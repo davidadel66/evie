@@ -265,17 +265,16 @@ func (s *Supervisor) delegate(ctx context.Context, parent delegation.Parent, wor
 
 // exploreRoots resolves each explore assignment's folder: its path inside the
 // parent's Workspace folder or project root, or that folder itself; an
-// absolute path when the parent has neither. Admission checks each root
-// against the parent's current folder again under the write lock.
+// absolute path when the parent has neither, as in a Workspace without a
+// folder whose owner turned explore on (2026-10-03). Admission checks the
+// Workspace's explore permission, then each root against the parent's
+// current folder, again under the write lock.
 func (s *Supervisor) exploreRoots(ctx context.Context, parent delegation.Parent, requests []delegation.Assignment) ([]string, error) {
 	base := parent.Scope.ProjectRoot
 	if parent.Scope.WorkspaceID != "" {
 		folder, err := s.store.WorkspaceFolder(ctx, parent.Scope.WorkspaceID)
 		if err != nil {
 			return nil, err
-		}
-		if folder.Path == "" {
-			return nil, errors.New("delegate_explore needs a folder: attach one to this Workspace first")
 		}
 		base = folder.Path
 	}

@@ -57,5 +57,9 @@ func (s *Store) loadWorkspacePresets(ctx context.Context, workspace *memory.Work
 	if err != nil {
 		return fmt.Errorf("read Workspace Agent Preset: %w", err)
 	}
-	return json.Unmarshal([]byte(encoded), &workspace.AllowedPresetIDs)
+	if err := json.Unmarshal([]byte(encoded), &workspace.AllowedPresetIDs); err != nil {
+		return err
+	}
+	workspace.Explore, err = workspaceExplore(ctx, s.db, workspace.ID, workspace.CurrentRevisionID)
+	return err
 }

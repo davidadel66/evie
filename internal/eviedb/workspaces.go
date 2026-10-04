@@ -69,6 +69,8 @@ func (s *Store) RegisterWorkspaceWithOptions(ctx context.Context, options Worksp
 	retainFolder := false
 	defer func() { cleanup(retainFolder) }()
 	workspace.Folder = folder
+	// Explore follows the folder until the owner chooses (2026-10-03).
+	workspace.Explore = memory.WorkspaceExplore{Setting: memory.WorkspaceExploreDefault, Allowed: presetID == "standard" && folder.Path != ""}
 	if options.AllowResearchDelegation {
 		workspace.AllowedPresetIDs = append(workspace.AllowedPresetIDs, "research")
 	}
@@ -88,6 +90,10 @@ func (s *Store) RegisterWorkspaceWithOptions(ctx context.Context, options Worksp
 		if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_preset_revisions(workspace_id,revision_id,default_preset_id,allowed_preset_ids)
  VALUES(?,?,?,?)`, workspace.ID, workspace.CurrentRevisionID, presetID, string(allowed)); err != nil {
 			return fmt.Errorf("insert Workspace Agent Preset: %w", err)
+		}
+		if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_explore_settings(workspace_id,revision_id,setting) VALUES(?,?,?)`,
+			workspace.ID, workspace.CurrentRevisionID, workspace.Explore.Setting); err != nil {
+			return fmt.Errorf("insert Workspace explore setting: %w", err)
 		}
 		if folder.Path != "" {
 			if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_folder_revisions(workspace_id,revision,path,recorded_at)

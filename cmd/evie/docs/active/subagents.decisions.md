@@ -1,5 +1,66 @@
 # Subagents implementation decisions
 
+## 2026-10-03 — Explore default follows the Workspace folder
+
+Source: the owner's decision recorded under Stage 7 of
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md):
+Workspaces with a local folder allow explore by default, confined to that
+folder, and a settings toggle can turn it off; Workspaces without a folder
+need the toggle to turn it on, and then each assignment declares an absolute
+path.
+
+Superseded wording: in the Stage 7 entry below, "A Workspace must allow the
+`explore` preset separately from `research` (`SetWorkspaceExplore`…)" insofar
+as it means the explore preset in the revision's allowed presets, and "There
+is no settings toggle for it yet … refused with a 'reviewed permission'
+explanation until it exists"; in Root, "a parent with neither must declare an
+absolute path" now includes a Workspace without a folder.
+
+- **Setting.** Each Workspace revision records one explore setting in an
+  immutable `workspace_explore_settings` row: `default`, `on` or `off`.
+  Research and explore stay separate; a research allowance never implies
+  explore. The setting is part of the revision, so every new revision (a
+  research change too) carries it forward, and a revision without a row
+  allows nothing.
+- **Effective allowance.** A revision allows explore when its Workspace's
+  default preset is Standard and its setting is `on`, or `default` while the
+  Workspace's latest folder revision has a path. The folder is read at each
+  check, as every chat already uses the current folder. Admission, start,
+  every child mutation and continuation require both the parent's pinned
+  revision and the current revision to allow it and no explore revocation of
+  the pinned revision (ADR 0027, 0033), then the root check below.
+- **Folder changes.** Attaching a folder enables explore for chats pinned to a
+  `default` revision, including existing ones, without a new revision;
+  detaching it disables them at once. Folder attachment stays operational
+  metadata (workspace-local-folder.spec.md); the reviewed revision's
+  `default` is what makes explore follow it.
+- **Toggle.** `SetWorkspaceExplore(id, expected revision, setting)` writes a
+  new revision with the expected-revision, new-chats and Standard-only rules
+  of `SetWorkspaceResearch`; the same setting is a no-op. Turning explore
+  `off` durably revokes every earlier revision whose setting is `on` or
+  `default`, so no later setting restores those chats. Returning to
+  `default` or turning it `on` revokes nothing. New revisions drop a Stage 7
+  `explore` entry from the allowed presets; the setting alone governs it.
+- **Root.** A Workspace without a folder has no folder ceiling: with explore
+  `on`, each assignment declares an absolute path, resolved under the
+  existing root rules (existing directory, canonical, neither is nor
+  contains a secret location). The root check itself also refuses a
+  folderless Workspace whose current setting is not `on`. A folder attached
+  later becomes the ceiling, so a child pinned outside it loses its
+  authority.
+- **Migration.** Created once, under the write lock, for every existing
+  revision without changing any revision, allowance list or revocation: a
+  revision whose allowed presets list `explore` is `on`; one without it in a
+  Workspace that has an explore revocation is `off` (conservatively, also a
+  revision from before explore was first allowed); any other is `default`.
+- **Surfaces.** The Workspace JSON carries `explore: {setting, allowed}` for
+  the current revision. `POST /api/workspaces/explore` (management guard;
+  `workspaceId`, `revision`, `setting`) stays available during a turn. The
+  Workspace home's "Explore workers" checkbox shows `allowed`; checking it
+  sends `default` when the Workspace has a folder and `on` otherwise, and
+  unchecking sends `off`. `evie workspaces list` and `evie workspaces explore
+  <workspace-id> on|off|default` do the same from the terminal.
+
 ## 2026-10-03 — Explore workers (general delegation, Stage 7)
 
 Source: Stage 7 of [docs/memory-architecture.md](../../../../docs/memory-architecture.md),

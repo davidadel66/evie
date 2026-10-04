@@ -23,42 +23,16 @@ var ErrWorkspaceExplorePreset = errors.New("explore delegation requires the Stan
 // SetWorkspaceResearch is an explicit owner configuration operation, not a
 // model capability. Existing pins and revocations are never rewritten.
 func (s *Store) SetWorkspaceResearch(ctx context.Context, id memory.WorkspaceID, expected memory.WorkspaceRevisionID, enabled bool) (memory.Workspace, error) {
-	return s.setWorkspaceWorker(ctx, id, expected, delegation.WorkerResearch, enabled)
-}
-
-// SetWorkspaceExplore allows or revokes read-only explore workers in a
-// Standard Workspace, exactly as SetWorkspaceResearch does for research
-// workers: a new revision, applying to new chats, and a durable revocation of
-// every earlier revision that allowed it (Stage 7, 2026-10-03).
-func (s *Store) SetWorkspaceExplore(ctx context.Context, id memory.WorkspaceID, expected memory.WorkspaceRevisionID, enabled bool) (memory.Workspace, error) {
-	return s.setWorkspaceWorker(ctx, id, expected, delegation.WorkerExplore, enabled)
-}
-
-func (s *Store) setWorkspaceWorker(ctx context.Context, id memory.WorkspaceID, expected memory.WorkspaceRevisionID, preset string, enabled bool) (memory.Workspace, error) {
+	preset := delegation.WorkerResearch
 	var workspace memory.Workspace
 	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		var explore memory.WorkspaceExploreSetting
 		var err error
-		workspace, err = scanWorkspace(conn.QueryRowContext(ctx, `SELECT id,display_name,lifecycle_state,current_revision_id,created_at,updated_at FROM workspaces WHERE id=?`, id))
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrWorkspaceNotFound
-		}
+		workspace, explore, err = lockWorkspaceRevision(ctx, conn, id, expected)
 		if err != nil {
 			return err
 		}
-		if expected == "" || workspace.State != memory.WorkspaceActive || workspace.CurrentRevisionID != expected {
-			return ErrChooserStateChanged
-		}
-		var encoded string
-		if err := conn.QueryRowContext(ctx, `SELECT default_preset_id,allowed_preset_ids FROM workspace_preset_revisions WHERE workspace_id=? AND revision_id=?`, id, expected).Scan(&workspace.DefaultPresetID, &encoded); err != nil {
-			return err
-		}
-		if err := json.Unmarshal([]byte(encoded), &workspace.AllowedPresetIDs); err != nil {
-			return err
-		}
 		if workspace.DefaultPresetID != "standard" {
-			if preset == delegation.WorkerExplore {
-				return ErrWorkspaceExplorePreset
-			}
 			return ErrWorkspaceResearchPreset
 		}
 		if slices.Contains(workspace.AllowedPresetIDs, preset) == enabled {
@@ -79,33 +53,92 @@ func (s *Store) setWorkspaceWorker(ctx context.Context, id memory.WorkspaceID, e
 				return err
 			}
 		}
-		workspace.CurrentRevisionID = memory.WorkspaceRevisionID(uuid.NewString())
-		workspace.UpdatedAt = now
-		allowed, err := json.Marshal(workspace.AllowedPresetIDs)
-		if err != nil {
-			return err
-		}
-		if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_preset_revisions(workspace_id,revision_id,default_preset_id,allowed_preset_ids) VALUES(?,?,?,?)`, id, workspace.CurrentRevisionID, workspace.DefaultPresetID, string(allowed)); err != nil {
-			return err
-		}
-		_, err = conn.ExecContext(ctx, `UPDATE workspaces SET current_revision_id=?,updated_at=? WHERE id=? AND current_revision_id=?`, workspace.CurrentRevisionID, now.Format(time.RFC3339Nano), id, expected)
-		return err
+		// The explore setting is part of the revision and carries forward.
+		return insertWorkspaceRevision(ctx, conn, &workspace, expected, explore, now)
 	})
 	if err != nil {
 		return memory.Workspace{}, err
 	}
-	workspace.Folder, err = s.WorkspaceFolder(ctx, id)
+	return s.completeWorkspace(ctx, workspace)
+}
+
+// lockWorkspaceRevision reads an active Workspace whose current revision is
+// still expected, with that revision's presets and explore setting, inside a
+// write transaction.
+func lockWorkspaceRevision(ctx context.Context, conn *sql.Conn, id memory.WorkspaceID, expected memory.WorkspaceRevisionID) (memory.Workspace, memory.WorkspaceExploreSetting, error) {
+	workspace, err := scanWorkspace(conn.QueryRowContext(ctx, `SELECT id,display_name,lifecycle_state,current_revision_id,created_at,updated_at FROM workspaces WHERE id=?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return workspace, "", ErrWorkspaceNotFound
+	}
 	if err != nil {
+		return workspace, "", err
+	}
+	if expected == "" || workspace.State != memory.WorkspaceActive || workspace.CurrentRevisionID != expected {
+		return workspace, "", ErrChooserStateChanged
+	}
+	var encoded string
+	if err := conn.QueryRowContext(ctx, `SELECT default_preset_id,allowed_preset_ids FROM workspace_preset_revisions WHERE workspace_id=? AND revision_id=?`, id, expected).Scan(&workspace.DefaultPresetID, &encoded); err != nil {
+		return workspace, "", err
+	}
+	if err := json.Unmarshal([]byte(encoded), &workspace.AllowedPresetIDs); err != nil {
+		return workspace, "", err
+	}
+	explore, err := workspaceExplore(ctx, conn, id, expected)
+	return workspace, explore.Setting, err
+}
+
+// insertWorkspaceRevision makes a new revision with workspace's presets and
+// the explore setting current, if expected is still current. The explore
+// worker is governed by its setting alone, so a preset list copied from a
+// Stage 7 revision drops the explore entry.
+func insertWorkspaceRevision(ctx context.Context, conn *sql.Conn, workspace *memory.Workspace, expected memory.WorkspaceRevisionID, explore memory.WorkspaceExploreSetting, now time.Time) error {
+	workspace.AllowedPresetIDs = slices.DeleteFunc(workspace.AllowedPresetIDs, func(id string) bool { return id == delegation.WorkerExplore })
+	workspace.CurrentRevisionID = memory.WorkspaceRevisionID(uuid.NewString())
+	workspace.UpdatedAt = now
+	allowed, err := json.Marshal(workspace.AllowedPresetIDs)
+	if err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_preset_revisions(workspace_id,revision_id,default_preset_id,allowed_preset_ids) VALUES(?,?,?,?)`, workspace.ID, workspace.CurrentRevisionID, workspace.DefaultPresetID, string(allowed)); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_explore_settings(workspace_id,revision_id,setting) VALUES(?,?,?)`, workspace.ID, workspace.CurrentRevisionID, explore); err != nil {
+		return err
+	}
+	result, err := conn.ExecContext(ctx, `UPDATE workspaces SET current_revision_id=?,updated_at=? WHERE id=? AND current_revision_id=?`, workspace.CurrentRevisionID, now.Format(time.RFC3339Nano), workspace.ID, expected)
+	if err != nil {
+		return err
+	}
+	if n, err := result.RowsAffected(); err != nil || n != 1 {
+		return errors.Join(ErrChooserStateChanged, err)
+	}
+	return nil
+}
+
+// completeWorkspace adds the operational folder and instruction settings and
+// the current revision's explore state to a Workspace read in a transaction.
+func (s *Store) completeWorkspace(ctx context.Context, workspace memory.Workspace) (memory.Workspace, error) {
+	var err error
+	if workspace.Folder, err = s.WorkspaceFolder(ctx, workspace.ID); err != nil {
 		return memory.Workspace{}, err
 	}
-	workspace.Instructions, err = s.RepositoryInstructionSettings(ctx, id)
-	return workspace, err
+	if workspace.Instructions, err = s.RepositoryInstructionSettings(ctx, workspace.ID); err != nil {
+		return memory.Workspace{}, err
+	}
+	if workspace.Explore, err = workspaceExplore(ctx, s.db, workspace.ID, workspace.CurrentRevisionID); err != nil {
+		return memory.Workspace{}, err
+	}
+	return workspace, nil
 }
 
 // authorizeWorkspacePreset requires the worker preset in the parent's pinned
 // and the Workspace's current reviewed allowances, unrevoked for the pinned
-// revision. Research and explore are allowed separately (2026-10-03).
+// revision. Research and explore are allowed separately; explore by its own
+// setting, whose default follows the Workspace's folder (2026-10-03).
 func authorizeWorkspacePreset(ctx context.Context, conn *sql.Conn, scope memory.ScopeContext, preset string) error {
+	if preset == delegation.WorkerExplore {
+		return authorizeWorkspaceExplore(ctx, conn, scope)
+	}
 	var allowed bool
 	err := conn.QueryRowContext(ctx, `SELECT EXISTS(
  SELECT 1 FROM workspaces w
@@ -120,9 +153,6 @@ func authorizeWorkspacePreset(ctx context.Context, conn *sql.Conn, scope memory.
 		return err
 	}
 	if !allowed {
-		if preset == delegation.WorkerExplore {
-			return fmt.Errorf("%w: Workspace explore delegation requires reviewed permission: the Workspace must allow the explore preset, and the chat must start after it was allowed", delegation.ErrAuthority)
-		}
 		return fmt.Errorf("%w: Workspace research requires reviewed permission; enable research delegation in Workspace settings and start a new chat", delegation.ErrAuthority)
 	}
 	return nil

@@ -16,7 +16,6 @@ import (
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/delegation"
-	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
@@ -435,63 +434,6 @@ func TestExploreRootsStayInsideTheParentFolder(t *testing.T) {
 	out, err := callParentTool(t, f, global, delegation.ToolName, `{"assignments":[{"idempotency_key":"g4","objective":"look","path":"/tmp"}]}`)
 	if err == nil || !strings.Contains(err.Error(), `unknown field "path"`) {
 		t.Fatalf("delegate_research accepted a path argument: %q %v", out, err)
-	}
-}
-
-// Explore in a Workspace needs the Workspace's own reviewed allowance, like
-// research; its root is the Workspace folder; and a child whose folder leaves
-// the Workspace's current folder loses its authority.
-func TestWorkspaceExploreNeedsItsOwnAllowanceAndFolder(t *testing.T) {
-	f := setup(t, delegation.DefaultPolicy())
-	root, outside := exploreProject(t)
-	ctx := context.Background()
-	w, err := f.store.RegisterWorkspaceWithOptions(ctx, eviedb.WorkspaceRegistration{DisplayName: "Explored", AllowResearchDelegation: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.store.SetWorkspaceFolder(ctx, w.ID, 0, root); err != nil {
-		t.Fatal(err)
-	}
-	client := &recordingClient{next: func(n int, r openrouter.ChatRequest) (openrouter.ChatResponse, error) {
-		return response(report("workspace survey")), nil
-	}}
-	configure(t, f, client)
-	// Research is allowed here, explore is not: no silent widening.
-	parent := f.workspaceParent(t, w)
-	if _, err := f.explore(t, ctx, parent, []delegation.Assignment{{Key: "w1", Objective: "look"}}); err == nil || !strings.Contains(err.Error(), "reviewed permission") {
-		t.Fatalf("explore without the Workspace allowance: %v", err)
-	}
-	allowed, err := f.store.SetWorkspaceExplore(ctx, w.ID, w.CurrentRevisionID, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The allowance applies to new chats only.
-	if _, err := f.explore(t, ctx, parent, []delegation.Assignment{{Key: "w2", Objective: "look"}}); err == nil {
-		t.Fatal("an existing chat gained explore delegation")
-	}
-	parent = f.workspaceParent(t, allowed)
-	r, err := f.explore(t, ctx, parent, []delegation.Assignment{{Key: "w3", Objective: "look"}})
-	if err != nil || r[0].Status != "succeeded" {
-		t.Fatalf("Workspace explore: %+v %v", r, err)
-	}
-	a, err := f.store.InspectSubagent(ctx, parent, r[0].ExecutionID)
-	if err != nil || a.Root != root {
-		t.Fatalf("Workspace explore root = %q, %v", a.Root, err)
-	}
-	// The owner points the Workspace at another folder: the child cannot be
-	// continued in a folder that is no longer the Workspace's.
-	if _, err := f.store.SetWorkspaceFolder(ctx, w.ID, 1, outside); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.continueResearch(t, parent, r[0].ExecutionID, "keep going"); err == nil || !errors.Is(err, delegation.ErrAuthority) {
-		t.Fatalf("continuation outside the current Workspace folder: %v", err)
-	}
-	// Revoking explore stops new work even in a chat that had it.
-	if _, err := f.store.SetWorkspaceExplore(ctx, w.ID, allowed.CurrentRevisionID, false); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.explore(t, ctx, parent, []delegation.Assignment{{Key: "w4", Objective: "look"}}); err == nil {
-		t.Fatal("revoked explore admitted work")
 	}
 }
 

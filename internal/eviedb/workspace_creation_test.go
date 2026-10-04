@@ -220,6 +220,11 @@ func TestWorkspacePresetUpgradeKeepsExistingSessionsAndDefaultsToStandard(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A database from before Workspace presets has no explore settings
+	// either (2026-10-03).
+	if _, err := db.Exec(`DROP TABLE workspace_explore_settings`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec(`DROP TABLE workspace_preset_revisions`); err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +238,8 @@ func TestWorkspacePresetUpgradeKeepsExistingSessionsAndDefaultsToStandard(t *tes
 	defer db.Close()
 	store = NewStore(db)
 	listed, err := store.ListWorkspaces(ctx, false)
-	if err != nil || len(listed) != 1 || listed[0].DefaultPresetID != "standard" || !reflect.DeepEqual(listed[0].AllowedPresetIDs, []string{"standard"}) {
+	if err != nil || len(listed) != 1 || listed[0].DefaultPresetID != "standard" || !reflect.DeepEqual(listed[0].AllowedPresetIDs, []string{"standard"}) ||
+		listed[0].Explore != (memory.WorkspaceExplore{Setting: memory.WorkspaceExploreDefault}) {
 		t.Fatalf("upgraded = %+v, %v", listed, err)
 	}
 	stored, err := store.GetActiveSession(ctx, session.ID)

@@ -48,6 +48,13 @@
 > contract, report paging, continuation, recovery and hidden child sessions.
 > Amended text below is marked "Stage 7"; the binding record is the
 > 2026-10-03 entry in [subagents.decisions.md](subagents.decisions.md).
+>
+> Amended 2026-10-03 by the owner's explore-default decision. A Workspace
+> allows explore by default exactly while it has a local folder, confined to
+> that folder; the owner can turn explore on or off in Workspace settings, the
+> web API or the CLI. Amended text below is marked "Explore default"; the
+> binding record is the "Explore default follows the Workspace folder" entry
+> in [subagents.decisions.md](subagents.decisions.md).
 
 ## Problem Statement
 
@@ -227,7 +234,13 @@ allowances produce an explicit refusal rather than a change of scope.
   from a declared absolute path), must be an existing directory that neither
   is nor contains a secret location, is pinned on the attempt, and is
   re-checked against the parent's current folder at admission, start, every
-  child mutation and continuation.
+  child mutation and continuation. (Explore default.) The Workspace
+  allowance is each revision's explore setting rather than a listed preset:
+  `default` allows explore while the Workspace has a local folder, `on` and
+  `off` are the owner's explicit choice. Both the pinned and the current
+  revision must allow it; turning it off durably revokes earlier revisions
+  that were on or followed the folder. A Workspace without a folder explores
+  only when turned on, and each assignment then declares an absolute path.
 - **Assignment interface.** Foreground delegation accepts a bounded objective,
   optional explicitly selected context, an optional existing Task identity, and
   an idempotency key. One fixed child preset is supported, so no model-selected
@@ -503,6 +516,13 @@ allowances produce an explicit refusal rather than a change of scope.
   cap like research children; explore paths stay inside the parent's folder;
   a Workspace needs its own explore allowance; older Standard receipts reopen
   with exactly their tools and cannot admit explore children.
+- (Explore default.) A Workspace's explore follows its folder by default
+  (attach enables, detach disables, no revision written); explicit on and off
+  persist across reopen and folder changes; off revokes durably and returning
+  to the default reaches only new chats; a research change carries the
+  setting forward; existing revisions migrate once without being rewritten;
+  the web route is guarded and validates the setting; the settings checkbox
+  and `evie workspaces explore` set it.
 - (Verification fixes.) One lock-contention error on a terminal write still
   settles the attempt; a write refused past its retries yields an error entry,
   a same-key retry that fails at once while the store refuses and replays the

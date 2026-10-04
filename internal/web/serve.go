@@ -213,6 +213,9 @@ func (s *Server) Handler() http.Handler {
 		if _, ok := s.contextSessions.(workspaceResearchController); ok {
 			mux.Handle("/api/workspaces/research", s.managementRoute(s.handleWorkspaceResearch))
 		}
+		if _, ok := s.contextSessions.(workspaceExploreController); ok {
+			mux.Handle("/api/workspaces/explore", s.managementRoute(s.handleWorkspaceExplore))
+		}
 		mux.Handle("/api/workspaces/choose-folder", s.managementRoute(s.handleWorkspaceChooseFolder))
 	}
 	if s.semanticMemory != nil {

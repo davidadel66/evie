@@ -556,18 +556,23 @@ func authorizeExploreComposition(parent, child composition.Receipt) error {
 // authorizeExploreRoot proves an explore attempt's pinned root is inside the
 // parent's current folder: its Workspace's latest attached folder, or its
 // project root. A parent with neither has no ceiling beyond the root it
-// declared, which the harness resolved at admission.
+// declared, which the harness resolved at admission. A Workspace without a
+// folder has that ceiling only while its owner has explore explicitly on
+// (2026-10-03); authorizeWorkspacePreset proves the full allowance first.
 func authorizeExploreRoot(ctx context.Context, conn *sql.Conn, scope memory.ScopeContext, root string) error {
 	if root == "" || !filepath.IsAbs(root) || filepath.Clean(root) != root {
 		return fmt.Errorf("%w: an explore attempt needs a pinned absolute root", delegation.ErrAuthority)
 	}
 	base := scope.ProjectRoot
 	if scope.WorkspaceID != "" {
-		if err := conn.QueryRowContext(ctx, `SELECT COALESCE((SELECT path FROM workspace_folder_revisions WHERE workspace_id=? ORDER BY revision DESC LIMIT 1),'')`, scope.WorkspaceID).Scan(&base); err != nil {
+		var on bool
+		if err := conn.QueryRowContext(ctx, `SELECT COALESCE((SELECT path FROM workspace_folder_revisions WHERE workspace_id=w.id ORDER BY revision DESC LIMIT 1),''),
+ EXISTS(SELECT 1 FROM workspace_explore_settings e WHERE e.workspace_id=w.id AND e.revision_id=w.current_revision_id AND e.setting='on')
+ FROM workspaces w WHERE w.id=?`, scope.WorkspaceID).Scan(&base, &on); err != nil {
 			return err
 		}
-		if base == "" {
-			return fmt.Errorf("%w: the Workspace has no attached folder for explore workers to read", delegation.ErrAuthority)
+		if base == "" && !on {
+			return fmt.Errorf("%w: the Workspace has no attached folder for explore workers to read, and explore is not turned on", delegation.ErrAuthority)
 		}
 	}
 	if base == "" || pathWithin(base, root) {

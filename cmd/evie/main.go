@@ -98,6 +98,12 @@ func main() {
 		}
 		return
 	}
+	if handled, err := runWorkspaceManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+		if err != nil {
+			log.Fatalf("workspaces: %v", err)
+		}
+		return
+	}
 	if _, err := kernelStore.ImportDefaultLegacyTodoList(context.Background()); err != nil {
 		log.Fatalf("failed to import legacy Todo list: %v", err)
 	}

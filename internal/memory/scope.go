@@ -29,6 +29,7 @@ type (
 		AllowedPresetIDs  []string                      `json:"allowedPresetIds"`
 		Instructions      RepositoryInstructionSettings `json:"instructions"`
 		Folder            WorkspaceFolder               `json:"folder"`
+		Explore           WorkspaceExplore              `json:"explore"`
 		ID                WorkspaceID                   `json:"id"`
 		DisplayName       string                        `json:"displayName"`
 		State             WorkspaceState                `json:"state"`
@@ -68,6 +69,29 @@ type (
 type WorkspaceFolder struct {
 	Path     string `json:"path"`
 	Revision int64  `json:"revision"`
+}
+
+// WorkspaceExploreSetting is a Workspace revision's choice for read-only
+// explore workers (2026-10-03): the default, which allows them exactly while
+// the Workspace has a local folder, or the owner's explicit on or off.
+type WorkspaceExploreSetting string
+
+const (
+	WorkspaceExploreDefault WorkspaceExploreSetting = "default"
+	WorkspaceExploreOn      WorkspaceExploreSetting = "on"
+	WorkspaceExploreOff     WorkspaceExploreSetting = "off"
+)
+
+// Valid reports whether s is one of the three settings.
+func (s WorkspaceExploreSetting) Valid() bool {
+	return s == WorkspaceExploreDefault || s == WorkspaceExploreOn || s == WorkspaceExploreOff
+}
+
+// WorkspaceExplore is the current revision's explore setting and whether it
+// allows explore workers now, given the Workspace's current folder.
+type WorkspaceExplore struct {
+	Setting WorkspaceExploreSetting `json:"setting"`
+	Allowed bool                    `json:"allowed"`
 }
 
 func (s Session) ScopeContext() ScopeContext {

@@ -34,3 +34,9 @@ func (c *webContextSessionController) SetWorkspaceResearch(ctx context.Context, 
 	}
 	return c.store.SetWorkspaceResearch(ctx, id, revision, enabled)
 }
+
+// SetWorkspaceExplore records the owner's explore setting. The explore
+// preset is built in and selects no plugin, so there is nothing to resolve.
+func (c *webContextSessionController) SetWorkspaceExplore(ctx context.Context, id memory.WorkspaceID, revision memory.WorkspaceRevisionID, setting memory.WorkspaceExploreSetting) (memory.Workspace, error) {
+	return c.store.SetWorkspaceExplore(ctx, id, revision, setting)
+}
