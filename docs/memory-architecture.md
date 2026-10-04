@@ -218,6 +218,19 @@ start after 11).
   `sqlite3 -readonly`), enforced in code. The allowlist must reject
   write-capable flags and option-embedded execution (`git -c`, `--output`,
   pipes into writers, redirections).
+- **Implemented** (a82bb8f).
+- **Decided (David, 2026-10-03):** Workspaces with a local folder allow
+  explore by default, confined to that folder, and a settings toggle can turn
+  it off. Workspaces without a folder need the toggle. This is a follow-up:
+  as merged, every Workspace still needs `SetWorkspaceExplore`.
+
+Follow-ups found during Stages 6–7:
+- Explore defaults and settings toggle, as decided above.
+- Privacy in accepted-memory recall. Automatic recall doesn't
+  relevance-filter accepted claims, and the newer-statement follow-up can add
+  a private later message: "Write a short story about a therapist…" pulled in
+  a private therapist message (scale corpus v5, default tier). Gate both on
+  the same relevance and privacy rules as conversation excerpts.
 
 **8. In-turn compaction**
 - When tool-result clearing can't bring the active turn under budget, the
