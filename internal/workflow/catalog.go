@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -14,14 +15,60 @@ import (
 // to validate and simulate a capability step: its canonical ID and contract
 // version, whether it reads or performs an external effect, whether its
 // provider proves idempotency for a repeated Effect Intent, and its typed
-// input and output.
+// input and output. Connections and Resources, when a provider declares
+// them, are the exact Connection IDs and resource selectors it serves
+// (Stage 14 sub-stage 5); a step naming any other is invalid.
 type CapabilityContract struct {
-	ID         string
-	Contract   string
-	Effect     bool
-	Idempotent bool
-	Input      *Type
-	Output     *Type
+	ID          string
+	Contract    string
+	Effect      bool
+	Idempotent  bool
+	Input       *Type
+	Output      *Type
+	Connections []string
+	Resources   []string
+}
+
+// SchemaSHA256 identifies the contract's schema: its typed input and output
+// and its read or effect classification, as 64 lowercase hex digits (the
+// form plugin schema evidence uses). The contract version label and the
+// connections and resources a provider serves are not part of it; a run
+// pins and checks them separately.
+func (c CapabilityContract) SchemaSHA256() string {
+	doc := struct {
+		Effect     bool  `json:"effect"`
+		Idempotent bool  `json:"idempotent"`
+		Input      *Type `json:"input"`
+		Output     *Type `json:"output"`
+	}{c.Effect, c.Idempotent, canonicalType(c.Input), canonicalType(c.Output)}
+	data, err := canonicalBytes(doc)
+	if err != nil {
+		// Types hold only JSON-encodable values.
+		panic(fmt.Sprintf("encode capability schema: %v", err))
+	}
+	return digest(data)
+}
+
+// canonicalType is a copy of t with every object's required fields sorted,
+// so equal types encode equally however they were built.
+func canonicalType(t *Type) *Type {
+	if t == nil {
+		return nil
+	}
+	c := t.clone()
+	var walk func(*Type)
+	walk = func(t *Type) {
+		if t == nil {
+			return
+		}
+		sort.Strings(t.Required)
+		for _, p := range t.Properties {
+			walk(p)
+		}
+		walk(t.Items)
+	}
+	walk(c)
+	return c
 }
 
 // Catalog resolves the Capability Contracts a definition may reference. It
@@ -67,6 +114,13 @@ func (a WorkspaceAccess) connection(id string) (ConnectionAccess, bool) {
 	return ConnectionAccess{}, false
 }
 
+// Allows reports whether the access lists this exact resource on this
+// connection.
+func (a WorkspaceAccess) Allows(connection, resource string) bool {
+	c, ok := a.connection(connection)
+	return ok && c.allows(resource)
+}
+
 func (c ConnectionAccess) allows(resource string) bool {
 	for _, r := range c.Resources {
 		if r == resource {
@@ -88,6 +142,11 @@ type Environment struct {
 	Capabilities Catalog
 	Access       WorkspaceAccess
 	Workers      WorkerCeiling
+	// AccessUnchecked reviews a definition outside any Workspace (the
+	// standalone validate and simulate commands): capability steps and
+	// requested authority are not checked against Access, which only a
+	// Workspace has; proposing, approving and running always check it.
+	AccessUnchecked bool
 }
 
 // Source reads one definition's files by slash-separated path relative to

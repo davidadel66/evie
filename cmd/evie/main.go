@@ -32,6 +32,14 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// defaultPluginEnabled is each compiled plugin's enabled state until the
+// owner chooses otherwise; the owner's choice is durable.
+var defaultPluginEnabled = map[plugins.PluginID]bool{
+	plugins.WebPluginID: true, plugins.FinancePluginID: true,
+	plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
+	plugins.SubagentsPluginID: false,
+}
+
 func main() {
 	// Capture the user's shell environment in the background now, so the
 	// first bash call doesn't pay for it mid-conversation.
@@ -125,9 +133,14 @@ func main() {
 		return
 	}
 	// Workflow activation (Stage 14 sub-stage 2) needs the database and the
-	// procedural repository.
+	// procedural repository, and runs (sub-stage 5) the workflow capability
+	// plugins under the owner's enabled choices.
 	if cmd == "workflows" {
-		workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv)
+		workflowPlugins, err := newWorkflowPluginManager(context.Background(), kernelStore)
+		if err != nil {
+			log.Fatalf("workflows: %v", err)
+		}
+		workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv, workflowPlugins)
 		if err != nil {
 			log.Fatalf("workflows: %v", err)
 		}
@@ -178,11 +191,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)
 	}
-	if err := pluginManager.ConfigureEnabledState(context.Background(), kernelStore, map[plugins.PluginID]bool{
-		plugins.WebPluginID: true, plugins.FinancePluginID: true,
-		plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
-		plugins.SubagentsPluginID: false,
-	}); err != nil {
+	if err := pluginManager.ConfigureEnabledState(context.Background(), kernelStore, defaultPluginEnabled); err != nil {
 		log.Fatalf("failed to apply plugin enabled configuration: %v", err)
 	}
 	if cmd == "plugins" || cmd == "presets" || cmd == "sessions" {
@@ -306,7 +315,7 @@ func main() {
 		// The REPL is a long-lived process: it runs the workflow scheduler
 		// (Stage 14 sub-stage 4) like the memory background pass. A
 		// configuration problem disables it with a reason; chat still starts.
-		if workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv); err != nil {
+		if workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv, pluginManager); err != nil {
 			log.Printf("workflow scheduler off: %v", err)
 		} else {
 			stopWorkflows := startWorkflowScheduler(runtimeCtx, workflowRuntime)
@@ -335,7 +344,7 @@ func main() {
 		}
 		usageReader := usage.NewService(runtimeCtx, kernelStore, usage.CodexBinary(), codexHomes)
 		spendingService := finance.NewSpendingService()
-		workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv)
+		workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv, pluginManager)
 		if err != nil {
 			log.Fatalf("workflow runtime: %v", err)
 		}

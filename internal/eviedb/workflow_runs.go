@@ -153,25 +153,33 @@ type WorkflowCheckpoint struct {
 }
 
 // WorkflowRunDetail is a run with its full attempt and checkpoint history,
-// its lease (nil before any runtime claimed it) and its recovery events.
+// its lease (nil before any runtime claimed it), its recovery events and
+// the compatible provider substitutions the owner approved for it.
 type WorkflowRunDetail struct {
-	Run         WorkflowRun           `json:"run"`
-	Attempts    []WorkflowNodeAttempt `json:"attempts"`
-	Checkpoints []WorkflowCheckpoint  `json:"checkpoints"`
-	Lease       *WorkflowRunLease     `json:"lease,omitempty"`
-	Events      []WorkflowRunEvent    `json:"events"`
+	Run           WorkflowRun               `json:"run"`
+	Attempts      []WorkflowNodeAttempt     `json:"attempts"`
+	Checkpoints   []WorkflowCheckpoint      `json:"checkpoints"`
+	Lease         *WorkflowRunLease         `json:"lease,omitempty"`
+	Events        []WorkflowRunEvent        `json:"events"`
+	Substitutions []WorkflowRunSubstitution `json:"substitutions"`
 }
 
 // WorkflowRunProgress is what an executor needs to take the next step.
 type WorkflowRunProgress struct {
 	Run        WorkflowRun
 	Checkpoint WorkflowCheckpoint
-	// Attempts of the checkpoint's next step made from this checkpoint,
-	// and the latest one's error.
-	Attempts  int
-	LastError string
+	// Made is every attempt of the checkpoint's next step from this
+	// checkpoint (attempts are numbered by it). Attempts are those counted
+	// against the step's Retry Policy and Interrupted those a stopped
+	// runtime left without an outcome, which are not (sub-stage 5: a rerun
+	// from the same checkpoint is safe; the runtime's interruption bound
+	// counts them instead). LastError is the latest attempt's error.
+	Made        int
+	Attempts    int
+	Interrupted int
+	LastError   string
 	// Counted is every attempt counted against limits.max_attempts
-	// (branch decisions are not counted; interrupted attempts are).
+	// (neither branch decisions nor interrupted attempts are counted).
 	Counted int
 	// InFlight is an attempt recorded but not finished.
 	InFlight *WorkflowNodeAttempt
@@ -328,7 +336,10 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, workflowNodeAttemptsIndexes); err != nil {
 		return fmt.Errorf("create workflow node attempt indexes: %w", err)
 	}
-	return ensureWorkflowRunLeaseSchema(ctx, db)
+	if err := ensureWorkflowRunLeaseSchema(ctx, db); err != nil {
+		return err
+	}
+	return ensureWorkflowRunSubstitutionSchema(ctx, db)
 }
 
 // WorkflowRunStart is a run the runtime has validated: the exact approved
@@ -764,11 +775,14 @@ func (s *Store) WorkflowRunProgress(ctx context.Context, id string) (WorkflowRun
 	var lastError sql.NullString
 	if err := conn.QueryRowContext(ctx, `SELECT
  (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=?),
+ (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=? AND state='interrupted'),
  (SELECT error FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=? ORDER BY seq DESC LIMIT 1),
- (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND kind<>'branch')`,
-		id, p.Checkpoint.Seq, p.Checkpoint.Next, id, p.Checkpoint.Seq, p.Checkpoint.Next, id).Scan(&p.Attempts, &lastError, &p.Counted); err != nil {
+ (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND kind<>'branch' AND state<>'interrupted')`,
+		id, p.Checkpoint.Seq, p.Checkpoint.Next, id, p.Checkpoint.Seq, p.Checkpoint.Next, id, p.Checkpoint.Seq, p.Checkpoint.Next, id).
+		Scan(&p.Made, &p.Interrupted, &lastError, &p.Counted); err != nil {
 		return p, err
 	}
+	p.Attempts = p.Made - p.Interrupted
 	p.LastError = lastError.String
 	a, err := scanWorkflowAttempt(conn.QueryRowContext(ctx, `SELECT `+attemptColumns+` FROM workflow_node_attempts WHERE run_id=? AND state='running'`, id))
 	switch {
@@ -841,7 +855,10 @@ func (s *Store) WorkflowRun(ctx context.Context, id string) (WorkflowRunDetail, 
 	if held {
 		d.Lease = &lease
 	}
-	d.Events, err = workflowRunEvents(ctx, conn, id)
+	if d.Events, err = workflowRunEvents(ctx, conn, id); err != nil {
+		return d, err
+	}
+	d.Substitutions, err = workflowRunSubstitutions(ctx, conn, id)
 	return d, err
 }
 

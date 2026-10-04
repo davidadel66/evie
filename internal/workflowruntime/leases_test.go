@@ -79,7 +79,10 @@ func (h *runHarness) process() *process {
 	if h.clock != nil {
 		store.UseClock(h.clock.Now, time.UTC)
 	}
-	rt, err := New(Config{Store: store, Repo: h.repo, Catalog: notesCatalog(), Workers: ceiling, Scheduler: h.scheduler})
+	if h.providers == nil {
+		h.providers = ContractsOnly(notesCatalog())
+	}
+	rt, err := New(Config{Store: store, Repo: h.repo, Capabilities: h.providers, Workers: ceiling, Scheduler: h.scheduler})
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -287,9 +290,10 @@ func TestWorkflowRunStaleHolderCannotWriteAfterTakeover(t *testing.T) {
 
 // A process that crashes inside a node is recovered by the next process's
 // startup scan once its lease expires: the interrupted attempt is recorded,
-// the step retries within its Retry Policy from the same checkpoint with
-// the same input, and the output is identical to an uninterrupted run. A
-// step whose policy allows one attempt fails visibly instead.
+// the step runs again from the same checkpoint with the same input, and the
+// output is identical to an uninterrupted run. An interruption is not one
+// of the step's attempts (sub-stage 5), so a step whose policy allows one
+// attempt runs again too.
 func TestWorkflowRunRecoversFromACrashInsideANode(t *testing.T) {
 	ctx := context.Background()
 	h := newLeaseHarness(t)
@@ -338,7 +342,7 @@ func TestWorkflowRunRecoversFromACrashInsideANode(t *testing.T) {
 	}
 	checkOrdering(t, d)
 
-	// leftover allows one attempt: the interruption is that attempt.
+	// leftover allows one attempt: its interruption does not spend it.
 	c := h.process()
 	dead = h.crashInside(c, "leftover")
 	go func() {
@@ -354,8 +358,58 @@ func TestWorkflowRunRecoversFromACrashInsideANode(t *testing.T) {
 		t.Fatal(err)
 	}
 	d = h.inspect(other)
-	if d.Run.State != eviedb.WorkflowRunFailed || !strings.HasPrefix(d.Run.Error, "steps.leftover failed after 1 attempt: interrupted") || d.Attempts[len(d.Attempts)-1].State != eviedb.WorkflowAttemptInterrupted {
-		t.Fatalf("run whose only attempt was interrupted = %+v attempts %+v", d.Run, summarize(d))
+	want = []attemptSummary{
+		{"split", 1, eviedb.WorkflowAttemptSucceeded, "check", 0},
+		{"check", 1, eviedb.WorkflowAttemptSucceeded, "leftover", 1},
+		{"leftover", 1, eviedb.WorkflowAttemptInterrupted, "", 2},
+		{"leftover", 2, eviedb.WorkflowAttemptSucceeded, "", 2},
+	}
+	if got := summarize(d); d.Run.State != eviedb.WorkflowRunSucceeded || !reflect.DeepEqual(got, want) || !reflect.DeepEqual(decoded(t, d.Run.Outputs), dinnerOutputs) {
+		t.Fatalf("run whose one-attempt step was interrupted = %+v attempts %+v", d.Run, got)
+	}
+}
+
+// A node that keeps killing its process is not rerun forever: after the
+// interruption bound (three by default) at one checkpoint, the next claim
+// fails the run visibly instead of running the node again.
+func TestWorkflowRunFailsAfterTheInterruptionBound(t *testing.T) {
+	ctx := context.Background()
+	h := newLeaseHarness(t)
+	w, _ := h.approveSplitBill(splitBillDir)
+	first := h.process()
+	dead := h.crashInside(first, "split")
+	go func() {
+		_, _ = first.rt.StartRun(ctx, RunRequest{WorkspaceID: w.ID, Workflow: "split-bill", Inputs: billInputs("dinner-1", 1000, 3), Surface: "cli"})
+	}()
+	<-dead
+	id := h.runs(w.ID)[0].ID
+	for crash := 2; crash <= 3; crash++ {
+		h.clock.Advance(testLease)
+		p := h.process()
+		dead := h.crashInside(p, "split")
+		// The dead process's scheduler stops polling; its pass stays stuck
+		// inside the node, as a killed process would.
+		polling, kill := context.WithCancel(ctx)
+		p.rt.Start(polling)
+		<-dead
+		kill()
+	}
+	h.clock.Advance(testLease)
+	last := h.process()
+	stop := last.rt.Start(ctx)
+	eventually(t, "the run to fail at the bound", func() bool { return h.state(id).Terminal() })
+	if err := stop(); err != nil {
+		t.Fatal(err)
+	}
+	d := h.inspect(id)
+	want := []attemptSummary{
+		{"split", 1, eviedb.WorkflowAttemptInterrupted, "", 0},
+		{"split", 2, eviedb.WorkflowAttemptInterrupted, "", 0},
+		{"split", 3, eviedb.WorkflowAttemptInterrupted, "", 0},
+	}
+	if got := summarize(d); d.Run.State != eviedb.WorkflowRunFailed || !reflect.DeepEqual(got, want) ||
+		!strings.HasPrefix(d.Run.Error, "steps.split was interrupted 3 times at checkpoint 0") {
+		t.Fatalf("crash-looping run = %+v attempts %+v", d.Run, got)
 	}
 }
 
@@ -537,14 +591,14 @@ func TestWorkflowRunPausesUnderAnIncompatibleRuntime(t *testing.T) {
 	w, _ := h.approveSplitBill(splitBillDir)
 	id := h.detach(w.ID, billInputs("dinner-1", 1000, 3)).ID
 	upgraded := h.process()
-	upgraded.rt.compatible = []string{"evie.workflow.runtime/2"}
+	upgraded.rt.compatible = []string{"evie.workflow.runtime/3"}
 	stop := upgraded.rt.Start(ctx)
 	eventually(t, "the run to pause", func() bool { return h.state(id) == eviedb.WorkflowRunWaitingForDependency })
 	if err := stop(); err != nil {
 		t.Fatal(err)
 	}
 	d := h.inspect(id)
-	if !strings.Contains(d.Run.Error, "evie.workflow.runtime/1") || !strings.Contains(d.Run.Error, "compatible") || len(d.Attempts) != 0 {
+	if !strings.Contains(d.Run.Error, RuntimeVersion) || !strings.Contains(d.Run.Error, "compatible") || len(d.Attempts) != 0 {
 		t.Fatalf("paused run = %+v", d.Run)
 	}
 	h.clock.Advance(time.Minute)

@@ -185,6 +185,8 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusUnprocessableEntity, "invalid_session", err.Error()
 	case errors.Is(err, workflowruntime.ErrDefinitionMismatch):
 		status, code, message = http.StatusConflict, "definition_mismatch", err.Error()
+	case errors.Is(err, workflowruntime.ErrCapabilityUnavailable):
+		status, code, message = http.StatusConflict, "capability_unavailable", err.Error()
 	}
 	managementJSONError(w, status, code, message)
 }

@@ -51,7 +51,7 @@ func (h *runHarness) reopen() {
 		h.t.Fatal(err)
 	}
 	h.db, h.store = db, eviedb.NewStore(db)
-	h.rt = h.runtime(notesCatalog())
+	h.rt = h.runtime()
 }
 
 var splitBillDir = filepath.Join(testdata, "split-bill")
@@ -409,8 +409,10 @@ func TestWorkflowRunRefusesStepKindsThisRuntimeCannotRunYet(t *testing.T) {
 	notes := h.workspace("notebook:inbox", "notebook:digest")
 	h.approve(h.propose(notes.ID, filepath.Join(testdata, "notes-digest"), fixtures(t, notesFixtures)))
 	_, err := h.rt.StartRun(ctx, RunRequest{WorkspaceID: notes.ID, Workflow: "notes-digest", TextInputs: map[string]string{"day": "2026-10-05"}, Surface: "cli"})
+	// Capability reads run since sub-stage 5; its effect (notes.append)
+	// waits for the effect protocol.
 	var unsupported *UnsupportedStepsError
-	if !errors.Is(err, ErrUnsupportedSteps) || !errors.As(err, &unsupported) || !reflect.DeepEqual(unsupported.Kinds, []string{"ai", "capability", "interrupt"}) ||
+	if !errors.Is(err, ErrUnsupportedSteps) || !errors.As(err, &unsupported) || !reflect.DeepEqual(unsupported.Kinds, []string{"ai", "capability effect", "interrupt"}) ||
 		!strings.Contains(err.Error(), "not yet supported in this runtime version") {
 		t.Fatalf("notes-digest: %v", err)
 	}

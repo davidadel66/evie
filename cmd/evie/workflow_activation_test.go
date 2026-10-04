@@ -42,7 +42,7 @@ func newWorkflowCLI(t *testing.T) *workflowCLI {
 	t.Helper()
 	store := backgroundTestStore(t)
 	rt, err := workflowruntime.New(workflowruntime.Config{
-		Store: store, Repo: procedural.New(filepath.Join(t.TempDir(), "procedural")), Catalog: notesTestCatalog(),
+		Store: store, Repo: procedural.New(filepath.Join(t.TempDir(), "procedural")), Capabilities: workflowruntime.ContractsOnly(notesTestCatalog()),
 		Workers: workflow.WorkerCeiling{Deadline: 15 * time.Minute, Tokens: 1_000_000},
 	})
 	if err != nil {

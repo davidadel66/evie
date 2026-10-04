@@ -54,7 +54,7 @@ func workflowRuntimeForWeb(t *testing.T) (*eviedb.Store, *workflowruntime.Runtim
 			Output: workflow.ObjectType(workflow.Field{Name: "entry_id", Type: workflow.StringType()})},
 	)
 	rt, err := workflowruntime.New(workflowruntime.Config{Store: store, Repo: procedural.New(filepath.Join(t.TempDir(), "procedural")),
-		Catalog: catalog, Workers: workflow.WorkerCeiling{Deadline: 15 * time.Minute, Tokens: 1_000_000}})
+		Capabilities: workflowruntime.ContractsOnly(catalog), Workers: workflow.WorkerCeiling{Deadline: 15 * time.Minute, Tokens: 1_000_000}})
 	if err != nil {
 		t.Fatal(err)
 	}

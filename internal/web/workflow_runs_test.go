@@ -103,6 +103,76 @@ func TestWorkflowWebRoutesStartListAndInspectRuns(t *testing.T) {
 	}
 }
 
+// A start that reads a capability with no ready provider is refused, with
+// its reason, before anything is recorded (Stage 14 sub-stage 5).
+func TestWorkflowWebStartRefusesAnUnavailableCapability(t *testing.T) {
+	ctx := context.Background()
+	_, rt, w := workflowRuntimeForWeb(t)
+	dir := t.TempDir()
+	for name, content := range map[string]string{
+		"README.md": "# Notes read\n\nRead one day's inbox notes.\n",
+		"workflow.yaml": `schema_version: 1
+name: notes-read
+description: Read one day's inbox notes.
+inputs:
+  day:
+    type: string
+    required: true
+run_key:
+  inputs: [day]
+limits:
+  max_duration: 5m
+  max_attempts: 3
+  max_parallel: 1
+  max_tokens: 1
+authority:
+  operations:
+    - capability: notes.list
+      connection: conn-notes
+      resources: ["notebook:inbox"]
+      max_calls_per_run: 1
+retention:
+  classification: ordinary
+start: read
+steps:
+  - id: read
+    kind: capability
+    capability: notes.list
+    contract: 1.0.0
+    connection: conn-notes
+    resource: "notebook:inbox"
+    input:
+      day: $inputs.day
+outputs:
+  notes: $steps.read.output.notes
+`,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f, err := workflow.ParseFixtures([]byte(`{"inputs": {"day": "2026-10-05"}, "steps": {"read": {"output": {"notes": []}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	card, err := rt.Propose(ctx, workflowruntime.Proposal{WorkspaceID: w.ID, Dir: dir, Fixtures: &f, Surface: "cli"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.Approve(ctx, workflowruntime.Approval{ProposalID: card.Proposal.ID, ExecutableHash: card.Proposal.ExecutableHash,
+		AuthorityHash: card.Proposal.AuthorityHash, ExpectedVersion: card.ExpectedVersion, Surface: "cli"}); err != nil {
+		t.Fatal(err)
+	}
+	h := web.WithWorkflows(web.NewServer(nil), rt).Handler()
+	resp := workflowPost(t, h, "start", map[string]any{"workspace_id": w.ID, "name": "notes-read", "inputs": map[string]any{"day": "2026-10-05"}})
+	if resp.Code != http.StatusConflict || !strings.Contains(resp.Body.String(), "capability_unavailable") || !strings.Contains(resp.Body.String(), "notes.list") {
+		t.Fatalf("start without a provider = %d %s", resp.Code, resp.Body)
+	}
+	if runs, err := rt.ListRuns(ctx, workflowruntime.RunFilter{WorkspaceID: w.ID}); err != nil || len(runs) != 0 {
+		t.Fatalf("a refused start recorded %+v, %v", runs, err)
+	}
+}
+
 // A detached web start records the run and returns it at once; the
 // server's scheduler executes it, and inspection shows its lease and
 // recovery events.
@@ -130,8 +200,10 @@ func TestWorkflowWebDetachedStartReturnsTheRecordedRun(t *testing.T) {
 		if resp.Code != http.StatusOK || json.Unmarshal(resp.Body.Bytes(), &detail) != nil {
 			t.Fatalf("inspect = %d %s", resp.Code, resp.Body)
 		}
-		if detail.Run.State == eviedb.WorkflowRunSucceeded {
-			if detail.Lease == nil || detail.Lease.Holder != rt.Holder() || detail.Lease.ReleasedAt == nil || detail.Events == nil {
+		// The pass releases the lease in its own transaction right after
+		// the run's last node, so wait for both.
+		if detail.Run.State == eviedb.WorkflowRunSucceeded && detail.Lease != nil && detail.Lease.ReleasedAt != nil {
+			if detail.Lease.Holder != rt.Holder() || detail.Events == nil {
 				t.Fatalf("inspected lease = %s", resp.Body)
 			}
 			break

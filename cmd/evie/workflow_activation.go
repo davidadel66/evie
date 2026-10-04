@@ -14,7 +14,9 @@ import (
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/procedural"
+	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/workflow"
 	"github.com/davidadel66/evie/internal/workflowruntime"
 )
@@ -30,14 +32,61 @@ type workflowCommands interface {
 	StartRun(context.Context, workflowruntime.RunRequest) (workflowruntime.RunResult, error)
 	InspectRun(context.Context, string) (eviedb.WorkflowRunDetail, error)
 	ListRuns(context.Context, workflowruntime.RunFilter) ([]eviedb.WorkflowRun, error)
+	Substitute(context.Context, workflowruntime.Substitution) (eviedb.WorkflowRunSubstitution, error)
+}
+
+// workflowCapabilityPlugins are the compiled plugins that contribute
+// workflow capability reads (Stage 14 sub-stage 5): Finance's fixed reads of
+// the local finance database. The full Plugin Manager of `evie serve` and
+// the REPL compiles the same plugins.
+func workflowCapabilityPlugins() []plugins.Plugin {
+	return []plugins.Plugin{plugins.NewFinance()}
+}
+
+// workflowCapabilityCatalog is the compiled workflow capability contracts,
+// for reviews that need no plugin to run.
+func workflowCapabilityCatalog() (workflow.Catalog, error) {
+	manager, err := plugins.NewManager(tools.NewToolset(nil), workflowCapabilityPlugins()...)
+	if err != nil {
+		return nil, err
+	}
+	return managerCatalog{manager}, nil
+}
+
+type managerCatalog struct{ manager *plugins.Manager }
+
+func (c managerCatalog) Capability(id string) (workflow.CapabilityContract, bool) {
+	return c.manager.WorkflowContract(id)
+}
+
+// newWorkflowPluginManager is a Plugin Manager of the workflow capability
+// plugins for a one-shot `evie workflows` command, which runs without the
+// full plugin set: it follows the owner's durable enabled choices (the same
+// defaults as `evie serve`), so a disabled plugin's reads are unavailable
+// here too.
+func newWorkflowPluginManager(ctx context.Context, store plugins.EnabledStateStore) (*plugins.Manager, error) {
+	compiled := workflowCapabilityPlugins()
+	manager, err := plugins.NewManager(tools.NewToolset(nil), compiled...)
+	if err != nil {
+		return nil, err
+	}
+	defaults := map[plugins.PluginID]bool{}
+	for _, p := range compiled {
+		id := p.Manifest().ID
+		defaults[id] = defaultPluginEnabled[id]
+	}
+	if err := manager.ConfigureEnabledState(ctx, store, defaults); err != nil {
+		return nil, err
+	}
+	return manager, nil
 }
 
 // newWorkflowRuntime is the production Workflow Runtime: the kernel store,
-// the procedural repository at ~/.evie/procedural, no capability contracts
-// yet (providers declare them in sub-stage 5), the operator's subagent
-// ceiling for agent budgets, and the scheduler's worker bound from
+// the procedural repository at ~/.evie/procedural, the workflow
+// capabilities of the given Plugin Manager (sub-stage 5), the operator's
+// subagent ceiling for agent budgets, and the scheduler's worker bound from
 // EVIE_WORKFLOW_WORKERS, its errors logged.
-func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string) (*workflowruntime.Runtime, error) {
+func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string, providers workflowruntime.CapabilityProviders) (*workflowruntime.Runtime, error) {
 	policy, err := configuredSubagentPolicy(getenv)
 	if err != nil {
 		return nil, fmt.Errorf("invalid Subagents configuration: %w", err)
@@ -51,7 +100,7 @@ func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string) (*workf
 		return nil, err
 	}
 	return workflowruntime.New(workflowruntime.Config{
-		Store: store, Repo: procedural.New(root), Catalog: workflow.NewCatalog(),
+		Store: store, Repo: procedural.New(root), Capabilities: providers,
 		Workers:   workflow.WorkerCeiling{Deadline: policy.Deadline, Tokens: policy.TokenBudget},
 		Scheduler: scheduler,
 		Report:    func(err error) { log.Printf("workflow scheduler: %v", err) },
@@ -251,6 +300,21 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		return true, listWorkflowRuns(ctx, args[2:], out, rt)
 	case "inspect":
 		return true, inspectWorkflowRun(ctx, args[2:], out, rt)
+	case "substitute":
+		a, ok := parseWorkflowArgs(args[2:])
+		if !ok || len(a.positional) != 3 {
+			return true, usage
+		}
+		sub, err := rt.Substitute(ctx, workflowruntime.Substitution{RunID: a.positional[0], Capability: a.positional[1], Version: a.positional[2], Surface: "cli"})
+		if err != nil {
+			return true, err
+		}
+		if a.json {
+			return true, encoder.Encode(sub)
+		}
+		fmt.Fprintf(out, "Recorded: run %s continues %s with %s %s in place of the pinned %s (contract %s, same schema).\n%s\nThe run resumes at its next check.\n",
+			sub.RunID, sub.Capability, sub.Plugin, sub.ReplacementVersion, sub.PinnedVersion, sub.Contract, sub.Evidence)
+		return true, nil
 	}
 	return true, usage
 }

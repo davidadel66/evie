@@ -1,0 +1,95 @@
+# Split one month's spending evenly between people in whole cents: a
+# capability read of the month's cash flow from the local finance database,
+# a deterministic split, a branch on whether cents are left over, and one
+# deterministic step on each path. Capability reads (Stage 14 sub-stage 5)
+# let manual runs execute it.
+schema_version: 1
+name: shared-spending
+description: Split one month's spending evenly between people in whole cents.
+
+inputs:
+  month:
+    type: string
+    required: true
+    max_length: 7
+  people:
+    # No maximum here: split_evenly@1 itself refuses more than 1000 parts.
+    type: integer
+    required: true
+    minimum: 1
+
+run_key:
+  inputs: [month, people]
+
+limits:
+  max_duration: 10m
+  max_attempts: 10
+  max_parallel: 1
+  max_tokens: 1
+
+authority:
+  operations:
+    - capability: finance.month_cash_flow
+      connection: finance-local
+      resources: [ledger]
+      max_calls_per_run: 1
+
+retention:
+  classification: sensitive
+
+start: read
+
+steps:
+  - id: read
+    kind: capability
+    description: The month's posted cash flow as of its last day.
+    capability: finance.month_cash_flow
+    contract: 1.0.0
+    connection: finance-local
+    resource: ledger
+    input:
+      month: $inputs.month
+    retry:
+      max_attempts: 3
+      backoff: 1m
+    next: split
+
+  - id: split
+    kind: deterministic
+    function: split_evenly@1
+    input:
+      total: $steps.read.output.outflow_cents
+      parts: $inputs.people
+    next: check
+
+  - id: check
+    kind: branch
+    cases:
+      - when:
+          ref: $steps.split.output.remainder
+          op: eq
+          value: 0
+        next: per_person
+    default: leftover
+
+  - id: per_person
+    kind: deterministic
+    description: The amount each person pays when the spending divides exactly.
+    function: split_evenly@1
+    input:
+      total: $steps.split.output.share
+      parts: 1
+
+  - id: leftover
+    kind: deterministic
+    description: The cents left over after an even split, as one amount.
+    function: split_evenly@1
+    input:
+      total: $steps.split.output.remainder
+      parts: 1
+
+outputs:
+  spent_cents: $steps.read.output.outflow_cents
+  shares: $steps.split.output.shares
+  per_person: $steps.per_person.output.share
+  leftover_cents: $steps.leftover.output.share

@@ -41,6 +41,8 @@ type harness struct {
 	// configures each runtime's scheduler and leases.
 	clock     *testClock
 	scheduler SchedulerConfig
+	// providers are every runtime's capability providers.
+	providers CapabilityProviders
 }
 
 func newHarness(t *testing.T) *harness {
@@ -51,13 +53,24 @@ func newHarness(t *testing.T) *harness {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	h := &harness{t: t, store: eviedb.NewStore(db), repo: procedural.New(filepath.Join(t.TempDir(), "procedural"))}
-	h.rt = h.runtime(notesCatalog())
+	h.rt = h.runtime()
 	return h
 }
 
-func (h *harness) runtime(catalog workflow.Catalog) *Runtime {
+// runtime is a runtime over the harness's store with its capability
+// providers (the notes contracts, which no run can call, unless a test set
+// others).
+func (h *harness) runtime() *Runtime {
 	h.t.Helper()
-	rt, err := New(Config{Store: h.store, Repo: h.repo, Catalog: catalog, Workers: ceiling, Scheduler: h.scheduler})
+	if h.providers == nil {
+		h.providers = ContractsOnly(notesCatalog())
+	}
+	return h.runtimeWith(h.providers)
+}
+
+func (h *harness) runtimeWith(providers CapabilityProviders) *Runtime {
+	h.t.Helper()
+	rt, err := New(Config{Store: h.store, Repo: h.repo, Capabilities: providers, Workers: ceiling, Scheduler: h.scheduler})
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -408,7 +421,7 @@ func TestWorkflowApprovalRevalidatesTheExactCommit(t *testing.T) {
 	if _, _, err := h.repo.Commit(ctx, card.Proposal.Path, tampered, "edit outside review"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.runtime(workflow.NewCatalog()).Approve(ctx, approvalFor(card)); err == nil || !strings.Contains(err.Error(), "not in the capability catalog") {
+	if _, err := h.runtimeWith(ContractsOnly(workflow.NewCatalog())).Approve(ctx, approvalFor(card)); err == nil || !strings.Contains(err.Error(), "not in the capability catalog") {
 		t.Fatalf("approval without the capabilities: %v", err)
 	}
 	a := h.approve(card)

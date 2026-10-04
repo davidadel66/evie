@@ -1,0 +1,3 @@
+{"inputs": {"month": "2026-09", "people": 3}, "steps": {
+	"read": {"output": {"month": "2026-09", "inflow_cents": 300000, "outflow_cents": 5770, "net_cents": 294230,
+		"transactions": 3, "pending_transactions": 1, "categories": []}}}}

@@ -19,22 +19,26 @@ const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie wor
 	" | evie workflows approve [--json] <proposal-id> --hash <executable-hash> --authority <authority-hash> --expect-version <n>" +
 	" | evie workflows deactivate [--json] <workspace-id> <name> --version <n> [--reason <text>]" +
 	" | evie workflows run [--json] [--detach] <workspace-id> <name> [--input <name>=<value>]... [--input-json <file>]" +
-	" | evie workflows runs [--json] [<workspace-id>] [--workflow <name>] | evie workflows inspect [--json] <run-id>"
+	" | evie workflows runs [--json] [<workspace-id>] [--workflow <name>] | evie workflows inspect [--json] <run-id>" +
+	" | evie workflows substitute [--json] <run-id> <capability> <version>"
 
 // workflowActivationCommands need the database and the procedural
 // repository; runWorkflowActivation answers them once both are available
-// (Stage 14 sub-stage 2; run, runs and inspect from sub-stage 3).
-var workflowActivationCommands = []string{"propose", "list", "show", "diff", "approve", "deactivate", "run", "runs", "inspect"}
+// (Stage 14 sub-stage 2; run, runs and inspect from sub-stage 3; substitute
+// from sub-stage 5).
+var workflowActivationCommands = []string{"propose", "list", "show", "diff", "approve", "deactivate", "run", "runs", "inspect", "substitute"}
+
+// accessNotChecked is printed with a standalone review.
+const accessNotChecked = "Workspace Access is not checked outside a Workspace; evie workflows propose <workspace-id> <dir> checks it.\n"
 
 // runWorkflowManagement answers `evie workflows validate <dir>`, which prints
 // a Workflow Definition's review report, and `evie workflows simulate <dir>
 // --fixtures <file>`, which prints an effect-suppressed simulation trace
 // (Stage 14 sub-stage 1, 2026-10-04). Both work on any directory and touch
-// no database, so the definition is reviewed against an empty capability
-// catalog and an empty Workspace Access: a capability node is reported as
-// unauthorized here. Proposing it to a Workspace (`evie workflows propose`,
-// sub-stage 2) validates it against that Workspace's access instead, and
-// capability providers declare workflow contracts in sub-stage 5. Agent
+// no database. Since sub-stage 5 the definition is reviewed against the
+// workflow capabilities compiled into Evie; Workspace Access belongs to a
+// Workspace, so it is not checked here, and proposing the definition to a
+// Workspace (`evie workflows propose`, sub-stage 2) checks it. Agent
 // budgets are bounded by the operator's subagent policy. The activation
 // commands are left to runWorkflowActivation, after the database opens.
 func runWorkflowManagement(_ context.Context, args []string, out io.Writer, getenv func(string) string) (bool, error) {
@@ -73,9 +77,14 @@ func runWorkflowManagement(_ context.Context, args []string, out io.Writer, gete
 	if err != nil {
 		return true, fmt.Errorf("invalid Subagents configuration: %w", err)
 	}
+	catalog, err := workflowCapabilityCatalog()
+	if err != nil {
+		return true, err
+	}
 	env := workflow.Environment{
-		Capabilities: workflow.NewCatalog(),
-		Workers:      workflow.WorkerCeiling{Deadline: policy.Deadline, Tokens: policy.TokenBudget},
+		Capabilities:    catalog,
+		Workers:         workflow.WorkerCeiling{Deadline: policy.Deadline, Tokens: policy.TokenBudget},
+		AccessUnchecked: true,
 	}
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
@@ -101,7 +110,7 @@ func runWorkflowManagement(_ context.Context, args []string, out io.Writer, gete
 		if asJSON {
 			return true, encoder.Encode(map[string]any{"valid": true, "report": validated.Report()})
 		}
-		_, err := io.WriteString(out, validated.Report().Text())
+		_, err := io.WriteString(out, validated.Report().Text()+accessNotChecked)
 		return true, err
 	}
 	data, err := os.ReadFile(fixtures)
@@ -119,6 +128,6 @@ func runWorkflowManagement(_ context.Context, args []string, out io.Writer, gete
 	if asJSON {
 		return true, encoder.Encode(simulation)
 	}
-	_, err = io.WriteString(out, simulation.Text())
+	_, err = io.WriteString(out, simulation.Text()+accessNotChecked)
 	return true, err
 }

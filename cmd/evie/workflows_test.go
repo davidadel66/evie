@@ -69,9 +69,8 @@ func TestWorkflowCLIUsesTheOperatorWorkerCeiling(t *testing.T) {
 	}
 }
 
-// Until a definition is bound to a Workspace (sub-stage 2) and providers
-// declare workflow contracts (sub-stage 5), the CLI reviews against an empty
-// catalog and Workspace Access: capability nodes are unauthorized there.
+// The CLI reviews against the compiled workflow capabilities, so a
+// capability no plugin provides (the test-only notes.list) is reported.
 func TestWorkflowCLIValidateReportsProblems(t *testing.T) {
 	text, err := runWorkflowsCLI(t, nil, "workflows", "validate", notesDigestDir)
 	if err == nil {
@@ -93,6 +92,35 @@ func TestWorkflowCLIValidateReportsProblems(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(raw), &report); err != nil || report.Valid || len(report.Problems) == 0 {
 		t.Fatalf("JSON problems = %s (%v)", raw, err)
+	}
+}
+
+var (
+	sharedSpendingDir      = filepath.Join("..", "..", "internal", "workflow", "testdata", "shared-spending")
+	sharedSpendingFixtures = filepath.Join("..", "..", "internal", "workflow", "testdata", "shared-spending.fixtures.json")
+)
+
+// Standalone review uses the workflow capabilities compiled into Evie (Stage
+// 14 sub-stage 5): a definition that reads finance.month_cash_flow
+// validates and simulates. Workspace Access exists only in a Workspace, so
+// it is checked when the definition is proposed there.
+func TestWorkflowCLIReviewsCapabilityReadsAgainstTheCompiledCatalog(t *testing.T) {
+	text, err := runWorkflowsCLI(t, nil, "workflows", "validate", sharedSpendingDir)
+	if err != nil {
+		t.Fatalf("%v:\n%s", err, text)
+	}
+	for _, want := range []string{"finance.month_cash_flow 1.0.0: read", "finance.month_cash_flow on finance-local: ledger", "Workspace Access is not checked outside a Workspace"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output lacks %q:\n%s", want, text)
+		}
+	}
+	sim, err := runWorkflowsCLI(t, nil, "workflows", "simulate", sharedSpendingDir, "--fixtures", sharedSpendingFixtures)
+	if err != nil || !strings.Contains(sim, "Status: succeeded") {
+		t.Fatalf("simulation %v:\n%s", err, sim)
+	}
+	raw, err := runWorkflowsCLI(t, nil, "workflows", "validate", "--json", sharedSpendingDir)
+	if err != nil || !strings.HasPrefix(strings.TrimSpace(raw), "{") || !strings.Contains(raw, `"valid": true`) {
+		t.Fatalf("JSON review %v:\n%s", err, raw)
 	}
 }
 

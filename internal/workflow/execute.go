@@ -32,6 +32,25 @@ type StepPlan struct {
 	Backoff time.Duration
 	// Function is a deterministic step's name@version.
 	Function string
+	// Capability, Contract, Connection and Resource bind a capability step
+	// to one Capability Contract on one connection's exact resource; Effect
+	// says it performs an external effect rather than a read.
+	Capability string
+	Contract   string
+	Connection string
+	Resource   string
+	Effect     bool
+}
+
+// CapabilityStep is one capability step's binding, as a run pins and
+// admits it (Stage 14 sub-stage 5).
+type CapabilityStep struct {
+	Step       string
+	Capability string
+	Contract   string
+	Connection string
+	Resource   string
+	Effect     bool
 }
 
 // RunLimits are the definition's limits on one run.
@@ -65,7 +84,72 @@ func (v *Validated) Step(id string) (StepPlan, bool) {
 	if n.kind != KindBranch {
 		p.Next = n.step.Next
 	}
+	if n.kind == KindCapability {
+		p.Capability, p.Contract, p.Connection, p.Resource = n.step.Capability, n.step.Contract, n.step.Connection, n.step.Resource
+		p.Effect = n.cap != nil && n.cap.Effect
+	}
 	return p, true
+}
+
+// CapabilitySteps lists every capability step's binding, by step ID.
+func (v *Validated) CapabilitySteps() []CapabilityStep {
+	out := []CapabilityStep{}
+	for _, id := range sortedKeys(v.steps) {
+		n := v.steps[id]
+		if n.kind != KindCapability {
+			continue
+		}
+		out = append(out, CapabilityStep{Step: id, Capability: n.step.Capability, Contract: n.step.Contract,
+			Connection: n.step.Connection, Resource: n.step.Resource, Effect: n.cap != nil && n.cap.Effect})
+	}
+	return out
+}
+
+// capabilityNode returns a capability step's compiled node.
+func (v *Validated) capabilityNode(id string) (*node, error) {
+	n, ok := v.steps[id]
+	if !ok || n.kind != KindCapability || n.cap == nil {
+		return nil, fmt.Errorf("%s is not a capability step", id)
+	}
+	return n, nil
+}
+
+// CapabilityInput resolves a capability step's input from run inputs and
+// the outputs of the steps that have run, leaving out optional fields whose
+// source is absent, and checks it against the contract's input type.
+func (v *Validated) CapabilityInput(id string, inputs, steps map[string]any) (map[string]any, error) {
+	n, err := v.capabilityNode(id)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := v.StepInput(id, inputs, steps)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	for name, value := range resolved {
+		if value != nil {
+			out[name] = value
+		}
+	}
+	in := n.cap.Input
+	if in == nil {
+		in = ObjectType()
+	}
+	if err := checkValue(in, out); err != nil {
+		return nil, fmt.Errorf("%s: input outside %s %s: %v", n.path, n.cap.ID, n.cap.Contract, err)
+	}
+	return out, nil
+}
+
+// CheckCapabilityOutput checks a provider's normalized output against the
+// capability step's contract.
+func (v *Validated) CheckCapabilityOutput(id string, value any) error {
+	n, err := v.capabilityNode(id)
+	if err != nil {
+		return err
+	}
+	return checkValue(n.output, value)
 }
 
 // StepKinds lists the distinct kinds of every step and map item, sorted.

@@ -39,17 +39,26 @@ import (
 // continue a run from its last checkpoint.
 
 // RuntimeVersion names this runtime's execution semantics in each run's
-// Execution Composition (ADR 0016, 0025).
-const RuntimeVersion = "evie.workflow.runtime/1"
+// Execution Composition (ADR 0016, 0025). Version 2 (sub-stage 5) adds
+// capability reads through pinned providers and stops counting interrupted
+// attempts against a step's Retry Policy.
+const RuntimeVersion = "evie.workflow.runtime/2"
 
 // compatibleRuntimes are the pinned runtimes this runtime declares it can
-// continue (ADR 0025). Sub-stage 4 adds leases and recovery around the same
-// node semantics, so runs pinned to evie.workflow.runtime/1 continue
-// unchanged; a run pinned to any other runtime pauses visibly.
-var compatibleRuntimes = []string{RuntimeVersion}
+// continue (ADR 0025). Runs pinned to evie.workflow.runtime/1 (sub-stages 3
+// and 4) hold only deterministic and branch steps, whose semantics are
+// unchanged; the one difference, that an interruption no longer spends one
+// of a step's attempts, only lets a pure node run again from the same
+// checkpoint and never changes a recorded output. A run pinned to any other
+// runtime pauses visibly.
+var compatibleRuntimes = []string{"evie.workflow.runtime/1", RuntimeVersion}
 
-// executableKinds are the step kinds this runtime version executes.
-var executableKinds = []string{workflow.KindBranch, workflow.KindDeterministic}
+// executableKinds are the step kinds this runtime version executes;
+// capability steps only when they read (effects are sub-stage 6's).
+var executableKinds = []string{workflow.KindBranch, workflow.KindCapability, workflow.KindDeterministic}
+
+// capabilityEffect names capability effect steps among unsupported kinds.
+const capabilityEffect = "capability effect"
 
 var (
 	// ErrUnsupportedSteps refuses a definition with steps this runtime
@@ -70,7 +79,7 @@ type UnsupportedStepsError struct {
 }
 
 func (e *UnsupportedStepsError) Error() string {
-	return fmt.Sprintf("workflow %s uses %s steps, not yet supported in this runtime version (it runs deterministic and branch steps); no run was started",
+	return fmt.Sprintf("workflow %s uses %s steps, not yet supported in this runtime version (it runs deterministic, branch and capability read steps); no run was started",
 		e.Workflow, strings.Join(e.Kinds, ", "))
 }
 
@@ -106,13 +115,14 @@ type RunFilter struct {
 	Limit       int                `json:"limit,omitempty"`
 }
 
-// composition is a run's Execution Composition in this sub-stage: the
-// runtime version and what it executes. Capability providers join it in
-// sub-stage 5.
+// composition is a run's Execution Composition: the runtime version, what
+// it executes, and (sub-stage 5) the provider pinned for each capability it
+// reads. Runs recorded before sub-stage 5 have no providers.
 type composition struct {
-	Runtime   string   `json:"runtime"`
-	StepKinds []string `json:"step_kinds"`
-	Functions []string `json:"functions"`
+	Runtime   string           `json:"runtime"`
+	StepKinds []string         `json:"step_kinds"`
+	Functions []string         `json:"functions"`
+	Providers []pinnedProvider `json:"providers,omitempty"`
 }
 
 type preparedRun struct {
@@ -182,7 +192,13 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 			unsupported = append(unsupported, kind)
 		}
 	}
+	for _, s := range v.CapabilitySteps() {
+		if s.Effect && !slices.Contains(unsupported, capabilityEffect) {
+			unsupported = append(unsupported, capabilityEffect)
+		}
+	}
 	if len(unsupported) > 0 {
+		slices.Sort(unsupported)
 		return preparedRun{}, &UnsupportedStepsError{Workflow: a.Name, Kinds: unsupported}
 	}
 	inputs, err := v.AcceptInputs(req.Inputs, req.TextInputs)
@@ -193,7 +209,11 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	if err != nil {
 		return preparedRun{}, err
 	}
-	pinned, err := json.Marshal(composition{Runtime: RuntimeVersion, StepKinds: kinds, Functions: v.Functions()})
+	providers, err := r.pinProviders(ctx, v)
+	if err != nil {
+		return preparedRun{}, err
+	}
+	pinned, err := json.Marshal(composition{Runtime: RuntimeVersion, StepKinds: kinds, Functions: v.Functions(), Providers: providers})
 	if err != nil {
 		return preparedRun{}, err
 	}
@@ -398,13 +418,28 @@ func admissionRefused(err error) bool {
 	return errors.Is(err, eviedb.ErrWorkflowNotActive) || errors.Is(err, eviedb.ErrWorkflowBlocked) || errors.Is(err, eviedb.ErrWorkflowNotFound)
 }
 
+// pass is one execution pass's context: the runtime's (ending when it
+// stops), the durable writes' (never cancelled mid-transaction), the
+// lease's (ending when it is lost), the lease, the run's approved
+// definition and its pinned Execution Composition.
+type pass struct {
+	stop   context.Context
+	writes context.Context
+	lost   context.Context
+	lease  eviedb.WorkflowRunLease
+	v      *workflow.Validated
+	comp   composition
+}
+
 // continueRun checks, under the lease, that the run may continue, pausing
 // it visibly when it may not, and then advances it. The checks run at
 // every claim, so they hold whenever a run resumes after a restart, a
 // retry's backoff or a pause: its pinned runtime must be one this runtime
-// declares compatible (ADR 0025), run admission must still hold for it
-// (ADR 0033: revocations apply despite the pin), and its pinned commit
-// must still validate and hash to its approval.
+// declares compatible (ADR 0025), its pinned providers must still be the
+// ones it pinned or audited substitutes (sub-stage 5), run admission must
+// still hold for it (ADR 0033: revocations apply despite the pin), its
+// pinned commit must still validate and hash to its approval, and when its
+// next step reads a capability, that provider must be available now.
 func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.WorkflowRunLease, lost context.Context) (passEnd, error) {
 	pause := func(reason string) (passEnd, error) {
 		if _, err := r.store.PauseWorkflowRun(writes, lease, reason, r.sched.Recheck); err != nil {
@@ -417,7 +452,14 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 		return 0, err
 	}
 	run := p.Run
-	if reason := r.incompatible(run.Composition); reason != "" {
+	comp, reason := r.incompatible(run.Composition)
+	if reason != "" {
+		return pause(reason)
+	}
+	if reason, err := r.providersCompatible(writes, run.ID, comp); err != nil || reason != "" {
+		if err != nil {
+			return 0, err
+		}
 		return pause(reason)
 	}
 	if err := r.store.AdmitWorkflowRun(writes, lease); err != nil {
@@ -439,25 +481,38 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 	if err != nil {
 		return 0, err
 	}
+	// A run paused for an unavailable provider stays paused, rather than
+	// resuming only to pause again before the read, until it is ready.
+	if next, ok := v.Step(p.Checkpoint.Next); ok && next.Kind == workflow.KindCapability && p.InFlight == nil && !run.State.Terminal() {
+		if pin, ok := comp.pin(next.Capability); ok {
+			_, reason, err := r.checkPinned(writes, run.ID, pin, true)
+			if err != nil {
+				return 0, err
+			}
+			if reason != "" {
+				return pause(fmt.Sprintf("steps.%s: %s", next.ID, reason))
+			}
+		}
+	}
 	if _, err := r.store.ResumeWorkflowRun(writes, lease); err != nil {
 		if admissionRefused(err) {
 			return pause(err.Error())
 		}
 		return 0, err
 	}
-	return r.advance(ctx, writes, lease, lost, v)
+	return r.advance(&pass{stop: ctx, writes: writes, lost: lost, lease: lease, v: v, comp: comp})
 }
 
-// incompatible says why this runtime cannot continue a run with the pinned
-// Execution Composition, or "" when it can. Nothing is migrated: the run
-// pauses until a compatible runtime claims it (ADR 0025).
-func (r *Runtime) incompatible(pinned json.RawMessage) string {
+// incompatible reads the run's pinned Execution Composition and says why
+// this runtime cannot continue it, or "" when it can. Nothing is migrated:
+// the run pauses until a compatible runtime claims it (ADR 0025).
+func (r *Runtime) incompatible(pinned json.RawMessage) (composition, string) {
 	var c composition
 	if err := json.Unmarshal(pinned, &c); err != nil {
-		return fmt.Sprintf("its pinned Execution Composition cannot be read (%v); this runtime does not continue it", err)
+		return c, fmt.Sprintf("its pinned Execution Composition cannot be read (%v); this runtime does not continue it", err)
 	}
 	if !slices.Contains(r.compatible, c.Runtime) {
-		return fmt.Sprintf("its pinned runtime %s is not one this Evie declares compatible (%s); continue it with an Evie that does, or migrate it to a new run once migration ships",
+		return c, fmt.Sprintf("its pinned runtime %s is not one this Evie declares compatible (%s); continue it with an Evie that does, or migrate it to a new run once migration ships",
 			c.Runtime, strings.Join(r.compatible, ", "))
 	}
 	var unknown []string
@@ -467,21 +522,22 @@ func (r *Runtime) incompatible(pinned json.RawMessage) string {
 		}
 	}
 	if len(unknown) > 0 {
-		return fmt.Sprintf("its pinned step kinds %s are not ones this runtime executes", strings.Join(unknown, ", "))
+		return c, fmt.Sprintf("its pinned step kinds %s are not ones this runtime executes", strings.Join(unknown, ", "))
 	}
-	return ""
+	return c, ""
 }
 
 // advance executes the run from its latest durable checkpoint until it ends,
-// pauses or waits for a retry, the lease is lost, or ctx ends. Each step
-// reads the run's progress back from SQLite, so nothing about the run lives
-// only in memory between nodes; every write is fenced by the lease.
-func (r *Runtime) advance(ctx, writes context.Context, lease eviedb.WorkflowRunLease, lost context.Context, v *workflow.Validated) (passEnd, error) {
+// pauses or waits for a retry, the lease is lost, or the runtime stops.
+// Each step reads the run's progress back from SQLite, so nothing about the
+// run lives only in memory between nodes; every write is fenced by the
+// lease.
+func (r *Runtime) advance(pc *pass) (passEnd, error) {
 	for {
-		if lost.Err() != nil {
+		if pc.lost.Err() != nil {
 			return passLost, nil
 		}
-		p, err := r.store.WorkflowRunProgress(writes, lease.RunID)
+		p, err := r.store.WorkflowRunProgress(pc.writes, pc.lease.RunID)
 		if err != nil {
 			return 0, err
 		}
@@ -494,11 +550,11 @@ func (r *Runtime) advance(ctx, writes context.Context, lease eviedb.WorkflowRunL
 			return 0, fmt.Errorf("%w: steps.%s attempt %d is in flight under lease %d", eviedb.ErrWorkflowRunConflict, p.InFlight.Step, p.InFlight.Attempt, p.InFlight.LeaseToken)
 		case p.Run.NotBefore != nil && p.Run.NotBefore.After(r.now()):
 			return passWaiting, nil
-		case ctx.Err() != nil:
+		case pc.stop.Err() != nil:
 			// Stopping: only a run with work left is released as such.
 			return passStopped, nil
 		}
-		if err := r.step(writes, lease, v, p); err != nil {
+		if err := r.step(pc, p); err != nil {
 			if errors.Is(err, eviedb.ErrWorkflowRunNotDue) {
 				return passWaiting, nil
 			}
@@ -508,10 +564,17 @@ func (r *Runtime) advance(ctx, writes context.Context, lease eviedb.WorkflowRunL
 }
 
 // step takes the run's next step from its latest checkpoint: one branch
-// decision or one deterministic attempt, or the run's failure.
-func (r *Runtime) step(ctx context.Context, lease eviedb.WorkflowRunLease, v *workflow.Validated, p eviedb.WorkflowRunProgress) error {
+// decision, one deterministic attempt or one capability read, a pause
+// before a read that cannot run now, or the run's failure. A node
+// interrupted as many times as the interruption bound at this checkpoint
+// fails the run instead of running again.
+func (r *Runtime) step(pc *pass, p eviedb.WorkflowRunProgress) error {
 	fail := func(reason string) error {
-		_, err := r.store.FailWorkflowRun(ctx, lease, p.Checkpoint.Seq, reason)
+		_, err := r.store.FailWorkflowRun(pc.writes, pc.lease, p.Checkpoint.Seq, reason)
+		return err
+	}
+	pause := func(reason string) error {
+		_, err := r.store.PauseWorkflowRun(pc.writes, pc.lease, reason, r.sched.Recheck)
 		return err
 	}
 	inputs, err := decodeObject(p.Run.Inputs)
@@ -522,15 +585,19 @@ func (r *Runtime) step(ctx context.Context, lease eviedb.WorkflowRunLease, v *wo
 	if err != nil {
 		return fail(fmt.Sprintf("checkpoint %d cannot be read: %v", p.Checkpoint.Seq, err))
 	}
-	step, ok := v.Step(p.Checkpoint.Next)
+	step, ok := pc.v.Step(p.Checkpoint.Next)
 	if !ok {
 		return fail(fmt.Sprintf("checkpoint %d names step %q, which the definition does not have", p.Checkpoint.Seq, p.Checkpoint.Next))
+	}
+	if p.Interrupted >= r.sched.Interruptions {
+		return fail(fmt.Sprintf("steps.%s was interrupted %s at checkpoint %d (each time its runtime crashed, stopped or lost its lease before recording the outcome); the run fails instead of running it again: %s",
+			step.ID, times(p.Interrupted), p.Checkpoint.Seq, p.LastError))
 	}
 	switch step.Kind {
 	case workflow.KindBranch:
 		// A branch decision is pure: one an interruption cut short is
 		// simply decided again.
-		d, err := v.Branch(step.ID, inputs, state)
+		d, err := pc.v.Branch(step.ID, inputs, state)
 		if err != nil {
 			return fail(err.Error())
 		}
@@ -538,8 +605,8 @@ func (r *Runtime) step(ctx context.Context, lease eviedb.WorkflowRunLease, v *wo
 		if err != nil {
 			return err
 		}
-		a, err := r.store.BeginWorkflowAttempt(ctx, lease, eviedb.WorkflowAttemptStart{
-			RunID: p.Run.ID, Checkpoint: p.Checkpoint.Seq, Step: step.ID, Kind: step.Kind, Attempt: p.Attempts + 1, Input: read,
+		a, err := r.store.BeginWorkflowAttempt(pc.writes, pc.lease, eviedb.WorkflowAttemptStart{
+			RunID: p.Run.ID, Checkpoint: p.Checkpoint.Seq, Step: step.ID, Kind: step.Kind, Attempt: p.Made + 1, Input: read,
 		})
 		if err != nil {
 			return err
@@ -551,33 +618,51 @@ func (r *Runtime) step(ctx context.Context, lease eviedb.WorkflowRunLease, v *wo
 		if err != nil {
 			return err
 		}
-		_, err = r.store.FinishWorkflowAttempt(ctx, lease, eviedb.WorkflowAttemptEnd{
+		_, err = r.store.FinishWorkflowAttempt(pc.writes, pc.lease, eviedb.WorkflowAttemptEnd{
 			RunID: p.Run.ID, Seq: a.Seq, Output: decision, Note: d.Note, Next: d.Next, State: p.Checkpoint.State,
 		})
 		return err
 	case workflow.KindDeterministic:
-		return r.deterministic(ctx, lease, v, p, step, inputs, state, fail)
+		return r.deterministic(pc, p, step, inputs, state, fail)
+	case workflow.KindCapability:
+		return r.read(pc, p, step, inputs, state, fail, pause)
 	}
 	return fail(fmt.Sprintf("steps.%s is a %s step, which this runtime version cannot run", step.ID, step.Kind))
 }
 
-// deterministic makes one attempt of a deterministic step within its Retry
-// Policy and the run's limits; an interrupted attempt counts as one. A
-// failed attempt that leaves attempts records the step's backoff as the
-// run's durable not-before time; the retry starts from the same checkpoint
-// with the same input once it passes, in whichever process claims the run.
-func (r *Runtime) deterministic(ctx context.Context, lease eviedb.WorkflowRunLease, v *workflow.Validated, p eviedb.WorkflowRunProgress, step workflow.StepPlan,
-	inputs, state map[string]any, fail func(string) error) error {
+func times(n int) string {
+	if n == 1 {
+		return "once"
+	}
+	return fmt.Sprintf("%d times", n)
+}
+
+// limitReached says why the step's next attempt may not start: its Retry
+// Policy is spent, or the run reached limits.max_attempts or
+// limits.max_duration. Interrupted attempts count against neither.
+func (r *Runtime) limitReached(v *workflow.Validated, p eviedb.WorkflowRunProgress, step workflow.StepPlan) string {
 	limits := v.Limits()
 	switch {
 	case p.Attempts >= step.Attempts:
-		return fail(fmt.Sprintf("steps.%s failed after %s: %s", step.ID, attempts(step.Attempts), p.LastError))
+		return fmt.Sprintf("steps.%s failed after %s: %s", step.ID, attempts(step.Attempts), p.LastError)
 	case p.Counted >= limits.Attempts:
-		return fail(fmt.Sprintf("steps.%s: the run reached limits.max_attempts %d", step.ID, limits.Attempts))
+		return fmt.Sprintf("steps.%s: the run reached limits.max_attempts %d", step.ID, limits.Attempts)
 	case r.now().Sub(p.Run.CreatedAt) > limits.Duration:
-		return fail(fmt.Sprintf("steps.%s: the run exceeded limits.max_duration %s", step.ID, limits.Duration))
+		return fmt.Sprintf("steps.%s: the run exceeded limits.max_duration %s", step.ID, limits.Duration)
 	}
-	input, err := v.StepInput(step.ID, inputs, state)
+	return ""
+}
+
+// deterministic makes one attempt of a deterministic step within its Retry
+// Policy and the run's limits. A failed attempt that leaves attempts
+// records the step's backoff as the run's durable not-before time; the
+// retry starts from the same checkpoint with the same input once it passes,
+// in whichever process claims the run.
+func (r *Runtime) deterministic(pc *pass, p eviedb.WorkflowRunProgress, step workflow.StepPlan, inputs, state map[string]any, fail func(string) error) error {
+	if reason := r.limitReached(pc.v, p, step); reason != "" {
+		return fail(reason)
+	}
+	input, err := pc.v.StepInput(step.ID, inputs, state)
 	if err != nil {
 		return fail(err.Error())
 	}
@@ -585,8 +670,8 @@ func (r *Runtime) deterministic(ctx context.Context, lease eviedb.WorkflowRunLea
 	if err != nil {
 		return err
 	}
-	a, err := r.store.BeginWorkflowAttempt(ctx, lease, eviedb.WorkflowAttemptStart{
-		RunID: p.Run.ID, Checkpoint: p.Checkpoint.Seq, Step: step.ID, Kind: step.Kind, Attempt: p.Attempts + 1, Input: encoded,
+	a, err := r.store.BeginWorkflowAttempt(pc.writes, pc.lease, eviedb.WorkflowAttemptStart{
+		RunID: p.Run.ID, Checkpoint: p.Checkpoint.Seq, Step: step.ID, Kind: step.Kind, Attempt: p.Made + 1, Input: encoded,
 	})
 	if err != nil {
 		return err
@@ -594,9 +679,9 @@ func (r *Runtime) deterministic(ctx context.Context, lease eviedb.WorkflowRunLea
 	var out any
 	var callErr error
 	if r.call != nil {
-		out, callErr = r.call(p.Run.ID, v, step.ID, input)
+		out, callErr = r.call(p.Run.ID, pc.v, step.ID, input)
 	} else {
-		out, callErr = v.CallFunction(step.ID, input)
+		out, callErr = pc.v.CallFunction(step.ID, input)
 	}
 	var output []byte
 	if callErr == nil {
@@ -604,17 +689,25 @@ func (r *Runtime) deterministic(ctx context.Context, lease eviedb.WorkflowRunLea
 			callErr = fmt.Errorf("its output cannot be recorded: %v", err)
 		}
 	}
-	if callErr != nil {
-		end := eviedb.WorkflowAttemptEnd{RunID: p.Run.ID, Seq: a.Seq, Error: callErr.Error()}
-		if end.Error == "" {
-			end.Error = "the function failed without a message"
-		}
-		if a.Attempt >= step.Attempts {
+	if callErr != nil && callErr.Error() == "" {
+		callErr = errors.New("the function failed without a message")
+	}
+	return r.settle(pc, p, step, a.Seq, inputs, state, out, output, callErr)
+}
+
+// settle records how an attempt ended: its output with the next checkpoint
+// (and the run's outputs when the graph ends), or its failure, retried
+// after the step's backoff, a durable not-before time, while its Retry
+// Policy has attempts left and failing the run otherwise.
+func (r *Runtime) settle(pc *pass, p eviedb.WorkflowRunProgress, step workflow.StepPlan, seq int64, inputs, state map[string]any, out any, output []byte, failure error) error {
+	if failure != nil {
+		end := eviedb.WorkflowAttemptEnd{RunID: p.Run.ID, Seq: seq, Error: failure.Error()}
+		if p.Attempts+1 >= step.Attempts {
 			end.RunError = fmt.Sprintf("steps.%s failed after %s: %s", step.ID, attempts(step.Attempts), end.Error)
 		} else {
 			end.RetryAfter = step.Backoff
 		}
-		_, err := r.store.FinishWorkflowAttempt(ctx, lease, end)
+		_, err := r.store.FinishWorkflowAttempt(pc.writes, pc.lease, end)
 		return err
 	}
 	next := make(map[string]any, len(state)+1)
@@ -626,13 +719,13 @@ func (r *Runtime) deterministic(ctx context.Context, lease eviedb.WorkflowRunLea
 	if err != nil {
 		return err
 	}
-	end := eviedb.WorkflowAttemptEnd{RunID: p.Run.ID, Seq: a.Seq, Output: output, Next: step.Next, State: nextState}
+	end := eviedb.WorkflowAttemptEnd{RunID: p.Run.ID, Seq: seq, Output: output, Next: step.Next, State: nextState}
 	if step.Next == "" {
-		if end.Outputs, err = workflow.EncodeValue(v.Outputs(inputs, next)); err != nil {
+		if end.Outputs, err = workflow.EncodeValue(pc.v.Outputs(inputs, next)); err != nil {
 			return err
 		}
 	}
-	_, err = r.store.FinishWorkflowAttempt(ctx, lease, end)
+	_, err = r.store.FinishWorkflowAttempt(pc.writes, pc.lease, end)
 	return err
 }
 
@@ -702,6 +795,14 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 	line("Run key: %s", run.RunKey)
 	line("Pinned: commit %s, executable %s, authority %s, Workspace revision %s, access revision %d",
 		short(run.Commit), run.ExecutableHash, run.AuthorityHash, run.WorkspaceRevision, run.AccessRevision)
+	var pinned composition
+	if json.Unmarshal(run.Composition, &pinned) == nil && len(pinned.Providers) > 0 {
+		line("Providers: %s", providersLine(pinned))
+	}
+	for _, s := range d.Substitutions {
+		line("Substituted: %s %s %s -> %s (contract %s, same schema), approved by %s via %s at %s",
+			s.Capability, s.Plugin, s.PinnedVersion, s.ReplacementVersion, s.Contract, s.Approver, s.Surface, s.ApprovedAt.Format(timeLayout))
+	}
 	started := fmt.Sprintf("Started via %s at %s", run.Surface, run.CreatedAt.Format(timeLayout))
 	if run.SessionID != "" {
 		started += " from session " + string(run.SessionID)

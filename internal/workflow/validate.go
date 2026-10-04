@@ -679,7 +679,13 @@ func (v *validator) compileCapability(n *node) {
 	if n.output == nil {
 		n.output = ObjectType()
 	}
-	if s.Connection != "" {
+	if len(c.Connections) > 0 && s.Connection != "" && !slices.Contains(c.Connections, s.Connection) {
+		v.add(p+".connection", "%s is served on connection %s, not %s", s.Capability, strings.Join(c.Connections, ", "), s.Connection)
+	}
+	if len(c.Resources) > 0 && s.Resource != "" && !slices.Contains(c.Resources, s.Resource) {
+		v.add(p+".resource", "%s serves resource %s, not %s", s.Capability, strings.Join(c.Resources, ", "), s.Resource)
+	}
+	if s.Connection != "" && !v.env.AccessUnchecked {
 		conn, ok := v.env.Access.connection(s.Connection)
 		switch {
 		case !ok:
@@ -1353,6 +1359,8 @@ func (v *validator) checkAuthority() {
 			v.add(p+".connection", "required")
 		case !opaquePattern.MatchString(op.Connection):
 			v.add(p+".connection", "%q is not a Connection ID", op.Connection)
+		case v.env.AccessUnchecked:
+			connOK = false
 		case !connOK:
 			v.add(p+".connection", "connection %s is outside Workspace Access", op.Connection)
 		}

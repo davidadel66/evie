@@ -106,6 +106,7 @@ type compiledPlugin struct {
 	capabilities          []ToolCapability
 	resumableCapabilities map[string][]ToolCapability
 	activeCapabilities    []ToolCapability
+	workflowCapabilities  []WorkflowCapability
 	enabled               bool
 	manualStopped         bool
 	started               bool
@@ -273,18 +274,39 @@ func NewManager(base tools.Toolset, compiled ...Plugin) (*Manager, error) {
 		if err := validateManifest(manifest); err != nil {
 			return nil, err
 		}
-		provider, ok := plugin.(ToolProvider)
-		if !ok {
+		provider, isTool := plugin.(ToolProvider)
+		workflowProvider, isWorkflow := plugin.(WorkflowCapabilityProvider)
+		if !isTool && !isWorkflow {
 			if len(manifest.Capabilities) != 0 {
-				return nil, fmt.Errorf("plugin %q declares capabilities but implements no ToolProvider", manifest.ID)
+				return nil, fmt.Errorf("plugin %q declares capabilities but implements no capability provider role", manifest.ID)
 			}
 			continue
 		}
-		capabilities, err := snapshotToolCapabilities(manifest, provider.ToolCapabilities())
+		var suppliedTools []ToolCapability
+		if isTool {
+			suppliedTools = provider.ToolCapabilities()
+		}
+		toolIDs := make(map[CapabilityID]bool, len(suppliedTools))
+		for _, capability := range suppliedTools {
+			toolIDs[capability.ID] = true
+		}
+		var reads []WorkflowCapability
+		if isWorkflow {
+			var err error
+			if reads, err = snapshotWorkflowCapabilities(manifest, workflowProvider.WorkflowCapabilities(), toolIDs); err != nil {
+				return nil, err
+			}
+		}
+		readIDs := make(map[CapabilityID]bool, len(reads))
+		for _, read := range reads {
+			readIDs[read.ID] = true
+		}
+		capabilities, err := snapshotToolCapabilities(manifest, suppliedTools, readIDs)
 		if err != nil {
 			return nil, err
 		}
 		manager.plugins[manifest.ID].capabilities = capabilities
+		manager.plugins[manifest.ID].workflowCapabilities = reads
 		resumable := make(map[string][]ToolCapability)
 		if resumableProvider, ok := plugin.(ResumableToolProvider); ok {
 			for _, declaration := range manifest.ResumableFrom {
@@ -296,7 +318,7 @@ func NewManager(base tools.Toolset, compiled ...Plugin) (*Manager, error) {
 			}
 		}
 		manager.plugins[manifest.ID].resumableCapabilities = resumable
-		if err := validateImplementationCompatibility(manifest, capabilities, resumable); err != nil {
+		if err := validateImplementationCompatibility(manifest, capabilities, resumable, reads); err != nil {
 			return nil, err
 		}
 	}
@@ -312,14 +334,26 @@ func NewManager(base tools.Toolset, compiled ...Plugin) (*Manager, error) {
 	return manager, nil
 }
 
-func validateImplementationCompatibility(manifest Manifest, capabilities []ToolCapability, resumable map[string][]ToolCapability) error {
+// compatibilityTarget is what a Capability's compatibility evidence must
+// match exactly: its contract version and schema hash.
+type compatibilityTarget struct {
+	contractVersion string
+	schemaSHA256    string
+}
+
+func validateImplementationCompatibility(manifest Manifest, capabilities []ToolCapability, resumable map[string][]ToolCapability, reads []WorkflowCapability) error {
 	current, err := parseManifestVersion(manifest.ImplementationVersion)
 	if err != nil {
 		return err
 	}
-	active := make(map[CapabilityID]ToolCapability, len(capabilities))
+	active := make(map[CapabilityID]compatibilityTarget, len(capabilities)+len(reads))
 	for _, capability := range capabilities {
-		active[capability.ID] = capability
+		active[capability.ID] = compatibilityTarget{capability.ContractVersion, schemaHash(capability.Tool.Schema)}
+	}
+	// Workflow capabilities have no frozen variants: evidence for them is
+	// always checked against what this implementation loads.
+	for _, read := range reads {
+		active[read.ID] = compatibilityTarget{read.ContractVersion, read.contract().SchemaSHA256()}
 	}
 	seenVersions := make(map[string]struct{}, len(manifest.ResumableFrom))
 	for _, declaration := range manifest.ResumableFrom {
@@ -339,9 +373,12 @@ func validateImplementationCompatibility(manifest Manifest, capabilities []ToolC
 		seenVersions[declaration.ImplementationVersion] = struct{}{}
 		available := active
 		if variants, exists := resumable[declaration.ImplementationVersion]; exists {
-			available = make(map[CapabilityID]ToolCapability, len(variants))
+			available = make(map[CapabilityID]compatibilityTarget, len(variants)+len(reads))
 			for _, capability := range variants {
-				available[capability.ID] = capability
+				available[capability.ID] = compatibilityTarget{capability.ContractVersion, schemaHash(capability.Tool.Schema)}
+			}
+			for _, read := range reads {
+				available[read.ID] = active[read.ID]
 			}
 		}
 		seenCapabilities := make(map[CapabilityID]struct{}, len(declaration.Capabilities))
@@ -360,14 +397,14 @@ func validateImplementationCompatibility(manifest Manifest, capabilities []ToolC
 					manifest.ID, declaration.ImplementationVersion, evidence.ID,
 				)
 			}
-			if evidence.ContractVersion != capability.ContractVersion {
+			if evidence.ContractVersion != capability.contractVersion {
 				return fmt.Errorf(
 					"plugin %q compatibility for implementation %s declares Capability %q contract %s, loaded contract is %s",
 					manifest.ID, declaration.ImplementationVersion, evidence.ID,
-					evidence.ContractVersion, capability.ContractVersion,
+					evidence.ContractVersion, capability.contractVersion,
 				)
 			}
-			actualSchema := schemaHash(capability.Tool.Schema)
+			actualSchema := capability.schemaSHA256
 			if evidence.SchemaSHA256 != actualSchema {
 				return fmt.Errorf(
 					"plugin %q compatibility for implementation %s declares Capability %q schema %s, loaded schema is %s",
@@ -604,7 +641,10 @@ func parseManifestVersion(value string) (composition.Version, error) {
 	return composition.ParseVersion(value)
 }
 
-func snapshotToolCapabilities(manifest Manifest, supplied []ToolCapability) ([]ToolCapability, error) {
+// snapshotToolCapabilities validates a plugin's tool contributions against
+// its manifest. reads are the IDs it contributes as workflow capabilities:
+// every declared Capability is contributed by exactly one role.
+func snapshotToolCapabilities(manifest Manifest, supplied []ToolCapability, reads map[CapabilityID]bool) ([]ToolCapability, error) {
 	contracts := make(map[CapabilityID]string, len(manifest.Capabilities))
 	for _, contract := range manifest.Capabilities {
 		contracts[contract.ID] = contract.Version
@@ -635,10 +675,10 @@ func snapshotToolCapabilities(manifest Manifest, supplied []ToolCapability) ([]T
 		capabilities[i] = capability
 		seen[capability.ID] = struct{}{}
 	}
-	if len(seen) != len(contracts) {
-		for id := range contracts {
-			if _, exists := seen[id]; !exists {
-				return nil, fmt.Errorf("plugin %q declares Capability %q without a tool contribution", manifest.ID, id)
+	if len(seen)+len(reads) != len(contracts) {
+		for _, contract := range manifest.Capabilities {
+			if _, exists := seen[contract.ID]; !exists && !reads[contract.ID] {
+				return nil, fmt.Errorf("plugin %q declares Capability %q without a tool or workflow contribution", manifest.ID, contract.ID)
 			}
 		}
 	}

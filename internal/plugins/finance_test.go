@@ -21,9 +21,11 @@ type financeCapabilityAssociation struct {
 
 func TestFinanceManifestAndToolContractsAreStable(t *testing.T) {
 	finance := NewFinance()
+	// 1.1.0 adds the workflow reads (Stage 14 sub-stage 5) and declares that
+	// it continues 1.0.0's sessions: its tools are unchanged.
 	want := Manifest{
 		ID:                    FinancePluginID,
-		ImplementationVersion: "1.0.0",
+		ImplementationVersion: "1.1.0",
 		KernelCompatibility: VersionRange{
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
@@ -31,7 +33,14 @@ func TestFinanceManifestAndToolContractsAreStable(t *testing.T) {
 			{ID: FinanceSyncCapabilityID, Version: "1.0.0"},
 			{ID: FinanceRulesCapabilityID, Version: "1.0.0"},
 			{ID: FinanceCategorizeCapabilityID, Version: "1.0.0"},
+			{ID: FinanceMonthCashFlowCapabilityID, Version: "1.0.0"},
+			{ID: FinanceMonthTransactionsCapabilityID, Version: "1.0.0"},
 		},
+		ResumableFrom: []ImplementationCompatibility{{ImplementationVersion: "1.0.0", Capabilities: []CapabilityCompatibility{
+			{ID: FinanceSyncCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.FinanceSyncTool().Schema)},
+			{ID: FinanceRulesCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.FinanceRulesTool().Schema)},
+			{ID: FinanceCategorizeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.FinanceCategorizeTool().Schema)},
+		}}},
 	}
 	if got := finance.Manifest(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Finance manifest\n got: %+v\nwant: %+v", got, want)

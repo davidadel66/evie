@@ -1,5 +1,214 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Capability reads (Stage 14, sub-stage 5)
+
+Source: sub-stage 5 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md) and
+the sub-stage 4 entry below ("What sub-stage 5 must pick up"): capability
+reads as fenced attempts with the read's backoff as the durable
+not-before time, providers pinned in the Execution Composition with a
+compatibility check that pauses on a missing or changed provider, an
+audited record for a compatible substitution, the run's context passed to
+providers, and a per-node admission check for sub-stage 6. Binding: ADR
+0015, 0016, 0017, 0025, 0027, 0029, 0033, 0035, 0037, 0039 and 0041 and
+this spec's capability-node, Execution Composition, retry and
+Compatibility Resolution decisions ("a capability node invokes one
+canonical Capability ID through a focused runtime-owned interface"; "reads
+use limited backoff"). The orchestrator also decided the interruption
+adjustment below, which changes a sub-stage 4 decision.
+
+### What was built
+
+- **Provider role.** Plugins contribute workflow capability reads through
+  a focused role, `plugins.WorkflowCapabilityProvider` (ADR 0015), separate
+  from the tool role: each read has a canonical plugin-namespaced
+  Capability ID declared in the manifest (ADR 0035), a contract version,
+  closed object input and output types, the exact Connection IDs and
+  resource selectors it serves, and a read function. The Plugin Manager
+  validates contributions once (declared at the manifest's contract
+  version, contributed by exactly one role, object types, valid selectors,
+  a read), lists the compiled contracts whatever a plugin's state
+  (`WorkflowContract`, what definitions validate against) and resolves a
+  callable provider only while its plugin is ready, its optional
+  dependencies are loaded and its connection is ready
+  (`ResolveWorkflowCapability`, after applying the owner's durable enabled
+  choices); otherwise the read is unavailable, returned with the provider
+  it would be so a pinned run can still be compared with it. A contract's
+  schema hash covers its input, output and read or effect classification.
+  A replacement implementation declares the earlier implementations whose
+  pinned work it continues through the manifest's existing `ResumableFrom`
+  evidence, now also checked against workflow capabilities (ADR 0037).
+  The role carries reads only; effects are a separate role in sub-stage 6.
+  The runtime consumes the seam through its own interface
+  (`workflowruntime.CapabilityProviders`); `ContractsOnly` is a catalog no
+  run can call.
+- **Production catalog.** Finance 1.1.0 contributes two fixed,
+  parameterized reads of the local finance database through the read-only
+  Spending queries the Spending view uses: `finance.month_cash_flow`
+  (input `month` as `YYYY-MM`; the month's posted inflow, outflow, net and
+  transaction count as of its last day, pending transactions, and the
+  month by category exactly as the Spending view reconciles it) and
+  `finance.month_transactions` (input `month`, optional `status`, `offset`
+  and `page_size` 1 to 100; one page newest first with each transaction's
+  saved classification entries and the month's counts). Both are contract
+  1.0.0, return whole cents as integers (a sum outside int64 is refused,
+  never rounded), refuse undeclared input fields, never take query text,
+  tables or columns from a definition and never read bank credentials. No
+  Account Connection registry exists, so the plugin names the one
+  connection it serves, `finance-local` (the owner's local finance
+  database and the banks linked through it), with one resource, `ledger`;
+  a Workspace grants it with `evie workspaces access <id> --set
+  finance-local=ledger`. Finance's tools are unchanged, so 1.1.0 declares
+  that it continues 1.0.0's pinned sessions (a session pinned to 1.0.0
+  records a Compatibility Resolution on its next resume, as Web's 1.1.0
+  did).
+- **Left out, deliberately.** `web.search` sends workflow data (the query)
+  to a third-party search service that Standing Authority cannot bound to
+  exact resources; `web.fetch` could be bound to exact reviewed URLs, but
+  its untrusted pages have no workflow consumer before AI steps (sub-stage
+  7), and research already reads the web through agent steps with the
+  research worker's fences (sub-stages 9 and 10). YouTube reads have the
+  same shape as web reads. Memory reads are not capability nodes: the spec
+  gives AI Nodes "explicitly requested scoped memory" instead (sub-stage
+  7). Finance sync, rules and categorize are effects (sub-stage 6). Each
+  can be added later as a reviewed contract.
+- **Validation.** Definitions validate against the compiled catalog: the
+  production runtime's is the Plugin Manager's, and `evie workflows
+  validate|simulate` use the same compiled contracts (they were reviewed
+  against an empty catalog). A step must name a connection and resource
+  its provider serves. Workspace Access belongs to a Workspace, so the
+  standalone commands do not check it (`Environment.AccessUnchecked`, with
+  a printed note); proposing, approving and running always do. Simulation
+  still uses fixtures and reaches no provider. `internal/workflow/testdata
+  /shared-spending` (read the month's cash flow, split its outflow, branch
+  on the remainder) is the example.
+- **Pinning.** A run's Execution Composition (runtime
+  `evie.workflow.runtime/2`) lists, per capability it reads, the Capability
+  ID, contract version, schema hash, plugin and implementation version and
+  the Connection IDs its steps use. A start resolves each provider and is
+  refused, with nothing recorded, while one is unknown or unavailable
+  (`ErrCapabilityUnavailable`; the web answers 409
+  `capability_unavailable`). A definition with a capability effect is
+  refused at start as "capability effect" steps, like AI, agent, map and
+  interruption steps; such a definition cannot be approved yet anyway,
+  because no plugin contributes an effect.
+- **Compatibility at every claim.** After the pinned runtime check, each
+  pinned provider is resolved again and the run pauses visibly
+  (`waiting_for_dependency` with the reason, rechecked like any pause) when
+  the capability is missing, its contract version or schema hash changed,
+  it no longer serves a pinned connection, or another implementation
+  version provides it without an approved substitution. The reason names
+  the next step: a replacement that declares (ADR 0037) it continues the
+  pinned implementation with the same contract and schema gets the exact
+  `evie workflows substitute <run-id> <capability> <version>` command;
+  one that does not, or that changed the contract, can only be continued
+  by an Evie with the pinned provider or by migration (sub-stage 12).
+  Nothing is substituted silently (ADR 0025). When the run's next step is
+  a read, its provider must also be ready now, so a run paused for a
+  disabled plugin stays paused through rechecks instead of resuming and
+  pausing again.
+- **Audited substitution (ADR 0041).** `evie workflows substitute
+  <run-id> <capability> <version> [--json]` (owner, CLI only; no web
+  route and no model tool) records, for an unfinished run, that it
+  continues one pinned capability with the replacement this Evie has, only
+  when that is the named version, offers exactly the pinned contract and
+  schema, still serves the run's connections and declares the
+  continuation. `workflow_run_substitutions` keeps the run, capability,
+  plugin, pinned and replacement versions, contract, schema hash, the
+  evidence text, approver `owner`, surface and time; rows are immutable and
+  a repeated approval returns the same row. The run's pins never change;
+  inspection shows each substitution. The run continues at its next
+  recheck.
+- **Per-node admission.** Before a read, `AdmitWorkflowNode` applies, in
+  one fenced transaction: run admission for the run's own version
+  (deactivation and every block, including any access revocation since
+  its pinned revision), the operation within the Standing Authority
+  approved with that version, and the connection and resource within the
+  Workspace's current access. A refusal pauses the run before the node
+  and the provider is never called (ADR 0027, 0033). Sub-stage 6 calls the
+  same check before each Effect Intent.
+- **Fenced reads.** A read step then: checks its limits (Retry Policy,
+  `limits.max_attempts`, `limits.max_duration`), resolves its input and
+  checks it against the contract input (a mismatch fails the run: it is the
+  same every time), records the attempt under the lease, checks the lease
+  again immediately before the call (`CheckWorkflowRunLease`), and calls
+  the provider with a context that ends when the lease is lost, the
+  runtime stops or the read timeout passes (`SchedulerConfig.ReadTimeout`,
+  default 30 seconds, at most 10 minutes). A provider that ignores its
+  context is not waited for, and a panic is caught. The output is
+  normalized to canonical JSON (at most 1 MiB) and checked against the
+  contract output; it is recorded with the next checkpoint in one fenced
+  transaction. A provider error, a timeout ("the read did not finish within
+  30s"), a panic or a malformed response ("malformed response: …") fails
+  the attempt; with attempts left, the step's `retry.backoff` becomes the
+  run's durable not-before time (reads use the limited backoff validation
+  already bounds: at most five attempts and ten minutes), otherwise the run
+  fails "steps.<id> failed after N attempts: …".
+- **Cancellation in flight.** A lost lease cancels the read; the stale
+  holder writes nothing and whichever runtime claims the run next records
+  the attempt interrupted and reads again. Stopping the runtime cancels
+  the read too; its holder records the attempt interrupted itself
+  (`InterruptWorkflowAttempt`, with an `attempt_interrupted` event) and
+  releases the run, which the next process continues at once.
+- **Interruption adjustment (decided by the orchestrator).** An
+  `interrupted` attempt of a deterministic step, a branch decision, a
+  capability read or (sub-stage 7) an AI step no longer counts against the
+  step's Retry Policy or `limits.max_attempts`, because rerunning such a
+  node from the same checkpoint is safe; this supersedes sub-stage 4's
+  "Retry after interruption". Instead a separate per-node interruption
+  bound (`SchedulerConfig.Interruptions`, default 3, at most 10) counts the
+  node's interrupted attempts at one checkpoint, and when it is reached the
+  next claim fails the run visibly ("steps.split was interrupted 3 times at
+  checkpoint 0 (each time its runtime crashed, stopped or lost its lease
+  before recording the outcome); the run fails instead of running it
+  again: …") rather than looping on a node that kills its process. Attempt
+  numbers still count every attempt. A graceful stop during a read counts
+  toward the bound like a crash. Effects (sub-stage 6) are different: an
+  interrupted effect is Outcome Unknown and must never be rerun
+  automatically.
+- **Earlier runs.** This runtime declares `evie.workflow.runtime/1`
+  compatible: those runs hold only deterministic and branch steps, whose
+  semantics are unchanged, and the interruption adjustment only lets a pure
+  node run again. An older Evie pauses a `/2` run as incompatible.
+- **Wiring.** `evie serve` and the REPL give the Workflow Runtime their
+  Plugin Manager; a one-shot `evie workflows` command builds a Plugin
+  Manager of the workflow capability plugins (Finance) that follows the
+  owner's durable enabled choices with the same defaults. `evie workflows
+  inspect` shows the pinned providers and substitutions.
+
+### Decisions and known limits
+
+- Every pinned provider is checked at every claim, including providers
+  whose steps already ran: a run continues only under its whole pinned
+  Execution Composition or an audited substitute (ADR 0025), even when no
+  read is left.
+- A provider that becomes unavailable during a read fails that attempt like
+  any other read failure, within the Retry Policy; only unavailability
+  seen before the read pauses the run.
+- `max_calls_per_run` is not enforced at run time for reads: an acyclic
+  graph reads each step at most once successfully, and retries are bounded
+  by the Retry Policy. Sub-stage 6 enforces it for effects, counting
+  Effect Intents.
+- Reads are not serialized by Resource Conflict Keys (ADR 0043 serializes
+  effects only); providers declare none yet.
+- A replaced provider needs one substitution per run; there is no bulk
+  approval.
+- The finance reads see the local database as last synced; they do not
+  sync. A missing finance database reads as an empty month, as in the
+  Spending view.
+
+### What sub-stage 6 must pick up
+
+- A separate effect provider role with idempotency, reconciliation and
+  Resource Conflict Keys, pinned in the same composition entries.
+- Call `AdmitWorkflowNode` before each Effect Intent, enforce
+  `max_calls_per_run` by Effect Intents, and check the lease right before
+  the provider call, as reads do.
+- An interrupted effect attempt is Outcome Unknown: it must not be rerun by
+  the interruption path or counted as a safe interruption; the run moves to
+  `needs_reconciliation` instead, and automatic resume stays off while an
+  effect is unknown (ADR 0029).
+
 ## 2026-10-04 — Durable restart and leases (Stage 14, sub-stage 4)
 
 Source: sub-stage 4 of Stage 14 in
@@ -46,7 +255,10 @@ does not cancel a run").
   new holder starts from a settled checkpoint. This covers a crash, a lost
   lease and a write that failed. Chosen over recording such attempts
   `failed` so inspection tells a crash from a function's own error.
-- **Retry after interruption.** An interrupted attempt counts as an
+- **Retry after interruption.** (Superseded by sub-stage 5's interruption
+  adjustment above: interruptions no longer count against the Retry Policy
+  or `limits.max_attempts`, and a per-node bound stops crash loops.) An
+  interrupted attempt counts as an
   attempt of its step's Retry Policy and of `limits.max_attempts`, like a
   failed one, as the sub-stage 3 entry asked ("retries from the same
   checkpoint within its policy") and as the amendment already says of agent

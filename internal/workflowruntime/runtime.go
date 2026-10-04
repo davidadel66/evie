@@ -6,11 +6,13 @@
 // for future runs, deactivate it, and list and show definitions. Sub-stage 3
 // adds manual runs of deterministic and branch steps (runs.go); sub-stage 4
 // adds fenced run leases, the background scheduler and restart recovery
-// (scheduler.go); later sub-stages extend runs through this same type.
+// (scheduler.go); sub-stage 5 adds capability reads through pinned
+// providers (capabilities.go); later sub-stages extend runs through this
+// same type.
 //
 // Validation runs against the bound Workspace: its current Workspace Access
-// and the runtime's capability catalog (empty until providers declare
-// workflow contracts in sub-stage 5) and the operator's worker ceiling. The
+// and the runtime's capability catalog (the workflow capabilities compiled
+// plugins contribute, sub-stage 5) and the operator's worker ceiling. The
 // store re-checks access, the Workspace's worker allowances and the
 // reviewed version inside the approval transaction, so a change racing the
 // approval refuses it rather than slipping past.
@@ -65,14 +67,24 @@ type Store interface {
 	FinishWorkflowAttempt(ctx context.Context, lease eviedb.WorkflowRunLease, e eviedb.WorkflowAttemptEnd) (eviedb.WorkflowRun, error)
 	FailWorkflowRun(ctx context.Context, lease eviedb.WorkflowRunLease, checkpoint int64, reason string) (eviedb.WorkflowRun, error)
 	DueWorkflowRuns(ctx context.Context, limit int) ([]string, error)
+
+	// Capability reads (sub-stage 5): per-node admission, the lease check
+	// right before a provider is called, an attempt its holder interrupts
+	// when it stops, and audited provider substitutions.
+	AdmitWorkflowNode(ctx context.Context, lease eviedb.WorkflowRunLease, n eviedb.WorkflowNodeAdmission) error
+	CheckWorkflowRunLease(ctx context.Context, lease eviedb.WorkflowRunLease) error
+	InterruptWorkflowAttempt(ctx context.Context, lease eviedb.WorkflowRunLease, seq int64, reason string) error
+	RecordWorkflowRunSubstitution(ctx context.Context, sub eviedb.WorkflowRunSubstitution) (eviedb.WorkflowRunSubstitution, error)
+	WorkflowRunSubstitutions(ctx context.Context, runID string) ([]eviedb.WorkflowRunSubstitution, error)
 }
 
 // Config wires a Runtime.
 type Config struct {
 	Store Store
 	Repo  *procedural.Repo
-	// Catalog resolves Capability Contracts; nil is the empty catalog.
-	Catalog workflow.Catalog
+	// Capabilities is the workflow capability catalog and its providers:
+	// the Plugin Manager in production. nil has no capabilities.
+	Capabilities CapabilityProviders
 	// Workers is the operator's subagent ceiling bounding agent budgets.
 	Workers workflow.WorkerCeiling
 	// Scheduler bounds and paces how this runtime executes runs; zero
@@ -97,6 +109,13 @@ type SchedulerConfig struct {
 	// Recheck is how long a paused run waits before its cause is checked
 	// again (default 1m).
 	Recheck time.Duration
+	// Interruptions is how many times one node may be interrupted at one
+	// checkpoint (its runtime crashed, stopped or lost the lease before
+	// recording the outcome) before the run fails visibly instead of
+	// running it again (default 3, at most 10; sub-stage 5).
+	Interruptions int
+	// ReadTimeout bounds one capability read (default 30s, at most 10m).
+	ReadTimeout time.Duration
 }
 
 const (
@@ -107,11 +126,26 @@ const (
 	defaultLease            = 30 * time.Second
 	defaultPoll             = time.Second
 	defaultRecheck          = time.Minute
+	// DefaultInterruptions and MaxInterruptions bound
+	// SchedulerConfig.Interruptions.
+	DefaultInterruptions = 3
+	MaxInterruptions     = 10
+	defaultReadTimeout   = 30 * time.Second
+	maxReadTimeout       = 10 * time.Minute
 )
 
 func (c SchedulerConfig) resolve() (SchedulerConfig, error) {
 	if c.Workers < 0 || c.Workers > MaxSchedulerWorkers || c.Lease < 0 || c.Poll < 0 || c.Recheck < 0 {
 		return c, fmt.Errorf("workflow scheduler needs 1 to %d workers and positive durations", MaxSchedulerWorkers)
+	}
+	if c.Interruptions < 0 || c.Interruptions > MaxInterruptions || c.ReadTimeout < 0 || c.ReadTimeout > maxReadTimeout {
+		return c, fmt.Errorf("workflow scheduler needs an interruption bound of 1 to %d and a read timeout up to %s", MaxInterruptions, maxReadTimeout)
+	}
+	if c.Interruptions == 0 {
+		c.Interruptions = DefaultInterruptions
+	}
+	if c.ReadTimeout == 0 {
+		c.ReadTimeout = defaultReadTimeout
 	}
 	if c.Workers == 0 {
 		c.Workers = DefaultSchedulerWorkers
@@ -130,8 +164,10 @@ func (c SchedulerConfig) resolve() (SchedulerConfig, error) {
 
 // Runtime is the Workflow Runtime.
 type Runtime struct {
-	store   Store
-	repo    *procedural.Repo
+	store     Store
+	repo      *procedural.Repo
+	providers CapabilityProviders
+	// catalog is the providers' compiled contracts, for validation.
 	catalog workflow.Catalog
 	workers workflow.WorkerCeiling
 	sched   SchedulerConfig
@@ -170,14 +206,14 @@ func New(c Config) (*Runtime, error) {
 	if c.Workers.Deadline <= 0 || c.Workers.Tokens <= 0 {
 		return nil, errors.New("workflow runtime needs the operator's worker ceiling")
 	}
-	if c.Catalog == nil {
-		c.Catalog = workflow.NewCatalog()
+	if c.Capabilities == nil {
+		c.Capabilities = ContractsOnly(workflow.NewCatalog())
 	}
 	sched, err := c.Scheduler.resolve()
 	if err != nil {
 		return nil, err
 	}
-	return &Runtime{store: c.Store, repo: c.Repo, catalog: c.Catalog, workers: c.Workers, sched: sched, report: c.Report,
+	return &Runtime{store: c.Store, repo: c.Repo, providers: c.Capabilities, catalog: providerCatalog{c.Capabilities}, workers: c.Workers, sched: sched, report: c.Report,
 		holder: fmt.Sprintf("evie-%d-%s", os.Getpid(), uuid.NewString()), compatible: slices.Clone(compatibleRuntimes),
 		now: time.Now, sleep: sleepContext,
 		active: map[string]bool{}, failures: map[string]error{}, reported: map[string]string{},

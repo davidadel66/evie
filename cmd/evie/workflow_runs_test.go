@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/workflowruntime"
 )
 
@@ -225,5 +227,59 @@ func TestWorkflowSchedulerWorkersFromEnvironment(t *testing.T) {
 	})
 	if err != nil || config.Workers != 4 {
 		t.Fatalf("config = %+v, %v", config, err)
+	}
+}
+
+// The owner approves a compatible provider substitution for a paused run
+// with `evie workflows substitute <run-id> <capability> <version>`; the
+// runtime refuses one the run's pins and the provider's evidence do not
+// permit.
+func TestWorkflowCLISubstitute(t *testing.T) {
+	c := newWorkflowCLI(t)
+	w := c.approveSplitBill()
+	out := c.mustRun("workflows", "run", "--detach", string(w.ID), "split-bill", "--input", "bill_id=dinner-1", "--input", "total_cents=1000", "--input", "people=3")
+	m := runIDLine.FindStringSubmatch(out)
+	if m == nil {
+		t.Fatalf("no run ID:\n%s", out)
+	}
+	if _, err := c.run("workflows", "substitute", m[1], "finance.month_cash_flow", "1.2.0"); err == nil || !strings.Contains(err.Error(), "pins no provider of finance.month_cash_flow") {
+		t.Fatalf("a substitution for a run without that provider: %v", err)
+	}
+	for _, args := range [][]string{
+		{"workflows", "substitute"},
+		{"workflows", "substitute", m[1], "finance.month_cash_flow"},
+		{"workflows", "substitute", m[1], "finance.month_cash_flow", "1.2.0", "extra"},
+	} {
+		if _, err := c.run(args...); err == nil || !strings.Contains(err.Error(), "usage") {
+			t.Fatalf("%q: %v", args, err)
+		}
+	}
+}
+
+// The production Workflow Runtime reaches the workflow capabilities
+// compiled into Evie through a Plugin Manager that follows the owner's
+// durable plugin choices: disabling Finance makes its reads unavailable.
+func TestWorkflowRuntimeUsesTheCompiledWorkflowCapabilities(t *testing.T) {
+	ctx := context.Background()
+	store := backgroundTestStore(t)
+	manager, err := newWorkflowPluginManager(ctx, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contract, ok := manager.WorkflowContract("finance.month_cash_flow"); !ok || contract.Effect {
+		t.Fatalf("compiled contract = %+v, %v", contract, ok)
+	}
+	if _, err := manager.ResolveWorkflowCapability(ctx, "finance.month_cash_flow"); err != nil {
+		t.Fatalf("finance is enabled by default: %v", err)
+	}
+	if _, err := store.SetPluginEnabled(ctx, "finance", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ResolveWorkflowCapability(ctx, "finance.month_cash_flow"); !errors.Is(err, plugins.ErrWorkflowCapabilityUnavailable) {
+		t.Fatalf("after the owner disabled finance: %v", err)
+	}
+	rt, err := newWorkflowRuntime(store, func(string) string { return "" }, manager)
+	if err != nil || rt == nil {
+		t.Fatalf("runtime = %v, %v", rt, err)
 	}
 }

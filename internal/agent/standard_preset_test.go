@@ -237,7 +237,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		t.Fatalf("resumed schemas = %#v, want exact standard schemas %#v", resumed.Toolset.Schemas(), wantSchemas)
 	}
 	wantProviders := []plugins.ProviderReceipt{
-		{ID: "finance", ImplementationVersion: "1.0.0"},
+		{ID: "finance", ImplementationVersion: "1.1.0"},
 		{ID: "todo", ImplementationVersion: "1.8.0"},
 		{ID: "web", ImplementationVersion: "1.1.0"},
 		{ID: "youtube", ImplementationVersion: "1.0.0"},
@@ -871,7 +871,7 @@ func standardManager(t *testing.T, taskService task.Service) *plugins.Manager {
 	manager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		deterministicToolPlugin{manifest: web.Manifest(), capabilities: webCapabilities, resumable: web.ResumableToolCapabilities},
-		deterministicToolPlugin{manifest: finance.Manifest(), capabilities: financeCapabilities},
+		deterministicToolPlugin{manifest: finance.Manifest(), capabilities: financeCapabilities, reads: finance.WorkflowCapabilities()},
 		deterministicToolPlugin{manifest: youtube.Manifest(), capabilities: youtubeCapabilities},
 		todo,
 	)
@@ -890,7 +890,12 @@ type deterministicToolPlugin struct {
 	manifest     plugins.Manifest
 	capabilities []plugins.ToolCapability
 	resumable    func(string) []plugins.ToolCapability
+	// reads are the workflow capability reads the plugin's manifest
+	// declares (Finance's since Stage 14 sub-stage 5); no session sees them.
+	reads []plugins.WorkflowCapability
 }
+
+func (p deterministicToolPlugin) WorkflowCapabilities() []plugins.WorkflowCapability { return p.reads }
 
 func (p deterministicToolPlugin) Manifest() plugins.Manifest { return p.manifest }
 

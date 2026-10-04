@@ -491,6 +491,30 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   workflows run` waits by default and takes `--detach`; inspection shows
   the lease and recovery events. Binding record: the sub-stage 4 entry in
   `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Sub-stage 5 implemented** (2026-10-04). Plugins contribute capability
+  reads through a focused workflow provider role, registered and validated
+  by the Plugin Manager and callable only while the plugin and its
+  connection are ready. The production catalog is two fixed reads of the
+  local finance database, `finance.month_cash_flow` and
+  `finance.month_transactions` (Finance 1.1.0, connection `finance-local`,
+  resource `ledger`); web, YouTube and memory reads are left out on
+  purpose. Definitions validate against the compiled catalog (the CLI's
+  standalone review too), and runs with read steps execute: each run pins
+  its providers (Capability ID, contract and schema hash, plugin version,
+  Connection IDs), every claim pauses it visibly when a pinned provider is
+  missing, changed or replaced, and `evie workflows substitute` records the
+  owner's audited approval of a replacement that declares it continues the
+  pinned one with the same contract and schema. Before each read, per-node
+  admission re-applies run admission, the approved Standing Authority and
+  current Workspace Access; the attempt is recorded under the fenced lease,
+  the lease is checked again, and the provider is called with a context
+  that a lost lease, shutdown or the read timeout cancels. Output is
+  validated against the contract; failures retry with the step's durable
+  backoff. Interrupted attempts no longer spend a step's Retry Policy or
+  the run's attempt limit; a per-node bound (default 3) fails a run that
+  keeps crashing instead (effects will never rerun after interruption).
+  Binding record: the sub-stage 5 entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 
