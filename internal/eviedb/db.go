@@ -1187,6 +1187,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, err
 	}
+	if err := ensureWorkflowSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := ensureRepositoryInstructions(ctx, db); err != nil {
 		db.Close()
 		return nil, err

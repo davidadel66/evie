@@ -1,5 +1,148 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Activation and Standing Authority (Stage 14, sub-stage 2)
+
+Source: sub-stage 2 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md) and
+the sub-stage 1 entry below, which left this sub-stage the procedural Git
+source, binding to a Workspace with its real Workspace Access, activation of
+an exact hash with its requested authority, the worker allowance check and
+the diffs between revisions. Binding: ADR 0007, 0008, 0011, 0012, 0016,
+0020, 0024, 0025, 0027 and 0033 and this spec's approval decisions. No run
+starts in this sub-stage.
+
+### What was built
+
+- **Procedural repository.** `internal/procedural` keeps reviewed
+  procedural assets in a private bare Git repository at
+  `~/.evie/procedural` (created on first use, mode 0700, branch `master`,
+  identity `Evie <evie@localhost>`). That path was already on the file
+  tools' denylist, and all of `~/.evie` is outside every explore root and
+  sandboxed shell, so no worker can read or write it. Evie writes it only
+  with plumbing (`hash-object`, `mktree`, `commit-tree`, then a
+  compare-and-swap `update-ref` of master retried on top of a concurrent
+  writer's commit): there is no work tree to leave dirty, and a crash
+  before the ref moves leaves only unreachable objects. Every command runs
+  with a built environment (no inherited `GIT_DIR`, index, global or system
+  configuration), hooks off and no transport. A root that is a link, a
+  file, or a folder holding anything but this repository is refused; paths
+  are clean, relative and never name `.git`. A Workflow Definition lives at
+  `workspaces/<workspace-id>/workflows/<name>/` with exactly its reviewed
+  files: `workflow.yaml`, `README.md` and the prompts and schemas it
+  references (nothing else in the source folder is copied).
+- **Git source.** `procedural.Source` implements sub-stage 1's `Source` at
+  one exact commit: a file must be a regular blob of at most 1 MiB, and a
+  later commit never changes what an earlier commit reads.
+- **Proposal.** `evie workflows propose <workspace-id> <dir> [--fixtures
+  <file>]` validates the folder against the Workspace's current Workspace
+  Access, the runtime's capability catalog and the operator's worker
+  ceiling, simulates it with the fixtures (fixture problems refuse before
+  anything is written), commits its files, validates the commit again (the
+  hash must match), and records the proposal in SQLite with its review
+  report and dry run. An invalid definition is not proposed. The proposal
+  records the Workspace revision and access revision it was made under.
+  Only the owner proposes in this sub-stage (CLI); a model-facing proposal
+  tool is deferred, and the store already accepts `evie` as proposer and
+  `chat` as surface for it.
+- **Workspace Access.** Workspaces had no access record, so this sub-stage
+  adds the smallest one the spec defines: per Workspace, Connection IDs each
+  with exact resource selectors (opaque, no spaces or controls, sorted, no
+  duplicates), stored as immutable revisions in
+  `workspace_access_revisions`, written with a compare-and-set on the
+  expected revision by the owner only (`evie workspaces access
+  <workspace-id> --expect <n> --set <connection>=<resource>,... | --clear`;
+  without flags it prints the current access). The latest revision applies
+  at once. Access grants nothing by itself: no Account Connection registry
+  exists yet, so an ID is only a ceiling entry.
+- **Approval.** `evie workflows approve <proposal-id> --hash <executable>
+  --authority <authority> --expect-version <n>` and `POST
+  /api/workflows/approve` approve exactly what a card showed: the
+  proposal's executable hash, its authority hash (`sha256` over a canonical
+  document of the requested operations, order-insensitive), and the version
+  the review compared with (0 for none). The runtime re-reads the
+  proposal's exact commit and re-validates it against the current catalog,
+  access and ceiling (the hash must be unchanged); then one SQLite
+  transaction requires the hashes, the reviewed version (a stale review is
+  refused), a dry run of that proposal that **succeeded** (ADR 0011's
+  "completing a dry run"; failed, waiting and missing dry runs refuse), an
+  active Workspace, the Workspace's current allowance for every worker
+  preset its agent steps run (the same check chat delegation uses), and
+  requested authority within the latest Workspace Access. It records version
+  N+1 with the commit, both hashes, the authority, workers and schedule,
+  the Workspace revision and access revision it was checked against, and
+  the approver (`owner`, surface `cli` or `web`, a detail line and time).
+  Approval starts no run; a declared schedule is recorded with it and
+  starts runs once schedules ship (sub-stage 11).
+- **Versions and history.** `workflow_proposals`, `workflow_activations`
+  and `workflow_deactivations` are immutable (triggers refuse update and
+  delete). A later approval supersedes the earlier version; re-approving an
+  older proposal is how a rollback is done. The database itself refuses an
+  approver other than the owner and a surface other than the CLI or web.
+- **README-only changes.** A proposal whose executable hash equals the
+  active version's is recorded as documentation of that version
+  (`documents_version`) and needs no approval; the active version is
+  unchanged (runs read its approved commit).
+- **Blocking.** A definition's status is derived on every read and at run
+  admission from immutable history: `proposed`, `active`, `inactive`
+  (deactivated) or `blocked` with every reason. It is blocked while its
+  Workspace is archived, while the Workspace's worker allowance no longer
+  covers its agent steps (pinned and current revision and every revocation
+  of the pinned one, exactly as for chats, so turning a worker off and on
+  again does not restore it), or once any access revision after the pinned
+  one failed to cover its authority (the effective access is the
+  intersection of the pinned revision and every later one, so restoring
+  access does not restore it). Only a new approval clears a block. Nothing
+  is stored as blocked, so no path that changes a Workspace can miss it.
+  `ActiveWorkflow` (and `authorizeWorkflowActivation` inside a transaction)
+  is the run-admission check sub-stage 3 calls.
+- **Deactivation.** `evie workflows deactivate <workspace-id> <name>
+  --version <n> [--reason]` and `POST /api/workflows/deactivate` end the
+  current version (compare-and-set on its number); it stays in history.
+- **Diffs and the card.** `evie workflows diff <proposal-id>` and `POST
+  /api/workflows/diff` show the approval card: both hashes, the current
+  version and its status, the executable diff by report section (graph,
+  inputs, outputs, run key, contracts, workers, functions, resources,
+  retries, model policies, schedule, retention, limits, prompt and schema
+  digests), the authority diff (operations added, removed, or changed in
+  resources or call bounds), whether documentation changed, the requested
+  authority, workers and schedule (highlighted: approving activates it),
+  validation warnings, the dry run's outcome, every reason approval would
+  be refused now, the file patch against the current version's commit, and
+  the exact approve command. `list` and `show` give status, block reasons,
+  versions and proposals.
+- **Surfaces.** CLI as above; management routes `POST
+  /api/workflows/{list,show,diff,approve,deactivate}` behind the usual
+  loopback and JSON guard, with exact, bounded request bodies (an approval
+  cannot name its approver or surface). The Workspace home has a Workflows
+  section listing definitions with status and block reasons, and an
+  approval card that approves exactly what it shows. There is no web
+  proposal route, so the browser never names a folder to read. No
+  model-facing tool proposes, approves or deactivates a workflow.
+
+### Decisions and known limits
+
+- Workspace Access lives in SQLite revisions, like the Workspace's
+  presets, worker settings, folder and merge commands today, not yet as a
+  reviewed procedural asset in Git as `workspaces.spec.md` intends for
+  Workspace Revisions. Moving Workspace configuration into procedural Git
+  is a Workspace slice of its own.
+- Git first, then SQLite, with no `procedural_operations` journal: a crash
+  between them leaves a commit no proposal names, which is harmless history
+  and never approvable. Approvals and blocks are in SQLite only.
+- The production capability catalog is still empty (sub-stage 5), so only
+  definitions without capability steps can be proposed and approved today;
+  Workspace Access matters once providers declare contracts.
+- The conversational `bash` tool stays the documented privileged bypass: it
+  could run the owner's CLI or call the loopback API, as for every other
+  management surface. Approval still needs the exact hashes of a recorded
+  proposal and a dry run that succeeded.
+- Approval re-validates against the current worker ceiling; lowering the
+  operator's ceiling later does not block an approved version (sub-stage 9
+  checks budgets at admission).
+- Sub-stage 3 must start runs only through `authorizeWorkflowActivation`
+  in its run transaction, read the definition from the activation's commit
+  through `procedural.Source`, re-hash it, and refuse a mismatch.
+
 ## 2026-10-04 — Map and agent steps; definition validation and simulation (Stage 14, sub-stage 1)
 
 Source: the owner's decisions recorded under Stage 14 of

@@ -252,11 +252,10 @@ func (v *validator) buildReport(hash string) Report {
 }
 
 func (v *validator) readmeDigest() string {
-	data, err := v.src.ReadFile("README.md")
-	if err != nil {
+	if v.readme == nil {
 		return ""
 	}
-	return "sha256:" + digest(data)
+	return "sha256:" + digest(v.readme)
 }
 
 func stepOf(r Ref) string {

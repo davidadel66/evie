@@ -124,6 +124,20 @@ func main() {
 		}
 		return
 	}
+	// Workflow activation (Stage 14 sub-stage 2) needs the database and the
+	// procedural repository.
+	if cmd == "workflows" {
+		workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv)
+		if err != nil {
+			log.Fatalf("workflows: %v", err)
+		}
+		if handled, err := runWorkflowActivation(context.Background(), os.Args[1:], os.Stdout, workflowRuntime); handled {
+			if err != nil {
+				log.Fatalf("workflows: %v", err)
+			}
+			return
+		}
+	}
 	if _, err := kernelStore.ImportDefaultLegacyTodoList(context.Background()); err != nil {
 		log.Fatalf("failed to import legacy Todo list: %v", err)
 	}
@@ -312,6 +326,10 @@ func main() {
 		}
 		usageReader := usage.NewService(runtimeCtx, kernelStore, usage.CodexBinary(), codexHomes)
 		spendingService := finance.NewSpendingService()
+		workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv)
+		if err != nil {
+			log.Fatalf("workflow runtime: %v", err)
+		}
 		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
 		if err != nil {
 			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)
@@ -319,7 +337,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopMemory := startMemoryForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime))
 			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -367,7 +385,7 @@ func main() {
 				agent.WithCompactionMemoryFlush(memoryBackground.runner)), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime))
 		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)

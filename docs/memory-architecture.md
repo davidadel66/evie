@@ -437,6 +437,22 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   <file>` expose it. The deep-research example lives in
   `internal/workflow/testdata/deep-research`. Binding record: the 2026-10-04
   entry in `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Sub-stage 2 implemented** (2026-10-04). Definitions are proposed into a
+  private bare procedural Git repository at `~/.evie/procedural`
+  (`workspaces/<workspace-id>/workflows/<name>/`, written only with Git
+  plumbing and a compare-and-swap of master) with their validation report
+  and dry run, validated against the Workspace's Workspace Access (a new
+  owner-set record of Connection IDs and exact resources, `evie workspaces
+  access`). One owner approval (`evie workflows approve` or the web card)
+  activates one exact executable hash and authority hash after a dry run
+  that succeeded, checking authority within current access and the
+  Workspace's worker allowances in one transaction; it records the schedule
+  and starts no run. Versions are immutable, README-only proposals are
+  recorded without approval, and access narrowing, worker revocation or
+  archiving blocks a version until it is approved again. `evie workflows
+  propose|list|show|diff|approve|deactivate`, `POST /api/workflows/…` and a
+  Workflows section on the Workspace home. Binding record: the sub-stage 2
+  entry in `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 

@@ -49,13 +49,13 @@ func NewCatalog(contracts ...CapabilityContract) Catalog {
 // WorkspaceAccess is the authority ceiling a definition's capability steps
 // and requested Standing Authority must stay within (ADR 0027).
 type WorkspaceAccess struct {
-	Connections []ConnectionAccess
+	Connections []ConnectionAccess `json:"connections"`
 }
 
 // ConnectionAccess binds one Connection ID to its exact allowed resources.
 type ConnectionAccess struct {
-	ID        string
-	Resources []string
+	ID        string   `json:"id"`
+	Resources []string `json:"resources"`
 }
 
 func (a WorkspaceAccess) connection(id string) (ConnectionAccess, bool) {
@@ -91,8 +91,8 @@ type Environment struct {
 }
 
 // Source reads one definition's files by slash-separated path relative to
-// its root. Today that is a directory; procedural Git (sub-stage 2) will
-// read the reviewed tree at one commit through the same seam.
+// its root: a directory (DirSource), or the reviewed tree at one procedural
+// Git commit (procedural.Source, sub-stage 2).
 type Source interface {
 	ReadFile(name string) ([]byte, error)
 }

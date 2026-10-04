@@ -7,28 +7,42 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/davidadel66/evie/internal/workflow"
 )
 
-const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie workflows simulate [--json] <dir> --fixtures <file>"
+const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie workflows simulate [--json] <dir> --fixtures <file>" +
+	" | evie workflows propose [--json] <workspace-id> <dir> [--fixtures <file>] | evie workflows list [--json] [<workspace-id>]" +
+	" | evie workflows show [--json] <workspace-id> <name> | evie workflows diff [--json] <proposal-id>" +
+	" | evie workflows approve [--json] <proposal-id> --hash <executable-hash> --authority <authority-hash> --expect-version <n>" +
+	" | evie workflows deactivate [--json] <workspace-id> <name> --version <n> [--reason <text>]"
+
+// workflowActivationCommands need the database and the procedural
+// repository; runWorkflowActivation answers them once both are available
+// (Stage 14 sub-stage 2).
+var workflowActivationCommands = []string{"propose", "list", "show", "diff", "approve", "deactivate"}
 
 // runWorkflowManagement answers `evie workflows validate <dir>`, which prints
 // a Workflow Definition's review report, and `evie workflows simulate <dir>
 // --fixtures <file>`, which prints an effect-suppressed simulation trace
 // (Stage 14 sub-stage 1, 2026-10-04). Both work on any directory and touch
-// no database: binding a definition to a Workspace, procedural Git and
-// activation are sub-stage 2, and capability providers declare workflow
-// contracts in sub-stage 5. Until then the definition is reviewed against an
-// empty capability catalog and an empty Workspace Access, so a capability
-// node is reported as unauthorized here; agent budgets are bounded by the
-// operator's subagent policy.
+// no database, so the definition is reviewed against an empty capability
+// catalog and an empty Workspace Access: a capability node is reported as
+// unauthorized here. Proposing it to a Workspace (`evie workflows propose`,
+// sub-stage 2) validates it against that Workspace's access instead, and
+// capability providers declare workflow contracts in sub-stage 5. Agent
+// budgets are bounded by the operator's subagent policy. The activation
+// commands are left to runWorkflowActivation, after the database opens.
 func runWorkflowManagement(_ context.Context, args []string, out io.Writer, getenv func(string) string) (bool, error) {
 	if len(args) == 0 || args[0] != "workflows" {
 		return false, nil
 	}
 	usage := errors.New(workflowsUsage)
+	if len(args) >= 2 && slices.Contains(workflowActivationCommands, args[1]) {
+		return false, nil
+	}
 	if len(args) < 2 || (args[1] != "validate" && args[1] != "simulate") {
 		return true, usage
 	}

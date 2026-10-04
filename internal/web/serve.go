@@ -93,6 +93,7 @@ type Server struct {
 	memoryBackground  MemoryBackgroundStatus
 	usageReader       UsageReader
 	spendingService   SpendingService
+	workflows         WorkflowManager
 	terminalMu        sync.Mutex
 	terminals         map[string]*terminalEntry
 	terminalsClosed   bool
@@ -255,6 +256,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerFolderRoutes(mux)
 	s.registerRepositoryInstructionRoutes(mux)
 	s.registerTerminalRoutes(mux)
+	s.registerWorkflowRoutes(mux)
 	mux.Handle("/", s.staticHandler())
 	return mux
 }

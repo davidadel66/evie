@@ -38,6 +38,8 @@ func (e *InvalidError) Error() string {
 // and review report. It is what activation (sub-stage 2) will approve.
 type Validated struct {
 	definition *Definition
+	source     []byte
+	readme     []byte
 	files      map[string][]byte
 	steps      map[string]*node
 	order      []string
@@ -136,6 +138,7 @@ var itemKinds = []string{KindDeterministic, KindAI, KindAgent}
 
 type validator struct {
 	src          Source
+	readme       []byte
 	env          Environment
 	def          *Definition
 	problems     []Problem
@@ -199,7 +202,7 @@ func Validate(src Source, env Environment) (*Validated, error) {
 		return nil, &InvalidError{Problems: v.problems}
 	}
 	result := &Validated{
-		definition: def, files: v.files, steps: v.steps, order: v.order,
+		definition: def, source: data, readme: v.readme, files: v.files, steps: v.steps, order: v.order,
 		inputs: v.inputs, limits: v.limits,
 	}
 	if result.hash, err = executableHash(def, v.files, v.functions); err != nil {
@@ -214,8 +217,12 @@ func (v *validator) add(path, format string, args ...any) {
 }
 
 func (v *validator) run() {
-	if _, err := v.src.ReadFile("README.md"); err != nil {
+	if readme, err := v.src.ReadFile("README.md"); err != nil {
 		v.add("README.md", "required beside workflow.yaml to explain the workflow to its reviewer")
+	} else {
+		// An empty README is present: its digest is the empty digest on
+		// every Source.
+		v.readme = append([]byte{}, readme...)
 	}
 	v.checkHeader()
 	v.checkLimits()
