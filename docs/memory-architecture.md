@@ -299,6 +299,14 @@ approval once at merge)
   worktrees list|clean`. Binding record: the Stage 11 entry in
   `cmd/evie/docs/active/subagents.decisions.md`.
 
+Decided (David, 2026-10-04) after Stage 11 landed:
+- Project sessions may delegate build without a toggle; registering the
+  project folder is the permission, as for research and explore. Only
+  Workspaces need an explicit "on".
+- Worker bash stays offline. Dependencies are installed before
+  worker-modified code runs (see Stage 12's setup phase), or the worker
+  reports what it needs.
+
 **12. Verify-and-merge gate**
 - Projects declare a verification command. Repository instructions or
   Workspace configuration can name it, for example
