@@ -72,8 +72,8 @@ func TestWorkflowMapOfDeterministicItems(t *testing.T) {
 	}
 	var outputs struct {
 		Halves []struct {
-			Index  int   `json:"index"`
-			Item   int   `json:"item"`
+			Index  int `json:"index"`
+			Item   int `json:"item"`
 			Output struct {
 				Shares []int `json:"shares"`
 			} `json:"output"`
