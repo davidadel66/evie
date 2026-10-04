@@ -345,9 +345,12 @@ type subagentNextSteps struct {
 	continuable bool
 	readable    bool
 	continues   string
-	// local is set for an explore child: it has no Web tools, so its report
-	// cites no Web evidence to check (2026-10-03).
+	// local is set for an explore or build child: it has no Web tools, so
+	// its report cites no Web evidence to check (2026-10-03).
 	local bool
+	// notes are worker-specific harness notes, such as where a build
+	// child's uncommitted work was kept (Stage 11).
+	notes []string
 }
 
 // limitNote states, with the attempt's pinned limit, which limit stopped an
@@ -460,6 +463,7 @@ func buildSubagentResult(r *delegation.Result, hasReport bool, report string, ev
 	if len(unverified) > 0 {
 		harness = append(harness, "URLs in unverified_urls are cited in the report but were never fetched or returned by a search.")
 	}
+	harness = append(harness, next.notes...)
 	var fromReport []string
 	if hasReport {
 		summary, ok := reportSection(report, "summary")
@@ -518,6 +522,15 @@ func buildSubagentResult(r *delegation.Result, hasReport bool, report string, ev
 			r.Summary = utf8Prefix(full, keep)
 		case len(fromReport) > 0:
 			fromReport = fromReport[:len(fromReport)-1]
+		case r.Build != nil && len(r.Build.Commands) > 0:
+			// A build result keeps its latest commands longest.
+			r.Build.Commands = r.Build.Commands[1:]
+			r.Build.CommandsOmitted++
+		case r.Build != nil && len(r.Build.Files) > 0:
+			// files_changed still counts every file.
+			r.Build.Files = r.Build.Files[:len(r.Build.Files)-1]
+		case r.Build != nil && len(r.Build.Commits) > 1:
+			r.Build.Commits = r.Build.Commits[:len(r.Build.Commits)-1]
 		case len(uncited) > 0:
 			trim(&uncited, len(uncited)-1)
 		case len(unverified) > 0:
@@ -592,8 +605,8 @@ func (s *Store) ReadSubagentReport(ctx context.Context, p delegation.Parent, id 
 			return fmt.Errorf("read_subagent_report offset %s is not a UTF-8 boundary within the %s-byte report; use 0 or a next_offset", delegation.Grouped(offset), delegation.Grouped(len(report)))
 		}
 		page = delegation.ReportPage{ExecutionID: a.ID, Status: a.State, TotalBytes: len(report), Offset: offset}
-		if a.Worker() == delegation.WorkerExplore {
-			page.Worker = delegation.WorkerExplore
+		if worker := a.Worker(); worker == delegation.WorkerExplore || worker == delegation.WorkerBuild {
+			page.Worker = worker
 		}
 		end := offset + len(utf8Prefix(report[offset:], limit))
 		for {

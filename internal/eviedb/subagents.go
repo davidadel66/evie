@@ -97,7 +97,7 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 	if receipt.Preset.ID != delegation.WorkerResearch {
 		return nil, errors.New("only the restricted research preset is allowed")
 	}
-	return s.admitSubagents(ctx, p, requests, nil, receipt, policy, dispatchID)
+	return s.admitSubagents(ctx, p, requests, admission{}, receipt, policy, dispatchID)
 }
 
 // AdmitExploreSubagents admits a delegate_explore batch like AdmitSubagents.
@@ -111,19 +111,23 @@ func (s *Store) AdmitExploreSubagents(ctx context.Context, p delegation.Parent, 
 	if len(roots) != len(requests) {
 		return nil, errors.New("every explore assignment needs a resolved root")
 	}
-	return s.admitSubagents(ctx, p, requests, roots, receipt, policy, dispatchID)
+	return s.admitSubagents(ctx, p, requests, admission{roots: roots}, receipt, policy, dispatchID)
 }
 
-func (s *Store) admitSubagents(ctx context.Context, p delegation.Parent, requests []delegation.Assignment, roots []string, receipt composition.Receipt, policy delegation.Policy, dispatchID string) ([]delegation.Attempt, error) {
+// admission is a batch's worker-specific harness inputs: explore roots, or
+// build worktree plans and why a plan could not be made.
+type admission struct {
+	roots    []string
+	plans    []delegation.Worktree
+	planErrs []error
+}
+
+func (s *Store) admitSubagents(ctx context.Context, p delegation.Parent, requests []delegation.Assignment, extra admission, receipt composition.Receipt, policy delegation.Policy, dispatchID string) ([]delegation.Attempt, error) {
 	if dispatchID == "" {
 		return nil, errors.New("subagent dispatch identity is required")
 	}
 	worker := receipt.Preset.ID
-	validate := policy.ValidateBatch
-	if worker == delegation.WorkerExplore {
-		validate = policy.ValidateExploreBatch
-	}
-	if err := validate(requests); err != nil {
+	if err := policy.ValidateWorkerBatch(worker, requests); err != nil {
 		return nil, err
 	}
 	encoded, err := composition.Marshal(receipt)
@@ -186,13 +190,33 @@ func (s *Store) admitSubagents(ctx context.Context, p delegation.Parent, request
 				continue
 			}
 			var root string
-			if worker == delegation.WorkerExplore {
-				root = roots[i]
+			var worktree *delegation.Worktree
+			id := uuid.NewString()
+			now := s.now().UTC()
+			switch worker {
+			case delegation.WorkerExplore:
+				root = extra.roots[i]
 				if err := authorizeExploreRoot(ctx, conn, p.Scope, root); err != nil {
 					return fmt.Errorf("assignment %q: %w", r.Key, err)
 				}
+			case delegation.WorkerBuild:
+				// The harness planned the worktree before admission; the
+				// attempt takes its identity from it.
+				if extra.planErrs[i] != nil {
+					return fmt.Errorf("assignment %q: %w", r.Key, extra.planErrs[i])
+				}
+				plan := extra.plans[i]
+				if err := authorizeBuildWorktree(ctx, conn, p.Scope, plan); err != nil {
+					return fmt.Errorf("assignment %q: %w", r.Key, err)
+				}
+				if slices.ContainsFunc(requests[:i], func(other delegation.Assignment) bool { return other.TaskID == r.TaskID }) {
+					return fmt.Errorf("assignment %q: Task %s is already assigned to another build worker in this batch", r.Key, r.TaskID)
+				}
+				if err := prepareBuildTask(ctx, conn, r.TaskID, now); err != nil {
+					return fmt.Errorf("assignment %q: %w", r.Key, err)
+				}
+				id, worktree = filepath.Base(plan.Path), &plan
 			}
-			now := s.now().UTC()
 			child := memory.Session{ID: memory.SessionID(uuid.NewString()), ParentSessionID: p.Scope.SessionID, Status: memory.SessionActive, CreatedAt: now, UpdatedAt: now,
 				WorkspaceID: p.Scope.WorkspaceID, WorkspaceRevisionSnapshot: p.Scope.WorkspaceRevision, ProjectID: p.Scope.ProjectID, ProjectRootSnapshot: p.Scope.ProjectRoot}
 			if _, err := conn.ExecContext(ctx, `INSERT INTO sessions(id,workspace_id,workspace_revision_snapshot,project_id,project_root_snapshot,parent_session_id,status,created_at,updated_at)
@@ -202,13 +226,20 @@ func (s *Store) admitSubagents(ctx context.Context, p delegation.Parent, request
 			if err := insertCompositionReceipt(ctx, conn, child.ID, encoded, now); err != nil {
 				return err
 			}
-			a := delegation.Attempt{ID: uuid.NewString(), DispatchID: dispatchID, Parent: p, Assignment: r, Digest: delegation.Digest(r), Child: child, Receipt: receipt, Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now, Root: root}
+			a := delegation.Attempt{ID: id, DispatchID: dispatchID, Parent: p, Assignment: r, Digest: delegation.Digest(r), Child: child, Receipt: receipt, Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now, Root: root, Worktree: worktree}
 			data, err := json.Marshal(a)
 			if err != nil {
 				return err
 			}
 			if _, err = conn.ExecContext(ctx, `INSERT INTO subagent_executions(id,parent_session_id,idempotency_key,request_digest,child_session_id,state,record_json) VALUES(?,?,?,?,?,?,?)`, a.ID, p.Scope.SessionID, r.Key, a.Digest, child.ID, a.State, string(data)); err != nil {
 				return err
+			}
+			if worker == delegation.WorkerBuild {
+				// The worker's authority over its Task: that Task's subtree,
+				// for this attempt only (Stage 11).
+				if err := issueBuildGrant(ctx, conn, p, child.ID, r.TaskID, a.ID, now); err != nil {
+					return err
+				}
 			}
 			attempts = append(attempts, a)
 		}
@@ -326,13 +357,21 @@ func (s *Store) AdmitSubagentContinuation(ctx context.Context, p delegation.Pare
 		now := s.now().UTC()
 		assignment := delegation.Assignment{Key: key, Objective: message, TaskID: original.Assignment.TaskID}
 		a = delegation.Attempt{ID: uuid.NewString(), DispatchID: dispatchID, Parent: p, Assignment: assignment, Digest: digest, Child: original.Child, Receipt: original.Receipt,
-			Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now, Continues: &delegation.Continues{ExecutionID: original.ID, AfterSequence: after}, Root: original.Root}
+			Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now, Continues: &delegation.Continues{ExecutionID: original.ID, AfterSequence: after}, Root: original.Root,
+			Worktree: original.Worktree}
 		data, err := json.Marshal(a)
 		if err != nil {
 			return err
 		}
 		if _, err = conn.ExecContext(ctx, `INSERT INTO subagent_executions(id,parent_session_id,idempotency_key,request_digest,child_session_id,state,record_json) VALUES(?,?,?,?,?,?,?)`, a.ID, p.Scope.SessionID, key, digest, a.Child.ID, a.State, string(data)); err != nil {
 			return err
+		}
+		if a.Worker() == delegation.WorkerBuild {
+			// A build child continues in the same worktree, on the same Task,
+			// under a grant for this attempt only.
+			if err = issueBuildGrant(ctx, conn, p, a.Child.ID, a.Assignment.TaskID, a.ID, now); err != nil {
+				return err
+			}
 		}
 		return s.authorizeSubagentParent(ctx, conn, p, original.Receipt)
 	})
@@ -428,8 +467,8 @@ func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn,
 	}
 
 	worker := child.Preset.ID
-	if worker != delegation.WorkerResearch && worker != delegation.WorkerExplore {
-		return errors.New("only the restricted research and read-only explore presets are allowed")
+	if worker != delegation.WorkerResearch && worker != delegation.WorkerExplore && worker != delegation.WorkerBuild {
+		return errors.New("only the restricted research, read-only explore and fenced build presets are allowed")
 	}
 	if p.Scope.WorkspaceID != "" {
 		if err := authorizeWorkspacePreset(ctx, conn, p.Scope, worker); err != nil {
@@ -440,10 +479,13 @@ func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn,
 		return err
 	}
 	// An explore worker uses no Web capability, so only Subagents must stay
-	// enabled for it.
+	// enabled for it; a build worker needs Todo for its Task instead.
 	required := []string{"subagents", "web"}
-	if worker == delegation.WorkerExplore {
+	switch worker {
+	case delegation.WorkerExplore:
 		required = []string{"subagents"}
+	case delegation.WorkerBuild:
+		required = []string{"subagents", "todo"}
 	}
 	for _, plugin := range required {
 		var enabled bool
@@ -463,14 +505,22 @@ func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn,
 	for _, c := range receipt.Capabilities {
 		caps[c.ID] = c
 	}
-	if worker == delegation.WorkerExplore {
+	switch worker {
+	case delegation.WorkerExplore:
 		if _, ok := caps[delegation.ExploreCapabilityID]; !ok {
 			return errors.New("parent composition does not permit explore delegation")
 		}
 		if err := authorizeExploreComposition(receipt, child); err != nil {
 			return err
 		}
-	} else {
+	case delegation.WorkerBuild:
+		if _, ok := caps[delegation.BuildCapabilityID]; !ok {
+			return errors.New("parent composition does not permit build delegation")
+		}
+		if err := authorizeBuildComposition(receipt, child); err != nil {
+			return err
+		}
+	default:
 		if _, ok := caps[delegation.CapabilityID]; !ok {
 			return errors.New("parent composition does not permit delegation")
 		}
@@ -584,13 +634,20 @@ func authorizeExploreRoot(ctx context.Context, conn *sql.Conn, scope memory.Scop
 	return fmt.Errorf("%w: explore root %q is outside the conversation's folder %q", delegation.ErrAuthority, root, base)
 }
 
-// authorizeAttemptRoot applies authorizeExploreRoot to an explore attempt;
-// research attempts have no root.
+// authorizeAttemptRoot applies authorizeExploreRoot to an explore attempt
+// and authorizeBuildWorktree to a build attempt; research attempts have no
+// folder.
 func authorizeAttemptRoot(ctx context.Context, conn *sql.Conn, a delegation.Attempt) error {
-	if a.Worker() != delegation.WorkerExplore {
-		return nil
+	switch a.Worker() {
+	case delegation.WorkerExplore:
+		return authorizeExploreRoot(ctx, conn, a.Parent.Scope, a.Root)
+	case delegation.WorkerBuild:
+		if a.Worktree == nil {
+			return fmt.Errorf("%w: a build attempt needs a pinned worktree", delegation.ErrAuthority)
+		}
+		return authorizeBuildWorktree(ctx, conn, a.Parent.Scope, *a.Worktree)
 	}
-	return authorizeExploreRoot(ctx, conn, a.Parent.Scope, a.Root)
+	return nil
 }
 
 // pathWithin reports whether p is root or below it.

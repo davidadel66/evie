@@ -285,6 +285,19 @@ approval once at merge)
   - the grant can't touch sibling or parent tasks;
   - a crash mid-task leaves the worktree recoverable;
   - old receipts still resume.
+- **Implemented** (2026-10-03). `delegate_build` (contract 1.0.0, Standard
+  `sha256:535755ad…`; earlier versions reopen unchanged) takes a required
+  Task and an optional base. The harness creates the worktree at
+  `<repo>/.evie/worktrees/<execution>` on branch `evie/<id>-<slug>`,
+  excluded through the repository's local `info/exclude`. The worker's file
+  tools are confined through `os.Root`; its bash runs only under Seatbelt or
+  bubblewrap (writes to the worktree and a private temp folder, no network),
+  and a host without a sandbox gives it no bash. The worker never runs a
+  git command that writes: the harness commits its work on its branch when
+  the attempt ends, whatever ended it. Workspaces need the owner's explicit
+  build setting (off by default). A crash leaves the worktree for `evie
+  worktrees list|clean`. Binding record: the Stage 11 entry in
+  `cmd/evie/docs/active/subagents.decisions.md`.
 
 **12. Verify-and-merge gate**
 - Projects declare a verification command. Repository instructions or

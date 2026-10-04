@@ -30,6 +30,7 @@ type (
 		Instructions      RepositoryInstructionSettings `json:"instructions"`
 		Folder            WorkspaceFolder               `json:"folder"`
 		Explore           WorkspaceExplore              `json:"explore"`
+		Build             WorkspaceBuild                `json:"build"`
 		ID                WorkspaceID                   `json:"id"`
 		DisplayName       string                        `json:"displayName"`
 		State             WorkspaceState                `json:"state"`
@@ -92,6 +93,30 @@ func (s WorkspaceExploreSetting) Valid() bool {
 type WorkspaceExplore struct {
 	Setting WorkspaceExploreSetting `json:"setting"`
 	Allowed bool                    `json:"allowed"`
+}
+
+// WorkspaceBuildSetting is a Workspace revision's choice for build workers,
+// which write code in their own git worktrees (Stage 11, 2026-10-03). Writing
+// is a bigger grant than exploring, so the default is off: only the owner's
+// explicit on allows them.
+type WorkspaceBuildSetting string
+
+const (
+	WorkspaceBuildDefault WorkspaceBuildSetting = "default"
+	WorkspaceBuildOn      WorkspaceBuildSetting = "on"
+	WorkspaceBuildOff     WorkspaceBuildSetting = "off"
+)
+
+// Valid reports whether s is one of the three settings.
+func (s WorkspaceBuildSetting) Valid() bool {
+	return s == WorkspaceBuildDefault || s == WorkspaceBuildOn || s == WorkspaceBuildOff
+}
+
+// WorkspaceBuild is the current revision's build setting and whether it
+// allows build workers.
+type WorkspaceBuild struct {
+	Setting WorkspaceBuildSetting `json:"setting"`
+	Allowed bool                  `json:"allowed"`
 }
 
 func (s Session) ScopeContext() ScopeContext {

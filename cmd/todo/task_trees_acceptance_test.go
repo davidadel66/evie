@@ -446,7 +446,7 @@ func assertAcceptanceComposition(t *testing.T, manager *plugins.Manager, resolve
 		}
 	}
 	presets, err := manager.InspectPresets()
-	if err != nil || len(presets) != 3 || presets[1].ID != plugins.ResearchPresetID || presets[0].ID != plugins.StandardPresetID || presets[2].ID != plugins.ExplorePresetID {
+	if err != nil || len(presets) != 4 || presets[1].ID != plugins.ResearchPresetID || presets[0].ID != plugins.StandardPresetID || presets[2].ID != plugins.ExplorePresetID || presets[3].ID != plugins.BuildPresetID {
 		t.Fatalf("preset regressions = %+v, %v", presets, err)
 	}
 }

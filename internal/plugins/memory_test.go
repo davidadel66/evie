@@ -117,8 +117,8 @@ func TestStandardPresetTreatsMemoryCapabilitiesAsOptional(t *testing.T) {
 	if err != nil {
 		t.Fatalf("disabled optional Memory Plugin invalidated standard: %v", err)
 	}
-	// Plus the uncompiled Subagents delegation, report, continuation and explore capabilities.
-	if len(disabled.Warnings) != len(want)+4 || containsMemorySchema(disabled.Toolset) {
+	// Plus the uncompiled Subagents delegation, report, continuation, explore and build capabilities.
+	if len(disabled.Warnings) != len(want)+5 || containsMemorySchema(disabled.Toolset) {
 		t.Fatalf("disabled composition warnings/schemas = %d/%v", len(disabled.Warnings), disabled.Toolset.Schemas())
 	}
 	if err := manager.Enable(context.Background(), MemoryPluginID); err != nil {
@@ -134,7 +134,7 @@ func TestStandardPresetTreatsMemoryCapabilitiesAsOptional(t *testing.T) {
 			memoryReceipts++
 		}
 	}
-	if len(enabled.Warnings) != 4 || memoryReceipts != len(want) { // the four uncompiled Subagents capabilities
+	if len(enabled.Warnings) != 5 || memoryReceipts != len(want) { // the five uncompiled Subagents capabilities
 		t.Fatalf("enabled composition warnings/capabilities = %v/%v", enabled.Warnings, enabled.Receipt.Capabilities)
 	}
 }
@@ -176,8 +176,8 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 	if !containsSchema(resolved.Toolset, "read_tool_result") {
 		t.Fatal("remote-memory opt-out removed the stored tool result reader")
 	}
-	// Eleven Memory reads plus the uncompiled Subagents delegation, report, continuation and explore capabilities.
-	if len(resolved.Warnings) != 15 {
+	// Eleven Memory reads plus the uncompiled Subagents delegation, report, continuation, explore and build capabilities.
+	if len(resolved.Warnings) != 16 {
 		t.Fatalf("remote-memory opt-out warnings = %v, want one per unavailable read Capability", resolved.Warnings)
 	}
 }
@@ -647,8 +647,8 @@ func TestFailedMemoryPluginStaysOutOfComposition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed optional Memory Plugin invalidated standard preset: %v", err)
 	}
-	// Plus the uncompiled Subagents delegation, report, continuation and explore capabilities.
-	if containsMemorySchema(composition.Toolset) || len(composition.Warnings) != len(allMemoryCapabilityIDs())+4 {
+	// Plus the uncompiled Subagents delegation, report, continuation, explore and build capabilities.
+	if containsMemorySchema(composition.Toolset) || len(composition.Warnings) != len(allMemoryCapabilityIDs())+5 {
 		t.Fatalf("failed Memory Plugin composition = warnings %v schemas %v", composition.Warnings, composition.Toolset.Schemas())
 	}
 }

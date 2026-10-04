@@ -604,9 +604,13 @@ func replayCoordinationError(id task.ID, result coordinationResult) error {
 func releaseStoredTaskClaim(ctx context.Context, conn *sql.Conn, claim storedTaskClaim,
 	event task.Event, reason string, managementOverride bool,
 ) (task.ClaimRelease, string, error) {
-	current, err := getGlobalTask(ctx, conn, claim.TaskID)
-	if err != nil {
-		return task.ClaimRelease{}, "", err
+	// Every caller has already authorized the Task, or is the Kernel's lease
+	// cleanup, which acts for no session's Task scope; the revision is read
+	// directly so cleanup also releases claims on Workspace and project Tasks
+	// (2026-10-03, Stage 11: build workers claim such Tasks).
+	var current task.Task
+	if err := conn.QueryRowContext(ctx, `SELECT revision FROM tasks WHERE id = ?`, claim.TaskID).Scan(&current.Revision); err != nil {
+		return task.ClaimRelease{}, "", fmt.Errorf("read claimed Task revision: %w", err)
 	}
 	result, err := conn.ExecContext(ctx, `DELETE FROM task_claims WHERE task_id = ? AND claim_id = ?`, claim.TaskID, claim.ID)
 	if err != nil {

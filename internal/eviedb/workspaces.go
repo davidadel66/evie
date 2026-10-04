@@ -71,6 +71,8 @@ func (s *Store) RegisterWorkspaceWithOptions(ctx context.Context, options Worksp
 	workspace.Folder = folder
 	// Explore follows the folder until the owner chooses (2026-10-03).
 	workspace.Explore = memory.WorkspaceExplore{Setting: memory.WorkspaceExploreDefault, Allowed: presetID == "standard" && folder.Path != ""}
+	// Build workers stay off until the owner turns them on (Stage 11).
+	workspace.Build = memory.WorkspaceBuild{Setting: memory.WorkspaceBuildDefault}
 	if options.AllowResearchDelegation {
 		workspace.AllowedPresetIDs = append(workspace.AllowedPresetIDs, "research")
 	}
@@ -94,6 +96,10 @@ func (s *Store) RegisterWorkspaceWithOptions(ctx context.Context, options Worksp
 		if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_explore_settings(workspace_id,revision_id,setting) VALUES(?,?,?)`,
 			workspace.ID, workspace.CurrentRevisionID, workspace.Explore.Setting); err != nil {
 			return fmt.Errorf("insert Workspace explore setting: %w", err)
+		}
+		if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_build_settings(workspace_id,revision_id,setting) VALUES(?,?,?)`,
+			workspace.ID, workspace.CurrentRevisionID, workspace.Build.Setting); err != nil {
+			return fmt.Errorf("insert Workspace build setting: %w", err)
 		}
 		if folder.Path != "" {
 			if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_folder_revisions(workspace_id,revision,path,recorded_at)

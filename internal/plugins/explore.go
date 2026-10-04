@@ -35,6 +35,8 @@ func WorkerInstructions(id PresetID) (string, error) {
 		return ResearchInstructions, nil
 	case ExplorePresetID:
 		return ExploreInstructions, nil
+	case BuildPresetID:
+		return BuildInstructions, nil
 	}
 	return "", fmt.Errorf("Agent Preset %q is not a worker preset", id)
 }

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/davidadel66/evie/internal/agent"
+	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -158,10 +160,19 @@ const exploreReportFormat = "## Summary\nA self-contained summary of your findin
 	"## Details\nSupporting detail and evidence with their file paths, commands or queries. The orchestrator reads this on request.\n" +
 	"## Limitations\nOne bullet per gap, conflict, or claim you could not verify."
 
+// buildReportFormat is a build child's report: what it changed and how it
+// checked it (Stage 11, 2026-10-03).
+const buildReportFormat = "## Summary\nA self-contained summary in about 1,000 to 2,000 tokens of what you changed and why, citing the files, and the tests or checks you ran with their exact commands and results. The orchestrator receives this section directly.\n" +
+	"## Details\nThe changes file by file and the full test results. The orchestrator reads this on request.\n" +
+	"## Limitations\nOne bullet per thing left undone, failing check, or risk a reviewer should know about."
+
 // workerReportFormat is the report format of worker's children.
 func workerReportFormat(worker string) string {
-	if worker == delegation.WorkerExplore {
+	switch worker {
+	case delegation.WorkerExplore:
 		return exploreReportFormat
+	case delegation.WorkerBuild:
+		return buildReportFormat
 	}
 	return reportFormat
 }
@@ -187,13 +198,36 @@ func continuationBrief(p delegation.Policy, worker string) string {
 		"Write a complete final report that replaces your previous one, covering everything you have found so far, in this format:\n%s", p.Deadline, p.TokenBudget, delegation.WrapUpPercent, workerReportFormat(worker))
 }
 
-// rootNote tells an explore child the folder its tools are confined to. It
-// is harness-written, from the attempt's pinned root.
+// rootNote tells an explore child the folder its tools are confined to, and
+// a build child its worktree, branch, shell and Task. It is harness-written,
+// from the attempt's pinned record.
 func rootNote(a delegation.Attempt) string {
-	if a.Worker() != delegation.WorkerExplore {
-		return ""
+	switch a.Worker() {
+	case delegation.WorkerExplore:
+		return fmt.Sprintf("Folder pinned by Evie's harness for this assignment: %s\nYour tools read only inside it, and relative paths start there.\n\n", a.Root)
+	case delegation.WorkerBuild:
+		if a.Worktree == nil {
+			return ""
+		}
+		w := a.Worktree
+		shell := "You have no shell: this host has no OS sandbox to confine one, so you cannot run builds or tests; say so under Limitations."
+		if slices.ContainsFunc(a.Receipt.ToolSchemas, func(s composition.ToolSchema) bool { return s.Name == "bash" }) {
+			shell = "Your bash runs in an OS sandbox: it can write only in the worktree and $TMPDIR, and has no network."
+		}
+		return fmt.Sprintf("Worktree pinned by Evie's harness for this assignment: %s, on branch %s from %s (commit %s).\n"+
+			"Your file tools write only inside it, and relative paths start there. %s Evie's harness commits your changes on your branch when you finish.\n"+
+			"Your Task: %s. Claim it with todo_claim before updating it; you can read, update and add subtasks under it, and no other Task.\n\n",
+			w.Path, w.Branch, w.Base, shortCommit(w.BaseCommit), shell, a.Assignment.TaskID)
 	}
-	return fmt.Sprintf("Folder pinned by Evie's harness for this assignment: %s\nYour tools read only inside it, and relative paths start there.\n\n", a.Root)
+	return ""
+}
+
+// shortCommit abbreviates a commit ID for a harness note.
+func shortCommit(sha string) string {
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
 }
 
 // assignmentMessage is the user-role message that starts the attempt's child

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -16,6 +17,7 @@ import (
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/tools"
+	"github.com/davidadel66/evie/internal/worktree"
 	"github.com/google/uuid"
 )
 
@@ -50,6 +52,11 @@ type Supervisor struct {
 	// unsettled holds the outcome each owner decided but could not record
 	// within settleWindow. Recovery passes and same-key retries record it.
 	unsettled map[string]outcome
+	// commits holds the harness's commit report of each build attempt until
+	// its outcome is recorded with it (Stage 11).
+	commits map[string]*delegation.BuildReport
+	// commitTimeout bounds the harness commit at the end of a build attempt.
+	commitTimeout time.Duration
 }
 
 func New(store *eviedb.Store, policy delegation.Policy) (*Supervisor, error) {
@@ -62,7 +69,7 @@ func New(store *eviedb.Store, policy delegation.Policy) (*Supervisor, error) {
 	idle := make(chan struct{})
 	close(idle)
 	return &Supervisor{store: store, policy: policy, active: map[uint64]context.CancelFunc{}, idle: idle, now: time.Now,
-		settleWindow: settleGrace, unsettled: map[string]outcome{}}, nil
+		settleWindow: settleGrace, unsettled: map[string]outcome{}, commits: map[string]*delegation.BuildReport{}, commitTimeout: buildCommitTimeout}, nil
 }
 
 // Configure supplies the same resolved transport and model used by parents.
@@ -178,12 +185,17 @@ func (s *Supervisor) Explore(ctx context.Context, parent delegation.Parent, requ
 	return s.delegate(ctx, parent, delegation.WorkerExplore, requests)
 }
 
+// Build runs a delegate_build batch of build children (Stage 11, 2026-10-03):
+// each works on one Task in its own git worktree on a fresh branch, which the
+// harness plans before admission, creates when the child starts and commits
+// when it finishes. They are admitted, budgeted, wrapped up, settled,
+// recovered and delivered exactly like research children.
+func (s *Supervisor) Build(ctx context.Context, parent delegation.Parent, requests []delegation.Assignment) ([]delegation.Result, error) {
+	return s.delegate(ctx, parent, delegation.WorkerBuild, requests)
+}
+
 func (s *Supervisor) delegate(ctx context.Context, parent delegation.Parent, worker string, requests []delegation.Assignment) ([]delegation.Result, error) {
-	validate := s.policy.ValidateBatch
-	if worker == delegation.WorkerExplore {
-		validate = s.policy.ValidateExploreBatch
-	}
-	if err := validate(requests); err != nil {
+	if err := s.policy.ValidateWorkerBatch(worker, requests); err != nil {
 		return nil, err
 	}
 	ctx, rt, leave, err := s.enter(ctx, parent)
@@ -202,15 +214,27 @@ func (s *Supervisor) delegate(ctx context.Context, parent delegation.Parent, wor
 	}
 	var childReceipt composition.Receipt
 	var roots []string
-	if worker == delegation.WorkerExplore {
+	var plans []delegation.Worktree
+	var planErrs []error
+	switch worker {
+	case delegation.WorkerExplore:
 		if childReceipt, err = exploreReceipt(resolved.Receipt, parentReceipt); err != nil {
 			return nil, err
 		}
 		if roots, err = s.exploreRoots(ctx, parent, requests); err != nil {
 			return nil, err
 		}
-	} else if childReceipt, err = researchReceipt(resolved.Receipt, parentReceipt); err != nil {
-		return nil, err
+	case delegation.WorkerBuild:
+		if childReceipt, err = buildReceipt(resolved.Receipt, parentReceipt); err != nil {
+			return nil, err
+		}
+		if plans, planErrs, err = s.buildPlans(ctx, parent, requests); err != nil {
+			return nil, err
+		}
+	default:
+		if childReceipt, err = researchReceipt(resolved.Receipt, parentReceipt); err != nil {
+			return nil, err
+		}
 	}
 	resolved, err = resolve(ctx, worker, &childReceipt)
 	if err != nil {
@@ -218,9 +242,12 @@ func (s *Supervisor) delegate(ctx context.Context, parent delegation.Parent, wor
 	}
 	dispatchID := uuid.NewString()
 	var attempts []delegation.Attempt
-	if worker == delegation.WorkerExplore {
+	switch worker {
+	case delegation.WorkerExplore:
 		attempts, err = s.store.AdmitExploreSubagents(ctx, parent, requests, roots, resolved.Receipt, s.policy, dispatchID)
-	} else {
+	case delegation.WorkerBuild:
+		attempts, err = s.store.AdmitBuildSubagents(ctx, parent, requests, plans, planErrs, resolved.Receipt, s.policy, dispatchID)
+	default:
 		attempts, err = s.store.AdmitSubagents(ctx, parent, requests, resolved.Receipt, s.policy, dispatchID)
 	}
 	if err != nil {
@@ -287,6 +314,30 @@ func (s *Supervisor) exploreRoots(ctx context.Context, parent delegation.Parent,
 		roots[i] = root
 	}
 	return roots, nil
+}
+
+// buildPlans plans each build assignment's worktree in the parent's
+// Workspace folder or project root, without changing anything. A plan that
+// cannot be made is kept as its error: only a fresh assignment needs one, so
+// admission refuses it then, while a retained key still replays.
+func (s *Supervisor) buildPlans(ctx context.Context, parent delegation.Parent, requests []delegation.Assignment) ([]delegation.Worktree, []error, error) {
+	folder := parent.Scope.ProjectRoot
+	if parent.Scope.WorkspaceID != "" {
+		current, err := s.store.WorkspaceFolder(ctx, parent.Scope.WorkspaceID)
+		if err != nil {
+			return nil, nil, err
+		}
+		folder = current.Path
+	}
+	plans := make([]delegation.Worktree, len(requests))
+	errs := make([]error, len(requests))
+	for i, r := range requests {
+		plans[i], errs[i] = worktree.Plan(ctx, folder, r.Base, uuid.NewString(), r.Objective)
+		if ctx.Err() != nil {
+			return nil, nil, ctx.Err()
+		}
+	}
+	return plans, errs, nil
 }
 
 // undeliverable is the error entry of one batch member whose result could
@@ -554,7 +605,16 @@ func (s *Supervisor) handOff(id string, o outcome, err error) (delegation.Result
 func (s *Supervisor) settleOnce(ctx context.Context, id string, o outcome) (delegation.Attempt, error) {
 	write, cancel := context.WithTimeout(ctx, terminalWriteTimeout)
 	defer cancel()
-	a, err := s.store.FinishSubagent(write, id, o.state, o.reason)
+	s.mu.Lock()
+	commit := s.commits[id]
+	s.mu.Unlock()
+	var a delegation.Attempt
+	var err error
+	if commit != nil {
+		a, err = s.store.FinishBuildSubagent(write, id, o.state, o.reason, commit)
+	} else {
+		a, err = s.store.FinishSubagent(write, id, o.state, o.reason)
+	}
 	if err == nil && a.Result == nil {
 		err = errors.New("terminal subagent result is missing")
 	}
@@ -566,6 +626,7 @@ func (s *Supervisor) settleOnce(ctx context.Context, id string, o outcome) (dele
 	}
 	s.mu.Lock()
 	delete(s.unsettled, id)
+	delete(s.commits, id)
 	s.mu.Unlock()
 	return a, nil
 }
@@ -667,9 +728,18 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 		return s.finish(call, a.ID, outcome{"failed", "composition_unavailable"})
 	}
 	toolset := resolved.Toolset
-	if a.Worker() == delegation.WorkerExplore {
+	switch a.Worker() {
+	case delegation.WorkerExplore:
 		// The explore tools read only inside the attempt's pinned root.
 		toolset = toolset.WithWorkerRoot(a.Root)
+	case delegation.WorkerBuild:
+		// The harness creates the worktree on its fresh branch, or finds the
+		// one a continuation resumes, before the child runs; the build tools
+		// write only there (Stage 11).
+		if err := s.prepareWorktree(ctx, a); err != nil {
+			return s.finish(call, a.ID, outcome{"failed", reasonWorktreeUnavailable})
+		}
+		toolset = toolset.WithBuildFence(tools.BuildFence{Worktree: a.Worktree.Path, Temp: a.Worktree.Temp})
 	}
 	if err := s.store.AppendCompatibilityResolutions(ctx, a.Child.ID, resolved.CompatibilityResolutions); err != nil {
 		return s.finish(call, a.ID, outcome{"failed", "composition_unavailable"})
@@ -690,18 +760,109 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 	}
 	holder := a.Child.ID
 	session := agent.NewDelegatedWithToolset(metered, profile, s.store.BindHistory(a.Child.ID, stringHolder(holder)), a.Child.ScopeContext(), s.store.BindTurnOwner(a.Child.ID, stringHolder(holder)), toolset, resolved.Instructions, agent.WithWrapUp(metered.wrapUp))
+	var o outcome
 	if err = session.Send(ctx, assignmentMessage(a), quietEvents{}, nil); err != nil {
-		failure := executionFailure(ctx, err, deadline)
-		if failure.reason == delegation.ReasonContextLimit && errors.Is(err, agent.ErrContextOverflow) && metered.wrapUpReason() != "" {
+		o = executionFailure(ctx, err, deadline)
+		if o.reason == delegation.ReasonContextLimit && errors.Is(err, agent.ErrContextOverflow) && metered.wrapUpReason() != "" {
 			// Even the smallest wrap-up request could not fit.
-			failure.reason = delegation.ReasonWrapUpFailed
+			o.reason = delegation.ReasonWrapUpFailed
 		}
-		return s.finish(call, a.ID, failure)
+	} else if reason := metered.wrapUpReason(); reason != "" {
+		o = outcome{delegation.StatePartial, reason}
+	} else {
+		o = outcome{"succeeded", ""}
 	}
-	if reason := metered.wrapUpReason(); reason != "" {
-		return s.finish(call, a.ID, outcome{delegation.StatePartial, reason})
+	if a.Worker() == delegation.WorkerBuild {
+		// Whatever the outcome, the harness commits the worker's changes on
+		// its branch before settling, so the result lists them.
+		s.commitBuild(call, a)
 	}
-	return s.finish(call, a.ID, outcome{"succeeded", ""})
+	return s.finish(call, a.ID, o)
+}
+
+// reasonWorktreeUnavailable is a build attempt whose worktree the harness
+// could not create or find.
+const reasonWorktreeUnavailable = "worktree_unavailable"
+
+// buildCommitTimeout bounds the harness commit and report at the end of a
+// build attempt.
+const buildCommitTimeout = 30 * time.Second
+
+// prepareWorktree creates a fresh build attempt's worktree, or verifies the
+// existing one a continuation resumes. A failure is recorded in the attempt's
+// build report so the parent learns why.
+func (s *Supervisor) prepareWorktree(ctx context.Context, a delegation.Attempt) error {
+	if a.Worktree == nil {
+		return errors.New("the build attempt has no pinned worktree")
+	}
+	err := worktree.Ensure(ctx, *a.Worktree, a.Continues == nil)
+	if err != nil {
+		// Before the child runs, the harness's own words name only harness
+		// paths, so the reason is kept, bounded.
+		reason := err.Error()
+		if len(reason) > 300 {
+			reason = strings.ToValidUTF8(reason[:300], "") + "…"
+		}
+		w := a.Worktree
+		s.mu.Lock()
+		s.commits[a.ID] = &delegation.BuildReport{Branch: w.Branch, Base: w.Base, BaseCommit: w.BaseCommit, Worktree: w.Path,
+			CommitError: "the harness could not prepare the worktree, so nothing ran in it: " + reason}
+		s.mu.Unlock()
+	}
+	return err
+}
+
+// commitBuild commits the worker's changes on its branch as the harness and
+// keeps the branch report for settlement. It runs after the child's turn,
+// whatever ended it, bounded by commitTimeout even when the owning call was
+// cancelled.
+func (s *Supervisor) commitBuild(call context.Context, a delegation.Attempt) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(call), s.commitTimeout)
+	defer cancel()
+	w := *a.Worktree
+	_, commitErr := worktree.Commit(ctx, w, buildCommitMessage(a))
+	report, err := worktree.Report(ctx, w)
+	if err != nil {
+		report = delegation.BuildReport{Branch: w.Branch, Base: w.Base, BaseCommit: w.BaseCommit, Worktree: w.Path, Uncommitted: true,
+			CommitError: "the branch could not be read: " + harnessWords(err)}
+	}
+	if commitErr != nil {
+		report.Uncommitted = true
+		report.CommitError = harnessWords(commitErr)
+	}
+	s.mu.Lock()
+	s.commits[a.ID] = &report
+	s.mu.Unlock()
+}
+
+// harnessWords is a harness error as the parent may read it outside the
+// child-output frame: fixed wording, never worker-chosen names.
+func harnessWords(err error) string {
+	switch {
+	case errors.Is(err, worktree.ErrNestedRepository):
+		return "the worktree contains a nested .git folder, which the harness never commits"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "git did not finish in time"
+	}
+	return "git failed; inspect the worktree"
+}
+
+// buildCommitMessage is the harness's plain commit message: the
+// assignment's first line, or the follow-up's for a continuation, and the
+// execution that made it.
+func buildCommitMessage(a delegation.Attempt) string {
+	subject, _, _ := strings.Cut(strings.TrimSpace(a.Assignment.Objective), "\n")
+	subject = strings.TrimSpace(subject)
+	if a.Continues != nil {
+		subject = "Continue: " + subject
+	}
+	if runes := []rune(subject); len(runes) > 72 {
+		subject = strings.TrimSpace(string(runes[:71])) + "…"
+	}
+	if subject == "" {
+		subject = "Evie build"
+	}
+	return fmt.Sprintf("%s\n\nEvie build execution %s.", subject, a.ID)
 }
 
 // recordWrapUp persists the wrap-up before the child's final call. A failure

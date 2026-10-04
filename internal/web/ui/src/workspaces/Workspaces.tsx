@@ -8,6 +8,7 @@ import { Folder, MessageSquare, Plus } from "../ui/Icon";
 import { FolderSettings } from "../folder/FolderSettings";
 import { WorkspaceResearchSettings } from "./WorkspaceResearchSettings";
 import { WorkspaceExploreSettings } from "./WorkspaceExploreSettings";
+import { WorkspaceBuildSettings } from "./WorkspaceBuildSettings";
 
 type DirectoryProps = {
   snapshot?: ContextSessionSnapshot;
@@ -171,6 +172,7 @@ export function WorkspaceHome({
         {instructions}
         <WorkspaceResearchSettings key={workspace.id} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceExploreSettings key={`explore:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
+        <WorkspaceBuildSettings key={`build:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
         <FolderSettings key={`${workspace.id}:${workspace.folder?.revision ?? 0}`} workspace={workspace} busy={busy} onChanged={onFolderChanged} onOpen={onOpenFiles} />
         <section className="mt-8">
           <div className="mb-4 flex items-baseline justify-between">

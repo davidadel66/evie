@@ -141,7 +141,7 @@ func (s *Store) SetWorkspaceExplore(ctx context.Context, id memory.WorkspaceID, 
 				return err
 			}
 		}
-		return insertWorkspaceRevision(ctx, conn, &workspace, expected, setting, now)
+		return insertWorkspaceRevision(ctx, conn, &workspace, expected, setting, "", now)
 	})
 	if err != nil {
 		return memory.Workspace{}, err

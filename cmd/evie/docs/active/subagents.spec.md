@@ -55,6 +55,19 @@
 > web API or the CLI. Amended text below is marked "Explore default"; the
 > binding record is the "Explore default follows the Workspace folder" entry
 > in [subagents.decisions.md](subagents.decisions.md).
+>
+> Amended 2026-10-03 by the owner's decision for Stage 11 (build worker) of
+> [docs/memory-architecture.md](../../../../docs/memory-architecture.md):
+> free edits inside the worktree, approval once at merge. A third immutable
+> worker preset, `build`, takes one bounded code change on one Task through
+> a new `delegate_build` capability. Its file tools write without approval
+> but only inside a git worktree on a fresh branch that the harness creates
+> in the parent's repository, its bash runs only under an OS sandbox (and
+> does not exist without one), the harness commits its work on its branch,
+> and a Task Access Grant limits it to its Task's subtree. Nothing merges;
+> that is Stage 12. Amended text below is marked "Stage 11"; the binding
+> record is the "Build workers (Stage 11)" entry in
+> [subagents.decisions.md](subagents.decisions.md).
 
 ## Problem Statement
 
@@ -96,6 +109,17 @@ only tools are `read_file` and a read-only bash, both confined to one folder
 pinned at admission, and the Kernel's existing read-only `query_db`. It has
 no write, approval-gated, Memory, Todo, scheduling, finance, Web or
 delegation capability, and no automatic retrieval of memory.
+
+(Stage 11.) The third worker preset, `build`, makes one bounded code change
+on one Task. The harness creates a git worktree on a fresh branch in the
+parent's repository; the worker's `read_file`, `edit_file` and `write_file`
+change files only inside it without approval, its `bash` runs only under an
+OS sandbox that can write only there and has no network (a host without a
+sandbox composes it without bash), and the harness commits its changes on
+its branch when it finishes. A Task Access Grant lets it claim, update and
+decompose its own Task and nothing else. It has no approval-gated, Memory,
+scheduling, finance, Web or delegation capability, and nothing it does is
+merged: review and merge stay with the parent and the owner.
 
 Foreground delegation waits for bounded results. A bounded batch runs independent
 children concurrently under configurable finite per-parent and runtime limits.
@@ -158,6 +182,7 @@ allowances produce an explicit refusal rather than a change of scope.
 50. As a maintainer, I want restricted composition and foreground execution delivered as focused changes, so that authorization and persistence decisions remain inspectable.
 51. As Evie's owner, I want the primary agent to continue a child that stopped at a limit, or whose findings need a follow-up, with its history intact and a fresh budget, so that bounded research is extended instead of restarted. (Added 2026-10-01, Stage 9.)
 52. As Evie's owner, I want the primary agent to delegate local, read-heavy investigation (many files, a repository, a database) to a read-only worker with a clean context, so that tool output the primary agent does not need never fills its context, while writes, approvals and memory stay with it. (Added 2026-10-03, Stage 7.)
+53. As Evie's owner, I want the primary agent to delegate a bounded code change on a Task to a worker that edits and tests freely in its own git worktree and branch, fenced there by code and the operating system, so that implementation work happens in parallel without touching my checkout, and I approve once, at merge. (Added 2026-10-03, Stage 11.)
 
 ## Implementation Decisions
 
@@ -189,6 +214,16 @@ allowances produce an explicit refusal rather than a change of scope.
   entry). Nothing of the parent's base toolset is inherited, so no write,
   approval-gated, cron or memory tool exists in an explore child. A receipt
   that claims any other tool or a plugin Capability does not reopen.
+- **Build composition.** (Stage 11.) The immutable built-in `build` preset
+  requires the Todo Capabilities `todo.get`, `todo.update`,
+  `todo.decompose`, `todo.claim` and `todo.release`, pinned at the parent's
+  own contracts and schemas. Its Kernel tools are `read_file`, `edit_file`
+  and `write_file` confined to the attempt's worktree (symlinks resolved,
+  access through `os.Root`, any `.git` component and the secrets denylist
+  refused, no approval), then `bash` only where an OS sandbox works:
+  Seatbelt on macOS, bubblewrap on Linux. Nothing of the parent's base is
+  inherited. A receipt pinned with bash reopens only where a sandbox still
+  works; one that claims any other tool does not reopen.
 - **Parent rollout.** Include delegation in the new version of the standard
   parent preset as an optional capability supplied by an enabled Subagents
   Plugin. A disabled or unavailable optional Plugin produces the normal
@@ -241,6 +276,17 @@ allowances produce an explicit refusal rather than a change of scope.
   revision must allow it; turning it off durably revokes earlier revisions
   that were on or followed the folder. A Workspace without a folder explores
   only when turned on, and each assignment then declares an absolute path.
+  (Stage 11.) A build child's ceiling is the parent's `subagents.build`,
+  its own `read_file`, `edit_file` and `bash`, and its Todo Capabilities;
+  Subagents and Todo must be enabled. Its repository is the parent's
+  Workspace folder or project root, which must be a repository's top level;
+  the worktree pinned on the attempt is re-checked against the parent's
+  current folder at admission, start, every child mutation and
+  continuation. A Workspace allows build only when its owner turns the
+  build setting `on` (off by default, unlike explore), in both the pinned
+  and the current revision, and turning it off revokes earlier `on`
+  revisions durably. Project sessions need no setting, as for research and
+  explore.
 - **Assignment interface.** Foreground delegation accepts a bounded objective,
   optional explicitly selected context, an optional existing Task identity, and
   an idempotency key. One fixed child preset is supported, so no model-selected
@@ -249,7 +295,10 @@ allowances produce an explicit refusal rather than a change of scope.
   `delegate_research` is unchanged, and `delegate_explore` takes the same
   assignment fields plus an optional `path` for the folder to explore. An
   idempotency key belongs to one worker: reusing a research key for explore
-  work, or the reverse, conflicts. The current parent invocation supplies the durable source intent,
+  work, or the reverse, conflicts. (Stage 11.) `delegate_build` takes the
+  same fields with `task_id` required and an optional `base` branch or
+  commit (default: the branch checked out); the other tools refuse `base`.
+  The current parent invocation supplies the durable source intent,
   session, Context Scope, and live execution ownership. Validate the request
   before starting a child or contacting a model provider.
 - **Selected context and instructions.** The child starts with the trusted
@@ -286,7 +335,12 @@ allowances produce an explicit refusal rather than a change of scope.
   automatic Task projection; the parent can include relevant authorized facts
   in the selected assignment context. Delegation neither creates a Task nor
   changes the linked Task's status. Later presets with Task capabilities must
-  use existing grant, focus, claim, and cleanup rules explicitly.
+  use existing grant, focus, claim, and cleanup rules explicitly. (Stage 11.)
+  A build assignment's Task must be open, unclaimed by any live execution
+  and free of another unfinished build; admission issues the child a
+  contribute Task Access Grant on it for that attempt only, the worker
+  claims it with its own lease, and settlement and recovery end the grant
+  and release the claim.
 - **Durable execution attempt.** Add a Kernel-owned execution record separate
   from both Session and Task status. It retains the parent session and source
   invocation, original parent ownership identity, idempotency key and canonical
@@ -378,7 +432,12 @@ allowances produce an explicit refusal rather than a change of scope.
   (Stage 7.) An explore result has the same shape with `worker: "explore"`,
   lists no Web sources or unverified URLs (it has no Web tools), and frames
   its text as explore child output; its report cites local paths, commands
-  and queries.
+  and queries. (Stage 11.) A build result has `worker: "build"`, frames its
+  text as build child output, including the bash commands the worker ran
+  with the outcome the harness recorded, and adds a harness-written `build`
+  object: branch, base and base commit, worktree, head, the harness's
+  commits after the base, the files changed with line counts, and whether
+  changes stayed uncommitted.
   (Stage 10.) Everything the child wrote (the summary, the report's
   limitations, and report pages) reaches the parent inside an escaped,
   collision-safe untrusted-data frame, as fetched web content does; status,
@@ -408,7 +467,11 @@ allowances produce an explicit refusal rather than a change of scope.
   unfinished work interrupted and make it inspectable without automatically
   restarting it. Recovery records execution-level facts; it does not synthesize
   missing child or parent conversational outcomes, append through stale turn
-  fences, or adopt another process's still-live child.
+  fences, or adopt another process's still-live child. (Stage 11.) The
+  harness commits a build attempt's work when its owner settles it, however
+  it ended; recovery commits nothing, keeps the worktree and branch with any
+  uncommitted work, and says how to resume or clean up. `evie worktrees`
+  lists build worktrees and cleans the named or abandoned ones.
 - **Plugin lifecycle.** Check live Subagents availability when admitting new
   work even if a parent still holds a pinned delegation capability. Disabling
   or stopping the Plugin closes admission and cancels its active foreground
@@ -516,6 +579,25 @@ allowances produce an explicit refusal rather than a change of scope.
   cap like research children; explore paths stay inside the parent's folder;
   a Workspace needs its own explore allowance; older Standard receipts reopen
   with exactly their tools and cannot admit explore children.
+- (Stage 11.) The build file tools refuse `..`, absolute paths outside,
+  links out, `.git` (any case, invisible characters) and secrets, and leave
+  the owner's checkout and outside files unchanged; the sandboxed bash
+  starts in the worktree, writes only there and in its temp folder, and is
+  refused writes to the owner's checkout, `$HOME`, `/tmp`, `.git`, a nested
+  `.git` and through links or hard links, any network (loopback included),
+  `git add`/`commit`/`update-ref`/`push`, and secrets and Evie's
+  environment; without a sandbox there is no bash. The harness plans
+  worktrees without side effects, refuses non-repositories, subfolders,
+  merges and rebases in progress, unresolvable bases and tracked or linked
+  `.evie`, creates the worktree with hooks off, and commits with the
+  pinned git directory, no hooks, and never a nested repository. Through
+  the composed parent loop a build child claims, updates and decomposes its
+  Task, writes and edits files, and its escapes (other Tasks, the owner's
+  checkout) are refused; the parent receives branch, commits and files with
+  the commands framed. A wrapped-up child is committed as partial; a crash
+  recovers as interrupted with the worktree kept; continuation resumes in
+  the same worktree; cleanup removes it; older Standard receipts reopen
+  unchanged and cannot build; a Workspace needs its explicit build setting.
 - (Explore default.) A Workspace's explore follows its folder by default
   (attach enables, detach disables, no revision written); explicit on and off
   persist across reopen and folder changes; off revokes durably and returning
@@ -573,11 +655,17 @@ allowances produce an explicit refusal rather than a change of scope.
   mutation, worktree isolation, shell access, or a coding-worker preset.
   (Amended 2026-10-03, Stage 7: the explore worker's read-only bash, which
   runs no shell, is in scope; any shell that can write is not.)
+  (Amended 2026-10-03, Stage 11: the build worker, with file mutation and
+  worktree isolation and a shell that can write only under an OS sandbox
+  confining it to its worktree, is in scope. Merging its branch is Stage 12
+  and remains out of scope here.)
 - Memory-enabled worker presets, automatic retrieval for workers, semantic
   memory writes, or compiling worker transcripts into accepted knowledge.
 - Child Todo capabilities, Task Access Grants, Task Focus, Task Claims, child Task
   decomposition, and child Task progress/result mutations. Existing contracts remain
-  the basis for a later Task-capable preset.
+  the basis for a later Task-capable preset. (Amended 2026-10-03, Stage 11: the
+  build preset is that Task-capable preset, limited to its own Task's subtree; Task
+  Focus stays out of scope.)
 - A generic Subagent Provider family, remote agent frameworks, third-party
   plugin distribution, dynamic executable loading, universal provider
   interfaces, or a new conversational agent loop.

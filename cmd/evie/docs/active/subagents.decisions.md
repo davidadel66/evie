@@ -1,5 +1,152 @@
 # Subagents implementation decisions
 
+## 2026-10-03 — Build workers (Stage 11)
+
+Source: Stage 11 of [docs/memory-architecture.md](../../../../docs/memory-architecture.md)
+and the owner's decision there: free edits inside the worktree, approval
+once at merge. The merge itself is Stage 12 and not part of this entry.
+
+Superseded wording: the spec's out-of-scope "Write-enabled workers, ...
+file mutation, worktree isolation, shell access, or a coding-worker preset"
+and "Child Todo capabilities, Task Access Grants, ... child Task
+progress/result mutations" insofar as they cover build workers; "The first
+web-only child has no Todo capabilities, Task Access Grant, ..." stays true
+of research and explore children. The bash decisions' "a shell walks around
+any path denylist" still holds; build workers are fenced by the operating
+system instead (see the 2026-10-03 note in
+`cmd/evie/docs/done/bash.decisions.md`).
+
+- **Preset.** A third immutable worker preset, `build` (`sha256:e4622db8…`),
+  with pinned instructions `evie.build-role`. It requires the Todo
+  Capabilities `todo.get`, `todo.update`, `todo.decompose`, `todo.claim`
+  and `todo.release`, and its Kernel tools are the build toolset in this
+  order: `read_file`, `edit_file` and `write_file`, all confined to the
+  attempt's worktree and needing no approval, then `bash` only where an OS
+  sandbox works. Nothing of the parent's base is inherited, so no
+  `query_db`, `edit_db`, cron, Memory, Finance, Web, delegation or
+  approval-gated tool exists in a build child; a receipt claiming more
+  does not reopen, and a receipt pinned with `bash` reopens only where a
+  sandbox still works. The build child's Todo Capabilities, providers and
+  their schemas are the parent's own pinned ones.
+- **Delegation tool.** A new optional Standard capability `subagents.build`
+  (`delegate_build`, contract 1.0.0) with the assignment fields of
+  `delegate_research`, a required `task_id` and an optional `base`. The
+  existing tools' schemas are unchanged (`delegate_research` and
+  `delegate_explore` still refuse `base` as an unknown field, as
+  `delegate_research` still refuses `path`), and `read_subagent_report` and
+  `continue_research` serve build children unchanged. An idempotency key
+  belongs to one worker. The Standard preset becomes `sha256:535755ad…`;
+  `sha256:bfd4eb42…` joins the historical definitions (preset history test
+  `combined_before_build`), so existing sessions reopen with exactly their
+  tools and need a new chat to build. The Subagents Plugin keeps
+  implementation version 1.0.0 with one more capability. Its ceiling: the
+  parent must hold `subagents.build` and its own `read_file`, `edit_file`
+  and `bash`; Subagents and Todo must be enabled (not Web).
+- **Worktree.** Before admission the harness plans, without changing
+  anything, a worktree for each fresh assignment in the parent's Workspace
+  folder or project root, which must be a non-bare repository's top level
+  with no merge, rebase, cherry-pick, revert or bisect in progress. The
+  base is `base` or the branch checked out (a detached HEAD needs a named
+  base); it is resolved to a commit and pinned. The branch is
+  `evie/<first 8 of the execution ID>-<slug of the objective>` and must not
+  exist. The worktree is `<repo>/.evie/worktrees/<execution ID>` and the
+  private temp folder `<repo>/.evie/tmp/<execution ID>`: inside the folder
+  that bounds the parent's authority (ADR 0027), never under `~/.evie`, and
+  `.evie` must be an untracked plain folder. The harness adds `/.evie/` to
+  the repository's local `info/exclude` (never to a tracked `.gitignore`),
+  so the owner's status stays clean. This mirrors Claude Code's
+  `.claude/worktrees`. The plan (repository, common and worktree git
+  directories, paths, branch, base and commit) is pinned on the attempt as
+  `worktree`, and the attempt takes its ID from it. The worktree is created
+  (`git worktree add -b`, hooks off) when the child starts; a continuation
+  finds the same worktree and refuses if it was removed. A plan error
+  refuses only a fresh assignment; a retained key still replays.
+- **Fence.** The file tools resolve every path against the worktree with
+  symlinks evaluated and open it through `os.Root`, so `..`, absolute paths
+  outside, links out (when checked or swapped in later), secret names, and
+  any `.git` component (in any case, ignoring invisible characters) are
+  refused; writes replace the named entry atomically and never follow a
+  final link. `bash` runs in the OS sandbox described in the bash decisions:
+  writes only to the worktree (minus `.git`) and the temp folder, reads
+  except secrets, no network, a built environment, the worktree as its
+  working directory. The worker cannot run git commands that write; read-only
+  git works.
+- **Harness commits.** After the child's turn ends, whatever ended it
+  (success, wrap-up, failure, cancellation), the harness stages everything
+  and commits it on the worker's branch with the repository's configured
+  identity (Evie's when it has none) and a plain message: the objective's
+  first line (or `Continue: ` and the follow-up's), then `Evie build
+  execution <id>.`. It runs git with `--git-dir`/`--work-tree` named
+  explicitly (the worktree's `.git` file is never trusted), hooks, fsmonitor,
+  pager, signing, external diff and submodule recursion off, a built
+  environment, and refuses to commit a worktree holding a nested `.git`.
+  The commit and report are bounded by 30 seconds and recorded with the
+  outcome in the same settlement transaction.
+- **Task grant.** Admission refuses a build assignment whose Task is not
+  open, is claimed by a live execution (the worker claims its own Task), or
+  already has an unfinished build attempt; a claim left by a dead execution
+  is released. It then issues the child a contribute Task Access Grant on
+  that Task, issued by the parent session, for this attempt only: the
+  worker can read, claim, update (status, result, metadata, with revision
+  checks) and decompose that Task and its subtasks; its siblings, parents
+  and other trees read as not found, and cancelling or reopening needs
+  manage. Settlement and recovery end the grant and release any claim the
+  child still holds; a continuation gets a fresh grant.
+- **Claim cleanup fix.** Releasing a claim read its Task through the
+  releasing context's scope, so the Kernel's lease cleanup (which acts for
+  no session's scope) failed on Workspace and project Tasks and left the
+  child's lease held. `releaseStoredTaskClaim` now reads the revision
+  directly; every other caller had already authorized the Task.
+- **Workspaces.** A Workspace allows build workers only when the owner sets
+  its build setting to `on`: a `workspace_build_settings` row per revision
+  (`default`, `on`, `off`), like explore's, but `default` allows nothing.
+  Existing revisions migrate to `default`. Every new revision carries the
+  setting forward. Both the pinned and current revisions must be `on`, and
+  any change to a setting other than `on` durably revokes every earlier
+  `on` revision. Surfaces: the Workspace JSON's `build: {setting,
+  allowed}`, `POST /api/workspaces/build` (management guard), `evie
+  workspaces build <workspace-id> on|off|default`, and a "Build workers"
+  checkbox on the Workspace home (its own component; the owner's
+  uncommitted UI files were not touched). Project sessions, like for
+  research and explore, need no setting: their registered root is the
+  ceiling.
+- **Result.** The research contract with `worker: "build"`, a build frame
+  (`[begin untrusted build child output from execution …]`), no Web
+  sources, and a `build` object outside the frame: branch, base, base
+  commit, worktree, head, the commits after the base (SHA and the harness's
+  subject), files changed with line counts (paths listed only when plain:
+  no spaces or unusual characters, at most 256 bytes; `files_changed`
+  counts all), totals, and whether changes stayed uncommitted and why. The
+  bash commands the worker ran, with the outcome the harness recorded
+  (`exit N`, `timeout`, `refused`, `error`), are worker-written, so they are
+  inside the frame, latest twenty. The result limit trims commands, then
+  files, then commits after the summary and limitations.
+- **Recovery and cleanup.** A crash leaves the worktree. Recovery settles
+  the attempt `interrupted` as before, without committing, ends the grant
+  and claim, and the result names the branch and worktree, says they were
+  kept with any uncommitted changes, and how to resume (commit or discard,
+  then a new build with `base` the branch) or remove them. `evie worktrees
+  list` shows every build worktree with its execution's state, presence
+  and uncommitted changes; `evie worktrees clean <execution-id>...` or
+  `--abandoned` (interrupted, failed or cancelled) removes worktree and
+  temp folder, refuses uncommitted work without `--force`, keeps branches
+  unless `--delete-branch`, refuses an unfinished execution, and marks the
+  worktree removed so no continuation runs there.
+- **Guidance.** A session that has `delegate_build` gets one more
+  Delegation line: one bounded code change per Task it created, the worker
+  claims that Task (so do not claim it yourself), then review the branch;
+  merging is the owner's separate step. Other sessions keep their prompt.
+- **Known limits.** The repository's own git configuration still applies
+  to harness commits beyond what is turned off (clean filters such as LFS,
+  `include` files), as for explore. Work after a crash stays uncommitted
+  until the owner commits or discards it. A sandboxed process that leaves
+  its process group (`setsid`) can outlive its command, still confined.
+  Reads are allowed outside the worktree (except secrets) so toolchains
+  work, within the parent's own read ceiling. On Linux, bubblewrap cannot
+  stop a nested `.git` from being created (the harness refuses to commit
+  it) and does not hide `.env` files outside the worktree. Dependencies not
+  already cached cannot be fetched.
+
 ## 2026-10-03 — Explore default follows the Workspace folder
 
 Source: the owner's decision recorded under Stage 7 of

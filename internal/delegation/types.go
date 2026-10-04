@@ -37,11 +37,20 @@ const ContinueToolName = "continue_research"
 const ExploreCapabilityID = "subagents.explore"
 const ExploreToolName = "delegate_explore"
 
+// BuildCapabilityID lets a parent delegate a bounded code change on one Task
+// to a build worker whose writes are fenced to its own git worktree and
+// branch (Stage 11 of docs/memory-architecture.md, added 2026-10-03). Its
+// results use the delegate_research contract plus the harness-recorded
+// branch, commits and files changed.
+const BuildCapabilityID = "subagents.build"
+const BuildToolName = "delegate_build"
+
 // Worker presets a child can be composed from. A child's worker is its pinned
 // receipt's preset identity.
 const (
 	WorkerResearch = "research"
 	WorkerExplore  = "explore"
+	WorkerBuild    = "build"
 )
 
 // ExploreToolNames are the explore preset's tools in schema order: read_file
@@ -50,11 +59,29 @@ const (
 // parent tool of the same name.
 var ExploreToolNames = []string{"read_file", "query_db", "bash"}
 
+// BuildKernelToolNames are the build preset's Kernel tools in schema order,
+// each confined to the attempt's worktree: read_file, edit_file and
+// write_file, then a bash that runs only under an OS sandbox. A host without
+// a usable sandbox composes build workers without bash.
+var BuildKernelToolNames = []string{"read_file", "edit_file", "write_file", "bash"}
+
+// BuildParentToolNames are the parent tools a build worker's tools are
+// confined forms of; a parent without them cannot delegate build work.
+var BuildParentToolNames = []string{"read_file", "edit_file", "bash"}
+
+// BuildTaskCapabilityIDs are the Todo Capabilities pinned in a build child,
+// in order. With the Task Access Grant the harness issues on its Task, they
+// let the worker read, claim, update and decompose that Task's subtree only.
+var BuildTaskCapabilityIDs = []string{"todo.get", "todo.update", "todo.decompose", "todo.claim", "todo.release"}
+
 // DelegationToolName is the tool whose committed intent admits a fresh child
 // of worker.
 func DelegationToolName(worker string) string {
-	if worker == WorkerExplore {
+	switch worker {
+	case WorkerExplore:
 		return ExploreToolName
+	case WorkerBuild:
+		return BuildToolName
 	}
 	return ToolName
 }
@@ -62,7 +89,7 @@ func DelegationToolName(worker string) string {
 // AdmitsChildren reports whether a committed parent tool intent can authorize
 // child execution: a delegation batch or a continuation.
 func AdmitsChildren(tool string) bool {
-	return tool == ToolName || tool == ExploreToolName || tool == ContinueToolName
+	return tool == ToolName || tool == ExploreToolName || tool == BuildToolName || tool == ContinueToolName
 }
 
 var ErrConflict = errors.New("subagent idempotency key conflicts with an existing assignment")
@@ -124,6 +151,10 @@ type Assignment struct {
 	// neither. Research assignments have none, so their digests are
 	// unchanged (added 2026-10-03).
 	Path string `json:"path,omitempty"`
+	// Base is a build assignment's base branch or commit; empty means the
+	// repository's current branch. Other workers have none, so their
+	// digests are unchanged (added 2026-10-03, Stage 11).
+	Base string `json:"base,omitempty"`
 }
 
 type Policy struct {
@@ -191,6 +222,8 @@ const (
 	MaxKeyBytes = 128
 	// MaxPathBytes bounds an explore assignment's declared path.
 	MaxPathBytes = 1024
+	// MaxBaseBytes bounds a build assignment's base branch or commit.
+	MaxBaseBytes = 200
 )
 
 // ValidateBatch checks a delegate_research request before any child or model
@@ -204,6 +237,18 @@ func (p Policy) ValidateBatch(a []Assignment) error {
 // and bounds each declared path.
 func (p Policy) ValidateExploreBatch(a []Assignment) error {
 	return p.validateBatch(ExploreToolName, a)
+}
+
+// ValidateBuildBatch checks a delegate_build request like ValidateBatch:
+// every build assignment names the Task it works on, and its optional base
+// is bounded.
+func (p Policy) ValidateBuildBatch(a []Assignment) error {
+	return p.validateBatch(BuildToolName, a)
+}
+
+// ValidateWorkerBatch checks a batch for worker's delegation tool.
+func (p Policy) ValidateWorkerBatch(worker string, a []Assignment) error {
+	return p.validateBatch(DelegationToolName(worker), a)
 }
 
 func (p Policy) validateBatch(tool string, a []Assignment) error {
@@ -246,6 +291,15 @@ func (p Policy) validateBatch(tool string, a []Assignment) error {
 			problems = append(problems, fmt.Sprintf("%s path is not supported by %s", name, tool))
 		case len(v.Path) > MaxPathBytes:
 			problems = append(problems, fmt.Sprintf("%s path is %s bytes; limit %s", name, Grouped(len(v.Path)), Grouped(MaxPathBytes)))
+		}
+		switch {
+		case tool != BuildToolName && v.Base != "":
+			problems = append(problems, fmt.Sprintf("%s base is not supported by %s", name, tool))
+		case len(v.Base) > MaxBaseBytes:
+			problems = append(problems, fmt.Sprintf("%s base is %s bytes; limit %d", name, Grouped(len(v.Base)), MaxBaseBytes))
+		}
+		if tool == BuildToolName && strings.TrimSpace(v.TaskID) == "" {
+			problems = append(problems, name+" task_id is blank; a build worker works on one Task you created for it")
 		}
 	}
 	if len(problems) > 0 {
@@ -370,6 +424,83 @@ type Result struct {
 	// StatusError. It is set only on delivery and never stored.
 	Error string `json:"error,omitempty"`
 	Usage *Usage `json:"usage"`
+	// Build is a build child's harness-recorded branch, commits, files
+	// changed and commands run (added 2026-10-03, Stage 11). Results of other
+	// workers leave it empty and stay byte-identical.
+	Build *BuildReport `json:"build,omitempty"`
+}
+
+// Worktree is a build attempt's harness-owned git worktree (Stage 11). The
+// harness resolves every field before admission and pins it on the attempt,
+// so recovery can find, resume or clean the worktree after a crash. Path and
+// Temp are inside Repo's .evie folder, which the harness adds to the
+// repository's local info/exclude; nothing there is ever tracked.
+type Worktree struct {
+	// Repo is the owner's checkout (the repository's top level), canonical.
+	Repo string `json:"repo"`
+	// CommonDir is the repository's common git directory and GitDir this
+	// worktree's private one. The harness runs git with these explicitly, so
+	// a worktree's .git file never decides which repository it writes.
+	CommonDir string `json:"common_dir"`
+	GitDir    string `json:"git_dir"`
+	Path      string `json:"path"`
+	// Temp is the attempt's private temporary folder, the only place
+	// besides Path where its sandboxed bash can write.
+	Temp       string `json:"temp"`
+	Branch     string `json:"branch"`
+	Base       string `json:"base"`
+	BaseCommit string `json:"base_commit"`
+	// RemovedAt is when the owner cleaned the worktree up.
+	RemovedAt *time.Time `json:"removed_at,omitempty"`
+}
+
+// BuildReport is what Evie's harness recorded about a build attempt: its
+// branch and base, the commits the harness made on the branch, the files
+// they changed against the base, and the bash commands the worker ran with
+// their exit statuses. Commands are worker-written text, so the parent view
+// frames them; everything else is harness-derived (file paths are listed
+// only when they are plain).
+type BuildReport struct {
+	Branch     string        `json:"branch"`
+	Base       string        `json:"base"`
+	BaseCommit string        `json:"base_commit"`
+	Worktree   string        `json:"worktree"`
+	Head       string        `json:"head,omitempty"`
+	Commits    []BuildCommit `json:"commits,omitempty"`
+	Files      []BuildFile   `json:"files,omitempty"`
+	// FilesChanged counts every changed file, listed or not.
+	FilesChanged int `json:"files_changed"`
+	Insertions   int `json:"insertions"`
+	Deletions    int `json:"deletions"`
+	// Uncommitted marks changes left in the worktree that the harness did
+	// not commit; CommitError says why, in harness words.
+	Uncommitted     bool           `json:"uncommitted,omitempty"`
+	CommitError     string         `json:"commit_error,omitempty"`
+	Commands        []BuildCommand `json:"commands,omitempty"`
+	CommandsOmitted int            `json:"commands_omitted,omitempty"`
+}
+
+// BuildCommit is one commit on a build branch after its base.
+type BuildCommit struct {
+	SHA     string `json:"sha"`
+	Subject string `json:"subject"`
+}
+
+// BuildFile is one file the branch changed against its base, as git's
+// numstat reports it. Binary files have no line counts.
+type BuildFile struct {
+	Path    string `json:"path"`
+	Added   int    `json:"added"`
+	Deleted int    `json:"deleted"`
+	Binary  bool   `json:"binary,omitempty"`
+}
+
+// BuildCommand is one bash command the worker ran and how it ended:
+// "exit" with its status, or "timeout", "refused" or "error".
+type BuildCommand struct {
+	Command    string `json:"command"`
+	Outcome    string `json:"outcome"`
+	ExitStatus int    `json:"exit_status,omitempty"`
 }
 
 // StatusError is the delivered status of a batch member whose result could
@@ -471,8 +602,11 @@ type Attempt struct {
 	Continues    *Continues          `json:"continues,omitempty"`
 	// Root is an explore attempt's pinned folder, resolved by the harness at
 	// admission and confining its read-only tools (added 2026-10-03).
-	Root   string  `json:"root,omitempty"`
-	Result *Result `json:"result,omitempty"`
+	Root string `json:"root,omitempty"`
+	// Worktree is a build attempt's pinned git worktree; a continuation
+	// inherits it (added 2026-10-03, Stage 11).
+	Worktree *Worktree `json:"worktree,omitempty"`
+	Result   *Result   `json:"result,omitempty"`
 }
 
 // Worker is the attempt's worker preset, from its pinned receipt.

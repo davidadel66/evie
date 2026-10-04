@@ -11,13 +11,15 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 )
 
-const workspacesUsage = "usage: evie workspaces list | evie workspaces explore <workspace-id> on|off|default"
+const workspacesUsage = "usage: evie workspaces list | evie workspaces explore <workspace-id> on|off|default | evie workspaces build <workspace-id> on|off|default"
 
 // runWorkspaceManagement answers `evie workspaces list`, which shows each
-// Workspace with its folder and explore setting, and `evie workspaces
+// Workspace with its folder and explore and build settings, `evie workspaces
 // explore <workspace-id> on|off|default`, which records the owner's explore
 // setting as a new revision of the Workspace's current configuration
-// (2026-10-03). It contacts no provider.
+// (2026-10-03), and `evie workspaces build <workspace-id> on|off|default`,
+// which does the same for build workers, off unless turned on (Stage 11). It
+// contacts no provider.
 func runWorkspaceManagement(ctx context.Context, args []string, out io.Writer, store *eviedb.Store) (bool, error) {
 	if len(args) == 0 || args[0] != "workspaces" {
 		return false, nil
@@ -36,10 +38,25 @@ func runWorkspaceManagement(ctx context.Context, args []string, out io.Writer, s
 		return true, encoder.Encode(struct {
 			Workspaces []memory.Workspace `json:"workspaces"`
 		}{workspaces})
-	case len(args) == 4 && args[1] == "explore":
-		setting := memory.WorkspaceExploreSetting(args[3])
-		if !setting.Valid() {
-			return true, errors.New(workspacesUsage)
+	case len(args) == 4 && (args[1] == "explore" || args[1] == "build"):
+		var set func(memory.Workspace) (memory.Workspace, error)
+		switch args[1] {
+		case "explore":
+			setting := memory.WorkspaceExploreSetting(args[3])
+			if !setting.Valid() {
+				return true, errors.New(workspacesUsage)
+			}
+			set = func(w memory.Workspace) (memory.Workspace, error) {
+				return store.SetWorkspaceExplore(ctx, w.ID, w.CurrentRevisionID, setting)
+			}
+		default:
+			setting := memory.WorkspaceBuildSetting(args[3])
+			if !setting.Valid() {
+				return true, errors.New(workspacesUsage)
+			}
+			set = func(w memory.Workspace) (memory.Workspace, error) {
+				return store.SetWorkspaceBuild(ctx, w.ID, w.CurrentRevisionID, setting)
+			}
 		}
 		workspaces, err := store.ListWorkspaces(ctx, true)
 		if err != nil {
@@ -49,9 +66,9 @@ func runWorkspaceManagement(ctx context.Context, args []string, out io.Writer, s
 			if string(workspace.ID) != args[2] {
 				continue
 			}
-			changed, err := store.SetWorkspaceExplore(ctx, workspace.ID, workspace.CurrentRevisionID, setting)
+			changed, err := set(workspace)
 			if err != nil {
-				return true, fmt.Errorf("set Workspace explore: %w", err)
+				return true, fmt.Errorf("set Workspace %s: %w", args[1], err)
 			}
 			return true, encoder.Encode(changed)
 		}

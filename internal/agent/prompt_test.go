@@ -117,3 +117,27 @@ func TestExploreGuidanceOnlyWhenTheSessionCanExplore(t *testing.T) {
 		t.Fatal("explore guidance is not in the Delegation section before the follow-up line")
 	}
 }
+
+// Stage 11 (2026-10-03): a session that has delegate_build is told when and
+// how to use it: one bounded code change per Task, the worker claims the
+// Task, and the parent reviews the branch before anything merges. Sessions
+// without the tool keep their exact prompt.
+func TestBuildGuidanceOnlyWhenTheSessionCanBuild(t *testing.T) {
+	explore := append(append([]openrouter.Tool(nil), delegationTools...), toolNamed("delegate_explore"))
+	without := primaryInstructions(explore)
+	with := primaryInstructions(append(append([]openrouter.Tool(nil), explore...), toolNamed("delegate_build")))
+	if strings.Contains(without, "delegate_build") {
+		t.Fatal("a session without delegate_build is told to use it")
+	}
+	for _, want := range []string{"delegate_build", "worktree", "own branch", "do not claim that Task yourself", "review its branch", "merging"} {
+		if !strings.Contains(with, want) {
+			t.Fatalf("build guidance lacks %q:\n%s", want, with)
+		}
+	}
+	if strings.Replace(with, buildGuidance, "", 1) != without || strings.Count(with, buildGuidance) != 1 {
+		t.Fatal("build guidance changed more than its own line")
+	}
+	if !strings.Contains(with, exploreGuidance+buildGuidance+"- Use read_subagent_report") {
+		t.Fatal("build guidance is not in the Delegation section after the explore line")
+	}
+}

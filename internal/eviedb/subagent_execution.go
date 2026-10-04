@@ -166,6 +166,10 @@ func (s *Store) withSubagentReadTransaction(ctx context.Context, operation func(
 // FinishSubagent arbitrates against accepted child evidence under the write
 // lock. A later cancellation can never replace an already accepted final answer.
 func (s *Store) FinishSubagent(ctx context.Context, id, state, reason string) (delegation.Attempt, error) {
+	return s.finishSubagentWith(ctx, id, state, reason, nil)
+}
+
+func (s *Store) finishSubagentWith(ctx context.Context, id, state, reason string, build *delegation.BuildReport) (delegation.Attempt, error) {
 	if state != "failed" && state != "cancelled" && state != "interrupted" && state != "succeeded" && state != delegation.StatePartial {
 		return delegation.Attempt{}, errors.New("invalid terminal subagent state")
 	}
@@ -179,21 +183,27 @@ func (s *Store) FinishSubagent(ctx context.Context, id, state, reason string) (d
 		if a.Terminal() {
 			return nil
 		}
-		return s.finishSubagent(ctx, conn, &a, state, reason)
+		return s.finishSubagent(ctx, conn, &a, state, reason, build)
 	})
 	return a, err
 }
 
-func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegation.Attempt, state, reason string) error {
+// finishSubagent settles a, with build, the harness's commit report for a
+// build attempt (nil when the harness did not commit).
+func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegation.Attempt, state, reason string, build *delegation.BuildReport) error {
 	// An attempt owns the child events after the earlier attempts' turns:
 	// all of them for an original assignment, its own turn for a
 	// continuation. An earlier report never settles a continuation.
 	var after int64
 	next := subagentParentNextSteps(ctx, conn, a.Parent.Scope.SessionID)
 	result := delegation.Result{ExecutionID: a.ID, ChildSessionID: a.Child.ID, Status: state, Reason: reason}
-	explore := a.Worker() == delegation.WorkerExplore
-	if explore {
-		result.Worker = delegation.WorkerExplore
+	// Explore and build children work locally: they have no Web tools, so
+	// they list no sources and their citations are not checked against Web
+	// evidence. Their results name their worker.
+	worker := a.Worker()
+	local := worker == delegation.WorkerExplore || worker == delegation.WorkerBuild
+	if local {
+		result.Worker = worker
 	}
 	if a.Continues != nil {
 		after = a.Continues.AfterSequence
@@ -247,22 +257,36 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 			return err
 		}
 	}
-	// Usage and the Web evidence are reported for every outcome. An explore
-	// child has no Web tools, so it lists no sources and its citations are
-	// not checked against Web evidence.
+	// Usage and the Web evidence are reported for every outcome.
 	if result.Usage, err = subagentUsage(ctx, conn, a.Child.ID, after); err != nil {
 		return err
 	}
 	var evidence []webURL
-	if !explore {
+	if !local {
 		if evidence, err = subagentWebEvidence(ctx, conn, a.Child.ID, after); err != nil {
 			return err
 		}
 	}
+	if worker == delegation.WorkerBuild && a.Worktree != nil {
+		// The harness's commit report, or, when it made none (recovery, or
+		// an attempt that never got its worktree), the pinned branch and
+		// worktree; then the commands the worker ran (Stage 11).
+		committed := build != nil
+		if !committed {
+			w := a.Worktree
+			build = &delegation.BuildReport{Branch: w.Branch, Base: w.Base, BaseCommit: w.BaseCommit, Worktree: w.Path}
+		}
+		recorded := *build
+		if recorded.Commands, recorded.CommandsOmitted, err = subagentBuildCommands(ctx, conn, a.Child.ID, after); err != nil {
+			return err
+		}
+		result.Build = &recorded
+		next.notes = buildNotes(*a, &recorded, committed)
+	}
 	if !hasReport {
 		report = ""
 	}
-	next.local = explore
+	next.local = local
 	buildSubagentResult(&result, hasReport, report, evidence, a.Policy, next)
 	now := s.now().UTC()
 	a.EndedAt = &now
@@ -270,6 +294,12 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 	a.Result = &result
 	if err = writeSubagent(ctx, conn, *a); err != nil {
 		return err
+	}
+	if worker == delegation.WorkerBuild {
+		// The worker's Task grant and any claim it holds end with it.
+		if err = endBuildAccess(ctx, conn, *a, now); err != nil {
+			return err
+		}
 	}
 	// Terminal execution never leaves a runnable worker or an outstanding
 	// claim; only a started continuation reopens the session (StartSubagent).
@@ -460,7 +490,7 @@ func (s *Store) recoverSubagent(ctx context.Context, id string) (bool, error) {
 		if !errors.Is(err, ErrTurnLeaseLost) {
 			return err
 		}
-		if err = s.finishSubagent(ctx, conn, &a, "interrupted", "original_parent_ownership_ended"); err != nil {
+		if err = s.finishSubagent(ctx, conn, &a, "interrupted", "original_parent_ownership_ended", nil); err != nil {
 			return err
 		}
 		recovered = true

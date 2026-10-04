@@ -40,3 +40,15 @@ func (c *webContextSessionController) SetWorkspaceResearch(ctx context.Context, 
 func (c *webContextSessionController) SetWorkspaceExplore(ctx context.Context, id memory.WorkspaceID, revision memory.WorkspaceRevisionID, setting memory.WorkspaceExploreSetting) (memory.Workspace, error) {
 	return c.store.SetWorkspaceExplore(ctx, id, revision, setting)
 }
+
+// SetWorkspaceBuild records the owner's build setting (Stage 11). Turning it
+// on needs the build preset to resolve, as research does; turning it off
+// never does.
+func (c *webContextSessionController) SetWorkspaceBuild(ctx context.Context, id memory.WorkspaceID, revision memory.WorkspaceRevisionID, setting memory.WorkspaceBuildSetting) (memory.Workspace, error) {
+	if setting == memory.WorkspaceBuildOn {
+		if _, err := c.manager.ResolvePresetContext(ctx, plugins.BuildPresetID); err != nil {
+			return memory.Workspace{}, fmt.Errorf("validate build allowance: %w", err)
+		}
+	}
+	return c.store.SetWorkspaceBuild(ctx, id, revision, setting)
+}

@@ -1,9 +1,11 @@
 export type WorkspaceExploreSetting = "default" | "on" | "off";
+export type WorkspaceBuildSetting = "default" | "on" | "off";
 
 export type Workspace = {
   defaultPresetId?: string;
   allowedPresetIds?: string[];
   explore?: { setting: WorkspaceExploreSetting; allowed: boolean };
+  build?: { setting: WorkspaceBuildSetting; allowed: boolean };
   instructions?: {enabled:boolean;revision:number};
 	 folder?: { path: string; revision: number };
   id: string;
@@ -93,6 +95,10 @@ export function setWorkspaceResearch(workspaceId: string, revision: string, enab
 
 export function setWorkspaceExplore(workspaceId: string, revision: string, setting: WorkspaceExploreSetting): Promise<Workspace> {
   return postJSON("/api/workspaces/explore", {workspaceId, revision, setting});
+}
+
+export function setWorkspaceBuild(workspaceId: string, revision: string, setting: WorkspaceBuildSetting): Promise<Workspace> {
+  return postJSON("/api/workspaces/build", {workspaceId, revision, setting});
 }
 
 export function registerWorkspace(options: WorkspaceCreation): Promise<Workspace> {

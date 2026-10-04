@@ -21,7 +21,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:bfd4eb42705bce9f2ab68b1b0832d224f11b1e5bbb1f0221768188cd2d322d4e"
+	StandardPresetVersion                               = "sha256:535755ad0e6b11cadd91edd54db59c8196a3970ff256b3feddac838babc38a72"
+	preBuildStandardPresetVersion                       = "sha256:bfd4eb42705bce9f2ab68b1b0832d224f11b1e5bbb1f0221768188cd2d322d4e"
 	preExploreStandardPresetVersion                     = "sha256:89664be6462d10c5f9d6adb09589533a388f753a31edef3986bc513165c0ef6a"
 	preProactiveStandardPresetVersion                   = "sha256:eda7e097e22cc327d7f8091c0aed225d96926ef3b6752a094de0baaa564b7ead"
 	preStandingStandardPresetVersion                    = "sha256:983a77d1935c12e9165cba63b28bcfa4b035a9fe4e55ce37f4630bd17e26c654"
@@ -344,6 +345,9 @@ func (m *Manager) ResolvePresetContext(ctx context.Context, id PresetID) (Resolv
 	if id == ExplorePresetID {
 		return m.resolvePreset(BuiltinExplorePreset())
 	}
+	if id == BuildPresetID {
+		return m.resolvePreset(BuiltinBuildPreset())
+	}
 	if id != StandardPresetID {
 		return ResolvedComposition{}, fmt.Errorf("Agent Preset %q is not allowed; choose %q", id, StandardPresetID)
 	}
@@ -360,7 +364,7 @@ func (m *Manager) InspectPresetsContext(ctx context.Context) ([]PresetInspection
 	if err := m.RefreshEnabledState(ctx); err != nil {
 		return nil, err
 	}
-	return []PresetInspection{m.inspectPreset(BuiltinStandardPreset(), true), m.inspectPreset(BuiltinResearchPreset(), true), m.inspectPreset(BuiltinExplorePreset(), true)}, nil
+	return []PresetInspection{m.inspectPreset(BuiltinStandardPreset(), true), m.inspectPreset(BuiltinResearchPreset(), true), m.inspectPreset(BuiltinExplorePreset(), true), m.inspectPreset(BuiltinBuildPreset(), true)}, nil
 }
 
 // ValidatePreset validates exactly the requested built-in. Unknown IDs are
@@ -378,6 +382,9 @@ func (m *Manager) validatePresetCurrent(id PresetID) PresetInspection {
 	}
 	if id == ExplorePresetID {
 		return m.inspectPreset(BuiltinExplorePreset(), true)
+	}
+	if id == BuildPresetID {
+		return m.inspectPreset(BuiltinBuildPreset(), true)
 	}
 	if id != StandardPresetID {
 		return PresetInspection{
@@ -478,6 +485,10 @@ func (m *Manager) resolvePreset(preset Preset) (ResolvedComposition, error) {
 		// toolset, not the parent's base: no write, approval-gated, cron or
 		// memory tool is ever inherited.
 		base = tools.ExploreToolset()
+	case BuildPresetID:
+		// The build worker's Kernel tools are confined to its worktree; its
+		// bash exists only where an OS sandbox can confine it (Stage 11).
+		base = tools.BuildToolset(tools.WorkerSandboxAvailable())
 	}
 	definitions := make([]tools.Tool, 0, len(selected))
 	schemaOwner := make(map[string]string)
@@ -703,11 +714,25 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preExploreStandardPresetVersion {
 		return m.resumePreset(preExploreStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preBuildStandardPresetVersion {
+		return m.resumePreset(preBuildStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
 	if receipt.Preset.ID == string(ExplorePresetID) {
 		return m.resumePresetWithBase(BuiltinExplorePreset(), tools.ExploreToolset(), receipt)
+	}
+	if receipt.Preset.ID == string(BuildPresetID) {
+		// A build child pinned with bash reopens only where an OS sandbox
+		// can still confine it; it never gets an unsandboxed shell.
+		bash := slices.ContainsFunc(receipt.ToolSchemas, func(s ToolSchemaReceipt) bool { return s.Name == "bash" })
+		if bash {
+			if _, err := tools.DetectWorkerSandbox(); err != nil {
+				return ResolvedComposition{}, fmt.Errorf("pinned build worker has bash, but no OS sandbox is available on this host: %w", err)
+			}
+		}
+		return m.resumePresetWithBase(BuiltinBuildPreset(), tools.BuildToolset(bash), receipt)
 	}
 	switch receipt.Preset.Version {
 	case preMemoryStandardPresetVersion:
@@ -1000,14 +1025,34 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 // Capability including the stored tool result reader, past-session episode
 // search, the standing tier's memory_set_standing and memory_overview, then
 // delegation, its report reader and continuation, then explore delegation
-// (Stage 7, 2026-10-03). A later Memory Capability must freeze this Memory
-// list, as preProactiveMemoryCapabilityRequirements does for the version
-// before it.
+// (Stage 7, 2026-10-03), then build delegation (Stage 11, 2026-10-03). A
+// later Memory Capability must freeze this Memory list, as
+// preProactiveMemoryCapabilityRequirements does for the version before it.
 func standardPresetContent() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preBuildStandardPresetContent()
+	p.OptionalCapabilities = append(p.OptionalCapabilities,
+		CapabilityRequirement{ID: SubagentsBuildCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preBuildStandardPresetContent is the content of version bfd4eb42…, the
+// standard preset before build delegation: everything before explore, then
+// explore delegation.
+func preBuildStandardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preExploreStandardPresetContent()
 	p.OptionalCapabilities = append(p.OptionalCapabilities,
 		CapabilityRequirement{ID: SubagentsExploreCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preBuildStandardPreset is the standard preset before build delegation
+// (version bfd4eb42…); sessions pinned to it keep explore delegation without
+// delegate_build.
+func preBuildStandardPreset() Preset {
+	p := preBuildStandardPresetContent()
+	p.Version = preBuildStandardPresetVersion
 	return p
 }
 

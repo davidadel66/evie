@@ -253,3 +253,49 @@ worker bash answers that by not running a shell at all:
 - **No spill file.** Output past 30,000 bytes is cut with a note to narrow
   the command, because a spill file would sit outside the root, where the
   worker's own tools cannot read it. Timeouts match the owner's bash.
+
+## 2026-10-03 — A sandboxed bash for build workers
+
+Stage 11 of `docs/memory-architecture.md` gives delegated build workers a
+third tool named `bash`, in `internal/tools/build_bash.go` and
+`sandbox.go`. A build worker must run builds and tests, so a vetted
+allowlist like explore's cannot serve it; it gets a real shell, and the
+fence moves from evie's parser to the operating system. The binding record
+is the Stage 11 entry in `cmd/evie/docs/active/subagents.decisions.md`.
+
+- **OS sandbox or no shell.** Each command runs `/bin/bash --noprofile
+  --norc -c` under Seatbelt (`sandbox-exec` with a profile generated per
+  command, as Claude Code does) on macOS, or under bubblewrap when `bwrap`
+  is installed and works on Linux. Where neither works the build worker is
+  composed without `bash` at all; evie never hands a worker a shell that
+  can write outside the worktree. `EVIE_WORKER_SANDBOX=off` turns it off
+  on any host.
+- **What the profile allows.** Deny by default, then: run programs, read
+  files except credential locations (`~/.ssh`, `~/.aws`, `~/.gnupg`,
+  `~/.evie`, `~/.config/gh`, `~/.docker`, `~/.kube`, keychains, `.netrc`,
+  shell rc and history files, `.env*`), and write only inside the
+  attempt's worktree and its private temp folder, never to the worktree's
+  `.git` or any `.git` below it (in any case). No network at all, loopback
+  and Unix sockets included, and no Mach service but directory lookup, so
+  `open`, `osascript` and the like cannot ask an unsandboxed process to act.
+  Hard links out are refused by Seatbelt itself; bubblewrap's bind mounts
+  refuse them across mounts.
+- **Measured on this Mac** (`TestSandboxedBashConfinesWritesNetworkAndGit`,
+  with a mutation check that a permissive profile fails it): writes to the
+  owner's checkout (by `../` and by absolute path), `$HOME`, `/tmp`, through
+  a symlink, after `cd /`, to `.git` and `.GIT`, a nested `.git`, a hard
+  link to an outside file, `git add`, `git commit`, `git update-ref` on the
+  main repository and `git push` to a local remote all fail; `curl` and
+  bash's `/dev/tcp` cannot reach a loopback listener; `go test`, `node` and
+  `npm test` run with their caches in the temp folder; read-only `git
+  status`/`log` work.
+- **Built environment, killed as a group.** The shell gets `PATH`, `HOME`,
+  locale, a few toolchain locations, caches redirected into the temp folder
+  (`GOCACHE`, `npm_config_cache`, `XDG_CACHE_HOME`), `GOPROXY=off` and
+  `GOTOOLCHAIN=local`; never Evie's own environment or API keys. Each
+  command leads its own process group, which is killed at the timeout and
+  after the command ends. Output over 30,000 bytes spills into the temp
+  folder, where the shell can read it.
+- **No write-capable git.** The worker's git data is read-only to it; Evie's
+  harness commits its changes on its branch with the git directory named
+  explicitly and hooks, fsmonitor and signing off.

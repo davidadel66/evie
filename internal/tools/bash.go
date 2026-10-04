@@ -293,6 +293,10 @@ func rememberCwd(pwdPath string) {
 // reading it. It holds at most maxBashSpill bytes; output past that is
 // counted and discarded.
 type boundedOutput struct {
+	// dir, when set, holds the spill instead of the temp directory: a build
+	// worker's spills go to its private temp folder, which its sandboxed
+	// shell can read.
+	dir      string
 	mu       sync.Mutex
 	head     []byte
 	total    int64
@@ -323,7 +327,12 @@ func (o *boundedOutput) Write(p []byte) (int, error) {
 		return written, nil
 	}
 	if o.spill == nil {
-		if o.spill, o.spillErr = createSpillFile("evie-output-"); o.spillErr != nil {
+		if o.dir != "" {
+			o.spill, o.spillErr = os.CreateTemp(o.dir, "evie-output-*.txt")
+		} else {
+			o.spill, o.spillErr = createSpillFile("evie-output-")
+		}
+		if o.spillErr != nil {
 			return written, nil
 		}
 		o.writeSpill(o.head)

@@ -12,12 +12,18 @@ const (
 	readSubagentReportTool = "read_subagent_report"
 	continueResearchTool   = "continue_research"
 	delegateExploreTool    = "delegate_explore"
+	delegateBuildTool      = "delegate_build"
 )
 
 // exploreGuidance is the Delegation line for a session that can delegate to
 // read-only explore workers (Stage 7, 2026-10-03). Sessions pinned before
 // delegate_explore existed keep their exact prompt.
 const exploreGuidance = "- Use " + delegateExploreTool + " for local work that needs many tool calls or large outputs you don't need to see, such as reading many files or investigating a repository or database; its workers can only read. Keep small lookups (a file or a query) yourself.\n"
+
+// buildGuidance is the Delegation line for a session that can delegate code
+// changes to build workers (Stage 11, 2026-10-03). Sessions pinned before
+// delegate_build existed keep their exact prompt.
+const buildGuidance = "- Use " + delegateBuildTool + " for a bounded code change on one Task you created for it; the worker edits and tests in its own git worktree on its own branch, and claims and updates that Task, so do not claim that Task yourself. Then review its branch, files changed and test results; merging is a separate step the owner approves.\n"
 
 // delegationFollowUpAnchor starts the Delegation line that the follow-up
 // guidance precedes.
@@ -50,7 +56,7 @@ const (
 // toolset is pinned, so its instructions stay stable and cacheable across
 // its turns.
 func primaryInstructions(tools []openrouter.Tool) string {
-	var report, continuation, explore, duties, overview bool
+	var report, continuation, explore, build, duties, overview bool
 	for _, tool := range tools {
 		switch tool.Function.Name {
 		case readSubagentReportTool:
@@ -59,6 +65,8 @@ func primaryInstructions(tools []openrouter.Tool) string {
 			continuation = true
 		case delegateExploreTool:
 			explore = true
+		case delegateBuildTool:
+			build = true
 		case rememberLiteralTool:
 			_, duties = tool.Function.Parameters.Properties[requestedByOwnerFlag]
 		case memoryOverviewTool:
@@ -74,6 +82,9 @@ func primaryInstructions(tools []openrouter.Tool) string {
 		line = "- Use " + readSubagentReportTool + " when a summary is not enough.\n"
 	case continuation:
 		line = "- Use " + continueResearchTool + " to extend a partial child instead of starting over.\n"
+	}
+	if build {
+		line = buildGuidance + line
 	}
 	if explore {
 		line = exploreGuidance + line

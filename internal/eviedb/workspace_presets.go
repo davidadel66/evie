@@ -60,6 +60,9 @@ func (s *Store) loadWorkspacePresets(ctx context.Context, workspace *memory.Work
 	if err := json.Unmarshal([]byte(encoded), &workspace.AllowedPresetIDs); err != nil {
 		return err
 	}
-	workspace.Explore, err = workspaceExplore(ctx, s.db, workspace.ID, workspace.CurrentRevisionID)
+	if workspace.Explore, err = workspaceExplore(ctx, s.db, workspace.ID, workspace.CurrentRevisionID); err != nil {
+		return err
+	}
+	workspace.Build, err = workspaceBuild(ctx, s.db, workspace.ID, workspace.CurrentRevisionID)
 	return err
 }

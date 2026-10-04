@@ -53,8 +53,9 @@ func (s *Store) SetWorkspaceResearch(ctx context.Context, id memory.WorkspaceID,
 				return err
 			}
 		}
-		// The explore setting is part of the revision and carries forward.
-		return insertWorkspaceRevision(ctx, conn, &workspace, expected, explore, now)
+		// The explore and build settings are part of the revision and carry
+		// forward.
+		return insertWorkspaceRevision(ctx, conn, &workspace, expected, explore, "", now)
 	})
 	if err != nil {
 		return memory.Workspace{}, err
@@ -90,8 +91,10 @@ func lockWorkspaceRevision(ctx context.Context, conn *sql.Conn, id memory.Worksp
 // insertWorkspaceRevision makes a new revision with workspace's presets and
 // the explore setting current, if expected is still current. The explore
 // worker is governed by its setting alone, so a preset list copied from a
-// Stage 7 revision drops the explore entry.
-func insertWorkspaceRevision(ctx context.Context, conn *sql.Conn, workspace *memory.Workspace, expected memory.WorkspaceRevisionID, explore memory.WorkspaceExploreSetting, now time.Time) error {
+// Stage 7 revision drops the explore entry. build is the new revision's build
+// setting; empty carries expected's forward (2026-10-03, Stage 11), and a
+// revision recorded without one stays without one, allowing nothing.
+func insertWorkspaceRevision(ctx context.Context, conn *sql.Conn, workspace *memory.Workspace, expected memory.WorkspaceRevisionID, explore memory.WorkspaceExploreSetting, build memory.WorkspaceBuildSetting, now time.Time) error {
 	workspace.AllowedPresetIDs = slices.DeleteFunc(workspace.AllowedPresetIDs, func(id string) bool { return id == delegation.WorkerExplore })
 	workspace.CurrentRevisionID = memory.WorkspaceRevisionID(uuid.NewString())
 	workspace.UpdatedAt = now
@@ -103,6 +106,14 @@ func insertWorkspaceRevision(ctx context.Context, conn *sql.Conn, workspace *mem
 		return err
 	}
 	if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_explore_settings(workspace_id,revision_id,setting) VALUES(?,?,?)`, workspace.ID, workspace.CurrentRevisionID, explore); err != nil {
+		return err
+	}
+	if build != "" {
+		if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_build_settings(workspace_id,revision_id,setting) VALUES(?,?,?)`, workspace.ID, workspace.CurrentRevisionID, build); err != nil {
+			return err
+		}
+	} else if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_build_settings(workspace_id,revision_id,setting)
+ SELECT ?,?,setting FROM workspace_build_settings WHERE workspace_id=? AND revision_id=?`, workspace.ID, workspace.CurrentRevisionID, workspace.ID, expected); err != nil {
 		return err
 	}
 	result, err := conn.ExecContext(ctx, `UPDATE workspaces SET current_revision_id=?,updated_at=? WHERE id=? AND current_revision_id=?`, workspace.CurrentRevisionID, now.Format(time.RFC3339Nano), workspace.ID, expected)
@@ -128,6 +139,9 @@ func (s *Store) completeWorkspace(ctx context.Context, workspace memory.Workspac
 	if workspace.Explore, err = workspaceExplore(ctx, s.db, workspace.ID, workspace.CurrentRevisionID); err != nil {
 		return memory.Workspace{}, err
 	}
+	if workspace.Build, err = workspaceBuild(ctx, s.db, workspace.ID, workspace.CurrentRevisionID); err != nil {
+		return memory.Workspace{}, err
+	}
 	return workspace, nil
 }
 
@@ -138,6 +152,9 @@ func (s *Store) completeWorkspace(ctx context.Context, workspace memory.Workspac
 func authorizeWorkspacePreset(ctx context.Context, conn *sql.Conn, scope memory.ScopeContext, preset string) error {
 	if preset == delegation.WorkerExplore {
 		return authorizeWorkspaceExplore(ctx, conn, scope)
+	}
+	if preset == delegation.WorkerBuild {
+		return authorizeWorkspaceBuild(ctx, conn, scope)
 	}
 	var allowed bool
 	err := conn.QueryRowContext(ctx, `SELECT EXISTS(

@@ -115,3 +115,37 @@ func TestExploreBatchValidationAndUnchangedResearchDigests(t *testing.T) {
 		t.Fatal("an assignment without a path no longer digests as before")
 	}
 }
+
+// Stage 11: a build assignment names its Task and may name a base; base is
+// refused by the other workers, and an assignment without one keeps its
+// earlier digest.
+func TestBuildBatchValidationRequiresTaskAndBoundsBase(t *testing.T) {
+	p := DefaultPolicy()
+	if err := p.ValidateBuildBatch([]Assignment{{Key: "b", Objective: "fix", TaskID: "t1", Base: "main"}}); err != nil {
+		t.Fatalf("build assignment refused: %v", err)
+	}
+	if err := p.ValidateBuildBatch([]Assignment{{Key: "b", Objective: "fix"}}); err == nil || !strings.Contains(err.Error(), `invalid delegate_build request: assignment "b" task_id is blank`) {
+		t.Fatalf("missing task: %v", err)
+	}
+	if err := p.ValidateBuildBatch([]Assignment{{Key: "b", Objective: "fix", TaskID: "t", Base: strings.Repeat("x", MaxBaseBytes+1)}}); err == nil || !strings.Contains(err.Error(), `assignment "b" base is 201 bytes; limit 200`) {
+		t.Fatalf("long base: %v", err)
+	}
+	if err := p.ValidateBuildBatch([]Assignment{{Key: "b", Objective: "fix", TaskID: "t", Path: "docs"}}); err == nil || !strings.Contains(err.Error(), `assignment "b" path is not supported by delegate_build`) {
+		t.Fatalf("build path: %v", err)
+	}
+	for _, validate := range []func([]Assignment) error{p.ValidateBatch, p.ValidateExploreBatch} {
+		if err := validate([]Assignment{{Key: "r", Objective: "look", Base: "main"}}); err == nil || !strings.Contains(err.Error(), `assignment "r" base is not supported by delegate_`) {
+			t.Fatalf("base outside build: %v", err)
+		}
+	}
+	if got := Digest(Assignment{Key: "k", Objective: "o", TaskID: "t"}); got != Digest(struct {
+		Key       string `json:"idempotency_key"`
+		Objective string `json:"objective"`
+		TaskID    string `json:"task_id"`
+	}{"k", "o", "t"}) {
+		t.Fatal("an assignment without a base no longer digests as before")
+	}
+	if DelegationToolName(WorkerBuild) != BuildToolName || !AdmitsChildren(BuildToolName) {
+		t.Fatal("delegate_build does not admit build children")
+	}
+}

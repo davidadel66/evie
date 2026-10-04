@@ -220,8 +220,11 @@ func TestWorkspacePresetUpgradeKeepsExistingSessionsAndDefaultsToStandard(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A database from before Workspace presets has no explore settings
-	// either (2026-10-03).
+	// A database from before Workspace presets has no explore or build
+	// settings either (2026-10-03).
+	if _, err := db.Exec(`DROP TABLE workspace_build_settings`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec(`DROP TABLE workspace_explore_settings`); err != nil {
 		t.Fatal(err)
 	}

@@ -125,6 +125,9 @@ func sealedChildFrame(t *testing.T, framed string) string {
 	if strings.HasPrefix(framed, "[begin untrusted explore child output") {
 		return sealedExploreFrame(t, framed)
 	}
+	if strings.HasPrefix(framed, "[begin untrusted build child output") {
+		return sealedBuildFrame(t, framed)
+	}
 	return sealedResearchFrame(t, framed)
 }
 
@@ -450,10 +453,15 @@ func TestParentPinnedBeforeExploreCannotDelegateExplore(t *testing.T) {
 	}
 	old := composition.Clone(current.Receipt)
 	old.Preset.Version = "sha256:89664be6462d10c5f9d6adb09589533a388f753a31edef3986bc513165c0ef6a"
-	old.Capabilities = slices.DeleteFunc(old.Capabilities, func(c composition.Capability) bool { return c.ID == delegation.ExploreCapabilityID })
-	old.ToolSchemas = slices.DeleteFunc(old.ToolSchemas, func(s composition.ToolSchema) bool { return s.Name == delegation.ExploreToolName })
-	if len(old.Capabilities) != len(current.Receipt.Capabilities)-1 || len(old.ToolSchemas) != len(current.Receipt.ToolSchemas)-1 {
-		t.Fatal("current Standard preset lacks explore delegation")
+	// Build delegation (Stage 11) came after explore, so it goes too.
+	old.Capabilities = slices.DeleteFunc(old.Capabilities, func(c composition.Capability) bool {
+		return c.ID == delegation.ExploreCapabilityID || c.ID == delegation.BuildCapabilityID
+	})
+	old.ToolSchemas = slices.DeleteFunc(old.ToolSchemas, func(s composition.ToolSchema) bool {
+		return s.Name == delegation.ExploreToolName || s.Name == delegation.BuildToolName
+	})
+	if len(old.Capabilities) != len(current.Receipt.Capabilities)-2 || len(old.ToolSchemas) != len(current.Receipt.ToolSchemas)-2 {
+		t.Fatal("current Standard preset lacks explore or build delegation")
 	}
 	reopened, err := f.manager.ResumeComposition(old)
 	if err != nil {
