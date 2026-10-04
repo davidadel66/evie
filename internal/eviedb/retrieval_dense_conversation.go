@@ -286,6 +286,8 @@ func (s *Store) denseConversationCandidates(ctx context.Context, tx *sql.Tx, sco
 	if scan.cut {
 		result.incomplete, result.truncated, result.cut = true, true, true
 	}
+	// Automatic Recall's floor frequencies, read once a hit needs them.
+	var frequency map[string]int
 	for _, item := range scan.hits {
 		if len(result.evidence) == 8 {
 			break
@@ -324,6 +326,25 @@ func (s *Store) denseConversationCandidates(ctx context.Context, tx *sql.Tx, sco
 		}
 		if !eligible {
 			continue
+		}
+		if query.Relevance != nil && !(query.Relevance.PersonalRecall && item.score >= denseAutomaticMinimumCosine) {
+			// Automatic Recall: a dense hit must also clear the excerpt floor
+			// lexically, unless a request to recall something about the owner
+			// is a near paraphrase of it.
+			if frequency == nil {
+				if frequency, err = relevanceFrequencies(ctx, tx, query.Relevance, scopeKeyForContext(scope), known, scope.SessionID, cutoff, conversationKeysAllowed(query), nil); err != nil {
+					result.incomplete = true
+					return result, err
+				}
+			}
+			corroborated, err := denseExcerptCorroborated(ctx, tx, e, evidenceSpan{current.start, current.end}, query, frequency, known)
+			if err != nil {
+				result.incomplete = true
+				return result, err
+			}
+			if !corroborated {
+				continue
+			}
 		}
 		resolved.Paths = []string{"conversation_dense"}
 		resolved.RetrievalGeneration = coverage.Generation

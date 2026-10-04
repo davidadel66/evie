@@ -391,13 +391,11 @@ func (r *retrievalTurn) automatic(ctx context.Context, events []memory.Event, su
 			continue
 		}
 		reference := plan.time
-		query := memory.RetrievalQuery{Kind: kind, Text: plan.query, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true, RecallTime: &reference}
-		if kind == memory.RetrievalConversationExcerpt {
-			// Raw conversation is the noisy kind: its excerpts must clear the
-			// relevance floor and not repeat what the request already shows.
-			relevance := plan.relevance
-			query.Relevance = &relevance
-		}
+		// Both kinds clear the relevance floor: excerpts, accepted Claims and
+		// the newer statements beside them (privacy in accepted-memory recall,
+		// 2026-10-03). Excerpts also skip what the request already shows.
+		relevance := plan.relevance
+		query := memory.RetrievalQuery{Kind: kind, Text: plan.query, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true, RecallTime: &reference, Relevance: &relevance}
 		result, _ := r.search(ctx, query)
 		outcomes = append(outcomes, result.Status)
 	}

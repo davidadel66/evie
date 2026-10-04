@@ -37,6 +37,9 @@ type retrievalCandidate struct {
 	evidence memory.RetrievalEvidence
 	score    float64
 	direct   bool
+	// denseScore is the Claim's best dense similarity in this read, zero
+	// when the dense generator did not suggest it.
+	denseScore float64
 }
 
 type retrievalCandidates struct {

@@ -12,8 +12,9 @@ import (
 // historical-claim link (Stage 13, M2) and the over-linking checks. Version 4
 // (harness review final pass) adds the one-word-answer recall target. Version
 // 5 (memory architecture Stage 6) adds the named-time and fact-phrasing
-// recall targets.
-const ScaleReportVersion = 5
+// recall targets. Version 6 (privacy in accepted-memory recall) counts a
+// Claim remembered from a private message as private.
+const ScaleReportVersion = 6
 
 // ScaleGapDenseScan mirrors memory.RetrievalGapDenseScan: the model-visible
 // signal that a dense scan budget left vectors uncompared.
@@ -342,7 +343,10 @@ func scaleItemLabels(c ScaleCorpus, messages map[string]ScaleMessage, key string
 		return message.Topic, message.Private
 	}
 	if claim, ok := c.Claim(key); ok {
-		return claim.Topic, false
+		// A Claim remembered from a private message is as private as the
+		// message (report version 6).
+		source, ok := messages["m."+key]
+		return claim.Topic, ok && source.Private
 	}
 	return "", false
 }

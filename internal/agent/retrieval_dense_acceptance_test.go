@@ -156,7 +156,10 @@ func TestDenseAutomaticRecallUsesTheSameLocalCandidateAndSourcePath(t *testing.T
 	target := f.remember(f.global(), memory.MemoryEverywhere, "runs before sunrise")
 	f.refresh()
 	client := &fakeClient{steps: []step{assistantStep("The original schedule is available.", nil)}}
-	if err := f.automaticSession(f.global(), client).Send(context.Background(), "jogging at dawn", &recorder{}, nil); err != nil {
+	// A dense-only hit reaches Automatic Recall for a request to recall
+	// something about the owner at near-paraphrase similarity (2026-10-03);
+	// the planner's query for this request is still "jogging dawn".
+	if err := f.automaticSession(f.global(), client).Send(context.Background(), "When am I jogging at dawn?", &recorder{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, item := range denseTurnEvidence(t, client.reqs[0]) {

@@ -123,7 +123,22 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 	if candidates.denseCut {
 		result.Gaps = append(result.Gaps, memory.RetrievalGapDenseScan)
 	}
+	// Automatic Recall holds Claims to the excerpt floor; a model-directed
+	// read has no relevance and no gate.
+	gate, err := newClaimRelevanceGate(ctx, tx, scope, query, metadata, candidates.plan.scopes)
+	if err != nil {
+		return retrievalReadFailure(ctx, result, err)
+	}
 	for _, candidate := range candidates.ordered() {
+		if gate != nil {
+			admitted, err := gate.admitsClaim(ctx, tx, candidate)
+			if err != nil {
+				return retrievalReadFailure(ctx, result, err)
+			}
+			if !admitted {
+				continue
+			}
+		}
 		if len(result.Evidence) == query.Limit {
 			result.Truncated = true
 			break
@@ -132,7 +147,7 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 	}
 	result.Truncated = result.Truncated || candidates.truncated
 	seen := candidates.seen
-	incomplete, err := s.supplementAcceptedRetrieval(ctx, tx, scope, query, metadata, &result, seen)
+	incomplete, err := s.supplementAcceptedRetrieval(ctx, tx, scope, query, metadata, &result, seen, gate)
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}

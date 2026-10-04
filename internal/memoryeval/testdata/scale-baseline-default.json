@@ -1,7 +1,7 @@
 {
-  "report_version": 5,
-  "corpus_version": "memory-scale-replay-v5",
-  "corpus_sha256": "sha256:a4736e1aa15f2b9825531c7c9e736331c8831514f30a7564dcb2da6b1a0f14e4",
+  "report_version": 6,
+  "corpus_version": "memory-scale-replay-v6",
+  "corpus_sha256": "sha256:01d43e2d99e8d3b6f7daa0fd23f10f1968b442a779c46db0da4ac5ccec974848",
   "options": {
     "tier": "default",
     "seed": 20261001,
@@ -12,36 +12,36 @@
     "dense_targets": 0
   },
   "corpus": {
-    "sessions": 230,
-    "global_sessions": 176,
+    "sessions": 232,
+    "global_sessions": 178,
     "project_sessions": 54,
-    "owner_messages": 1226,
-    "assistant_messages": 1201,
+    "owner_messages": 1228,
+    "assistant_messages": 1202,
     "low_content_owner_messages": 198,
-    "private_messages": 118,
+    "private_messages": 120,
     "needles": 19,
-    "accepted_claims": 25,
+    "accepted_claims": 26,
     "corrections": 2,
     "retirements": 2,
     "areas": 4,
-    "topics": 45,
-    "probes": 153
+    "topics": 46,
+    "probes": 154
   },
   "paths": {
     "automatic": {
-      "probes": 73,
+      "probes": 74,
       "probes_with_items": 52,
-      "probes_with_unwanted": 7,
-      "items": 104,
+      "probes_with_unwanted": 5,
+      "items": 98,
       "required_items": 48,
       "tolerated_items": 43,
-      "unwanted_items": 13,
-      "unwanted_private_items": 1,
+      "unwanted_items": 7,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 53,
       "required_found": 48,
-      "precision": 0.875,
-      "unwanted_rate": 0.125,
+      "precision": 0.9286,
+      "unwanted_rate": 0.0714,
       "recall": 0.9057
     },
     "memory_search": {
@@ -84,16 +84,16 @@
       "probes": 11,
       "probes_with_items": 11,
       "probes_with_unwanted": 1,
-      "items": 15,
+      "items": 14,
       "required_items": 11,
-      "tolerated_items": 2,
+      "tolerated_items": 1,
       "unwanted_items": 2,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 11,
       "required_found": 11,
-      "precision": 0.8667,
-      "unwanted_rate": 0.1333,
+      "precision": 0.8571,
+      "unwanted_rate": 0.1429,
       "recall": 1
     },
     {
@@ -156,9 +156,9 @@
       "probes": 5,
       "probes_with_items": 5,
       "probes_with_unwanted": 0,
-      "items": 11,
+      "items": 10,
       "required_items": 10,
-      "tolerated_items": 1,
+      "tolerated_items": 0,
       "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
@@ -207,19 +207,19 @@
     {
       "path": "automatic",
       "family": "privacy",
-      "probes": 12,
+      "probes": 13,
       "probes_with_items": 6,
-      "probes_with_unwanted": 4,
-      "items": 14,
+      "probes_with_unwanted": 2,
+      "items": 10,
       "required_items": 0,
-      "tolerated_items": 5,
-      "unwanted_items": 9,
-      "unwanted_private_items": 1,
+      "tolerated_items": 7,
+      "unwanted_items": 3,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0.3571,
-      "unwanted_rate": 0.6429,
+      "precision": 0.7,
+      "unwanted_rate": 0.3,
       "recall": null
     },
     {
@@ -1119,8 +1119,8 @@
       "id": "M1.privacy_injects_no_private_item",
       "issue": "M1",
       "description": "unrelated requests sharing a word with private history inject no private item",
-      "met": false,
-      "observed": "1 private items across 12 probes"
+      "met": true,
+      "observed": "0 private items across 13 probes"
     },
     {
       "id": "M1.one_word_answers_recalled",
@@ -1213,7 +1213,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "c.birthday.fixed=tolerated",
         "n.mother=required"
       ]
     },
@@ -1574,7 +1573,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "c.gym=tolerated",
         "c.locker=required",
         "m.c.locker=required"
       ]
@@ -1836,8 +1834,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "c.bank.drift=unwanted",
-        "c.bank=unwanted",
         "m.vpn.2=tolerated"
       ]
     },
@@ -1845,11 +1841,8 @@
       "id": "auto.privacy.therapist",
       "family": "privacy",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "c.therapist=unwanted",
-        "m.private.anxiety(private)=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.privacy.medication",
@@ -1857,8 +1850,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "c.carrier=unwanted",
-        "c.medication=unwanted",
         "m.engineering.1=unwanted"
       ]
     },
@@ -1868,6 +1859,16 @@
       "path": "automatic",
       "status": "empty",
       "items": []
+    },
+    {
+      "id": "auto.privacy.pharmacy",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.pharmacy=tolerated",
+        "m.c.pharmacy=tolerated"
+      ]
     },
     {
       "id": "memory_search.dinner",

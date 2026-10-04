@@ -200,7 +200,9 @@ func TestAutomaticMemoryRecallScopeMatrixKeepsRawHistoryInItsArea(t *testing.T) 
 	for _, a := range areas {
 		t.Run(a.name, func(t *testing.T) {
 			client := &fakeClient{steps: []step{assistantStep("I have the eligible dinner and greenhouse context.", nil)}}
-			if err := f.automaticSession(a.reader, client).Send(ctx, "What dinner suits me, and what was the greenhouse trial?", &recorder{}, nil); err != nil {
+			// Each half names two words of its item: a Claim, like an excerpt,
+			// must match two words of a longer request (2026-10-03).
+			if err := f.automaticSession(a.reader, client).Send(ctx, "What dinner do I prefer, and what was the greenhouse trial?", &recorder{}, nil); err != nil {
 				t.Fatal(err)
 			}
 			evidence := expansionBoundaryEvidence(t, client.reqs[0])

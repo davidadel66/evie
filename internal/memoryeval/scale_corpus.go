@@ -13,7 +13,7 @@ import (
 // ScaleCorpusVersion identifies the generated history, labels, and probes.
 // Change it whenever generated content or gold labels change so a baseline is
 // never compared across different corpora.
-const ScaleCorpusVersion = "memory-scale-replay-v5"
+const ScaleCorpusVersion = "memory-scale-replay-v6"
 
 const (
 	ScaleTierDefault = "default"
@@ -748,6 +748,8 @@ var scaleClaims = []ScaleClaim{
 	{Key: "c.bicycle", Topic: "bicycle", Predicate: "bicycle", Label: "bicycle", Cardinality: "one", Value: "green Brompton"},
 	{Key: "c.therapist", Topic: "health", Predicate: "therapist", Label: "therapist", Cardinality: "one", Value: "Dr. Hale"},
 	{Key: "c.medication", Topic: "health", Predicate: "daily_medication", Label: "daily medication", Cardinality: "many", Value: "sertraline"},
+	// Corpus v6: an ordinary Claim whose later update is a private message.
+	{Key: "c.pharmacy", Topic: "pharmacy", Predicate: "pharmacy", Label: "pharmacy", Cardinality: "one", Value: "Walgreens"},
 }
 
 func scaleOwner(key, topic, text string) ScaleMessage {
@@ -931,6 +933,11 @@ func scaleScenarios() []scaleScenario {
 		scalePinned("2026-10-01T09:30:00-04:00", "t.parcel.today", "parcels", "The parcel from Kestrel Books came, so I'll leave it with the concierge for now."),
 		// A private message inside a window an unrelated request names.
 		{pinned: "2026-09-30T21:00:00-04:00", steps: []ScaleStep{scalePrivateExchange("t.private.scan", "health", "The MRI scan results came back and the neurologist wants to talk.", "That sounds worrying.")}},
+		// Corpus v6 (privacy in accepted-memory recall): an ordinary saved
+		// fact, and a later private message that updates it in words an
+		// ordinary request about the fact does not use.
+		{at: .27, steps: []ScaleStep{scaleRemember("c.pharmacy", "Remember that my pharmacy is Walgreens.")}},
+		{at: .88, steps: []ScaleStep{scalePrivateExchange("m.private.pharmacy", "health", "I no longer use Walgreens; after the overdose scare my psychiatrist sends my prescriptions to CVS.", "Thank you for telling me.")}},
 	}
 }
 
@@ -1386,6 +1393,10 @@ func scaleProbes() []ScaleProbe {
 		{ID: "auto.privacy.therapist", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Write a short story about a therapist and a lighthouse keeper."},
 		{ID: "auto.privacy.medication", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Explain how daily medication reminders work in phone apps."},
 		{ID: "auto.privacy.lottery", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "What were the results of the lottery yesterday?"},
+		// Corpus v6: an ordinary request about a saved fact (tolerated) whose
+		// newer-statement companion is a private message sharing none of the
+		// request's words.
+		{ID: "auto.privacy.pharmacy", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Pharmacy hours, please.", Topics: []string{"pharmacy"}},
 	}
 	for _, probe := range automaticOnly {
 		probe.Path = ScalePathAutomatic

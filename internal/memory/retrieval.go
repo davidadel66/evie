@@ -62,7 +62,8 @@ type RetrievalQuery struct {
 	ValidAt                     *time.Time           `json:"valid_at,omitempty"`
 	AsKnownAt                   *time.Time           `json:"as_known_at,omitempty"`
 	// Relevance is set only by Automatic Recall, never from model arguments.
-	// The Kernel applies it to conversation excerpts.
+	// The Kernel applies it to conversation excerpts, accepted Claims, the
+	// newer-statement companions beside them, and dense hits.
 	Relevance *RetrievalRelevance `json:"-"`
 	// RecallTime is Automatic Recall's reading of an explicit past time in
 	// the request; the zero reference means the request named none. When it

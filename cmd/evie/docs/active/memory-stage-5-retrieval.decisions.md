@@ -1,5 +1,101 @@
 # Memory Stage 5 retrieval — decisions
 
+- **2026-10-03 — Privacy in accepted-memory recall (follow-up to memory
+  architecture Stages 6–7).** Automatic Recall applied its relevance floor
+  (2026-10-01) only to lexical Conversation Excerpts. Accepted Claims, the
+  newer-statement companions found beside them, and dense hits were injected
+  on any match: "Write a short story about a therapist and a lighthouse
+  keeper." received the private Claim `therapist` through its Predicate label
+  and, as its companion, the owner's later "I've been seeing a therapist
+  about my anxiety since March."; in the large scale tier the concept-hash
+  embedder put the private "I take sertraline every morning with breakfast."
+  into "Translate good morning into Portuguese." through "morning". Applying
+  the safe-failure principle of the confirmation review (when unsure, don't
+  inject; the model can still search), Automatic Recall now holds all three
+  to the excerpt floor. Model-directed `memory_search`,
+  `memory_search_conversations` and expansion carry no relevance and are
+  unchanged, as is the exact lookup of a selector the request names (an ID or
+  opaque code such as `MOM-27`).
+  - *Claims.* The planner passes the same `RetrievalRelevance` to the
+    accepted-memory search as to the conversation search. A Claim qualifies
+    when the floor (`relevantTokens`: a distinctive request word; two words
+    for a request of three or more; the strong single match for a personal
+    recall) passes on its eligible sources' rendered words, as an excerpt of
+    them would; or, for a personal recall only, on those words together with
+    the Claim's own: its Predicate label and token, literal value, and the
+    canonical names and active aliases of its non-anchor Entities readable to
+    the reader (the words that key its sources, Stage 6). A general or
+    creative request that shares a Predicate label is not asking about the
+    owner's saved fact, so "Explain how daily medication reminders work in
+    phone apps." does not receive `daily medication: sertraline`, although
+    it names both label words. Frequencies are counted over what the request
+    is judged against: the messages the ordinary conversation read could
+    return (same scope, observation bound, live-context exclusion and key
+    columns), plus the indexed Claims of the reader's Global, Context and
+    session scopes, each count capped at 256. Counting messages alone would
+    judge a Global fact read in a project by that project's history, where
+    its words are usually absent, and drop it; counting Claims alone made
+    almost every request word absent and a two-word match on source words
+    impossible to anchor (the frozen held-out case "Who checks the
+    instruments for the observatory Nadia Rusk volunteers with?" lost its
+    answer that way). A Claim that fails takes no result slot. A conflicting
+    Claim added beside a qualified one shares its subject and Predicate token
+    and is not gated again.
+  - *Newer-statement companions.* In Automatic Recall a companion is added
+    only when its Claim qualified and the companion itself clears the floor
+    with the same frequencies: by its own excerpt's words, or, for a personal
+    recall, through the words of the selected Claims of its family, which it
+    may update, as keys. "Pharmacy hours, please." still receives `pharmacy:
+    Walgreens` (its source says "pharmacy"), but no longer the private "I no
+    longer use Walgreens; after the overdose scare my psychiatrist sends my
+    prescriptions to CVS."; "Which pharmacy do I use?" receives both.
+    Model-directed searches keep every companion; the two-companion bound is
+    unchanged.
+  - *Dense-only hits.* In Automatic Recall a dense conversation hit is
+    delivered only when its excerpt also clears the floor lexically (with
+    fact keys for a personal recall), or when the request is a personal
+    recall and the cosine is at least 0.6 (`denseAutomaticMinimumCosine`;
+    model-directed reads keep the 0.25 floor). A Claim suggested only by
+    dense similarity follows the same rule through the Claim gate. The
+    threshold is far above the floor; on the scale corpus's concept-hash
+    proxy the two paraphrase targets score 0.83 and 0.72 and every other
+    dense-only automatic hit at most 0.47. It is not calibrated on the real
+    `all-minilm:22m` model and must be measured there before it is trusted;
+    until then a non-personal request never receives a dense-only hit.
+  - *Measured effect* (scale corpus v6 and report v6, before → after; the
+    full tables are in `memory-scale-eval.md`). Report v6 also counts a Claim
+    remembered from a private message as private, so the before columns
+    count `therapist` and `daily medication` that report v5 did not. Default
+    tier: automatic private items 4 → 0 (privacy target met), unwanted
+    14 → 7, recall 48/53 unchanged; large tier: private 12 → 0, unwanted
+    35 → 5, recall 50/53 unchanged (both paraphrase targets kept by the
+    personal-recall threshold). Stale-fact outcomes are identical (2 misses
+    of 71, 10/10 controls), with no scope leak, and the model-directed paths
+    are unchanged in both tiers. The frozen lexical workloads lose three
+    automatic obligations, all recovered by deeper search: held-out 22/28 →
+    21/28 (deeper 26/28 unchanged), development 24/27 → 22/27 (deeper 25/27
+    unchanged; 21/27 when the dev11 random-ID tie recorded in Stage 12 falls
+    the other way). The accepted read now counts frequencies for its gate:
+    about 10 ms at 20,000 messages.
+  - *Known limits.* The losses are the floor's known cost, now paid by
+    Claims too: a request of three or more words that shares one word with a
+    saved fact misses it unless it is a personal recall whose words history
+    all knows and whose rarest word is nearly unique. The three lost
+    obligations are of that kind ("What do the available records say about
+    where I live, including any accepted disagreement...?" shares only
+    "live" with `live in`; "...Which fits what you know about how I like
+    listening?" only "audiobook"), as are compound requests and impersonal
+    questions about a named person ("What present would Maya like?").
+    Requests of one or two content words are still explained by one
+    distinctive word, as excerpts are, so a short creative request that
+    shares a saved fact's rarest word ("A story about a pharmacy?") can still
+    receive it. A non-personal request receives a newer statement only
+    through the statement's own words. Frequencies are exact terms, as for
+    excerpts. Three acceptance tests were reworded to
+    name two words of the fact they expect (the area scope matrix, the
+    opaque-noise reference) or to ask as a personal recall (the dense
+    automatic path).
+
 - **2026-10-03 — Recall quality: fact-augmented keys and time-aware query
   expansion (memory architecture Stage 6).** Applies the two LongMemEval
   findings that `docs/memory-architecture.md` adopts for relevance recall.
@@ -150,7 +246,9 @@
     `therapist` (accepted Claims are not floored, decision of 2026-10-01) and
     its newer-statement companion search adds the owner's later therapist
     message through the Predicate phrase. That path is outside this change
-    and is recorded for follow-up.
+    and is recorded for follow-up. *Resolved by the privacy entry above
+    (2026-10-03): Automatic Recall now gates Claims, companions and dense-only
+    hits.*
 
 - **2026-10-01 — The cumulative memory budget charges each delivered byte once
   per turn (harness review C2, Stage 4).** The 36 KiB per-turn bound still
@@ -401,7 +499,9 @@
     lexical, temporal, graph, dense, conflict) and dense excerpts keep their
     0.25 cosine floor; the stricter term rules would remove paraphrase recall,
     and a calibrated automatic dense floor needs the real embedding model.
-    Model-directed reads are unchanged.
+    Model-directed reads are unchanged. *Superseded for Automatic Recall by
+    the 2026-10-03 privacy entry: Claims, their newer-statement companions
+    and dense-only hits now clear the floor too.*
   - *Measured effect.* Scale replay (`memory-scale-eval.md`): default tier
     automatic unwanted items 30→4 (rate 0.3704→0.0833), private 4→0,
     same-session 7→0, recall unchanged at 21/25; large tier unwanted 30→12,

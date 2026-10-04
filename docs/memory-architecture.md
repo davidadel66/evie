@@ -230,7 +230,8 @@ Follow-ups found during Stages 6–7:
   relevance-filter accepted claims, and the newer-statement follow-up can add
   a private later message: "Write a short story about a therapist…" pulled in
   a private therapist message (scale corpus v5, default tier). Gate both on
-  the same relevance and privacy rules as conversation excerpts.
+  the same relevance and privacy rules as conversation excerpts. (Done
+  2026-10-03, with dense-only hits gated too; see the retrieval decisions.)
 
 **8. In-turn compaction**
 - When tool-result clearing can't bring the active turn under budget, the

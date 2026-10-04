@@ -59,7 +59,10 @@ func retrievalClaimPairConflicts(left, right memory.RetrievalEvidence) bool {
 
 // supplementAcceptedRetrieval shares the foreground candidate/result budgets
 // with initial retrieval. It never runs a second unbounded relevance search.
-func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scope memory.ScopeContext, query memory.RetrievalQuery, metadata memory.ExactReadMetadata, result *memory.RetrievalResult, seen map[memory.SemanticID]bool) (bool, error) {
+// A conflicting Claim shares a selected Claim's subject and Predicate token,
+// so it is as relevant as that Claim and is not gated again. In Automatic
+// Recall (gate set) a newer-statement companion must itself clear the gate.
+func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scope memory.ScopeContext, query memory.RetrievalQuery, metadata memory.ExactReadMetadata, result *memory.RetrievalResult, seen map[memory.SemanticID]bool, gate *claimRelevanceGate) (bool, error) {
 	if len(result.Evidence) == 0 {
 		return false, nil
 	}
@@ -226,6 +229,15 @@ func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scop
 		family.rankNewerStatements(accepted)
 		for _, candidate := range accepted {
 			e, span := candidate.evidence, candidate.span
+			if gate != nil {
+				admitted, err := gate.admitsCompanion(ctx, q, e.content[span.start:span.end], families[key])
+				if err != nil {
+					return false, err
+				}
+				if !admitted {
+					continue
+				}
+			}
 			if companions >= 2 || len(result.Evidence) >= query.Limit {
 				result.Truncated = true
 				continue

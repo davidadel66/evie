@@ -6,8 +6,8 @@ Stage 12 (recall relevance, M1/M7) and Stage 13 (currency and conflicts,
 M2/M3/M4) are measured rather than guessed. Every unmet target below is
 current behavior, recorded as such; none is accepted as correct. Stage 12's
 and Stage 13's before/after results follow the Stage 11 baseline. The
-committed baselines are the memory architecture Stage 6 report (version 5)
-on corpus v5; see [Stage 6: recall quality](#stage-6-recall-quality-memory-architecture).
+committed baselines are the report (version 6) on corpus v6 of the privacy
+follow-up; see [Privacy in accepted-memory recall](#privacy-in-accepted-memory-recall-corpus-v6).
 
 ## What runs
 
@@ -64,8 +64,10 @@ time elapsed in it, so events, leases and memory times share one timeline.
 - **Item classes.** `required`: the probe's target. `tolerated`: on the
   probe's topic but not required. `unwanted`: everything else. Precision is
   (required + tolerated) / delivered; recall counts unique required keys.
-- **Private.** An unwanted item from the health or relationship topics. This
-  labels sensitivity only; no private-conversation feature is implied.
+- **Private.** An unwanted item from a message labelled private (the health
+  and relationship topics and the privacy probes' private messages), or
+  (report version 6) a Claim remembered from such a message. This labels
+  sensitivity only; no private-conversation feature is implied.
 - **Same session.** Evidence re-injected from the probe's own session. Those
   messages are already in the provider request, so they count as unwanted.
 - **Low-content follow-ups** ("thanks!", "ok", "perfect"): every injected
@@ -1013,6 +1015,115 @@ Remaining misses and known limits:
 - *Valid time.* Only Claims with a recorded Valid Time (here the corrected
   employer) take part; most remembered Claims have none.
 - *The therapist probe* above, and the dense proxy hits of the large tier.
+  Both are resolved by the privacy follow-up below.
+
+## Privacy in accepted-memory recall (corpus v6)
+
+The follow-up that Stages 6–7 recorded: Automatic Recall now holds accepted
+Claims, the newer-statement companions found beside them, and dense-only
+hits to the relevance floor that conversation excerpts clear. The rules are
+the first 2026-10-03 entry of
+[the retrieval decisions](memory-stage-5-retrieval.decisions.md). In short:
+a Claim qualifies by its sources' words, or, for a personal recall, by those
+together with its own words (Predicate, value, Entity names), with
+frequencies counted over the reader's searchable messages plus readable
+Claims; a companion is added only when its Claim qualified and its own words
+clear the floor, or, for a personal recall, the words of the Claim it may
+update do; a dense-only hit needs lexical or fact-key corroboration, or a
+personal recall at cosine 0.6 or more. Model-directed reads are unchanged.
+
+**Corpus v6, report v6.** `memory-scale-replay-v6` (seed unchanged) adds an
+ordinary Claim `pharmacy: Walgreens` ("Remember that my pharmacy is
+Walgreens.") and a later private owner message that updates it in other
+words ("I no longer use Walgreens; after the overdose scare my psychiatrist
+sends my prescriptions to CVS."), with the privacy probe "Pharmacy hours,
+please." (the Claim and its source are tolerated; the update is private).
+Report version 6 counts a Claim remembered from a private message as
+private, so `therapist` and `daily medication` delivered to the Stage 6
+probes now count. On the code before this change, corpus v6 left every v5
+probe's items unchanged in the default tier apart from those labels; in the
+large tier the extra IDs move some dense ties among tolerated or unwanted
+items, with identical counts outside the privacy family.
+
+"Before" is this change's base (dda660c) on corpus v6 and report v6.
+Automatic path, default tier (unchanged rows show one value):
+
+| Path | Family | Items | Unwanted | Private | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| automatic | all | 107 → 98 | 14 → 7 | 4 → 0 | 0.8692 → 0.9286 | 48/53 |
+| automatic | privacy | 17 → 10 | 10 → 3 | 4 → 0 | 0.4118 → 0.7000 | n/a |
+| automatic | relevant | 15 → 14 | 2 | 0 | 0.8667 → 0.8571 | 11/11 |
+| automatic | fact_key | 11 → 10 | 0 | 0 | 1.0000 | 10/10 |
+| automatic | stale, temporal, follow-up, one-word answer, low-content, unrelated, paraphrase | unchanged | | | | |
+
+Large tier:
+
+| Path | Family | Items | Unwanted | Private | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| automatic | all | 145 → 100 | 35 → 5 | 12 → 0 | 0.7586 → 0.9500 | 50/53 |
+| automatic | privacy | 29 → 10 | 18 → 3 | 8 → 0 | 0.3793 → 0.7000 | n/a |
+| automatic | relevant | 24 → 14 | 3 → 0 | 1 → 0 | 0.8750 → 1.0000 | 11/11 |
+| automatic | paraphrase | 4 → 2 | 0 | 0 | 1.0000 | 2/2 |
+| automatic | stale | 40 → 38 | 2 → 0 | 1 → 0 | 0.9500 → 1.0000 | 12/13 |
+| automatic | temporal | 12 → 11 | 1 → 0 | 0 | 0.9167 → 1.0000 | 9/9 |
+| automatic | fact_key | 14 → 10 | 2 → 0 | 1 → 0 | 0.8571 → 1.0000 | 10/10 |
+| automatic | unrelated | 6 → 0 | 6 → 0 | 1 → 0 | 0.0000 → n/a | n/a |
+| automatic | one-word answer | 10 → 9 | 1 → 0 | 0 | 0.9000 → 1.0000 | 4/5 |
+| automatic | follow-up, low-content | unchanged counts | | | | |
+
+Automatic unwanted-item rate 0.1308 → 0.0714 (default) and 0.2414 → 0.0500
+(large). Both tool paths are unchanged in both tiers (`memory_search` 20/20;
+conversation search 23/25 default, 49/49 large). Stale-fact outcomes are
+identical: 2 misses of 71, 10/10 controls, no scope leaks or unmapped items,
+and the large tier's dense targets (M7) are unchanged.
+
+| Target | Default before → after | Large before → after |
+| --- | --- | --- |
+| M1: privacy probes inject no private item | no (4) → yes (0) | no (8) → yes (0) |
+| Every other target | unchanged | unchanged, with fewer unwanted items in the S6 and one-word observations |
+
+Every per-probe change in the default tier is a removal: the privacy
+probes lose the therapist Claim and its private companion, the medication
+Claim (and `phone carrier`, matched by "phone"), both bank Claims for the
+VPN question, and the pharmacy update; "What present would my mother like
+for her birthday?" loses the tolerated `sister's birthday` Claim (one shared
+word) and "What's my gym locker combination?" the tolerated `gym` Claim. In
+the large tier every removed item is a dense-only hit, one of those Claims,
+or a newer-statement companion of one; the paraphrase targets "When is my pup's yearly checkup?" (cosine
+0.83) and "How fast am I aiming to jog the 21k?" (0.72) are personal recalls
+and stay. Two follow-up probes take a different unwanted lexical item into
+the slot a dense hit left ("what dates did I book?", "and when was it?").
+
+**Frozen 24-case lexical workloads.** Three automatic obligations are lost,
+all recovered by deeper search, and non-gold items fall:
+
+| Workload | Automatic | Automatic + deeper | First-dispatch items (non-gold) |
+| --- | --- | --- | --- |
+| held-out | 22/28 → 21/28 | 26/28 | 48 (19) → 44 (17) |
+| development | 24/27 → 22/27 | 25/27 | 51 (19) → 47 (19) |
+
+The lost obligations are personal recalls whose many words share one with
+the saved fact: hold02 ("...Which fits what you know about how I like
+listening?" shares only "audiobook" with `audiobook narration`) and both
+dev17 Claims ("What do the available records say about where I live,
+including any accepted disagreement and newer owner statement? Cite each
+original source event ID..." shares only "live" with `live in`). The gate
+fails toward not injecting; the model's deeper search finds them. dev11
+still flips between runs on the random-ID tie recorded in Stage 12 (21/27
+when it falls the other way).
+
+**Timing.** The accepted read now counts frequencies for its gate: an
+automatic accepted-memory search over 20,000 Global messages took about
+10 ms (fastest of three, `TestRelevanceFrequenciesStayFastAtScale`); whole
+tiers are unchanged within noise.
+
+Known limits (recorded in the decision): a request of three or more words
+sharing one word with a saved fact misses it unless it is a personal recall
+whose rarest word is nearly unique, so compound and impersonal questions
+("What present would Maya like?") can lose Claims they used to receive;
+short requests are still explained by one distinctive word; the 0.6 dense
+threshold is set on the proxy embedder and needs measuring on the real
+model.
 
 ## Decisions and spec relationship
 

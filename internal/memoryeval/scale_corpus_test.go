@@ -193,6 +193,40 @@ func TestScaleScoreClassifiesItemsAndStaleOutcomes(t *testing.T) {
 	}
 }
 
+// A Claim remembered from a private message is as private as the message
+// (report version 6): injecting the private therapist or medication Claim
+// into an unrelated request counts as a private item.
+func TestScaleScoreLabelsClaimsRememberedPrivately(t *testing.T) {
+	c := GenerateScaleCorpus(DefaultScaleCorpusOptions())
+	global := ScaleAreaGlobal
+	report := ScoreScale(c, []ScaleObservation{
+		{ProbeID: "auto.privacy.therapist", Status: "success", Items: []ScaleItem{
+			{Key: "c.therapist", Kind: "accepted_memory", Area: global},
+			{Key: "c.dinner", Kind: "accepted_memory", Area: global},
+		}},
+		{ProbeID: "auto.privacy.pharmacy", Status: "success", Items: []ScaleItem{
+			{Key: "c.pharmacy", Kind: "accepted_memory", Area: global},
+			{Key: "m.private.pharmacy", Kind: "conversation_excerpt", Area: global},
+		}},
+	})
+	privacy := report.Paths[ScalePathAutomatic]
+	if privacy.Unwanted != 3 || privacy.Private != 2 || privacy.Tolerated != 1 {
+		t.Fatalf("automatic counts = %+v", privacy)
+	}
+	for _, result := range report.Probes {
+		switch result.ID {
+		case "auto.privacy.therapist":
+			if !slices.Contains(result.Items, "c.therapist(private)=unwanted") || !slices.Contains(result.Items, "c.dinner=unwanted") {
+				t.Fatalf("therapist probe items = %v", result.Items)
+			}
+		case "auto.privacy.pharmacy":
+			if !slices.Contains(result.Items, "c.pharmacy=tolerated") || !slices.Contains(result.Items, "m.private.pharmacy(private)=unwanted") {
+				t.Fatalf("pharmacy probe items = %v", result.Items)
+			}
+		}
+	}
+}
+
 // The M7 target accepts "found or reported as truncated": a missed dense
 // target counts only when its outcome carried the dense scan gap, which is
 // distinct from "partial" (pending index work also produces that).

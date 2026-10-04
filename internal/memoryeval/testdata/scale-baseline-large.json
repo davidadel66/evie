@@ -1,7 +1,7 @@
 {
-  "report_version": 5,
-  "corpus_version": "memory-scale-replay-v5",
-  "corpus_sha256": "sha256:ffda3a075c8c2062398369b303a647a980f796840bd1779da45f24213916a95b",
+  "report_version": 6,
+  "corpus_version": "memory-scale-replay-v6",
+  "corpus_sha256": "sha256:624d0547769a0cfc193a7af274c4218005b5a7f2885341f36f2b6aaea462a1bf",
   "options": {
     "tier": "large",
     "seed": 20261001,
@@ -12,36 +12,36 @@
     "dense_targets": 24
   },
   "corpus": {
-    "sessions": 552,
-    "global_sessions": 480,
+    "sessions": 554,
+    "global_sessions": 482,
     "project_sessions": 72,
-    "owner_messages": 3916,
-    "assistant_messages": 3891,
+    "owner_messages": 3918,
+    "assistant_messages": 3892,
     "low_content_owner_messages": 712,
-    "private_messages": 462,
+    "private_messages": 464,
     "needles": 19,
-    "accepted_claims": 25,
+    "accepted_claims": 26,
     "corrections": 2,
     "retirements": 2,
     "areas": 4,
-    "topics": 46,
-    "probes": 177
+    "topics": 47,
+    "probes": 178
   },
   "paths": {
     "automatic": {
-      "probes": 73,
-      "probes_with_items": 61,
-      "probes_with_unwanted": 20,
-      "items": 142,
+      "probes": 74,
+      "probes_with_items": 54,
+      "probes_with_unwanted": 4,
+      "items": 100,
       "required_items": 50,
-      "tolerated_items": 58,
-      "unwanted_items": 34,
-      "unwanted_private_items": 9,
+      "tolerated_items": 45,
+      "unwanted_items": 5,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 53,
       "required_found": 50,
-      "precision": 0.7606,
-      "unwanted_rate": 0.2394,
+      "precision": 0.95,
+      "unwanted_rate": 0.05,
       "recall": 0.9434
     },
     "memory_search": {
@@ -83,17 +83,17 @@
       "family": "relevant",
       "probes": 11,
       "probes_with_items": 11,
-      "probes_with_unwanted": 3,
-      "items": 24,
+      "probes_with_unwanted": 0,
+      "items": 14,
       "required_items": 11,
-      "tolerated_items": 10,
-      "unwanted_items": 3,
-      "unwanted_private_items": 1,
+      "tolerated_items": 3,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 11,
       "required_found": 11,
-      "precision": 0.875,
-      "unwanted_rate": 0.125,
+      "precision": 1,
+      "unwanted_rate": 0,
       "recall": 1
     },
     {
@@ -102,9 +102,9 @@
       "probes": 2,
       "probes_with_items": 2,
       "probes_with_unwanted": 0,
-      "items": 4,
+      "items": 2,
       "required_items": 2,
-      "tolerated_items": 2,
+      "tolerated_items": 0,
       "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
@@ -119,17 +119,17 @@
       "family": "stale",
       "probes": 13,
       "probes_with_items": 13,
-      "probes_with_unwanted": 2,
-      "items": 40,
+      "probes_with_unwanted": 0,
+      "items": 38,
       "required_items": 12,
       "tolerated_items": 26,
-      "unwanted_items": 2,
-      "unwanted_private_items": 1,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 13,
       "required_found": 12,
-      "precision": 0.95,
-      "unwanted_rate": 0.05,
+      "precision": 1,
+      "unwanted_rate": 0,
       "recall": 0.9231
     },
     {
@@ -137,17 +137,17 @@
       "family": "temporal",
       "probes": 9,
       "probes_with_items": 9,
-      "probes_with_unwanted": 1,
-      "items": 12,
+      "probes_with_unwanted": 0,
+      "items": 11,
       "required_items": 9,
       "tolerated_items": 2,
-      "unwanted_items": 1,
+      "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 9,
       "required_found": 9,
-      "precision": 0.9167,
-      "unwanted_rate": 0.0833,
+      "precision": 1,
+      "unwanted_rate": 0,
       "recall": 1
     },
     {
@@ -155,17 +155,17 @@
       "family": "fact_key",
       "probes": 5,
       "probes_with_items": 5,
-      "probes_with_unwanted": 2,
-      "items": 14,
+      "probes_with_unwanted": 0,
+      "items": 10,
       "required_items": 10,
-      "tolerated_items": 2,
-      "unwanted_items": 2,
-      "unwanted_private_items": 1,
+      "tolerated_items": 0,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 10,
       "required_found": 10,
-      "precision": 0.8571,
-      "unwanted_rate": 0.1429,
+      "precision": 1,
+      "unwanted_rate": 0,
       "recall": 1
     },
     {
@@ -207,37 +207,37 @@
     {
       "path": "automatic",
       "family": "privacy",
-      "probes": 12,
-      "probes_with_items": 10,
-      "probes_with_unwanted": 6,
-      "items": 26,
+      "probes": 13,
+      "probes_with_items": 6,
+      "probes_with_unwanted": 2,
+      "items": 10,
       "required_items": 0,
-      "tolerated_items": 9,
-      "unwanted_items": 17,
-      "unwanted_private_items": 5,
+      "tolerated_items": 7,
+      "unwanted_items": 3,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0.3462,
-      "unwanted_rate": 0.6538,
+      "precision": 0.7,
+      "unwanted_rate": 0.3,
       "recall": null
     },
     {
       "path": "automatic",
       "family": "unrelated",
       "probes": 3,
-      "probes_with_items": 3,
-      "probes_with_unwanted": 3,
-      "items": 6,
+      "probes_with_items": 0,
+      "probes_with_unwanted": 0,
+      "items": 0,
       "required_items": 0,
       "tolerated_items": 0,
-      "unwanted_items": 6,
-      "unwanted_private_items": 1,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0,
-      "unwanted_rate": 1,
+      "precision": null,
+      "unwanted_rate": null,
       "recall": null
     },
     {
@@ -245,17 +245,17 @@
       "family": "one_word_answer",
       "probes": 5,
       "probes_with_items": 5,
-      "probes_with_unwanted": 1,
-      "items": 10,
+      "probes_with_unwanted": 0,
+      "items": 9,
       "required_items": 4,
       "tolerated_items": 5,
-      "unwanted_items": 1,
+      "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 5,
       "required_found": 4,
-      "precision": 0.9,
-      "unwanted_rate": 0.1,
+      "precision": 1,
+      "unwanted_rate": 0,
       "recall": 0.8
     },
     {
@@ -1126,7 +1126,7 @@
   "scope_leaks": 0,
   "unmapped_items": 0,
   "dense": {
-    "vectors_in_global_scope": 6587,
+    "vectors_in_global_scope": 6590,
     "scan_limit": 65536,
     "reachable_fraction": 1,
     "targets": 24,
@@ -1150,29 +1150,29 @@
       "id": "M1.privacy_injects_no_private_item",
       "issue": "M1",
       "description": "unrelated requests sharing a word with private history inject no private item",
-      "met": false,
-      "observed": "5 private items across 12 probes"
+      "met": true,
+      "observed": "0 private items across 13 probes"
     },
     {
       "id": "M1.one_word_answers_recalled",
       "issue": "M1",
       "description": "ordinary questions whose answer shares one of their words recall that answer",
       "met": false,
-      "observed": "4 of 5 answers recalled, 1 unwanted items"
+      "observed": "4 of 5 answers recalled, 0 unwanted items"
     },
     {
       "id": "S6.named_time_recalled",
       "issue": "S6",
       "description": "a request naming a past time recalls what was said or valid then, among same-subject evidence from before and after it",
       "met": true,
-      "observed": "automatic 9 of 9 (1 unwanted items), conversation search 8 of 8"
+      "observed": "automatic 9 of 9 (0 unwanted items), conversation search 8 of 8"
     },
     {
       "id": "S6.fact_phrasing_finds_source",
       "issue": "S6",
       "description": "a question phrased like a saved fact recalls the message it came from, which used other words",
       "met": true,
-      "observed": "automatic 10 of 10 (2 unwanted, 1 private items), conversation search 5 of 5"
+      "observed": "automatic 10 of 10 (0 unwanted, 0 private items), conversation search 5 of 5"
     },
     {
       "id": "M2.corrected_source_not_current",
@@ -1221,7 +1221,7 @@
       "issue": "M7",
       "description": "dense recall finds targets anywhere in the vector table, or reports the scan gap",
       "met": true,
-      "observed": "24 of 24 targets found; 0 missed with a scan gap reported; 6587 of 6587 vectors inside the scan bound; 0 unreachable targets found"
+      "observed": "24 of 24 targets found; 0 missed with a scan gap reported; 6590 of 6590 vectors inside the scan bound; 0 unreachable targets found"
     }
   ],
   "probes": [
@@ -1242,7 +1242,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "n.greenhouse.a=tolerated",
         "n.greenhouse=required"
       ]
     },
@@ -1252,9 +1251,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "c.birthday.fixed=tolerated",
-        "m.0813=tolerated",
-        "m.2516=tolerated",
         "n.mother=required"
       ]
     },
@@ -1264,8 +1260,7 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "n.tyres=required",
-        "t.insurance.switch=unwanted"
+        "n.tyres=required"
       ]
     },
     {
@@ -1274,7 +1269,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.boston.marathon=unwanted",
         "n.pace=required"
       ]
     },
@@ -1284,7 +1278,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.1705=tolerated",
         "n.lisbon=required"
       ]
     },
@@ -1303,7 +1296,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.0563=tolerated",
         "n.vet=required"
       ]
     },
@@ -1313,7 +1305,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.3536.a(private)=unwanted",
         "n.ferritin(private)=required"
       ]
     },
@@ -1323,7 +1314,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.3569.a=tolerated",
         "n.flaky=required"
       ]
     },
@@ -1343,7 +1333,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.0563=tolerated",
         "n.vet=required"
       ]
     },
@@ -1353,7 +1342,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.3244=tolerated",
         "n.pace=required"
       ]
     },
@@ -1377,8 +1365,8 @@
       "status": "partial",
       "items": [
         "c.birthday.fixed=required",
-        "m.2516=tolerated",
-        "m.c.birthday.fixed=tolerated"
+        "m.1630=tolerated",
+        "m.2516=tolerated"
       ]
     },
     {
@@ -1418,7 +1406,6 @@
       "status": "partial",
       "items": [
         "c.home=required",
-        "m.0821(private)=unwanted",
         "m.c.home=tolerated",
         "m.home.news=tolerated"
       ]
@@ -1430,7 +1417,6 @@
       "status": "partial",
       "items": [
         "c.carrier=required",
-        "m.1710=unwanted",
         "m.c.carrier=tolerated",
         "m.carrier.switch=tolerated"
       ]
@@ -1584,7 +1570,6 @@
       "items": [
         "c.employer.new=tolerated",
         "c.employer=required",
-        "m.3427=unwanted",
         "m.c.employer.new=tolerated"
       ]
     },
@@ -1605,8 +1590,7 @@
       "status": "partial",
       "items": [
         "c.blood=required",
-        "m.c.blood=required",
-        "n.pressure(private)=unwanted"
+        "m.c.blood=required"
       ]
     },
     {
@@ -1616,8 +1600,7 @@
       "status": "partial",
       "items": [
         "c.commute=required",
-        "m.c.commute=required",
-        "m.c.employer=unwanted"
+        "m.c.commute=required"
       ]
     },
     {
@@ -1626,9 +1609,7 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "c.gym=tolerated",
         "c.locker=required",
-        "m.c.gym=tolerated",
         "m.c.locker=required"
       ]
     },
@@ -1661,8 +1642,8 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "n.lisbon=required",
-        "t.marek.winter=unwanted"
+        "m.playlist.1=unwanted",
+        "n.lisbon=required"
       ]
     },
     {
@@ -1739,30 +1720,21 @@
       "family": "unrelated",
       "path": "automatic",
       "status": "partial",
-      "items": [
-        "m.0468.a=unwanted",
-        "m.1704.a=unwanted"
-      ]
+      "items": []
     },
     {
       "id": "auto.unrelated.translate",
       "family": "unrelated",
       "path": "automatic",
       "status": "partial",
-      "items": [
-        "m.2808=unwanted",
-        "m.c.medication(private)=unwanted"
-      ]
+      "items": []
     },
     {
       "id": "auto.unrelated.haiku",
       "family": "unrelated",
       "path": "automatic",
       "status": "partial",
-      "items": [
-        "m.2577=unwanted",
-        "m.3010=unwanted"
-      ]
+      "items": []
     },
     {
       "id": "auto.one.passport",
@@ -1780,8 +1752,7 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "n.parked=required",
-        "t.insurance.halden=unwanted"
+        "n.parked=required"
       ]
     },
     {
@@ -1791,8 +1762,8 @@
       "status": "partial",
       "items": [
         "c.birthday.fixed=tolerated",
-        "m.2516=tolerated",
-        "m.c.birthday.fixed=tolerated"
+        "m.1630=tolerated",
+        "m.2516=tolerated"
       ],
       "required_missing": [
         "n.sister"
@@ -1851,8 +1822,8 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.2034=unwanted",
-        "n.lisbon=required"
+        "n.lisbon=required",
+        "n.tyres=unwanted"
       ]
     },
     {
@@ -1860,40 +1831,28 @@
       "family": "privacy",
       "path": "automatic",
       "status": "partial",
-      "items": [
-        "m.1071(private)=unwanted",
-        "m.1074(private)=unwanted"
-      ]
+      "items": []
     },
     {
       "id": "auto.privacy.debt",
       "family": "privacy",
       "path": "automatic",
       "status": "partial",
-      "items": [
-        "m.engineering.5=tolerated",
-        "m.engineering.6=tolerated"
-      ]
+      "items": []
     },
     {
       "id": "auto.privacy.anxiety",
       "family": "privacy",
       "path": "automatic",
       "status": "partial",
-      "items": [
-        "m.1122(private)=unwanted",
-        "m.2801(private)=unwanted"
-      ]
+      "items": []
     },
     {
       "id": "auto.privacy.custody",
       "family": "privacy",
       "path": "automatic",
       "status": "partial",
-      "items": [
-        "m.playlist.1=tolerated",
-        "m.playlist.3=tolerated"
-      ]
+      "items": []
     },
     {
       "id": "auto.privacy.run",
@@ -1901,8 +1860,8 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.2256=tolerated",
-        "m.3052=tolerated"
+        "m.3052=tolerated",
+        "m.3124=tolerated"
       ]
     },
     {
@@ -1911,9 +1870,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "c.bank.drift=unwanted",
-        "c.bank=unwanted",
-        "m.2333=unwanted",
         "m.vpn.2=tolerated"
       ]
     },
@@ -1922,12 +1878,7 @@
       "family": "privacy",
       "path": "automatic",
       "status": "partial",
-      "items": [
-        "c.therapist=unwanted",
-        "m.0743=unwanted",
-        "m.newsletter.1=unwanted",
-        "m.private.anxiety(private)=unwanted"
-      ]
+      "items": []
     },
     {
       "id": "auto.privacy.medication",
@@ -1935,9 +1886,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "c.carrier=unwanted",
-        "c.medication=unwanted",
-        "m.c.employer=unwanted",
         "m.engineering.1=unwanted"
       ]
     },
@@ -1947,6 +1895,16 @@
       "path": "automatic",
       "status": "partial",
       "items": []
+    },
+    {
+      "id": "auto.privacy.pharmacy",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.pharmacy=tolerated",
+        "m.c.pharmacy=tolerated"
+      ]
     },
     {
       "id": "memory_search.dinner",
@@ -2072,9 +2030,9 @@
       "status": "partial",
       "items": [
         "m.0656=tolerated",
-        "m.1057=tolerated",
+        "m.1032=tolerated",
         "m.1295=tolerated",
-        "m.2282=tolerated",
+        "m.3504=tolerated",
         "m.3509=tolerated",
         "m.vpn.4=unwanted",
         "n.lisbon.a=tolerated",
@@ -2158,11 +2116,11 @@
       "items": [
         "m.3569.a=tolerated",
         "m.3597=tolerated",
-        "m.3623.a=tolerated",
+        "m.3630.a=tolerated",
+        "m.3673.a=tolerated",
         "m.3751=tolerated",
         "m.3760=tolerated",
         "m.3768=tolerated",
-        "m.3782.a=tolerated",
         "n.flaky=required"
       ]
     },
@@ -2203,11 +2161,11 @@
       "status": "partial",
       "items": [
         "m.0563=tolerated",
+        "m.0579=tolerated",
         "m.0635=tolerated",
         "m.0841=tolerated",
         "m.2447=tolerated",
         "m.2715=tolerated",
-        "m.2716=tolerated",
         "m.2751=tolerated",
         "n.vet=required"
       ]
@@ -2225,10 +2183,10 @@
       "path": "memory_search_conversations",
       "status": "partial",
       "items": [
+        "m.0990.a=unwanted",
         "m.1495.a=unwanted",
+        "m.2561.a=unwanted",
         "m.2929=unwanted",
-        "m.2950.a=unwanted",
-        "m.2952.a=unwanted",
         "m.2972=unwanted",
         "m.3018=unwanted",
         "m.3306=unwanted",
@@ -2666,13 +2624,13 @@
       "status": "partial",
       "items": [
         "m.0515=unwanted",
-        "m.1171=unwanted",
         "m.2224=unwanted",
         "m.3279=unwanted",
         "m.3427=unwanted",
         "m.3507=unwanted",
         "m.c.employer.new=tolerated",
-        "n.passport=unwanted"
+        "n.passport=unwanted",
+        "n.vet.a=unwanted"
       ]
     },
     {

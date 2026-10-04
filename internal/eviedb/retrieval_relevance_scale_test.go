@@ -130,12 +130,28 @@ func TestRelevanceFrequenciesStayFastAtScale(t *testing.T) {
 		}
 		searching = min(searching, elapsed)
 	}
-	t.Logf("20k messages: frequency counting %s, search %s (deadline %s)", counting, searching, retrievalDeadline)
+	// Automatic Recall's accepted-memory read counts the same frequencies for
+	// its Claim gate (2026-10-03), plus one bounded count per word among Claims.
+	query.Kind = memory.RetrievalAcceptedMemory
+	accepted := time.Duration(1<<63 - 1)
+	for i := 0; i < 3; i++ {
+		started := time.Now()
+		result, err := store.SearchMemory(ctx, reader.ScopeContext(), query)
+		elapsed := time.Since(started)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Status == memory.RetrievalExhausted || result.Status == memory.RetrievalFailed {
+			t.Fatalf("accepted search at scale ended %s after %s", result.Status, elapsed)
+		}
+		accepted = min(accepted, elapsed)
+	}
+	t.Logf("20k messages: frequency counting %s, search %s, accepted search %s (deadline %s)", counting, searching, accepted, retrievalDeadline)
 	// Race instrumentation slows the pure-Go SQLite driver far more than the
 	// budget scale assumes, so wall-clock margins are only asserted in
 	// ordinary builds; the status check above still runs under -race.
-	if raceTimeScale == 1 && (counting > retrievalDeadline/10 || searching > retrievalDeadline/2) {
-		t.Fatalf("at 20k messages counting took %s and search %s; the read deadline is %s", counting, searching, retrievalDeadline)
+	if raceTimeScale == 1 && (counting > retrievalDeadline/10 || searching > retrievalDeadline/2 || accepted > retrievalDeadline/2) {
+		t.Fatalf("at 20k messages counting took %s, search %s and accepted search %s; the read deadline is %s", counting, searching, accepted, retrievalDeadline)
 	}
 	timeWindowSearchesStayFast(t, store, reader)
 }

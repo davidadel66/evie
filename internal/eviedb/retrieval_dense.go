@@ -196,6 +196,8 @@ func (c *retrievalCandidates) denseGenerator(ctx context.Context) error {
 		}
 		rank++
 		ranked[id] = true
+		// Hits arrive best first, so this is the Claim's best similarity.
+		candidate.denseScore = item.score
 		candidate.direct = true
 		candidate.evidence.RetrievalGeneration = coverage.Generation
 		addRetrievalRank(candidate, "dense", rank)

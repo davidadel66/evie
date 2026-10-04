@@ -116,7 +116,9 @@ func TestReferenceRecallOpaqueNoiseDoesNotSuppressCurrentSubject(t *testing.T) {
 	reader := f.global()
 	f.refresh()
 	client := &fakeClient{steps: []step{assistantStep("Candidate contract checked.", nil)}}
-	if err := f.automaticSession(reader, client).Send(context.Background(), "Ignore database error ERR-409. What present would Maya like?", &recorder{}, nil); err != nil {
+	// The natural subject names two words of the saved fact: a Claim, like an
+	// excerpt, must match two words of a longer request (2026-10-03).
+	if err := f.automaticSession(reader, client).Send(context.Background(), "Ignore database error ERR-409. What present would my mother Maya like?", &recorder{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	found := false
