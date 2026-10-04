@@ -45,9 +45,11 @@ import (
 // capability effects through the effect protocol, Outcome Unknown and
 // reconciliation; version 4 (sub-stage 7) adds AI steps through pinned
 // Model Policies and durable interruptions, and presents unknown effects
-// as interruptions. An Evie without a version's semantics pauses such a
-// run as incompatible instead of running it.
-const RuntimeVersion = "evie.workflow.runtime/4"
+// as interruptions; version 5 (sub-stage 9) adds agent steps that run the
+// existing workers under the run's lease, with their presets pinned, and
+// bounded map fan-out with per-item attempts. An Evie without a version's
+// semantics pauses such a run as incompatible instead of running it.
+const RuntimeVersion = "evie.workflow.runtime/5"
 
 // compatibleRuntimes are the pinned runtimes this runtime declares it can
 // continue (ADR 0025). Runs pinned to evie.workflow.runtime/1 (sub-stages 3
@@ -60,15 +62,18 @@ const RuntimeVersion = "evie.workflow.runtime/4"
 // unchanged. Runs pinned to evie.workflow.runtime/3 (sub-stage 6) were
 // refused AI steps and interruptions at start; their effects keep the same
 // protocol, and an unknown outcome is now also presented to the owner as
-// an interruption whose answer is the same reconciliation record. A run
-// pinned to any other runtime pauses visibly.
-var compatibleRuntimes = []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", "evie.workflow.runtime/3", RuntimeVersion}
+// an interruption whose answer is the same reconciliation record. Runs
+// pinned to evie.workflow.runtime/4 (sub-stage 7) were refused agent and
+// map steps at start, so they hold none; the only change they see is that
+// a map step's own attempt and item attempts are counted per item, which
+// none of them has. A run pinned to any other runtime pauses visibly.
+var compatibleRuntimes = []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", "evie.workflow.runtime/3", "evie.workflow.runtime/4", RuntimeVersion}
 
 // executableKinds are the step kinds this runtime version executes:
 // capability reads and, since sub-stage 6, capability effects; since
-// sub-stage 7, AI steps and interruptions. Agent and map steps wait for
-// sub-stage 9.
-var executableKinds = []string{workflow.KindAI, workflow.KindBranch, workflow.KindCapability, workflow.KindDeterministic, workflow.KindInterrupt}
+// sub-stage 7, AI steps and interruptions; since sub-stage 9, agent and
+// map steps.
+var executableKinds = []string{workflow.KindAgent, workflow.KindAI, workflow.KindBranch, workflow.KindCapability, workflow.KindDeterministic, workflow.KindInterrupt, workflow.KindMap}
 
 var (
 	// ErrUnsupportedSteps refuses a definition with steps this runtime
@@ -139,8 +144,13 @@ type composition struct {
 	Functions []string         `json:"functions"`
 	Providers []pinnedProvider `json:"providers,omitempty"`
 	// Models are the Model Policies its AI steps use (sub-stage 7), each
-	// with its exact provider, model and parameters (ADR 0019).
+	// with its exact provider, model and parameters (ADR 0019); since
+	// sub-stage 9 also those of its agent steps.
 	Models []workflow.PolicyReport `json:"model_policies,omitempty"`
+	// Workers are the worker presets its agent steps run, each with the
+	// digest of its composition at start (sub-stage 9, ADR 0016): every
+	// worker admission requires the preset to compose to it still.
+	Workers []pinnedWorker `json:"workers,omitempty"`
 }
 
 type preparedRun struct {
@@ -217,6 +227,12 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	if r.models == nil && hasAISteps(v) {
 		return preparedRun{}, &ModelsUnavailableError{Workflow: a.Name, Reason: r.modelsOff}
 	}
+	// Agent steps need a worker supervisor, and each worker preset they run
+	// is pinned now (sub-stage 9).
+	workers, err := r.pinWorkers(ctx, v)
+	if err != nil {
+		return preparedRun{}, err
+	}
 	var prior eviedb.WorkflowRunDetail
 	var logical string
 	if req.RerunOf != "" || strings.TrimSpace(req.Reason) != "" {
@@ -241,7 +257,7 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	if err != nil {
 		return preparedRun{}, err
 	}
-	pinned, err := json.Marshal(composition{Runtime: RuntimeVersion, StepKinds: kinds, Functions: v.Functions(), Providers: providers, Models: v.ModelPolicies()})
+	pinned, err := json.Marshal(composition{Runtime: RuntimeVersion, StepKinds: kinds, Functions: v.Functions(), Providers: providers, Models: v.ModelPolicies(), Workers: workers})
 	if err != nil {
 		return preparedRun{}, err
 	}
@@ -555,8 +571,19 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 	// A run paused before an AI step in an Evie whose AI steps are off
 	// stays paused, rather than resuming only to pause again, until an Evie
 	// that allows them claims it (sub-stage 7).
-	if next, ok := v.Step(p.Checkpoint.Next); ok && next.Kind == workflow.KindAI && p.InFlight == nil && r.models == nil {
-		return pause(r.modelsPause(next.ID))
+	if next, ok := v.Step(p.Checkpoint.Next); ok && p.InFlight == nil {
+		kind := next.Kind
+		if m, isMap := v.MapStep(next.ID); isMap {
+			kind = m.Item.Kind
+		}
+		switch {
+		case kind == workflow.KindAI && r.models == nil:
+			return pause(r.modelsPause(next.ID))
+		case kind == workflow.KindAgent && r.agents == nil:
+			// Likewise a run before an agent step, or a map of agent items,
+			// in an Evie that cannot run workers (sub-stage 9).
+			return pause(r.agentsPause(next.ID, r.agentsOff))
+		}
 	}
 	// A run paused for an unavailable provider stays paused, rather than
 	// resuming only to pause again before the read, until it is ready; one
@@ -755,7 +782,9 @@ func (r *Runtime) step(pc *pass, p eviedb.WorkflowRunProgress) error {
 			}
 		}
 	}
-	if interrupted >= r.sched.Interruptions {
+	// A map's own attempt does no work of its own: its items are bounded
+	// one by one instead (sub-stage 9), so it is not.
+	if interrupted >= r.sched.Interruptions && step.Kind != workflow.KindMap {
 		return fail(fmt.Sprintf("steps.%s was interrupted %s at checkpoint %d (each time its runtime crashed, stopped or lost its lease before recording the outcome); the run fails instead of running it again: %s",
 			step.ID, times(interrupted), p.Checkpoint.Seq, p.LastError))
 	}
@@ -799,6 +828,10 @@ func (r *Runtime) step(pc *pass, p eviedb.WorkflowRunProgress) error {
 		return r.ai(pc, p, step, inputs, state, fail, pause)
 	case workflow.KindInterrupt:
 		return r.interrupt(pc, p, step, inputs, state, fail)
+	case workflow.KindAgent:
+		return r.agentStep(pc, p, step, inputs, state, fail, pause)
+	case workflow.KindMap:
+		return r.mapStep(pc, p, step, inputs, state, fail, pause)
 	}
 	return fail(fmt.Sprintf("steps.%s is a %s step, which this runtime version cannot run", step.ID, step.Kind))
 }
@@ -1068,6 +1101,9 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 	}
 	for _, a := range d.Attempts {
 		text := fmt.Sprintf("  #%d %s attempt %d: %s", a.Seq, a.Step, a.Attempt, a.State)
+		if a.Item != nil {
+			text = fmt.Sprintf("  #%d %s item %d attempt %d: %s", a.Seq, a.Step, *a.Item, a.Attempt, a.State)
+		}
 		if a.Next != "" {
 			text += " -> " + a.Next
 		}
@@ -1089,6 +1125,18 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 	effectsText(&b, d.Effects)
 	interruptionsText(&b, d.Interruptions)
 	modelCallsText(&b, d.ModelCalls)
+	mapsText(&b, d)
+	workersText(&b, d.Workers)
+	if len(d.Workers) > 0 && len(d.ModelCalls) > 0 {
+		var tokens, micro int64
+		for _, c := range d.ModelCalls {
+			tokens, micro = tokens+c.Tokens(), micro+c.Cost()
+		}
+		for _, c := range d.Workers {
+			tokens, micro = tokens+c.Tokens(), micro+c.Cost()
+		}
+		line("Run spend: %s tokens, %s (AI steps and workers)", grouped(tokens), dollars(micro))
+	}
 	switch {
 	case run.State == eviedb.WorkflowRunCancelling:
 		line("No further node starts: the cancellation finishes from checkpoint %d", run.Checkpoint)

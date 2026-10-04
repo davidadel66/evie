@@ -129,24 +129,47 @@ func (s *Store) InterruptWorkflowAttempt(ctx context.Context, lease WorkflowRunL
 		if err := requireAttemptEffectResolved(ctx, conn, lease.RunID, seq); err != nil {
 			return err
 		}
-		var step string
-		var attempt int
-		var checkpoint int64
-		err := conn.QueryRowContext(ctx, `UPDATE workflow_node_attempts SET state='interrupted',error=?,finished_at=?
- WHERE run_id=? AND seq=? AND state='running' AND lease_token=? RETURNING step_id,attempt,input_checkpoint`,
-			reason, formatTime(now), lease.RunID, seq, lease.Token).Scan(&step, &attempt, &checkpoint)
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrWorkflowRunConflict
-		}
-		if err != nil {
-			return fmt.Errorf("record interrupted workflow node attempt: %w", err)
-		}
-		if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET updated_at=? WHERE id=?`, formatTime(now), lease.RunID); err != nil {
+		// A map's attempt is interrupted only after its items ended, and an
+		// agent attempt with its worker call (sub-stage 9).
+		if err := requireItemsEnded(ctx, conn, lease.RunID, seq); err != nil {
 			return err
 		}
-		return recordWorkflowRunEvent(ctx, conn, WorkflowRunEvent{RunID: lease.RunID, Kind: WorkflowEventAttemptInterrupted, Holder: lease.Holder, Token: lease.Token,
-			Attempt: seq, Detail: fmt.Sprintf("steps.%s attempt %d from checkpoint %d: %s", step, attempt, checkpoint, reason), At: now})
+		if err := requireAttemptWorkerCallRecorded(ctx, conn, lease.RunID, seq); err != nil {
+			return err
+		}
+		return interruptAttempt(ctx, conn, lease, seq, reason, now)
 	})
+}
+
+// interruptAttempt records the holder's own attempt in flight (a step's or
+// a map item's) interrupted, with an attempt_interrupted event.
+func interruptAttempt(ctx context.Context, conn *sql.Conn, lease WorkflowRunLease, seq int64, reason string, now time.Time) error {
+	var step string
+	var attempt int
+	var checkpoint int64
+	var item sql.NullInt64
+	err := conn.QueryRowContext(ctx, `UPDATE workflow_node_attempts SET state='interrupted',error=?,finished_at=?
+ WHERE run_id=? AND seq=? AND state='running' AND lease_token=? RETURNING step_id,attempt,input_checkpoint,item_index`,
+		reason, formatTime(now), lease.RunID, seq, lease.Token).Scan(&step, &attempt, &checkpoint, &item)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrWorkflowRunConflict
+	}
+	if err != nil {
+		return fmt.Errorf("record interrupted workflow node attempt: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET updated_at=? WHERE id=?`, formatTime(now), lease.RunID); err != nil {
+		return err
+	}
+	return recordWorkflowRunEvent(ctx, conn, WorkflowRunEvent{RunID: lease.RunID, Kind: WorkflowEventAttemptInterrupted, Holder: lease.Holder, Token: lease.Token,
+		Attempt: seq, Detail: fmt.Sprintf("%s attempt %d from checkpoint %d: %s", attemptLabel(step, item), attempt, checkpoint, reason), At: now})
+}
+
+// attemptLabel names a step's attempt or a map item's.
+func attemptLabel(step string, item sql.NullInt64) string {
+	if item.Valid {
+		return fmt.Sprintf("steps.%s item %d", step, item.Int64)
+	}
+	return "steps." + step
 }
 
 // WorkflowRunSubstitution is the owner's audited approval that a run

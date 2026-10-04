@@ -327,8 +327,12 @@ func (s *Store) AcquireWorkflowRunLease(ctx context.Context, runID, holder strin
 				a.Error, formatTime(now), runID, a.Seq); err != nil {
 				return fmt.Errorf("record interrupted workflow node attempt: %w", err)
 			}
+			item := sql.NullInt64{}
+			if a.Item != nil {
+				item = sql.NullInt64{Int64: int64(*a.Item), Valid: true}
+			}
 			if err := recordWorkflowRunEvent(ctx, conn, WorkflowRunEvent{RunID: runID, Kind: WorkflowEventAttemptInterrupted, Holder: holder, Token: lease.Token, Attempt: a.Seq,
-				Detail: fmt.Sprintf("steps.%s attempt %d from checkpoint %d: %s", a.Step, a.Attempt, a.InputCheckpoint, a.Error), At: now}); err != nil {
+				Detail: fmt.Sprintf("%s attempt %d from checkpoint %d: %s", attemptLabel(a.Step, item), a.Attempt, a.InputCheckpoint, a.Error), At: now}); err != nil {
 				return err
 			}
 			claim.Interrupted = append(claim.Interrupted, a)
@@ -337,6 +341,13 @@ func (s *Store) AcquireWorkflowRunLease(ctx context.Context, runID, holder strin
 			if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET updated_at=? WHERE id=?`, formatTime(now), runID); err != nil {
 				return err
 			}
+		}
+		// The workers an earlier holder left (sub-stage 9) lost their
+		// authority with its lease: their executions are settled
+		// interrupted and their worker calls recorded with what they
+		// spent, before the new holder does anything else.
+		if err := s.settleRunWorkers(ctx, conn, runID, lease.Token, now); err != nil {
+			return err
 		}
 		// An Effect Intent whose attempt ended without its receipt (just
 		// interrupted above, or interrupted by an Evie that predates the

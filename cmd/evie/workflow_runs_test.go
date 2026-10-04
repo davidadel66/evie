@@ -264,7 +264,7 @@ func TestWorkflowCLISubstitute(t *testing.T) {
 func TestWorkflowRuntimeUsesTheCompiledWorkflowCapabilities(t *testing.T) {
 	ctx := context.Background()
 	store := backgroundTestStore(t)
-	manager, err := newWorkflowPluginManager(ctx, store)
+	manager, err := newWorkflowPluginManager(ctx, store, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func TestWorkflowRuntimeUsesTheCompiledWorkflowCapabilities(t *testing.T) {
 	if _, err := manager.ResolveWorkflowCapability(ctx, "finance.month_cash_flow"); !errors.Is(err, plugins.ErrWorkflowCapabilityUnavailable) {
 		t.Fatalf("after the owner disabled finance: %v", err)
 	}
-	rt, err := newWorkflowRuntime(store, func(string) string { return "" }, manager)
+	rt, err := newWorkflowRuntime(store, func(string) string { return "" }, manager, nil, nil)
 	if err != nil || rt == nil {
 		t.Fatalf("runtime = %v, %v", rt, err)
 	}

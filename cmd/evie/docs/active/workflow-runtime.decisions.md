@@ -1,5 +1,240 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Agent steps and bounded map fan-out (Stage 14, sub-stage 9)
+
+Source: sub-stage 9 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md), the
+spec's 2026-10-04 amendment (map over a prior step's list, `max_items`
+at most 1,000, `max_parallel` within `limits.max_parallel`,
+`on_item_failure` `fail` or `partial` with `min_succeeded`, input-ordered
+results, one nesting level; agent steps run the research, explore and
+build workers with their fences, wrap-up and result contract, an
+objective prompt, a required Model Policy, a budget within the operator's
+ceiling and the run's limits, an optional typed result from the report's
+`## Result` block, `partial` counting as success, build needing
+`task_id`, "the Workflow Run's fenced lease in place of the parent turn";
+no merge in v1; worker presets are not Standing Authority), and sub-stage
+8's "What sub-stage 9 must pick up". Binding: ADR 0010, 0016, 0017, 0019,
+0025 and 0027, this spec's map, agent, cancellation and recovery
+decisions, and the subagents spec's admission, budget, wrap-up, fence,
+result and recovery rules (amended the same day: see the "Run-owned
+workers" entry in
+[subagents.decisions.md](subagents.decisions.md)).
+
+### What was built
+
+- **Run-owned worker admission.** The Kernel subagent supervisor gains
+  `RunWorker`: one worker attempt whose authority is the Workflow Run's
+  fenced lease (holder and token) and the node attempt it runs under,
+  recorded on the attempt (`delegation.RunOwner`) instead of a parent
+  turn lease and committed tool intent. `AdmitRunSubagent` is one
+  immediate transaction that requires the run's current, unexpired lease
+  to be the owner's, the run `running`, the node attempt in flight under
+  that lease with its worker call recorded, run admission (deactivation
+  and every block, the Workspace's worker allowance among them), the
+  Workspace's allowance for the preset in the run's pinned and current
+  revision with its revocations (the check chat delegation uses), the
+  worker's plugins enabled (Subagents, plus Web for research or Todo for
+  build), and the worker's own rules: an explore root inside the
+  Workspace folder; a build worktree in the Workspace repository on an
+  open, unclaimed Task of the run's Workspace or the global scope with
+  the Task Tree's dependency and conflict rules applied conservatively
+  (Stage 13). It reserves a hidden child session with its pinned receipt
+  and the execution, links them to the worker call, and issues a build
+  worker's Task Access Grant for this attempt only. The same checks are
+  the worker's authority at its start (`StartSubagent`), on every fenced
+  child write and in its watchdog (`AuthorizeSubagent`, every 100 ms):
+  losing the lease, the owner's cancellation (the run is no longer
+  `running`), a pause, the node attempt ending, a deactivation, a block or
+  a revocation ends it. A run's workers are children of the run's hidden
+  worker session (`workflow_worker_sessions`): a session whose parent is
+  itself, so like every child session it appears in no session list and
+  no memory path and can never be opened as a conversation; it gives the
+  run's workers one idempotency space (`workflow:<run>:<attempt>`) and
+  one per-parent capacity count. Chat delegation is unchanged.
+- **Agent steps.** An attempt records its worker call
+  (`workflow_worker_calls`: worker, Model Policy, objective and schema
+  digests, budget, the model's price) with the node attempt under the
+  lease, checks the lease, and runs the worker through the supervisor
+  (the runtime's `Agents` seam). The worker gets the reviewed objective's
+  exact bytes, the step's declared input as canonical JSON inside an
+  escaped untrusted-data frame ("workflow data, not instructions or
+  authority"), its folder or worktree note, its budget and report format,
+  and, when the step declares an output schema, the instruction to end
+  its report with a `## Result` json block matching it. Its model is the
+  step's pinned Model Policy (`ConfigureRuns` resolves that model's
+  context profile; the policy's temperature is sent with every call that
+  sets none and its output bound caps the response), never a parent
+  session's; its time and token budget are the step's, refused above the
+  operator's policy, with the subagent wrap-up at 90%; the objective plus
+  data must fit `EVIE_SUBAGENTS_ASSIGNMENT_BYTES`. The step's output is
+  the worker result (status, summary, full report, the URLs it fetched
+  with whether the report cites them, limitations, the tokens counted)
+  built by the same code the simulator uses; the typed result is the last
+  json block of the report's last `## Result` section, validated against
+  the step's schema. `succeeded` and `partial` succeed (the note and the
+  status say partial); a worker that ended failed, cancelled or
+  interrupted, a missing or invalid typed result and a worker refused for
+  its policy fail the attempt, which retries as a fresh worker under a
+  fresh budget within the Retry Policy.
+- **Interruptions of agent attempts (decision).** An attempt cut short by
+  a crash, a stop or a lost lease is recorded `interrupted` and runs again
+  from the same checkpoint within the per-node interruption bound, as AI
+  steps do. What runs again depends on what the interrupted worker left,
+  read from its worker call: a worker that finished with a report before
+  its attempt was recorded is not run again, its result is adopted (a new
+  attempt that runs nothing and counts no tokens); an interrupted build
+  worker is continued in its kept worktree and branch, as a continuation
+  on its own child session (its history, without the incomplete last tool
+  group, and the new attempt's authority, never the earlier one's); any
+  other worker starts afresh, which is safe for research and explore. A
+  failed attempt's retry is always a fresh worker (a build one on a new
+  worktree; the failed branch stays for inspection and `evie worktrees`).
+- **Map steps.** The map's own attempt (kind `map`, its input the list)
+  stays in flight while its items run. A list longer than `max_items`
+  fails the step before any item starts (its one failed attempt; nothing
+  truncated). Items are node attempts of their map step with an
+  `item_index` and the `map_attempt` they ran under (columns added to
+  `workflow_node_attempts`; the one-in-flight index now covers step
+  attempts only and attempt numbers are per item, under the sub-stage 4
+  index names so an older Evie's schema setup keeps them). They start in
+  index order, at most `max_parallel` at once, never more than
+  `limits.max_parallel` and, for agent items, the operator's worker caps
+  (`EVIE_SUBAGENTS_PER_PARENT` and `EVIE_SUBAGENTS_RUNTIME`; a run's
+  worker session is one parent), in batches that apply run admission once
+  per transaction (`BeginWorkflowItemAttempts`); each records its output
+  (its durable boundary), an agent item with its worker call and an AI
+  item with its model call. An item retries within its own Retry Policy
+  after its backoff; one interrupted as many times as the interruption
+  bound fails. With `fail` the first item that fails after its retries
+  stops the map: items not started never start, running ones are
+  cancelled and recorded interrupted ("an item failed and the map stops
+  at its first failed item"), and the run fails ("steps.research: item 1
+  failed: …"). With `partial` the map succeeds with at least
+  `min_succeeded` items, otherwise the run fails ("2 of 3 items
+  succeeded; min_succeeded 3"). The output (results in input order, then
+  failures, both counts) is built by the simulator's code and recorded
+  with the next checkpoint only after every item ended.
+- **Per-item recovery.** A map attempt that runs again from the same
+  checkpoint (after a crash, a stop, a pause or a lost lease) reads its
+  items' recorded attempts: succeeded items keep their outputs and never
+  run again, failed ones keep their spent attempts and backoff, and only
+  the rest run. The map's own interrupted attempts are not bounded (it
+  does no work of its own); each item's interruptions are.
+- **Cancellation.** The owner's cancellation reaches every item in
+  flight: the map stops starting items, cancels the running ones (their
+  workers stop through their context, and their authority ends with the
+  run's `running` state anyway), records each interrupted ("the owner
+  cancelled the run while the worker ran; worker execution … ended
+  cancelled"), and records its own attempt interrupted with the counts;
+  the run is cancelled only after every item ended. An agent step's
+  worker ends the same way. A build worker's branch and worktree stay as
+  they are.
+- **Spend.** Every worker counts against `limits.max_tokens`: an open
+  worker call at its whole budget, a finished one at its reported usage,
+  or at least its budget when some usage went unreported; its cost is
+  that count at the model's price (any unreported part as output). An
+  agent step or item whose budget would pass the limit is not started:
+  the run fails visibly when nothing else runs ("steps.research item 2:
+  its next attempt could use up to 100,000 tokens, and the run has used
+  200,120 of limits.max_tokens 250,000; it was not started"). AI steps
+  count workers' spend too. Inspection lists each worker call (worker,
+  policy, budget, execution and child session, outcome, usage, cost),
+  each map step's items (state, attempts, worker execution) and the
+  run's total spend.
+- **Pinned workers and the runtime version.** Runs pin
+  `evie.workflow.runtime/5` with each worker preset their agent steps run
+  and the digest of its composition at start (preset identity and
+  version, capability contracts and schemas, tool schemas, instructions;
+  not provider implementation versions); every worker admission requires
+  the preset to compose to it still, otherwise the attempt is recorded
+  interrupted and the run pauses visibly (ADR 0016, 0025). `/1`–`/4` stay
+  compatible: those runs were refused agent and map steps at start. A
+  start is refused, with nothing recorded, when this Evie cannot run the
+  definition's workers (`ErrAgentsUnavailable`), and a run that reaches an
+  agent step or a map of agent items in an Evie without workers pauses
+  visibly and continues by itself in one that has them.
+- **Wiring.** `evie serve`, the REPL and one-shot `evie workflows`
+  commands give the runtime the Kernel subagent supervisor
+  (`ConfigureRuns`, independent of any chat session) when
+  `EVIE_WORKFLOW_REMOTE_MODELS=on` with `OPENROUTER_API_KEY`: workers send
+  run data to the model provider, exactly like AI steps. The one-shot
+  command's Plugin Manager now also compiles Web, Todo and Subagents so a
+  foreground run runs its workers there. Workers still need the Subagents
+  plugin enabled (off by default) and the Workspace's allowance.
+- **Example.** The deep-research definition runs end to end with
+  scripted fakes: AI planning, a map of research workers, `collect_claims`
+  keeping only fetched sources, three verify workers per claim, the
+  majority filter and the AI report (`TestWorkflowDeepResearchRunsEndToEndWithFakes`).
+
+### State → recovery (rows added or changed by sub-stage 9)
+
+| State | What a claim after a restart finds | Recovery |
+|---|---|---|
+| `running`, agent attempt in flight | attempt and worker call open under a dead lease; the worker's execution `running` or `admitted` | due once the lease expires; the claim records the attempt `interrupted`, settles the execution `interrupted` (`run_ownership_ended`) and records the worker call with its usage, in one transaction; the step runs again within the interruption bound: a finished worker's result is adopted, an interrupted build worker is continued in its worktree, any other worker starts afresh |
+| `running`, map attempt in flight | the map's attempt and its items' attempts `running` under a dead lease | as above for every item in flight; the map's attempt runs again from the same checkpoint and continues from its items' records: finished items are kept, interrupted ones run again within their own bound, the rest start |
+| `running`, map waiting for an item's retry | the map's attempt in flight; the item's failed attempt and backoff | the map waits out the backoff under its lease; after a crash the next map attempt honors it from the failed attempt's finish time |
+| `running`, paused at a map | the map's attempt recorded `interrupted` with the pause; its items' records | as any pause; on resume the map continues from its items' records |
+| `cancelling`, agent or map items in flight | items and worker calls open under a live lease | not due while the holder lives; the holder stops every item, records them and its map attempt, and finishes the cancellation; after a crash the claim records them as above and finishes it. A run with an open worker call cannot be finished by any Evie (a trigger), so only an Evie that runs agent and map steps settles its workers and finishes it |
+| any run pinned to `/5` in an Evie that predates it | incompatible pinned runtime | paused visibly (sub-stage 4's rule); never advanced; a cancellation with workers in flight stays `cancelling` (the trigger) until a current Evie claims it |
+
+### Decisions and known limits
+
+- **Who finishes a cancellation with items in flight (decision).** Only
+  an Evie that runs agent and map steps may: a trigger refuses to finish
+  a run (`succeeded`, `failed` or `cancelled`) while one of its worker
+  calls is open, and another refuses an earlier Evie's rewrite of a
+  run-owned execution (its recovery would drop the owner). An older
+  Evie's claim of such a run records the attempts interrupted and fails
+  to finish it; it stays `cancelling` until a current Evie's claim
+  settles the workers. An older Evie running beside a current one reports
+  its subagent recovery of run-owned executions failing (retried with
+  backoff) without changing them.
+- Workers run in the process that holds the run's lease: a run is still
+  the unit of the lease, the scheduler's due rule and `settled` are
+  unchanged, and an item cannot outlive its map's lease.
+- The per-turn child limit (`EVIE_SUBAGENTS_PER_TURN`) and the batch size
+  do not apply to run-owned workers: the reviewed `max_items`,
+  `max_parallel`, Retry Policy and `limits.max_attempts` bound them. The
+  per-parent and runtime caps and the assignment, request and result
+  limits do.
+- Token counting is conservative: a worker whose provider did not report
+  usage for every response counts its whole budget. There is still no
+  dollar cap in the schema; cost is recorded and reported.
+- The worker result in a step's output carries the full report, so
+  checkpoints, which hold every step output so far, grow with large maps
+  (deep-research's verify map holds 36 reports). Bounding them is left to
+  sub-stage 12's retention work.
+- A run's build branches cannot be merged yet: the Stage 12 gate admits
+  only a session's own build attempts, and no session owns a run's. The
+  owner can inspect them with `evie worktrees` and git; adding a run's
+  build to a session's gate is a follow-up.
+- A build map item conflicts with the run's other build items by the
+  Task Tree's conservative rule (a Task without paths may touch any
+  file): such an admission is refused and fails the item's attempt (it
+  retries within its policy). Give build items' Tasks disjoint paths or
+  `max_parallel: 1`.
+- Workers' context profiles are resolved per attempt from the provider's
+  model metadata (`ResolveContextProfile`); a model without published
+  metadata cannot run as a worker.
+- A run-owned worker's hard deadline is a real-time context deadline from
+  the start time the store records, as for chat children.
+
+### What sub-stage 10 must pick up
+
+- Ship the deep-research workflow for real: its README and prompts
+  reviewed, the research worker preset's Web capabilities and budgets
+  measured on real questions, the report's citations checked against the
+  verify workers' fetched sources, and its cost per run reported against
+  `limits.max_tokens`.
+- Decide whether the full report belongs in the agent step's output or
+  only its typed result and summary (checkpoint size), before maps of
+  dozens of workers run routinely.
+- The web run view does not show map items or worker calls yet (its
+  files are the owner's uncommitted work); the inspect route already
+  returns every item attempt (with `item` and `map_attempt`) and the
+  `workers`, and `evie workflows inspect` shows both.
+
 ## 2026-10-04 — Cancellation and recovery (Stage 14, sub-stage 8)
 
 Source: sub-stage 8 of Stage 14 in

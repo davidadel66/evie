@@ -740,9 +740,99 @@ type Attempt struct {
 	Worktree *Worktree `json:"worktree,omitempty"`
 	// Gate is a build attempt's merge-gate record (added 2026-10-04, Stage
 	// 12); attempts recorded before it have none.
-	Gate   *BuildGate `json:"gate,omitempty"`
-	Result *Result    `json:"result,omitempty"`
+	Gate *BuildGate `json:"gate,omitempty"`
+	// Run is the Workflow Run that owns a run-owned attempt (Stage 14
+	// sub-stage 9, 2026-10-04): its authority is the run's fenced lease and
+	// the node attempt it runs under, never a parent turn. Parent then holds
+	// only the run's hidden worker session as its scope and no lease.
+	// Attempts delegated from a chat have none.
+	Run    *RunOwner `json:"run,omitempty"`
+	Result *Result   `json:"result,omitempty"`
 }
+
+// RunOwner is the authority of a run-owned worker attempt (Stage 14
+// sub-stage 9, 2026-10-04): the Workflow Run's fenced lease, which a
+// runtime holds while it advances the run, and the node attempt (an agent
+// step's, or a map item's) the worker runs under. The worker keeps
+// authority only while that lease is the run's current, unexpired lease,
+// the run is running (not cancelling, paused or finished), that attempt is
+// still in flight under it, and the run's admission and the Workspace's
+// worker allowance still hold. The step's pinned Model Policy and result
+// schema are recorded with it.
+type RunOwner struct {
+	RunID       string             `json:"run_id"`
+	WorkspaceID memory.WorkspaceID `json:"workspace_id"`
+	Workflow    string             `json:"workflow"`
+	Step        string             `json:"step"`
+	// Item is a map item's index; nil for an agent step.
+	Item *int `json:"item,omitempty"`
+	// AttemptSeq is the node attempt (the agent step's, or the map item's)
+	// the worker runs under.
+	AttemptSeq int64  `json:"attempt_seq"`
+	Holder     string `json:"holder"`
+	Token      int64  `json:"token"`
+	// Policy, PolicyVersion, Model, Temperature and MaxOutputTokens are the
+	// step's pinned Model Policy (ADR 0019), which replaces the parent
+	// session's model a chat child would reuse.
+	Policy          string   `json:"policy"`
+	PolicyVersion   int      `json:"policy_version"`
+	Model           string   `json:"model"`
+	Temperature     *float64 `json:"temperature,omitempty"`
+	MaxOutputTokens int64    `json:"max_output_tokens"`
+	// ResultSchema is the canonical JSON schema the report's "## Result"
+	// block must match; empty when the step declares none.
+	ResultSchema string `json:"result_schema,omitempty"`
+}
+
+// RunAssignment is one run-owned worker attempt a Workflow Run asks the
+// supervisor to run: its owner, the worker preset, the reviewed objective
+// prompt, the step's declared input as assignment data (canonical JSON,
+// framed as data, never instructions or authority), a build worker's Task,
+// and its budget, no larger than the operator's subagent policy.
+// ContinueFrom names an interrupted build execution of the same run, step
+// and item whose kept worktree this attempt resumes as its continuation;
+// Preset is the digest of the worker composition the run pinned at start
+// (empty skips the check).
+type RunAssignment struct {
+	Owner        RunOwner
+	Worker       string
+	Objective    string
+	Data         string
+	TaskID       string
+	Deadline     time.Duration
+	TokenBudget  int64
+	ContinueFrom string
+	Preset       string
+}
+
+// RunOutcome is a run-owned attempt's settled result and its full stored
+// report (empty without one).
+type RunOutcome struct {
+	Result Result
+	Report string
+}
+
+// RunKey is the idempotency key of the run-owned attempt admitted under one
+// node attempt of a run, so a retry of that admission finds it again.
+func RunKey(o RunOwner) string { return fmt.Sprintf("workflow:%s:%d", o.RunID, o.AttemptSeq) }
+
+// Errors of run-owned admission (Stage 14 sub-stage 9).
+var (
+	// ErrUnavailable is a supervisor that cannot admit work now: the
+	// Subagents Plugin is stopped or disabled, or no model runtime is
+	// configured.
+	ErrUnavailable = errors.New("Subagents Plugin or model runtime is unavailable")
+	// ErrWorkerChanged refuses a run-owned attempt whose worker preset no
+	// longer composes to the composition its run pinned (ADR 0016, 0025).
+	ErrWorkerChanged = errors.New("the worker preset's composition changed since the run pinned it")
+)
+
+// ReasonRunOwnershipEnded is a run-owned attempt recovery settled because
+// the Workflow Run lease it ran under ended.
+const ReasonRunOwnershipEnded = "run_ownership_ended"
+
+// RunOwned reports whether the attempt is owned by a Workflow Run.
+func (a Attempt) RunOwned() bool { return a.Run != nil }
 
 // Worker is the attempt's worker preset, from its pinned receipt.
 func (a Attempt) Worker() string { return a.Receipt.Preset.ID }

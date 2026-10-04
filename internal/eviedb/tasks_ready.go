@@ -415,9 +415,14 @@ func checkContinuationConflicts(ctx context.Context, conn *sql.Conn, a delegatio
 	if a.Worktree == nil || a.Assignment.TaskID == "" {
 		return nil
 	}
-	conservative, err := orchestratingParent(ctx, conn, a.Parent.Scope.SessionID)
-	if err != nil {
-		return err
+	// A run-owned build (Stage 14 sub-stage 9) has no parent composition:
+	// it always takes the conservative rule.
+	conservative := a.Run != nil
+	if !conservative {
+		var err error
+		if conservative, err = orchestratingParent(ctx, conn, a.Parent.Scope.SessionID); err != nil {
+			return err
+		}
 	}
 	id := task.ID(a.Assignment.TaskID)
 	root, err := taskRootID(ctx, conn, id)

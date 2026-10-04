@@ -17,6 +17,7 @@ import (
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/procedural"
+	"github.com/davidadel66/evie/internal/subagents"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/workflow"
 	"github.com/davidadel66/evie/internal/workflowruntime"
@@ -68,10 +69,13 @@ func (c managerCatalog) Capability(id string) (workflow.CapabilityContract, bool
 // plugins for a one-shot `evie workflows` command, which runs without the
 // full plugin set: it follows the owner's durable enabled choices (the same
 // defaults as `evie serve`), so a disabled plugin's reads are unavailable
-// here too.
-func newWorkflowPluginManager(ctx context.Context, store plugins.EnabledStateStore) (*plugins.Manager, error) {
-	compiled := workflowCapabilityPlugins()
-	manager, err := plugins.NewManager(tools.NewToolset(nil), compiled...)
+// here too. Since sub-stage 9 it also compiles the plugins agent steps'
+// workers compose from (Web, Todo and Subagents with the command's
+// supervisor) and the Kernel tools they confine, so a foreground run there
+// runs its workers like `evie serve` does.
+func newWorkflowPluginManager(ctx context.Context, store *eviedb.Store, supervisor *subagents.Supervisor) (*plugins.Manager, error) {
+	compiled := append(workflowCapabilityPlugins(), plugins.NewWeb(), plugins.NewTodo(store), plugins.NewSubagents(supervisor))
+	manager, err := plugins.NewManager(tools.KernelToolset(), compiled...)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +96,12 @@ func newWorkflowPluginManager(ctx context.Context, store plugins.EnabledStateSto
 // subagent ceiling for agent budgets, the scheduler's worker bound from
 // EVIE_WORKFLOW_WORKERS, its errors logged, and (sub-stage 7) the model
 // provider of AI steps when EVIE_WORKFLOW_REMOTE_MODELS allows it.
-func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string, providers workflowruntime.CapabilityProviders) (*workflowruntime.Runtime, error) {
+func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string, providers workflowruntime.CapabilityProviders, supervisor *subagents.Supervisor, workers *plugins.Manager) (*workflowruntime.Runtime, error) {
 	models, modelsOff, err := workflowModels(getenv)
+	if err != nil {
+		return nil, err
+	}
+	agents, agentsOff, err := workflowWorkers(getenv, supervisor, workers)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +123,38 @@ func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string, provide
 		Scheduler: scheduler,
 		Report:    func(err error) { log.Printf("workflow scheduler: %v", err) },
 		Models:    models, ModelsOff: modelsOff,
+		Agents: agents, AgentsOff: agentsOff,
 	})
+}
+
+// workflowWorkers wires agent steps' workers (Stage 14 sub-stage 9): the
+// Kernel subagent supervisor, composing worker presets through manager
+// and calling each step's pinned model through OpenRouter, when the owner
+// allowed remote workflow models. Like AI steps, workers send run data
+// (the step's declared input) to the model provider, so the same setting
+// governs both. Workers still need the Subagents plugin enabled and the
+// Workspace's allowance for their preset.
+func workflowWorkers(getenv func(string) string, supervisor *subagents.Supervisor, manager *plugins.Manager) (workflowruntime.Agents, string, error) {
+	switch strings.ToLower(strings.TrimSpace(getenv(workflowRemoteModels))) {
+	case "", "off":
+		return nil, "agent steps are off: their workers send the step's input to the model provider; set " + workflowRemoteModels + "=on (with OPENROUTER_API_KEY) to allow it", nil
+	case "on":
+	default:
+		return nil, "", fmt.Errorf("%s must be on or off", workflowRemoteModels)
+	}
+	key := strings.TrimSpace(getenv("OPENROUTER_API_KEY"))
+	switch {
+	case key == "":
+		return nil, "agent steps need OPENROUTER_API_KEY to reach their workers' model (" + workflowRemoteModels + "=on)", nil
+	case supervisor == nil || manager == nil:
+		return nil, "agent steps need the Subagents supervisor, which this Evie does not run", nil
+	}
+	client, err := openrouter.NewClient(key)
+	if err != nil {
+		return nil, "", fmt.Errorf("%s: %w", workflowRemoteModels, err)
+	}
+	supervisor.ConfigureRuns(client, workerComposer(manager), client.ResolveContextProfile)
+	return supervisor, "", nil
 }
 
 // workflowRemoteModels is the owner's setting that lets workflow AI steps

@@ -91,6 +91,17 @@
 > refuses premature or conflicting work. Amended text below is marked
 > "Stage 13"; the binding record is the "Task Tree orchestration (Stage
 > 13)" entry in [subagents.decisions.md](subagents.decisions.md).
+>
+> Amended 2026-10-04 by Stage 14 sub-stage 9 of
+> [docs/memory-architecture.md](../../../../docs/memory-architecture.md)
+> and the amendment of [workflow-runtime.spec.md](workflow-runtime.spec.md):
+> a workflow's agent step runs a research, explore or build worker as a
+> run-owned attempt, admitted and authorized by the Workflow Run's fenced
+> lease and the node attempt instead of a parent turn and its tool intent,
+> with the step's pinned Model Policy instead of the parent's model.
+> Amended text below is marked "Run-owned"; the binding record is the
+> "Run-owned workers (Stage 14, sub-stage 9)" entry in
+> [subagents.decisions.md](subagents.decisions.md).
 
 ## Problem Statement
 
@@ -394,6 +405,28 @@ allowances produce an explicit refusal rather than a change of scope.
   before `todo_ready` keep parallel builds of Tasks without paths.
   Sessions with `todo_ready` and `delegate_build` get one Durable Task
   Trees guidance line. The owner reads progress with `todo show`.
+- **Run-owned workers.** (Run-owned, 2026-10-04.) A Workflow Run's agent
+  step runs one worker through the same supervisor as a run-owned attempt.
+  Its authority is the run's fenced lease (holder and token) and the node
+  attempt it runs under, never a parent turn: admission, start, every
+  fenced child mutation and the watchdog require that lease to be the
+  run's current, unexpired one, the run `running`, the node attempt in
+  flight under it, run admission (deactivation and blocks), the
+  Workspace's allowance for the preset in the run's pinned and current
+  revision with its revocations, and the worker's plugins enabled. The
+  preset itself is the capability ceiling (no parent composition exists),
+  its composition digest must match the one the run pinned, and the
+  worker's fences, budgets (within the operator's policy), wrap-up,
+  result contract, settlement, build commit and Task grant are the
+  delegated ones. Its model is the step's pinned Model Policy; its
+  assignment is the reviewed objective with the step's input framed as
+  data. Run-owned workers are hidden children of the run's worker
+  session, read by the runtime and never delivered to a conversation;
+  the per-turn limit does not apply (the run's reviewed bounds do), and
+  recovery settles an attempt whose run lease or node attempt ended. A
+  run's interrupted build attempt is continued in its kept worktree by
+  the next attempt of the same step. Nothing a run's worker builds is
+  merged by a workflow.
 - **Assignment interface.** Foreground delegation accepts a bounded objective,
   optional explicitly selected context, an optional existing Task identity, and
   an idempotency key. One fixed child preset is supported, so no model-selected

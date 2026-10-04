@@ -756,8 +756,8 @@ func TestWorkflowCapabilityUnavailableProviderPausesAndResumes(t *testing.T) {
 
 // Runs recorded by earlier runtimes keep their shapes: a run pinned to
 // evie.workflow.runtime/1 (sub-stages 3 and 4, no providers), /2
-// (sub-stage 5) or /3 (sub-stage 6) resumes under this runtime, which
-// declares each compatible.
+// (sub-stage 5), /3 (sub-stage 6) or /4 (sub-stages 7 and 8) resumes under
+// this runtime, which declares each compatible.
 func TestWorkflowRunsOfEarlierRuntimeShapesStillResume(t *testing.T) {
 	ctx := context.Background()
 	h := newLeaseHarness(t)
@@ -766,7 +766,7 @@ func TestWorkflowRunsOfEarlierRuntimeShapesStillResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i, runtime := range []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", "evie.workflow.runtime/3"} {
+	for i, runtime := range []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", "evie.workflow.runtime/3", "evie.workflow.runtime/4"} {
 		bill := fmt.Sprintf("dinner-%d", i+1)
 		inputs, _ := json.Marshal(map[string]any{"bill_id": bill, "total_cents": 1000, "people": 3})
 		accepted, err := v.AcceptInputs(map[string]json.RawMessage{"bill_id": json.RawMessage(fmt.Sprintf("%q", bill)), "total_cents": json.RawMessage(`1000`), "people": json.RawMessage(`3`)}, nil)

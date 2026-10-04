@@ -13,7 +13,9 @@
 // Model Policies (ai.go, models.go) and durable interruptions answered by
 // the owner (interrupts.go); sub-stage 8 adds the owner's cancellation,
 // revocation at every node boundary and the audited rerun override
-// (cancel.go); later sub-stages extend runs through this same type.
+// (cancel.go); sub-stage 9 adds agent steps whose workers run under the
+// run's lease (agent.go) and bounded map fan-out with per-item attempts
+// (mapstep.go); later sub-stages extend runs through this same type.
 //
 // Validation runs against the bound Workspace: its current Workspace Access
 // and the runtime's capability catalog (the workflow capabilities compiled
@@ -36,6 +38,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/procedural"
@@ -111,6 +114,21 @@ type Store interface {
 	RequestWorkflowRunCancellation(ctx context.Context, req eviedb.WorkflowRunCancellationRequest) (eviedb.WorkflowRunCancellation, error)
 	FinishWorkflowCancellation(ctx context.Context, lease eviedb.WorkflowRunLease) (eviedb.WorkflowRun, error)
 	WorkflowRunState(ctx context.Context, id string) (eviedb.WorkflowRunState, error)
+
+	// Agent steps and map fan-out (sub-stage 9): an agent attempt recorded
+	// with its worker call and finished with its outcome; map item
+	// attempts begun in batches under the map's attempt and finished one
+	// by one; what a step or item ran before at a checkpoint; a run-owned
+	// worker execution with its report; the run's spend.
+	BeginWorkflowWorkerCall(ctx context.Context, lease eviedb.WorkflowRunLease, w eviedb.WorkflowWorkerCallStart) (eviedb.WorkflowNodeAttempt, error)
+	FinishWorkflowWorkerCall(ctx context.Context, lease eviedb.WorkflowRunLease, w eviedb.WorkflowWorkerCallEnd) (eviedb.WorkflowRun, error)
+	InterruptWorkflowWorkerCall(ctx context.Context, lease eviedb.WorkflowRunLease, w eviedb.WorkflowWorkerCallEnd, reason string) error
+	BeginWorkflowItemAttempts(ctx context.Context, lease eviedb.WorkflowRunLease, mapSeq int64, items []eviedb.WorkflowItemStart) ([]eviedb.WorkflowNodeAttempt, error)
+	FinishWorkflowItemAttempt(ctx context.Context, lease eviedb.WorkflowRunLease, e eviedb.WorkflowItemEnd) error
+	WorkflowItemAttempts(ctx context.Context, runID string, checkpoint int64, step string) ([]eviedb.WorkflowNodeAttempt, error)
+	WorkflowStepWorkerCalls(ctx context.Context, runID string, checkpoint int64, step string, item *int) ([]eviedb.WorkflowWorkerCall, error)
+	RunWorkerExecution(ctx context.Context, runID, id string) (delegation.Attempt, string, error)
+	WorkflowRunSpend(ctx context.Context, runID string) (eviedb.WorkflowRunSpend, error)
 }
 
 // Config wires a Runtime.
@@ -134,6 +152,11 @@ type Config struct {
 	// on.
 	Models    Models
 	ModelsOff string
+	// Agents runs agent steps' workers (sub-stage 9): the Kernel subagent
+	// supervisor when the owner allowed remote workflow models. nil turns
+	// agent steps off; AgentsOff then says why and how to turn them on.
+	Agents    Agents
+	AgentsOff string
 }
 
 // SchedulerConfig bounds and paces a runtime's execution of runs
@@ -241,6 +264,10 @@ type Runtime struct {
 	// for the reason modelsOff gives (sub-stage 7).
 	models    Models
 	modelsOff string
+	// agents runs agent steps' workers; nil when they are off, for the
+	// reason agentsOff gives (sub-stage 9).
+	agents    Agents
+	agentsOff string
 	// holder names this runtime instance on every lease it takes.
 	holder string
 	// compatible are the pinned runtimes this runtime continues (ADR 0025).
@@ -288,8 +315,11 @@ func New(c Config) (*Runtime, error) {
 	if c.Models == nil && strings.TrimSpace(c.ModelsOff) == "" {
 		c.ModelsOff = "AI steps are off in this Evie"
 	}
+	if c.Agents == nil && strings.TrimSpace(c.AgentsOff) == "" {
+		c.AgentsOff = "agent steps are off in this Evie"
+	}
 	return &Runtime{store: c.Store, repo: c.Repo, providers: c.Capabilities, catalog: providerCatalog{c.Capabilities}, workers: c.Workers, sched: sched, report: c.Report,
-		models: c.Models, modelsOff: c.ModelsOff,
+		models: c.Models, modelsOff: c.ModelsOff, agents: c.Agents, agentsOff: c.AgentsOff,
 		holder: fmt.Sprintf("evie-%d-%s", os.Getpid(), uuid.NewString()), compatible: slices.Clone(compatibleRuntimes),
 		now: time.Now, sleep: sleepContext,
 		active: map[string]bool{}, failures: map[string]error{}, reported: map[string]string{}, signals: map[string]*cancelSignal{},

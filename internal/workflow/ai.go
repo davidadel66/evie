@@ -54,6 +54,12 @@ func (v *Validated) AIStep(id string) (AIStep, bool) {
 	if !ok || n.kind != KindAI {
 		return AIStep{}, false
 	}
+	return v.aiStepOf(id, n)
+}
+
+// aiStepOf is an AI node's (a step's or a map item's) prompt, policy and
+// schema under id.
+func (v *Validated) aiStepOf(id string, n *node) (AIStep, bool) {
 	m, ok := v.definition.ModelPolicies[n.step.ModelPolicy]
 	if !ok {
 		return AIStep{}, false

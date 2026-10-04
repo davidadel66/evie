@@ -1,5 +1,94 @@
 # Subagents implementation decisions
 
+## 2026-10-04 — Run-owned workers (Stage 14, sub-stage 9)
+
+Source: sub-stage 9 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md) and
+the 2026-10-04 amendment of
+[workflow-runtime.spec.md](workflow-runtime.spec.md): a workflow's agent
+steps run the existing research, explore and build workers "with the
+Workflow Run's fenced lease in place of the parent turn"; admission
+applies the existing worker checks (pinned and current Workspace
+allowance, revocations, Task and conflict rules); cancellation, lease
+loss and revocation reach the worker; worker presets are not Standing
+Authority (ADR 0027). The workflow side is the sub-stage 9 entry in
+[workflow-runtime.decisions.md](workflow-runtime.decisions.md).
+
+Superseded wording: this spec's "the current parent invocation supplies
+the durable source intent, session, Context Scope, and live execution
+ownership", "reuse the parent's resolved model/provider configuration",
+"a limit on children per parent turn" and the recovery rule's "original
+parent lease" hold for delegated children; a run-owned attempt replaces
+each as below. Chat delegation is unchanged, which the full subagents
+suite proves.
+
+- **Owner.** A run-owned attempt records `run` (`delegation.RunOwner`):
+  the run, its Workspace and workflow, the step and map item, the node
+  attempt it runs under, the lease holder and fencing token, and the
+  step's pinned Model Policy and result schema. Its `parent` is the
+  run's hidden worker session (a session whose parent is itself, so it
+  appears in no list or memory path and cannot be opened) with no turn
+  lease. Every authority check of a delegated attempt (admission, start,
+  each fenced child mutation including final assistant acceptance, the
+  watchdog, continuation) dispatches on it: a run-owned attempt is
+  authorized while the run's current, unexpired lease is the owner's,
+  the run is `running`, its node attempt is in flight under that lease,
+  run admission holds (deactivation and every block), the Workspace's
+  allowance for the preset holds in the run's pinned and current revision
+  with its revocations, and the worker's plugins are enabled. Losing the
+  lease, the owner cancelling or the run pausing, the node attempt
+  ending, a deactivation or a revocation ends the worker's authority
+  within one watchdog tick.
+- **Admission.** `Supervisor.RunWorker` validates the budget against the
+  operator's policy (time and tokens no larger; the objective plus the
+  assignment data within `assignment_bytes`), composes the preset freshly
+  and requires exactly its own composition (research: web.search and
+  web.fetch; explore: the explore tools; build: its Task Capabilities and
+  confined tools; there is no parent composition to bound it, so the
+  immutable preset is the ceiling) and, when the run pinned one, the same
+  composition digest, resolves the explore root or plans the build
+  worktree in the Workspace folder, and admits through
+  `AdmitRunSubagent` (one transaction; its rules are in the workflow
+  entry). The idempotency key is the node attempt
+  (`workflow:<run>:<attempt>`), under the run's worker session. Capacity
+  is the policy's per-parent cap per run and its runtime-wide cap.
+  `ConfigureRuns` supplies the run-owned model transport, composition
+  resolver and the context profile resolver of pinned models,
+  independently of any chat session; without it run-owned workers are
+  unavailable (`delegation.ErrUnavailable`).
+- **Model and assignment.** The worker's model is the step's Model
+  Policy, its temperature sent with every call that sets none and its
+  output bound capping the response; its first message is the reviewed
+  objective, the step's input framed as untrusted data, its folder or
+  worktree note, the usual budget brief and report format, and the
+  `## Result` instruction when the step declares a schema.
+- **Settlement and results.** Run-owned attempts settle, commit (build),
+  end their grants and close their child sessions exactly like delegated
+  ones; `RunWorkerExecution` returns the execution with its full report to
+  the runtime. Results are read by the runtime, not a parent model, and
+  never delivered to a conversation; continuation and report tools refuse
+  them (they belong to no session).
+- **Build continuation (decision).** A run's build attempt interrupted by
+  a crash, a stop or a lost lease is continued by the next attempt of the
+  same step and item: a new attempt on the same child session and
+  worktree (`continues`), admitted under the new node attempt's authority,
+  only while the interrupted one is the child's latest, started, ended
+  interrupted or cancelled, and its worktree is still there; it applies
+  the Stage 13 continuation conflict rule. This extends continuation to
+  an attempt without a report, for run-owned builds only: its history
+  replays without its incomplete last tool group. A failed attempt is not
+  continued.
+- **Recovery.** A run-owned attempt is abandoned once its run lease or
+  its node attempt ended; recovery then settles it `interrupted`
+  (`run_ownership_ended`) without restarting anything, and a claim of the
+  run settles its earlier holder's workers in the claim's transaction.
+  What runs again is the workflow's decision. A trigger keeps an Evie
+  that predates run-owned workers from rewriting their records.
+- **No merge.** A workflow cannot merge: there is no merge step, and the
+  merge gate admits only a session's own build attempts. A run's build
+  branch waits for the owner (a session-side gate for run builds is a
+  follow-up).
+
 ## 2026-10-04 — Task Tree orchestration (Stage 13)
 
 Source: Stage 13 of [docs/memory-architecture.md](../../../../docs/memory-architecture.md)

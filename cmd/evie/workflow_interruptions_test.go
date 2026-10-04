@@ -135,7 +135,7 @@ func TestWorkflowRemoteModelsSetting(t *testing.T) {
 	if _, _, err := workflowModels(env(map[string]string{"EVIE_WORKFLOW_REMOTE_MODELS": "yes"})); err == nil || !strings.Contains(err.Error(), "on or off") {
 		t.Fatalf("an unknown setting: %v", err)
 	}
-	if _, err := newWorkflowRuntime(backgroundTestStore(t), env(map[string]string{"EVIE_WORKFLOW_REMOTE_MODELS": "always", "HOME": t.TempDir()}), nil); err == nil {
+	if _, err := newWorkflowRuntime(backgroundTestStore(t), env(map[string]string{"EVIE_WORKFLOW_REMOTE_MODELS": "always", "HOME": t.TempDir()}), nil, nil, nil); err == nil {
 		t.Fatal("the runtime started with an unknown remote model setting")
 	}
 }

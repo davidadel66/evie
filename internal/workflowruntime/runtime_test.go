@@ -46,6 +46,17 @@ type harness struct {
 	providers CapabilityProviders
 	models    Models
 	modelsOff string
+	// agentsFor builds each runtime's worker supervisor over its own store
+	// (sub-stage 9); nil turns agent steps off.
+	agentsFor func(*eviedb.Store) Agents
+}
+
+// agentsOf is the worker supervisor of a runtime over store, if any.
+func (h *harness) agentsOf(store *eviedb.Store) Agents {
+	if h.agentsFor == nil {
+		return nil
+	}
+	return h.agentsFor(store)
 }
 
 func newHarness(t *testing.T) *harness {
@@ -73,7 +84,8 @@ func (h *harness) runtime() *Runtime {
 
 func (h *harness) runtimeWith(providers CapabilityProviders) *Runtime {
 	h.t.Helper()
-	rt, err := New(Config{Store: h.store, Repo: h.repo, Capabilities: providers, Workers: ceiling, Scheduler: h.scheduler, Models: h.models, ModelsOff: h.modelsOff})
+	rt, err := New(Config{Store: h.store, Repo: h.repo, Capabilities: providers, Workers: ceiling, Scheduler: h.scheduler, Models: h.models, ModelsOff: h.modelsOff,
+		Agents: h.agentsOf(h.store)})
 	if err != nil {
 		h.t.Fatal(err)
 	}

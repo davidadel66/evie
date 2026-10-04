@@ -67,6 +67,13 @@ type Supervisor struct {
 	// moved holds, for running build attempts in this process, the move of
 	// their target branch they are told about on their next model call.
 	moved map[string]delegation.TargetMove
+	// runClient, runResolve and profiles are run-owned workers' model
+	// transport, composition resolver and the context profile resolver of
+	// their pinned models (Stage 14 sub-stage 9, ConfigureRuns); nil
+	// leaves run-owned workers unavailable.
+	runClient  agent.Client
+	runResolve Resolver
+	profiles   ProfileResolver
 }
 
 func New(store *eviedb.Store, policy delegation.Policy) (*Supervisor, error) {
@@ -160,7 +167,7 @@ func (s *Supervisor) enter(ctx context.Context, parent delegation.Parent) (conte
 	if !s.enabled || s.client == nil || s.resolve == nil {
 		s.mu.Unlock()
 		cancel(nil)
-		return nil, childRuntime{}, nil, errors.New("Subagents Plugin or model runtime is unavailable")
+		return nil, childRuntime{}, nil, delegation.ErrUnavailable
 	}
 	if len(s.active) == 0 {
 		s.idle = make(chan struct{})
@@ -777,15 +784,24 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 		record:    func(reason string) { s.recordWrapUp(ctx, a.ID, reason) },
 		notice:    func() string { return s.moveNotice(a.ID) }}
 	// The child gets the model's normal output reserve; only its request
-	// bytes are narrowed.
-	profile, err = profile.WithWorkerLimits(int64(a.Policy.RequestBytes), profile.OutputReserveTokens())
+	// bytes are narrowed. A run-owned worker uses its step's pinned Model
+	// Policy instead: its temperature, and an output bound no larger than
+	// the policy's (Stage 14 sub-stage 9).
+	output := profile.OutputReserveTokens()
+	message := assignmentMessage(a)
+	if a.Run != nil {
+		metered.temperature = a.Run.Temperature
+		output = min(output, a.Run.MaxOutputTokens)
+		message = runAssignmentMessage(a)
+	}
+	profile, err = profile.WithWorkerLimits(int64(a.Policy.RequestBytes), output)
 	if err != nil {
 		return s.finish(call, a.ID, outcome{"failed", "invalid_model_policy"})
 	}
 	holder := a.Child.ID
 	session := agent.NewDelegatedWithToolset(metered, profile, s.store.BindHistory(a.Child.ID, stringHolder(holder)), a.Child.ScopeContext(), s.store.BindTurnOwner(a.Child.ID, stringHolder(holder)), toolset, resolved.Instructions, agent.WithWrapUp(metered.wrapUp))
 	var o outcome
-	if err = session.Send(ctx, assignmentMessage(a), quietEvents{}, nil); err != nil {
+	if err = session.Send(ctx, message, quietEvents{}, nil); err != nil {
 		o = executionFailure(ctx, err, deadline)
 		if o.reason == delegation.ReasonContextLimit && errors.Is(err, agent.ErrContextOverflow) && metered.wrapUpReason() != "" {
 			// Even the smallest wrap-up request could not fit.

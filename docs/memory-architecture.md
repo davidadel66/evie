@@ -596,6 +596,39 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   the run. The decisions entry holds the state-to-recovery table. Binding
   record: the sub-stage 8 entry in
   `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Sub-stage 9 implemented** (2026-10-04). Agent steps run the existing
+  research, explore and build workers through the Kernel subagent
+  supervisor as run-owned attempts: admitted and authorized by the Workflow
+  Run's fenced lease and the node attempt instead of a parent turn, with
+  the Workspace's pinned and current allowance for the preset, run
+  admission and the worker's plugins checked at admission, at start, on
+  every child write and by the watchdog, so losing the lease, the owner's
+  cancellation, a pause or a revocation ends the worker. Each worker gets
+  the reviewed objective with the step's input framed as data, the step's
+  pinned Model Policy, a budget within the operator's policy and the run's
+  limits, and the report contract; its result (with the typed `## Result`
+  block when the step declares a schema; `partial` succeeds) is the
+  step's output. An interrupted research or explore worker starts afresh,
+  an interrupted build worker is continued in its kept worktree, and a
+  worker that finished before its attempt was recorded is adopted.
+  Workers are hidden children of a per-run worker session and inspection
+  lists each one with its execution, usage and cost. Map steps run their
+  items as per-item node attempts under the map's attempt: `max_items`
+  checked before any item starts, at most `max_parallel` (and the worker
+  caps) at once, input-ordered output, `fail` and `partial` policies,
+  per-item retries and interruption bounds, per-item recovery after a
+  crash, and the owner's cancellation reaching every item in flight before
+  the run is cancelled. Every worker counts against `limits.max_tokens`
+  (an item that would pass it is not started; the run fails visibly).
+  Runs pin `evie.workflow.runtime/5` with each worker preset's
+  composition; `/1`–`/4` stay compatible, an older Evie pauses a `/5` run,
+  and only an Evie that runs workers can finish a run with a worker in
+  flight (a database trigger). Workers need
+  `EVIE_WORKFLOW_REMOTE_MODELS=on` and the Subagents plugin. The
+  deep-research example runs end to end with scripted fakes; no workflow
+  can merge a build branch. Binding record: the sub-stage 9 entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md` and the run-owned
+  workers entry in `cmd/evie/docs/active/subagents.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 

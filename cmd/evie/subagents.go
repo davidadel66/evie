@@ -57,7 +57,13 @@ func configuredSubagentPolicy(getenv func(string) string) (delegation.Policy, er
 	return p, p.Validate()
 }
 func configureSubagentRuntime(supervisor *subagents.Supervisor, manager *plugins.Manager, client agent.Client, profile openrouter.ContextProfile) {
-	supervisor.Configure(client, profile, func(ctx context.Context, worker string, receipt *composition.Receipt) (subagents.Composition, error) {
+	supervisor.Configure(client, profile, workerComposer(manager))
+}
+
+// workerComposer composes worker children through manager: the named
+// worker preset freshly, or exactly a pinned receipt of it.
+func workerComposer(manager *plugins.Manager) subagents.Resolver {
+	return func(ctx context.Context, worker string, receipt *composition.Receipt) (subagents.Composition, error) {
 		instructions, err := plugins.WorkerInstructions(plugins.PresetID(worker))
 		if err != nil {
 			return subagents.Composition{}, err
@@ -71,7 +77,7 @@ func configureSubagentRuntime(supervisor *subagents.Supervisor, manager *plugins
 			resolved, err = manager.ResumeCompositionContext(ctx, *receipt)
 		}
 		return subagents.Composition{Receipt: resolved.Receipt, Toolset: resolved.Toolset, Instructions: instructions, CompatibilityResolutions: resolved.CompatibilityResolutions}, err
-	})
+	}
 }
 
 func startSubagentRecovery(ctx context.Context, supervisor *subagents.Supervisor) func() {

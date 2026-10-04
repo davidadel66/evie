@@ -498,24 +498,8 @@ func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn,
 	if err := fence(ctx, conn, p.Scope.SessionID, p.Lease.HolderID, p.Lease.FencingToken, s.now().UTC().Format(turnLeaseTimeFormat)); err != nil {
 		return err
 	}
-	// An explore worker uses no Web capability, so only Subagents must stay
-	// enabled for it; a build worker needs Todo for its Task instead.
-	required := []string{"subagents", "web"}
-	switch worker {
-	case delegation.WorkerExplore:
-		required = []string{"subagents"}
-	case delegation.WorkerBuild:
-		required = []string{"subagents", "todo"}
-	}
-	for _, plugin := range required {
-		var enabled bool
-		err := conn.QueryRowContext(ctx, `SELECT enabled FROM plugin_enabled_configuration WHERE plugin_id=?`, plugin).Scan(&enabled)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		if err == nil && !enabled {
-			return delegation.ErrAuthority
-		}
+	if err := requireWorkerPlugins(ctx, conn, worker); err != nil {
+		return err
 	}
 	receipt, err := getCompositionReceipt(ctx, conn, p.Scope.SessionID)
 	if err != nil {
@@ -595,6 +579,30 @@ func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn,
 	}
 	if !linked {
 		return delegation.ErrAuthority
+	}
+	return nil
+}
+
+// requireWorkerPlugins requires the plugins a worker uses to stay enabled:
+// Subagents always, Web for research and Todo for build (an explore worker
+// uses no Web capability). A plugin never configured counts as enabled.
+func requireWorkerPlugins(ctx context.Context, conn *sql.Conn, worker string) error {
+	required := []string{"subagents", "web"}
+	switch worker {
+	case delegation.WorkerExplore:
+		required = []string{"subagents"}
+	case delegation.WorkerBuild:
+		required = []string{"subagents", "todo"}
+	}
+	for _, plugin := range required {
+		var enabled bool
+		err := conn.QueryRowContext(ctx, `SELECT enabled FROM plugin_enabled_configuration WHERE plugin_id=?`, plugin).Scan(&enabled)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if err == nil && !enabled {
+			return fmt.Errorf("%w: the %s plugin is disabled", delegation.ErrAuthority, plugin)
+		}
 	}
 	return nil
 }

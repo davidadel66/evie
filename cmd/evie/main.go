@@ -136,15 +136,31 @@ func main() {
 	// procedural repository, and runs (sub-stage 5) the workflow capability
 	// plugins under the owner's enabled choices.
 	if cmd == "workflows" {
-		workflowPlugins, err := newWorkflowPluginManager(context.Background(), kernelStore)
+		// Agent steps (sub-stage 9) run their workers through a Kernel
+		// subagent supervisor of this command's own, as `evie serve` does.
+		policy, err := configuredSubagentPolicy(os.Getenv)
+		if err != nil {
+			log.Fatalf("invalid Subagents configuration: %v", err)
+		}
+		workers, err := subagents.New(kernelStore, policy)
 		if err != nil {
 			log.Fatalf("workflows: %v", err)
 		}
-		workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv, workflowPlugins)
+		workflowPlugins, err := newWorkflowPluginManager(context.Background(), kernelStore, workers)
 		if err != nil {
 			log.Fatalf("workflows: %v", err)
 		}
-		if handled, err := runWorkflowActivation(context.Background(), os.Args[1:], os.Stdout, workflowRuntime); handled {
+		workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv, workflowPlugins, workers, workflowPlugins)
+		if err != nil {
+			log.Fatalf("workflows: %v", err)
+		}
+		handled, err := runWorkflowActivation(context.Background(), os.Args[1:], os.Stdout, workflowRuntime)
+		stopCtx, stopWorkers := context.WithTimeout(context.Background(), 5*time.Second)
+		if stopErr := workers.Stop(stopCtx); stopErr != nil {
+			log.Printf("Subagents shutdown: %v", stopErr)
+		}
+		stopWorkers()
+		if handled {
 			if err != nil {
 				log.Fatalf("workflows: %v", err)
 			}
@@ -315,7 +331,7 @@ func main() {
 		// The REPL is a long-lived process: it runs the workflow scheduler
 		// (Stage 14 sub-stage 4) like the memory background pass. A
 		// configuration problem disables it with a reason; chat still starts.
-		if workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv, pluginManager); err != nil {
+		if workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv, pluginManager, supervisor, pluginManager); err != nil {
 			log.Printf("workflow scheduler off: %v", err)
 		} else {
 			stopWorkflows := startWorkflowScheduler(runtimeCtx, workflowRuntime)
@@ -344,7 +360,7 @@ func main() {
 		}
 		usageReader := usage.NewService(runtimeCtx, kernelStore, usage.CodexBinary(), codexHomes)
 		spendingService := finance.NewSpendingService()
-		workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv, pluginManager)
+		workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv, pluginManager, supervisor, pluginManager)
 		if err != nil {
 			log.Fatalf("workflow runtime: %v", err)
 		}

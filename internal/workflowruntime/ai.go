@@ -241,6 +241,12 @@ func (r *Runtime) requestModel(pc *pass, calls context.Context, req ModelRequest
 // and checks the normalized value it records again, so what is recorded
 // is exactly what passed.
 func parseProposal(v *workflow.Validated, step, text string) (any, []byte, error) {
+	return parseProposalWith(func(value any) error { return v.CheckStepOutput(step, value) }, text)
+}
+
+// parseProposalWith is parseProposal with the schema check of a step or a
+// map item.
+func parseProposalWith(check func(any) error, text string) (any, []byte, error) {
 	body := strings.TrimSpace(text)
 	if fence, rest, ok := strings.Cut(body, "\n"); ok && (fence == "```" || fence == "```json") && strings.HasSuffix(rest, "```") {
 		body = strings.TrimSpace(strings.TrimSuffix(rest, "```"))
@@ -252,7 +258,7 @@ func parseProposal(v *workflow.Validated, step, text string) (any, []byte, error
 	if _, ok := value.(map[string]any); !ok {
 		return nil, nil, errors.New("invalid output: the answer is not one JSON object")
 	}
-	if err := v.CheckStepOutput(step, value); err != nil {
+	if err := check(value); err != nil {
 		return nil, nil, fmt.Errorf("invalid output: %v", err)
 	}
 	output, err := workflow.EncodeValue(value)
@@ -261,7 +267,7 @@ func parseProposal(v *workflow.Validated, step, text string) (any, []byte, error
 	}
 	recorded, err := workflow.DecodeValue(output)
 	if err == nil {
-		err = v.CheckStepOutput(step, recorded)
+		err = check(recorded)
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("invalid output: as recorded: %v", err)
@@ -328,9 +334,9 @@ func (r *Runtime) ai(pc *pass, p eviedb.WorkflowRunProgress, step workflow.StepP
 	}
 	estIn, estOut := estimateTokens(req)
 	limit := pc.v.Limits().Tokens
-	if p.ModelTokens+estIn+estOut > limit {
+	if p.SpentTokens()+estIn+estOut > limit {
 		return fail(fmt.Sprintf("steps.%s: its next attempt could use up to %s tokens (about %s in, at most %s out), and the run has used %s of limits.max_tokens %s; it was not sent",
-			step.ID, grouped(estIn+estOut), grouped(estIn), grouped(estOut), grouped(p.ModelTokens), grouped(limit)))
+			step.ID, grouped(estIn+estOut), grouped(estIn), grouped(estOut), grouped(p.SpentTokens()), grouped(limit)))
 	}
 	pricing := r.models.Pricing(pc.stop, spec.Policy.Model)
 	encodedInput, err := workflow.EncodeValue(input)
@@ -389,7 +395,7 @@ func (r *Runtime) ai(pc *pass, p eviedb.WorkflowRunProgress, step workflow.StepP
 	} else {
 		value, output, failure = parseProposal(pc.v, step.ID, answer.text)
 	}
-	switch used := p.ModelTokens + answer.in + answer.out; {
+	switch used := p.SpentTokens() + answer.in + answer.out; {
 	case used > limit:
 		// Recorded with its usage; the run's reviewed bound is passed, so
 		// it fails rather than spending more.

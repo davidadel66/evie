@@ -37,6 +37,10 @@ type budget struct {
 	// of each request without being stored, such as a build worker's target
 	// branch moving while it works (Stage 12, 2026-10-04).
 	notice func() string
+	// temperature, when set, is a run-owned worker's pinned Model Policy
+	// temperature, sent with every call that sets none of its own (Stage 14
+	// sub-stage 9).
+	temperature *float64
 
 	mu     sync.Mutex
 	tokens int64
@@ -73,6 +77,10 @@ func (b *budget) ChatStream(ctx context.Context, r openrouter.ChatRequest, h ope
 			last := &r.Messages[len(r.Messages)-1]
 			last.Content += "\n\n" + notice
 		}
+	}
+	if b.temperature != nil && r.Temperature == nil {
+		temperature := *b.temperature
+		r.Temperature = &temperature
 	}
 	request, err := openrouter.RequestBytes(r)
 	if err != nil {

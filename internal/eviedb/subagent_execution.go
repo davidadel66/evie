@@ -26,7 +26,9 @@ func (s *Store) StartSubagent(ctx context.Context, id string) (delegation.Attemp
 		if a.State != "admitted" {
 			return nil
 		}
-		if err = s.authorizeSubagentParent(ctx, conn, a.Parent, a.Receipt); err != nil {
+		// A run-owned attempt starts under its run's lease and node attempt
+		// (Stage 14 sub-stage 9), a delegated one under its parent turn.
+		if err = s.authorizeAttemptOwner(ctx, conn, a, fenceTurnLeaseWrite); err != nil {
 			return err
 		}
 		if err = authorizeAttemptRoot(ctx, conn, a); err != nil {
@@ -95,7 +97,7 @@ func (s *Store) authorizeSubagentChildWith(ctx context.Context, conn *sql.Conn, 
 	if a.State != "running" || a.StartedAt == nil || !s.now().Before(a.StartedAt.Add(a.Policy.Deadline)) {
 		return delegation.ErrAuthority
 	}
-	if err := s.authorizeSubagentParentWith(ctx, conn, a.Parent, a.Receipt, fence); err != nil {
+	if err := s.authorizeAttemptOwner(ctx, conn, a, fence); err != nil {
 		return err
 	}
 	// An explore child loses its authority when its folder leaves the
@@ -474,6 +476,18 @@ func (s *Store) subagentRecoveryCandidates(ctx context.Context) ([]string, error
 				candidates = append(candidates, u.id)
 				continue
 			}
+			if a.Run != nil {
+				// A run-owned attempt is abandoned once its run lease or its
+				// node attempt ended (Stage 14 sub-stage 9).
+				live, err := runOwnerLive(ctx, conn, *a.Run, s.now().UTC())
+				if err != nil {
+					return err
+				}
+				if !live {
+					candidates = append(candidates, u.id)
+				}
+				continue
+			}
 			err = checkTurnLeaseLive(ctx, conn, a.Parent.Scope.SessionID, a.Parent.Lease.HolderID, a.Parent.Lease.FencingToken, now)
 			if errors.Is(err, ErrTurnLeaseLost) {
 				candidates = append(candidates, u.id)
@@ -498,6 +512,17 @@ func (s *Store) recoverSubagent(ctx context.Context, id string) (bool, error) {
 			return err
 		}
 		if a.Terminal() {
+			return nil
+		}
+		if a.Run != nil {
+			live, err := runOwnerLive(ctx, conn, *a.Run, s.now().UTC())
+			if err != nil || live {
+				return err
+			}
+			if err = s.finishSubagent(ctx, conn, &a, "interrupted", delegation.ReasonRunOwnershipEnded, nil); err != nil {
+				return err
+			}
+			recovered = true
 			return nil
 		}
 		err = fenceTurnLeaseWrite(ctx, conn, a.Parent.Scope.SessionID, a.Parent.Lease.HolderID, a.Parent.Lease.FencingToken, s.now().UTC().Format(turnLeaseTimeFormat))

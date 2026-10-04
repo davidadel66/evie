@@ -207,7 +207,7 @@ func TestWorkflowAIStepSendsOnlyItsPromptAndDeclaredInput(t *testing.T) {
 		StepKinds []string                `json:"step_kinds"`
 		Models    []workflow.PolicyReport `json:"model_policies"`
 	}
-	if err := json.Unmarshal(d.Run.Composition, &comp); err != nil || comp.Runtime != "evie.workflow.runtime/4" ||
+	if err := json.Unmarshal(d.Run.Composition, &comp); err != nil || comp.Runtime != "evie.workflow.runtime/5" ||
 		!reflect.DeepEqual(comp.StepKinds, []string{"ai", "branch", "deterministic", "interrupt"}) || len(comp.Models) != 1 ||
 		comp.Models[0].Model != "deepseek/deepseek-v4.1-flash" || comp.Models[0].MaxOutputTokens != 500 {
 		t.Fatalf("composition = %s", d.Run.Composition)

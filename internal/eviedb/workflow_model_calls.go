@@ -50,25 +50,27 @@ const maxModelResponse = 64 << 10
 
 // WorkflowModelCall is one AI attempt's call to its pinned model.
 type WorkflowModelCall struct {
-	RunID                 string               `json:"run_id"`
-	AttemptSeq            int64                `json:"attempt_seq"`
-	AttemptState          WorkflowAttemptState `json:"attempt_state"`
-	Step                  string               `json:"step"`
-	Policy                string               `json:"policy"`
-	PolicyVersion         int                  `json:"policy_version"`
-	Provider              string               `json:"provider"`
-	Model                 string               `json:"model"`
-	Parameters            json.RawMessage      `json:"parameters"`
-	PromptSHA256          string               `json:"prompt_sha256"`
-	SchemaSHA256          string               `json:"schema_sha256"`
-	RequestSHA256         string               `json:"request_sha256"`
-	EstimatedInputTokens  int64                `json:"estimated_input_tokens"`
-	EstimatedOutputTokens int64                `json:"estimated_output_tokens"`
-	EstimatedMicroUSD     int64                `json:"estimated_micro_usd"`
-	LeaseHolder           string               `json:"lease_holder"`
-	LeaseToken            int64                `json:"lease_token"`
-	StartedAt             time.Time            `json:"started_at"`
-	FinishedAt            *time.Time           `json:"finished_at,omitempty"`
+	RunID        string               `json:"run_id"`
+	AttemptSeq   int64                `json:"attempt_seq"`
+	AttemptState WorkflowAttemptState `json:"attempt_state"`
+	Step         string               `json:"step"`
+	// Item is the map item an AI item attempt's call is for (sub-stage 9).
+	Item                  *int            `json:"item,omitempty"`
+	Policy                string          `json:"policy"`
+	PolicyVersion         int             `json:"policy_version"`
+	Provider              string          `json:"provider"`
+	Model                 string          `json:"model"`
+	Parameters            json.RawMessage `json:"parameters"`
+	PromptSHA256          string          `json:"prompt_sha256"`
+	SchemaSHA256          string          `json:"schema_sha256"`
+	RequestSHA256         string          `json:"request_sha256"`
+	EstimatedInputTokens  int64           `json:"estimated_input_tokens"`
+	EstimatedOutputTokens int64           `json:"estimated_output_tokens"`
+	EstimatedMicroUSD     int64           `json:"estimated_micro_usd"`
+	LeaseHolder           string          `json:"lease_holder"`
+	LeaseToken            int64           `json:"lease_token"`
+	StartedAt             time.Time       `json:"started_at"`
+	FinishedAt            *time.Time      `json:"finished_at,omitempty"`
 	// Requests is how many provider requests the attempt sent (bounded
 	// transport retries included).
 	Requests      int    `json:"requests,omitempty"`
@@ -156,7 +158,7 @@ func ensureWorkflowModelCallSchema(ctx context.Context, db *sql.DB) error {
 
 const modelCallColumns = `m.run_id,m.attempt_seq,a.state,m.step_id,m.policy,m.policy_version,m.provider,m.model,m.parameters,m.prompt_sha256,m.schema_sha256,m.request_sha256,
  m.estimated_input_tokens,m.estimated_output_tokens,m.estimated_micro_usd,m.lease_holder,m.lease_token,m.started_at,m.finished_at,
- m.requests,m.input_tokens,m.output_tokens,m.usage_reported,m.micro_usd,m.pricing_source,m.response,m.error`
+ m.requests,m.input_tokens,m.output_tokens,m.usage_reported,m.micro_usd,m.pricing_source,m.response,m.error,a.item_index`
 
 const modelCallFrom = ` FROM workflow_model_calls m JOIN workflow_node_attempts a ON a.run_id=m.run_id AND a.seq=m.attempt_seq`
 
@@ -164,11 +166,16 @@ func scanWorkflowModelCall(scanner rowScanner) (WorkflowModelCall, error) {
 	var c WorkflowModelCall
 	var parameters, started string
 	var finished sql.NullString
+	var item sql.NullInt64
 	if err := scanner.Scan(&c.RunID, &c.AttemptSeq, &c.AttemptState, &c.Step, &c.Policy, &c.PolicyVersion, &c.Provider, &c.Model, &parameters,
 		&c.PromptSHA256, &c.SchemaSHA256, &c.RequestSHA256, &c.EstimatedInputTokens, &c.EstimatedOutputTokens, &c.EstimatedMicroUSD,
 		&c.LeaseHolder, &c.LeaseToken, &started, &finished, &c.Requests, &c.InputTokens, &c.OutputTokens, &c.UsageReported, &c.MicroUSD,
-		&c.PricingSource, &c.Response, &c.Error); err != nil {
+		&c.PricingSource, &c.Response, &c.Error, &item); err != nil {
 		return c, err
+	}
+	if item.Valid {
+		index := int(item.Int64)
+		c.Item = &index
 	}
 	c.Parameters = json.RawMessage(parameters)
 	var err error
@@ -263,16 +270,61 @@ func (s *Store) BeginWorkflowModelCall(ctx context.Context, lease WorkflowRunLea
 		if out, err = beginWorkflowAttempt(ctx, conn, lease, m.Attempt, now); err != nil {
 			return err
 		}
-		_, err = conn.ExecContext(ctx, `INSERT INTO workflow_model_calls(run_id,attempt_seq,step_id,policy,policy_version,provider,model,parameters,prompt_sha256,schema_sha256,request_sha256,
- estimated_input_tokens,estimated_output_tokens,estimated_micro_usd,lease_holder,lease_token,started_at,finished_at,requests,input_tokens,output_tokens,usage_reported,micro_usd,pricing_source,response,error)
- VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,0,0,0,0,0,'','','')`, out.RunID, out.Seq, out.Step, m.Policy, m.PolicyVersion, m.Provider, m.Model, string(m.Parameters),
-			m.PromptSHA256, m.SchemaSHA256, m.RequestSHA256, m.EstimatedInputTokens, m.EstimatedOutputTokens, m.EstimatedMicroUSD, lease.Holder, lease.Token, formatTime(now))
-		if err != nil {
-			return fmt.Errorf("record workflow model call: %w", err)
-		}
-		return nil
+		return insertModelCall(ctx, conn, out, m, lease, now)
 	})
 	return out, err
+}
+
+func validModelCallStart(m WorkflowModelCallStart) error {
+	switch {
+	case m.Policy == "" || m.PolicyVersion < 1 || m.Provider == "" || m.Model == "" || !workflowJSONObject(m.Parameters):
+		return errors.New("a model call names its Model Policy, provider, model and parameters")
+	case !validDigest(m.PromptSHA256) || !validDigest(m.SchemaSHA256) || !validDigest(m.RequestSHA256):
+		return errors.New("a model call needs the digests of its prompt, schema and request")
+	case m.EstimatedInputTokens < 0 || m.EstimatedOutputTokens < 0 || m.EstimatedMicroUSD < 0:
+		return errors.New("a model call's estimate is not negative")
+	}
+	return nil
+}
+
+// insertModelCall records an AI attempt's (a step's or a map item's) model
+// call before the model is called.
+func insertModelCall(ctx context.Context, conn *sql.Conn, a WorkflowNodeAttempt, m WorkflowModelCallStart, lease WorkflowRunLease, now time.Time) error {
+	if err := validModelCallStart(m); err != nil {
+		return err
+	}
+	_, err := conn.ExecContext(ctx, `INSERT INTO workflow_model_calls(run_id,attempt_seq,step_id,policy,policy_version,provider,model,parameters,prompt_sha256,schema_sha256,request_sha256,
+ estimated_input_tokens,estimated_output_tokens,estimated_micro_usd,lease_holder,lease_token,started_at,finished_at,requests,input_tokens,output_tokens,usage_reported,micro_usd,pricing_source,response,error)
+ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,0,0,0,0,0,'','','')`, a.RunID, a.Seq, a.Step, m.Policy, m.PolicyVersion, m.Provider, m.Model, string(m.Parameters),
+		m.PromptSHA256, m.SchemaSHA256, m.RequestSHA256, m.EstimatedInputTokens, m.EstimatedOutputTokens, m.EstimatedMicroUSD, lease.Holder, lease.Token, formatTime(now))
+	if err != nil {
+		return fmt.Errorf("record workflow model call: %w", err)
+	}
+	return nil
+}
+
+// finishModelCallRow records an AI attempt's call usage and answer under
+// the lease that began it.
+func finishModelCallRow(ctx context.Context, conn *sql.Conn, m WorkflowModelCallEnd, lease WorkflowRunLease, now time.Time) error {
+	switch {
+	case m.Requests < 0 || m.InputTokens < 0 || m.OutputTokens < 0 || m.MicroUSD < 0:
+		return errors.New("a model call's usage is not negative")
+	case len(m.Response) > maxModelResponse || len(m.Error) > maxEffectText || len(m.PricingSource) > 64:
+		return errors.New("a model call's response, error or pricing source is too long")
+	}
+	res, err := conn.ExecContext(ctx, `UPDATE workflow_model_calls SET finished_at=?,requests=?,input_tokens=?,output_tokens=?,usage_reported=?,micro_usd=?,pricing_source=?,response=?,error=?
+ WHERE run_id=? AND attempt_seq=? AND finished_at IS NULL AND lease_token=?`, formatTime(now), m.Requests, m.InputTokens, m.OutputTokens, m.UsageReported,
+		m.MicroUSD, m.PricingSource, m.Response, m.Error, m.RunID, m.AttemptSeq, lease.Token)
+	if err != nil {
+		return fmt.Errorf("record workflow model call usage: %w", err)
+	}
+	if n, err := res.RowsAffected(); err != nil || n != 1 {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("%w: attempt %d has no open model call under lease %d", ErrWorkflowRunConflict, m.AttemptSeq, lease.Token)
+	}
+	return nil
 }
 
 // WorkflowModelCallEnd is how an AI attempt's call ended: its usage, cost,
@@ -308,17 +360,8 @@ func (s *Store) FinishWorkflowModelCall(ctx context.Context, lease WorkflowRunLe
 		return WorkflowRun{}, err
 	}
 	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, now time.Time) error {
-		res, err := conn.ExecContext(ctx, `UPDATE workflow_model_calls SET finished_at=?,requests=?,input_tokens=?,output_tokens=?,usage_reported=?,micro_usd=?,pricing_source=?,response=?,error=?
- WHERE run_id=? AND attempt_seq=? AND finished_at IS NULL AND lease_token=?`, formatTime(now), m.Requests, m.InputTokens, m.OutputTokens, m.UsageReported,
-			m.MicroUSD, m.PricingSource, m.Response, m.Error, m.RunID, m.AttemptSeq, lease.Token)
-		if err != nil {
-			return fmt.Errorf("record workflow model call usage: %w", err)
-		}
-		if n, err := res.RowsAffected(); err != nil || n != 1 {
-			if err != nil {
-				return err
-			}
-			return fmt.Errorf("%w: attempt %d has no open model call under lease %d", ErrWorkflowRunConflict, m.AttemptSeq, lease.Token)
+		if err := finishModelCallRow(ctx, conn, m, lease, now); err != nil {
+			return err
 		}
 		return finishWorkflowAttempt(ctx, conn, lease, m.Attempt, now)
 	})

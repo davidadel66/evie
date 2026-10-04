@@ -195,7 +195,12 @@ coordinate nodes, leases, receipts, or recovery themselves.
   interruption or capability call, and it may reference its element, run
   inputs and steps that always run before the map. Each item attempt is a
   node attempt, recorded and checkpointed like one and counted against the
-  run's limits.
+  run's limits. (Implemented 2026-10-04, sub-stage 9: items are node
+  attempts of their map step with an item index, begun in batches that
+  apply run admission once, and the map's output is recorded with the next
+  checkpoint after every item ended; a map that runs again keeps its
+  finished items. See the sub-stage 9 entry in
+  [workflow-runtime.decisions.md](workflow-runtime.decisions.md).)
 - (Amended 2026-10-04.) An **agent step** runs one existing immutable worker
   preset (`research`, `explore` or `build`) with exactly that preset's fenced
   tools, the subagent wrap-up at 90% of its budget, and its result contract;
@@ -216,7 +221,12 @@ coordinate nodes, leases, receipts, or recovery themselves.
   worker checks (pinned and current Workspace allowance, revocations, Task
   and conflict rules), with the Workflow Run's fenced lease in place of the
   parent turn; cancellation, lease loss and revocation reach the worker.
-  Agent steps are not AI Nodes: AI Nodes keep no tools.
+  Agent steps are not AI Nodes: AI Nodes keep no tools. (Implemented
+  2026-10-04, sub-stage 9: run-owned admission in the subagent supervisor,
+  the worker preset's composition pinned with the run, every worker
+  counted against `limits.max_tokens`, and an interrupted build worker
+  continued in its kept worktree. See the sub-stage 9 entry in
+  [workflow-runtime.decisions.md](workflow-runtime.decisions.md).)
 - (Amended 2026-10-04.) Workflows cannot merge in v1. An agent step's build
   branch stays unmerged until the owner merges it through the Stage 12 gate
   from a session, and no `subagents.*` capability can be a capability node.

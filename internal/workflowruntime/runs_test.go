@@ -135,9 +135,31 @@ func summarize(d eviedb.WorkflowRunDetail) []attemptSummary {
 
 // checkOrdering asserts each attempt started from the checkpoint before it
 // and each succeeded attempt produced the next checkpoint, in time order.
+// A map item's attempt (sub-stage 9) produces no checkpoint: it runs under
+// its map's attempt from the same checkpoint and ends before the map's
+// attempt does.
 func checkOrdering(t *testing.T, d eviedb.WorkflowRunDetail) {
 	t.Helper()
-	for i, a := range d.Attempts {
+	var steps []eviedb.WorkflowNodeAttempt
+	bySeq := map[int64]eviedb.WorkflowNodeAttempt{}
+	for _, a := range d.Attempts {
+		bySeq[a.Seq] = a
+	}
+	for _, a := range d.Attempts {
+		if a.Item == nil {
+			steps = append(steps, a)
+			continue
+		}
+		if a.MapAttempt == nil {
+			t.Fatalf("item attempt %d names no map attempt", a.Seq)
+		}
+		parent, ok := bySeq[*a.MapAttempt]
+		if !ok || parent.Kind != "map" || parent.InputCheckpoint != a.InputCheckpoint || a.StartedAt.Before(parent.StartedAt) ||
+			parent.FinishedAt != nil && (a.FinishedAt == nil || parent.FinishedAt.Before(*a.FinishedAt)) {
+			t.Fatalf("item attempt %d is not inside its map attempt: %+v", a.Seq, a)
+		}
+	}
+	for i, a := range steps {
 		if a.State == eviedb.WorkflowAttemptRunning {
 			continue
 		}
@@ -156,8 +178,8 @@ func checkOrdering(t *testing.T, d eviedb.WorkflowRunDetail) {
 		if next == nil || next.Seq != a.InputCheckpoint+1 || next.CreatedAt.Before(*a.FinishedAt) {
 			t.Fatalf("attempt %d (%s) has no checkpoint right after it: %+v", a.Seq, a.Step, d.Checkpoints)
 		}
-		if i+1 < len(d.Attempts) && d.Attempts[i+1].StartedAt.Before(next.CreatedAt) {
-			t.Fatalf("attempt %d started before checkpoint %d was recorded", d.Attempts[i+1].Seq, next.Seq)
+		if i+1 < len(steps) && steps[i+1].StartedAt.Before(next.CreatedAt) {
+			t.Fatalf("attempt %d started before checkpoint %d was recorded", steps[i+1].Seq, next.Seq)
 		}
 	}
 }
@@ -401,11 +423,12 @@ func readFile(t *testing.T, path string) string {
 	return string(data)
 }
 
-// A definition with steps this runtime cannot execute yet is refused at
-// start, before anything is recorded; it is never partly executed. AI
-// steps and interruptions run since sub-stage 7; agent and map steps wait
-// for sub-stage 9.
-func TestWorkflowRunRefusesStepKindsThisRuntimeCannotRunYet(t *testing.T) {
+// A definition whose steps this Evie cannot run is refused at start,
+// before anything is recorded; it is never partly executed. Since
+// sub-stage 9 every step kind runs, but AI steps need remote models and
+// agent steps a worker supervisor: deep-research is refused without
+// either, naming why.
+func TestWorkflowRunRefusesStepsThisEvieCannotRun(t *testing.T) {
 	ctx := context.Background()
 	h := newRunHarness(t)
 	research := h.workspace()
@@ -413,11 +436,20 @@ func TestWorkflowRunRefusesStepKindsThisRuntimeCannotRunYet(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.approve(h.propose(research.ID, filepath.Join(testdata, "deep-research"), deepResearchFixtures(t)))
-	_, err := h.rt.StartRun(ctx, RunRequest{WorkspaceID: research.ID, Workflow: "deep-research", TextInputs: map[string]string{"question": "Is it?"}, Surface: "cli"})
-	var unsupported *UnsupportedStepsError
-	if !errors.Is(err, ErrUnsupportedSteps) || !errors.As(err, &unsupported) || !reflect.DeepEqual(unsupported.Kinds, []string{"agent", "map"}) ||
-		!strings.Contains(err.Error(), "not yet supported in this runtime version") {
-		t.Fatalf("deep-research: %v", err)
+	start := func() error {
+		_, err := h.rt.StartRun(ctx, RunRequest{WorkspaceID: research.ID, Workflow: "deep-research", TextInputs: map[string]string{"question": "Is it?"}, Surface: "cli"})
+		return err
+	}
+	if err := start(); !errors.Is(err, ErrModelsUnavailable) {
+		t.Fatalf("deep-research without models: %v", err)
+	}
+	h.models = NewOpenRouterModels(newFakeChat(reply(`{}`, 1, 1)))
+	h.reopen()
+	err := start()
+	var agents *AgentsUnavailableError
+	if !errors.Is(err, ErrAgentsUnavailable) || !errors.As(err, &agents) || !strings.Contains(err.Error(), "agent steps are off in this Evie") ||
+		!strings.Contains(err.Error(), "no run was started") {
+		t.Fatalf("deep-research without workers: %v", err)
 	}
 	if runs, err := h.rt.ListRuns(ctx, RunFilter{}); err != nil || len(runs) != 0 {
 		t.Fatalf("refused starts recorded runs: %+v, %v", runs, err)

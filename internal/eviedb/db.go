@@ -1203,6 +1203,12 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, err
 	}
+	// Run-owned workers (Stage 14 sub-stage 9) need both the workflow run
+	// and the subagent execution tables.
+	if err := ensureWorkflowWorkerSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := ensureSemanticSchema(ctx, db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create Semantic Memory schema: %w", err)

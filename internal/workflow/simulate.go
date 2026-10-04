@@ -404,13 +404,8 @@ func agentResult(n *node, value any, tokens int64) (any, string, string, error) 
 	if err := dec.Decode(&f); err != nil {
 		return nil, "", "", fmt.Errorf("%s: agent fixture: %v", n.path, err)
 	}
-	note := ""
 	switch f.Status {
-	case "succeeded":
-	case "partial":
-		note = "the worker wrapped up at its budget (partial)"
-	case "failed", "cancelled", "interrupted":
-		return nil, "", "worker ended " + f.Status, nil
+	case "succeeded", "partial", "failed", "cancelled", "interrupted":
 	default:
 		return nil, "", "", fmt.Errorf("%s: agent fixture status %q; use succeeded, partial, failed, cancelled or interrupted", n.path, f.Status)
 	}
@@ -429,30 +424,16 @@ func agentResult(n *node, value any, tokens int64) (any, string, string, error) 
 	if report == "" {
 		report = "## Summary\n" + f.Summary + "\n"
 	}
-	sources := []any{}
+	r := WorkerResult{Status: f.Status, Summary: f.Summary, Report: report, Limitations: f.Limitations, Tokens: tokens}
 	for _, src := range f.Sources {
-		sources = append(sources, map[string]any{"url": src.URL, "cited": src.Cited})
+		r.Sources = append(r.Sources, WorkerSource{URL: src.URL, Cited: src.Cited})
 	}
-	limitations := []any{}
-	for _, l := range f.Limitations {
-		limitations = append(limitations, l)
-	}
-	out := map[string]any{
-		"status": f.Status, "summary": f.Summary, "report": report,
-		"sources": sources, "limitations": limitations, "tokens": tokens,
-	}
-	if n.schema != nil {
-		result, err := extractAgentResult(report)
-		if err == nil {
-			err = checkValue(n.schema, result)
-		}
-		if err != nil {
-			return nil, note, "typed result: " + err.Error(), nil
-		}
-		out["result"] = result
-	}
-	if err := checkValue(n.output, out); err != nil {
-		return nil, "", "", fmt.Errorf("%s: agent fixture: %v", n.path, err)
+	out, note, failure, broken := agentOutput(n, r)
+	switch {
+	case broken != nil:
+		return nil, "", "", fmt.Errorf("%s: agent fixture: %v", n.path, broken)
+	case failure != nil:
+		return nil, note, failure.Error(), nil
 	}
 	return out, note, "", nil
 }
@@ -499,7 +480,7 @@ func (s *simulator) mapStep(n *node) (any, error) {
 		return nil, runFailed("%s: the list has %d items; max_items %d, so no item started", n.path, len(list), maxItems)
 	}
 	fixture := s.f.Steps[n.id]
-	results, failures := []any{}, []any{}
+	var outcomes []ItemOutcome
 	for i, element := range list {
 		index := i
 		var itemFixture *ItemFixture
@@ -514,7 +495,7 @@ func (s *simulator) mapStep(n *node) (any, error) {
 		var failed itemFailed
 		switch {
 		case errors.As(err, &failed):
-			failures = append(failures, map[string]any{"index": int64(i), "item": element, "error": failed.msg})
+			outcomes = append(outcomes, ItemOutcome{Index: i, Error: failed.msg})
 			if n.step.OnItemFailure == "fail" {
 				s.entry(TraceEntry{Step: n.id, Kind: n.kind, Status: "failed", Error: failed.msg, Note: "stopped at the first failed item"})
 				return nil, runFailed("%s: item %d failed: %s", n.path, i, failed.msg)
@@ -522,17 +503,18 @@ func (s *simulator) mapStep(n *node) (any, error) {
 		case err != nil:
 			return nil, err
 		default:
-			results = append(results, map[string]any{"index": int64(i), "item": element, "output": out})
+			outcomes = append(outcomes, ItemOutcome{Index: i, Succeeded: true, Output: out})
 		}
 	}
-	out := map[string]any{
-		"results": results, "failures": failures,
-		"succeeded": int64(len(results)), "failed": int64(len(failures)),
+	out, err := mapOutput(list, outcomes)
+	if err != nil {
+		return nil, err
 	}
-	note := fmt.Sprintf("%d of %d items succeeded; simulated in index order, a run executes at most %d at once", len(results), len(list), parallel)
-	if n.step.OnItemFailure == "partial" && len(results) < n.step.MinSucceeded {
+	succeeded := int(out["succeeded"].(int64))
+	note := fmt.Sprintf("%d of %d items succeeded; simulated in index order, a run executes at most %d at once", succeeded, len(list), parallel)
+	if n.step.OnItemFailure == "partial" && succeeded < n.step.MinSucceeded {
 		s.entry(TraceEntry{Step: n.id, Kind: n.kind, Status: "failed", Output: out, Note: note})
-		return nil, runFailed("%s: %d of %d items succeeded; min_succeeded %d", n.path, len(results), len(list), n.step.MinSucceeded)
+		return nil, runFailed("%s: %d of %d items succeeded; min_succeeded %d", n.path, succeeded, len(list), n.step.MinSucceeded)
 	}
 	s.entry(TraceEntry{Step: n.id, Kind: n.kind, Status: "succeeded", Output: out, Note: note})
 	return out, nil

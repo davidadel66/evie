@@ -137,6 +137,12 @@ type WorkflowNodeAttempt struct {
 	// and 0 for attempts recorded before leases existed).
 	LeaseHolder string `json:"lease_holder,omitempty"`
 	LeaseToken  int64  `json:"lease_token,omitempty"`
+	// Item is a map item's index and MapAttempt the map step's attempt it
+	// ran under (sub-stage 9): an item attempt is a node attempt of its map
+	// step with its own index, attempt number and output. Both are nil for
+	// a step's own attempt.
+	Item       *int   `json:"item,omitempty"`
+	MapAttempt *int64 `json:"map_attempt,omitempty"`
 }
 
 // WorkflowCheckpoint is the durable state between nodes.
@@ -171,6 +177,10 @@ type WorkflowRunDetail struct {
 	ModelCalls    []WorkflowModelCall       `json:"model_calls"`
 	Cancellation  *WorkflowRunCancellation  `json:"cancellation,omitempty"`
 	Override      *WorkflowRunOverride      `json:"override,omitempty"`
+	// Workers are the worker calls of its agent steps and agent map items
+	// (sub-stage 9), each with the hidden child session and execution it
+	// ran as, in attempt order.
+	Workers []WorkflowWorkerCall `json:"workers"`
 }
 
 // WorkflowRunProgress is what an executor needs to take the next step.
@@ -203,10 +213,19 @@ type WorkflowRunProgress struct {
 	// whose usage was never recorded (it may have been billed).
 	ModelTokens   int64
 	ModelMicroUSD int64
+	// WorkerTokens and WorkerMicroUSD are its agent workers' spend so far
+	// (sub-stage 9): what each finished worker counted, and the budget of
+	// each worker call still open (it may spend up to it).
+	WorkerTokens   int64
+	WorkerMicroUSD int64
 	// Unresolved counts the run's Effect Intents without a receipt
 	// (sub-stage 8: a cancelling run finishes only when there are none).
 	Unresolved int
 }
+
+// SpentTokens is everything the run counts against limits.max_tokens: its
+// AI steps' calls and its workers.
+func (p WorkflowRunProgress) SpentTokens() int64 { return p.ModelTokens + p.WorkerTokens }
 
 // workflowNodeAttemptsTable is the node attempt table since sub-stage 4:
 // an attempt records the lease it ran under, and a crash leaves it
@@ -228,21 +247,68 @@ const workflowNodeAttemptsTable = `CREATE TABLE IF NOT EXISTS workflow_node_atte
  finished_at TEXT,
  lease_holder TEXT NOT NULL,
  lease_token INTEGER NOT NULL CHECK(lease_token >= 0),
+ item_index INTEGER CHECK(item_index IS NULL OR item_index BETWEEN 0 AND 999),
+ map_attempt INTEGER CHECK(map_attempt IS NULL OR map_attempt > 0),
  PRIMARY KEY(run_id, seq),
  FOREIGN KEY(run_id, input_checkpoint) REFERENCES workflow_run_checkpoints(run_id, seq),
  CHECK((state = 'running') = (finished_at IS NULL)),
  CHECK(state <> 'succeeded' OR output IS NOT NULL),
  CHECK(state NOT IN ('failed','interrupted') OR (error <> '' AND output IS NULL)))`
 
-const workflowNodeAttemptsIndexes = `CREATE UNIQUE INDEX IF NOT EXISTS workflow_node_attempts_one_in_flight ON workflow_node_attempts(run_id) WHERE state = 'running';
- CREATE UNIQUE INDEX IF NOT EXISTS workflow_node_attempts_numbered ON workflow_node_attempts(run_id, input_checkpoint, step_id, attempt);
+// workflowNodeAttemptsIndexes since sub-stage 9: one step attempt in
+// flight per run, any number of map item attempts beside it, and attempt
+// numbers unique per step, or per map item, at one checkpoint. The index
+// and trigger names are those of sub-stage 4, so an older Evie's
+// CREATE ... IF NOT EXISTS keeps these definitions.
+const workflowNodeAttemptsIndexes = `CREATE UNIQUE INDEX IF NOT EXISTS workflow_node_attempts_one_in_flight ON workflow_node_attempts(run_id) WHERE state = 'running' AND item_index IS NULL;
+ CREATE UNIQUE INDEX IF NOT EXISTS workflow_node_attempts_numbered ON workflow_node_attempts(run_id, input_checkpoint, step_id, COALESCE(item_index,-1), attempt);
+ CREATE INDEX IF NOT EXISTS workflow_node_attempts_items ON workflow_node_attempts(run_id, map_attempt) WHERE map_attempt IS NOT NULL;
  CREATE TRIGGER IF NOT EXISTS workflow_node_attempts_finished BEFORE UPDATE ON workflow_node_attempts
  WHEN OLD.state <> 'running'
  BEGIN SELECT RAISE(ABORT,'finished workflow node attempts are immutable'); END;
- CREATE TRIGGER IF NOT EXISTS workflow_node_attempts_identity BEFORE UPDATE OF run_id,seq,step_id,kind,attempt,input_checkpoint,input,started_at,lease_holder,lease_token ON workflow_node_attempts
+ CREATE TRIGGER IF NOT EXISTS workflow_node_attempts_identity BEFORE UPDATE OF run_id,seq,step_id,kind,attempt,input_checkpoint,input,started_at,lease_holder,lease_token,item_index,map_attempt ON workflow_node_attempts
  BEGIN SELECT RAISE(ABORT,'a workflow node attempt''s identity is immutable'); END;
  CREATE TRIGGER IF NOT EXISTS workflow_node_attempts_no_delete BEFORE DELETE ON workflow_node_attempts
  BEGIN SELECT RAISE(ABORT,'workflow node attempts are immutable'); END;`
+
+// upgradeWorkflowItemColumns adds sub-stage 9's map item columns to an
+// earlier attempt table and replaces the one-in-flight index, the
+// numbering index and the identity trigger with their item-aware forms,
+// under the write lock, so competing startups upgrade it once. Rows are
+// untouched: earlier attempts are step attempts.
+func upgradeWorkflowItemColumns(ctx context.Context, conn *sql.Conn) error {
+	for _, column := range []string{
+		"item_index INTEGER CHECK(item_index IS NULL OR item_index BETWEEN 0 AND 999)",
+		"map_attempt INTEGER CHECK(map_attempt IS NULL OR map_attempt > 0)",
+	} {
+		name, _, _ := strings.Cut(column, " ")
+		var present bool
+		if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pragma_table_info('workflow_node_attempts') WHERE name=?)`, name).Scan(&present); err != nil {
+			return err
+		}
+		if !present {
+			if _, err := conn.ExecContext(ctx, `ALTER TABLE workflow_node_attempts ADD COLUMN `+column); err != nil {
+				return fmt.Errorf("add the workflow map item column %s: %w", name, err)
+			}
+		}
+	}
+	for _, old := range []struct{ kind, name string }{{"index", "workflow_node_attempts_one_in_flight"}, {"index", "workflow_node_attempts_numbered"}, {"trigger", "workflow_node_attempts_identity"}} {
+		var definition string
+		err := conn.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type=? AND name=?`, old.kind, old.name).Scan(&definition)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(definition, "item_index") {
+			if _, err := conn.ExecContext(ctx, `DROP `+strings.ToUpper(old.kind)+` `+old.name); err != nil {
+				return fmt.Errorf("replace %s %s: %w", old.kind, old.name, err)
+			}
+		}
+	}
+	return nil
+}
 
 // subStage3Attempts identifies the sub-stage 3 attempt table: no lease
 // columns and no interrupted state.
@@ -356,6 +422,9 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("upgrade workflow run schema: %w", err)
 	}
+	if err := withImmediateTransaction(ctx, db, func(conn *sql.Conn) error { return upgradeWorkflowItemColumns(ctx, conn) }); err != nil {
+		return fmt.Errorf("upgrade workflow node attempts for map items: %w", err)
+	}
 	if _, err := db.ExecContext(ctx, workflowNodeAttemptsIndexes); err != nil {
 		return fmt.Errorf("create workflow node attempt indexes: %w", err)
 	}
@@ -372,6 +441,9 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureWorkflowModelCallSchema(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureWorkflowWorkerCallSchema(ctx, db); err != nil {
 		return err
 	}
 	return ensureWorkflowRunCancellationSchema(ctx, db)
@@ -654,7 +726,7 @@ func beginWorkflowAttempt(ctx context.Context, conn *sql.Conn, lease WorkflowRun
 	var next int64
 	if err := conn.QueryRowContext(ctx, `SELECT
  (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND state='running'),
- (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=?),
+ (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=? AND item_index IS NULL),
  (SELECT COALESCE(MAX(seq),0)+1 FROM workflow_node_attempts WHERE run_id=?)`, a.RunID, a.RunID, c.Seq, a.Step, a.RunID).Scan(&inFlight, &made, &next); err != nil {
 		return WorkflowNodeAttempt{}, err
 	}
@@ -716,6 +788,10 @@ func (s *Store) FinishWorkflowAttempt(ctx context.Context, lease WorkflowRunLeas
 		if err := requireAttemptModelCallRecorded(ctx, conn, e.RunID, e.Seq); err != nil {
 			return err
 		}
+		// An agent attempt ends with its worker call (FinishWorkflowWorkerCall).
+		if err := requireAttemptWorkerCallRecorded(ctx, conn, e.RunID, e.Seq); err != nil {
+			return err
+		}
 		return finishWorkflowAttempt(ctx, conn, lease, e, clock)
 	})
 	if err != nil {
@@ -759,12 +835,18 @@ func finishWorkflowAttempt(ctx context.Context, conn *sql.Conn, lease WorkflowRu
 	var state, step string
 	var input, token int64
 	var attempt int
-	err = conn.QueryRowContext(ctx, `SELECT state,input_checkpoint,lease_token,step_id,attempt FROM workflow_node_attempts WHERE run_id=? AND seq=?`, e.RunID, e.Seq).
-		Scan(&state, &input, &token, &step, &attempt)
-	if errors.Is(err, sql.ErrNoRows) || err == nil && (state != string(WorkflowAttemptRunning) || token != lease.Token) {
+	var item sql.NullInt64
+	err = conn.QueryRowContext(ctx, `SELECT state,input_checkpoint,lease_token,step_id,attempt,item_index FROM workflow_node_attempts WHERE run_id=? AND seq=?`, e.RunID, e.Seq).
+		Scan(&state, &input, &token, &step, &attempt, &item)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && (state != string(WorkflowAttemptRunning) || token != lease.Token || item.Valid) {
 		return ErrWorkflowRunConflict
 	}
 	if err != nil {
+		return err
+	}
+	// A map step's attempt ends only after every item it started ended
+	// (sub-stage 9).
+	if err := requireItemsEnded(ctx, conn, e.RunID, e.Seq); err != nil {
 		return err
 	}
 	c, err := latestCheckpoint(ctx, conn, e.RunID)
@@ -859,15 +941,24 @@ func (s *Store) FailWorkflowRun(ctx context.Context, lease WorkflowRunLease, che
 	return readWorkflowRun(ctx, s.db, runID)
 }
 
-const attemptColumns = `run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at,lease_holder,lease_token`
+const attemptColumns = `run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at,lease_holder,lease_token,item_index,map_attempt`
 
 func scanWorkflowAttempt(scanner rowScanner) (WorkflowNodeAttempt, error) {
 	var a WorkflowNodeAttempt
 	var input, started string
 	var output, finished sql.NullString
+	var item, mapAttempt sql.NullInt64
 	if err := scanner.Scan(&a.RunID, &a.Seq, &a.Step, &a.Kind, &a.Attempt, &a.InputCheckpoint, &input, &a.State, &output, &a.Error, &a.Next, &a.Note, &started, &finished,
-		&a.LeaseHolder, &a.LeaseToken); err != nil {
+		&a.LeaseHolder, &a.LeaseToken, &item, &mapAttempt); err != nil {
 		return a, err
+	}
+	if item.Valid {
+		index := int(item.Int64)
+		a.Item = &index
+	}
+	if mapAttempt.Valid {
+		seq := mapAttempt.Int64
+		a.MapAttempt = &seq
 	}
 	a.Input = json.RawMessage(input)
 	if output.Valid {
@@ -898,18 +989,22 @@ func (s *Store) WorkflowRunProgress(ctx context.Context, id string) (WorkflowRun
 		return p, err
 	}
 	var lastError sql.NullString
+	// A map step's item attempts are counted per item by the map, not as
+	// attempts of its step; the map's own attempt does no work of its own
+	// and is not counted against limits.max_attempts, its items are
+	// (sub-stage 9).
 	if err := conn.QueryRowContext(ctx, `SELECT
- (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=?),
- (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=? AND state='interrupted'),
- (SELECT error FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=? ORDER BY seq DESC LIMIT 1),
- (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND kind<>'branch' AND state<>'interrupted')`,
+ (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=? AND item_index IS NULL),
+ (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=? AND item_index IS NULL AND state='interrupted'),
+ (SELECT error FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=? AND item_index IS NULL ORDER BY seq DESC LIMIT 1),
+ (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND kind NOT IN ('branch','map') AND state<>'interrupted')`,
 		id, p.Checkpoint.Seq, p.Checkpoint.Next, id, p.Checkpoint.Seq, p.Checkpoint.Next, id, p.Checkpoint.Seq, p.Checkpoint.Next, id).
 		Scan(&p.Made, &p.Interrupted, &lastError, &p.Counted); err != nil {
 		return p, err
 	}
 	p.Attempts = p.Made - p.Interrupted
 	p.LastError = lastError.String
-	a, err := scanWorkflowAttempt(conn.QueryRowContext(ctx, `SELECT `+attemptColumns+` FROM workflow_node_attempts WHERE run_id=? AND state='running'`, id))
+	a, err := scanWorkflowAttempt(conn.QueryRowContext(ctx, `SELECT `+attemptColumns+` FROM workflow_node_attempts WHERE run_id=? AND state='running' AND item_index IS NULL`, id))
 	switch {
 	case err == nil:
 		p.InFlight = &a
@@ -928,6 +1023,9 @@ func (s *Store) WorkflowRunProgress(ctx context.Context, id string) (WorkflowRun
 		return p, err
 	}
 	if p.ModelTokens, p.ModelMicroUSD, err = modelSpend(ctx, conn, id); err != nil {
+		return p, err
+	}
+	if p.WorkerTokens, p.WorkerMicroUSD, err = workerSpend(ctx, conn, id); err != nil {
 		return p, err
 	}
 	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_effect_intents i WHERE i.run_id=?
@@ -1011,6 +1109,9 @@ func (s *Store) WorkflowRun(ctx context.Context, id string) (WorkflowRunDetail, 
 		return d, err
 	}
 	if d.ModelCalls, err = workflowModelCalls(ctx, conn, id); err != nil {
+		return d, err
+	}
+	if d.Workers, err = workflowWorkerCalls(ctx, conn, id); err != nil {
 		return d, err
 	}
 	if c, found, err := readWorkflowRunCancellation(ctx, conn, id); err != nil {
