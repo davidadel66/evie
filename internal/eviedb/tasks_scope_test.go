@@ -39,11 +39,11 @@ func TestTaskScopeUpgradePreservesLegacyGlobalState(t *testing.T) {
 		DROP TRIGGER IF EXISTS task_revisions_append_only_delete;
 		CREATE TABLE old_tasks (id TEXT PRIMARY KEY, scope TEXT NOT NULL CHECK(scope='global'), title TEXT NOT NULL,
 			description TEXT, priority INTEGER, due_date TEXT, result_summary TEXT, status TEXT NOT NULL, revision INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-		INSERT INTO old_tasks SELECT * FROM tasks; DROP TABLE tasks; ALTER TABLE old_tasks RENAME TO tasks;
+		INSERT INTO old_tasks SELECT id, scope, title, description, priority, due_date, result_summary, status, revision, created_at, updated_at FROM tasks; DROP TABLE tasks; ALTER TABLE old_tasks RENAME TO tasks;
 		CREATE TABLE old_revisions (task_id TEXT NOT NULL REFERENCES tasks(id), revision INTEGER NOT NULL, scope TEXT NOT NULL CHECK(scope='global'),
 			title TEXT NOT NULL, description TEXT, priority INTEGER, due_date TEXT, result_summary TEXT, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
 			PRIMARY KEY(task_id, revision));
-		INSERT INTO old_revisions SELECT * FROM task_revisions; DROP TABLE task_revisions; ALTER TABLE old_revisions RENAME TO task_revisions;`); err != nil {
+		INSERT INTO old_revisions SELECT task_id, revision, scope, title, description, priority, due_date, result_summary, status, created_at, updated_at FROM task_revisions; DROP TABLE task_revisions; ALTER TABLE old_revisions RENAME TO task_revisions;`); err != nil {
 		t.Fatal(err)
 	}
 	if err := raw.Close(); err != nil {

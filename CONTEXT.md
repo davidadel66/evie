@@ -69,6 +69,20 @@ permanently locking the Task. Progress, result, and completion updates require
 an active claim; child creation and metadata corrections do not.
 _Avoid_: Task ownership, access grant, agent execution
 
+**Task Dependency**:
+A Task of the same Task Tree that must be completed, and its build merged,
+before another Task is dispatched. A subtask also waits for its ancestors'
+dependencies, so a Task never depends on its ancestor or descendant. Only the
+orchestrating conversation plans dependencies.
+_Avoid_: Sibling order, ordering hint
+
+**Ready Set**:
+The Tasks of a Task Tree that can be dispatched to workers now, in batches
+whose members' expected paths do not conflict, sized to the worker limits.
+It is computed on read and schedules nothing; the orchestrator dispatches it
+inside its own turn.
+_Avoid_: Queue, scheduler, workflow run
+
 **Capability Provider**:
 A plugin role that contributes one specific family of capabilities through its
 own focused interface, such as tools, models, sandboxes, or subagents.

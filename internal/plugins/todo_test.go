@@ -19,18 +19,19 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	todo := NewTodo(nil)
 	want := Manifest{
 		ID:                    TodoPluginID,
-		ImplementationVersion: "1.7.0",
+		ImplementationVersion: "1.8.0",
 		KernelCompatibility: VersionRange{
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
 		Capabilities: []CapabilityContract{
 			{ID: TodoListCapabilityID, Version: "1.3.0"},
-			{ID: TodoAddCapabilityID, Version: "1.4.0"},
+			{ID: TodoAddCapabilityID, Version: "1.5.0"},
 			{ID: TodoGetCapabilityID, Version: "1.1.0"},
-			{ID: TodoUpdateCapabilityID, Version: "1.3.0"},
-			{ID: TodoDecomposeCapabilityID, Version: "1.0.0"},
+			{ID: TodoUpdateCapabilityID, Version: "1.4.0"},
+			{ID: TodoDecomposeCapabilityID, Version: "1.1.0"},
 			{ID: TodoClaimCapabilityID, Version: "1.0.0"},
 			{ID: TodoReleaseCapabilityID, Version: "1.0.0"},
+			{ID: TodoReadyCapabilityID, Version: "1.0.0"},
 		},
 		ResumableFrom: []ImplementationCompatibility{
 			{
@@ -100,6 +101,20 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 					{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "69d3046efcb2b32995358856de6f0106c06adff7b173254f385e509efd2d15f9"},
 				},
 			},
+			{
+				// Before Stage 13 (2026-10-04): these hashes pin the exact
+				// schemas sessions composed with Todo 1.7.0 reopen with.
+				ImplementationVersion: "1.7.0",
+				Capabilities: []CapabilityCompatibility{
+					{ID: TodoListCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: "418a5881bba8ee80fed0c67c2dd98f83768f025eeb5491975b7d9d3a8964dc28"},
+					{ID: TodoAddCapabilityID, ContractVersion: "1.4.0", SchemaSHA256: "263a91b50c355486d3aeefd89ccdc38afe7f4b7b1b12934a79ae4e66dbce1e03"},
+					{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: "dd52b8e07189b5863170784d1e051ea75fbd451c214f556cd47443972e15cdba"},
+					{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: "b9d4f8c01243220efb0b81ec60583eb7393b6660110e6539fd2ea58a11a9157c"},
+					{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "0dcda46f6f320e1afcf56f990c80196407d70da56401f70ecc320804cbd71b10"},
+					{ID: TodoClaimCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "718dbd187e037db724b67d5ad075c294256c118e903201831120d0e63884acef"},
+					{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "69d3046efcb2b32995358856de6f0106c06adff7b173254f385e509efd2d15f9"},
+				},
+			},
 		},
 	}
 	if got := todo.Manifest(); !reflect.DeepEqual(got, want) {
@@ -123,12 +138,13 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	}
 	wantAssociations := []association{
 		{ID: TodoListCapabilityID, ContractVersion: "1.3.0", SchemaName: "todo_list"},
-		{ID: TodoAddCapabilityID, ContractVersion: "1.4.0", SchemaName: "todo_add"},
+		{ID: TodoAddCapabilityID, ContractVersion: "1.5.0", SchemaName: "todo_add"},
 		{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_get"},
-		{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", SchemaName: "todo_update"},
-		{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_decompose"},
+		{ID: TodoUpdateCapabilityID, ContractVersion: "1.4.0", SchemaName: "todo_update"},
+		{ID: TodoDecomposeCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_decompose"},
 		{ID: TodoClaimCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_claim"},
 		{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_release"},
+		{ID: TodoReadyCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_ready"},
 	}
 	if !reflect.DeepEqual(gotAssociations, wantAssociations) {
 		t.Fatalf("Todo Capability associations\n got: %+v\nwant: %+v", gotAssociations, wantAssociations)
@@ -146,15 +162,88 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantDefinitions := []tools.Tool{
-		tools.TodoScopedListTool(), tools.TodoFocusedAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
-		tools.TodoDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(),
+		tools.TodoScopedListTool(), tools.TodoPlannedAddTool(), tools.TodoTreeGetTool(), tools.TodoPlannedUpdateTool(),
+		tools.TodoPlannedDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(), tools.TodoReadyTool(),
 	}
 	if got, wantSchemas := toolset.Schemas(), tools.NewToolset(wantDefinitions).Schemas(); !reflect.DeepEqual(got, wantSchemas) {
 		t.Fatalf("Todo plugin schemas changed\n got: %#v\nwant: %#v", got, wantSchemas)
 	}
-	if got := schemaNames(toolset); !reflect.DeepEqual(got, []string{"todo_list", "todo_add", "todo_get", "todo_update", "todo_decompose", "todo_claim", "todo_release"}) {
+	if got := schemaNames(toolset); !reflect.DeepEqual(got, []string{"todo_list", "todo_add", "todo_get", "todo_update", "todo_decompose", "todo_claim", "todo_release", "todo_ready"}) {
 		t.Fatalf("Todo schema names = %v", got)
 	}
+	// Stage 13 (2026-10-04): the planned schemas extend the earlier ones
+	// with plan fields only.
+	for _, pair := range []struct {
+		earlier, current tools.Tool
+		added            []string
+	}{
+		{tools.TodoFocusedAddTool(), tools.TodoPlannedAddTool(), []string{"depends_on", "paths"}},
+		{tools.TodoClaimedUpdateTool(), tools.TodoPlannedUpdateTool(), []string{"depends_on", "paths"}},
+	} {
+		got := pair.current.Schema.Function.Parameters.Properties
+		for name, property := range pair.earlier.Schema.Function.Parameters.Properties {
+			if !reflect.DeepEqual(got[name], property) {
+				t.Errorf("%s changed earlier property %s", pair.current.Schema.Function.Name, name)
+			}
+		}
+		if len(got) != len(pair.earlier.Schema.Function.Parameters.Properties)+len(pair.added) {
+			t.Errorf("%s properties = %d", pair.current.Schema.Function.Name, len(got))
+		}
+	}
+	children := tools.TodoPlannedDecomposeTool().Schema.Function.Parameters.Properties["children"].Items.Properties
+	for _, name := range []string{"title", "description", "priority", "due", "depends_on", "depends_on_children", "paths"} {
+		if _, ok := children[name]; !ok {
+			t.Errorf("planned decomposition child lacks %s", name)
+		}
+	}
+	if earlier := tools.TodoDecomposeTool().Schema.Function.Parameters.Properties["children"].Items.Properties; len(earlier) != 4 {
+		t.Errorf("the frozen decomposition schema changed: %v", earlier)
+	}
+}
+
+func TestTodoPlanFieldsAreCurrentOnlyAndFrozenReceiptsRejectThem(t *testing.T) {
+	service := &taskServiceFixture{created: task.Task{ID: "created", Title: "tracked", Status: task.StatusOpen, Revision: 1}}
+	current := NewTodo(service).ToolCapabilities()
+	currentTools := make([]tools.Tool, len(current))
+	for i := range current {
+		currentTools[i] = current[i].Tool
+	}
+	outcome := executeTodoTool(t, tools.NewToolset(currentTools), "todo_add", `{"title":"tracked","parent_id":"p","expected_parent_revision":1,"depends_on":["a"],"paths":["pkg/a"]}`)
+	if outcome.IsErr || len(service.create) != 1 || !reflect.DeepEqual(service.create[0].DependsOn, []task.ID{"a"}) || !reflect.DeepEqual(service.create[0].Paths, []string{"pkg/a"}) {
+		t.Fatalf("current planned add = %+v, service calls %#v", outcome, service.create)
+	}
+	for _, version := range []string{"1.5.0", "1.6.0", "1.7.0"} {
+		t.Run(version, func(t *testing.T) {
+			capabilities := NewTodo(&taskServiceFixture{}).ResumableToolCapabilities(version)
+			frozenTools := make([]tools.Tool, len(capabilities))
+			for i := range capabilities {
+				frozenTools[i] = capabilities[i].Tool
+			}
+			set := tools.NewToolset(frozenTools)
+			for _, call := range []struct{ name, args string }{
+				{"todo_add", `{"title":"tracked","paths":["pkg/a"]}`},
+				{"todo_update", `{"task_id":"t","expected_revision":1,"idempotency_key":"k","depends_on":["a"]}`},
+				{"todo_decompose", `{"task_id":"t","expected_revision":1,"idempotency_key":"k","children":[{"title":"c","paths":["x"]}]}`},
+			} {
+				frozen := executeTodoTool(t, set, call.name, call.args)
+				if !frozen.IsErr || !strings.Contains(frozen.Content, "unknown field") {
+					t.Errorf("frozen %s accepted plan fields: %+v", call.name, frozen)
+				}
+			}
+			if slicesContainsName(set, "todo_ready") {
+				t.Error("a frozen receipt gained todo_ready")
+			}
+		})
+	}
+}
+
+func slicesContainsName(set tools.Toolset, name string) bool {
+	for _, schema := range set.Schemas() {
+		if schema.Function.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func TestTodoFocusedAddIsCurrentOnlyAndFrozenReceiptsRejectIt(t *testing.T) {

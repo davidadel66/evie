@@ -184,6 +184,13 @@ func (s *Store) admitSubagents(ctx context.Context, p delegation.Parent, request
 				return err
 			}
 		}
+		var batchTasks []task.ID
+		orchestrated := false
+		if worker == delegation.WorkerBuild && fresh > 0 {
+			if orchestrated, err = orchestratingParent(ctx, conn, p.Scope.SessionID); err != nil {
+				return err
+			}
+		}
 		for i, r := range requests {
 			if retained[i] != nil {
 				attempts = append(attempts, *retained[i])
@@ -215,6 +222,12 @@ func (s *Store) admitSubagents(ctx context.Context, p delegation.Parent, request
 				if err := prepareBuildTask(ctx, conn, r.TaskID, now); err != nil {
 					return fmt.Errorf("assignment %q: %w", r.Key, err)
 				}
+				// Task Tree orchestration (Stage 13): dependencies done,
+				// no conflict with running work or this batch.
+				if err := checkBuildOrchestration(ctx, conn, task.ID(r.TaskID), plan, batchTasks, orchestrated, now); err != nil {
+					return fmt.Errorf("assignment %q: %w", r.Key, err)
+				}
+				batchTasks = append(batchTasks, task.ID(r.TaskID))
 				id, worktree = filepath.Base(plan.Path), &plan
 			}
 			child := memory.Session{ID: memory.SessionID(uuid.NewString()), ParentSessionID: p.Scope.SessionID, Status: memory.SessionActive, CreatedAt: now, UpdatedAt: now,
@@ -349,6 +362,13 @@ func (s *Store) AdmitSubagentContinuation(ctx context.Context, p delegation.Pare
 		}
 		if err = admitWithinTurnLimit(ctx, conn, p, policy, 1); err != nil {
 			return err
+		}
+		if original.Worker() == delegation.WorkerBuild {
+			// Stage 13: a build worker resumes only while no build on an
+			// overlapping Task runs in the same repository.
+			if err = checkContinuationConflicts(ctx, conn, original, s.now().UTC()); err != nil {
+				return err
+			}
 		}
 		var after int64
 		if err = conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(sequence),0) FROM events WHERE session_id=?`, original.Child.ID).Scan(&after); err != nil {

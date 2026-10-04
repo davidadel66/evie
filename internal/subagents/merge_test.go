@@ -1033,11 +1033,11 @@ func TestParentPinnedBeforeTheMergeGateCannotProposeMerges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := composition.Clone(current.Receipt)
+	old := withoutTodoReady(composition.Clone(current.Receipt))
 	old.Preset.Version = "sha256:535755ad0e6b11cadd91edd54db59c8196a3970ff256b3feddac838babc38a72"
 	old.Capabilities = slices.DeleteFunc(old.Capabilities, func(c composition.Capability) bool { return c.ID == delegation.MergeCapabilityID })
 	old.ToolSchemas = slices.DeleteFunc(old.ToolSchemas, func(s composition.ToolSchema) bool { return s.Name == delegation.MergeToolName })
-	if len(old.Capabilities) != len(current.Receipt.Capabilities)-1 {
+	if len(old.Capabilities) != len(current.Receipt.Capabilities)-2 {
 		t.Fatal("the current Standard preset lacks the merge gate")
 	}
 	reopened, err := f.manager.ResumeComposition(old)

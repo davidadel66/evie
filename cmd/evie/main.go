@@ -23,6 +23,7 @@ import (
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/subagents"
+	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/usage"
 	"github.com/davidadel66/evie/internal/web"
@@ -147,7 +148,9 @@ func main() {
 		plugins.NewWeb(),
 		plugins.NewFinance(),
 		plugins.NewYouTube(),
-		plugins.NewTodo(kernelStore),
+		// todo_ready sizes batches to the configured subagent caps (Stage 13).
+		plugins.NewTodo(kernelStore).WithDispatchLimits(task.DispatchLimits{MaxBatch: subagentPolicy.MaxBatch,
+			PerParent: subagentPolicy.PerParent, Runtime: subagentPolicy.Runtime, PerTurn: subagentPolicy.PerTurn}),
 		plugins.NewMemory(kernelStore),
 		plugins.NewSubagents(supervisor),
 	)

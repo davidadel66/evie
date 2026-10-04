@@ -60,6 +60,9 @@ const (
 	CapabilityDecompose Capability = "todo.decompose"
 	CapabilityClaim     Capability = "todo.claim"
 	CapabilityRelease   Capability = "todo.release"
+	// CapabilityReady reads a Task Tree's dispatchable set for orchestration
+	// (Stage 13, 2026-10-04).
+	CapabilityReady Capability = "todo.ready"
 )
 
 type AccessLevel string
@@ -164,20 +167,26 @@ const (
 
 // Task is the durable state of one owner-controlled unit of work.
 type Task struct {
-	ID            ID        `json:"id"`
-	ParentID      ID        `json:"parent_id,omitempty"`
-	RootID        ID        `json:"root_id"`
-	SiblingOrder  uint64    `json:"sibling_order,omitempty"`
-	Scope         Scope     `json:"scope"`
-	Title         string    `json:"title"`
-	Description   string    `json:"description,omitempty"`
-	Priority      int       `json:"priority,omitempty"`
-	DueDate       string    `json:"due_date,omitempty"`
-	ResultSummary string    `json:"result_summary,omitempty"`
-	Status        Status    `json:"status"`
-	Revision      uint64    `json:"revision"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            ID     `json:"id"`
+	ParentID      ID     `json:"parent_id,omitempty"`
+	RootID        ID     `json:"root_id"`
+	SiblingOrder  uint64 `json:"sibling_order,omitempty"`
+	Scope         Scope  `json:"scope"`
+	Title         string `json:"title"`
+	Description   string `json:"description,omitempty"`
+	Priority      int    `json:"priority,omitempty"`
+	DueDate       string `json:"due_date,omitempty"`
+	ResultSummary string `json:"result_summary,omitempty"`
+	// DependsOn names Tasks of the same tree that must be done (completed,
+	// and their builds merged) before this one is dispatched; Paths are the
+	// files or folders it expects to touch, used only to keep conflicting
+	// work apart (Stage 13, 2026-10-04). Both are nil unless set.
+	DependsOn []ID      `json:"depends_on,omitempty"`
+	Paths     []string  `json:"paths,omitempty"`
+	Status    Status    `json:"status"`
+	Revision  uint64    `json:"revision"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // CreateInput deliberately excludes persistence, scope identities, owner,
@@ -193,6 +202,10 @@ type CreateInput struct {
 	IdempotencyKey         IdempotencyKey
 	Scope                  ScopeSelection
 	Focus                  bool
+	// DependsOn and Paths plan a child Task (Stage 13); a root has no
+	// dependencies.
+	DependsOn []ID
+	Paths     []string
 }
 
 type ChildInput struct {
@@ -200,6 +213,18 @@ type ChildInput struct {
 	Description string `json:"description,omitempty"`
 	Priority    int    `json:"priority,omitempty"`
 	DueDate     string `json:"due_date,omitempty"`
+	// Plan fields (Stage 13): existing Tasks of the tree, other children of
+	// the same batch by zero-based index, and expected paths. Empty ones are
+	// omitted from the canonical encoding, so earlier requests keep their
+	// identities.
+	DependsOn         []ID     `json:"depends_on,omitempty"`
+	DependsOnChildren []int    `json:"depends_on_children,omitempty"`
+	Paths             []string `json:"paths,omitempty"`
+}
+
+// HasPlan reports whether a child sets any plan field.
+func (c ChildInput) HasPlan() bool {
+	return len(c.DependsOn) > 0 || len(c.DependsOnChildren) > 0 || len(c.Paths) > 0
 }
 
 type DecomposeInput struct {
@@ -254,7 +279,11 @@ type UpdateInput struct {
 	DueDate          *string
 	ResultSummary    *string
 	Status           *Status
-	IdempotencyKey   IdempotencyKey
+	// DependsOn and Paths replace the Task's lists; an empty list clears
+	// one (Stage 13).
+	DependsOn      *[]ID
+	Paths          *[]string
+	IdempotencyKey IdempotencyKey
 }
 
 // ListFilter defaults to open Tasks when neither Statuses nor IncludeHistory
@@ -422,6 +451,15 @@ func ValidateCreateInput(input CreateInput) error {
 	if input.ParentID == "" && input.ExpectedParentRevision != 0 {
 		return &InputError{Field: "expected_parent_revision", Message: "must be zero when parent_id is omitted"}
 	}
+	if input.ParentID == "" && len(input.DependsOn) > 0 {
+		return &InputError{Field: "depends_on", Message: "a Task Tree root cannot depend on other Tasks; dependencies are between Tasks of one tree"}
+	}
+	if err := ValidateDependencyIDs(input.DependsOn); err != nil {
+		return err
+	}
+	if _, err := NormalizePaths(input.Paths); err != nil {
+		return err
+	}
 	if input.ParentID != "" {
 		if input.Scope != ScopeSelectionDefault {
 			return &InputError{Field: "scope", Message: "must be omitted when parent_id is supplied"}
@@ -450,8 +488,46 @@ func ValidateDecomposeInput(input DecomposeInput) error {
 		if err := validateTaskContent(fmt.Sprintf("children[%d].", i), child); err != nil {
 			return err
 		}
+		if err := validateChildPlan(i, len(input.Children), child); err != nil {
+			return err
+		}
 	}
 	return ValidateIdempotencyKey(input.IdempotencyKey)
+}
+
+// validateChildPlan checks one decomposed child's plan fields: existing
+// dependencies, sibling indexes into the same batch, and paths.
+func validateChildPlan(index, count int, child ChildInput) error {
+	prefix := fmt.Sprintf("children[%d].", index)
+	relabel := func(err error) error {
+		var inputErr *InputError
+		if errors.As(err, &inputErr) {
+			return &InputError{Field: prefix + inputErr.Field, Message: inputErr.Message}
+		}
+		return err
+	}
+	if err := ValidateDependencyIDs(child.DependsOn); err != nil {
+		return relabel(err)
+	}
+	if len(child.DependsOn)+len(child.DependsOnChildren) > MaxTaskDependencies {
+		return &InputError{Field: prefix + "depends_on", Message: fmt.Sprintf("must not exceed %d Tasks with depends_on_children", MaxTaskDependencies)}
+	}
+	seen := map[int]bool{}
+	for _, sibling := range child.DependsOnChildren {
+		switch {
+		case sibling < 0 || sibling >= count:
+			return &InputError{Field: prefix + "depends_on_children", Message: fmt.Sprintf("index %d is not a child of this batch (0 to %d)", sibling, count-1)}
+		case sibling == index:
+			return &InputError{Field: prefix + "depends_on_children", Message: "must not name the child itself"}
+		case seen[sibling]:
+			return &InputError{Field: prefix + "depends_on_children", Message: fmt.Sprintf("names child %d twice", sibling)}
+		}
+		seen[sibling] = true
+	}
+	if _, err := NormalizePaths(child.Paths); err != nil {
+		return relabel(err)
+	}
+	return nil
 }
 
 func validateTaskContent(prefix string, input ChildInput) error {
@@ -497,8 +573,18 @@ func ValidateUpdateInput(input UpdateInput) error {
 		return &InputError{Field: "expected_revision", Message: "must be greater than zero"}
 	}
 	if input.Title == nil && input.Description == nil && input.Priority == nil && input.DueDate == nil &&
-		input.ResultSummary == nil && input.Status == nil {
+		input.ResultSummary == nil && input.Status == nil && input.DependsOn == nil && input.Paths == nil {
 		return &InputError{Field: "patch", Message: "must change metadata, result, or lifecycle status"}
+	}
+	if input.DependsOn != nil {
+		if err := ValidateDependencyIDs(*input.DependsOn); err != nil {
+			return err
+		}
+	}
+	if input.Paths != nil {
+		if _, err := NormalizePaths(*input.Paths); err != nil {
+			return err
+		}
 	}
 	if input.Title != nil && strings.TrimSpace(*input.Title) == "" {
 		return &InputError{Field: "title", Message: "must not be blank"}

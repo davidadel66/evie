@@ -354,6 +354,40 @@ Decided (David, 2026-10-04) after Stage 11 landed:
 - Progress is visible in the UI's task view.
 - Restart-safe: claims, leases and worktrees survive a crash and resume or
   release cleanly.
+- **Decided (David, 2026-10-04):** the orchestrator is the conversational
+  model inside a turn, supported by deterministic harness tools, not a
+  background scheduler; workers stay bound to the parent turn's authority.
+  Orchestration that outlives a turn is Stage 14's.
+- **Implemented** (2026-10-04). Tasks gain optional `depends_on` (Tasks of
+  the same tree, cycle-checked: a subtask waits for its ancestors'
+  dependencies and a parent for its subtasks, so ancestors and
+  descendants are refused) and `paths` (relative files or folders), set by
+  the orchestrating conversation only, through Todo 1.8.0 (`todo_add`,
+  `todo_update`, `todo_decompose` with `depends_on_children`; earlier
+  contracts reopen unchanged and refuse the fields). `todo_ready(tree_id,
+  max?)` (Standard `sha256:377b51c0…`; `6566fc2a…` reopens unchanged)
+  returns active leaf Tasks whose dependencies are completed and merged,
+  unclaimed or claimed only by dead executions, outside running work, in
+  first-fit batches with no two members conflicting, sized to the caps
+  (`max_batch`, free `per_parent`, `runtime`, this turn's remaining
+  `per_turn`); plus builds in flight with their next step, blocked Tasks
+  with every reason (dependencies, claims, running work, conflicts with
+  running or unmerged builds including those needing a rebase, marked
+  blocked, no capacity) and Tasks that look finished. Two Tasks conflict
+  when their paths overlap by component prefix (case-insensitive) or
+  either has none. Build admission enforces the same rules in its
+  transaction (dependencies, overlap within the call and with running
+  builds in the repository, subtasks of running work); chats pinned
+  before `todo_ready` keep parallel builds of path-less Tasks. Sessions
+  with `todo_ready` and `delegate_build` get one guidance line: plan, read,
+  dispatch the first batch, merge through Stage 12, update, repeat.
+  Restart safety needs no new state: after a crash dead claims read stale,
+  interrupted builds are offered on their kept branch and dependents wait.
+  Progress: `todo_ready` for the model and `todo show <tree-id>` for the
+  owner (status, plan, claim, worker execution, branch, gate step). The
+  web UI has no Task view yet; adding one needs the owner's shell files,
+  so it is deferred. Binding record: the Stage 13 entry in
+  `cmd/evie/docs/active/subagents.decisions.md`.
 
 **14. Workflow Runtime**
 - Implement the reviewed, deterministic Workflow Runtime from

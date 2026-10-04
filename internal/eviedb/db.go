@@ -1251,6 +1251,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("upgrade Task Context Scopes: %w", err)
 	}
+	if err := ensureTaskPlan(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade Task plans: %w", err)
+	}
 	if hooks.afterSchema != nil {
 		hooks.afterSchema()
 	}

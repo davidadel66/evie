@@ -17,6 +17,25 @@ func IdempotencySHA256(key IdempotencyKey) string {
 // CanonicalCreateRequestSHA256 returns the stable request identity used by
 // durable Task idempotency after the trusted runtime resolves the target scope.
 func CanonicalCreateRequestSHA256(input CreateInput, scope Scope) (string, error) {
+	if len(input.DependsOn) > 0 || len(input.Paths) > 0 {
+		// Stage 13 (2026-10-04): plan fields get their own version, so a
+		// request without them keeps its earlier identity.
+		return canonicalMutationSHA256(struct {
+			Version                int      `json:"version"`
+			Operation              string   `json:"operation"`
+			Scope                  Scope    `json:"scope"`
+			Title                  string   `json:"title"`
+			Description            string   `json:"description"`
+			Priority               int      `json:"priority"`
+			DueDate                string   `json:"due_date"`
+			ParentID               ID       `json:"parent_id"`
+			ExpectedParentRevision uint64   `json:"expected_parent_revision"`
+			Focus                  bool     `json:"focus"`
+			DependsOn              []ID     `json:"depends_on"`
+			Paths                  []string `json:"paths"`
+		}{3, string(OperationCreate), scope, input.Title, input.Description, input.Priority, input.DueDate,
+			input.ParentID, input.ExpectedParentRevision, input.Focus, input.DependsOn, input.Paths})
+	}
 	if input.Focus {
 		return canonicalMutationSHA256(struct {
 			Version                int    `json:"version"`
@@ -49,6 +68,14 @@ func CanonicalCreateRequestSHA256(input CreateInput, scope Scope) (string, error
 // CanonicalDecomposeRequestSHA256 returns the stable request identity used by
 // durable Task decomposition idempotency.
 func CanonicalDecomposeRequestSHA256(id ID, input DecomposeInput) (string, error) {
+	version := 1
+	for _, child := range input.Children {
+		if child.HasPlan() {
+			// Stage 13: children with plan fields encode them (ChildInput
+			// omits empty ones, so plain batches keep version 1 exactly).
+			version = 2
+		}
+	}
 	return canonicalMutationSHA256(struct {
 		Version          int          `json:"version"`
 		Operation        string       `json:"operation"`
@@ -56,7 +83,7 @@ func CanonicalDecomposeRequestSHA256(id ID, input DecomposeInput) (string, error
 		TaskID           ID           `json:"task_id"`
 		ExpectedRevision uint64       `json:"expected_revision"`
 		Children         []ChildInput `json:"children"`
-	}{1, string(OperationDecompose), ScopeGlobal, id, input.ExpectedRevision, input.Children})
+	}{version, string(OperationDecompose), ScopeGlobal, id, input.ExpectedRevision, input.Children})
 }
 
 // CanonicalUpdateRequestSHA256 returns the stable request identity used by
@@ -67,6 +94,40 @@ func CanonicalUpdateRequestSHA256(id ID, input UpdateInput) (string, error) {
 	priority, prioritySet := pointerValue(input.Priority)
 	dueDate, dueDateSet := pointerValue(input.DueDate)
 	status, statusSet := pointerValue(input.Status)
+	if input.DependsOn != nil || input.Paths != nil {
+		// Stage 13 (2026-10-04): a patch of plan fields has its own version.
+		resultSummary, resultSummarySet := pointerValue(input.ResultSummary)
+		dependsOn, dependsOnSet := pointerValue(input.DependsOn)
+		paths, pathsSet := pointerValue(input.Paths)
+		return canonicalMutationSHA256(struct {
+			Version          int      `json:"version"`
+			Operation        string   `json:"operation"`
+			Scope            Scope    `json:"scope"`
+			TaskID           ID       `json:"task_id"`
+			ExpectedRevision uint64   `json:"expected_revision"`
+			TitleSet         bool     `json:"title_set"`
+			Title            string   `json:"title"`
+			DescriptionSet   bool     `json:"description_set"`
+			Description      string   `json:"description"`
+			PrioritySet      bool     `json:"priority_set"`
+			Priority         int      `json:"priority"`
+			DueDateSet       bool     `json:"due_date_set"`
+			DueDate          string   `json:"due_date"`
+			ResultSummarySet bool     `json:"result_summary_set"`
+			ResultSummary    string   `json:"result_summary"`
+			StatusSet        bool     `json:"status_set"`
+			Status           Status   `json:"status"`
+			DependsOnSet     bool     `json:"depends_on_set"`
+			DependsOn        []ID     `json:"depends_on"`
+			PathsSet         bool     `json:"paths_set"`
+			Paths            []string `json:"paths"`
+		}{
+			3, string(OperationUpdate), ScopeGlobal, id, input.ExpectedRevision,
+			titleSet, title, descriptionSet, description, prioritySet, priority,
+			dueDateSet, dueDate, resultSummarySet, resultSummary, statusSet, status,
+			dependsOnSet, dependsOn, pathsSet, paths,
+		})
+	}
 	if input.ResultSummary == nil {
 		return canonicalMutationSHA256(struct {
 			Version          int    `json:"version"`

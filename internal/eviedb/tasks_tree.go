@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,6 +46,9 @@ func (s *Store) DecomposeGlobalTask(
 	access, err := taskAccessFromContext(ctx, s.db)
 	if err != nil {
 		return task.Decomposition{}, err
+	}
+	if access.delegated && slices.ContainsFunc(input.Children, task.ChildInput.HasPlan) {
+		return task.Decomposition{}, errDelegatedPlan
 	}
 	requestSHA256, err := task.CanonicalDecomposeRequestSHA256(id, input)
 	if err != nil {
@@ -154,17 +158,49 @@ func (s *Store) DecomposeGlobalTask(
 		if err != nil {
 			return err
 		}
-		children := make([]task.Task, len(input.Children))
-		for i, childInput := range input.Children {
+		ids := make([]task.ID, len(input.Children))
+		for i := range ids {
 			childID, err := uuid.NewRandom()
 			if err != nil {
 				return fmt.Errorf("generate decomposed Task ID: %w", err)
 			}
+			ids[i] = task.ID(childID.String())
+		}
+		// Stage 13: a child depends on existing Tasks of the tree and on
+		// other children of this batch by index; all are proved before
+		// anything is written.
+		dependencies := make([][]task.ID, len(input.Children))
+		created, proposed := map[task.ID]task.ID{}, map[task.ID][]task.ID{}
+		for i, childInput := range input.Children {
+			created[ids[i]] = parent.ID
+			dependencies[i] = slices.Clone(childInput.DependsOn)
+			for _, sibling := range childInput.DependsOnChildren {
+				dependencies[i] = append(dependencies[i], ids[sibling])
+			}
+			if len(dependencies[i]) > 0 {
+				proposed[ids[i]] = dependencies[i]
+			} else {
+				dependencies[i] = nil
+			}
+		}
+		if len(proposed) > 0 {
+			rejected, err := checkTaskDependencies(ctx, conn, parent.RootID, created, proposed)
+			if err != nil {
+				return err
+			}
+			if rejected != nil {
+				return reject(rejected, task.DiagnosticInvalidInput, mutationInvalidInput, "depends_on", "")
+			}
+		}
+		children := make([]task.Task, len(input.Children))
+		for i, childInput := range input.Children {
+			paths, _ := task.NormalizePaths(childInput.Paths)
 			child := task.Task{
-				ID: task.ID(childID.String()), ParentID: parent.ID, RootID: parent.RootID,
+				ID: ids[i], ParentID: parent.ID, RootID: parent.RootID,
 				SiblingOrder: firstOrder + uint64(i), Scope: parent.Scope,
 				Title: childInput.Title, Description: childInput.Description, Priority: childInput.Priority,
-				DueDate: childInput.DueDate, Status: task.StatusOpen, Revision: 1, CreatedAt: now, UpdatedAt: now,
+				DueDate: childInput.DueDate, DependsOn: dependencies[i], Paths: paths,
+				Status: task.StatusOpen, Revision: 1, CreatedAt: now, UpdatedAt: now,
 			}
 			if err := insertTaskState(ctx, conn, child); err != nil {
 				return err
@@ -400,7 +436,7 @@ func (s *Store) GetGlobalTaskTree(ctx context.Context, id task.ID, query task.Tr
 		)
 		SELECT t.id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
 		       t.scope, t.title, t.description, t.priority, t.due_date, t.result_summary,
-		       t.status, t.revision, t.created_at, t.updated_at, descendants.depth,
+		       t.status, t.revision, t.created_at, t.updated_at, t.depends_on, t.paths, descendants.depth,
 		       CASE WHEN descendants.depth = ? THEN EXISTS (
 		           WITH RECURSIVE below(task_id) AS (
 		               SELECT task_id FROM task_hierarchy WHERE parent_id = t.id
@@ -431,18 +467,24 @@ func (s *Store) GetGlobalTaskTree(ctx context.Context, id task.ID, query task.Tr
 	var flat []flatNode
 	for rows.Next() {
 		var node flatNode
-		var description, dueDate, resultSummary sql.NullString
+		var description, dueDate, resultSummary, dependsOn, paths sql.NullString
 		var priority sql.NullInt64
 		var createdText, updatedText string
 		if err := rows.Scan(&node.value.ID, &node.value.ParentID, &node.value.RootID, &node.value.SiblingOrder,
 			&node.value.Scope, &node.value.Title, &description, &priority, &dueDate, &resultSummary, &node.value.Status,
-			&node.value.Revision, &createdText, &updatedText, &node.depth, &node.hasRelevantDescendants); err != nil {
+			&node.value.Revision, &createdText, &updatedText, &dependsOn, &paths, &node.depth, &node.hasRelevantDescendants); err != nil {
 			return task.Tree{}, err
 		}
 		node.value.Description = description.String
 		node.value.Priority = int(priority.Int64)
 		node.value.DueDate = dueDate.String
 		node.value.ResultSummary = resultSummary.String
+		if node.value.DependsOn, err = decodeTaskList[task.ID](dependsOn); err != nil {
+			return task.Tree{}, err
+		}
+		if node.value.Paths, err = decodeTaskList[string](paths); err != nil {
+			return task.Tree{}, err
+		}
 		node.value.CreatedAt, err = time.Parse(time.RFC3339Nano, createdText)
 		if err != nil {
 			return task.Tree{}, err

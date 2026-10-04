@@ -262,6 +262,84 @@ var todoDecomposeTool = openrouter.Tool{
 	},
 }
 
+// Task Tree orchestration (Stage 13, 2026-10-04): plan fields on add, update
+// and decompose, and the todo_ready read model. Earlier schemas stay frozen
+// for sessions pinned before them.
+var (
+	todoDependsOnProperty = openrouter.Property{
+		Type: "array", Items: &openrouter.Property{Type: "string"},
+		Description: "Task IDs of the same tree that must be completed, and their builds merged, before this Task is dispatched; never an ancestor or descendant",
+	}
+	todoPathsProperty = openrouter.Property{
+		Type: "array", Items: &openrouter.Property{Type: "string"},
+		Description: "Files or folders, relative to the repository's top level, this Task expects to change; Tasks whose paths overlap never run at once, and a Task without paths may touch any file",
+	}
+)
+
+var todoPlannedAddTool = func() openrouter.Tool {
+	tool := cloneSchema(todoFocusedAddTool)
+	tool.Function.Parameters.Properties["depends_on"] = cloneProperty(todoDependsOnProperty)
+	tool.Function.Parameters.Properties["paths"] = cloneProperty(todoPathsProperty)
+	return tool
+}()
+
+var todoPlannedUpdateTool = func() openrouter.Tool {
+	tool := cloneSchema(todoClaimedUpdateTool)
+	dependsOn := cloneProperty(todoDependsOnProperty)
+	dependsOn.Description = "Replacement dependencies: " + dependsOn.Description + "; an empty list clears them"
+	paths := cloneProperty(todoPathsProperty)
+	paths.Description = "Replacement paths: " + paths.Description + "; an empty list clears them"
+	tool.Function.Parameters.Properties["depends_on"] = dependsOn
+	tool.Function.Parameters.Properties["paths"] = paths
+	return tool
+}()
+
+var todoPlannedDecomposeTool = func() openrouter.Tool {
+	tool := cloneSchema(todoDecomposeTool)
+	children := tool.Function.Parameters.Properties["children"]
+	children.Items.Properties["depends_on"] = cloneProperty(todoDependsOnProperty)
+	children.Items.Properties["depends_on_children"] = openrouter.Property{
+		Type: "array", Items: &openrouter.Property{Type: "integer"},
+		Description: "Zero-based indexes of other children in this batch that must be done before this child is dispatched",
+	}
+	children.Items.Properties["paths"] = cloneProperty(todoPathsProperty)
+	tool.Function.Parameters.Properties["children"] = children
+	return tool
+}()
+
+var todoReadyTool = openrouter.Tool{
+	Type: "function",
+	Function: openrouter.Function{
+		Name: "todo_ready",
+		Description: "Read which Tasks of a Task Tree can be dispatched to workers now. Returns batches of open leaf Tasks whose dependencies are done (completed and merged), " +
+			"no two of which conflict (their paths overlap, or one has no paths), each sized to the worker limits: dispatch only the first batch, then read again. " +
+			"Also returns Tasks whose builds are running or await propose_build_merge, blocked Tasks with every reason (waiting on dependencies, claimed, part of running work, conflicting with a build, marked blocked, no capacity), " +
+			"and Tasks that look finished. A claim left by an execution that is no longer running counts as released. Read-only workers (delegate_explore) change no files, so their Tasks may join any batch.",
+		Parameters: openrouter.Parameter{
+			Type:     "object",
+			Required: []string{"tree_id"},
+			Properties: map[string]openrouter.Property{
+				"tree_id": {Type: "string", Description: "The Task Tree's root, or any Task to consider only its subtree"},
+				"max":     {Type: "integer", Description: "Optional smaller batch size than the worker limits allow"},
+			},
+		},
+	},
+}
+
+// TodoPlannedAddTool is the current add schema with dependencies and paths.
+func TodoPlannedAddTool() Tool { return Tool{Schema: cloneSchema(todoPlannedAddTool)} }
+
+// TodoPlannedUpdateTool is the current update schema with dependencies and
+// paths.
+func TodoPlannedUpdateTool() Tool { return Tool{Schema: cloneSchema(todoPlannedUpdateTool)} }
+
+// TodoPlannedDecomposeTool is the current decomposition schema whose
+// children may carry dependencies and paths.
+func TodoPlannedDecomposeTool() Tool { return Tool{Schema: cloneSchema(todoPlannedDecomposeTool)} }
+
+// TodoReadyTool reads a Task Tree's dispatchable set.
+func TodoReadyTool() Tool { return Tool{Schema: cloneSchema(todoReadyTool)} }
+
 // TodoTools returns fresh definitions for the existing model-facing Todo
 // tools. The Todo first-party plugin attaches canonical Capability identities
 // while preserving these schemas and execution functions unchanged.

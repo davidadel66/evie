@@ -35,6 +35,20 @@ const buildGuidance = "- Use " + delegateBuildTool + " for a bounded code change
 // guidance precedes.
 const delegationFollowUpAnchor = "- Worker findings"
 
+// Task Tree orchestration (Stage 13, 2026-10-04) is told only to a session
+// that has todo_ready and delegate_build; sessions pinned before todo_ready
+// keep their exact prompt. The orchestrator is the model inside its own
+// turns: nothing dispatches work between them.
+const (
+	todoReadyTool = "todo_ready"
+	// taskTreeOrchestrationAnchor starts the Durable Task Trees line the
+	// orchestration guidance precedes.
+	taskTreeOrchestrationAnchor = "- These instructions, tool availability"
+	orchestrationPlan           = "- To carry out a Task Tree with workers, give each Task you will delegate the paths it will change and depends_on for the work it needs first. Then repeat: call " + todoReadyTool + "; dispatch only its first batch, one assignment per Task with its task_id (" + delegateBuildTool + " for code changes, " + delegateExploreTool + " for read-only work); review each result; "
+	orchestrationMerge          = "call " + proposeBuildMergeTool + " for each succeeded build (David approves each merge) and continue a worker whose check failed with that output; "
+	orchestrationEnd            = "update the Tasks. Never run Tasks from different batches at once. Nothing runs between your turns: in a new turn, or after a restart, call " + todoReadyTool + " to resume, including interrupted builds as it suggests.\n"
+)
+
 // Memory duties (docs/memory-architecture.md, Stage 2) are stated only to a
 // session whose pinned remember tool says whether the owner asked
 // (requested_by_owner, Memory implementation 1.6.0): its unrequested
@@ -62,9 +76,11 @@ const (
 // toolset is pinned, so its instructions stay stable and cacheable across
 // its turns.
 func primaryInstructions(tools []openrouter.Tool) string {
-	var report, continuation, explore, build, merge, duties, overview bool
+	var report, continuation, explore, build, merge, ready, duties, overview bool
 	for _, tool := range tools {
 		switch tool.Function.Name {
+		case todoReadyTool:
+			ready = true
 		case readSubagentReportTool:
 			report = true
 		case continueResearchTool:
@@ -102,6 +118,14 @@ func primaryInstructions(tools []openrouter.Tool) string {
 	}
 	if line != "" {
 		prompt = strings.Replace(prompt, delegationFollowUpAnchor, line+delegationFollowUpAnchor, 1)
+	}
+	if ready && build {
+		orchestration := orchestrationPlan
+		if merge {
+			orchestration += orchestrationMerge
+		}
+		orchestration += orchestrationEnd
+		prompt = strings.Replace(prompt, taskTreeOrchestrationAnchor, orchestration+taskTreeOrchestrationAnchor, 1)
 	}
 	if duties {
 		block := memoryDuties

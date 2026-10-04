@@ -164,3 +164,43 @@ func TestMergeGuidanceOnlyWhenTheSessionCanProposeMerges(t *testing.T) {
 		t.Fatal("merge guidance does not follow the build line")
 	}
 }
+
+// Stage 13 (2026-10-04): a session that has todo_ready and delegate_build is
+// told how to carry out a Task Tree: plan paths and dependencies, read the
+// ready set, dispatch one conflict-free batch, merge through the gate,
+// update the Tasks and repeat, resuming with todo_ready in a later turn.
+// Sessions pinned before todo_ready keep their exact prompt; the merge step
+// is named only to sessions that have the merge tool.
+func TestOrchestrationGuidanceOnlyWhenTheSessionCanReadyAndBuild(t *testing.T) {
+	build := append(append([]openrouter.Tool(nil), delegationTools...), toolNamed("delegate_explore"), toolNamed("delegate_build"), toolNamed("propose_build_merge"))
+	without := primaryInstructions(build)
+	with := primaryInstructions(append(append([]openrouter.Tool(nil), build...), toolNamed("todo_ready")))
+	if strings.Contains(without, "todo_ready") {
+		t.Fatal("a session pinned before todo_ready is told to use it")
+	}
+	orchestration := orchestrationPlan + orchestrationMerge + orchestrationEnd
+	for _, want := range []string{"paths", "depends_on", "todo_ready", "first batch", "task_id", "delegate_build", "delegate_explore",
+		"propose_build_merge", "approves each merge", "failed", "update the Tasks", "different batches", "Nothing runs between your turns", "interrupted builds"} {
+		if !strings.Contains(orchestration, want) {
+			t.Errorf("orchestration guidance lacks %q:\n%s", want, orchestration)
+		}
+	}
+	if strings.Replace(with, orchestration, "", 1) != without || strings.Count(with, orchestration) != 1 {
+		t.Fatal("orchestration guidance changed more than its own line")
+	}
+	if !strings.Contains(with, orchestration+taskTreeOrchestrationAnchor) || strings.Index(with, orchestration) < strings.Index(with, "# Durable Task Trees") {
+		t.Fatal("orchestration guidance is not in the Durable Task Trees section")
+	}
+	if len(orchestration) > 800 {
+		t.Errorf("orchestration guidance is %d bytes; keep it short, it is resident in every request", len(orchestration))
+	}
+	// Without the merge tool the merge step is not named; without
+	// delegate_build there is nothing to orchestrate.
+	noMerge := primaryInstructions([]openrouter.Tool{toolNamed("delegate_build"), toolNamed("todo_ready")})
+	if strings.Contains(noMerge, "propose_build_merge") || !strings.Contains(noMerge, orchestrationPlan+orchestrationEnd) {
+		t.Fatal("orchestration guidance names a merge tool the session lacks")
+	}
+	if got := primaryInstructions([]openrouter.Tool{toolNamed("todo_ready")}); got != systemPrompt {
+		t.Fatal("a session that cannot delegate builds got orchestration guidance")
+	}
+}

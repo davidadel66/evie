@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/google/uuid"
@@ -21,28 +22,51 @@ const (
 	TodoDecomposeCapabilityID CapabilityID = CapabilityID(task.CapabilityDecompose)
 	TodoClaimCapabilityID     CapabilityID = CapabilityID(task.CapabilityClaim)
 	TodoReleaseCapabilityID   CapabilityID = CapabilityID(task.CapabilityRelease)
+	TodoReadyCapabilityID     CapabilityID = CapabilityID(task.CapabilityReady)
 
-	todoImplementationVersion    = "1.7.0"
+	// Implementation 1.8.0 (Stage 13, 2026-10-04) adds dependencies and
+	// paths to add, update and decompose, and todo_ready. 1.7.0 reopens with
+	// its exact schemas and refuses plan fields.
+	todoImplementationVersion    = "1.8.0"
 	todoContractVersion          = "1.0.0"
 	todoListContractVersion      = "1.3.0"
-	todoAddContractVersion       = "1.4.0"
+	todoAddContractVersion       = "1.5.0"
 	todoGetContractVersion       = "1.1.0"
-	todoUpdateContractVersion    = "1.3.0"
-	todoDecomposeContractVersion = "1.0.0"
+	todoUpdateContractVersion    = "1.4.0"
+	todoDecomposeContractVersion = "1.1.0"
 	todoClaimContractVersion     = "1.0.0"
 	todoReleaseContractVersion   = "1.0.0"
+	todoReadyContractVersion     = "1.0.0"
 )
 
 type Todo struct {
 	service task.Service
+	limits  task.DispatchLimits
 }
 
 type taskManagementService interface {
 	ManagementUpdateGlobalTask(context.Context, task.ID, task.UpdateInput, string) (task.Task, error)
 }
 
+// taskReadinessService is the Kernel read model behind todo_ready.
+type taskReadinessService interface {
+	ReadyGlobalTasks(context.Context, task.ReadyQuery) (task.Readiness, error)
+}
+
 // NewTodo binds the Kernel Task service used by every current Todo capability.
-func NewTodo(service task.Service) Todo { return Todo{service: service} }
+// todo_ready sizes batches to the default subagent limits until
+// WithDispatchLimits supplies the configured ones.
+func NewTodo(service task.Service) Todo {
+	policy := delegation.DefaultPolicy()
+	return Todo{service: service, limits: task.DispatchLimits{MaxBatch: policy.MaxBatch, PerParent: policy.PerParent, Runtime: policy.Runtime, PerTurn: policy.PerTurn}}
+}
+
+// WithDispatchLimits sizes todo_ready's batches to the configured subagent
+// concurrency caps.
+func (t Todo) WithDispatchLimits(limits task.DispatchLimits) Todo {
+	t.limits = limits
+	return t
+}
 
 func (t Todo) Start(context.Context) error {
 	if t.service == nil {
@@ -74,6 +98,7 @@ func (Todo) Manifest() Manifest {
 			{ID: TodoDecomposeCapabilityID, Version: todoDecomposeContractVersion},
 			{ID: TodoClaimCapabilityID, Version: todoClaimContractVersion},
 			{ID: TodoReleaseCapabilityID, Version: todoReleaseContractVersion},
+			{ID: TodoReadyCapabilityID, Version: todoReadyContractVersion},
 		},
 		ResumableFrom: []ImplementationCompatibility{
 			{
@@ -143,25 +168,39 @@ func (Todo) Manifest() Manifest {
 					{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.TodoReleaseTool().Schema)},
 				},
 			},
+			{
+				ImplementationVersion: "1.7.0",
+				Capabilities: []CapabilityCompatibility{
+					{ID: TodoListCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: schemaHash(tools.TodoScopedListTool().Schema)},
+					{ID: TodoAddCapabilityID, ContractVersion: "1.4.0", SchemaSHA256: schemaHash(tools.TodoFocusedAddTool().Schema)},
+					{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: schemaHash(tools.TodoTreeGetTool().Schema)},
+					{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: schemaHash(tools.TodoClaimedUpdateTool().Schema)},
+					{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.TodoDecomposeTool().Schema)},
+					{ID: TodoClaimCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.TodoClaimTool().Schema)},
+					{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.TodoReleaseTool().Schema)},
+				},
+			},
 		},
 	}
 }
 
 func (t Todo) ToolCapabilities() []ToolCapability {
-	addTool := tools.TodoFocusedAddTool()
+	addTool := tools.TodoPlannedAddTool()
 	listTool := tools.TodoScopedListTool()
 	getTool := tools.TodoTreeGetTool()
 	addTool.Execute = t.add
 	listTool.Execute = t.list
 	getTool.Execute = t.get
-	updateTool := tools.TodoClaimedUpdateTool()
+	updateTool := tools.TodoPlannedUpdateTool()
 	updateTool.Execute = t.update
-	decomposeTool := tools.TodoDecomposeTool()
+	decomposeTool := tools.TodoPlannedDecomposeTool()
 	decomposeTool.Execute = t.decompose
 	claimTool := tools.TodoClaimTool()
 	claimTool.Execute = t.claim
 	releaseTool := tools.TodoReleaseTool()
 	releaseTool.Execute = t.release
+	readyTool := tools.TodoReadyTool()
+	readyTool.Execute = t.ready
 	return []ToolCapability{
 		{ID: TodoListCapabilityID, ContractVersion: todoListContractVersion, Tool: listTool},
 		{ID: TodoAddCapabilityID, ContractVersion: todoAddContractVersion, Tool: addTool},
@@ -170,12 +209,40 @@ func (t Todo) ToolCapabilities() []ToolCapability {
 		{ID: TodoDecomposeCapabilityID, ContractVersion: todoDecomposeContractVersion, Tool: decomposeTool},
 		{ID: TodoClaimCapabilityID, ContractVersion: todoClaimContractVersion, Tool: claimTool},
 		{ID: TodoReleaseCapabilityID, ContractVersion: todoReleaseContractVersion, Tool: releaseTool},
+		{ID: TodoReadyCapabilityID, ContractVersion: todoReadyContractVersion, Tool: readyTool},
 	}
 }
 
 // ResumableToolCapabilities supplies exact frozen schemas with current
 // plugin-owned execution for receipts pinned before an intentional evolution.
 func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
+	if version == "1.7.0" {
+		// Before Stage 13 (2026-10-04): the same execution as then, plan
+		// fields refused as unknown, and no todo_ready.
+		listTool := tools.TodoScopedListTool()
+		listTool.Execute = t.list
+		addTool := tools.TodoFocusedAddTool()
+		addTool.Execute = t.addUnplanned
+		getTool := tools.TodoTreeGetTool()
+		getTool.Execute = t.get
+		updateTool := tools.TodoClaimedUpdateTool()
+		updateTool.Execute = t.updateUnplanned
+		decomposeTool := tools.TodoDecomposeTool()
+		decomposeTool.Execute = t.decomposeUnplanned
+		claimTool := tools.TodoClaimTool()
+		claimTool.Execute = t.claim
+		releaseTool := tools.TodoReleaseTool()
+		releaseTool.Execute = t.release
+		return []ToolCapability{
+			{ID: TodoListCapabilityID, ContractVersion: "1.3.0", Tool: listTool},
+			{ID: TodoAddCapabilityID, ContractVersion: "1.4.0", Tool: addTool},
+			{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", Tool: getTool},
+			{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", Tool: updateTool},
+			{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", Tool: decomposeTool},
+			{ID: TodoClaimCapabilityID, ContractVersion: "1.0.0", Tool: claimTool},
+			{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", Tool: releaseTool},
+		}
+	}
 	legacy := tools.TodoTools()
 	legacy[0].Execute = t.listLegacy
 	legacy[1].Execute = t.addLegacy
@@ -229,7 +296,7 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 		updateTool := tools.TodoIdempotentUpdateTool()
 		updateTool.Execute = t.updateCompatibility
 		decomposeTool := tools.TodoDecomposeTool()
-		decomposeTool.Execute = t.decompose
+		decomposeTool.Execute = t.decomposeUnplanned
 		capabilities = []ToolCapability{
 			{ID: TodoListCapabilityID, ContractVersion: "1.2.0", Tool: listTool},
 			{ID: TodoAddCapabilityID, ContractVersion: "1.2.0", Tool: addTool},
@@ -246,9 +313,9 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 		getTool := tools.TodoTreeGetTool()
 		getTool.Execute = t.get
 		updateTool := tools.TodoClaimedUpdateTool()
-		updateTool.Execute = t.update
+		updateTool.Execute = t.updateUnplanned
 		decomposeTool := tools.TodoDecomposeTool()
-		decomposeTool.Execute = t.decompose
+		decomposeTool.Execute = t.decomposeUnplanned
 		claimTool := tools.TodoClaimTool()
 		claimTool.Execute = t.claim
 		releaseTool := tools.TodoReleaseTool()
@@ -271,9 +338,9 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 		getTool := tools.TodoTreeGetTool()
 		getTool.Execute = t.get
 		updateTool := tools.TodoClaimedUpdateTool()
-		updateTool.Execute = t.update
+		updateTool.Execute = t.updateUnplanned
 		decomposeTool := tools.TodoDecomposeTool()
-		decomposeTool.Execute = t.decompose
+		decomposeTool.Execute = t.decomposeUnplanned
 		claimTool := tools.TodoClaimTool()
 		claimTool.Execute = t.claim
 		releaseTool := tools.TodoReleaseTool()
@@ -302,6 +369,16 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 
 func (t Todo) add(ctx context.Context, arguments string) (string, error) {
 	input, err := decodeTodoAddArguments(arguments)
+	if err != nil {
+		return "", fmt.Errorf("decode todo_add arguments: %w", err)
+	}
+	return t.createTask(ctx, input.taskInput())
+}
+
+// addUnplanned serves receipts pinned to the focused add (1.4.0), before
+// plan fields.
+func (t Todo) addUnplanned(ctx context.Context, arguments string) (string, error) {
+	input, err := decodeTodoUnplannedAddArguments(arguments)
 	if err != nil {
 		return "", fmt.Errorf("decode todo_add arguments: %w", err)
 	}
@@ -448,49 +525,104 @@ func (t Todo) get(ctx context.Context, arguments string) (string, error) {
 	return encodeTodoResult(value)
 }
 
+// decompose is the current todo_decompose (1.1.0): children may carry plan
+// fields.
 func (t Todo) decompose(ctx context.Context, arguments string) (string, error) {
+	input, err := decodeTodoPlannedDecomposeArguments(arguments)
+	if err != nil {
+		return "", fmt.Errorf("decode todo_decompose arguments: %w", err)
+	}
+	return t.applyDecompose(ctx, input.TaskID, input.taskInput())
+}
+
+// decomposeUnplanned serves receipts pinned before Stage 13.
+func (t Todo) decomposeUnplanned(ctx context.Context, arguments string) (string, error) {
 	input, err := decodeTodoDecomposeArguments(arguments)
 	if err != nil {
 		return "", fmt.Errorf("decode todo_decompose arguments: %w", err)
 	}
-	if strings.TrimSpace(input.TaskID) == "" {
+	return t.applyDecompose(ctx, input.TaskID, input.taskInput())
+}
+
+func (t Todo) applyDecompose(ctx context.Context, taskID string, input task.DecomposeInput) (string, error) {
+	if strings.TrimSpace(taskID) == "" {
 		return "", &task.InputError{Field: "task_id", Message: "must not be blank"}
 	}
 	if t.service == nil {
 		return "", fmt.Errorf("Todo Task service is unavailable")
 	}
-	result, err := t.service.DecomposeGlobalTask(ctx, task.ID(input.TaskID), input.taskInput())
+	result, err := t.service.DecomposeGlobalTask(ctx, task.ID(taskID), input)
 	if err != nil {
 		return "", err
 	}
 	return encodeTodoResult(result)
 }
 
+// ready is todo_ready (Stage 13): the tree's dispatchable set, sized to the
+// subagent caps and counted against the invoking turn.
+func (t Todo) ready(ctx context.Context, arguments string) (string, error) {
+	var input struct {
+		TreeID string `json:"tree_id"`
+		Max    int    `json:"max"`
+	}
+	if err := decodeTodoArguments(arguments, &input); err != nil {
+		return "", fmt.Errorf("decode todo_ready arguments: %w", err)
+	}
+	readiness, ok := t.service.(taskReadinessService)
+	if !ok {
+		return "", fmt.Errorf("Todo Task readiness service is unavailable")
+	}
+	query := task.ReadyQuery{TreeID: task.ID(input.TreeID), Max: input.Max, Limits: t.limits}
+	if invocation, found := tools.InvocationFromContext(ctx); found {
+		query.TurnSourceEventID = string(invocation.SourceEventID)
+	}
+	result, err := readiness.ReadyGlobalTasks(ctx, query)
+	if err != nil {
+		return "", err
+	}
+	return encodeTodoResult(result)
+}
+
+// update is the current todo_update (1.4.0): plan fields included.
 func (t Todo) update(ctx context.Context, arguments string) (string, error) {
-	return t.updateWithReason(ctx, arguments, "")
+	input, err := decodeTodoPlannedUpdateArguments(arguments)
+	if err != nil {
+		return "", fmt.Errorf("decode todo_update arguments: %w", err)
+	}
+	return t.applyUpdate(ctx, input.TaskID, input.taskInput(), "")
 }
 
-func (t Todo) updateCompatibility(ctx context.Context, arguments string) (string, error) {
-	return t.updateWithReason(ctx, arguments, "legacy_receipt")
-}
-
-func (t Todo) updateWithReason(ctx context.Context, arguments, managementReason string) (string, error) {
+// updateUnplanned serves receipts pinned before Stage 13, whose todo_update
+// has no plan fields.
+func (t Todo) updateUnplanned(ctx context.Context, arguments string) (string, error) {
 	input, err := decodeTodoUpdateArguments(arguments)
 	if err != nil {
 		return "", fmt.Errorf("decode todo_update arguments: %w", err)
 	}
-	if strings.TrimSpace(input.TaskID) == "" {
+	return t.applyUpdate(ctx, input.TaskID, input.taskInput(), "")
+}
+
+func (t Todo) updateCompatibility(ctx context.Context, arguments string) (string, error) {
+	input, err := decodeTodoUpdateArguments(arguments)
+	if err != nil {
+		return "", fmt.Errorf("decode todo_update arguments: %w", err)
+	}
+	return t.applyUpdate(ctx, input.TaskID, input.taskInput(), "legacy_receipt")
+}
+
+func (t Todo) applyUpdate(ctx context.Context, taskID string, updateInput task.UpdateInput, managementReason string) (string, error) {
+	if strings.TrimSpace(taskID) == "" {
 		return "", &task.InputError{Field: "task_id", Message: "must not be blank"}
 	}
 	if t.service == nil {
 		return "", fmt.Errorf("Todo Task service is unavailable")
 	}
-	updateInput := input.taskInput()
 	var updated task.Task
-	if managementReason == "" || (input.Status == nil && input.ResultSummary == nil) {
-		updated, err = t.service.UpdateGlobalTask(ctx, task.ID(input.TaskID), updateInput)
+	var err error
+	if managementReason == "" || (updateInput.Status == nil && updateInput.ResultSummary == nil) {
+		updated, err = t.service.UpdateGlobalTask(ctx, task.ID(taskID), updateInput)
 	} else if management, ok := t.service.(taskManagementService); ok {
-		updated, err = management.ManagementUpdateGlobalTask(ctx, task.ID(input.TaskID), updateInput, managementReason)
+		updated, err = management.ManagementUpdateGlobalTask(ctx, task.ID(taskID), updateInput, managementReason)
 	} else {
 		return "", fmt.Errorf("Todo Task management service is unavailable")
 	}

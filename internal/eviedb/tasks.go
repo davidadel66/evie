@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,6 +37,9 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 	}
 	if input.ParentID == "" && access.delegated {
 		return task.Task{}, task.ErrRootCreationDenied
+	}
+	if access.delegated && (len(input.DependsOn) > 0 || len(input.Paths) > 0) {
+		return task.Task{}, errDelegatedPlan
 	}
 	targetScope, err := access.selected(input.Scope)
 	if err != nil {
@@ -109,18 +113,13 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 		if err != nil {
 			return fmt.Errorf("generate task ID: %w", err)
 		}
+		paths, _ := task.NormalizePaths(input.Paths)
 		created = task.Task{
 			ID: task.ID(id.String()), RootID: task.ID(id.String()), Scope: targetScope,
 			Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate,
-			Status: task.StatusOpen, Revision: 1, CreatedAt: now, UpdatedAt: now,
+			Paths: paths, Status: task.StatusOpen, Revision: 1, CreatedAt: now, UpdatedAt: now,
 		}
-		if _, err := conn.ExecContext(ctx, `
-			INSERT INTO tasks (
-				id, scope, title, description, priority, due_date, result_summary,
-				status, revision, created_at, updated_at
-			) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)
-		`, created.ID, created.Scope, created.Title, created.Description, created.Priority, created.DueDate,
-			created.ResultSummary, created.Status, created.Revision, formatTaskTime(created.CreatedAt), formatTaskTime(created.UpdatedAt)); err != nil {
+		if err := insertTaskState(ctx, conn, created); err != nil {
 			return fmt.Errorf("insert global task: %w", err)
 		}
 		if _, err := conn.ExecContext(ctx, `
@@ -250,10 +249,24 @@ func (s *Store) createChildTask(
 	if err != nil {
 		return task.Task{}, nil, fmt.Errorf("generate child Task ID: %w", err)
 	}
+	if len(input.DependsOn) > 0 {
+		// Stage 13: each dependency is another Task of this tree, never an
+		// ancestor, and the tree stays free of cycles.
+		rejected, err := checkTaskDependencies(ctx, conn, parent.RootID,
+			map[task.ID]task.ID{task.ID(id.String()): parent.ID}, map[task.ID][]task.ID{task.ID(id.String()): input.DependsOn})
+		if err != nil {
+			return task.Task{}, nil, err
+		}
+		if rejected != nil {
+			return reject(rejected, task.DiagnosticInvalidInput, mutationInvalidInput, "depends_on", "")
+		}
+	}
+	paths, _ := task.NormalizePaths(input.Paths)
 	created := task.Task{
 		ID: task.ID(id.String()), ParentID: parent.ID, RootID: parent.RootID, SiblingOrder: order,
 		Scope: parent.Scope, Title: input.Title, Description: input.Description, Priority: input.Priority,
-		DueDate: input.DueDate, Status: task.StatusOpen, Revision: 1, CreatedAt: now, UpdatedAt: now,
+		DueDate: input.DueDate, DependsOn: slices.Clone(input.DependsOn), Paths: paths,
+		Status: task.StatusOpen, Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := insertTaskState(ctx, conn, created); err != nil {
 		return task.Task{}, nil, err
@@ -410,7 +423,7 @@ func (s *Store) ListGlobalTasks(ctx context.Context, filter task.ListFilter) ([]
 		)
 		SELECT t.id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
 		       t.scope, t.title, t.description, t.priority, t.due_date, t.result_summary,
-		       t.status, t.revision, t.created_at, t.updated_at
+		       t.status, t.revision, t.created_at, t.updated_at, t.depends_on, t.paths
 		FROM tasks t
 		JOIN task_hierarchy h ON h.task_id = t.id
 		JOIN tree ON tree.task_id = t.id
@@ -532,6 +545,9 @@ func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 	if err != nil {
 		return task.Task{}, err
 	}
+	if access.delegated && (input.DependsOn != nil || input.Paths != nil) {
+		return task.Task{}, errDelegatedPlan
+	}
 	requestSHA256, err := task.CanonicalUpdateRequestSHA256(id, input)
 	if err != nil {
 		return task.Task{}, err
@@ -631,6 +647,16 @@ func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 				task.DiagnosticRevisionConflict, mutationRevisionConflict, "", current.Status, "",
 			)
 		}
+		if input.DependsOn != nil && len(*input.DependsOn) > 0 {
+			// Stage 13: the new dependencies must keep the tree acyclic.
+			rejected, err := checkTaskDependencies(ctx, conn, current.RootID, nil, map[task.ID][]task.ID{id: *input.DependsOn})
+			if err != nil {
+				return err
+			}
+			if rejected != nil {
+				return reject(rejected, task.DiagnosticInvalidInput, mutationInvalidInput, "depends_on", current.Status, "")
+			}
+		}
 		activeClaim, activeClaimFound, claimErr := authorizeTaskUpdate(
 			ctx, conn, current, input, attribution, s.now().UTC(), managementReason != "",
 		)
@@ -699,13 +725,17 @@ func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 		}
 		updated.Revision++
 		updated.UpdatedAt = s.now().UTC()
+		dependsOn, paths, err := encodeTaskPlan(updated)
+		if err != nil {
+			return err
+		}
 		outcome, err := conn.ExecContext(ctx, `
 			UPDATE tasks
 			SET title = ?, description = NULLIF(?, ''), priority = NULLIF(?, 0), due_date = NULLIF(?, ''), result_summary = NULLIF(?, ''),
-			    status = ?, revision = ?, updated_at = ?
+			    status = ?, revision = ?, updated_at = ?, depends_on = ?, paths = ?
 			WHERE id = ? AND scope = ? AND revision = ?
 		`, updated.Title, updated.Description, updated.Priority, updated.DueDate, updated.ResultSummary, updated.Status,
-			updated.Revision, formatTaskTime(updated.UpdatedAt), id, current.Scope, current.Revision)
+			updated.Revision, formatTaskTime(updated.UpdatedAt), dependsOn, paths, id, current.Scope, current.Revision)
 		if err != nil {
 			return fmt.Errorf("update global task: %w", err)
 		}
@@ -873,7 +903,7 @@ func hasTerminalAncestor(ctx context.Context, source queryRower, parentID task.I
 
 func hasTaskNonStatusPatch(input task.UpdateInput) bool {
 	return input.Title != nil || input.Description != nil || input.Priority != nil || input.DueDate != nil ||
-		input.ResultSummary != nil
+		input.ResultSummary != nil || input.DependsOn != nil || input.Paths != nil
 }
 
 func applyTaskPatch(current task.Task, input task.UpdateInput) task.Task {
@@ -895,6 +925,16 @@ func applyTaskPatch(current task.Task, input task.UpdateInput) task.Task {
 	}
 	if input.Status != nil {
 		updated.Status = *input.Status
+	}
+	if input.DependsOn != nil {
+		updated.DependsOn = nil
+		if len(*input.DependsOn) > 0 {
+			updated.DependsOn = slices.Clone(*input.DependsOn)
+		}
+	}
+	if input.Paths != nil {
+		// Validation already accepted the paths; stored paths are cleaned.
+		updated.Paths, _ = task.NormalizePaths(*input.Paths)
 	}
 	return updated
 }
@@ -1007,7 +1047,7 @@ func getGlobalTask(ctx context.Context, source queryRower, id task.ID) (task.Tas
 	return scanTask(source.QueryRowContext(ctx, `
 		SELECT t.id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
 		       t.scope, t.title, t.description, t.priority, t.due_date, t.result_summary,
-		       t.status, t.revision, t.created_at, t.updated_at
+		       t.status, t.revision, t.created_at, t.updated_at, t.depends_on, t.paths
 		FROM tasks t
 		JOIN task_hierarchy h ON h.task_id = t.id
 		WHERE t.id = ? AND t.scope IN (`+scopeSQL+`)`+grantSQL+`
@@ -1015,13 +1055,17 @@ func getGlobalTask(ctx context.Context, source queryRower, id task.ID) (task.Tas
 }
 
 func insertTaskState(ctx context.Context, conn *sql.Conn, value task.Task) error {
-	_, err := conn.ExecContext(ctx, `
+	dependsOn, paths, err := encodeTaskPlan(value)
+	if err != nil {
+		return err
+	}
+	_, err = conn.ExecContext(ctx, `
 		INSERT INTO tasks (
 			id, scope, title, description, priority, due_date, result_summary,
-			status, revision, created_at, updated_at
-		) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)
+			status, revision, created_at, updated_at, depends_on, paths
+		) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, ?, ?)
 	`, value.ID, value.Scope, value.Title, value.Description, value.Priority, value.DueDate,
-		value.ResultSummary, value.Status, value.Revision, formatTaskTime(value.CreatedAt), formatTaskTime(value.UpdatedAt))
+		value.ResultSummary, value.Status, value.Revision, formatTaskTime(value.CreatedAt), formatTaskTime(value.UpdatedAt), dependsOn, paths)
 	if err != nil {
 		return fmt.Errorf("insert Task state: %w", err)
 	}
@@ -1170,12 +1214,13 @@ func scanTask(scanner rowScanner) (task.Task, error) {
 	var (
 		value                               task.Task
 		description, dueDate, resultSummary sql.NullString
+		dependsOn, paths                    sql.NullString
 		priority                            sql.NullInt64
 		createdText, updatedText            string
 	)
 	if err := scanner.Scan(&value.ID, &value.ParentID, &value.RootID, &value.SiblingOrder,
 		&value.Scope, &value.Title, &description, &priority, &dueDate, &resultSummary,
-		&value.Status, &value.Revision, &createdText, &updatedText); err != nil {
+		&value.Status, &value.Revision, &createdText, &updatedText, &dependsOn, &paths); err != nil {
 		return task.Task{}, err
 	}
 	value.Description = description.String
@@ -1183,6 +1228,12 @@ func scanTask(scanner rowScanner) (task.Task, error) {
 	value.DueDate = dueDate.String
 	value.ResultSummary = resultSummary.String
 	var err error
+	if value.DependsOn, err = decodeTaskList[task.ID](dependsOn); err != nil {
+		return task.Task{}, err
+	}
+	if value.Paths, err = decodeTaskList[string](paths); err != nil {
+		return task.Task{}, err
+	}
 	value.CreatedAt, err = time.Parse(time.RFC3339Nano, createdText)
 	if err != nil {
 		return task.Task{}, fmt.Errorf("parse task created_at: %w", err)

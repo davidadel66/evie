@@ -19,7 +19,9 @@ type todoAddArguments struct {
 	Focus                  bool                `json:"focus"`
 }
 
-func decodeTodoAddArguments(arguments string) (todoAddArguments, error) {
+// decodeTodoUnplannedAddArguments decodes the todo_add contract pinned
+// before Stage 13 (1.4.0): plan fields are unknown and refused.
+func decodeTodoUnplannedAddArguments(arguments string) (todoAddArguments, error) {
 	var input todoAddArguments
 	if err := decodeTodoArguments(arguments, &input); err != nil {
 		return todoAddArguments{}, err
@@ -33,6 +35,40 @@ func (input todoAddArguments) taskInput() task.CreateInput {
 		ParentID: task.ID(input.ParentID), ExpectedParentRevision: input.ExpectedParentRevision,
 		Scope: input.Scope, IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey), Focus: input.Focus,
 	}
+}
+
+// todoPlannedAddArguments is the current todo_add contract (1.5.0, Stage 13):
+// the earlier fields plus dependencies and paths.
+type todoPlannedAddArguments struct {
+	todoAddArguments
+	DependsOn []string `json:"depends_on"`
+	Paths     []string `json:"paths"`
+}
+
+func decodeTodoAddArguments(arguments string) (todoPlannedAddArguments, error) {
+	var input todoPlannedAddArguments
+	if err := decodeTodoArguments(arguments, &input); err != nil {
+		return todoPlannedAddArguments{}, err
+	}
+	return input, nil
+}
+
+func (input todoPlannedAddArguments) taskInput() task.CreateInput {
+	created := input.todoAddArguments.taskInput()
+	created.DependsOn, created.Paths = taskIDs(input.DependsOn), input.Paths
+	return created
+}
+
+// taskIDs converts model-supplied identities, keeping nil for none.
+func taskIDs(values []string) []task.ID {
+	if values == nil {
+		return nil
+	}
+	ids := make([]task.ID, len(values))
+	for i, value := range values {
+		ids[i] = task.ID(value)
+	}
+	return ids
 }
 
 type todoUpdateArguments struct {
@@ -63,16 +99,53 @@ func (input todoUpdateArguments) taskInput() task.UpdateInput {
 	}
 }
 
+// todoPlannedUpdateArguments is the current todo_update contract (1.4.0,
+// Stage 13): replacement dependencies and paths, an empty list clearing one.
+type todoPlannedUpdateArguments struct {
+	todoUpdateArguments
+	DependsOn *[]string `json:"depends_on"`
+	Paths     *[]string `json:"paths"`
+}
+
+func decodeTodoPlannedUpdateArguments(arguments string) (todoPlannedUpdateArguments, error) {
+	var input todoPlannedUpdateArguments
+	if err := decodeTodoArguments(arguments, &input); err != nil {
+		return todoPlannedUpdateArguments{}, err
+	}
+	return input, nil
+}
+
+func (input todoPlannedUpdateArguments) taskInput() task.UpdateInput {
+	updated := input.todoUpdateArguments.taskInput()
+	if input.DependsOn != nil {
+		ids := taskIDs(*input.DependsOn)
+		if ids == nil {
+			ids = []task.ID{}
+		}
+		updated.DependsOn = &ids
+	}
+	updated.Paths = input.Paths
+	return updated
+}
+
+type todoDecomposeChild struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Priority    int    `json:"priority"`
+	DueDate     string `json:"due"`
+}
+
+func (child todoDecomposeChild) taskInput() task.ChildInput {
+	return task.ChildInput{Title: child.Title, Description: child.Description, Priority: child.Priority, DueDate: child.DueDate}
+}
+
+// todoDecomposeArguments is the todo_decompose contract pinned before Stage
+// 13 (1.0.0): children have no plan fields.
 type todoDecomposeArguments struct {
-	TaskID           string `json:"task_id"`
-	ExpectedRevision uint64 `json:"expected_revision"`
-	Children         []struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		Priority    int    `json:"priority"`
-		DueDate     string `json:"due"`
-	} `json:"children"`
-	IdempotencyKey string `json:"idempotency_key"`
+	TaskID           string               `json:"task_id"`
+	ExpectedRevision uint64               `json:"expected_revision"`
+	Children         []todoDecomposeChild `json:"children"`
+	IdempotencyKey   string               `json:"idempotency_key"`
 }
 
 func decodeTodoDecomposeArguments(arguments string) (todoDecomposeArguments, error) {
@@ -86,9 +159,44 @@ func decodeTodoDecomposeArguments(arguments string) (todoDecomposeArguments, err
 func (input todoDecomposeArguments) taskInput() task.DecomposeInput {
 	children := make([]task.ChildInput, len(input.Children))
 	for index, child := range input.Children {
-		children[index] = task.ChildInput{
-			Title: child.Title, Description: child.Description, Priority: child.Priority, DueDate: child.DueDate,
-		}
+		children[index] = child.taskInput()
+	}
+	return task.DecomposeInput{
+		ExpectedRevision: input.ExpectedRevision, Children: children,
+		IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey),
+	}
+}
+
+// todoPlannedDecomposeArguments is the current todo_decompose contract
+// (1.1.0, Stage 13): each child may name existing dependencies, earlier or
+// later children of the batch by index, and paths.
+type todoPlannedDecomposeArguments struct {
+	TaskID           string `json:"task_id"`
+	ExpectedRevision uint64 `json:"expected_revision"`
+	Children         []struct {
+		todoDecomposeChild
+		DependsOn         []string `json:"depends_on"`
+		DependsOnChildren []int    `json:"depends_on_children"`
+		Paths             []string `json:"paths"`
+	} `json:"children"`
+	IdempotencyKey string `json:"idempotency_key"`
+}
+
+func decodeTodoPlannedDecomposeArguments(arguments string) (todoPlannedDecomposeArguments, error) {
+	var input todoPlannedDecomposeArguments
+	if err := decodeTodoArguments(arguments, &input); err != nil {
+		return todoPlannedDecomposeArguments{}, err
+	}
+	return input, nil
+}
+
+func (input todoPlannedDecomposeArguments) taskInput() task.DecomposeInput {
+	children := make([]task.ChildInput, len(input.Children))
+	for index, child := range input.Children {
+		children[index] = child.taskInput()
+		children[index].DependsOn = taskIDs(child.DependsOn)
+		children[index].DependsOnChildren = child.DependsOnChildren
+		children[index].Paths = child.Paths
 	}
 	return task.DecomposeInput{
 		ExpectedRevision: input.ExpectedRevision, Children: children,
@@ -145,14 +253,14 @@ func CanonicalTodoMutationAttempt(
 		key = task.IdempotencyKey(input.IdempotencyKey)
 		request, err = task.CanonicalCreateRequestSHA256(input.taskInput(), targetScope)
 	case "todo_update":
-		input, decodeErr := decodeTodoUpdateArguments(arguments)
+		input, decodeErr := decodeTodoPlannedUpdateArguments(arguments)
 		if decodeErr != nil {
 			return TodoMutationAttempt{}, false, nil
 		}
 		key = task.IdempotencyKey(input.IdempotencyKey)
 		request, err = task.CanonicalUpdateRequestSHA256(task.ID(input.TaskID), input.taskInput())
 	case "todo_decompose":
-		input, decodeErr := decodeTodoDecomposeArguments(arguments)
+		input, decodeErr := decodeTodoPlannedDecomposeArguments(arguments)
 		if decodeErr != nil {
 			return TodoMutationAttempt{}, false, nil
 		}

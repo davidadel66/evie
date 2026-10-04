@@ -182,6 +182,9 @@ func (a taskAccess) project(value task.Task) task.Task {
 		value.ParentID = ""
 		value.SiblingOrder = 0
 	}
+	// Dependencies may name Tasks outside the grant (Stage 13); a delegated
+	// session sees none of them.
+	value.DependsOn = nil
 	return value
 }
 

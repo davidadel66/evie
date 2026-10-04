@@ -174,13 +174,17 @@ func nullableUint64(value *uint64) any {
 }
 
 func insertTaskRevision(ctx context.Context, conn *sql.Conn, value task.Task) error {
-	_, err := conn.ExecContext(ctx, `
+	dependsOn, paths, err := encodeTaskPlan(value)
+	if err != nil {
+		return err
+	}
+	_, err = conn.ExecContext(ctx, `
 		INSERT INTO task_revisions (
 			task_id, revision, scope, title, description, priority, due_date, result_summary,
-			status, created_at, updated_at
-		) VALUES (?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?)
+			status, created_at, updated_at, depends_on, paths
+		) VALUES (?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, ?)
 	`, value.ID, value.Revision, value.Scope, value.Title, value.Description, value.Priority, value.DueDate,
-		value.ResultSummary, value.Status, formatTaskTime(value.CreatedAt), formatTaskTime(value.UpdatedAt))
+		value.ResultSummary, value.Status, formatTaskTime(value.CreatedAt), formatTaskTime(value.UpdatedAt), dependsOn, paths)
 	if err != nil {
 		return fmt.Errorf("insert Task revision: %w", err)
 	}
@@ -198,7 +202,7 @@ func getTaskRevision(ctx context.Context, conn *sql.Conn, id task.ID, revision u
 	return scanTask(conn.QueryRowContext(ctx, `
 		SELECT r.task_id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
 		       r.scope, r.title, r.description, r.priority, r.due_date, r.result_summary,
-		       r.status, r.revision, r.created_at, r.updated_at
+		       r.status, r.revision, r.created_at, r.updated_at, r.depends_on, r.paths
 		FROM task_revisions r
 		JOIN task_hierarchy h ON h.task_id = r.task_id
 		WHERE r.task_id = ? AND r.revision = ? AND r.scope IN (`+scopeSQL+`)

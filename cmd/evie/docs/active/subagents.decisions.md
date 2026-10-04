@@ -1,5 +1,152 @@
 # Subagents implementation decisions
 
+## 2026-10-04 — Task Tree orchestration (Stage 13)
+
+Source: Stage 13 of [docs/memory-architecture.md](../../../../docs/memory-architecture.md)
+(parallel workers driven from the Task Tree; the orchestrator verifies,
+merges through Stage 12 and moves on) and the owner's scope decision for
+it: the orchestrator is the conversational model inside a turn, supported
+by deterministic harness tools, not a background scheduler. Workers stay
+bound to the parent turn's authority, unchanged. Orchestration that
+outlives a turn belongs to Stage 14 (Workflow Runtime).
+
+Superseded wording: none. The 2026-09-10 entry's "No ... automatic
+dependency scheduling" still holds (nothing schedules work), but Tasks now
+record dependencies and expected paths, and build admission enforces
+them.
+
+- **Plans on Tasks.** A Task may carry `depends_on` (Task IDs of the same
+  tree) and `paths` (files or folders relative to the repository's top
+  level that it expects to change). Both live on the Task and on each
+  revision snapshot (`depends_on` and `paths` columns of `tasks` and
+  `task_revisions`, JSON arrays, NULL when empty; an upgrade adds the
+  columns once). Changes bump the revision and use the usual revision
+  checks and idempotency; requests without plan fields keep their
+  canonical digests (create v3, update v3 and decompose v2 apply only when
+  a plan field is present). Limits: at most 32 dependencies (no blank or
+  repeated ID) and 32 paths of at most 256 bytes. Paths are cleaned
+  (`./pkg/a/` is `pkg/a`) and must be relative, without `..`, `~`, a
+  pattern (`*`, `?`, `[`) or a control character; `.` is refused (omit
+  paths for work that may touch anything). A dependency names another
+  Task of the same tree that is neither an ancestor nor a descendant, and
+  the tree must stay acyclic in its "waits for" graph: a Task waits for
+  its dependencies, a subtask for the dependencies of every ancestor (it
+  cannot start before its parent could), and a parent for its subtasks (it
+  cannot complete while they are active). A root depends on nothing. A
+  refusal names the problem and writes nothing; `todo_decompose` children
+  may name earlier or later children of the same batch by index
+  (`depends_on_children`).
+- **Who plans.** Only the orchestrating (non-delegated) conversation sets
+  plan fields; a delegated worker's request carrying them is refused, and
+  a worker reads its Tasks without `depends_on`, which may name Tasks
+  outside its grant. This follows "the orchestrator owns the rest of the
+  tree" (Stage 11); workers keep claiming, updating and decomposing their
+  own Task.
+- **Todo 1.8.0.** `todo.add` 1.5.0 and `todo.update` 1.4.0 (replacement
+  lists; an empty list clears one) gain `depends_on` and `paths`;
+  `todo.decompose` 1.1.0 lets each child carry `depends_on`,
+  `depends_on_children` and `paths`; `todo.ready` 1.0.0 (`todo_ready`) is
+  new. Implementation 1.7.0 is resumable with its exact schemas, and every
+  earlier contract refuses plan fields as unknown.
+- **`todo_ready`.** Arguments: `tree_id` (the root, or any Task for its
+  subtree) and an optional smaller `max` batch size. It returns the
+  capacity, conflict-free `batches`, `in_flight`, `blocked` (every reason),
+  `completable` and status `counts`, computed from one read snapshot:
+  - A Task is dispatchable when it is active and has no subtasks (a group
+    is never dispatched), is open or in progress with no live claim, is
+    not part of a Task whose build is running, and every effective
+    dependency (its own and its ancestors') is done: completed, and its
+    latest build merged or with nothing to merge. Its paths must not
+    conflict with a build that holds paths in the conversation's
+    repository: each Task's latest build while it runs or awaits its
+    merge.
+  - A claim whose execution is no longer running counts as released
+    (`stale_claim`; admission releases it). A Task whose latest build
+    failed, was cancelled or was interrupted with its worktree kept is
+    dispatchable with a note offering `delegate_build` with `base` its
+    branch. A subtask of a Task whose build awaits its merge gets the same
+    stacking note.
+  - A Task whose build runs or awaits its merge is in flight, with the
+    next step (wait; or `propose_build_merge` with the execution ID, noting
+    a target that moved and a Task still to complete).
+  - Blocked reasons: `waiting_on_dependencies` (each dependency with its
+    status and any running or unmerged build), `claimed` (by this
+    conversation or another live execution), `inside_running_work`,
+    `conflicts_with_build`, `marked_blocked`, and `no_capacity`.
+  - Completable: a group whose subtasks are all completed or cancelled,
+    and a Task whose build merged.
+  - Batches: first fit in tree order, each at most the batch size, no two
+    members conflicting. The batch size is the smallest of `max_batch`,
+    `per_parent` minus this conversation's running workers, `runtime`,
+    `per_turn` minus the workers this turn started, and `max`; other
+    conversations' workers only delay a batch and are reported. At zero,
+    there are no batches and each ready Task is blocked `no_capacity` with
+    the reason. The orchestrator dispatches the first batch and reads
+    again.
+- **Conflict rule.** Two Tasks conflict when a path of one equals,
+  contains or lies inside a path of the other, compared component-wise and
+  case-insensitively (as on the owner's macOS file system), or, under the
+  conservative rule, when either declares no paths (it may touch any
+  file). Paths only keep work apart; they fence nothing (the worktree
+  fence and the merge gate still apply). Explore workers write nothing, so
+  their Tasks never conflict.
+- **Harness enforcement.** Inside the build admission transaction, after
+  the Stage 11 Task checks, each fresh assignment is refused when an
+  effective dependency is unfinished (naming each), when its paths overlap
+  an earlier assignment of the same call, when its paths overlap the Task
+  of a build that is admitted or running in the same repository (same
+  common git directory), or when it is part of a Task whose build is
+  running (that worker's grant covers it). A continuation of a build
+  worker is refused while an overlapping build runs. The conservative
+  rule and the running-work refusal apply when the parent was composed
+  with `todo.ready`; a parent pinned earlier cannot declare paths and keeps
+  Stage 11's parallel builds, while declared overlaps and dependencies
+  bind every parent. A finished, unmerged build does not block admission
+  (only `todo_ready` holds overlapping Tasks back), so work can still be
+  stacked on an unmerged branch.
+- **Guidance.** A session that has `todo_ready` and `delegate_build` gets
+  one more Durable Task Trees line: plan paths and dependencies; then
+  repeat `todo_ready`, dispatch only the first batch with one assignment
+  per Task, review, `propose_build_merge` each succeeded build (named only
+  when the session has it), continue a worker whose check failed, update
+  the Tasks; never run Tasks of different batches at once; nothing runs
+  between turns, so a new turn or a restart resumes with `todo_ready`.
+  Other sessions keep their prompt.
+- **Progress.** The orchestrator reads progress through `todo_ready`; the
+  owner through `todo show [--session ID] [--max N] <tree-id>`: each
+  Task's status, dependencies, paths, claim (this session, live or stale)
+  and latest build (execution, state and phase, branch, merge-gate step,
+  needs rebase), then the read model. `todo get` and `todo list` print plan
+  fields. There is no web view: the web UI has no Task view, and adding
+  one would mean editing the owner's uncommitted shell files, so it is
+  deferred.
+- **Restart safety.** Nothing new is stored: readiness is computed from
+  Tasks, claims, turn leases and build records. After a crash, recovery
+  interrupts a running build (worktree and branch kept), ends its grant and
+  releases its claim; a claim of a turn that died reads stale until
+  admission releases it; the interrupted Task is offered for resumption on
+  its branch; its dependents keep waiting; a new turn calls `todo_ready`.
+- **Versioning.** The Standard preset becomes `sha256:377b51c0…`, adding
+  `todo.ready` after the required Todo Capabilities; `sha256:6566fc2a…`
+  joins the historical definitions (preset history test
+  `combined_before_ready`), so existing chats reopen with exactly their
+  tools (Todo 1.7.0 schemas through its declared compatibility) and need a
+  new chat for `todo_ready` and plan fields. Delegation tools, worker
+  presets and their schemas are unchanged.
+- **Stage 14.** Nothing dispatches work between turns or after a restart;
+  orchestration that outlives a turn (unattended fan-out, retries,
+  schedules) is the Workflow Runtime's.
+- **Known limits.** Paths are the planner's estimate: a worker can change
+  files outside its Task's paths, which the merge gate's rebase (textual
+  conflicts) and verify runs (semantic ones) still catch.
+  Case-insensitive comparison may serialize work that a case-sensitive
+  file system would allow. `todo show` sizes batches to the default caps,
+  not `EVIE_SUBAGENTS_*`. Conflicts with builds of another conversation in
+  the same repository name only the execution. A dependency whose Task was
+  completed while its latest build ended failed, cancelled or interrupted
+  counts as done; any commits on that branch are not tracked as unmerged
+  work.
+
 ## 2026-10-04 — Verify-and-merge gate (Stage 12)
 
 Source: Stage 12 of [docs/memory-architecture.md](../../../../docs/memory-architecture.md)

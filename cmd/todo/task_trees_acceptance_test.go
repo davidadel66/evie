@@ -405,7 +405,7 @@ func acceptanceManager(t *testing.T, service task.Service) *plugins.Manager {
 
 func assertAcceptanceComposition(t *testing.T, manager *plugins.Manager, resolved plugins.ResolvedComposition) {
 	t.Helper()
-	for _, name := range []string{"todo_list", "todo_get", "todo_add", "todo_update", "todo_decompose", "todo_claim", "todo_release", "youtube_transcript", "youtube_scrape_channel"} {
+	for _, name := range []string{"todo_list", "todo_get", "todo_add", "todo_update", "todo_decompose", "todo_claim", "todo_release", "todo_ready", "youtube_transcript", "youtube_scrape_channel"} {
 		if acceptanceSchemaCount(resolved.Toolset, name) != 1 {
 			t.Fatalf("standard schema %q count=%d", name, acceptanceSchemaCount(resolved.Toolset, name))
 		}
@@ -432,8 +432,9 @@ func assertAcceptanceComposition(t *testing.T, manager *plugins.Manager, resolve
 		contracts[capability.ID] = capability.ContractVersion
 	}
 	expectedContracts := map[string]string{
-		"todo.add":               "1.4.0",
-		"todo.decompose":         "1.0.0",
+		"todo.add":               "1.5.0",
+		"todo.decompose":         "1.1.0",
+		"todo.ready":             "1.0.0",
 		"youtube.transcript":     "1.0.0",
 		"youtube.scrape_channel": "1.0.0",
 	}

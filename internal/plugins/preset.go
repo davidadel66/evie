@@ -21,7 +21,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:6566fc2a89af6fb8661b00d2222d49125b9181153ef5a2e97888552221864a54"
+	StandardPresetVersion                               = "sha256:377b51c09706fba7741ad0f6f0e9ba8281921ba6b0043b8f9985a5c31966b3c0"
+	preReadyStandardPresetVersion                       = "sha256:6566fc2a89af6fb8661b00d2222d49125b9181153ef5a2e97888552221864a54"
 	preMergeStandardPresetVersion                       = "sha256:535755ad0e6b11cadd91edd54db59c8196a3970ff256b3feddac838babc38a72"
 	preBuildStandardPresetVersion                       = "sha256:bfd4eb42705bce9f2ab68b1b0832d224f11b1e5bbb1f0221768188cd2d322d4e"
 	preExploreStandardPresetVersion                     = "sha256:89664be6462d10c5f9d6adb09589533a388f753a31edef3986bc513165c0ef6a"
@@ -721,6 +722,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preMergeStandardPresetVersion {
 		return m.resumePreset(preMergeStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preReadyStandardPresetVersion {
+		return m.resumePreset(preReadyStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -1030,14 +1034,35 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 // search, the standing tier's memory_set_standing and memory_overview, then
 // delegation, its report reader and continuation, then explore delegation
 // (Stage 7, 2026-10-03), then build delegation (Stage 11, 2026-10-03), then
-// the build merge gate (Stage 12, 2026-10-04). A later Memory Capability
-// must freeze this Memory list, as preProactiveMemoryCapabilityRequirements
-// does for the version before it.
+// the build merge gate (Stage 12, 2026-10-04), and todo_ready after the
+// required Todo Capabilities (Stage 13, 2026-10-04). A later Memory
+// Capability must freeze this Memory list, as
+// preProactiveMemoryCapabilityRequirements does for the version before it.
 func standardPresetContent() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preReadyStandardPresetContent()
+	p.RequiredCapabilities = append(p.RequiredCapabilities,
+		CapabilityRequirement{ID: TodoReadyCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preReadyStandardPresetContent is the content of version 6566fc2a…, the
+// standard preset before Task Tree orchestration: everything before the
+// merge gate, then the merge gate.
+func preReadyStandardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preMergeStandardPresetContent()
 	p.OptionalCapabilities = append(p.OptionalCapabilities,
 		CapabilityRequirement{ID: SubagentsMergeCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preReadyStandardPreset is the standard preset before todo_ready (version
+// 6566fc2a…); sessions pinned to it keep their exact tools, including the
+// Todo 1.7.0 schemas without dependencies or paths.
+func preReadyStandardPreset() Preset {
+	p := preReadyStandardPresetContent()
+	p.Version = preReadyStandardPresetVersion
 	return p
 }
 

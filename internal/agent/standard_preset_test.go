@@ -229,8 +229,8 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	}
 
 	wantTodo := []tools.Tool{
-		tools.TodoScopedListTool(), tools.TodoFocusedAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
-		tools.TodoDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(),
+		tools.TodoScopedListTool(), tools.TodoPlannedAddTool(), tools.TodoTreeGetTool(), tools.TodoPlannedUpdateTool(),
+		tools.TodoPlannedDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(), tools.TodoReadyTool(),
 	}
 	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools([]tools.Tool{tools.WebExcerptTool(), tools.WebTools()[1]}).WithTools(tools.YouTubeTools()).WithTools(wantTodo).Schemas()
 	if !reflect.DeepEqual(resumed.Toolset.Schemas(), wantSchemas) {
@@ -238,7 +238,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	}
 	wantProviders := []plugins.ProviderReceipt{
 		{ID: "finance", ImplementationVersion: "1.0.0"},
-		{ID: "todo", ImplementationVersion: "1.7.0"},
+		{ID: "todo", ImplementationVersion: "1.8.0"},
 		{ID: "web", ImplementationVersion: "1.1.0"},
 		{ID: "youtube", ImplementationVersion: "1.0.0"},
 	}
@@ -249,8 +249,8 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		"finance.sync@1.0.0", "finance.rules@1.0.0", "finance.categorize@1.0.0",
 		"web.fetch@1.1.0", "web.search@1.0.0",
 		"youtube.transcript@1.0.0", "youtube.scrape_channel@1.0.0",
-		"todo.list@1.3.0", "todo.add@1.4.0", "todo.get@1.1.0", "todo.update@1.3.0", "todo.decompose@1.0.0",
-		"todo.claim@1.0.0", "todo.release@1.0.0",
+		"todo.list@1.3.0", "todo.add@1.5.0", "todo.get@1.1.0", "todo.update@1.4.0", "todo.decompose@1.1.0",
+		"todo.claim@1.0.0", "todo.release@1.0.0", "todo.ready@1.0.0",
 	}
 	gotCapabilities := make([]string, len(receipt.Capabilities))
 	for i, capability := range receipt.Capabilities {

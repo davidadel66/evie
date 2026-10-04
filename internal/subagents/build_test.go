@@ -859,7 +859,7 @@ func TestBuildAdmissionRefusesUnsafeRepositoriesTasksAndParents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := composition.Clone(resolved.Receipt)
+	old := withoutTodoReady(composition.Clone(resolved.Receipt))
 	old.Preset.Version = "sha256:bfd4eb42705bce9f2ab68b1b0832d224f11b1e5bbb1f0221768188cd2d322d4e"
 	// The merge gate (Stage 12) came after build, so it goes too.
 	old.Capabilities = slices.DeleteFunc(old.Capabilities, func(c composition.Capability) bool {

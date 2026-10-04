@@ -80,6 +80,17 @@
 > text below is marked "Stage 12"; the binding record is the
 > "Verify-and-merge gate (Stage 12)" entry in
 > [subagents.decisions.md](subagents.decisions.md).
+>
+> Amended 2026-10-04 by the owner's decision for Stage 13 (Task Tree
+> orchestration) of [docs/memory-architecture.md](../../../../docs/memory-architecture.md):
+> the orchestrator is the conversational model inside a turn, supported by
+> deterministic harness tools, not a background scheduler. Tasks gain
+> optional dependencies and expected paths through the Todo tools, a new
+> read capability `todo_ready` returns a tree's dispatchable Tasks in
+> conflict-free batches sized to the worker caps, and build admission
+> refuses premature or conflicting work. Amended text below is marked
+> "Stage 13"; the binding record is the "Task Tree orchestration (Stage
+> 13)" entry in [subagents.decisions.md](subagents.decisions.md).
 
 ## Problem Statement
 
@@ -144,6 +155,17 @@ owner's setup command, when set, runs with network in each fresh worktree
 on its base commit before the worker starts, so the worker's offline
 builds find their dependencies.
 
+(Stage 13.) The parent carries out a Task Tree inside its own turns. It
+gives each Task the paths it expects to change and the Tasks it depends
+on, then repeats: `todo_ready` returns the Tasks that can start now in
+batches no two of whose members conflict, sized to the worker caps; the
+parent dispatches the first batch (one assignment per Task), reviews the
+results, proposes each succeeded build's merge, updates the Tasks and
+reads again. The harness refuses a build whose dependencies are
+unfinished or whose paths overlap a running build, whatever the model
+asks. Nothing runs between turns: a new turn, or one after a restart,
+resumes from `todo_ready`.
+
 Foreground delegation waits for bounded results. A bounded batch runs independent
 children concurrently under configurable finite per-parent and runtime limits.
 Background continuation and worker management panels remain separate outcomes.
@@ -207,6 +229,7 @@ allowances produce an explicit refusal rather than a change of scope.
 52. As Evie's owner, I want the primary agent to delegate local, read-heavy investigation (many files, a repository, a database) to a read-only worker with a clean context, so that tool output the primary agent does not need never fills its context, while writes, approvals and memory stay with it. (Added 2026-10-03, Stage 7.)
 53. As Evie's owner, I want the primary agent to delegate a bounded code change on a Task to a worker that edits and tests freely in its own git worktree and branch, fenced there by code and the operating system, so that implementation work happens in parallel without touching my checkout, and I approve once, at merge. (Added 2026-10-03, Stage 11.)
 54. As Evie's owner, I want a worker's branch verified with my project's check before and after it is rebased onto its target, and merged only by a fast-forward I approve, which never touches my uncommitted changes, so that I review verified work once and my checkout stays mine. (Added 2026-10-04, Stage 12.)
+55. As Evie's owner, I want the primary agent to carry out a Task Tree with parallel workers, running independent Tasks together and dependent or conflicting ones in order, merging each through the gate and resuming after a restart, with the harness refusing premature or conflicting work, so that larger changes progress safely without me sequencing them. (Added 2026-10-04, Stage 13.)
 
 ## Implementation Decisions
 
@@ -345,6 +368,32 @@ allowances produce an explicit refusal rather than a change of scope.
   needing a rebase, and workers still running are told. Each attempt
   records its gate's last step, and recovery settles interrupted steps:
   rebases are aborted, merges are found complete or not happened.
+- **Task Tree orchestration.** (Stage 13.) The orchestrator is the
+  parent model inside its own turns; no scheduler dispatches work between
+  them. Tasks carry optional `depends_on` (Tasks of the same tree; never
+  an ancestor or descendant; the tree stays acyclic, counting that a
+  subtask waits for its ancestors' dependencies and a parent for its
+  subtasks) and `paths` (relative files or folders it expects to change),
+  set only by the orchestrating conversation through `todo_add`,
+  `todo_update` and `todo_decompose` (Todo 1.8.0; earlier contracts keep
+  their schemas and refuse the fields). `todo_ready` (`todo.ready`, a
+  required Standard Capability) returns, for a tree or subtree: the
+  dispatchable Tasks (active leaves with no live claim, outside running
+  work, every dependency completed and its build merged, no conflict with
+  a running or unmerged build in the conversation's repository) in
+  first-fit conflict-free batches sized to the subagent caps; Tasks in
+  flight with their next step; blocked Tasks with every reason; and Tasks
+  that look finished. Two Tasks conflict when their paths overlap by
+  path prefix, or when either has none (it may touch any file). Claims of
+  executions that are no longer running count as released, and
+  interrupted builds whose worktrees were kept are offered for resumption
+  on their branch. Build admission enforces the same rules in its
+  transaction: it refuses a Task with unfinished dependencies, one whose
+  paths overlap another assignment of the call or a build running in the
+  same repository, and one inside a running build's Task; parents pinned
+  before `todo_ready` keep parallel builds of Tasks without paths.
+  Sessions with `todo_ready` and `delegate_build` get one Durable Task
+  Trees guidance line. The owner reads progress with `todo show`.
 - **Assignment interface.** Foreground delegation accepts a bounded objective,
   optional explicitly selected context, an optional existing Task identity, and
   an idempotency key. One fixed child preset is supported, so no model-selected
@@ -687,6 +736,30 @@ allowances produce an explicit refusal rather than a change of scope.
   cannot propose; the composed parent loop proposes and the owner
   approves the card; the CLI, web routes and settings section set and
   suggest the commands.
+- (Stage 13.) Pure tests cover path normalization and refusal, prefix,
+  nested and case-insensitive overlap and the no-paths rule, cycles
+  (direct, self, ancestor, descendant, inherited through a group), and the
+  read model: batching, capacity (including none), claims and stale
+  claims, running and unmerged builds, resumable builds, subtasks of
+  running work, finished groups and subtrees. Real SQLite proves plan
+  fields persist, replay and keep revision checks, refused dependencies
+  write nothing, delegated workers cannot plan, dead claims read stale,
+  and an earlier database upgrades. Through the real dispatcher and
+  supervisor, admission refuses a premature Task, two conflicting Tasks in
+  one call, and a conflicting or path-less Task while a build runs, while
+  an independent Task runs alongside; a parent pinned before `todo_ready`
+  keeps parallel builds. Through the composed parent loop, a scripted
+  orchestrator plans a four-Task tree (two independent, one depending on
+  both, one conflicting), is refused when it dispatches early or
+  conflicting work, dispatches the first batch in parallel to build
+  workers in a temporary repository, merges each through the Stage 12
+  gate with test approvals (the second rebased), dispatches the next
+  batch, merges it, and finds the root completable; the conflicting Tasks
+  never ran at once. After a crash the tree resumes: the interrupted build
+  is offered on its branch, a dead turn's claim reads stale and is
+  released, dependents wait. Receipts pinned before `todo_ready` reopen
+  with exactly their tools and refuse plan fields; `todo show` renders the
+  progress.
 - (Explore default.) A Workspace's explore follows its folder by default
   (attach enables, detach disables, no revision written); explicit on and off
   persist across reopen and folder changes; off revokes durably and returning
@@ -735,7 +808,10 @@ allowances produce an explicit refusal rather than a change of scope.
 
 - Asynchronous spawn/status/wait/cancel capabilities, background continuation,
   restart-driven execution, recurring
-  scheduling, result outboxes, and notifications.
+  scheduling, result outboxes, and notifications. (Amended 2026-10-04,
+  Stage 13: Task Tree orchestration happens only inside the parent's
+  turns; orchestration that outlives a turn belongs to the Workflow
+  Runtime, Stage 14.)
 - Nested delegation, sibling messaging, child-initiated or background
   multi-turn worker conversations, and arbitrary model-selected worker
   presets. (Amended 2026-10-01, Stage 9: a parent's explicit foreground

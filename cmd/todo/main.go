@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/task"
@@ -27,11 +28,18 @@ Usage:
   todo start|block|done|cancel|reopen [--session ID] [--revision N] <id>
   todo release-claim [--session ID] --reason TEXT <id>
   todo delete [--session ID] [--revision N] <id>  (deprecated: cancels and retains)
+  todo show [--session ID] [--max N] <tree-id>
   todo help
 
 STATUS is open, in_progress, blocked, completed, or cancelled. A primary
 session selects its trusted Workspace or project context; without --session,
-commands operate in Global scope. Flags precede positional arguments.`
+commands operate in Global scope. Flags precede positional arguments.
+
+show prints a Task Tree's orchestration progress: each Task's status,
+dependencies, paths, claim and latest build worker (execution, state,
+branch, merge-gate step), then what todo_ready offers: conflict-free
+batches sized to the default worker limits, builds in flight, blocked Tasks
+with reasons, and Tasks that look finished.`
 
 const todoCLISessionID memory.SessionID = "todo-cli"
 
@@ -90,6 +98,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runLifecycle(ctx, store, args[0], task.StatusCancelled, args[1:], stdout, stderr)
 	case "release-claim":
 		return runReleaseClaim(ctx, store, args[1:], stdout, stderr)
+	case "show":
+		return runShow(ctx, store, args[1:], stdout, stderr)
 	default:
 		return 2
 	}
@@ -97,7 +107,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 func knownCommand(command string) bool {
 	switch command {
-	case "list", "get", "add", "update", "start", "block", "done", "cancel", "reopen", "delete", "release-claim":
+	case "list", "get", "add", "update", "start", "block", "done", "cancel", "reopen", "delete", "release-claim", "show":
 		return true
 	default:
 		return false
@@ -618,8 +628,142 @@ func renderTask(ctx context.Context, store *eviedb.Store, out io.Writer, value t
 	if value.ResultSummary != "" {
 		fmt.Fprintf(out, " result=%q", value.ResultSummary)
 	}
+	fmt.Fprint(out, planText(value))
 	fmt.Fprintln(out)
 	return nil
+}
+
+// planText is a Task's dependencies and paths (Stage 13), when it has any.
+func planText(value task.Task) string {
+	var b strings.Builder
+	if len(value.DependsOn) > 0 {
+		ids := make([]string, len(value.DependsOn))
+		for i, id := range value.DependsOn {
+			ids[i] = string(id)
+		}
+		fmt.Fprintf(&b, " depends_on=%s", strings.Join(ids, ","))
+	}
+	if len(value.Paths) > 0 {
+		fmt.Fprintf(&b, " paths=%s", strings.Join(value.Paths, ","))
+	}
+	return b.String()
+}
+
+// runShow prints a Task Tree's orchestration progress (Stage 13).
+func runShow(ctx context.Context, store *eviedb.Store, args []string, stdout, stderr io.Writer) int {
+	flags := commandFlags("show")
+	var sessionID string
+	var max int
+	flags.StringVar(&sessionID, "session", "", "active primary session")
+	flags.IntVar(&max, "max", 0, "smaller batch size")
+	if !parseFlags(flags, args, stderr) {
+		return 2
+	}
+	if flags.NArg() != 1 {
+		return reportUsage(stderr, "show", "[--session ID] [--max N] <tree-id>")
+	}
+	bound, err := ownerContext(ctx, store, sessionID, uuid.NewString())
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	policy := delegation.DefaultPolicy()
+	nodes, ready, err := store.TaskTreeProgress(bound, task.ReadyQuery{TreeID: task.ID(flags.Arg(0)), Max: max,
+		Limits: task.DispatchLimits{MaxBatch: policy.MaxBatch, PerParent: policy.PerParent, Runtime: policy.Runtime, PerTurn: policy.PerTurn}})
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	renderProgress(stdout, nodes, ready)
+	return 0
+}
+
+func renderProgress(out io.Writer, nodes []task.PlanNode, ready task.Readiness) {
+	depth := map[task.ID]int{}
+	inSubtree := map[task.ID]bool{ready.TreeID: true}
+	titles := map[task.ID]string{}
+	for _, node := range nodes {
+		t := node.Task
+		titles[t.ID] = t.Title
+		if !inSubtree[t.ID] && !inSubtree[t.ParentID] {
+			continue
+		}
+		inSubtree[t.ID] = true
+		if t.ID != ready.TreeID {
+			depth[t.ID] = depth[t.ParentID] + 1
+		}
+		claim := "-"
+		switch {
+		case node.Claim != nil && node.Claim.Live && node.Claim.Mine:
+			claim = "this-session"
+		case node.Claim != nil && node.Claim.Live:
+			claim = "live"
+		case node.Claim != nil:
+			claim = "stale"
+		}
+		build := "-"
+		if b := node.Build; b != nil {
+			build = fmt.Sprintf("%s:%s(%s)", b.ExecutionID, b.State, b.Phase())
+			if b.Branch != "" {
+				build += " branch=" + b.Branch
+			}
+			if b.GateStep != "" {
+				build += " gate=" + b.GateStep
+			}
+			if b.NeedsRebase {
+				build += " needs_rebase"
+			}
+		}
+		fmt.Fprintf(out, "%s- status=%s id=%s title=%q claim=%s build=%s%s\n", strings.Repeat("  ", depth[t.ID]), t.Status, t.ID, t.Title, claim, build, planText(t))
+	}
+	statuses := make([]string, 0, len(ready.Counts))
+	for _, status := range []task.Status{task.StatusOpen, task.StatusInProgress, task.StatusBlocked, task.StatusCompleted, task.StatusCancelled} {
+		if n := ready.Counts[status]; n > 0 {
+			statuses = append(statuses, fmt.Sprintf("%s=%d", status, n))
+		}
+	}
+	fmt.Fprintf(out, "Counts: %s\n", strings.Join(statuses, " "))
+	c := ready.Capacity
+	fmt.Fprintf(out, "Capacity: batch=%d (max_batch=%d per_conversation=%d running_here=%d runtime=%d running_overall=%d)\n",
+		c.BatchSize, c.MaxBatch, c.PerConversation, c.RunningHere, c.Runtime, c.RunningOverall)
+	if c.Note != "" {
+		fmt.Fprintf(out, "  %s\n", c.Note)
+	}
+	fmt.Fprintln(out, "Ready batches (dispatch the first, then read again):")
+	if len(ready.Batches) == 0 {
+		fmt.Fprintln(out, "  none")
+	}
+	for i, batch := range ready.Batches {
+		items := make([]string, len(batch))
+		for j, item := range batch {
+			items[j] = fmt.Sprintf("%q (%s)", item.Title, item.TaskID)
+			if item.StaleClaim {
+				items[j] += " stale-claim"
+			}
+		}
+		fmt.Fprintf(out, "  %d. %s\n", i+1, strings.Join(items, ", "))
+		for _, item := range batch {
+			if item.Note != "" {
+				fmt.Fprintf(out, "     %s: %s\n", item.TaskID, item.Note)
+			}
+		}
+	}
+	for _, f := range ready.InFlight {
+		fmt.Fprintf(out, "In flight: %q (%s) build %s %s branch=%s gate=%s; next: %s\n", f.Title, f.TaskID, f.Build.ExecutionID, f.Build.Phase, f.Build.Branch, valueOr(f.Build.GateStep, "-"), f.Next)
+	}
+	for _, b := range ready.Blocked {
+		for _, reason := range b.Reasons {
+			fmt.Fprintf(out, "Blocked: %q (%s) %s: %s\n", b.Title, b.TaskID, reason.Code, reason.Detail)
+		}
+	}
+	for _, done := range ready.Completable {
+		fmt.Fprintf(out, "Completable: %q (%s) revision=%d: %s\n", done.Title, done.TaskID, done.Revision, done.Reason)
+	}
+}
+
+func valueOr(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 type repeatedString []string

@@ -26,9 +26,9 @@ type cancelingEnabledStateStore struct {
 
 func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *testing.T) {
 	// Each released Standard version, including 89664be6… from before explore
-	// delegation, bfd4eb42… from before build delegation (2026-10-03) and
-	// 535755ad… from before the merge gate (2026-10-04), reopens with exactly
-	// its own tools.
+	// delegation, bfd4eb42… from before build delegation (2026-10-03),
+	// 535755ad… from before the merge gate and 6566fc2a… from before
+	// todo_ready (2026-10-04), reopens with exactly its own tools.
 	t.Setenv("EVIE_REMOTE_MEMORY", "on")
 	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
 	if err != nil {
@@ -51,23 +51,24 @@ func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *te
 	beforeSubagents := preSubagentsStandardPresetContent()
 	beforeSubagents.Version = preSubagentsStandardPresetVersion
 	for _, tc := range []struct {
-		name                                                                                                   string
-		preset                                                                                                 Preset
-		retrieval, delegation, report, read, continuation, episodes, standing, overview, explore, build, merge int
+		name                                                                                                          string
+		preset                                                                                                        Preset
+		retrieval, delegation, report, read, continuation, episodes, standing, overview, explore, build, merge, ready int
 	}{
-		{"baseline", preRetrievalStandardPreset(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		{"retrieval_only", beforeSubagents, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		{"combined_before_reports", preReportStandardPreset(), 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		{"combined_before_stored_tool_results", preReadToolResultStandardPreset(), 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-		{"combined_before_continuation", preContinueStandardPreset(), 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0},
-		{"combined_before_episodes", preEpisodesStandardPreset(), 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0},
-		{"combined_before_standing", preStandingStandardPreset(), 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0},
-		{"combined_before_proactive", preProactiveStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
-		{"combined_before_explore", preExploreStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
-		{"combined_before_build", preBuildStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
-		{"combined_before_merge", preMergeStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
-		{"combined", BuiltinStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{"baseline", preRetrievalStandardPreset(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"retrieval_only", beforeSubagents, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"combined_before_reports", preReportStandardPreset(), 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"combined_before_stored_tool_results", preReadToolResultStandardPreset(), 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"combined_before_continuation", preContinueStandardPreset(), 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"combined_before_episodes", preEpisodesStandardPreset(), 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0},
+		{"combined_before_standing", preStandingStandardPreset(), 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0},
+		{"combined_before_proactive", preProactiveStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0},
+		{"combined_before_explore", preExploreStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
+		{"combined_before_build", preBuildStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
+		{"combined_before_merge", preMergeStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
+		{"combined_before_ready", preReadyStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+		{"combined", BuiltinStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := canonicalPresetVersion(tc.preset); got != tc.preset.Version {
@@ -93,7 +94,8 @@ func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *te
 				countSchema(reopened.Toolset, "memory_overview") != tc.overview ||
 				countSchema(reopened.Toolset, delegation.ExploreToolName) != tc.explore ||
 				countSchema(reopened.Toolset, delegation.BuildToolName) != tc.build ||
-				countSchema(reopened.Toolset, delegation.MergeToolName) != tc.merge {
+				countSchema(reopened.Toolset, delegation.MergeToolName) != tc.merge ||
+				countSchema(reopened.Toolset, "todo_ready") != tc.ready {
 				t.Fatalf("historical capabilities changed: %v", schemaNames(reopened.Toolset))
 			}
 		})
@@ -138,8 +140,8 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 		t.Fatalf("Evie version = %q, want %q", composition.Receipt.EvieVersion, EvieVersion)
 	}
 	wantTodo := []tools.Tool{
-		tools.TodoScopedListTool(), tools.TodoScopedAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
-		tools.TodoDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(),
+		tools.TodoScopedListTool(), tools.TodoPlannedAddTool(), tools.TodoTreeGetTool(), tools.TodoPlannedUpdateTool(),
+		tools.TodoPlannedDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(), tools.TodoReadyTool(),
 	}
 	wantSchemas := schemaNames(tools.KernelToolset().
 		WithTools(tools.FinanceTools()).
@@ -177,7 +179,8 @@ func TestPreRetrievalStandardReceiptKeepsExactToolsWhenMemoryProviderUpgrades(t 
 		return manager
 	}
 	plugin := NewMemory(&stubSemanticKernel{})
-	legacyPreset := BuiltinStandardPreset()
+	// The required list as it was before todo_ready (Stage 13).
+	legacyPreset := preReadyStandardPreset()
 	legacyPreset.Version = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
 	legacyPreset.OptionalCapabilities = nil
 	for _, capability := range plugin.ResumableToolCapabilities("1.1.0") {
@@ -611,7 +614,7 @@ func TestPreDurableTodoStandardReceiptResumesThroughDeclaredCompatibility(t *tes
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ID != string(TodoPluginID) ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.7.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.8.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 }
@@ -695,7 +698,7 @@ func TestPreLifecycleTodoStandardReceiptResumesWithExactFrozenTools(t *testing.T
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.7.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.8.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 	if countSchema(resumed.Toolset, "todo_update") != 0 {
@@ -759,7 +762,7 @@ func TestPreIdempotencyStandardReceiptResumesWithExactFrozenTools(t *testing.T) 
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.2.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.7.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.8.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 	for _, schema := range resumed.Toolset.Schemas() {
@@ -827,7 +830,7 @@ func TestPreTreeStandardReceiptResumesWithExactFrozenTools(t *testing.T) {
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.3.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.7.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.8.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 	if countSchema(resumed.Toolset, "todo_decompose") != 0 {
@@ -955,7 +958,7 @@ func TestPreClaimsStandardReceiptResumesFrozenUpdateWithAuditedCompatibility(t *
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.4.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.7.0" ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.8.0" ||
 		countSchema(resumed.Toolset, "todo_claim") != 0 || countSchema(resumed.Toolset, "todo_release") != 0 {
 		t.Fatalf("pre-claims compatibility = %+v", resumed.CompatibilityResolutions)
 	}
