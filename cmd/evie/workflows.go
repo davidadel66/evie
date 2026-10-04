@@ -17,12 +17,14 @@ const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie wor
 	" | evie workflows propose [--json] <workspace-id> <dir> [--fixtures <file>] | evie workflows list [--json] [<workspace-id>]" +
 	" | evie workflows show [--json] <workspace-id> <name> | evie workflows diff [--json] <proposal-id>" +
 	" | evie workflows approve [--json] <proposal-id> --hash <executable-hash> --authority <authority-hash> --expect-version <n>" +
-	" | evie workflows deactivate [--json] <workspace-id> <name> --version <n> [--reason <text>]"
+	" | evie workflows deactivate [--json] <workspace-id> <name> --version <n> [--reason <text>]" +
+	" | evie workflows run [--json] <workspace-id> <name> [--input <name>=<value>]... [--input-json <file>]" +
+	" | evie workflows runs [--json] [<workspace-id>] [--workflow <name>] | evie workflows inspect [--json] <run-id>"
 
 // workflowActivationCommands need the database and the procedural
 // repository; runWorkflowActivation answers them once both are available
-// (Stage 14 sub-stage 2).
-var workflowActivationCommands = []string{"propose", "list", "show", "diff", "approve", "deactivate"}
+// (Stage 14 sub-stage 2; run, runs and inspect from sub-stage 3).
+var workflowActivationCommands = []string{"propose", "list", "show", "diff", "approve", "deactivate", "run", "runs", "inspect"}
 
 // runWorkflowManagement answers `evie workflows validate <dir>`, which prints
 // a Workflow Definition's review report, and `evie workflows simulate <dir>

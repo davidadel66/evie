@@ -11,6 +11,7 @@ import { WorkspaceExploreSettings } from "./WorkspaceExploreSettings";
 import { WorkspaceBuildSettings } from "./WorkspaceBuildSettings";
 import { WorkspaceVerifySettings } from "./WorkspaceVerifySettings";
 import { WorkspaceWorkflows } from "./WorkspaceWorkflows";
+import { WorkspaceWorkflowRuns } from "./WorkspaceWorkflowRuns";
 
 type DirectoryProps = {
   snapshot?: ContextSessionSnapshot;
@@ -177,6 +178,7 @@ export function WorkspaceHome({
         <WorkspaceBuildSettings key={`build:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceVerifySettings key={`verify:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceWorkflows key={`workflows:${workspace.id}`} workspace={workspace} />
+        <WorkspaceWorkflowRuns key={`workflow-runs:${workspace.id}`} workspace={workspace} />
         <FolderSettings key={`${workspace.id}:${workspace.folder?.revision ?? 0}`} workspace={workspace} busy={busy} onChanged={onFolderChanged} onOpen={onOpenFiles} />
         <section className="mt-8">
           <div className="mb-4 flex items-baseline justify-between">

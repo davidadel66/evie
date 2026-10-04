@@ -137,13 +137,13 @@ func (v *Validated) Simulate(f Fixtures) (*Simulation, error) {
 	if err := s.checkFixtures(); err != nil {
 		return nil, err
 	}
-	inputs, err := v.acceptInputs(f.Inputs)
+	inputs, err := v.AcceptInputs(f.Inputs, nil)
 	if err != nil {
 		return nil, err
 	}
 	s.inputs = inputs
 	s.sim = &Simulation{
-		Workflow: v.definition.Name, ExecutableHash: v.hash, RunKey: v.runKey(inputs),
+		Workflow: v.definition.Name, ExecutableHash: v.hash, RunKey: v.RunKey(inputs),
 		Inputs: inputs, Trace: []TraceEntry{}, Previews: []EffectPreview{}, Outputs: map[string]any{},
 		Notice: simulationNotice,
 	}
@@ -159,16 +159,7 @@ func (v *Validated) Simulate(f Fixtures) (*Simulation, error) {
 	}
 	s.sim.Status = status
 	if status == SimulationSucceeded {
-		for name, ref := range v.definition.Outputs {
-			r, _ := parseRef(ref)
-			if r.Root == refInputs {
-				s.sim.Outputs[name] = walkValue(inputs[r.Name], r.Path)
-				continue
-			}
-			if out, ran := s.state[r.Name]; ran {
-				s.sim.Outputs[name] = walkValue(out, r.Path)
-			}
-		}
+		s.sim.Outputs = v.Outputs(inputs, s.state)
 	}
 	return s.sim, nil
 }
@@ -214,49 +205,6 @@ func (s *simulator) checkFixtures() error {
 	return nil
 }
 
-// acceptInputs applies defaults and validates inputs as a run start would.
-func (v *Validated) acceptInputs(raw map[string]json.RawMessage) (map[string]any, error) {
-	out := map[string]any{}
-	for _, name := range sortedKeys(raw) {
-		in, ok := v.inputs[name]
-		if !ok {
-			return nil, fmt.Errorf("inputs.%s: the workflow declares no such input", name)
-		}
-		value, err := parseCanonicalJSON(raw[name])
-		if err == nil {
-			err = checkValue(in.t, value)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("inputs.%s: %v", name, err)
-		}
-		out[name] = value
-	}
-	for _, name := range sortedKeys(v.inputs) {
-		in := v.inputs[name]
-		if _, given := out[name]; given {
-			continue
-		}
-		switch {
-		case in.hasDefault:
-			out[name] = in.def
-		case in.spec.Required:
-			return nil, fmt.Errorf("inputs.%s: required", name)
-		}
-	}
-	return out, nil
-}
-
-// runKey derives the Run Key: the workflow name and the digest of the
-// canonical JSON of the rule's inputs.
-func (v *Validated) runKey(inputs map[string]any) string {
-	selected := map[string]any{}
-	for _, name := range v.definition.RunKey.Inputs {
-		selected[name] = inputs[name]
-	}
-	data, _ := canonicalBytes(selected)
-	return v.definition.Name + ":sha256:" + digest(data)
-}
-
 func (s *simulator) entry(e TraceEntry) { s.sim.Trace = append(s.sim.Trace, e) }
 
 func (s *simulator) run() (string, error) {
@@ -300,28 +248,10 @@ func (s *simulator) run() (string, error) {
 }
 
 func (s *simulator) resolveArgs(n *node, item any) map[string]any {
-	out := map[string]any{}
-	for name, a := range n.args {
-		if a.isConst {
-			out[name] = a.literal
-			continue
-		}
-		out[name] = s.resolve(*a.ref, item)
-	}
-	return out
+	return n.inputOf(s.inputs, s.state, item)
 }
 
-func (s *simulator) resolve(r Ref, item any) any {
-	switch r.Root {
-	case refInputs:
-		return walkValue(s.inputs[r.Name], r.Path)
-	case refSteps:
-		return walkValue(s.state[r.Name], r.Path)
-	case refItem:
-		return walkValue(item, r.Path)
-	}
-	return nil
-}
+func (s *simulator) resolve(r Ref, item any) any { return resolveRef(r, s.inputs, s.state, item) }
 
 func (s *simulator) countAttempt(n *node) error {
 	if s.attempts+1 > s.v.limits.attempts {
@@ -410,12 +340,12 @@ func fixtureAttempt(f *ItemFixture, attempt int) (AttemptFixture, bool) {
 // this attempt; err is a fixture or internal problem.
 func (s *simulator) once(n *node, fixture *ItemFixture, attempt int, input map[string]any) (out any, note string, tokens int64, failure string, err error) {
 	if n.kind == KindDeterministic {
-		result, callErr := n.fn.Call(input)
-		if callErr != nil {
-			return nil, "", 0, callErr.Error(), nil
-		}
-		if checkErr := checkValue(n.fn.Result, result); checkErr != nil {
-			return nil, "", 0, "", fmt.Errorf("%s: %s returned a value outside its result type: %v", n.path, n.fn.ID(), checkErr)
+		result, failed, broken := n.call(input)
+		switch {
+		case failed != nil:
+			return nil, "", 0, failed.Error(), nil
+		case broken != nil:
+			return nil, "", 0, "", broken
 		}
 		return result, "", 0, "", nil
 	}
@@ -609,14 +539,9 @@ func (s *simulator) mapStep(n *node) (any, error) {
 }
 
 func (s *simulator) branch(n *node) string {
-	for i, c := range n.cases {
-		if evaluate(c, s.resolve(c.ref, nil)) {
-			s.entry(TraceEntry{Step: n.id, Kind: n.kind, Status: "branched", Next: c.next, Note: fmt.Sprintf("case %d matched: %s %s", i+1, c.ref.Raw, c.op)})
-			return c.next
-		}
-	}
-	s.entry(TraceEntry{Step: n.id, Kind: n.kind, Status: "branched", Next: n.step.Default, Note: "no case matched; default"})
-	return n.step.Default
+	d := n.decide(func(r Ref) any { return s.resolve(r, nil) })
+	s.entry(TraceEntry{Step: n.id, Kind: n.kind, Status: "branched", Next: d.Next, Note: d.Note})
+	return d.Next
 }
 
 func evaluate(c compiledCase, v any) bool {

@@ -3,8 +3,9 @@
 // Standing Authority: propose a definition into procedural Git with its
 // validation report and dry run, present the approval card (executable and
 // authority diffs against the current version), approve one exact version
-// for future runs, deactivate it, and list and show definitions. Runs come
-// in later sub-stages through this same type.
+// for future runs, deactivate it, and list and show definitions. Sub-stage 3
+// adds manual runs of deterministic and branch steps (runs.go); later
+// sub-stages extend runs through this same type.
 //
 // Validation runs against the bound Workspace: its current Workspace Access
 // and the runtime's capability catalog (empty until providers declare
@@ -23,6 +24,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
@@ -40,6 +42,15 @@ type Store interface {
 	DeactivateWorkflow(ctx context.Context, ws memory.WorkspaceID, name string, version int64, reason, surface string) (eviedb.WorkflowActivation, error)
 	WorkflowDefinition(ctx context.Context, ws memory.WorkspaceID, name string) (eviedb.WorkflowDefinitionState, error)
 	ListWorkflowDefinitions(ctx context.Context, ws memory.WorkspaceID) ([]eviedb.WorkflowDefinitionState, error)
+	ActiveWorkflow(ctx context.Context, ws memory.WorkspaceID, name string) (eviedb.WorkflowActivation, error)
+
+	StartWorkflowRun(ctx context.Context, req eviedb.WorkflowRunStart) (eviedb.WorkflowRun, bool, error)
+	BeginWorkflowAttempt(ctx context.Context, a eviedb.WorkflowAttemptStart) (eviedb.WorkflowNodeAttempt, error)
+	FinishWorkflowAttempt(ctx context.Context, e eviedb.WorkflowAttemptEnd) (eviedb.WorkflowRun, error)
+	FailWorkflowRun(ctx context.Context, runID string, checkpoint int64, reason string) (eviedb.WorkflowRun, error)
+	WorkflowRunProgress(ctx context.Context, id string) (eviedb.WorkflowRunProgress, error)
+	WorkflowRun(ctx context.Context, id string) (eviedb.WorkflowRunDetail, error)
+	ListWorkflowRuns(ctx context.Context, f eviedb.WorkflowRunFilter) ([]eviedb.WorkflowRun, error)
 }
 
 // Config wires a Runtime.
@@ -58,6 +69,12 @@ type Runtime struct {
 	repo    *procedural.Repo
 	catalog workflow.Catalog
 	workers workflow.WorkerCeiling
+	// call runs one deterministic step's function; nil is the reviewed
+	// function itself. Tests replace it to inject failures and to observe
+	// durable state from inside a node.
+	call  func(v *workflow.Validated, step string, input map[string]any) (any, error)
+	now   func() time.Time
+	sleep func(ctx context.Context, d time.Duration) error
 }
 
 // New returns a Runtime. It touches neither Git nor the database.
@@ -71,7 +88,7 @@ func New(c Config) (*Runtime, error) {
 	if c.Catalog == nil {
 		c.Catalog = workflow.NewCatalog()
 	}
-	return &Runtime{store: c.Store, repo: c.Repo, catalog: c.Catalog, workers: c.Workers}, nil
+	return &Runtime{store: c.Store, repo: c.Repo, catalog: c.Catalog, workers: c.Workers, now: time.Now, sleep: sleepContext}, nil
 }
 
 func ownerSurface(surface string) bool { return surface == "cli" || surface == "web" }

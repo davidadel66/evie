@@ -453,6 +453,26 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   propose|list|show|diff|approve|deactivate`, `POST /api/workflows/…` and a
   Workflows section on the Workspace home. Binding record: the sub-stage 2
   entry in `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Sub-stage 3 implemented** (2026-10-04). The owner starts a run of a
+  Workspace's active workflow (`evie workflows run <workspace-id> <name>
+  --input k=v | --input-json <file>`, `POST /api/workflows/start`, or the
+  Workflow runs section on the Workspace home). Each start re-reads the
+  approved commit from procedural Git and refuses it unless it still hashes
+  to the approval, refuses step kinds this runtime cannot execute yet (only
+  deterministic and branch steps run; nothing is recorded), validates the
+  input, derives the Run Key, and records the run in the transaction that
+  applies run admission (`authorizeWorkflowActivation`). The run pins the
+  version, both hashes, the Workspace and access revisions and its
+  Execution Composition. The database allows one active or succeeded run
+  per Run Key; a duplicate start returns that run, and a failed one frees
+  the key. Runs execute in the foreground: each node attempt is recorded
+  before it runs and its output with the next checkpoint before the next
+  node, deterministic steps retry within their policy and the run's limits,
+  and terminal history is immutable. `evie workflows runs|inspect` and
+  `POST /api/workflows/{runs,inspect}` show runs with every attempt. A
+  crash leaves the run at its last checkpoint for sub-stage 4's recovery.
+  Binding record: the sub-stage 3 entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 

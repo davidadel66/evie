@@ -26,6 +26,9 @@ type workflowCommands interface {
 	Deactivate(context.Context, workflowruntime.Deactivation) (eviedb.WorkflowActivation, error)
 	List(context.Context, memory.WorkspaceID) ([]eviedb.WorkflowDefinitionState, error)
 	Show(context.Context, memory.WorkspaceID, string) (eviedb.WorkflowDefinitionState, error)
+	StartRun(context.Context, workflowruntime.RunRequest) (workflowruntime.RunResult, error)
+	InspectRun(context.Context, string) (eviedb.WorkflowRunDetail, error)
+	ListRuns(context.Context, workflowruntime.RunFilter) ([]eviedb.WorkflowRun, error)
 }
 
 // newWorkflowRuntime is the production Workflow Runtime: the kernel store,
@@ -88,7 +91,7 @@ func parseWorkflowArgs(args []string, accepted ...string) (workflowArgs, bool) {
 // card of a proposal); approve exactly the hashes and version a card showed;
 // and deactivate a version. Approval is the owner's only: no model tool
 // reaches these commands, and approve needs the exact hashes the owner
-// reviewed.
+// reviewed. Sub-stage 3 adds run, runs and inspect (workflow_runs.go).
 func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt workflowCommands) (bool, error) {
 	if len(args) < 2 || args[0] != "workflows" || !slices.Contains(workflowActivationCommands, args[1]) {
 		return false, nil
@@ -234,6 +237,12 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		}
 		fmt.Fprintf(out, "Deactivated %s version %d. No new run will start; approve a version to activate it again.\n", activation.Name, activation.Version)
 		return true, nil
+	case "run":
+		return true, runWorkflowRun(ctx, args[2:], out, rt)
+	case "runs":
+		return true, listWorkflowRuns(ctx, args[2:], out, rt)
+	case "inspect":
+		return true, inspectWorkflowRun(ctx, args[2:], out, rt)
 	}
 	return true, usage
 }

@@ -129,7 +129,7 @@ func TestWorkflowCLIUsage(t *testing.T) {
 		{"workflows", "validate"},
 		{"workflows", "simulate", deepResearchDir},
 		{"workflows", "simulate", deepResearchDir, "--fixtures"},
-		{"workflows", "run", deepResearchDir},
+		{"workflows", "execute", deepResearchDir},
 		{"workflows", "validate", deepResearchDir, "extra"},
 	} {
 		text, err := runWorkflowsCLI(t, nil, args...)

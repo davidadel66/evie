@@ -54,7 +54,7 @@ func (p Param) checkBounds(v any) error {
 // reviewedFunctions is the reviewed registry, keyed by ID.
 func reviewedFunctions() map[string]Function {
 	out := map[string]Function{}
-	for _, f := range []Function{collectClaims(), expandBallots(), majorityFilter()} {
+	for _, f := range []Function{collectClaims(), expandBallots(), majorityFilter(), splitEvenly()} {
 		out[f.ID()] = f
 	}
 	return out
@@ -309,6 +309,59 @@ func majorityFilter() Function {
 				"accepted": accepted, "rejected": rejected,
 				"accepted_count": int64(len(accepted)), "rejected_count": int64(len(rejected)),
 			}, nil
+		},
+	}
+}
+
+// Bounds of split_evenly@1.
+const (
+	maxSplitTotal = 1_000_000_000_000
+	maxSplitParts = 1_000
+)
+
+// splitEvenly splits a whole-number total (such as cents) into parts that
+// differ by at most one and add up to the total exactly; the first
+// `remainder` shares carry the extra unit (Stage 14 sub-stage 3, the
+// deterministic example for manual runs).
+func splitEvenly() Function {
+	params := []Param{
+		{Name: "total", Type: IntegerType(), Min: 0, Max: maxSplitTotal},
+		{Name: "parts", Type: IntegerType(), Min: 1, Max: maxSplitParts},
+	}
+	result := func(minItems, maxItems int64) *Type {
+		shares := ArrayType(IntegerType())
+		shares.MinItems, shares.MaxItems = &minItems, &maxItems
+		return ObjectType(
+			Field{Name: "shares", Type: shares},
+			Field{Name: "share", Type: IntegerType()},
+			Field{Name: "remainder", Type: IntegerType()},
+		)
+	}
+	return Function{
+		Name: "split_evenly", Version: 1, Params: params, Result: result(1, maxSplitParts),
+		Summary: "split a whole-number total into parts that differ by at most one and add up to it exactly",
+		Refine: func(args map[string]StaticArg) *Type {
+			if a := args["parts"]; a.IsConst {
+				if n, ok := a.Literal.(int64); ok {
+					return result(n, n)
+				}
+			}
+			return result(1, maxSplitParts)
+		},
+		Call: func(args map[string]any) (any, error) {
+			if err := checkArgs(params, args); err != nil {
+				return nil, err
+			}
+			total, parts := args["total"].(int64), args["parts"].(int64)
+			share, remainder := total/parts, total%parts
+			shares := make([]any, parts)
+			for i := range shares {
+				shares[i] = share
+				if int64(i) < remainder {
+					shares[i] = share + 1
+				}
+			}
+			return map[string]any{"shares": shares, "share": share, "remainder": remainder}, nil
 		},
 	}
 }

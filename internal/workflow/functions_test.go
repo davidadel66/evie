@@ -115,7 +115,7 @@ func TestWorkflowFunctionRegistryIsReviewedAndPure(t *testing.T) {
 	for id := range reviewedFunctions() {
 		ids = append(ids, id)
 	}
-	want := []string{"collect_claims@1", "expand_ballots@1", "majority_filter@1"}
+	want := []string{"collect_claims@1", "expand_ballots@1", "majority_filter@1", "split_evenly@1"}
 	if !reflect.DeepEqual(sortedStrings(ids), want) {
 		t.Fatalf("registry = %v, want %v", ids, want)
 	}

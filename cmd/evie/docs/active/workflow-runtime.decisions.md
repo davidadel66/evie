@@ -1,5 +1,162 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Manual deterministic runs (Stage 14, sub-stage 3)
+
+Source: sub-stage 3 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md) and
+the sub-stage 2 entry below, which left this sub-stage run admission
+through `authorizeWorkflowActivation` inside the run's transaction, the
+definition read from the activation's commit through `procedural.Source`
+and re-hashed, and the version, both hashes, Workspace revision and access
+revision pinned on the run. Binding: ADR 0007, 0016, 0017, 0021, 0025 and
+0033 and this spec's run, Run Key, checkpoint, state and retry decisions.
+Leases, the scheduler and restart recovery are sub-stage 4's.
+
+### What was built
+
+- **Run start.** `Runtime.StartRun` takes a Workspace, a workflow name,
+  inputs (JSON values, or command-line text converted to each input's
+  declared type) and an optional originating session, from the owner's CLI
+  or web surface only. Before anything is written it reads the active
+  version (`ActiveWorkflow`), reads that version's exact commit through
+  procedural Git, validates it against the Workspace's current access, the
+  catalog and the worker ceiling, and requires its executable hash and
+  authority hash to equal the approval's (otherwise `ErrDefinitionMismatch`,
+  "approve the definition again"); refuses step kinds this runtime cannot
+  execute; accepts the input against the declared inputs (types, bounds,
+  enums, defaults, required, nothing unknown or given twice; otherwise
+  `ErrRunInput`); and derives the Run Key. Then one immediate SQLite
+  transaction calls `authorizeWorkflowActivation` (latest version, not
+  deactivated, not blocked: every block is re-derived at each start),
+  requires the version and both hashes to be the ones just validated (a
+  version approved in between is validated again, up to three times),
+  returns the run already holding the key, checks the originating session
+  belongs to the run's Workspace, and records the run with its first
+  checkpoint.
+- **Run record.** `workflow_runs`: stable ID, Workspace, workflow, the
+  approved version with its commit and path, executable and authority
+  hashes, the Workspace revision and access revision current when the run
+  starts (ADR 0033: the run pins what it started under; the activation
+  keeps its approval-time pins, and admission evaluated every later access
+  revision), its Execution Composition (`{"runtime":
+  "evie.workflow.runtime/1", "step_kinds": [...], "functions": [...]}`;
+  capability providers join it in sub-stage 5), Run Key, accepted input
+  (canonical JSON), state, outputs, error, origin surface (`cli` or `web`),
+  optional session, and created, started, finished and updated times.
+  Pinned fields are immutable, a terminal run is never rewritten, a started
+  run cannot be queued again, and nothing is deleted (triggers).
+- **Run Key.** `<workflow>:sha256:<digest>` over the canonical JSON of the
+  `run_key` inputs, the simulation's own rule, so manual and (later)
+  scheduled starts agree. A partial unique index on (Workspace, workflow,
+  Run Key) over runs that are not failed or cancelled makes the database
+  refuse a second active or succeeded run for one key across versions. A
+  duplicate start returns the existing run (`existing: true`) and executes
+  nothing; a failed or cancelled run leaves its key free, so the same
+  logical execution can be started again after a failure.
+- **Step kinds.** This runtime version executes `deterministic` and
+  `branch` steps and the graph's end. A definition using any other kind
+  (including a map item's kind) is refused at start with
+  `UnsupportedStepsError` ("uses ai, capability, interrupt steps, not yet
+  supported in this runtime version ...; no run was started") before
+  anything is recorded, so no run is ever partly executed. Approval is not
+  refused: the definition can be approved now and run once its kinds ship.
+- **Execution and checkpoints.** The run executes in the caller's process,
+  foreground, before `StartRun` returns. Checkpoint 0 is the accepted input
+  with the first step. Before each node attempt one transaction records the
+  attempt (step, kind, attempt number, the checkpoint it starts from and its
+  resolved input) and moves the run to `running`; after it, one transaction
+  records the normalized output (canonical JSON) and appends the next
+  checkpoint (the step after it, `""` when the graph ended, and every step
+  output so far), and when the graph ended records the outputs and
+  `succeeded`. Another attempt cannot start before that: every write is a
+  compare-and-set on the run's latest checkpoint, one attempt per run may be
+  in flight (unique index), attempt numbers per checkpoint are unique, and
+  finished attempts and checkpoints are immutable. A branch is recorded as
+  an attempt too (input: the values its cases read; output: the chosen step
+  and case; note: which case matched); like in simulation it does not count
+  against `limits.max_attempts`. The loop reads the run's progress back from
+  SQLite before every step, so it continues from the last checkpoint and
+  holds nothing in memory between nodes. A web start does not stop when the
+  browser disconnects.
+- **States.** Run states are the spec's nine, explicit and non-overlapping
+  in the schema: `queued`, `running`, `waiting_for_human`,
+  `waiting_for_dependency`, `needs_reconciliation`, `cancelling`,
+  `cancelled`, `failed`, `succeeded`. This sub-stage reaches `queued`
+  (recorded, no node started), `running`, `failed` and `succeeded`. Node
+  attempts are `running`, `succeeded` or `failed`.
+- **Retries and limits.** A deterministic step retries within its Retry
+  Policy (`retry.max_attempts`, default 1) from the same input checkpoint
+  with the same recorded input, waiting `retry.backoff` in process between
+  attempts; after the last attempt the run fails with "steps.<id> failed
+  after N attempts: <error>". A function error, a panic and a result outside
+  the function's declared type all fail the attempt. `limits.max_attempts`
+  (all attempts of the run) and `limits.max_duration` (from the run's
+  creation) are checked before each attempt and fail the run when reached.
+- **Execution primitives.** `internal/workflow` exports what a run needs
+  and nothing that stores or schedules: the step plan, step kinds and
+  functions, limits, `AcceptInputs` (JSON and text), `ParseInputs`,
+  `RunKey`, `StepInput` (refusing a reference to a step that has not run),
+  `CallFunction`, `Branch`, `Outputs`, and canonical `DecodeValue` and
+  `EncodeValue` (integers stay integers after a restart). The simulator now
+  uses the same helpers, so a run and its dry run cannot disagree.
+- **Function registry.** `split_evenly@1` (a whole-number total, such as
+  cents, split into 1 to 1,000 parts that differ by at most one and add up
+  exactly; the first `remainder` shares carry the extra unit) is the one new
+  reviewed function, pure and bounded, so a deterministic example exists.
+  `internal/workflow/testdata/split-bill` (split, branch on the remainder,
+  one deterministic step per path) is the test example; its README says so.
+- **Surfaces.** `evie workflows run <workspace-id> <name> [--input
+  <name>=<value>]... [--input-json <file>] [--json]` prints the run with
+  each node and its outputs (a duplicate says the key is held and shows that
+  run; a failed run exits with an error after it is shown); `evie workflows
+  runs [<workspace-id>] [--workflow <name>]` and `evie workflows inspect
+  <run-id>`. `POST /api/workflows/start` (`workspace_id`, `name`, `inputs`
+  object, optional `session_id`; the surface is always `web`), `POST
+  /api/workflows/runs` and `POST /api/workflows/inspect` are management
+  routes (loopback, JSON, exact bounded bodies). A Workflow runs section on
+  the Workspace home starts an active workflow with a JSON inputs object,
+  lists runs and inspects one (pins, nodes, outputs). No model-facing tool
+  starts or inspects a run.
+
+### Decisions and known limits
+
+- ADR 0021's audited override to rerun a succeeded key is not built: a
+  succeeded key cannot be run again. It needs an owner-only surface and a
+  durable override record; schedules (sub-stage 11) are the natural place.
+- A crash mid-run today leaves the run `running` (or `queued` before its
+  first attempt) at its last checkpoint, with the interrupted attempt
+  `running` and no output. Nothing resumes it, and its Run Key stays held,
+  so a duplicate start returns that stuck run until sub-stage 4 recovers it.
+  No completed node is lost and no checkpoint is half written.
+- `StartRun` blocks until the run ends; there is no background execution,
+  cancellation (sub-stage 8) or later-session attachment yet.
+- Checkpoints hold every step output so far, which keeps resumption simple;
+  their size grows with each step, to be revisited for large map outputs in
+  sub-stage 9.
+- Accepted input, including inputs a definition marks `sensitive`, is stored
+  and shown on the owner's inspect surfaces as given; redaction and
+  retention are sub-stage 12's.
+
+### What sub-stage 4 must pick up
+
+- Fenced run leases on `BeginWorkflowAttempt`, `FinishWorkflowAttempt` and
+  `FailWorkflowRun` (each is already a compare-and-set on the latest
+  checkpoint), a scheduler that executes recorded runs in the background,
+  and a recovery scan over `queued` and `running` runs.
+- An attempt left `running` by a crash needs a terminal record (the attempt
+  state set allows `running`, `succeeded`, `failed`; adding `interrupted`
+  needs a table rebuild, or record it `failed` with that reason) before a
+  deterministic step retries from the same checkpoint within its policy.
+- Before resuming, re-apply admission (`authorizeWorkflowActivation`:
+  revocations apply immediately, ADR 0033), re-read and re-hash the pinned
+  commit (`approvedDefinition`), and require the run's pinned
+  `composition.runtime` to be one this runtime declares compatible (ADR
+  0025); otherwise pause the run visibly instead of continuing.
+- `Runtime.advance` already continues from the latest checkpoint and
+  refuses a run with an attempt in flight (`ErrRunInterrupted`); recovery
+  resolves that attempt first. Backoff should become a durable not-before
+  time rather than an in-process wait.
+
 ## 2026-10-04 — Activation and Standing Authority (Stage 14, sub-stage 2)
 
 Source: sub-stage 2 of Stage 14 in

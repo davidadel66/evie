@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -15,13 +16,17 @@ import (
 // uses it (Stage 14 sub-stage 2): list and show definitions, present a
 // proposal's approval card, approve exactly what it showed, and deactivate
 // a version. Proposals come from the CLI; these routes never read a path
-// the browser names.
+// the browser names. Sub-stage 3 adds starting, listing and inspecting
+// runs.
 type WorkflowManager interface {
 	List(context.Context, memory.WorkspaceID) ([]eviedb.WorkflowDefinitionState, error)
 	Show(context.Context, memory.WorkspaceID, string) (eviedb.WorkflowDefinitionState, error)
 	Card(context.Context, string) (workflowruntime.Card, error)
 	Approve(context.Context, workflowruntime.Approval) (eviedb.WorkflowActivation, error)
 	Deactivate(context.Context, workflowruntime.Deactivation) (eviedb.WorkflowActivation, error)
+	StartRun(context.Context, workflowruntime.RunRequest) (workflowruntime.RunResult, error)
+	InspectRun(context.Context, string) (eviedb.WorkflowRunDetail, error)
+	ListRuns(context.Context, workflowruntime.RunFilter) ([]eviedb.WorkflowRun, error)
 }
 
 // WithWorkflows adds the workflow management routes.
@@ -39,6 +44,9 @@ func (s *Server) registerWorkflowRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workflows/diff", s.managementRoute(s.handleWorkflowDiff))
 	mux.Handle("/api/workflows/approve", s.managementRoute(s.handleWorkflowApprove))
 	mux.Handle("/api/workflows/deactivate", s.managementRoute(s.handleWorkflowDeactivate))
+	mux.Handle("/api/workflows/start", s.managementRoute(s.handleWorkflowStart))
+	mux.Handle("/api/workflows/runs", s.managementRoute(s.handleWorkflowRuns))
+	mux.Handle("/api/workflows/inspect", s.managementRoute(s.handleWorkflowInspect))
 }
 
 func boundedID(id string) bool { return id != "" && len(id) <= 128 }
@@ -163,8 +171,96 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusConflict, "approval_refused", err.Error()
 	case errors.Is(err, eviedb.ErrWorkflowNotActive):
 		status, code, message = http.StatusConflict, "not_active", err.Error()
-	case errors.Is(err, eviedb.ErrWorkflowApprover):
+	case errors.Is(err, eviedb.ErrWorkflowApprover), errors.Is(err, eviedb.ErrWorkflowRunSurface):
 		status, code, message = http.StatusForbidden, "owner_only", err.Error()
+	case errors.Is(err, eviedb.ErrWorkflowBlocked):
+		status, code, message = http.StatusConflict, "blocked", err.Error()
+	case errors.Is(err, eviedb.ErrWorkflowRunNotFound):
+		status, code, message = http.StatusNotFound, "run_not_found", err.Error()
+	case errors.Is(err, workflowruntime.ErrRunInput):
+		status, code, message = http.StatusUnprocessableEntity, "invalid_input", err.Error()
+	case errors.Is(err, workflowruntime.ErrUnsupportedSteps):
+		status, code, message = http.StatusUnprocessableEntity, "unsupported_steps", err.Error()
+	case errors.Is(err, eviedb.ErrWorkflowRunSession):
+		status, code, message = http.StatusUnprocessableEntity, "invalid_session", err.Error()
+	case errors.Is(err, workflowruntime.ErrDefinitionMismatch):
+		status, code, message = http.StatusConflict, "definition_mismatch", err.Error()
 	}
 	managementJSONError(w, status, code, message)
+}
+
+// maxWorkflowStartBytes bounds a start request: the run input document (at
+// most 64 KiB) and its envelope.
+const maxWorkflowStartBytes = 72 << 10
+
+// handleWorkflowStart is the owner starting a run of a Workspace's active
+// workflow from the web (Stage 14 sub-stage 3). It names the Workspace, the
+// workflow, JSON inputs and optionally its originating session; the surface
+// is always the web. The run executes before the response, and does not
+// stop if the browser disconnects.
+func (s *Server) handleWorkflowStart(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		WorkspaceID memory.WorkspaceID `json:"workspace_id"`
+		Name        string             `json:"name"`
+		Inputs      json.RawMessage    `json:"inputs"`
+		SessionID   memory.SessionID   `json:"session_id"`
+	}
+	if !decodeCandidateRequestLimit(w, r, &request, maxWorkflowStartBytes) {
+		return
+	}
+	run := workflowruntime.RunRequest{WorkspaceID: request.WorkspaceID, Workflow: request.Name, SessionID: request.SessionID, Surface: "web"}
+	valid := boundedID(string(request.WorkspaceID)) && boundedID(request.Name) && len(request.SessionID) <= 128
+	if valid && len(request.Inputs) > 0 {
+		var err error
+		run.Inputs, err = workflow.ParseInputs(request.Inputs)
+		valid = err == nil
+	}
+	if !valid {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "start requires the Workspace ID, the workflow name and an inputs object")
+		return
+	}
+	result, err := s.workflows.StartRun(r.Context(), run)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleWorkflowRuns(w http.ResponseWriter, r *http.Request) {
+	var request workflowruntime.RunFilter
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	if len(request.WorkspaceID) > 128 || len(request.Workflow) > 128 || request.Limit < 0 || request.Limit > 200 {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "runs takes an optional Workspace ID, workflow name and a limit up to 200")
+		return
+	}
+	runs, err := s.workflows.ListRuns(r.Context(), request)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Runs []eviedb.WorkflowRun `json:"runs"`
+	}{runs})
+}
+
+func (s *Server) handleWorkflowInspect(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		RunID string `json:"run_id"`
+	}
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	if !boundedID(request.RunID) {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "inspect requires the run ID")
+		return
+	}
+	d, err := s.workflows.InspectRun(r.Context(), request.RunID)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
 }

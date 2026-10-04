@@ -97,3 +97,76 @@ export type WorkflowAPI = typeof workflowAPI;
 export function pendingProposal(definition: WorkflowDefinition): WorkflowProposalSummary | undefined {
   return definition.proposals?.find((proposal) => proposal.pending);
 }
+
+// Workflow runs (Stage 14 sub-stage 3): the owner starts a run of an active
+// workflow, which executes its deterministic and branch steps before the
+// response, and lists and inspects runs with every node attempt.
+
+export type WorkflowRunState =
+  | "queued" | "running" | "waiting_for_human" | "waiting_for_dependency" | "needs_reconciliation"
+  | "cancelling" | "cancelled" | "failed" | "succeeded";
+
+export type WorkflowRun = {
+  id: string;
+  workspace_id: string;
+  workflow: string;
+  version: number;
+  commit: string;
+  executable_hash: string;
+  authority_hash: string;
+  workspace_revision: string;
+  access_revision: number;
+  run_key: string;
+  inputs: Record<string, unknown>;
+  state: WorkflowRunState;
+  outputs?: Record<string, unknown>;
+  error?: string;
+  surface: string;
+  session_id?: string;
+  checkpoint: number;
+  next_step?: string;
+  created_at: string;
+  started_at?: string;
+  finished_at?: string;
+};
+
+export type WorkflowNodeAttempt = {
+  seq: number;
+  step: string;
+  kind: string;
+  attempt: number;
+  input_checkpoint: number;
+  input: unknown;
+  state: "running" | "succeeded" | "failed";
+  output?: unknown;
+  error?: string;
+  next?: string;
+  note?: string;
+  started_at: string;
+  finished_at?: string;
+};
+
+export type WorkflowCheckpoint = { seq: number; after_attempt?: number; next: string; state: Record<string, unknown>; created_at: string };
+
+export type WorkflowRunDetail = { run: WorkflowRun; attempts: WorkflowNodeAttempt[]; checkpoints: WorkflowCheckpoint[] };
+
+export type WorkflowRunResult = { run: WorkflowRunDetail; existing: boolean };
+
+export const workflowRunAPI = {
+  runs: (workspaceId: string): Promise<{ runs: WorkflowRun[] }> => postWorkflows("runs", { workspace_id: workspaceId }),
+  start: (workspaceId: string, name: string, inputs: Record<string, unknown>): Promise<WorkflowRunResult> =>
+    postWorkflows("start", { workspace_id: workspaceId, name, inputs }),
+  inspect: (runId: string): Promise<WorkflowRunDetail> => postWorkflows("inspect", { run_id: runId }),
+};
+export type WorkflowRunAPI = typeof workflowRunAPI;
+
+/** The start form's inputs: one JSON object, or undefined when it is not one. */
+export function parseRunInputs(text: string): Record<string, unknown> | undefined {
+  if (text.trim() === "") return {};
+  try {
+    const value: unknown = JSON.parse(text);
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+  } catch {
+    return undefined;
+  }
+}
