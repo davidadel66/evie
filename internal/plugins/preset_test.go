@@ -26,8 +26,9 @@ type cancelingEnabledStateStore struct {
 
 func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *testing.T) {
 	// Each released Standard version, including 89664be6… from before explore
-	// delegation and bfd4eb42… from before build delegation (2026-10-03),
-	// reopens with exactly its own tools.
+	// delegation, bfd4eb42… from before build delegation (2026-10-03) and
+	// 535755ad… from before the merge gate (2026-10-04), reopens with exactly
+	// its own tools.
 	t.Setenv("EVIE_REMOTE_MEMORY", "on")
 	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
 	if err != nil {
@@ -50,22 +51,23 @@ func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *te
 	beforeSubagents := preSubagentsStandardPresetContent()
 	beforeSubagents.Version = preSubagentsStandardPresetVersion
 	for _, tc := range []struct {
-		name                                                                                            string
-		preset                                                                                          Preset
-		retrieval, delegation, report, read, continuation, episodes, standing, overview, explore, build int
+		name                                                                                                   string
+		preset                                                                                                 Preset
+		retrieval, delegation, report, read, continuation, episodes, standing, overview, explore, build, merge int
 	}{
-		{"baseline", preRetrievalStandardPreset(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		{"retrieval_only", beforeSubagents, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-		{"combined_before_reports", preReportStandardPreset(), 1, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-		{"combined_before_stored_tool_results", preReadToolResultStandardPreset(), 1, 1, 1, 0, 0, 0, 0, 0, 0, 0},
-		{"combined_before_continuation", preContinueStandardPreset(), 1, 1, 1, 1, 0, 0, 0, 0, 0, 0},
-		{"combined_before_episodes", preEpisodesStandardPreset(), 1, 1, 1, 1, 1, 0, 0, 0, 0, 0},
-		{"combined_before_standing", preStandingStandardPreset(), 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
-		{"combined_before_proactive", preProactiveStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
-		{"combined_before_explore", preExploreStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
-		{"combined_before_build", preBuildStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
-		{"combined", BuiltinStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{"baseline", preRetrievalStandardPreset(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"retrieval_only", beforeSubagents, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"combined_before_reports", preReportStandardPreset(), 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"combined_before_stored_tool_results", preReadToolResultStandardPreset(), 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+		{"combined_before_continuation", preContinueStandardPreset(), 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0},
+		{"combined_before_episodes", preEpisodesStandardPreset(), 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0},
+		{"combined_before_standing", preStandingStandardPreset(), 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0},
+		{"combined_before_proactive", preProactiveStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
+		{"combined_before_explore", preExploreStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
+		{"combined_before_build", preBuildStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
+		{"combined_before_merge", preMergeStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+		{"combined", BuiltinStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := canonicalPresetVersion(tc.preset); got != tc.preset.Version {
@@ -90,7 +92,8 @@ func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *te
 				countSchema(reopened.Toolset, "memory_set_standing") != tc.standing ||
 				countSchema(reopened.Toolset, "memory_overview") != tc.overview ||
 				countSchema(reopened.Toolset, delegation.ExploreToolName) != tc.explore ||
-				countSchema(reopened.Toolset, delegation.BuildToolName) != tc.build {
+				countSchema(reopened.Toolset, delegation.BuildToolName) != tc.build ||
+				countSchema(reopened.Toolset, delegation.MergeToolName) != tc.merge {
 				t.Fatalf("historical capabilities changed: %v", schemaNames(reopened.Toolset))
 			}
 		})

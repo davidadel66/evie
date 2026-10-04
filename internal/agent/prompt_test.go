@@ -141,3 +141,26 @@ func TestBuildGuidanceOnlyWhenTheSessionCanBuild(t *testing.T) {
 		t.Fatal("build guidance is not in the Delegation section after the explore line")
 	}
 }
+
+// Stage 12 (2026-10-04): a session that has propose_build_merge is told to
+// propose merges through the gate and to continue a worker whose check
+// failed; sessions pinned before it keep their exact prompt.
+func TestMergeGuidanceOnlyWhenTheSessionCanProposeMerges(t *testing.T) {
+	build := append(append([]openrouter.Tool(nil), delegationTools...), toolNamed("delegate_explore"), toolNamed("delegate_build"))
+	without := primaryInstructions(build)
+	with := primaryInstructions(append(append([]openrouter.Tool(nil), build...), toolNamed("propose_build_merge")))
+	if strings.Contains(without, "propose_build_merge") {
+		t.Fatal("a session without propose_build_merge is told to use it")
+	}
+	for _, want := range []string{"propose_build_merge", "latest execution_id", "verifies the branch", "approve", "continue the worker with the failure output"} {
+		if !strings.Contains(with, want) {
+			t.Fatalf("merge guidance lacks %q:\n%s", want, with)
+		}
+	}
+	if strings.Replace(with, mergeGuidance, "", 1) != without || strings.Count(with, mergeGuidance) != 1 {
+		t.Fatal("merge guidance changed more than its own line")
+	}
+	if !strings.Contains(with, buildGuidance+mergeGuidance+"- Use read_subagent_report") {
+		t.Fatal("merge guidance does not follow the build line")
+	}
+}

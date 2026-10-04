@@ -63,6 +63,9 @@ func (s *Store) loadWorkspacePresets(ctx context.Context, workspace *memory.Work
 	if workspace.Explore, err = workspaceExplore(ctx, s.db, workspace.ID, workspace.CurrentRevisionID); err != nil {
 		return err
 	}
-	workspace.Build, err = workspaceBuild(ctx, s.db, workspace.ID, workspace.CurrentRevisionID)
+	if workspace.Build, err = workspaceBuild(ctx, s.db, workspace.ID, workspace.CurrentRevisionID); err != nil {
+		return err
+	}
+	workspace.Verify, err = buildVerify(ctx, s.db, verifyScopeWorkspace, string(workspace.ID))
 	return err
 }

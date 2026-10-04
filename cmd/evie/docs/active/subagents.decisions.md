@@ -1,5 +1,175 @@
 # Subagents implementation decisions
 
+## 2026-10-04 — Verify-and-merge gate (Stage 12)
+
+Source: Stage 12 of [docs/memory-architecture.md](../../../../docs/memory-architecture.md)
+(run the project's check on the worker's branch, rebase, rerun, David
+approves the merge) and the owner's 2026-10-04 decisions recorded there and
+below. Modelled on how the owner's own reviews were run (verify, rebase,
+re-verify, approval, fast-forward, clean up) and on cloud coding agents'
+environments: a setup phase with network before an agent phase without it.
+
+Superseded wording: the Stage 11 entry's "The merge itself is Stage 12 and
+not part of this entry", the spec's "Nothing merges; that is Stage 12" and
+"Merging its branch is Stage 12 and remains out of scope here", and the
+Stage 11 known limit "Dependencies not already cached cannot be fetched"
+insofar as a setup command now fetches them.
+
+- **Commands.** A Workspace or project declares a `setup` command
+  (optional) and a `verify` command, each at most 2,048 bytes with no
+  control character but tab and newline. Only the owner sets them: `evie
+  workspaces verify <workspace-id> [--setup …] [--verify …]`, `evie
+  projects verify <project-id or root> […]`, `POST /api/workspaces/verify`
+  (management guard; `workspaceId`, `revision`, `setup`, `verify`) and the
+  Workspace home's "Merge checks" section. A flag left out keeps its
+  command; an empty one clears it. They live in `build_verify_revisions`,
+  one immutable row per change (no update or delete), written with a
+  compare-and-set on the expected revision. Unlike the build permission
+  they are operational, like the Workspace folder: the latest applies at
+  once, to running chats too, because a corrected or removed command must
+  not keep running anywhere. The Workspace JSON carries `verify: {setup,
+  verify, revision}`; `evie projects list` shows each project's.
+- **Proposals, never settings.** Evie reads `AGENTS.md` and `CLAUDE.md` at
+  the folder's top (regular files inside it, 256 KiB) and suggests the first
+  install command as setup and the first check command in a verification,
+  check or test section as verify. The suggestion appears in `evie
+  workspaces|projects verify` without flags, in `POST
+  /api/workspaces/verify/propose` (the UI's "Suggest from repository
+  instructions" fills the fields and saves nothing) and in the refusal of a
+  proposal without a verify command. Nothing Evie or a model does records a
+  command; there is no model tool for it.
+- **Setup phase.** When the harness creates a fresh build worktree (not for
+  a continuation), and a setup command is set, it runs it there on the base
+  commit before the worker starts, under the same OS sandbox as the
+  worker's bash with one difference: outbound network. Writes stay confined
+  to the worktree (never `.git`) and the private temp folder, credential
+  reads and Evie's environment stay out of reach, and on macOS Seatbelt's
+  `localhost` (every address of this host: loopback and its own
+  interfaces, so Evie's own server and local services) and every local
+  socket but DNS stay closed; bubblewrap shares the network namespace and
+  cannot close loopback. `GOPROXY` is not turned off for setup. The setup
+  runs only on the owner's history: a base reachable from a local branch
+  outside `evie/`, a tag or a remote-tracking branch. A base that exists
+  only on an unmerged build branch is never set up with network (the run is
+  recorded `skipped`), so worker-written code never gets network. Setup is
+  bounded by 10 minutes; its whole output goes to `<temp>/evie-setup.log`
+  (4 MiB) and the attempt records the command, commit, outcome (`passed`,
+  `failed`, `timeout`, `error`, `skipped`, `interrupted`), exit status,
+  duration and a 3,000-byte tail. The worker is told how it went (passed;
+  failed or timed out, with the tail framed as data; skipped, and why) and
+  runs either way; its result's `build.setup` carries the harness facts
+  without the output and a note when it did not pass. The worker phase
+  stays offline, unchanged.
+- **Merge proposal.** A new optional Standard capability `subagents.merge`
+  (`propose_build_merge`, contract 1.0.0; arguments `execution_id` and an
+  optional `target`, default the branch the build started from). It is
+  approval-gated through the dispatcher's prepare-then-approve path. Before
+  any approval, preparation: (1) refuses unless the parent's live turn
+  committed this call, its pinned composition has `subagents.merge`, its
+  Workspace still allows build workers, and the execution is its own,
+  finished, the child's latest, with its worktree present, clean of
+  tracked changes, unmerged, still the parent's folder's, and holding
+  commits the target lacks; a scope without a verify command is refused
+  with how the owner sets one and the suggestion; (2) runs the verify
+  command on the branch in its worktree, offline in the sandbox, bounded
+  by 20 minutes, and stops if that run changed tracked files (a check must
+  not modify what it checks); (3) rebases the branch onto the target's current head
+  inside the worktree as the harness (git directory named, hooks,
+  autostash, rerere, update-refs and signing off; the repository's
+  identity, Evie's when none), aborting and naming the conflicting plain
+  paths on a conflict; (4) reruns the verify command on the rebased head,
+  or records that it was not rerun because the branch already contained
+  the target's head and the first run verified that exact commit. A failing
+  run, a conflict or a refusal returns the proposal as the tool's error,
+  with each run's output tail in one `[begin untrusted verification output
+  …]` frame, and asks nobody; the orchestrator continues the worker with
+  `continue_research` and the output (bounded by the assignment limit) and
+  proposes again with the new execution ID. A rebase is recorded on every
+  attempt of the child (its base becomes the target's head).
+- **Approval card.** Only when both runs passed does the owner see a card:
+  `propose_build_merge · Merge evie/… into <target> (fast-forward)`, the
+  target's head before and after, the commits (harness subjects), plain
+  file paths with line counts, each run's outcome, warnings when the
+  branch changes a file the setup or verify command names (a branch that
+  edits its own checks), and how the merge will happen. All of it is
+  harness-written. It is carried in the existing file-change preview, so
+  the owner's uncommitted card components were not touched; the REPL prints
+  it for this tool.
+- **Merge.** On approval, and only then, the harness (never a worker)
+  re-checks the parent's authority, that the gate still awaits exactly
+  this proposal and that the branch is at the verified head, then
+  fast-forwards the target: in the checkout that has it checked out with
+  `git merge --ff-only --no-autostash` (hooks off), so the owner's working
+  tree follows and git refuses when the owner's uncommitted changes would
+  be overwritten; otherwise with `git update-ref <ref> <new> <verified
+  old>`, a compare-and-swap. It never stashes, resets, forces, overwrites
+  or pushes, and never merges into a build worktree. A target that moved
+  between verification and approval merges nothing (`target_moved`) and
+  the next proposal rebases and verifies again; a refusal in the owner's
+  checkout (`merge_refused`) reports git's words, leaves everything as it
+  was and keeps the worktree and branch. After a merge the worktree and
+  branch are removed and the worktree marked removed; a cleanup failure
+  keeps them and names `evie worktrees clean`.
+- **Moving target.** A merge marks the latest attempt of every other build
+  child in the repository whose work is unmerged, whose worktree remains
+  and whose target (its last proposal's, else its base) is the moved branch
+  as needing a rebase (`gate.needs_rebase`). A worker still running in this
+  process gets a harness notice appended to each later model request (not
+  stored) saying its target moved and the gate will rebase; its result
+  carries `build.target_moved` and a note. `evie worktrees list` shows it.
+  The next proposal rebases automatically.
+- **Records and recovery.** Each build attempt records its gate on its own
+  record (`gate`): the last step (`setup_running`, `setup_done`,
+  `verifying`, `rebasing`, `verifying_rebased`, `verify_failed`,
+  `rebase_conflict`, `awaiting_approval`, `target_moved`, `merging`,
+  `merge_refused`, `merged`, `interrupted`, `refused`) and when, the setup
+  run, the latest proposal's target, heads, runs (without output) and
+  problem, the move and the merge. An in-progress step names the parent
+  turn running it. Recovery (at start, every 10 seconds, and before a new
+  proposal on the same attempt) settles steps whose turn is gone and that
+  no gate of this process runs: a rebase is aborted so the branch is as it
+  was; a verification is marked interrupted; a merge is complete (the
+  target is at the verified head: recorded, cleaned up, moves marked) or
+  never happened (recorded interrupted), since a fast-forward and a
+  compare-and-swap move the ref atomically. A setup cut off by a crash is
+  recorded interrupted when the attempt is.
+- **Versioning.** The Standard preset becomes `sha256:6566fc2a…`, adding
+  `subagents.merge` after `subagents.build`; `sha256:535755ad…` joins the
+  historical definitions (preset history test `combined_before_merge`), so
+  existing sessions reopen with exactly their tools and need a new chat to
+  propose merges, and the Kernel refuses a proposal from a parent whose
+  receipt lacks the capability. The Subagents Plugin keeps implementation
+  version 1.0.0 with one more capability. Committed `propose_build_merge`
+  intents record the parent's lease like delegation intents. The build
+  preset, its tools and every earlier tool schema are unchanged. Sessions
+  that have both `delegate_build` and `propose_build_merge` get one more
+  Delegation line; others keep their prompt.
+- **Known limits.** Verification runs worker-written code (offline,
+  sandboxed), and a worker can edit the scripts its verify command runs;
+  the card warns when the branch changes a file the command names, but a
+  change elsewhere that weakens the checks shows only in the diff. After a
+  rebase, dependencies installed by setup on the old base may be stale;
+  setup is not rerun because the rebased tree contains worker-written code.
+  Package managers whose caches live outside the worktree and temp folder
+  (Go's module cache) cannot fill them during setup. A compare-and-swap
+  races a checkout of the target started in the same instant. On Linux the
+  setup phase can reach loopback.
+
+## 2026-10-04 — Owner decisions after Stage 11
+
+Source: the owner's decisions recorded under Stage 11 of
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md).
+
+- **Projects need no build toggle.** A project session may delegate build
+  work without a setting: registering the project folder is the
+  permission, as for research and explore. Only Workspaces need the
+  explicit `on` (Stage 11 entry, "Workspaces"). This was already how Stage
+  11 shipped and is now binding.
+- **Worker bash stays offline.** The build worker's sandbox keeps no
+  network. Dependencies are installed before worker-modified code runs, by
+  the owner's setup command in the setup phase (Stage 12 entry), or the
+  worker reports what it needs.
+
 ## 2026-10-03 — Build workers (Stage 11)
 
 Source: Stage 11 of [docs/memory-architecture.md](../../../../docs/memory-architecture.md)

@@ -219,6 +219,10 @@ func (s *Server) Handler() http.Handler {
 		if _, ok := s.contextSessions.(workspaceBuildController); ok {
 			mux.Handle("/api/workspaces/build", s.managementRoute(s.handleWorkspaceBuild))
 		}
+		if _, ok := s.contextSessions.(workspaceVerifyController); ok {
+			mux.Handle("/api/workspaces/verify", s.managementRoute(s.handleWorkspaceVerify))
+			mux.Handle("/api/workspaces/verify/propose", s.managementRoute(s.handleWorkspaceVerifyPropose))
+		}
 		mux.Handle("/api/workspaces/choose-folder", s.managementRoute(s.handleWorkspaceChooseFolder))
 	}
 	if s.semanticMemory != nil {

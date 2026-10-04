@@ -45,6 +45,15 @@ const ExploreToolName = "delegate_explore"
 const BuildCapabilityID = "subagents.build"
 const BuildToolName = "delegate_build"
 
+// MergeCapabilityID lets a parent propose merging a build worker's branch
+// (Stage 12 of docs/memory-architecture.md, added 2026-10-04): the harness
+// runs the project's verify command on the branch, rebases it onto the
+// target branch, reruns the command, and only when both runs pass asks the
+// owner to approve a fast-forward of the target. The harness, never a
+// worker, performs the merge.
+const MergeCapabilityID = "subagents.merge"
+const MergeToolName = "propose_build_merge"
+
 // Worker presets a child can be composed from. A child's worker is its pinned
 // receipt's preset identity.
 const (
@@ -90,6 +99,13 @@ func DelegationToolName(worker string) string {
 // child execution: a delegation batch or a continuation.
 func AdmitsChildren(tool string) bool {
 	return tool == ToolName || tool == ExploreToolName || tool == BuildToolName || tool == ContinueToolName
+}
+
+// BindsParentLease reports whether a committed intent of tool records the
+// parent's turn lease, which the Kernel checks before acting on it: every
+// tool that admits children, and the merge gate (Stage 12, 2026-10-04).
+func BindsParentLease(tool string) bool {
+	return AdmitsChildren(tool) || tool == MergeToolName
 }
 
 var ErrConflict = errors.New("subagent idempotency key conflicts with an existing assignment")
@@ -478,6 +494,122 @@ type BuildReport struct {
 	CommitError     string         `json:"commit_error,omitempty"`
 	Commands        []BuildCommand `json:"commands,omitempty"`
 	CommandsOmitted int            `json:"commands_omitted,omitempty"`
+	// Setup is how the project's setup command ran when the harness created
+	// the worktree (Stage 12, 2026-10-04): harness facts only, its output
+	// stays in the log file it names.
+	Setup *GateRun `json:"setup,omitempty"`
+	// TargetMoved records that the branch the worker's work will merge into
+	// moved while it worked (Stage 12): the merge gate rebases onto it.
+	TargetMoved *TargetMove `json:"target_moved,omitempty"`
+}
+
+// Gate steps a build attempt's merge gate records (Stage 12, 2026-10-04).
+// The last one is the attempt's gate state; an in-progress step whose
+// owner's turn is gone is settled by recovery.
+const (
+	GateSetupRunning   = "setup_running"
+	GateSetupDone      = "setup_done"
+	GateVerifying      = "verifying"
+	GateRebasing       = "rebasing"
+	GateVerifyingAfter = "verifying_rebased"
+	GateVerifyFailed   = "verify_failed"
+	GateRebaseConflict = "rebase_conflict"
+	GateAwaiting       = "awaiting_approval"
+	GateTargetMoved    = "target_moved"
+	GateMerging        = "merging"
+	GateMergeRefused   = "merge_refused"
+	GateMerged         = "merged"
+	GateInterrupted    = "interrupted"
+	GateRefused        = "refused"
+)
+
+// GateInProgress reports whether step is one a crash can interrupt.
+func GateInProgress(step string) bool {
+	switch step {
+	case GateSetupRunning, GateVerifying, GateRebasing, GateVerifyingAfter, GateMerging:
+		return true
+	}
+	return false
+}
+
+// Outcomes of one setup or verify run.
+const (
+	RunPassed      = "passed"
+	RunFailed      = "failed"
+	RunTimeout     = "timeout"
+	RunError       = "error"
+	RunSkipped     = "skipped"
+	RunInterrupted = "interrupted"
+	RunRunning     = "running"
+)
+
+// GateRun is one run of the project's setup or verify command, as the
+// harness recorded it. Command is the owner's configured command; Output is
+// a bounded tail of what it printed, which may come from worker-written
+// code, so the parent reads it only inside an untrusted-data frame.
+type GateRun struct {
+	Step       string     `json:"step"`
+	Command    string     `json:"command"`
+	Commit     string     `json:"commit,omitempty"`
+	Outcome    string     `json:"outcome"`
+	ExitStatus int        `json:"exit_status"`
+	Network    bool       `json:"network,omitempty"`
+	Detail     string     `json:"detail,omitempty"`
+	Log        string     `json:"log,omitempty"`
+	Output     string     `json:"output,omitempty"`
+	StartedAt  time.Time  `json:"started_at"`
+	EndedAt    *time.Time `json:"ended_at,omitempty"`
+	DurationMS int64      `json:"duration_ms,omitempty"`
+}
+
+// TargetMove is a merge that moved a target branch other build branches
+// will merge into.
+type TargetMove struct {
+	Target      string    `json:"target"`
+	From        string    `json:"from"`
+	To          string    `json:"to"`
+	ByExecution string    `json:"by_execution"`
+	At          time.Time `json:"at"`
+}
+
+// GateOwner is the parent turn that runs an in-progress gate step: recovery
+// settles the step only once that turn's lease is gone.
+type GateOwner struct {
+	SessionID    memory.SessionID     `json:"session_id"`
+	HolderID     memory.LeaseHolderID `json:"holder_id"`
+	FencingToken memory.FencingToken  `json:"fencing_token"`
+}
+
+// BuildGate is a build attempt's merge-gate record (Stage 12): its last step
+// and when, the setup run that prepared its worktree, the runs and heads of
+// its latest merge proposal, and the merge itself.
+type BuildGate struct {
+	Step  string     `json:"step"`
+	At    time.Time  `json:"at"`
+	Owner *GateOwner `json:"owner,omitempty"`
+	Setup *GateRun   `json:"setup,omitempty"`
+	// Target is the branch the proposal merges into; TargetHead the head it
+	// verified against; BranchHead the verified head of the worker's branch.
+	Target     string    `json:"target,omitempty"`
+	TargetHead string    `json:"target_head,omitempty"`
+	BranchHead string    `json:"branch_head,omitempty"`
+	Rebased    bool      `json:"rebased,omitempty"`
+	Runs       []GateRun `json:"runs,omitempty"`
+	// Problem is the last refusal or failure in harness words.
+	Problem     string      `json:"problem,omitempty"`
+	NeedsRebase *TargetMove `json:"needs_rebase,omitempty"`
+	Merged      *GateMerge  `json:"merged,omitempty"`
+}
+
+// GateMerge is a merge the owner approved and the harness performed.
+type GateMerge struct {
+	Target string    `json:"target"`
+	From   string    `json:"from"`
+	To     string    `json:"to"`
+	Where  string    `json:"where"`
+	At     time.Time `json:"at"`
+	// Cleanup says whether the worktree and branch were removed, or why not.
+	Cleanup string `json:"cleanup,omitempty"`
 }
 
 // BuildCommit is one commit on a build branch after its base.
@@ -606,7 +738,10 @@ type Attempt struct {
 	// Worktree is a build attempt's pinned git worktree; a continuation
 	// inherits it (added 2026-10-03, Stage 11).
 	Worktree *Worktree `json:"worktree,omitempty"`
-	Result   *Result   `json:"result,omitempty"`
+	// Gate is a build attempt's merge-gate record (added 2026-10-04, Stage
+	// 12); attempts recorded before it have none.
+	Gate   *BuildGate `json:"gate,omitempty"`
+	Result *Result    `json:"result,omitempty"`
 }
 
 // Worker is the attempt's worker preset, from its pinned receipt.

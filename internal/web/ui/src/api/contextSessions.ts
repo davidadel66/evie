@@ -6,6 +6,7 @@ export type Workspace = {
   allowedPresetIds?: string[];
   explore?: { setting: WorkspaceExploreSetting; allowed: boolean };
   build?: { setting: WorkspaceBuildSetting; allowed: boolean };
+  verify?: WorkspaceVerify;
   instructions?: {enabled:boolean;revision:number};
 	 folder?: { path: string; revision: number };
   id: string;
@@ -99,6 +100,21 @@ export function setWorkspaceExplore(workspaceId: string, revision: string, setti
 
 export function setWorkspaceBuild(workspaceId: string, revision: string, setting: WorkspaceBuildSetting): Promise<Workspace> {
   return postJSON("/api/workspaces/build", {workspaceId, revision, setting});
+}
+
+/** The merge gate's commands (Stage 12): setup runs with network in each
+ *  fresh build worktree; verify gates every merge proposal. */
+export type WorkspaceVerify = { setup: string; verify: string; revision: number };
+
+/** Commands Evie found in the folder's repository instructions. */
+export type VerifyProposal = { setup?: string; setupSource?: string; verify?: string; verifySource?: string };
+
+export function setWorkspaceVerify(workspaceId: string, revision: number, setup: string, verify: string): Promise<Workspace> {
+  return postJSON("/api/workspaces/verify", {workspaceId, revision, setup, verify});
+}
+
+export function proposeWorkspaceVerify(workspaceId: string): Promise<VerifyProposal> {
+  return postJSON("/api/workspaces/verify/propose", {workspaceId});
 }
 
 export function registerWorkspace(options: WorkspaceCreation): Promise<Workspace> {

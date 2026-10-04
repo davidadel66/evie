@@ -453,15 +453,16 @@ func TestParentPinnedBeforeExploreCannotDelegateExplore(t *testing.T) {
 	}
 	old := composition.Clone(current.Receipt)
 	old.Preset.Version = "sha256:89664be6462d10c5f9d6adb09589533a388f753a31edef3986bc513165c0ef6a"
-	// Build delegation (Stage 11) came after explore, so it goes too.
+	// Build delegation (Stage 11) and the merge gate (Stage 12) came after
+	// explore, so they go too.
 	old.Capabilities = slices.DeleteFunc(old.Capabilities, func(c composition.Capability) bool {
-		return c.ID == delegation.ExploreCapabilityID || c.ID == delegation.BuildCapabilityID
+		return c.ID == delegation.ExploreCapabilityID || c.ID == delegation.BuildCapabilityID || c.ID == delegation.MergeCapabilityID
 	})
 	old.ToolSchemas = slices.DeleteFunc(old.ToolSchemas, func(s composition.ToolSchema) bool {
-		return s.Name == delegation.ExploreToolName || s.Name == delegation.BuildToolName
+		return s.Name == delegation.ExploreToolName || s.Name == delegation.BuildToolName || s.Name == delegation.MergeToolName
 	})
-	if len(old.Capabilities) != len(current.Receipt.Capabilities)-2 || len(old.ToolSchemas) != len(current.Receipt.ToolSchemas)-2 {
-		t.Fatal("current Standard preset lacks explore or build delegation")
+	if len(old.Capabilities) != len(current.Receipt.Capabilities)-3 || len(old.ToolSchemas) != len(current.Receipt.ToolSchemas)-3 {
+		t.Fatal("current Standard preset lacks explore, build or merge")
 	}
 	reopened, err := f.manager.ResumeComposition(old)
 	if err != nil {

@@ -297,6 +297,38 @@ func subagentBuildCommands(ctx context.Context, conn *sql.Conn, child memory.Ses
 // buildNotes are the harness notes of a build result: where the work is and
 // how to resume or clean it up when the harness could not commit it.
 func buildNotes(a delegation.Attempt, report *delegation.BuildReport, harnessReported bool) []string {
+	notes := worktreeNotes(a, report, harnessReported)
+	// Stage 12 (2026-10-04): how setup went when it did not pass, and a
+	// target that moved while the worker ran.
+	if setup := report.Setup; setup != nil && setup.Outcome != delegation.RunPassed {
+		note := fmt.Sprintf("Setup command `%s` %s", setup.Command, setup.Outcome)
+		if setup.Outcome == delegation.RunFailed {
+			note += fmt.Sprintf(" (exit %d)", setup.ExitStatus)
+		}
+		if setup.Detail != "" {
+			note += ": " + setup.Detail
+		}
+		if setup.Log != "" {
+			note += "; its output is in " + setup.Log
+		}
+		notes = append(notes, note+".")
+	}
+	if moved := report.TargetMoved; moved != nil {
+		notes = append(notes, fmt.Sprintf("While this worker ran, %s moved from %s to %s (the merge of execution %s); propose_build_merge rebases this branch onto it before verifying.",
+			moved.Target, shortSHA(moved.From), shortSHA(moved.To), moved.ByExecution))
+	}
+	return notes
+}
+
+func shortSHA(sha string) string {
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
+}
+
+// worktreeNotes are where the work is and how to resume or clean it up.
+func worktreeNotes(a delegation.Attempt, report *delegation.BuildReport, harnessReported bool) []string {
 	w := a.Worktree
 	cleanup := fmt.Sprintf("`evie worktrees clean %s` removes the worktree", a.ID)
 	switch {
@@ -329,6 +361,10 @@ type BuildWorktree struct {
 	TaskID      string              `json:"task_id,omitempty"`
 	EndedAt     *time.Time          `json:"ended_at,omitempty"`
 	Worktree    delegation.Worktree `json:"worktree"`
+	// Gate is the latest attempt's merge-gate record and Setup the setup
+	// run that prepared the worktree (Stage 12, 2026-10-04).
+	Gate  *delegation.BuildGate `json:"gate,omitempty"`
+	Setup *delegation.GateRun   `json:"setup,omitempty"`
 }
 
 // ListBuildWorktrees lists the worktree of every build attempt, original
@@ -348,10 +384,17 @@ func (s *Store) ListBuildWorktrees(ctx context.Context) ([]BuildWorktree, error)
 			continue
 		}
 		key := a.Worktree.Path
-		if _, seen := latest[key]; seen {
+		if entry, seen := latest[key]; seen {
+			if entry.Setup == nil && a.Gate != nil && a.Gate.Setup != nil {
+				entry.Setup = a.Gate.Setup
+				latest[key] = entry
+			}
 			continue
 		}
-		entry := BuildWorktree{ExecutionID: a.ID, State: a.State, TaskID: a.Assignment.TaskID, EndedAt: a.EndedAt, Worktree: *a.Worktree}
+		entry := BuildWorktree{ExecutionID: a.ID, State: a.State, TaskID: a.Assignment.TaskID, EndedAt: a.EndedAt, Worktree: *a.Worktree, Gate: a.Gate}
+		if a.Gate != nil {
+			entry.Setup = a.Gate.Setup
+		}
 		if a.Result != nil {
 			entry.Reason = a.Result.Reason
 		}

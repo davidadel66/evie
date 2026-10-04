@@ -31,6 +31,7 @@ type (
 		Folder            WorkspaceFolder               `json:"folder"`
 		Explore           WorkspaceExplore              `json:"explore"`
 		Build             WorkspaceBuild                `json:"build"`
+		Verify            BuildVerify                   `json:"verify"`
 		ID                WorkspaceID                   `json:"id"`
 		DisplayName       string                        `json:"displayName"`
 		State             WorkspaceState                `json:"state"`
@@ -118,6 +119,22 @@ type WorkspaceBuild struct {
 	Setting WorkspaceBuildSetting `json:"setting"`
 	Allowed bool                  `json:"allowed"`
 }
+
+// BuildVerify is a Workspace's or project's merge-gate commands (Stage 12,
+// 2026-10-04), set only by the owner. Setup runs with network in a fresh
+// build worktree on its base commit, before the worker; Verify runs offline
+// on a worker's branch before and after its rebase, and a merge is proposed
+// only when both runs pass. Revision counts the owner's changes; each is an
+// immutable record and the latest applies everywhere at once, like the
+// Workspace folder. Empty means not set.
+type BuildVerify struct {
+	Setup    string `json:"setup"`
+	Verify   string `json:"verify"`
+	Revision int64  `json:"revision"`
+}
+
+// MaxBuildCommandBytes bounds a setup or verify command.
+const MaxBuildCommandBytes = 2048
 
 func (s Session) ScopeContext() ScopeContext {
 	return ScopeContext{

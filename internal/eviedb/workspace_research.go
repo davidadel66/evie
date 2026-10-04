@@ -142,6 +142,9 @@ func (s *Store) completeWorkspace(ctx context.Context, workspace memory.Workspac
 	if workspace.Build, err = workspaceBuild(ctx, s.db, workspace.ID, workspace.CurrentRevisionID); err != nil {
 		return memory.Workspace{}, err
 	}
+	if workspace.Verify, err = buildVerify(ctx, s.db, verifyScopeWorkspace, string(workspace.ID)); err != nil {
+		return memory.Workspace{}, err
+	}
 	return workspace, nil
 }
 

@@ -68,6 +68,18 @@
 > that is Stage 12. Amended text below is marked "Stage 11"; the binding
 > record is the "Build workers (Stage 11)" entry in
 > [subagents.decisions.md](subagents.decisions.md).
+>
+> Amended 2026-10-04 by the owner's decision for Stage 12 (verify-and-merge
+> gate) of [docs/memory-architecture.md](../../../../docs/memory-architecture.md).
+> A Workspace or project declares an owner-set setup command, run with
+> network in each fresh build worktree on its base commit before the worker
+> starts, and a verify command. A new `propose_build_merge` capability
+> verifies a build worker's branch offline, rebases it onto its target,
+> verifies it again, and only when both runs pass asks the owner to approve
+> a fast-forward, which the harness performs and then cleans up. Amended
+> text below is marked "Stage 12"; the binding record is the
+> "Verify-and-merge gate (Stage 12)" entry in
+> [subagents.decisions.md](subagents.decisions.md).
 
 ## Problem Statement
 
@@ -120,6 +132,17 @@ its branch when it finishes. A Task Access Grant lets it claim, update and
 decompose its own Task and nothing else. It has no approval-gated, Memory,
 scheduling, finance, Web or delegation capability, and nothing it does is
 merged: review and merge stay with the parent and the owner.
+
+(Stage 12.) The parent proposes merging a build worker's branch with
+`propose_build_merge`. The harness runs the owner's verify command on the
+branch in its worktree, offline in the sandbox, rebases the branch onto
+its target, and runs the command again; a failure returns the bounded
+output so the parent continues the worker with it. Only when both runs
+pass does the owner see an approval card, and only on approval does the
+harness fast-forward the target and remove the worktree and branch. The
+owner's setup command, when set, runs with network in each fresh worktree
+on its base commit before the worker starts, so the worker's offline
+builds find their dependencies.
 
 Foreground delegation waits for bounded results. A bounded batch runs independent
 children concurrently under configurable finite per-parent and runtime limits.
@@ -183,6 +206,7 @@ allowances produce an explicit refusal rather than a change of scope.
 51. As Evie's owner, I want the primary agent to continue a child that stopped at a limit, or whose findings need a follow-up, with its history intact and a fresh budget, so that bounded research is extended instead of restarted. (Added 2026-10-01, Stage 9.)
 52. As Evie's owner, I want the primary agent to delegate local, read-heavy investigation (many files, a repository, a database) to a read-only worker with a clean context, so that tool output the primary agent does not need never fills its context, while writes, approvals and memory stay with it. (Added 2026-10-03, Stage 7.)
 53. As Evie's owner, I want the primary agent to delegate a bounded code change on a Task to a worker that edits and tests freely in its own git worktree and branch, fenced there by code and the operating system, so that implementation work happens in parallel without touching my checkout, and I approve once, at merge. (Added 2026-10-03, Stage 11.)
+54. As Evie's owner, I want a worker's branch verified with my project's check before and after it is rebased onto its target, and merged only by a fast-forward I approve, which never touches my uncommitted changes, so that I review verified work once and my checkout stays mine. (Added 2026-10-04, Stage 12.)
 
 ## Implementation Decisions
 
@@ -287,6 +311,40 @@ allowances produce an explicit refusal rather than a change of scope.
   and the current revision, and turning it off revokes earlier `on`
   revisions durably. Project sessions need no setting, as for research and
   explore.
+- **Merge gate.** (Stage 12.) A Workspace or project has an owner-set
+  `setup` command (optional) and `verify` command, immutable revisions
+  written with a compare-and-set and applied at once; only the CLI (`evie
+  workspaces verify`, `evie projects verify`), the management API and the
+  Workspace settings set them, and Evie only suggests values found in
+  `AGENTS.md` or `CLAUDE.md`. When the harness creates a fresh build
+  worktree it runs the setup command there on the base commit, before the
+  worker starts, in the sandbox variant with outbound network (writes and
+  credential reads confined as for the worker; on macOS no loopback or
+  local socket but DNS), and only when the base is in the owner's history
+  (a branch outside `evie/`, a tag or a remote-tracking branch); the worker
+  is told how it went and stays offline. The optional Standard capability
+  `subagents.merge` (`propose_build_merge`: `execution_id`, optional
+  `target`, default the branch the build started from) is approval-gated:
+  before any approval it requires the parent's live turn, its own
+  finished, latest build attempt with commits to merge and a clean,
+  present, unmerged worktree, and a verify command (otherwise a refusal
+  naming how the owner sets one); it runs the verify command offline on the
+  branch, rebases the branch onto the target's current head inside the
+  worktree (a conflict is aborted and named), and reruns the command unless
+  the branch already contained that head. A failure returns the bounded,
+  framed output and no card. When both runs pass, the owner's card reads
+  "Merge evie/… into <target> (fast-forward)" with the commits, files,
+  runs and warnings, all harness-written. On approval the harness re-checks
+  authority, the proposal and both heads and fast-forwards the target: by
+  `git merge --ff-only` in the checkout that has it checked out (git
+  refuses when the owner's uncommitted changes would be overwritten; Evie
+  never stashes, resets, overwrites or pushes) or by a compare-and-swap of
+  its ref. A target that moved since verification merges nothing and is
+  re-verified by the next proposal. After a merge the worktree and branch
+  are removed, other unmerged build branches on that target are marked as
+  needing a rebase, and workers still running are told. Each attempt
+  records its gate's last step, and recovery settles interrupted steps:
+  rebases are aborted, merges are found complete or not happened.
 - **Assignment interface.** Foreground delegation accepts a bounded objective,
   optional explicitly selected context, an optional existing Task identity, and
   an idempotency key. One fixed child preset is supported, so no model-selected
@@ -437,7 +495,9 @@ allowances produce an explicit refusal rather than a change of scope.
   with the outcome the harness recorded, and adds a harness-written `build`
   object: branch, base and base commit, worktree, head, the harness's
   commits after the base, the files changed with line counts, and whether
-  changes stayed uncommitted.
+  changes stayed uncommitted. (Stage 12.) It also carries `setup`, how the
+  setup command ran (without its output), and `target_moved` when the
+  merge target moved while the worker ran, each with a harness note.
   (Stage 10.) Everything the child wrote (the summary, the report's
   limitations, and report pages) reaches the parent inside an escaped,
   collision-safe untrusted-data frame, as fetched web content does; status,
@@ -598,6 +658,35 @@ allowances produce an explicit refusal rather than a change of scope.
   recovers as interrupted with the worktree kept; continuation resumes in
   the same worktree; cleanup removes it; older Standard receipts reopen
   unchanged and cannot build; a Workspace needs its explicit build setting.
+- (Stage 12.) The setup sandbox reaches a remote host but not this host
+  (loopback or its own address), writes only in the worktree and temp
+  folder, and reads no credential or Evie's environment, while the offline
+  variant reaches nothing; gate commands are bounded in time and output
+  and refuse to run without a sandbox. Setup runs before the worker on the
+  base commit and is reported to it (passed, failed with framed output,
+  skipped for a base only on an unmerged build branch), not again for a
+  continuation, and a crash during it recovers as interrupted. Through
+  the real Plugin and dispatcher, a proposal verifies, rebases onto a
+  moved master and verifies again before the card, a declined card merges
+  nothing, and an approved one fast-forwards master in the owner's
+  checkout keeping an unrelated uncommitted edit, then removes the
+  worktree and branch; a failing check returns framed output and asks
+  nobody, the continued worker's fix merges and the superseded execution
+  is refused; a check that changes tracked files stops the gate; a branch
+  that edits its own check script gets a warning on the card; a rebase
+  conflict is aborted with the branch unchanged; the
+  owner's conflicting uncommitted edit makes git refuse after approval
+  with everything kept, nothing stashed (even with `merge.autoStash`);
+  an unchecked-out target moves by compare-and-swap, and one moved
+  between verification and approval is re-verified; no verify command
+  refuses with the suggestion and sets nothing; another parent's
+  execution reads as not found; interrupted rebases are aborted and
+  merges found complete or not on recovery while live steps are left
+  alone; a merge marks another branch on the same target, tells a running
+  worker and its next proposal rebases; a parent pinned before the gate
+  cannot propose; the composed parent loop proposes and the owner
+  approves the card; the CLI, web routes and settings section set and
+  suggest the commands.
 - (Explore default.) A Workspace's explore follows its folder by default
   (attach enables, detach disables, no revision written); explicit on and off
   persist across reopen and folder changes; off revokes durably and returning
@@ -658,7 +747,10 @@ allowances produce an explicit refusal rather than a change of scope.
   (Amended 2026-10-03, Stage 11: the build worker, with file mutation and
   worktree isolation and a shell that can write only under an OS sandbox
   confining it to its worktree, is in scope. Merging its branch is Stage 12
-  and remains out of scope here.)
+  and remains out of scope here.) (Amended 2026-10-04, Stage 12: merging a
+  build branch by an owner-approved fast-forward the harness performs is in
+  scope; pushing, force updates, merge commits and merges a worker performs
+  are not.)
 - Memory-enabled worker presets, automatic retrieval for workers, semantic
   memory writes, or compiling worker transcripts into accepted knowledge.
 - Child Todo capabilities, Task Access Grants, Task Focus, Task Claims, child Task

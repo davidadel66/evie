@@ -299,3 +299,25 @@ is the Stage 11 entry in `cmd/evie/docs/active/subagents.decisions.md`.
 - **No write-capable git.** The worker's git data is read-only to it; Evie's
   harness commits its changes on its branch with the git directory named
   explicitly and hooks, fsmonitor and signing off.
+
+## 2026-10-04 — The same sandbox for the merge gate's commands
+
+Stage 12 of `docs/memory-architecture.md` has Evie's harness, not a worker,
+run the owner's setup and verify commands (`internal/tools/gate.go`) under
+the build worker's sandbox. The binding record is the Stage 12 entry in
+`cmd/evie/docs/active/subagents.decisions.md`.
+
+- **Verify: the worker's sandbox, unchanged.** No network; the command runs
+  worker-written code.
+- **Setup: one difference, outbound network.** It runs before any worker
+  code exists, on a base in the owner's history. Writes, reads and the
+  built environment are confined exactly as for the worker (except that
+  `GOPROXY` is not turned off). Seatbelt allows outbound connections to
+  remote addresses and DNS through mDNSResponder, and denies `localhost`,
+  which covers every address of this host, so Evie's own server and other
+  local services stay unreachable; bubblewrap keeps the host network
+  (`--share-net`) and cannot close loopback.
+- **Bounded.** Each command has a time limit (10 minutes for setup, 20 for
+  verify) and is killed as a group; its output goes to a log in the temp
+  folder (4 MiB) and only a 3,000-byte tail is kept. Without a sandbox
+  nothing runs.

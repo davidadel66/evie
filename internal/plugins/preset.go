@@ -21,7 +21,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:535755ad0e6b11cadd91edd54db59c8196a3970ff256b3feddac838babc38a72"
+	StandardPresetVersion                               = "sha256:6566fc2a89af6fb8661b00d2222d49125b9181153ef5a2e97888552221864a54"
+	preMergeStandardPresetVersion                       = "sha256:535755ad0e6b11cadd91edd54db59c8196a3970ff256b3feddac838babc38a72"
 	preBuildStandardPresetVersion                       = "sha256:bfd4eb42705bce9f2ab68b1b0832d224f11b1e5bbb1f0221768188cd2d322d4e"
 	preExploreStandardPresetVersion                     = "sha256:89664be6462d10c5f9d6adb09589533a388f753a31edef3986bc513165c0ef6a"
 	preProactiveStandardPresetVersion                   = "sha256:eda7e097e22cc327d7f8091c0aed225d96926ef3b6752a094de0baaa564b7ead"
@@ -717,6 +718,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preBuildStandardPresetVersion {
 		return m.resumePreset(preBuildStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preMergeStandardPresetVersion {
+		return m.resumePreset(preMergeStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -1025,14 +1029,35 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 // Capability including the stored tool result reader, past-session episode
 // search, the standing tier's memory_set_standing and memory_overview, then
 // delegation, its report reader and continuation, then explore delegation
-// (Stage 7, 2026-10-03), then build delegation (Stage 11, 2026-10-03). A
-// later Memory Capability must freeze this Memory list, as
-// preProactiveMemoryCapabilityRequirements does for the version before it.
+// (Stage 7, 2026-10-03), then build delegation (Stage 11, 2026-10-03), then
+// the build merge gate (Stage 12, 2026-10-04). A later Memory Capability
+// must freeze this Memory list, as preProactiveMemoryCapabilityRequirements
+// does for the version before it.
 func standardPresetContent() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preMergeStandardPresetContent()
+	p.OptionalCapabilities = append(p.OptionalCapabilities,
+		CapabilityRequirement{ID: SubagentsMergeCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preMergeStandardPresetContent is the content of version 535755ad…, the
+// standard preset before the merge gate: everything before build, then
+// build delegation.
+func preMergeStandardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preBuildStandardPresetContent()
 	p.OptionalCapabilities = append(p.OptionalCapabilities,
 		CapabilityRequirement{ID: SubagentsBuildCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preMergeStandardPreset is the standard preset before the merge gate
+// (version 535755ad…); sessions pinned to it keep build delegation without
+// propose_build_merge.
+func preMergeStandardPreset() Preset {
+	p := preMergeStandardPresetContent()
+	p.Version = preMergeStandardPresetVersion
 	return p
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/worktree"
 )
 
 func (c *webContextSessionController) RegisterWorkspaceWithOptions(ctx context.Context, options eviedb.WorkspaceRegistration) (memory.Workspace, error) {
@@ -51,4 +52,20 @@ func (c *webContextSessionController) SetWorkspaceBuild(ctx context.Context, id 
 		}
 	}
 	return c.store.SetWorkspaceBuild(ctx, id, revision, setting)
+}
+
+// SetWorkspaceVerify records the owner's setup and verify commands for the
+// merge gate (Stage 12, 2026-10-04).
+func (c *webContextSessionController) SetWorkspaceVerify(ctx context.Context, id memory.WorkspaceID, expected int64, setup, verify string) (memory.Workspace, error) {
+	return c.store.SetWorkspaceVerify(ctx, id, expected, setup, verify)
+}
+
+// ProposeWorkspaceVerify suggests commands from the Workspace folder's
+// repository instructions; it records nothing.
+func (c *webContextSessionController) ProposeWorkspaceVerify(ctx context.Context, id memory.WorkspaceID) (worktree.Proposal, error) {
+	folder, err := c.store.WorkspaceFolder(ctx, id)
+	if err != nil || folder.Path == "" {
+		return worktree.Proposal{}, err
+	}
+	return worktree.ProposeCommands(folder.Path), nil
 }

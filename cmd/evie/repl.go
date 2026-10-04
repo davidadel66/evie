@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/davidadel66/evie/internal/agent"
+	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/tools"
@@ -654,13 +655,28 @@ func runREPLContextIOWithMemory(
 	// approve is the terminal half of the write gate: gated tools show
 	// what they're about to run and wait for a y/yes before executing.
 	// It shares the REPL's scanner — stdin has exactly one reader.
-	approve := func(approvalCtx context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
+	approve := func(approvalCtx context.Context, name, args string, preview *tools.FileChangePreview) tools.Decision {
 		// A memory with a standing classification can be approved with its
 		// "Always applies" flag switched, exactly as the web card offers.
 		switchable := strings.Contains(args, `"classification":{`)
 		prompt := "approve? [y/N] "
 		if switchable {
 			prompt = "approve? [y/N; s = approve with Always applies switched] "
+		}
+		if name == delegation.MergeToolName && preview != nil {
+			// A merge proposal's card is the harness's summary, not the
+			// model's arguments (Stage 12, 2026-10-04).
+			_, _ = fmt.Fprintf(out, "\n[%s]\nNow: %s\nAfter:\n%s%s", preview.Path, strings.TrimSpace(preview.OldText), preview.NewText, prompt)
+			if !scanner.Scan() {
+				return tools.Declined
+			}
+			if approvalCtx.Err() != nil {
+				return tools.Expired
+			}
+			if answer := strings.ToLower(strings.TrimSpace(scanner.Text())); answer == "y" || answer == "yes" {
+				return tools.Approved
+			}
+			return tools.Declined
 		}
 		_, _ = fmt.Fprintf(out, "\n[%s wants to run]\n%s\n%s", name, args, prompt)
 		if !scanner.Scan() {

@@ -9,6 +9,9 @@ import (
 const (
 	recoveryInterval   = 250 * time.Millisecond
 	recoveryMaxBackoff = 10 * time.Second
+	// gateRecoveryInterval spaces the passes over interrupted merge-gate
+	// steps (Stage 12).
+	gateRecoveryInterval = 10 * time.Second
 )
 
 // RunRecovery reconciles execution metadata throughout the host's lifetime,
@@ -25,6 +28,7 @@ func (s *Supervisor) RunRecovery(ctx context.Context, report func(error)) error 
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 	var reported string
+	var lastGates time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -33,8 +37,16 @@ func (s *Supervisor) RunRecovery(ctx context.Context, report func(error)) error 
 		}
 		pendingErr := s.settlePending(ctx)
 		_, err := s.store.RecoverSubagents(ctx)
+		// Merge-gate steps a crash or lost turn left in progress (Stage 12),
+		// checked less often: they read every finished build attempt.
+		var gateErr error
+		if time.Since(lastGates) >= gateRecoveryInterval {
+			if gateErr = s.RecoverGates(ctx); gateErr == nil {
+				lastGates = time.Now()
+			}
+		}
 		if ctx.Err() == nil {
-			err = errors.Join(pendingErr, err)
+			err = errors.Join(pendingErr, err, gateErr)
 		}
 		switch {
 		case err == nil:

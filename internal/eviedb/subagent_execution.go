@@ -280,6 +280,23 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 		if recorded.Commands, recorded.CommandsOmitted, err = subagentBuildCommands(ctx, conn, a.Child.ID, after); err != nil {
 			return err
 		}
+		if a.Gate != nil {
+			// The setup run that prepared this attempt's worktree, and a
+			// target that moved while it ran (Stage 12, 2026-10-04). A setup
+			// still marked running was cut off by the attempt's end.
+			if setup := a.Gate.Setup; setup != nil {
+				if setup.Outcome == delegation.RunRunning {
+					setup.Outcome, setup.Detail = delegation.RunInterrupted, "the attempt ended while setup ran"
+					if a.Gate.Step == delegation.GateSetupRunning {
+						a.Gate.Step = delegation.GateInterrupted
+					}
+				}
+				copied := *setup
+				copied.Output = ""
+				recorded.Setup = &copied
+			}
+			recorded.TargetMoved = a.Gate.NeedsRebase
+		}
 		result.Build = &recorded
 		next.notes = buildNotes(*a, &recorded, committed)
 	}

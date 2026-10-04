@@ -861,8 +861,13 @@ func TestBuildAdmissionRefusesUnsafeRepositoriesTasksAndParents(t *testing.T) {
 	}
 	old := composition.Clone(resolved.Receipt)
 	old.Preset.Version = "sha256:bfd4eb42705bce9f2ab68b1b0832d224f11b1e5bbb1f0221768188cd2d322d4e"
-	old.Capabilities = slices.DeleteFunc(old.Capabilities, func(c composition.Capability) bool { return c.ID == delegation.BuildCapabilityID })
-	old.ToolSchemas = slices.DeleteFunc(old.ToolSchemas, func(s composition.ToolSchema) bool { return s.Name == delegation.BuildToolName })
+	// The merge gate (Stage 12) came after build, so it goes too.
+	old.Capabilities = slices.DeleteFunc(old.Capabilities, func(c composition.Capability) bool {
+		return c.ID == delegation.BuildCapabilityID || c.ID == delegation.MergeCapabilityID
+	})
+	old.ToolSchemas = slices.DeleteFunc(old.ToolSchemas, func(s composition.ToolSchema) bool {
+		return s.Name == delegation.BuildToolName || s.Name == delegation.MergeToolName
+	})
 	reopened, err := f.manager.ResumeComposition(old)
 	if err != nil {
 		t.Fatalf("pre-build receipt does not reopen: %v", err)

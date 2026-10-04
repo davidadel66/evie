@@ -29,6 +29,12 @@ type WorkerSandbox interface {
 	// Command returns the confined command for program and args, to be run
 	// with its Dir inside fence.Worktree and the environment buildEnv makes.
 	Command(ctx context.Context, fence BuildFence, program string, args ...string) (*exec.Cmd, error)
+	// SetupCommand is Command with outbound network allowed, for the
+	// harness's setup phase only (Stage 12, 2026-10-04): it runs the owner's
+	// setup command on the base commit before any worker-written code
+	// exists. Writes and reads are confined exactly as in Command; on macOS
+	// loopback and local sockets other than DNS stay closed.
+	SetupCommand(ctx context.Context, fence BuildFence, program string, args ...string) (*exec.Cmd, error)
 }
 
 // workerSandboxEnv lets an operator turn build-worker bash off.
@@ -141,12 +147,34 @@ type seatbelt struct{ path string }
 func (seatbelt) Name() string { return "seatbelt" }
 
 func (s seatbelt) Command(ctx context.Context, fence BuildFence, program string, args ...string) (*exec.Cmd, error) {
+	return s.command(ctx, fence, false, program, args...)
+}
+
+func (s seatbelt) SetupCommand(ctx context.Context, fence BuildFence, program string, args ...string) (*exec.Cmd, error) {
+	return s.command(ctx, fence, true, program, args...)
+}
+
+func (s seatbelt) command(ctx context.Context, fence BuildFence, network bool, program string, args ...string) (*exec.Cmd, error) {
 	profile, err := seatbeltProfile(fence)
 	if err != nil {
 		return nil, err
 	}
+	if network {
+		profile += seatbeltNetwork
+	}
 	return exec.CommandContext(ctx, s.path, append([]string{"-p", profile, program}, args...)...), nil
 }
+
+// seatbeltNetwork is the setup phase's network: outbound connections to
+// remote hosts and DNS through mDNSResponder. Seatbelt's localhost covers
+// every address of this host, so loopback and the host's own interface
+// addresses (Evie's own server, other local services) stay closed, as does
+// every other local socket.
+const seatbeltNetwork = "(allow system-socket)\n" +
+	"(allow network-outbound (remote ip \"*:*\"))\n" +
+	"(deny network-outbound (remote ip \"localhost:*\"))\n" +
+	"(allow network-outbound (remote unix-socket (path-literal \"/private/var/run/mDNSResponder\")))\n" +
+	"(allow mach-lookup (global-name \"com.apple.dnssd.service\"))\n"
 
 // sbplString quotes s as a Seatbelt profile string literal.
 func sbplString(s string) string {
@@ -193,11 +221,25 @@ type bubblewrap struct{ path string }
 func (bubblewrap) Name() string { return "bubblewrap" }
 
 func (s bubblewrap) Command(ctx context.Context, fence BuildFence, program string, args ...string) (*exec.Cmd, error) {
+	return s.command(ctx, fence, false, program, args...)
+}
+
+// SetupCommand keeps the host's network namespace (--share-net). Unlike
+// Seatbelt, bubblewrap cannot then keep loopback closed.
+func (s bubblewrap) SetupCommand(ctx context.Context, fence BuildFence, program string, args ...string) (*exec.Cmd, error) {
+	return s.command(ctx, fence, true, program, args...)
+}
+
+func (s bubblewrap) command(ctx context.Context, fence BuildFence, network bool, program string, args ...string) (*exec.Cmd, error) {
 	if err := checkFence(fence); err != nil {
 		return nil, err
 	}
-	argv := []string{"--die-with-parent", "--new-session", "--unshare-all", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
-		"--bind", fence.Worktree, fence.Worktree, "--bind", fence.Temp, fence.Temp}
+	argv := []string{"--die-with-parent", "--new-session", "--unshare-all"}
+	if network {
+		argv = append(argv, "--share-net")
+	}
+	argv = append(argv, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
+		"--bind", fence.Worktree, fence.Worktree, "--bind", fence.Temp, fence.Temp)
 	if _, err := os.Lstat(filepath.Join(fence.Worktree, ".git")); err == nil {
 		argv = append(argv, "--ro-bind", filepath.Join(fence.Worktree, ".git"), filepath.Join(fence.Worktree, ".git"))
 	}
@@ -214,6 +256,19 @@ func (s bubblewrap) Command(ctx context.Context, fence BuildFence, program strin
 	}
 	argv = append(argv, "--chdir", fence.Worktree, "--", program)
 	return exec.CommandContext(ctx, s.path, append(argv, args...)...), nil
+}
+
+// setupEnv is the setup phase's environment: the worker's, except that
+// GOPROXY is not turned off, since the setup phase may fetch.
+func setupEnv(fence BuildFence) []string {
+	env := buildEnv(fence)
+	out := env[:0]
+	for _, entry := range env {
+		if entry != "GOPROXY=off" {
+			out = append(out, entry)
+		}
+	}
+	return out
 }
 
 // buildEnv is the sandboxed shell's environment, built rather than

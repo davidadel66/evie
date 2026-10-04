@@ -13,7 +13,13 @@ const (
 	continueResearchTool   = "continue_research"
 	delegateExploreTool    = "delegate_explore"
 	delegateBuildTool      = "delegate_build"
+	proposeBuildMergeTool  = "propose_build_merge"
 )
+
+// mergeGuidance is the Delegation line for a session that can propose
+// merging a build worker's branch (Stage 12, 2026-10-04). Sessions pinned
+// before propose_build_merge existed keep their exact prompt.
+const mergeGuidance = "- When a build result looks right, call " + proposeBuildMergeTool + " with the child's latest execution_id: Evie verifies the branch, rebases it onto its target and verifies again, and only then asks David to approve the fast-forward. If a check fails, continue the worker with the failure output and propose again; never try to merge by other means.\n"
 
 // exploreGuidance is the Delegation line for a session that can delegate to
 // read-only explore workers (Stage 7, 2026-10-03). Sessions pinned before
@@ -56,7 +62,7 @@ const (
 // toolset is pinned, so its instructions stay stable and cacheable across
 // its turns.
 func primaryInstructions(tools []openrouter.Tool) string {
-	var report, continuation, explore, build, duties, overview bool
+	var report, continuation, explore, build, merge, duties, overview bool
 	for _, tool := range tools {
 		switch tool.Function.Name {
 		case readSubagentReportTool:
@@ -67,6 +73,8 @@ func primaryInstructions(tools []openrouter.Tool) string {
 			explore = true
 		case delegateBuildTool:
 			build = true
+		case proposeBuildMergeTool:
+			merge = true
 		case rememberLiteralTool:
 			_, duties = tool.Function.Parameters.Properties[requestedByOwnerFlag]
 		case memoryOverviewTool:
@@ -82,6 +90,9 @@ func primaryInstructions(tools []openrouter.Tool) string {
 		line = "- Use " + readSubagentReportTool + " when a summary is not enough.\n"
 	case continuation:
 		line = "- Use " + continueResearchTool + " to extend a partial child instead of starting over.\n"
+	}
+	if build && merge {
+		line = mergeGuidance + line
 	}
 	if build {
 		line = buildGuidance + line

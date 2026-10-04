@@ -11,7 +11,7 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 )
 
-const workspacesUsage = "usage: evie workspaces list | evie workspaces explore <workspace-id> on|off|default | evie workspaces build <workspace-id> on|off|default"
+const workspacesUsage = "usage: evie workspaces list | evie workspaces explore <workspace-id> on|off|default | evie workspaces build <workspace-id> on|off|default | evie workspaces verify <workspace-id> [--setup <command>] [--verify <command>]"
 
 // runWorkspaceManagement answers `evie workspaces list`, which shows each
 // Workspace with its folder and explore and build settings, `evie workspaces
@@ -27,6 +27,9 @@ func runWorkspaceManagement(ctx context.Context, args []string, out io.Writer, s
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
 	switch {
+	case len(args) >= 3 && args[1] == "verify":
+		// The merge gate's setup and verify commands (Stage 12).
+		return true, workspaceVerify(ctx, args, out, store)
 	case len(args) == 2 && args[1] == "list":
 		workspaces, err := store.ListWorkspaces(ctx, true)
 		if err != nil {

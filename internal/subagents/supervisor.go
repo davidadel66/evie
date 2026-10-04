@@ -57,6 +57,16 @@ type Supervisor struct {
 	commits map[string]*delegation.BuildReport
 	// commitTimeout bounds the harness commit at the end of a build attempt.
 	commitTimeout time.Duration
+	// setupTimeout and verifyTimeout bound the project's setup and verify
+	// commands (Stage 12, 2026-10-04).
+	setupTimeout  time.Duration
+	verifyTimeout time.Duration
+	// gates holds the build attempts whose merge gate runs in this process;
+	// recovery leaves them alone.
+	gates map[string]bool
+	// moved holds, for running build attempts in this process, the move of
+	// their target branch they are told about on their next model call.
+	moved map[string]delegation.TargetMove
 }
 
 func New(store *eviedb.Store, policy delegation.Policy) (*Supervisor, error) {
@@ -69,7 +79,8 @@ func New(store *eviedb.Store, policy delegation.Policy) (*Supervisor, error) {
 	idle := make(chan struct{})
 	close(idle)
 	return &Supervisor{store: store, policy: policy, active: map[uint64]context.CancelFunc{}, idle: idle, now: time.Now,
-		settleWindow: settleGrace, unsettled: map[string]outcome{}, commits: map[string]*delegation.BuildReport{}, commitTimeout: buildCommitTimeout}, nil
+		settleWindow: settleGrace, unsettled: map[string]outcome{}, commits: map[string]*delegation.BuildReport{}, commitTimeout: buildCommitTimeout,
+		setupTimeout: setupTimeout, verifyTimeout: verifyTimeout, gates: map[string]bool{}, moved: map[string]delegation.TargetMove{}}, nil
 }
 
 // Configure supplies the same resolved transport and model used by parents.
@@ -101,6 +112,9 @@ var (
 // block the Plugin; RunRecovery retries and reports such failures.
 func (s *Supervisor) Start(ctx context.Context) error {
 	if _, err := s.store.RecoverSubagents(ctx); err != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err := s.RecoverGates(ctx); err != nil && ctx.Err() != nil {
 		return ctx.Err()
 	}
 	s.mu.Lock()
@@ -739,7 +753,16 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 		if err := s.prepareWorktree(ctx, a); err != nil {
 			return s.finish(call, a.ID, outcome{"failed", reasonWorktreeUnavailable})
 		}
+		if a.Continues == nil {
+			// The harness runs the project's setup command, with network, on
+			// the base commit before the worker exists (Stage 12); the
+			// worker is told how it went.
+			if gate := s.runSetup(ctx, a); gate != nil {
+				a.Gate = gate
+			}
+		}
 		toolset = toolset.WithBuildFence(tools.BuildFence{Worktree: a.Worktree.Path, Temp: a.Worktree.Temp})
+		defer s.forgetMove(a.ID)
 	}
 	if err := s.store.AppendCompatibilityResolutions(ctx, a.Child.ID, resolved.CompatibilityResolutions); err != nil {
 		return s.finish(call, a.ID, outcome{"failed", "composition_unavailable"})
@@ -751,7 +774,8 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 	}
 	metered := &budget{client: client, policy: a.Policy, worker: a.Worker(), now: s.now, started: s.now(),
 		authorize: func(ctx context.Context) error { return s.authorize(ctx, a.ID) },
-		record:    func(reason string) { s.recordWrapUp(ctx, a.ID, reason) }}
+		record:    func(reason string) { s.recordWrapUp(ctx, a.ID, reason) },
+		notice:    func() string { return s.moveNotice(a.ID) }}
 	// The child gets the model's normal output reserve; only its request
 	// bytes are narrowed.
 	profile, err = profile.WithWorkerLimits(int64(a.Policy.RequestBytes), profile.OutputReserveTokens())

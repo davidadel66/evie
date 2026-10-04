@@ -104,6 +104,12 @@ func main() {
 		}
 		return
 	}
+	if handled, err := runProjectManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+		if err != nil {
+			log.Fatalf("projects: %v", err)
+		}
+		return
+	}
 	if handled, err := runWorktreeManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
 		if err != nil {
 			log.Fatalf("worktrees: %v", err)

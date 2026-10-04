@@ -27,6 +27,13 @@ type worktreeListing struct {
 	Uncommitted bool   `json:"uncommitted"`
 	Removed     bool   `json:"removed"`
 	Problem     string `json:"problem,omitempty"`
+	// The merge gate (Stage 12, 2026-10-04): its last step and problem, how
+	// setup went, whether the target moved since, and where it merged.
+	GateStep    string `json:"gate_step,omitempty"`
+	GateProblem string `json:"gate_problem,omitempty"`
+	Setup       string `json:"setup,omitempty"`
+	NeedsRebase string `json:"needs_rebase,omitempty"`
+	MergedInto  string `json:"merged_into,omitempty"`
 }
 
 // abandonedStates are build executions that ended without a report to
@@ -59,6 +66,18 @@ func runWorktreeManagement(ctx context.Context, args []string, out io.Writer, st
 			row.Present, row.Uncommitted = present, dirty
 			if err != nil {
 				row.Problem = err.Error()
+			}
+			if e.Setup != nil {
+				row.Setup = e.Setup.Outcome
+			}
+			if g := e.Gate; g != nil {
+				row.GateStep, row.GateProblem = g.Step, g.Problem
+				if g.NeedsRebase != nil {
+					row.NeedsRebase = fmt.Sprintf("%s moved to %s", g.NeedsRebase.Target, g.NeedsRebase.To)
+				}
+				if g.Merged != nil {
+					row.MergedInto = fmt.Sprintf("%s at %s", g.Merged.Target, g.Merged.To)
+				}
 			}
 			listed = append(listed, row)
 		}

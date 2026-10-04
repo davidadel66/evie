@@ -321,6 +321,27 @@ Decided (David, 2026-10-04) after Stage 11 landed:
 - A failing check returns to the worker through continuation with the
   failure output, bounded by budget.
 - Running agents are told when the target branch moves.
+- **Implemented** (2026-10-04). A Workspace or project has owner-set
+  `setup` and `verify` commands (`evie workspaces verify`, `evie projects
+  verify`, `POST /api/workspaces/verify`, the Workspace's "Merge checks";
+  immutable revisions, latest applies at once). Evie only suggests values
+  from `AGENTS.md`/`CLAUDE.md`. The setup command runs with network in each
+  fresh build worktree on its base commit, before the worker, in the
+  sandbox variant that still confines writes and credential reads (and, on
+  macOS, closes this host's own addresses), and only on the owner's history;
+  the worker stays offline. `propose_build_merge` (Standard `sha256:6566fc2a…`;
+  earlier versions reopen unchanged) verifies the branch offline, rebases it
+  onto the target inside the worktree (conflicts aborted), verifies again,
+  and only then shows David "Merge evie/… into <target> (fast-forward)".
+  On approval the harness fast-forwards the target, by `git merge
+  --ff-only` in the checkout that has it (git refuses to overwrite his
+  uncommitted changes; nothing is stashed or pushed) or by a
+  compare-and-swap of its ref, and removes the worktree and branch. A
+  failing check returns framed output for `continue_research`; a target
+  that moved before approval is re-verified; other branches on the moved
+  target are marked and running workers told; interrupted gate steps
+  recover. Binding record: the Stage 12 entry in
+  `cmd/evie/docs/active/subagents.decisions.md`.
 
 **13. Task Tree orchestration**
 - Given a Task Tree, the orchestrator dispatches independent ready tasks to

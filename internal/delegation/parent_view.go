@@ -81,6 +81,11 @@ type ParentBuild struct {
 	Deletions    int           `json:"deletions"`
 	Uncommitted  bool          `json:"uncommitted,omitempty"`
 	CommitError  string        `json:"commit_error,omitempty"`
+	// Setup and TargetMoved are harness facts (Stage 12, 2026-10-04): how
+	// the project's setup command ran, without its output, and whether the
+	// merge target moved while the worker ran.
+	Setup       *GateRun    `json:"setup,omitempty"`
+	TargetMoved *TargetMove `json:"target_moved,omitempty"`
 }
 
 // ParentView renders r for the parent. Results stored before framing render
@@ -91,7 +96,14 @@ func (r Result) ParentView() ParentResult {
 		SummaryTruncated: r.SummaryTruncated, ReportBytes: r.ReportBytes, Sources: r.Sources, UnverifiedURLs: r.UnverifiedURLs, Usage: r.Usage}
 	if b := r.Build; b != nil {
 		view.Build = &ParentBuild{Branch: b.Branch, Base: b.Base, BaseCommit: b.BaseCommit, Worktree: b.Worktree, Head: b.Head, Commits: b.Commits,
-			Files: b.Files, FilesChanged: b.FilesChanged, Insertions: b.Insertions, Deletions: b.Deletions, Uncommitted: b.Uncommitted, CommitError: b.CommitError}
+			Files: b.Files, FilesChanged: b.FilesChanged, Insertions: b.Insertions, Deletions: b.Deletions, Uncommitted: b.Uncommitted, CommitError: b.CommitError,
+			TargetMoved: b.TargetMoved}
+		if b.Setup != nil {
+			// The setup command's output never reaches the parent unframed.
+			setup := *b.Setup
+			setup.Output = ""
+			view.Build.Setup = &setup
+		}
 	}
 	if text := r.childText(); text != "" {
 		view.Summary = frameChildOutput(r.Worker, r.ExecutionID, text)
