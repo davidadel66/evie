@@ -243,6 +243,10 @@ type WorkflowModelCallStart struct {
 	EstimatedInputTokens  int64
 	EstimatedOutputTokens int64
 	EstimatedMicroUSD     int64
+	// Cap, when set, is the operator's daily cap (sub-stage 11): the call
+	// is refused, with nothing recorded, when its estimate would take
+	// today's spend past it.
+	Cap *WorkflowDailyCap
 }
 
 func validDigest(d string) bool {
@@ -264,8 +268,16 @@ func (s *Store) BeginWorkflowModelCall(ctx context.Context, lease WorkflowRunLea
 	case m.EstimatedInputTokens < 0 || m.EstimatedOutputTokens < 0 || m.EstimatedMicroUSD < 0:
 		return WorkflowNodeAttempt{}, errors.New("a model call's estimate is not negative")
 	}
+	if err := validDailyCap(m.Cap); err != nil {
+		return WorkflowNodeAttempt{}, err
+	}
 	var out WorkflowNodeAttempt
 	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, now time.Time) error {
+		if m.Cap != nil {
+			if err := checkDailyCap(ctx, conn, now, *m.Cap, m.EstimatedInputTokens+m.EstimatedOutputTokens, m.EstimatedMicroUSD); err != nil {
+				return err
+			}
+		}
 		var err error
 		if out, err = beginWorkflowAttempt(ctx, conn, lease, m.Attempt, now); err != nil {
 			return err

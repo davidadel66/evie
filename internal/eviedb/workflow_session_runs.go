@@ -50,25 +50,34 @@ type WorkflowChatOrigin struct {
 }
 
 // workflowRunSurfacesBeforeChat is the origin check of sub-stages 3 to 9;
-// workflowRunSurfaces adds chat, which always names its session.
+// workflowRunSurfacesChat (sub-stage 10) adds chat, which always names its
+// session; workflowRunSurfaces (sub-stage 11) adds schedule, which never
+// does.
 const (
 	workflowRunSurfacesBeforeChat = "origin_surface TEXT NOT NULL CHECK(origin_surface IN ('cli','web'))"
-	workflowRunSurfaces           = "origin_surface TEXT NOT NULL CHECK(origin_surface IN ('cli','web','chat') AND (origin_surface <> 'chat' OR session_id IS NOT NULL))"
+	workflowRunSurfacesChat       = "origin_surface TEXT NOT NULL CHECK(origin_surface IN ('cli','web','chat') AND (origin_surface <> 'chat' OR session_id IS NOT NULL))"
+	workflowRunSurfaces           = "origin_surface TEXT NOT NULL CHECK(origin_surface IN ('cli','web','chat','schedule') AND (origin_surface <> 'chat' OR session_id IS NOT NULL) AND (origin_surface <> 'schedule' OR session_id IS NULL))"
 )
 
 // validRunSurface checks a start's surface before its transaction: the
-// owner's CLI or web without a chat turn, or a chat with its session and
-// turn and no rerun override.
+// owner's CLI or web without a chat turn, a chat with its session and turn
+// and no rerun override, or (sub-stage 11) a schedule with its slot and
+// neither a session nor an override.
 func validRunSurface(req WorkflowRunStart) error {
 	switch req.Surface {
 	case "cli", "web":
-		if req.Chat != nil {
+		if req.Chat != nil || req.Slot != nil {
 			return ErrWorkflowRunSurface
 		}
 	case "chat":
-		if req.Chat == nil || req.SessionID == "" || req.RerunOf != "" || strings.TrimSpace(req.Reason) != "" {
+		if req.Chat == nil || req.Slot != nil || req.SessionID == "" || req.RerunOf != "" || strings.TrimSpace(req.Reason) != "" {
 			return ErrWorkflowRunSurface
 		}
+	case "schedule":
+		if req.Slot == nil || req.Chat != nil || req.SessionID != "" || req.RerunOf != "" || strings.TrimSpace(req.Reason) != "" {
+			return ErrWorkflowRunSurface
+		}
+		return validSlotStart(req.Slot)
 	default:
 		return ErrWorkflowRunSurface
 	}

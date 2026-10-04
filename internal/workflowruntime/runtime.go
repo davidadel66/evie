@@ -17,7 +17,10 @@
 // run's lease (agent.go) and bounded map fan-out with per-item attempts
 // (mapstep.go); sub-stage 10 adds bundled templates to proposals, bounded
 // agent outputs (runtime /6) and chat starts and status for the Workflows
-// plugin (session.go); later sub-stages extend runs through this same type.
+// plugin (session.go); sub-stage 11 adds approved schedules started
+// through StartRun with bounded catch-up (schedules.go), the operator's
+// daily cap (caps.go) and durable notifications (notifications.go); later
+// sub-stages extend runs through this same type.
 //
 // Validation runs against the bound Workspace: its current Workspace Access
 // and the runtime's capability catalog (the workflow capabilities compiled
@@ -131,6 +134,21 @@ type Store interface {
 	WorkflowStepWorkerCalls(ctx context.Context, runID string, checkpoint int64, step string, item *int) ([]eviedb.WorkflowWorkerCall, error)
 	RunWorkerExecution(ctx context.Context, runID, id string) (delegation.Attempt, string, error)
 	WorkflowRunSpend(ctx context.Context, runID string) (eviedb.WorkflowRunSpend, error)
+
+	// Schedules, the daily cap and notifications (sub-stage 11): the
+	// schedules of current versions with their cursors, slots recorded
+	// without a run, the owner's pause and resume, the ticker's single
+	// runner lease, today's spend across all runs, and durable notices.
+	WorkflowSchedules(ctx context.Context, ws memory.WorkspaceID) ([]eviedb.WorkflowSchedule, error)
+	RecordWorkflowScheduleSlot(ctx context.Context, slot eviedb.WorkflowScheduleSlot) error
+	ControlWorkflowSchedule(ctx context.Context, req eviedb.WorkflowScheduleControlRequest) (eviedb.WorkflowScheduleControl, error)
+	AcquireWorkflowScheduleRunner(ctx context.Context, holder string, ttl time.Duration) (bool, error)
+	ReleaseWorkflowScheduleRunner(ctx context.Context, holder string) error
+	WorkflowDailySpend(ctx context.Context, day string) (eviedb.WorkflowDailySpend, error)
+	ListWorkflowNotifications(ctx context.Context, f eviedb.WorkflowNotificationFilter) ([]eviedb.WorkflowNotification, error)
+	MarkWorkflowNotifications(ctx context.Context, ids []int64, read bool) (int, error)
+	MarkAllWorkflowNotificationsRead(ctx context.Context, ws memory.WorkspaceID) (int, error)
+	WorkflowNotificationCounts(ctx context.Context, ws memory.WorkspaceID) (eviedb.WorkflowNotificationCounts, error)
 }
 
 // Config wires a Runtime.
@@ -159,6 +177,12 @@ type Config struct {
 	// agent steps off; AgentsOff then says why and how to turn them on.
 	Agents    Agents
 	AgentsOff string
+	// DailyCap is the operator's cap on all workflow runs' AI calls and
+	// workers in one UTC day (sub-stage 11): every call and worker start
+	// is refused, and its run paused until the next day, when it would
+	// pass it. nil enforces none; every Evie process sets it from the
+	// environment with conservative defaults (cmd/evie).
+	DailyCap *eviedb.WorkflowDailyCap
 }
 
 // SchedulerConfig bounds and paces a runtime's execution of runs
@@ -192,6 +216,12 @@ type SchedulerConfig struct {
 	// doubling, at most two retries and 30s).
 	ModelTimeout  time.Duration
 	ModelRetryGap time.Duration
+	// Schedules is how often the schedule ticker looks for due slots
+	// (default 15s, at most 10m; sub-stage 11), and ScheduleGrace how late
+	// a slot may first be seen and still count as on time for the skip
+	// Catch-up Policy (default 5m, at most 1h).
+	Schedules     time.Duration
+	ScheduleGrace time.Duration
 }
 
 const (
@@ -221,6 +251,15 @@ func (c SchedulerConfig) resolve() (SchedulerConfig, error) {
 		c.ModelRetryGap < 0 || c.ModelRetryGap > maxModelRetryDelay {
 		return c, fmt.Errorf("workflow scheduler needs an interruption bound of 1 to %d, read, effect and model timeouts up to %s and a model retry gap up to %s",
 			MaxInterruptions, maxReadTimeout, maxModelRetryDelay)
+	}
+	if c.Schedules < 0 || c.Schedules > maxReadTimeout || c.ScheduleGrace < 0 || c.ScheduleGrace > time.Hour {
+		return c, fmt.Errorf("workflow scheduler needs a schedule tick up to %s and a schedule grace up to 1h", maxReadTimeout)
+	}
+	if c.Schedules == 0 {
+		c.Schedules = defaultScheduleTick
+	}
+	if c.ScheduleGrace == 0 {
+		c.ScheduleGrace = defaultScheduleGrace
 	}
 	if c.ModelTimeout == 0 {
 		c.ModelTimeout = defaultModelTimeout
@@ -300,6 +339,11 @@ type Runtime struct {
 	// signals reach the passes this process runs when the owner cancels
 	// their runs here (sub-stage 8).
 	signals map[string]*cancelSignal
+	// cap is the operator's daily cap (sub-stage 11); nil enforces none.
+	cap *eviedb.WorkflowDailyCap
+	// scheduleYield is when this runtime may take the schedule runner
+	// lease again after a slot it could not start (sub-stage 11).
+	scheduleYield time.Time
 }
 
 // New returns a Runtime. It touches neither Git nor the database.
@@ -323,8 +367,16 @@ func New(c Config) (*Runtime, error) {
 	if c.Agents == nil && strings.TrimSpace(c.AgentsOff) == "" {
 		c.AgentsOff = "agent steps are off in this Evie"
 	}
+	var limit *eviedb.WorkflowDailyCap
+	if c.DailyCap != nil {
+		if c.DailyCap.Tokens < 0 || c.DailyCap.MicroUSD < 0 {
+			return nil, errors.New("the daily workflow cap is not negative")
+		}
+		copied := *c.DailyCap
+		limit = &copied
+	}
 	return &Runtime{store: c.Store, repo: c.Repo, providers: c.Capabilities, catalog: providerCatalog{c.Capabilities}, workers: c.Workers, sched: sched, report: c.Report,
-		models: c.Models, modelsOff: c.ModelsOff, agents: c.Agents, agentsOff: c.AgentsOff,
+		models: c.Models, modelsOff: c.ModelsOff, agents: c.Agents, agentsOff: c.AgentsOff, cap: limit,
 		holder: fmt.Sprintf("evie-%d-%s", os.Getpid(), uuid.NewString()), compatible: slices.Clone(compatibleRuntimes), pin: RuntimeVersion,
 		now: time.Now, sleep: sleepContext,
 		active: map[string]bool{}, failures: map[string]error{}, reported: map[string]string{}, signals: map[string]*cancelSignal{},
@@ -670,7 +722,7 @@ func (c Card) Text() string {
 		line("Workers: %s (needs the Workspace's allowance for each)", strings.Join(c.Requirements.Workers, ", "))
 	}
 	if s := c.Requirements.Schedule; s != nil {
-		line("Schedule: %s %s, catch-up %s; approving also activates this schedule (scheduled runs start once schedules ship)", s.Cron, s.Timezone, s.CatchUp)
+		line("Schedule: %s %s, catch-up %s; approving also activates this schedule: its runs start at their times until you pause it (evie workflows schedule pause) or deactivate the workflow", s.Cron, s.Timezone, s.CatchUp)
 	} else {
 		line("Schedule: none (manual starts only)")
 	}

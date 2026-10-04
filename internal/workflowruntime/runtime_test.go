@@ -49,6 +49,8 @@ type harness struct {
 	// agentsFor builds each runtime's worker supervisor over its own store
 	// (sub-stage 9); nil turns agent steps off.
 	agentsFor func(*eviedb.Store) Agents
+	// cap, when set, is the next runtime's daily cap (sub-stage 11).
+	cap *eviedb.WorkflowDailyCap
 }
 
 // agentsOf is the worker supervisor of a runtime over store, if any.
@@ -85,7 +87,7 @@ func (h *harness) runtime() *Runtime {
 func (h *harness) runtimeWith(providers CapabilityProviders) *Runtime {
 	h.t.Helper()
 	rt, err := New(Config{Store: h.store, Repo: h.repo, Capabilities: providers, Workers: ceiling, Scheduler: h.scheduler, Models: h.models, ModelsOff: h.modelsOff,
-		Agents: h.agentsOf(h.store)})
+		Agents: h.agentsOf(h.store), DailyCap: h.cap})
 	if err != nil {
 		h.t.Fatal(err)
 	}

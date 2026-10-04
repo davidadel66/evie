@@ -34,6 +34,13 @@ type WorkflowManager interface {
 	Answer(context.Context, workflowruntime.AnswerRequest) (eviedb.WorkflowRunDetail, error)
 	Interruptions(context.Context, workflowruntime.InterruptionFilter) ([]eviedb.WorkflowInterruption, error)
 	Cancel(context.Context, workflowruntime.CancelRequest) (eviedb.WorkflowRunDetail, error)
+	// Sub-stage 11: schedules and the owner's pause and resume, durable
+	// notifications and their read state, and the daily cap's status.
+	Schedules(context.Context, memory.WorkspaceID) ([]workflowruntime.ScheduleStatus, error)
+	ControlSchedule(context.Context, workflowruntime.ScheduleControl) (eviedb.WorkflowScheduleControl, error)
+	Notifications(context.Context, eviedb.WorkflowNotificationFilter) ([]workflowruntime.Notification, error)
+	MarkNotifications(context.Context, workflowruntime.NotificationMark) (int, error)
+	Status(context.Context, memory.WorkspaceID) (workflowruntime.Status, error)
 }
 
 // WithWorkflows adds the workflow management routes.
@@ -58,6 +65,11 @@ func (s *Server) registerWorkflowRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workflows/answer", s.managementRoute(s.handleWorkflowAnswer))
 	mux.Handle("/api/workflows/interruptions", s.managementRoute(s.handleWorkflowInterruptions))
 	mux.Handle("/api/workflows/cancel", s.managementRoute(s.handleWorkflowCancel))
+	mux.Handle("/api/workflows/schedules", s.managementRoute(s.handleWorkflowSchedules))
+	mux.Handle("/api/workflows/schedule", s.managementRoute(s.handleWorkflowSchedule))
+	mux.Handle("/api/workflows/notifications", s.managementRoute(s.handleWorkflowNotifications))
+	mux.Handle("/api/workflows/notifications/read", s.managementRoute(s.handleWorkflowNotificationsRead))
+	mux.Handle("/api/workflows/status", s.managementRoute(s.handleWorkflowStatus))
 }
 
 func boundedID(id string) bool { return id != "" && len(id) <= 128 }
@@ -208,8 +220,126 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusConflict, "run_finished", err.Error()
 	case errors.Is(err, workflowruntime.ErrRerunRefused):
 		status, code, message = http.StatusConflict, "rerun_refused", err.Error()
+	case errors.Is(err, eviedb.ErrWorkflowScheduleControl):
+		status, code, message = http.StatusConflict, "schedule_state", err.Error()
+	case errors.Is(err, eviedb.ErrWorkflowScheduleNotFound):
+		status, code, message = http.StatusConflict, "no_schedule", err.Error()
 	}
 	managementJSONError(w, status, code, message)
+}
+
+// handleWorkflowSchedules lists the schedules of a Workspace's (or every
+// Workspace's) current versions (Stage 14 sub-stage 11).
+func (s *Server) handleWorkflowSchedules(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		WorkspaceID memory.WorkspaceID `json:"workspace_id"`
+	}
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	if len(request.WorkspaceID) > 128 {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "workspace_id is too long")
+		return
+	}
+	list, err := s.workflows.Schedules(r.Context(), request.WorkspaceID)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Schedules []workflowruntime.ScheduleStatus `json:"schedules"`
+	}{list})
+}
+
+// handleWorkflowSchedule is the owner pausing or resuming a schedule from
+// the web (sub-stage 11); the surface is always the web.
+func (s *Server) handleWorkflowSchedule(w http.ResponseWriter, r *http.Request) {
+	var request workflowruntime.ScheduleControl
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	if !boundedID(string(request.WorkspaceID)) || !boundedID(request.Workflow) || request.Version < 0 || len(request.Reason) > 1000 ||
+		request.Action != "pause" && request.Action != "resume" {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "schedule requires the Workspace ID, the workflow name and an action of pause or resume")
+		return
+	}
+	request.Surface = "web"
+	control, err := s.workflows.ControlSchedule(r.Context(), request)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, control)
+}
+
+// handleWorkflowNotifications lists durable notifications (sub-stage 11):
+// unread ones unless all is set, for a Workspace, the session that started
+// a run, or one run, newest first.
+func (s *Server) handleWorkflowNotifications(w http.ResponseWriter, r *http.Request) {
+	var request eviedb.WorkflowNotificationFilter
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	if len(request.WorkspaceID) > 128 || len(request.SessionID) > 128 || len(request.RunID) > 128 || request.Limit < 0 || request.Limit > 200 {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "notifications takes an optional Workspace ID, session ID, run ID and a limit up to 200")
+		return
+	}
+	list, err := s.workflows.Notifications(r.Context(), request)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Notifications []workflowruntime.Notification `json:"notifications"`
+	}{list})
+}
+
+// handleWorkflowNotificationsRead is the owner marking notifications read
+// or unread by ID, or every unread one (of a Workspace) read (sub-stage
+// 11).
+func (s *Server) handleWorkflowNotificationsRead(w http.ResponseWriter, r *http.Request) {
+	var request workflowruntime.NotificationMark
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	valid := len(request.WorkspaceID) <= 128 && len(request.IDs) <= 200 && (request.All && request.Read && len(request.IDs) == 0 || !request.All && len(request.IDs) > 0)
+	for _, id := range request.IDs {
+		valid = valid && id > 0
+	}
+	if !valid {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "name 1 to 200 notification IDs with read true or false, or all with read true")
+		return
+	}
+	request.Surface = "web"
+	marked, err := s.workflows.MarkNotifications(r.Context(), request)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Marked int `json:"marked"`
+	}{marked})
+}
+
+// handleWorkflowStatus is the daily cap with today's spend, the schedules
+// and the notification counts (sub-stage 11).
+func (s *Server) handleWorkflowStatus(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		WorkspaceID memory.WorkspaceID `json:"workspace_id"`
+	}
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	if len(request.WorkspaceID) > 128 {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "workspace_id is too long")
+		return
+	}
+	status, err := s.workflows.Status(r.Context(), request.WorkspaceID)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
 }
 
 // maxWorkflowReconcileBytes bounds a reconciliation request: the effect's

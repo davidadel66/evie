@@ -658,6 +658,33 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   take a finished run's build branch through the Stage 12 gate with the
   owner's approval. Binding record: the sub-stage 10 entry in
   `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Sub-stage 11 implemented** (2026-10-04). An approved schedule is
+  active with its approval: `evie serve` and the REPL tick every 15
+  seconds under one runner lease, compute due slots on the schedule's
+  IANA timezone's wall clock (a time skipped by daylight saving runs when
+  the gap ends, a repeated one once), and start each through `StartRun`
+  with surface `schedule`, the slot's local date and time as
+  `$schedule.date` and `$schedule.time` (so in the Run Key), recording the
+  slot with the run so no slot starts twice across processes. The Catch-up
+  Policy bounds downtime recovery (`skip` within 5 minutes,
+  `each_missed` the latest `max_runs`), skipped slots are recorded and
+  notified, a slot this Evie cannot start is left for one that can, and
+  deactivation or a block stops the schedule. `evie workflows schedule
+  pause|resume` records the owner's control without re-approval. Every
+  Evie enforces a daily cap on all workflow runs' AI calls and workers
+  (`EVIE_WORKFLOW_DAILY_USD`, default $5, `EVIE_WORKFLOW_DAILY_TOKENS`,
+  default 10,000,000, per UTC day): a call past it is refused, and its
+  run pauses visibly until midnight UTC and continues by itself (the wait
+  is not counted toward `max_duration`). Durable notifications record
+  every run that succeeded, failed, was cancelled, waits for an answer,
+  needs reconciliation, paused or hit the cap, and every skipped or
+  failed slot, deduplicated per transition, with read state: `evie
+  workflows notifications`, `evie workflows status`, `POST
+  /api/workflows/{notifications,status,schedules,schedule}` and a
+  Workspace-home list; a chat sees its runs' unread notices in
+  `workflow_status`. The deep-research README says how to record a
+  measured run. Binding record: the sub-stage 11 entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 

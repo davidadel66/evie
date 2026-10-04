@@ -83,7 +83,7 @@ func (h *runHarness) process() *process {
 		h.providers = ContractsOnly(notesCatalog())
 	}
 	rt, err := New(Config{Store: store, Repo: h.repo, Capabilities: h.providers, Workers: ceiling, Scheduler: h.scheduler, Models: h.models, ModelsOff: h.modelsOff,
-		Agents: h.agentsOf(store)})
+		Agents: h.agentsOf(store), DailyCap: h.cap})
 	if err != nil {
 		h.t.Fatal(err)
 	}

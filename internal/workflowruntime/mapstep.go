@@ -85,6 +85,10 @@ type mapRun struct {
 	cancel   context.CancelCauseFunc
 	results  chan itemResult
 	running  int
+	// recheck, when set, is how long a pause waits before the run is
+	// checked again: until the next UTC day for the daily cap
+	// (sub-stage 11).
+	recheck time.Duration
 }
 
 // Why a map stops starting items.
@@ -283,7 +287,13 @@ func (m *mapRun) run() error {
 		}
 		if stopping == mapComplete {
 			why, detail, err := m.startItems()
+			var capped *eviedb.WorkflowDailyCapError
 			switch {
+			case err != nil && errors.As(err, &capped):
+				// Today's cap refused the batch (sub-stage 11): the items
+				// in flight finish, then the run pauses until tomorrow.
+				m.recheck = m.r.untilReset(capped)
+				stop(mapPaused, capped.Error(), nil)
 			case err != nil && errors.Is(err, eviedb.ErrWorkflowRunCancelling):
 				stop(mapCancelled, "", errMapCancelled)
 			case err != nil && (errors.Is(err, eviedb.ErrWorkflowRunLeaseLost)):
@@ -403,6 +413,18 @@ func (m *mapRun) startItems() (why, detail string, err error) {
 	if err != nil {
 		return "", "", err
 	}
+	// Today's spend across all runs, for the operator's daily cap
+	// (sub-stage 11); the store checks the batch again when it records it.
+	var today eviedb.WorkflowDailySpend
+	var reset time.Time
+	if m.r.cap != nil {
+		var day string
+		day, reset = eviedb.WorkflowDay(now)
+		if today, err = m.r.store.WorkflowDailySpend(m.pc.writes, day); err != nil {
+			return "", "", err
+		}
+	}
+	reservedMicro := int64(0)
 	limits := m.pc.v.Limits()
 	type prepared struct {
 		it    *mapItem
@@ -432,16 +454,16 @@ func (m *mapRun) startItems() (why, detail string, err error) {
 			return "", "", err
 		}
 		p := prepared{it: it, input: input, start: eviedb.WorkflowItemStart{Index: it.index, Kind: m.spec.Item.Kind, Attempt: it.made + 1, Input: encoded}}
-		estimate := int64(0)
+		estimate, estimateMicro := int64(0), int64(0)
 		switch m.spec.Item.Kind {
 		case workflow.KindAgent:
 			if p.plan, err = m.r.planWorker(m.pc, m.p.Run.ID, m.p.Checkpoint.Seq, m.step.ID, &it.index, m.agent.Worker); err != nil {
 				return "", "", err
 			}
-			if p.plan.adopt == nil {
-				estimate = m.agent.Tokens
-			}
 			w := m.r.workerCallStart(m.pc.stop, m.agent, p.plan)
+			if p.plan.adopt == nil {
+				estimate, estimateMicro = m.agent.Tokens, w.EstimatedMicroUSD
+			}
 			p.start.Worker = &w
 		case workflow.KindAI:
 			if p.req, err = aiRequest(m.ai, input); err != nil {
@@ -458,16 +480,28 @@ func (m *mapRun) startItems() (why, detail string, err error) {
 			if err != nil {
 				return "", "", err
 			}
+			estimateMicro = pricing.MicroUSD(estIn, estOut)
 			p.start.Model = &eviedb.WorkflowModelCallStart{Policy: m.ai.Policy.Name, PolicyVersion: m.ai.Policy.Version, Provider: m.ai.Policy.Provider, Model: m.ai.Policy.Model,
 				Parameters: params, PromptSHA256: m.ai.PromptSHA256, SchemaSHA256: m.ai.SchemaSHA256, RequestSHA256: digest,
-				EstimatedInputTokens: estIn, EstimatedOutputTokens: estOut, EstimatedMicroUSD: pricing.MicroUSD(estIn, estOut)}
+				EstimatedInputTokens: estIn, EstimatedOutputTokens: estOut, EstimatedMicroUSD: estimateMicro, Cap: m.r.cap}
 		}
 		if spend.Tokens+reserved+estimate > limits.Tokens || estimate == 0 && spend.Tokens > limits.Tokens {
 			why, detail = mapLimit, fmt.Sprintf("steps.%s item %d: its next attempt could use up to %s tokens, and the run has used %s of limits.max_tokens %s; it was not started",
 				m.step.ID, it.index, grouped(estimate), grouped(spend.Tokens+reserved), grouped(limits.Tokens))
 			break
 		}
+		if c := m.r.cap; c != nil && estimate > 0 && (today.Tokens+reserved+estimate > c.Tokens || today.MicroUSD+reservedMicro+estimateMicro > c.MicroUSD) {
+			// The operator's daily cap holds the item back (sub-stage 11):
+			// the items started finish, then the run pauses until tomorrow.
+			held := today
+			held.Tokens, held.MicroUSD = today.Tokens+reserved, today.MicroUSD+reservedMicro
+			capped := &eviedb.WorkflowDailyCapError{Day: today.Day, Spent: held, Cap: *c, NeedTokens: estimate, NeedMicroUSD: estimateMicro, ResetAt: reset}
+			m.recheck = m.r.untilReset(capped)
+			why, detail = mapPaused, capped.Error()
+			break
+		}
 		reserved += estimate
+		reservedMicro += estimateMicro
 		batch = append(batch, p)
 	}
 	if len(batch) == 0 {
@@ -642,7 +676,11 @@ func (m *mapRun) finish(stopping, reason string, failure error) error {
 		if err := m.r.store.InterruptWorkflowAttempt(pc.writes, pc.lease, m.attempt.Seq, "interrupted: "+reason+" ("+counts+")"); err != nil {
 			return err
 		}
-		_, err := m.r.store.PauseWorkflowRun(pc.writes, pc.lease, reason, m.r.sched.Recheck)
+		recheck := m.r.sched.Recheck
+		if m.recheck > 0 {
+			recheck = m.recheck
+		}
+		_, err := m.r.store.PauseWorkflowRun(pc.writes, pc.lease, reason, recheck)
 		return err
 	case mapLimit:
 		end.Error, end.RunError = reason+" ("+counts+")", reason

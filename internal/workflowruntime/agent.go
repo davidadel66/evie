@@ -184,7 +184,7 @@ func (r *Runtime) workerCallStart(ctx context.Context, spec workflow.AgentPlan, 
 	w := eviedb.WorkflowWorkerCallStart{Worker: spec.Worker, Policy: spec.Policy.Name, PolicyVersion: spec.Policy.Version, Provider: spec.Policy.Provider,
 		Model: spec.Policy.Model, ObjectiveSHA256: spec.ObjectiveSHA256, SchemaSHA256: spec.SchemaSHA256, Budget: spec.Budget, BudgetTokens: spec.Tokens,
 		InputPerMillion: pricing.InputPerMillion, OutputPerMillion: pricing.OutputPerMillion, PricingSource: pricing.Source,
-		EstimatedMicroUSD: pricing.MicroUSD(0, spec.Tokens), Continues: plan.continueFrom}
+		EstimatedMicroUSD: pricing.MicroUSD(0, spec.Tokens), Continues: plan.continueFrom, Cap: r.cap}
 	if plan.adopt != nil {
 		w.AdoptedFrom = plan.adopt.ID
 	}

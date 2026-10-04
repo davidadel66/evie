@@ -351,6 +351,72 @@ export type WorkflowMapItem = {
 
 export type WorkflowMapView = { step: string; checkpoint: number; items: WorkflowMapItem[] };
 
+// Schedules, durable notifications and the daily cap (Stage 14 sub-stage
+// 11): every run that finishes or needs David, and every schedule slot
+// skipped or refused, leaves a notice he reads here and marks read; the
+// daily cap bounds all workflow runs' AI calls and workers per UTC day.
+
+export type WorkflowNotificationKind =
+  | "succeeded" | "failed" | "cancelled" | "waiting_for_human" | "needs_reconciliation"
+  | "paused" | "cap_reached" | "schedule_skipped" | "schedule_failed";
+
+export type WorkflowNotification = {
+  id: number;
+  workspace_id: string;
+  workflow: string;
+  run_id?: string;
+  kind: WorkflowNotificationKind;
+  run_state?: string;
+  detail?: string;
+  /** Who started the run: the owner (cli, web), a chat or its schedule. */
+  surface?: string;
+  session_id?: string;
+  created_at: string;
+  read_at?: string;
+  text: string;
+};
+
+export type WorkflowCapStatus = {
+  enforced: boolean;
+  day: string;
+  reset_at: string;
+  cap: { tokens: number; micro_usd: number };
+  spent: { day: string; tokens: number; micro_usd: number; model_calls: number; worker_calls: number };
+  reached: boolean;
+  paused_runs: string[];
+};
+
+export type WorkflowSlot = { key: string; date: string; time: string; due: string; shifted?: boolean };
+
+export type WorkflowScheduleStatus = {
+  workspace_id: string;
+  workflow: string;
+  version: number;
+  schedule: WorkflowSchedule;
+  approved_at: string;
+  status: WorkflowStatus;
+  blocked?: string[];
+  paused: boolean;
+  state: "active" | "paused" | "inactive" | "blocked";
+  next?: WorkflowSlot;
+  overdue?: boolean;
+};
+
+export type WorkflowStatusView = {
+  caps: WorkflowCapStatus;
+  schedules: WorkflowScheduleStatus[];
+  notifications: { unread: number; total: number };
+};
+
+export const workflowNotificationAPI = {
+  list: (workspaceId: string, all = false): Promise<{ notifications: WorkflowNotification[] }> =>
+    postWorkflows("notifications", all ? { workspace_id: workspaceId, all: true } : { workspace_id: workspaceId }),
+  markRead: (ids: number[]): Promise<{ marked: number }> => postWorkflows("notifications/read", { ids, read: true }),
+  markAllRead: (workspaceId: string): Promise<{ marked: number }> => postWorkflows("notifications/read", { all: true, read: true, workspace_id: workspaceId }),
+  status: (workspaceId: string): Promise<WorkflowStatusView> => postWorkflows("status", { workspace_id: workspaceId }),
+};
+export type WorkflowNotificationAPI = typeof workflowNotificationAPI;
+
 /**
  * Each map step's items, as `evie workflows inspect` derives them: the list
  * its latest attempt at a checkpoint ran over, and for each element its item

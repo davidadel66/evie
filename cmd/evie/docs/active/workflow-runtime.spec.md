@@ -353,10 +353,24 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Schedules declare an IANA timezone and bounded Catch-up Policy. The Cairo tip
   workflow later uses business date in its Run Key and creates one recovery run
   for each missing business date. Different keys may progress independently.
+  (Implemented 2026-10-04, sub-stage 11: slots are computed on the timezone's
+  wall clock with deterministic daylight-saving rules, start through the same
+  StartRun with surface "schedule" and the slot's local date and time as
+  `$schedule` inputs, are recorded with their run so none starts twice, and
+  `skip` or `each_missed` with `max_runs` bounds catch-up; the owner pauses
+  and resumes a schedule without re-approval, and a daily cap on all runs'
+  AI calls and workers pauses a run until the next UTC day. See the
+  sub-stage 11 entry in
+  [workflow-runtime.decisions.md](workflow-runtime.decisions.md).)
 - Every Background Run terminal or needs-attention transition creates a
   deduplicated Durable Notification. Future notification plugins may mirror it,
   but SQLite remains authoritative and outbound content omits sensitive data by
-  default.
+  default. (Implemented 2026-10-04, sub-stage 11: every run's transition to
+  succeeded, failed, cancelled, waiting for a human, needs reconciliation,
+  paused or paused at the daily cap, and every skipped or failed schedule
+  slot, records a notice in the same transaction, deduplicated by run and
+  transition, with read state; no mirror exists yet. See the sub-stage 11
+  entry in [workflow-runtime.decisions.md](workflow-runtime.decisions.md).)
 - Audit state retains accepted input, proposals, corrections, node attempts,
   Effect Intents, provider responses, Effect Receipts, checkpoints, approvals,
   authority evaluations, and outputs. Credentials and raw tokens are forbidden.

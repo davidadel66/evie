@@ -125,6 +125,54 @@ the AI calls and the run's total spend; compare it with the bounds above.
 Step outputs keep each worker's summary, sources and typed result; `evie
 workflows report <run-id> <execution-id>` prints a worker's full report.
 
+Every Evie also enforces the operator's daily cap on all workflow runs
+(`EVIE_WORKFLOW_DAILY_USD`, default $5, and `EVIE_WORKFLOW_DAILY_TOKENS`,
+default 10,000,000, per UTC day). A run's worst case ($7.20) is above the
+default dollar cap, so a long run can pause at it ("paused at the daily
+workflow cap" in `evie workflows notifications`) and continue by itself
+after 00:00 UTC; the wait does not count toward `max_duration`. For a
+measured run, either let that happen and note it, or raise the cap for the
+day, for example `export EVIE_WORKFLOW_DAILY_USD=8`, in the Evie that runs
+it. `evie workflows status` shows today's spend against the cap.
+
+### Recording a measurement
+
+Once the run has finished (`evie workflows notifications` says so), read
+its numbers from the inspection, which counts every AI call and worker at
+its recorded usage (an unfinished call at its bound):
+
+```sh
+evie workflows inspect --json <run-id> > run.json
+jq '{state: .run.state, started: .run.created_at, finished: .run.finished_at,
+  angles: ([.attempts[] | select(.step == "research" and .item != null)] | map(.item) | unique | length),
+  verifiers: ([.attempts[] | select(.step == "verify" and .item != null)] | map(.item) | unique | length),
+  ai_tokens: ([.model_calls[] | if .finished_at then (.input_tokens // 0) + (.output_tokens // 0) else .estimated_input_tokens + .estimated_output_tokens end] | add // 0),
+  worker_tokens: ([.workers[] | if .finished_at then (.counted_tokens // 0) else .budget_tokens end] | add // 0),
+  usd: ((([.model_calls[] | if .finished_at then (.micro_usd // 0) else .estimated_micro_usd end] | add // 0)
+       + ([.workers[] | if .finished_at then (.micro_usd // 0) else .estimated_micro_usd end] | add // 0)) / 1000000),
+  report: .run.outputs.report.status, verified_claims: (.run.outputs.verified_claims | length)}' run.json
+```
+
+The duration is `finished` minus `started`, less any time paused at the
+daily cap (`evie workflows inspect <run-id>` lists the pauses under
+Recovery). Then:
+
+1. Add a row to **Measured runs** below: the date, the Evie commit
+   (`git rev-parse --short HEAD`), the question, the angles, claims and
+   verifiers, the AI and worker tokens, the cost, the duration, and the
+   report's status (`verified` or `corrected`) with how many citations were
+   removed. This README is documentation, so the edit needs no approval.
+2. If the numbers argue for different budgets, `max_items` or prompts,
+   change them only through a new reviewed version of the template, and
+   record why in a dated entry of
+   `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+
+### Measured runs
+
+| Date | Evie | Question | Angles / claims / verifiers | AI tokens | Worker tokens | Cost | Duration | Report |
+|---|---|---|---|---|---|---|---|---|
+| (none yet) | | | | | | | | |
+
 Simulate the dry run that proposing it records with:
 
 ```sh

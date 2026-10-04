@@ -1,0 +1,64 @@
+# A scheduled deterministic example: every morning at 07:00 New York time,
+# split one fixed amount evenly. Its run key is the slot's local date and
+# time, so each slot is one logical run. It has only deterministic and
+# branch steps, so schedule tests run it end to end without any provider.
+schema_version: 1
+name: scheduled-split
+description: Split a fixed amount every morning in New York.
+
+inputs:
+  day:
+    type: string
+    required: true
+    max_length: 10
+  at:
+    type: string
+    required: true
+    max_length: 5
+  total_cents:
+    type: integer
+    required: true
+    minimum: 0
+  people:
+    type: integer
+    required: true
+    minimum: 1
+
+run_key:
+  inputs: [day, at]
+
+limits:
+  max_duration: 5m
+  max_attempts: 10
+  max_parallel: 1
+  max_tokens: 1
+
+schedule:
+  cron: "0 7 * * *"
+  timezone: America/New_York
+  catch_up:
+    policy: each_missed
+    max_runs: 3
+  inputs:
+    day: $schedule.date
+    at: $schedule.time
+    total_cents: 1000
+    people: 3
+
+retention:
+  classification: ordinary
+
+start: split
+
+steps:
+  - id: split
+    kind: deterministic
+    function: split_evenly@1
+    input:
+      total: $inputs.total_cents
+      parts: $inputs.people
+
+outputs:
+  shares: $steps.split.output.shares
+  day: $inputs.day
+  at: $inputs.at

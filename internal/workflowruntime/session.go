@@ -114,6 +114,17 @@ func (r *Runtime) ChatWorkflows(ctx context.Context, scope memory.ScopeContext) 
 		}
 		out.Runs = append(out.Runs, view)
 	}
+	// Sub-stage 11: the unread notices of the runs this chat started; the
+	// owner's read state is never changed by a chat.
+	if scope.SessionID != "" {
+		notes, err := r.store.ListWorkflowNotifications(ctx, eviedb.WorkflowNotificationFilter{WorkspaceID: scope.WorkspaceID, SessionID: scope.SessionID, Limit: 10})
+		if err != nil {
+			return out, err
+		}
+		for _, n := range notes {
+			out.Notifications = append(out.Notifications, plugins.WorkflowChatNotification{RunID: n.RunID, Workflow: n.Workflow, Kind: string(n.Kind), At: n.CreatedAt})
+		}
+	}
 	return out, nil
 }
 

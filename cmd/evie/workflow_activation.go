@@ -40,6 +40,11 @@ type workflowCommands interface {
 	Interruptions(context.Context, workflowruntime.InterruptionFilter) ([]eviedb.WorkflowInterruption, error)
 	Cancel(context.Context, workflowruntime.CancelRequest) (eviedb.WorkflowRunDetail, error)
 	WorkerReport(context.Context, string, string) (workflowruntime.WorkerReport, error)
+	Schedules(context.Context, memory.WorkspaceID) ([]workflowruntime.ScheduleStatus, error)
+	ControlSchedule(context.Context, workflowruntime.ScheduleControl) (eviedb.WorkflowScheduleControl, error)
+	Notifications(context.Context, eviedb.WorkflowNotificationFilter) ([]workflowruntime.Notification, error)
+	MarkNotifications(context.Context, workflowruntime.NotificationMark) (int, error)
+	Status(context.Context, memory.WorkspaceID) (workflowruntime.Status, error)
 }
 
 // workflowCapabilityPlugins are the compiled plugins that contribute
@@ -114,6 +119,10 @@ func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string, provide
 	if err != nil {
 		return nil, err
 	}
+	dailyCap, err := workflowDailyCap(getenv)
+	if err != nil {
+		return nil, err
+	}
 	root, err := procedural.DefaultRoot()
 	if err != nil {
 		return nil, err
@@ -125,6 +134,7 @@ func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string, provide
 		Report:    func(err error) { log.Printf("workflow scheduler: %v", err) },
 		Models:    models, ModelsOff: modelsOff,
 		Agents: agents, AgentsOff: agentsOff,
+		DailyCap: dailyCap,
 	})
 }
 
@@ -358,7 +368,8 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		fmt.Fprintf(out, "Activated %s version %d in Workspace %s (executable %s, authority %s). No run was started.\n",
 			activation.Name, activation.Version, activation.WorkspaceID, activation.ExecutableHash, activation.AuthorityHash)
 		if s := activation.Schedule; s != nil {
-			fmt.Fprintf(out, "Its schedule (%s %s) is approved with it; scheduled runs start once schedules ship.\n", s.Cron, s.Timezone)
+			fmt.Fprintf(out, "Its schedule (%s %s) is active: a running Evie (evie serve or the REPL) starts its runs at their times. Pause it with evie workflows schedule pause %s %s.\n",
+				s.Cron, s.Timezone, activation.WorkspaceID, activation.Name)
 		}
 		return true, nil
 	case "deactivate":
@@ -412,6 +423,14 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		return true, cancelWorkflowRun(ctx, args[2:], out, rt)
 	case "report":
 		return true, reportWorkflowWorker(ctx, args[2:], out, rt)
+	case "schedules":
+		return true, listWorkflowSchedules(ctx, args[2:], out, rt)
+	case "schedule":
+		return true, controlWorkflowSchedule(ctx, args[2:], out, rt)
+	case "notifications":
+		return true, workflowNotifications(ctx, args[2:], out, rt)
+	case "status":
+		return true, workflowStatus(ctx, args[2:], out, rt)
 	}
 	return true, usage
 }
@@ -451,7 +470,7 @@ func activationText(b *strings.Builder, a eviedb.WorkflowActivation) {
 		line("  Workers: %s", strings.Join(a.Workers, ", "))
 	}
 	if s := a.Schedule; s != nil {
-		line("  Schedule: %s %s (approved; scheduled runs start once schedules ship)", s.Cron, s.Timezone)
+		line("  Schedule: %s %s, catch-up %s (approved with this version; evie workflows schedules shows its state)", s.Cron, s.Timezone, s.CatchUp)
 	}
 	line("  Proposal %s, commit %s", a.ProposalID, a.Commit)
 	line("  Pinned Workspace revision %s, access revision %d", a.WorkspaceRevision, a.AccessRevision)

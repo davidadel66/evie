@@ -134,6 +134,11 @@ type RunRequest struct {
 	// 10, StartFromChat); such a start is always detached and never a
 	// rerun.
 	Chat *eviedb.WorkflowChatOrigin `json:"-"`
+	// Schedule is the slot a start with surface "schedule" decides
+	// (sub-stage 11, the schedule ticker): its inputs come from the
+	// approved schedule and the slot, never from the request, and such a
+	// start is always detached and never a rerun.
+	Schedule *ScheduledStart `json:"-"`
 }
 
 // RunResult is a started run, or the run that already holds its Run Key
@@ -181,9 +186,12 @@ type preparedRun struct {
 // stops waiting or disconnects does not stop it.
 func (r *Runtime) StartRun(ctx context.Context, req RunRequest) (RunResult, error) {
 	switch {
-	case ownerSurface(req.Surface) && req.Chat == nil:
-	case req.Surface == "chat" && req.Chat != nil && req.RerunOf == "" && strings.TrimSpace(req.Reason) == "":
+	case ownerSurface(req.Surface) && req.Chat == nil && req.Schedule == nil:
+	case req.Surface == "chat" && req.Chat != nil && req.Schedule == nil && req.RerunOf == "" && strings.TrimSpace(req.Reason) == "":
 		// A chat starts a background run and goes on with its turn.
+		req.Detach = true
+	case req.Surface == "schedule" && req.Schedule != nil && req.Chat == nil && req.SessionID == "" && req.RerunOf == "" && strings.TrimSpace(req.Reason) == "":
+		// A schedule starts a background run (sub-stage 11).
 		req.Detach = true
 	default:
 		return RunResult{}, eviedb.ErrWorkflowRunSurface
@@ -225,6 +233,9 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	if err != nil {
 		return preparedRun{}, err
 	}
+	if req.Schedule != nil && (a.Version != req.Schedule.Version || a.Schedule == nil || a.Schedule.Timezone != req.Schedule.Timezone) {
+		return preparedRun{}, fmt.Errorf("%w: version %d is active, the slot is version %d's", errScheduleChanged, a.Version, req.Schedule.Version)
+	}
 	access, err := r.store.WorkspaceAccess(ctx, req.WorkspaceID)
 	if err != nil {
 		return preparedRun{}, err
@@ -232,6 +243,14 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	v, err := r.approvedDefinition(ctx, a, access.Access)
 	if err != nil {
 		return preparedRun{}, err
+	}
+	if req.Schedule != nil {
+		// A scheduled run's inputs are the approved schedule's, with the
+		// slot's nominal local date and time (sub-stage 11).
+		if req.Inputs, err = v.ScheduleInputs(req.Schedule.Slot); err != nil {
+			return preparedRun{}, fmt.Errorf("%w: %v", ErrRunInput, err)
+		}
+		req.TextInputs = nil
 	}
 	kinds := v.StepKinds()
 	var unsupported []string
@@ -284,6 +303,9 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	start := eviedb.WorkflowRunStart{
 		WorkspaceID: req.WorkspaceID, Workflow: a.Name, Version: a.Version, ExecutableHash: a.ExecutableHash, AuthorityHash: a.AuthorityHash,
 		Composition: pinned, RunKey: v.RunKey(inputs), Inputs: encoded, Start: v.Start(), Surface: req.Surface, SessionID: req.SessionID, Chat: req.Chat,
+	}
+	if s := req.Schedule; s != nil {
+		start.Slot = &eviedb.WorkflowScheduleSlotStart{Timezone: s.Timezone, Key: s.Slot.Key, Due: s.Slot.Due, Shifted: s.Slot.Shifted, Holder: r.holder}
 	}
 	if req.RerunOf != "" {
 		if start.RunKey != logical {
@@ -737,7 +759,19 @@ func (r *Runtime) advance(pc *pass) (passEnd, error) {
 			return passStopped, nil
 		}
 		if err := r.step(pc, p); err != nil {
+			var capped *eviedb.WorkflowDailyCapError
 			switch {
+			case errors.As(err, &capped):
+				// Today's cap refused the AI call or worker start before
+				// anything was recorded or sent: the run pauses visibly
+				// until the next UTC day (sub-stage 11).
+				if _, err := r.store.PauseWorkflowRun(pc.writes, pc.lease, capped.Error(), r.untilReset(capped)); err != nil {
+					if errors.Is(err, eviedb.ErrWorkflowRunCancelling) {
+						continue
+					}
+					return 0, err
+				}
+				return passPaused, nil
 			case errors.Is(err, eviedb.ErrWorkflowRunNotDue):
 				return passWaiting, nil
 			case errors.Is(err, eviedb.ErrWorkflowRunCancelling):
@@ -889,10 +923,11 @@ func (r *Runtime) limitReached(v *workflow.Validated, p eviedb.WorkflowRunProgre
 
 // elapsed is the run's time counted against limits.max_duration: since
 // its creation, less the time it waited for the owner's answers to its
-// questions (sub-stage 7). Time waiting for an effect's reconciliation
+// questions (sub-stage 7) and the time it was paused at the operator's
+// daily cap (sub-stage 11). Time waiting for an effect's reconciliation
 // still counts, as sub-stage 6 decided.
 func (r *Runtime) elapsed(p eviedb.WorkflowRunProgress) time.Duration {
-	return r.now().Sub(p.Run.CreatedAt) - p.HumanWait
+	return r.now().Sub(p.Run.CreatedAt) - p.HumanWait - p.CapWait
 }
 
 // deterministic makes one attempt of a deterministic step within its Retry
@@ -1067,9 +1102,18 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 			s.Capability, s.Plugin, s.PinnedVersion, s.ReplacementVersion, s.Contract, s.Approver, s.Surface, s.ApprovedAt.Format(timeLayout))
 	}
 	started := fmt.Sprintf("Started via %s at %s", run.Surface, run.CreatedAt.Format(timeLayout))
-	if run.Surface == "chat" {
+	switch {
+	case run.Surface == "chat":
 		// Sub-stage 10: Evie started it with workflow_start in the owner's chat.
 		started = fmt.Sprintf("Started by Evie in the owner's chat (workflow_start) at %s", run.CreatedAt.Format(timeLayout))
+	case run.Surface == "schedule" && d.Slot != nil:
+		// Sub-stage 11: its schedule started it for one slot.
+		shifted := ""
+		if d.Slot.Shifted {
+			shifted = ", run when the clocks changed because that time did not exist that day"
+		}
+		started = fmt.Sprintf("Started by its schedule for %s %s (due %s%s) at %s", d.Slot.Key, d.Slot.Timezone, d.Slot.Due.Format(timeLayout), shifted,
+			run.CreatedAt.Format(timeLayout))
 	}
 	if run.SessionID != "" {
 		started += " from session " + string(run.SessionID)

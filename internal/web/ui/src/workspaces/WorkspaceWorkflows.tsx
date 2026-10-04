@@ -36,6 +36,7 @@ export function WorkflowList({definitions, busy, onReview, onDeactivate}: {
         {d.current && <span className="text-fainter">version {d.current.version} · {shortHash(d.current.executable_hash)}</span>}
         {d.pending > 0 && <span className="text-teal">{d.pending === 1 ? "1 proposal waiting" : `${d.pending} proposals waiting`}</span>}
       </div>
+      {d.current?.schedule && <p className="text-muted-text mt-1">Schedule: {d.current.schedule.cron} {d.current.schedule.timezone}, catch-up {d.current.schedule.catch_up}{d.status === "active" ? "" : " (not running: the workflow is not active)"}</p>}
       {d.blocked?.map((reason) => <p key={reason} className="text-danger mt-1 leading-5">{reason}</p>)}
       <div className="mt-2 flex gap-3">
         {(d.pending > 0 || d.status === "blocked" || d.status === "inactive") && <button type="button" disabled={busy} onClick={() => onReview(d)} className="text-body underline underline-offset-2 disabled:opacity-40">Review proposal</button>}
@@ -77,7 +78,7 @@ export function WorkflowApprovalCard({card, busy, onApprove, onClose}: {
         {card.requirements.authority.map((op) => <li key={`${op.capability}:${op.connection}`} className="font-mono">{op.capability} on {op.connection}: {op.resources.join(", ")}, at most {op.max_calls_per_run} calls per run</li>)}
       </ul>}
       {card.requirements.workers.length > 0 && <p className="text-muted-text">Workers: {card.requirements.workers.join(", ")}</p>}
-      <p className="text-muted-text">{schedule ? `Schedule: ${schedule.cron} ${schedule.timezone}. Approving also activates this schedule; scheduled runs start once schedules ship.` : "Schedule: none (manual starts only)."}</p>
+      <p className="text-muted-text">{schedule ? `Schedule: ${schedule.cron} ${schedule.timezone}, catch-up ${schedule.catch_up}${schedule.max_runs ? ` (at most ${schedule.max_runs})` : ""}. Approving also activates this schedule: its runs start at their times until you pause it (evie workflows schedule pause) or deactivate the workflow.` : "Schedule: none (manual starts only)."}</p>
     </section>
     <p className="text-muted-text mt-3">{simulation ? `Dry run: ${simulation.status}, ${simulation.attempts} attempts, ${simulation.tokens} tokens, ${simulation.previews.length} effect previews (none executed).` : "Dry run: none."}{simulation?.error ? ` ${simulation.error}` : ""}</p>
     {refusals.length > 0 && <div role="alert" className="text-danger mt-3"><p>Approval would be refused now:</p><ul>{refusals.map((r) => <li key={r}>{r}</li>)}</ul></div>}

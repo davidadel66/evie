@@ -181,6 +181,8 @@ type WorkflowRunDetail struct {
 	// (sub-stage 9), each with the hidden child session and execution it
 	// ran as, in attempt order.
 	Workers []WorkflowWorkerCall `json:"workers"`
+	// Slot is the schedule slot that started it (sub-stage 11), if any.
+	Slot *WorkflowScheduleSlot `json:"slot,omitempty"`
 }
 
 // WorkflowRunProgress is what an executor needs to take the next step.
@@ -208,6 +210,9 @@ type WorkflowRunProgress struct {
 	// does not count.
 	Question  *WorkflowInterruption
 	HumanWait time.Duration
+	// CapWait is the time the run spent paused at the operator's daily cap
+	// (sub-stage 11), which limits.max_duration does not count either.
+	CapWait time.Duration
 	// ModelTokens and ModelMicroUSD are the run's AI spend so far: the
 	// recorded usage of its model calls, and the estimate of each call
 	// whose usage was never recorded (it may have been billed).
@@ -373,10 +378,14 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("create workflow run schema: %w", err)
 	}
-	// Sub-stage 10 lets Evie start a run from the owner's chat: the table's
-	// origin check gains "chat", which only a table rebuild can change.
+	// Sub-stage 10 lets Evie start a run from the owner's chat and
+	// sub-stage 11 from a schedule: the table's origin check gains "chat"
+	// and "schedule", which only a table rebuild can change.
 	if err := rebuildWorkflowRuns(ctx, db, workflowRunSurfacesBeforeChat, workflowRunSurfaces); err != nil {
-		return fmt.Errorf("upgrade workflow runs for chat starts: %w", err)
+		return fmt.Errorf("upgrade workflow runs for chat and scheduled starts: %w", err)
+	}
+	if err := rebuildWorkflowRuns(ctx, db, workflowRunSurfacesChat, workflowRunSurfaces); err != nil {
+		return fmt.Errorf("upgrade workflow runs for scheduled starts: %w", err)
 	}
 	// Sub-stage 4 adds the durable retry time to runs and the lease and
 	// interrupted state to attempts. A sub-stage 3 database is upgraded once,
@@ -451,7 +460,16 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureWorkflowWorkerCallSchema(ctx, db); err != nil {
 		return err
 	}
-	return ensureWorkflowRunCancellationSchema(ctx, db)
+	if err := ensureWorkflowRunCancellationSchema(ctx, db); err != nil {
+		return err
+	}
+	// Sub-stage 11: schedule slots and controls, then durable
+	// notifications, whose trigger on workflow_runs exists only after any
+	// rebuild above.
+	if err := ensureWorkflowScheduleSchema(ctx, db); err != nil {
+		return err
+	}
+	return ensureWorkflowNotificationSchema(ctx, db)
 }
 
 // WorkflowRunStart is a run the runtime has validated: the exact approved
@@ -479,6 +497,10 @@ type WorkflowRunStart struct {
 	RerunOf    string
 	LogicalKey string
 	Reason     string
+	// Slot is the schedule slot a run with surface "schedule" decides
+	// (sub-stage 11); it is recorded with the run, or with the run already
+	// holding the Run Key.
+	Slot *WorkflowScheduleSlotStart
 }
 
 const runColumns = `r.id,r.workspace_id,r.workflow,r.version,r.commit_id,r.tree_path,r.executable_hash,r.authority_hash,r.workspace_revision_id,r.access_revision,
@@ -591,6 +613,11 @@ func (s *Store) StartWorkflowRun(ctx context.Context, req WorkflowRunStart) (run
 		switch {
 		case err == nil:
 			run, existing = WorkflowRun{ID: held}, true
+			// A slot whose logical work a run already holds records that
+			// run (sub-stage 11): nothing new starts.
+			if req.Slot != nil {
+				return recordStartedSlot(ctx, conn, a, req.Slot, WorkflowSlotExisting, held, s.now().UTC())
+			}
 			return nil
 		case !errors.Is(err, sql.ErrNoRows):
 			return err
@@ -632,6 +659,11 @@ func (s *Store) StartWorkflowRun(ctx context.Context, req WorkflowRunStart) (run
 			if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_run_overrides(run_id,rerun_of,logical_key,reason,actor,surface,recorded_at) VALUES(?,?,?,?,'owner',?,?)`,
 				id, req.RerunOf, req.LogicalKey, strings.TrimSpace(req.Reason), req.Surface, now); err != nil {
 				return fmt.Errorf("record workflow rerun override: %w", err)
+			}
+		}
+		if req.Slot != nil {
+			if err := recordStartedSlot(ctx, conn, a, req.Slot, WorkflowSlotStarted, id, s.now().UTC()); err != nil {
+				return err
 			}
 		}
 		run = WorkflowRun{ID: id}
@@ -1037,6 +1069,9 @@ func (s *Store) WorkflowRunProgress(ctx context.Context, id string) (WorkflowRun
 	if p.HumanWait, err = questionWaits(ctx, conn, id); err != nil {
 		return p, err
 	}
+	if p.CapWait, err = capWaits(ctx, conn, id); err != nil {
+		return p, err
+	}
 	if p.ModelTokens, p.ModelMicroUSD, err = modelSpend(ctx, conn, id); err != nil {
 		return p, err
 	}
@@ -1138,6 +1173,9 @@ func (s *Store) WorkflowRun(ctx context.Context, id string) (WorkflowRunDetail, 
 		return d, err
 	} else if found {
 		d.Override = &o
+	}
+	if d.Slot, err = runSlot(ctx, conn, id); err != nil {
+		return d, err
 	}
 	return d, nil
 }

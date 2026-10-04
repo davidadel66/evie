@@ -321,6 +321,11 @@ type WorkflowWorkerCallStart struct {
 	EstimatedMicroUSD int64
 	AdoptedFrom       string
 	Continues         string
+	// Cap, when set, is the operator's daily cap (sub-stage 11): a worker
+	// that would run is refused, with nothing recorded, when its whole
+	// budget would take today's spend past it. An adopted result runs
+	// nothing and is not checked.
+	Cap *WorkflowDailyCap
 }
 
 func validWorkerCallStart(w WorkflowWorkerCallStart) error {
@@ -338,7 +343,16 @@ func validWorkerCallStart(w WorkflowWorkerCallStart) error {
 	case w.AdoptedFrom != "" && w.Continues != "":
 		return errors.New("a worker call adopts a result or resumes a worker, not both")
 	}
-	return nil
+	return validDailyCap(w.Cap)
+}
+
+// capNeed is what a worker call counts toward the daily cap before it
+// ends: nothing when it adopts a finished worker's result.
+func (w WorkflowWorkerCallStart) capNeed() (tokens, micro int64, checked bool) {
+	if w.Cap == nil || w.AdoptedFrom != "" {
+		return 0, 0, false
+	}
+	return w.BudgetTokens, w.EstimatedMicroUSD, true
 }
 
 // insertWorkerCall records an agent attempt's worker call.
@@ -372,6 +386,11 @@ func (s *Store) BeginWorkflowWorkerCall(ctx context.Context, lease WorkflowRunLe
 	}
 	var out WorkflowNodeAttempt
 	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, now time.Time) error {
+		if tokens, micro, checked := w.capNeed(); checked {
+			if err := checkDailyCap(ctx, conn, now, *w.Cap, tokens, micro); err != nil {
+				return err
+			}
+		}
 		var err error
 		if out, err = beginWorkflowAttempt(ctx, conn, lease, w.Attempt, now); err != nil {
 			return err
@@ -551,6 +570,25 @@ func (s *Store) BeginWorkflowItemAttempts(ctx context.Context, lease WorkflowRun
 				return nil, err
 			}
 		}
+		if it.Model != nil {
+			if err := validDailyCap(it.Model.Cap); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// The batch is checked against the daily cap as a whole (sub-stage 11).
+	var capLimit *WorkflowDailyCap
+	var needTokens, needMicro int64
+	for _, it := range items {
+		switch {
+		case it.Worker != nil:
+			if tokens, micro, checked := it.Worker.capNeed(); checked {
+				capLimit, needTokens, needMicro = it.Worker.Cap, needTokens+tokens, needMicro+micro
+			}
+		case it.Model != nil && it.Model.Cap != nil:
+			capLimit = it.Model.Cap
+			needTokens, needMicro = needTokens+it.Model.EstimatedInputTokens+it.Model.EstimatedOutputTokens, needMicro+it.Model.EstimatedMicroUSD
+		}
 	}
 	var out []WorkflowNodeAttempt
 	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, now time.Time) error {
@@ -586,6 +624,11 @@ func (s *Store) BeginWorkflowItemAttempts(ctx context.Context, lease WorkflowRun
 		// to every node; sub-stage 9 batches a map's items).
 		if err := authorizeWorkflowRun(ctx, conn, run); err != nil {
 			return err
+		}
+		if capLimit != nil {
+			if err := checkDailyCap(ctx, conn, now, *capLimit, needTokens, needMicro); err != nil {
+				return err
+			}
 		}
 		var next int64
 		if err := conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(seq),0)+1 FROM workflow_node_attempts WHERE run_id=?`, lease.RunID).Scan(&next); err != nil {

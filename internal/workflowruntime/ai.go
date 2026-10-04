@@ -355,7 +355,7 @@ func (r *Runtime) ai(pc *pass, p eviedb.WorkflowRunProgress, step workflow.StepP
 		Attempt: eviedb.WorkflowAttemptStart{RunID: p.Run.ID, Checkpoint: p.Checkpoint.Seq, Step: step.ID, Kind: step.Kind, Attempt: p.Made + 1, Input: encodedInput},
 		Policy:  spec.Policy.Name, PolicyVersion: spec.Policy.Version, Provider: spec.Policy.Provider, Model: spec.Policy.Model, Parameters: params,
 		PromptSHA256: spec.PromptSHA256, SchemaSHA256: spec.SchemaSHA256, RequestSHA256: digest,
-		EstimatedInputTokens: estIn, EstimatedOutputTokens: estOut, EstimatedMicroUSD: pricing.MicroUSD(estIn, estOut),
+		EstimatedInputTokens: estIn, EstimatedOutputTokens: estOut, EstimatedMicroUSD: pricing.MicroUSD(estIn, estOut), Cap: r.cap,
 	})
 	if err != nil {
 		return err

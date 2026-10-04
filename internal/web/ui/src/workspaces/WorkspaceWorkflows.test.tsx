@@ -49,6 +49,14 @@ describe("Workspace workflows", () => {
     expect(html).toContain("Review proposal");
   });
 
+  it("shows an active version's schedule, and that it is not running when the workflow is not active", () => {
+    const schedule = {cron: "0 7 * * *", timezone: "America/New_York", catch_up: "each_missed", max_runs: 3, inputs: ["day"]};
+    const scheduled: WorkflowDefinition = {...active, current: {...active.current!, schedule}};
+    const html = renderToStaticMarkup(<WorkflowList definitions={[scheduled, {...scheduled, name: "tips", status: "blocked"}]} busy={false} onReview={()=>{}} onDeactivate={()=>{}} />);
+    expect(html).toContain("Schedule: 0 7 * * * America/New_York, catch-up each_missed");
+    expect(html).toContain("(not running: the workflow is not active)");
+  });
+
   it("shows exactly what approval binds and changes", () => {
     const html = renderToStaticMarkup(<WorkflowApprovalCard card={card} busy={false} onApprove={()=>{}} onClose={()=>{}} />);
     expect(html).toContain(card.proposal.executable_hash);

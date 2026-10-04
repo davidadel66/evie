@@ -49,9 +49,30 @@ func (r *Runtime) Start(ctx context.Context) (stop func() error) {
 			}
 		}
 	}()
+	// The schedule ticker (sub-stage 11) decides due schedule slots under
+	// its single runner lease; the first tick is at start, so every startup
+	// applies the Catch-up Policies.
+	ticks := make(chan struct{})
+	go func() {
+		defer close(ticks)
+		ticker := time.NewTicker(r.sched.Schedules)
+		defer ticker.Stop()
+		for {
+			r.reportError("schedules", r.tickSchedules(ctx))
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
 	return sync.OnceValue(func() error {
 		cancel()
 		<-loop
+		<-ticks
+		if err := r.store.ReleaseWorkflowScheduleRunner(context.WithoutCancel(ctx), r.holder); err != nil {
+			r.reportError("schedules", err)
+		}
 		done := make(chan struct{})
 		go func() {
 			passes.Wait()

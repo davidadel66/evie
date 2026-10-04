@@ -1,5 +1,207 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Schedules and notifications (Stage 14, sub-stage 11)
+
+Source: sub-stage 11 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md) and
+sub-stage 10's "What sub-stage 11 must pick up": a daily dollar or token
+cap before schedules or frequent chat starts multiply runs, durable
+notifications when a background run (a chat-started one too) finishes or
+needs attention, and instructions, not a run, for measuring deep-research
+live. Binding: ADR 0020 (the approval that shows a schedule activates
+it), 0021 (manual and scheduled starts share the Run Key), 0023 (an IANA
+timezone and an explicit, bounded Catch-up Policy), 0025, 0029 and 0046
+(durable notifications deduplicated by run and transition, never owned by
+an external channel), and this spec's "Scheduled start and bounded
+Catch-up Policy follow as a separate slice using the same run-start
+interface", "Every Background Run terminal or needs-attention transition
+creates a deduplicated Durable Notification" and its schedule tests
+(injected clock and timezone database, daylight saving, offline gaps,
+bounded catch-up, duplicate manual and scheduled starts, independent
+business dates).
+
+### What was built
+
+- **Timetables** (`internal/workflow/schedule.go`). A reviewed schedule's
+  slots are computed on the wall clock of its IANA timezone (the embedded
+  `time/tzdata`), never the host's. A slot is one nominal local date and
+  time the cron matches; its key `2006-01-02T15:04` with the timezone
+  identifies it for good. Cron: five numeric fields; when both day fields
+  are restricted a day matching either runs, and when either starts with
+  `*` (`*/10` too) a day must match both, as in cron; `N/S` steps from N to
+  the field's end. Daylight saving, deterministically: a wall time that
+  does not exist (spring forward) is due when the gap ends and is marked
+  shifted (several slots in one gap share that due time, in key order); a
+  wall time that happens twice (fall back) is due once, at its first
+  occurrence. `$schedule.date` and `$schedule.time` are the slot's
+  nominal local date and time ("02:30" for a 02:30 slot run at 03:00 EDT),
+  so a Run Key built from them never moves with the clocks. Lookahead is
+  bounded at eight years (31 February never comes), lookback at 400 days.
+- **Active with the approval.** The schedule recorded with an approval
+  (sub-stage 2) belongs to that version: its state is derived, `active`,
+  `paused` (the owner's latest control), `blocked` (any block of the
+  definition) or `inactive` (deactivated). A new approval's schedule
+  starts unpaused (the approval activates it) and only covers slots after
+  that approval.
+- **The schedule ticker.** `Runtime.Start` (in `evie serve` and the REPL;
+  not one-shot commands) runs it every `SchedulerConfig.Schedules`
+  (default 15 seconds), first at start, so every startup applies the
+  Catch-up Policies. It holds a single cross-process runner lease
+  (`workflow_scheduler_state`, four ticks long, like the memory background
+  pass's). For each current version with a schedule that is active and not
+  paused, it takes the slots due after the schedule's cursor (the latest
+  of its approval, the owner's latest resume and its latest decided slot,
+  per Workspace, workflow and timezone) and applies the Catch-up Policy:
+  `skip` starts only slots first seen within `ScheduleGrace` (default 5
+  minutes) of their time; `each_missed` with `max_runs` N starts the
+  latest N due slots, oldest first, one run each, whatever their age. The
+  slots not started are recorded as one `skipped` slot (the latest of
+  them) saying how many, from which to which and why, with one
+  notification. A blocked definition's due slots are skipped the same way
+  ("the workflow is blocked (…), so no run started"); a deactivated or
+  paused schedule decides nothing.
+- **Scheduled starts through StartRun.** A slot starts with `StartRun`
+  and surface `schedule` (always detached, never a rerun, no session): the
+  active version must still be the schedule's (otherwise the next tick
+  reads the new one), every start gate applies, and the inputs are the
+  approved schedule's (literals, `$schedule.date`, `$schedule.time`), never
+  a caller's. The store records the slot (`workflow_schedule_slots`,
+  immutable) in the transaction that records the run, `started`, or
+  `existing` with the run that already holds the Run Key (a manual start
+  of the same logical work). A slot is decided once whatever process
+  decides it, and even after its run failed and freed the key
+  (`ErrWorkflowScheduleSlotTaken`). A slot this Evie cannot start (its AI
+  steps or workers are off here, a pinned provider is unavailable, a step
+  kind it lacks) stays undecided: the error is reported and the ticker
+  gives the runner lease up for four ticks so another Evie can start it.
+  Any other refusal records the slot `failed` with a notification.
+  `workflow_runs.origin_surface` admits `schedule`, which never names a
+  session; a sub-stage 10 database is rebuilt once at startup (the
+  sub-stage 10 rebuild generalised, every row, rowid, index and trigger
+  kept). Inspection says "Started by its schedule for 2026-10-04T07:00
+  America/New_York (due …)", noting a shifted slot.
+- **Pause and resume.** `evie workflows schedule pause|resume
+  <workspace-id> <name> [--version <n>] [--reason <text>]` and `POST
+  /api/workflows/schedule` record the owner's control
+  (`workflow_schedule_controls`, immutable, owner via CLI or web only, the
+  current version's schedule only) without a new approval: the schedule
+  itself does not change, and changing it still needs one by hash. Slots
+  that came due while paused are never caught up (resume moves the
+  cursor). `evie workflows schedules [<workspace-id>]` and `POST
+  /api/workflows/schedules` list each schedule with its state, next slot
+  (or "due now"), blocks, pause and latest slot.
+- **The daily cap.** Every Evie process enforces the operator's cap on all
+  workflow runs' AI calls and worker starts per UTC day (the memory
+  background pass's day): `EVIE_WORKFLOW_DAILY_TOKENS` (default
+  10,000,000; 0 to 1,000,000,000) and `EVIE_WORKFLOW_DAILY_USD` (default
+  $5; 0 to 10,000); a malformed value refuses to start the runtime. Calls
+  count toward the UTC day their start was recorded: a finished one at its
+  recorded usage and cost, an open one at its bound (an AI call's
+  estimate, a worker's whole budget priced as output); an adopted worker
+  result counts nothing. The transaction that would record an AI call
+  (`BeginWorkflowModelCall`), a worker (`BeginWorkflowWorkerCall`) or a
+  batch of map items (`BeginWorkflowItemAttempts`) refuses it, recording
+  nothing, when today's spend plus its bound would pass the cap in tokens
+  or dollars (`*WorkflowDailyCapError`). The run then pauses visibly
+  (`waiting_for_dependency`) with a reason beginning "daily workflow cap
+  reached for <day> (UTC)" and the numbers, its recheck at the next 00:00
+  UTC, when it continues by itself. A map holds back the items that do
+  not fit (checked before the batch and again in its transaction), lets
+  the started ones finish, then pauses; resuming it keeps its finished
+  items. Each run's `limits.max_tokens` still applies. `evie workflows
+  status`, `POST /api/workflows/status` and the Workspace home show today's
+  spend against the cap and the runs paused at it.
+- **Durable notifications** (`workflow_notifications`). A trigger on
+  `workflow_runs` records a notice in the transaction of every state
+  change to `succeeded`, `failed`, `cancelled`, `waiting_for_human`,
+  `needs_reconciliation` or `waiting_for_dependency` (kind `paused`, or
+  `cap_reached` when the reason is the cap's), whatever code path makes
+  it, deduplicated by run, state, checkpoint and reason (a pause rechecked
+  or flapping at one boundary for one reason notifies once). Schedule
+  slots skipped or failed notify too (`schedule_skipped`,
+  `schedule_failed`). A notice keeps the run's Workspace, workflow, origin
+  surface and session; its content is immutable and only the owner's read
+  state changes. `evie workflows notifications [--all] [<workspace-id>]
+  [--session <id>] [--run <id>]` (unread by default), `evie workflows
+  notifications read|unread <id>...` and `read --all`, `POST
+  /api/workflows/notifications` and `/notifications/read`, and a Workflow
+  notifications section on the Workspace home
+  (`WorkspaceWorkflowNotifications`, with the cap line, mark read, mark
+  all read, show read ones). Each kind has one line of text (for example
+  "deep-research run … is waiting for your answer (evie workflows
+  interruptions --run …) (started from a chat)").
+- **Surfacing to the chat that started a run (decision).** The minimal
+  safe approach: `workflow_status` without `run_id` (the Workflows
+  plugin's listing) adds `unread_notifications` for the runs this
+  conversation started: run ID, workflow, kind and time, never the detail
+  (the run's own `workflow_status` shows it, framed as before), and never
+  changing the owner's read state. Nothing is injected into the turn:
+  that would change the agent kernel's context composition and pinned
+  prompts, and the chat UI files are the owner's. The tool's schema and
+  description are unchanged, so pinned sessions keep their contract. The
+  web API's `session_id` filter is the seam for the chat UI.
+- **Live measurement.** The deep-research template README now says how a
+  measured run interacts with the daily cap, how to read its tokens, cost,
+  duration and outcome from `evie workflows inspect --json`, and where the
+  numbers go (its Measured runs table, and a decisions entry if a bound
+  should change through a new reviewed version). Nothing was run.
+- **Texts.** The approval card, `approve` and `show` now say the schedule
+  is active with the approval and how to pause it.
+
+### Decisions and known limits
+
+- **Paused at the cap does not count toward `limits.max_duration`
+  (decision).** `elapsed` already left out answered questions (sub-stage
+  7); it now also leaves out the time from each cap pause to its resume
+  (read from the run's `paused` and `resumed` events). Without it, a
+  deep-research run (3 hours) paused at the cap until midnight would fail
+  the moment it resumed. The runtime version is unchanged (runs still
+  pin `/6`): the cap is the operator's policy applied to every run, like
+  the owner's cancellation, and only this Evie can create such a pause.
+  An Evie from before this sub-stage enforces no cap and, continuing a run
+  paused at it, counts the wait.
+- A run paused at the cap is rechecked only at the reset: raising the cap
+  during the day takes effect for new calls at once, but a paused run
+  waits until 00:00 UTC (or cancel and start it again).
+- The runtime enforces no cap when `Config.DailyCap` is nil (tests); every
+  Evie process sets it from the environment.
+- Notifications cover every run, foreground CLI starts included: ADR 0046
+  speaks of Background Runs, but a durable notice is never wrong and the
+  owner marks it read. Transitions before this sub-stage are not
+  back-filled.
+- The ticker evaluates schedules under one runner lease; the slot record,
+  not the lease, is the no-double-start guarantee. Under `each_missed` a
+  slot no running Evie can start keeps being retried (it stays among the
+  latest N) until one can; under `skip` it becomes missed after the
+  grace.
+- Downtime: the scheduler cannot tell downtime from a block that cleared
+  while no Evie ran, so on unblocking the Catch-up Policy applies to those
+  slots; slots that came due while an Evie saw the block are skipped.
+- A sub-hourly schedule may start several shifted slots at once at the
+  end of a spring-forward gap. A timezone change in a new version starts
+  new slot keys; a Run Key from `$schedule.date` still prevents a second
+  run of the same date.
+- No external mirror or desktop notification; nothing leaves Evie. The
+  Workspace page shows schedules and notifications but has no pause
+  button yet (the CLI and the API do). The chat UI shows no notification
+  (its files are the owner's).
+- The measured deep-research run is still owed.
+
+### What sub-stage 12 must pick up
+
+- Retention, export and redaction (ADR 0045) for notifications, schedule
+  slots and controls, whose details can carry run errors derived from run
+  data (sensitive classifications); deletion only as an explicit,
+  audited operation. Nothing here is ever deleted, so notifications grow
+  without bound.
+- Migration (ADR 0030): a Successor Run of a scheduled run must keep the
+  slot decided by its predecessor (the slot row names the predecessor)
+  rather than decide it again, and a successor started under a new
+  version should keep the schedule's cursor; migrating a run paused at the
+  cap must keep its cap wait out of `max_duration`.
+- An external notification mirror (a plugin, redacted by default, never
+  the only record) once there is a channel.
+
 ## 2026-10-04 — Deep-research workflow (Stage 14, sub-stage 10)
 
 Source: sub-stage 10 of Stage 14 in

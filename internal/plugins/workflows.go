@@ -119,10 +119,22 @@ type WorkflowChatSpend struct {
 }
 
 // WorkflowChatCatalog is the Workspace's active workflows and this chat's
-// runs.
+// runs, with (Stage 14 sub-stage 11) the unread durable notifications of
+// the runs this chat started.
 type WorkflowChatCatalog struct {
-	Workflows []WorkflowChatDefinition
-	Runs      []WorkflowChatRun
+	Workflows     []WorkflowChatDefinition
+	Runs          []WorkflowChatRun
+	Notifications []WorkflowChatNotification
+}
+
+// WorkflowChatNotification is one unread notice of a run this chat
+// started: what happened and when, never the run's detail, which
+// workflow_status of that run shows framed as its status.
+type WorkflowChatNotification struct {
+	RunID    string    `json:"run_id"`
+	Workflow string    `json:"workflow"`
+	Kind     string    `json:"kind"`
+	At       time.Time `json:"at"`
 }
 
 // WorkflowChatDefinition is one active workflow a chat may start.
@@ -339,10 +351,11 @@ func (w Workflows) status(ctx context.Context, args string) (string, error) {
 			return "", err
 		}
 		listing := struct {
-			Workflows []WorkflowChatDefinition `json:"active_workflows"`
-			Runs      []workflowRunView        `json:"runs_from_this_conversation"`
-			Note      string                   `json:"note"`
-		}{Workflows: catalog.Workflows, Runs: []workflowRunView{}}
+			Workflows     []WorkflowChatDefinition   `json:"active_workflows"`
+			Runs          []workflowRunView          `json:"runs_from_this_conversation"`
+			Notifications []WorkflowChatNotification `json:"unread_notifications,omitempty"`
+			Note          string                     `json:"note"`
+		}{Workflows: catalog.Workflows, Runs: []workflowRunView{}, Notifications: catalog.Notifications}
 		if listing.Workflows == nil {
 			listing.Workflows = []WorkflowChatDefinition{}
 		}
@@ -352,6 +365,9 @@ func (w Workflows) status(ctx context.Context, args string) (string, error) {
 		listing.Note = "Start an active workflow with workflow_start; only David proposes and approves workflows (evie workflows propose, or a bundled template: evie workflows templates)."
 		if len(listing.Workflows) == 0 {
 			listing.Note = "This Workspace has no active workflow, so nothing can be started; do the work in this conversation. " + listing.Note
+		}
+		if len(listing.Notifications) > 0 {
+			listing.Note += " unread_notifications are runs this conversation started that finished or need David; read one with workflow_status and its run_id before telling David about it."
 		}
 		b, err := json.Marshal(listing)
 		return string(b), err
