@@ -1,0 +1,112 @@
+{
+  "inputs": {
+    "question": "What limits the range of battery-electric aircraft?",
+    "max_angles": 2
+  },
+  "steps": {
+    "plan": {
+      "output": {
+        "angles": [
+          {"id": "energy-density", "question": "How much energy do aviation battery cells store per kilogram compared with jet fuel?"},
+          {"id": "reserves", "question": "What energy reserve rules apply to battery-electric aircraft?"}
+        ]
+      },
+      "tokens": 1500
+    },
+    "research": {
+      "items": {
+        "0": {
+          "output": {
+            "status": "succeeded",
+            "summary": "Cell energy density is the binding limit.",
+            "sources": [
+              {"url": "https://example.org/research/cells", "cited": true},
+              {"url": "https://example.org/research/fuel", "cited": true}
+            ],
+            "result": {
+              "claims": [
+                {"text": "Lithium-ion aviation cells store roughly 250 to 300 Wh/kg.", "sources": ["https://example.org/research/cells", "https://example.org/research/never-fetched"]},
+                {"text": "Jet fuel stores about 12,000 Wh/kg.", "sources": ["https://example.org/research/fuel"]}
+              ]
+            }
+          },
+          "tokens": 140000
+        },
+        "1": {
+          "output": {
+            "status": "partial",
+            "summary": "Reserve rules for electric aircraft are still being defined.",
+            "sources": [{"url": "https://example.org/research/reserves", "cited": true}],
+            "result": {
+              "claims": [
+                {"text": "Battery-electric aircraft must keep 30 minutes of reserve energy under visual flight rules.", "sources": ["https://example.org/research/reserves"]}
+              ]
+            }
+          },
+          "tokens": 110000
+        }
+      }
+    },
+    "verify": {
+      "item_default": {
+        "output": {
+          "status": "succeeded",
+          "summary": "The claim matches an independent source.",
+          "sources": [{"url": "https://example.org/evidence/1", "cited": true}],
+          "result": {"verdict": "supported", "evidence": ["https://example.org/evidence/1"], "rationale": "An independent source states the same figure."}
+        },
+        "tokens": 45000
+      },
+      "items": {
+        "3": {
+          "output": {
+            "status": "succeeded",
+            "summary": "A fuel handbook gives the same figure.",
+            "sources": [{"url": "https://example.org/evidence/2", "cited": true}],
+            "result": {"verdict": "supported", "evidence": ["https://example.org/evidence/2"], "rationale": "The handbook lists about 12 kWh/kg."}
+          },
+          "tokens": 40000
+        },
+        "4": {
+          "output": {
+            "status": "succeeded",
+            "summary": "Supported, but no page was read.",
+            "sources": [],
+            "result": {"verdict": "supported", "evidence": ["https://example.org/evidence/never-fetched"], "rationale": "It is widely known."}
+          },
+          "tokens": 20000
+        },
+        "6": {
+          "output": {
+            "status": "succeeded",
+            "summary": "The 30-minute rule applies to fuel aircraft.",
+            "sources": [{"url": "https://example.org/evidence/rules", "cited": true}],
+            "result": {"verdict": "refuted", "evidence": ["https://example.org/evidence/rules"], "rationale": "Electric reserves are not yet defined by the regulator."}
+          },
+          "tokens": 38000
+        },
+        "7": {
+          "output": {
+            "status": "succeeded",
+            "summary": "No battery-specific reserve rule found.",
+            "sources": [{"url": "https://example.org/evidence/rules", "cited": true}],
+            "result": {"verdict": "refuted", "evidence": ["https://example.org/evidence/rules"], "rationale": "The rule cited is for fuel."}
+          },
+          "tokens": 36000
+        }
+      }
+    },
+    "synthesize": {
+      "output": {
+        "title": "What limits the range of battery-electric aircraft",
+        "summary": "Battery energy density, roughly 250 to 300 Wh/kg [S1] against about 12,000 Wh/kg for jet fuel [S2], is the binding limit.",
+        "body_markdown": "## Energy density\n\nAviation cells store roughly 250 to 300 Wh/kg [S1], while jet fuel stores about 12,000 Wh/kg [S2][S1].\n\n## Open questions\n\nA 30-minute reserve rule for battery-electric aircraft could not be verified.\n",
+        "citations": [
+          {"marker": "S1", "url": "https://example.org/evidence/1"},
+          {"marker": "S2", "url": "https://example.org/evidence/2"}
+        ]
+      },
+      "tokens": 9000
+    }
+  }
+}

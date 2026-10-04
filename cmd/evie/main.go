@@ -34,10 +34,12 @@ import (
 
 // defaultPluginEnabled is each compiled plugin's enabled state until the
 // owner chooses otherwise; the owner's choice is durable.
+// The Workflows plugin (Stage 14 sub-stage 10) is on: its chat tools start
+// only workflows the owner approved, inside every gate a start has.
 var defaultPluginEnabled = map[plugins.PluginID]bool{
 	plugins.WebPluginID: true, plugins.FinancePluginID: true,
 	plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
-	plugins.SubagentsPluginID: false,
+	plugins.SubagentsPluginID: false, plugins.WorkflowsPluginID: true,
 }
 
 func main() {
@@ -193,6 +195,9 @@ func main() {
 			log.Printf("Subagents shutdown: %v", err)
 		}
 	}()
+	// The chat's workflow tools reach the Workflow Runtime once the runtime
+	// exists; it needs this manager first (sub-stage 10).
+	workflowLink := &plugins.WorkflowLink{}
 	pluginManager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		plugins.NewWeb(),
@@ -203,6 +208,7 @@ func main() {
 			PerParent: subagentPolicy.PerParent, Runtime: subagentPolicy.Runtime, PerTurn: subagentPolicy.PerTurn}),
 		plugins.NewMemory(kernelStore),
 		plugins.NewSubagents(supervisor),
+		plugins.NewWorkflows(workflowLink),
 	)
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)
@@ -333,7 +339,9 @@ func main() {
 		// configuration problem disables it with a reason; chat still starts.
 		if workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv, pluginManager, supervisor, pluginManager); err != nil {
 			log.Printf("workflow scheduler off: %v", err)
+			workflowLink.Unavailable("the workflow runtime did not start: " + err.Error())
 		} else {
+			workflowLink.Bind(workflowRuntime)
 			stopWorkflows := startWorkflowScheduler(runtimeCtx, workflowRuntime)
 			defer stopWorkflows()
 		}
@@ -364,6 +372,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("workflow runtime: %v", err)
 		}
+		workflowLink.Bind(workflowRuntime)
 		// The web process runs the workflow scheduler (Stage 14 sub-stage
 		// 4) in both its full and management-only modes.
 		stopWorkflows := startWorkflowScheduler(runtimeCtx, workflowRuntime)

@@ -54,7 +54,7 @@ func (p Param) checkBounds(v any) error {
 // reviewedFunctions is the reviewed registry, keyed by ID.
 func reviewedFunctions() map[string]Function {
 	out := map[string]Function{}
-	for _, f := range []Function{collectClaims(), expandBallots(), majorityFilter(), splitEvenly()} {
+	for _, f := range []Function{collectClaims(), expandBallots(), majorityFilter(), splitEvenly(), tallyVerdicts(), checkCitations()} {
 		out[f.ID()] = f
 	}
 	return out

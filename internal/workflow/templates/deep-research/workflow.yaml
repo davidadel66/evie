@@ -1,0 +1,183 @@
+# Deep research, the bundled template (Stage 14 sub-stage 10): plan a few
+# angles, research each with its own research worker, verify every claim
+# with three independent verifiers that must fetch their evidence, keep the
+# claims a majority supports, write a report, and check its citations
+# against the sources the verifiers fetched. README.md explains it; this
+# file, the prompts and the schemas are what the owner approves.
+schema_version: 1
+name: deep-research
+description: >-
+  Research one question from up to four angles with web research workers,
+  verify every claim with three independent verifiers that must fetch their
+  evidence, keep the claims a majority supports, and write a cited report
+  whose citations are checked against the sources the verifiers fetched.
+
+inputs:
+  question:
+    type: string
+    required: true
+    max_length: 2000
+    description: The question to research, with any scope or time frame that matters.
+  max_angles:
+    type: integer
+    default: 3
+    minimum: 1
+    maximum: 4
+    description: How many research angles to plan (at most four).
+
+run_key:
+  inputs: [question]
+
+model_policies:
+  planner:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.2
+    max_output_tokens: 2000
+  researcher:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.3
+    max_output_tokens: 8000
+  verifier:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.1
+    max_output_tokens: 4000
+  writer:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.3
+    max_output_tokens: 16000
+
+limits:
+  max_duration: 3h
+  max_attempts: 60
+  max_parallel: 4
+  max_tokens: 6000000
+
+retention:
+  classification: ordinary
+
+start: plan
+
+steps:
+  - id: plan
+    kind: ai
+    description: Split the question into at most max_angles distinct research angles.
+    model_policy: planner
+    prompt: prompts/plan.md
+    input:
+      question: $inputs.question
+      max_angles: $inputs.max_angles
+    output_schema: schemas/angles.schema.json
+    retry:
+      max_attempts: 2
+    next: research
+
+  - id: research
+    kind: map
+    description: Research every angle with its own research worker.
+    over: $steps.plan.output.angles
+    max_items: 4
+    max_parallel: 4
+    on_item_failure: partial
+    min_succeeded: 1
+    item:
+      kind: agent
+      worker: research
+      model_policy: researcher
+      objective: prompts/research.md
+      input:
+        question: $inputs.question
+        angle_id: $item.id
+        angle: $item.question
+      output_schema: schemas/findings.schema.json
+      budget:
+        time: 10m
+        tokens: 250000
+      retry:
+        max_attempts: 2
+        backoff: 30s
+    next: claims
+
+  - id: claims
+    kind: deterministic
+    description: Merge duplicate claims, keep only sources a researcher fetched, at most twelve claims.
+    function: collect_claims@1
+    input:
+      findings: $steps.research.output.results
+      max_claims: 12
+    next: ballots
+
+  - id: ballots
+    kind: deterministic
+    description: Three independent ballots per claim.
+    function: expand_ballots@1
+    input:
+      claims: $steps.claims.output.claims
+      votes: 3
+    next: verify
+
+  - id: verify
+    kind: map
+    description: Each ballot is an independent research worker that checks one claim and votes.
+    over: $steps.ballots.output.ballots
+    max_items: 36
+    max_parallel: 4
+    on_item_failure: partial
+    min_succeeded: 1
+    item:
+      kind: agent
+      worker: research
+      model_policy: verifier
+      objective: prompts/verify.md
+      input:
+        claim: $item.text
+        cited_sources: $item.sources
+      output_schema: schemas/verdict.schema.json
+      budget:
+        time: 5m
+        tokens: 100000
+    next: tally
+
+  - id: tally
+    kind: deterministic
+    description: Keep claims at least two of three verifiers support with evidence they fetched.
+    function: tally_verdicts@1
+    input:
+      claims: $steps.claims.output.claims
+      votes: $steps.verify.output.results
+      quorum: 2
+    next: synthesize
+
+  - id: synthesize
+    kind: ai
+    description: Write the report from the verified claims, citing only their verified sources.
+    model_policy: writer
+    prompt: prompts/synthesize.md
+    input:
+      question: $inputs.question
+      verified_claims: $steps.tally.output.accepted
+      rejected_claims: $steps.tally.output.rejected
+    output_schema: schemas/report.schema.json
+    retry:
+      max_attempts: 2
+    next: cite
+
+  - id: cite
+    kind: deterministic
+    description: Keep only citations of sources a verifier fetched for an accepted claim; report every removal.
+    function: check_citations@1
+    input:
+      report: $steps.synthesize.output
+      claims: $steps.tally.output.accepted
+
+outputs:
+  report: $steps.cite.output
+  verified_claims: $steps.tally.output.accepted
+  rejected_claims: $steps.tally.output.rejected

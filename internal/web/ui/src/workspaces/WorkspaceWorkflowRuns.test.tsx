@@ -114,6 +114,36 @@ describe("Workspace workflow runs", () => {
     expect(listed).not.toContain("text-danger");
   });
 
+  it("shows each map item and worker call with its execution and spend, and a run Evie started from a chat", () => {
+    const research: WorkflowRun = {...run, id: "run-5", workflow: "deep-research", surface: "chat", session_id: "chat-1", outputs: undefined, state: "running", finished_at: undefined};
+    const call = {run_id: "run-5", policy: "researcher", policy_version: 1, model: "deepseek/deepseek-v4.1-flash", worker: "research", step: "research",
+      budget_ms: 600000, budget_tokens: 250000, estimated_micro_usd: 300000, started_at: ""};
+    const html = renderToStaticMarkup(<WorkflowRunView onClose={()=>{}} detail={{run: research, checkpoints: [],
+      attempts: [
+        {seq: 1, step: "research", kind: "map", attempt: 1, input_checkpoint: 1, input: {items: [{id: "energy"}, {id: "rules"}, {id: "cost"}]}, state: "running", started_at: ""},
+        {seq: 2, step: "research", kind: "agent", attempt: 1, input_checkpoint: 1, input: {}, state: "succeeded", output: {}, started_at: "", item: 0, map_attempt: 1},
+        {seq: 3, step: "research", kind: "agent", attempt: 1, input_checkpoint: 1, input: {}, state: "failed", error: "worker ended failed", started_at: "", item: 1, map_attempt: 1},
+        {seq: 4, step: "research", kind: "agent", attempt: 2, input_checkpoint: 1, input: {}, state: "running", started_at: "", item: 1, map_attempt: 1},
+      ],
+      workers: [
+        {...call, attempt_seq: 2, attempt_state: "succeeded", item: 0, execution_id: "exec-0", finished_at: "x", status: "succeeded", usage_complete: true, counted_tokens: 3350, micro_usd: 4400},
+        {...call, attempt_seq: 3, attempt_state: "failed", item: 1, execution_id: "exec-1", finished_at: "x", status: "failed", reason: "provider unavailable", usage_complete: true, counted_tokens: 1000, micro_usd: 1000},
+        {...call, attempt_seq: 4, attempt_state: "running", item: 1, execution_id: "exec-2"},
+      ]}} />);
+    expect(html).toContain("started by Evie in your chat (workflow_start) in session chat-1");
+    expect(html).toContain("Map items of research (from checkpoint 1)");
+    expect(html).toContain("#0 {&quot;id&quot;:&quot;energy&quot;}: succeeded, 1 attempt, worker execution exec-0, 3350 tokens, $0.004400");
+    expect(html).toContain("#1 {&quot;id&quot;:&quot;rules&quot;}: running, 2 attempts, worker execution exec-2, 251000 tokens");
+    expect(html).toContain("#2 {&quot;id&quot;:&quot;cost&quot;}: not started");
+    expect(html).toContain("research item 1 attempt #3: research worker, researcher v1 deepseek/deepseek-v4.1-flash, budget 10m / 250000 tokens; execution exec-1; failed (provider unavailable), 1000 tokens");
+    expect(html).toContain("research item 1 attempt #4: research worker");
+    expect(html).toContain("in flight, counted at its budget of 250000 tokens");
+    expect(html).toContain("Worker spend: 254350 tokens, $0.305400");
+    // Item attempts are listed under their map, not as steps.
+    expect(html).toContain("#1 research attempt 1: running");
+    expect(html).not.toContain("#2 research attempt 1");
+  });
+
   it("shows the override a rerun was started under", () => {
     const html = renderToStaticMarkup(<WorkflowRunView onClose={()=>{}} detail={{...detail, override: {run_id: "run-1", rerun_of: "run-0",
       logical_key: "split-bill:sha256:" + "d".repeat(64), reason: "the bill was corrected", actor: "owner", surface: "cli", recorded_at: "2026-10-04T12:00:00Z"}}} />);

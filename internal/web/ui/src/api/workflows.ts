@@ -124,7 +124,8 @@ export type WorkflowRun = {
   state: WorkflowRunState;
   outputs?: Record<string, unknown>;
   error?: string;
-  surface: string;
+  /** Who started it: the owner from the CLI or web, or Evie from a chat in the Workspace (workflow_start). */
+  surface: "cli" | "web" | "chat" | string;
   session_id?: string;
   checkpoint: number;
   next_step?: string;
@@ -151,6 +152,9 @@ export type WorkflowNodeAttempt = {
   finished_at?: string;
   lease_holder?: string;
   lease_token?: number;
+  /** A map item's index and the map step's attempt it ran under (sub-stage 9). */
+  item?: number;
+  map_attempt?: number;
 };
 
 export type WorkflowCheckpoint = { seq: number; after_attempt?: number; next: string; state: Record<string, unknown>; created_at: string };
@@ -249,6 +253,37 @@ export type WorkflowRunOverride = {
   recorded_at: string;
 };
 
+// Agent steps and map fan-out (Stage 14 sub-stage 9): each agent attempt's
+// worker call, with the worker execution it ran as, its outcome, usage and
+// cost; a map step's items are node attempts with an item index.
+export type WorkflowWorkerCall = {
+  run_id: string;
+  attempt_seq: number;
+  attempt_state: string;
+  step: string;
+  item?: number;
+  worker: string;
+  policy: string;
+  policy_version: number;
+  model: string;
+  budget_ms: number;
+  budget_tokens: number;
+  estimated_micro_usd: number;
+  adopted_from?: string;
+  continues?: string;
+  execution_id?: string;
+  child_session_id?: string;
+  started_at: string;
+  finished_at?: string;
+  status?: string;
+  reason?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  usage_complete?: boolean;
+  counted_tokens?: number;
+  micro_usd?: number;
+};
+
 export type WorkflowRunDetail = {
   run: WorkflowRun;
   attempts: WorkflowNodeAttempt[];
@@ -259,6 +294,7 @@ export type WorkflowRunDetail = {
   model_calls?: WorkflowModelCall[];
   cancellation?: WorkflowRunCancellation;
   override?: WorkflowRunOverride;
+  workers?: WorkflowWorkerCall[];
 };
 
 export type WorkflowRunResult = { run: WorkflowRunDetail; existing: boolean };
@@ -292,4 +328,65 @@ export function parseRunInputs(text: string): Record<string, unknown> | undefine
   } catch {
     return undefined;
   }
+}
+
+/** A worker call's tokens and cost: what it counted once finished; its whole budget while open (it may spend up to it). */
+export function workerCallSpend(call: WorkflowWorkerCall): { tokens: number; microUSD: number } {
+  return call.finished_at
+    ? { tokens: call.counted_tokens ?? 0, microUSD: call.micro_usd ?? 0 }
+    : { tokens: call.budget_tokens, microUSD: call.estimated_micro_usd };
+}
+
+export type WorkflowMapItem = {
+  index: number;
+  item: unknown;
+  /** succeeded, failed, interrupted, running or "not started" */
+  state: string;
+  attempts: number;
+  execution?: string;
+  tokens: number;
+  microUSD: number;
+  error?: string;
+};
+
+export type WorkflowMapView = { step: string; checkpoint: number; items: WorkflowMapItem[] };
+
+/**
+ * Each map step's items, as `evie workflows inspect` derives them: the list
+ * its latest attempt at a checkpoint ran over, and for each element its item
+ * attempts (a succeeded item keeps its state), the worker execution of its
+ * latest agent attempt and what its workers spent.
+ */
+export function workflowMapViews(detail: WorkflowRunDetail): WorkflowMapView[] {
+  const lists = new Map<string, { step: string; checkpoint: number; items: unknown[] }>();
+  for (const a of detail.attempts) {
+    if (a.kind !== "map" || a.item !== undefined) continue;
+    const input = a.input as { items?: unknown[] } | null;
+    if (!input || !Array.isArray(input.items)) continue;
+    lists.set(`${a.step}@${a.input_checkpoint}`, { step: a.step, checkpoint: a.input_checkpoint, items: input.items });
+  }
+  const calls = new Map<number, WorkflowWorkerCall>();
+  for (const w of detail.workers ?? []) calls.set(w.attempt_seq, w);
+  return [...lists.values()].map(({ step, checkpoint, items }) => ({
+    step, checkpoint,
+    items: items.map((element, index) => {
+      const view: WorkflowMapItem = { index, item: element, state: "not started", attempts: 0, tokens: 0, microUSD: 0 };
+      for (const a of detail.attempts) {
+        if (a.item !== index || a.step !== step || a.input_checkpoint !== checkpoint) continue;
+        view.attempts++;
+        const call = calls.get(a.seq);
+        if (call) {
+          const spend = workerCallSpend(call);
+          view.tokens += spend.tokens;
+          view.microUSD += spend.microUSD;
+        }
+        if (view.state === "succeeded") continue;
+        view.state = a.state;
+        view.error = a.error;
+        const execution = call?.adopted_from || call?.execution_id;
+        if (execution) view.execution = execution;
+      }
+      return view;
+    }),
+  }));
 }

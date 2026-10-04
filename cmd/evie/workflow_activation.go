@@ -39,6 +39,7 @@ type workflowCommands interface {
 	Answer(context.Context, workflowruntime.AnswerRequest) (eviedb.WorkflowRunDetail, error)
 	Interruptions(context.Context, workflowruntime.InterruptionFilter) ([]eviedb.WorkflowInterruption, error)
 	Cancel(context.Context, workflowruntime.CancelRequest) (eviedb.WorkflowRunDetail, error)
+	WorkerReport(context.Context, string, string) (workflowruntime.WorkerReport, error)
 }
 
 // workflowCapabilityPlugins are the compiled plugins that contribute
@@ -236,11 +237,19 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 	encoder.SetIndent("", "  ")
 	switch args[1] {
 	case "propose":
-		a, ok := parseWorkflowArgs(args[2:], "fixtures")
-		if !ok || len(a.positional) != 2 {
+		a, ok := parseWorkflowArgs(args[2:], "fixtures", "template")
+		template, fromTemplate := a.flags["template"]
+		if !ok || fromTemplate && len(a.positional) != 1 || !fromTemplate && len(a.positional) != 2 {
 			return true, usage
 		}
-		req := workflowruntime.Proposal{WorkspaceID: memory.WorkspaceID(a.positional[0]), Dir: a.positional[1], Surface: "cli"}
+		req := workflowruntime.Proposal{WorkspaceID: memory.WorkspaceID(a.positional[0]), Surface: "cli"}
+		source := template
+		if fromTemplate {
+			// A bundled template (sub-stage 10) brings its own dry run.
+			req.Template = template
+		} else {
+			req.Dir, source = a.positional[1], a.positional[1]
+		}
 		if path, ok := a.flags["fixtures"]; ok {
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -258,12 +267,12 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 			if a.json {
 				_ = encoder.Encode(map[string]any{"valid": false, "problems": invalid.Problems})
 			} else {
-				fmt.Fprintf(out, "%s is not a valid Workflow Definition for this Workspace:\n", a.positional[1])
+				fmt.Fprintf(out, "%s is not a valid Workflow Definition for this Workspace:\n", source)
 				for _, p := range invalid.Problems {
 					fmt.Fprintf(out, "  %s: %s\n", p.Path, p.Message)
 				}
 			}
-			return true, fmt.Errorf("%s is invalid (%d problems); nothing was proposed", a.positional[1], len(invalid.Problems))
+			return true, fmt.Errorf("%s is invalid (%d problems); nothing was proposed", source, len(invalid.Problems))
 		}
 		if err != nil {
 			return true, err
@@ -401,6 +410,8 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		return true, listWorkflowInterruptions(ctx, args[2:], out, rt)
 	case "cancel":
 		return true, cancelWorkflowRun(ctx, args[2:], out, rt)
+	case "report":
+		return true, reportWorkflowWorker(ctx, args[2:], out, rt)
 	}
 	return true, usage
 }

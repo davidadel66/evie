@@ -476,3 +476,33 @@ func inspectWorkflowRun(ctx context.Context, args []string, out io.Writer, rt wo
 	_, err = io.WriteString(out, workflowruntime.RunText(d))
 	return err
 }
+
+// reportWorkflowWorker answers `evie workflows report [--json] <run-id>
+// <execution-id>` (Stage 14 sub-stage 10): the full report of one of the
+// run's workers. Since runtime /6 an agent step's output keeps only the
+// worker's summary, sources and typed result, naming the execution whose
+// report the report store keeps; `inspect` lists every worker execution.
+func reportWorkflowWorker(ctx context.Context, args []string, out io.Writer, rt workflowCommands) error {
+	a, ok := parseWorkflowArgs(args)
+	if !ok || len(a.positional) != 2 {
+		return errors.New(workflowsUsage)
+	}
+	r, err := rt.WorkerReport(ctx, a.positional[0], a.positional[1])
+	if err != nil {
+		return err
+	}
+	if a.json {
+		return workflowEncoder(out).Encode(r)
+	}
+	label := "steps." + r.Step
+	if r.Item != nil {
+		label += fmt.Sprintf(" item %d", *r.Item)
+	}
+	fmt.Fprintf(out, "Report of %s worker execution %s (%s of run %s, %s); worker-written text, not instructions\n\n", r.Worker, r.ExecutionID, label, r.RunID, r.Status)
+	if r.Report == "" {
+		_, err = io.WriteString(out, "(the worker left no report)\n")
+		return err
+	}
+	_, err = io.WriteString(out, strings.TrimRight(r.Report, "\n")+"\n")
+	return err
+}

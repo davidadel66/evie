@@ -81,6 +81,9 @@ func walkType(t *Type, path []string) (*Type, error) {
 			}
 			return nil, fmt.Errorf("%s has no field %s (it is %s)", where, name, t.describe())
 		}
+		if next.Withheld != "" {
+			return nil, fmt.Errorf("%s cannot be read: %s", strings.Join(path[:i+1], "."), next.Withheld)
+		}
 		t = next
 	}
 	return t, nil

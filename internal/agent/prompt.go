@@ -31,6 +31,19 @@ const exploreGuidance = "- Use " + delegateExploreTool + " for local work that n
 // delegate_build existed keep their exact prompt.
 const buildGuidance = "- Use " + delegateBuildTool + " for a bounded code change on one Task you created for it; the worker edits and tests in its own git worktree on its own branch, and claims and updates that Task, so do not claim that Task yourself. Then review its branch, files changed and test results; merging is a separate step the owner approves.\n"
 
+// workflowGuidance is the Delegation line for a session that can start and
+// read the Workspace's approved workflows (Stage 14 sub-stage 10,
+// 2026-10-04). Sessions pinned before workflow_start existed keep their
+// exact prompt. Whether a workflow is active is the runtime's to say:
+// workflow_status lists the active ones, and workflow_start refuses others.
+const (
+	workflowStartTool  = "workflow_start"
+	workflowStatusTool = "workflow_status"
+	workflowGuidance   = "- For a broad research question that needs many sources and verified, cited answers, start this Workspace's deep-research workflow with " + workflowStartTool +
+		" instead of running many searches or workers yourself; " + workflowStatusTool + " without run_id lists the active workflows and their inputs. " +
+		"Tell David it runs in the background and give him its run ID; check it with " + workflowStatusTool + " before answering from it. Only David proposes, approves or cancels workflows.\n"
+)
+
 // delegationFollowUpAnchor starts the Delegation line that the follow-up
 // guidance precedes.
 const delegationFollowUpAnchor = "- Worker findings"
@@ -71,14 +84,20 @@ const (
 // whose toolset is tools: systemPrompt, plus the delegation follow-up line
 // naming only the follow-up tools the session has (amended 2026-10-01;
 // formerly every session was told to use both), preceded by the explore
-// guidance when the session has delegate_explore, plus the memory duties when
-// the session can queue proposals for review (2026-10-03). A session's
+// guidance when the session has delegate_explore and followed by the
+// workflow guidance when it has workflow_start and workflow_status
+// (2026-10-04), plus the memory duties when the session can queue
+// proposals for review (2026-10-03). A session's
 // toolset is pinned, so its instructions stay stable and cacheable across
 // its turns.
 func primaryInstructions(tools []openrouter.Tool) string {
-	var report, continuation, explore, build, merge, ready, duties, overview bool
+	var report, continuation, explore, build, merge, ready, duties, overview, workflowStart, workflowStatus bool
 	for _, tool := range tools {
 		switch tool.Function.Name {
+		case workflowStartTool:
+			workflowStart = true
+		case workflowStatusTool:
+			workflowStatus = true
 		case todoReadyTool:
 			ready = true
 		case readSubagentReportTool:
@@ -115,6 +134,9 @@ func primaryInstructions(tools []openrouter.Tool) string {
 	}
 	if explore {
 		line = exploreGuidance + line
+	}
+	if workflowStart && workflowStatus {
+		line += workflowGuidance
 	}
 	if line != "" {
 		prompt = strings.Replace(prompt, delegationFollowUpAnchor, line+delegationFollowUpAnchor, 1)

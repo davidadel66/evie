@@ -218,7 +218,11 @@ func (r *Runtime) runAgent(pc *pass, ctx context.Context, run eviedb.WorkflowRun
 		end := eviedb.WorkerCallEndOf(*prior)
 		end.Reason = "took the result of worker execution " + prior.ID + ", which finished before an interrupted attempt recorded it"
 		o := agentOutcome{end: end}
-		o.value, o.output, o.note, o.failure = r.agentResult(pc, spec, *prior.Result, plan.adoptReport, tokensOf(*prior, spec))
+		adopted := *prior.Result
+		if adopted.ExecutionID == "" {
+			adopted.ExecutionID = prior.ID
+		}
+		o.value, o.output, o.note, o.failure = r.agentResult(pc, spec, adopted, plan.adoptReport, tokensOf(*prior, spec))
 		o.note = joinNotes("adopted worker execution "+prior.ID+" (it finished before the runtime recorded it; no worker ran again)", o.note)
 		return o
 	}
@@ -308,7 +312,11 @@ func notAdmitted(err error) eviedb.WorkflowWorkerCallEnd {
 // output: the sources it fetched (each marked cited or not), and the typed
 // result when the step declares a schema.
 func (r *Runtime) agentResult(pc *pass, spec workflow.AgentPlan, result delegation.Result, report string, tokens int64) (any, []byte, string, error) {
-	wr := workflow.WorkerResult{Status: result.Status, Summary: result.Summary, Report: report, Limitations: result.Limitations, Tokens: tokens}
+	// Since sub-stage 10 the output names the execution whose report the
+	// report store keeps instead of carrying it; a run pinned to /5 keeps
+	// the shape it started with.
+	wr := workflow.WorkerResult{Status: result.Status, Summary: result.Summary, Report: report, ExecutionID: result.ExecutionID,
+		FullReport: pc.comp.Runtime == fullReportRuntime, Limitations: result.Limitations, Tokens: tokens}
 	for _, src := range result.Sources {
 		if src.Fetched {
 			wr.Sources = append(wr.Sources, workflow.WorkerSource{URL: src.URL, Cited: src.Cited})

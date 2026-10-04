@@ -14,12 +14,14 @@ import (
 )
 
 const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie workflows simulate [--json] <dir> --fixtures <file>" +
-	" | evie workflows propose [--json] <workspace-id> <dir> [--fixtures <file>] | evie workflows list [--json] [<workspace-id>]" +
+	" | evie workflows templates [--json]" +
+	" | evie workflows propose [--json] <workspace-id> (<dir> | --template <name>) [--fixtures <file>] | evie workflows list [--json] [<workspace-id>]" +
 	" | evie workflows show [--json] <workspace-id> <name> | evie workflows diff [--json] <proposal-id>" +
 	" | evie workflows approve [--json] <proposal-id> --hash <executable-hash> --authority <authority-hash> --expect-version <n>" +
 	" | evie workflows deactivate [--json] <workspace-id> <name> --version <n> [--reason <text>]" +
 	" | evie workflows run [--json] [--detach] <workspace-id> <name> [--input <name>=<value>]... [--input-json <file>] [--rerun-of <run-id> --reason <text>]" +
 	" | evie workflows runs [--json] [<workspace-id>] [--workflow <name>] | evie workflows inspect [--json] <run-id>" +
+	" | evie workflows report [--json] <run-id> <execution-id>" +
 	" | evie workflows substitute [--json] <run-id> <capability> <version>" +
 	" | evie workflows reconcile [--json] [--detach] <run-id> <step> --outcome happened|did-not-happen [--evidence <text>] [--output-json <file>]" +
 	" | evie workflows answer [--json] [--detach] <run-id> <step> (--answer <json> | --answer-file <file>) [--session <session-id>]" +
@@ -30,9 +32,9 @@ const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie wor
 // repository; runWorkflowActivation answers them once both are available
 // (Stage 14 sub-stage 2; run, runs and inspect from sub-stage 3; substitute
 // from sub-stage 5; reconcile from sub-stage 6; answer and interruptions
-// from sub-stage 7; cancel from sub-stage 8).
+// from sub-stage 7; cancel from sub-stage 8; report from sub-stage 10).
 var workflowActivationCommands = []string{"propose", "list", "show", "diff", "approve", "deactivate", "run", "runs", "inspect", "substitute", "reconcile",
-	"answer", "interruptions", "cancel"}
+	"answer", "interruptions", "cancel", "report"}
 
 // accessNotChecked is printed with a standalone review.
 const accessNotChecked = "Workspace Access is not checked outside a Workspace; evie workflows propose <workspace-id> <dir> checks it.\n"
@@ -54,6 +56,9 @@ func runWorkflowManagement(_ context.Context, args []string, out io.Writer, gete
 	usage := errors.New(workflowsUsage)
 	if len(args) >= 2 && slices.Contains(workflowActivationCommands, args[1]) {
 		return false, nil
+	}
+	if len(args) >= 2 && args[1] == "templates" {
+		return true, listWorkflowTemplates(args[2:], out, usage)
 	}
 	if len(args) < 2 || (args[1] != "validate" && args[1] != "simulate") {
 		return true, usage
@@ -136,4 +141,35 @@ func runWorkflowManagement(_ context.Context, args []string, out io.Writer, gete
 	}
 	_, err = io.WriteString(out, simulation.Text()+accessNotChecked)
 	return true, err
+}
+
+// listWorkflowTemplates answers `evie workflows templates [--json]` (Stage
+// 14 sub-stage 10): the reviewed definitions bundled with Evie, which `evie
+// workflows propose <workspace-id> --template <name>` proposes to a
+// Workspace for the owner's approval. It touches no database.
+func listWorkflowTemplates(args []string, out io.Writer, usage error) error {
+	asJSON := false
+	for _, a := range args {
+		if a != "--json" {
+			return usage
+		}
+		asJSON = true
+	}
+	templates := workflow.Templates()
+	if asJSON {
+		encoder := json.NewEncoder(out)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(struct {
+			Templates []workflow.TemplateInfo `json:"templates"`
+		}{templates})
+	}
+	if len(templates) == 0 {
+		_, err := io.WriteString(out, "No workflow templates are bundled with this Evie.\n")
+		return err
+	}
+	for _, t := range templates {
+		fmt.Fprintf(out, "%s\n  %s\n  inputs: %s\n  propose: evie workflows propose <workspace-id> --template %s\n", t.Name, t.Description, strings.Join(t.Inputs, ", "), t.Name)
+	}
+	_, err := io.WriteString(out, "Proposing records the template's reviewed files and dry run for the Workspace; approving it is a separate step, and approval starts no run.\n")
+	return err
 }

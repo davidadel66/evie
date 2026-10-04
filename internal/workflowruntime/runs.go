@@ -47,9 +47,17 @@ import (
 // Model Policies and durable interruptions, and presents unknown effects
 // as interruptions; version 5 (sub-stage 9) adds agent steps that run the
 // existing workers under the run's lease, with their presets pinned, and
-// bounded map fan-out with per-item attempts. An Evie without a version's
-// semantics pauses such a run as incompatible instead of running it.
-const RuntimeVersion = "evie.workflow.runtime/5"
+// bounded map fan-out with per-item attempts; version 6 (sub-stage 10)
+// records an agent step's output without the worker's full report (its
+// summary, sources, limitations, tokens and typed result, with the
+// execution whose report the report store keeps), so checkpoints stay
+// bounded. An Evie without a version's semantics pauses such a run as
+// incompatible instead of running it.
+const RuntimeVersion = "evie.workflow.runtime/6"
+
+// fullReportRuntime is the last runtime whose agent outputs carry the
+// worker's full report; its runs keep that shape to the end.
+const fullReportRuntime = "evie.workflow.runtime/5"
 
 // compatibleRuntimes are the pinned runtimes this runtime declares it can
 // continue (ADR 0025). Runs pinned to evie.workflow.runtime/1 (sub-stages 3
@@ -66,8 +74,11 @@ const RuntimeVersion = "evie.workflow.runtime/5"
 // pinned to evie.workflow.runtime/4 (sub-stage 7) were refused agent and
 // map steps at start, so they hold none; the only change they see is that
 // a map step's own attempt and item attempts are counted per item, which
-// none of them has. A run pinned to any other runtime pauses visibly.
-var compatibleRuntimes = []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", "evie.workflow.runtime/3", "evie.workflow.runtime/4", RuntimeVersion}
+// none of them has. Runs pinned to evie.workflow.runtime/5 (sub-stage 9)
+// keep recording each agent output with the worker's full report, as they
+// did when they started (sub-stage 10). A run pinned to any other runtime
+// pauses visibly.
+var compatibleRuntimes = []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", "evie.workflow.runtime/3", "evie.workflow.runtime/4", fullReportRuntime, RuntimeVersion}
 
 // executableKinds are the step kinds this runtime version executes:
 // capability reads and, since sub-stage 6, capability effects; since
@@ -119,6 +130,10 @@ type RunRequest struct {
 	// and why. Without inputs, the rerun takes that run's accepted input.
 	RerunOf string `json:"rerun_of,omitempty"`
 	Reason  string `json:"reason,omitempty"`
+	// Chat is the chat turn starting a run with surface "chat" (sub-stage
+	// 10, StartFromChat); such a start is always detached and never a
+	// rerun.
+	Chat *eviedb.WorkflowChatOrigin `json:"-"`
 }
 
 // RunResult is a started run, or the run that already holds its Run Key
@@ -165,7 +180,12 @@ type preparedRun struct {
 // pauses (await). The run does not belong to the caller: a caller that
 // stops waiting or disconnects does not stop it.
 func (r *Runtime) StartRun(ctx context.Context, req RunRequest) (RunResult, error) {
-	if !ownerSurface(req.Surface) {
+	switch {
+	case ownerSurface(req.Surface) && req.Chat == nil:
+	case req.Surface == "chat" && req.Chat != nil && req.RerunOf == "" && strings.TrimSpace(req.Reason) == "":
+		// A chat starts a background run and goes on with its turn.
+		req.Detach = true
+	default:
 		return RunResult{}, eviedb.ErrWorkflowRunSurface
 	}
 	err := eviedb.ErrWorkflowChanged
@@ -257,13 +277,13 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	if err != nil {
 		return preparedRun{}, err
 	}
-	pinned, err := json.Marshal(composition{Runtime: RuntimeVersion, StepKinds: kinds, Functions: v.Functions(), Providers: providers, Models: v.ModelPolicies(), Workers: workers})
+	pinned, err := json.Marshal(composition{Runtime: r.pin, StepKinds: kinds, Functions: v.Functions(), Providers: providers, Models: v.ModelPolicies(), Workers: workers})
 	if err != nil {
 		return preparedRun{}, err
 	}
 	start := eviedb.WorkflowRunStart{
 		WorkspaceID: req.WorkspaceID, Workflow: a.Name, Version: a.Version, ExecutableHash: a.ExecutableHash, AuthorityHash: a.AuthorityHash,
-		Composition: pinned, RunKey: v.RunKey(inputs), Inputs: encoded, Start: v.Start(), Surface: req.Surface, SessionID: req.SessionID,
+		Composition: pinned, RunKey: v.RunKey(inputs), Inputs: encoded, Start: v.Start(), Surface: req.Surface, SessionID: req.SessionID, Chat: req.Chat,
 	}
 	if req.RerunOf != "" {
 		if start.RunKey != logical {
@@ -1047,6 +1067,10 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 			s.Capability, s.Plugin, s.PinnedVersion, s.ReplacementVersion, s.Contract, s.Approver, s.Surface, s.ApprovedAt.Format(timeLayout))
 	}
 	started := fmt.Sprintf("Started via %s at %s", run.Surface, run.CreatedAt.Format(timeLayout))
+	if run.Surface == "chat" {
+		// Sub-stage 10: Evie started it with workflow_start in the owner's chat.
+		started = fmt.Sprintf("Started by Evie in the owner's chat (workflow_start) at %s", run.CreatedAt.Format(timeLayout))
+	}
 	if run.SessionID != "" {
 		started += " from session " + string(run.SessionID)
 	}

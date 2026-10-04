@@ -165,6 +165,39 @@ func TestMergeGuidanceOnlyWhenTheSessionCanProposeMerges(t *testing.T) {
 	}
 }
 
+// Stage 14 sub-stage 10 (2026-10-04): a session that can start and read
+// workflows is told to start the Workspace's deep-research workflow for a
+// broad research question instead of many inline searches, that the run
+// continues in the background, and how to check it. Sessions pinned before
+// the workflow tools keep their exact prompt.
+func TestWorkflowGuidanceOnlyWhenTheSessionCanStartWorkflows(t *testing.T) {
+	without := primaryInstructions(delegationTools)
+	with := primaryInstructions(append(append([]openrouter.Tool(nil), delegationTools...), toolNamed("workflow_start"), toolNamed("workflow_status")))
+	if strings.Contains(without, "workflow_start") {
+		t.Fatal("a session without workflow tools is told to use them")
+	}
+	for _, want := range []string{"workflow_start", "deep-research", "broad research question", "instead of", "background", "run ID", "workflow_status",
+		"Only David proposes, approves or cancels"} {
+		if !strings.Contains(workflowGuidance, want) {
+			t.Errorf("workflow guidance lacks %q:\n%s", want, workflowGuidance)
+		}
+	}
+	if strings.Replace(with, workflowGuidance, "", 1) != without || strings.Count(with, workflowGuidance) != 1 {
+		t.Fatal("workflow guidance changed more than its own line")
+	}
+	start, end := strings.Index(with, "# Delegation\n"), strings.Index(with, "\n# Durable Task Trees")
+	if i := strings.Index(with, workflowGuidance); i < start || i > end {
+		t.Fatal("workflow guidance is not in the Delegation section")
+	}
+	if len(workflowGuidance) > 600 {
+		t.Errorf("workflow guidance is %d bytes; keep it short, it is resident in every request", len(workflowGuidance))
+	}
+	// A session with only one of the tools is not told to use them.
+	if half := primaryInstructions(append(append([]openrouter.Tool(nil), delegationTools...), toolNamed("workflow_start"))); half != without {
+		t.Fatal("a session without workflow_status is told about workflows")
+	}
+}
+
 // Stage 13 (2026-10-04): a session that has todo_ready and delegate_build is
 // told how to carry out a Task Tree: plan paths and dependencies, read the
 // ready set, dispatch one conflict-free batch, merge through the gate,

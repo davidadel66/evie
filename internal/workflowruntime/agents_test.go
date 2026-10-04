@@ -420,7 +420,7 @@ func TestWorkflowAgentStepRunsAResearchWorkerUnderTheRunsLease(t *testing.T) {
 		}
 	}
 	var comp composition
-	if err := json.Unmarshal(d.Run.Composition, &comp); err != nil || comp.Runtime != "evie.workflow.runtime/5" || len(comp.Workers) != 1 ||
+	if err := json.Unmarshal(d.Run.Composition, &comp); err != nil || comp.Runtime != RuntimeVersion || len(comp.Workers) != 1 ||
 		comp.Workers[0].Worker != "research" || !strings.HasPrefix(comp.Workers[0].Digest, "sha256:") {
 		t.Fatalf("composition = %s", d.Run.Composition)
 	}

@@ -15,7 +15,9 @@
 // revocation at every node boundary and the audited rerun override
 // (cancel.go); sub-stage 9 adds agent steps whose workers run under the
 // run's lease (agent.go) and bounded map fan-out with per-item attempts
-// (mapstep.go); later sub-stages extend runs through this same type.
+// (mapstep.go); sub-stage 10 adds bundled templates to proposals, bounded
+// agent outputs (runtime /6) and chat starts and status for the Workflows
+// plugin (session.go); later sub-stages extend runs through this same type.
 //
 // Validation runs against the bound Workspace: its current Workspace Access
 // and the runtime's capability catalog (the workflow capabilities compiled
@@ -270,8 +272,11 @@ type Runtime struct {
 	agentsOff string
 	// holder names this runtime instance on every lease it takes.
 	holder string
-	// compatible are the pinned runtimes this runtime continues (ADR 0025).
+	// compatible are the pinned runtimes this runtime continues (ADR 0025);
+	// pin is the runtime a run it starts pins (RuntimeVersion; tests pin an
+	// earlier one to stand for an earlier Evie).
 	compatible []string
+	pin        string
 	// call runs one deterministic step's function; nil is the reviewed
 	// function itself. Tests replace it to inject failures, crashes and
 	// to observe durable state from inside a node.
@@ -320,7 +325,7 @@ func New(c Config) (*Runtime, error) {
 	}
 	return &Runtime{store: c.Store, repo: c.Repo, providers: c.Capabilities, catalog: providerCatalog{c.Capabilities}, workers: c.Workers, sched: sched, report: c.Report,
 		models: c.Models, modelsOff: c.ModelsOff, agents: c.Agents, agentsOff: c.AgentsOff,
-		holder: fmt.Sprintf("evie-%d-%s", os.Getpid(), uuid.NewString()), compatible: slices.Clone(compatibleRuntimes),
+		holder: fmt.Sprintf("evie-%d-%s", os.Getpid(), uuid.NewString()), compatible: slices.Clone(compatibleRuntimes), pin: RuntimeVersion,
 		now: time.Now, sleep: sleepContext,
 		active: map[string]bool{}, failures: map[string]error{}, reported: map[string]string{}, signals: map[string]*cancelSignal{},
 		wakeup: make(chan struct{}, 1), changed: make(chan struct{})}, nil
@@ -335,12 +340,15 @@ func (r *Runtime) environment(access workflow.WorkspaceAccess) workflow.Environm
 	return workflow.Environment{Capabilities: r.catalog, Access: access, Workers: r.workers}
 }
 
-// Proposal is the owner proposing the definition in Dir for a Workspace.
+// Proposal is the owner proposing the definition in Dir for a Workspace,
+// or (Stage 14 sub-stage 10) the bundled template named Template.
 // Fixtures are the dry run approval needs; a proposal without them can be
-// reviewed, and needs none when it only changes documentation.
+// reviewed, and needs none when it only changes documentation. A template
+// brings its bundled fixtures when none are given.
 type Proposal struct {
 	WorkspaceID memory.WorkspaceID
 	Dir         string
+	Template    string
 	Fixtures    *workflow.Fixtures
 	Surface     string
 }
@@ -353,8 +361,28 @@ func (r *Runtime) Propose(ctx context.Context, req Proposal) (Card, error) {
 	if !ownerSurface(req.Surface) {
 		return Card{}, eviedb.ErrWorkflowApprover
 	}
-	if strings.TrimSpace(req.Dir) == "" {
-		return Card{}, errors.New("propose needs a definition directory")
+	var src workflow.Source
+	origin := ""
+	switch dir, template := strings.TrimSpace(req.Dir), strings.TrimSpace(req.Template); {
+	case dir != "" && template != "":
+		return Card{}, errors.New("propose either a definition directory or a bundled template, not both")
+	case template != "":
+		bundled, ok := workflow.TemplateSource(template)
+		if !ok {
+			return Card{}, fmt.Errorf("no bundled workflow template named %q (evie workflows templates lists them)", template)
+		}
+		if req.Fixtures == nil {
+			f, err := workflow.TemplateFixtures(template)
+			if err != nil {
+				return Card{}, err
+			}
+			req.Fixtures = &f
+		}
+		src, origin = bundled, template
+	case dir != "":
+		src = workflow.DirSource{Dir: req.Dir}
+	default:
+		return Card{}, errors.New("propose needs a definition directory or a bundled template")
 	}
 	workspace, err := r.workspace(ctx, req.WorkspaceID)
 	if err != nil {
@@ -368,7 +396,7 @@ func (r *Runtime) Propose(ctx context.Context, req Proposal) (Card, error) {
 		return Card{}, err
 	}
 	env := r.environment(access.Access)
-	local, err := workflow.Validate(workflow.DirSource{Dir: req.Dir}, env)
+	local, err := workflow.Validate(src, env)
 	if err != nil {
 		return Card{}, err
 	}
@@ -382,6 +410,9 @@ func (r *Runtime) Propose(ctx context.Context, req Proposal) (Card, error) {
 	authority := workflow.RequirementsOf(local.Report()).AuthorityHash
 	message := fmt.Sprintf("Propose workflow %s for Workspace %s\n\nExecutable-Hash: %s\nAuthority-Hash: %s\nProposed-By: owner (%s)\n",
 		local.Name(), req.WorkspaceID, local.Hash(), authority, req.Surface)
+	if origin != "" {
+		message += "Template: " + origin + " (bundled with Evie)\n"
+	}
 	commit, _, err := r.repo.Commit(ctx, path, local.Files(), message)
 	if err != nil {
 		return Card{}, err
@@ -407,7 +438,9 @@ func (r *Runtime) Propose(ctx context.Context, req Proposal) (Card, error) {
 	if err != nil {
 		return Card{}, err
 	}
-	return r.card(ctx, recorded)
+	card, err := r.card(ctx, recorded)
+	card.Template = origin
+	return card, err
 }
 
 // Card is the approval card: what approving a proposal would bind and
@@ -424,6 +457,9 @@ type Card struct {
 	Refusals        []string                   `json:"refusals,omitempty"`
 	Patch           string                     `json:"patch"`
 	ApproveCommand  string                     `json:"approve_command,omitempty"`
+	// Template names the bundled template a proposal came from, on the card
+	// the proposal itself returns (sub-stage 10).
+	Template string `json:"template,omitempty"`
 }
 
 // Card builds the approval card for a recorded proposal.
@@ -605,6 +641,9 @@ func (c Card) Text() string {
 	p := c.Proposal
 	line("Workflow %s in Workspace %s", p.Name, p.WorkspaceID)
 	line("Proposal %s (commit %s), proposed by %s via %s at %s", p.ID, short(p.Commit), p.ProposedBy, p.Surface, p.ProposedAt.Format("2006-01-02 15:04:05Z07:00"))
+	if c.Template != "" {
+		line("Template: %s (bundled with Evie); its README explains it, and its bundled fixtures are the dry run", c.Template)
+	}
 	line("Executable hash: %s", p.ExecutableHash)
 	line("Authority hash:  %s", p.AuthorityHash)
 	if c.Current == nil {

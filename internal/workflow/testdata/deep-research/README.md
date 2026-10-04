@@ -1,4 +1,11 @@
-# Deep research
+# Deep research (test example)
+
+This is the frozen sub-stage 1–9 example that validation, hashing and
+simulation tests are written against. The deep-research workflow Evie ships
+is the bundled template in `internal/workflow/templates/deep-research`
+(Stage 14 sub-stage 10), with reviewed prompts, verifiers that must fetch
+their evidence and a citation check; propose that one with
+`evie workflows propose <workspace-id> --template deep-research`.
 
 Researches one question the way a careful analyst would, as a durable
 workflow rather than one chat turn.

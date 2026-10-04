@@ -137,6 +137,9 @@ func (s *Store) authorizeBuildGate(ctx context.Context, conn *sql.Conn, p delega
 	}
 	a, err := s.inspectSubagent(ctx, conn, p, id)
 	if errors.Is(err, sql.ErrNoRows) {
+		a, err = inspectRunBuild(ctx, conn, p, id)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
 		return a, fmt.Errorf("%w: %q", delegation.ErrNotFound, id)
 	}
 	if err != nil {

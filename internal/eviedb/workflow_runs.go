@@ -332,7 +332,7 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
  state TEXT NOT NULL CHECK(state IN ('queued','running','waiting_for_human','waiting_for_dependency','needs_reconciliation','cancelling','cancelled','failed','succeeded')),
  outputs TEXT CHECK(outputs IS NULL OR (json_valid(outputs) AND json_type(outputs) = 'object')),
  error TEXT NOT NULL,
- origin_surface TEXT NOT NULL CHECK(origin_surface IN ('cli','web')),
+ `+workflowRunSurfaces+`,
  session_id TEXT REFERENCES sessions(id),
  created_at TEXT NOT NULL,
  started_at TEXT,
@@ -372,6 +372,11 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
  BEGIN SELECT RAISE(ABORT,'workflow checkpoints are immutable'); END;`)
 	if err != nil {
 		return fmt.Errorf("create workflow run schema: %w", err)
+	}
+	// Sub-stage 10 lets Evie start a run from the owner's chat: the table's
+	// origin check gains "chat", which only a table rebuild can change.
+	if err := rebuildWorkflowRuns(ctx, db, workflowRunSurfacesBeforeChat, workflowRunSurfaces); err != nil {
+		return fmt.Errorf("upgrade workflow runs for chat starts: %w", err)
 	}
 	// Sub-stage 4 adds the durable retry time to runs and the lease and
 	// interrupted state to attempts. A sub-stage 3 database is upgraded once,
@@ -465,6 +470,9 @@ type WorkflowRunStart struct {
 	Start     string
 	Surface   string
 	SessionID memory.SessionID
+	// Chat is the chat turn that starts a run with surface "chat" (sub-stage
+	// 10): its live turn lease and committed workflow_start call.
+	Chat *WorkflowChatOrigin
 	// RerunOf, LogicalKey and Reason are the owner's audited rerun override
 	// (sub-stage 8, ADR 0021): the succeeded run this reruns, the logical
 	// Run Key both share, and why. RunKey then includes the override.
@@ -547,8 +555,8 @@ func workflowJSONObject(data json.RawMessage) bool {
 // the originating session, and pins the current Workspace revision and
 // access revision with the first checkpoint.
 func (s *Store) StartWorkflowRun(ctx context.Context, req WorkflowRunStart) (run WorkflowRun, existing bool, err error) {
-	if req.Surface != "cli" && req.Surface != "web" {
-		return WorkflowRun{}, false, ErrWorkflowRunSurface
+	if err := validRunSurface(req); err != nil {
+		return WorkflowRun{}, false, err
 	}
 	if !workflowJSONObject(req.Inputs) || !workflowJSONObject(req.Composition) || req.RunKey == "" || req.Start == "" {
 		return WorkflowRun{}, false, errors.New("a workflow run needs its accepted input and composition as JSON objects, a Run Key and a first step")
@@ -567,6 +575,13 @@ func (s *Store) StartWorkflowRun(ctx context.Context, req WorkflowRunStart) (run
 		}
 		if req.RerunOf != "" {
 			if err := checkRerun(ctx, conn, req); err != nil {
+				return err
+			}
+		}
+		// A chat start is proved before anything, even a held key, is
+		// answered (sub-stage 10).
+		if req.Surface == "chat" {
+			if err := authorizeChatStart(ctx, conn, req, s.now().UTC().Format(turnLeaseTimeFormat)); err != nil {
 				return err
 			}
 		}

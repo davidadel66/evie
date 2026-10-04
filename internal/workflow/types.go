@@ -47,6 +47,10 @@ type Type struct {
 	MaxLength *int64   `json:"max_length,omitempty"`
 	MinItems  *int64   `json:"min_items,omitempty"`
 	MaxItems  *int64   `json:"max_items,omitempty"`
+	// Withheld marks a field no step may read, with where its value is
+	// instead (Stage 14 sub-stage 10: an agent step's full report stays in
+	// the worker's report store; only runs pinned before it carry it).
+	Withheld string `json:"withheld,omitempty"`
 }
 
 // Field is one object property for ObjectType.

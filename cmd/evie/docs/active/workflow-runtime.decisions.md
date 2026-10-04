@@ -1,5 +1,225 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Deep-research workflow (Stage 14, sub-stage 10)
+
+Source: sub-stage 10 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md)
+("First workflow to ship: a deep-research workflow (search, fetch,
+verify, synthesize)") and sub-stage 9's "What sub-stage 10 must pick up":
+ship deep-research with reviewed prompts, check the report's citations
+against the verify workers' fetched sources, report its cost against
+`limits.max_tokens`, decide what an agent step's output keeps, show map
+items and worker calls in the web run view, and give a run's build branch
+a session-side path to the merge gate. Binding: ADR 0010, 0016, 0019, 0025
+and 0027 and this spec's "Manual/session start is the first delivery
+slice", user story 18 ("start an approved workflow from a chat session"),
+"Manual starts require no second approval", "although that preset must
+expose the capability used to start or inspect workflows", and "an agent
+step's build branch stays unmerged until the owner merges it through the
+Stage 12 gate from a session".
+
+### What was built
+
+- **Bundled templates.** `internal/workflow/templates/<name>/` is embedded
+  in the binary (`workflow.Templates`, `TemplateSource`,
+  `TemplateFixtures`). A template is only a source: its folder holds the
+  reviewed definition plus a `fixtures.json` dry run, which is never
+  committed (only referenced files are). `evie workflows templates
+  [--json]` lists them without a database; `evie workflows propose
+  <workspace-id> --template <name> [--fixtures <file>]` proposes one into
+  the Workspace's procedural repository exactly like a folder, with its
+  bundled fixtures as the dry run unless others are given; the card and
+  commit message name the template, and the owner's normal approval
+  follows. A model cannot propose (`Propose` keeps the owner surfaces).
+  `internal/workflow/testdata/deep-research` stays the frozen test example
+  its tests (and pinned hash) are written against; its README points to the
+  template.
+- **The deep-research template** (`sha256:e40aefec…`, pinned by a test):
+  plan (AI, at most `max_angles`, default 3, never more than 4) → research
+  (map of research workers, 4 items, `partial` with one success, 10 minutes
+  and 250,000 tokens each, one retry after 30s) → `collect_claims@1` (12
+  claims, sources a researcher fetched) → `expand_ballots@1` (3 votes) →
+  verify (map of research workers, at most 36, 5 minutes and 100,000
+  tokens each, no retry) → `tally_verdicts@1` (quorum 2) → synthesize (AI)
+  → `check_citations@1`. Every step pins `deepseek/deepseek-v4.1-flash`
+  through four Model Policies (planner 0.2/2,000, researcher 0.3/8,000,
+  verifier 0.1/4,000, writer 0.3/16,000 output tokens). Limits:
+  `max_duration` 3h, `max_attempts` 60, `max_parallel` 4, `max_tokens`
+  6,000,000, which covers the worst worker case (2,000,000 research +
+  3,600,000 verify) with room for the AI steps, so validation warns of
+  nothing. No Standing Authority. The prompts: the planner splits the
+  question into self-contained, non-overlapping angles; a researcher cites
+  only URLs it fetched, one checkable fact per claim, at most six; a
+  verifier reads the cited sources itself, looks for an independent and
+  possibly contradicting one, judges the claim exactly as written and votes
+  `supported`, `refuted` or `insufficient` ("when in doubt,
+  insufficient") with one to three evidence URLs it fetched; the writer
+  answers from verified claims only, cites inline `[S1]` with a citation
+  list of verified sources, says when evidence is mixed, mentions rejected
+  claims only as unverified, and is told the citations are checked. Every
+  prompt frames its data as data. The verdict schema requires `evidence`;
+  URL fields are at most 500 bytes, so the verify assignment fits the
+  8 KiB assignment limit.
+- **Integrity functions** (`internal/workflow/citations.go`).
+  `tally_verdicts@1`: a `supported` or `refuted` vote counts only when its
+  `evidence` names a URL the harness recorded that verifier fetching
+  (otherwise it counts `insufficient`, noted); a missing vote (a failed
+  verifier) counts against; a claim with at least `quorum` supported votes
+  is accepted, and its citable `sources` are exactly its supporting votes'
+  fetched evidence, in vote order. Rejected claims carry no sources.
+  `check_citations@1` is the citation rule:
+  1. allowed sources are the accepted claims' `sources`, compared as exact
+     strings after trimming spaces;
+  2. a citation in the list is kept only when its marker is `S<n>` (one to
+     three digits), appears once, its URL is allowed and the title, summary
+     or body cites it; others are removed with their reason;
+  3. an inline marker (`[S1]`, or `[S1, S2]`) survives only for a kept
+     citation; others are deleted with the space before them, and a
+     combined marker is rewritten `[S1][S2]`;
+  4. a markdown link or bare URL in the text whose URL is not allowed loses
+     it (the link keeps its text; a bare URL becomes `[unverified link
+     removed]`); links to allowed sources stay;
+  5. the output is the cleaned report, its kept citations (each with the
+     accepted claims it supports), every removal with its reason, `status`
+     `verified` when nothing was removed and `corrected` otherwise, and the
+     accepted claims the citations cover and those none does.
+  The report schema is title, summary, body and `citations: [{marker,
+  url}]`; the run's `report` output is the checked report.
+- **Bounded agent outputs (decision; runtime `/6`).** An agent step's (or
+  item's) output keeps `status`, `summary`, `sources` (fetched, with
+  whether the report cites them), `limitations`, `tokens` and the typed
+  `result`, and names `execution_id` and `report_bytes` instead of carrying
+  the full report, which stays in the subagent report store; `evie
+  workflows report <run-id> <execution-id>` prints it (`Runtime.
+  WorkerReport`). Checkpoints, which hold every output so far, stay
+  bounded however many workers a map runs (deep-research's final
+  checkpoint is a few KiB, not 36 reports). `report` is a withheld field of
+  the result type: validation refuses `$steps.<agent>.output.report` and
+  says where the report is. Runs pin `evie.workflow.runtime/6`; a run
+  pinned to `/5` keeps recording the full report to the end (its shape is
+  part of its pinned semantics), and `/1`–`/5` stay compatible. Simulation
+  builds the bounded shape.
+- **Chat start and status.** A new Workflows plugin (`workflows`, 1.0.0,
+  on by default) contributes `workflows.start` (`workflow_start`) and
+  `workflows.status` (`workflow_status`), contract 1.0.0, optional in the
+  Standard preset (now `sha256:7f31ed96…`; `377b51c0…` reopens unchanged,
+  without them). `workflow_start(name, inputs)` takes only those two fields
+  (strict decoding refuses any other); the Workspace, session and turn come
+  from the invocation. `Runtime.StartFromChat` calls `StartRun` with
+  surface `chat`, always detached and never a rerun, so every start gate
+  holds: the active version's approved commit re-read and re-hashed, run
+  admission (deactivated, blocked and never-approved definitions are
+  refused with nothing recorded), executable step kinds,
+  `EVIE_WORKFLOW_REMOTE_MODELS` for AI steps and workers, worker
+  availability, declared inputs and the Run Key (a duplicate returns the
+  run that holds it). The store then proves the chat in the transaction
+  that records the run: a top-level, active session of the run's
+  Workspace whose pinned composition exposes `workflows.start`, its live
+  turn lease, and that turn's committed `workflow_start` call with no
+  outcome yet (the merge gate's position proof); then it records origin
+  `chat` with the session. `workflow_status(run_id?, offset?)` reads a run
+  of the chat's Workspace (another Workspace's run is not found): state,
+  each step's progress with map item counts, what it waits for, build
+  branches left for the gate, tokens and cost against `max_tokens`, and,
+  once it succeeded, its outputs (deep-research's checked report) framed
+  as untrusted workflow output and paged 16 KiB at a time; without
+  `run_id` it lists the active workflows with their inputs and this chat's
+  runs. The plugin binds to the runtime after it starts (`WorkflowLink`);
+  without one the tools say why. `evie workflows inspect` says "Started by
+  Evie in the owner's chat".
+- **Owner-only stays owner-only.** No model tool proposes, approves,
+  deactivates, cancels, answers, reconciles, substitutes or reruns:
+  `Propose`, `Approve`, `Deactivate`, `Cancel`, `Answer`, `Reconcile` and
+  `Substitute` refuse the chat surface, the database's own checks refuse it
+  on approvals, cancellations, reconciliations, answers and overrides, a
+  chat start cannot carry an override, and the Workflows plugin exposes
+  exactly the two tools (tests prove each).
+- **Schema.** `workflow_runs.origin_surface` admits `chat`, always with
+  its session. SQLite cannot change a check in place, so a database from
+  before is rebuilt once at startup under the write lock with foreign keys
+  off: every row is copied with its rowid, the old table dropped and the
+  new one renamed, then exactly the indexes and triggers the old table had
+  (read from the schema first) are recreated and foreign keys checked
+  before commit. Competing startups re-read the definition under the lock.
+- **Prompt.** A session with both tools gets one Delegation line: for a
+  broad research question needing many sources and verified, cited
+  answers, start the Workspace's deep-research workflow with
+  `workflow_start` instead of many searches or workers; list active
+  workflows with `workflow_status`; tell David it runs in the background
+  with its run ID; check it before answering from it; only David proposes,
+  approves or cancels workflows. Sessions pinned before keep their exact
+  prompt.
+- **Web run view.** The Workspace home's run view lists step attempts as
+  nodes and each map step's items under it (index, element, state,
+  attempts, worker execution, tokens and cost of its workers), every
+  worker call (step and item, attempt, worker, policy and model, budget,
+  execution, adoption or continuation, outcome, tokens, cost) with the
+  worker spend, and names a run Evie started from a chat (derived in the
+  browser from the inspect route's attempts and `workers`, as `inspect`
+  does).
+- **Merge path for a run's build branch (decision).** The smaller safe
+  design extends the Stage 12 gate rather than adding a second one:
+  `propose_build_merge` from a top-level chat of the run's Workspace (all
+  of `authorizeGateParent`'s checks: its live, committed call, the merge
+  capability, the Workspace's build allowance) accepts a run-owned build
+  execution of that Workspace once its run has finished (a run still
+  waiting or running may continue that worker, so it is refused with that
+  reason), with the chat's Task access applied. The gate then verifies,
+  rebases, verifies again and shows the card; only the owner's approval
+  fast-forwards the target. Workflows still cannot merge. The tool's
+  schema is unchanged, so every pinned session keeps its contract.
+  `workflow_status` names the build executions.
+- **Live measurement (manual, never automatic).** The template README
+  gives the command sequence (`evie plugins enable subagents`, research
+  workers allowed in the Workspace's settings,
+  `EVIE_WORKFLOW_REMOTE_MODELS=on`, propose, approve, `evie workflows run
+  … --input question=…`, `evie workflows inspect`). Cost bounds at DeepSeek
+  V4.1 Flash's catalog price ($0.30 per million input tokens, $1.20 per
+  million output tokens; the runtime records the price it reads when the
+  run starts): hard ceiling 6,000,000 tokens all billed as output, $7.20;
+  the limit reached at workers' usual ~95% input, about $2.10; expected
+  for three angles and about nine claims (27 verifiers), about 2 to 3
+  million tokens, $0.70 to $1.00, until measured.
+
+### Decisions and known limits
+
+- Citations match by exact string. A writer that normalizes a URL (a
+  trailing slash, a fragment) loses that citation, visibly, in `removed`;
+  the prompt tells it to copy URLs exactly.
+- A claim set that is empty (no researcher produced a claim) leaves the
+  verify map with no items, and its `min_succeeded` 1 fails the run
+  visibly ("0 of 0 items succeeded"); a report needs verified claims.
+- The chat tools are in every new Standard session whatever the
+  Workspace's workflows: availability is the runtime's answer at call time
+  (an inactive or missing workflow is refused, and `workflow_status` lists
+  the active ones), so pinned tools and the cached prompt stay stable.
+- `workflow_start` shows no approval card: the spec's manual starts need
+  no second approval, and the owner approved the definition, its limits
+  and its authority. Each start is bounded by `limits.max_tokens` (the
+  result states it) and deduplicated by the Run Key (deep-research's is the
+  question).
+- A run's build attempt is not the chat's child: `read_subagent_report`
+  and `continue_research` do not reach it, so a failing gate check cannot
+  continue that worker from the chat; the owner reads the report with
+  `evie workflows report` and reruns or fixes the branch.
+- The full report of a run's worker is readable from the CLI only; the web
+  run view shows executions, not reports.
+- `internal/workflowruntime/map_kinds_test.go` (from sub-stage 9) is not
+  gofmt-clean; it was left untouched.
+
+### What sub-stage 11 must pick up
+
+- Measure deep-research on real questions with the manual command above
+  and record the spend `inspect` reports against the bounds; adjust
+  budgets, `max_items` or prompts only through a new reviewed version.
+- Schedules multiply runs, and a chat can now start them: add the daily
+  dollar or token cap the sub-stage 7 entry asked for before scheduled
+  deep research.
+- Durable notifications when a background run (including a chat-started
+  one) finishes, fails or needs attention, so the owner need not ask
+  `workflow_status`; the chat UI still shows no run (its files are the
+  owner's).
+
 ## 2026-10-04 — Agent steps and bounded map fan-out (Stage 14, sub-stage 9)
 
 Source: sub-stage 9 of Stage 14 in

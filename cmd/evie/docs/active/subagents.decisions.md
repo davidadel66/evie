@@ -1,5 +1,26 @@
 # Subagents implementation decisions
 
+## 2026-10-04 — A run's build branch at the merge gate (Stage 14, sub-stage 10)
+
+Source: sub-stage 10 of Stage 14 and the workflow spec's "an agent step's
+build branch stays unmerged until the owner merges it through the Stage 12
+gate from a session". The gate's parent checks
+(`authorizeGateParent`: a top-level chat, its live turn's committed
+`propose_build_merge` call, the merge capability, the Workspace's build
+allowance) are unchanged. What changed is which execution it accepts: when
+the execution is not the chat's own child, `authorizeBuildGate` accepts a
+run-owned build execution of a Workflow Run in the chat's Workspace once
+that run has finished (a waiting or running run may still continue the
+worker in its worktree, so it is refused with that reason), with the
+chat's Task access and the worktree checks applied. Verification, rebase,
+the second verification, the owner's approval card, the fast-forward and
+the cleanup are the Stage 12 gate's, and the execution keeps its run owner
+throughout. The tool's schema and contract are unchanged, so every pinned
+session keeps them. `read_subagent_report` and `continue_research` still
+reach only a chat's own children; a run's worker report is read with `evie
+workflows report`. Binding record: the sub-stage 10 entry in
+[workflow-runtime.decisions.md](workflow-runtime.decisions.md).
+
 ## 2026-10-04 — Run-owned workers (Stage 14, sub-stage 9)
 
 Source: sub-stage 9 of Stage 14 in

@@ -12,14 +12,15 @@ import (
 	"github.com/davidadel66/evie/internal/openrouter"
 )
 
-// Version compatibility (Stage 14 sub-stage 9). Runs pin
-// evie.workflow.runtime/5; an Evie that cannot run agent and map steps
-// pauses such a run visibly instead of advancing it, and only an Evie that
-// runs them can finish a run, including the owner's cancellation, while a
-// worker it started is unsettled: the database refuses the others.
+// Version compatibility (Stage 14 sub-stage 9). Runs pin the current
+// runtime (evie.workflow.runtime/5 then, /6 since sub-stage 10); an Evie
+// that cannot run it pauses such a run visibly instead of advancing it, and
+// only an Evie that runs agent and map steps can finish a run, including
+// the owner's cancellation, while a worker it started is unsettled: the
+// database refuses the others.
 
-// An Evie whose runtime is older than /5 pauses a run that pins it,
-// starting nothing; an Evie that runs agent steps resumes it.
+// An Evie whose runtime is older than the run's pauses a run that pins it,
+// starting nothing; a current Evie resumes it.
 func TestWorkflowOlderEviePausesAnAgentRunVisibly(t *testing.T) {
 	ctx := context.Background()
 	h, _ := newAgentHarness(t, nil, &workerModel{answer: answerResearch})
@@ -31,12 +32,12 @@ func TestWorkflowOlderEviePausesAnAgentRunVisibly(t *testing.T) {
 	}
 	id := res.Run.Run.ID
 	older := h.process()
-	older.rt.compatible = []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", "evie.workflow.runtime/3", "evie.workflow.runtime/4"}
+	older.rt.compatible = []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", "evie.workflow.runtime/3", "evie.workflow.runtime/4", "evie.workflow.runtime/5"}
 	if _, err := older.rt.execute(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	d := h.inspect(id)
-	if d.Run.State != eviedb.WorkflowRunWaitingForDependency || !strings.Contains(d.Run.Error, "evie.workflow.runtime/5 is not one this Evie declares compatible") ||
+	if d.Run.State != eviedb.WorkflowRunWaitingForDependency || !strings.Contains(d.Run.Error, RuntimeVersion+" is not one this Evie declares compatible") ||
 		len(d.Attempts) != 0 || len(d.Workers) != 0 {
 		t.Fatalf("under an older Evie = %+v", d.Run)
 	}

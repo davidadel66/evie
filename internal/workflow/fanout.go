@@ -13,8 +13,10 @@ import (
 // function call or AI step, and the map's output in input order; and an
 // agent step's worker, pinned Model Policy, reviewed objective, budget and
 // result schema, with the worker result an agent step outputs, its typed
-// result taken from the report's "## Result" block. The simulator builds
-// map and agent outputs with the same code, so a run and its dry run
+// result taken from the report's "## Result" block. Since sub-stage 10 that
+// output names the worker execution and the report's size instead of
+// carrying the report (runs pinned to runtime /5 keep it). The simulator
+// builds map and agent outputs with the same code, so a run and its dry run
 // cannot disagree. Nothing here runs a worker or a model.
 
 // MapPlan is a map step as a run executes it.
@@ -246,11 +248,18 @@ func (v *Validated) AgentStep(id string) (AgentPlan, bool) {
 // WorkerResult is what a worker returned, as the runtime reads it from the
 // harness: its terminal status, the report's summary, its full report, the
 // sources it fetched (each marked cited in the report or not), its
-// limitations and the tokens the run counts for it.
+// limitations and the tokens the run counts for it. ExecutionID is the
+// worker execution whose report the report store keeps. The step's output
+// carries the full report only when FullReport is set: a run pinned before
+// Stage 14 sub-stage 10 (evie.workflow.runtime/5) keeps its recorded shape;
+// every later output names the execution and the report's size instead, so
+// checkpoints stay bounded however many workers a map runs.
 type WorkerResult struct {
 	Status      string
 	Summary     string
 	Report      string
+	ExecutionID string
+	FullReport  bool
 	Sources     []WorkerSource
 	Limitations []string
 	Tokens      int64
@@ -310,8 +319,16 @@ func agentOutput(n *node, r WorkerResult) (out any, note string, failure, broken
 		limitations = append(limitations, l)
 	}
 	result := map[string]any{
-		"status": r.Status, "summary": r.Summary, "report": r.Report,
+		"status": r.Status, "summary": r.Summary,
 		"sources": sources, "limitations": limitations, "tokens": r.Tokens,
+	}
+	if r.FullReport {
+		result["report"] = r.Report
+	} else {
+		result["report_bytes"] = int64(len(r.Report))
+		if r.ExecutionID != "" {
+			result["execution_id"] = r.ExecutionID
+		}
 	}
 	if n.schema != nil {
 		typed, err := extractAgentResult(r.Report)

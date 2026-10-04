@@ -771,12 +771,23 @@ func (v *validator) compileAgent(n *node) {
 	n.tokens = b.Tokens
 }
 
-// agentResultType is the worker result contract as a workflow sees it.
+// reportWithheld says where an agent step's full report is.
+const reportWithheld = "an agent step's output keeps the worker's summary, sources, limitations and typed result; " +
+	"its full report stays in the worker's report store under execution_id (evie workflows inspect shows each worker's execution)"
+
+// agentResultType is the worker result contract as a workflow sees it. Since
+// Stage 14 sub-stage 10 it names the worker execution and the report's size
+// instead of carrying the full report, which no step may read; a run pinned
+// to evie.workflow.runtime/5 still records the report as it did.
 func agentResultType(result *Type) *Type {
+	report := StringType()
+	report.Withheld = reportWithheld
 	fields := []Field{
 		{Name: "status", Type: &Type{Kind: KindString, Enum: []any{"succeeded", "partial"}}},
 		{Name: "summary", Type: StringType()},
-		{Name: "report", Type: StringType()},
+		{Name: "execution_id", Type: StringType(), Optional: true},
+		{Name: "report_bytes", Type: IntegerType(), Optional: true},
+		{Name: "report", Type: report, Optional: true},
 		{Name: "sources", Type: ArrayType(ObjectType(Field{Name: "url", Type: StringType()}, Field{Name: "cited", Type: BooleanType()}))},
 		{Name: "limitations", Type: ArrayType(StringType())},
 		{Name: "tokens", Type: IntegerType()},

@@ -133,7 +133,7 @@ export function WorkspaceWorkflows({workspace, api = workflowAPI}: {workspace: W
   });
   return <section aria-label="Workflows" className="border-hair mt-7 border-b pb-7">
     <h2 className="text-body mb-3 text-sm font-medium">Workflows</h2>
-    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Reviewed procedures this Workspace can run. Propose one with <code className="font-mono">evie workflows propose {workspace.id} &lt;folder&gt; --fixtures &lt;file&gt;</code>; approving a version grants exactly the Standing Authority it shows, within this Workspace&apos;s access, and starts no run. Any change to its behavior needs a new approval.</p>
+    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Reviewed procedures this Workspace can run. Propose one with <code className="font-mono">evie workflows propose {workspace.id} &lt;folder&gt; --fixtures &lt;file&gt;</code>, or a template bundled with Evie (<code className="font-mono">evie workflows templates</code>) with <code className="font-mono">evie workflows propose {workspace.id} --template deep-research</code>; approving a version grants exactly the Standing Authority it shows, within this Workspace&apos;s access, and starts no run. Any change to its behavior needs a new approval.</p>
     {definitions === null ? <p className="text-muted-text text-xs">Loading workflows…</p>
       : <WorkflowList definitions={definitions} busy={busy || workspace.state !== "active"} onReview={(d) => void review(d)} onDeactivate={(d) => void deactivate(d)} />}
     {card && <WorkflowApprovalCard card={card} busy={busy || workspace.state !== "active"} onApprove={() => void approve()} onClose={() => setCard(null)} />}

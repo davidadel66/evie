@@ -21,7 +21,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:377b51c09706fba7741ad0f6f0e9ba8281921ba6b0043b8f9985a5c31966b3c0"
+	StandardPresetVersion                               = "sha256:7f31ed96c814e676d51c7f9288cb0c15bca18352a2dc271d7b3894f3f20f14dd"
+	preWorkflowsStandardPresetVersion                   = "sha256:377b51c09706fba7741ad0f6f0e9ba8281921ba6b0043b8f9985a5c31966b3c0"
 	preReadyStandardPresetVersion                       = "sha256:6566fc2a89af6fb8661b00d2222d49125b9181153ef5a2e97888552221864a54"
 	preMergeStandardPresetVersion                       = "sha256:535755ad0e6b11cadd91edd54db59c8196a3970ff256b3feddac838babc38a72"
 	preBuildStandardPresetVersion                       = "sha256:bfd4eb42705bce9f2ab68b1b0832d224f11b1e5bbb1f0221768188cd2d322d4e"
@@ -725,6 +726,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preReadyStandardPresetVersion {
 		return m.resumePreset(preReadyStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preWorkflowsStandardPresetVersion {
+		return m.resumePreset(preWorkflowsStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -1034,15 +1038,38 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 // search, the standing tier's memory_set_standing and memory_overview, then
 // delegation, its report reader and continuation, then explore delegation
 // (Stage 7, 2026-10-03), then build delegation (Stage 11, 2026-10-03), then
-// the build merge gate (Stage 12, 2026-10-04), and todo_ready after the
-// required Todo Capabilities (Stage 13, 2026-10-04). A later Memory
+// the build merge gate (Stage 12, 2026-10-04), todo_ready after the
+// required Todo Capabilities (Stage 13, 2026-10-04), and the chat's
+// workflow_start and workflow_status (Stage 14 sub-stage 10, 2026-10-04),
+// optional so a disabled Workflows plugin only warns. A later Memory
 // Capability must freeze this Memory list, as
 // preProactiveMemoryCapabilityRequirements does for the version before it.
 func standardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preWorkflowsStandardPresetContent()
+	p.OptionalCapabilities = append(p.OptionalCapabilities,
+		CapabilityRequirement{ID: WorkflowsStartCapabilityID, Compatibility: compatibility},
+		CapabilityRequirement{ID: WorkflowsStatusCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preWorkflowsStandardPresetContent is the content of version 377b51c0…,
+// the standard preset before the chat's workflow tools: everything before
+// todo_ready, then todo_ready.
+func preWorkflowsStandardPresetContent() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preReadyStandardPresetContent()
 	p.RequiredCapabilities = append(p.RequiredCapabilities,
 		CapabilityRequirement{ID: TodoReadyCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preWorkflowsStandardPreset is the standard preset before workflow_start
+// and workflow_status (version 377b51c0…); sessions pinned to it keep their
+// exact tools and prompt.
+func preWorkflowsStandardPreset() Preset {
+	p := preWorkflowsStandardPresetContent()
+	p.Version = preWorkflowsStandardPresetVersion
 	return p
 }
 

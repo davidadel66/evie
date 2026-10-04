@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Workspace } from "../api/contextSessions";
 import {
-  modelCallSpend, parseRunInputs, workflowAPI, workflowRunAPI,
-  type WorkflowAPI, type WorkflowInterruption, type WorkflowRun, type WorkflowRunAPI, type WorkflowRunDetail, type WorkflowRunState,
+  modelCallSpend, parseRunInputs, workerCallSpend, workflowAPI, workflowMapViews, workflowRunAPI,
+  type WorkflowAPI, type WorkflowInterruption, type WorkflowRun, type WorkflowRunAPI, type WorkflowRunDetail, type WorkflowRunState, type WorkflowWorkerCall,
 } from "../api/workflows";
 import { WorkflowInterruptionAnswer } from "./WorkflowInterruptionAnswer";
 
@@ -20,7 +20,10 @@ import { WorkflowInterruptionAnswer } from "./WorkflowInterruptionAnswer";
 // he cancels an unfinished run here: no further step starts, what is in
 // flight finishes (an effect completes or is reconciled first), and the run
 // ends cancelled with its completed steps recorded and its Run Key free. A
-// rerun of a succeeded run shows the override it was started under.
+// rerun of a succeeded run shows the override it was started under. Since
+// sub-stage 10 the view shows each map step's items (index, state,
+// attempts, worker execution, spend) and every worker call, and names a run
+// Evie started from a chat in this Workspace (workflow_start).
 
 const stateLabel: Record<WorkflowRunState, string> = {
   queued: "Queued",
@@ -77,6 +80,34 @@ export function WorkflowRunList({runs, busy, onInspect}: {
   </ul>;
 }
 
+/** Who started a run: the owner from the web or the CLI, or Evie from a chat. */
+function origin(run: WorkflowRun): string {
+  const where = run.surface === "chat" ? "started by Evie in your chat (workflow_start)" : `started from the ${run.surface === "web" ? "web" : "CLI"}`;
+  return `${where}${run.session_id ? ` in session ${run.session_id}` : ""}`;
+}
+
+function dollars(microUSD: number): string {
+  return `$${(microUSD / 1_000_000).toFixed(6)}`;
+}
+
+function budget(ms: number): string {
+  return ms % 60000 === 0 ? `${ms / 60000}m` : ms % 1000 === 0 ? `${ms / 1000}s` : `${ms}ms`;
+}
+
+/** One worker call: which attempt ran which worker, as which execution, and how it ended. */
+function workerLine(c: WorkflowWorkerCall): string {
+  const label = `${c.step}${c.item !== undefined ? ` item ${c.item}` : ""} attempt #${c.attempt_seq}`;
+  let text = `${label}: ${c.worker} worker, ${c.policy} v${c.policy_version} ${c.model}, budget ${budget(c.budget_ms)} / ${c.budget_tokens} tokens`;
+  if (c.execution_id) text += `; execution ${c.execution_id}`;
+  if (c.adopted_from) text += `; took the result of execution ${c.adopted_from}`;
+  if (c.continues) text += `; continued execution ${c.continues} in its worktree`;
+  const spend = workerCallSpend(c);
+  text += c.finished_at
+    ? `; ${c.status ?? "ended"}${c.reason ? ` (${c.reason})` : ""}, ${spend.tokens} tokens${c.usage_complete ? "" : " (counted at least at its budget)"}, ${dollars(spend.microUSD)}`
+    : `; in flight, counted at its budget of ${spend.tokens} tokens`;
+  return text;
+}
+
 function resolutionLine(i: WorkflowInterruption): string {
   const r = i.resolution;
   if (!r) return "";
@@ -112,9 +143,16 @@ export function WorkflowRunView({detail, onClose, busy = false, onAnswer, onCanc
     const s = modelCallSpend(call);
     return {tokens: total.tokens + s.tokens, microUSD: total.microUSD + s.microUSD};
   }, {tokens: 0, microUSD: 0});
+  const workers = detail.workers ?? [];
+  const workerSpend = workers.reduce((total, call) => {
+    const s = workerCallSpend(call);
+    return {tokens: total.tokens + s.tokens, microUSD: total.microUSD + s.microUSD};
+  }, {tokens: 0, microUSD: 0});
+  const maps = workflowMapViews(detail);
+  const steps = detail.attempts.filter((a) => a.item === undefined);
   return <div role="dialog" aria-label={`Run ${run.id}`} className="border-hair bg-app mt-3 rounded-[8px] border p-4 text-xs leading-5">
     <h3 className="text-body mb-2 text-sm font-medium">{run.workflow} version {run.version}: {stateLabel[run.state]}</h3>
-    <p className="text-muted-text">Run <code className="font-mono">{run.id}</code>, started from the {run.surface === "web" ? "web" : "CLI"}{run.session_id ? ` in session ${run.session_id}` : ""}.</p>
+    <p className="text-muted-text">Run <code className="font-mono">{run.id}</code>, {origin(run)}.</p>
     <p className="text-muted-text">Run key <code className="font-mono">{run.run_key}</code></p>
     {override && <p className="text-muted-text">{`Rerun of ${override.rerun_of} under your override via ${override.surface} at ${when(override.recorded_at)}: ${override.reason}`}</p>}
     <p className="text-muted-text">Executable hash <code className="font-mono">{run.executable_hash}</code></p>
@@ -140,8 +178,8 @@ export function WorkflowRunView({detail, onClose, busy = false, onAnswer, onCanc
     </section>
     <section className="mt-3">
       <h4 className="text-body font-medium">Nodes</h4>
-      {detail.attempts.length === 0 ? <p className="text-muted-text">No node has started.</p> : <ol>
-        {detail.attempts.map((a) => <li key={a.seq} className="mt-1">
+      {steps.length === 0 ? <p className="text-muted-text">No node has started.</p> : <ol>
+        {steps.map((a) => <li key={a.seq} className="mt-1">
           <p className={a.state === "failed" || a.state === "interrupted" ? "text-danger" : "text-body"}>
             {`#${a.seq} ${a.step} attempt ${a.attempt}: ${a.state}${a.next ? ` → ${a.next}` : ""}`}
             <span className="text-fainter">{` (from checkpoint ${a.input_checkpoint})`}</span>
@@ -153,6 +191,17 @@ export function WorkflowRunView({detail, onClose, busy = false, onAnswer, onCanc
       </ol>}
       {!finished(run.state) && run.state !== "cancelling" && run.next_step && <p className="text-muted-text mt-1">Next: {run.next_step} from checkpoint {run.checkpoint}.</p>}
     </section>
+    {maps.map((m) => <section key={`${m.step}@${m.checkpoint}`} className="mt-3" aria-label={`Map items of ${m.step}`}>
+      <h4 className="text-body font-medium">{`Map items of ${m.step} (from checkpoint ${m.checkpoint})`}</h4>
+      <ol>{m.items.map((it) => <li key={it.index} className={`${it.state === "failed" || it.state === "interrupted" ? "text-danger" : "text-muted-text"} mt-1`}>
+        {`#${it.index} ${JSON.stringify(it.item)}: ${it.state}${it.attempts > 0 ? `, ${it.attempts} attempt${it.attempts === 1 ? "" : "s"}` : ""}${it.execution ? `, worker execution ${it.execution}` : ""}${it.tokens > 0 ? `, ${it.tokens} tokens, ${dollars(it.microUSD)}` : ""}${it.error ? ` - ${it.error}` : ""}`}
+      </li>)}</ol>
+    </section>)}
+    {workers.length > 0 && <section className="mt-3" aria-label="Workers">
+      <h4 className="text-body font-medium">Workers</h4>
+      <ol>{workers.map((c) => <li key={c.attempt_seq} className="text-muted-text mt-1">{workerLine(c)}</li>)}</ol>
+      <p className="text-muted-text mt-1">{`Worker spend: ${workerSpend.tokens} tokens, ${dollars(workerSpend.microUSD)}`}</p>
+    </section>}
     {interruptions.some((i) => i.resolution) && <section className="mt-3">
       <h4 className="text-body font-medium">Interruptions</h4>
       <ol>{interruptions.filter((i) => i.resolution).map((i) => <li key={i.seq} className="text-muted-text mt-1">{resolutionLine(i)}</li>)}</ol>
@@ -259,7 +308,7 @@ export function WorkspaceWorkflowRuns({workspace, api = workflowRunAPI, definiti
   });
   return <section aria-label="Workflow runs" className="border-hair mt-7 border-b pb-7">
     <h2 className="text-body mb-3 text-sm font-medium">Workflow runs</h2>
-    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Start an active workflow with its inputs. Each run is pinned to the approved version and records every step it takes; a run whose Run Key already ran is shown instead of starting again. Runs keep going if you leave this page, and a run cut short by a restart resumes from its last checkpoint. A run that asks you something waits here until you answer, from this or any later session. Cancelling a run stops its remaining steps; a step already running finishes first. Workflows with agent or map steps cannot run yet.</p>
+    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Start an active workflow with its inputs. Each run is pinned to the approved version and records every step it takes; a run whose Run Key already ran is shown instead of starting again. Runs keep going if you leave this page, and a run cut short by a restart resumes from its last checkpoint. A run that asks you something waits here until you answer, from this or any later session. Cancelling a run stops its remaining steps; a step already running finishes first. Evie can also start an active workflow from a chat in this Workspace; those runs appear here too.</p>
     {workspace.state === "active" && <WorkflowRunStart workflows={active} busy={busy} onStart={(name, inputs) => void start(name, inputs)} />}
     {runs === null ? <p className="text-muted-text text-xs">Loading runs…</p>
       : <WorkflowRunList runs={runs} busy={busy} onInspect={(run) => void inspect(run)} />}

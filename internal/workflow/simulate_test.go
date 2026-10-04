@@ -460,7 +460,8 @@ outputs:
 		t.Fatalf("status %s error %q trace:\n%s", s.Status, s.Error, s.Text())
 	}
 	look := entries(s, "look")[0].Output.(map[string]any)
-	if look["report"] != "## Summary\nIt is a Go project.\n" || look["tokens"] != int64(150000) {
+	// Since sub-stage 10 the output names the report's size, not its text.
+	if _, has := look["report"]; has || look["report_bytes"] != int64(len("## Summary\nIt is a Go project.\n")) || look["tokens"] != int64(150000) {
 		t.Fatalf("worker result = %v", look)
 	}
 	// A value outside the status enum is refused at validation.

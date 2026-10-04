@@ -231,7 +231,10 @@ coordinate nodes, leases, receipts, or recovery themselves.
   branch stays unmerged until the owner merges it through the Stage 12 gate
   from a session, and no `subagents.*` capability can be a capability node.
   Allowing it later needs an amendment that declares the exact repository and
-  target as Standing Authority approved with the definition.
+  target as Standing Authority approved with the definition. (Implemented
+  2026-10-04, sub-stage 10: `propose_build_merge` from a chat of the run's
+  Workspace accepts a finished run's build execution, and the gate's card
+  still needs the owner's approval.)
 - Definitions cannot embed arbitrary Go, Python, JavaScript, shell, templates
   that generate executable code, or dynamically generated graph structure.
 - Workflow-to-workflow invocation, parallel branches, arbitrary graph loops,
@@ -268,7 +271,13 @@ coordinate nodes, leases, receipts, or recovery themselves.
   activates the highlighted schedule.
 - Manual/session start is the first delivery slice. Scheduled start and bounded
   Catch-up Policy follow as a separate slice using the same run-start interface.
-  External event triggers remain a later extension.
+  External event triggers remain a later extension. (Implemented 2026-10-04,
+  sub-stage 10: a chat in a Workspace starts that Workspace's active workflow
+  through the Workflows plugin's `workflow_start`, with every start gate, the
+  chat's live turn proved and origin "chat" recorded, and reads it through
+  `workflow_status`; no model tool proposes, approves, cancels, answers or
+  reconciles. See the sub-stage 10 entry in
+  [workflow-runtime.decisions.md](workflow-runtime.decisions.md).)
 - Foreground and Background Runs share one runtime and persistent state.
   Session disconnect does not cancel a run, and a later session may attach to
   inspect it or answer an interruption.

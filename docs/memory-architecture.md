@@ -629,6 +629,35 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   can merge a build branch. Binding record: the sub-stage 9 entry in
   `cmd/evie/docs/active/workflow-runtime.decisions.md` and the run-owned
   workers entry in `cmd/evie/docs/active/subagents.decisions.md`.
+- **Sub-stage 10 implemented** (2026-10-04). Deep-research ships as a
+  template bundled in the binary (`evie workflows templates`; `evie
+  workflows propose <workspace-id> --template deep-research` proposes it
+  with its bundled dry run, and the owner approves it as any definition).
+  It plans at most four angles, researches each with a research worker,
+  keeps at most twelve claims with sources a researcher fetched, gives each
+  three independent verifiers that vote supported, refuted or
+  insufficient with evidence they fetched (a vote without fetched
+  evidence counts as insufficient), accepts a claim with two supported
+  votes, writes the report from accepted claims only, and checks it:
+  `check_citations@1` keeps only citations of sources a verifier fetched
+  and relied on for an accepted claim, removes other citations, markers
+  and links, and reports each. One pinned model
+  (`deepseek/deepseek-v4.1-flash`), `limits.max_tokens` 6,000,000: at most
+  $7.20 at its catalog price, about $0.70–$1.00 expected; the README gives
+  the manual command for a measured live run. Agent step outputs keep the
+  worker's summary, sources and typed result and name the execution whose
+  report the report store keeps (`evie workflows report`), so checkpoints
+  stay bounded (runtime `/6`; `/5` runs keep full reports). A new
+  Workflows plugin gives chats `workflow_start` (a start of the
+  Workspace's active workflow, through every start gate, proved against
+  the chat's live turn and recorded with origin "chat") and
+  `workflow_status` (bounded, framed status and outputs), with guidance to
+  start deep-research for broad research questions; nothing model-facing
+  proposes, approves, cancels, answers or reconciles. The web run view
+  shows map items and worker calls, and a chat in the run's Workspace can
+  take a finished run's build branch through the Stage 12 gate with the
+  owner's approval. Binding record: the sub-stage 10 entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 
