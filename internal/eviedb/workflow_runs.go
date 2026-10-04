@@ -154,9 +154,10 @@ type WorkflowCheckpoint struct {
 
 // WorkflowRunDetail is a run with its full attempt and checkpoint history,
 // its lease (nil before any runtime claimed it), its recovery events and
-// the compatible provider substitutions the owner approved for it, and
+// the compatible provider substitutions the owner approved for it,
 // (sub-stage 6) its Effect Intents with their unknown outcomes and
-// receipts.
+// receipts, and (sub-stage 7) its interruptions with their resolutions and
+// the model calls of its AI attempts.
 type WorkflowRunDetail struct {
 	Run           WorkflowRun               `json:"run"`
 	Attempts      []WorkflowNodeAttempt     `json:"attempts"`
@@ -165,6 +166,8 @@ type WorkflowRunDetail struct {
 	Events        []WorkflowRunEvent        `json:"events"`
 	Substitutions []WorkflowRunSubstitution `json:"substitutions"`
 	Effects       []WorkflowEffectIntent    `json:"effects"`
+	Interruptions []WorkflowInterruption    `json:"interruptions"`
+	ModelCalls    []WorkflowModelCall       `json:"model_calls"`
 }
 
 // WorkflowRunProgress is what an executor needs to take the next step.
@@ -186,6 +189,17 @@ type WorkflowRunProgress struct {
 	Counted int
 	// InFlight is an attempt recorded but not finished.
 	InFlight *WorkflowNodeAttempt
+	// Question is the latest question asked at the checkpoint's step, with
+	// its answer once given (sub-stage 7). HumanWait is the time the run
+	// spent waiting for answers to its questions, which limits.max_duration
+	// does not count.
+	Question  *WorkflowInterruption
+	HumanWait time.Duration
+	// ModelTokens and ModelMicroUSD are the run's AI spend so far: the
+	// recorded usage of its model calls, and the estimate of each call
+	// whose usage was never recorded (it may have been billed).
+	ModelTokens   int64
+	ModelMicroUSD int64
 }
 
 // workflowNodeAttemptsTable is the node attempt table since sub-stage 4:
@@ -345,7 +359,13 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureWorkflowRunSubstitutionSchema(ctx, db); err != nil {
 		return err
 	}
-	return ensureWorkflowEffectSchema(ctx, db)
+	if err := ensureWorkflowEffectSchema(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureWorkflowInterruptionSchema(ctx, db); err != nil {
+		return err
+	}
+	return ensureWorkflowModelCallSchema(ctx, db)
 }
 
 // WorkflowRunStart is a run the runtime has validated: the exact approved
@@ -650,8 +670,12 @@ func (s *Store) FinishWorkflowAttempt(ctx context.Context, lease WorkflowRunLeas
 	}
 	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, clock time.Time) error {
 		// An effect's attempt ends only with its receipt or as unknown
-		// (FinishWorkflowEffect, MarkWorkflowEffectUnknown).
+		// (FinishWorkflowEffect, MarkWorkflowEffectUnknown), and an AI
+		// attempt with its model call (FinishWorkflowModelCall).
 		if err := requireAttemptEffectResolved(ctx, conn, e.RunID, e.Seq); err != nil {
+			return err
+		}
+		if err := requireAttemptModelCallRecorded(ctx, conn, e.RunID, e.Seq); err != nil {
 			return err
 		}
 		return finishWorkflowAttempt(ctx, conn, lease, e, clock)
@@ -769,8 +793,13 @@ func (s *Store) FailWorkflowRun(ctx context.Context, lease WorkflowRunLease, che
 			return ErrWorkflowRunConflict
 		}
 		// A run whose effect outcome is unknown is reconciled first; it is
-		// never failed past it (sub-stage 6).
+		// never failed past it (sub-stage 6). A run waiting for the owner's
+		// answer is not failed under it either (sub-stage 7): cancellation
+		// withdraws the question first.
 		if err := requireEffectsResolved(ctx, conn, runID); err != nil {
+			return err
+		}
+		if err := requireNoOpenQuestion(ctx, conn, runID); err != nil {
 			return err
 		}
 		now := formatTime(clock)
@@ -838,6 +867,20 @@ func (s *Store) WorkflowRunProgress(ctx context.Context, id string) (WorkflowRun
 	case err == nil:
 		p.InFlight = &a
 	case !errors.Is(err, sql.ErrNoRows):
+		return p, err
+	}
+	asked, err := queryInterruptions(ctx, conn, `i.run_id=? AND i.checkpoint=? AND i.step_id=? AND i.kind='question' ORDER BY i.seq DESC LIMIT 1`,
+		id, p.Checkpoint.Seq, p.Checkpoint.Next)
+	if err != nil {
+		return p, err
+	}
+	if len(asked) > 0 {
+		p.Question = &asked[0]
+	}
+	if p.HumanWait, err = questionWaits(ctx, conn, id); err != nil {
+		return p, err
+	}
+	if p.ModelTokens, p.ModelMicroUSD, err = modelSpend(ctx, conn, id); err != nil {
 		return p, err
 	}
 	return p, nil
@@ -910,7 +953,13 @@ func (s *Store) WorkflowRun(ctx context.Context, id string) (WorkflowRunDetail, 
 	if d.Substitutions, err = workflowRunSubstitutions(ctx, conn, id); err != nil {
 		return d, err
 	}
-	d.Effects, err = workflowEffectIntents(ctx, conn, id)
+	if d.Effects, err = workflowEffectIntents(ctx, conn, id); err != nil {
+		return d, err
+	}
+	if d.Interruptions, err = workflowInterruptions(ctx, conn, id); err != nil {
+		return d, err
+	}
+	d.ModelCalls, err = workflowModelCalls(ctx, conn, id)
 	return d, err
 }
 

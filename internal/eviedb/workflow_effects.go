@@ -676,8 +676,18 @@ type WorkflowEffectUnknownMark struct {
 
 // markUnknown records an intent's outcome unknown and moves its run to
 // needs_reconciliation: due for automatic reconciliation after settle when
-// the provider reconciles, otherwise waiting for the owner.
+// the provider reconciles, otherwise waiting for the owner. In the same
+// transaction the unknown outcome is presented to the owner as an
+// effect_reconciliation interruption (sub-stage 7), which only the
+// intent's receipt closes.
 func markUnknown(ctx context.Context, conn *sql.Conn, lease WorkflowRunLease, i WorkflowEffectIntent, reason string, response json.RawMessage, runError string, now time.Time, settle time.Duration) error {
+	row, err := effectInterruption(i, reason)
+	if err != nil {
+		return err
+	}
+	if _, err := openInterruption(ctx, conn, lease, row, now); err != nil {
+		return err
+	}
 	var resp any
 	if len(response) > 0 {
 		resp = string(response)
@@ -791,7 +801,10 @@ func markOrphanedEffectsUnknown(ctx context.Context, conn *sql.Conn, lease Workf
 // WorkflowEffectResolution reconciles an intent whose outcome is unknown:
 // Outcome succeeded (it happened, Response its output) or failed (it did
 // not), from the provider's reconciliation or the owner (Source), with the
-// evidence and, for the owner, the surface.
+// evidence and, for the owner, the surface and the session the owner
+// answered from, if any. Answer is the owner's answer document as given
+// (sub-stage 7); when empty it is derived from the outcome, evidence and
+// output.
 type WorkflowEffectResolution struct {
 	RunID     string
 	IntentSeq int64
@@ -801,6 +814,8 @@ type WorkflowEffectResolution struct {
 	Source    WorkflowEffectSource
 	Evidence  string
 	Surface   string
+	SessionID memory.SessionID
+	Answer    json.RawMessage
 }
 
 // ResolveWorkflowEffect records, under the run's current lease, the
@@ -808,8 +823,17 @@ type WorkflowEffectResolution struct {
 // Resource Conflict Keys and lets the run continue: it is running again
 // from its latest checkpoint, where the runtime continues from the receipt
 // (the step's output when it happened; a retry within the Retry Policy, or
-// the run's failure, when it did not).
+// the run's failure, when it did not). In the same transaction it closes
+// the intent's effect_reconciliation interruption (sub-stage 7): answered,
+// with the owner's answer, surface and session, or reconciled by the
+// provider, so the reconciliation and the receipt are one record.
 func (s *Store) ResolveWorkflowEffect(ctx context.Context, lease WorkflowRunLease, r WorkflowEffectResolution) (WorkflowRun, error) {
+	if r.Source != WorkflowEffectFromOwner && r.SessionID != "" {
+		return WorkflowRun{}, errors.New("only the owner answers from a session")
+	}
+	if len(r.Answer) > 0 && !validInterruptionJSON(r.Answer) {
+		return WorkflowRun{}, errors.New("a reconciliation's answer is one JSON object")
+	}
 	receipt := WorkflowEffectReceipt{Outcome: r.Outcome, Response: r.Response, Error: r.Error, Source: r.Source, Evidence: r.Evidence,
 		Actor: "runtime", LeaseHolder: lease.Holder, LeaseToken: lease.Token}
 	switch {
@@ -844,6 +868,26 @@ func (s *Store) ResolveWorkflowEffect(ctx context.Context, lease WorkflowRunLeas
 		}
 		if i.State() != WorkflowEffectUnknown || run.State != WorkflowRunNeedsReconciliation {
 			return fmt.Errorf("%w: Effect Intent #%d is %s and the run is %s", ErrWorkflowEffectNotUnknown, i.Seq, i.State(), run.State)
+		}
+		if err := requireWorkspaceSession(ctx, conn, run, r.SessionID); err != nil {
+			return err
+		}
+		interruption, err := effectInterruptionSeq(ctx, conn, lease, i, now)
+		if err != nil {
+			return err
+		}
+		answer := r.Answer
+		if len(answer) == 0 {
+			if answer, err = effectAnswer(r.Outcome, r.Evidence, r.Response); err != nil {
+				return err
+			}
+		}
+		closed := resolutionRow{kind: WorkflowInterruptionReconciled, answer: answer, actor: "runtime"}
+		if r.Source == WorkflowEffectFromOwner {
+			closed = resolutionRow{kind: WorkflowInterruptionAnswered, answer: answer, actor: "owner", surface: r.Surface, session: r.SessionID}
+		}
+		if err := resolveInterruption(ctx, conn, lease, interruption, closed, now); err != nil {
+			return err
 		}
 		if err := insertReceipt(ctx, conn, r.RunID, i.Seq, receipt, now); err != nil {
 			return err

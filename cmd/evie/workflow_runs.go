@@ -19,7 +19,8 @@ import (
 )
 
 // The owner's workflow run commands (Stage 14 sub-stage 3, 2026-10-04;
-// --detach and leases from sub-stage 4; reconcile from sub-stage 6):
+// --detach and leases from sub-stage 4; reconcile from sub-stage 6; answer
+// and interruptions from sub-stage 7):
 //
 //	evie workflows run [--detach] <workspace-id> <name> [--input <name>=<value>]... [--input-json <file>]
 //	evie workflows runs [<workspace-id>] [--workflow <name>]
@@ -129,6 +130,130 @@ func runResultError(res workflowruntime.RunResult) error {
 		return fmt.Errorf("workflow run %s is paused: %s", run.ID, run.Error)
 	case run.State == eviedb.WorkflowRunNeedsReconciliation:
 		return fmt.Errorf("workflow run %s needs reconciliation: %s", run.ID, run.Error)
+	case run.State == eviedb.WorkflowRunWaitingForHuman:
+		for _, i := range res.Run.Interruptions {
+			if i.Open() {
+				return fmt.Errorf("workflow run %s waits for your answer: steps.%s asks: %s; answer with: evie workflows answer %s %s --answer '<JSON object>'",
+					run.ID, i.Step, i.Message, run.ID, i.Step)
+			}
+		}
+		return fmt.Errorf("workflow run %s waits for your answer", run.ID)
+	}
+	return nil
+}
+
+// answerWorkflowInterruption is `evie workflows answer [--json] [--detach]
+// <run-id> <step> --answer <json> | --answer-file <file> [--session
+// <session-id>]` (Stage 14 sub-stage 7): the owner answers the
+// interruption a run waits for at a step, from any later session: a
+// question's typed answer, or an unknown effect's reconciliation
+// ({"outcome": "happened"|"did-not-happen", "evidence": "...", "output":
+// {...}}). --json is the output format, as on every workflows command, so
+// the answer is --answer. The run then continues in the foreground, as
+// `run` does, unless --detach leaves it to a running Evie.
+func answerWorkflowInterruption(ctx context.Context, args []string, out io.Writer, rt workflowCommands) error {
+	usage := errors.New(workflowsUsage)
+	detach := false
+	rest := make([]string, 0, len(args))
+	for _, a := range args {
+		if a == "--detach" {
+			if detach {
+				return usage
+			}
+			detach = true
+			continue
+		}
+		rest = append(rest, a)
+	}
+	a, ok := parseWorkflowArgs(rest, "answer", "answer-file", "session")
+	if !ok || len(a.positional) != 2 {
+		return usage
+	}
+	text, inline := a.flags["answer"]
+	file, fromFile := a.flags["answer-file"]
+	if inline == fromFile {
+		return usage
+	}
+	answer := []byte(text)
+	if fromFile {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+		answer = data
+	}
+	answer = bytes.TrimSpace(answer)
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(answer, &object); err != nil || object == nil {
+		return errors.New("the answer must be one JSON object")
+	}
+	req := workflowruntime.AnswerRequest{RunID: a.positional[0], Step: a.positional[1], Answer: answer, SessionID: memory.SessionID(a.flags["session"]),
+		Detach: detach, Surface: "cli"}
+	d, err := rt.Answer(ctx, req)
+	if err != nil {
+		return err
+	}
+	if a.json {
+		if err := workflowEncoder(out).Encode(d); err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintf(out, "Answered steps.%s of run %s; the answer is recorded with this surface.\n", req.Step, req.RunID)
+		if _, err := io.WriteString(out, workflowruntime.RunText(d)); err != nil {
+			return err
+		}
+		if detach {
+			fmt.Fprintf(out, "Detached: a running Evie (evie serve or the REPL) continues this run; follow it with evie workflows inspect %s\n", req.RunID)
+		}
+	}
+	return runResultError(workflowruntime.RunResult{Run: d})
+}
+
+// listWorkflowInterruptions is `evie workflows interruptions [--json]
+// [--all] [<workspace-id>] [--session <session-id>] [--run <run-id>]`
+// (Stage 14 sub-stage 7): what the owner is asked now, for a Workspace,
+// the session that started a run, or one run; --all includes answered
+// ones.
+func listWorkflowInterruptions(ctx context.Context, args []string, out io.Writer, rt workflowCommands) error {
+	usage := errors.New(workflowsUsage)
+	all := false
+	rest := make([]string, 0, len(args))
+	for _, a := range args {
+		if a == "--all" {
+			if all {
+				return usage
+			}
+			all = true
+			continue
+		}
+		rest = append(rest, a)
+	}
+	a, ok := parseWorkflowArgs(rest, "session", "run")
+	if !ok || len(a.positional) > 1 {
+		return usage
+	}
+	filter := workflowruntime.InterruptionFilter{SessionID: memory.SessionID(a.flags["session"]), RunID: a.flags["run"], All: all}
+	if len(a.positional) == 1 {
+		filter.WorkspaceID = memory.WorkspaceID(a.positional[0])
+	}
+	found, err := rt.Interruptions(ctx, filter)
+	if err != nil {
+		return err
+	}
+	if a.json {
+		return workflowEncoder(out).Encode(struct {
+			Interruptions []eviedb.WorkflowInterruption `json:"interruptions"`
+		}{found})
+	}
+	if len(found) == 0 {
+		_, err := io.WriteString(out, "No open interruptions.\n")
+		return err
+	}
+	for _, i := range found {
+		fmt.Fprintf(out, "Run %s (%s in Workspace %s)\n", i.RunID, i.Workflow, i.WorkspaceID)
+		if _, err := io.WriteString(out, workflowruntime.InterruptionText(i)); err != nil {
+			return err
+		}
 	}
 	return nil
 }

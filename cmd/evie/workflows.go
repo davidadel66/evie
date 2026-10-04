@@ -21,13 +21,17 @@ const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie wor
 	" | evie workflows run [--json] [--detach] <workspace-id> <name> [--input <name>=<value>]... [--input-json <file>]" +
 	" | evie workflows runs [--json] [<workspace-id>] [--workflow <name>] | evie workflows inspect [--json] <run-id>" +
 	" | evie workflows substitute [--json] <run-id> <capability> <version>" +
-	" | evie workflows reconcile [--json] [--detach] <run-id> <step> --outcome happened|did-not-happen [--evidence <text>] [--output-json <file>]"
+	" | evie workflows reconcile [--json] [--detach] <run-id> <step> --outcome happened|did-not-happen [--evidence <text>] [--output-json <file>]" +
+	" | evie workflows answer [--json] [--detach] <run-id> <step> (--answer <json> | --answer-file <file>) [--session <session-id>]" +
+	" | evie workflows interruptions [--json] [--all] [<workspace-id>] [--session <session-id>] [--run <run-id>]"
 
 // workflowActivationCommands need the database and the procedural
 // repository; runWorkflowActivation answers them once both are available
 // (Stage 14 sub-stage 2; run, runs and inspect from sub-stage 3; substitute
-// from sub-stage 5; reconcile from sub-stage 6).
-var workflowActivationCommands = []string{"propose", "list", "show", "diff", "approve", "deactivate", "run", "runs", "inspect", "substitute", "reconcile"}
+// from sub-stage 5; reconcile from sub-stage 6; answer and interruptions
+// from sub-stage 7).
+var workflowActivationCommands = []string{"propose", "list", "show", "diff", "approve", "deactivate", "run", "runs", "inspect", "substitute", "reconcile",
+	"answer", "interruptions"}
 
 // accessNotChecked is printed with a standalone review.
 const accessNotChecked = "Workspace Access is not checked outside a Workspace; evie workflows propose <workspace-id> <dir> checks it.\n"

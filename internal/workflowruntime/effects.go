@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/eviedb"
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/workflow"
 )
@@ -234,7 +235,7 @@ func (r *Runtime) effect(pc *pass, p eviedb.WorkflowRunProgress, step workflow.S
 	switch {
 	case p.Counted >= limits.Attempts:
 		return fail(fmt.Sprintf("steps.%s: the run reached limits.max_attempts %d", step.ID, limits.Attempts))
-	case r.now().Sub(p.Run.CreatedAt) > limits.Duration:
+	case r.elapsed(p) > limits.Duration:
 		return fail(fmt.Sprintf("steps.%s: the run exceeded limits.max_duration %s", step.ID, limits.Duration))
 	}
 	pin, ok := pc.comp.pin(step.Capability)
@@ -646,8 +647,16 @@ func (r *Runtime) reconcileAutomatically(pc *pass, p eviedb.WorkflowRunProgress)
 // provider is not called again), or, when it did not, with a retry only
 // within the step's Retry Policy. Only the owner's CLI and web surfaces
 // reconcile. The run's lease is taken for the write, so a run another
-// runtime is advancing is refused until it stops.
+// runtime is advancing is refused until it stops. Since sub-stage 7 it is
+// the owner's answer to the effect's durable interruption: the same answer
+// Answer records, written with the receipt in one transaction.
 func (r *Runtime) Reconcile(ctx context.Context, req Reconciliation) (eviedb.WorkflowRunDetail, error) {
+	return r.reconcile(ctx, req, "")
+}
+
+// reconcile records the owner's reconciliation, answered from session
+// when one is named.
+func (r *Runtime) reconcile(ctx context.Context, req Reconciliation, session memory.SessionID) (eviedb.WorkflowRunDetail, error) {
 	if !ownerSurface(req.Surface) {
 		return eviedb.WorkflowRunDetail{}, eviedb.ErrWorkflowApprover
 	}
@@ -692,7 +701,7 @@ func (r *Runtime) Reconcile(ctx context.Context, req Reconciliation) (eviedb.Wor
 	case err != nil:
 		return eviedb.WorkflowRunDetail{}, err
 	}
-	resolveErr := r.reconcileClaimed(writes, claim.Lease, req, outcome)
+	resolveErr := r.reconcileClaimed(writes, claim.Lease, req, outcome, session)
 	if err := r.store.ReleaseWorkflowRunLease(writes, claim.Lease, ""); err != nil && !errors.Is(err, eviedb.ErrWorkflowRunLeaseLost) {
 		resolveErr = errors.Join(resolveErr, fmt.Errorf("release workflow run lease: %w", err))
 	}
@@ -706,8 +715,9 @@ func (r *Runtime) Reconcile(ctx context.Context, req Reconciliation) (eviedb.Wor
 	return r.await(ctx, req.RunID)
 }
 
-// reconcileClaimed records the owner's reconciliation under the claim.
-func (r *Runtime) reconcileClaimed(ctx context.Context, lease eviedb.WorkflowRunLease, req Reconciliation, outcome eviedb.WorkflowEffectState) error {
+// reconcileClaimed records the owner's reconciliation under the claim:
+// the receipt, and the answer to the effect's interruption it closes.
+func (r *Runtime) reconcileClaimed(ctx context.Context, lease eviedb.WorkflowRunLease, req Reconciliation, outcome eviedb.WorkflowEffectState, session memory.SessionID) error {
 	refuse := func(format string, args ...any) error {
 		return fmt.Errorf("%w: %s", ErrReconcileRefused, fmt.Sprintf(format, args...))
 	}
@@ -728,7 +738,11 @@ func (r *Runtime) reconcileClaimed(ctx context.Context, lease eviedb.WorkflowRun
 		return refuse("steps.%s of run %s has no Effect Intent whose outcome is unknown", req.Step, req.RunID)
 	}
 	resolution := eviedb.WorkflowEffectResolution{RunID: req.RunID, IntentSeq: intent.Seq, Outcome: outcome, Source: eviedb.WorkflowEffectFromOwner,
-		Evidence: req.Evidence, Surface: req.Surface}
+		Evidence: req.Evidence, Surface: req.Surface, SessionID: session}
+	answer := map[string]any{"outcome": req.Outcome}
+	if req.Evidence != "" {
+		answer["evidence"] = req.Evidence
+	}
 	if outcome == eviedb.WorkflowEffectFailed {
 		resolution.Error = "the owner reconciled it as not having happened"
 	} else {
@@ -749,6 +763,10 @@ func (r *Runtime) reconcileClaimed(ctx context.Context, lease eviedb.WorkflowRun
 		if resolution.Response, err = workflow.EncodeValue(value); err != nil {
 			return err
 		}
+		answer["output"] = value
+	}
+	if resolution.Answer, err = workflow.EncodeValue(answer); err != nil {
+		return err
 	}
 	_, err = r.store.ResolveWorkflowEffect(ctx, lease, resolution)
 	return err

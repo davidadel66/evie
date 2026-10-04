@@ -1,0 +1,2 @@
+{"inputs": {"receipt_id": "r-1", "receipt_text": "TOTAL DUE 12.00", "people": 3, "tip_cents": 300},
+ "steps": {"read": {"output": {"total_cents": 1200, "confidence": "high"}, "tokens": 120}}}

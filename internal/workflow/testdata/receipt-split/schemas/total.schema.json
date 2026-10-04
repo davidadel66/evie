@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["total_cents", "confidence"],
+  "properties": {
+    "total_cents": {"type": "integer", "minimum": 0, "maximum": 10000000},
+    "confidence": {"type": "string", "enum": ["high", "low"]}
+  }
+}

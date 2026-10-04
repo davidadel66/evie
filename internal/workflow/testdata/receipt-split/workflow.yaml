@@ -1,0 +1,114 @@
+# Read a receipt's total with an AI step, confirm a low-confidence reading
+# with the owner, and split the total evenly. It exercises AI steps and
+# durable interruptions (Stage 14 sub-stage 7): the AI step proposes typed
+# data from the receipt text it declares, a branch routes on the proposal,
+# the owner answers a typed question, and deterministic steps do the
+# arithmetic on the validated values.
+schema_version: 1
+name: receipt-split
+description: Read a receipt's total, confirm it when unsure, and split it evenly.
+
+inputs:
+  receipt_id:
+    type: string
+    required: true
+    max_length: 64
+  receipt_text:
+    type: string
+    required: true
+    max_length: 4000
+    sensitive: true
+  people:
+    type: integer
+    required: true
+    minimum: 1
+    maximum: 100
+  tip_cents:
+    type: integer
+    default: 0
+    minimum: 0
+
+run_key:
+  inputs: [receipt_id]
+
+model_policies:
+  reader:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0
+    max_output_tokens: 500
+
+limits:
+  max_duration: 30m
+  max_attempts: 10
+  max_parallel: 1
+  max_tokens: 20000
+
+retention:
+  classification: sensitive
+
+start: tip
+
+steps:
+  - id: tip
+    kind: deterministic
+    description: Split the tip; the AI step never sees it.
+    function: split_evenly@1
+    input:
+      total: $inputs.tip_cents
+      parts: $inputs.people
+    next: read
+
+  - id: read
+    kind: ai
+    description: Propose the receipt's total in cents from its text.
+    model_policy: reader
+    prompt: prompts/read.md
+    input:
+      text: $inputs.receipt_text
+    output_schema: schemas/total.schema.json
+    retry:
+      max_attempts: 3
+      backoff: 1s
+    next: sure
+
+  - id: sure
+    kind: branch
+    cases:
+      - when:
+          ref: $steps.read.output.confidence
+          op: eq
+          value: low
+        next: confirm
+    default: split
+
+  - id: confirm
+    kind: interrupt
+    message: Evie read this receipt's total with low confidence. Reply with the total in cents.
+    input:
+      receipt_id: $inputs.receipt_id
+      proposed_total_cents: $steps.read.output.total_cents
+    response_schema: schemas/confirm.schema.json
+    next: split_confirmed
+
+  - id: split
+    kind: deterministic
+    function: split_evenly@1
+    input:
+      total: $steps.read.output.total_cents
+      parts: $inputs.people
+
+  - id: split_confirmed
+    kind: deterministic
+    function: split_evenly@1
+    input:
+      total: $steps.confirm.output.total_cents
+      parts: $inputs.people
+
+outputs:
+  proposed_total_cents: $steps.read.output.total_cents
+  confirmed_total_cents: $steps.confirm.output.total_cents
+  shares: $steps.split.output.shares
+  confirmed_shares: $steps.split_confirmed.output.shares
+  tip_shares: $steps.tip.output.shares

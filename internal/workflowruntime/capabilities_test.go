@@ -755,36 +755,40 @@ func TestWorkflowCapabilityUnavailableProviderPausesAndResumes(t *testing.T) {
 }
 
 // Runs recorded by earlier runtimes keep their shapes: a run pinned to
-// evie.workflow.runtime/1 (sub-stages 3 and 4, no providers) resumes under
-// this runtime, which declares it compatible.
+// evie.workflow.runtime/1 (sub-stages 3 and 4, no providers), /2
+// (sub-stage 5) or /3 (sub-stage 6) resumes under this runtime, which
+// declares each compatible.
 func TestWorkflowRunsOfEarlierRuntimeShapesStillResume(t *testing.T) {
 	ctx := context.Background()
 	h := newLeaseHarness(t)
 	w, a := h.approveSplitBill(splitBillDir)
-	inputs, _ := json.Marshal(map[string]any{"bill_id": "dinner-1", "total_cents": 1000, "people": 3})
 	v, err := workflow.Validate(workflow.DirSource{Dir: splitBillDir}, workflow.Environment{Workers: ceiling})
 	if err != nil {
 		t.Fatal(err)
 	}
-	accepted, err := v.AcceptInputs(map[string]json.RawMessage{"bill_id": json.RawMessage(`"dinner-1"`), "total_cents": json.RawMessage(`1000`), "people": json.RawMessage(`3`)}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	old, _, err := h.store.StartWorkflowRun(ctx, eviedb.WorkflowRunStart{
-		WorkspaceID: w.ID, Workflow: a.Name, Version: a.Version, ExecutableHash: a.ExecutableHash, AuthorityHash: a.AuthorityHash,
-		Composition: json.RawMessage(`{"runtime":"evie.workflow.runtime/1","step_kinds":["branch","deterministic"],"functions":["split_evenly@1"]}`),
-		RunKey:      v.RunKey(accepted), Inputs: inputs, Start: "split", Surface: "cli",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := h.process()
-	stop := p.rt.Start(ctx)
-	eventually(t, "the earlier run to finish", func() bool { return h.state(old.ID).Terminal() })
-	if err := stop(); err != nil {
-		t.Fatal(err)
-	}
-	if d := h.inspect(old.ID); d.Run.State != eviedb.WorkflowRunSucceeded || !reflect.DeepEqual(decoded(t, d.Run.Outputs), dinnerOutputs) || len(d.Events) != 0 {
-		t.Fatalf("earlier run = %+v events %+v", d.Run, d.Events)
+	for i, runtime := range []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", "evie.workflow.runtime/3"} {
+		bill := fmt.Sprintf("dinner-%d", i+1)
+		inputs, _ := json.Marshal(map[string]any{"bill_id": bill, "total_cents": 1000, "people": 3})
+		accepted, err := v.AcceptInputs(map[string]json.RawMessage{"bill_id": json.RawMessage(fmt.Sprintf("%q", bill)), "total_cents": json.RawMessage(`1000`), "people": json.RawMessage(`3`)}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		old, _, err := h.store.StartWorkflowRun(ctx, eviedb.WorkflowRunStart{
+			WorkspaceID: w.ID, Workflow: a.Name, Version: a.Version, ExecutableHash: a.ExecutableHash, AuthorityHash: a.AuthorityHash,
+			Composition: json.RawMessage(`{"runtime":"` + runtime + `","step_kinds":["branch","deterministic"],"functions":["split_evenly@1"]}`),
+			RunKey:      v.RunKey(accepted), Inputs: inputs, Start: "split", Surface: "cli",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := h.process()
+		stop := p.rt.Start(ctx)
+		eventually(t, "the earlier run to finish", func() bool { return h.state(old.ID).Terminal() })
+		if err := stop(); err != nil {
+			t.Fatal(err)
+		}
+		if d := h.inspect(old.ID); d.Run.State != eviedb.WorkflowRunSucceeded || !reflect.DeepEqual(decoded(t, d.Run.Outputs), dinnerOutputs) || len(d.Events) != 0 {
+			t.Fatalf("%s run = %+v events %+v", runtime, d.Run, d.Events)
+		}
 	}
 }

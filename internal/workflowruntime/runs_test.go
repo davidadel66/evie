@@ -402,27 +402,21 @@ func readFile(t *testing.T, path string) string {
 }
 
 // A definition with steps this runtime cannot execute yet is refused at
-// start, before anything is recorded; it is never partly executed.
+// start, before anything is recorded; it is never partly executed. AI
+// steps and interruptions run since sub-stage 7; agent and map steps wait
+// for sub-stage 9.
 func TestWorkflowRunRefusesStepKindsThisRuntimeCannotRunYet(t *testing.T) {
 	ctx := context.Background()
 	h := newRunHarness(t)
-	notes := h.workspace("notebook:inbox", "notebook:digest")
-	h.approve(h.propose(notes.ID, filepath.Join(testdata, "notes-digest"), fixtures(t, notesFixtures)))
-	_, err := h.rt.StartRun(ctx, RunRequest{WorkspaceID: notes.ID, Workflow: "notes-digest", TextInputs: map[string]string{"day": "2026-10-05"}, Surface: "cli"})
-	// Capability reads run since sub-stage 5 and effects since sub-stage
-	// 6; its AI step and interruption wait for sub-stage 7.
-	var unsupported *UnsupportedStepsError
-	if !errors.Is(err, ErrUnsupportedSteps) || !errors.As(err, &unsupported) || !reflect.DeepEqual(unsupported.Kinds, []string{"ai", "interrupt"}) ||
-		!strings.Contains(err.Error(), "not yet supported in this runtime version") {
-		t.Fatalf("notes-digest: %v", err)
-	}
 	research := h.workspace()
 	if _, err := h.store.SetWorkspaceResearch(ctx, research.ID, research.CurrentRevisionID, true); err != nil {
 		t.Fatal(err)
 	}
 	h.approve(h.propose(research.ID, filepath.Join(testdata, "deep-research"), deepResearchFixtures(t)))
-	_, err = h.rt.StartRun(ctx, RunRequest{WorkspaceID: research.ID, Workflow: "deep-research", TextInputs: map[string]string{"question": "Is it?"}, Surface: "cli"})
-	if !errors.As(err, &unsupported) || !reflect.DeepEqual(unsupported.Kinds, []string{"agent", "ai", "map"}) {
+	_, err := h.rt.StartRun(ctx, RunRequest{WorkspaceID: research.ID, Workflow: "deep-research", TextInputs: map[string]string{"question": "Is it?"}, Surface: "cli"})
+	var unsupported *UnsupportedStepsError
+	if !errors.Is(err, ErrUnsupportedSteps) || !errors.As(err, &unsupported) || !reflect.DeepEqual(unsupported.Kinds, []string{"agent", "map"}) ||
+		!strings.Contains(err.Error(), "not yet supported in this runtime version") {
 		t.Fatalf("deep-research: %v", err)
 	}
 	if runs, err := h.rt.ListRuns(ctx, RunFilter{}); err != nil || len(runs) != 0 {

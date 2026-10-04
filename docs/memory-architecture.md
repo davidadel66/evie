@@ -541,6 +541,36 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   candidates cannot prove what one request did, so the protocol is tested
   with fakes. Binding record: the sub-stage 6 entry in
   `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Sub-stage 7 implemented** (2026-10-04). Interrupt steps record a
+  durable typed question (message, declared input, answer schema, the
+  run's originating session) and the run waits `waiting_for_human` with no
+  lease. No scheduler resumes it, and nothing pauses, fails or advances it
+  meanwhile. Any later session answers through `evie workflows answer
+  <run> <step> --answer <json>` or `POST /api/workflows/answer`, or from
+  the Workspace home's run view. The answer is checked against the step's
+  schema, recorded once with its surface and session, and checked again
+  before the graph advances. `evie workflows interruptions` and `POST
+  /api/workflows/interruptions` list what is waiting by Workspace,
+  session or run. Waiting for an answer does not count toward
+  `limits.max_duration`. An effect whose outcome is unknown opens an
+  `effect_reconciliation` interruption. Answering it and `evie workflows
+  reconcile` record the same answer with the Effect Receipt in one
+  transaction; the run state stays `needs_reconciliation`. AI steps send
+  their pinned model (exact provider, model and parameters of a versioned
+  Model Policy) only the reviewed prompt and the declared input fields,
+  framed as data with the output schema. They send no tools, transcript,
+  memory or credentials, which a capturing fake proves byte for byte. The
+  answer must be one JSON object inside the schema; malformed ones retry
+  within the Retry Policy. Transport failures that generated nothing retry
+  at most twice. Each attempt records its model call before the call and
+  its tokens and cost after, and the run's `limits.max_tokens` bounds its
+  AI spend (not sent, or failed, visibly). A crash mid-call reruns the
+  step and counts the lost call at its estimate. AI steps need
+  `EVIE_WORKFLOW_REMOTE_MODELS=on` with `OPENROUTER_API_KEY`: without it a
+  start is refused and a running run pauses before an AI step. Runs pin
+  `evie.workflow.runtime/4`; `/1`–`/3` stay compatible; agent and map
+  steps wait for sub-stage 9. Binding record: the sub-stage 7 entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 

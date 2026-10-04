@@ -408,6 +408,11 @@ func (v *validator) checkPolicies() {
 			v.add(p+".model", "%q is not an exact model id such as vendor/model-1.2", m.Model)
 		case strings.HasSuffix(strings.ToLower(m.Model), "latest"):
 			v.add(p+".model", "%s is a floating alias; pin an exact model version", m.Model)
+		case strings.HasPrefix(strings.ToLower(m.Model), "openrouter/"):
+			// Sub-stage 7: OpenRouter's routers choose a model per request.
+			v.add(p+".model", "%s routes each request to a model of its choosing; name an exact model", m.Model)
+		case strings.HasSuffix(strings.ToLower(m.Model), ":batch"):
+			v.add(p+".model", "%s needs OpenRouter's asynchronous Batch API, which AI steps do not use; name an exact model without :batch", m.Model)
 		}
 		if m.Temperature != nil && (*m.Temperature < 0 || *m.Temperature > 2) {
 			v.add(p+".temperature", "%s is outside 0 to 2", formatNumber(*m.Temperature))

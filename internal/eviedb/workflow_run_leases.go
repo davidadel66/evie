@@ -224,13 +224,16 @@ func validLeaseRequest(holder string, d time.Duration) error {
 	return nil
 }
 
-// schedulable reports the states a runtime claims and advances: queued and
-// running runs, runs paused waiting for a dependency, which are checked
-// again at their recheck time, and (sub-stage 6) runs that need
-// reconciliation, which a runtime claims to reconcile them automatically
-// or to record the owner's reconciliation.
+// schedulable reports the states a runtime may claim: queued and running
+// runs, runs paused waiting for a dependency, which are checked again at
+// their recheck time, (sub-stage 6) runs that need reconciliation, which a
+// runtime claims to reconcile them automatically or to record the owner's
+// reconciliation, and (sub-stage 7) runs waiting for a human, which only
+// the owner's answering surface claims, to record the answer:
+// DueWorkflowRuns never lists them, so no scheduler resumes them.
 func schedulable(state WorkflowRunState) bool {
-	return state == WorkflowRunQueued || state == WorkflowRunRunning || state == WorkflowRunWaitingForDependency || state == WorkflowRunNeedsReconciliation
+	return state == WorkflowRunQueued || state == WorkflowRunRunning || state == WorkflowRunWaitingForDependency || state == WorkflowRunNeedsReconciliation ||
+		state == WorkflowRunWaitingForHuman
 }
 
 // AcquireWorkflowRunLease claims a run for holder for d. It refuses a
@@ -337,7 +340,13 @@ func (s *Store) AcquireWorkflowRunLease(ctx context.Context, runID, holder strin
 		// effect protocol) leaves its outcome unknown: the run needs
 		// reconciliation before anything else (sub-stage 6), never the
 		// interruption's rerun.
-		return markOrphanedEffectsUnknown(ctx, conn, lease, now)
+		if err := markOrphanedEffectsUnknown(ctx, conn, lease, now); err != nil {
+			return err
+		}
+		// Every unknown outcome is presented to the owner as an
+		// interruption (sub-stage 7), including one an earlier Evie
+		// recorded without it.
+		return ensureEffectInterruptions(ctx, conn, lease, now)
 	})
 	if err != nil {
 		return WorkflowRunClaim{}, err
@@ -451,6 +460,11 @@ func (s *Store) PauseWorkflowRun(ctx context.Context, lease WorkflowRunLease, re
 		}
 		if run.State == WorkflowRunNeedsReconciliation {
 			return fmt.Errorf("%w: the run needs reconciliation", ErrWorkflowRunConflict)
+		}
+		// A run waiting for the owner's answer stays waiting: a pause would
+		// resume by itself (ADR 0029, sub-stage 7).
+		if err := requireNoOpenQuestion(ctx, conn, lease.RunID); err != nil {
+			return err
 		}
 		if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET state='waiting_for_dependency',error=?,not_before=?,updated_at=? WHERE id=?`,
 			reason, formatLeaseTime(now.Add(recheck)), formatTime(now), lease.RunID); err != nil {

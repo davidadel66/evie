@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Workspace } from "../api/contextSessions";
 import {
-  parseRunInputs, workflowAPI, workflowRunAPI,
-  type WorkflowAPI, type WorkflowRun, type WorkflowRunAPI, type WorkflowRunDetail, type WorkflowRunState,
+  modelCallSpend, parseRunInputs, workflowAPI, workflowRunAPI,
+  type WorkflowAPI, type WorkflowInterruption, type WorkflowRun, type WorkflowRunAPI, type WorkflowRunDetail, type WorkflowRunState,
 } from "../api/workflows";
+import { WorkflowInterruptionAnswer } from "./WorkflowInterruptionAnswer";
 
 // Runs of this Workspace's workflows (Stage 14 sub-stage 3). David starts a
 // run of an active workflow with its inputs; Evie executes its deterministic
@@ -13,6 +14,9 @@ import {
 // refused until the runtime supports them. Since sub-stage 4 a run survives
 // restarts: one Evie process at a time advances it under a fenced lease, a
 // paused run shows why, and inspection lists its lease and recovery events.
+// Since sub-stage 7 a run may wait for David's answer to a question, or to
+// an effect whose outcome is unknown; he answers it here, from any later
+// session, and AI steps show their model calls and spend.
 
 const stateLabel: Record<WorkflowRunState, string> = {
   queued: "Queued",
@@ -64,8 +68,28 @@ export function WorkflowRunList({runs, busy, onInspect}: {
   </ul>;
 }
 
-export function WorkflowRunView({detail, onClose}: {detail: WorkflowRunDetail; onClose: () => void}) {
+function resolutionLine(i: WorkflowInterruption): string {
+  const r = i.resolution;
+  if (!r) return "";
+  const who = r.kind === "answered" ? `answered via ${r.surface}${r.session_id ? ` from session ${r.session_id}` : ""}`
+    : r.kind === "reconciled" ? "settled by the provider's reconciliation" : "withdrawn";
+  return `Interruption #${i.seq} at ${i.step}: ${who}${r.answer ? `: ${JSON.stringify(r.answer)}` : ""}`;
+}
+
+export function WorkflowRunView({detail, onClose, busy = false, onAnswer}: {
+  detail: WorkflowRunDetail;
+  onClose: () => void;
+  busy?: boolean;
+  onAnswer?: (step: string, answer: Record<string, unknown>) => void;
+}) {
   const run = detail.run;
+  const interruptions = detail.interruptions ?? [];
+  const open = interruptions.filter((i) => !i.resolution);
+  const calls = detail.model_calls ?? [];
+  const spend = calls.reduce((total, call) => {
+    const s = modelCallSpend(call);
+    return {tokens: total.tokens + s.tokens, microUSD: total.microUSD + s.microUSD};
+  }, {tokens: 0, microUSD: 0});
   return <div role="dialog" aria-label={`Run ${run.id}`} className="border-hair bg-app mt-3 rounded-[8px] border p-4 text-xs leading-5">
     <h3 className="text-body mb-2 text-sm font-medium">{run.workflow} version {run.version}: {stateLabel[run.state]}</h3>
     <p className="text-muted-text">Run <code className="font-mono">{run.id}</code>, started from the {run.surface === "web" ? "web" : "CLI"}{run.session_id ? ` in session ${run.session_id}` : ""}.</p>
@@ -76,6 +100,12 @@ export function WorkflowRunView({detail, onClose}: {detail: WorkflowRunDetail; o
       ? <p role="status" className="text-muted-text mt-2">{reason(run)}{run.not_before ? ` Checked again after ${when(run.not_before)}.` : ""}</p>
       : <p role="alert" className="text-danger mt-2">{run.error}</p>)}
     {run.not_before && !paused(run) && !["succeeded", "failed", "cancelled"].includes(run.state) && <p className="text-muted-text">Retry not before {when(run.not_before)}.</p>}
+    {open.length > 0 && <section className="mt-3" aria-label="Waiting for you">
+      <h4 className="text-body font-medium">Waiting for you</h4>
+      {open.map((i) => onAnswer
+        ? <WorkflowInterruptionAnswer key={i.seq} interruption={i} busy={busy} onAnswer={onAnswer} />
+        : <p key={i.seq} className="text-muted-text">{i.message}</p>)}
+    </section>}
     {detail.lease && <p className="text-muted-text">{detail.lease.released_at
       ? `Lease released by ${detail.lease.holder} (lease ${detail.lease.token}) at ${when(detail.lease.released_at)}; last heartbeat ${when(detail.lease.heartbeat_at)}.`
       : `Lease held by ${detail.lease.holder} (lease ${detail.lease.token}) until ${when(detail.lease.expires_at)}; last heartbeat ${when(detail.lease.heartbeat_at)}.`}</p>}
@@ -98,6 +128,17 @@ export function WorkflowRunView({detail, onClose}: {detail: WorkflowRunDetail; o
       </ol>}
       {!["succeeded", "failed", "cancelled"].includes(run.state) && run.next_step && <p className="text-muted-text mt-1">Next: {run.next_step} from checkpoint {run.checkpoint}.</p>}
     </section>
+    {interruptions.some((i) => i.resolution) && <section className="mt-3">
+      <h4 className="text-body font-medium">Interruptions</h4>
+      <ol>{interruptions.filter((i) => i.resolution).map((i) => <li key={i.seq} className="text-muted-text mt-1">{resolutionLine(i)}</li>)}</ol>
+    </section>}
+    {calls.length > 0 && <section className="mt-3">
+      <h4 className="text-body font-medium">Model calls</h4>
+      <ol>{calls.map((c) => <li key={c.attempt_seq} className="text-muted-text mt-1">
+        {`${c.step} attempt #${c.attempt_seq}: ${c.policy} v${c.policy_version} ${c.model}, ${modelCallSpend(c).tokens} tokens${c.finished_at ? "" : " (estimated: it may have been billed)"}${c.error ? `; ${c.error}` : ""}`}
+      </li>)}</ol>
+      <p className="text-muted-text mt-1">{`AI spend: ${spend.tokens} tokens, $${(spend.microUSD / 1_000_000).toFixed(6)}`}</p>
+    </section>}
     {run.outputs && <section className="mt-3">
       <h4 className="text-body font-medium">Outputs</h4>
       <pre className="font-mono whitespace-pre-wrap">{json(run.outputs)}</pre>
@@ -175,13 +216,20 @@ export function WorkspaceWorkflowRuns({workspace, api = workflowRunAPI, definiti
     setDetail(await api.inspect(run.id));
     return "";
   });
+  const answer = (step: string, value: Record<string, unknown>) => act(async () => {
+    if (!detail) return "";
+    const answered = await api.answer(detail.run.id, step, value);
+    setDetail(answered);
+    await refresh();
+    return `Answered ${step}; the run is ${stateLabel[answered.run.state].toLowerCase()}.`;
+  });
   return <section aria-label="Workflow runs" className="border-hair mt-7 border-b pb-7">
     <h2 className="text-body mb-3 text-sm font-medium">Workflow runs</h2>
-    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Start an active workflow with its inputs. Each run is pinned to the approved version and records every step it takes; a run whose Run Key already ran is shown instead of starting again. Runs keep going if you leave this page, and a run cut short by a restart resumes from its last checkpoint. Workflows with AI, agent, map, capability or interruption steps cannot run yet.</p>
+    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Start an active workflow with its inputs. Each run is pinned to the approved version and records every step it takes; a run whose Run Key already ran is shown instead of starting again. Runs keep going if you leave this page, and a run cut short by a restart resumes from its last checkpoint. A run that asks you something waits here until you answer, from this or any later session. Workflows with agent or map steps cannot run yet.</p>
     {workspace.state === "active" && <WorkflowRunStart workflows={active} busy={busy} onStart={(name, inputs) => void start(name, inputs)} />}
     {runs === null ? <p className="text-muted-text text-xs">Loading runs…</p>
       : <WorkflowRunList runs={runs} busy={busy} onInspect={(run) => void inspect(run)} />}
-    {detail && <WorkflowRunView detail={detail} onClose={() => setDetail(null)} />}
+    {detail && <WorkflowRunView detail={detail} busy={busy} onAnswer={(step, value) => void answer(step, value)} onClose={() => setDetail(null)} />}
     <p role="status" className="text-muted-text mt-2 text-xs">{busy ? "Working…" : message}</p>
     {problem && <p role="alert" className="text-danger mt-2 text-xs">{problem}</p>}
   </section>;

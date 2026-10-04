@@ -109,4 +109,10 @@ func TestWorkflowWebReconcilesAnUnknownEffect(t *testing.T) {
 	if r == nil || r.Source != eviedb.WorkflowEffectFromOwner || r.Surface != "web" || r.Evidence != "the statement shows entry-1" {
 		t.Fatalf("receipt = %+v", r)
 	}
+	// The reconciliation is the answer to the effect's interruption
+	// (sub-stage 7), recorded with the receipt.
+	if len(detail.Interruptions) != 1 || detail.Interruptions[0].Resolution == nil || detail.Interruptions[0].Resolution.Surface != "web" ||
+		string(detail.Interruptions[0].Resolution.Answer) != `{"evidence":"the statement shows entry-1","outcome":"happened","output":{"balance_cents":250,"entry_id":"entry-1"}}` {
+		t.Fatalf("interruptions = %+v", detail.Interruptions)
+	}
 }

@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["total_cents"],
+  "properties": {
+    "total_cents": {"type": "integer", "minimum": 0, "maximum": 10000000},
+    "note": {"type": "string", "maxLength": 500}
+  }
+}

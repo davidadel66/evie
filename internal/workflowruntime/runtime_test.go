@@ -41,8 +41,11 @@ type harness struct {
 	// configures each runtime's scheduler and leases.
 	clock     *testClock
 	scheduler SchedulerConfig
-	// providers are every runtime's capability providers.
+	// providers are every runtime's capability providers; models (with
+	// modelsOff when nil) every runtime's model provider (sub-stage 7).
 	providers CapabilityProviders
+	models    Models
+	modelsOff string
 }
 
 func newHarness(t *testing.T) *harness {
@@ -70,7 +73,7 @@ func (h *harness) runtime() *Runtime {
 
 func (h *harness) runtimeWith(providers CapabilityProviders) *Runtime {
 	h.t.Helper()
-	rt, err := New(Config{Store: h.store, Repo: h.repo, Capabilities: providers, Workers: ceiling, Scheduler: h.scheduler})
+	rt, err := New(Config{Store: h.store, Repo: h.repo, Capabilities: providers, Workers: ceiling, Scheduler: h.scheduler, Models: h.models, ModelsOff: h.modelsOff})
 	if err != nil {
 		h.t.Fatal(err)
 	}

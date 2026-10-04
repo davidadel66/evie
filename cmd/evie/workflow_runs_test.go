@@ -126,8 +126,10 @@ func TestWorkflowCLIRunFailuresAndRefusals(t *testing.T) {
 	card := c.mustRun("workflows", "propose", string(notes.ID), notesDigestDir, "--fixtures", writeNotesFixtures(t))
 	m := approveLine.FindStringSubmatch(card)
 	c.mustRun("workflows", "approve", m[1], "--hash", m[2], "--authority", m[3], "--expect-version", m[4])
-	if _, err := c.run("workflows", "run", string(notes.ID), "notes-digest", "--input", "day=2026-10-05"); err == nil || !strings.Contains(err.Error(), "not yet supported in this runtime version") {
-		t.Fatalf("unsupported steps: %v", err)
+	// Its AI step needs remote workflow models, which this Evie has off
+	// (Stage 14 sub-stage 7).
+	if _, err := c.run("workflows", "run", string(notes.ID), "notes-digest", "--input", "day=2026-10-05"); err == nil || !strings.Contains(err.Error(), "runs AI steps, which are unavailable") {
+		t.Fatalf("AI steps without remote models: %v", err)
 	}
 	if listed := c.mustRun("workflows", "runs", string(notes.ID)); !strings.Contains(listed, "No workflow runs") {
 		t.Fatalf("refused start recorded a run:\n%s", listed)

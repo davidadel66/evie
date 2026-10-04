@@ -43,9 +43,11 @@ import (
 // capability reads through pinned providers and stops counting interrupted
 // attempts against a step's Retry Policy; version 3 (sub-stage 6) adds
 // capability effects through the effect protocol, Outcome Unknown and
-// reconciliation, so an Evie without them pauses such a run as
-// incompatible instead of running it.
-const RuntimeVersion = "evie.workflow.runtime/3"
+// reconciliation; version 4 (sub-stage 7) adds AI steps through pinned
+// Model Policies and durable interruptions, and presents unknown effects
+// as interruptions. An Evie without a version's semantics pauses such a
+// run as incompatible instead of running it.
+const RuntimeVersion = "evie.workflow.runtime/4"
 
 // compatibleRuntimes are the pinned runtimes this runtime declares it can
 // continue (ADR 0025). Runs pinned to evie.workflow.runtime/1 (sub-stages 3
@@ -55,12 +57,18 @@ const RuntimeVersion = "evie.workflow.runtime/3"
 // checkpoint and never changes a recorded output. Runs pinned to
 // evie.workflow.runtime/2 (sub-stage 5) were refused any effect at start,
 // so they hold only those steps and capability reads, whose semantics are
-// unchanged. A run pinned to any other runtime pauses visibly.
-var compatibleRuntimes = []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", RuntimeVersion}
+// unchanged. Runs pinned to evie.workflow.runtime/3 (sub-stage 6) were
+// refused AI steps and interruptions at start; their effects keep the same
+// protocol, and an unknown outcome is now also presented to the owner as
+// an interruption whose answer is the same reconciliation record. A run
+// pinned to any other runtime pauses visibly.
+var compatibleRuntimes = []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", "evie.workflow.runtime/3", RuntimeVersion}
 
 // executableKinds are the step kinds this runtime version executes:
-// capability reads and, since sub-stage 6, capability effects.
-var executableKinds = []string{workflow.KindBranch, workflow.KindCapability, workflow.KindDeterministic}
+// capability reads and, since sub-stage 6, capability effects; since
+// sub-stage 7, AI steps and interruptions. Agent and map steps wait for
+// sub-stage 9.
+var executableKinds = []string{workflow.KindAI, workflow.KindBranch, workflow.KindCapability, workflow.KindDeterministic, workflow.KindInterrupt}
 
 var (
 	// ErrUnsupportedSteps refuses a definition with steps this runtime
@@ -81,7 +89,7 @@ type UnsupportedStepsError struct {
 }
 
 func (e *UnsupportedStepsError) Error() string {
-	return fmt.Sprintf("workflow %s uses %s steps, not yet supported in this runtime version (it runs deterministic, branch and capability steps); no run was started",
+	return fmt.Sprintf("workflow %s uses %s steps, not yet supported in this runtime version (it runs deterministic, branch, capability, AI and interruption steps); no run was started",
 		e.Workflow, strings.Join(e.Kinds, ", "))
 }
 
@@ -125,6 +133,9 @@ type composition struct {
 	StepKinds []string         `json:"step_kinds"`
 	Functions []string         `json:"functions"`
 	Providers []pinnedProvider `json:"providers,omitempty"`
+	// Models are the Model Policies its AI steps use (sub-stage 7), each
+	// with its exact provider, model and parameters (ADR 0019).
+	Models []workflow.PolicyReport `json:"model_policies,omitempty"`
 }
 
 type preparedRun struct {
@@ -198,6 +209,9 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 		slices.Sort(unsupported)
 		return preparedRun{}, &UnsupportedStepsError{Workflow: a.Name, Kinds: unsupported}
 	}
+	if r.models == nil && hasAISteps(v) {
+		return preparedRun{}, &ModelsUnavailableError{Workflow: a.Name, Reason: r.modelsOff}
+	}
 	inputs, err := v.AcceptInputs(req.Inputs, req.TextInputs)
 	if err != nil {
 		return preparedRun{}, fmt.Errorf("%w: %v", ErrRunInput, err)
@@ -210,7 +224,7 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	if err != nil {
 		return preparedRun{}, err
 	}
-	pinned, err := json.Marshal(composition{Runtime: RuntimeVersion, StepKinds: kinds, Functions: v.Functions(), Providers: providers})
+	pinned, err := json.Marshal(composition{Runtime: RuntimeVersion, StepKinds: kinds, Functions: v.Functions(), Providers: providers, Models: v.ModelPolicies()})
 	if err != nil {
 		return preparedRun{}, err
 	}
@@ -452,9 +466,13 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 		return 0, err
 	}
 	run := p.Run
-	if run.State == eviedb.WorkflowRunNeedsReconciliation {
+	switch run.State {
+	case eviedb.WorkflowRunNeedsReconciliation:
 		// Never paused or resumed: only a receipt lets it continue.
 		return r.continueReconciliation(ctx, writes, lease, lost, p)
+	case eviedb.WorkflowRunWaitingForHuman:
+		// Only the owner's answer lets it continue (sub-stage 7).
+		return passParked, nil
 	}
 	comp, reason := r.incompatible(run.Composition)
 	if reason != "" {
@@ -482,6 +500,12 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 	}
 	if err != nil {
 		return 0, err
+	}
+	// A run paused before an AI step in an Evie whose AI steps are off
+	// stays paused, rather than resuming only to pause again, until an Evie
+	// that allows them claims it (sub-stage 7).
+	if next, ok := v.Step(p.Checkpoint.Next); ok && next.Kind == workflow.KindAI && p.InFlight == nil && r.models == nil {
+		return pause(r.modelsPause(next.ID))
 	}
 	// A run paused for an unavailable provider stays paused, rather than
 	// resuming only to pause again before the read, until it is ready; one
@@ -569,6 +593,10 @@ func (r *Runtime) advance(pc *pass) (passEnd, error) {
 			return passDone, nil
 		case p.Run.State == eviedb.WorkflowRunWaitingForDependency:
 			return passPaused, nil
+		case p.Run.State == eviedb.WorkflowRunWaitingForHuman:
+			// The owner's answer, recorded under another claim, lets it
+			// continue; nothing here resumes it (ADR 0029).
+			return passParked, nil
 		case p.Run.State == eviedb.WorkflowRunNeedsReconciliation:
 			// An effect's outcome is unknown: reconcile it automatically
 			// when that is due, before anything else; otherwise the run
@@ -693,6 +721,10 @@ func (r *Runtime) step(pc *pass, p eviedb.WorkflowRunProgress) error {
 			return r.effect(pc, p, step, inputs, state, intents, fail, pause)
 		}
 		return r.read(pc, p, step, inputs, state, fail, pause)
+	case workflow.KindAI:
+		return r.ai(pc, p, step, inputs, state, fail, pause)
+	case workflow.KindInterrupt:
+		return r.interrupt(pc, p, step, inputs, state, fail)
 	}
 	return fail(fmt.Sprintf("steps.%s is a %s step, which this runtime version cannot run", step.ID, step.Kind))
 }
@@ -714,10 +746,18 @@ func (r *Runtime) limitReached(v *workflow.Validated, p eviedb.WorkflowRunProgre
 		return fmt.Sprintf("steps.%s failed after %s: %s", step.ID, attempts(step.Attempts), p.LastError)
 	case p.Counted >= limits.Attempts:
 		return fmt.Sprintf("steps.%s: the run reached limits.max_attempts %d", step.ID, limits.Attempts)
-	case r.now().Sub(p.Run.CreatedAt) > limits.Duration:
+	case r.elapsed(p) > limits.Duration:
 		return fmt.Sprintf("steps.%s: the run exceeded limits.max_duration %s", step.ID, limits.Duration)
 	}
 	return ""
+}
+
+// elapsed is the run's time counted against limits.max_duration: since
+// its creation, less the time it waited for the owner's answers to its
+// questions (sub-stage 7). Time waiting for an effect's reconciliation
+// still counts, as sub-stage 6 decided.
+func (r *Runtime) elapsed(p eviedb.WorkflowRunProgress) time.Duration {
+	return r.now().Sub(p.Run.CreatedAt) - p.HumanWait
 }
 
 // deterministic makes one attempt of a deterministic step within its Retry
@@ -877,6 +917,13 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 	if json.Unmarshal(run.Composition, &pinned) == nil && len(pinned.Providers) > 0 {
 		line("Providers: %s", providersLine(pinned))
 	}
+	for _, m := range pinned.Models {
+		temperature := "provider default"
+		if m.Temperature != nil {
+			temperature = fmt.Sprint(*m.Temperature)
+		}
+		line("Model Policy: %s v%d, %s %s, temperature %s, at most %s output tokens", m.Name, m.Version, m.Provider, m.Model, temperature, grouped(m.MaxOutputTokens))
+	}
 	for _, s := range d.Substitutions {
 		line("Substituted: %s %s %s -> %s (contract %s, same schema), approved by %s via %s at %s",
 			s.Capability, s.Plugin, s.PinnedVersion, s.ReplacementVersion, s.Contract, s.Approver, s.Surface, s.ApprovedAt.Format(timeLayout))
@@ -891,6 +938,8 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 	line("%s", started)
 	line("Inputs: %s", valuesLine(run.Inputs))
 	switch {
+	case run.State == eviedb.WorkflowRunWaitingForHuman:
+		line("Waiting for your answer: no Evie continues it until you answer (see Interruptions)")
 	case run.State == eviedb.WorkflowRunWaitingForDependency:
 		paused := "Paused: " + run.Error
 		if run.NotBefore != nil {
@@ -942,6 +991,8 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 		}
 	}
 	effectsText(&b, d.Effects)
+	interruptionsText(&b, d.Interruptions)
+	modelCallsText(&b, d.ModelCalls)
 	if !run.State.Terminal() {
 		line("Next: %s from checkpoint %d", run.NextStep, run.Checkpoint)
 	}

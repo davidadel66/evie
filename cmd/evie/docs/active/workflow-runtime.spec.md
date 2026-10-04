@@ -303,7 +303,12 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Reconciliation first uses provider-supported idempotency or lookup. If the
   provider cannot prove the outcome, a durable human interruption presents the
   evidence and requires explicit resolution. Outcome Unknown never retries by
-  policy.
+  policy. (Implemented 2026-10-04, sub-stage 7: the interruption opens when
+  the outcome becomes unknown and only the Effect Receipt closes it; the
+  owner's answer to it and `evie workflows reconcile` are one record, and the
+  run's state stays needs reconciliation, distinct from waiting for a human.
+  See the sub-stage 7 entry in
+  [workflow-runtime.decisions.md](workflow-runtime.decisions.md).)
 - Retry Policy is declared per node and bounded. Pure deterministic work may
   retry; reads use limited backoff; AI Nodes may retry malformed typed output;
   effects retry only when the connector proves idempotency for the same Effect

@@ -18,7 +18,8 @@ import (
 // a version. Proposals come from the CLI; these routes never read a path
 // the browser names. Sub-stage 3 adds starting, listing and inspecting
 // runs; sub-stage 6 the owner's reconciliation of an effect whose outcome
-// is unknown.
+// is unknown; sub-stage 7 answering a run's durable interruptions and
+// listing them for a Workspace, the session that started a run, or a run.
 type WorkflowManager interface {
 	List(context.Context, memory.WorkspaceID) ([]eviedb.WorkflowDefinitionState, error)
 	Show(context.Context, memory.WorkspaceID, string) (eviedb.WorkflowDefinitionState, error)
@@ -29,6 +30,8 @@ type WorkflowManager interface {
 	InspectRun(context.Context, string) (eviedb.WorkflowRunDetail, error)
 	ListRuns(context.Context, workflowruntime.RunFilter) ([]eviedb.WorkflowRun, error)
 	Reconcile(context.Context, workflowruntime.Reconciliation) (eviedb.WorkflowRunDetail, error)
+	Answer(context.Context, workflowruntime.AnswerRequest) (eviedb.WorkflowRunDetail, error)
+	Interruptions(context.Context, workflowruntime.InterruptionFilter) ([]eviedb.WorkflowInterruption, error)
 }
 
 // WithWorkflows adds the workflow management routes.
@@ -50,6 +53,8 @@ func (s *Server) registerWorkflowRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workflows/runs", s.managementRoute(s.handleWorkflowRuns))
 	mux.Handle("/api/workflows/inspect", s.managementRoute(s.handleWorkflowInspect))
 	mux.Handle("/api/workflows/reconcile", s.managementRoute(s.handleWorkflowReconcile))
+	mux.Handle("/api/workflows/answer", s.managementRoute(s.handleWorkflowAnswer))
+	mux.Handle("/api/workflows/interruptions", s.managementRoute(s.handleWorkflowInterruptions))
 }
 
 func boundedID(id string) bool { return id != "" && len(id) <= 128 }
@@ -192,6 +197,10 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusConflict, "capability_unavailable", err.Error()
 	case errors.Is(err, workflowruntime.ErrReconcileRefused):
 		status, code, message = http.StatusConflict, "reconcile_refused", err.Error()
+	case errors.Is(err, workflowruntime.ErrAnswerRefused):
+		status, code, message = http.StatusConflict, "answer_refused", err.Error()
+	case errors.Is(err, workflowruntime.ErrModelsUnavailable):
+		status, code, message = http.StatusConflict, "models_unavailable", err.Error()
 	}
 	managementJSONError(w, status, code, message)
 }
@@ -231,6 +240,65 @@ func (s *Server) handleWorkflowReconcile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, reconciled)
+}
+
+// maxWorkflowAnswerBytes bounds an answer request: the answer (at most 64
+// KiB) and its envelope.
+const maxWorkflowAnswerBytes = 72 << 10
+
+// handleWorkflowAnswer is the owner answering, from the web, the
+// interruption a run waits for at a step (Stage 14 sub-stage 7): a
+// question's typed answer, or an unknown effect's reconciliation. It
+// names the run, the step, the answer object and, when answered from a
+// session's view, that session (any session of the run's Workspace); the
+// surface is always the web. The response waits until the run finishes or
+// stops again, unless detach is set; either way the run does not stop if
+// the browser disconnects.
+func (s *Server) handleWorkflowAnswer(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		RunID     string           `json:"run_id"`
+		Step      string           `json:"step"`
+		Answer    json.RawMessage  `json:"answer"`
+		SessionID memory.SessionID `json:"session_id"`
+		Detach    bool             `json:"detach"`
+	}
+	if !decodeCandidateRequestLimit(w, r, &request, maxWorkflowAnswerBytes) {
+		return
+	}
+	var object map[string]json.RawMessage
+	if !boundedID(request.RunID) || !boundedID(request.Step) || len(request.SessionID) > 128 || json.Unmarshal(request.Answer, &object) != nil || object == nil {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "answer requires the run ID, the step and an answer object")
+		return
+	}
+	answered, err := s.workflows.Answer(r.Context(), workflowruntime.AnswerRequest{RunID: request.RunID, Step: request.Step, Answer: request.Answer,
+		SessionID: request.SessionID, Detach: request.Detach, Surface: "web"})
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, answered)
+}
+
+// handleWorkflowInterruptions lists what runs ask the owner (Stage 14
+// sub-stage 7): by default the open interruptions, for a Workspace, the
+// session that started a run (so that session can show them) or one run.
+func (s *Server) handleWorkflowInterruptions(w http.ResponseWriter, r *http.Request) {
+	var request workflowruntime.InterruptionFilter
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	if len(request.WorkspaceID) > 128 || len(request.SessionID) > 128 || len(request.RunID) > 128 || request.Limit < 0 || request.Limit > 200 {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "interruptions takes an optional Workspace ID, session ID, run ID and a limit up to 200")
+		return
+	}
+	found, err := s.workflows.Interruptions(r.Context(), request)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Interruptions []eviedb.WorkflowInterruption `json:"interruptions"`
+	}{found})
 }
 
 // maxWorkflowStartBytes bounds a start request: the run input document (at

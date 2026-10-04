@@ -91,9 +91,11 @@ func TestWorkflowWebRoutesStartListAndInspectRuns(t *testing.T) {
 	approveForWeb(t, rt, w.ID, "notes-digest", []byte(`{"inputs": {"day": "2026-10-05"}, "steps": {
 		"read": {"output": {"notes": [{"id": "n1", "text": "x"}]}}, "summarize": {"output": {"digest": "d"}}, "write": {"output": {"entry_id": "e"}}}}`))
 	notes := map[string]any{"workspace_id": w.ID, "name": "notes-digest", "inputs": map[string]any{"day": "2026-10-05"}}
-	if resp := workflowPost(t, h, "start", notes); resp.Code != http.StatusUnprocessableEntity || !strings.Contains(resp.Body.String(), "unsupported_steps") ||
-		!strings.Contains(resp.Body.String(), "not yet supported in this runtime version") {
-		t.Fatalf("unsupported steps = %d %s", resp.Code, resp.Body)
+	// Its AI step needs remote workflow models, which this Evie has off
+	// (Stage 14 sub-stage 7).
+	if resp := workflowPost(t, h, "start", notes); resp.Code != http.StatusConflict || !strings.Contains(resp.Body.String(), "models_unavailable") ||
+		!strings.Contains(resp.Body.String(), "runs AI steps, which are unavailable") {
+		t.Fatalf("AI steps without remote models = %d %s", resp.Code, resp.Body)
 	}
 	if _, err := rt.Deactivate(context.Background(), workflowruntime.Deactivation{WorkspaceID: w.ID, Name: "split-bill", Version: 1, Surface: "cli"}); err != nil {
 		t.Fatal(err)

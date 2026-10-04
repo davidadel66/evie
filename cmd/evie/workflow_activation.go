@@ -14,6 +14,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/procedural"
 	"github.com/davidadel66/evie/internal/tools"
@@ -34,6 +35,8 @@ type workflowCommands interface {
 	ListRuns(context.Context, workflowruntime.RunFilter) ([]eviedb.WorkflowRun, error)
 	Substitute(context.Context, workflowruntime.Substitution) (eviedb.WorkflowRunSubstitution, error)
 	Reconcile(context.Context, workflowruntime.Reconciliation) (eviedb.WorkflowRunDetail, error)
+	Answer(context.Context, workflowruntime.AnswerRequest) (eviedb.WorkflowRunDetail, error)
+	Interruptions(context.Context, workflowruntime.InterruptionFilter) ([]eviedb.WorkflowInterruption, error)
 }
 
 // workflowCapabilityPlugins are the compiled plugins that contribute
@@ -85,9 +88,14 @@ func newWorkflowPluginManager(ctx context.Context, store plugins.EnabledStateSto
 // newWorkflowRuntime is the production Workflow Runtime: the kernel store,
 // the procedural repository at ~/.evie/procedural, the workflow
 // capabilities of the given Plugin Manager (sub-stage 5), the operator's
-// subagent ceiling for agent budgets, and the scheduler's worker bound from
-// EVIE_WORKFLOW_WORKERS, its errors logged.
+// subagent ceiling for agent budgets, the scheduler's worker bound from
+// EVIE_WORKFLOW_WORKERS, its errors logged, and (sub-stage 7) the model
+// provider of AI steps when EVIE_WORKFLOW_REMOTE_MODELS allows it.
 func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string, providers workflowruntime.CapabilityProviders) (*workflowruntime.Runtime, error) {
+	models, modelsOff, err := workflowModels(getenv)
+	if err != nil {
+		return nil, err
+	}
 	policy, err := configuredSubagentPolicy(getenv)
 	if err != nil {
 		return nil, fmt.Errorf("invalid Subagents configuration: %w", err)
@@ -105,7 +113,36 @@ func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string, provide
 		Workers:   workflow.WorkerCeiling{Deadline: policy.Deadline, Tokens: policy.TokenBudget},
 		Scheduler: scheduler,
 		Report:    func(err error) { log.Printf("workflow scheduler: %v", err) },
+		Models:    models, ModelsOff: modelsOff,
 	})
+}
+
+// workflowRemoteModels is the owner's setting that lets workflow AI steps
+// send their declared input to their pinned model through OpenRouter
+// (Stage 14 sub-stage 7): "on" (with OPENROUTER_API_KEY) or "off", the
+// default. It is separate from EVIE_REMOTE_MEMORY: a run's data is not the
+// owner's messages, and turning one on does not send the other.
+const workflowRemoteModels = "EVIE_WORKFLOW_REMOTE_MODELS"
+
+// workflowModels resolves the model provider of workflow AI steps: the
+// OpenRouter adapter when the owner turned remote workflow models on and
+// an API key is set; otherwise none, with the reason a run or start shows.
+func workflowModels(getenv func(string) string) (workflowruntime.Models, string, error) {
+	switch strings.ToLower(strings.TrimSpace(getenv(workflowRemoteModels))) {
+	case "", "off":
+		return nil, "AI steps are off: they send their declared input to the model provider; set " + workflowRemoteModels + "=on (with OPENROUTER_API_KEY) to allow it", nil
+	case "on":
+		key := strings.TrimSpace(getenv("OPENROUTER_API_KEY"))
+		if key == "" {
+			return nil, "AI steps need OPENROUTER_API_KEY to reach their model (" + workflowRemoteModels + "=on)", nil
+		}
+		client, err := openrouter.NewClient(key)
+		if err != nil {
+			return nil, "", fmt.Errorf("%s: %w", workflowRemoteModels, err)
+		}
+		return workflowruntime.NewOpenRouterModels(client), "", nil
+	}
+	return nil, "", fmt.Errorf("%s must be on or off", workflowRemoteModels)
 }
 
 // workflowArgs are one activation command's positional arguments and flags.
@@ -318,6 +355,10 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		return true, nil
 	case "reconcile":
 		return true, reconcileWorkflowEffect(ctx, args[2:], out, rt)
+	case "answer":
+		return true, answerWorkflowInterruption(ctx, args[2:], out, rt)
+	case "interruptions":
+		return true, listWorkflowInterruptions(ctx, args[2:], out, rt)
 	}
 	return true, usage
 }

@@ -9,7 +9,9 @@
 // (scheduler.go); sub-stage 5 adds capability reads through pinned
 // providers (capabilities.go); sub-stage 6 adds capability effects through
 // the durable intent-call-receipt-checkpoint protocol and their
-// reconciliation (effects.go); later sub-stages extend runs through this
+// reconciliation (effects.go); sub-stage 7 adds AI steps through pinned
+// Model Policies (ai.go, models.go) and durable interruptions answered by
+// the owner (interrupts.go); later sub-stages extend runs through this
 // same type.
 //
 // Validation runs against the bound Workspace: its current Workspace Access
@@ -91,6 +93,16 @@ type Store interface {
 	DeferWorkflowReconciliation(ctx context.Context, lease eviedb.WorkflowRunLease, reason string, recheck time.Duration) (eviedb.WorkflowRun, error)
 	WorkflowEffectIntents(ctx context.Context, runID string) ([]eviedb.WorkflowEffectIntent, error)
 	WorkflowEffectConflict(ctx context.Context, runID string, keys []string) (*eviedb.WorkflowEffectConflictError, error)
+
+	// AI steps and interruptions (sub-stage 7): an AI attempt recorded
+	// with its model call and finished with its usage; a question asked
+	// and answered under the lease; interruptions listed for a Workspace,
+	// a session or a run.
+	BeginWorkflowModelCall(ctx context.Context, lease eviedb.WorkflowRunLease, m eviedb.WorkflowModelCallStart) (eviedb.WorkflowNodeAttempt, error)
+	FinishWorkflowModelCall(ctx context.Context, lease eviedb.WorkflowRunLease, m eviedb.WorkflowModelCallEnd) (eviedb.WorkflowRun, error)
+	AskWorkflowQuestion(ctx context.Context, lease eviedb.WorkflowRunLease, q eviedb.WorkflowQuestion) (eviedb.WorkflowInterruption, error)
+	AnswerWorkflowQuestion(ctx context.Context, lease eviedb.WorkflowRunLease, a eviedb.WorkflowAnswer) (eviedb.WorkflowRun, error)
+	ListWorkflowInterruptions(ctx context.Context, f eviedb.WorkflowInterruptionFilter) ([]eviedb.WorkflowInterruption, error)
 }
 
 // Config wires a Runtime.
@@ -108,6 +120,12 @@ type Config struct {
 	// Report receives scheduler errors, each distinct one once while it
 	// persists; nil drops them.
 	Report func(error)
+	// Models is the model provider AI steps call (sub-stage 7): the
+	// OpenRouter adapter when the owner allowed remote workflow models.
+	// nil turns AI steps off; ModelsOff then says why and how to turn them
+	// on.
+	Models    Models
+	ModelsOff string
 }
 
 // SchedulerConfig bounds and paces a runtime's execution of runs
@@ -135,6 +153,12 @@ type SchedulerConfig struct {
 	// 30s, at most 10m; sub-stage 6). A call without an answer by then
 	// leaves its outcome unknown.
 	EffectTimeout time.Duration
+	// ModelTimeout bounds one model request of an AI step (default 2m, at
+	// most 10m; sub-stage 7); ModelRetryGap is the first wait before a
+	// request that provably generated nothing is sent again (default 2s,
+	// doubling, at most two retries and 30s).
+	ModelTimeout  time.Duration
+	ModelRetryGap time.Duration
 }
 
 const (
@@ -151,6 +175,8 @@ const (
 	MaxInterruptions     = 10
 	defaultReadTimeout   = 30 * time.Second
 	maxReadTimeout       = 10 * time.Minute
+	defaultModelTimeout  = 2 * time.Minute
+	defaultModelRetryGap = 2 * time.Second
 )
 
 func (c SchedulerConfig) resolve() (SchedulerConfig, error) {
@@ -158,8 +184,16 @@ func (c SchedulerConfig) resolve() (SchedulerConfig, error) {
 		return c, fmt.Errorf("workflow scheduler needs 1 to %d workers and positive durations", MaxSchedulerWorkers)
 	}
 	if c.Interruptions < 0 || c.Interruptions > MaxInterruptions || c.ReadTimeout < 0 || c.ReadTimeout > maxReadTimeout ||
-		c.EffectTimeout < 0 || c.EffectTimeout > maxReadTimeout {
-		return c, fmt.Errorf("workflow scheduler needs an interruption bound of 1 to %d and read and effect timeouts up to %s", MaxInterruptions, maxReadTimeout)
+		c.EffectTimeout < 0 || c.EffectTimeout > maxReadTimeout || c.ModelTimeout < 0 || c.ModelTimeout > maxReadTimeout ||
+		c.ModelRetryGap < 0 || c.ModelRetryGap > maxModelRetryDelay {
+		return c, fmt.Errorf("workflow scheduler needs an interruption bound of 1 to %d, read, effect and model timeouts up to %s and a model retry gap up to %s",
+			MaxInterruptions, maxReadTimeout, maxModelRetryDelay)
+	}
+	if c.ModelTimeout == 0 {
+		c.ModelTimeout = defaultModelTimeout
+	}
+	if c.ModelRetryGap == 0 {
+		c.ModelRetryGap = defaultModelRetryGap
 	}
 	if c.Interruptions == 0 {
 		c.Interruptions = DefaultInterruptions
@@ -195,6 +229,10 @@ type Runtime struct {
 	workers workflow.WorkerCeiling
 	sched   SchedulerConfig
 	report  func(error)
+	// models is the model provider AI steps call; nil when they are off,
+	// for the reason modelsOff gives (sub-stage 7).
+	models    Models
+	modelsOff string
 	// holder names this runtime instance on every lease it takes.
 	holder string
 	// compatible are the pinned runtimes this runtime continues (ADR 0025).
@@ -236,7 +274,11 @@ func New(c Config) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
+	if c.Models == nil && strings.TrimSpace(c.ModelsOff) == "" {
+		c.ModelsOff = "AI steps are off in this Evie"
+	}
 	return &Runtime{store: c.Store, repo: c.Repo, providers: c.Capabilities, catalog: providerCatalog{c.Capabilities}, workers: c.Workers, sched: sched, report: c.Report,
+		models: c.Models, modelsOff: c.ModelsOff,
 		holder: fmt.Sprintf("evie-%d-%s", os.Getpid(), uuid.NewString()), compatible: slices.Clone(compatibleRuntimes),
 		now: time.Now, sleep: sleepContext,
 		active: map[string]bool{}, failures: map[string]error{}, reported: map[string]string{},

@@ -176,12 +176,64 @@ export type WorkflowRunEvent = {
   at: string;
 };
 
+// Durable interruptions and AI steps (Stage 14 sub-stage 7): a run asks the
+// owner a typed question, or presents an effect whose outcome is unknown,
+// and waits; any later session answers it. AI attempts record their model
+// call with its usage and cost.
+export type WorkflowInterruptionResolution = {
+  kind: "answered" | "reconciled" | "withdrawn";
+  answer?: Record<string, unknown>;
+  actor: string;
+  surface?: string;
+  session_id?: string;
+  detail?: string;
+  recorded_at: string;
+};
+
+export type WorkflowInterruption = {
+  run_id: string;
+  seq: number;
+  workspace_id: string;
+  workflow: string;
+  kind: "question" | "effect_reconciliation";
+  step: string;
+  checkpoint: number;
+  intent_seq?: number;
+  message: string;
+  request: Record<string, unknown>;
+  response_schema: Record<string, unknown>;
+  session_id?: string;
+  opened_at: string;
+  resolution?: WorkflowInterruptionResolution;
+};
+
+export type WorkflowModelCall = {
+  attempt_seq: number;
+  attempt_state: string;
+  step: string;
+  policy: string;
+  policy_version: number;
+  model: string;
+  estimated_input_tokens: number;
+  estimated_output_tokens: number;
+  estimated_micro_usd: number;
+  finished_at?: string;
+  requests?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  micro_usd?: number;
+  pricing_source?: string;
+  error?: string;
+};
+
 export type WorkflowRunDetail = {
   run: WorkflowRun;
   attempts: WorkflowNodeAttempt[];
   checkpoints: WorkflowCheckpoint[];
   lease?: WorkflowRunLease;
   events?: WorkflowRunEvent[];
+  interruptions?: WorkflowInterruption[];
+  model_calls?: WorkflowModelCall[];
 };
 
 export type WorkflowRunResult = { run: WorkflowRunDetail; existing: boolean };
@@ -191,8 +243,18 @@ export const workflowRunAPI = {
   start: (workspaceId: string, name: string, inputs: Record<string, unknown>): Promise<WorkflowRunResult> =>
     postWorkflows("start", { workspace_id: workspaceId, name, inputs }),
   inspect: (runId: string): Promise<WorkflowRunDetail> => postWorkflows("inspect", { run_id: runId }),
+  answer: (runId: string, step: string, answer: Record<string, unknown>): Promise<WorkflowRunDetail> =>
+    postWorkflows("answer", { run_id: runId, step, answer }),
+  interruptions: (workspaceId: string): Promise<{ interruptions: WorkflowInterruption[] }> => postWorkflows("interruptions", { workspace_id: workspaceId }),
 };
 export type WorkflowRunAPI = typeof workflowRunAPI;
+
+/** A model call's tokens and cost: its usage once recorded, its estimate otherwise (it may have been billed). */
+export function modelCallSpend(call: WorkflowModelCall): { tokens: number; microUSD: number } {
+  return call.finished_at
+    ? { tokens: (call.input_tokens ?? 0) + (call.output_tokens ?? 0), microUSD: call.micro_usd ?? 0 }
+    : { tokens: call.estimated_input_tokens + call.estimated_output_tokens, microUSD: call.estimated_micro_usd };
+}
 
 /** The start form's inputs: one JSON object, or undefined when it is not one. */
 export function parseRunInputs(text: string): Record<string, unknown> | undefined {
