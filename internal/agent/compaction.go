@@ -85,6 +85,11 @@ func (s *Session) Compact(ctx context.Context) (result CompactionResult, retErr 
 		}
 		return CompactionResult{}, fmt.Errorf("acquire turn lease: %w", err)
 	}
+	// Stage 10: a committed compaction offers its summarized owner messages
+	// to the background memory pass once the lease is released (this defer
+	// runs after the release below), so the pass finds the conversation free.
+	var flushThrough int64
+	defer func() { s.requestCompactionFlush(flushThrough) }()
 
 	coordinator := newTurnCoordinator(ctx)
 	coordinator.setStage(memory.StageContextCompaction)
@@ -168,6 +173,7 @@ func (s *Session) Compact(ctx context.Context) (result CompactionResult, retErr 
 		return CompactionResult{}, s.classifyLocalError(coordinator, fmt.Errorf("persist context compaction: %w", err))
 	}
 	coordinator.finishSuccessBoundary()
+	flushThrough = plan.CoveredLast.Sequence
 	return CompactionResult{CompactionEventID: compacted.ID}, nil
 }
 

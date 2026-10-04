@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/memorybackground"
@@ -25,6 +26,9 @@ type memoryBackgroundHost struct {
 	runner  *memorybackground.Runner
 	pricing func(context.Context) (memorybackground.Pricing, error)
 }
+
+// The runner is every root conversation's compaction flush (Stage 10).
+var _ agent.CompactionMemoryFlush = (*memorybackground.Runner)(nil)
 
 func newMemoryBackgroundHost(getenv func(string) string, store *eviedb.Store) *memoryBackgroundHost {
 	config := memorybackground.FromEnv(getenv)

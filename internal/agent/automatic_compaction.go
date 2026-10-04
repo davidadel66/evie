@@ -294,6 +294,10 @@ func (s *Session) performAutomaticCompaction(
 		}
 	}
 	coordinator.finishCommitBoundary(memory.StageContextCompose)
+	// Stage 10: offer the summarized owner messages to the background
+	// memory pass. It never waits for the pass, which commits only after
+	// this turn releases the conversation.
+	s.requestCompactionFlush(plan.CoveredLast.Sequence)
 	if plan.turn != nil {
 		// An in-turn summary is reconstructed from its durable event by every
 		// projection; the rolling summary is unchanged.

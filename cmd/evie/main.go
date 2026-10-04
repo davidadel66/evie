@@ -161,6 +161,11 @@ func main() {
 		}
 	}
 
+	// The always-on background memory pass (memory architecture Stage 4)
+	// runs in long-lived REPL and web processes only. Their conversations
+	// offer every committed compaction to it (Stage 10).
+	memoryBackground := newMemoryBackgroundHost(os.Getenv, kernelStore)
+
 	// cron-exec runs headless under launchd with no API key — it must
 	// never pay for (or die on) client construction, so the session is
 	// built inside the arms that talk to the model.
@@ -221,11 +226,9 @@ func main() {
 			selection.ScopeContext(),
 			store.BindTurnOwner(selection.ID, holderID),
 			resolvedComposition.Resolved.Toolset,
+			agent.WithCompactionMemoryFlush(memoryBackground.runner),
 		)
 	}
-	// The always-on background memory pass (memory architecture Stage 4)
-	// runs in long-lived REPL and web processes only.
-	memoryBackground := newMemoryBackgroundHost(os.Getenv, kernelStore)
 	startMemoryForRuntime := func(ctx context.Context) func() {
 		ctx, cancel := context.WithCancel(ctx)
 		stopRetrieval := startMemoryRetrievalHost(ctx, kernelStore)
@@ -338,7 +341,8 @@ func main() {
 				return nil, err
 			}
 			holderID := memory.LeaseHolderID(holderUUID.String())
-			return agent.NewWithToolset(client, selectedProfile, kernelStore.BindHistory(session.ID, holderID), session.ScopeContext(), kernelStore.BindTurnOwnerWithModelRevision(session.ID, holderID, revision), composition.Toolset), nil
+			return agent.NewWithToolset(client, selectedProfile, kernelStore.BindHistory(session.ID, holderID), session.ScopeContext(), kernelStore.BindTurnOwnerWithModelRevision(session.ID, holderID, revision), composition.Toolset,
+				agent.WithCompactionMemoryFlush(memoryBackground.runner)), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
 		serveErr := web.ServeWithContext(runtimeCtx, web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService))

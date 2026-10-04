@@ -7,8 +7,9 @@ import (
 )
 
 // The always-on background pass (docs/memory-architecture.md, Stage 4 and
-// decision 4). After a root conversation goes idle, or after every N new
-// owner messages, Evie reads only the owner's new messages since a durable
+// decision 4). After a root conversation goes idle, after every N new owner
+// messages, or once a committed compaction has summarized owner messages
+// (the Stage 10 flush), Evie reads only the owner's new messages since a durable
 // per-conversation cursor, extracts candidate memories, compares each with
 // the most similar existing memories, and chooses ADD, UPDATE, INVALIDATE or
 // NOOP (Mem0's operations, with Zep-style invalidation instead of deletion).
@@ -175,6 +176,13 @@ type BackgroundDue struct {
 	PendingOwner   int               `json:"pending_owner_messages"`
 	LastActivityAt time.Time         `json:"last_activity_at"`
 	Trigger        BackgroundTrigger `json:"trigger"`
+	// CompactedPending counts the owner messages past the cursor up to
+	// Through, the last event a committed compaction of the conversation
+	// summarized: the memory flush before compaction still owed (Stage 10).
+	// Any makes the conversation due as a compaction flush, regardless of
+	// the idle and turn triggers.
+	CompactedPending int   `json:"compacted_pending_owner_messages,omitempty"`
+	Through          int64 `json:"through_sequence,omitempty"`
 }
 
 // BackgroundRun is the durable record of one pass over one conversation.
@@ -250,6 +258,17 @@ type BackgroundSessionProgress struct {
 	NextAttemptAt *time.Time          `json:"next_attempt_at,omitempty"`
 	LastStatus    BackgroundRunStatus `json:"last_status,omitempty"`
 	LastRunAt     *time.Time          `json:"last_run_at,omitempty"`
+	// CompactedPending counts the pending owner messages a committed
+	// compaction already summarized: the flush still owed (Stage 10).
+	CompactedPending int `json:"compacted_pending_owner_messages"`
+}
+
+// BackgroundCompactionFlush is the memory flush before compaction still
+// owed across root conversations (Stage 10): owner messages up to the last
+// event a committed compaction summarized that the pass has not covered.
+type BackgroundCompactionFlush struct {
+	Conversations        int `json:"conversations"`
+	PendingOwnerMessages int `json:"pending_owner_messages"`
 }
 
 // BackgroundProgress is the durable half of the pass's status.
@@ -263,6 +282,7 @@ type BackgroundProgress struct {
 	SkippedBatches     int                         `json:"skipped_batches"`
 	RunsToday          int                         `json:"runs_today"`
 	ProposalsQueuedDay int                         `json:"proposals_queued_today"`
+	CompactionFlush    BackgroundCompactionFlush   `json:"compaction_flush"`
 }
 
 // BackgroundStatus is what `evie memory-background status` and the web
@@ -283,6 +303,10 @@ type BackgroundStatus struct {
 	RemainingTokens   int64              `json:"remaining_tokens"`
 	RemainingMicroUSD int64              `json:"remaining_micro_usd"`
 	Progress          BackgroundProgress `json:"progress"`
+	// CompactionFlushSkipped says why an owed compaction flush is not
+	// running now (the pass is disabled, or paused at today's cap); the
+	// compaction itself was unaffected. Empty when nothing is skipped.
+	CompactionFlushSkipped string `json:"compaction_flush_skipped,omitempty"`
 }
 
 // Background status states.

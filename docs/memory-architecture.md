@@ -257,6 +257,12 @@ Follow-ups found during Stages 6–7:
   turns.
 - It doesn't block the turn: it runs asynchronously over stored events, which
   remain in SQLite.
+- **Implemented**, with the second point amended: the flush runs just after
+  the compaction commits, as soon as the conversation is free (an automatic
+  compaction's turn holds it, and the pass never commits during a live
+  turn). Every owner message a committed compaction summarized stays owed to
+  the pass until a pass covers it; see the Stage 10 entry in
+  `cmd/evie/docs/active/memory.decisions.md`.
 
 **11. Build worker** (decided 2026-10-03: free edits inside the worktree,
 approval once at merge)

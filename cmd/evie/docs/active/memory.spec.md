@@ -341,7 +341,10 @@ execute again.
     messages to a remote model only with `EVIE_REMOTE_MEMORY=on`, never
     sends a message with a detected secret, never commits while a live turn
     holds the conversation, and never makes a model call that would pass
-    its pass budget or daily caps. See
+    its pass budget or daily caps. Every owner message a committed
+    compaction of a root conversation summarized stays owed to the pass
+    until a pass covers it; a compaction never waits for that flush and
+    never moves the cursor. See
     [Background Memory Pass](#background-memory-pass).
 
 ## Scope And Authority
@@ -1414,9 +1417,11 @@ marker; a batch holds at most 30 messages and 24 KiB.
 
 **When.** A conversation is due when it has new owner messages since its
 durable cursor and either has been idle for 10 minutes
-(`EVIE_MEMORY_BACKGROUND_IDLE_MINUTES`) or has 20 new owner messages
-(`EVIE_MEMORY_BACKGROUND_TURNS`), is active, is not held by a live turn, and
-is not backing off after a failure. Long-lived REPL and `evie serve`
+(`EVIE_MEMORY_BACKGROUND_IDLE_MINUTES`), has 20 new owner messages
+(`EVIE_MEMORY_BACKGROUND_TURNS`), or has owner messages a committed
+compaction summarized (the [memory flush before
+compaction](#memory-flush-before-compaction)), is active, is not held by a
+live turn, and is not backing off after a failure. Long-lived REPL and `evie serve`
 processes tick every minute and serve at most four conversations per tick,
 one pass at a time; cooperating processes share one durable runner lease.
 Activation (the first enabled start) captures a frontier: conversations that
@@ -1528,11 +1533,10 @@ caps, today's spend and what remains, the last run and last problem, skipped
 batches, pending background proposals and each recent conversation's cursor,
 pending owner messages, failures and next attempt. Status carries no
 message, proposal or memory text (conversation titles only), and a run's
-recorded error never quotes model output.
-
-**Compaction seam.** `Runner.PassThrough(sessionID, through)` runs passes
-over the owner messages up to an event sequence regardless of triggers, for
-Stage 10 (memory flush before compaction). It is not wired yet.
+recorded error never quotes model output. It also counts the compaction
+flushes still owed (conversations and owner messages, overall and per
+conversation) and, while the pass is disabled or paused at its cap, says
+the flush is skipped (`compaction_flush_skipped`).
 
 **Per-conversation activation retired.** `memory-compiler activate` and
 `resume` refuse and point here. `memory-compiler status` and `disable` stay,
@@ -1540,6 +1544,58 @@ existing activations keep running under a configured compiler host until
 disabled, and their candidates stay reviewable in the Review tab. Entity
 (Entity-to-Entity) memories are not extracted by the pass; the in-turn
 `memory_remember_entity` remains the way to propose them.
+
+### Memory flush before compaction
+
+Stage 10 of the [memory architecture plan](../../../../docs/memory-architecture.md):
+before compacted turns are forgotten, the owner messages they hold are
+offered as memory, as Claude is warned before context clearing so it can
+save to memory first
+([comparison](../../../../docs/context-management-comparison.md)).
+
+**Guarantee.** Every owner message of a root conversation up to the last
+event a committed compaction summarized (a whole-turn automatic, in-turn or
+manual `/compact` compaction) is offered to the background pass at least
+once, under the pass's ordinary rules, and its proposals are committed to
+the review inbox once, before the pass's cursor moves past it. The flush
+runs after the compaction commits, never before it and never inside the
+turn: the summary replaces those turns in the model's requests at once,
+while their events stay in SQLite, so the pass reads the owner's exact words
+afterwards. A manual compaction's flush starts as soon as the compaction
+releases the conversation; an automatic one's on the first tick after the
+turn that compacted releases it (within a minute). A compaction never waits
+for, and never changes because of, its flush.
+
+**Request.** Once the compaction event is durable, the conversation offers
+the compaction's `covered_last_sequence` to the pass
+(`agent.WithCompactionMemoryFlush`; REPL and `evie serve` conversations use
+the runner). Automatic compactions offer it right after their commit inside
+the turn; a manual compaction after releasing its short lease. A failed
+compaction offers nothing, and a delegated child conversation never offers.
+The request never blocks: it only wakes a running pass's loop.
+
+**Durability.** The committed compaction, not the request, makes the flush
+owed: a root conversation with owner messages past its cursor up to the
+furthest `covered_last_sequence` of its `context_compacted` and
+`context_turn_compacted` events after the cursor is due with trigger
+`compaction`, regardless of the idle and turn triggers, ahead of other due
+conversations. The tick then runs passes through that frontier
+(`Runner.PassThrough`), batch after batch. A request lost to a crash, a
+process that runs no pass, or another process holding the runner lease is
+flushed by the next tick that runs, after restart included.
+
+**Rules kept.** The flush is an ordinary pass: owner messages of root
+conversations only, the live-turn fence (not due, and never committing,
+while a live turn holds the conversation), failure backoff, the pass budget
+and daily caps, and the disabled state. A compaction never moves the
+cursor; only a pass that read the messages does, to the last owner message
+it read. Passes run one at a time per process and per database (the runner
+lease), and the cursor's compare-and-set commits each batch once, so a
+flushed message is never proposed from twice (a batch whose pass failed or
+was deferred is read again, as for any pass). For an in-turn compaction the covered frontier
+follows the turn's owner message, which is therefore flushed even though it
+stays verbatim in the request. Flushing through a frontier also covers any
+older owner message before it, since the cursor only moves forward.
 
 ## Explicit Memory Operations
 

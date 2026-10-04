@@ -107,6 +107,7 @@ func decisionItem(candidate int, op, target, mode string) map[string]any {
 type fixture struct {
 	t      *testing.T
 	ctx    context.Context
+	path   string
 	db     *sql.DB
 	store  *eviedb.Store
 	model  *scriptedModel
@@ -129,12 +130,13 @@ func newFixture(t *testing.T) *fixture {
 
 func newFixtureWith(t *testing.T, config Config) *fixture {
 	t.Helper()
-	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := eviedb.OpenDBAt(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	f := &fixture{t: t, ctx: context.Background(), db: db, store: eviedb.NewStore(db), model: newScriptedModel(), config: config}
+	f := &fixture{t: t, ctx: context.Background(), path: path, db: db, store: eviedb.NewStore(db), model: newScriptedModel(), config: config}
 	f.runner = NewRunner(f.store, f.model, config, WithClock(func() time.Time { return time.Now().Add(f.offset) }),
 		WithSleep(func(ctx context.Context, d time.Duration) error { f.slept = append(f.slept, d); return ctx.Err() }),
 		WithPricing(Pricing{InputPerMillion: 0.3, OutputPerMillion: 1.2, Source: "test"}))

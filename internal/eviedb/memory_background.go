@@ -147,8 +147,31 @@ func (s *Store) ReleaseMemoryBackgroundRunner(ctx context.Context, holder string
 // ownerMessageCondition selects owner messages: the only events a pass reads.
 const ownerMessageCondition = `events.event_type = 'user_message' AND events.role = 'user'`
 
+// compactedThroughSQL is the last event a committed compaction of the
+// conversation summarized (memory architecture Stage 10): whole-turn and
+// in-turn compactions both record it as covered_last_sequence. Only
+// compactions after the cursor are read, since only they can cover an owner
+// message the pass has not. Zero when there is none. session and cursor are
+// SQL expressions for the conversation ID and its cursor.
+func compactedThroughSQL(session, cursor string) string {
+	return `COALESCE((SELECT MAX(CAST(json_extract(compactions.payload_json, '$.covered_last_sequence') AS INTEGER))
+		FROM events AS compactions
+		WHERE compactions.session_id = ` + session + `
+		  AND compactions.event_type IN ('` + string(memory.EventContextCompacted) + `', '` + string(memory.EventContextTurnCompacted) + `')
+		  AND compactions.sequence > ` + cursor + `), 0)`
+}
+
+// compactedPendingSQL counts the owner messages after cursor up to through:
+// the memory flush a committed compaction still owes.
+func compactedPendingSQL(session, cursor, through string) string {
+	return `(SELECT COUNT(*) FROM events WHERE events.session_id = ` + session + ` AND ` + ownerMessageCondition + `
+		AND events.sequence > ` + cursor + ` AND events.sequence <= ` + through + `)`
+}
+
 // DueMemoryBackgroundSessions lists root conversations whose pass is due:
-// at least Turns new owner messages since the cursor, or at least one and no
+// owner messages past the cursor that a committed compaction summarized
+// (the compaction flush, Stage 10, regardless of the other triggers), at
+// least Turns new owner messages since the cursor, or at least one and no
 // activity for Idle. A conversation whose turn lease is held by a live turn,
 // that is archived, delegated, or waiting out a failure backoff is not due.
 func (s *Store) DueMemoryBackgroundSessions(ctx context.Context, q memory.BackgroundDueQuery) ([]memory.BackgroundDue, error) {
@@ -156,22 +179,28 @@ func (s *Store) DueMemoryBackgroundSessions(ctx context.Context, q memory.Backgr
 		return nil, errors.New("background due query needs positive triggers and limit")
 	}
 	now := q.Now.UTC()
+	cursor := `COALESCE(cursors.cursor_sequence, 0)`
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT sessions.id, COALESCE(cursors.cursor_sequence, 0),
-		       (SELECT COUNT(*) FROM events WHERE events.session_id = sessions.id AND `+ownerMessageCondition+`
-		          AND events.sequence > COALESCE(cursors.cursor_sequence, 0)) AS pending,
-		       (SELECT events.recorded_at FROM events WHERE events.session_id = sessions.id ORDER BY events.sequence DESC LIMIT 1)
-		FROM sessions
-		LEFT JOIN memory_background_cursors AS cursors ON cursors.session_id = sessions.id
-		WHERE sessions.parent_session_id IS NULL AND sessions.status = ?
-		  AND (cursors.next_attempt_at IS NULL OR cursors.next_attempt_at <= ?)
-		  AND NOT EXISTS (
-		      SELECT 1 FROM session_turn_leases AS leases
-		      WHERE leases.session_id = sessions.id AND leases.holder_id IS NOT NULL AND leases.expires_at > ?)
-		  AND EXISTS (
-		      SELECT 1 FROM events WHERE events.session_id = sessions.id AND `+ownerMessageCondition+`
-		        AND events.sequence > COALESCE(cursors.cursor_sequence, 0))
-		ORDER BY sessions.id
+		SELECT due.id, due.cursor_sequence, due.pending, due.last_recorded_at, due.compacted_through,
+		       `+compactedPendingSQL("due.id", "due.cursor_sequence", "due.compacted_through")+`
+		FROM (
+			SELECT sessions.id AS id, `+cursor+` AS cursor_sequence,
+			       (SELECT COUNT(*) FROM events WHERE events.session_id = sessions.id AND `+ownerMessageCondition+`
+			          AND events.sequence > `+cursor+`) AS pending,
+			       (SELECT events.recorded_at FROM events WHERE events.session_id = sessions.id ORDER BY events.sequence DESC LIMIT 1) AS last_recorded_at,
+			       `+compactedThroughSQL("sessions.id", cursor)+` AS compacted_through
+			FROM sessions
+			LEFT JOIN memory_background_cursors AS cursors ON cursors.session_id = sessions.id
+			WHERE sessions.parent_session_id IS NULL AND sessions.status = ?
+			  AND (cursors.next_attempt_at IS NULL OR cursors.next_attempt_at <= ?)
+			  AND NOT EXISTS (
+			      SELECT 1 FROM session_turn_leases AS leases
+			      WHERE leases.session_id = sessions.id AND leases.holder_id IS NOT NULL AND leases.expires_at > ?)
+			  AND EXISTS (
+			      SELECT 1 FROM events WHERE events.session_id = sessions.id AND `+ownerMessageCondition+`
+			        AND events.sequence > `+cursor+`)
+		) AS due
+		ORDER BY due.id
 	`, memory.SessionActive, formatSemanticTime(now), now.Format(turnLeaseTimeFormat))
 	if err != nil {
 		return nil, fmt.Errorf("list due background passes: %w", err)
@@ -181,7 +210,8 @@ func (s *Store) DueMemoryBackgroundSessions(ctx context.Context, q memory.Backgr
 	for rows.Next() {
 		var item memory.BackgroundDue
 		var last sql.NullString
-		if err := rows.Scan(&item.SessionID, &item.Cursor, &item.PendingOwner, &last); err != nil {
+		var through int64
+		if err := rows.Scan(&item.SessionID, &item.Cursor, &item.PendingOwner, &last, &through, &item.CompactedPending); err != nil {
 			return nil, err
 		}
 		if last.Valid {
@@ -190,6 +220,8 @@ func (s *Store) DueMemoryBackgroundSessions(ctx context.Context, q memory.Backgr
 			}
 		}
 		switch {
+		case item.CompactedPending > 0:
+			item.Trigger, item.Through = memory.BackgroundTriggerCompaction, through
 		case item.PendingOwner >= q.Turns:
 			item.Trigger = memory.BackgroundTriggerTurns
 		case item.PendingOwner > 0 && !item.LastActivityAt.IsZero() && !now.Before(item.LastActivityAt.Add(q.Idle)):
@@ -202,9 +234,18 @@ func (s *Store) DueMemoryBackgroundSessions(ctx context.Context, q memory.Backgr
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	// The conversations waiting longest go first; each tick serves a few.
+	// Owed compaction flushes go first, since their owner messages already
+	// left the model's context; then the conversations waiting longest.
+	// Each tick serves a few.
+	first := func(a, b memory.BackgroundDue) bool {
+		aFlush, bFlush := a.Trigger == memory.BackgroundTriggerCompaction, b.Trigger == memory.BackgroundTriggerCompaction
+		if aFlush != bFlush {
+			return aFlush
+		}
+		return a.LastActivityAt.Before(b.LastActivityAt)
+	}
 	for i := 1; i < len(due); i++ {
-		for j := i; j > 0 && due[j].LastActivityAt.Before(due[j-1].LastActivityAt); j-- {
+		for j := i; j > 0 && first(due[j], due[j-1]); j-- {
 			due[j], due[j-1] = due[j-1], due[j]
 		}
 	}
@@ -689,11 +730,26 @@ func (s *Store) MemoryBackgroundProgress(ctx context.Context, now time.Time, lim
 		Scan(&progress.PendingProposals); err != nil {
 		return progress, err
 	}
+	cursor := `COALESCE(cursors.cursor_sequence, 0)`
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*), COALESCE(SUM(owed.pending), 0) FROM (
+			SELECT `+compactedPendingSQL("flush.id", "flush.cursor_sequence", "flush.compacted_through")+` AS pending
+			FROM (
+				SELECT sessions.id AS id, `+cursor+` AS cursor_sequence, `+compactedThroughSQL("sessions.id", cursor)+` AS compacted_through
+				FROM sessions
+				LEFT JOIN memory_background_cursors AS cursors ON cursors.session_id = sessions.id
+				WHERE sessions.parent_session_id IS NULL AND sessions.status = ?
+			) AS flush
+		) AS owed WHERE owed.pending > 0`, memory.SessionActive).
+		Scan(&progress.CompactionFlush.Conversations, &progress.CompactionFlush.PendingOwnerMessages); err != nil {
+		return progress, fmt.Errorf("read owed compaction flushes: %w", err)
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT sessions.id, COALESCE(sessions.title, ''), sessions.workspace_id, sessions.project_id,
-		       COALESCE(cursors.cursor_sequence, 0), COALESCE(cursors.failures, 0), cursors.next_attempt_at,
+		       `+cursor+`, COALESCE(cursors.failures, 0), cursors.next_attempt_at,
 		       (SELECT COUNT(*) FROM events WHERE events.session_id = sessions.id AND `+ownerMessageCondition+`
-		          AND events.sequence > COALESCE(cursors.cursor_sequence, 0)),
+		          AND events.sequence > `+cursor+`),
+		       `+compactedPendingSQL("sessions.id", cursor, compactedThroughSQL("sessions.id", cursor))+`,
 		       (SELECT status FROM memory_background_runs AS runs WHERE runs.session_id = sessions.id ORDER BY runs.finished_at DESC, runs.run_id DESC LIMIT 1),
 		       (SELECT finished_at FROM memory_background_runs AS runs WHERE runs.session_id = sessions.id ORDER BY runs.finished_at DESC, runs.run_id DESC LIMIT 1)
 		FROM sessions
@@ -709,7 +765,7 @@ func (s *Store) MemoryBackgroundProgress(ctx context.Context, now time.Time, lim
 		var item memory.BackgroundSessionProgress
 		var workspaceID, projectID, next, status, finished sql.NullString
 		if err := rows.Scan(&item.SessionID, &item.Title, &workspaceID, &projectID, &item.Cursor, &item.Failures, &next,
-			&item.PendingOwner, &status, &finished); err != nil {
+			&item.PendingOwner, &item.CompactedPending, &status, &finished); err != nil {
 			return progress, err
 		}
 		item.ScopeKey = scopeKeyForContext(memory.ScopeContext{WorkspaceID: memory.WorkspaceID(workspaceID.String), ProjectID: memory.ProjectID(projectID.String)})

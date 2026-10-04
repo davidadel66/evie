@@ -200,3 +200,54 @@ func TestBackgroundBatchReadsOnlyOwnerMessagesAfterTheCursorWithinBounds(t *test
 		t.Fatalf("limited = %+v, %v", limited, err)
 	}
 }
+
+// Stage 10: a committed compaction makes its conversation due for the memory
+// flush through the compaction's covered frontier, regardless of the idle and
+// turn triggers. For an in-turn compaction the frontier follows the turn's
+// owner message, so that message (and any earlier one past the cursor) is
+// covered. The live-turn fence still holds the flush back, and status counts
+// the owner messages still owed.
+func TestACompactionMakesItsSummarizedOwnerMessagesDueForTheFlush(t *testing.T) {
+	f, a, r := fourGroupTurn(t)
+	ctx := context.Background()
+	if _, err := f.store.EnsureMemoryBackgroundActivation(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// Read the conversation from its start, as one created after activation.
+	if _, err := f.store.db.ExecContext(ctx, `DELETE FROM memory_background_cursors WHERE session_id = ?`, f.session.ID); err != nil {
+		t.Fatal(err)
+	}
+	query := memory.BackgroundDueQuery{Now: time.Now(), Idle: time.Hour, Turns: 20, Limit: 10}
+	if due, err := f.store.DueMemoryBackgroundSessions(ctx, query); err != nil || len(due) != 0 {
+		t.Fatalf("due before any compaction = %+v, %v", due, err)
+	}
+	f.mustAppend(turnCompactionInput(t, f.trigger.ID, f.root.ID, 1, "", a[0], r[1][1], a[2]))
+	due, err := f.store.DueMemoryBackgroundSessions(ctx, query)
+	if err != nil || len(due) != 1 {
+		t.Fatalf("due after the in-turn compaction = %+v, %v", due, err)
+	}
+	if item := due[0]; item.SessionID != f.session.ID || item.Trigger != memory.BackgroundTriggerCompaction ||
+		item.Through != r[1][1].Sequence || item.Through <= f.root.Sequence || item.CompactedPending != 2 || item.PendingOwner != 2 {
+		t.Fatalf("due = %+v, want a compaction flush through %d covering both owner messages", item, r[1][1].Sequence)
+	}
+
+	lease, err := f.store.AcquireTurnLease(ctx, f.session.ID, "live-turn", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if due, err := f.store.DueMemoryBackgroundSessions(ctx, query); err != nil || len(due) != 0 {
+		t.Fatalf("a flush was due while a live turn held the conversation: %+v, %v", due, err)
+	}
+	if err := f.store.ReleaseTurnLease(ctx, f.session.ID, lease.HolderID, lease.FencingToken); err != nil {
+		t.Fatal(err)
+	}
+
+	progress, err := f.store.MemoryBackgroundProgress(ctx, time.Now(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if progress.CompactionFlush != (memory.BackgroundCompactionFlush{Conversations: 1, PendingOwnerMessages: 2}) ||
+		len(progress.Sessions) != 1 || progress.Sessions[0].CompactedPending != 2 {
+		t.Fatalf("progress = %+v", progress)
+	}
+}

@@ -62,6 +62,8 @@ type Session struct {
 	stepLimit int
 	// wrapUp optionally ends a turn earlier through the same final call.
 	wrapUp WrapUpSignal
+	// compactionFlush is offered every committed compaction (Stage 10).
+	compactionFlush CompactionMemoryFlush
 }
 
 type legacyToolSignature struct {

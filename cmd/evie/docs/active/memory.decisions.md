@@ -1,5 +1,93 @@
 # memory - decisions
 
+- **2026-10-03 — Memory flush before compaction (memory architecture
+  Stage 10).** Implements Stage 10 of
+  [the memory architecture plan](../../../../docs/memory-architecture.md)
+  by wiring the Stage 4 `Runner.PassThrough` seam; the spec section is
+  [Memory flush before compaction](memory.spec.md#memory-flush-before-compaction)
+  and invariant 19. Implementation choices:
+  - *Guarantee.* Every owner message of a root conversation up to the last
+    event a committed compaction summarized (whole-turn automatic, in-turn,
+    or manual `/compact` from the REPL or web) is offered to the background
+    pass at least once, and its proposals are committed to the review inbox
+    once, before the cursor moves past it. A manual compaction's flush
+    starts when it releases the conversation; an automatic one's on the
+    first runner tick after the compacting turn releases it (within a
+    minute). The compaction itself never waits for and never changes
+    because of its flush.
+  - *After, not before (amends the plan's criterion).* The plan asked for
+    proposals to land "before the summary replaces those turns". Automatic
+    compactions happen inside a live turn, invariant 19 forbids a pass
+    commit while a live turn holds the conversation, and the plan also
+    forbids blocking the turn on the pass's model calls. So the flush runs
+    after the commit, over the stored events, which the summary replaces
+    only in the model's requests. The ordering requirement kept is the
+    cursor's: a compaction never moves it, so everything compacted is
+    eventually covered by a pass that read it.
+  - *Request.* A new `agent.CompactionMemoryFlush` (consumer-owned) is set
+    with `agent.WithCompactionMemoryFlush`; REPL and `evie serve` sessions
+    pass the runner. After the compaction event is durable the session
+    calls `RequestCompactionFlush(session, covered_last_sequence)`:
+    automatic whole-turn and in-turn compactions right after their commit
+    (one call site in `performAutomaticCompaction`), a manual compaction in
+    a deferred call that runs after its lease release, so the woken pass
+    finds the conversation free. Failed compactions and delegated sessions
+    (parent lineage or worker instructions) request nothing. The runner's
+    request only wakes its loop through a one-slot channel: it takes no
+    lock a pass holds and touches neither the store nor a model.
+  - *Durable rule instead of a queue.* The request is a shortcut.
+    `DueMemoryBackgroundSessions` derives what is owed from committed
+    events: the furthest `covered_last_sequence` among the
+    conversation's `context_compacted` and `context_turn_compacted` events
+    after its cursor, and the owner messages past the cursor up to it. Any
+    makes the conversation due with trigger `compaction` regardless of the
+    idle and turn triggers, ahead of other due conversations; `Tick` runs
+    passes through that frontier batch after batch (`passThrough`, shared
+    with `PassThrough`). So a crash right after the commit, a process that
+    runs no pass (`cron-exec`, the status command) or another process
+    holding the runner lease loses nothing: the next tick that runs, after
+    restart included, flushes it. No schema change, and the process-local
+    request never carries durable state (invariant 10).
+  - *Rules kept.* Owner messages of root conversations only; not due while
+    a live turn holds the conversation or during failure backoff; the pass
+    budget, daily caps and disabled state apply unchanged. Passes stay
+    serialized (runner mutex in a process, runner lease across processes)
+    and the cursor compare-and-set commits each batch once, with derived
+    idempotency keys, so a flush never queues a proposal twice. The cursor
+    ends at the last owner message read, not at the frontier.
+  - *In-turn.* An in-turn compaction's covered frontier is a tool result of
+    the active turn, after its root message, so the root message is flushed
+    although it stays verbatim in the request; later generations request
+    again and find nothing owed.
+  - *Status.* `progress.compaction_flush` counts the conversations and owner
+    messages still owed, each listed conversation has
+    `compacted_pending_owner_messages`, and `compaction_flush_skipped` says
+    why owed flushes are not running when the pass is disabled or paused at
+    today's cap. `evie memory-background status` and
+    `/api/memory/background/status` return them; the web Review tab does not
+    render them yet (the UI is outside this change).
+  - *Known limits.* A flush through a frontier also covers older owner
+    messages before it that no compaction summarized, since the cursor only
+    moves forward. An automatic compaction's wake finds the conversation
+    held by its own turn, so its flush waits for the next regular tick.
+    When only the next call would pass today's cap, status shows the flush
+    owed with state `on` and no skip reason, because status reports
+    `paused` only once today's spend reaches a cap (the Stage 4 rule).
+  - *Tests.* Agent: whole-turn, in-turn and manual compactions request their
+    covered frontier only after commit (manual after release); failed and
+    delegated compactions request nothing. Store: an in-turn compaction makes
+    its root message due through its frontier, not while a live turn holds
+    the conversation, and progress counts the debt. Runner, against a real
+    `/compact` in SQLite: the flush covers exactly the compacted owner
+    messages without the idle or turn triggers and the inbox gets their
+    proposals; a repeated request, tick or `PassThrough` makes no call; the
+    retained turns are read once by the idle trigger; a compaction never
+    waits for a pass in a model call; a running pass wakes for the request;
+    the live turn and backoff hold the flush back; a flush lost in a crash
+    runs after reopening the database; a disabled or capped pass leaves the
+    compaction identical and status shows the skipped flush. REPL: `/compact`
+    offers its frontier.
+
 - **2026-10-03 — Tighter tool output (memory architecture Stage 9).**
   Implements Stage 9 of
   [the memory architecture plan](../../../../docs/memory-architecture.md),
@@ -322,7 +410,7 @@
     candidate review are unchanged.
   - *Stage 10 seam.* `Runner.PassThrough(sessionID, through)` processes the
     owner messages up to a frontier regardless of triggers; compaction does
-    not call it yet.
+    not call it yet (wired by the Stage 10 entry above).
   - *Evaluation.* A scripted fake model drives every test; no test makes a
     paid call. The precision probe on a fixed 12-case corpus (scripted
     output with deliberate model mistakes) queues 7 proposals, 5 useful

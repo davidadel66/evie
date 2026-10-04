@@ -1,9 +1,10 @@
 # Context management — Evie vs current harnesses
 
-Status: comparison for planning (2026-10-03). In-turn compaction and
-tighter tool output (memory architecture Stages 8 and 9) are implemented;
-see their 2026-10-03 entries in `cmd/evie/docs/active/memory.decisions.md`.
-The other recommendations are not decided yet.
+Status: comparison for planning (2026-10-03). In-turn compaction, tighter
+tool output and the memory flush before compaction (memory architecture
+Stages 8, 9 and 10) are implemented; see their 2026-10-03 entries in
+`cmd/evie/docs/active/memory.decisions.md`. Explore workers (Stage 7) are
+implemented too; see `cmd/evie/docs/active/subagents.decisions.md`.
 
 ## Techniques the leading harnesses use
 
@@ -36,7 +37,7 @@ The other recommendations are not decided yet.
 | Delegation | Research workers only (`web_search`, `web_fetch`), with budgets, wrap-up, pageable reports and continuation | **Large.** Local work (reading files, querying databases, long bash investigations) can't be delegated, so its output floods the orchestrator. |
 | Tool-result clearing | Above 60% of the budget, older groups shrink to 1 KiB head/tail placeholders in bands, keeping the newest 3; `read_tool_result` re-reads them. Since Stage 9, a request that offers `read_tool_result` shows at most 32 KiB per result and 96 KiB per group, with the omitted range named for paging. Memory, Task, delegation and reread results are excluded from clearing. A clear that frees under 8 KiB while the request fits is skipped. | Small. Workers and older presets keep the 100 KiB per-result bound, and the 1 KiB projection is not frame-aware for very long delimiter lines. |
 | Compaction | Rolling summary of whole completed turns, carry-forward sections, calibrated budget, retry when the provider rejects for context length; since Stage 8, the active turn's oldest completed tool groups are summarized when a request cannot fit | Small. Retained tool-call arguments are never shortened. |
-| Save before forgetting | Not yet; planned as the background memory pass at idle or compaction (memory Stage 4) | Small, once Stage 4 lands. Run the pass *before* compaction, not after. |
+| Save before forgetting | Since Stage 10, every committed compaction (whole-turn, in-turn or manual) owes the background memory pass its summarized owner messages; the pass runs them as soon as the conversation is free, and a lost request is recovered from the committed compaction | Small. The flush runs just *after* the compaction commits (the events stay in SQLite), never inside the live turn; an automatic flush waits up to a minute after the turn ends. |
 | Structured notes | Task Trees and Task Focus; summary sections carried forward | Covered. |
 | Just-in-time | Memory tools, conversation and episode search, `read_tool_result`, `read_subagent_report` | Covered. |
 | Cache stability | Stable-first ordering, projection bands, Anthropic breakpoints | Covered. |
@@ -62,7 +63,9 @@ The other recommendations are not decided yet.
      never cleared.
 4. **Memory flush before compaction.** Trigger memory Stage 4's background pass
    just *before* a compaction, so what's about to be summarized is offered as
-   memory first.
+   memory first. Implemented (Stage 10) as a flush owed by every committed
+   compaction and run once the conversation is free, since the pass may not
+   commit during a live turn and must not block it.
 
 ## Sources
 

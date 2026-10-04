@@ -87,6 +87,8 @@ type Runner struct {
 	mu        sync.Mutex
 	activated bool
 	pricingMu sync.RWMutex
+	// flush wakes Run early when a compaction asks for a flush (Stage 10).
+	flush chan struct{}
 }
 
 // Option adjusts a Runner, for tests and hosts.
@@ -103,7 +105,7 @@ func WithPricing(pricing Pricing) Option          { return func(r *Runner) { r.p
 // a runner that only reports status.
 func NewRunner(store Store, model Model, config Config, options ...Option) *Runner {
 	r := &Runner{store: store, model: model, config: config, pricing: FallbackPricing, holder: "memory-background:" + uuid.NewString(),
-		now: time.Now, sleep: sleepContext, newID: uuid.NewString, logf: func(string, ...any) {}}
+		now: time.Now, sleep: sleepContext, newID: uuid.NewString, logf: func(string, ...any) {}, flush: make(chan struct{}, 1)}
 	if config.Provider == ProviderLocal {
 		r.pricing = Pricing{Source: "local"}
 	}
@@ -166,9 +168,49 @@ func (r *Runner) Run(ctx context.Context) error {
 		if _, err := r.Tick(ctx); err != nil && ctx.Err() == nil {
 			r.logf("memory background pass: %v", err)
 		}
-		if err := r.sleep(ctx, r.config.Tick); err != nil {
+		if err := r.wait(ctx); err != nil {
 			return err
 		}
+	}
+}
+
+// wait sleeps until the next tick, or less when a compaction asks for a
+// flush. It returns an error only when ctx ends.
+func (r *Runner) wait(ctx context.Context) error {
+	waitCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		select {
+		case <-r.flush:
+			cancel()
+		case <-waitCtx.Done():
+		}
+	}()
+	_ = r.sleep(waitCtx, r.config.Tick)
+	return ctx.Err()
+}
+
+// RequestCompactionFlush is the memory flush before compaction (memory
+// architecture Stage 10): a compaction of the conversation has committed a
+// summary of its events through sequence through. It never blocks and never
+// touches the store or a model; it only wakes a running pass so the flush
+// starts on this tick rather than the next one.
+//
+// The request is a shortcut, not the guarantee. A committed compaction
+// whose summarized owner messages lie past the conversation's cursor makes
+// the conversation due by itself (DueMemoryBackgroundSessions, trigger
+// compaction), so a lost request (a crash right after the commit, a process
+// that runs no pass, another process holding the runner lease) is flushed
+// by the next tick that runs anywhere. The flush keeps every rule of a pass:
+// owner messages only, the live-turn fence, backoff, and the caps. A
+// disabled pass ignores the request, and status reports the skipped flush.
+func (r *Runner) RequestCompactionFlush(sessionID memory.SessionID, through int64) {
+	if !r.config.Enabled || sessionID == "" || through < 1 {
+		return
+	}
+	select {
+	case r.flush <- struct{}{}:
+	default:
 	}
 }
 
@@ -219,9 +261,24 @@ func (r *Runner) Tick(ctx context.Context) (TickResult, error) {
 			result.Leased = leased
 			return result, err
 		}
-		run, err := r.runSession(ctx, item.SessionID, item.Trigger, 0)
-		if run.RunID != "" && !run.FinishedAt.IsZero() {
-			result.Runs = append(result.Runs, run)
+		var err error
+		if item.Trigger == memory.BackgroundTriggerCompaction {
+			// An owed compaction flush covers everything through the
+			// compaction's frontier, batch after batch.
+			var runs []memory.BackgroundRun
+			var leased bool
+			runs, leased, err = r.passThrough(ctx, item.SessionID, item.Through)
+			result.Runs = append(result.Runs, runs...)
+			if !leased {
+				result.Leased = false
+				return result, err
+			}
+		} else {
+			var run memory.BackgroundRun
+			run, err = r.runSession(ctx, item.SessionID, item.Trigger, 0)
+			if run.RunID != "" && !run.FinishedAt.IsZero() {
+				result.Runs = append(result.Runs, run)
+			}
 		}
 		if errors.Is(err, memory.ErrBackgroundDailyCap) {
 			result.Paused = true
@@ -235,11 +292,11 @@ func (r *Runner) Tick(ctx context.Context) (TickResult, error) {
 }
 
 // PassThrough runs passes over one conversation's owner messages up to
-// event sequence through, regardless of the idle and turn triggers. It is
-// the seam for Stage 10 (memory flush before compaction): the compaction
-// path can call it with the frontier it is about to summarize, after its own
-// transaction, since the events stay in SQLite. It is not wired yet. Each
-// pass still respects the caps, the cursor and the live-turn fence.
+// event sequence through at once, regardless of the idle and turn triggers
+// and of failure backoff. The compaction flush (Stage 10) reaches it through
+// Tick, which runs it for a conversation an owed flush makes due, so the
+// flush also waits for a live turn and honours backoff. Each pass still
+// respects the caps, the cursor and the live-turn fence at commit.
 func (r *Runner) PassThrough(ctx context.Context, sessionID memory.SessionID, through int64) ([]memory.BackgroundRun, error) {
 	if !r.config.Enabled {
 		return nil, errors.New("the memory background pass is disabled: " + r.config.Reason)
@@ -255,23 +312,34 @@ func (r *Runner) PassThrough(ctx context.Context, sessionID memory.SessionID, th
 		}
 		r.activated = true
 	}
-	var runs []memory.BackgroundRun
+	runs, leased, err := r.passThrough(ctx, sessionID, through)
+	if !leased {
+		return runs, errors.Join(errors.New("another process is running the background pass"), err)
+	}
+	return runs, err
+}
+
+// passThrough runs passes over one conversation's owner messages up to
+// event sequence through, batch after batch, renewing the runner lease
+// before each. The caller holds r.mu and has activated the pass. leased is
+// false when another process holds the runner lease.
+func (r *Runner) passThrough(ctx context.Context, sessionID memory.SessionID, through int64) (runs []memory.BackgroundRun, leased bool, err error) {
 	for range 64 {
 		if leased, err := r.store.AcquireMemoryBackgroundRunner(ctx, r.holder, r.runnerLeaseTTL()); err != nil || !leased {
-			return runs, errors.Join(errors.New("another process is running the background pass"), err)
+			return runs, false, err
 		}
 		run, err := r.runSession(ctx, sessionID, memory.BackgroundTriggerCompaction, through)
 		if run.RunID != "" && !run.FinishedAt.IsZero() {
 			runs = append(runs, run)
 		}
 		if err != nil {
-			return runs, err
+			return runs, true, err
 		}
 		if run.FinishedAt.IsZero() || run.ThroughSequence >= through || run.Status != memory.BackgroundRunSucceeded && run.Status != memory.BackgroundRunSkipped {
-			return runs, nil
+			return runs, true, nil
 		}
 	}
-	return runs, nil
+	return runs, true, nil
 }
 
 // errPassBudget marks a call that cannot fit the per-pass token budget.
@@ -735,6 +803,16 @@ func (r *Runner) Status(ctx context.Context) (memory.BackgroundStatus, error) {
 	priced := pricing.InputPerMillion > 0 || pricing.OutputPerMillion > 0
 	if r.config.Enabled && (status.RemainingTokens == 0 || status.RemainingMicroUSD == 0 && priced) {
 		status.State, status.Reason = memory.BackgroundStatePaused, "today's cap is reached; the pass resumes after midnight UTC"
+	}
+	// Stage 10: a compaction never waits for its flush, so a flush the pass
+	// cannot run now stays owed and is shown with the reason it is skipped.
+	if progress.CompactionFlush.PendingOwnerMessages > 0 {
+		switch status.State {
+		case memory.BackgroundStateDisabled:
+			status.CompactionFlushSkipped = "the pass is disabled; compactions proceed without the memory flush"
+		case memory.BackgroundStatePaused:
+			status.CompactionFlushSkipped = "today's cap is reached; the owed flush runs after midnight UTC"
+		}
 	}
 	return status, nil
 }
