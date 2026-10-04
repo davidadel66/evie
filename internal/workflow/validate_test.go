@@ -282,6 +282,30 @@ func TestWorkflowValidationWarnsWithoutFailing(t *testing.T) {
 	}
 }
 
+// An effect whose retries could send more Effect Intents than its
+// operation's max_calls_per_run is valid with a warning: the runtime counts
+// intents and refuses one past the bound before calling the provider
+// (Stage 14 sub-stage 6).
+func TestWorkflowValidationWarnsWhenEffectRetriesExceedMaxCalls(t *testing.T) {
+	v := mustValidate(t, filepath.Join("testdata", "notes-digest"), testEnvironment())
+	found := false
+	for _, w := range v.Report().Warnings {
+		if contains(w, "authority.operations[1]") && contains(w, "up to 2 Effect Intents") && contains(w, "max_calls_per_run 1") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no warning about retries past max_calls_per_run: %q", v.Report().Warnings)
+	}
+	dir := copyDefinition(t, "notes-digest")
+	edit(t, dir, "workflow.yaml", "    retry:\n      max_attempts: 2\n\noutputs:", "\noutputs:")
+	for _, w := range mustValidate(t, dir, testEnvironment()).Report().Warnings {
+		if contains(w, "Effect Intents") {
+			t.Fatalf("a warning without retries: %q", w)
+		}
+	}
+}
+
 func TestWorkflowValidationRequiresAWorkerCeiling(t *testing.T) {
 	env := testEnvironment()
 	env.Workers = WorkerCeiling{}

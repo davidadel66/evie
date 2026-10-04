@@ -409,10 +409,10 @@ func TestWorkflowRunRefusesStepKindsThisRuntimeCannotRunYet(t *testing.T) {
 	notes := h.workspace("notebook:inbox", "notebook:digest")
 	h.approve(h.propose(notes.ID, filepath.Join(testdata, "notes-digest"), fixtures(t, notesFixtures)))
 	_, err := h.rt.StartRun(ctx, RunRequest{WorkspaceID: notes.ID, Workflow: "notes-digest", TextInputs: map[string]string{"day": "2026-10-05"}, Surface: "cli"})
-	// Capability reads run since sub-stage 5; its effect (notes.append)
-	// waits for the effect protocol.
+	// Capability reads run since sub-stage 5 and effects since sub-stage
+	// 6; its AI step and interruption wait for sub-stage 7.
 	var unsupported *UnsupportedStepsError
-	if !errors.Is(err, ErrUnsupportedSteps) || !errors.As(err, &unsupported) || !reflect.DeepEqual(unsupported.Kinds, []string{"ai", "capability effect", "interrupt"}) ||
+	if !errors.Is(err, ErrUnsupportedSteps) || !errors.As(err, &unsupported) || !reflect.DeepEqual(unsupported.Kinds, []string{"ai", "interrupt"}) ||
 		!strings.Contains(err.Error(), "not yet supported in this runtime version") {
 		t.Fatalf("notes-digest: %v", err)
 	}

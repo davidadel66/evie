@@ -1388,12 +1388,21 @@ func (v *validator) checkAuthority() {
 			v.add(p, "repeats %s on %s; list its resources in one operation", op.Capability, op.Connection)
 		}
 		seen[key] = true
-		calls, used := 0, map[string]bool{}
+		calls, intents, used := 0, 0, map[string]bool{}
 		for _, n := range v.list {
 			if n.kind == KindCapability && n.step.Capability == op.Capability && n.step.Connection == op.Connection {
 				calls++
 				used[n.step.Resource] = true
+				if n.cap != nil && n.cap.Effect {
+					intents += n.attempts
+				}
 			}
+		}
+		// The runtime counts every Effect Intent, retries included, and
+		// refuses one past the bound before calling the provider.
+		if op.MaxCallsPerRun > 0 && calls <= op.MaxCallsPerRun && intents > op.MaxCallsPerRun {
+			v.warnings = append(v.warnings, fmt.Sprintf("%s: with retries its steps may send up to %d Effect Intents of %s on %s, but max_calls_per_run %d refuses each one past it before the provider is called",
+				p, intents, op.Capability, op.Connection, op.MaxCallsPerRun))
 		}
 		if calls == 0 {
 			v.add(p, "no step uses %s on %s; request only what the workflow needs", op.Capability, op.Connection)

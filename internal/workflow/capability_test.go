@@ -50,6 +50,37 @@ func TestWorkflowCapabilitySchemaHashIdentifiesTheContractSchema(t *testing.T) {
 	}
 }
 
+// An effect's reconciliation and Resource Conflict Key rule are part of its
+// schema (Stage 14 sub-stage 6), so a run pinned to it notices a change;
+// they leave every hash pinned before them unchanged: reads, and effects
+// declaring neither.
+func TestWorkflowCapabilitySchemaHashCoversEffectDeclarations(t *testing.T) {
+	read := CapabilityContract{ID: "ledger.month_total", Contract: "1.0.0",
+		Input:  ObjectType(Field{Name: "month", Type: StringType()}, Field{Name: "account", Type: StringType(), Optional: true}),
+		Output: ObjectType(Field{Name: "total_cents", Type: IntegerType()}, Field{Name: "count", Type: IntegerType()})}
+	if got := read.SchemaSHA256(); got != "e3b1b1878a6d64f918b871150b6aba52d816e89b2a87ff3491a521c6445113cd" {
+		t.Fatalf("a read's pinned schema hash changed to %s", got)
+	}
+	effect := read
+	effect.Effect, effect.Idempotent = true, true
+	if got := effect.SchemaSHA256(); got != "5594bcce1c4523ab0e48283bc973e6ab511abb856c530cde5f72ad555c714e0c" {
+		t.Fatalf("an effect's schema hash without reconciliation or conflict rule changed to %s", got)
+	}
+	seen := map[string]bool{effect.SchemaSHA256(): true}
+	for name, change := range map[string]func(*CapabilityContract){
+		"reconciles":       func(c *CapabilityContract) { c.Reconciles = true },
+		"conflict keys":    func(c *CapabilityContract) { c.ConflictKeys = "resource" },
+		"conflict account": func(c *CapabilityContract) { c.ConflictKeys = "account" },
+	} {
+		c := effect
+		change(&c)
+		if seen[c.SchemaSHA256()] {
+			t.Fatalf("%s: the schema hash did not change", name)
+		}
+		seen[c.SchemaSHA256()] = true
+	}
+}
+
 // A provider that declares the connections and resources it serves refuses
 // a step naming any other, at validation as well as at run time.
 func TestWorkflowValidationRefusesConnectionsAndResourcesTheProviderDoesNotServe(t *testing.T) {

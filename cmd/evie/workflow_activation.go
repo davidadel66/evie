@@ -33,6 +33,7 @@ type workflowCommands interface {
 	InspectRun(context.Context, string) (eviedb.WorkflowRunDetail, error)
 	ListRuns(context.Context, workflowruntime.RunFilter) ([]eviedb.WorkflowRun, error)
 	Substitute(context.Context, workflowruntime.Substitution) (eviedb.WorkflowRunSubstitution, error)
+	Reconcile(context.Context, workflowruntime.Reconciliation) (eviedb.WorkflowRunDetail, error)
 }
 
 // workflowCapabilityPlugins are the compiled plugins that contribute
@@ -315,6 +316,8 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		fmt.Fprintf(out, "Recorded: run %s continues %s with %s %s in place of the pinned %s (contract %s, same schema).\n%s\nThe run resumes at its next check.\n",
 			sub.RunID, sub.Capability, sub.Plugin, sub.ReplacementVersion, sub.PinnedVersion, sub.Contract, sub.Evidence)
 		return true, nil
+	case "reconcile":
+		return true, reconcileWorkflowEffect(ctx, args[2:], out, rt)
 	}
 	return true, usage
 }

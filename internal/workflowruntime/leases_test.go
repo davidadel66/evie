@@ -591,7 +591,7 @@ func TestWorkflowRunPausesUnderAnIncompatibleRuntime(t *testing.T) {
 	w, _ := h.approveSplitBill(splitBillDir)
 	id := h.detach(w.ID, billInputs("dinner-1", 1000, 3)).ID
 	upgraded := h.process()
-	upgraded.rt.compatible = []string{"evie.workflow.runtime/3"}
+	upgraded.rt.compatible = []string{"evie.workflow.runtime/99"}
 	stop := upgraded.rt.Start(ctx)
 	eventually(t, "the run to pause", func() bool { return h.state(id) == eviedb.WorkflowRunWaitingForDependency })
 	if err := stop(); err != nil {

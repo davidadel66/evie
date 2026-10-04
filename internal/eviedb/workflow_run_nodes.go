@@ -63,30 +63,44 @@ func (s *Store) AdmitWorkflowNode(ctx context.Context, lease WorkflowRunLease, n
 		if err != nil {
 			return err
 		}
-		if err := authorizeWorkflowRun(ctx, conn, run); err != nil {
-			return err
-		}
-		own, err := activationAt(ctx, conn, run.WorkspaceID, run.Workflow, run.Version)
-		if err != nil {
-			return err
-		}
-		covered := slices.ContainsFunc(own.Authority, func(op workflow.AuthorityReport) bool {
-			return op.Capability == n.Capability && op.Connection == n.Connection && slices.Contains(op.Resources, n.Resource)
-		})
-		if !covered {
-			return &WorkflowNodeRefusal{Reason: fmt.Sprintf("steps.%s: %s on %s %s is outside the Standing Authority approved with version %d",
-				n.Step, n.Capability, n.Connection, n.Resource, run.Version)}
-		}
-		access, err := workspaceAccess(ctx, conn, run.WorkspaceID)
-		if err != nil {
-			return err
-		}
-		if !access.Access.Allows(n.Connection, n.Resource) {
-			return &WorkflowNodeRefusal{Reason: fmt.Sprintf("steps.%s: %s %s is outside the Workspace's current Workspace Access (revision %d)",
-				n.Step, n.Connection, n.Resource, access.Revision)}
-		}
-		return nil
+		_, err = admitWorkflowNode(ctx, conn, run, n)
+		return err
 	})
+}
+
+// nodeAdmission is what admitted a node: the operation of the run's own
+// approved Standing Authority that covers it and the Workspace Access
+// revision that allows it.
+type nodeAdmission struct {
+	operation workflow.AuthorityReport
+	access    int64
+}
+
+// admitWorkflowNode applies per-node admission inside a transaction.
+func admitWorkflowNode(ctx context.Context, conn *sql.Conn, run WorkflowRun, n WorkflowNodeAdmission) (nodeAdmission, error) {
+	if err := authorizeWorkflowRun(ctx, conn, run); err != nil {
+		return nodeAdmission{}, err
+	}
+	own, err := activationAt(ctx, conn, run.WorkspaceID, run.Workflow, run.Version)
+	if err != nil {
+		return nodeAdmission{}, err
+	}
+	i := slices.IndexFunc(own.Authority, func(op workflow.AuthorityReport) bool {
+		return op.Capability == n.Capability && op.Connection == n.Connection && slices.Contains(op.Resources, n.Resource)
+	})
+	if i < 0 {
+		return nodeAdmission{}, &WorkflowNodeRefusal{Reason: fmt.Sprintf("steps.%s: %s on %s %s is outside the Standing Authority approved with version %d",
+			n.Step, n.Capability, n.Connection, n.Resource, run.Version)}
+	}
+	access, err := workspaceAccess(ctx, conn, run.WorkspaceID)
+	if err != nil {
+		return nodeAdmission{}, err
+	}
+	if !access.Access.Allows(n.Connection, n.Resource) {
+		return nodeAdmission{}, &WorkflowNodeRefusal{Reason: fmt.Sprintf("steps.%s: %s %s is outside the Workspace's current Workspace Access (revision %d)",
+			n.Step, n.Connection, n.Resource, access.Revision)}
+	}
+	return nodeAdmission{operation: own.Authority[i], access: access.Revision}, nil
 }
 
 // CheckWorkflowRunLease reports whether lease is still the run's current,
@@ -110,6 +124,11 @@ func (s *Store) InterruptWorkflowAttempt(ctx context.Context, lease WorkflowRunL
 		return errors.New("an interrupted attempt needs its reason")
 	}
 	return s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, now time.Time) error {
+		// An effect attempt is never a safe rerun: its outcome is unknown
+		// (sub-stage 6).
+		if err := requireAttemptEffectResolved(ctx, conn, lease.RunID, seq); err != nil {
+			return err
+		}
 		var step string
 		var attempt int
 		var checkpoint int64

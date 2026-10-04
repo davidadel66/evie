@@ -17,7 +17,8 @@ import (
 // proposal's approval card, approve exactly what it showed, and deactivate
 // a version. Proposals come from the CLI; these routes never read a path
 // the browser names. Sub-stage 3 adds starting, listing and inspecting
-// runs.
+// runs; sub-stage 6 the owner's reconciliation of an effect whose outcome
+// is unknown.
 type WorkflowManager interface {
 	List(context.Context, memory.WorkspaceID) ([]eviedb.WorkflowDefinitionState, error)
 	Show(context.Context, memory.WorkspaceID, string) (eviedb.WorkflowDefinitionState, error)
@@ -27,6 +28,7 @@ type WorkflowManager interface {
 	StartRun(context.Context, workflowruntime.RunRequest) (workflowruntime.RunResult, error)
 	InspectRun(context.Context, string) (eviedb.WorkflowRunDetail, error)
 	ListRuns(context.Context, workflowruntime.RunFilter) ([]eviedb.WorkflowRun, error)
+	Reconcile(context.Context, workflowruntime.Reconciliation) (eviedb.WorkflowRunDetail, error)
 }
 
 // WithWorkflows adds the workflow management routes.
@@ -47,6 +49,7 @@ func (s *Server) registerWorkflowRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workflows/start", s.managementRoute(s.handleWorkflowStart))
 	mux.Handle("/api/workflows/runs", s.managementRoute(s.handleWorkflowRuns))
 	mux.Handle("/api/workflows/inspect", s.managementRoute(s.handleWorkflowInspect))
+	mux.Handle("/api/workflows/reconcile", s.managementRoute(s.handleWorkflowReconcile))
 }
 
 func boundedID(id string) bool { return id != "" && len(id) <= 128 }
@@ -187,8 +190,47 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusConflict, "definition_mismatch", err.Error()
 	case errors.Is(err, workflowruntime.ErrCapabilityUnavailable):
 		status, code, message = http.StatusConflict, "capability_unavailable", err.Error()
+	case errors.Is(err, workflowruntime.ErrReconcileRefused):
+		status, code, message = http.StatusConflict, "reconcile_refused", err.Error()
 	}
 	managementJSONError(w, status, code, message)
+}
+
+// maxWorkflowReconcileBytes bounds a reconciliation request: the effect's
+// output (at most 64 KiB), the evidence and the envelope.
+const maxWorkflowReconcileBytes = 72 << 10
+
+// handleWorkflowReconcile is the owner reconciling, from the web, an
+// effect whose outcome is unknown (Stage 14 sub-stage 6): the run, the
+// step, whether the effect happened or did not happen, the evidence and,
+// when it happened, its output object. The surface is always the web. The
+// response waits until the run finishes or stops again, unless detach is
+// set; either way the run does not stop if the browser disconnects.
+func (s *Server) handleWorkflowReconcile(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		RunID    string          `json:"run_id"`
+		Step     string          `json:"step"`
+		Outcome  string          `json:"outcome"`
+		Evidence string          `json:"evidence"`
+		Output   json.RawMessage `json:"output"`
+		Detach   bool            `json:"detach"`
+	}
+	if !decodeCandidateRequestLimit(w, r, &request, maxWorkflowReconcileBytes) {
+		return
+	}
+	outcomes := request.Outcome == workflowruntime.OutcomeHappened || request.Outcome == workflowruntime.OutcomeDidNotHappen
+	if !boundedID(request.RunID) || !boundedID(request.Step) || !outcomes || len(request.Evidence) > workflowruntime.MaxReconcileEvidence {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request",
+			"reconcile requires the run ID, the step, an outcome of happened or did-not-happen and evidence of at most 2000 bytes")
+		return
+	}
+	reconciled, err := s.workflows.Reconcile(r.Context(), workflowruntime.Reconciliation{RunID: request.RunID, Step: request.Step, Outcome: request.Outcome,
+		Evidence: request.Evidence, Output: request.Output, Detach: request.Detach, Surface: "web"})
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, reconciled)
 }
 
 // maxWorkflowStartBytes bounds a start request: the run input document (at

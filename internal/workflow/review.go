@@ -280,14 +280,7 @@ func reviewSections(r Report) []section {
 		outputs = append(outputs, fmt.Sprintf("%s: %s (%s)", o.Name, o.From, when))
 	}
 	for _, c := range r.Capabilities {
-		kind := "read"
-		if c.Effect {
-			kind = "effect"
-			if c.Idempotent {
-				kind += ", idempotent"
-			}
-		}
-		contracts = append(contracts, fmt.Sprintf("%s %s: %s", c.ID, c.Contract, kind))
+		contracts = append(contracts, fmt.Sprintf("%s %s: %s", c.ID, c.Contract, c.summary()))
 	}
 	for _, w := range r.Workers {
 		l := fmt.Sprintf("%s: %s worker, %s, %s / %s tokens each", w.Step, w.Worker, plural(w.Attempts, "attempt"), w.BudgetTime, grouped(w.BudgetTokens))

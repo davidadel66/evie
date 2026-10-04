@@ -1,5 +1,242 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Effect protocol and reconciliation (Stage 14, sub-stage 6)
+
+Source: sub-stage 6 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md) and
+the sub-stage 5 entry below ("What sub-stage 6 must pick up"): a separate
+effect provider role with idempotency, reconciliation and Resource Conflict
+Keys pinned in the same composition entries; per-node admission before each
+Effect Intent; `max_calls_per_run` counted by intents; the lease checked
+right before the call; an interrupted effect is Outcome Unknown and moves
+the run to `needs_reconciliation`, never the interruption rerun; automatic
+resume stays off while an effect is unknown. Binding: ADR 0008, 0009,
+0010, 0015, 0016, 0017, 0021, 0025, 0027, 0029 and 0043 and this spec's
+effect ordering, Outcome Unknown, reconciliation, retry, Resource Conflict
+Key and Standing Authority decisions.
+
+### What was built
+
+- **Effect provider role.** Plugins contribute effects through
+  `plugins.WorkflowEffectProvider` (ADR 0015), separate from reads and
+  tools: a manifest-declared Capability ID and contract version, closed
+  object input and output, the exact Connection IDs and resources served,
+  and four declarations. `Idempotent`: the provider applies one idempotency
+  key at most once, so the same Effect Intent may be sent again.
+  `ConflictKeys` with its named `ConflictRule` (such as `account`): the
+  Resource Conflict Keys a request touches; without them one key per
+  connection and resource. `Perform`: sends a request; only an error
+  wrapping `plugins.ErrWorkflowEffectNotPerformed` (`EffectNotPerformed`)
+  proves nothing happened. `Reconcile` (optional): for an intent whose
+  outcome is unknown, says by lookup or idempotent replay whether the
+  effect with its key happened (`happened` with its output,
+  `did_not_happen`, or `unknown`); it must never perform the effect twice.
+  The Plugin Manager validates contributions like reads (declared once, one
+  role only, object types, valid selectors, a perform function, a rule
+  exactly when keys are derived) and resolves the behavior only while the
+  plugin is ready. `workflow.CapabilityContract` gains `Reconciles` and
+  `ConflictKeys`; both enter the schema hash only when set, so every hash
+  pinned before (Finance's reads included) is unchanged, which a test pins.
+  Runs pin effects in the same Execution Composition entries as reads, with
+  `effect`, `idempotent`, `reconciles` and `conflict_keys`; any change is a
+  schema change and pauses a pinned run (ADR 0025).
+- **Review.** Reports and approval cards describe each effect as "effect,
+  idempotent, reconciled by the provider|owner, conflict keys per <rule>".
+  Validation warns (it does not refuse) when an operation's effect steps
+  could send more intents with their retries than its `max_calls_per_run`.
+- **Durable sequence.** The run's input is accepted and checkpointed, and
+  its definition, authority and composition pinned, at start. Before each
+  effect the pinned provider must be ready (otherwise the run pauses with
+  nothing recorded, and resumes by itself: nothing is uncertain). Then one
+  fenced transaction (`BeginWorkflowEffect`) applies per-node admission (the
+  same `admitWorkflowNode` as `AdmitWorkflowNode`: run admission, the
+  operation within the run's own approved Standing Authority, the
+  connection and resource within current Workspace Access), counts the
+  run's intents of the operation against `max_calls_per_run`, takes the
+  Resource Conflict Keys, and records the node attempt with its Effect
+  Intent: step, checkpoint, provider called (Capability ID, contract,
+  schema hash, plugin, version), connection, resource, idempotency key,
+  idempotency, who reconciles, conflict keys, input and the authority
+  evaluation (version, authority hash, operation, this call's number, the
+  bound, the access revision). The lease is checked again immediately
+  before the call, and the call's context ends when the lease is lost or
+  the effect timeout passes (`SchedulerConfig.EffectTimeout`, default 30
+  seconds, at most 10 minutes), not when the runtime stops: an effect in
+  flight completes or ends unknown. The provider's response is normalized,
+  checked against the contract and recorded as the Effect Receipt with the
+  attempt's output and the next checkpoint in one transaction
+  (`FinishWorkflowEffect`), which also releases the conflict keys. A proven
+  failure records a failed receipt and retries within the step's Retry
+  Policy after its durable backoff, or fails the run after the last
+  attempt. Attempt and intent share one transaction, so "after the attempt,
+  before the intent" is not a reachable crash state; receipt, output and
+  checkpoint share one, so a crash after them reruns only the next step.
+- **Idempotency key.** `sha256:` over the canonical JSON of the run's
+  Workspace and Run Key (its logical execution, ADR 0021), the step, the
+  capability, connection, resource and the deterministic input. Every
+  attempt and reconciliation of a node shares it, whichever implementation
+  serves it, and so does a later run of the same Run Key after a failure,
+  so an idempotent provider never repeats an effect that already happened
+  there.
+- **Outcome Unknown.** An answer after the effect timeout that is not proof
+  of non-performance (after a grace of up to one second for the provider's
+  own answer), any other error, a panic, or a response outside the contract
+  records the intent's outcome unknown (`workflow_effect_unknowns`, with
+  the reason and any malformed response) and moves the run to
+  `needs_reconciliation`, in one transaction with the attempt's end. A
+  runtime that dies between intent and receipt leaves the attempt in
+  flight; the next claim records it interrupted and the intent unknown in
+  the claim's own transaction. Every claim also records unknown any intent
+  whose attempt ended without a receipt (an Evie that predates the effect
+  protocol may have interrupted it and paused the run), and may claim such
+  a run before its recheck time. The run's error says what is unknown and
+  how it is reconciled. Provider text quoted in receipts, unknown outcomes
+  and run errors is clipped to 1,000 bytes.
+- **Blocked until reconciled.** While any intent of a run has no receipt
+  the store refuses every node attempt (dependent nodes are blocked), every
+  pause, resume and failure of the run, ending the effect attempt without
+  its receipt, and treating it as a safe interruption. A run that needs
+  reconciliation is never paused or resumed; only a receipt moves it back
+  to `running`. Interrupted effect attempts do not count toward the
+  per-node interruption bound.
+- **Automatic reconciliation.** When the provider reconciles, the run is
+  due after a settle delay of one effect timeout when its call timed out or
+  failed (the pass that found it unknown waits it out under its lease, so
+  a request still landing is not looked up too early), and at once after a
+  crash, whose holder stopped at least a lease earlier (`DueWorkflowRuns`
+  lists `needs_reconciliation` runs with a not-before time). The runtime
+  checks the run's pins and approved
+  definition, the provider's readiness and per-node admission (a replay
+  may perform), checks the lease, calls `Reconcile` with the intent's key
+  and records its answer as the receipt (`source reconcile`, with its
+  evidence): `happened` with output inside the contract, or
+  `did_not_happen`. Then the run continues in the same pass. While the
+  provider is unavailable or its reconciliation fails or times out, the run
+  stays `needs_reconciliation` and is tried again after the pause recheck
+  (one minute). When the provider cannot prove the outcome, answers outside
+  the contract, is no longer admitted or does not reconcile, the run waits
+  for the owner (no not-before time; no scheduler claims it).
+- **Owner reconciliation.** `evie workflows reconcile <run-id> <step>
+  --outcome happened|did-not-happen [--evidence <text>] [--output-json
+  <file>] [--detach] [--json]` and `POST /api/workflows/reconcile`
+  (`run_id`, `step`, `outcome`, `evidence` up to 2,000 bytes, `output`,
+  `detach`; the surface is always `web`) claim the run's lease, record an
+  immutable receipt with the owner, surface and evidence, and continue the
+  run in the foreground unless detached. An effect that happened needs its
+  output, checked against the step's contract (`{}` when none is given); a
+  run another runtime is advancing, a step without an unknown effect and a
+  finished run are refused (`ErrReconcileRefused`, web 409
+  `reconcile_refused`). No model-facing tool reconciles.
+- **Continuing from a receipt.** An effect reconciled as having happened
+  supplies the step's output from its receipt through an attempt that
+  calls nothing (its note names the intent and how it was reconciled), with
+  the next checkpoint. One that did not happen retries only within the
+  step's Retry Policy, sending the same idempotency key again; with no
+  attempt left the run fails ("steps.post: Effect Intent #1 did not happen
+  (...); its Retry Policy allows no further attempt (1 attempt)").
+- **Resource Conflict Keys.** Each key is scoped by its connection
+  (`conn-ledger/account:household`). A partial unique index over
+  `workflow_effect_conflicts` lets one unresolved intent hold a key at a
+  time, across every run and Workspace; an intent takes its keys in its own
+  transaction and releases them with its receipt, so an unknown intent
+  keeps its keys until reconciled. A run whose effect needs a held key
+  pauses visibly before the intent ("steps.post waits: Resource Conflict
+  Key ... is held by run ... steps.post (Effect Intent #1, in flight)"),
+  rechecked at the scheduler's poll while the holder is in flight and at
+  the pause recheck while the holder waits for reconciliation, and stays
+  paused through rechecks until the key is free. Deterministic steps and
+  reads are never serialized.
+- **Enforcement.** Out-of-bounds effects stop before the provider is
+  called: admission refusals pause the run with nothing recorded, and an
+  intent past `max_calls_per_run` fails the run ("steps.post: the Standing
+  Authority's max_calls_per_run 1 for ledger.post on conn-ledger is reached
+  (Effect Intents sent in this run: 1); the effect is refused before the
+  provider is called").
+- **Records.** `workflow_effect_intents`, `workflow_effect_unknowns` and
+  `workflow_effect_receipts` are immutable; `workflow_effect_conflicts`
+  rows are only released. `evie workflows inspect` and the inspect route
+  list each intent with its key, conflict keys, call number, input,
+  unknown outcome and receipt; a run needing reconciliation is labelled so.
+- **Runtime version.** Runs pin `evie.workflow.runtime/3`; `/1` and `/2`
+  stay compatible (they hold no effect: sub-stage 5 refused effects at
+  start). An older Evie pauses a `/3` run as incompatible rather than
+  running its effects.
+- **No production effect provider.** None of the candidates fits safely
+  now. `finance.categorize` is already a tool capability (one Capability,
+  one role); a workflow effect over the ledger would need a new contract
+  and a Finance version, and the finance database keeps no per-request
+  record, so neither lookup by key nor a replay could prove what a given
+  intent did or reproduce its output (Categorize is idempotent over state,
+  not per request). Task Tree updates belong to the orchestrating
+  conversation, which a run does not have. The protocol ships with test
+  providers only (`internal/workflow/testdata/post-share` and the fakes in
+  the runtime tests); the first real provider should keep a per-key record
+  so it can reconcile.
+- **AI steps and simulation.** Only a capability effect step reaches
+  `Perform`, and only through this protocol; AI, agent and map steps are
+  still refused at start, and no other code path holds the effect role
+  (ADR 0010). Simulation is unchanged: effects become previews with the
+  fixture's response, reach no provider and record no intent or receipt
+  (tested through a proposal).
+
+### Decisions and known limits
+
+- `max_calls_per_run` counts every Effect Intent (every provider call),
+  retries included, not distinct idempotency keys: the conservative
+  reading, which a validation warning makes visible.
+- Attempt states are not extended (no table rebuild): a live unknown
+  outcome ends its attempt `failed` ("outcome unknown: ..."), a crash
+  leaves it `interrupted`; the explicit Outcome Unknown is the intent's
+  state, and the run's `needs_reconciliation`.
+- No new recovery event kinds (the events table checks its kinds):
+  effect history lives in the intent, unknown and receipt records.
+- Conflict keys are global, not per Workspace: a key names an external
+  resource, which Workspaces may share through a connection (ADR 0042),
+  and this is strictly stronger than serializing within one Workspace.
+  ADR 0043's "broader single-file execution" is the default rule.
+- A lookup that finds "did not happen" while the request is still in
+  flight (a stale holder's, or a timed-out one) could race it. The lost
+  lease cancels a stale holder's context, the first lookup after a timeout
+  waits one effect timeout, retries exist only for idempotent providers
+  (validation) and resend the same key; what remains is a non-idempotent
+  provider's request landing later still, after its lookup made the run
+  fail rather than retry. Such a provider's lookup should only answer
+  "did not happen" when it can prove the request can no longer land.
+- Stopping the scheduler waits at most five seconds; an effect running
+  longer keeps its lease until it expires, and the next holder records it
+  unknown.
+- A conflict wait re-reads the approved commit at each recheck (one second
+  by default while the holder is in flight).
+- Standing Authority declares operations, connections, exact resources and
+  `max_calls_per_run`; amounts and recipients are not in the schema yet
+  (resources stand in for recipients). Declaring them is a schema
+  amendment, and changing them a new approved version.
+- `limits.max_duration` keeps counting while a run waits for
+  reconciliation; a reconciled effect's output is still recorded, and the
+  run then fails at its next node.
+- ADR 0021's audited override (not built) must add an override identity to
+  the key derivation, or an idempotent provider would answer the rerun with
+  the earlier result.
+- The owner's evidence is optional text; the receipt records who, how and
+  when. Reconciliation has no web UI control yet (it needs the Workspace
+  home's run view); the API route exists.
+
+### What sub-stage 7 must pick up
+
+- AI steps return typed proposals only: their output may reach an effect
+  only as a later capability step's input through deterministic
+  validation, and never through the effect role (ADR 0010).
+- Durable human interruptions must keep automatic resume off while one is
+  outstanding (ADR 0029), as the store now does for unknown effects
+  (`ResumeWorkflowRun`, `PauseWorkflowRun`, `BeginWorkflowAttempt`). The
+  spec presents an unprovable effect to the owner as a durable human
+  interruption; today it is `needs_reconciliation` with the CLI and API, so
+  sub-stage 7 decides whether reconciliation also becomes an interruption.
+- Bump the runtime to `evie.workflow.runtime/4` when AI steps execute and
+  declare `/3` compatible. Sub-stage 8's cancellation must let an effect in
+  flight complete or reach reconciliation: the store refuses to fail a run
+  with an unresolved intent, and cancellation needs the same rule.
+
 ## 2026-10-04 — Capability reads (Stage 14, sub-stage 5)
 
 Source: sub-stage 5 of Stage 14 in

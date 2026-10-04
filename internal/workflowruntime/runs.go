@@ -41,24 +41,26 @@ import (
 // RuntimeVersion names this runtime's execution semantics in each run's
 // Execution Composition (ADR 0016, 0025). Version 2 (sub-stage 5) adds
 // capability reads through pinned providers and stops counting interrupted
-// attempts against a step's Retry Policy.
-const RuntimeVersion = "evie.workflow.runtime/2"
+// attempts against a step's Retry Policy; version 3 (sub-stage 6) adds
+// capability effects through the effect protocol, Outcome Unknown and
+// reconciliation, so an Evie without them pauses such a run as
+// incompatible instead of running it.
+const RuntimeVersion = "evie.workflow.runtime/3"
 
 // compatibleRuntimes are the pinned runtimes this runtime declares it can
 // continue (ADR 0025). Runs pinned to evie.workflow.runtime/1 (sub-stages 3
 // and 4) hold only deterministic and branch steps, whose semantics are
 // unchanged; the one difference, that an interruption no longer spends one
 // of a step's attempts, only lets a pure node run again from the same
-// checkpoint and never changes a recorded output. A run pinned to any other
-// runtime pauses visibly.
-var compatibleRuntimes = []string{"evie.workflow.runtime/1", RuntimeVersion}
+// checkpoint and never changes a recorded output. Runs pinned to
+// evie.workflow.runtime/2 (sub-stage 5) were refused any effect at start,
+// so they hold only those steps and capability reads, whose semantics are
+// unchanged. A run pinned to any other runtime pauses visibly.
+var compatibleRuntimes = []string{"evie.workflow.runtime/1", "evie.workflow.runtime/2", RuntimeVersion}
 
-// executableKinds are the step kinds this runtime version executes;
-// capability steps only when they read (effects are sub-stage 6's).
+// executableKinds are the step kinds this runtime version executes:
+// capability reads and, since sub-stage 6, capability effects.
 var executableKinds = []string{workflow.KindBranch, workflow.KindCapability, workflow.KindDeterministic}
-
-// capabilityEffect names capability effect steps among unsupported kinds.
-const capabilityEffect = "capability effect"
 
 var (
 	// ErrUnsupportedSteps refuses a definition with steps this runtime
@@ -79,7 +81,7 @@ type UnsupportedStepsError struct {
 }
 
 func (e *UnsupportedStepsError) Error() string {
-	return fmt.Sprintf("workflow %s uses %s steps, not yet supported in this runtime version (it runs deterministic, branch and capability read steps); no run was started",
+	return fmt.Sprintf("workflow %s uses %s steps, not yet supported in this runtime version (it runs deterministic, branch and capability steps); no run was started",
 		e.Workflow, strings.Join(e.Kinds, ", "))
 }
 
@@ -190,11 +192,6 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	for _, kind := range kinds {
 		if !slices.Contains(executableKinds, kind) {
 			unsupported = append(unsupported, kind)
-		}
-	}
-	for _, s := range v.CapabilitySteps() {
-		if s.Effect && !slices.Contains(unsupported, capabilityEffect) {
-			unsupported = append(unsupported, capabilityEffect)
 		}
 	}
 	if len(unsupported) > 0 {
@@ -429,6 +426,9 @@ type pass struct {
 	lease  eviedb.WorkflowRunLease
 	v      *workflow.Validated
 	comp   composition
+	// settling is set when this pass found an effect's outcome unknown and
+	// automatic reconciliation waits its settle delay (sub-stage 6).
+	settling bool
 }
 
 // continueRun checks, under the lease, that the run may continue, pausing
@@ -452,6 +452,10 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 		return 0, err
 	}
 	run := p.Run
+	if run.State == eviedb.WorkflowRunNeedsReconciliation {
+		// Never paused or resumed: only a receipt lets it continue.
+		return r.continueReconciliation(ctx, writes, lease, lost, p)
+	}
 	comp, reason := r.incompatible(run.Composition)
 	if reason != "" {
 		return pause(reason)
@@ -472,9 +476,7 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 	if err != nil {
 		return 0, err
 	}
-	pinned := eviedb.WorkflowActivation{WorkspaceID: run.WorkspaceID, Name: run.Workflow, Version: run.Version, Commit: run.Commit, Path: run.Path,
-		ExecutableHash: run.ExecutableHash, AuthorityHash: run.AuthorityHash}
-	v, err := r.approvedDefinition(writes, pinned, access.Access)
+	v, err := r.approvedDefinition(writes, pinnedActivation(run), access.Access)
 	if errors.Is(err, ErrDefinitionMismatch) {
 		return pause(err.Error())
 	}
@@ -482,15 +484,29 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 		return 0, err
 	}
 	// A run paused for an unavailable provider stays paused, rather than
-	// resuming only to pause again before the read, until it is ready.
+	// resuming only to pause again before the read, until it is ready; one
+	// paused before an effect whose Resource Conflict Key another run
+	// holds stays paused until the key is free.
 	if next, ok := v.Step(p.Checkpoint.Next); ok && next.Kind == workflow.KindCapability && p.InFlight == nil && !run.State.Terminal() {
 		if pin, ok := comp.pin(next.Capability); ok {
-			_, reason, err := r.checkPinned(writes, run.ID, pin, true)
+			provider, reason, err := r.checkPinned(writes, run.ID, pin, true)
 			if err != nil {
 				return 0, err
 			}
 			if reason != "" {
 				return pause(fmt.Sprintf("steps.%s: %s", next.ID, reason))
+			}
+			if next.Effect && run.State == eviedb.WorkflowRunWaitingForDependency {
+				held, err := r.pendingConflict(writes, p, v, next, provider)
+				if err != nil {
+					return 0, err
+				}
+				if held != nil {
+					if err := r.waitForConflict(writes, lease, next, held); err != nil {
+						return 0, err
+					}
+					return passPaused, nil
+				}
 			}
 		}
 	}
@@ -501,6 +517,13 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 		return 0, err
 	}
 	return r.advance(&pass{stop: ctx, writes: writes, lost: lost, lease: lease, v: v, comp: comp})
+}
+
+// pinnedActivation is the approved version a run is pinned to, as
+// approvedDefinition reads it.
+func pinnedActivation(run eviedb.WorkflowRun) eviedb.WorkflowActivation {
+	return eviedb.WorkflowActivation{WorkspaceID: run.WorkspaceID, Name: run.Workflow, Version: run.Version, Commit: run.Commit, Path: run.Path,
+		ExecutableHash: run.ExecutableHash, AuthorityHash: run.AuthorityHash}
 }
 
 // incompatible reads the run's pinned Execution Composition and says why
@@ -546,6 +569,32 @@ func (r *Runtime) advance(pc *pass) (passEnd, error) {
 			return passDone, nil
 		case p.Run.State == eviedb.WorkflowRunWaitingForDependency:
 			return passPaused, nil
+		case p.Run.State == eviedb.WorkflowRunNeedsReconciliation:
+			// An effect's outcome is unknown: reconcile it automatically
+			// when that is due, before anything else; otherwise the run
+			// waits (for its recheck, or for the owner). When this pass
+			// has just found it unknown, it waits out the settle delay
+			// under its lease first, so a request still landing is not
+			// looked up too early.
+			settling := pc.settling
+			pc.settling = false
+			if settling && p.Run.NotBefore != nil && p.Run.NotBefore.After(r.now()) && pc.stop.Err() == nil {
+				if err := r.sleep(pc.stop, p.Run.NotBefore.Sub(r.now())); err != nil {
+					return passParked, nil
+				}
+				continue
+			}
+			if p.Run.NotBefore == nil || p.Run.NotBefore.After(r.now()) || pc.stop.Err() != nil {
+				return passParked, nil
+			}
+			resolved, err := r.reconcileAutomatically(pc, p)
+			if err != nil {
+				return 0, err
+			}
+			if !resolved {
+				return passParked, nil
+			}
+			continue
 		case p.InFlight != nil:
 			return 0, fmt.Errorf("%w: steps.%s attempt %d is in flight under lease %d", eviedb.ErrWorkflowRunConflict, p.InFlight.Step, p.InFlight.Attempt, p.InFlight.LeaseToken)
 		case p.Run.NotBefore != nil && p.Run.NotBefore.After(r.now()):
@@ -589,9 +638,24 @@ func (r *Runtime) step(pc *pass, p eviedb.WorkflowRunProgress) error {
 	if !ok {
 		return fail(fmt.Sprintf("checkpoint %d names step %q, which the definition does not have", p.Checkpoint.Seq, p.Checkpoint.Next))
 	}
-	if p.Interrupted >= r.sched.Interruptions {
+	// An effect's attempts that sent an Effect Intent are never safe
+	// interruptions: an interrupted one left its outcome unknown and was
+	// reconciled, so only the others count toward the bound.
+	interrupted := p.Interrupted
+	var intents []eviedb.WorkflowEffectIntent
+	if step.Kind == workflow.KindCapability && step.Effect {
+		if intents, err = r.stepIntents(pc.writes, p.Run.ID, p.Checkpoint.Seq, step.ID); err != nil {
+			return err
+		}
+		for _, i := range intents {
+			if i.AttemptState == eviedb.WorkflowAttemptInterrupted {
+				interrupted--
+			}
+		}
+	}
+	if interrupted >= r.sched.Interruptions {
 		return fail(fmt.Sprintf("steps.%s was interrupted %s at checkpoint %d (each time its runtime crashed, stopped or lost its lease before recording the outcome); the run fails instead of running it again: %s",
-			step.ID, times(p.Interrupted), p.Checkpoint.Seq, p.LastError))
+			step.ID, times(interrupted), p.Checkpoint.Seq, p.LastError))
 	}
 	switch step.Kind {
 	case workflow.KindBranch:
@@ -625,6 +689,9 @@ func (r *Runtime) step(pc *pass, p eviedb.WorkflowRunProgress) error {
 	case workflow.KindDeterministic:
 		return r.deterministic(pc, p, step, inputs, state, fail)
 	case workflow.KindCapability:
+		if step.Effect {
+			return r.effect(pc, p, step, inputs, state, intents, fail, pause)
+		}
 		return r.read(pc, p, step, inputs, state, fail, pause)
 	}
 	return fail(fmt.Sprintf("steps.%s is a %s step, which this runtime version cannot run", step.ID, step.Kind))
@@ -710,6 +777,18 @@ func (r *Runtime) settle(pc *pass, p eviedb.WorkflowRunProgress, step workflow.S
 		_, err := r.store.FinishWorkflowAttempt(pc.writes, pc.lease, end)
 		return err
 	}
+	end, err := successEnd(pc, p, step, seq, inputs, state, out, output)
+	if err != nil {
+		return err
+	}
+	_, err = r.store.FinishWorkflowAttempt(pc.writes, pc.lease, end)
+	return err
+}
+
+// successEnd is a succeeded attempt's end: its output with the next
+// checkpoint, holding every step output so far, and the run's outputs when
+// the graph ends.
+func successEnd(pc *pass, p eviedb.WorkflowRunProgress, step workflow.StepPlan, seq int64, inputs, state map[string]any, out any, output []byte) (eviedb.WorkflowAttemptEnd, error) {
 	next := make(map[string]any, len(state)+1)
 	for k, v := range state {
 		next[k] = v
@@ -717,16 +796,15 @@ func (r *Runtime) settle(pc *pass, p eviedb.WorkflowRunProgress, step workflow.S
 	next[step.ID] = out
 	nextState, err := workflow.EncodeValue(next)
 	if err != nil {
-		return err
+		return eviedb.WorkflowAttemptEnd{}, err
 	}
 	end := eviedb.WorkflowAttemptEnd{RunID: p.Run.ID, Seq: seq, Output: output, Next: step.Next, State: nextState}
 	if step.Next == "" {
 		if end.Outputs, err = workflow.EncodeValue(pc.v.Outputs(inputs, next)); err != nil {
-			return err
+			return eviedb.WorkflowAttemptEnd{}, err
 		}
 	}
-	_, err = r.store.FinishWorkflowAttempt(pc.writes, pc.lease, end)
-	return err
+	return end, nil
 }
 
 func decodeObject(data json.RawMessage) (map[string]any, error) {
@@ -819,10 +897,16 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 			paused += fmt.Sprintf(" (checked again after %s)", run.NotBefore.Format(timeLayout))
 		}
 		line("%s", paused)
+	case run.State == eviedb.WorkflowRunNeedsReconciliation:
+		needs := "Needs reconciliation: " + run.Error
+		if run.NotBefore != nil {
+			needs += fmt.Sprintf(" (automatic reconciliation after %s)", run.NotBefore.Format(timeLayout))
+		}
+		line("%s", needs)
 	case run.Error != "":
 		line("Error: %s", run.Error)
 	}
-	if run.NotBefore != nil && run.State != eviedb.WorkflowRunWaitingForDependency && !run.State.Terminal() {
+	if run.NotBefore != nil && run.State != eviedb.WorkflowRunWaitingForDependency && run.State != eviedb.WorkflowRunNeedsReconciliation && !run.State.Terminal() {
 		line("Retry: not before %s", run.NotBefore.Format(timeLayout))
 	}
 	if l := d.Lease; l != nil {
@@ -857,6 +941,7 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 			line("     output %s", a.Output)
 		}
 	}
+	effectsText(&b, d.Effects)
 	if !run.State.Terminal() {
 		line("Next: %s from checkpoint %d", run.NextStep, run.Checkpoint)
 	}

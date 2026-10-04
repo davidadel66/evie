@@ -17,36 +17,85 @@ import (
 // provider proves idempotency for a repeated Effect Intent, and its typed
 // input and output. Connections and Resources, when a provider declares
 // them, are the exact Connection IDs and resource selectors it serves
-// (Stage 14 sub-stage 5); a step naming any other is invalid.
+// (Stage 14 sub-stage 5); a step naming any other is invalid. An effect
+// also declares (sub-stage 6) whether its provider can reconcile an Effect
+// Intent whose outcome is unknown (Reconciles; otherwise only the owner
+// can) and what one of its Resource Conflict Keys covers (ConflictKeys:
+// "resource", one key per connection and resource, or the provider's own
+// narrower rule, such as "account").
 type CapabilityContract struct {
-	ID          string
-	Contract    string
-	Effect      bool
-	Idempotent  bool
-	Input       *Type
-	Output      *Type
-	Connections []string
-	Resources   []string
+	ID           string
+	Contract     string
+	Effect       bool
+	Idempotent   bool
+	Reconciles   bool
+	ConflictKeys string
+	Input        *Type
+	Output       *Type
+	Connections  []string
+	Resources    []string
 }
 
-// SchemaSHA256 identifies the contract's schema: its typed input and output
-// and its read or effect classification, as 64 lowercase hex digits (the
-// form plugin schema evidence uses). The contract version label and the
-// connections and resources a provider serves are not part of it; a run
-// pins and checks them separately.
+// DefaultConflictKeys is the Resource Conflict Key rule of an effect that
+// declares none: one key per connection and resource, so every effect on
+// one resource is serialized (ADR 0043).
+const DefaultConflictKeys = "resource"
+
+// SchemaSHA256 identifies the contract's schema: its typed input and output,
+// its read or effect classification and, for an effect, its reconciliation
+// and Resource Conflict Key rule, as 64 lowercase hex digits (the form
+// plugin schema evidence uses). The two effect declarations are left out
+// while unset, so every hash pinned before they existed is unchanged. The
+// contract version label and the connections and resources a provider
+// serves are not part of it; a run pins and checks them separately.
 func (c CapabilityContract) SchemaSHA256() string {
 	doc := struct {
-		Effect     bool  `json:"effect"`
-		Idempotent bool  `json:"idempotent"`
-		Input      *Type `json:"input"`
-		Output     *Type `json:"output"`
-	}{c.Effect, c.Idempotent, canonicalType(c.Input), canonicalType(c.Output)}
+		Effect       bool   `json:"effect"`
+		Idempotent   bool   `json:"idempotent"`
+		Reconciles   bool   `json:"reconciles,omitempty"`
+		ConflictKeys string `json:"conflict_keys,omitempty"`
+		Input        *Type  `json:"input"`
+		Output       *Type  `json:"output"`
+	}{c.Effect, c.Idempotent, c.Reconciles, c.ConflictKeys, canonicalType(c.Input), canonicalType(c.Output)}
 	data, err := canonicalBytes(doc)
 	if err != nil {
 		// Types hold only JSON-encodable values.
 		panic(fmt.Sprintf("encode capability schema: %v", err))
 	}
 	return digest(data)
+}
+
+// CheckOutput checks a normalized value against the contract's output
+// type, as a provider's response or an owner's reconciled output must fit
+// it.
+func (c CapabilityContract) CheckOutput(value any) error {
+	out := c.Output
+	if out == nil {
+		out = ObjectType()
+	}
+	return checkValue(out, value)
+}
+
+// EffectSummary describes an effect's declarations for review: whether it
+// is idempotent, who reconciles an unknown outcome, and what its Resource
+// Conflict Keys cover. A read is "read".
+func EffectSummary(effect, idempotent, reconciles bool, conflictKeys string) string {
+	if !effect {
+		return "read"
+	}
+	kind := "effect"
+	if idempotent {
+		kind += ", idempotent"
+	}
+	if reconciles {
+		kind += ", reconciled by the provider"
+	} else {
+		kind += ", reconciled by the owner"
+	}
+	if conflictKeys == "" {
+		conflictKeys = DefaultConflictKeys
+	}
+	return kind + ", conflict keys per " + conflictKeys
 }
 
 // canonicalType is a copy of t with every object's required fields sorted,

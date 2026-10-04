@@ -21,8 +21,9 @@ import (
 // resolves a callable provider only while its plugin is ready, so disabling,
 // stopping or failing a plugin makes its reads unavailable (a run waits for
 // them) without changing any pinned record. This role carries reads only:
-// effects, with idempotency and reconciliation, are a later role
-// (sub-stage 6).
+// effects, with idempotency, reconciliation and Resource Conflict Keys,
+// come through the separate WorkflowEffectProvider role (sub-stage 6,
+// workflow_effect.go).
 
 // WorkflowCapabilityProvider is the focused role through which a plugin
 // contributes workflow capability reads.
@@ -72,7 +73,9 @@ var (
 // WorkflowProvider is a workflow capability as the Manager resolves it now:
 // its contract and schema hash, the plugin and implementation version that
 // provide it, the evidence it declares for continuing earlier
-// implementations' pinned work, and its read (nil unless ready).
+// implementations' pinned work, and its behavior: a read's Read, or an
+// effect's Perform, Reconcile and ConflictKeys (each nil unless ready, and
+// Reconcile and ConflictKeys nil when the effect declares none).
 type WorkflowProvider struct {
 	Contract     workflow.CapabilityContract
 	SchemaSHA256 string
@@ -83,6 +86,9 @@ type WorkflowProvider struct {
 	// continues for this capability (ADR 0037, 0041).
 	ResumableFrom map[string]CapabilityCompatibility
 	Read          WorkflowRead
+	Perform       WorkflowEffect
+	Reconcile     WorkflowEffectReconcile
+	ConflictKeys  WorkflowConflictKeys
 }
 
 func (c WorkflowCapability) contract() workflow.CapabilityContract {
@@ -132,18 +138,33 @@ func snapshotWorkflowCapabilities(manifest Manifest, supplied []WorkflowCapabili
 	return out, nil
 }
 
-// workflowCapabilityLocked finds a compiled workflow capability by ID.
-func (m *Manager) workflowCapabilityLocked(id CapabilityID) (*compiledPlugin, WorkflowCapability, bool) {
+// compiledWorkflow is one compiled workflow capability: a read or an
+// effect.
+type compiledWorkflow struct {
+	id       CapabilityID
+	contract workflow.CapabilityContract
+	read     WorkflowRead
+	effect   *WorkflowEffectCapability
+}
+
+// workflowCapabilityLocked finds a compiled workflow capability, read or
+// effect, by ID.
+func (m *Manager) workflowCapabilityLocked(id CapabilityID) (*compiledPlugin, compiledWorkflow, bool) {
 	entry, exists := m.plugins[providerIDForCapability(id)]
 	if !exists {
-		return nil, WorkflowCapability{}, false
+		return nil, compiledWorkflow{}, false
 	}
 	for _, c := range entry.workflowCapabilities {
 		if c.ID == id {
-			return entry, c, true
+			return entry, compiledWorkflow{id: c.ID, contract: c.contract(), read: c.Read}, true
 		}
 	}
-	return nil, WorkflowCapability{}, false
+	for i := range entry.workflowEffects {
+		if e := &entry.workflowEffects[i]; e.ID == id {
+			return entry, compiledWorkflow{id: e.ID, contract: e.contract(), effect: e}, true
+		}
+	}
+	return nil, compiledWorkflow{}, false
 }
 
 // WorkflowContract is the compiled contract of one workflow capability,
@@ -155,7 +176,7 @@ func (m *Manager) WorkflowContract(id string) (workflow.CapabilityContract, bool
 	if !ok {
 		return workflow.CapabilityContract{}, false
 	}
-	return c.contract(), true
+	return c.contract, true
 }
 
 // ResolveWorkflowCapability resolves one workflow capability's provider
@@ -175,12 +196,12 @@ func (m *Manager) ResolveWorkflowCapability(ctx context.Context, id string) (Wor
 	if !ok {
 		return WorkflowProvider{}, fmt.Errorf("%w: %s", ErrWorkflowCapabilityUnknown, id)
 	}
-	contract := c.contract()
+	contract := c.contract
 	p := WorkflowProvider{Contract: contract, SchemaSHA256: contract.SchemaSHA256(), Plugin: entry.manifest.ID,
 		Version: entry.manifest.ImplementationVersion, ResumableFrom: map[string]CapabilityCompatibility{}}
 	for _, declaration := range entry.manifest.ResumableFrom {
 		for _, evidence := range declaration.Capabilities {
-			if evidence.ID == c.ID {
+			if evidence.ID == c.id {
 				p.ResumableFrom[declaration.ImplementationVersion] = evidence
 			}
 		}
@@ -198,14 +219,17 @@ func (m *Manager) ResolveWorkflowCapability(ctx context.Context, id string) (Wor
 		}
 		return unavailable("plugin %q is %s", entry.manifest.ID, detail)
 	}
-	for _, dependency := range capabilityContract(entry.manifest, c.ID).OptionalDependencies {
+	for _, dependency := range capabilityContract(entry.manifest, c.id).OptionalDependencies {
 		if !entry.loadedOptional[dependency] {
 			return unavailable("its optional dependency %q is not ready", dependency)
 		}
 	}
 	if entry.connectionReadiness.State == ConnectionNotReady {
-		return unavailable("plugin %q's connection is not ready; set it up and the read becomes available", entry.manifest.ID)
+		return unavailable("plugin %q's connection is not ready; set it up and the capability becomes available", entry.manifest.ID)
 	}
-	p.Read = c.Read
+	p.Read = c.read
+	if e := c.effect; e != nil {
+		p.Perform, p.Reconcile, p.ConflictKeys = e.Perform, e.Reconcile, e.ConflictKeys
+	}
 	return p, nil
 }

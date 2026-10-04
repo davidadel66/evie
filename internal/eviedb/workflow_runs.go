@@ -154,7 +154,9 @@ type WorkflowCheckpoint struct {
 
 // WorkflowRunDetail is a run with its full attempt and checkpoint history,
 // its lease (nil before any runtime claimed it), its recovery events and
-// the compatible provider substitutions the owner approved for it.
+// the compatible provider substitutions the owner approved for it, and
+// (sub-stage 6) its Effect Intents with their unknown outcomes and
+// receipts.
 type WorkflowRunDetail struct {
 	Run           WorkflowRun               `json:"run"`
 	Attempts      []WorkflowNodeAttempt     `json:"attempts"`
@@ -162,6 +164,7 @@ type WorkflowRunDetail struct {
 	Lease         *WorkflowRunLease         `json:"lease,omitempty"`
 	Events        []WorkflowRunEvent        `json:"events"`
 	Substitutions []WorkflowRunSubstitution `json:"substitutions"`
+	Effects       []WorkflowEffectIntent    `json:"effects"`
 }
 
 // WorkflowRunProgress is what an executor needs to take the next step.
@@ -339,7 +342,10 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureWorkflowRunLeaseSchema(ctx, db); err != nil {
 		return err
 	}
-	return ensureWorkflowRunSubstitutionSchema(ctx, db)
+	if err := ensureWorkflowRunSubstitutionSchema(ctx, db); err != nil {
+		return err
+	}
+	return ensureWorkflowEffectSchema(ctx, db)
 }
 
 // WorkflowRunStart is a run the runtime has validated: the exact approved
@@ -544,58 +550,75 @@ func runRunnable(ctx context.Context, q queryRower, runID string) (WorkflowRun, 
 // the run's current lease: the step the run's latest checkpoint names, its
 // next attempt number from that checkpoint, its resolved input and the
 // lease. No other attempt of the run may be in flight, a paused run must be
-// resumed first, and a retry waits for its not-before time. The run is
-// running from its first attempt.
+// resumed first, a retry waits for its not-before time, and no node starts
+// while an Effect Intent of the run has no receipt (sub-stage 6: dependent
+// nodes are blocked). The run is running from its first attempt.
 func (s *Store) BeginWorkflowAttempt(ctx context.Context, lease WorkflowRunLease, a WorkflowAttemptStart) (WorkflowNodeAttempt, error) {
-	if len(a.Input) == 0 || !json.Valid(a.Input) {
-		return WorkflowNodeAttempt{}, errors.New("a node attempt needs its resolved input as JSON")
-	}
-	if a.RunID != lease.RunID {
-		return WorkflowNodeAttempt{}, fmt.Errorf("%w: the lease is for run %s", ErrWorkflowRunLeaseLost, lease.RunID)
+	if err := validAttemptStart(lease, a); err != nil {
+		return WorkflowNodeAttempt{}, err
 	}
 	var out WorkflowNodeAttempt
 	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, now time.Time) error {
-		run, err := runRunnable(ctx, conn, a.RunID)
-		if err != nil {
-			return err
-		}
-		if run.State != WorkflowRunQueued && run.State != WorkflowRunRunning {
-			return fmt.Errorf("%w: the run is %s", ErrWorkflowRunConflict, run.State)
-		}
-		if run.NotBefore != nil && run.NotBefore.After(now) {
-			return &WorkflowRunNotDueError{NotBefore: *run.NotBefore}
-		}
-		c, err := latestCheckpoint(ctx, conn, a.RunID)
-		if err != nil {
-			return err
-		}
-		if c.Seq != a.Checkpoint || c.Next != a.Step {
-			return ErrWorkflowRunConflict
-		}
-		var inFlight, made int
-		var next int64
-		if err := conn.QueryRowContext(ctx, `SELECT
+		var err error
+		out, err = beginWorkflowAttempt(ctx, conn, lease, a, now)
+		return err
+	})
+	return out, err
+}
+
+func validAttemptStart(lease WorkflowRunLease, a WorkflowAttemptStart) error {
+	if len(a.Input) == 0 || !json.Valid(a.Input) {
+		return errors.New("a node attempt needs its resolved input as JSON")
+	}
+	if a.RunID != lease.RunID {
+		return fmt.Errorf("%w: the lease is for run %s", ErrWorkflowRunLeaseLost, lease.RunID)
+	}
+	return nil
+}
+
+// beginWorkflowAttempt records a node attempt inside a fenced transaction.
+func beginWorkflowAttempt(ctx context.Context, conn *sql.Conn, lease WorkflowRunLease, a WorkflowAttemptStart, now time.Time) (WorkflowNodeAttempt, error) {
+	run, err := runRunnable(ctx, conn, a.RunID)
+	if err != nil {
+		return WorkflowNodeAttempt{}, err
+	}
+	if run.State != WorkflowRunQueued && run.State != WorkflowRunRunning {
+		return WorkflowNodeAttempt{}, fmt.Errorf("%w: the run is %s", ErrWorkflowRunConflict, run.State)
+	}
+	if run.NotBefore != nil && run.NotBefore.After(now) {
+		return WorkflowNodeAttempt{}, &WorkflowRunNotDueError{NotBefore: *run.NotBefore}
+	}
+	if err := requireEffectsResolved(ctx, conn, a.RunID); err != nil {
+		return WorkflowNodeAttempt{}, err
+	}
+	c, err := latestCheckpoint(ctx, conn, a.RunID)
+	if err != nil {
+		return WorkflowNodeAttempt{}, err
+	}
+	if c.Seq != a.Checkpoint || c.Next != a.Step {
+		return WorkflowNodeAttempt{}, ErrWorkflowRunConflict
+	}
+	var inFlight, made int
+	var next int64
+	if err := conn.QueryRowContext(ctx, `SELECT
  (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND state='running'),
  (SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND input_checkpoint=? AND step_id=?),
  (SELECT COALESCE(MAX(seq),0)+1 FROM workflow_node_attempts WHERE run_id=?)`, a.RunID, a.RunID, c.Seq, a.Step, a.RunID).Scan(&inFlight, &made, &next); err != nil {
-			return err
-		}
-		if inFlight > 0 || a.Attempt != made+1 {
-			return ErrWorkflowRunConflict
-		}
-		if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_node_attempts(run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at,lease_holder,lease_token)
+		return WorkflowNodeAttempt{}, err
+	}
+	if inFlight > 0 || a.Attempt != made+1 {
+		return WorkflowNodeAttempt{}, ErrWorkflowRunConflict
+	}
+	if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_node_attempts(run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at,lease_holder,lease_token)
  VALUES(?,?,?,?,?,?,?,'running',NULL,'','','',?,NULL,?,?)`, a.RunID, next, a.Step, a.Kind, a.Attempt, c.Seq, string(a.Input), formatTime(now), lease.Holder, lease.Token); err != nil {
-			return fmt.Errorf("record workflow node attempt: %w", err)
-		}
-		if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET state='running',started_at=COALESCE(started_at,?),not_before=NULL,updated_at=? WHERE id=?`,
-			formatTime(now), formatTime(now), a.RunID); err != nil {
-			return fmt.Errorf("start workflow run: %w", err)
-		}
-		out = WorkflowNodeAttempt{RunID: a.RunID, Seq: next, Step: a.Step, Kind: a.Kind, Attempt: a.Attempt, InputCheckpoint: c.Seq,
-			Input: a.Input, State: WorkflowAttemptRunning, StartedAt: now.UTC(), LeaseHolder: lease.Holder, LeaseToken: lease.Token}
-		return nil
-	})
-	return out, err
+		return WorkflowNodeAttempt{}, fmt.Errorf("record workflow node attempt: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET state='running',started_at=COALESCE(started_at,?),not_before=NULL,updated_at=? WHERE id=?`,
+		formatTime(now), formatTime(now), a.RunID); err != nil {
+		return WorkflowNodeAttempt{}, fmt.Errorf("start workflow run: %w", err)
+	}
+	return WorkflowNodeAttempt{RunID: a.RunID, Seq: next, Step: a.Step, Kind: a.Kind, Attempt: a.Attempt, InputCheckpoint: c.Seq,
+		Input: a.Input, State: WorkflowAttemptRunning, StartedAt: now.UTC(), LeaseHolder: lease.Holder, LeaseToken: lease.Token}, nil
 }
 
 // WorkflowAttemptEnd is how a node attempt ended. An empty Error means it
@@ -622,83 +645,104 @@ type WorkflowAttemptEnd struct {
 // current lease, before any other attempt can start. The attempt's output
 // and its checkpoint commit together or not at all.
 func (s *Store) FinishWorkflowAttempt(ctx context.Context, lease WorkflowRunLease, e WorkflowAttemptEnd) (WorkflowRun, error) {
-	succeeded := e.Error == ""
-	switch {
-	case e.RunID != lease.RunID:
-		return WorkflowRun{}, fmt.Errorf("%w: the lease is for run %s", ErrWorkflowRunLeaseLost, lease.RunID)
-	case e.RetryAfter < 0 || e.RetryAfter > 0 && (succeeded || e.RunError != ""):
-		return WorkflowRun{}, errors.New("only a failed attempt that leaves its run running is retried after a backoff")
-	case succeeded && (len(e.Output) == 0 || !json.Valid(e.Output) || !workflowJSONObject(e.State)):
-		return WorkflowRun{}, errors.New("a succeeded attempt needs its output and the next checkpoint's state")
-	case succeeded && e.Next == "" && !workflowJSONObject(e.Outputs):
-		return WorkflowRun{}, errors.New("an attempt that ends the graph needs the run's outputs")
-	case succeeded && e.Next != "" && len(e.Outputs) > 0:
-		return WorkflowRun{}, errors.New("only an attempt that ends the graph gives the run's outputs")
-	case !succeeded && (len(e.Output) > 0 || len(e.State) > 0 || len(e.Outputs) > 0):
-		return WorkflowRun{}, errors.New("a failed attempt has no output or checkpoint")
+	if err := validAttemptEnd(lease, e); err != nil {
+		return WorkflowRun{}, err
 	}
 	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, clock time.Time) error {
-		if _, err := runRunnable(ctx, conn, e.RunID); err != nil {
+		// An effect's attempt ends only with its receipt or as unknown
+		// (FinishWorkflowEffect, MarkWorkflowEffectUnknown).
+		if err := requireAttemptEffectResolved(ctx, conn, e.RunID, e.Seq); err != nil {
 			return err
 		}
-		var state, step string
-		var input, token int64
-		var attempt int
-		err := conn.QueryRowContext(ctx, `SELECT state,input_checkpoint,lease_token,step_id,attempt FROM workflow_node_attempts WHERE run_id=? AND seq=?`, e.RunID, e.Seq).
-			Scan(&state, &input, &token, &step, &attempt)
-		if errors.Is(err, sql.ErrNoRows) || err == nil && (state != string(WorkflowAttemptRunning) || token != lease.Token) {
-			return ErrWorkflowRunConflict
-		}
-		if err != nil {
-			return err
-		}
-		c, err := latestCheckpoint(ctx, conn, e.RunID)
-		if err != nil {
-			return err
-		}
-		if c.Seq != input {
-			return ErrWorkflowRunConflict
-		}
-		now := formatTime(clock)
-		if !succeeded {
-			if _, err := conn.ExecContext(ctx, `UPDATE workflow_node_attempts SET state='failed',error=?,note=?,finished_at=? WHERE run_id=? AND seq=?`,
-				e.Error, e.Note, now, e.RunID, e.Seq); err != nil {
-				return fmt.Errorf("record failed workflow node attempt: %w", err)
-			}
-			if e.RunError == "" && e.RetryAfter > 0 {
-				retry := clock.Add(e.RetryAfter)
-				if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET not_before=?,updated_at=? WHERE id=?`, formatLeaseTime(retry), now, e.RunID); err != nil {
-					return fmt.Errorf("record workflow retry time: %w", err)
-				}
-				return recordWorkflowRunEvent(ctx, conn, WorkflowRunEvent{RunID: e.RunID, Kind: WorkflowEventRetryScheduled, Holder: lease.Holder, Token: lease.Token, Attempt: e.Seq,
-					Detail: fmt.Sprintf("steps.%s attempt %d failed; it is retried from checkpoint %d no earlier than %s", step, attempt, input, formatLeaseTime(retry)), At: clock})
-			}
-			if e.RunError == "" {
-				_, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET updated_at=? WHERE id=?`, now, e.RunID)
-				return err
-			}
-			_, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET state='failed',error=?,finished_at=?,updated_at=? WHERE id=?`, e.RunError, now, now, e.RunID)
-			return err
-		}
-		if _, err := conn.ExecContext(ctx, `UPDATE workflow_node_attempts SET state='succeeded',output=?,next_step=?,note=?,finished_at=? WHERE run_id=? AND seq=?`,
-			string(e.Output), e.Next, e.Note, now, e.RunID, e.Seq); err != nil {
-			return fmt.Errorf("record workflow node output: %w", err)
-		}
-		if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_run_checkpoints(run_id,seq,after_attempt,next_step,state,created_at) VALUES(?,?,?,?,?,?)`,
-			e.RunID, c.Seq+1, e.Seq, e.Next, string(e.State), now); err != nil {
-			return fmt.Errorf("record workflow checkpoint: %w", err)
-		}
-		if e.Next != "" {
-			_, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET updated_at=? WHERE id=?`, now, e.RunID)
-			return err
-		}
-		_, err = conn.ExecContext(ctx, `UPDATE workflow_runs SET state='succeeded',outputs=?,finished_at=?,updated_at=? WHERE id=?`, string(e.Outputs), now, now, e.RunID)
-		return err
+		return finishWorkflowAttempt(ctx, conn, lease, e, clock)
 	})
 	if err != nil {
 		return WorkflowRun{}, err
 	}
 	return readWorkflowRun(ctx, s.db, e.RunID)
+}
+
+func validAttemptEnd(lease WorkflowRunLease, e WorkflowAttemptEnd) error {
+	succeeded := e.Error == ""
+	switch {
+	case e.RunID != lease.RunID:
+		return fmt.Errorf("%w: the lease is for run %s", ErrWorkflowRunLeaseLost, lease.RunID)
+	case e.RetryAfter < 0 || e.RetryAfter > 0 && (succeeded || e.RunError != ""):
+		return errors.New("only a failed attempt that leaves its run running is retried after a backoff")
+	case succeeded && (len(e.Output) == 0 || !json.Valid(e.Output) || !workflowJSONObject(e.State)):
+		return errors.New("a succeeded attempt needs its output and the next checkpoint's state")
+	case succeeded && e.Next == "" && !workflowJSONObject(e.Outputs):
+		return errors.New("an attempt that ends the graph needs the run's outputs")
+	case succeeded && e.Next != "" && len(e.Outputs) > 0:
+		return errors.New("only an attempt that ends the graph gives the run's outputs")
+	case !succeeded && (len(e.Output) > 0 || len(e.State) > 0 || len(e.Outputs) > 0):
+		return errors.New("a failed attempt has no output or checkpoint")
+	}
+	return nil
+}
+
+// finishWorkflowAttempt records how an in-flight attempt ended inside a
+// fenced transaction: its output with the next checkpoint (and the run's
+// outputs when the graph ended), or its failure with the retry time or the
+// run's failure.
+func finishWorkflowAttempt(ctx context.Context, conn *sql.Conn, lease WorkflowRunLease, e WorkflowAttemptEnd, clock time.Time) error {
+	succeeded := e.Error == ""
+	if _, err := runRunnable(ctx, conn, e.RunID); err != nil {
+		return err
+	}
+	var state, step string
+	var input, token int64
+	var attempt int
+	err := conn.QueryRowContext(ctx, `SELECT state,input_checkpoint,lease_token,step_id,attempt FROM workflow_node_attempts WHERE run_id=? AND seq=?`, e.RunID, e.Seq).
+		Scan(&state, &input, &token, &step, &attempt)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && (state != string(WorkflowAttemptRunning) || token != lease.Token) {
+		return ErrWorkflowRunConflict
+	}
+	if err != nil {
+		return err
+	}
+	c, err := latestCheckpoint(ctx, conn, e.RunID)
+	if err != nil {
+		return err
+	}
+	if c.Seq != input {
+		return ErrWorkflowRunConflict
+	}
+	now := formatTime(clock)
+	if !succeeded {
+		if _, err := conn.ExecContext(ctx, `UPDATE workflow_node_attempts SET state='failed',error=?,note=?,finished_at=? WHERE run_id=? AND seq=?`,
+			e.Error, e.Note, now, e.RunID, e.Seq); err != nil {
+			return fmt.Errorf("record failed workflow node attempt: %w", err)
+		}
+		if e.RunError == "" && e.RetryAfter > 0 {
+			retry := clock.Add(e.RetryAfter)
+			if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET not_before=?,updated_at=? WHERE id=?`, formatLeaseTime(retry), now, e.RunID); err != nil {
+				return fmt.Errorf("record workflow retry time: %w", err)
+			}
+			return recordWorkflowRunEvent(ctx, conn, WorkflowRunEvent{RunID: e.RunID, Kind: WorkflowEventRetryScheduled, Holder: lease.Holder, Token: lease.Token, Attempt: e.Seq,
+				Detail: fmt.Sprintf("steps.%s attempt %d failed; it is retried from checkpoint %d no earlier than %s", step, attempt, input, formatLeaseTime(retry)), At: clock})
+		}
+		if e.RunError == "" {
+			_, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET updated_at=? WHERE id=?`, now, e.RunID)
+			return err
+		}
+		_, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET state='failed',error=?,finished_at=?,updated_at=? WHERE id=?`, e.RunError, now, now, e.RunID)
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, `UPDATE workflow_node_attempts SET state='succeeded',output=?,next_step=?,note=?,finished_at=? WHERE run_id=? AND seq=?`,
+		string(e.Output), e.Next, e.Note, now, e.RunID, e.Seq); err != nil {
+		return fmt.Errorf("record workflow node output: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_run_checkpoints(run_id,seq,after_attempt,next_step,state,created_at) VALUES(?,?,?,?,?,?)`,
+		e.RunID, c.Seq+1, e.Seq, e.Next, string(e.State), now); err != nil {
+		return fmt.Errorf("record workflow checkpoint: %w", err)
+	}
+	if e.Next != "" {
+		_, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET updated_at=? WHERE id=?`, now, e.RunID)
+		return err
+	}
+	_, err = conn.ExecContext(ctx, `UPDATE workflow_runs SET state='succeeded',outputs=?,finished_at=?,updated_at=? WHERE id=?`, string(e.Outputs), now, now, e.RunID)
+	return err
 }
 
 // FailWorkflowRun fails a run between attempts (a run limit, or a
@@ -723,6 +767,11 @@ func (s *Store) FailWorkflowRun(ctx context.Context, lease WorkflowRunLease, che
 		}
 		if c.Seq != checkpoint || inFlight > 0 {
 			return ErrWorkflowRunConflict
+		}
+		// A run whose effect outcome is unknown is reconciled first; it is
+		// never failed past it (sub-stage 6).
+		if err := requireEffectsResolved(ctx, conn, runID); err != nil {
+			return err
 		}
 		now := formatTime(clock)
 		_, err = conn.ExecContext(ctx, `UPDATE workflow_runs SET state='failed',error=?,not_before=NULL,finished_at=?,updated_at=? WHERE id=?`, reason, now, now, runID)
@@ -858,7 +907,10 @@ func (s *Store) WorkflowRun(ctx context.Context, id string) (WorkflowRunDetail, 
 	if d.Events, err = workflowRunEvents(ctx, conn, id); err != nil {
 		return d, err
 	}
-	d.Substitutions, err = workflowRunSubstitutions(ctx, conn, id)
+	if d.Substitutions, err = workflowRunSubstitutions(ctx, conn, id); err != nil {
+		return d, err
+	}
+	d.Effects, err = workflowEffectIntents(ctx, conn, id)
 	return d, err
 }
 

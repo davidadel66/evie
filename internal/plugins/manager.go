@@ -13,6 +13,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/tools"
+	"github.com/davidadel66/evie/internal/workflow"
 )
 
 const KernelAPIVersion = "1.0.0"
@@ -107,6 +108,7 @@ type compiledPlugin struct {
 	resumableCapabilities map[string][]ToolCapability
 	activeCapabilities    []ToolCapability
 	workflowCapabilities  []WorkflowCapability
+	workflowEffects       []WorkflowEffectCapability
 	enabled               bool
 	manualStopped         bool
 	started               bool
@@ -276,7 +278,8 @@ func NewManager(base tools.Toolset, compiled ...Plugin) (*Manager, error) {
 		}
 		provider, isTool := plugin.(ToolProvider)
 		workflowProvider, isWorkflow := plugin.(WorkflowCapabilityProvider)
-		if !isTool && !isWorkflow {
+		effectProvider, isEffect := plugin.(WorkflowEffectProvider)
+		if !isTool && !isWorkflow && !isEffect {
 			if len(manifest.Capabilities) != 0 {
 				return nil, fmt.Errorf("plugin %q declares capabilities but implements no capability provider role", manifest.ID)
 			}
@@ -301,12 +304,34 @@ func NewManager(base tools.Toolset, compiled ...Plugin) (*Manager, error) {
 		for _, read := range reads {
 			readIDs[read.ID] = true
 		}
-		capabilities, err := snapshotToolCapabilities(manifest, suppliedTools, readIDs)
+		var effects []WorkflowEffectCapability
+		if isEffect {
+			taken := make(map[CapabilityID]bool, len(toolIDs)+len(readIDs))
+			for id := range toolIDs {
+				taken[id] = true
+			}
+			for id := range readIDs {
+				taken[id] = true
+			}
+			var err error
+			if effects, err = snapshotWorkflowEffects(manifest, effectProvider.WorkflowEffects(), taken); err != nil {
+				return nil, err
+			}
+		}
+		workflowIDs := make(map[CapabilityID]bool, len(reads)+len(effects))
+		for id := range readIDs {
+			workflowIDs[id] = true
+		}
+		for _, effect := range effects {
+			workflowIDs[effect.ID] = true
+		}
+		capabilities, err := snapshotToolCapabilities(manifest, suppliedTools, workflowIDs)
 		if err != nil {
 			return nil, err
 		}
 		manager.plugins[manifest.ID].capabilities = capabilities
 		manager.plugins[manifest.ID].workflowCapabilities = reads
+		manager.plugins[manifest.ID].workflowEffects = effects
 		resumable := make(map[string][]ToolCapability)
 		if resumableProvider, ok := plugin.(ResumableToolProvider); ok {
 			for _, declaration := range manifest.ResumableFrom {
@@ -318,7 +343,7 @@ func NewManager(base tools.Toolset, compiled ...Plugin) (*Manager, error) {
 			}
 		}
 		manager.plugins[manifest.ID].resumableCapabilities = resumable
-		if err := validateImplementationCompatibility(manifest, capabilities, resumable, reads); err != nil {
+		if err := validateImplementationCompatibility(manifest, capabilities, resumable, workflowContracts(reads, effects)); err != nil {
 			return nil, err
 		}
 	}
@@ -341,7 +366,20 @@ type compatibilityTarget struct {
 	schemaSHA256    string
 }
 
-func validateImplementationCompatibility(manifest Manifest, capabilities []ToolCapability, resumable map[string][]ToolCapability, reads []WorkflowCapability) error {
+// workflowContracts are the compiled contracts of a plugin's workflow
+// reads and effects.
+func workflowContracts(reads []WorkflowCapability, effects []WorkflowEffectCapability) []workflow.CapabilityContract {
+	out := make([]workflow.CapabilityContract, 0, len(reads)+len(effects))
+	for _, read := range reads {
+		out = append(out, read.contract())
+	}
+	for _, effect := range effects {
+		out = append(out, effect.contract())
+	}
+	return out
+}
+
+func validateImplementationCompatibility(manifest Manifest, capabilities []ToolCapability, resumable map[string][]ToolCapability, reads []workflow.CapabilityContract) error {
 	current, err := parseManifestVersion(manifest.ImplementationVersion)
 	if err != nil {
 		return err
@@ -350,10 +388,11 @@ func validateImplementationCompatibility(manifest Manifest, capabilities []ToolC
 	for _, capability := range capabilities {
 		active[capability.ID] = compatibilityTarget{capability.ContractVersion, schemaHash(capability.Tool.Schema)}
 	}
-	// Workflow capabilities have no frozen variants: evidence for them is
-	// always checked against what this implementation loads.
+	// Workflow capabilities (reads and effects) have no frozen variants:
+	// evidence for them is always checked against what this implementation
+	// loads.
 	for _, read := range reads {
-		active[read.ID] = compatibilityTarget{read.ContractVersion, read.contract().SchemaSHA256()}
+		active[CapabilityID(read.ID)] = compatibilityTarget{read.Contract, read.SchemaSHA256()}
 	}
 	seenVersions := make(map[string]struct{}, len(manifest.ResumableFrom))
 	for _, declaration := range manifest.ResumableFrom {
@@ -378,7 +417,7 @@ func validateImplementationCompatibility(manifest Manifest, capabilities []ToolC
 				available[capability.ID] = compatibilityTarget{capability.ContractVersion, schemaHash(capability.Tool.Schema)}
 			}
 			for _, read := range reads {
-				available[read.ID] = active[read.ID]
+				available[CapabilityID(read.ID)] = active[CapabilityID(read.ID)]
 			}
 		}
 		seenCapabilities := make(map[CapabilityID]struct{}, len(declaration.Capabilities))

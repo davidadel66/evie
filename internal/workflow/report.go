@@ -60,11 +60,35 @@ type OutputReport struct {
 	Step   string `json:"step,omitempty"`
 }
 
+// CapabilityReport is one required Capability Contract. An effect also
+// reports who reconciles an unknown outcome ("provider" or "owner") and
+// what its Resource Conflict Keys cover (Stage 14 sub-stage 6).
 type CapabilityReport struct {
-	ID         string `json:"id"`
-	Contract   string `json:"contract"`
-	Effect     bool   `json:"effect"`
-	Idempotent bool   `json:"idempotent,omitempty"`
+	ID           string `json:"id"`
+	Contract     string `json:"contract"`
+	Effect       bool   `json:"effect"`
+	Idempotent   bool   `json:"idempotent,omitempty"`
+	Reconcile    string `json:"reconcile,omitempty"`
+	ConflictKeys string `json:"conflict_keys,omitempty"`
+}
+
+func capabilityReport(c *CapabilityContract) CapabilityReport {
+	r := CapabilityReport{ID: c.ID, Contract: c.Contract, Effect: c.Effect, Idempotent: c.Idempotent}
+	if c.Effect {
+		r.Reconcile, r.ConflictKeys = "owner", c.ConflictKeys
+		if c.Reconciles {
+			r.Reconcile = "provider"
+		}
+		if r.ConflictKeys == "" {
+			r.ConflictKeys = DefaultConflictKeys
+		}
+	}
+	return r
+}
+
+// summary describes the contract's kind for review.
+func (c CapabilityReport) summary() string {
+	return EffectSummary(c.Effect, c.Idempotent, c.Reconcile == "provider", c.ConflictKeys)
 }
 
 type WorkerReport struct {
@@ -186,7 +210,7 @@ func (v *validator) buildReport(hash string) Report {
 			}
 		}
 		if n.cap != nil {
-			caps[n.cap.ID] = CapabilityReport{n.cap.ID, n.cap.Contract, n.cap.Effect, n.cap.Idempotent}
+			caps[n.cap.ID] = capabilityReport(n.cap)
 			key := n.step.Connection + "\x00" + n.step.Resource
 			res := resources[key]
 			if res == nil {
@@ -419,14 +443,7 @@ func (r Report) Text() string {
 	line("Run key: %s + %s", r.Workflow, strings.Join(r.RunKey, ", "))
 	items = nil
 	for _, c := range r.Capabilities {
-		kind := "read"
-		if c.Effect {
-			kind = "effect"
-			if c.Idempotent {
-				kind += ", idempotent"
-			}
-		}
-		items = append(items, fmt.Sprintf("%s %s: %s", c.ID, c.Contract, kind))
+		items = append(items, fmt.Sprintf("%s %s: %s", c.ID, c.Contract, c.summary()))
 	}
 	section("Capability contracts", len(items) == 0, items)
 	items = nil

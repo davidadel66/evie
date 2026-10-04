@@ -71,7 +71,7 @@ func TestWorkflowReportShowsAuthorityResourcesAndSchedule(t *testing.T) {
 		"[interrupt] response schemas/ask.schema.json -> end",
 		"[capability] notes.append 1.0.0 (effect, idempotent) on conn-notes notebook:digest -> end",
 		"notes.list 1.0.0: read",
-		"notes.append 1.0.0: effect, idempotent",
+		"notes.append 1.0.0: effect, idempotent, reconciled by the owner, conflict keys per resource",
 		"conn-notes notebook:digest: write",
 		"conn-notes notebook:inbox: read",
 		"read: 3 attempts, backoff 2s",

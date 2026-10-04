@@ -87,12 +87,15 @@ type CapabilityUnavailableError struct {
 }
 
 func (e *CapabilityUnavailableError) Error() string {
-	return fmt.Sprintf("workflow %s reads %s, which is unavailable: %s; no run was started", e.Workflow, e.Capability, e.Reason)
+	return fmt.Sprintf("workflow %s calls %s, which is unavailable: %s; no run was started", e.Workflow, e.Capability, e.Reason)
 }
 
 func (e *CapabilityUnavailableError) Unwrap() error { return ErrCapabilityUnavailable }
 
-// pinnedProvider is one capability's provider as a run pinned it.
+// pinnedProvider is one capability's provider as a run pinned it. An
+// effect's entry (sub-stage 6) also records its idempotency,
+// reconciliation and Resource Conflict Key rule, which its schema hash
+// covers, so a changed declaration pauses the run like a changed schema.
 type pinnedProvider struct {
 	Capability   string   `json:"capability"`
 	Contract     string   `json:"contract"`
@@ -100,6 +103,10 @@ type pinnedProvider struct {
 	Plugin       string   `json:"plugin"`
 	Version      string   `json:"version"`
 	Connections  []string `json:"connections"`
+	Effect       bool     `json:"effect,omitempty"`
+	Idempotent   bool     `json:"idempotent,omitempty"`
+	Reconciles   bool     `json:"reconciles,omitempty"`
+	ConflictKeys string   `json:"conflict_keys,omitempty"`
 }
 
 func (c composition) pin(capability string) (pinnedProvider, bool) {
@@ -136,6 +143,9 @@ func (r *Runtime) pinProviders(ctx context.Context, v *workflow.Validated) ([]pi
 					Reason: fmt.Sprintf("%s %s offers contract %s, not %s", p.Plugin, p.Version, p.Contract.Contract, s.Contract)}
 			}
 			pin = &pinnedProvider{Capability: s.Capability, Contract: p.Contract.Contract, SchemaSHA256: p.SchemaSHA256, Plugin: string(p.Plugin), Version: p.Version}
+			if p.Contract.Effect {
+				pin.Effect, pin.Idempotent, pin.Reconciles, pin.ConflictKeys = true, p.Contract.Idempotent, p.Contract.Reconciles, p.Contract.ConflictKeys
+			}
 			pins[s.Capability] = pin
 		}
 		if !slices.Contains(pin.Connections, s.Connection) {
@@ -282,9 +292,6 @@ func (r *Runtime) read(pc *pass, p eviedb.WorkflowRunProgress, step workflow.Ste
 	if reason := r.limitReached(pc.v, p, step); reason != "" {
 		return fail(reason)
 	}
-	if step.Effect {
-		return fail(fmt.Sprintf("steps.%s is a capability effect, which this runtime version cannot run", step.ID))
-	}
 	pin, ok := pc.comp.pin(step.Capability)
 	if !ok {
 		return fail(fmt.Sprintf("steps.%s: capability %s is not pinned in the run's Execution Composition", step.ID, step.Capability))
@@ -429,6 +436,9 @@ func providersLine(c composition) string {
 	parts := make([]string, len(c.Providers))
 	for i, p := range c.Providers {
 		parts[i] = fmt.Sprintf("%s %s from %s %s on %s (schema %s)", p.Capability, p.Contract, p.Plugin, p.Version, strings.Join(p.Connections, ", "), shortHash(p.SchemaSHA256))
+		if p.Effect {
+			parts[i] += ", " + workflow.EffectSummary(true, p.Idempotent, p.Reconciles, p.ConflictKeys)
+		}
 	}
 	return strings.Join(parts, "; ")
 }

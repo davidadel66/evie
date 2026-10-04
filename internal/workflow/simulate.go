@@ -198,7 +198,7 @@ func (s *simulator) checkFixtures() error {
 				return fmt.Errorf("steps.%s is a %s step: give output or attempts", id, n.kind)
 			}
 			if n.cap != nil && n.cap.Effect && (f.Error != "" || len(f.Attempts) > 0) {
-				return fmt.Errorf("steps.%s is an effect: it is only previewed, so give its simulated output; effect failures and reconciliation belong to the effect protocol (sub-stage 6)", id)
+				return fmt.Errorf("steps.%s is an effect: it is only previewed, so give its simulated output; effect failures and reconciliation happen only in runs, through the effect protocol", id)
 			}
 		}
 	}

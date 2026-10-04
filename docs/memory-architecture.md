@@ -515,6 +515,32 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   keeps crashing instead (effects will never rerun after interruption).
   Binding record: the sub-stage 5 entry in
   `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Sub-stage 6 implemented** (2026-10-04). Plugins contribute effects
+  through a separate effect provider role: contract, idempotency, a
+  Resource Conflict Key rule, a perform function whose only proof of
+  non-performance is an explicit "not performed" error, and an optional
+  reconciliation (lookup or idempotent replay by key); runs pin them in the
+  same composition entries as reads. Each effect follows the durable
+  sequence: per-node admission, the run's `max_calls_per_run` (counted by
+  Effect Intents) and its conflict keys are checked in the transaction that
+  records the attempt with its Effect Intent (stable idempotency key from
+  the Workspace, Run Key, node and input; the authority evaluation); the
+  lease is checked again right before the call; the response is recorded
+  as the Effect Receipt with the output and next checkpoint in one
+  transaction. A timeout, an unproven error, a malformed response or a
+  crash between intent and receipt is Outcome Unknown: the run needs
+  reconciliation, no dependent node, pause, resume or failure is recorded,
+  and nothing retries it. A reconciling provider is asked at once (and
+  later while it is unavailable); otherwise the owner reconciles with
+  evidence (`evie workflows reconcile <run> <step> --outcome
+  happened|did-not-happen`, `POST /api/workflows/reconcile`). A happened
+  receipt supplies the step's output without another call; did-not-happen
+  retries only within the Retry Policy. Effects sharing a conflict key are
+  serialized across runs (and Workspaces) by a database-enforced hold;
+  computation and reads proceed. No production effect provider ships: the
+  candidates cannot prove what one request did, so the protocol is tested
+  with fakes. Binding record: the sub-stage 6 entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 

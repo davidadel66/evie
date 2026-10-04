@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,11 +19,12 @@ import (
 )
 
 // The owner's workflow run commands (Stage 14 sub-stage 3, 2026-10-04;
-// --detach and leases from sub-stage 4):
+// --detach and leases from sub-stage 4; reconcile from sub-stage 6):
 //
 //	evie workflows run [--detach] <workspace-id> <name> [--input <name>=<value>]... [--input-json <file>]
 //	evie workflows runs [<workspace-id>] [--workflow <name>]
 //	evie workflows inspect <run-id>
+//	evie workflows reconcile [--detach] <run-id> <step> --outcome happened|did-not-happen [--evidence <text>] [--output-json <file>]
 //
 // run starts a run of the Workspace's active version and, by default, waits
 // for it in the foreground: this process executes it (another Evie process
@@ -112,14 +114,84 @@ func runWorkflowRun(ctx context.Context, args []string, out io.Writer, rt workfl
 			fmt.Fprintf(out, "Detached: a running Evie (evie serve or the REPL) executes this run in the background; follow it with evie workflows inspect %s\n", res.Run.Run.ID)
 		}
 	}
+	return runResultError(res)
+}
+
+// runResultError is the error a command exits with after showing a run
+// that failed, paused or (sub-stage 6) needs reconciliation; a run that
+// already held the Run Key is not one.
+func runResultError(res workflowruntime.RunResult) error {
 	switch run := res.Run.Run; {
 	case res.Existing:
 	case run.State == eviedb.WorkflowRunFailed:
 		return fmt.Errorf("workflow run %s failed: %s", run.ID, run.Error)
 	case run.State == eviedb.WorkflowRunWaitingForDependency:
 		return fmt.Errorf("workflow run %s is paused: %s", run.ID, run.Error)
+	case run.State == eviedb.WorkflowRunNeedsReconciliation:
+		return fmt.Errorf("workflow run %s needs reconciliation: %s", run.ID, run.Error)
 	}
 	return nil
+}
+
+// reconcileWorkflowEffect is `evie workflows reconcile [--json] [--detach]
+// <run-id> <step> --outcome happened|did-not-happen [--evidence <text>]
+// [--output-json <file>]` (Stage 14 sub-stage 6): the owner records what
+// happened to an effect whose outcome is unknown, with evidence and, when
+// it happened, its output. The run then continues in the foreground, as
+// `run` does, unless --detach leaves it to a running Evie.
+func reconcileWorkflowEffect(ctx context.Context, args []string, out io.Writer, rt workflowCommands) error {
+	usage := errors.New(workflowsUsage)
+	detach := false
+	rest := make([]string, 0, len(args))
+	for _, a := range args {
+		if a == "--detach" {
+			if detach {
+				return usage
+			}
+			detach = true
+			continue
+		}
+		rest = append(rest, a)
+	}
+	a, ok := parseWorkflowArgs(rest, "outcome", "evidence", "output-json")
+	if !ok || len(a.positional) != 2 {
+		return usage
+	}
+	outcome := a.flags["outcome"]
+	if outcome != workflowruntime.OutcomeHappened && outcome != workflowruntime.OutcomeDidNotHappen {
+		return usage
+	}
+	req := workflowruntime.Reconciliation{RunID: a.positional[0], Step: a.positional[1], Outcome: outcome, Evidence: a.flags["evidence"], Detach: detach, Surface: "cli"}
+	if file, ok := a.flags["output-json"]; ok {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+		data = bytes.TrimSpace(data)
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(data, &object); err != nil || object == nil {
+			return fmt.Errorf("%s: the output must be one JSON object", file)
+		}
+		req.Output = data
+	}
+	d, err := rt.Reconcile(ctx, req)
+	if err != nil {
+		return err
+	}
+	if a.json {
+		if err := workflowEncoder(out).Encode(d); err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintf(out, "Reconciled steps.%s of run %s as %s; the receipt records your evidence.\n", req.Step, req.RunID, outcome)
+		if _, err := io.WriteString(out, workflowruntime.RunText(d)); err != nil {
+			return err
+		}
+		if detach {
+			fmt.Fprintf(out, "Detached: a running Evie (evie serve or the REPL) continues this run; follow it with evie workflows inspect %s\n", req.RunID)
+		}
+	}
+	return runResultError(workflowruntime.RunResult{Run: d})
 }
 
 // workflowSchedulerConfig is the Workflow Runtime's scheduler configuration

@@ -1,0 +1,79 @@
+# Post one person's even share of a bill to a shared ledger account: a
+# deterministic split, one capability effect that posts the share, and a
+# deterministic step that depends on the effect's receipt. It exercises the
+# effect protocol (Stage 14 sub-stage 6) against a test capability catalog.
+schema_version: 1
+name: post-share
+description: Post one person's even share of a bill to the household ledger.
+
+inputs:
+  bill_id:
+    type: string
+    required: true
+    max_length: 64
+  total_cents:
+    type: integer
+    required: true
+    minimum: 0
+  people:
+    # No maximum here: split_evenly@1 itself refuses more than 1000 parts.
+    type: integer
+    required: true
+    minimum: 1
+
+run_key:
+  inputs: [bill_id]
+
+limits:
+  max_duration: 30m
+  max_attempts: 10
+  max_parallel: 1
+  max_tokens: 1
+
+authority:
+  operations:
+    - capability: ledger.post
+      connection: conn-ledger
+      resources: ["account:household"]
+      max_calls_per_run: 2
+
+retention:
+  classification: ordinary
+
+start: split
+
+steps:
+  - id: split
+    kind: deterministic
+    function: split_evenly@1
+    input:
+      total: $inputs.total_cents
+      parts: $inputs.people
+    next: post
+
+  - id: post
+    kind: capability
+    description: Post the share to the household account.
+    capability: ledger.post
+    contract: 1.0.0
+    connection: conn-ledger
+    resource: "account:household"
+    input:
+      bill_id: $inputs.bill_id
+      amount_cents: $steps.split.output.share
+    retry:
+      max_attempts: 2
+      backoff: 1m
+    next: record
+
+  - id: record
+    kind: deterministic
+    description: The account's balance after the posting, which needs its receipt.
+    function: split_evenly@1
+    input:
+      total: $steps.post.output.balance_cents
+      parts: 1
+
+outputs:
+  entry_id: $steps.post.output.entry_id
+  balance_cents: $steps.record.output.share

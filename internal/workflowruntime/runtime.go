@@ -7,7 +7,9 @@
 // adds manual runs of deterministic and branch steps (runs.go); sub-stage 4
 // adds fenced run leases, the background scheduler and restart recovery
 // (scheduler.go); sub-stage 5 adds capability reads through pinned
-// providers (capabilities.go); later sub-stages extend runs through this
+// providers (capabilities.go); sub-stage 6 adds capability effects through
+// the durable intent-call-receipt-checkpoint protocol and their
+// reconciliation (effects.go); later sub-stages extend runs through this
 // same type.
 //
 // Validation runs against the bound Workspace: its current Workspace Access
@@ -76,6 +78,19 @@ type Store interface {
 	InterruptWorkflowAttempt(ctx context.Context, lease eviedb.WorkflowRunLease, seq int64, reason string) error
 	RecordWorkflowRunSubstitution(ctx context.Context, sub eviedb.WorkflowRunSubstitution) (eviedb.WorkflowRunSubstitution, error)
 	WorkflowRunSubstitutions(ctx context.Context, runID string) ([]eviedb.WorkflowRunSubstitution, error)
+
+	// Effects (sub-stage 6): the Effect Intent recorded with its attempt
+	// after per-node admission, max_calls_per_run and Resource Conflict
+	// Keys; the provider's answer as the Effect Receipt with the next
+	// checkpoint; an unknown outcome; its reconciliation; and the intents
+	// and held conflict keys read back.
+	BeginWorkflowEffect(ctx context.Context, lease eviedb.WorkflowRunLease, e eviedb.WorkflowEffectStart) (eviedb.WorkflowEffectIntent, error)
+	FinishWorkflowEffect(ctx context.Context, lease eviedb.WorkflowRunLease, e eviedb.WorkflowEffectEnd) (eviedb.WorkflowRun, error)
+	MarkWorkflowEffectUnknown(ctx context.Context, lease eviedb.WorkflowRunLease, m eviedb.WorkflowEffectUnknownMark) (eviedb.WorkflowRun, error)
+	ResolveWorkflowEffect(ctx context.Context, lease eviedb.WorkflowRunLease, r eviedb.WorkflowEffectResolution) (eviedb.WorkflowRun, error)
+	DeferWorkflowReconciliation(ctx context.Context, lease eviedb.WorkflowRunLease, reason string, recheck time.Duration) (eviedb.WorkflowRun, error)
+	WorkflowEffectIntents(ctx context.Context, runID string) ([]eviedb.WorkflowEffectIntent, error)
+	WorkflowEffectConflict(ctx context.Context, runID string, keys []string) (*eviedb.WorkflowEffectConflictError, error)
 }
 
 // Config wires a Runtime.
@@ -116,6 +131,10 @@ type SchedulerConfig struct {
 	Interruptions int
 	// ReadTimeout bounds one capability read (default 30s, at most 10m).
 	ReadTimeout time.Duration
+	// EffectTimeout bounds one effect call or reconciliation call (default
+	// 30s, at most 10m; sub-stage 6). A call without an answer by then
+	// leaves its outcome unknown.
+	EffectTimeout time.Duration
 }
 
 const (
@@ -138,14 +157,18 @@ func (c SchedulerConfig) resolve() (SchedulerConfig, error) {
 	if c.Workers < 0 || c.Workers > MaxSchedulerWorkers || c.Lease < 0 || c.Poll < 0 || c.Recheck < 0 {
 		return c, fmt.Errorf("workflow scheduler needs 1 to %d workers and positive durations", MaxSchedulerWorkers)
 	}
-	if c.Interruptions < 0 || c.Interruptions > MaxInterruptions || c.ReadTimeout < 0 || c.ReadTimeout > maxReadTimeout {
-		return c, fmt.Errorf("workflow scheduler needs an interruption bound of 1 to %d and a read timeout up to %s", MaxInterruptions, maxReadTimeout)
+	if c.Interruptions < 0 || c.Interruptions > MaxInterruptions || c.ReadTimeout < 0 || c.ReadTimeout > maxReadTimeout ||
+		c.EffectTimeout < 0 || c.EffectTimeout > maxReadTimeout {
+		return c, fmt.Errorf("workflow scheduler needs an interruption bound of 1 to %d and read and effect timeouts up to %s", MaxInterruptions, maxReadTimeout)
 	}
 	if c.Interruptions == 0 {
 		c.Interruptions = DefaultInterruptions
 	}
 	if c.ReadTimeout == 0 {
 		c.ReadTimeout = defaultReadTimeout
+	}
+	if c.EffectTimeout == 0 {
+		c.EffectTimeout = defaultReadTimeout
 	}
 	if c.Workers == 0 {
 		c.Workers = DefaultSchedulerWorkers

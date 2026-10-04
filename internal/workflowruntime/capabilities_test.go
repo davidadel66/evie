@@ -49,6 +49,11 @@ type fakeProvider struct {
 	// down, when set, makes the provider unavailable for that reason.
 	down string
 	read plugins.WorkflowRead
+	// perform, reconcile and conflictKeys are an effect's behavior
+	// (sub-stage 6).
+	perform      plugins.WorkflowEffect
+	reconcile    plugins.WorkflowEffectReconcile
+	conflictKeys plugins.WorkflowConflictKeys
 }
 
 func (f *fakeProviders) WorkflowContract(id string) (workflow.CapabilityContract, bool) {
@@ -74,6 +79,7 @@ func (f *fakeProviders) ResolveWorkflowCapability(_ context.Context, id string) 
 		return out, fmt.Errorf("%w: %s: %s", plugins.ErrWorkflowCapabilityUnavailable, id, p.down)
 	}
 	out.Read = p.read
+	out.Perform, out.Reconcile, out.ConflictKeys = p.perform, p.reconcile, p.conflictKeys
 	return out, nil
 }
 
