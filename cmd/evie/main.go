@@ -56,6 +56,13 @@ func main() {
 		runCronExec(os.Args[2:])
 		return
 	}
+	// Workflow review needs no database: it reads one definition directory.
+	if handled, err := runWorkflowManagement(context.Background(), os.Args[1:], os.Stdout, os.Getenv); handled {
+		if err != nil {
+			log.Fatalf("workflows: %v", err)
+		}
+		return
+	}
 
 	db, err := eviedb.OpenDB()
 	if err != nil {
@@ -366,7 +373,7 @@ func main() {
 			log.Fatalf("serve: %v", err)
 		}
 	default:
-		log.Fatalf("unknown command %q (usage: evie [serve|cron-exec <job-id>|plugins ...|presets ...|sessions ...])", cmd)
+		log.Fatalf("unknown command %q (usage: evie [serve|cron-exec <job-id>|plugins ...|presets ...|sessions ...|workflows ...])", cmd)
 	}
 }
 

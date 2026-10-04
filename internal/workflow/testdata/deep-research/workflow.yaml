@@ -1,0 +1,163 @@
+# Deep research: plan angles, research each angle with its own research
+# worker, verify every claim with independent votes, keep the claims a
+# majority supports, and write a cited report. Comments and README.md are
+# documentation: they are not part of the executable hash.
+schema_version: 1
+name: deep-research
+description: >-
+  Research one question from several angles, verify each claim with three
+  independent research workers, keep the claims a majority supports, and
+  write a cited report.
+
+inputs:
+  question:
+    type: string
+    required: true
+    max_length: 2000
+    description: The question to research.
+  max_angles:
+    type: integer
+    default: 4
+    minimum: 1
+    maximum: 6
+    description: How many research angles to plan.
+
+run_key:
+  inputs: [question]
+
+model_policies:
+  planner:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.2
+    max_output_tokens: 4000
+  researcher:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.3
+    max_output_tokens: 16000
+  writer:
+    version: 1
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+    temperature: 0.4
+    max_output_tokens: 12000
+
+limits:
+  max_duration: 2h
+  max_attempts: 200
+  max_parallel: 4
+  max_tokens: 12000000
+
+retention:
+  classification: ordinary
+
+start: plan
+
+steps:
+  - id: plan
+    kind: ai
+    description: Split the question into distinct research angles.
+    model_policy: planner
+    prompt: prompts/plan.md
+    input:
+      question: $inputs.question
+      max_angles: $inputs.max_angles
+    output_schema: schemas/angles.schema.json
+    retry:
+      max_attempts: 2
+    next: research
+
+  - id: research
+    kind: map
+    description: Research every angle with its own research worker.
+    over: $steps.plan.output.angles
+    max_items: 6
+    max_parallel: 4
+    on_item_failure: partial
+    min_succeeded: 1
+    item:
+      kind: agent
+      worker: research
+      model_policy: researcher
+      objective: prompts/research.md
+      input:
+        question: $inputs.question
+        angle_id: $item.id
+        angle: $item.question
+      output_schema: schemas/findings.schema.json
+      budget:
+        time: 10m
+        tokens: 400000
+      retry:
+        max_attempts: 2
+    next: claims
+
+  - id: claims
+    kind: deterministic
+    description: Merge the claims, keeping only sources a worker fetched.
+    function: collect_claims@1
+    input:
+      findings: $steps.research.output.results
+      max_claims: 12
+    next: ballots
+
+  - id: ballots
+    kind: deterministic
+    description: One ballot per claim and voter.
+    function: expand_ballots@1
+    input:
+      claims: $steps.claims.output.claims
+      votes: 3
+    next: verify
+
+  - id: verify
+    kind: map
+    description: Each ballot is an independent research worker checking one claim.
+    over: $steps.ballots.output.ballots
+    max_items: 36
+    max_parallel: 4
+    on_item_failure: partial
+    min_succeeded: 1
+    item:
+      kind: agent
+      worker: research
+      model_policy: researcher
+      objective: prompts/verify.md
+      input:
+        claim: $item.text
+        cited_sources: $item.sources
+      output_schema: schemas/verdict.schema.json
+      budget:
+        time: 5m
+        tokens: 150000
+    next: filter
+
+  - id: filter
+    kind: deterministic
+    description: Keep claims that at least two of three voters support.
+    function: majority_filter@1
+    input:
+      claims: $steps.claims.output.claims
+      votes: $steps.verify.output.results
+      quorum: 2
+    next: synthesize
+
+  - id: synthesize
+    kind: ai
+    description: Write the cited report from the verified claims.
+    model_policy: writer
+    prompt: prompts/synthesize.md
+    input:
+      question: $inputs.question
+      verified_claims: $steps.filter.output.accepted
+      rejected_claims: $steps.filter.output.rejected
+    output_schema: schemas/report.schema.json
+    retry:
+      max_attempts: 2
+
+outputs:
+  report: $steps.synthesize.output
+  verified_claims: $steps.filter.output.accepted

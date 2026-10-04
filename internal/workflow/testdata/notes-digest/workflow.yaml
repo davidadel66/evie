@@ -1,0 +1,110 @@
+# A daily digest: read the day's notes, summarize them, append the digest.
+# It exercises capability reads and effects, a branch, an interruption and a
+# schedule against the test capability catalog.
+schema_version: 1
+name: notes-digest
+description: Summarize one day's inbox notes into the digest notebook.
+
+inputs:
+  day:
+    type: string
+    required: true
+    max_length: 10
+    sensitive: true
+
+run_key:
+  inputs: [day]
+
+model_policies:
+  summarizer:
+    version: 2
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0
+    max_output_tokens: 2000
+
+limits:
+  max_duration: 30m
+  max_attempts: 20
+  max_parallel: 1
+  max_tokens: 200000
+
+authority:
+  operations:
+    - capability: notes.list
+      connection: conn-notes
+      resources: ["notebook:inbox"]
+      max_calls_per_run: 1
+    - capability: notes.append
+      connection: conn-notes
+      resources: ["notebook:digest"]
+      max_calls_per_run: 1
+
+schedule:
+  cron: "0 7 * * 1-5"
+  timezone: America/New_York
+  catch_up:
+    policy: each_missed
+    max_runs: 3
+  inputs:
+    day: $schedule.date
+
+retention:
+  classification: sensitive
+
+start: read
+
+steps:
+  - id: read
+    kind: capability
+    capability: notes.list
+    contract: 1.0.0
+    connection: conn-notes
+    resource: "notebook:inbox"
+    input:
+      day: $inputs.day
+    retry:
+      max_attempts: 3
+      backoff: 2s
+    next: check
+
+  - id: check
+    kind: branch
+    cases:
+      - when:
+          ref: $steps.read.output.notes
+          op: empty
+        next: ask
+    default: summarize
+
+  - id: ask
+    kind: interrupt
+    message: No notes were found for this day. Reply whether that is expected.
+    input:
+      day: $inputs.day
+    response_schema: schemas/ask.schema.json
+
+  - id: summarize
+    kind: ai
+    model_policy: summarizer
+    prompt: prompts/summarize.md
+    input:
+      notes: $steps.read.output.notes
+    output_schema: schemas/digest.schema.json
+    next: write
+
+  - id: write
+    kind: capability
+    capability: notes.append
+    contract: 1.0.0
+    connection: conn-notes
+    resource: "notebook:digest"
+    input:
+      day: $inputs.day
+      text: $steps.summarize.output.digest
+    retry:
+      max_attempts: 2
+
+outputs:
+  digest: $steps.summarize.output.digest
+  entry: $steps.write.output.entry_id

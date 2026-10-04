@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "summary", "body_markdown", "citations"],
+  "properties": {
+    "title": {"type": "string", "minLength": 1, "maxLength": 200},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "body_markdown": {"type": "string", "minLength": 1, "maxLength": 60000},
+    "citations": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    }
+  }
+}

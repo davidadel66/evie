@@ -423,6 +423,20 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   10. Deep-research workflow.
   11. Schedules and notifications.
   12. Migration and retention.
+- **Sub-stage 1 implemented** (2026-10-04). `workflow-runtime.spec.md` is
+  amended with map and agent steps (workflows cannot merge in v1; plain AI
+  steps keep no tools). The new `internal/workflow` package parses
+  `workflow.yaml` strictly (yaml.v3 with `KnownFields`; no anchors, aliases,
+  merge keys, tags, duplicate keys, nulls or implicit conversions), validates
+  the graph, references, types, limits, Run Key, schedule, capabilities
+  against a catalog and Workspace Access, worker presets and budgets, map
+  bounds and a reviewed function registry, hashes everything behavior-
+  affecting (README, comments and descriptions excluded), prints a review
+  report, and simulates over fixtures with effects as previews. `evie
+  workflows validate <dir>` and `evie workflows simulate <dir> --fixtures
+  <file>` expose it. The deep-research example lives in
+  `internal/workflow/testdata/deep-research`. Binding record: the 2026-10-04
+  entry in `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 

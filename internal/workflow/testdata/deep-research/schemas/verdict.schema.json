@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "rationale"],
+  "properties": {
+    "verdict": {"type": "string", "enum": ["supported", "refuted", "unclear"]},
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 1000}
+  }
+}

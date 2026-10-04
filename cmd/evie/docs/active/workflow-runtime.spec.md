@@ -1,3 +1,16 @@
+> Amended 2026-10-04 by the owner's decision for Stage 14 of
+> [docs/memory-architecture.md](../../../../docs/memory-architecture.md).
+> Two step kinds join the original five: a bounded parallel `map` step over a
+> list a prior step produced, and `agent` steps that run the existing
+> research, explore and build workers with their own fenced tools, budgets,
+> wrap-up and result contract. Plain AI Nodes keep the no-tools rule (ADR
+> 0010, 0019), external effects still go only through capability nodes and
+> the effect protocol, and a workflow cannot merge a build branch in v1.
+> `workflow.yaml` is parsed strictly with `gopkg.in/yaml.v3`. The delivery
+> stages now match the twelve sub-stages listed there. Amended text below is
+> marked "(Amended 2026-10-04)"; the binding record is the 2026-10-04 entry
+> in [workflow-runtime.decisions.md](workflow-runtime.decisions.md).
+
 ## Problem Statement
 
 Evie can currently interpret instructions and call tools inside a live
@@ -106,6 +119,9 @@ coordinate nodes, leases, receipts, or recovery themselves.
 68. As a maintainer, I want one Workflow Runtime interface, so that callers do not orchestrate node scheduling, persistence, fencing, retries, or reconciliation.
 69. As a maintainer, I want real SQLite used in durability tests, so that crash recovery and transaction ordering are verified rather than mocked.
 70. As a maintainer, I want fake capability and model providers behind focused interfaces, so that all external outcomes can be tested deterministically.
+71. As Evie's owner, I want a reviewed workflow to fan the same step out over a list a prior step produced, with declared bounds on items, parallelism, per-item budgets and failures, so that dozens of independent pieces of work run as one durable, reviewable procedure rather than a chat turn. (Added 2026-10-04.)
+72. As Evie's owner, I want a workflow step to run an existing research, explore or build worker with exactly that worker's fenced tools, budget and result contract, so that unattended work can investigate or change code without plain AI steps gaining tools. (Added 2026-10-04.)
+73. As Evie's owner, I want a workflow unable to merge a build worker's branch, so that unattended work never changes my checkout or a target branch without my approval at the merge gate. (Added 2026-10-04.)
 
 ## Implementation Decisions
 
@@ -136,24 +152,96 @@ coordinate nodes, leases, receipts, or recovery themselves.
   `README.md`, and separate Markdown prompt files for AI Nodes. Validation
   rejects unknown fields, unsupported schema versions, missing references,
   unreachable nodes, unbounded or unsafe cycles, and missing limits.
+- (Amended 2026-10-04.) `workflow.yaml` is parsed with `gopkg.in/yaml.v3`
+  into the closed schema with unknown fields refused, and only a safe YAML
+  subset is accepted: one document; no anchors, aliases, merge keys, explicit
+  tags or duplicate keys; no null values; booleans only as `true` or
+  `false`; integers only in plain decimal; decimals only as digits with one
+  point; dates and the YAML 1.1 words `yes`, `no`, `on`, `off`, `y` and `n`
+  only when quoted; and a field declared as text, a number or a boolean
+  accepts only that type. Prompts are static Markdown with no templating:
+  declared inputs reach the model as separate data.
 - Activation canonicalizes all behavior-affecting definition content and hashes
   it. Documentation-only content is excluded from the executable hash while
-  still remaining reviewable in Git.
+  still remaining reviewable in Git. (Amended 2026-10-04.) The executable hash
+  covers the normalized `workflow.yaml` (defaults applied, durations and
+  order normalized, `description` fields left out), the exact bytes of each
+  referenced prompt, each referenced JSON schema in canonical form, and the
+  identity, version and signature of each referenced deterministic function.
+  `README.md`, comments, formatting and descriptions are excluded.
 - V1 graph execution supports five node kinds: deterministic calculation,
   capability call, AI judgment, conditional branch, and durable interruption.
   Control flow is sequential or conditional with bounded node retries.
+  (Amended 2026-10-04.) Two more kinds are supported: `map` and `agent`,
+  below. The graph stays acyclic; a map's items are its only parallelism.
+- Deterministic nodes call reviewed Go functions from a registry compiled
+  into Evie, named with a version (`collect_claims@1`) and a typed signature.
+  A definition cannot add one. (Amended 2026-10-04.)
+- (Amended 2026-10-04.) A **map step** runs one item step for each element of
+  a list a prior step produced (`over` names that step's output), and
+  declares `max_items`, `max_parallel`, an item failure policy and, through
+  its item, the per-item retry policy and budget. A list longer than
+  `max_items` fails the step before any item starts; nothing is truncated.
+  At most `max_parallel` items run at once, never more than the run's
+  `limits.max_parallel`, and runtime capacity (worker slots, provider rate
+  limits, run token limit) can only lower that. Its output lists succeeded
+  items in input order, each with its index, element and output, then the
+  failed items with their errors and both counts, so the output never
+  depends on completion order. With `on_item_failure: fail` the first item
+  that fails after its retries fails the step: unstarted items never start
+  and running ones are cancelled. With `partial` the step succeeds when at
+  least `min_succeeded` items succeeded. Nesting stops at one level: an item
+  is a single deterministic, AI or agent step, never a map, branch,
+  interruption or capability call, and it may reference its element, run
+  inputs and steps that always run before the map. Each item attempt is a
+  node attempt, recorded and checkpointed like one and counted against the
+  run's limits.
+- (Amended 2026-10-04.) An **agent step** runs one existing immutable worker
+  preset (`research`, `explore` or `build`) with exactly that preset's fenced
+  tools, the subagent wrap-up at 90% of its budget, and its result contract;
+  there is no other or model-selected preset. It declares an objective prompt
+  file, the input fields passed as assignment data (framed as data, never
+  instructions or authority), a named Model Policy that replaces the parent
+  session's model a chat child would reuse, and a `budget` of time and tokens
+  no larger than the operator's subagent policy. Its output is the worker
+  result (status, summary, report, sources, limitations and usage); when it
+  declares an output schema, the worker is asked to end its report with a
+  `## Result` JSON block, which is extracted deterministically and validated
+  like AI Node output. `partial` (a wrap-up report) succeeds; failed,
+  cancelled and interrupted attempts fail. The worker has no Memory,
+  automatic recall, ambient transcript or delegation. Research reads the web;
+  explore reads the run's Workspace folder; build writes only its own
+  worktree and branch in the run's Workspace repository and names, through
+  its `task_id` input, the Task it works on. Admission applies the existing
+  worker checks (pinned and current Workspace allowance, revocations, Task
+  and conflict rules), with the Workflow Run's fenced lease in place of the
+  parent turn; cancellation, lease loss and revocation reach the worker.
+  Agent steps are not AI Nodes: AI Nodes keep no tools.
+- (Amended 2026-10-04.) Workflows cannot merge in v1. An agent step's build
+  branch stays unmerged until the owner merges it through the Stage 12 gate
+  from a session, and no `subagents.*` capability can be a capability node.
+  Allowing it later needs an amendment that declares the exact repository and
+  target as Standing Authority approved with the definition.
 - Definitions cannot embed arbitrary Go, Python, JavaScript, shell, templates
   that generate executable code, or dynamically generated graph structure.
 - Workflow-to-workflow invocation, parallel branches, arbitrary graph loops,
   dynamic graph mutation, and production time-travel replay are deferred.
-  Shared deterministic capabilities provide initial reuse.
+  Shared deterministic capabilities provide initial reuse. (Amended
+  2026-10-04: the bounded map step is not a parallel branch; graph-level
+  fork and join stays deferred.)
 - Workflow validation produces a human graph, required Capability Contracts,
   expected inputs and outputs, resource list, Run Key rule, Resource Conflict
   Keys, Retry Policies, Model Policies, requested Standing Authority, schedule,
-  and retention classification.
+  and retention classification. (Amended 2026-10-04: also each map step's
+  bounds and each agent step's worker and budget, with the worst-case agent
+  tokens and attempts against the run's limits.)
 - Effect-suppressed simulation runs deterministic and AI proposal nodes with
   controlled fixtures while replacing external mutations with previews. A dry
-  run never becomes an Effect Receipt and never grants authority.
+  run never becomes an Effect Receipt and never grants authority. (Amended
+  2026-10-04: fixtures also supply each agent attempt's worker result, each
+  map item's outcome and each capability read's result; map steps are
+  simulated over the fixture lists in index order, and simulation contacts no
+  model, worker or capability provider.)
 - Workflow Approval accepts one exact executable definition hash and its exact
   requested Standing Authority. It activates the definition for future runs.
   Arbitrary procedural text, a Skill, Workspace Access, an Agent Preset, and an
@@ -219,7 +307,8 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Retry Policy is declared per node and bounded. Pure deterministic work may
   retry; reads use limited backoff; AI Nodes may retry malformed typed output;
   effects retry only when the connector proves idempotency for the same Effect
-  Intent.
+  Intent. (Amended 2026-10-04: an agent step's retry is a fresh worker attempt
+  under a fresh budget; map items retry individually.)
 - Cancellation stops future nodes. An in-flight effect completes or enters
   reconciliation; completed effects remain recorded and are not undone.
   Standing Authority or Workspace Access revocation blocks new runs and pauses
@@ -247,11 +336,22 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Generic CLI and web surfaces list definitions and runs, show validation and
   simulation, present approval diffs, start and cancel runs, display progress,
   answer interruptions, reconcile unknown effects, and inspect notifications.
-- Implementation is delivered in independently reviewable stages: definition
-  validation and simulation; activation and authority; manual deterministic
-  runs; durable restart and leases; capability reads; effect protocol and
-  reconciliation; interruptions and AI Nodes; cancellation and recovery;
-  schedules and notifications; migration and retention.
+- Implementation is delivered in independently reviewable stages, in order
+  (amended 2026-10-04 to match Stage 14 of
+  [docs/memory-architecture.md](../../../../docs/memory-architecture.md)):
+  1. spec amendment, then definition validation and simulation (strict YAML,
+     canonical hashing);
+  2. activation and Standing Authority;
+  3. manual deterministic runs;
+  4. durable restart and leases;
+  5. capability reads;
+  6. effect protocol and reconciliation;
+  7. interruptions and AI steps;
+  8. cancellation and recovery;
+  9. agent steps and bounded map fan-out;
+  10. the deep-research workflow;
+  11. schedules and notifications;
+  12. migration and retention.
 
 ## Testing Decisions
 
@@ -272,7 +372,20 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Definition tests cover canonical hashing, unknown fields, unsupported schema
   versions, missing prompts, unreachable nodes, unsafe cycles, missing limits,
   invalid branches, invalid Run Key rules, unauthorized resources, and
-  documentation-only changes.
+  documentation-only changes. (Amended 2026-10-04: also every rejected YAML
+  form, map and agent bounds, unknown worker presets, deterministic functions
+  outside the reviewed registry, and proof that every behavior edit changes
+  the executable hash.)
+- (Amended 2026-10-04.) Simulation tests prove the same definition and
+  fixtures produce an identical trace, map items keep input order and the
+  failure policy, oversized lists fail before any item, effects only produce
+  previews, and no model, worker or capability provider is reachable from the
+  simulator.
+- (Amended 2026-10-04.) Agent and map run tests (sub-stage 9) prove each
+  worker keeps its fences and budget under a run's lease, items run at most
+  `max_parallel` at once, cancellation and lease loss reach running workers,
+  a crash recovers each item from its own checkpoint without rerunning
+  finished ones, and no workflow can merge a build branch.
 - Review tests assert the human graph, executable diff, authority diff,
   Capability Contracts, schedules, resources, expected input/output, and
   effect-suppressed preview.
@@ -283,7 +396,8 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Run tests cover manual and scheduled starts, foreground detachment, background
   continuation, later-session attachment, deterministic Run Key collisions,
   completed-key override, and different-key concurrency.
-- Node tests cover all five supported node kinds, typed state transitions,
+- Node tests cover all five supported node kinds (amended 2026-10-04: seven,
+  with map and agent), typed state transitions,
   deterministic validation, branch selection, bounded retries, and durable
   interruption response.
 - Crash-matrix tests stop after every durable boundary around an external effect:
@@ -322,7 +436,13 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Arbitrary embedded code, shell nodes, user-provided executables, or dynamic
   graph generation.
 - Parallel graph branches, arbitrary graph cycles, time-travel execution, or
-  mutation of a live graph.
+  mutation of a live graph. (Amended 2026-10-04: the bounded map step is in
+  scope; nested maps, map items that are capability calls, branches or
+  interruptions, and fork-join graph branches are not.)
+- (Amended 2026-10-04.) Merging a build branch from a workflow, any
+  `subagents.*` capability as a capability node, worker presets other than
+  research, explore and build, and workers with Memory, automatic recall or
+  delegation.
 - Workflow-to-workflow calls; later pinned subworkflow nodes remain a named
   extension.
 - Automatic external event triggers in the first runtime.
@@ -330,7 +450,9 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Compensating transactions or pretending completed external effects can always
   be undone.
 - Letting AI Nodes call tools, authorize effects, perform financial arithmetic,
-  or receive ambient session context.
+  or receive ambient session context. (Amended 2026-10-04: agent steps run
+  workers with their own fenced tools; they are not AI Nodes and perform no
+  external effect outside their worker's fence.)
 - Treating ordinary conversational tool intent as Workflow Run state.
 - Cairo-specific calculations, employee mapping, Square queries, Google Sheets
   layout, or Venmo execution.
