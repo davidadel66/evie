@@ -1,9 +1,9 @@
 # Context management — Evie vs current harnesses
 
-Status: comparison for planning (2026-10-03). In-turn compaction (memory
-architecture Stage 8) is implemented; see the 2026-10-03 entry in
-`cmd/evie/docs/active/memory.decisions.md`. The other recommendations are
-not decided yet.
+Status: comparison for planning (2026-10-03). In-turn compaction and
+tighter tool output (memory architecture Stages 8 and 9) are implemented;
+see their 2026-10-03 entries in `cmd/evie/docs/active/memory.decisions.md`.
+The other recommendations are not decided yet.
 
 ## Techniques the leading harnesses use
 
@@ -34,7 +34,7 @@ not decided yet.
 | Technique | Evie today | Gap |
 |---|---|---|
 | Delegation | Research workers only (`web_search`, `web_fetch`), with budgets, wrap-up, pageable reports and continuation | **Large.** Local work (reading files, querying databases, long bash investigations) can't be delegated, so its output floods the orchestrator. |
-| Tool-result clearing | Above 60% of the budget, older groups shrink to 1 KiB head/tail placeholders in bands, keeping the newest 3; `read_tool_result` re-reads them | Small. No per-tool exclusions; a single result may still take 100 KiB before projection. |
+| Tool-result clearing | Above 60% of the budget, older groups shrink to 1 KiB head/tail placeholders in bands, keeping the newest 3; `read_tool_result` re-reads them. Since Stage 9, a request that offers `read_tool_result` shows at most 32 KiB per result and 96 KiB per group, with the omitted range named for paging. Memory, Task, delegation and reread results are excluded from clearing. A clear that frees under 8 KiB while the request fits is skipped. | Small. Workers and older presets keep the 100 KiB per-result bound, and the 1 KiB projection is not frame-aware for very long delimiter lines. |
 | Compaction | Rolling summary of whole completed turns, carry-forward sections, calibrated budget, retry when the provider rejects for context length; since Stage 8, the active turn's oldest completed tool groups are summarized when a request cannot fit | Small. Retained tool-call arguments are never shortened. |
 | Save before forgetting | Not yet; planned as the background memory pass at idle or compaction (memory Stage 4) | Small, once Stage 4 lands. Run the pass *before* compaction, not after. |
 | Structured notes | Task Trees and Task Focus; summary sections carried forward | Covered. |
@@ -55,7 +55,7 @@ not decided yet.
 2. **In-turn compaction.** Allow compacting completed tool groups inside the
    active turn when clearing isn't enough. Keep the user message verbatim and
    summarize the older tool groups, like OpenAI's server-side compaction.
-3. **Tighter tool output.**
+3. **Tighter tool output.** *Implemented (Stage 9).*
    - Lower the per-result admission (100 KiB today) and rely on files plus
      paging for large outputs.
    - Add `exclude_tools`-style protection so memory, todo and task results are

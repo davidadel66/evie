@@ -73,18 +73,21 @@ func (s *Session) projectedRequestBytes(input ContextComposeInput) (int64, int64
 // enough, every tool result to a one-line marker. Both forms name the event
 // and its original size and hash. It returns the input unchanged when it
 // already fits or when nothing fits, in which case composition reports the
-// overflow. reduced reports whether events were replaced.
+// overflow. reduced reports whether results were replaced. Replacements reach
+// the composer as toolResultReductions, so durable history and the snapshot
+// placeholders validated against it are unchanged.
 func (s *Session) fitWrapUpRequest(input ContextComposeInput) (ContextComposeInput, bool, error) {
 	fits := func(candidate ContextComposeInput) (bool, error) {
 		requestBytes, usable, err := s.projectedRequestBytes(candidate)
 		return requestBytes <= usable, err
 	}
+	input.toolResultReductions = nil
 	if ok, err := fits(input); ok || err != nil {
 		return input, false, err
 	}
 	for _, reduce := range []func(memory.Event) string{wrapUpExcerpt, wrapUpMarker} {
 		candidate := input
-		candidate.Events = reduceToolResults(input.Events, reduce)
+		candidate.toolResultReductions = reduceToolResults(input.Events, reduce)
 		ok, err := fits(candidate)
 		if err != nil {
 			return input, false, err
@@ -100,15 +103,30 @@ func isToolResult(event memory.Event) bool {
 	return event.Type == memory.EventToolSucceeded || event.Type == memory.EventToolFailed || event.Type == memory.EventToolCancelled
 }
 
-// reduceToolResults copies events, replacing each tool result's content with
-// reduce's when that is shorter.
-func reduceToolResults(events []memory.Event, reduce func(memory.Event) string) []memory.Event {
-	reduced := append([]memory.Event(nil), events...)
-	for i, event := range reduced {
+// reduceToolResults maps each tool result whose reduce content is shorter
+// to that content.
+func reduceToolResults(events []memory.Event, reduce func(memory.Event) string) map[memory.EventID]string {
+	reductions := make(map[memory.EventID]string)
+	for _, event := range events {
 		if !isToolResult(event) {
 			continue
 		}
 		if content := reduce(event); len(content) < len(event.Content) {
+			reductions[event.ID] = content
+		}
+	}
+	return reductions
+}
+
+// withToolResultReductions copies events with each reduced result's content
+// replaced.
+func withToolResultReductions(events []memory.Event, reductions map[memory.EventID]string) []memory.Event {
+	if len(reductions) == 0 {
+		return events
+	}
+	reduced := append([]memory.Event(nil), events...)
+	for i, event := range reduced {
+		if content, ok := reductions[event.ID]; ok && isToolResult(event) {
 			reduced[i].Content = content
 		}
 	}
@@ -135,7 +153,8 @@ func wrapUpMarker(event memory.Event) string {
 // below its projection threshold, so these are all of the request's
 // placeholders. Results an in-turn compaction replaced are not in the
 // request and are not described.
-func wrapUpPlaceholders(original, reduced []memory.Event, snapshot memory.ContextSnapshotPayload) []memory.ContextPlaceholderManifest {
+func wrapUpPlaceholders(original []memory.Event, reductions map[memory.EventID]string, snapshot memory.ContextSnapshotPayload) []memory.ContextPlaceholderManifest {
+	reduced := withToolResultReductions(original, reductions)
 	// The history was validated before composition, so this cannot fail;
 	// without it every retained result is described, as before Stage 8.
 	hidden, _ := turnCompactionHiddenEvents(original)

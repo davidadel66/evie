@@ -247,20 +247,15 @@ func (s *Session) runOwnedTurn(
 		if err != nil {
 			return s.classifyLocalError(coordinator, err)
 		}
-		var wrapUpOriginal []memory.Event
 		fitWrapUp := func() error {
 			if !finalStep || s.wrapUp == nil {
 				return nil
 			}
-			original := composeInput.Events
-			fitted, reduced, err := s.fitWrapUpRequest(composeInput)
+			fitted, _, err := s.fitWrapUpRequest(composeInput)
 			if err != nil {
 				return err
 			}
-			composeInput, wrapUpOriginal = fitted, nil
-			if reduced {
-				wrapUpOriginal = original
-			}
+			composeInput = fitted
 			return nil
 		}
 		if finalStep {
@@ -393,8 +388,8 @@ func (s *Session) runOwnedTurn(
 				return overflow
 			}
 		}
-		if wrapUpOriginal != nil {
-			composed.Snapshot.Placeholders = wrapUpPlaceholders(wrapUpOriginal, composeInput.Events, composed.Snapshot)
+		if len(composeInput.toolResultReductions) > 0 {
+			composed.Snapshot.Placeholders = wrapUpPlaceholders(composeInput.Events, composeInput.toolResultReductions, composed.Snapshot)
 		}
 		composed.Snapshot.CompactionFailureCategory = failureCategory
 		recall.recordAccounting(composed.Snapshot.Memory)

@@ -24,6 +24,8 @@ type workingContextProvider interface {
 
 type completeToolResultGroup struct {
 	resultIndexes []int
+	// names are the called tools' names, aligned with resultIndexes.
+	names []string
 }
 
 func completeToolResultGroups(events []memory.Event) ([]completeToolResultGroup, error) {
@@ -61,6 +63,7 @@ func completeToolResultGroups(events []memory.Event) ([]completeToolResultGroup,
 				return nil, fmt.Errorf("tool event %q is out of order for assistant event %q", events[j].ID, event.ID)
 			}
 			group.resultIndexes = append(group.resultIndexes, j)
+			group.names = append(group.names, payload.ToolCalls[position].Name)
 		}
 		if len(group.resultIndexes) != len(payload.ToolCalls) {
 			return nil, fmt.Errorf("complete assistant event %q has an inconsistent result group", event.ID)

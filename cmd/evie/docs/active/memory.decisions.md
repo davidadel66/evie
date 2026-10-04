@@ -1,5 +1,108 @@
 # memory - decisions
 
+- **2026-10-03 — Tighter tool output (memory architecture Stage 9).**
+  Implements Stage 9 of
+  [the memory architecture plan](../../../../docs/memory-architecture.md),
+  modelled on `clear_tool_uses` in Claude's context editing
+  ([comparison](../../../../docs/context-management-comparison.md)). It
+  amends the 2026-08-30 admission and projection decision and the
+  2026-10-01 band decision below. Implementation choices:
+  - *Measured first.* The local history (108 tool results) holds 786,550
+    result bytes. Only 7 results exceed 32 KiB (five `web_fetch`, one YouTube
+    transcript, one `read_file`), and they carry 203,598 bytes (26 percent)
+    beyond that limit. `bash` is the most common tool (41 results, largest
+    24,260 bytes), and memory, Task and delegation results are all under
+    5 KiB. After a 32 KiB limit, no group exceeds about 72 KiB.
+  - *Limits.* Durable admission stays 100 KiB, so each stored result is
+    still the whole admitted output. A request that offers
+    `read_tool_result` shows at most 32 KiB of an unprotected result and
+    96 KiB of a complete tool group. 32 KiB sits above `bash`'s 30,000-byte
+    inline cap, its spill note and exit status, so `bash` results never
+    change, and it equals `read_tool_result`'s largest page. 96 KiB is three
+    full results, and exactly `delegation.BatchEnvelopeBytes`, so a full
+    research batch fits whole. It also lowers the worst case for the three
+    newest groups, which pressure never projects, from 384 KiB to 288 KiB.
+    The group allocator, its 8 KiB floors and the metadata-only fallback
+    are unchanged. Compactor transcripts keep the 128 KiB group bound,
+    because their summary replaces what they see.
+  - *Only where paging works.* The limits apply only when the request's
+    tools include `read_tool_result`. Workers and sessions pinned to presets
+    without it keep the 100 KiB and 128 KiB bounds, the earlier labels, and
+    no group protection. Their tools size output for those bounds.
+    Worker `web_fetch` excerpts are JSON envelopes of up to 64 KiB, and an
+    excerpt of one would break the JSON with no tool to page back the
+    middle.
+  - *Excerpt.* A shortened result shows a one-line label, then the head and
+    the tail. The label carries `event_id`, original bytes, SHA-256 and a
+    reason (`result_limit`, `group_limit` or `protected_group_limit`). It
+    also gives the shown ranges `0-A,B-N` and says to read the omitted bytes
+    with `read_tool_result` from offset `A`. Cuts never split a UTF-8
+    sequence or an untrusted-data delimiter line. The head is closed and
+    the tail reopened with copies of the frame's own `[end ...]` and
+    `[begin ...]` lines, so each half is a complete data frame and the
+    label and markers are always outside a frame. A tail never starts at a
+    mid-line `[`, where a cut after an escaping backslash would make
+    escaped payload read as a delimiter. Tools that spill to files keep
+    their notes. `bash`'s note is under the limit, and `web_fetch`'s note
+    ends its payload, inside the tail. The excerpt is a pure function of
+    the durable event and the group, so its bytes never change between
+    iterations. Snapshot placeholders record it like any projection.
+  - *Protected results (`exclude_tools`).* Conversation projection never
+    shortens results of `memory_*`, `todo_*`, `delegate_*` (including
+    `delegate_research` and `delegate_explore`), `read_subagent_report`,
+    `continue_research` and `read_tool_result`. A paged read would
+    otherwise be excerpted again. These results are exempt from the 32 KiB
+    limit and keep their full size in a group while the other results share
+    what remains. Two fallbacks use the normal rules and say so:
+    - When protected results alone leave no room in the group, every result
+      is allocated as usual, labelled `protected_group_limit`.
+    - When the request still exceeds usable input after every unprotected
+      older result is projected, a second oldest-first pass projects
+      protected results to the band target, labelled
+      `protected tool result projected to fit the context budget`. This
+      happens before any older turn is dropped.
+
+    The set is explicit in code and tested by name.
+  - *`clear_at_least`.* The 20 percent bands are unchanged. A pressure
+    projection of a request that fits usable input without it is applied
+    only if it frees at least 8 KiB of canonical request bytes, or the
+    band's bytes to free when a small window makes that less. Otherwise
+    the request is sent unprojected and its cached history is kept. A
+    projected result is over 4 KiB and becomes about 1.2 KiB, so 8 KiB
+    means at least three small results or one over 9 KiB. A request that
+    cannot fit is always projected. Reaching the band target always frees
+    at least a band, so the rule only skips small projections that ran out
+    of eligible results.
+  - *Cache stability.* Bytes before the newest message change only at
+    projection points. A test composes 24 growing iterations with excerpted,
+    protected and projectable results and finds one band crossing.
+    In-turn compaction (Stage 8) and the worker wrap-up are unchanged and
+    still pass their tests.
+  - *Wrap-up fix.* The worker wrap-up used to rewrite tool-result content
+    in the events it composed from. Fitting then validated history again,
+    so an earlier snapshot placeholder failed as "does not match durable
+    content" (`infrastructure_failure`). This already happened before this
+    stage whenever a worker's group exceeded 128 KiB before its wrap-up.
+    The reductions now reach the composer as a projection-only override,
+    and the events stay durable.
+  - *Existing sessions.* Durable events and old snapshots are unchanged and
+    still validate, and replay stays deterministic because every bound is
+    computed at composition from durable events. A session's request
+    changes once, on the first request after upgrade, only where a new rule
+    applies to its retained history. That covers any session where pressure
+    used to project a protected result, or a projection that freed under
+    8 KiB while the request fit. It also covers a session offering
+    `read_tool_result` with a result over 32 KiB or a group over 96 KiB.
+    Every other request is byte-identical. The composer version becomes
+    `context-composer-v5`.
+  - *Not in this stage / known limits.* The 1 KiB older-result projection
+    is unchanged and not frame-aware. A begin delimiter over 512 bytes (a
+    `web_fetch` source URL near its 2,000-byte limit) can still be split
+    there. Tool descriptions are unchanged; for example, `read_file` still
+    says files up to 100KB are returned whole, so its schema and cached
+    prefix stay stable. The worker wrap-up's last-resort reduction still
+    applies to protected results.
+
 - **2026-10-03 — In-turn compaction (memory architecture Stage 8).**
   Implements Stage 8 of
   [the memory architecture plan](../../../../docs/memory-architecture.md),

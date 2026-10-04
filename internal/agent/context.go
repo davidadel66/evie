@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ContextComposerVersion            = "context-composer-v4"
+	ContextComposerVersion            = "context-composer-v5"
 	CanonicalRequestEstimatorVersion  = "canonical-provider-json-bytes-v2"
 	CalibratedRequestEstimatorVersion = "calibrated-provider-json-bytes-v3"
 )
@@ -110,6 +110,11 @@ type ContextComposeInput struct {
 	// plannedTurnSummary, set only while planning an in-turn compaction,
 	// replaces the active turn's durable in-turn summary with a candidate.
 	plannedTurnSummary *contextTurnSummary
+	// toolResultReductions, set only for a worker's fitted wrap-up request,
+	// replaces what the request shows of these tool results. Events stay
+	// durable, so history validation still checks earlier snapshots'
+	// placeholders against stored content.
+	toolResultReductions map[memory.EventID]string
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -331,7 +336,12 @@ func (c *ContextComposer) projectAtStart(
 	if err != nil {
 		return contextProjection{}, err
 	}
-	projection.selectedProjected, err = applyToolResultGroupLimits(projection.selectedOriginal)
+	projection.selectedOriginal = withToolResultReductions(projection.selectedOriginal, input.toolResultReductions)
+	limitToolResults := applyToolResultGroupLimits
+	if offersToolResultPaging(input.Tools) {
+		limitToolResults = applyModelToolResultLimits
+	}
+	projection.selectedProjected, err = limitToolResults(projection.selectedOriginal)
 	if err != nil {
 		return contextProjection{}, fmt.Errorf("bound durable tool-result groups: %w", err)
 	}
@@ -437,23 +447,51 @@ func (c *ContextComposer) projectAtStart(
 		}
 	}
 	eligibleGroups := max(0, len(groups)-retainedCompleteToolResultGroups)
-	for groupIndex := 0; projection.estimate.SerializedBytes > pressureTarget && groupIndex < eligibleGroups; groupIndex++ {
-		for _, resultIndex := range groups[groupIndex].resultIndexes {
-			if projection.estimate.SerializedBytes <= pressureTarget {
-				break
-			}
-			if !isPressureProjectableToolResult(projection.selectedOriginal[resultIndex]) {
-				continue
-			}
-			pressureProjection := projectOldToolResult(projection.selectedOriginal[resultIndex])
-			if len(pressureProjection) >= len(projection.selectedProjected[resultIndex].Content) {
-				continue
-			}
-			projection.selectedProjected[resultIndex].Content = pressureProjection
-			if err := composeProjected(projection.selectedProjected); err != nil {
-				return contextProjection{}, err
+	unpressured := projection
+	unpressured.selectedProjected = append([]memory.Event(nil), projection.selectedProjected...)
+	// Protected results are projected only in a second pass, when the
+	// request still cannot fit without them.
+	projectOlder := func(protected bool) error {
+		for groupIndex := 0; projection.estimate.SerializedBytes > pressureTarget && groupIndex < eligibleGroups; groupIndex++ {
+			group := groups[groupIndex]
+			for i, resultIndex := range group.resultIndexes {
+				if projection.estimate.SerializedBytes <= pressureTarget {
+					break
+				}
+				original := projection.selectedOriginal[resultIndex]
+				if isProtectedToolResult(group.names[i]) != protected || !isPressureProjectableToolResult(original) {
+					continue
+				}
+				pressureProjection := projectOldToolResult(original)
+				if protected {
+					pressureProjection = projectProtectedToolResult(original)
+				}
+				if len(pressureProjection) >= len(projection.selectedProjected[resultIndex].Content) {
+					continue
+				}
+				projection.selectedProjected[resultIndex].Content = pressureProjection
+				if err := composeProjected(projection.selectedProjected); err != nil {
+					return err
+				}
 			}
 		}
+		return nil
+	}
+	if err := projectOlder(false); err != nil {
+		return contextProjection{}, err
+	}
+	if projection.estimate.SerializedBytes > usable {
+		if err := projectOlder(true); err != nil {
+			return contextProjection{}, err
+		}
+	}
+	// clear_at_least: a request that fits without projection keeps its
+	// cached history unless projecting frees at least the minimum, or the
+	// band's bytes to free when a small window makes that less.
+	freed := unpressured.estimate.SerializedBytes - projection.estimate.SerializedBytes
+	if freed > 0 && unpressured.estimate.SerializedBytes <= usable &&
+		freed < min(pressureProjectionClearAtLeastBytes, unpressured.estimate.SerializedBytes-pressureTarget) {
+		return unpressured, nil
 	}
 	return projection, nil
 }
