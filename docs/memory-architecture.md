@@ -364,6 +364,31 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   provider rate limits and cost caps, and each run's cost is reported.
 - First workflow to ship: a deep-research workflow (search, fetch, verify,
   synthesize) equivalent to the one used for this plan.
+- **Decided (David, 2026-10-04):**
+  - Amend `workflow-runtime.spec.md`, which excluded both parallel branches
+    and tool-using AI steps. Add a bounded parallel **map** step, plus
+    **agent** steps that run the existing research, explore and build
+    workers with their own fenced tools.
+  - Plain AI steps keep the no-tools rule (ADR 0010). External effects still
+    go only through the effect protocol.
+  - Add the `gopkg.in/yaml.v3` dependency, parsed strictly, for
+    `workflow.yaml`.
+- **Sub-stages.** The spec's own delivery stages, plus the amendment, run
+  in order. Each is one reviewable change, validated and merged without
+  waiting for David (David, 2026-10-04):
+  1. Spec amendment, then definition validation and simulation (strict YAML,
+     canonical hashing).
+  2. Activation and Standing Authority.
+  3. Manual deterministic runs.
+  4. Durable restart and leases.
+  5. Capability reads.
+  6. Effect protocol and reconciliation.
+  7. Interruptions and AI steps.
+  8. Cancellation and recovery.
+  9. Agent steps and bounded map fan-out (the amendment).
+  10. Deep-research workflow.
+  11. Schedules and notifications.
+  12. Migration and retention.
 
 ## Decisions (David, 2026-10-03)
 
