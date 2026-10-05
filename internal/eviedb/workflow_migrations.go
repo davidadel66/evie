@@ -259,6 +259,9 @@ func (s *Store) MigrateWorkflowRun(ctx context.Context, req WorkflowMigration) (
 		case WorkflowRunWaitingForHuman:
 			return migrationRefused("run %s waits for the owner's answer: answer its question or cancel it first", p.ID)
 		}
+		if workspaceSource(p.Source) != WorkflowSourceWorkspace {
+			return migrationRefused("run %s pins %s version %d, which stays resumable on its own pins; cancel it and start it again to use another version", p.ID, p.Source, p.Version)
+		}
 		if err := requireEffectsResolved(ctx, conn, p.ID); err != nil {
 			return migrationRefused("run %s has an effect whose outcome is unknown: reconcile it first (evie workflows reconcile); %v", p.ID, err)
 		}

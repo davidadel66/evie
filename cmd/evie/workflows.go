@@ -33,7 +33,7 @@ const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie wor
 	" | evie workflows notifications read|unread [--json] <id>... | evie workflows notifications read --all [--workspace <workspace-id>]" +
 	" | evie workflows status [--json] [<workspace-id>]" +
 	" | evie workflows migrate [--json] [--detach] <run-id> --to-version <n> [--reason <text>]" +
-	" | evie workflows retention status [--json] | evie workflows retention sweep [--dry-run] [--json]"
+	" | evie workflows retention status [--json] | evie workflows retention sweep [--dry-run] [--json]" + workflowBuiltinUsage
 
 // workflowActivationCommands need the database and the procedural
 // repository; runWorkflowActivation answers them once both are available
@@ -43,7 +43,7 @@ const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie wor
 // schedules, schedule, notifications and status from sub-stage 11; migrate
 // and retention from sub-stage 12).
 var workflowActivationCommands = []string{"propose", "list", "show", "diff", "approve", "deactivate", "run", "runs", "inspect", "substitute", "reconcile",
-	"answer", "interruptions", "cancel", "report", "schedules", "schedule", "notifications", "status", "migrate", "retention"}
+	"answer", "interruptions", "cancel", "report", "schedules", "schedule", "notifications", "status", "migrate", "retention", "builtin", "customize", "global"}
 
 // accessNotChecked is printed with a standalone review.
 const accessNotChecked = "Workspace Access is not checked outside a Workspace; evie workflows propose <workspace-id> <dir> checks it.\n"
@@ -153,9 +153,11 @@ func runWorkflowManagement(_ context.Context, args []string, out io.Writer, gete
 }
 
 // listWorkflowTemplates answers `evie workflows templates [--json]` (Stage
-// 14 sub-stage 10): the reviewed definitions bundled with Evie, which `evie
-// workflows propose <workspace-id> --template <name>` proposes to a
-// Workspace for the owner's approval. It touches no database.
+// 14 sub-stage 10): the reviewed definitions bundled with Evie. Since the
+// built-in decision (2026-10-04) each is a built-in every Workspace runs
+// without an approval; `evie workflows customize` (or `propose
+// <workspace-id> --template <name>`) proposes a copy for the owner's
+// approval. It touches no database.
 func listWorkflowTemplates(args []string, out io.Writer, usage error) error {
 	asJSON := false
 	for _, a := range args {
@@ -177,8 +179,9 @@ func listWorkflowTemplates(args []string, out io.Writer, usage error) error {
 		return err
 	}
 	for _, t := range templates {
-		fmt.Fprintf(out, "%s\n  %s\n  inputs: %s\n  propose: evie workflows propose <workspace-id> --template %s\n", t.Name, t.Description, strings.Join(t.Inputs, ", "), t.Name)
+		fmt.Fprintf(out, "%s (built in)\n  %s\n  inputs: %s\n  customize: evie workflows customize %s --workspace <workspace-id> | --global\n", t.Name, t.Description, strings.Join(t.Inputs, ", "), t.Name)
 	}
-	_, err := io.WriteString(out, "Proposing records the template's reviewed files and dry run for the Workspace; approving it is a separate step, and approval starts no run.\n")
+	_, err := io.WriteString(out, "Built-in workflows run in every Workspace without an approval (evie workflows builtin list shows their state). "+
+		"Customizing records a copy's reviewed files and dry run as a proposal; approving it is a separate step, and an approved copy overrides the built-in in its scope.\n")
 	return err
 }

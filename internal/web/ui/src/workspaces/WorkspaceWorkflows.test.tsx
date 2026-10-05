@@ -35,7 +35,9 @@ describe("Workspace workflows", () => {
     const html = renderToStaticMarkup(<WorkspaceHome workspace={workspace} sessions={[]} busy={false} onNewChat={()=>{}} onResume={()=>{}} />);
     expect(html).toContain('aria-label="Workflows"');
     expect(html).toContain("evie workflows propose");
-    expect(html).toContain("--template deep-research");
+    // Built-in workflows need no "add from template" step (2026-10-04).
+    expect(html).not.toContain("--template");
+    expect(html).toContain('aria-label="Built-in workflows"');
   });
 
   it("lists each definition with its status, version and why it is blocked", () => {

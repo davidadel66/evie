@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["results"],
+  "properties": {
+    "results": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["url", "title", "relevance"],
+        "properties": {
+          "url": {"type": "string", "minLength": 1, "maxLength": 500},
+          "title": {"type": "string", "minLength": 1, "maxLength": 300},
+          "snippet": {"type": "string", "maxLength": 500},
+          "relevance": {"type": "string", "enum": ["high", "medium", "low"]}
+        }
+      }
+    }
+  }
+}

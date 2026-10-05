@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["angles"],
+  "properties": {
+    "angles": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "query", "rationale"],
+        "properties": {
+          "label": {"type": "string", "minLength": 1, "maxLength": 60},
+          "query": {"type": "string", "minLength": 1, "maxLength": 300},
+          "rationale": {"type": "string", "minLength": 1, "maxLength": 300}
+        }
+      }
+    }
+  }
+}

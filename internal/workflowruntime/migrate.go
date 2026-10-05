@@ -136,6 +136,11 @@ func (r *Runtime) Migrate(ctx context.Context, req MigrationRequest) (MigrationR
 	if run.State == eviedb.WorkflowRunNeedsReconciliation {
 		return MigrationResult{}, refuse("it needs reconciliation: an effect's outcome is unknown; reconcile it first (evie workflows reconcile)")
 	}
+	if run.Source != eviedb.WorkflowSourceWorkspace && run.Source != "" {
+		// A built-in or Global version stays readable from its commit, so
+		// its runs continue on their own pins (2026-10-04).
+		return MigrationResult{}, refuse("it pins %s version %d, which stays resumable on its own pins; cancel it and start it again to use another version", run.Source, run.Version)
+	}
 	a, err := r.store.ActiveWorkflow(writes, run.WorkspaceID, run.Workflow)
 	if err != nil {
 		if admissionRefused(err) {

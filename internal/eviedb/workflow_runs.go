@@ -116,6 +116,10 @@ type WorkflowRun struct {
 	// run: a retry's backoff, or a paused run's next check. While the run
 	// waits for a dependency, Error says why.
 	NotBefore *time.Time `json:"not_before,omitempty"`
+	// Source is where its pinned version comes from (2026-10-04): a
+	// Workspace's approved version, a Global custom version or a built-in
+	// version.
+	Source WorkflowSource `json:"source"`
 }
 
 // WorkflowNodeAttempt is one node attempt.
@@ -364,7 +368,7 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
  finished_at TEXT,
  updated_at TEXT NOT NULL,
  not_before TEXT,
- FOREIGN KEY(workspace_id, workflow, version) REFERENCES workflow_activations(workspace_id, name, version),
+ `+workflowRunSource+`
  `+workflowRunFinished+`,
  CHECK((state = 'succeeded') = (outputs IS NOT NULL)),
  CHECK(state <> 'failed' OR error <> ''));
@@ -411,6 +415,10 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	// predecessor ends in.
 	if err := rebuildWorkflowRunsWith(ctx, db, [][2]string{{workflowRunStatesBefore, workflowRunStatesSuperseded}, {workflowRunFinishedBefore, workflowRunFinished}}); err != nil {
 		return fmt.Errorf("upgrade workflow runs for migration: %w", err)
+	}
+	// Built-in and Global workflows (2026-10-04): a run pins its source.
+	if err := upgradeWorkflowRunSources(ctx, db); err != nil {
+		return err
 	}
 	// Sub-stage 4 adds the durable retry time to runs and the lease and
 	// interrupted state to attempts. A sub-stage 3 database is upgraded once,
@@ -509,8 +517,11 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 // version it read from procedural Git and re-hashed, the accepted input,
 // its Run Key and Execution Composition, and where it was started.
 type WorkflowRunStart struct {
-	WorkspaceID    memory.WorkspaceID
-	Workflow       string
+	WorkspaceID memory.WorkspaceID
+	Workflow    string
+	// Source is where the version comes from (empty: the Workspace's);
+	// the name must still resolve to it (ResolveWorkflow).
+	Source         WorkflowSource
 	Version        int64
 	ExecutableHash string
 	AuthorityHash  string
@@ -538,7 +549,7 @@ type WorkflowRunStart struct {
 
 const runColumns = `r.id,r.workspace_id,r.workflow,r.version,r.commit_id,r.tree_path,r.executable_hash,r.authority_hash,r.workspace_revision_id,r.access_revision,
  r.composition,r.run_key,r.inputs,r.state,r.outputs,r.error,r.origin_surface,r.session_id,r.created_at,r.started_at,r.finished_at,r.updated_at,
- r.not_before,c.seq,c.next_step`
+ r.not_before,c.seq,c.next_step,r.source`
 
 const runFrom = ` FROM workflow_runs r JOIN workflow_run_checkpoints c ON c.run_id=r.id
  AND c.seq=(SELECT MAX(seq) FROM workflow_run_checkpoints WHERE run_id=r.id)`
@@ -560,7 +571,7 @@ func scanWorkflowRun(scanner rowScanner) (WorkflowRun, error) {
 	var outputs, session, started, finished, notBefore sql.NullString
 	if err := scanner.Scan(&r.ID, &r.WorkspaceID, &r.Workflow, &r.Version, &r.Commit, &r.Path, &r.ExecutableHash, &r.AuthorityHash, &r.WorkspaceRevision, &r.AccessRevision,
 		&composition, &r.RunKey, &inputs, &r.State, &outputs, &r.Error, &r.Surface, &session, &created, &started, &finished, &updated,
-		&notBefore, &r.Checkpoint, &r.NextStep); err != nil {
+		&notBefore, &r.Checkpoint, &r.NextStep, &r.Source); err != nil {
 		return r, err
 	}
 	if notBefore.Valid {
@@ -621,12 +632,15 @@ func (s *Store) StartWorkflowRun(ctx context.Context, req WorkflowRunStart) (run
 	}
 	id := uuid.NewString()
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-		a, err := authorizeWorkflowActivation(ctx, conn, req.WorkspaceID, req.Workflow)
+		a, err := admitWorkflowStart(ctx, conn, req)
 		if err != nil {
 			return err
 		}
 		if a.Version != req.Version || a.ExecutableHash != req.ExecutableHash || a.AuthorityHash != req.AuthorityHash {
 			return ErrWorkflowChanged
+		}
+		if req.Slot != nil && workspaceSource(req.Source) != WorkflowSourceWorkspace {
+			return errors.New("only a Workspace's approved version has a schedule")
 		}
 		if req.RerunOf != "" {
 			if err := checkRerun(ctx, conn, req); err != nil {
@@ -679,9 +693,9 @@ func (s *Store) StartWorkflowRun(ctx context.Context, req WorkflowRunStart) (run
 			session = string(req.SessionID)
 		}
 		if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_runs(id,workspace_id,workflow,version,commit_id,tree_path,executable_hash,authority_hash,workspace_revision_id,access_revision,
- composition,run_key,inputs,state,outputs,error,origin_surface,session_id,created_at,started_at,finished_at,updated_at)
- VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'queued',NULL,'',?,?,?,NULL,NULL,?)`, id, req.WorkspaceID, req.Workflow, a.Version, a.Commit, a.Path, a.ExecutableHash, a.AuthorityHash,
-			w.revision, access.Revision, string(req.Composition), req.RunKey, string(req.Inputs), req.Surface, session, now, now); err != nil {
+ composition,run_key,inputs,state,outputs,error,origin_surface,session_id,created_at,started_at,finished_at,updated_at,source)
+ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'queued',NULL,'',?,?,?,NULL,NULL,?,?)`, id, req.WorkspaceID, req.Workflow, a.Version, a.Commit, a.Path, a.ExecutableHash, a.AuthorityHash,
+			w.revision, access.Revision, string(req.Composition), req.RunKey, string(req.Inputs), req.Surface, session, now, now, workspaceSource(req.Source)); err != nil {
 			return fmt.Errorf("record workflow run: %w", err)
 		}
 		if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_run_checkpoints(run_id,seq,after_attempt,next_step,state,created_at) VALUES(?,0,NULL,?,'{}',?)`,

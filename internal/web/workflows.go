@@ -46,6 +46,9 @@ type WorkflowManager interface {
 	Migrate(context.Context, workflowruntime.MigrationRequest) (workflowruntime.MigrationResult, error)
 	Sweep(context.Context, workflowruntime.SweepRequest) (workflowruntime.SweepResult, error)
 	RetentionStatus(context.Context) (workflowruntime.RetentionStatus, error)
+	// Built-in workflows (2026-10-04): list them and turn one off or on.
+	Builtins(context.Context, memory.WorkspaceID) ([]workflowruntime.BuiltinView, error)
+	ControlBuiltin(context.Context, workflowruntime.BuiltinControl) (eviedb.WorkflowBuiltinControl, error)
 }
 
 // WithWorkflows adds the workflow management routes.
@@ -78,6 +81,8 @@ func (s *Server) registerWorkflowRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workflows/migrate", s.managementRoute(s.handleWorkflowMigrate))
 	mux.Handle("/api/workflows/retention", s.managementRoute(s.handleWorkflowRetention))
 	mux.Handle("/api/workflows/retention/sweep", s.managementRoute(s.handleWorkflowRetentionSweep))
+	mux.Handle("/api/workflows/builtins", s.managementRoute(s.handleWorkflowBuiltins))
+	mux.Handle("/api/workflows/builtins/control", s.managementRoute(s.handleWorkflowBuiltinControl))
 }
 
 // handleWorkflowMigrate is the owner migrating an unfinished run to the

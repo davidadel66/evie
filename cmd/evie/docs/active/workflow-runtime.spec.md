@@ -10,6 +10,20 @@
 > stages now match the twelve sub-stages listed there. Amended text below is
 > marked "(Amended 2026-10-04)"; the binding record is the 2026-10-04 entry
 > in [workflow-runtime.decisions.md](workflow-runtime.decisions.md).
+>
+> Amended again 2026-10-04 by the owner's built-in decision: one standard
+> deep-research workflow is available by default in every Workspace, with no
+> proposal or approval step, because Workflow Approval exists to grant
+> Standing Authority for unattended effects and a built-in, effect-free,
+> read-only workflow whose only power is the research workers a chat
+> already has needs none. The owner can disable it, and customize it into
+> a Workspace or Global definition approved through the normal flow, which
+> then overrides it in its scope. Deep research moves to version 2 (the
+> structure of the deep-research harness that planned Evie's memory
+> architecture, with Evie's citation check kept). Amended text is marked
+> "(Amended 2026-10-04, built-ins)"; the binding record is the "Built-in
+> workflows and deep-research v2" entry in
+> [workflow-runtime.decisions.md](workflow-runtime.decisions.md).
 
 ## Problem Statement
 
@@ -122,6 +136,11 @@ coordinate nodes, leases, receipts, or recovery themselves.
 71. As Evie's owner, I want a reviewed workflow to fan the same step out over a list a prior step produced, with declared bounds on items, parallelism, per-item budgets and failures, so that dozens of independent pieces of work run as one durable, reviewable procedure rather than a chat turn. (Added 2026-10-04.)
 72. As Evie's owner, I want a workflow step to run an existing research, explore or build worker with exactly that worker's fenced tools, budget and result contract, so that unattended work can investigate or change code without plain AI steps gaining tools. (Added 2026-10-04.)
 73. As Evie's owner, I want a workflow unable to merge a build worker's branch, so that unattended work never changes my checkout or a target branch without my approval at the merge gate. (Added 2026-10-04.)
+74. As Evie's owner, I want a standard deep-research workflow available in every Workspace without proposing or approving it, so that a chat can research a broad question the moment research workers are allowed. (Added 2026-10-04, built-ins.)
+75. As Evie's owner, I want to turn a built-in workflow off and on for every Workspace, with each change recorded, so that I stay in control of what Evie can start. (Added 2026-10-04, built-ins.)
+76. As Evie's owner, I want to copy a built-in into a Workspace or Global definition and approve my copy through the normal flow, so that my reviewed changes override the built-in in their scope. (Added 2026-10-04, built-ins.)
+77. As Evie's owner, I want runs of a built-in pinned to its exact version, so that an Evie upgrade never silently changes a run in progress. (Added 2026-10-04, built-ins.)
+78. As Evie's owner, I want Evie to ask me two or three clarifying questions before researching an underspecified question, so that background research answers what I actually need. (Added 2026-10-04, built-ins.)
 
 ## Implementation Decisions
 
@@ -193,7 +212,10 @@ coordinate nodes, leases, receipts, or recovery themselves.
   depends on completion order. With `on_item_failure: fail` the first item
   that fails after its retries fails the step: unstarted items never start
   and running ones are cancelled. With `partial` the step succeeds when at
-  least `min_succeeded` items succeeded. Nesting stops at one level: an item
+  least `min_succeeded` items succeeded ((Amended 2026-10-04,
+  built-ins) `min_succeeded` may be 0: the step then succeeds whatever its
+  items' outcomes, an empty list included, and its failures are data for
+  later steps). Nesting stops at one level: an item
   is a single deterministic, AI or agent step, never a map, branch,
   interruption or capability call, and it may reference its element, run
   inputs and steps that always run before the map. Each item attempt is a
@@ -272,6 +294,48 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Approval activates a manual definition without starting a run. If the
   reviewed definition contains a Workflow Schedule, that same approval
   activates the highlighted schedule.
+- (Amended 2026-10-04, built-ins.) **Built-in workflows.** A definition
+  compiled into Evie that qualifies as built-in runs in every Workspace
+  without a proposal or Workflow Approval. It qualifies (validator-enforced,
+  `workflow.QualifyBuiltin`, and again by database triggers) when it calls
+  no capability (reads and effects both need Standing Authority), requests
+  no Standing Authority, declares no schedule, and its agent steps run only
+  the read-only research and explore workers (no build worker, so nothing
+  can reach the merge gate). Worker presets are not Standing Authority (ADR
+  0027), so such a definition holds nothing an approval grants (ADR 0008).
+  Built-ins are available in every Workspace and on by default; only the
+  owner disables or enables one, for every Workspace, from the CLI or web,
+  each change an immutable record (the latest applies); disabling stops new
+  runs and pauses runs in progress at their next node, enabling lets them
+  continue (ADR 0033). A built-in's identity is the executable hash of its
+  embedded definition: before the first run that pins a hash, Evie commits
+  its exact files to procedural Git (`builtin/workflows/<name>`) and records
+  the version (an immutable built-in version row, numbered per name), so
+  runs pin and read it from its commit like any approved version, and runs
+  of an earlier built-in version stay resumable after Evie ships a newer
+  one; an Evie that cannot read a pinned version pauses the run visibly
+  (ADR 0025), and a built-in run is never migrated (cancel it and start it
+  again). No activation row is written for a built-in: the run pins its
+  source (`workspace`, `global` or `builtin`) and a trigger requires the
+  pinned version in that source's table.
+- (Amended 2026-10-04, built-ins.) **Global custom definitions.** The owner
+  may propose a definition for every Workspace (`global/workflows/<name>`),
+  reviewed with the same card and approved with the same exact hashes, dry
+  run and expected version; it must qualify like a built-in, because Global
+  access rules do not exist (Standing Authority stays a Workspace's). The
+  owner deactivates a Global version like a Workspace's.
+- (Amended 2026-10-04, built-ins.) **Resolution by name.** A start of a name
+  in a Workspace pins the Workspace's custom version while its latest
+  approval is not deactivated (a blocked one refuses the start with its
+  blocks and never falls through to another definition), else the Global
+  custom version on the same terms, else the built-in of that name while
+  enabled. Chat starts, `workflow_status` and the CLI `run` resolve the
+  same way. Every run still belongs to the Workspace it starts in and
+  passes that Workspace's worker allowance and run admission at start and
+  at every node; one Run Key space serves the name whichever definition
+  runs it. `evie workflows customize <name> --workspace <id>|--global`
+  proposes a copy of a built-in, with its bundled dry run, for the normal
+  approval.
 - Manual/session start is the first delivery slice. Scheduled start and bounded
   Catch-up Policy follow as a separate slice using the same run-start interface.
   External event triggers remain a later extension. (Implemented 2026-10-04,
@@ -456,6 +520,15 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Review tests assert the human graph, executable diff, authority diff,
   Capability Contracts, schedules, resources, expected input/output, and
   effect-suppressed preview.
+- (Amended 2026-10-04, built-ins.) Built-in tests prove a built-in runs in
+  a fresh database with no proposal or approval, the owner's disable and
+  enable (immutable, owner-only, pausing and resuming runs), the override
+  order (Workspace custom, Global custom, built-in), the qualification
+  refusing capabilities, authority, schedules and build workers in the
+  validator and the database, run pinning with an earlier built-in version
+  resumed (and paused where it cannot be read), the chat start of the
+  built-in deep-research with scripted fakes, and the chat guidance to ask
+  clarifying questions first.
 - Approval tests prove one approval activates the exact definition and Standing
   Authority, manual approval starts no run, a reviewed schedule becomes active,
   ordinary future runs need no Action Approval, and every out-of-bounds effect

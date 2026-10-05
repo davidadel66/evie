@@ -9,19 +9,23 @@ import (
 	"strings"
 )
 
-// Bundled templates (Stage 14 sub-stage 10, 2026-10-04): reviewed Workflow
-// Definitions compiled into Evie. A template is only a source: proposing
-// one to a Workspace commits exactly its reviewed files to procedural Git
-// with its bundled dry-run fixtures, and the owner's normal approval
-// activates it. Nothing here runs it or grants anything.
+// Bundled definitions (Stage 14 sub-stage 10, 2026-10-04): reviewed
+// Workflow Definitions compiled into Evie. Since the owner's built-in
+// decision (2026-10-04) each one is a built-in workflow (builtin.go):
+// available in every Workspace without a proposal, and a template the
+// owner may customize, whose proposal commits exactly its reviewed files to
+// procedural Git with its bundled dry-run fixtures for the normal
+// approval. Nothing here runs it or grants anything. The sub-stage 10
+// deep-research template (v1) is frozen in testdata/deep-research-template-v1
+// for the tests written against it.
 //
-//go:embed templates
+//go:embed builtin
 var bundled embed.FS
 
-// templatesRoot is the bundled templates' folder; each subfolder is one
+// templatesRoot is the bundled definitions' folder; each subfolder is one
 // definition named after it, with a fixtures.json for its dry run beside
 // its reviewed files (never committed: only referenced files are).
-const templatesRoot = "templates"
+const templatesRoot = "builtin"
 
 // TemplateInfo is one bundled template as a listing shows it.
 type TemplateInfo struct {

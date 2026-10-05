@@ -81,6 +81,11 @@ func admitWorkflowNode(ctx context.Context, conn *sql.Conn, run WorkflowRun, n W
 	if err := authorizeWorkflowRun(ctx, conn, run); err != nil {
 		return nodeAdmission{}, err
 	}
+	if workspaceSource(run.Source) != WorkflowSourceWorkspace {
+		// Built-in and Global versions hold no Standing Authority.
+		return nodeAdmission{}, &WorkflowNodeRefusal{Reason: fmt.Sprintf("steps.%s: %s on %s %s is outside the Standing Authority of %s version %d, which holds none",
+			n.Step, n.Capability, n.Connection, n.Resource, run.Source, run.Version)}
+	}
 	own, err := activationAt(ctx, conn, run.WorkspaceID, run.Workflow, run.Version)
 	if err != nil {
 		return nodeAdmission{}, err

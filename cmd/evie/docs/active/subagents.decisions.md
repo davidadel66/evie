@@ -1,5 +1,42 @@
 # Subagents implementation decisions
 
+## 2026-10-04 — Subagents on by default for built-in deep research
+
+Source: the owner's built-in decision of 2026-10-04 ("with
+`EVIE_WORKFLOW_REMOTE_MODELS=on`, deep research must work from a Workspace
+chat with no setup beyond research workers being allowed"; if the
+Subagents plugin's default blocks that path, make the smallest safe
+default change and record it here). Binding record of the feature: the
+"Built-in workflows and deep-research v2" entry in
+[workflow-runtime.decisions.md](workflow-runtime.decisions.md).
+
+- **Decision: the Subagents plugin is enabled by default**
+  (`defaultPluginEnabled` in `cmd/evie/main.go`). The built-in
+  deep-research runs research workers, and a run-owned worker is admitted
+  only while the Subagents plugin (and Web) is enabled, so with the old
+  default (off) a new install could not run the built-in until the owner
+  found `evie plugins enable subagents`.
+- **Why it is safe.** A new install gets delegation exactly as an owner
+  who enables the plugin gets it today, and nothing more: research
+  delegation in Global chats (as before, no Workspace allowance applies
+  there), research in a Workspace only where its research allowance is on
+  (off by default), explore in a Workspace while it has a local folder (the
+  explore default), build only where the owner turned it on, and merging
+  only with the owner's approval at the gate. Workers keep their fences,
+  budgets, the operator's caps and the per-turn limits; no new tool,
+  capability or authority is added.
+- **Reach.** A plugin's default is seeded once per database and the
+  owner's choice is durable, so the change reaches only databases that
+  never resolved the plugin. A database that recorded Subagents off (the
+  old seeded default or the owner's choice) keeps it; the built-in's start
+  refusal and the Workspace page say `evie plugins enable subagents`.
+- `newWorkflowPluginManager` compiles Subagents only with a supervisor
+  (production always passes one), so a manager without one never starts a
+  nil supervisor now that the plugin is on by default.
+- The Workspace research allowance default is unchanged (off): allowing
+  research workers in a Workspace stays the owner's one setting, as the
+  decision expects.
+
 ## 2026-10-04 — A run's build branch at the merge gate (Stage 14, sub-stage 10)
 
 Source: sub-stage 10 of Stage 14 and the workflow spec's "an agent step's

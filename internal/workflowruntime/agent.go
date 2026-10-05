@@ -112,7 +112,11 @@ func (r *Runtime) pinWorkers(ctx context.Context, v *workflow.Validated) ([]pinn
 		// Like an unavailable capability provider (sub-stage 5), a worker
 		// that cannot run now refuses the start, recording nothing.
 		if err := r.agents.RunWorkerAvailable(ctx, worker); err != nil {
-			return nil, &AgentsUnavailableError{Workflow: v.Name(), Reason: fmt.Sprintf("its %s workers cannot run now: %v", worker, err)}
+			reason := fmt.Sprintf("its %s workers cannot run now: %v", worker, err)
+			if errors.Is(err, delegation.ErrUnavailable) {
+				reason += " (the Subagents plugin must be enabled: evie plugins enable subagents)"
+			}
+			return nil, &AgentsUnavailableError{Workflow: v.Name(), Reason: reason}
 		}
 		digest, err := r.agents.RunWorkerPin(ctx, worker)
 		if err != nil {

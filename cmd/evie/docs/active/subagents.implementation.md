@@ -91,7 +91,9 @@ go run ./cmd/evie
 go run ./cmd/evie serve
 ```
 
-Subagents is installed but disabled by default. Enabling it affects newly
+Subagents is enabled by default since 2026-10-04 (the built-in
+deep-research workflow runs research workers; see subagents.decisions.md);
+a database that recorded it off keeps it off. Enabling it affects newly
 composed eligible conversations; existing receipts are unchanged.
 Start a new conversation and request: “Research two independent aspects of this
 question in parallel. Use a separate research assignment and stable key for each,

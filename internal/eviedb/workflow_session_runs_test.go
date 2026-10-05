@@ -206,7 +206,7 @@ func TestWorkflowRunsTableUpgradesToChatOrigins(t *testing.T) {
 		t.Fatalf("pinned run key changed: %v", err)
 	}
 	// A chat run always names its session.
-	if _, err := r.db.ExecContext(ctx, `INSERT INTO workflow_runs SELECT 'orphan',workspace_id,workflow,version,commit_id,tree_path,executable_hash,authority_hash,workspace_revision_id,access_revision,composition,'other-key',inputs,state,outputs,error,'chat',NULL,created_at,started_at,finished_at,updated_at,not_before FROM workflow_runs WHERE id=?`, run.ID); err == nil || !strings.Contains(err.Error(), "CHECK") {
+	if _, err := r.db.ExecContext(ctx, `INSERT INTO workflow_runs SELECT 'orphan',workspace_id,workflow,version,commit_id,tree_path,executable_hash,authority_hash,workspace_revision_id,access_revision,composition,'other-key',inputs,state,outputs,error,'chat',NULL,created_at,started_at,finished_at,updated_at,not_before,source FROM workflow_runs WHERE id=?`, run.ID); err == nil || !strings.Contains(err.Error(), "CHECK") {
 		t.Fatalf("a chat run without its session was stored: %v", err)
 	}
 }

@@ -23,7 +23,7 @@ func TestWorkflowCLITemplatesListsBundledTemplates(t *testing.T) {
 	if !handled || err != nil {
 		t.Fatalf("templates: %v %v", handled, err)
 	}
-	for _, want := range []string{"deep-research", "cited report", "question (string, required)", "evie workflows propose <workspace-id> --template deep-research"} {
+	for _, want := range []string{"deep-research (built in)", "cited report", "question (string, required)", "evie workflows customize deep-research --workspace <workspace-id> | --global", "without an approval"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("templates lacks %q:\n%s", want, out.String())
 		}
@@ -100,9 +100,15 @@ func TestWorkflowCLIReportNeedsTheRunsExecution(t *testing.T) {
 }
 
 // The chat's workflow tools are on by default: they start only workflows
-// the owner approved, inside the gates every start has.
+// the owner approved or built into Evie, inside the gates every start has.
+// Since the built-in decision (2026-10-04) the Subagents plugin is on by
+// default too, so the built-in deep-research's research workers can run
+// once the Workspace allows research.
 func TestWorkflowsPluginIsEnabledByDefault(t *testing.T) {
 	if !defaultPluginEnabled[plugins.WorkflowsPluginID] {
 		t.Fatal("the Workflows plugin is off by default")
+	}
+	if !defaultPluginEnabled[plugins.SubagentsPluginID] || !defaultPluginEnabled[plugins.WebPluginID] {
+		t.Fatal("the built-in deep-research's workers are off by default")
 	}
 }

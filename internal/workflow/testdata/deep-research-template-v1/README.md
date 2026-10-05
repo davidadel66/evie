@@ -1,5 +1,9 @@
 # Deep research
 
+> Frozen copy (2026-10-04): this is the sub-stage 10 template (v1), kept for
+> the tests written against it. The deep-research Evie ships is the
+> built-in v2 in `internal/workflow/builtin/deep-research`.
+
 A bundled Workflow Definition (Stage 14 sub-stage 10). It researches one
 question the way a careful analyst would, as a durable background run
 instead of one long chat turn: plan angles, research them in parallel,

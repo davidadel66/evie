@@ -1,0 +1,251 @@
+# Deep research v2, built into Evie (2026-10-04): scope the question into
+# search angles, search each one, deduplicate the sources under a budget,
+# extract quoted claims from each source, rank them, have three adversarial
+# verifiers try to refute every claim, keep what survives, write a report,
+# and check its citations against the sources the verifiers fetched.
+# README.md explains it; this file, the prompts and the schemas are its
+# executable definition.
+schema_version: 1
+name: deep-research
+description: >-
+  Research one question from up to five search angles, deduplicate up to
+  fifteen sources, extract falsifiable claims with direct quotes, have three
+  adversarial verifiers try to refute every claim with evidence they fetch,
+  and write a cited report of the claims that survive, whose citations are
+  checked against the sources the verifiers fetched.
+
+inputs:
+  question:
+    type: string
+    required: true
+    max_length: 2000
+    description: The question to research, with any scope, region, budget or time frame that matters.
+
+run_key:
+  inputs: [question]
+
+model_policies:
+  scoper:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.2
+    max_output_tokens: 2000
+  searcher:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.2
+    max_output_tokens: 4000
+  extractor:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.1
+    max_output_tokens: 4000
+  verifier:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.3
+    max_output_tokens: 3000
+  writer:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0.3
+    max_output_tokens: 12000
+
+limits:
+  max_duration: 4h
+  max_attempts: 140
+  max_parallel: 4
+  max_tokens: 6000000
+
+retention:
+  classification: ordinary
+
+start: scope
+
+steps:
+  - id: scope
+    kind: ai
+    description: Decompose the question into up to five complementary search angles.
+    model_policy: scoper
+    prompt: prompts/scope.md
+    input:
+      question: $inputs.question
+    output_schema: schemas/angles.schema.json
+    retry:
+      max_attempts: 2
+    next: search
+
+  - id: search
+    kind: map
+    description: One research worker per angle searches the web and ranks what it finds; it fetches nothing.
+    over: $steps.scope.output.angles
+    max_items: 5
+    max_parallel: 4
+    on_item_failure: partial
+    min_succeeded: 1
+    item:
+      kind: agent
+      worker: research
+      model_policy: searcher
+      objective: prompts/search.md
+      input:
+        question: $inputs.question
+        label: $item.label
+        query: $item.query
+        rationale: $item.rationale
+      output_schema: schemas/search.schema.json
+      budget:
+        time: 3m
+        tokens: 40000
+      retry:
+        max_attempts: 2
+        backoff: 30s
+    next: sources
+
+  - id: sources
+    kind: deterministic
+    description: Normalize URLs, drop duplicates across angles and keep the fifteen most relevant sources.
+    function: dedup_sources@1
+    input:
+      results: $steps.search.output.results
+      max_sources: 15
+    next: extract
+
+  - id: extract
+    kind: map
+    description: One research worker per source fetches it, rates it and extracts falsifiable claims with direct quotes.
+    over: $steps.sources.output.sources
+    max_items: 15
+    max_parallel: 4
+    on_item_failure: partial
+    min_succeeded: 0
+    item:
+      kind: agent
+      worker: research
+      model_policy: extractor
+      objective: prompts/extract.md
+      input:
+        question: $inputs.question
+        url: $item.url
+        title: $item.title
+        angle: $item.angle
+      output_schema: schemas/extraction.schema.json
+      budget:
+        time: 4m
+        tokens: 60000
+    next: rank
+
+  - id: rank
+    kind: deterministic
+    description: Keep claims of sources their extractor fetched, order them by importance then source quality, at most twenty-five.
+    function: rank_claims@1
+    input:
+      extractions: $steps.extract.output
+      max_claims: 25
+    next: ballots
+
+  - id: ballots
+    kind: deterministic
+    description: Three adversarial ballots per claim.
+    function: expand_ballots@2
+    input:
+      claims: $steps.rank.output.claims
+      votes: 3
+    next: verify
+
+  - id: verify
+    kind: map
+    description: Each ballot is an independent research worker that tries to refute one claim and votes with the evidence it fetched.
+    over: $steps.ballots.output.ballots
+    max_items: 75
+    max_parallel: 4
+    on_item_failure: partial
+    min_succeeded: 0
+    item:
+      kind: agent
+      worker: research
+      model_policy: verifier
+      objective: prompts/verify.md
+      input:
+        question: $inputs.question
+        claim: $item.text
+        quote: $item.quote
+        source_url: $item.source_url
+        source_quality: $item.source_quality
+        publish_date: $item.publish_date
+        voter: $item.voter
+      output_schema: schemas/verdict.schema.json
+      budget:
+        time: 5m
+        tokens: 60000
+    next: tally
+
+  - id: tally
+    kind: deterministic
+    description: Two of three refutations kill a claim; it survives with two valid votes and fewer refutations; otherwise it is unverified.
+    function: tally_adversarial@1
+    input:
+      claims: $steps.rank.output.claims
+      votes: $steps.verify.output.results
+      votes_per_claim: 3
+      refutations_required: 2
+      min_valid_votes: 2
+      sources: $steps.sources.output
+      ranked: $steps.rank.output
+    next: decide
+
+  - id: decide
+    kind: branch
+    description: Write a report when a claim survived; otherwise say honestly why the research is inconclusive.
+    cases:
+      - when:
+          ref: $steps.tally.output.confirmed_count
+          op: gt
+          value: 0
+        next: synthesize
+    default: inconclusive
+
+  - id: synthesize
+    kind: ai
+    description: Merge duplicate claims into findings ranked by confidence, with caveats and open questions, citing only verified sources.
+    model_policy: writer
+    prompt: prompts/synthesize.md
+    input:
+      question: $inputs.question
+      confirmed: $steps.tally.output.confirmed
+      refuted: $steps.tally.output.refuted
+      unverified: $steps.tally.output.unverified
+    output_schema: schemas/report.schema.json
+    retry:
+      max_attempts: 2
+    next: cite
+
+  - id: cite
+    kind: deterministic
+    description: Keep only citations of sources a surviving verifier fetched for a confirmed claim; report every removal.
+    function: check_citations@1
+    input:
+      report: $steps.synthesize.output
+      claims: $steps.tally.output.confirmed
+
+  - id: inconclusive
+    kind: deterministic
+    description: Check the deterministic inconclusive report like any other, so no unverified link reaches the owner.
+    function: check_citations@1
+    input:
+      report: $steps.tally.output.inconclusive_report
+      claims: $steps.tally.output.confirmed
+
+outputs:
+  report: $steps.cite.output
+  inconclusive: $steps.inconclusive.output
+  outcome: $steps.tally.output.outcome
+  confirmed_claims: $steps.tally.output.confirmed
+  refuted_claims: $steps.tally.output.refuted
+  unverified_claims: $steps.tally.output.unverified
+  stats: $steps.tally.output.stats

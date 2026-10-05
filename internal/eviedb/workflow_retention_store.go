@@ -737,7 +737,7 @@ func (s *Store) DeleteWorkflowRecords(ctx context.Context, req WorkflowRetention
 		notices, err := collect(`SELECT n.id,n.created_at,length(n.detail) FROM workflow_notifications n LEFT JOIN workflow_runs r ON r.id=n.run_id
  LEFT JOIN workflow_schedule_slots s ON n.run_id IS NULL AND n.dedup_key='schedule:'||s.workspace_id||'/'||s.workflow||':'||s.timezone||':'||s.slot_key
  WHERE n.workspace_id=? AND n.workflow=? AND n.read_at IS NOT NULL
- AND (n.run_id IS NOT NULL AND r.state IN (`+terminalWorkflowStates+`) AND r.version IN (`+versions+`) OR n.run_id IS NULL AND s.version IN (`+versions+`))`,
+ AND (n.run_id IS NOT NULL AND r.state IN (`+terminalWorkflowStates+`) AND r.source='workspace' AND r.version IN (`+versions+`) OR n.run_id IS NULL AND s.version IN (`+versions+`))`,
 			append(args(req.WorkspaceID, req.Workflow), args()...), func(rows *sql.Rows) (found, error) {
 				var id, size int64
 				var created string

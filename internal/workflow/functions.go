@@ -54,7 +54,9 @@ func (p Param) checkBounds(v any) error {
 // reviewedFunctions is the reviewed registry, keyed by ID.
 func reviewedFunctions() map[string]Function {
 	out := map[string]Function{}
-	for _, f := range []Function{collectClaims(), expandBallots(), majorityFilter(), splitEvenly(), tallyVerdicts(), checkCitations()} {
+	for _, f := range []Function{collectClaims(), expandBallots(), majorityFilter(), splitEvenly(), tallyVerdicts(), checkCitations(),
+		// The built-in deep-research v2's steps (2026-10-04, research.go).
+		dedupSources(), rankClaims(), expandBallotsV2(), tallyAdversarial()} {
 		out[f.ID()] = f
 	}
 	return out

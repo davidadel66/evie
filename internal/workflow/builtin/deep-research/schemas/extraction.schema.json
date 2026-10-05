@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_quality", "claims"],
+  "properties": {
+    "source_quality": {"type": "string", "enum": ["primary", "secondary", "blog", "forum", "unreliable"]},
+    "publish_date": {"type": "string", "maxLength": 40},
+    "claims": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim", "quote", "importance"],
+        "properties": {
+          "claim": {"type": "string", "minLength": 1, "maxLength": 400},
+          "quote": {"type": "string", "minLength": 1, "maxLength": 600},
+          "importance": {"type": "string", "enum": ["central", "supporting", "tangential"]}
+        }
+      }
+    }
+  }
+}

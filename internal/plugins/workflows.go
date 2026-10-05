@@ -137,13 +137,18 @@ type WorkflowChatNotification struct {
 	At       time.Time `json:"at"`
 }
 
-// WorkflowChatDefinition is one active workflow a chat may start.
+// WorkflowChatDefinition is one workflow a chat may start: the
+// Workspace's approved version, the Global custom version or a built-in
+// (Source, 2026-10-04). Unavailable says what David must enable before it
+// can start in this Workspace.
 type WorkflowChatDefinition struct {
 	Name        string   `json:"name"`
 	Version     int64    `json:"version"`
+	Source      string   `json:"source,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Inputs      []string `json:"inputs"`
 	MaxTokens   int64    `json:"max_tokens"`
+	Unavailable string   `json:"unavailable,omitempty"`
 }
 
 // WorkflowLink binds the plugin to the runtime once the runtime exists,
@@ -362,7 +367,8 @@ func (w Workflows) status(ctx context.Context, args string) (string, error) {
 		for _, r := range catalog.Runs {
 			listing.Runs = append(listing.Runs, runView(r))
 		}
-		listing.Note = "Start an active workflow with workflow_start; only David proposes and approves workflows (evie workflows propose, or a bundled template: evie workflows templates)."
+		listing.Note = "Start a listed workflow with workflow_start. source builtin is built into Evie and needs no approval; global and workspace are David's approved copies. " +
+			"A workflow with unavailable set cannot start here yet: tell David exactly what it says to enable. Only David proposes, approves, customizes or turns workflows off."
 		if len(listing.Workflows) == 0 {
 			listing.Note = "This Workspace has no active workflow, so nothing can be started; do the work in this conversation. " + listing.Note
 		}

@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -9,12 +10,34 @@ import (
 // Stage 14 sub-stage 10 (2026-10-04): reviewed definitions bundled into the
 // binary as templates. Each validates against the operator's default worker
 // ceiling, its dry run with the bundled fixtures succeeds, and only its
-// reviewed files would be committed.
+// reviewed files would be committed. Since the built-in decision
+// (2026-10-04) the bundled deep-research is v2 (builtin_deepresearch_test.go
+// covers it); the sub-stage 10 template (v1) is frozen in
+// testdata/deep-research-template-v1, and the tests below keep checking it.
+
+// deepResearchTemplateV1 is the frozen sub-stage 10 template.
+var deepResearchTemplateV1 = DirSource{Dir: "testdata/deep-research-template-v1"}
+
+func deepResearchTemplateV1Fixtures(t *testing.T) Fixtures {
+	t.Helper()
+	data, err := deepResearchTemplateV1.ReadFile("fixtures.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := ParseFixtures(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
 
 func TestWorkflowTemplatesListTheBundledDefinitions(t *testing.T) {
 	list := Templates()
 	if len(list) != 1 || list[0].Name != "deep-research" || !strings.Contains(list[0].Description, "cited report") {
 		t.Fatalf("templates = %+v", list)
+	}
+	if builtins := Builtins(); len(builtins) != 1 || builtins[0].Name != "deep-research" || !IsBuiltin("deep-research") || IsBuiltin("no-such") {
+		t.Fatalf("built-ins = %+v", builtins)
 	}
 	if _, ok := TemplateSource("no-such"); ok {
 		t.Fatal("an unknown template resolved")
@@ -22,13 +45,25 @@ func TestWorkflowTemplatesListTheBundledDefinitions(t *testing.T) {
 	if _, err := TemplateFixtures("no-such"); err == nil {
 		t.Fatal("an unknown template has fixtures")
 	}
+	// The bundled deep-research is v2, and it qualifies as built-in.
+	src, _ := BuiltinSource("deep-research")
+	v, err := Validate(src, Environment{Workers: testEnvironment().Workers})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if problems := QualifyBuiltin(v.Report()); len(problems) != 0 {
+		t.Fatalf("the built-in does not qualify: %v", problems)
+	}
+	if !slices.Contains(v.Functions(), "tally_adversarial@1") {
+		t.Fatalf("the built-in is not v2: %v", v.Functions())
+	}
+	if _, err := BuiltinFixtures("deep-research"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestWorkflowDeepResearchTemplateValidatesAndSimulates(t *testing.T) {
-	src, ok := TemplateSource("deep-research")
-	if !ok {
-		t.Fatal("deep-research template missing")
-	}
+	src := deepResearchTemplateV1
 	env := Environment{Workers: WorkerCeiling{Deadline: testEnvironment().Workers.Deadline, Tokens: testEnvironment().Workers.Tokens}}
 	v, err := Validate(src, env)
 	if err != nil {
@@ -76,11 +111,7 @@ func TestWorkflowDeepResearchTemplateValidatesAndSimulates(t *testing.T) {
 	if !reflect.DeepEqual(functions, []string{"check_citations@1", "collect_claims@1", "expand_ballots@1", "tally_verdicts@1"}) {
 		t.Fatalf("functions = %v", functions)
 	}
-	fixtures, err := TemplateFixtures("deep-research")
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := v.Simulate(fixtures)
+	s, err := v.Simulate(deepResearchTemplateV1Fixtures(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,10 +132,10 @@ func TestWorkflowDeepResearchTemplateValidatesAndSimulates(t *testing.T) {
 }
 
 // The template's executable hash is pinned: changing a prompt, schema or
-// the graph must be deliberate, and changes what an owner approves.
+// the graph must be deliberate, and changes what an owner approves. The
+// frozen v1 copy keeps the hash approvals of sub-stage 10 named.
 func TestWorkflowDeepResearchTemplateHashIsPinned(t *testing.T) {
-	src, _ := TemplateSource("deep-research")
-	v, err := Validate(src, Environment{Workers: WorkerCeiling{Deadline: testEnvironment().Workers.Deadline, Tokens: testEnvironment().Workers.Tokens}})
+	v, err := Validate(deepResearchTemplateV1, Environment{Workers: WorkerCeiling{Deadline: testEnvironment().Workers.Deadline, Tokens: testEnvironment().Workers.Tokens}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -105,8 +105,12 @@ func TestWorkflowChatStartsOnlyActiveWorkflowsThroughEveryGate(t *testing.T) {
 		t.Fatalf("status = %+v, %v", status, err)
 	}
 	catalog, err := h.rt.ChatWorkflows(ctx, call.Scope)
-	if err != nil || len(catalog.Workflows) != 1 || catalog.Workflows[0].Name != "split-bill" || catalog.Workflows[0].Version != split.Version ||
-		!strings.Contains(strings.Join(catalog.Workflows[0].Inputs, " "), "total_cents") || len(catalog.Runs) != 1 || catalog.Runs[0].RunID != started.RunID {
+	// Since the built-in decision (2026-10-04) the built-in deep-research is
+	// listed too, with what David must enable before it runs here.
+	if err != nil || len(catalog.Workflows) != 2 || catalog.Workflows[1].Name != "split-bill" || catalog.Workflows[1].Version != split.Version ||
+		catalog.Workflows[1].Source != "workspace" || !strings.Contains(strings.Join(catalog.Workflows[1].Inputs, " "), "total_cents") ||
+		catalog.Workflows[0].Name != "deep-research" || catalog.Workflows[0].Source != "builtin" || !strings.Contains(catalog.Workflows[0].Unavailable, "research delegation") ||
+		len(catalog.Runs) != 1 || catalog.Runs[0].RunID != started.RunID {
 		t.Fatalf("catalog = %+v, %v", catalog, err)
 	}
 
@@ -141,7 +145,7 @@ func TestWorkflowChatStartsOnlyActiveWorkflowsThroughEveryGate(t *testing.T) {
 	fresh := chatCall(t, h.store, w)
 	fresh.Workflow, fresh.Inputs = "split-bill", map[string]json.RawMessage{"bill_id": json.RawMessage(`"dinner-4"`), "total_cents": json.RawMessage(`10`), "people": json.RawMessage(`1`)}
 	refused("an inactive workflow", fresh, "not active")
-	if catalog, err := h.rt.ChatWorkflows(ctx, fresh.Scope); err != nil || len(catalog.Workflows) != 0 {
+	if catalog, err := h.rt.ChatWorkflows(ctx, fresh.Scope); err != nil || len(catalog.Workflows) != 1 || catalog.Workflows[0].Name != "deep-research" {
 		t.Fatalf("catalog after deactivation = %+v, %v", catalog, err)
 	}
 	// Another Workspace's chat cannot read this run.

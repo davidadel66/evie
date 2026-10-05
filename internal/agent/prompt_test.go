@@ -176,8 +176,10 @@ func TestWorkflowGuidanceOnlyWhenTheSessionCanStartWorkflows(t *testing.T) {
 	if strings.Contains(without, "workflow_start") {
 		t.Fatal("a session without workflow tools is told to use them")
 	}
-	for _, want := range []string{"workflow_start", "deep-research", "broad research question", "instead of", "background", "run ID", "workflow_status",
-		"Only David proposes, approves or cancels"} {
+	// Since the built-in decision (2026-10-04): built in, and clarify an
+	// underspecified question first with 2-3 questions.
+	for _, want := range []string{"workflow_start", "deep-research", "built in", "broad research question", "instead of", "background", "run ID", "workflow_status",
+		"underspecified", "2-3 short clarifying questions", "budget, use or region", "refined, self-contained question", "Only David proposes, approves or cancels"} {
 		if !strings.Contains(workflowGuidance, want) {
 			t.Errorf("workflow guidance lacks %q:\n%s", want, workflowGuidance)
 		}

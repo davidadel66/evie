@@ -837,8 +837,10 @@ func (v *validator) compileMap(n *node) {
 		switch {
 		case !s.keys["min_succeeded"]:
 			v.add(p+".min_succeeded", "required with on_item_failure: partial")
-		case s.MinSucceeded < 1:
-			v.add(p+".min_succeeded", "must be positive")
+		case s.MinSucceeded < 0:
+			// 0 (2026-10-04) lets the step succeed whatever its items'
+			// outcomes, so a later step can treat failures as data.
+			v.add(p+".min_succeeded", "must be 0 or more")
 		case itemsOK && s.MinSucceeded > s.MaxItems:
 			v.add(p+".min_succeeded", "%d is above max_items %d", s.MinSucceeded, s.MaxItems)
 		}

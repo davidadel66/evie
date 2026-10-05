@@ -1,0 +1,156 @@
+{
+  "inputs": {
+    "question": "What limits the range of battery-electric aircraft?"
+  },
+  "steps": {
+    "scope": {
+      "output": {
+        "angles": [
+          {"label": "energy density", "query": "aviation battery cell energy density Wh/kg vs jet fuel", "rationale": "The physical limit on stored energy."},
+          {"label": "regulation", "query": "energy reserve rules battery-electric aircraft VFR", "rationale": "Rules that reduce usable range."},
+          {"label": "skeptical", "query": "electric aircraft range claims criticism", "rationale": "Overstated range promises."}
+        ]
+      },
+      "tokens": 1500
+    },
+    "search": {
+      "items": {
+        "0": {
+          "output": {
+            "status": "succeeded",
+            "summary": "Two sources on cell and fuel energy density.",
+            "sources": [],
+            "result": {"results": [
+              {"url": "https://example.org/cells", "title": "Aviation battery cells", "snippet": "Measured cell energy density.", "relevance": "high"},
+              {"url": "https://example.org/fuel", "title": "Jet fuel properties", "snippet": "Energy content of jet fuel.", "relevance": "medium"}
+            ]}
+          },
+          "tokens": 12000
+        },
+        "1": {
+          "output": {
+            "status": "succeeded",
+            "summary": "Reserve rules and a duplicate of the cell page.",
+            "sources": [],
+            "result": {"results": [
+              {"url": "https://www.example.org/cells/", "title": "Aviation battery cells", "snippet": "The same cell data.", "relevance": "high"},
+              {"url": "https://example.org/reserves", "title": "Energy reserve rules", "snippet": "Reserve energy for electric aircraft.", "relevance": "high"}
+            ]}
+          },
+          "tokens": 11000
+        },
+        "2": {
+          "output": {
+            "status": "succeeded",
+            "summary": "A promotional claim.",
+            "sources": [],
+            "result": {"results": [
+              {"url": "https://example.org/hype", "title": "The 1,000 km electric plane", "snippet": "A startup's range promise.", "relevance": "low"}
+            ]}
+          },
+          "tokens": 9000
+        }
+      }
+    },
+    "extract": {
+      "items": {
+        "0": {
+          "output": {
+            "status": "succeeded",
+            "summary": "Cell energy density figures.",
+            "sources": [{"url": "https://example.org/cells", "cited": true}],
+            "result": {"source_quality": "primary", "publish_date": "2026-02-10", "claims": [
+              {"claim": "Lithium-ion aviation cells store about 250 to 300 Wh/kg.", "quote": "Current aviation cells reach 250-300 Wh/kg at cell level.", "importance": "central"}
+            ]}
+          },
+          "tokens": 30000
+        },
+        "1": {
+          "output": {
+            "status": "succeeded",
+            "summary": "Reserve rules.",
+            "sources": [{"url": "https://example.org/reserves", "cited": true}],
+            "result": {"source_quality": "secondary", "claims": [
+              {"claim": "Battery-electric aircraft must keep 30 minutes of reserve energy under visual flight rules.", "quote": "A 30-minute energy reserve applies under VFR.", "importance": "central"}
+            ]}
+          },
+          "tokens": 28000
+        },
+        "2": {
+          "output": {
+            "status": "succeeded",
+            "summary": "Jet fuel energy content.",
+            "sources": [{"url": "https://example.org/fuel", "cited": true}],
+            "result": {"source_quality": "primary", "claims": [
+              {"claim": "Jet fuel stores about 12,000 Wh/kg.", "quote": "Jet A has a specific energy of about 43 MJ/kg (12,000 Wh/kg).", "importance": "supporting"}
+            ]}
+          },
+          "tokens": 26000
+        },
+        "3": {
+          "output": {
+            "status": "succeeded",
+            "summary": "A promotional range claim.",
+            "sources": [{"url": "https://example.org/hype", "cited": true}],
+            "result": {"source_quality": "blog", "claims": [
+              {"claim": "Electric aircraft will fly 1,000 km on one charge by 2027.", "quote": "Our aircraft will fly 1,000 km by 2027.", "importance": "central"}
+            ]}
+          },
+          "tokens": 25000
+        }
+      }
+    },
+    "verify": {
+      "item_default": {
+        "output": {
+          "status": "succeeded",
+          "summary": "The claim holds against an independent source.",
+          "sources": [{"url": "https://example.org/evidence/1", "cited": true}],
+          "result": {"refuted": false, "evidence": "An independent handbook gives the same figure.", "evidence_urls": ["https://example.org/evidence/1"], "confidence": "high"}
+        },
+        "tokens": 40000
+      },
+      "items": {
+        "6": {
+          "output": {
+            "status": "succeeded",
+            "summary": "A promise, not a measurement.",
+            "sources": [{"url": "https://example.org/hype", "cited": true}, {"url": "https://example.org/evidence/range", "cited": true}],
+            "result": {"refuted": true, "evidence": "The page is a press release; no aircraft has flown that far.", "evidence_urls": ["https://example.org/hype"], "confidence": "high", "counter_source": "https://example.org/evidence/range"}
+          },
+          "tokens": 42000
+        },
+        "7": {
+          "output": {
+            "status": "succeeded",
+            "summary": "Marketing.",
+            "sources": [{"url": "https://example.org/evidence/range", "cited": true}],
+            "result": {"refuted": true, "evidence": "Independent analysis puts current range far lower.", "evidence_urls": ["https://example.org/evidence/range"], "confidence": "high"}
+          },
+          "tokens": 38000
+        },
+        "11": {
+          "output": {
+            "status": "succeeded",
+            "summary": "The fuel figure matches the source.",
+            "sources": [{"url": "https://example.org/fuel", "cited": true}, {"url": "https://example.org/evidence/2", "cited": true}],
+            "result": {"refuted": false, "evidence": "The source and a fuel handbook agree on 43 MJ/kg.", "evidence_urls": ["https://example.org/evidence/2"], "confidence": "high"}
+          },
+          "tokens": 41000
+        }
+      }
+    },
+    "synthesize": {
+      "output": {
+        "title": "What limits the range of battery-electric aircraft",
+        "summary": "Battery energy density is the binding limit: aviation cells store about 250 to 300 Wh/kg [S1], against about 12,000 Wh/kg for jet fuel [S2]. Reserve rules reduce usable range further [S1].",
+        "body_markdown": "## Findings\n\n### Battery energy density\nConfidence: high · Vote: 3-0\nAviation cells store about 250 to 300 Wh/kg, against about 12,000 Wh/kg for jet fuel [S1][S2].\nEvidence: an independent handbook and the fuel source agree.\n\n### Reserve rules\nConfidence: medium · Vote: 3-0\nA 30-minute energy reserve applies under visual flight rules [S1].\nEvidence: an independent handbook gives the same rule.\n\n## Caveats\n\nThe reserve rule comes from secondary reporting. One promotional range claim was refuted and left out.\n\n## Open questions\n\n- How fast is cell energy density improving?\n- Do hybrid designs change the picture?\n",
+        "citations": [
+          {"marker": "S1", "url": "https://example.org/evidence/1"},
+          {"marker": "S2", "url": "https://example.org/fuel"}
+        ]
+      },
+      "tokens": 18000
+    }
+  }
+}

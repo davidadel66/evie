@@ -1,5 +1,236 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Built-in workflows and deep-research v2
+
+Source: the owner's decisions of 2026-10-04 (binding): one standard
+deep-research workflow is available by default in every Workspace, with no
+"add from template" button and no proposal or approval step for the
+built-in; it can be customized later. Workflow Approval exists to grant
+Standing Authority for unattended effects (ADR 0008); a built-in,
+effect-free, read-only workflow whose only power is the research workers a
+chat already has needs none, and the owner can disable it. The owner can
+copy a built-in into a Workspace or Global definition and approve it
+through the normal flow; an approved custom definition with the same name
+overrides the built-in in its scope (Workspace custom, then Global custom,
+then built-in). Deep research v2 adopts the structure of the deep-research
+harness Claude Code used to build the memory plan, keeping Evie's
+citation-integrity check. Before researching an underspecified question
+the chat asks two or three clarifying questions. Binding ADRs: 0008, 0010,
+0016, 0018, 0025 and 0027 (none conflicts: see "Authority" below), and the
+spec amendment marked "(Amended 2026-10-04, built-ins)" in
+[workflow-runtime.spec.md](workflow-runtime.spec.md).
+
+### What was built
+
+- **Qualification** (`workflow.QualifyBuiltin`). A built-in or Global
+  definition calls no capability (reads and effects both need Standing
+  Authority), requests no Standing Authority, declares no schedule, and its
+  agent steps run only the read-only research and explore workers (so no
+  build worker, no branch and nothing for the merge gate). It is checked
+  when Evie records a built-in version, when the owner proposes or approves
+  a Global definition, and again from the pinned commit at every start; the
+  database refuses, by trigger, a built-in version or Global activation
+  with requested authority, a capability, a schedule or another worker,
+  and its `authority` column admits only `[]`.
+- **Built-ins and their versions.** The definitions embedded under
+  `internal/workflow/builtin/` are the built-ins (`workflow.Builtins`,
+  `BuiltinSource`, `BuiltinFixtures`; `Templates` and `propose --template`
+  read the same folder). A built-in's identity is its executable hash.
+  Before the first run that pins a hash, the runtime commits the embedded
+  files to procedural Git at `builtin/workflows/<name>` (no commit when the
+  tree there is unchanged), validates and qualifies the commit, and records
+  the version in `workflow_builtin_versions` (immutable, `recorded_by`
+  `evie`, numbered 1, 2, … per name; the same hash is the same version).
+- **Versioning choice (decision): record each version's files in
+  procedural Git**, rather than embedding every earlier version or pausing
+  runs whose version Evie no longer ships. A run pins the version's commit
+  like any approved version and reads it from there, so runs of an earlier
+  built-in version continue after Evie ships a newer one (only the reviewed
+  functions it names must still exist, and functions are never removed). An
+  Evie that cannot read the pinned commit (another procedural repository)
+  pauses the run visibly with "built-in version N at commit … no longer
+  validates; continue it with an Evie that can read it, or cancel it and
+  start it again" (ADR 0025). A built-in or Global run is never migrated:
+  `evie workflows migrate` refuses it ("stays resumable on its own pins").
+- **No activation row (decision).** A built-in writes nothing in the
+  owner's approval tables, whose database checks still refuse any approver
+  but the owner. Runs pin their source instead: `workflow_runs.source`
+  (`workspace`, `global`, `builtin`) replaces the foreign key to
+  `workflow_activations`, and a trigger requires the pinned version in its
+  source's table (`workflow_activations`, `workflow_global_activations` or
+  `workflow_builtin_versions`, all immutable, so the insert check holds for
+  good); another trigger keeps the source immutable. A database from
+  before is rebuilt once at startup by the sub-stage 10 rebuild (every row,
+  rowid, index and trigger kept; every existing run a Workspace run).
+- **Owner controls.** `workflow_builtin_controls` records the owner
+  disabling or enabling a built-in for every Workspace (immutable, owner
+  only, CLI or web; a control that changes nothing is refused; none means
+  enabled). A disabled built-in starts no run; its runs in progress pause at
+  their next node with how to enable it, and continue once it is enabled
+  (ADR 0033: revocations apply despite the pin). An approved copy of the
+  same name still runs.
+- **Global custom definitions.** `workflow_global_proposals`,
+  `_activations` and `_deactivations` (immutable) hold the owner's
+  definitions for every Workspace, committed at `global/workflows/<name>`:
+  proposed (`Proposal{Global: true}`), reviewed on the same card ("Global
+  workflow …"), approved by `evie workflows approve` or the web approve
+  route with the card's exact hashes, a successful dry run and the expected
+  version, and deactivated. They qualify like built-ins (decision: Global
+  access rules do not exist, and Standing Authority stays a Workspace's).
+  The Workspace's worker allowance applies where a run starts.
+- **Resolution** (`Store.ResolveWorkflow`, `Runtime.resolve`): the
+  Workspace's custom version while its latest approval is not deactivated,
+  else the Global version on the same terms, else this Evie's built-in of
+  that name while enabled. A blocked custom version is the answer with its
+  blocks: a revocation never falls through to another definition. A
+  proposal alone overrides nothing. Deactivating a custom version (the
+  owner's explicit act) falls back to the next one. Every start resolves
+  again inside the transaction that records the run (a stale source or
+  version is `ErrWorkflowChanged` and retried). Run admission continues per
+  source at every node: a built-in run needs its built-in enabled, a Global
+  run its Global definition and version not deactivated, and both the
+  Workspace active with its worker allowance at the run's pinned and
+  current revision (and every revocation of the pinned one); a Workspace
+  run is unchanged.
+- **Surfaces.** `evie workflows builtin list [--workspace <id>]`, `builtin
+  disable|enable <name> [--reason]`, `customize <name> --workspace <id> |
+  --global [--fixtures]`, `global list|show|deactivate`; `run`, `approve`
+  and `diff` resolve and route by themselves; `templates` now lists the
+  built-ins and how to customize them. Web: `POST /api/workflows/builtins`
+  (with what a run of each would pin in a Workspace and why it could not
+  start) and `/api/workflows/builtins/control`; the Workspace page's
+  Workflows section lists them with an on/off switch
+  (`WorkspaceBuiltinWorkflows`), and its "propose a template" text is gone.
+  Inspection says "built-in version N" or "Global version N".
+- **Chat.** `workflow_start` and `workflow_status` resolve like every
+  start. The listing gives each workflow's `source` and, for one that
+  cannot start in this Workspace, `unavailable` with what David must
+  enable. A start refused for David's settings (remote models, the
+  Subagents plugin, the Workspace's research allowance, a disabled
+  built-in) returns one `StartNeedsError` listing every setting at once
+  ("deep-research cannot start in this Workspace yet; nothing was started.
+  Tell David exactly what to change, then start it again: (1) …"). The
+  Delegation guidance line now says deep-research is built in and, for an
+  underspecified question ("which car to buy, without budget, use or
+  region"), to ask David 2-3 short clarifying questions first and start it
+  with one refined, self-contained question, then give the run ID and
+  check it with `workflow_status`. The tools' schemas and descriptions are
+  unchanged, so pinned sessions keep their contract; the guidance line is
+  derived from the tools, so sessions that already have them get the new
+  line.
+- **Deep research v2** (`internal/workflow/builtin/deep-research`,
+  `sha256:a06c763a…`, pinned by a test). scope (AI, 3–5 domain-adaptive
+  angles: label, query, rationale) → search (map of research workers, one
+  per angle, searching only, up to 6 ranked results; 5 items, 3 minutes and
+  40,000 tokens, one retry, at least one must succeed) → `dedup_sources@1`
+  (http(s) URLs only, at most 500 bytes, no whitespace, control character or
+  backslash; key = host lower case without userinfo, port or `www.` + path
+  without trailing slashes + query, scheme and fragment ignored; ordered by
+  relevance, angle, position; duplicates and the results over the
+  15-source budget counted) → extract (map of research workers, one per
+  source: fetch, quality primary|secondary|blog|forum|unreliable, publish
+  date, 2–5 falsifiable claims each with a direct quote and importance;
+  15 items, 4 minutes and 60,000 tokens, `min_succeeded` 0) →
+  `rank_claims@1` (claims count only when the harness saw their extractor
+  fetch the source; importance then quality; at most 25) →
+  `expand_ballots@2` (3 ballots carrying claim, quote and source) → verify
+  (map of 75 adversarial research workers: refute if uncertain, the
+  harness's five-point checklist; verdict refuted, evidence,
+  evidence_urls, confidence, counter_source; 5 minutes and 60,000 tokens,
+  `min_succeeded` 0) → `tally_adversarial@1` (a vote counts only with an
+  evidence URL the harness saw its verifier fetch; 2 of 3 refutations kill;
+  survives with ≥2 counted votes and <2 refutations; otherwise unverified;
+  deterministic confidence: 3-0 all valid starts high, else medium,
+  secondary caps at medium, blog/forum/unreliable at low, no surviving
+  "high" rating lowers one level; citable sources = the surviving voters'
+  fetched evidence as the harness recorded it plus the claim's own source
+  when a surviving voter fetched it; outcome confirmed | all_refuted |
+  verifiers_failed | refuted_and_unverified | no_claims with an honest
+  summary and a deterministic inconclusive report) → decide (branch) →
+  synthesize (AI: merge duplicates, findings ranked by confidence with
+  vote and evidence, caveats, open questions, inline `[S1]`) →
+  `check_citations@1` (unchanged) — or, when nothing survived,
+  `inconclusive` (`check_citations@1` on the deterministic report, which
+  strips any URL a web claim carried; no writer runs). Outputs: `report`
+  or `inconclusive`, `outcome`, `confirmed_claims`, `refuted_claims`,
+  `unverified_claims`, `stats`. Five Model Policies all pin
+  `deepseek/deepseek-v4.1-flash`. Limits: 4 hours, 140 attempts, 4 at
+  once, 6,000,000 tokens (worst-case workers 400,000 + 900,000 + 4,500,000
+  = 5,800,000, so validation warns of nothing). No Standing Authority.
+- **`min_succeeded` 0 (schema relaxation, decision).** A `partial` map may
+  declare `min_succeeded: 0`: it succeeds whatever its items' outcomes, an
+  empty list included, and its failures are data. Without it every claim
+  failing extraction, or every verifier failing, would fail the run instead
+  of producing the honest "no claims" or "verifiers failed" summary the
+  harness gives. Earlier definitions are unaffected (the value was refused
+  before; the hash form is unchanged).
+- **v1 stays frozen.** The sub-stage 10 template (`sha256:e40aefec…`) is
+  kept in `internal/workflow/testdata/deep-research-template-v1` for the
+  tests written against it (now proposed from that folder), and the
+  sub-stage 1 example in `testdata/deep-research` is unchanged.
+  `collect_claims@1`, `expand_ballots@1`, `majority_filter@1` and
+  `tally_verdicts@1` keep their behavior; runs pinned to v1 versions
+  resume as before.
+- **Out of the box.** With `EVIE_WORKFLOW_REMOTE_MODELS=on` (and
+  `OPENROUTER_API_KEY`), a Workspace chat starts deep research with no
+  proposal or approval once research delegation is allowed in the
+  Workspace's settings. The Subagents plugin, which research workers need,
+  is now on by default for a new database (see the entry "Subagents on by
+  default for built-in deep research" in
+  [subagents.decisions.md](subagents.decisions.md)); a database that
+  recorded it off keeps that, and the refusal says `evie plugins enable
+  subagents`.
+
+### Cost (deep research v2)
+
+About 97 calls per run: 1 scope, up to 5 searches, up to 15 extractions,
+up to 75 verifiers and 1 writer. At DeepSeek V4.1 Flash's catalog price
+($0.30 per million input tokens, $1.20 per million output): hard ceiling
+6,000,000 tokens all billed as output, $7.20 (the default $5 daily cap
+pauses the run first; it continues after 00:00 UTC); the limit reached at
+workers' usual ~95% input, about $2.10; expected about 3 to 3.5 million
+tokens, $1.05 to $1.25, until measured. Two runs fit comfortably under the
+default daily cap at the expected cost.
+
+### Decisions and known limits
+
+- **Authority (no ADR conflict).** ADR 0008 makes approval the grant of
+  Standing Authority; built-ins and Global definitions hold none (validator
+  and database), and worker presets are not authority (ADR 0027): each run
+  passes the Workspace's worker allowance at start and at every node, as a
+  chat child does. ADR 0018 holds (closed declarative definitions, reviewed
+  functions only); ADR 0010 holds (AI steps have no tools); ADR 0016 and
+  0025 hold through pinning by commit and visible pauses.
+- Disabling is for every Workspace; a Workspace cannot turn a built-in off
+  for itself alone (its research allowance does stop it there).
+- One Run Key space per Workspace and name, whichever definition runs it:
+  a question already researched by the built-in returns that run to a
+  customized copy too (rerun override as before).
+- An Evie from before this change sees built-in and Global runs as
+  Workspace runs, cannot find their activation and reports an error each
+  time it tries them; it never changes them, and a current Evie continues
+  them.
+- Retention: redaction and checkpoint compaction treat built-in and Global
+  runs like any run (their sensitivity is read from the pinned commit), but
+  a configured `notices` window deletes read notices of Workspace versions'
+  runs only; built-in and Global runs' read notices are kept (the default
+  window is never).
+- The `workflow_start` tool's description still says "active workflows,
+  which David reviewed and approved"; changing it would change every pinned
+  session's tool contract, so the listing note explains the sources
+  instead.
+- `TestStage4StartupIndependentProcesses` failed once on a fresh database
+  with "database schema has changed" from the unguarded base schema while
+  other processes ran their schema steps (this change adds a few more);
+  it passed on reruns. The race predates this change.
+
+### What's left
+
+- Measure deep research v2 live (its README's commands) and adjust
+  budgets only through a new built-in version.
+- A per-Workspace opt-out of a built-in, if wanted; built-ins beyond
+  deep-research; web controls for customizing (the CLI does it).
+
 ## 2026-10-04 — Migration and retention (Stage 14, sub-stage 12)
 
 Source: sub-stage 12 of Stage 14 in

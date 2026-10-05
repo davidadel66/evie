@@ -341,6 +341,9 @@ func stepSummary(n *node) string {
 		policy := "stop at the first failed item"
 		if s.OnItemFailure == "partial" {
 			policy = fmt.Sprintf("partial (at least %d must succeed)", s.MinSucceeded)
+			if s.MinSucceeded == 0 {
+				policy = "partial (items may all fail)"
+			}
 		}
 		return fmt.Sprintf("over %s: at most %d items, %d at once, %s", s.Over, s.MaxItems, s.MaxParallel, policy)
 	case KindBranch:

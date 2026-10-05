@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "summary", "body_markdown", "citations"],
+  "properties": {
+    "title": {"type": "string", "minLength": 1, "maxLength": 200},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 3000},
+    "body_markdown": {"type": "string", "minLength": 1, "maxLength": 40000},
+    "citations": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["marker", "url"],
+        "properties": {
+          "marker": {"type": "string", "minLength": 2, "maxLength": 8},
+          "url": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      }
+    }
+  }
+}

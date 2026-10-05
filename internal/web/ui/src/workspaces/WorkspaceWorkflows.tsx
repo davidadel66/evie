@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Workspace } from "../api/contextSessions";
 import { pendingProposal, workflowAPI, type WorkflowAPI, type WorkflowCard, type WorkflowDefinition } from "../api/workflows";
+import { WorkspaceBuiltinWorkflows } from "./WorkspaceBuiltinWorkflows";
 
 // Workflows bound to this Workspace (Stage 14 sub-stage 2). Definitions are
 // proposed with `evie workflows propose`; here David reviews a proposal's
 // approval card (what changes, the Standing Authority it requests, its dry
 // run) and approves exactly that version, or deactivates one. Approval
-// starts no run.
+// starts no run. Since the built-in decision (2026-10-04) the built-in
+// workflows are listed here too, with their on/off switch; there is no
+// "add from template" step.
 
 const statusLabel: Record<WorkflowDefinition["status"], string> = {
   proposed: "Proposed",
@@ -134,11 +137,12 @@ export function WorkspaceWorkflows({workspace, api = workflowAPI}: {workspace: W
   });
   return <section aria-label="Workflows" className="border-hair mt-7 border-b pb-7">
     <h2 className="text-body mb-3 text-sm font-medium">Workflows</h2>
-    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Reviewed procedures this Workspace can run. Propose one with <code className="font-mono">evie workflows propose {workspace.id} &lt;folder&gt; --fixtures &lt;file&gt;</code>, or a template bundled with Evie (<code className="font-mono">evie workflows templates</code>) with <code className="font-mono">evie workflows propose {workspace.id} --template deep-research</code>; approving a version grants exactly the Standing Authority it shows, within this Workspace&apos;s access, and starts no run. Any change to its behavior needs a new approval.</p>
+    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Reviewed procedures this Workspace can run. Propose your own with <code className="font-mono">evie workflows propose {workspace.id} &lt;folder&gt; --fixtures &lt;file&gt;</code>; approving a version grants exactly the Standing Authority it shows, within this Workspace&apos;s access, and starts no run. Any change to its behavior needs a new approval.</p>
     {definitions === null ? <p className="text-muted-text text-xs">Loading workflows…</p>
       : <WorkflowList definitions={definitions} busy={busy || workspace.state !== "active"} onReview={(d) => void review(d)} onDeactivate={(d) => void deactivate(d)} />}
     {card && <WorkflowApprovalCard card={card} busy={busy || workspace.state !== "active"} onApprove={() => void approve()} onClose={() => setCard(null)} />}
     <p role="status" className="text-muted-text mt-2 text-xs">{busy ? "Working…" : message}</p>
     {problem && <p role="alert" className="text-danger mt-2 text-xs">{problem}</p>}
+    <WorkspaceBuiltinWorkflows workspace={workspace} />
   </section>;
 }

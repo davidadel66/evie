@@ -33,13 +33,20 @@ import (
 )
 
 // defaultPluginEnabled is each compiled plugin's enabled state until the
-// owner chooses otherwise; the owner's choice is durable.
+// owner chooses otherwise; the owner's choice is durable (the default is
+// seeded once per database, so changing it here reaches only databases
+// that never resolved the plugin).
 // The Workflows plugin (Stage 14 sub-stage 10) is on: its chat tools start
-// only workflows the owner approved, inside every gate a start has.
+// only workflows the owner approved or built into Evie, inside every gate a
+// start has. The Subagents plugin is on since the built-in decision
+// (2026-10-04, subagents.decisions.md "Subagents on by default for built-in
+// deep research"): the built-in deep-research runs research workers, which
+// need it, and each Workspace's research allowance (off by default) still
+// gates them.
 var defaultPluginEnabled = map[plugins.PluginID]bool{
 	plugins.WebPluginID: true, plugins.FinancePluginID: true,
 	plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
-	plugins.SubagentsPluginID: false, plugins.WorkflowsPluginID: true,
+	plugins.SubagentsPluginID: true, plugins.WorkflowsPluginID: true,
 }
 
 func main() {

@@ -32,15 +32,20 @@ const exploreGuidance = "- Use " + delegateExploreTool + " for local work that n
 const buildGuidance = "- Use " + delegateBuildTool + " for a bounded code change on one Task you created for it; the worker edits and tests in its own git worktree on its own branch, and claims and updates that Task, so do not claim that Task yourself. Then review its branch, files changed and test results; merging is a separate step the owner approves.\n"
 
 // workflowGuidance is the Delegation line for a session that can start and
-// read the Workspace's approved workflows (Stage 14 sub-stage 10,
-// 2026-10-04). Sessions pinned before workflow_start existed keep their
-// exact prompt. Whether a workflow is active is the runtime's to say:
-// workflow_status lists the active ones, and workflow_start refuses others.
+// read the Workspace's workflows (Stage 14 sub-stage 10, 2026-10-04).
+// Sessions pinned before workflow_start existed keep their exact prompt.
+// Whether a workflow can start is the runtime's to say: workflow_status
+// lists them, and workflow_start refuses others with what David must
+// enable. Since the built-in decision (2026-10-04) deep-research is built
+// in, and the line asks for 2-3 clarifying questions before researching an
+// underspecified question, as the deep-research harness it follows does;
+// the tools are unchanged, so the line changes for every session that has
+// them.
 const (
 	workflowStartTool  = "workflow_start"
 	workflowStatusTool = "workflow_status"
-	workflowGuidance   = "- For a broad research question that needs many sources and verified, cited answers, start this Workspace's deep-research workflow with " + workflowStartTool +
-		" instead of running many searches or workers yourself; " + workflowStatusTool + " without run_id lists the active workflows and their inputs. " +
+	workflowGuidance   = "- For a broad research question that needs many sources and verified, cited answers, start the deep-research workflow (built in) with " + workflowStartTool +
+		" instead of many searches or workers yourself. If the question is underspecified (which car to buy, without budget, use or region), first ask David 2-3 short clarifying questions, then start it with one refined, self-contained question. " +
 		"Tell David it runs in the background and give him its run ID; check it with " + workflowStatusTool + " before answering from it. Only David proposes, approves or cancels workflows.\n"
 )
 

@@ -161,7 +161,7 @@ func TestWorkflowRunKeyIsUniqueWhileActiveOrSucceeded(t *testing.T) {
 	if err != nil || !existing || again.ID != first.ID {
 		t.Fatalf("duplicate start = %+v, %v, %v", again, existing, err)
 	}
-	if _, err := r.db.ExecContext(ctx, `INSERT INTO workflow_runs SELECT 'other',workspace_id,workflow,version,commit_id,tree_path,executable_hash,authority_hash,workspace_revision_id,access_revision,composition,run_key,inputs,state,outputs,error,origin_surface,session_id,created_at,started_at,finished_at,updated_at,not_before FROM workflow_runs WHERE id=?`, first.ID); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
+	if _, err := r.db.ExecContext(ctx, `INSERT INTO workflow_runs SELECT 'other',workspace_id,workflow,version,commit_id,tree_path,executable_hash,authority_hash,workspace_revision_id,access_revision,composition,run_key,inputs,state,outputs,error,origin_surface,session_id,created_at,started_at,finished_at,updated_at,not_before,source FROM workflow_runs WHERE id=?`, first.ID); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
 		t.Fatalf("the database accepted a second active run for one key: %v", err)
 	}
 	if _, err := r.s.FailWorkflowRun(ctx, testLease(t, r.s, first.ID), 0, "stopped by test"); err != nil {

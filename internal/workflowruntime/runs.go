@@ -229,11 +229,13 @@ func (r *Runtime) startRun(ctx context.Context, req RunRequest) (RunResult, erro
 // active version, its approved commit re-validated and re-hashed, the step
 // kinds checked, the input accepted and the Run Key derived.
 func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, error) {
-	a, err := r.store.ActiveWorkflow(ctx, req.WorkspaceID, req.Workflow)
+	// The Workspace's custom version, the Global one or the built-in
+	// (2026-10-04).
+	a, err := r.resolve(ctx, req.WorkspaceID, req.Workflow)
 	if err != nil {
 		return preparedRun{}, err
 	}
-	if req.Schedule != nil && (a.Version != req.Schedule.Version || a.Schedule == nil || a.Schedule.Timezone != req.Schedule.Timezone) {
+	if req.Schedule != nil && (a.Source != "" || a.Version != req.Schedule.Version || a.Schedule == nil || a.Schedule.Timezone != req.Schedule.Timezone) {
 		return preparedRun{}, fmt.Errorf("%w: version %d is active, the slot is version %d's", errScheduleChanged, a.Version, req.Schedule.Version)
 	}
 	access, err := r.store.WorkspaceAccess(ctx, req.WorkspaceID)
@@ -243,6 +245,13 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	v, err := r.approvedDefinition(ctx, a, access.Access)
 	if err != nil {
 		return preparedRun{}, err
+	}
+	if a.Source != "" {
+		// A built-in or Global version holds no authority (checked again
+		// from its commit).
+		if problems := workflow.QualifyBuiltin(v.Report()); len(problems) > 0 {
+			return preparedRun{}, fmt.Errorf("%w: %s", eviedb.ErrWorkflowNotStandalone, strings.Join(problems, "; "))
+		}
 	}
 	if req.Schedule != nil {
 		// A scheduled run's inputs are the approved schedule's, with the
@@ -309,7 +318,7 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 		return preparedRun{}, err
 	}
 	start := eviedb.WorkflowRunStart{
-		WorkspaceID: req.WorkspaceID, Workflow: a.Name, Version: a.Version, ExecutableHash: a.ExecutableHash, AuthorityHash: a.AuthorityHash,
+		WorkspaceID: req.WorkspaceID, Workflow: a.Name, Source: a.Source, Version: a.Version, ExecutableHash: a.ExecutableHash, AuthorityHash: a.AuthorityHash,
 		Composition: pinned, RunKey: v.RunKey(inputs), Inputs: encoded, Start: v.Start(), Surface: req.Surface, SessionID: req.SessionID, Chat: req.Chat,
 	}
 	if s := req.Schedule; s != nil {
@@ -330,17 +339,26 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 // approvedDefinition reads the activation's exact commit through procedural
 // Git and requires it to validate and hash to what was approved.
 func (r *Runtime) approvedDefinition(ctx context.Context, a eviedb.WorkflowActivation, access workflow.WorkspaceAccess) (*workflow.Validated, error) {
-	v, err := workflow.Validate(r.repo.Source(ctx, a.Commit, a.Path), r.environment(access))
+	env, what, remedy := r.environment(access), fmt.Sprintf("version %d", a.Version), "approve the definition again"
+	switch a.Source {
+	case eviedb.WorkflowSourceBuiltin:
+		// A built-in version's recorded files (2026-10-04): an Evie that
+		// cannot read or validate them pauses the run (ADR 0025).
+		env, what, remedy = r.standaloneEnvironment(), fmt.Sprintf("built-in version %d", a.Version), "continue it with an Evie that can read it, or cancel it and start it again"
+	case eviedb.WorkflowSourceGlobal:
+		env, what = r.standaloneEnvironment(), fmt.Sprintf("Global version %d", a.Version)
+	}
+	v, err := workflow.Validate(r.repo.Source(ctx, a.Commit, a.Path), env)
 	if err != nil {
-		return nil, fmt.Errorf("%w: version %d at commit %s no longer validates; approve the definition again: %v", ErrDefinitionMismatch, a.Version, short(a.Commit), err)
+		return nil, fmt.Errorf("%w: %s at commit %s no longer validates; %s: %v", ErrDefinitionMismatch, what, short(a.Commit), remedy, err)
 	}
 	if v.Hash() != a.ExecutableHash {
-		return nil, fmt.Errorf("%w: version %d at commit %s hashes to %s, not the approved %s; approve the definition again",
-			ErrDefinitionMismatch, a.Version, short(a.Commit), v.Hash(), a.ExecutableHash)
+		return nil, fmt.Errorf("%w: %s at commit %s hashes to %s, not the approved %s; %s",
+			ErrDefinitionMismatch, what, short(a.Commit), v.Hash(), a.ExecutableHash, remedy)
 	}
 	if authority := workflow.RequirementsOf(v.Report()).AuthorityHash; authority != a.AuthorityHash {
-		return nil, fmt.Errorf("%w: version %d requests authority %s, not the approved %s; approve the definition again",
-			ErrDefinitionMismatch, a.Version, authority, a.AuthorityHash)
+		return nil, fmt.Errorf("%w: %s requests authority %s, not the approved %s; %s",
+			ErrDefinitionMismatch, what, authority, a.AuthorityHash, remedy)
 	}
 	return v, nil
 }
@@ -674,8 +692,12 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 // pinnedActivation is the approved version a run is pinned to, as
 // approvedDefinition reads it.
 func pinnedActivation(run eviedb.WorkflowRun) eviedb.WorkflowActivation {
+	source := run.Source
+	if source == eviedb.WorkflowSourceWorkspace {
+		source = ""
+	}
 	return eviedb.WorkflowActivation{WorkspaceID: run.WorkspaceID, Name: run.Workflow, Version: run.Version, Commit: run.Commit, Path: run.Path,
-		ExecutableHash: run.ExecutableHash, AuthorityHash: run.AuthorityHash}
+		ExecutableHash: run.ExecutableHash, AuthorityHash: run.AuthorityHash, Source: source}
 }
 
 // incompatible reads the run's pinned Execution Composition and says why
@@ -1111,7 +1133,16 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 	var b strings.Builder
 	line := func(format string, args ...any) { fmt.Fprintf(&b, format+"\n", args...) }
 	run := d.Run
-	line("Run %s: %s version %d in Workspace %s, %s", run.ID, run.Workflow, run.Version, run.WorkspaceID, run.State)
+	switch run.Source {
+	case eviedb.WorkflowSourceBuiltin:
+		// 2026-10-04: a built-in version runs without an approval; it
+		// holds no Standing Authority.
+		line("Run %s: %s built-in version %d in Workspace %s, %s", run.ID, run.Workflow, run.Version, run.WorkspaceID, run.State)
+	case eviedb.WorkflowSourceGlobal:
+		line("Run %s: %s Global version %d in Workspace %s, %s", run.ID, run.Workflow, run.Version, run.WorkspaceID, run.State)
+	default:
+		line("Run %s: %s version %d in Workspace %s, %s", run.ID, run.Workflow, run.Version, run.WorkspaceID, run.State)
+	}
 	line("Run key: %s", run.RunKey)
 	if o := d.Override; o != nil {
 		line("Rerun of %s by the %s via %s at %s (logical Run Key %s): %s", o.RerunOf, o.Actor, o.Surface, o.RecordedAt.Format(timeLayout), o.LogicalKey, o.Reason)

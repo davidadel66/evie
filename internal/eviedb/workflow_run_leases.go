@@ -507,6 +507,10 @@ func (s *Store) PauseWorkflowRun(ctx context.Context, lease WorkflowRunLease, re
 // neither deactivated nor blocked. A run of a superseded version continues
 // under its own pins.
 func authorizeWorkflowRun(ctx context.Context, conn *sql.Conn, run WorkflowRun) error {
+	if workspaceSource(run.Source) != WorkflowSourceWorkspace {
+		// A built-in or Global run (2026-10-04) has its own admission.
+		return authorizeStandaloneRun(ctx, conn, run)
+	}
 	if _, err := authorizeWorkflowActivation(ctx, conn, run.WorkspaceID, run.Workflow); err != nil {
 		return err
 	}

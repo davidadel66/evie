@@ -121,6 +121,9 @@ type WorkflowProposal struct {
 	AccessRevision    int64                      `json:"access_revision"`
 	DocumentsVersion  int64                      `json:"documents_version,omitempty"`
 	ProposedAt        time.Time                  `json:"proposed_at"`
+	// Source is "global" for a Global custom definition's proposal (no
+	// Workspace); empty for a Workspace's.
+	Source WorkflowSource `json:"source,omitempty"`
 }
 
 // WorkflowApprover is the evidence of who approved, and where. Only the
@@ -167,6 +170,10 @@ type WorkflowActivation struct {
 	Approver          WorkflowApprover           `json:"approver"`
 	ApprovedAt        time.Time                  `json:"approved_at"`
 	Deactivated       *WorkflowDeactivation      `json:"deactivated,omitempty"`
+	// Source is "global" for a Global custom version and "builtin" for a
+	// built-in version (approved by no one: it holds no authority); empty
+	// for a Workspace's approved version.
+	Source WorkflowSource `json:"source,omitempty"`
 }
 
 // WorkflowDeactivation is the owner ending one version.
@@ -201,6 +208,9 @@ type WorkflowDefinitionState struct {
 	Pending     int                       `json:"pending"`
 	Versions    []WorkflowActivation      `json:"versions,omitempty"`
 	Proposals   []WorkflowProposalSummary `json:"proposals,omitempty"`
+	// Source is "global" for a Global custom definition; empty for a
+	// Workspace's.
+	Source WorkflowSource `json:"source,omitempty"`
 }
 
 func ensureWorkflowSchema(ctx context.Context, db *sql.DB) error {
@@ -269,7 +279,7 @@ func ensureWorkflowSchema(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("create workflow activation schema: %w", err)
 	}
-	return nil
+	return ensureWorkflowBuiltinSchema(ctx, db)
 }
 
 var (

@@ -730,6 +730,29 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   - scoped memory for AI steps, sensitive data-flow tracking into agent
     steps, bulk substitution approval and Workspace configuration in
     procedural Git.
+- **Built-in workflows and deep-research v2** (2026-10-04, owner
+  decision). Deep research is built into Evie and available in every
+  Workspace with no proposal or approval: a built-in holds no Standing
+  Authority (no capability, schedule or build worker, enforced by the
+  validator and the database), so there is nothing for Workflow Approval
+  to grant; the owner turns it off or on for every Workspace (`evie
+  workflows builtin disable|enable`, or the switch on the Workspace page)
+  and can customize it into a Workspace or Global copy approved the normal
+  way, which overrides it in its scope (Workspace, then Global, then
+  built-in). Each built-in version is identified by its executable hash
+  and recorded in procedural Git before a run pins it, so runs keep their
+  version across upgrades. Deep research v2 follows the harness that
+  planned this document: 3–5 search angles, searching workers, URL
+  dedup under a 15-source budget, extractors that quote 2–5 falsifiable
+  claims per source, ranking to 25 claims, three adversarial verifiers per
+  claim (two refutations kill; only evidence the harness saw a verifier
+  fetch counts), honest inconclusive outcomes, a synthesis with confidence,
+  caveats and open questions, and the existing citation check; about 97
+  calls and $1.05–$1.25 expected per run. Chats ask 2–3 clarifying
+  questions before researching an underspecified question. The Subagents
+  plugin is now on by default for new installs. Binding record: the
+  "Built-in workflows and deep-research v2" entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 

@@ -64,6 +64,22 @@ type Store interface {
 	ListWorkflowDefinitions(ctx context.Context, ws memory.WorkspaceID) ([]eviedb.WorkflowDefinitionState, error)
 	ActiveWorkflow(ctx context.Context, ws memory.WorkspaceID, name string) (eviedb.WorkflowActivation, error)
 
+	// Built-in and Global workflows (2026-10-04): resolution by name for a
+	// Workspace, built-in versions and the owner's controls, and Global
+	// custom definitions.
+	ResolveWorkflow(ctx context.Context, ws memory.WorkspaceID, name string) (eviedb.WorkflowResolution, error)
+	RecordWorkflowBuiltinVersion(ctx context.Context, v eviedb.WorkflowBuiltinVersion) (eviedb.WorkflowBuiltinVersion, error)
+	WorkflowBuiltinVersion(ctx context.Context, name string, version int64) (eviedb.WorkflowBuiltinVersion, error)
+	WorkflowBuiltinState(ctx context.Context, name string) (eviedb.WorkflowBuiltinState, error)
+	ControlWorkflowBuiltin(ctx context.Context, req eviedb.WorkflowBuiltinControlRequest) (eviedb.WorkflowBuiltinControl, error)
+	WorkspaceWorkerBlocks(ctx context.Context, ws memory.WorkspaceID, workers []string) ([]string, error)
+	RecordGlobalWorkflowProposal(ctx context.Context, p eviedb.WorkflowProposal) (eviedb.WorkflowProposal, error)
+	GlobalWorkflowProposal(ctx context.Context, id string) (eviedb.WorkflowProposal, error)
+	ActivateGlobalWorkflow(ctx context.Context, approval eviedb.WorkflowApproval) (eviedb.WorkflowActivation, error)
+	DeactivateGlobalWorkflow(ctx context.Context, name string, version int64, reason, surface string) (eviedb.WorkflowActivation, error)
+	GlobalWorkflowDefinition(ctx context.Context, name string) (eviedb.WorkflowDefinitionState, error)
+	ListGlobalWorkflowDefinitions(ctx context.Context) ([]eviedb.WorkflowDefinitionState, error)
+
 	StartWorkflowRun(ctx context.Context, req eviedb.WorkflowRunStart) (eviedb.WorkflowRun, bool, error)
 	WorkflowRunProgress(ctx context.Context, id string) (eviedb.WorkflowRunProgress, error)
 	WorkflowRun(ctx context.Context, id string) (eviedb.WorkflowRunDetail, error)
@@ -382,6 +398,10 @@ type Runtime struct {
 	// sensitivities the versions' sensitivity read so far (sub-stage 12).
 	retention     *RetentionConfig
 	sensitivities map[string]workflow.Sensitivity
+	// builtins are this Evie's built-in workflows, validated once and
+	// recorded before the first run pins them (2026-10-04).
+	builtins   map[string]*builtinEntry
+	builtinSet builtinCatalog
 }
 
 // New returns a Runtime. It touches neither Git nor the database.
@@ -420,6 +440,7 @@ func New(c Config) (*Runtime, error) {
 	}
 	return &Runtime{store: c.Store, repo: c.Repo, providers: c.Capabilities, catalog: providerCatalog{c.Capabilities}, workers: c.Workers, sched: sched, report: c.Report,
 		models: c.Models, modelsOff: c.ModelsOff, agents: c.Agents, agentsOff: c.AgentsOff, cap: limit, retention: retention, sensitivities: map[string]workflow.Sensitivity{},
+		builtins: map[string]*builtinEntry{}, builtinSet: embeddedBuiltins(),
 		holder: fmt.Sprintf("evie-%d-%s", os.Getpid(), uuid.NewString()), compatible: slices.Clone(compatibleRuntimes), pin: RuntimeVersion,
 		now: time.Now, sleep: sleepContext,
 		active: map[string]bool{}, failures: map[string]error{}, reported: map[string]string{}, signals: map[string]*cancelSignal{},
@@ -442,10 +463,13 @@ func (r *Runtime) environment(access workflow.WorkspaceAccess) workflow.Environm
 // brings its bundled fixtures when none are given.
 type Proposal struct {
 	WorkspaceID memory.WorkspaceID
-	Dir         string
-	Template    string
-	Fixtures    *workflow.Fixtures
-	Surface     string
+	// Global proposes a Global custom definition (2026-10-04): no
+	// Workspace, qualified like a built-in.
+	Global   bool
+	Dir      string
+	Template string
+	Fixtures *workflow.Fixtures
+	Surface  string
 }
 
 // Propose validates the definition against the Workspace's current access,
@@ -462,12 +486,12 @@ func (r *Runtime) Propose(ctx context.Context, req Proposal) (Card, error) {
 	case dir != "" && template != "":
 		return Card{}, errors.New("propose either a definition directory or a bundled template, not both")
 	case template != "":
-		bundled, ok := workflow.TemplateSource(template)
+		bundled, ok := r.builtinSet.source(template)
 		if !ok {
-			return Card{}, fmt.Errorf("no bundled workflow template named %q (evie workflows templates lists them)", template)
+			return Card{}, fmt.Errorf("no bundled workflow template named %q (evie workflows builtin list lists the built-ins)", template)
 		}
 		if req.Fixtures == nil {
-			f, err := workflow.TemplateFixtures(template)
+			f, err := r.builtinSet.fixtures(template)
 			if err != nil {
 				return Card{}, err
 			}
@@ -478,6 +502,12 @@ func (r *Runtime) Propose(ctx context.Context, req Proposal) (Card, error) {
 		src = workflow.DirSource{Dir: req.Dir}
 	default:
 		return Card{}, errors.New("propose needs a definition directory or a bundled template")
+	}
+	if req.Global {
+		if req.WorkspaceID != "" {
+			return Card{}, errors.New("a Global definition belongs to no Workspace")
+		}
+		return r.proposeGlobal(ctx, req, src, origin)
 	}
 	workspace, err := r.workspace(ctx, req.WorkspaceID)
 	if err != nil {
@@ -559,7 +589,7 @@ type Card struct {
 
 // Card builds the approval card for a recorded proposal.
 func (r *Runtime) Card(ctx context.Context, proposalID string) (Card, error) {
-	p, err := r.store.WorkflowProposal(ctx, proposalID)
+	p, err := r.proposal(ctx, proposalID)
 	if err != nil {
 		return Card{}, err
 	}
@@ -568,7 +598,14 @@ func (r *Runtime) Card(ctx context.Context, proposalID string) (Card, error) {
 
 func (r *Runtime) card(ctx context.Context, p eviedb.WorkflowProposal) (Card, error) {
 	c := Card{Proposal: p, Requirements: workflow.RequirementsOf(p.Report)}
-	state, err := r.store.WorkflowDefinition(ctx, p.WorkspaceID, p.Name)
+	global := p.Source == eviedb.WorkflowSourceGlobal
+	var state eviedb.WorkflowDefinitionState
+	var err error
+	if global {
+		state, err = r.store.GlobalWorkflowDefinition(ctx, p.Name)
+	} else {
+		state, err = r.store.WorkflowDefinition(ctx, p.WorkspaceID, p.Name)
+	}
 	if err != nil {
 		return Card{}, err
 	}
@@ -576,7 +613,7 @@ func (r *Runtime) card(ctx context.Context, p eviedb.WorkflowProposal) (Card, er
 	baseCommit := ""
 	if cur := state.Current; cur != nil {
 		c.Current, c.CurrentStatus, c.CurrentBlocked, c.ExpectedVersion = cur, state.Status, state.Blocked, cur.Version
-		known, err := r.store.WorkflowProposal(ctx, cur.ProposalID)
+		known, err := r.proposal(ctx, cur.ProposalID)
 		if err != nil {
 			return Card{}, err
 		}
@@ -604,6 +641,15 @@ func (r *Runtime) precheck(ctx context.Context, p eviedb.WorkflowProposal, req w
 		out = append(out, "no dry run: propose it again with fixtures before approving")
 	} else if p.Simulation.Status != workflow.SimulationSucceeded {
 		out = append(out, fmt.Sprintf("the dry run ended %s: approval needs one that succeeded", p.Simulation.Status))
+	}
+	if p.Source == eviedb.WorkflowSourceGlobal {
+		// A Global definition is qualified like a built-in; each
+		// Workspace's worker allowance applies when a run starts there.
+		out = append(out, workflow.QualifyBuiltin(p.Report)...)
+		if _, err := r.revalidate(ctx, p, workflow.WorkspaceAccess{}); err != nil {
+			out = append(out, err.Error())
+		}
+		return out, nil
 	}
 	w, err := r.workspace(ctx, p.WorkspaceID)
 	if err != nil {
@@ -653,7 +699,11 @@ func (r *Runtime) workspace(ctx context.Context, id memory.WorkspaceID) (memory.
 // revalidate reads the proposal's exact commit and validates it against the
 // current catalog, access and worker ceiling; its hash must be unchanged.
 func (r *Runtime) revalidate(ctx context.Context, p eviedb.WorkflowProposal, access workflow.WorkspaceAccess) (*workflow.Validated, error) {
-	v, err := workflow.Validate(r.repo.Source(ctx, p.Commit, p.Path), r.environment(access))
+	env := r.environment(access)
+	if p.Source == eviedb.WorkflowSourceGlobal {
+		env = r.standaloneEnvironment()
+	}
+	v, err := workflow.Validate(r.repo.Source(ctx, p.Commit, p.Path), env)
 	if err != nil {
 		return nil, fmt.Errorf("the proposal is no longer valid: %w", err)
 	}
@@ -682,12 +732,26 @@ func (r *Runtime) Approve(ctx context.Context, a Approval) (eviedb.WorkflowActiv
 	if !ownerSurface(a.Surface) {
 		return eviedb.WorkflowActivation{}, eviedb.ErrWorkflowApprover
 	}
-	p, err := r.store.WorkflowProposal(ctx, a.ProposalID)
+	p, err := r.proposal(ctx, a.ProposalID)
 	if err != nil {
 		return eviedb.WorkflowActivation{}, err
 	}
 	if a.ExecutableHash != p.ExecutableHash || a.AuthorityHash != p.AuthorityHash {
 		return eviedb.WorkflowActivation{}, eviedb.ErrWorkflowHashMismatch
+	}
+	approval := eviedb.WorkflowApproval{
+		ProposalID: a.ProposalID, ExecutableHash: a.ExecutableHash, AuthorityHash: a.AuthorityHash, ExpectedVersion: a.ExpectedVersion,
+		Approver: eviedb.WorkflowApprover{Actor: "owner", Surface: a.Surface, Detail: a.Detail},
+	}
+	if p.Source == eviedb.WorkflowSourceGlobal {
+		v, err := r.revalidate(ctx, p, workflow.WorkspaceAccess{})
+		if err != nil {
+			return eviedb.WorkflowActivation{}, err
+		}
+		if problems := workflow.QualifyBuiltin(v.Report()); len(problems) > 0 {
+			return eviedb.WorkflowActivation{}, &eviedb.WorkflowRefusal{Reasons: problems}
+		}
+		return r.store.ActivateGlobalWorkflow(ctx, approval)
 	}
 	access, err := r.store.WorkspaceAccess(ctx, p.WorkspaceID)
 	if err != nil {
@@ -696,25 +760,31 @@ func (r *Runtime) Approve(ctx context.Context, a Approval) (eviedb.WorkflowActiv
 	if _, err := r.revalidate(ctx, p, access.Access); err != nil {
 		return eviedb.WorkflowActivation{}, err
 	}
-	return r.store.ActivateWorkflow(ctx, eviedb.WorkflowApproval{
-		ProposalID: a.ProposalID, ExecutableHash: a.ExecutableHash, AuthorityHash: a.AuthorityHash, ExpectedVersion: a.ExpectedVersion,
-		Approver: eviedb.WorkflowApprover{Actor: "owner", Surface: a.Surface, Detail: a.Detail},
-	})
+	return r.store.ActivateWorkflow(ctx, approval)
 }
 
 // Deactivation is the owner revoking a definition's current version.
 type Deactivation struct {
 	WorkspaceID memory.WorkspaceID `json:"workspace_id"`
-	Name        string             `json:"name"`
-	Version     int64              `json:"version"`
-	Reason      string             `json:"reason,omitempty"`
-	Surface     string             `json:"-"`
+	// Global ends the Global custom definition's version instead
+	// (2026-10-04); WorkspaceID is then empty.
+	Global  bool   `json:"global,omitempty"`
+	Name    string `json:"name"`
+	Version int64  `json:"version"`
+	Reason  string `json:"reason,omitempty"`
+	Surface string `json:"-"`
 }
 
 // Deactivate ends the definition's current version: no new run starts.
 func (r *Runtime) Deactivate(ctx context.Context, d Deactivation) (eviedb.WorkflowActivation, error) {
 	if !ownerSurface(d.Surface) {
 		return eviedb.WorkflowActivation{}, eviedb.ErrWorkflowApprover
+	}
+	if d.Global {
+		if d.WorkspaceID != "" {
+			return eviedb.WorkflowActivation{}, errors.New("a Global definition belongs to no Workspace")
+		}
+		return r.store.DeactivateGlobalWorkflow(ctx, d.Name, d.Version, d.Reason, d.Surface)
 	}
 	return r.store.DeactivateWorkflow(ctx, d.WorkspaceID, d.Name, d.Version, d.Reason, d.Surface)
 }
@@ -734,7 +804,11 @@ func (c Card) Text() string {
 	var b strings.Builder
 	line := func(format string, args ...any) { fmt.Fprintf(&b, format+"\n", args...) }
 	p := c.Proposal
-	line("Workflow %s in Workspace %s", p.Name, p.WorkspaceID)
+	if p.Source == eviedb.WorkflowSourceGlobal {
+		line("Global workflow %s: every Workspace without its own approved %s runs it in place of the built-in", p.Name, p.Name)
+	} else {
+		line("Workflow %s in Workspace %s", p.Name, p.WorkspaceID)
+	}
 	line("Proposal %s (commit %s), proposed by %s via %s at %s", p.ID, short(p.Commit), p.ProposedBy, p.Surface, p.ProposedAt.Format("2006-01-02 15:04:05Z07:00"))
 	if c.Template != "" {
 		line("Template: %s (bundled with Evie); its README explains it, and its bundled fixtures are the dry run", c.Template)

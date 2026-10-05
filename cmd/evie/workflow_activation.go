@@ -49,6 +49,8 @@ type workflowCommands interface {
 	Migrate(context.Context, workflowruntime.MigrationRequest) (workflowruntime.MigrationResult, error)
 	Sweep(context.Context, workflowruntime.SweepRequest) (workflowruntime.SweepResult, error)
 	RetentionStatus(context.Context) (workflowruntime.RetentionStatus, error)
+	// Built-in and Global workflows (2026-10-04).
+	workflowBuiltinCommands
 }
 
 // workflowCapabilityPlugins are the compiled plugins that contribute
@@ -84,7 +86,12 @@ func (c managerCatalog) Capability(id string) (workflow.CapabilityContract, bool
 // supervisor) and the Kernel tools they confine, so a foreground run there
 // runs its workers like `evie serve` does.
 func newWorkflowPluginManager(ctx context.Context, store *eviedb.Store, supervisor *subagents.Supervisor) (*plugins.Manager, error) {
-	compiled := append(workflowCapabilityPlugins(), plugins.NewWeb(), plugins.NewTodo(store), plugins.NewSubagents(supervisor))
+	compiled := append(workflowCapabilityPlugins(), plugins.NewWeb(), plugins.NewTodo(store))
+	if supervisor != nil {
+		// Subagents is on by default since 2026-10-04, so a manager without
+		// a supervisor must not compile it (it would start a nil one).
+		compiled = append(compiled, plugins.NewSubagents(supervisor))
+	}
 	manager, err := plugins.NewManager(tools.KernelToolset(), compiled...)
 	if err != nil {
 		return nil, err
@@ -374,6 +381,11 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		if a.json {
 			return true, encoder.Encode(activation)
 		}
+		if activation.Source == eviedb.WorkflowSourceGlobal {
+			fmt.Fprintf(out, "Activated Global %s version %d (executable %s, no Standing Authority): every Workspace without its own approved %s runs it in place of the built-in, within its worker allowance. No run was started.\n",
+				activation.Name, activation.Version, activation.ExecutableHash, activation.Name)
+			return true, nil
+		}
 		fmt.Fprintf(out, "Activated %s version %d in Workspace %s (executable %s, authority %s). No run was started.\n",
 			activation.Name, activation.Version, activation.WorkspaceID, activation.ExecutableHash, activation.AuthorityHash)
 		if s := activation.Schedule; s != nil {
@@ -444,6 +456,12 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		return true, migrateWorkflowRun(ctx, args[2:], out, rt)
 	case "retention":
 		return true, workflowRetentionCommand(ctx, args[2:], out, rt)
+	case "builtin":
+		return true, workflowBuiltinCommand(ctx, args[2:], out, rt, usage)
+	case "customize":
+		return true, customizeWorkflow(ctx, args[2:], out, rt, usage)
+	case "global":
+		return true, globalWorkflowCommand(ctx, args[2:], out, rt, usage)
 	}
 	return true, usage
 }
@@ -500,7 +518,11 @@ func activationText(b *strings.Builder, a eviedb.WorkflowActivation) {
 func definitionText(d eviedb.WorkflowDefinitionState) string {
 	var b strings.Builder
 	line := func(format string, args ...any) { fmt.Fprintf(&b, format+"\n", args...) }
-	line("Workflow %s in Workspace %s", d.Name, d.WorkspaceID)
+	if d.Source == eviedb.WorkflowSourceGlobal {
+		line("Global workflow %s (every Workspace without its own approved %s)", d.Name, d.Name)
+	} else {
+		line("Workflow %s in Workspace %s", d.Name, d.WorkspaceID)
+	}
 	line("Status: %s", d.Status)
 	for _, reason := range d.Blocked {
 		line("  blocked: %s", reason)

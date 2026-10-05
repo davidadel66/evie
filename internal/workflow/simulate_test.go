@@ -510,3 +510,25 @@ func TestWorkflowPackageCannotReachProviders(t *testing.T) {
 		t.Fatal("no package files checked")
 	}
 }
+
+// A partial map may declare min_succeeded 0 (2026-10-04, built-in
+// deep-research v2): the step succeeds whatever its items' outcomes, so a
+// later deterministic step can treat failed items as data. An empty list
+// succeeds with no results.
+func TestWorkflowSimulationMapMinimumZeroTreatsFailuresAsData(t *testing.T) {
+	v := mustValidate(t, listDefinition(t, "    on_item_failure: partial\n    min_succeeded: 0"), testEnvironment())
+	if text := v.Report().Text(); !strings.Contains(text, "partial (items may all fail)") {
+		t.Fatalf("report does not say the items may all fail:\n%s", text)
+	}
+	failed := simulate(t, v, fixtures(t, listFixtures([]string{"a", "b"}, `"item_default": {"error": "worker failed"}`)))
+	if failed.Status != "succeeded" {
+		t.Fatalf("every item failed: %s %q", failed.Status, failed.Error)
+	}
+	if results := failed.Outputs["judged"].([]any); len(results) != 0 {
+		t.Fatalf("results = %v", results)
+	}
+	empty := simulate(t, v, fixtures(t, listFixtures([]string{}, `"item_default": {"output": {"ok": true}}`)))
+	if empty.Status != "succeeded" || len(empty.Outputs["judged"].([]any)) != 0 {
+		t.Fatalf("empty list: %s %q %v", empty.Status, empty.Error, empty.Outputs)
+	}
+}

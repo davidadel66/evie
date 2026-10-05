@@ -3,6 +3,7 @@ package workflowruntime
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,7 +16,13 @@ import (
 // run, approved by the owner, and run end to end with scripted fakes: AI
 // planning, research workers, three verifiers per claim that must fetch
 // their evidence, the tally, the AI report and the citation check. Nothing
-// reaches the network.
+// reaches the network. Since the built-in decision (2026-10-04) the
+// bundled deep-research is v2 (deepresearch_v2_test.go); the sub-stage 10
+// template is frozen in testdata/deep-research-template-v1 and proposed
+// from that folder here, so its run keeps being checked.
+
+// deepResearchTemplateV1 is the frozen sub-stage 10 template's folder.
+var deepResearchTemplateV1 = filepath.Join(testdata, "deep-research-template-v1")
 
 // deepResearchChat answers the template's AI steps: the plan, then a report
 // that cites one verifier source, one source only a researcher fetched and
@@ -87,7 +94,8 @@ func TestWorkflowDeepResearchTemplateProposesApprovesAndRunsWithFakes(t *testing
 		t.Fatal("a template and a folder were proposed together")
 	}
 	// The template's bundled fixtures are its dry run: approval needs one.
-	card, err := h.rt.Propose(ctx, Proposal{WorkspaceID: w.ID, Template: "deep-research", Surface: "cli"})
+	v1 := fixtures(t, readFile(t, filepath.Join(deepResearchTemplateV1, "fixtures.json")))
+	card, err := h.rt.Propose(ctx, Proposal{WorkspaceID: w.ID, Dir: deepResearchTemplateV1, Fixtures: v1, Surface: "cli"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,9 +105,6 @@ func TestWorkflowDeepResearchTemplateProposesApprovesAndRunsWithFakes(t *testing
 	}
 	if !strings.Contains(card.Patch, "prompts/verify.md") || strings.Contains(card.Patch, "b/fixtures.json") {
 		t.Fatalf("committed files:\n%s", card.Patch)
-	}
-	if !strings.Contains(card.Text(), "Template: deep-research (bundled with Evie)") {
-		t.Fatalf("card text:\n%s", card.Text())
 	}
 	h.approve(card)
 	res, err := h.startRun(h.rt, w.ID, "deep-research", map[string]string{"question": "What limits the range of electric aircraft?"})

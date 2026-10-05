@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["refuted", "evidence", "evidence_urls", "confidence"],
+  "properties": {
+    "refuted": {"type": "boolean"},
+    "evidence": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "evidence_urls": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 3,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+    "counter_source": {"type": "string", "minLength": 1, "maxLength": 500}
+  }
+}

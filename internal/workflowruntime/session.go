@@ -52,11 +52,107 @@ func (r *Runtime) StartFromChat(ctx context.Context, req plugins.WorkflowChatSta
 		SessionID: req.Scope.SessionID, Surface: "chat",
 		Chat: &eviedb.WorkflowChatOrigin{Lease: req.Lease, SourceEventID: req.SourceEventID, IntentEventID: req.IntentEventID}})
 	if err != nil {
-		return plugins.WorkflowChatRun{}, err
+		return plugins.WorkflowChatRun{}, r.chatStartRefusal(ctx, req.Scope.WorkspaceID, strings.TrimSpace(req.Workflow), err)
 	}
 	run, err := r.chatRun(ctx, res.Run, false)
 	run.Existing = res.Existing
 	return run, err
+}
+
+// StartNeedsError is a chat start refused for settings only David can
+// change (2026-10-04): every one the workflow needs in this Workspace, so
+// the model tells him all of them at once instead of one per attempt.
+type StartNeedsError struct {
+	Workflow string
+	Needs    []string
+	Cause    error
+}
+
+func (e *StartNeedsError) Error() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s cannot start in this Workspace yet; nothing was started. Tell David exactly what to change, then start it again:", e.Workflow)
+	for i, need := range e.Needs {
+		fmt.Fprintf(&b, " (%d) %s;", i+1, need)
+	}
+	return strings.TrimSuffix(b.String(), ";") + "."
+}
+
+func (e *StartNeedsError) Unwrap() error { return e.Cause }
+
+// chatStartRefusal turns a start refused for David's settings (remote
+// models, the Subagents plugin, the Workspace's worker allowance, a
+// disabled built-in) into one StartNeedsError listing every setting the
+// workflow needs here; other errors are returned as they are.
+func (r *Runtime) chatStartRefusal(ctx context.Context, ws memory.WorkspaceID, name string, cause error) error {
+	var models *ModelsUnavailableError
+	var agents *AgentsUnavailableError
+	var blocked *eviedb.WorkflowBlockedError
+	if !errors.As(cause, &models) && !errors.As(cause, &agents) && !errors.As(cause, &blocked) && !errors.Is(cause, eviedb.ErrWorkflowBuiltinDisabled) {
+		return cause
+	}
+	needs, err := r.startNeeds(ctx, ws, name)
+	if err != nil || len(needs) == 0 {
+		return cause
+	}
+	return &StartNeedsError{Workflow: name, Needs: needs, Cause: cause}
+}
+
+// startNeeds lists the owner's settings a start of name in the Workspace
+// lacks now.
+func (r *Runtime) startNeeds(ctx context.Context, ws memory.WorkspaceID, name string) ([]string, error) {
+	var needs []string
+	res, err := r.store.ResolveWorkflow(ctx, ws, name)
+	var blocked *eviedb.WorkflowBlockedError
+	if err != nil && !errors.As(err, &blocked) {
+		return nil, err
+	}
+	var v *workflow.Validated
+	switch {
+	case res.Source == eviedb.WorkflowSourceBuiltin && r.isBuiltin(name):
+		if !res.BuiltinEnabled {
+			needs = append(needs, fmt.Sprintf("enable the built-in %s (evie workflows builtin enable %s, or its switch on the Workspace page)", name, name))
+		}
+		if v, err = r.builtin(name); err != nil {
+			return nil, err
+		}
+	case res.Activation != nil:
+		access, err := r.store.WorkspaceAccess(ctx, ws)
+		if err != nil {
+			return nil, err
+		}
+		if v, err = r.approvedDefinition(ctx, *res.Activation, access.Access); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, nil
+	}
+	if hasAISteps(v) && r.models == nil {
+		needs = append(needs, r.modelsOff)
+	}
+	workers := workflow.RequirementsOf(v.Report()).Workers
+	if hasAgentSteps(v) {
+		if r.agents == nil {
+			needs = append(needs, r.agentsOff)
+		} else {
+			for _, worker := range workers {
+				if err := r.agents.RunWorkerAvailable(ctx, worker); err != nil {
+					needs = append(needs, fmt.Sprintf("turn on the Subagents plugin (evie plugins enable subagents) so %s workers can run: %v", worker, err))
+					break
+				}
+			}
+		}
+	}
+	switch {
+	case blocked != nil:
+		needs = append(needs, blocked.Reasons...)
+	case res.Source == eviedb.WorkflowSourceBuiltin:
+		reasons, err := r.store.WorkspaceWorkerBlocks(ctx, ws, workers)
+		if err != nil {
+			return nil, err
+		}
+		needs = append(needs, reasons...)
+	}
+	return needs, nil
 }
 
 // ChatRunStatus reads one run of the chat's Workspace, with its outputs
@@ -75,8 +171,12 @@ func (r *Runtime) ChatRunStatus(ctx context.Context, scope memory.ScopeContext, 
 	return r.chatRun(ctx, d, true)
 }
 
-// ChatWorkflows lists the chat's Workspace's active workflows, with the
-// inputs each declares, and the latest runs the chat started.
+// ChatWorkflows lists the workflows the chat's Workspace can start, each
+// by what a new run of its name would pin there (the Workspace's custom
+// version, the Global one or the built-in, 2026-10-04), with the inputs
+// it declares; a built-in or Global one the Workspace cannot run yet is
+// listed with what David must enable. It also lists the latest runs the
+// chat started.
 func (r *Runtime) ChatWorkflows(ctx context.Context, scope memory.ScopeContext) (plugins.WorkflowChatCatalog, error) {
 	if scope.WorkspaceID == "" {
 		return plugins.WorkflowChatCatalog{}, errNotInWorkspace
@@ -85,20 +185,30 @@ func (r *Runtime) ChatWorkflows(ctx context.Context, scope memory.ScopeContext) 
 	if err != nil {
 		return plugins.WorkflowChatCatalog{}, err
 	}
-	out := plugins.WorkflowChatCatalog{Workflows: []plugins.WorkflowChatDefinition{}}
+	globals, err := r.store.ListGlobalWorkflowDefinitions(ctx)
+	if err != nil {
+		return plugins.WorkflowChatCatalog{}, err
+	}
+	names := []string{}
 	for _, d := range defs {
-		if d.Status != eviedb.WorkflowActive || d.Current == nil {
-			continue
-		}
-		p, err := r.store.WorkflowProposal(ctx, d.Current.ProposalID)
+		names = append(names, d.Name)
+	}
+	for _, d := range globals {
+		names = append(names, d.Name)
+	}
+	for _, b := range r.builtinSet.list() {
+		names = append(names, b.Name)
+	}
+	slices.Sort(names)
+	out := plugins.WorkflowChatCatalog{Workflows: []plugins.WorkflowChatDefinition{}}
+	for _, name := range slices.Compact(names) {
+		def, ok, err := r.chatDefinition(ctx, scope.WorkspaceID, name)
 		if err != nil {
 			return out, err
 		}
-		def := plugins.WorkflowChatDefinition{Name: d.Name, Version: d.Current.Version, Description: p.Report.Description, Inputs: []string{}, MaxTokens: p.Report.Limits.MaxTokens}
-		for _, in := range p.Report.Inputs {
-			def.Inputs = append(def.Inputs, in.Name+": "+in.Summary)
+		if ok {
+			out.Workflows = append(out.Workflows, def)
 		}
-		out.Workflows = append(out.Workflows, def)
 	}
 	runs, err := r.store.ListWorkflowRuns(ctx, eviedb.WorkflowRunFilter{WorkspaceID: scope.WorkspaceID, Limit: 200})
 	if err != nil {
@@ -126,6 +236,66 @@ func (r *Runtime) ChatWorkflows(ctx context.Context, scope memory.ScopeContext) 
 		}
 	}
 	return out, nil
+}
+
+// chatDefinition is one name as a chat may start it in the Workspace, or
+// false when nothing of that name can start there: a Workspace version
+// that is not active, a disabled built-in, or neither. A Global or
+// built-in version the Workspace's allowance does not cover is listed with
+// what to enable.
+func (r *Runtime) chatDefinition(ctx context.Context, ws memory.WorkspaceID, name string) (plugins.WorkflowChatDefinition, bool, error) {
+	def := plugins.WorkflowChatDefinition{Name: name, Inputs: []string{}}
+	res, err := r.store.ResolveWorkflow(ctx, ws, name)
+	var blocked *eviedb.WorkflowBlockedError
+	switch {
+	case errors.As(err, &blocked) && res.Source == eviedb.WorkflowSourceGlobal:
+		def.Unavailable = strings.Join(blocked.Reasons, "; ")
+	case err != nil && (errors.As(err, &blocked) || admissionRefused(err)):
+		return def, false, nil
+	case err != nil:
+		return def, false, err
+	}
+	def.Source = string(res.Source)
+	var report workflow.Report
+	switch res.Source {
+	case eviedb.WorkflowSourceWorkspace:
+		p, err := r.store.WorkflowProposal(ctx, res.Activation.ProposalID)
+		if err != nil {
+			return def, false, err
+		}
+		report, def.Version = p.Report, res.Activation.Version
+	case eviedb.WorkflowSourceGlobal:
+		p, err := r.store.GlobalWorkflowProposal(ctx, res.Activation.ProposalID)
+		if err != nil {
+			return def, false, err
+		}
+		report, def.Version = p.Report, res.Activation.Version
+	default:
+		if !res.BuiltinEnabled || !r.isBuiltin(name) {
+			return def, false, nil
+		}
+		v, err := r.builtin(name)
+		if err != nil {
+			def.Unavailable = err.Error()
+			return def, true, nil
+		}
+		report = v.Report()
+		if state, err := r.store.WorkflowBuiltinState(ctx, name); err != nil {
+			return def, false, err
+		} else if i := slices.IndexFunc(state.Versions, func(b eviedb.WorkflowBuiltinVersion) bool { return b.ExecutableHash == v.Hash() }); i >= 0 {
+			def.Version = state.Versions[i].Version
+		}
+		reasons, err := r.store.WorkspaceWorkerBlocks(ctx, ws, workflow.RequirementsOf(report).Workers)
+		if err != nil {
+			return def, false, err
+		}
+		def.Unavailable = strings.Join(reasons, "; ")
+	}
+	def.Description, def.MaxTokens = report.Description, report.Limits.MaxTokens
+	for _, in := range report.Inputs {
+		def.Inputs = append(def.Inputs, in.Name+": "+in.Summary)
+	}
+	return def, true, nil
 }
 
 // WorkerReport is one run-owned worker's full report, which since
@@ -167,7 +337,7 @@ func (r *Runtime) chatRun(ctx context.Context, d eviedb.WorkflowRunDetail, outpu
 	if !run.State.Terminal() {
 		view.NextStep = run.NextStep
 	}
-	if report, err := r.runReport(ctx, run); err == nil {
+	if report, err := r.pinnedReport(ctx, run); err == nil {
 		view.MaxTokens = report.Limits.MaxTokens
 	} else {
 		return view, err
@@ -198,23 +368,6 @@ func (r *Runtime) chatRun(ctx context.Context, d eviedb.WorkflowRunDetail, outpu
 		view.OutputsJSON = string(scrub.Outputs(run.Outputs))
 	}
 	return view, nil
-}
-
-// runReport is the review report of the version a run pinned.
-func (r *Runtime) runReport(ctx context.Context, run eviedb.WorkflowRun) (workflow.Report, error) {
-	state, err := r.store.WorkflowDefinition(ctx, run.WorkspaceID, run.Workflow)
-	if err != nil {
-		return workflow.Report{}, err
-	}
-	i := slices.IndexFunc(state.Versions, func(a eviedb.WorkflowActivation) bool { return a.Version == run.Version })
-	if i < 0 {
-		return workflow.Report{}, fmt.Errorf("version %d of %s is not recorded", run.Version, run.Workflow)
-	}
-	p, err := r.store.WorkflowProposal(ctx, state.Versions[i].ProposalID)
-	if err != nil {
-		return workflow.Report{}, err
-	}
-	return p.Report, nil
 }
 
 // chatSteps is each step's latest state in the order the run reached it;

@@ -54,6 +54,9 @@ type harness struct {
 	// retention, when set, is the next runtime's retention policy
 	// (sub-stage 12).
 	retention *RetentionConfig
+	// builtins, when set, are every runtime's built-in workflows in place
+	// of Evie's embedded ones (2026-10-04).
+	builtins *builtinCatalog
 }
 
 // agentsOf is the worker supervisor of a runtime over store, if any.
@@ -97,6 +100,9 @@ func (h *harness) runtimeWith(providers CapabilityProviders) *Runtime {
 	if h.clock != nil {
 		h.store.UseClock(h.clock.Now, time.UTC)
 		rt.now = h.clock.Now
+	}
+	if h.builtins != nil {
+		rt.builtinSet = *h.builtins
 	}
 	return rt
 }

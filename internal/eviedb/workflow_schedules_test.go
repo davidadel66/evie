@@ -349,7 +349,7 @@ func TestWorkflowRunsTableUpgradesToScheduledOrigins(t *testing.T) {
 		t.Fatal(err)
 	}
 	copyRun := `INSERT INTO workflow_runs SELECT ?,workspace_id,workflow,version,commit_id,tree_path,executable_hash,authority_hash,workspace_revision_id,access_revision,
- composition,?,inputs,state,outputs,error,'schedule',?,created_at,started_at,finished_at,updated_at,not_before FROM workflow_runs WHERE id=?`
+ composition,?,inputs,state,outputs,error,'schedule',?,created_at,started_at,finished_at,updated_at,not_before,source FROM workflow_runs WHERE id=?`
 	if _, err := r.db.ExecContext(ctx, copyRun, "scheduled", "other-key", nil, old.ID); err == nil || !strings.Contains(err.Error(), "CHECK") {
 		t.Fatalf("the sub-stage 10 table accepted a scheduled run: %v", err)
 	}
