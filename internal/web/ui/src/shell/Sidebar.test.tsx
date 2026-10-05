@@ -38,4 +38,10 @@ describe("workspace session shortcuts", () => {
     expect(button).not.toContain("md:hidden");
     expect(render([workspace], false, true)).toMatch(/<aside[^>]*md:hidden/);
   });
+
+  it("starts at the smaller default width with a keyboard-resizable edge", () => {
+    const html = render([workspace]);
+    expect(html).toContain("width:240px");
+    expect(html).toMatch(/role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuenow="240" aria-valuemin="200" aria-valuemax="360" tabindex="0"/);
+  });
 });

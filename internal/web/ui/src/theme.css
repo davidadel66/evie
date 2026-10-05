@@ -135,8 +135,16 @@ body {
   line-height: 1.65;
 }
 
-.evie-markdown p {
-  margin: 0;
+/* Progress text folded into the activity trace reads as a log, not an answer.
+   Text still streaming keeps answer size until its commit settles its role. */
+.evie-quiet .evie-markdown {
+  color: var(--color-muted-text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.evie-quiet .evie-markdown [data-streamdown="strong"] {
+  color: var(--color-body);
 }
 
 .evie-markdown [data-streamdown="heading-1"],

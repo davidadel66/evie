@@ -112,3 +112,19 @@ the full HTTP package then passed. A final assertion checks the exact inactive
 Claim rejection on source restoration, followed by another focused HTTP run.
 The repository-wide `./scripts/verify-change.sh` remains required before the PR
 handoff; these focused checks do not replace it.
+
+## Excerpt presentation amendment — October 3, 2026
+
+David found conversation excerpt cards full of repeated and raw detail. A
+supplied excerpt now shows its text once as a quote, followed by who said it
+(`You` for the owner, `Evie` for the assistant) and a readable local time. The
+completed-request note is one line: shown to the model, not necessarily used.
+The repeated "Attributed conversation evidence" sentence is removed.
+
+Explicitness is kept by exception: Historical and Retired labels, conflicts,
+potential discrepancies, corrections and current unavailability stay visible,
+and the original-versus-current state line appears (in amber) whenever any
+state is not plain `active`. Otherwise the state line, raw speaker, authority,
+exact timestamp, source reference (event, session, scope, locator, SHA-256),
+discovery paths and read filters sit in one closed **Details** disclosure on
+the card. Accepted-memory cards are unchanged.

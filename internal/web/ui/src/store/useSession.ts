@@ -194,6 +194,8 @@ export function useSession(sessionId?: string, model?: string): Session {
         return false;
       }
       if (command?.kind === "compact") return compact();
+      // The composer opens the model picker before sending; never send it as text.
+      if (command?.kind === "model") return false;
       // A turn holds the session lock server-side (a second Send is a 409),
       // so mid-turn messages pool here instead. A queued message is NOT in
       // items — the transcript must never claim the server saw something it

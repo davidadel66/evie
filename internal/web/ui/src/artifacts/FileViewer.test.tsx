@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { FileCode, FileViewer } from "./FileViewer";
 import { Panel } from "./Panel";
 import { Diff } from "../chat/Diff";
-import { Activity } from "../chat/Activity";
+import { ActivityItems } from "../chat/Activity";
 import { activityTurns } from "../chat/activityModel";
 import type { FileInspection } from "./fileInspection";
 import { inspectToolFile } from "./fileInspection";
@@ -67,7 +67,7 @@ describe("file side panel", () => {
 
   it("renders a separate file action outside the tool disclosure", () => {
     const items: Item[] = [{kind: "user", key: "u", text: "read"}, {kind: "tool", key: "t", id: "c", name: "read_file", args: '{"path":"/src/main.go"}', result: "     1\tpackage main\n", startedAt: 0}];
-    const html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenFile={() => {}} />);
+    const html = renderToStaticMarkup(<ActivityItems items={activityTurns(items, true)[0].activity} active onAnswer={() => {}} onOpenFile={() => {}} />);
     expect(html).toContain('aria-label="Open /src/main.go"');
     expect(html).not.toContain("<details");
     expect(html).not.toContain("Arguments");
@@ -78,7 +78,7 @@ describe("file side panel", () => {
   it("keeps completed and pending file diffs out of chat", () => {
     for (const state of ["approved", "pending"] as const) {
       const items: Item[] = [{kind: "user", key: "u", text: "edit"}, {kind: "tool", key: "t", id: "c", name: "edit_file", args: '{"path":"/src/main.go","old_string":"before","new_string":"after"}', result: state === "approved" ? "OK" : undefined, startedAt: 0, approval: {reqId: "p", state, preview: {path: "/src/main.go", oldText: "before contents", newText: "after contents", isNew: false}}}];
-      const html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenFile={() => {}} />);
+      const html = renderToStaticMarkup(<ActivityItems items={activityTurns(items, true)[0].activity} active onAnswer={() => {}} onOpenFile={() => {}} />);
       expect(html).toContain('aria-label="Open /src/main.go"');
       expect(html).not.toContain("Complete file change");
       expect(html).not.toContain("before contents");

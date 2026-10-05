@@ -1,25 +1,34 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ModelSelector } from "./ModelSelector";
+import { ModelPicker, ModelProblem } from "./ModelSelector";
 
 const models = [
   {id:"openai/gpt-test", name:"GPT Test", provider:"openai"},
   {id:"anthropic/claude-test", name:"Claude Test", provider:"anthropic"},
 ];
+const base = {models, onChange: () => {}, onClose: () => {}};
 
-describe("chat model selector", () => {
-  it("groups by provider and retains a configured model absent from the catalog", () => {
-    const html = renderToStaticMarkup(<ModelSelector models={models} value="openai/gpt-test" onChange={() => {}} onRetry={() => {}} />);
-    expect(html.indexOf('<optgroup label="Anthropic">')).toBeLessThan(html.indexOf('<optgroup label="OpenAI">'));
-    expect(html).toContain('aria-label="Chat model"');
-    expect(html).toContain('<optgroup label="Anthropic">');
-    expect(html).toContain('<option value="openai/gpt-test" selected="">GPT Test</option>');
+describe("chat model picker", () => {
+  it("groups by provider, marks the current model and retains one absent from the catalog", () => {
+    const html = renderToStaticMarkup(<ModelPicker {...base} value="deepseek/custom" />);
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-label="Search models"');
+    expect(html.indexOf('aria-label="Anthropic"')).toBeLessThan(html.indexOf('aria-label="OpenAI"'));
+    expect(html).toContain('aria-label="DeepSeek"');
+    expect(html).toMatch(/aria-current="true"[^>]*>.*deepseek\/custom/);
+    expect(html).not.toContain("once the current reply finishes");
   });
-  it("disables switching during a turn and shows an actionable error without losing selection", () => {
-    const html = renderToStaticMarkup(<ModelSelector models={[]} value="deepseek/custom" disabled problem="Models unavailable" onChange={() => {}} onRetry={() => {}} />);
-    expect(html).toContain('disabled=""');
-    expect(html).toContain('value="deepseek/custom" selected=""');
+
+  it("explains and disables switching during a turn", () => {
+    const html = renderToStaticMarkup(<ModelPicker {...base} value="openai/gpt-test" disabled />);
+    expect(html).toContain("The model can change once the current reply finishes.");
+    expect(html.match(/data-model="true" disabled=""/g)).toHaveLength(2);
+  });
+
+  it("reports selection problems with Retry", () => {
+    const html = renderToStaticMarkup(<ModelProblem problem="Models unavailable" onRetry={() => {}} />);
     expect(html).toContain('role="alert"');
-    expect(html).toContain('Retry');
+    expect(html).toContain("Retry");
+    expect(renderToStaticMarkup(<ModelProblem onRetry={() => {}} />)).toBe("");
   });
 });

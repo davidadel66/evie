@@ -1,6 +1,7 @@
-import { ModelSelector } from "./chat/ModelSelector";
+import { ModelPicker, ModelProblem } from "./chat/ModelSelector";
+import { composerCommand } from "./chat/composerCommand";
 import { useChatModels } from "./store/useChatModels";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ContextScope,
   ContextSessionSelection,
@@ -23,7 +24,7 @@ import { Sidebar, type SidebarDestination } from "./shell/Sidebar";
 import { useContextSessions } from "./store/useContextSessions";
 import { useSession } from "./store/useSession";
 import { Banner } from "./ui/Banner";
-import { Cross, Database, Expand, Folder, MessageSquare, PanelRight, Sidebar as SidebarIcon } from "./ui/Icon";
+import { Folder, MessageSquare, PanelRight, Sidebar as SidebarIcon } from "./ui/Icon";
 import {
   defaultChatTextSize,
   resolveChatTextSize,
@@ -42,7 +43,7 @@ export type WorkbenchView =
 
 const textSizeStorageKey = "evie.chatTextSize";
 const sidebarStorageKey = "evie.sidebarCollapsed";
-const initialViews: WorkbenchView[] = [{ id: "chat", kind: "chat" }];
+const chatView: WorkbenchView = { id: "chat", kind: "chat" };
 
 export default function App() {
   const contextSessions = useContextSessions();
@@ -51,9 +52,25 @@ export default function App() {
   // A running compaction holds the conversation like a turn: the server
   // refuses session and model changes until it finishes.
   const working = status === "streaming" || compacting;
-  const [views, setViews] = useState<WorkbenchView[]>(initialViews);
-  const [activeViewId, setActiveViewId] = useState<WorkbenchView["id"]>("chat");
+  // One main view at a time; the sidebar chooses it and the bar leads back to chat.
+  const [activeView, setActiveView] = useState<WorkbenchView>(chatView);
   const [draft, setDraft] = useState("");
+  // Bound to the session it opened in, so switching chats closes the picker.
+  const [modelPickerSession, setModelPickerSession] = useState<string>();
+  const activeSessionId = contextSessions.snapshot?.activeSession?.id;
+  const modelPickerOpen = !!activeSessionId && modelPickerSession === activeSessionId;
+  const closeModelPicker = useCallback(() => setModelPickerSession(undefined), []);
+  // Sends the draft, or a command chosen from the "/" menu. `/model` opens the
+  // picker here: it is a UI action, not a session request.
+  const submit = (text: string) => {
+    if (composerCommand(text)?.kind === "model") {
+      setDraft("");
+      setModelPickerSession(activeSessionId);
+      return;
+    }
+    if (chatModels.saving || !chatModels.catalog) return;
+    if (send(text)) setDraft("");
+  };
   const [textSize, setTextSize] = useState<ChatTextSize>(loadChatTextSize);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -76,11 +93,12 @@ export default function App() {
   // Memories Evie proposed on her own wait for review; recount after each turn.
   const memoryReviewPending = usePendingMemoryProposals(status);
 
-  const activeView = views.find((view) => view.id === activeViewId) ?? views[0];
   const activeWorkspace = activeView.kind === "workspace"
     ? contextSessions.snapshot?.workspaces.find((workspace) => workspace.id === activeView.workspaceId)
     : undefined;
   const scopeWorkspace=contextSessions.snapshot?.workspaces.find(workspace=>workspace.id===contextSessions.snapshot?.activeScope?.workspaceId);
+  // Per-turn instruction receipts only matter when a folder can supply instructions.
+  const instructionsAttached=!!scopeWorkspace?.folder?.path&&(scopeWorkspace.instructions?.enabled??true);
   const openInstructions=(workspace:Workspace,trigger:HTMLButtonElement,turnId?:string)=>{
     fileTrigger.current=trigger;activityTrigger.current=null;
     setSelectedAction(undefined);setInspectorOverride({kind:"repository-instructions",workspaceId:workspace.id,folderRevision:workspace.folder?.revision??0,settingsRevision:workspace.instructions?.revision??0,sessionId:turnId?contextSessions.snapshot?.activeSession?.id:undefined,turnId});
@@ -173,8 +191,7 @@ export default function App() {
   };
 
   const openView = (view: WorkbenchView) => {
-    setViews((current) => current.some((open) => open.id === view.id) ? current : [...current, view]);
-    setActiveViewId(view.id);
+    setActiveView(view);
     setInspectorOverride(undefined);
     setSelectedAction(undefined);
     setMobileNavOpen(false);
@@ -184,27 +201,11 @@ export default function App() {
     openView({ id: `workspace:${workspace.id}`, kind: "workspace", workspaceId: workspace.id, label: workspace.displayName });
   };
 
-  const activateView = (view: WorkbenchView) => {
-    setActiveViewId(view.id);
-    setInspectorOverride(undefined);
-    setSelectedAction(undefined);
-  };
-
-  const closeView = (view: WorkbenchView) => {
-    if (view.kind === "chat") return;
-    const index = views.findIndex((open) => open.id === view.id);
-    const next = views.filter((open) => open.id !== view.id);
-    setViews(next);
-    if (view.id === activeViewId) setActiveViewId(next[Math.max(0, index - 1)]?.id ?? "chat");
-    setInspectorOverride(undefined);
-    setSelectedAction(undefined);
-  };
-
   const selectSession = async (selection: ContextSessionSelection) => {
     try {
       await contextSessions.select(selection);
       setDraft("");
-      setActiveViewId("chat");
+      setActiveView(chatView);
       setInspectorOverride(undefined);
       setSelectedAction(undefined);
       setMobileNavOpen(false);
@@ -265,154 +266,149 @@ export default function App() {
         onData={() => openView({ id: "data", kind: "data" })}
         onWorkspace={openWorkspace}
         onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
-        onSession={(session) => void selectSession({ sessionId: session.id })}
+        onSession={(session) => {
+          // Returning to the open chat from another view keeps its draft.
+          if (session.id === contextSessions.snapshot?.activeSession?.id) openView(chatView);
+          else void selectSession({ sessionId: session.id });
+        }}
       />
 
-      <div className="relative flex min-w-0 flex-1 flex-col">
-        <WorkbenchBar
-          views={views}
-          activeViewId={activeView.id}
-          chatLabel={contextSessions.snapshot?.activeSession?.title.trim() || "Chat"}
-          inspectorOpen={inspectorOpen}
-          inspectorFocused={inspectorFocused}
-          navigationCollapsed={sidebarCollapsed}
-          onOpenNavigation={() => {
-            if (window.matchMedia("(min-width: 768px)").matches) setSidebarCollapsed(false);
-            else setMobileNavOpen(true);
-            requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('button[aria-label="Close navigation"]')?.focus());
-          }}
-          onActivate={activateView}
-          onClose={closeView}
-          onToggleInspector={() => {
-            setInspectorOpen((open) => !open);
-            if (inspectorOpen) setInspectorFocused(false);
-          }}
-          onToggleInspectorFocus={() => {
-            setInspectorOpen(true);
-            setInspectorFocused((focused) => !focused);
-          }}
-        />
+      {/* The Inspector runs full height beside the bar and the main view. */}
+      <div className="@container/workbench relative flex min-w-0 flex-1">
+        {!inspectorFocused && (
+          <div className="flex min-w-0 flex-1 flex-col">
+            <WorkbenchBar
+              view={activeView}
+              chatLabel={contextSessions.snapshot?.activeSession?.title.trim() || "Chat"}
+              inspectorOpen={inspectorOpen}
+              navigationCollapsed={sidebarCollapsed}
+              onOpenNavigation={() => {
+                if (window.matchMedia("(min-width: 768px)").matches) setSidebarCollapsed(false);
+                else setMobileNavOpen(true);
+                requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('button[aria-label="Close navigation"]')?.focus());
+              }}
+              onChat={() => openView(chatView)}
+              onToggleInspector={() => {
+                setInspectorOpen((open) => !open);
+                if (inspectorOpen) setInspectorFocused(false);
+              }}
+            />
 
-        {contextSessions.problem && activeView.kind !== "workspaces" && <div role="alert" className="border-danger-hair bg-danger-bg text-danger-ink border-b px-5 py-3 text-sm">{contextSessions.problem}</div>}
-        {problem && <Banner message={problem} onDismiss={dismissProblem} />}
-
-        <div className="@container/workbench relative flex min-h-0 flex-1">
-          {!inspectorFocused && (
-            <div className="flex min-w-0 flex-1 flex-col">
-              {activeView.kind === "chat" && (
-                contextSessions.snapshot?.activeScope ? (
-                  <>
-                    <Chat onOpenInstructions={scopeWorkspace?(turnId,trigger)=>openInstructions(scopeWorkspace,trigger,turnId):undefined} key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onAlwaysApplies={setAlwaysApplies} onOpenFile={openTool} onOpenTool={openTool} onOpenMemory={(snapshotId, trigger) => {
+            {contextSessions.problem && activeView.kind !== "workspaces" && <div role="alert" className="border-danger-hair bg-danger-bg text-danger-ink border-b px-5 py-3 text-sm">{contextSessions.problem}</div>}
+            {problem && <Banner message={problem} onDismiss={dismissProblem} />}
+            {activeView.kind === "chat" && (
+              contextSessions.snapshot?.activeScope ? (
+                <>
+                  <Chat onOpenInstructions={instructionsAttached&&scopeWorkspace?(turnId,trigger)=>openInstructions(scopeWorkspace,trigger,turnId):undefined} key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onAlwaysApplies={setAlwaysApplies} onOpenFile={openTool} onOpenTool={openTool} onOpenMemory={(snapshotId, trigger) => {
+                    const sessionId = contextSessions.snapshot?.activeSession?.id;
+                    if (!sessionId) return;
+                    fileTrigger.current = trigger;
+                    activityTrigger.current = trigger.closest('section[aria-label="Turn activity"]')?.querySelector<HTMLButtonElement>('button[aria-controls]') ?? null;
+                    setSelectedAction(undefined);
+                    setInspectorOverride({kind: "memory-evidence", sessionId, snapshotId});
+                    setInspectionRequest(value => value + 1);
+                    setInspectorOpen(true);
+                    setInspectorFocused(false);
+                  }} historyLoading={historyLoading} historyProblem={historyProblem} hasOlder={hasOlder} onOlder={loadOlder} onRetry={retryHistory} />
+                  <Composer
+                    value={draft}
+                    onChange={setDraft}
+                    streaming={status === "streaming"}
+                    disabled={contextSessions.busy || historyLoading || !!historyProblem || chatModels.saving || !chatModels.catalog}
+                    overlay={modelPickerOpen && <ModelPicker models={chatModels.catalog?.models ?? []} value={chatModels.catalog?.model} loading={chatModels.loading} disabled={contextSessions.busy || working || queue.length > 0 || chatModels.saving || !chatModels.catalog?.model} onChange={model => { void chatModels.select(model); }} onClose={closeModelPicker} />}
+                    after={<><ModelProblem problem={chatModels.problem ?? (problem?.startsWith("Chat model changed") ? problem : undefined)} disabled={contextSessions.busy || working || queue.length > 0 || chatModels.loading || chatModels.saving} onRetry={() => {
                       const sessionId = contextSessions.snapshot?.activeSession?.id;
-                      if (!sessionId) return;
-                      fileTrigger.current = trigger;
-                      activityTrigger.current = trigger.closest('section[aria-label="Turn activity"]')?.querySelector<HTMLButtonElement>('button[aria-controls]') ?? null;
-                      setSelectedAction(undefined);
-                      setInspectorOverride({kind: "memory-evidence", sessionId, snapshotId});
-                      setInspectionRequest(value => value + 1);
-                      setInspectorOpen(true);
-                      setInspectorFocused(false);
-                    }} historyLoading={historyLoading} historyProblem={historyProblem} hasOlder={hasOlder} onOlder={loadOlder} onRetry={retryHistory} />
-                    <Composer
-                      value={draft}
-                      onChange={setDraft}
-                      streaming={status === "streaming"}
-                      disabled={contextSessions.busy || historyLoading || !!historyProblem || chatModels.saving || !chatModels.catalog}
-                      modelSelector={<><ModelSelector models={chatModels.catalog?.models ?? []} value={chatModels.catalog?.model} loading={chatModels.loading} saving={chatModels.saving} problem={chatModels.problem ?? (problem?.startsWith("Chat model changed") ? problem : undefined)} disabled={contextSessions.busy || working || queue.length > 0} onChange={model => { void chatModels.select(model); }} onRetry={() => {
-                        const sessionId = contextSessions.snapshot?.activeSession?.id;
-                        if (sessionId) void contextSessions.select({sessionId}).then(() => { chatModels.refresh(); dismissProblem(); }).catch(() => {});
-                      }} />{status === "error" && queue.length > 0 && <button type="button" className="text-muted-text mt-2 text-xs underline" onClick={() => {
+                      if (sessionId) void contextSessions.select({sessionId}).then(() => { chatModels.refresh(); dismissProblem(); }).catch(() => {});
+                    }} />{status === "error" && queue.length > 0 && <button type="button" className="text-muted-text mt-2 text-xs underline" onClick={() => {
+                      setDraft([...queue, draft].filter(Boolean).join("\n\n"));
+                      clearQueue();
+                    }}>Return queued messages to draft</button>}</>}
+                    onSend={() => submit(draft)}
+                    onCommand={submit}
+                    onStop={() => {
+                      // Stop means stop: queued messages return to the draft
+                      // instead of firing once the turn ends.
+                      if (queue.length > 0) {
                         setDraft([...queue, draft].filter(Boolean).join("\n\n"));
                         clearQueue();
-                      }}>Return queued messages to draft</button>}</>}
-                      onSend={() => {
-                        if (chatModels.saving || !chatModels.catalog) return;
-                        if (send(draft)) setDraft("");
-                      }}
-                      onStop={() => {
-                        // Stop means stop: queued messages return to the draft
-                        // instead of firing once the turn ends.
-                        if (queue.length > 0) {
-                          setDraft([...queue, draft].filter(Boolean).join("\n\n"));
-                          clearQueue();
-                        }
-                        stop();
-                      }}
-                      stopping={stopping}
-                      notice={notice}
-                    />
-                  </>
-                ) : (
-                  <ChooseScope
-                    snapshot={contextSessions.snapshot}
-                    busy={contextSessions.busy}
-                    onWorkspace={(workspace) => void startWorkspaceChat(workspace)}
-                    onProject={(project) => void startProjectChat(project)}
-                    onUnscoped={() => void selectSession({ unscoped: true })}
-                    onManage={() => openView({ id: "workspaces", kind: "workspaces" })}
+                      }
+                      stop();
+                    }}
+                    stopping={stopping}
+                    notice={notice}
                   />
-                )
-              )}
-              {activeView.kind === "data" && (
-                <DataHub
-                  source={dataSource}
-                  onSource={(source) => {
-                    setDataSource(source);
-                    setInspectorOverride(undefined);
-                    setSelectedAction(undefined);
-                  }}
+                </>
+              ) : (
+                <ChooseScope
                   snapshot={contextSessions.snapshot}
+                  busy={contextSessions.busy}
+                  onWorkspace={(workspace) => void startWorkspaceChat(workspace)}
+                  onProject={(project) => void startProjectChat(project)}
+                  onUnscoped={() => void selectSession({ unscoped: true })}
+                  onManage={() => openView({ id: "workspaces", kind: "workspaces" })}
                 />
-              )}
-              {activeView.kind === "workspaces" && (
-                <Workspaces
-                  snapshot={contextSessions.snapshot}
-                  busy={contextSessions.busy || working}
-                  problem={contextSessions.problem}
-                  onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
-                  onOpenWorkspace={openWorkspace}
-                  onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
-                  onNewProjectChat={(project) => void startProjectChat(project)}
-                  onResume={(session) => void selectSession({ sessionId: session.id })}
-                  onNewUnscopedChat={() => void selectSession({ unscoped: true })}
-                />
-              )}
-              {activeView.kind === "workspace" && activeWorkspace && (
-                <WorkspaceHome
-                  workspace={activeWorkspace}
-                  instructions={<InstructionBadge workspace={activeWorkspace} onOpen={trigger=>openInstructions(activeWorkspace,trigger)}/>}
-                  onFolderChanged={contextSessions.refresh}
-                  onResearchChanged={contextSessions.refresh}
-                  onOpenFiles={() => {setFilesRequest(value => value + 1); setSelectedAction(undefined); setInspectorOverride(undefined); setInspectorOpen(true);}}
-                  sessions={workspaceSessions}
-                  busy={contextSessions.busy || working}
-                  onNewChat={() => void startWorkspaceChat(activeWorkspace)}
-                  onResume={(session) => void selectSession({ sessionId: session.id })}
-                />
-              )}
-              {activeView.kind === "workspace" && !activeWorkspace && (
-                <div className="text-muted-text flex flex-1 items-center justify-center">This workspace is no longer available.</div>
-              )}
-            </div>
-          )}
+              )
+            )}
+            {activeView.kind === "data" && (
+              <DataHub
+                source={dataSource}
+                onSource={(source) => {
+                  setDataSource(source);
+                  setInspectorOverride(undefined);
+                  setSelectedAction(undefined);
+                }}
+                snapshot={contextSessions.snapshot}
+              />
+            )}
+            {activeView.kind === "workspaces" && (
+              <Workspaces
+                snapshot={contextSessions.snapshot}
+                busy={contextSessions.busy || working}
+                problem={contextSessions.problem}
+                onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+                onOpenWorkspace={openWorkspace}
+                onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
+                onNewProjectChat={(project) => void startProjectChat(project)}
+                onResume={(session) => void selectSession({ sessionId: session.id })}
+                onNewUnscopedChat={() => void selectSession({ unscoped: true })}
+              />
+            )}
+            {activeView.kind === "workspace" && activeWorkspace && (
+              <WorkspaceHome
+                workspace={activeWorkspace}
+                instructions={<InstructionBadge workspace={activeWorkspace} onOpen={trigger=>openInstructions(activeWorkspace,trigger)}/>}
+                onFolderChanged={contextSessions.refresh}
+                onResearchChanged={contextSessions.refresh}
+                onOpenFiles={() => {setFilesRequest(value => value + 1); setSelectedAction(undefined); setInspectorOverride(undefined); setInspectorOpen(true);}}
+                sessions={workspaceSessions}
+                busy={contextSessions.busy || working}
+                onNewChat={() => void startWorkspaceChat(activeWorkspace)}
+                onResume={(session) => void selectSession({ sessionId: session.id })}
+              />
+            )}
+            {activeView.kind === "workspace" && !activeWorkspace && (
+              <div className="text-muted-text flex flex-1 items-center justify-center">This workspace is no longer available.</div>
+            )}
+          </div>
+        )}
 
-          <InspectorPane
-            items={items}
-            target={selectedAction || visibleOverride ? inspectorTarget : undefined}
-            requestVersion={inspectionRequest}
-            filesRequest={filesRequest}
-            workspace={activeWorkspace ?? contextSessions.snapshot?.workspaces.find(workspace => workspace.id === contextSessions.snapshot?.activeScope?.workspaceId)}
-            sessionId={contextSessions.snapshot?.activeSession?.id}
-            visible={inspectorOpen}
-            focused={inspectorFocused}
-            onClose={closeInspector}
-            onManageFolder={() => {
-              const workspace = activeWorkspace ?? contextSessions.snapshot?.workspaces.find(workspace => workspace.id === contextSessions.snapshot?.activeScope?.workspaceId);
-              if (workspace) openWorkspace(workspace); else openView({id: "workspaces", kind: "workspaces"});
-              setInspectorOpen(false); setInspectorFocused(false);
-            }}
-          />
-        </div>
+        <InspectorPane
+          items={items}
+          target={selectedAction || visibleOverride ? inspectorTarget : undefined}
+          requestVersion={inspectionRequest}
+          filesRequest={filesRequest}
+          workspace={activeWorkspace ?? contextSessions.snapshot?.workspaces.find(workspace => workspace.id === contextSessions.snapshot?.activeScope?.workspaceId)}
+          sessionId={contextSessions.snapshot?.activeSession?.id}
+          visible={inspectorOpen}
+          focused={inspectorFocused}
+          onToggleFocus={() => setInspectorFocused((focused) => !focused)}
+          onClose={closeInspector}
+          onManageFolder={() => {
+            const workspace = activeWorkspace ?? contextSessions.snapshot?.workspaces.find(workspace => workspace.id === contextSessions.snapshot?.activeScope?.workspaceId);
+            if (workspace) openWorkspace(workspace); else openView({id: "workspaces", kind: "workspaces"});
+            setInspectorOpen(false); setInspectorFocused(false);
+          }}
+        />
       </div>
       {createWorkspaceOpen && <CreateWorkspaceDialog onClose={() => setCreateWorkspaceOpen(false)} onCreate={registerWorkspace} />}
       {settingsOpen && <SettingsDialog snapshot={contextSessions.snapshot} problem={contextSessions.problem} onRefresh={contextSessions.refresh} busy={contextSessions.busy || working} textSize={textSize} onTextSize={setTextSize} font={chatFont} onFont={setChatFont} onClose={() => setSettingsOpen(false)} onRestore={session => contextSessions.setArchived(session.id, false)} />}
@@ -420,61 +416,37 @@ export default function App() {
   );
 }
 
+// The slim bar: where you are, and the one inspector toggle. Another view
+// reads as a breadcrumb whose first step returns to the open chat.
 export function WorkbenchBar({
-  views,
-  activeViewId,
+  view,
   chatLabel,
   inspectorOpen,
-  inspectorFocused,
   navigationCollapsed = false,
   onOpenNavigation,
-  onActivate,
-  onClose,
+  onChat,
   onToggleInspector,
-  onToggleInspectorFocus,
 }: {
-  views: WorkbenchView[];
-  activeViewId: WorkbenchView["id"];
+  view: WorkbenchView;
   chatLabel: string;
   inspectorOpen: boolean;
-  inspectorFocused: boolean;
   navigationCollapsed?: boolean;
   onOpenNavigation: () => void;
-  onActivate: (view: WorkbenchView) => void;
-  onClose: (view: WorkbenchView) => void;
+  onChat: () => void;
   onToggleInspector: () => void;
-  onToggleInspectorFocus: () => void;
 }) {
+  const label = view.kind === "data" ? "Data" : view.kind === "workspaces" ? "Workspaces" : view.kind === "workspace" ? view.label : undefined;
   return (
-    <header className="border-hair bg-topbar flex h-[52px] flex-none items-center gap-2 border-b px-2">
-      <button type="button" aria-label="Open navigation" aria-controls="evie-navigation" onClick={onOpenNavigation} className={`text-muted-text hover:bg-hover hover:text-body focus-visible:ring-teal flex-none rounded-lg p-2.5 focus-visible:ring-1 focus-visible:outline-none ${navigationCollapsed ? "" : "md:hidden"}`}><SidebarIcon size={16} /></button>
-      <div role="tablist" aria-label="Open work" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-1">
-        {views.map((view) => {
-          const active = view.id === activeViewId;
-          return (
-            <div key={view.id} className={`${active ? "bg-selected text-ink" : "text-muted-text hover:bg-hover hover:text-body"} group flex h-9 min-w-[96px] max-w-[260px] flex-none items-center rounded-lg`}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={active}
-                title={view.kind === "chat" ? chatLabel : view.kind === "data" ? "Data" : view.kind === "workspaces" ? "Workspaces" : view.label}
-                onClick={() => onActivate(view)}
-                className="focus-visible:ring-teal flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg px-3 text-left text-[12.5px] focus-visible:ring-1 focus-visible:outline-none"
-              >
-                <span className={active ? "text-teal" : "text-faint"}>{view.kind === "chat" ? <MessageSquare size={14} /> : view.kind === "data" ? <Database size={14} /> : <Folder size={14} />}</span>
-                <span className="truncate">{view.kind === "chat" ? chatLabel : view.kind === "data" ? "Data" : view.kind === "workspaces" ? "Workspaces" : view.label}</span>
-              </button>
-              {view.kind !== "chat" && (
-                <button type="button" aria-label={`Close ${view.kind === "workspace" ? view.label : view.kind} tab`} onClick={() => onClose(view)} className={`text-faint hover:bg-app hover:text-body focus-visible:ring-teal mr-1.5 rounded p-1.5 focus-visible:ring-1 focus-visible:outline-none ${active ? "" : "opacity-0 focus:opacity-100 group-hover:opacity-100 max-md:opacity-100"}`}><Cross size={11} /></button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex flex-none items-center gap-1 px-2">
-        <button type="button" title="Toggle inspector" aria-label="Toggle inspector" aria-pressed={inspectorOpen} onClick={onToggleInspector} className={`${inspectorOpen ? "text-teal" : "text-faint hover:text-body"} focus-visible:ring-teal rounded p-2 focus-visible:ring-1 focus-visible:outline-none`}><PanelRight size={15} /></button>
-        <button type="button" title="Focus inspector" aria-label="Focus inspector" aria-pressed={inspectorFocused} onClick={onToggleInspectorFocus} className={`${inspectorFocused ? "text-teal" : "text-faint hover:text-body"} focus-visible:ring-teal rounded p-2 focus-visible:ring-1 focus-visible:outline-none`}><Expand size={14} /></button>
-      </div>
+    <header className="border-hair bg-topbar flex h-11 flex-none items-center gap-1 border-b px-2">
+      <button type="button" aria-label="Open navigation" aria-controls="evie-navigation" onClick={onOpenNavigation} className={`text-muted-text hover:bg-hover hover:text-body focus-visible:ring-teal flex-none rounded-lg p-2 focus-visible:ring-1 focus-visible:outline-none ${navigationCollapsed ? "" : "md:hidden"}`}><SidebarIcon size={16} /></button>
+      <nav aria-label="Location" className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-[13px]">
+        {label ? <>
+          <button type="button" onClick={onChat} title={`Back to ${chatLabel}`} className="text-muted-text hover:text-body focus-visible:ring-teal min-w-0 max-w-[45%] truncate rounded focus-visible:ring-1 focus-visible:outline-none">{chatLabel}</button>
+          <span aria-hidden="true" className="text-ghost">/</span>
+          <span aria-current="page" className="text-ink min-w-0 truncate font-medium">{label}</span>
+        </> : <span aria-current="page" className="text-ink min-w-0 truncate font-medium" title={chatLabel}>{chatLabel}</span>}
+      </nav>
+      <button type="button" title="Toggle inspector" aria-label="Toggle inspector" aria-pressed={inspectorOpen} onClick={onToggleInspector} className={`${inspectorOpen ? "text-teal" : "text-faint hover:text-body"} focus-visible:ring-teal flex-none rounded p-2 focus-visible:ring-1 focus-visible:outline-none`}><PanelRight size={15} /></button>
     </header>
   );
 }

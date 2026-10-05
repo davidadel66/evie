@@ -5,17 +5,17 @@ import { folderRef } from "../api/localFolder";
 import { TerminalView } from "../folder/Terminal";
 import { ChangesView } from "../folder/Changes";
 import { DiskFileView, FileTree } from "../folder/Files";
-import { Cross, Database, FileIcon, Folder, Layers, TerminalIcon } from "../ui/Icon";
+import { Cross, Database, Expand, FileIcon, Folder, Layers, TerminalIcon } from "../ui/Icon";
 import { InspectorContent, type InspectorTarget } from "./Panel";
 import { targetTitle } from "./inspectorTitle";
 import { closePaneTab, inspectionKey, openPaneTab, refreshInspection, type PaneTab } from "./paneTabs";
 
-export type InspectorPaneProps = {target?:InspectorTarget;items?:Item[];requestVersion?:number;filesRequest?:number;workspace?:Workspace;sessionId?:string;visible:boolean;focused:boolean;onClose:()=>void;onManageFolder:()=>void};
+export type InspectorPaneProps = {target?:InspectorTarget;items?:Item[];requestVersion?:number;filesRequest?:number;workspace?:Workspace;sessionId?:string;visible:boolean;focused:boolean;onToggleFocus?:()=>void;onClose:()=>void;onManageFolder:()=>void};
 export function InspectorPane(props:InspectorPaneProps) {
  const folderIdentity=`${props.workspace?.id ?? "none"}:${props.workspace?.folder?.revision ?? 0}`;
  return <Pane key={`${folderIdentity}:${props.sessionId ?? "none"}`} {...props}/>;
 }
-function Pane({target,items=[],sessionId,requestVersion=0,filesRequest=0,workspace,visible,focused,onClose,onManageFolder}:InspectorPaneProps) {
+function Pane({target,items=[],sessionId,requestVersion=0,filesRequest=0,workspace,visible,focused,onToggleFocus,onClose,onManageFolder}:InspectorPaneProps) {
  const hasFolder=!!workspace?.folder?.path;
  const [tabs,setTabs]=useState<PaneTab[]>(hasFolder?[{id:"files",kind:"files"}]:[]);
  const [active,setActive]=useState(hasFolder?"files":"");
@@ -62,12 +62,15 @@ function Pane({target,items=[],sessionId,requestVersion=0,filesRequest=0,workspa
   if(destination){event.preventDefault();destination.focus();}
  }}>
   {!focused && <div role="separator" aria-label="Resize inspector" aria-orientation="vertical" aria-valuenow={width} aria-valuemin={380} aria-valuemax={1100} tabIndex={0} onPointerDown={resize} onKeyDown={event=>{if(event.key==="ArrowLeft"||event.key==="ArrowRight"){event.preventDefault();setWidth(value=>Math.max(380,Math.min(1100,value+(event.key==="ArrowLeft"?30:-30))));}}} className="hover:bg-teal/40 focus-visible:bg-teal absolute inset-y-0 -left-1 z-10 w-1.5 cursor-col-resize touch-none @max-[760px]/workbench:hidden"/>}
-  <header className="border-editor-hair bg-topbar flex h-11 flex-none items-center gap-1 border-b px-2">
-   <button type="button" title="Files" aria-label="Open files" onClick={()=>open({id:"files",kind:"files"})} className={`rounded p-2 ${selected?.kind==="files"||selected?.kind==="disk"?"text-teal":"text-muted-text hover:text-body"}`}><Folder size={16}/></button>
-   <button type="button" title="Changes" aria-label="Open changes" disabled={!hasFolder} onClick={()=>open({id:"changes",kind:"changes"})} className="text-muted-text hover:text-body rounded p-2 disabled:opacity-30"><Layers size={16}/></button>
-   <button type="button" title="Terminal" aria-label="Open terminal" disabled={!hasFolder} onClick={()=>open({id:"terminal",kind:"terminal"})} className="text-muted-text hover:text-body rounded p-2 disabled:opacity-30"><TerminalIcon size={16}/></button>
-   <span className="text-editor-muted ml-1 min-w-0 flex-1 truncate text-xs" title={workspace?.folder?.path}>{workspace?.folder?.path?.split("/").pop() ?? "Details"}</span>
-   <button ref={closeRef} type="button" aria-label="Close inspector" onClick={onClose} className="text-editor-muted hover:text-body rounded p-2"><Cross size={14}/></button>
+  <header className="border-editor-hair bg-topbar flex h-11 flex-none items-center gap-1 border-b pr-1.5 pl-2">
+   <div role="group" aria-label="Inspector views" className="flex flex-none items-center gap-0.5">
+    <PaneButton label="Files" action="Open files" icon={<Folder size={13}/>} active={selected?.kind==="files"||selected?.kind==="disk"} onClick={()=>open({id:"files",kind:"files"})}/>
+    {hasFolder&&<PaneButton label="Changes" action="Open changes" icon={<Layers size={13}/>} active={selected?.kind==="changes"} onClick={()=>open({id:"changes",kind:"changes"})}/>}
+    {hasFolder&&<PaneButton label="Terminal" action="Open terminal" icon={<TerminalIcon size={13}/>} active={selected?.kind==="terminal"} onClick={()=>open({id:"terminal",kind:"terminal"})}/>}
+   </div>
+   <span className="text-editor-muted ml-2 min-w-0 flex-1 truncate text-right text-xs" title={workspace?.folder?.path}>{workspace?.folder?.path?.split("/").pop()}</span>
+   {onToggleFocus && <button type="button" title={focused?"Show chat beside the inspector":"Expand inspector"} aria-label="Focus inspector" aria-pressed={focused} onClick={onToggleFocus} className={`${focused?"text-teal":"text-editor-muted hover:text-body"} flex-none rounded p-2`}><Expand size={14}/></button>}
+   <button ref={closeRef} type="button" aria-label="Close inspector" onClick={onClose} className="text-editor-muted hover:text-body flex-none rounded p-2"><Cross size={14}/></button>
   </header>
   {tabs.length>0 && <div role="tablist" aria-label="Inspector tabs" className="border-editor-hair flex h-10 flex-none overflow-x-auto border-b">
    {tabs.map(tab=><div key={tab.id} className={`border-editor-hair flex min-w-0 flex-none items-center border-r ${tab.id===active?"bg-selected text-ink":"text-editor-muted"}`}>
@@ -89,6 +92,10 @@ function Pane({target,items=[],sessionId,requestVersion=0,filesRequest=0,workspa
    :<div className="flex min-h-0 flex-1"><div className="min-w-0 flex-1"><FileTree root={root} onOpen={openFile}/></div></div>}
   </div>
  </aside>;
+}
+// Labeled view switches; the action name keeps "Open files" style control names.
+function PaneButton({label,action,icon,active,onClick}:{label:string;action:string;icon:React.ReactNode;active:boolean;onClick:()=>void}) {
+ return <button type="button" aria-label={action} aria-pressed={active} onClick={onClick} className={`${active?"bg-selected text-ink":"text-muted-text hover:bg-hover hover:text-body"} flex items-center gap-1.5 rounded-md px-2 py-1 text-xs`}>{icon}{label}</button>;
 }
 function tabLabel(tab:PaneTab):string {
  switch(tab.kind){case "files":return "Files";case "changes":return "Changes";case "terminal":return "Terminal";case "disk":return tab.path.split("/").pop()??tab.path;case "inspection":return targetTitle(tab.target);}

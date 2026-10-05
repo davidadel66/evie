@@ -17,13 +17,16 @@ export function AssistantMessage({
   text,
   streaming,
   discarded,
+  quiet,
 }: {
   text: string;
   streaming: boolean;
   discarded?: { reason: DiscardReason; message: string };
+  /** Settled progress text inside the activity trace: muted log size, not answer size. */
+  quiet?: boolean;
 }) {
   return (
-    <div className="min-w-0 max-w-[min(720px,100%)] flex-none self-start">
+    <div className={`${quiet ? "evie-quiet " : ""}min-w-0 max-w-[min(720px,100%)] flex-none self-start`}>
       <Markdown text={text} streaming={streaming} />
       {streaming && <Caret />}
       {discarded && <DiscardWarning message={discarded.message} />}

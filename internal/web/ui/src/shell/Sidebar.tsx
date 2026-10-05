@@ -3,7 +3,14 @@ import type {
   StoredSession,
   Workspace,
 } from "../api/contextSessions";
+import { useEffect, useState } from "react";
 import { Archive, Database, Folder, MessageSquare, Plus, Settings, Sidebar as SidebarIcon } from "../ui/Icon";
+
+// Desktop width is the person's to set: drag or arrow keys on the edge,
+// double-click to reset. Saved per browser like the Inspector's width.
+export const sidebarWidth = { initial: 240, min: 200, max: 360 } as const;
+const widthKey = "evie.sidebarWidth";
+const clampWidth = (value: number) => Math.max(sidebarWidth.min, Math.min(sidebarWidth.max, Math.round(value)));
 import { ReviewBadge } from "../candidateInbox/MemoryReviewTabs";
 
 export type SidebarDestination = "chat" | "data" | "workspaces" | `workspace:${string}`;
@@ -44,12 +51,57 @@ export function Sidebar({
   onNewWorkspaceChat,
   onSession,
 }: Props) {
+  const [width, setWidth] = useState(() => {
+    try {
+      const stored = Number(localStorage.getItem(widthKey));
+      return stored ? clampWidth(stored) : sidebarWidth.initial;
+    } catch {
+      return sidebarWidth.initial;
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(widthKey, String(width)); } catch { /* the width stays in memory */ }
+  }, [width]);
+  const resize = (event: React.PointerEvent) => {
+    const start = event.clientX, initial = width;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const move = (next: PointerEvent) => setWidth(clampWidth(initial + next.clientX - start));
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
   return (
     <aside
       id="evie-navigation"
       aria-label="Evie navigation"
-      className={`${mobileOpen ? "flex" : "hidden"} ${collapsed ? "md:hidden" : "md:flex"} border-hair bg-sidebar absolute inset-y-0 left-0 z-40 w-[276px] flex-none flex-col border-r md:relative md:z-auto`}
+      style={{ width }}
+      className={`${mobileOpen ? "flex" : "hidden"} ${collapsed ? "md:hidden" : "md:flex"} border-hair bg-sidebar absolute inset-y-0 left-0 z-40 max-w-[85vw] flex-none flex-col border-r md:relative md:z-auto`}
     >
+      <div
+        role="separator"
+        aria-label="Resize sidebar"
+        aria-orientation="vertical"
+        aria-valuenow={width}
+        aria-valuemin={sidebarWidth.min}
+        aria-valuemax={sidebarWidth.max}
+        tabIndex={0}
+        title="Drag to resize. Double-click to reset."
+        onPointerDown={resize}
+        onDoubleClick={() => setWidth(sidebarWidth.initial)}
+        onKeyDown={(event) => {
+          const next = event.key === "ArrowLeft" ? width - 16 : event.key === "ArrowRight" ? width + 16
+            : event.key === "Home" ? sidebarWidth.min : event.key === "End" ? sidebarWidth.max : undefined;
+          if (next === undefined) return;
+          event.preventDefault();
+          setWidth(clampWidth(next));
+        }}
+        className="hover:bg-teal/40 focus-visible:bg-teal absolute inset-y-0 -right-1 z-10 hidden w-1.5 cursor-col-resize touch-none md:block"
+      />
       <div className="flex h-[54px] flex-none items-center px-4">
         <div aria-label="evie." className="text-ink font-sans text-[21px] font-medium tracking-[-0.04em]">
           evie<span className="text-teal">.</span>

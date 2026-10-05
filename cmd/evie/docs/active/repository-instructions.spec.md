@@ -70,3 +70,13 @@ prior binary and SQLite database, gracefully restarted `evie serve` on
 `http://127.0.0.1:6687/`, and restored the previously selected Interview Prep
 conversation. Verified the new schema, default enabled setting, preview endpoint,
 and loaded web app after restart. Its Workspace currently has no attached folder.
+
+## Per-turn control amendment — October 3, 2026
+
+David found the per-turn **Repository instructions** action useless when no
+folder can supply instructions. It now appears under a turn's activity only
+while the chat's Workspace has an attached folder with repository instructions
+enabled. Receipts are still captured and stored for every turn exactly as
+above; the sidebar instruction control is unchanged. Trade-off: after a folder
+is detached or instructions are disabled, earlier turns' receipts are no longer
+reachable from chat, though they remain durable.

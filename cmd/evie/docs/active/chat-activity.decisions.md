@@ -62,3 +62,11 @@
   source-inspection API still controls original evidence and current access.
   Empty retrieval does not imply an empty direct listing. Neither result
   rendering nor request association asserts that an answer cited a source.
+
+- David's October 3 request replaces the open-while-working trace with a
+  collapsed live status line. The line uses tool events and streamed text
+  rather than reasoning because providers increasingly withhold reasoning.
+  Requested tools keep the "requested" wording; no running state is inferred.
+- With his agreement, settled tool problems no longer render as individual
+  rows while activity is collapsed; one summary line expands the trace. Pending
+  approvals, notices and memory receipt visibility are unchanged.

@@ -80,11 +80,15 @@ it("exposes the original Claim version without assigning a Claim identity to con
   expect(conversationHtml).not.toContain("Claim version:");
 });
 
-it("preserves a conversation excerpt's speaker, uncertainty and exact source range without inventing a Claim", () => {
+it("quotes a conversation excerpt once with a readable speaker and keeps its exact source range in Details without inventing a Claim", () => {
   const receipt: MemoryEvidenceReceipt = { sessionId: "reader", snapshotId: "request-2", version: "retrieval-v1", status: "success", evidence: [{ reference: { id: "excerpt:source:7:35", kind: "conversation_excerpt", scope_key: "workspace:gardening", status: "active", as_known_at: "2026-09-10T10:00:00Z", valid_at: "2026-09-10T10:00:00Z", paths: ["conversation_fts"], sources: [] }, available: true, current_status: "active", evidence: { text: "She might like café plants.", sources: [{ event_id: "source-event", session_id: "earlier-conversation", source_scope_key: "workspace:gardening", actor: "assistant", authority: "none", observed_at: "2026-09-09T10:00:00Z", evidence: "She might like café plants.", locator_kind: "utf8_byte_range", locator_value: "7:35", evidence_sha256: "9520142f1cd104327a97b8a51c6e075d98d2cdcc6fb63dc234ab1faf9b218370" }] } }] };
   const html = renderToStaticMarkup(<MemoryEvidenceView receipt={receipt} />);
   for (const value of ["Conversation excerpt", "She might like café plants.", "Speaker: assistant", "Authority: none", "earlier-conversation", "utf8_byte_range 7:35", "9520142f1cd104327a97b8a51c6e075d98d2cdcc6fb63dc234ab1faf9b218370"]) expect(html).toContain(value);
-  expect(html).toContain("Attributed conversation evidence");
+  expect(html).not.toContain("Attributed conversation evidence");
+  expect(html.match(/She might like café plants\./g)).toHaveLength(1);
+  expect(html).toMatch(/<blockquote[^>]*>She might like café plants\.<\/blockquote><p[^>]*>Evie · [^<]*2026/);
+  const visible = html.slice(0, html.indexOf("<details"));
+  for (const raw of ["Original state", "Authority:", "2026-09-09T10:00:00Z"]) expect(visible).not.toContain(raw);
   expect(html).not.toContain("Accepted memory");
   expect(html).not.toContain("Claim ID");
 });

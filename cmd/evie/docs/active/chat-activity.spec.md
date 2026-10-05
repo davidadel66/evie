@@ -288,3 +288,35 @@ Correction verification on September 11, 2026:
 - Standards and Spec reviews have no remaining actionable findings. Query
   lifecycle and entity-reference display gaps found during review were fixed
   with failing-then-passing regression tests before handoff.
+
+## Live status line amendment — October 3, 2026
+
+David asked for one updating line while Evie works instead of the full trace,
+following T3 Code's work log. This supersedes "opens while working" above and
+the per-row visibility of settled tool failures while collapsed.
+
+- Activity starts collapsed while working and stays collapsed on completion
+  unless the user expands it. The full trace, including commentary, reasoning
+  summaries and every action row, remains one click away and is unchanged.
+- While working and collapsed, one line below the header shows: assistant
+  text as it streams; otherwise the latest requested tool without a result,
+  as its existing compact row (label, subject, Inspect); otherwise
+  "Thinking…". It is derived from events only, never from reasoning text, so
+  it reads the same whether or not the model exposes reasoning. Committed
+  commentary folds into the trace.
+- Pending approvals keep their actionable rows and replace the live line.
+  Latest and flagged memory receipts, discarded-response warnings and notices
+  stay visible as before.
+- Settled tool problems (failed, declined or expired actions and flagged memory
+  searches) collapse into one amber line such as "2 actions failed" or
+  "1 action needs attention". Selecting it expands the trace, where each row
+  keeps its label and Inspect action.
+
+- Inside the expanded trace, settled progress text renders as muted 13px
+  markdown so it reads as a log. Text still streaming keeps answer size until
+  its commit settles whether it is progress or the final answer.
+
+No backend, persistence, event or dependency changes. Verification covers the
+collapsed live line for a requested tool, Thinking between tools, streamed
+text replacing the line, approvals replacing it, the problem summary, and
+quiet versus streaming progress text.

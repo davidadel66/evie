@@ -63,7 +63,21 @@ export function needsAttention(item: Item): boolean {
     (item.kind === "tool" && (!!item.isErr || item.approval?.state === "pending" || item.approval?.state === "declined" || item.approval?.state === "expired"));
 }
 
-type ActionKind = "read" | "edit" | "command" | "search" | "data" | "memory" | "tool";
+export function awaitingApproval(item: Item): boolean {
+  return item.kind === "tool" && item.approval?.state === "pending" && item.result === undefined;
+}
+
+// Collapsed activity reports settled tool problems as one line; the rows stay
+// in the expanded trace and pending approvals keep their own actionable rows.
+export function problemSummary(items: Item[]): string | null {
+  const tools = items.filter((item): item is ToolItem => item.kind === "tool" && needsAttention(item) && !awaitingApproval(item));
+  if (tools.length === 0) return null;
+  const failed = tools.every((tool) => tool.isErr && tool.approval?.state !== "declined" && tool.approval?.state !== "expired");
+  const one = tools.length === 1;
+  return `${tools.length} ${one ? "action" : "actions"} ${failed ? "failed" : one ? "needs attention" : "need attention"}`;
+}
+
+type ActionKind ="read" | "edit" | "command" | "search" | "data" | "memory" | "tool";
 const actions: Record<string, { kind: ActionKind; action: string; done: string; subject: string[] }> = {
   read_file: {kind: "read", action: "Read file", done: "Read file", subject: ["path"]},
   edit_file: {kind: "edit", action: "Edit file", done: "Edited file", subject: ["path"]},

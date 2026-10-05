@@ -4,31 +4,24 @@ import { WorkbenchBar, type WorkbenchView } from "./App";
 import { selectionForScope } from "./shell/scopeSelection";
 
 describe("WorkbenchBar", () => {
-  it("renders open work as semantic tabs with inspector controls", () => {
-    const views: WorkbenchView[] = [
-      { id: "chat", kind: "chat" },
-      { id: "data", kind: "data" },
-      { id: "workspace:one", kind: "workspace", workspaceId: "one", label: "Cairo's Kitchen" },
-    ];
-    const html = renderToStaticMarkup(
-      <WorkbenchBar
-        views={views}
-        activeViewId="workspace:one"
-        chatLabel="Dinner prep"
-        inspectorOpen
-        inspectorFocused={false}
-        onOpenNavigation={() => undefined}
-        onActivate={() => undefined}
-        onClose={() => undefined}
-        onToggleInspector={() => undefined}
-        onToggleInspectorFocus={() => undefined}
-      />,
-    );
-    for (const label of ["Dinner prep", "Data", "Cairo&#x27;s Kitchen"]) expect(html).toContain(label);
-    expect(html).toContain('role="tablist"');
-    expect(html).toContain('aria-selected="true"');
+  const base = {chatLabel: "Dinner prep", inspectorOpen: true, onOpenNavigation: () => undefined, onChat: () => undefined, onToggleInspector: () => undefined};
+
+  it("names the open chat with one inspector toggle and no tabs", () => {
+    const html = renderToStaticMarkup(<WorkbenchBar {...base} view={{id: "chat", kind: "chat"}} />);
+    expect(html).toContain("Dinner prep");
+    expect(html).toContain('aria-current="page"');
+    expect(html).not.toContain('role="tab');
     expect(html).toContain('aria-label="Toggle inspector"');
-    expect(html).toContain('aria-label="Focus inspector"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).not.toContain("Focus inspector");
+  });
+
+  it("shows another view as a breadcrumb that leads back to the chat", () => {
+    const view: WorkbenchView = {id: "workspace:one", kind: "workspace", workspaceId: "one", label: "Cairo's Kitchen"};
+    const html = renderToStaticMarkup(<WorkbenchBar {...base} view={view} />);
+    expect(html).toMatch(/<button[^>]*title="Back to Dinner prep"[^>]*>Dinner prep<\/button>/);
+    expect(html).toMatch(/aria-current="page"[^>]*>Cairo&#x27;s Kitchen</);
+    expect(renderToStaticMarkup(<WorkbenchBar {...base} view={{id: "data", kind: "data"}} />)).toMatch(/aria-current="page"[^>]*>Data</);
   });
 });
 

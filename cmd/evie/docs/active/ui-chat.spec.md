@@ -460,3 +460,34 @@ test), so `evie serve` + `vite dev` side by side works with hot reload.
    force it via curl → 409 surfaces as a banner, not a console error.
 7. Kill the server mid-stream → "Lost connection" banner, Retry clears it.
 8. `evie` (no args) still runs the REPL unchanged.
+
+**Centered column amendment (2026-10-03):** following T3 Code, the transcript
+and composer share one centered column, `max-width: 768px`, with the
+scrollbar at the pane edge. The composer is one `18px`-radius row: input,
+Stop while streaming, and a round send button. The command menu and model
+picker float above it ([chat-model-selection](chat-model-selection.spec.md));
+command results and recovery lines sit below it.
+
+**Slim bar amendment (2026-10-03):** David found the tab strip took too much
+space. This supersedes the closable tab strip, the 46px strip in the layout
+above and the top-right Inspector focus control. The center shows one view at
+a time, chosen from the sidebar: the open chat, Data, the Workspace directory
+or a Workspace home. A 44px bar names it: the chat title, or a breadcrumb
+`Chat title / Data` whose first step returns to the open chat with its draft
+intact. Selecting the already-open session in the sidebar does the same
+instead of reselecting it. The bar's only control besides navigation is the
+Inspector toggle; the Inspector's own header carries its focus and close
+controls.
+
+**Inspector and sidebar amendment (2026-10-03):** the Inspector now runs the
+full window height beside the slim bar, so its 44px header aligns with the bar
+instead of stacking under it. Its header shows labeled **Files**, **Changes**
+and **Terminal** buttons (pressed when selected) in place of bare icons;
+Changes and Terminal appear only when a folder is attached, and Files then
+explains how to attach one. The folder name sits right-aligned before the
+focus and close controls. Focus mode gives the Inspector the whole area beside
+the sidebar. The left sidebar defaults to 240px instead of 276px and is
+resizable from its right edge between 200px and 360px by drag or arrow keys
+(Home/End for the limits); double-click resets it and the width persists per
+browser. Narrow screens keep the overlay, capped at 85% of the viewport,
+without the resize edge.

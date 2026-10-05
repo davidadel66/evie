@@ -142,8 +142,8 @@ Terminal review entry points: `internal/localterminal/session.go` (PTY lifetime)
 `internal/web/ui/src/api/terminal.ts` (transport), and
 `internal/web/ui/src/folder/Terminal.tsx` (mounted terminal view).
 
-To demonstrate: attach a Workspace folder, open its inspector, and select the
-terminal icon. Run a command, switch to a fetched memory or file tab, and return
+To demonstrate: attach a Workspace folder, open its inspector, and select
+**Terminal**. Run a command, switch to a fetched memory or file tab, and return
 to Terminal. Hiding the pane preserves that shell; closing its Terminal tab or
 changing chat/folder ends it. A backend restart preserves the folder attachment,
 while the next opened Terminal starts a fresh shell.

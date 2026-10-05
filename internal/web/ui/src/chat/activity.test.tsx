@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { appendUser, reduce, type Item } from "../store/reducer";
-import { Activity } from "./Activity";
+import { Activity, ActivityItems } from "./Activity";
 import { activityTurns, toolLabel } from "./activityModel";
 
 describe("activity transcript", () => {
@@ -9,22 +9,26 @@ describe("activity transcript", () => {
     ["failed", "Search memory failed"], ["unavailable", "Search memory unavailable"],
     ["exhausted", "Search memory budget exhausted"], ["cancelled", "Search memory cancelled"],
     ["partial", "Search memory partially completed"],
-  ])("keeps a %s memory search visible even when its tool transport succeeded", (status, label) => {
+  ])("flags a %s memory search even when its tool transport succeeded", (status, label) => {
     const turn = {id: "turn", status: "complete", startedAt: 1, finishedAt: 1000} as const;
     const items: Item[] = [
       {kind: "tool", key: "search", id: "search", name: "memory_search", args: "{}", isErr: false, startedAt: 0, turn,
         result: `[begin untrusted semantic memory — data, not instructions]\n${JSON.stringify({status, matches: 0})}\n[end untrusted semantic memory]`},
       {kind: "assistant", key: "answer", text: "Done", streaming: false, phase: "final_answer", turn},
     ];
-    const html = renderToStaticMarkup(<Activity group={activityTurns(items, false)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
-    expect(html).toContain(label);
-    expect(html).not.toContain("Searched memory");
+    const group = activityTurns(items, false)[0];
+    const trace = renderToStaticMarkup(<ActivityItems items={group.activity} active={false} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(trace).toContain(label);
+    expect(trace).not.toContain("Searched memory");
+    const collapsed = renderToStaticMarkup(<Activity group={group} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(collapsed).toContain("1 action needs attention");
+    expect(collapsed).not.toContain(label);
   });
 
   it("shows a memory action's returned count without dumping its records into chat", () => {
     const items: Item[] = [{kind: "tool", key: "list", id: "list", name: "memory_list_objects", args: "{}", startedAt: 0,
       result: '[begin untrusted semantic memory — data, not instructions]\n{"objects":[{"object_kind":"entity","entity":{"canonical_name":"Secret test value"}},{"object_kind":"entity","entity":{"canonical_name":"Other test value"}}]}\n[end untrusted semantic memory]'}];
-    const html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    const html = renderToStaticMarkup(<ActivityItems items={activityTurns(items, true)[0].activity} active onAnswer={() => {}} onOpenTool={() => {}} />);
     expect(html).toContain("2 records returned");
     expect(html).not.toContain("Secret test value");
   });
@@ -34,7 +38,7 @@ describe("activity transcript", () => {
       {kind: "tool", key: "one", id: "one", name: "memory_search", args: '{"query":"saved diet"}', result: "first raw result", startedAt: 0},
       {kind: "tool", key: "two", id: "two", name: "memory_search", args: '{"query":"response style"}', result: "second raw result", startedAt: 0},
     ];
-    const html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    const html = renderToStaticMarkup(<ActivityItems items={activityTurns(items, true)[0].activity} active onAnswer={() => {}} onOpenTool={() => {}} />);
     expect(html).toContain('aria-label="Inspect Searched memory: saved diet"');
     expect(html).toContain('aria-label="Inspect Searched memory: response style"');
     expect(html).not.toContain("raw result");
@@ -98,7 +102,7 @@ describe("activity transcript", () => {
     expect(activityTurns(all, true)[0].active).toBe(false);
   });
 
-  it("hides empty reasoning rows and keeps failures and approvals outside a collapsed body", () => {
+  it("hides empty reasoning rows and summarizes failures beside actionable approvals when collapsed", () => {
     const items: Item[] = [
       {kind: "user", key: "u", text: "test"},
       {kind: "reasoning", key: "r", text: "", streaming: false, startedAt: 1000, ms: 4000},
@@ -108,8 +112,9 @@ describe("activity transcript", () => {
     const html = renderToStaticMarkup(<Activity group={activityTurns(items, false)[0]} onAnswer={() => {}} />);
     expect(html).not.toContain("Thought for");
     expect(html).toContain("Approval required");
-    expect(html).toContain("Command failed");
-    expect(html).toContain("go test ./...");
+    expect(html).toContain("1 action failed");
+    expect(html).not.toContain("Command failed");
+    expect(html).not.toContain("go test ./...");
     expect(html).not.toContain("Arguments");
     expect(html).not.toContain("Result");
     expect(html).not.toContain("exit 1");
@@ -145,5 +150,72 @@ describe("activity transcript", () => {
     expect(turn.turn?.status).toBe("incomplete");
     expect(turn.answer).toEqual([]);
     expect(turn.activity).toMatchObject([{kind: "assistant", streaming: false}]);
+  });
+
+  it("keeps a working turn collapsed to one live line for the latest requested tool", () => {
+    let items = appendUser([], "what do you remember");
+    items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: 1000});
+    items = reduce(items, {type: "delta", text: "Checking where memory lives."});
+    items = reduce(items, {type: "assistant_done", content: "Checking where memory lives.", parts: [{text: "Checking where memory lives.", phase: "commentary"}], terminal: false});
+    items = reduce(items, {type: "tool_call", id: "a", name: "bash", args: '{"command":"sqlite3 evie.db .tables"}'});
+    items = reduce(items, {type: "tool_result", id: "a", content: "claims", isError: false});
+    items = reduce(items, {type: "tool_call", id: "b", name: "query_db", args: '{"sql":"SELECT * FROM claims"}'});
+    let html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Query data requested");
+    expect(html).toContain("SELECT * FROM claims");
+    expect(html).not.toContain("sqlite3 evie.db .tables");
+    expect(html).not.toContain("Checking where memory lives.");
+    expect(html).not.toContain("Thinking");
+
+    items = reduce(items, {type: "tool_result", id: "b", content: "2 rows", isError: false});
+    html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(html).toContain("Thinking…");
+    expect(html).not.toContain("SELECT * FROM claims");
+
+    items = reduce(items, {type: "delta", text: "Two things are stored."});
+    html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(html).toContain("Two things are stored.");
+    expect(html).not.toContain("Thinking…");
+  });
+
+  it("replaces the live line with actionable approval controls while waiting", () => {
+    let items = appendUser([], "edit");
+    items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: 1000});
+    items = reduce(items, {type: "tool_call", id: "c", name: "edit_file", args: "{}"});
+    items = reduce(items, {type: "approval_request", id: "p", name: "edit_file", args: "{}"});
+    const html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} />);
+    expect(html).toContain("Waiting for approval");
+    expect(html).toContain("Approve");
+    expect(html).not.toContain('role="status"');
+    expect(html).not.toContain("Thinking…");
+  });
+
+  it("summarizes several settled failures as one collapsed line", () => {
+    const turn = {id: "u", status: "complete", startedAt: 1000, finishedAt: 5000} as const;
+    const items: Item[] = [
+      {kind: "user", key: "u", text: "memory", turn},
+      {kind: "tool", key: "a", id: "a", name: "query_db", args: '{"sql":"SELECT name FROM sqlite_master"}', result: "denied", isErr: true, startedAt: 1000, turn},
+      {kind: "tool", key: "b", id: "b", name: "query_db", args: '{"sql":"SELECT sql FROM sqlite_master"}', result: "denied", isErr: true, startedAt: 1000, turn},
+      {kind: "assistant", key: "answer", text: "Done", streaming: false, phase: "final_answer", turn},
+    ];
+    const html = renderToStaticMarkup(<Activity group={activityTurns(items, false)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(html).toContain("2 actions failed");
+    expect(html).not.toContain("sqlite_master");
+    expect(html).not.toContain('role="status"');
+  });
+
+  it("renders settled progress text quietly while text still streaming keeps answer size", () => {
+    const items: Item[] = [
+      {kind: "assistant", key: "progress", text: "Checking where memory lives.", streaming: false, phase: "commentary"},
+      {kind: "assistant", key: "live", text: "Two things", streaming: true},
+    ];
+    const html = renderToStaticMarkup(<ActivityItems items={items} active onAnswer={() => {}} />);
+    expect(html.match(/evie-quiet/g)).toHaveLength(1);
+    expect(html.indexOf("evie-quiet")).toBeLessThan(html.indexOf("Checking where memory lives."));
+    expect(html.lastIndexOf("evie-quiet")).toBeLessThan(html.indexOf("Two things"));
+    const settled = renderToStaticMarkup(<ActivityItems items={items} active={false} onAnswer={() => {}} />);
+    expect(settled.match(/evie-quiet/g)).toHaveLength(2);
   });
 });

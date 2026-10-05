@@ -50,6 +50,14 @@ describe("shared inspector tabs", () => {
  it("exposes the shared pane and folder setup without a second inspector",()=>{
   const html=renderToStaticMarkup(createElement(InspectorPane,{visible:true,focused:false,onClose:()=>{},onManageFolder:()=>{}}));
   expect(html.match(/aria-label="Inspector"/g)).toHaveLength(1);
-  expect(html).toContain("Open files");expect(html).toContain("Open changes");expect(html).toContain("Open Workspaces");
+  expect(html).toContain("Open files");expect(html).toContain("Open Workspaces");
+  expect(html).not.toContain("Open changes");expect(html).not.toContain("Open terminal");
+ });
+ it("labels every folder view once a folder is attached",()=>{
+  const workspace={id:"w",displayName:"Evie",state:"active",currentRevisionId:"r",createdAt:"",updatedAt:"",folder:{path:"/code/evie",revision:1}} as const;
+  const html=renderToStaticMarkup(createElement(InspectorPane,{visible:true,focused:false,workspace,onClose:()=>{},onManageFolder:()=>{}}));
+  for(const label of ["Files","Changes","Terminal"])expect(html).toMatch(new RegExp(`aria-label="Open ${label.toLowerCase()}"[^>]*>.*?${label}</button>`));
+  expect(html).toMatch(/aria-label="Open files" aria-pressed="true"/);
+  expect(html).toContain(">evie</span>");
  });
 });

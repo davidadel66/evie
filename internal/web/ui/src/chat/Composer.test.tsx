@@ -32,3 +32,26 @@ describe("Composer turn controls", () => {
     expect(renderToStaticMarkup(<Composer {...base} streaming={false} />)).not.toContain('role="status"');
   });
 });
+
+describe("Composer command menu", () => {
+  const options = (html: string) => [...html.matchAll(/role="option" aria-selected="(true|false)"[^>]*><span[^>]*>([^<]+)<\/span>/g)].map((m) => [m[2], m[1]]);
+
+  it("offers matching commands for a bare slash prefix with the first highlighted", () => {
+    expect(options(renderToStaticMarkup(<Composer {...base} value="/" streaming={false} />))).toEqual([["/model", "true"], ["/compact", "false"]]);
+    const narrowed = renderToStaticMarkup(<Composer {...base} value="/co" streaming />);
+    expect(options(narrowed)).toEqual([["/compact", "true"]]);
+    expect(narrowed).toMatch(/aria-activedescendant="[^"]+-0"/);
+  });
+
+  it("stays closed for ordinary text, arguments, a disabled composer or an open picker", () => {
+    for (const html of [
+      renderToStaticMarkup(<Composer {...base} value="hello /model" streaming={false} />),
+      renderToStaticMarkup(<Composer {...base} value="/model now" streaming={false} />),
+      renderToStaticMarkup(<Composer {...base} value="/" streaming={false} disabled />),
+      renderToStaticMarkup(<Composer {...base} value="/" streaming={false} overlay={<div>picker</div>} />),
+    ]) {
+      expect(html).not.toContain('role="listbox"');
+      expect(html).not.toContain("aria-activedescendant");
+    }
+  });
+});

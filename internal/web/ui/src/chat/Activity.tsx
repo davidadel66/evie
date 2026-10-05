@@ -6,7 +6,7 @@ import { ChevronDown, Database, FileIcon, Wrench } from "../ui/Icon";
 import { ApprovalCard } from "./ApprovalCard";
 import { AssistantMessage, DiscardWarning } from "./Message";
 import { MemoryActivity, type MemoryOpener } from "./MemoryActivity";
-import { elapsedLabel, needsAttention, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
+import { awaitingApproval, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
 
 type FileOpener = (key: string, trigger: HTMLButtonElement) => void;
 type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener; onOpenInstructions?: (turnId:string,trigger:HTMLButtonElement)=>void };
@@ -20,10 +20,12 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [group.active]);
-  const pending = group.activity.some((item) => item.kind === "tool" && item.approval?.state === "pending" && item.result === undefined);
-  const open = manual ?? group.active;
+  const pending = group.activity.some(awaitingApproval);
+  const open = manual ?? false;
   const latestMemory = [...group.activity].reverse().find((item) => item.kind === "memory");
   const visibleActivity = group.activity.filter((item) => item.kind !== "memory" || item === latestMemory || needsAttention(item));
+  const collapsedActivity = group.activity.filter((item) => item === latestMemory || (needsAttention(item) && (item.kind !== "tool" || awaitingApproval(item))));
+  const problems = problemSummary(group.activity);
   const elapsed = elapsedLabel(group.turn?.startedAt, group.active ? now : group.turn?.finishedAt);
   const complete = group.turn?.status === "complete" || (!group.turn && group.answer.length > 0);
   const label = pending ? "Waiting for approval" : group.active ? "Working…" : complete ? "Worked" : "Work incomplete";
@@ -42,13 +44,33 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
         {open && <ActivityItems items={visibleActivity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />}
         {open && group.activity.length === 0 && <p className="text-muted-text text-xs">{group.active ? "Waiting for a response…" : "No additional activity to show."}</p>}
       </div>
-      {!open && <div className="space-y-3"><ActivityItems items={group.activity.filter((item) => item === latestMemory || needsAttention(item))} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} /></div>}
+      {!open && <div className="space-y-3">
+        <ActivityItems items={collapsedActivity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />
+        {problems && <button type="button" aria-controls={bodyID} onClick={() => setManual(true)}
+          className="activity-summary text-amber-ink focus-visible:outline-teal flex cursor-pointer items-center gap-3 rounded-sm py-1 text-left text-[13px] focus-visible:outline-2 focus-visible:outline-offset-2">
+          <span>{problems}</span><ChevronDown size={12} />
+        </button>}
+        {group.active && !pending && <LiveStatus activity={group.activity} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} />}
+      </div>}
       {!group.active && !complete && !group.turn?.finishedAt && <p className="text-amber-ink mt-2 text-xs">Completion wasn’t recorded here. Reload to check the saved conversation.</p>}
     </section>
   );
 }
 
-function ActivityItems({items, active, onAnswer, onOpenFile, onOpenTool, onOpenMemory}: {items: Item[]; active: boolean; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener}) {
+// One line while working: text as it streams, else the latest requested tool,
+// else Thinking. Built from events alone, so it reads the same whether or not
+// the model exposes reasoning.
+function LiveStatus({activity, onAnswer, onOpenFile, onOpenTool}: {activity: Item[]; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenTool?: FileOpener}) {
+  const last = activity[activity.length - 1];
+  if (last?.kind === "assistant" && last.streaming && !last.discarded) return <AssistantMessage text={last.text} streaming />;
+  const tool = [...activity].reverse().find((item): item is ToolItem => item.kind === "tool" && item.result === undefined);
+  return <div role="status">
+    {tool ? <ToolRow tool={tool} active onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} />
+      : <p className="text-muted-text py-1 text-[13px]">Thinking…</p>}
+  </div>;
+}
+
+export function ActivityItems({items, active, onAnswer, onOpenFile, onOpenTool, onOpenMemory}: {items: Item[]; active: boolean; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener}) {
   const rows: (Item | ToolItem[])[] = [];
   for (const item of items) {
     if (item.kind === "tool" && !item.name.startsWith("memory_") && !needsAttention(item)) {
@@ -63,7 +85,7 @@ function ActivityItems({items, active, onAnswer, onOpenFile, onOpenTool, onOpenM
     }
     switch (row.kind) {
       case "memory": return <MemoryActivity key={row.key} activity={row.memory} onOpen={onOpenMemory} />;
-      case "assistant": return <AssistantMessage key={row.key} text={row.text} streaming={active && row.streaming} discarded={row.discarded} />;
+      case "assistant": return <AssistantMessage key={row.key} text={row.text} streaming={active && row.streaming} discarded={row.discarded} quiet={!(active && row.streaming)} />;
       case "notice": return <DiscardWarning key={row.key} message={row.text} />;
       case "reasoning": return <details key={row.key} className="text-muted-text text-[13px]">
         <summary className="activity-summary flex cursor-pointer items-center gap-3 py-1"><span className="min-w-0 flex-1 truncate">{row.text.replace(/\s+/g, " ").trim()}</span><span className="shrink-0 text-xs">Reasoning summary</span><ChevronDown size={12}/></summary>

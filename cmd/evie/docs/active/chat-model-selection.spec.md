@@ -83,3 +83,34 @@ Review entry points: `internal/web/models.go` (guarded selection),
 `cmd/evie/web_context_sessions.go` (runtime and persistence ordering),
 `internal/eviedb/session_models.go` and `turn_leases.go` (revision/turn fencing),
 and `internal/web/ui/src/chat/ModelSelector.tsx` (grouped control).
+
+## Model control amendment — October 3, 2026
+
+David asked for no always-visible model control: `/model` opens a picker,
+following T3 Code. This supersedes the labeled dropdown above; catalog,
+selection, persistence, fencing and busy rules are unchanged.
+
+- No model control is shown in the composer. Exact `/model` (trimmed), typed
+  and sent or chosen from the composer's command menu, opens a searchable
+  picker above the composer, grouped by provider, with the current model
+  marked. It is never sent as a message, including while a reply runs;
+  `/model <anything>` reports `Usage: /model`.
+- The search field takes focus on open. Arrow keys move through models, Enter
+  in the search field chooses the first match, Escape or a choice closes the
+  picker and returns focus to the composer. Clicking elsewhere closes it.
+- While a turn runs, messages are queued, a selection is saving, or the session
+  is changing, models are disabled and the picker says the model can change
+  once the reply ends. Selection and catalog errors appear below the composer
+  with Retry. The picker closes when the active session changes.
+- Typing a bare `/` prefix opens a command menu listing matching commands
+  (`/model`, `/compact`) with descriptions. Arrow keys move the highlight, Enter
+  or a click runs the highlighted command exactly as if it were sent, Tab
+  completes it into the draft, and Escape dismisses the menu until the draft
+  changes. Any whitespace, argument or other text closes it.
+
+Verification on October 3, 2026: UI suite with composer command, command menu
+and picker tests; the updated `scripts/chat-model-selection-browser.cjs` passed
+seven Chrome scenarios with zero page errors (command menu filtering,
+navigation, dismissal and completion; keyboard picker; reload; failed
+selection; `/model` during a reply; stale-browser recovery; parked queue;
+390px menu and picker fit).
