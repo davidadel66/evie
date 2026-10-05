@@ -51,6 +51,9 @@ type harness struct {
 	agentsFor func(*eviedb.Store) Agents
 	// cap, when set, is the next runtime's daily cap (sub-stage 11).
 	cap *eviedb.WorkflowDailyCap
+	// retention, when set, is the next runtime's retention policy
+	// (sub-stage 12).
+	retention *RetentionConfig
 }
 
 // agentsOf is the worker supervisor of a runtime over store, if any.
@@ -87,7 +90,7 @@ func (h *harness) runtime() *Runtime {
 func (h *harness) runtimeWith(providers CapabilityProviders) *Runtime {
 	h.t.Helper()
 	rt, err := New(Config{Store: h.store, Repo: h.repo, Capabilities: providers, Workers: ceiling, Scheduler: h.scheduler, Models: h.models, ModelsOff: h.modelsOff,
-		Agents: h.agentsOf(h.store), DailyCap: h.cap})
+		Agents: h.agentsOf(h.store), DailyCap: h.cap, Retention: h.retention})
 	if err != nil {
 		h.t.Fatal(err)
 	}

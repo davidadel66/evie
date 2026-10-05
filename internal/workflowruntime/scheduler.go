@@ -66,10 +66,27 @@ func (r *Runtime) Start(ctx context.Context) (stop func() error) {
 			}
 		}
 	}()
+	// The retention sweep (sub-stage 12) runs under its own single runner
+	// lease, first at start.
+	sweeps := make(chan struct{})
+	go func() {
+		defer close(sweeps)
+		ticker := time.NewTicker(r.sched.Retention)
+		defer ticker.Stop()
+		for {
+			r.reportError("retention", r.tickRetention(ctx))
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
 	return sync.OnceValue(func() error {
 		cancel()
 		<-loop
 		<-ticks
+		<-sweeps
 		if err := r.store.ReleaseWorkflowScheduleRunner(context.WithoutCancel(ctx), r.holder); err != nil {
 			r.reportError("schedules", err)
 		}

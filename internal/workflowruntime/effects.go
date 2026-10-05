@@ -468,8 +468,13 @@ func (r *Runtime) settleFromReceipt(pc *pass, p eviedb.WorkflowRunProgress, step
 	if err != nil {
 		return err
 	}
-	end.Note = fmt.Sprintf("Effect Intent #%d happened (%s); its receipt's response is the step's output, and the provider was not called again",
-		i.Seq, receiptSummary(i.Receipt))
+	intent := fmt.Sprintf("Effect Intent #%d", i.Seq)
+	if i.RunID != p.Run.ID {
+		// Inherited from the predecessor this run continues (sub-stage 12).
+		intent += " of run " + i.RunID
+	}
+	end.Note = fmt.Sprintf("%s happened (%s); its receipt's response is the step's output, and the provider was not called again",
+		intent, receiptSummary(i.Receipt))
 	_, err = r.store.FinishWorkflowAttempt(pc.writes, pc.lease, end)
 	return err
 }
@@ -651,7 +656,8 @@ func (r *Runtime) reconcileAutomatically(pc *pass, p eviedb.WorkflowRunProgress)
 // the owner's answer to the effect's durable interruption: the same answer
 // Answer records, written with the receipt in one transaction.
 func (r *Runtime) Reconcile(ctx context.Context, req Reconciliation) (eviedb.WorkflowRunDetail, error) {
-	return r.reconcile(ctx, req, "")
+	d, err := r.reconcile(ctx, req, "")
+	return r.present(ctx, d), err
 }
 
 // reconcile records the owner's reconciliation, answered from session

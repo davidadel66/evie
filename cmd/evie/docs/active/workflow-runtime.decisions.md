@@ -1,5 +1,246 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Migration and retention (Stage 14, sub-stage 12)
+
+Source: sub-stage 12 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md), the
+earlier entries' hand-offs (sub-stage 11: retention, redaction and audited
+deletion for notifications, schedule slots and controls, which grow
+forever and whose details can carry run-derived errors; a successor keeps
+its predecessor's decided slot and the schedule's position; migrating a
+run paused at the cap keeps that wait out of `max_duration`; sub-stage 9:
+checkpoints grow with every output; sub-stage 4: a paused run holds its
+Run Key until cancelled or migrated; sub-stage 3: inputs marked
+`sensitive` are stored and shown as given). Binding: ADR 0016, 0021,
+0025 ("Evie pauses the run visibly and requires an explicit migration or
+rollback. It never substitutes new behavior"), 0028, 0030 (a linked
+Successor Run under an approved new definition carries only validated
+state and durable Effect Receipts; the predecessor remains intact;
+inherited effect identities prevent completed actions from being
+performed twice), 0045 (a complete local audit trail by default;
+definitions classify sensitive fields for redaction; deletion is an
+explicit, auditable operation) and 0046, and this spec's "Explicit
+migration creates a linked Successor Run ... The predecessor remains
+immutable", "A Workflow Run has ... optional predecessor or successor
+link", "Audit state retains ... Credentials and raw tokens are forbidden.
+Workflow field classifications and Workspace policy govern redaction,
+retention, and export" and its migration and retention tests.
+
+### What was built
+
+- **The owner's migration** (`internal/workflowruntime/migrate.go`).
+  `evie workflows migrate [--json] [--detach] <run-id> --to-version <n>
+  [--reason <text>]` and `POST /api/workflows/migrate` (`run_id`,
+  `to_version`, `reason` up to 1,000 bytes, `detach`; the surface is
+  always `web`) call `Runtime.Migrate`, owner surfaces only (no model or
+  chat tool; `ErrWorkflowRunSurface`). Nothing else migrates a run: a run
+  an Evie cannot continue still pauses (its reason now names the
+  command), and approving a newer version changes no run. The target must
+  be the definition's active version and newer than the run's; the
+  runtime reads its approved commit, refuses step kinds, AI steps or
+  workers it cannot run (as a start does) and pins the new version's
+  Execution Composition (runtime, providers, Model Policies, worker
+  presets).
+- **Compatibility, precisely** (`workflow.PlanResume`). The successor
+  resumes at the step the predecessor's latest checkpoint names. The
+  predecessor's input must be accepted by the new version (inputs it no
+  longer declares are dropped and listed; a new required input refuses),
+  and the new version must derive the same logical Run Key from it (ADR
+  0021: a successor continues the same logical execution). Every step
+  output a step from the resume point on reads (its inputs, a map's list
+  and items, a branch's cases) must be recorded, with the read field
+  present (an optional one may be absent) and of the type the new version
+  reads; run outputs are checked when recorded. A recorded step the new
+  version would run again after the resume point refuses (nothing
+  completed is repeated). Recorded outputs of steps the new version does
+  not have, or that nothing reads and no longer match, are not carried
+  and are listed. A refusal is `MigrationRefusedError` (web 409
+  `migration_refused`) with every problem at its definition path, for
+  example `outputs.shares: reads $steps.split.output.shares, which the
+  run's recorded output of steps.split does not satisfy: shares: has 3
+  items; at least 4`.
+- **One transaction** (`Store.MigrateWorkflowRun`). It re-checks that the
+  predecessor is not finished, cancelling or waiting for an answer, has
+  every Effect Intent resolved (an unknown effect refuses: reconcile it
+  first) and no question open, is not held by a live lease and has no
+  attempt or worker in flight, is still at the checkpoint the plan was
+  made from, and that the version is still active and newer (run
+  admission). It then records the migration (`workflow_run_migrations`,
+  immutable: both runs, versions, the checkpoint and resume step, the
+  logical Run Key, the plan, the predecessor's Effect Intents with their
+  outcomes and idempotency keys, what the predecessor used of its limits,
+  its schedule slot, the owner, surface and reason), supersedes the
+  predecessor and records the successor (queued, holding the
+  predecessor's Run Key, origin surface and session, its first checkpoint
+  the carried state with the resume step). The runtime first claims and
+  releases the predecessor's lease so whatever a dead holder left in
+  flight is settled (an attempt interrupted, a worker settled, an effect
+  unknown). By default the command then runs the successor like a start.
+- **Superseded (decision: a terminal state and a link).** The predecessor
+  ends in the new terminal state `superseded` (error "superseded by run
+  … : migrated to version N by the owner via cli: …"), which frees its
+  Run Key for the successor in the same transaction and stops every
+  scheduler; a trigger refuses it without the migration record. Its pins,
+  attempts, checkpoints, effects, answers and events are never rewritten
+  (a test compares them before and after). A link alone would have left
+  the predecessor "running" forever and holding its key, since the
+  one-per-key index cannot read another table. `workflow_runs` is rebuilt
+  once at startup for the new state (every row and rowid kept, the
+  rebuild now able to replace several texts and run with
+  `legacy_alter_table` so triggers of other tables that read
+  `workflow_runs` survive it); `superseded` does not notify (the owner
+  asked for it; the successor's transitions do). Inspection shows
+  "Successor of run …" with what was carried, dropped and inherited, and
+  "Superseded by run …".
+- **The same logical execution.** The successor keeps the Run Key, so its
+  Effect Intents derive the same idempotency keys; it counts its
+  predecessors' intents against `max_calls_per_run`; an effect step it
+  resumes at inherits that step's intents from the predecessor's
+  checkpoint, so a receipt that says the effect happened gives the step's
+  output with no call ("Effect Intent #1 of run … happened …; the provider
+  was not called again") and a proven failure counts as one of its Retry
+  Policy's attempts. Its `limits.max_duration`, `max_attempts` and
+  `max_tokens` count what its predecessors used: their time less the time
+  they waited for answers and at the daily cap (an open cap pause counted
+  until the migration), their counted attempts and their AI and worker
+  tokens and cost. A rerun or a later migration of a successor uses the
+  recorded logical Run Key. A scheduled run's successor keeps the slot
+  its predecessor decided (inspection names it; the schedule never
+  decides it again, and its cursor is unchanged).
+- **Retention policies** (`internal/workflowruntime/retention.go`). Each
+  classification a definition declares (`ordinary`, `sensitive`) has the
+  operator's policy, `EVIE_WORKFLOW_RETENTION_ORDINARY` and
+  `EVIE_WORKFLOW_RETENTION_SENSITIVE`, comma-separated over the defaults:
+  `mask=on|off` (default on), and `redact`, `notices` and `compact`, each
+  `never`, days (`30d`) or a duration (`12h`, `0`); the defaults are
+  `redact=never,notices=never,compact=7d`. A malformed policy refuses to
+  start the runtime. What is sensitive comes from the run's pinned
+  version, read once from its approved commit without validating it
+  again (`workflow.ParseSensitivity`): under `ordinary`, the inputs marked
+  `sensitive`, the step inputs, map item inputs and branch reads the
+  definition binds to them, run outputs that name them, and their values
+  wherever else they appear (a string of at least three characters, a
+  number of at least three digits); under `sensitive`, every value the
+  run recorded.
+- **Masking** (default on): once a run ended, the owner's surfaces (CLI
+  and web inspection, run lists, start, cancel, answer, reconcile and
+  migrate results, interruptions) show its sensitive values as
+  `[sensitive]`; texts keep only the sensitive inputs' values out, so the
+  owner still sees why a run failed. Storage is unchanged. Whatever the
+  policy, a run's sensitive inputs never reach a chat (`workflow_status`
+  errors and outputs) or a notice's detail (`evie workflows
+  notifications`, the web list), finished or not. A version whose
+  definition cannot be read is masked as sensitive.
+- **Redaction** (never by default): the given time after a run (and every
+  successor of it) ended, the sweep rewrites its sensitive values in
+  storage as `[redacted]`: run input, outputs and error; checkpoints;
+  attempt inputs, outputs, errors and notes; recovery events; Effect
+  Intent inputs; unknown outcomes; receipt responses, errors and evidence;
+  interruption messages and requests; answers; model responses and
+  errors; worker reasons; the run's notices; and, under `sensitive`, the
+  details of skipped and failed schedule slots and their notices. Texts
+  are rewritten whole under `sensitive`. Keys, identities, states, times,
+  idempotency keys, receipt outcomes and authority evaluations never
+  change. A rerun without inputs of a redacted run is refused.
+- **Audited deletion** (never by default): read notices of finished runs
+  and of schedules, skipped and failed schedule slots that are not their
+  schedule's latest (and whose notice is not unread), and schedule
+  controls a later one replaced, the given time after they were recorded. Runs, attempts, checkpoints,
+  intents, receipts, unknown outcomes, interruptions, answers, model and
+  worker calls, cancellations, overrides, migrations and started slots
+  are never deleted.
+- **Checkpoint compaction** (seven days by default). A finished run's
+  checkpoints between its first and its last keep their rows and lose
+  their stored state. Each one is exactly the checkpoint before it with
+  the output of the attempt that produced it (the same after a branch),
+  which the sweep checks for every one before compacting (a run whose
+  checkpoint does not rebuild is kept whole and reported), and inspection
+  rebuilds it (`compacted: true`), so nothing is lost: the audit trail is
+  the first checkpoint, the attempts' outputs and the final checkpoint.
+- **Enforced by the database.** Every immutability trigger of run records
+  admits a change only while the retention guard
+  (`workflow_retention_guard`) is open, which exists only inside a
+  retention transaction (removed before it commits, and at every
+  startup), and only of what its purpose may change: redaction, a
+  finished run's values and texts; compaction, an intermediate
+  checkpoint's state (never the first or last); deletion, read notices of
+  finished runs, superseded skipped or failed slots, replaced controls.
+  Every action records a tombstone (`workflow_retention_tombstones`,
+  immutable): the sweep, action, data class (`sensitive_inputs`,
+  `run_values`, `checkpoint_states`, `notifications`, `schedule_slots`,
+  `schedule_controls`), classification, Workspace, workflow, run, records
+  and bytes by table, the records' time range, the policy, the reason,
+  and who ran it (the periodic sweep, or the owner via the CLI or web).
+  Inspection lists a run's tombstones.
+- **Evidence an unfinished run needs is never touched**: the sweep acts
+  only on runs that finished, finished before the window, have every
+  Effect Intent resolved and whose successors all finished (a superseded
+  predecessor of a running successor is kept and reported), and on
+  notices of finished runs.
+- **The sweep.** `evie serve` and the REPL run it every hour, first at
+  start (`SchedulerConfig.Retention`), under a single cross-process runner
+  lease (`workflow_retention_state`, ten minutes, given up after each
+  sweep), at most 500 run actions per sweep, each its own transaction,
+  ending between actions when the runtime stops. `evie workflows retention
+  sweep [--dry-run] [--json]` and `POST /api/workflows/retention/sweep`
+  run it now for the owner (refused while another Evie sweeps,
+  `ErrRetentionBusy`); a dry run takes no lease, does everything in a
+  rolled-back transaction and reports the tombstones it would record.
+  `evie workflows retention status [--json]` and `POST
+  /api/workflows/retention` show the policies, the latest sweep, the
+  totals by action and class, and what is due now.
+
+### Decisions and known limits
+
+- **Policies are the operator's per classification, not per Workspace.**
+  ADR 0045 lets each Workspace define retention and export rules; this
+  sub-stage ships the classification policies with ADR 0045's defaults
+  (keep everything, mask on the owner's surfaces) and leaves Workspace
+  rules and export to a follow-up. The default redaction and deletion
+  windows (never) are a product decision for David to revisit.
+- **Masking is a view, redaction is storage.** Masking needs no window
+  and changes nothing; only a configured window removes data, and only
+  with a tombstone, so "explicit and auditable" holds for every removal.
+- **Carried limits.** Time paused for any other reason (an incompatible
+  runtime, a deactivation) still counts toward `max_duration` across a
+  migration, as it does for the run itself (sub-stage 4): a run paused
+  past its limit fails at its successor's first node; the owner can start
+  it again instead.
+- A successor reruns a map from its start (finished items are attempts of
+  the predecessor, not checkpointed state), and asks a question at its
+  resume point again even when the predecessor had its answer recorded but
+  not yet used. A run waiting for an answer, cancelling or needing
+  reconciliation is not migrated.
+- Worker transcripts and reports (the subagent store) and procedural Git
+  are outside redaction: a `sensitive` workflow's agent steps' reports
+  keep what their workers wrote.
+- Free-text scrubbing of `ordinary` runs is by value: a sensitive value
+  of fewer than three characters (or digits) is replaced only where the
+  definition binds it.
+- Old runs are swept like new ones once a policy applies; by default that
+  is compaction only, which loses nothing. An Evie from before this
+  sub-stage treats `superseded` as unfinished but cannot change such a
+  run (the guarded triggers refuse it) and never schedules it.
+
+### What's left after Stage 14
+
+- Measure deep-research live on real questions (the template README's
+  manual command) and adjust budgets only through a new reviewed version.
+- An external notification mirror plugin (redacted by default, never the
+  only record).
+- Chat UI for workflow runs, waiting questions, notifications and the
+  Task Tree once the owner's UI work lands (the chat files are the
+  owner's); web controls for migration, retention, schedule pause, rerun
+  and worker reports on the Workspace page.
+- Workspace-level retention and export rules, default redaction windows,
+  and retention of workflow workers' transcripts and reports.
+- The first production effect provider, keeping a per-key record so it
+  can reconcile; Standing Authority amounts and recipients and a dollar
+  limit in the schema (amendments).
+- Scoped memory for AI steps, sensitive data-flow tracking into agent
+  steps, bulk substitution approval, and Workspace configuration in
+  procedural Git.
+
 ## 2026-10-04 — Schedules and notifications (Stage 14, sub-stage 11)
 
 Source: sub-stage 11 of Stage 14 in

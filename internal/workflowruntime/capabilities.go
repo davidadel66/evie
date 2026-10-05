@@ -171,7 +171,7 @@ func (r *Runtime) checkPinned(ctx context.Context, runID string, pin pinnedProvi
 	unavailable := errors.Is(err, plugins.ErrWorkflowCapabilityUnavailable)
 	switch {
 	case errors.Is(err, plugins.ErrWorkflowCapabilityUnknown):
-		return p, fmt.Sprintf("capability %s is missing: no plugin in this Evie provides it (the run pinned %s %s); continue the run with an Evie that does, or migrate it once migration ships",
+		return p, fmt.Sprintf("capability %s is missing: no plugin in this Evie provides it (the run pinned %s %s); continue the run with an Evie that does, or migrate it to a newer approved version (evie workflows migrate <run-id> --to-version <n>)",
 			pin.Capability, pin.Plugin, pin.Version), nil
 	case err != nil && !unavailable:
 		return p, "", err
@@ -199,7 +199,7 @@ func (r *Runtime) checkPinned(ctx context.Context, runID string, pin pinnedProvi
 				return p, fmt.Sprintf("capability %s: the run pinned %s %s, and this Evie has %s %s, which declares it continues %s with the same contract %s and schema; approve the substitution with: evie workflows substitute %s %s %s",
 					pin.Capability, pin.Plugin, pin.Version, p.Plugin, p.Version, pin.Version, pin.Contract, runID, pin.Capability, p.Version), nil
 			}
-			return p, fmt.Sprintf("capability %s: the run pinned %s %s, and %s %s does not declare that it continues %s with contract %s and schema %s; continue the run with an Evie that has %s %s, or migrate it once migration ships",
+			return p, fmt.Sprintf("capability %s: the run pinned %s %s, and %s %s does not declare that it continues %s with contract %s and schema %s; continue the run with an Evie that has %s %s, or migrate it to a newer approved version (evie workflows migrate <run-id> --to-version <n>)",
 				pin.Capability, pin.Plugin, pin.Version, p.Plugin, p.Version, pin.Version, pin.Contract, shortHash(pin.SchemaSHA256), pin.Plugin, pin.Version), nil
 		}
 	}

@@ -304,16 +304,48 @@ func (s *Store) WorkflowScheduleSlots(ctx context.Context, ws memory.WorkspaceID
 	return out, rows.Err()
 }
 
-// runSlot is the slot that started a run, if a schedule started it.
+// runSlot is the slot that started a run, if a schedule started it; a
+// Successor Run keeps the slot its predecessor decided (sub-stage 12),
+// which the slot row still names.
 func runSlot(ctx context.Context, q queryRower, runID string) (*WorkflowScheduleSlot, error) {
 	slot, err := scanScheduleSlot(q.QueryRowContext(ctx, `SELECT `+slotColumns+` FROM workflow_schedule_slots WHERE run_id=? AND outcome='started'`, runID))
+	if err == nil {
+		return &slot, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	m, found, err := readMigration(ctx, q, "successor_id", runID)
+	if err != nil || !found || m.SlotKey == "" {
+		return nil, err
+	}
+	slot, err = scanScheduleSlot(q.QueryRowContext(ctx, `SELECT `+slotColumns+` FROM workflow_schedule_slots WHERE run_id=? AND timezone=? AND slot_key=?`,
+		m.PredecessorID, m.SlotTimezone, m.SlotKey))
+	if errors.Is(err, sql.ErrNoRows) {
+		return runSlot(ctx, q, m.PredecessorID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &slot, nil
+}
+
+// decidedSlot is the slot a run holds: the one that started it, the one
+// recorded "existing" with it (its Run Key already held that slot's
+// logical work), or the one its predecessor held.
+func decidedSlot(ctx context.Context, q queryRower, runID string) (*WorkflowScheduleSlot, error) {
+	slot, err := runSlot(ctx, q, runID)
+	if err != nil || slot != nil {
+		return slot, err
+	}
+	existing, err := scanScheduleSlot(q.QueryRowContext(ctx, `SELECT `+slotColumns+` FROM workflow_schedule_slots WHERE run_id=? ORDER BY decided_at DESC LIMIT 1`, runID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &slot, nil
+	return &existing, nil
 }
 
 const controlColumns = `seq,workspace_id,workflow,version,action,reason,actor,surface,recorded_at`

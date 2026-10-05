@@ -178,13 +178,13 @@ type preparedRun struct {
 	start eviedb.WorkflowRunStart
 }
 
-// StartRun starts a run of the Workspace's active workflow, or returns the
+// startRun starts a run of the Workspace's active workflow, or returns the
 // run that already holds its Run Key without executing anything. Only the
 // owner's CLI and web surfaces start runs. A detached start returns the
 // recorded run at once; otherwise StartRun waits until the run finishes or
 // pauses (await). The run does not belong to the caller: a caller that
 // stops waiting or disconnects does not stop it.
-func (r *Runtime) StartRun(ctx context.Context, req RunRequest) (RunResult, error) {
+func (r *Runtime) startRun(ctx context.Context, req RunRequest) (RunResult, error) {
 	switch {
 	case ownerSurface(req.Surface) && req.Chat == nil && req.Schedule == nil:
 	case req.Surface == "chat" && req.Chat != nil && req.Schedule == nil && req.RerunOf == "" && strings.TrimSpace(req.Reason) == "":
@@ -279,6 +279,14 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 			return preparedRun{}, err
 		}
 		if len(req.Inputs) == 0 && len(req.TextInputs) == 0 {
+			// A redacted input is not the run's input any more (sub-stage
+			// 12): the owner gives it again.
+			for _, t := range prior.Retention {
+				if t.Action == eviedb.WorkflowRetentionRedact {
+					return preparedRun{}, fmt.Errorf("%w: run %s's input was redacted at %s (%s); give the inputs with the rerun",
+						ErrRerunRefused, prior.Run.ID, t.RecordedAt.Format(timeLayout), t.Policy)
+				}
+			}
 			if req.Inputs, err = workflow.ParseInputs(prior.Run.Inputs); err != nil {
 				return preparedRun{}, fmt.Errorf("%w: run %s's input cannot be read: %v", ErrRerunRefused, prior.Run.ID, err)
 			}
@@ -679,7 +687,7 @@ func (r *Runtime) incompatible(pinned json.RawMessage) (composition, string) {
 		return c, fmt.Sprintf("its pinned Execution Composition cannot be read (%v); this runtime does not continue it", err)
 	}
 	if !slices.Contains(r.compatible, c.Runtime) {
-		return c, fmt.Sprintf("its pinned runtime %s is not one this Evie declares compatible (%s); continue it with an Evie that does, or migrate it to a new run once migration ships",
+		return c, fmt.Sprintf("its pinned runtime %s is not one this Evie declares compatible (%s); continue it with an Evie that does, or migrate it to a newer approved version (evie workflows migrate <run-id> --to-version <n>)",
 			c.Runtime, strings.Join(r.compatible, ", "))
 	}
 	var unknown []string
@@ -830,8 +838,18 @@ func (r *Runtime) step(pc *pass, p eviedb.WorkflowRunProgress) error {
 		if intents, err = r.stepIntents(pc.writes, p.Run.ID, p.Checkpoint.Seq, step.ID); err != nil {
 			return err
 		}
+		// A successor resuming at an effect step continues its
+		// predecessor's attempts of it (sub-stage 12): their receipts are
+		// its own earlier attempts' and are never performed again.
+		if p.Checkpoint.Seq == 0 {
+			inherited, err := r.inheritedIntents(pc.writes, p.Run.ID, step.ID)
+			if err != nil {
+				return err
+			}
+			intents = append(inherited, intents...)
+		}
 		for _, i := range intents {
-			if i.AttemptState == eviedb.WorkflowAttemptInterrupted {
+			if i.RunID == p.Run.ID && i.AttemptState == eviedb.WorkflowAttemptInterrupted {
 				interrupted--
 			}
 		}
@@ -924,10 +942,11 @@ func (r *Runtime) limitReached(v *workflow.Validated, p eviedb.WorkflowRunProgre
 // elapsed is the run's time counted against limits.max_duration: since
 // its creation, less the time it waited for the owner's answers to its
 // questions (sub-stage 7) and the time it was paused at the operator's
-// daily cap (sub-stage 11). Time waiting for an effect's reconciliation
-// still counts, as sub-stage 6 decided.
+// daily cap (sub-stage 11), plus what its predecessors counted when it is
+// a Successor Run (sub-stage 12). Time waiting for an effect's
+// reconciliation still counts, as sub-stage 6 decided.
 func (r *Runtime) elapsed(p eviedb.WorkflowRunProgress) time.Duration {
-	return r.now().Sub(p.Run.CreatedAt) - p.HumanWait - p.CapWait
+	return r.now().Sub(p.Run.CreatedAt) - p.HumanWait - p.CapWait + p.Carried.Elapsed()
 }
 
 // deterministic makes one attempt of a deterministic step within its Retry
@@ -1032,12 +1051,25 @@ func decodeObject(data json.RawMessage) (map[string]any, error) {
 // InspectRun reads one run with every attempt and checkpoint, its lease and
 // its recovery events.
 func (r *Runtime) InspectRun(ctx context.Context, id string) (eviedb.WorkflowRunDetail, error) {
-	return r.store.WorkflowRun(ctx, id)
+	d, err := r.store.WorkflowRun(ctx, id)
+	if err != nil {
+		return d, err
+	}
+	// A finished run's sensitive values are masked on the owner's
+	// surfaces under its classification's policy (sub-stage 12).
+	return r.present(ctx, d), nil
 }
 
-// ListRuns lists runs, newest first.
+// ListRuns lists runs, newest first, masked as InspectRun masks them.
 func (r *Runtime) ListRuns(ctx context.Context, f RunFilter) ([]eviedb.WorkflowRun, error) {
-	return r.store.ListWorkflowRuns(ctx, eviedb.WorkflowRunFilter{WorkspaceID: f.WorkspaceID, Workflow: f.Workflow, Limit: f.Limit})
+	runs, err := r.store.ListWorkflowRuns(ctx, eviedb.WorkflowRunFilter{WorkspaceID: f.WorkspaceID, Workflow: f.Workflow, Limit: f.Limit})
+	if err != nil {
+		return nil, err
+	}
+	for i := range runs {
+		runs[i] = r.presentRun(ctx, runs[i])
+	}
+	return runs, nil
 }
 
 // valuesLine renders a JSON object's fields as name=value, sorted.
@@ -1122,6 +1154,8 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 		started += "; finished at " + run.FinishedAt.Format(timeLayout)
 	}
 	line("%s", started)
+	migrationText(&b, d)
+	retentionText(&b, d)
 	line("Inputs: %s", valuesLine(run.Inputs))
 	if c := d.Cancellation; c != nil {
 		label := "Cancellation requested"
@@ -1131,7 +1165,7 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 		line("%s by the %s via %s at %s, while the run was %s%s", label, c.Actor, c.Surface, c.RequestedAt.Format(timeLayout), c.FromState, reasonText(c.Reason))
 	}
 	switch {
-	case run.State == eviedb.WorkflowRunCancelled:
+	case run.State == eviedb.WorkflowRunCancelled, run.State == eviedb.WorkflowRunSuperseded:
 	case run.State == eviedb.WorkflowRunCancelling:
 		line("Cancelling: %s", run.Error)
 	case run.State == eviedb.WorkflowRunWaitingForHuman:

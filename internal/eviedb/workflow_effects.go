@@ -525,8 +525,10 @@ func (s *Store) BeginWorkflowEffect(ctx context.Context, lease WorkflowRunLease,
 		if err != nil {
 			return err
 		}
+		// A Successor Run counts its predecessors' intents too (sub-stage
+		// 12): max_calls_per_run bounds one logical execution.
 		var calls int
-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_effect_intents WHERE run_id=? AND capability=? AND connection=?`,
+		if err := conn.QueryRowContext(ctx, workflowRunChain+` SELECT COUNT(*) FROM workflow_effect_intents WHERE run_id IN (SELECT id FROM chain) AND capability=? AND connection=?`,
 			run.ID, e.Capability, e.Connection).Scan(&calls); err != nil {
 			return err
 		}

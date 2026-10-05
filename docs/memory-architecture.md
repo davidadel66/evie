@@ -685,6 +685,51 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   `workflow_status`. The deep-research README says how to record a
   measured run. Binding record: the sub-stage 11 entry in
   `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Sub-stage 12 implemented** (2026-10-04). Only the owner migrates a
+  run (`evie workflows migrate <run-id> --to-version <n> [--reason]`,
+  `POST /api/workflows/migrate`; no model or chat surface, nothing
+  automatic) to the definition's newer active version. The successor
+  resumes at the predecessor's next step only when the recorded state
+  satisfies the new version's reads up to that point and derives the same
+  logical Run Key; otherwise the migration is refused with every
+  difference, and an unknown effect, a held run or an open question
+  refuses it too. One transaction records an immutable migration (the
+  owner's reason, what was carried and dropped, the predecessor's Effect
+  Intents, what it used of its limits, its schedule slot), ends the
+  predecessor in the new terminal state `superseded` with its history
+  untouched, and starts the successor with the Run Key, slot and pinned
+  new Execution Composition. The successor never performs a recorded
+  effect again (a receipt that happened supplies the step's output), counts
+  its predecessors' intents, time (less waits for answers and at the daily
+  cap), attempts and tokens against its limits. Retention policies per
+  classification (`EVIE_WORKFLOW_RETENTION_ORDINARY|SENSITIVE`, by default
+  mask on, redact and delete never, compact after seven days): a finished
+  run's sensitive values are masked on the owner's surfaces, sensitive
+  inputs never reach a chat or a notice, and a sweep under one runner
+  lease (hourly in `evie serve` and the REPL; `evie workflows retention
+  status|sweep [--dry-run]`) redacts sensitive values from storage,
+  deletes read notices, superseded slots and replaced controls, and
+  compacts finished runs' checkpoints losslessly once their windows pass,
+  each action an immutable tombstone and bounded by database triggers;
+  evidence an unfinished run may need is never touched. Binding record:
+  the sub-stage 12 entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Stage 14 implemented** (2026-10-04): all twelve sub-stages. What's
+  left, consolidated from the sub-stages' notes:
+  - measure deep-research live on real questions and adjust its bounds
+    only through a new reviewed version;
+  - an external notification mirror plugin, redacted by default;
+  - chat UI for workflow runs, questions, notices and the Task Tree once
+    the owner's UI work lands, and Workspace-page controls for migration,
+    retention, schedule pause, reruns and worker reports;
+  - Workspace-level retention and export rules, the default redaction
+    windows, and retention of workflow workers' transcripts and reports;
+  - the first production effect provider (with a per-key record for
+    reconciliation), and schema amendments for Standing Authority amounts
+    and recipients and a dollar limit;
+  - scoped memory for AI steps, sensitive data-flow tracking into agent
+    steps, bulk substitution approval and Workspace configuration in
+    procedural Git.
 
 ## Decisions (David, 2026-10-03)
 

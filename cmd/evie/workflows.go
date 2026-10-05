@@ -31,16 +31,19 @@ const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie wor
 	" | evie workflows schedule pause|resume [--json] <workspace-id> <name> [--version <n>] [--reason <text>]" +
 	" | evie workflows notifications [--json] [--all] [<workspace-id>] [--session <session-id>] [--run <run-id>] [--limit <n>]" +
 	" | evie workflows notifications read|unread [--json] <id>... | evie workflows notifications read --all [--workspace <workspace-id>]" +
-	" | evie workflows status [--json] [<workspace-id>]"
+	" | evie workflows status [--json] [<workspace-id>]" +
+	" | evie workflows migrate [--json] [--detach] <run-id> --to-version <n> [--reason <text>]" +
+	" | evie workflows retention status [--json] | evie workflows retention sweep [--dry-run] [--json]"
 
 // workflowActivationCommands need the database and the procedural
 // repository; runWorkflowActivation answers them once both are available
 // (Stage 14 sub-stage 2; run, runs and inspect from sub-stage 3; substitute
 // from sub-stage 5; reconcile from sub-stage 6; answer and interruptions
 // from sub-stage 7; cancel from sub-stage 8; report from sub-stage 10;
-// schedules, schedule, notifications and status from sub-stage 11).
+// schedules, schedule, notifications and status from sub-stage 11; migrate
+// and retention from sub-stage 12).
 var workflowActivationCommands = []string{"propose", "list", "show", "diff", "approve", "deactivate", "run", "runs", "inspect", "substitute", "reconcile",
-	"answer", "interruptions", "cancel", "report", "schedules", "schedule", "notifications", "status"}
+	"answer", "interruptions", "cancel", "report", "schedules", "schedule", "notifications", "status", "migrate", "retention"}
 
 // accessNotChecked is printed with a standalone review.
 const accessNotChecked = "Workspace Access is not checked outside a Workspace; evie workflows propose <workspace-id> <dir> checks it.\n"

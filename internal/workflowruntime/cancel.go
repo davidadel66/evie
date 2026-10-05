@@ -59,7 +59,7 @@ type CancelRequest struct {
 	Surface string `json:"-"`
 }
 
-// Cancel records the owner's cancellation of an unfinished run and lets
+// cancelRun records the owner's cancellation of an unfinished run and lets
 // the runtime holding it, or the next to claim it, finish it: at once for
 // a queued, paused or waiting run, after the node in flight for a running
 // one, and once its effect is reconciled for a run with an effect whose
@@ -67,7 +67,7 @@ type CancelRequest struct {
 // unchanged; a run that succeeded or failed is refused
 // (ErrWorkflowRunFinished) and never changed. Only the owner's CLI and web
 // surfaces cancel; no model-facing tool does.
-func (r *Runtime) Cancel(ctx context.Context, req CancelRequest) (eviedb.WorkflowRunDetail, error) {
+func (r *Runtime) cancelRun(ctx context.Context, req CancelRequest) (eviedb.WorkflowRunDetail, error) {
 	if !ownerSurface(req.Surface) {
 		return eviedb.WorkflowRunDetail{}, eviedb.ErrWorkflowApprover
 	}
@@ -214,9 +214,6 @@ func (r *Runtime) rerunBase(ctx context.Context, req RunRequest, workflowName st
 	case run.State != eviedb.WorkflowRunSucceeded:
 		return refuse("run %s is %s: only a succeeded run's Run Key needs an override", run.ID, run.State)
 	}
-	logical := prior.Run.RunKey
-	if prior.Override != nil {
-		logical = prior.Override.LogicalKey
-	}
-	return prior, logical, nil
+	// A rerun's logical key, or (sub-stage 12) a successor's.
+	return prior, logicalRunKey(prior), nil
 }

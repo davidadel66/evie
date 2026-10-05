@@ -143,11 +143,14 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - A Workflow Run has a stable ID, Workspace ID, Run Key, pinned definition and
   authority versions, Execution Composition, lifecycle state, input and output,
   timestamps, optional originating session or schedule, and optional predecessor
-  or successor link.
+  or successor link. (Implemented 2026-10-04, sub-stage 12: the link is the
+  immutable migration record both runs show.)
 - Workflow Run and node state use explicit non-overlapping states. At minimum
   the runtime distinguishes queued, running, waiting for a human, waiting for a
   dependency, needs reconciliation, cancelling, cancelled, failed, and
-  succeeded; terminal history is never rewritten.
+  succeeded; terminal history is never rewritten. (Implemented 2026-10-04,
+  sub-stage 12: a migrated predecessor ends in the terminal state
+  superseded, which frees its Run Key for its successor.)
 - A definition consists of a strict `workflow.yaml`, a human-readable
   `README.md`, and separate Markdown prompt files for AI Nodes. Validation
   rejects unknown fields, unsupported schema versions, missing references,
@@ -375,10 +378,28 @@ coordinate nodes, leases, receipts, or recovery themselves.
   Effect Intents, provider responses, Effect Receipts, checkpoints, approvals,
   authority evaluations, and outputs. Credentials and raw tokens are forbidden.
   Workflow field classifications and Workspace policy govern redaction,
-  retention, and export.
+  retention, and export. (Implemented 2026-10-04, sub-stage 12: each
+  retention classification has the operator's policy, by default masking
+  a finished run's sensitive values on the owner's surfaces, compacting
+  checkpoints losslessly after seven days, and redacting and deleting
+  nothing; configured windows redact sensitive values from storage and
+  delete read notices, superseded schedule slots and replaced controls
+  through a periodic sweep under one runner lease, each action recorded as
+  a tombstone and bounded by database triggers; sensitive inputs never
+  reach a chat or a notice. Workspace rules and export are a follow-up.
+  See the sub-stage 12 entry in
+  [workflow-runtime.decisions.md](workflow-runtime.decisions.md).)
 - An incompatible unfinished run pauses. Explicit migration creates a linked
   Successor Run under an approved new definition, carrying only validated state
-  and durable effect evidence. The predecessor remains immutable.
+  and durable effect evidence. The predecessor remains immutable. (Implemented
+  2026-10-04, sub-stage 12: `evie workflows migrate <run-id> --to-version
+  <n>` from the owner only; the state must satisfy the new version's reads up
+  to the resume point, or the migration is refused with every difference; an
+  unknown effect blocks it; the successor keeps the Run Key, the schedule
+  slot and what its predecessor used of its limits, and its effects reuse
+  the predecessor's receipts instead of calling the provider again. See the
+  sub-stage 12 entry in
+  [workflow-runtime.decisions.md](workflow-runtime.decisions.md).)
 - Generic CLI and web surfaces list definitions and runs, show validation and
   simulation, present approval diffs, start and cancel runs, display progress,
   answer interruptions, reconcile unknown effects, and inspect notifications.
@@ -466,10 +487,12 @@ coordinate nodes, leases, receipts, or recovery themselves.
   scheduled starts, and independent business dates.
 - Migration tests prove the predecessor remains unchanged, invalid state is not
   carried forward, Effect Receipts retain identity, and a Successor Run cannot
-  repeat completed effects.
+  repeat completed effects. (Implemented 2026-10-04, sub-stage 12, with the
+  refusals, the schedule slot and the daily cap's wait.)
 - Retention and notification tests prove field redaction, credential exclusion,
   deduplicated notices, external mirror failure tolerance, explicit deletion
-  audit, and local authoritative history.
+  audit, and local authoritative history. (Implemented 2026-10-04, sub-stage
+  12, except the external mirror, which does not exist yet.)
 - Existing session lease, append-only event, cancellation, tool approval, cron
   recovery, and SQLite reopen tests are prior art for fencing, terminal causes,
   external uncertainty, and deterministic persistence.

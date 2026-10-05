@@ -261,7 +261,7 @@ func (r *Runtime) tickSchedule(ctx context.Context, s eviedb.WorkflowSchedule, n
 // could not. It reports whether this call decided the slot by starting
 // (or finding) its run; a slot another process decided is not an error.
 func (r *Runtime) startSlot(ctx context.Context, s eviedb.WorkflowSchedule, slot workflow.Slot) (bool, error) {
-	_, err := r.StartRun(ctx, RunRequest{WorkspaceID: s.WorkspaceID, Workflow: s.Workflow, Surface: "schedule",
+	_, err := r.startRun(ctx, RunRequest{WorkspaceID: s.WorkspaceID, Workflow: s.Workflow, Surface: "schedule",
 		Schedule: &ScheduledStart{Version: s.Version, Timezone: s.Schedule.Timezone, Slot: slot}})
 	switch {
 	case err == nil:

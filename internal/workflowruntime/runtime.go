@@ -35,6 +35,7 @@ package workflowruntime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -149,6 +150,24 @@ type Store interface {
 	MarkWorkflowNotifications(ctx context.Context, ids []int64, read bool) (int, error)
 	MarkAllWorkflowNotificationsRead(ctx context.Context, ws memory.WorkspaceID) (int, error)
 	WorkflowNotificationCounts(ctx context.Context, ws memory.WorkspaceID) (eviedb.WorkflowNotificationCounts, error)
+
+	// Migration and retention (sub-stage 12): the owner's migration of an
+	// unfinished run to a Successor Run and the record of one; the
+	// retention sweep's candidates, its redaction, compaction and deletion
+	// with their tombstones, its single runner lease and its state.
+	WorkflowRunRecord(ctx context.Context, id string) (eviedb.WorkflowRun, error)
+	MigrateWorkflowRun(ctx context.Context, m eviedb.WorkflowMigration) (eviedb.WorkflowRunMigration, error)
+	WorkflowRunMigration(ctx context.Context, successorID string) (eviedb.WorkflowRunMigration, bool, error)
+	WorkflowRetentionCandidates(ctx context.Context, afterRowID int64, limit int) ([]eviedb.WorkflowRetentionCandidate, error)
+	RedactWorkflowRun(ctx context.Context, req eviedb.WorkflowRetentionRun) (*eviedb.WorkflowRetentionTombstone, error)
+	CompactWorkflowRun(ctx context.Context, req eviedb.WorkflowRetentionRun) (*eviedb.WorkflowRetentionTombstone, error)
+	DeleteWorkflowRecords(ctx context.Context, req eviedb.WorkflowRetentionDeletion) ([]eviedb.WorkflowRetentionTombstone, error)
+	RedactWorkflowSlots(ctx context.Context, req eviedb.WorkflowRetentionDeletion) (*eviedb.WorkflowRetentionTombstone, error)
+	WorkflowRetentionStatus(ctx context.Context) (eviedb.WorkflowRetentionState, error)
+	WorkflowRetentionTombstones(ctx context.Context, f eviedb.WorkflowRetentionTombstoneFilter) ([]eviedb.WorkflowRetentionTombstone, error)
+	AcquireWorkflowRetentionRunner(ctx context.Context, holder string, ttl time.Duration) (bool, error)
+	ReleaseWorkflowRetentionRunner(ctx context.Context, holder string) error
+	RecordWorkflowRetentionSweep(ctx context.Context, holder string, summary json.RawMessage) error
 }
 
 // Config wires a Runtime.
@@ -183,6 +202,12 @@ type Config struct {
 	// pass it. nil enforces none; every Evie process sets it from the
 	// environment with conservative defaults (cmd/evie).
 	DailyCap *eviedb.WorkflowDailyCap
+	// Retention is the operator's retention policy for each
+	// classification (sub-stage 12): masking on the owner's surfaces, and
+	// the periodic sweep's redaction, compaction and deletion. nil masks
+	// nothing and sweeps nothing (tests); every Evie process sets it from
+	// the environment, with the defaults of DefaultRetention.
+	Retention *RetentionConfig
 }
 
 // SchedulerConfig bounds and paces a runtime's execution of runs
@@ -222,6 +247,9 @@ type SchedulerConfig struct {
 	// Catch-up Policy (default 5m, at most 1h).
 	Schedules     time.Duration
 	ScheduleGrace time.Duration
+	// Retention is how often the retention sweep runs (default 1h, at most
+	// 24h; sub-stage 12), first at start.
+	Retention time.Duration
 }
 
 const (
@@ -254,6 +282,12 @@ func (c SchedulerConfig) resolve() (SchedulerConfig, error) {
 	}
 	if c.Schedules < 0 || c.Schedules > maxReadTimeout || c.ScheduleGrace < 0 || c.ScheduleGrace > time.Hour {
 		return c, fmt.Errorf("workflow scheduler needs a schedule tick up to %s and a schedule grace up to 1h", maxReadTimeout)
+	}
+	if c.Retention < 0 || c.Retention > 24*time.Hour {
+		return c, errors.New("workflow scheduler needs a retention sweep interval up to 24h")
+	}
+	if c.Retention == 0 {
+		c.Retention = time.Hour
 	}
 	if c.Schedules == 0 {
 		c.Schedules = defaultScheduleTick
@@ -344,6 +378,10 @@ type Runtime struct {
 	// scheduleYield is when this runtime may take the schedule runner
 	// lease again after a slot it could not start (sub-stage 11).
 	scheduleYield time.Time
+	// retention is the operator's retention policy, nil for none, and
+	// sensitivities the versions' sensitivity read so far (sub-stage 12).
+	retention     *RetentionConfig
+	sensitivities map[string]workflow.Sensitivity
 }
 
 // New returns a Runtime. It touches neither Git nor the database.
@@ -375,8 +413,13 @@ func New(c Config) (*Runtime, error) {
 		copied := *c.DailyCap
 		limit = &copied
 	}
+	var retention *RetentionConfig
+	if c.Retention != nil {
+		copied := *c.Retention
+		retention = &copied
+	}
 	return &Runtime{store: c.Store, repo: c.Repo, providers: c.Capabilities, catalog: providerCatalog{c.Capabilities}, workers: c.Workers, sched: sched, report: c.Report,
-		models: c.Models, modelsOff: c.ModelsOff, agents: c.Agents, agentsOff: c.AgentsOff, cap: limit,
+		models: c.Models, modelsOff: c.ModelsOff, agents: c.Agents, agentsOff: c.AgentsOff, cap: limit, retention: retention, sensitivities: map[string]workflow.Sensitivity{},
 		holder: fmt.Sprintf("evie-%d-%s", os.Getpid(), uuid.NewString()), compatible: slices.Clone(compatibleRuntimes), pin: RuntimeVersion,
 		now: time.Now, sleep: sleepContext,
 		active: map[string]bool{}, failures: map[string]error{}, reported: map[string]string{}, signals: map[string]*cancelSignal{},

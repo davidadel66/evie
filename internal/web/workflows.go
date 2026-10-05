@@ -41,6 +41,11 @@ type WorkflowManager interface {
 	Notifications(context.Context, eviedb.WorkflowNotificationFilter) ([]workflowruntime.Notification, error)
 	MarkNotifications(context.Context, workflowruntime.NotificationMark) (int, error)
 	Status(context.Context, memory.WorkspaceID) (workflowruntime.Status, error)
+	// Sub-stage 12: the owner's migration of a run, and the retention
+	// sweep and its status.
+	Migrate(context.Context, workflowruntime.MigrationRequest) (workflowruntime.MigrationResult, error)
+	Sweep(context.Context, workflowruntime.SweepRequest) (workflowruntime.SweepResult, error)
+	RetentionStatus(context.Context) (workflowruntime.RetentionStatus, error)
 }
 
 // WithWorkflows adds the workflow management routes.
@@ -70,6 +75,68 @@ func (s *Server) registerWorkflowRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workflows/notifications", s.managementRoute(s.handleWorkflowNotifications))
 	mux.Handle("/api/workflows/notifications/read", s.managementRoute(s.handleWorkflowNotificationsRead))
 	mux.Handle("/api/workflows/status", s.managementRoute(s.handleWorkflowStatus))
+	mux.Handle("/api/workflows/migrate", s.managementRoute(s.handleWorkflowMigrate))
+	mux.Handle("/api/workflows/retention", s.managementRoute(s.handleWorkflowRetention))
+	mux.Handle("/api/workflows/retention/sweep", s.managementRoute(s.handleWorkflowRetentionSweep))
+}
+
+// handleWorkflowMigrate is the owner migrating an unfinished run to the
+// definition's newer active version from the web (Stage 14 sub-stage 12),
+// with an optional reason; the surface is always the web. The response
+// waits until the successor finishes or stops, unless detach is set.
+func (s *Server) handleWorkflowMigrate(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		RunID     string `json:"run_id"`
+		ToVersion int64  `json:"to_version"`
+		Reason    string `json:"reason"`
+		Detach    bool   `json:"detach"`
+	}
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	if !boundedID(request.RunID) || request.ToVersion < 1 || len(request.Reason) > eviedb.MaxWorkflowCancelReason {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "migrate requires the run ID and the version to migrate to, and takes a reason of at most 1000 bytes")
+		return
+	}
+	result, err := s.workflows.Migrate(r.Context(), workflowruntime.MigrationRequest{RunID: request.RunID, ToVersion: request.ToVersion, Reason: request.Reason,
+		Detach: request.Detach, Surface: "web"})
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// handleWorkflowRetention is the retention policies, the sweep's state
+// and what is due now (sub-stage 12).
+func (s *Server) handleWorkflowRetention(w http.ResponseWriter, r *http.Request) {
+	var request struct{}
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	status, err := s.workflows.RetentionStatus(r.Context())
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+// handleWorkflowRetentionSweep is the owner's retention sweep from the web
+// (sub-stage 12), or a dry run of it.
+func (s *Server) handleWorkflowRetentionSweep(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		DryRun bool `json:"dry_run"`
+	}
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	result, err := s.workflows.Sweep(r.Context(), workflowruntime.SweepRequest{DryRun: request.DryRun, Surface: "web"})
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func boundedID(id string) bool { return id != "" && len(id) <= 128 }
@@ -224,6 +291,12 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusConflict, "schedule_state", err.Error()
 	case errors.Is(err, eviedb.ErrWorkflowScheduleNotFound):
 		status, code, message = http.StatusConflict, "no_schedule", err.Error()
+	case errors.Is(err, workflowruntime.ErrMigrationRefused), errors.Is(err, eviedb.ErrWorkflowMigrationRefused):
+		status, code, message = http.StatusConflict, "migration_refused", err.Error()
+	case errors.Is(err, workflowruntime.ErrRetentionBusy):
+		status, code, message = http.StatusConflict, "retention_busy", err.Error()
+	case errors.Is(err, workflowruntime.ErrRetentionOff):
+		status, code, message = http.StatusConflict, "retention_off", err.Error()
 	}
 	managementJSONError(w, status, code, message)
 }

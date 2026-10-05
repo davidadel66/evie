@@ -48,7 +48,7 @@ func (r *Runtime) StartFromChat(ctx context.Context, req plugins.WorkflowChatSta
 	if strings.TrimSpace(req.Workflow) == "" {
 		return plugins.WorkflowChatRun{}, errors.New("name a workflow to start")
 	}
-	res, err := r.StartRun(ctx, RunRequest{WorkspaceID: req.Scope.WorkspaceID, Workflow: strings.TrimSpace(req.Workflow), Inputs: req.Inputs,
+	res, err := r.startRun(ctx, RunRequest{WorkspaceID: req.Scope.WorkspaceID, Workflow: strings.TrimSpace(req.Workflow), Inputs: req.Inputs,
 		SessionID: req.Scope.SessionID, Surface: "chat",
 		Chat: &eviedb.WorkflowChatOrigin{Lease: req.Lease, SourceEventID: req.SourceEventID, IntentEventID: req.IntentEventID}})
 	if err != nil {
@@ -160,8 +160,10 @@ func (r *Runtime) WorkerReport(ctx context.Context, runID, executionID string) (
 // its spend against limits.max_tokens and, when asked, its outputs.
 func (r *Runtime) chatRun(ctx context.Context, d eviedb.WorkflowRunDetail, outputs bool) (plugins.WorkflowChatRun, error) {
 	run := d.Run
+	// A run's sensitive inputs never reach a chat (sub-stage 12).
+	scrub := r.inputScrubber(ctx, run)
 	view := plugins.WorkflowChatRun{RunID: run.ID, Workflow: run.Workflow, Version: run.Version, State: string(run.State), StartedFrom: run.Surface,
-		SessionID: string(run.SessionID), CreatedAt: run.CreatedAt, FinishedAt: run.FinishedAt, Error: clipText(run.Error, maxChatError)}
+		SessionID: string(run.SessionID), CreatedAt: run.CreatedAt, FinishedAt: run.FinishedAt, Error: clipText(scrub.Text(run.Error), maxChatError)}
 	if !run.State.Terminal() {
 		view.NextStep = run.NextStep
 	}
@@ -193,7 +195,7 @@ func (r *Runtime) chatRun(ctx context.Context, d eviedb.WorkflowRunDetail, outpu
 		}
 	}
 	if outputs && run.State == eviedb.WorkflowRunSucceeded {
-		view.OutputsJSON = string(run.Outputs)
+		view.OutputsJSON = string(scrub.Outputs(run.Outputs))
 	}
 	return view, nil
 }

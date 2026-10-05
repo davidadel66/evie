@@ -158,6 +158,11 @@ func readWorkflowRunOverride(ctx context.Context, q queryRower, runID string) (W
 // logicalRunKey is the Run Key of the logical execution a run belongs to:
 // its own, or for a rerun the one its override names.
 func logicalRunKey(ctx context.Context, q queryRower, run WorkflowRun) (string, error) {
+	// A Successor Run continues its predecessor's logical execution
+	// (sub-stage 12), recorded with its migration.
+	if m, found, err := readMigration(ctx, q, "successor_id", run.ID); err != nil || found {
+		return m.LogicalKey, err
+	}
 	o, rerun, err := readWorkflowRunOverride(ctx, q, run.ID)
 	if err != nil || !rerun {
 		return run.RunKey, err

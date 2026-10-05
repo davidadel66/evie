@@ -65,9 +65,10 @@ const (
 	WorkflowRunSucceeded            WorkflowRunState = "succeeded"
 )
 
-// Terminal reports a state whose history is final.
+// Terminal reports a state whose history is final; since sub-stage 12 a
+// migrated predecessor is superseded.
 func (s WorkflowRunState) Terminal() bool {
-	return s == WorkflowRunSucceeded || s == WorkflowRunFailed || s == WorkflowRunCancelled
+	return s == WorkflowRunSucceeded || s == WorkflowRunFailed || s == WorkflowRunCancelled || s == WorkflowRunSuperseded
 }
 
 // WorkflowAttemptState is one node attempt's state. An attempt is
@@ -156,6 +157,11 @@ type WorkflowCheckpoint struct {
 	// State holds every step output so far, by step ID.
 	State     json.RawMessage `json:"state"`
 	CreatedAt time.Time       `json:"created_at"`
+	// Compacted marks a finished run's intermediate checkpoint whose stored
+	// state the retention sweep removed (sub-stage 12): State is rebuilt
+	// from the checkpoint before it and the output of the attempt that
+	// produced it, which is exactly what was stored.
+	Compacted bool `json:"compacted,omitempty"`
 }
 
 // WorkflowRunDetail is a run with its full attempt and checkpoint history,
@@ -181,8 +187,16 @@ type WorkflowRunDetail struct {
 	// (sub-stage 9), each with the hidden child session and execution it
 	// ran as, in attempt order.
 	Workers []WorkflowWorkerCall `json:"workers"`
-	// Slot is the schedule slot that started it (sub-stage 11), if any.
+	// Slot is the schedule slot that started it (sub-stage 11), if any; a
+	// successor keeps its predecessor's (sub-stage 12).
 	Slot *WorkflowScheduleSlot `json:"slot,omitempty"`
+	// Predecessor is the migration that created this run from an earlier
+	// one, and Successor the migration that superseded it (sub-stage 12).
+	Predecessor *WorkflowRunMigration `json:"predecessor,omitempty"`
+	Successor   *WorkflowRunMigration `json:"successor,omitempty"`
+	// Retention is what the retention sweep redacted or compacted of it
+	// (sub-stage 12), newest first.
+	Retention []WorkflowRetentionTombstone `json:"retention,omitempty"`
 }
 
 // WorkflowRunProgress is what an executor needs to take the next step.
@@ -226,11 +240,17 @@ type WorkflowRunProgress struct {
 	// Unresolved counts the run's Effect Intents without a receipt
 	// (sub-stage 8: a cancelling run finishes only when there are none).
 	Unresolved int
+	// Carried is what a Successor Run's predecessors already used of its
+	// limits (sub-stage 12): Counted includes its attempts, SpentTokens its
+	// tokens, and the runtime adds its time to the run's own.
+	Carried WorkflowCarried
 }
 
 // SpentTokens is everything the run counts against limits.max_tokens: its
-// AI steps' calls and its workers.
-func (p WorkflowRunProgress) SpentTokens() int64 { return p.ModelTokens + p.WorkerTokens }
+// AI steps' calls and its workers, and what its predecessors spent.
+func (p WorkflowRunProgress) SpentTokens() int64 {
+	return p.ModelTokens + p.WorkerTokens + p.Carried.Tokens
+}
 
 // workflowNodeAttemptsTable is the node attempt table since sub-stage 4:
 // an attempt records the lease it ran under, and a crash leaves it
@@ -334,7 +354,7 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
  composition TEXT NOT NULL CHECK(json_valid(composition) AND json_type(composition) = 'object'),
  run_key TEXT NOT NULL CHECK(length(run_key) BETWEEN 1 AND 256),
  inputs TEXT NOT NULL CHECK(json_valid(inputs) AND json_type(inputs) = 'object'),
- state TEXT NOT NULL CHECK(state IN ('queued','running','waiting_for_human','waiting_for_dependency','needs_reconciliation','cancelling','cancelled','failed','succeeded')),
+ `+workflowRunStatesSuperseded+`,
  outputs TEXT CHECK(outputs IS NULL OR (json_valid(outputs) AND json_type(outputs) = 'object')),
  error TEXT NOT NULL,
  `+workflowRunSurfaces+`,
@@ -345,7 +365,7 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
  updated_at TEXT NOT NULL,
  not_before TEXT,
  FOREIGN KEY(workspace_id, workflow, version) REFERENCES workflow_activations(workspace_id, name, version),
- CHECK((state IN ('succeeded','failed','cancelled')) = (finished_at IS NOT NULL)),
+ `+workflowRunFinished+`,
  CHECK((state = 'succeeded') = (outputs IS NOT NULL)),
  CHECK(state <> 'failed' OR error <> ''));
  CREATE UNIQUE INDEX IF NOT EXISTS workflow_runs_one_per_key ON workflow_runs(workspace_id, workflow, run_key)
@@ -386,6 +406,11 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	}
 	if err := rebuildWorkflowRuns(ctx, db, workflowRunSurfacesChat, workflowRunSurfaces); err != nil {
 		return fmt.Errorf("upgrade workflow runs for scheduled starts: %w", err)
+	}
+	// Sub-stage 12 adds the terminal state superseded, which a migrated
+	// predecessor ends in.
+	if err := rebuildWorkflowRunsWith(ctx, db, [][2]string{{workflowRunStatesBefore, workflowRunStatesSuperseded}, {workflowRunFinishedBefore, workflowRunFinished}}); err != nil {
+		return fmt.Errorf("upgrade workflow runs for migration: %w", err)
 	}
 	// Sub-stage 4 adds the durable retry time to runs and the lease and
 	// interrupted state to attempts. A sub-stage 3 database is upgraded once,
@@ -469,7 +494,15 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureWorkflowScheduleSchema(ctx, db); err != nil {
 		return err
 	}
-	return ensureWorkflowNotificationSchema(ctx, db)
+	if err := ensureWorkflowNotificationSchema(ctx, db); err != nil {
+		return err
+	}
+	// Sub-stage 12: migrations, then retention, whose guarded triggers
+	// replace the immutability triggers created above.
+	if err := ensureWorkflowMigrationSchema(ctx, db); err != nil {
+		return err
+	}
+	return ensureWorkflowRetentionSchema(ctx, db)
 }
 
 // WorkflowRunStart is a run the runtime has validated: the exact approved
@@ -608,7 +641,7 @@ func (s *Store) StartWorkflowRun(ctx context.Context, req WorkflowRunStart) (run
 			}
 		}
 		var held string
-		err = conn.QueryRowContext(ctx, `SELECT id FROM workflow_runs WHERE workspace_id=? AND workflow=? AND run_key=? AND state NOT IN ('failed','cancelled')`,
+		err = conn.QueryRowContext(ctx, `SELECT id FROM workflow_runs WHERE workspace_id=? AND workflow=? AND run_key=? AND state NOT IN ('failed','cancelled','superseded')`,
 			req.WorkspaceID, req.Workflow, req.RunKey).Scan(&held)
 		switch {
 		case err == nil:
@@ -1082,6 +1115,10 @@ func (s *Store) WorkflowRunProgress(ctx context.Context, id string) (WorkflowRun
  AND NOT EXISTS(SELECT 1 FROM workflow_effect_receipts r WHERE r.run_id=i.run_id AND r.intent_seq=i.seq)`, id).Scan(&p.Unresolved); err != nil {
 		return p, err
 	}
+	if p.Carried, err = carriedOf(ctx, conn, id); err != nil {
+		return p, err
+	}
+	p.Counted += p.Carried.Attempts
 	return p, nil
 }
 
@@ -1114,31 +1151,14 @@ func (s *Store) WorkflowRun(ctx context.Context, id string) (WorkflowRunDetail, 
 	if err := rows.Err(); err != nil {
 		return d, err
 	}
-	rows, err = conn.QueryContext(ctx, `SELECT seq,after_attempt,next_step,state,created_at FROM workflow_run_checkpoints WHERE run_id=? ORDER BY seq`, id)
+	checkpoints, _, err := checkpointHistory(ctx, conn, id)
 	if err != nil {
 		return d, err
 	}
-	for rows.Next() {
-		c := WorkflowCheckpoint{RunID: id}
-		var after sql.NullInt64
-		var state, created string
-		if err := rows.Scan(&c.Seq, &after, &c.Next, &state, &created); err != nil {
-			rows.Close()
-			return d, err
-		}
-		c.AfterAttempt, c.State = after.Int64, json.RawMessage(state)
-		if c.CreatedAt, err = parseTime(created); err != nil {
-			rows.Close()
-			return d, err
-		}
-		d.Checkpoints = append(d.Checkpoints, c)
-	}
-	if err := rows.Close(); err != nil {
-		return d, err
-	}
-	if err := rows.Err(); err != nil {
-		return d, err
-	}
+	d.Checkpoints = append(d.Checkpoints, checkpoints...)
+	// A compacted checkpoint's state is rebuilt from the attempts that
+	// produced it (sub-stage 12).
+	rebuildCompacted(&d)
 	lease, held, err := readWorkflowRunLease(ctx, conn, id)
 	if err != nil {
 		return d, err
@@ -1176,6 +1196,23 @@ func (s *Store) WorkflowRun(ctx context.Context, id string) (WorkflowRunDetail, 
 	}
 	if d.Slot, err = runSlot(ctx, conn, id); err != nil {
 		return d, err
+	}
+	if m, found, err := readMigration(ctx, conn, "successor_id", id); err != nil {
+		return d, err
+	} else if found {
+		d.Predecessor = &m
+	}
+	if m, found, err := readMigration(ctx, conn, "predecessor_id", id); err != nil {
+		return d, err
+	} else if found {
+		d.Successor = &m
+	}
+	retention, err := retentionTombstones(ctx, conn, WorkflowRetentionTombstoneFilter{RunID: id})
+	if err != nil {
+		return d, err
+	}
+	if len(retention) > 0 {
+		d.Retention = retention
 	}
 	return d, nil
 }

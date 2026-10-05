@@ -45,6 +45,10 @@ type workflowCommands interface {
 	Notifications(context.Context, eviedb.WorkflowNotificationFilter) ([]workflowruntime.Notification, error)
 	MarkNotifications(context.Context, workflowruntime.NotificationMark) (int, error)
 	Status(context.Context, memory.WorkspaceID) (workflowruntime.Status, error)
+	// Sub-stage 12: migration and the retention sweep.
+	Migrate(context.Context, workflowruntime.MigrationRequest) (workflowruntime.MigrationResult, error)
+	Sweep(context.Context, workflowruntime.SweepRequest) (workflowruntime.SweepResult, error)
+	RetentionStatus(context.Context) (workflowruntime.RetentionStatus, error)
 }
 
 // workflowCapabilityPlugins are the compiled plugins that contribute
@@ -123,6 +127,10 @@ func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string, provide
 	if err != nil {
 		return nil, err
 	}
+	retention, err := workflowRetention(getenv)
+	if err != nil {
+		return nil, err
+	}
 	root, err := procedural.DefaultRoot()
 	if err != nil {
 		return nil, err
@@ -134,7 +142,8 @@ func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string, provide
 		Report:    func(err error) { log.Printf("workflow scheduler: %v", err) },
 		Models:    models, ModelsOff: modelsOff,
 		Agents: agents, AgentsOff: agentsOff,
-		DailyCap: dailyCap,
+		DailyCap:  dailyCap,
+		Retention: &retention,
 	})
 }
 
@@ -431,6 +440,10 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		return true, workflowNotifications(ctx, args[2:], out, rt)
 	case "status":
 		return true, workflowStatus(ctx, args[2:], out, rt)
+	case "migrate":
+		return true, migrateWorkflowRun(ctx, args[2:], out, rt)
+	case "retention":
+		return true, workflowRetentionCommand(ctx, args[2:], out, rt)
 	}
 	return true, usage
 }

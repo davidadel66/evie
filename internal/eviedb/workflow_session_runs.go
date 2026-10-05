@@ -181,11 +181,27 @@ var workflowRunsTableName = regexp.MustCompile(`^CREATE TABLE\s+"?workflow_runs"
 // schema first), then checks foreign keys before committing. Competing
 // startups rebuild it once: each re-reads the definition under the lock.
 func rebuildWorkflowRuns(ctx context.Context, db *sql.DB, from, to string) error {
+	return rebuildWorkflowRunsWith(ctx, db, [][2]string{{from, to}})
+}
+
+// rebuildWorkflowRunsWith rebuilds the workflow_runs table, as
+// rebuildWorkflowRuns does, when its definition holds any replacement's
+// from text, with every such text replaced by its to (Stage 14 sub-stage
+// 12 changes the state check and the finished check together).
+func rebuildWorkflowRunsWith(ctx context.Context, db *sql.DB, replacements [][2]string) error {
+	needed := func(definition string) bool {
+		for _, r := range replacements {
+			if strings.Contains(definition, r[0]) {
+				return true
+			}
+		}
+		return false
+	}
 	var definition string
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='workflow_runs'`).Scan(&definition); err != nil {
 		return err
 	}
-	if !strings.Contains(definition, from) {
+	if !needed(definition) {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -197,6 +213,13 @@ func rebuildWorkflowRuns(ctx context.Context, db *sql.DB, from, to string) error
 		return err
 	}
 	defer conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA foreign_keys=ON`)
+	// Triggers of other tables read workflow_runs (sub-stage 12's retention
+	// guards): the rename must not re-check them while the table is being
+	// replaced, as SQLite's own procedure for such changes does.
+	if _, err := conn.ExecContext(ctx, `PRAGMA legacy_alter_table=ON`); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA legacy_alter_table=OFF`)
 	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
 		return err
 	}
@@ -209,13 +232,16 @@ func rebuildWorkflowRuns(ctx context.Context, db *sql.DB, from, to string) error
 	if err := conn.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='workflow_runs'`).Scan(&definition); err != nil {
 		return err
 	}
-	if !strings.Contains(definition, from) {
+	if !needed(definition) {
 		return nil
 	}
 	if !workflowRunsTableName.MatchString(definition) {
 		return errors.New("unsupported workflow run table schema")
 	}
-	rebuilt := workflowRunsTableName.ReplaceAllString(strings.Replace(definition, from, to, 1), "CREATE TABLE workflow_runs_rebuilt (")
+	for _, r := range replacements {
+		definition = strings.Replace(definition, r[0], r[1], 1)
+	}
+	rebuilt := workflowRunsTableName.ReplaceAllString(definition, "CREATE TABLE workflow_runs_rebuilt (")
 	var dependents []string
 	rows, err := conn.QueryContext(ctx, `SELECT sql FROM sqlite_master WHERE tbl_name='workflow_runs' AND type IN ('index','trigger') AND sql IS NOT NULL ORDER BY type,name`)
 	if err != nil {

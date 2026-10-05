@@ -78,7 +78,21 @@ func (r *Runtime) Notifications(ctx context.Context, f eviedb.WorkflowNotificati
 		return nil, err
 	}
 	out := make([]Notification, len(list))
+	runs := map[string]eviedb.WorkflowRun{}
 	for i, n := range list {
+		// A run's sensitive inputs never reach a notice's detail,
+		// whatever the policy (sub-stage 12): the detail is the run's
+		// error at the transition, which may quote them.
+		if n.RunID != "" && n.Detail != "" {
+			run, ok := runs[n.RunID]
+			if !ok {
+				if run, err = r.store.WorkflowRunRecord(ctx, n.RunID); err != nil {
+					return nil, err
+				}
+				runs[n.RunID] = run
+			}
+			n.Detail = r.inputScrubber(ctx, run).Text(n.Detail)
+		}
 		out[i] = Notification{WorkflowNotification: n, Text: NotificationText(n)}
 	}
 	return out, nil

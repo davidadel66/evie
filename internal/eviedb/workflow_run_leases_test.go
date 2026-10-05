@@ -476,6 +476,10 @@ const subStage3Shape = `CREATE TABLE workflow_node_attempts_old (
  BEGIN SELECT RAISE(ABORT,'finished workflow node attempts are immutable'); END;
  DROP TABLE workflow_run_events;
  DROP TABLE workflow_run_leases;
+ DROP TRIGGER workflow_runs_terminal;
+ CREATE TRIGGER workflow_runs_terminal BEFORE UPDATE ON workflow_runs
+ WHEN OLD.state IN ('succeeded','failed','cancelled')
+ BEGIN SELECT RAISE(ABORT,'terminal workflow runs are immutable'); END;
  ALTER TABLE workflow_runs DROP COLUMN not_before;`
 
 // A database written by sub-stage 3 is upgraded in place: its attempts keep

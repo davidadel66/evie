@@ -74,16 +74,21 @@ type InterruptionFilter struct {
 // Interruptions lists interruptions, by default the open ones: what the
 // owner is asked now, for a Workspace or the session that started a run.
 func (r *Runtime) Interruptions(ctx context.Context, f InterruptionFilter) ([]eviedb.WorkflowInterruption, error) {
-	return r.store.ListWorkflowInterruptions(ctx, eviedb.WorkflowInterruptionFilter{WorkspaceID: f.WorkspaceID, SessionID: f.SessionID, RunID: f.RunID, All: f.All, Limit: f.Limit})
+	list, err := r.store.ListWorkflowInterruptions(ctx, eviedb.WorkflowInterruptionFilter{WorkspaceID: f.WorkspaceID, SessionID: f.SessionID, RunID: f.RunID, All: f.All, Limit: f.Limit})
+	if err != nil {
+		return nil, err
+	}
+	// A finished run's questions and answers are masked (sub-stage 12).
+	return r.presentInterruptions(ctx, list)
 }
 
 // maxAnswerBytes bounds an answer document.
 const maxAnswerBytes = 64 << 10
 
-// Answer records the owner's answer to the interruption the run waits for
+// answerRun records the owner's answer to the interruption the run waits for
 // at the step and lets the run continue. Only the owner's CLI and web
 // surfaces answer; no model-facing tool does.
-func (r *Runtime) Answer(ctx context.Context, req AnswerRequest) (eviedb.WorkflowRunDetail, error) {
+func (r *Runtime) answerRun(ctx context.Context, req AnswerRequest) (eviedb.WorkflowRunDetail, error) {
 	if !ownerSurface(req.Surface) {
 		return eviedb.WorkflowRunDetail{}, eviedb.ErrWorkflowApprover
 	}
