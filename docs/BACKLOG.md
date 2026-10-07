@@ -17,8 +17,7 @@ Details live in active plans/specs and completed feature records.
   Epic 1 complete, with no Epic 2 story currently selected
 
 ## finance-daily follow-ups (decided 2026-10-06, see cmd/evie/docs/active/finance-daily.*)
-- approve the finance-daily proposal in the Finance Workspace (owner), then watch the first 09:00 America/Detroit run
-- remove cron job 3 (`cron_remove finance-daily`) after the first clean scheduled run
+- finance-daily approved 2026-10-06; first scheduled run 2026-10-07 09:00 America/Detroit succeeded (run 9cbf8363); cron job 3 removed the same day
 - delete `cmd/finance` after one clean week and a parity check of Plaid link and rules seeding in Evie
 - external delivery of workflow notifications (a failed finance-daily run is only visible in `evie workflows status` / `notifications`)
 - fold a `go install` + `scripts/install-serve-agent.sh --restart` step into the release routine so `evie serve` never runs stale code

@@ -48,3 +48,9 @@ in a grilling session with the owner; every item below is his answer.
   (categorize.decisions.md). Dead rules stay.
 - **Glossary.** Budget Entry, Awaiting Review (posted only) and Pending
   Fence were added to CONTEXT.md.
+- **Cutover 2026-10-07.** The first scheduled run (09:00 America/Detroit,
+  run 9cbf8363) succeeded on the launchd-managed serve: three banks synced,
+  six transactions categorized, check passed, two effect receipts
+  recorded. Cron job 3 was then unloaded from launchd, its plist deleted
+  and its job row removed, keeping its run history. `cmd/finance` stays
+  until a clean week and the parity check.
