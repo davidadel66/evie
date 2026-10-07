@@ -150,7 +150,7 @@ sweeps.
 | 60 | `venmo` | excluded |
 | 60 | `zel %` | excluded |
 | 60 | `%domestic incoming wire%` | excluded |
-| 70 | `%payroll%` | excluded |
+| 70 | `%payroll%` | Income (changed from excluded 2026-10-07, see categorize.decisions.md) |
 | 70 | `%interest payment%` | excluded |
 
 Notes on the judgment calls, all David's:

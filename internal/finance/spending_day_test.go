@@ -28,7 +28,7 @@ func spendingDayFixture(t *testing.T) (*SpendingService, *sql.DB) {
 	insertSpendingEntry(t, db, "b-split", "Food", 600, "rule")
 	insertSpendingEntry(t, db, "b-split", "Home", 200, "human")
 	insertSpendingEntry(t, db, "d-pending", "Food", 400, "rule")
-	if _, err := db.Exec(`INSERT INTO categories(name) VALUES('excluded')`); err != nil {
+	if _, err := db.Exec(`INSERT OR IGNORE INTO categories(name) VALUES('excluded')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`UPDATE transactions SET name='Statement description',merchant_name='Merchant',account_id='private-account',plaid_category='private-plaid-category',tags='["private-transaction-tag"]',category='Legacy',category_source='agent',reviewed=1 WHERE transaction_id='c-unclassified'`); err != nil {

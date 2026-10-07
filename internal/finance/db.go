@@ -56,6 +56,17 @@ CREATE TABLE IF NOT EXISTS rules (
 	category TEXT NOT NULL REFERENCES categories(name)
 );
 
+-- Name patterns (categorize-patterns.spec.md), checked only when no
+-- merchant rule matched: a SQL LIKE pattern against transactions.name,
+-- case-insensitively; the lowest priority wins and an equal-priority tie
+-- is an error, never a coin flip.
+CREATE TABLE IF NOT EXISTS name_rules (
+	id       INTEGER PRIMARY KEY,
+	pattern  TEXT NOT NULL UNIQUE,
+	category TEXT NOT NULL REFERENCES categories(name),
+	priority INTEGER NOT NULL DEFAULT 100
+);
+
 CREATE TABLE IF NOT EXISTS budget_entries (
 	id             INTEGER PRIMARY KEY,
 	transaction_id TEXT NOT NULL REFERENCES transactions(transaction_id),
@@ -75,6 +86,12 @@ CREATE TABLE IF NOT EXISTS budget_limits (
 -- One row per workflow effect the finance plugin performed, keyed by the
 -- Effect Intent's idempotency key: a replay returns the recorded output
 -- instead of acting again, and reconciliation answers from it.
+-- excluded is a real category: an entry in it records "this deliberately
+-- does not count as spending" (card payments, transfers, payroll) so the
+-- transaction leaves the review pile through the same mechanism as any
+-- decision. Spend queries that sum across all categories must leave it out.
+INSERT OR IGNORE INTO categories (name) VALUES ('excluded');
+
 CREATE TABLE IF NOT EXISTS effect_receipts (
 	idempotency_key TEXT PRIMARY KEY,
 	effect          TEXT NOT NULL,

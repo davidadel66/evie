@@ -37,3 +37,41 @@ Spec: [categorize.spec.md](categorize.spec.md). In flight.
 - **Case sensitivity of the exact compare** — David's matcher decision
   (Claude recommends folding both sides with ToLower: still exact,
   forgiving about case drift). TBD.
+- **Name rules landed 2026-10-06** (categorize-patterns.spec.md, stages
+  1–2): `name_rules(pattern UNIQUE, category, priority)` in the schema,
+  `excluded` seeded on every open, matching order legacy column → merchant
+  rule → name rule, matched in SQL so the semantics are exactly SQLite's
+  `LIKE`. The twenty reviewed patterns are embedded from
+  `internal/finance/data/name_rules.json` (not `cmd/finance/data`: the
+  seeder runs inside whichever binary is current and `cmd/finance` is
+  slated for deletion); `finance rules` and the `finance_rules` tool seed
+  them after the merchant file, upsert on pattern. The tool's schema is
+  unchanged on purpose so sessions pinned to Finance 1.0.0/1.1.0 still
+  resume.
+- **A same-priority tie is an error only when the tied rules disagree**
+  (Claude, refining the spec's "equal priority + both match → error"). The
+  spec's own seed has `%mr cooper%` and `%mtg pyt%` both at priority 10 and
+  both Mortgage, and the real string `MR COOPER MTG PYT` matches both; two
+  patterns that say the same thing are not a coin flip. Disagreement still
+  fails categorize naming the transaction, every tied pattern and the
+  priority, and mints nothing. Dry run on a copy of the live database:
+  339 → 125 awaiting review, 212 of the 225 empty-merchant rows classified
+  (199 `excluded`, 5 Loans, 5 Bank Fees, 3 Mortgage), no ties.
+- **Backfill 2026-10-06 (stage 4).** Seeded and categorized against the
+  live database: 339 → 125 awaiting review, a second run minted 0.
+  `excluded` holds 199 rows: Citi/Amex/Capital One/Chase card payments,
+  the matching "PAYMENT, THANK YOU" credits, transfers between *9243/*9278
+  and *9251, Zelle, Venmo (48 rows, $5,942.52), payroll from three
+  employers, interest payments and one incoming wire. Name rules also
+  placed 5 student-loan rows in Loans, 3 mortgage rows in Mortgage and 5
+  interest/wire-fee rows in Bank Fees. 13 merchant-less rows remain for
+  chat review. The `query_db`/`edit_db` descriptions carry the `excluded`
+  filter and the ratchet; the agent projection test was rebuilt without
+  Kernel tools (David, 2026-10-06) so tool-description growth no longer
+  trips a context-size guard that was measuring projection, not schemas.
+- **Payroll is Income, not excluded** (David, 2026-10-07). The August seed
+  table put `%payroll%` under `excluded` with the transfers; once the
+  Overview stopped showing excluded money, September's inflow fell to
+  $472 and net flow read minus $7,651. Transfers cancel out; income does
+  not. `%payroll%` now seeds to `Income` at priority 70, and the rows
+  already excluded by it were moved to Income in place.

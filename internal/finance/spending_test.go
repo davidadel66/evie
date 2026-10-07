@@ -61,7 +61,7 @@ func TestSpendingDailyFlowUsesPostedDatesAndAllRawTransactions(t *testing.T) {
 	insertSpendingTxn(t, db, "blank", "", 9, 0)
 	insertSpendingTxn(t, db, "invalid", "2026-02-29", 9, 0)
 	insertSpendingTxn(t, db, "year-zero", "0000-01-01", 9, 0)
-	if _, err := db.Exec(`INSERT INTO categories(name) VALUES('excluded')`); err != nil {
+	if _, err := db.Exec(`INSERT OR IGNORE INTO categories(name) VALUES('excluded')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`INSERT INTO budget_entries(transaction_id,category,amount_cents) VALUES('transfer','excluded',5000)`); err != nil {

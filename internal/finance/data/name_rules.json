@@ -1,0 +1,22 @@
+[
+  {"priority": 10, "pattern": "%student ln%", "category": "Loans"},
+  {"priority": 10, "pattern": "%kmfusa%", "category": "Car Lease"},
+  {"priority": 10, "pattern": "%mr cooper%", "category": "Mortgage"},
+  {"priority": 10, "pattern": "%mtg pyt%", "category": "Mortgage"},
+  {"priority": 20, "pattern": "%interest charge%", "category": "Bank Fees"},
+  {"priority": 20, "pattern": "%wire fee%", "category": "Bank Fees"},
+  {"priority": 20, "pattern": "%limit fee%", "category": "Bank Fees"},
+  {"priority": 50, "pattern": "%citi card%", "category": "excluded"},
+  {"priority": 50, "pattern": "%amex epayment%", "category": "excluded"},
+  {"priority": 50, "pattern": "%crcardpmt%", "category": "excluded"},
+  {"priority": 50, "pattern": "%chase credit crd%", "category": "excluded"},
+  {"priority": 50, "pattern": "%payment, thank you%", "category": "excluded"},
+  {"priority": 50, "pattern": "%mobile payment%", "category": "excluded"},
+  {"priority": 60, "pattern": "%online transfer%", "category": "excluded"},
+  {"priority": 60, "pattern": "%funds transfer%", "category": "excluded"},
+  {"priority": 60, "pattern": "venmo", "category": "excluded"},
+  {"priority": 60, "pattern": "zel %", "category": "excluded"},
+  {"priority": 60, "pattern": "%domestic incoming wire%", "category": "excluded"},
+  {"priority": 70, "pattern": "%payroll%", "category": "Income"},
+  {"priority": 70, "pattern": "%interest payment%", "category": "excluded"}
+]

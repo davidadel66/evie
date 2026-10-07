@@ -56,7 +56,7 @@ func TestFinanceToolsPreserveLegacySchemasAndExecution(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			assertFinanceToolResult(t, surface.toolset, "finance_rules", "Seeded rules from "+rulesPath+"\n", false)
+			assertFinanceToolResult(t, surface.toolset, "finance_rules", "Seeded rules from "+rulesPath+" and 20 built-in name rules\n", false)
 			seedFinanceTransaction(t)
 			assertFinanceToolResult(t, surface.toolset, "finance_categorize", "1 categorized by rule, 0 uncategorized\n", false)
 			assertFinanceToolResult(t, surface.toolset, "finance_sync", "tool call came back with error set PLAID_CLIENT_ID and PLAID_SECRET to your environment", true)

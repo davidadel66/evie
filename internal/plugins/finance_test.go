@@ -184,7 +184,7 @@ func TestFinanceManagerToolsetPreservesLegacyBehavior(t *testing.T) {
 			IsErr:   true,
 		},
 		FinanceRulesCapabilityID: {
-			Content: "Seeded rules from <HOME>/.finance/merchantLookup.json\n",
+			Content: "Seeded rules from <HOME>/.finance/merchantLookup.json and 20 built-in name rules\n",
 		},
 		FinanceCategorizeCapabilityID: {
 			Content: "1 categorized by rule, 0 uncategorized\n",

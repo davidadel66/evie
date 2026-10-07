@@ -93,7 +93,11 @@ func financeRules(ctx context.Context, _ string) (string, error) {
 	if err := finance.RulesSeed(ctx, db, rulesPath); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Seeded rules from %s\n", rulesPath), nil
+	n, err := finance.NameRulesSeed(ctx, db)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Seeded rules from %s and %d built-in name rules\n", rulesPath, n), nil
 }
 
 // financeCategorizeTool describes finance_categorize to the model: apply

@@ -256,9 +256,10 @@ Databases: "finance" — personal finance. Schema:
   budget_limits(category, month, limit_cents) — month NULL is the standing monthly template, month 'YYYY-MM' overrides it for that month. Recurring limits ALWAYS go in the template (month NULL); write a 'YYYY-MM' row only for a one-month exception David explicitly asks for
   effect_receipts(idempotency_key, effect, output, recorded_at) — never edit
   categories(name)
-  rules(id, merchant, category)
+  rules(id, merchant, category) — exact merchant_name match
+  name_rules(id, pattern, category, priority) — LIKE patterns on transactions.name for merchant-less rows; used only when no merchant rule matches, lowest priority wins
 
-Notes: amounts are integer cents. Spend per category = SUM(budget_entries.amount_cents) joined to transactions for the date. Awaiting-review transactions are those with NO budget_entries row. The items table is off-limits.
+Notes: amounts are integer cents. Spend per category = SUM(budget_entries.amount_cents) joined to transactions for the date. Category 'excluded' = not spending (card payments, transfers, paychecks): totals across ALL categories must filter out category='excluded'. Awaiting-review = posted rows with NO budget_entries row. The items table is off-limits.
 
 Databases: "evie" — evie's own state. Schema:
   jobs(id, name UNIQUE, schedule '5-field cron', command, created_at RFC3339 local, enabled INTEGER (always 1 in v1))
@@ -661,7 +662,7 @@ var editDBTool = openrouter.Tool{
 
 Databases: "finance" — the personal finance db (same schema as query_db; the items table is off-limits).
 
-Common uses: categorize a transaction (INSERT INTO budget_entries with the full amount_cents and source='human'; insert the category into categories first if new), split a bill (several budget_entries rows summing to the transaction total), set a standing budget limit (month NULL — never a literal month unless David asks for a one-month exception), add a rule, tag an entry.`,
+Common uses: categorize a transaction (INSERT INTO budget_entries with the full amount_cents and source='human'; insert the category into categories first if new), split a bill (several budget_entries rows summing to the transaction total), set a standing budget limit (month NULL — never a literal month unless David asks for a one-month exception), add a rule, tag an entry, exclude a transaction (budget_entries row with category='excluded', full amount_cents, source='human'). Ratchet: when David decides an uncategorized merchant in chat, insert the entry AND a rules row in Plaid's exact merchant_name spelling (name_rules for a merchant-less bank string) so it is never decided twice.`,
 		Parameters: openrouter.Parameter{
 			Type:     "object",
 			Required: []string{"db", "statement"},

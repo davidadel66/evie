@@ -1283,9 +1283,12 @@ func TestSessionSendProjectsOldToolResultWithoutChangingDurableHistory(t *testin
 	}
 	history := &fakeHistory{events: events}
 	client := &fakeClient{steps: []step{assistantStep("done", nil)}}
-	session := withByteBudgets(New(client, profile, history, memory.ScopeContext{
+	// The session carries no Kernel tools: this test measures what
+	// projection does to old tool results, and the Kernel descriptions'
+	// size is incidental to that (and grows with every documented table).
+	session := withByteBudgets(NewWithToolset(client, profile, history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
-	}, newFakeTurnOwner()))
+	}, newFakeTurnOwner(), tools.NewToolset(nil)))
 	session.reasoning = nil
 
 	if err := session.Send(context.Background(), "continue", &recorder{}, nil); err != nil {
@@ -1354,9 +1357,13 @@ func TestSessionSendProjectsOldToolResultWithoutChangingDurableHistory(t *testin
 		strings.Repeat("b", 512),
 	)
 	wantRequest := openrouter.ChatRequest{
-		Model: "test/model", Messages: wantMessages, Tools: tools.Schemas(), Stream: true, MaxTokens: 1,
+		Model: "test/model", Messages: wantMessages, Stream: true, MaxTokens: 1,
 	}
 	wantRequest.Messages = append(wantRequest.Messages, openrouter.Message{Role: "user", Content: "continue"})
+	if len(client.reqs[0].Tools) != 0 {
+		t.Fatalf("a session with no tools sent %d tool schemas", len(client.reqs[0].Tools))
+	}
+	client.reqs[0].Tools = nil
 	if !reflect.DeepEqual(client.reqs[0], wantRequest) {
 		got := client.reqs[0]
 		if got.Model != wantRequest.Model || got.Stream != wantRequest.Stream || got.MaxTokens != wantRequest.MaxTokens ||

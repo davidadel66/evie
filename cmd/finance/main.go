@@ -89,6 +89,11 @@ func main() {
 			log.Fatal(err)
 		}
 		fmt.Printf("Seeded rules from %s\n", rulesPath)
+		n, err := finance.NameRulesSeed(context.Background(), db)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Seeded %d name rules from the built-in patterns\n", n)
 	case "categorize":
 		db, err := finance.OpenDB()
 		if err != nil {
