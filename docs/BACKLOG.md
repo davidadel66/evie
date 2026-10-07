@@ -20,7 +20,7 @@ Details live in active plans/specs and completed feature records.
 - finance-daily approved 2026-10-06; first scheduled run 2026-10-07 09:00 America/Detroit succeeded (run 9cbf8363); cron job 3 removed the same day
 - delete `cmd/finance` after one clean week and a parity check of Plaid link and rules seeding in Evie
 - external delivery of workflow notifications (a failed finance-daily run is only visible in `evie workflows status` / `notifications`)
-- fold a `go install` + `scripts/install-serve-agent.sh --restart` step into the release routine so `evie serve` never runs stale code
+- `scripts/release.sh` (2026-10-07) verifies, installs and restarts serve in one step; use it for every change so `evie serve` never runs stale code
 - categorize-patterns landed 2026-10-06 (name rules, `excluded`; 339 → 125 awaiting review). Left for chat review: 13 merchant-less rows (5× `TRANSFER CONSUMERS CU`, mobile deposits, Apple Pay, a hotel folio) and 112 one-off merchants; Venmo (48 rows, $5,942.52) is excluded as a transfer per the August decision and worth a second look
 - move categorize-patterns.spec.md to cmd/finance/docs/done once David has eyeballed the excluded list
 

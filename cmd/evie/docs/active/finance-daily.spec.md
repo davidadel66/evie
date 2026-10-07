@@ -92,9 +92,9 @@ run. Retention `sensitive`. `fixtures.json` simulates a clean day.
 3. `evie workflows propose <ws> cmd/evie/workflows/finance-daily --fixtures cmd/evie/workflows/finance-daily/fixtures.json`.
 4. The owner approves the proposal (`evie workflows approve ...`). This
    grants the Standing Authority (ADR 0008); nothing else does.
-5. `go install ./cmd/evie && scripts/install-serve-agent.sh` (a manual
-   `evie serve` must be stopped first; after each later `go install`,
-   `scripts/install-serve-agent.sh --restart`).
+5. `scripts/install-serve-agent.sh` once (a manual `evie serve` must be
+   stopped first). Every later change ships with `scripts/release.sh`,
+   which verifies, installs the binaries and restarts the agent.
 6. After the first clean scheduled run: `cron_remove finance-daily` (job 3).
 7. After one clean week and a parity check of Plaid link and rules seeding
    in Evie: delete `cmd/finance`.
