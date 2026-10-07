@@ -75,3 +75,11 @@ Spec: [categorize.spec.md](categorize.spec.md). In flight.
   $472 and net flow read minus $7,651. Transfers cancel out; income does
   not. `%payroll%` now seeds to `Income` at priority 70, and the rows
   already excluded by it were moved to Income in place.
+- **Card payments are their own category** (David, 2026-10-07). The six
+  card-payment patterns seed to `Credit Card Payments` instead of
+  `excluded`, and the rows already excluded by them were moved in place.
+  Accepted cost, stated at the time: the Overview counts a card payment as
+  outflow on the bank side and the matching "PAYMENT, THANK YOU" credit as
+  inflow on the card side, on top of the purchases that were counted when
+  the card was swiped. If that double count turns out to matter, the
+  Overview can treat this category like `excluded`.

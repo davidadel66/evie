@@ -139,12 +139,12 @@ sweeps.
 | 20 | `%interest charge%` | Bank Fees |
 | 20 | `%wire fee%` | Bank Fees |
 | 20 | `%limit fee%` | Bank Fees |
-| 50 | `%citi card%` | excluded |
-| 50 | `%amex epayment%` | excluded |
-| 50 | `%crcardpmt%` | excluded |
-| 50 | `%chase credit crd%` | excluded |
-| 50 | `%payment, thank you%` | excluded |
-| 50 | `%mobile payment%` | excluded |
+| 50 | `%citi card%` | Credit Card Payments (changed from excluded 2026-10-07) |
+| 50 | `%amex epayment%` | Credit Card Payments (changed from excluded 2026-10-07) |
+| 50 | `%crcardpmt%` | Credit Card Payments (changed from excluded 2026-10-07) |
+| 50 | `%chase credit crd%` | Credit Card Payments (changed from excluded 2026-10-07) |
+| 50 | `%payment, thank you%` | Credit Card Payments (changed from excluded 2026-10-07) |
+| 50 | `%mobile payment%` | Credit Card Payments (changed from excluded 2026-10-07) |
 | 60 | `%online transfer%` | excluded |
 | 60 | `%funds transfer%` | excluded |
 | 60 | `venmo` | excluded |

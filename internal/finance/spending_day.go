@@ -180,7 +180,7 @@ func (snapshot spendingDaySnapshot) view() SpendingDayTransaction {
 		row.Classification = "classified"
 		excluded := true
 		for _, entry := range row.Entries {
-			if entry.Category != ExcludedCategory {
+			if !OverviewOmitted(entry.Category) {
 				excluded = false
 			}
 		}

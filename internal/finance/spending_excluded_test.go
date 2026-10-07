@@ -138,3 +138,52 @@ func TestSpendingTransactionsReportExcludedSeparately(t *testing.T) {
 		t.Fatalf("day = %+v, %v", day, err)
 	}
 }
+
+// Both legs of a credit-card payment are a transfer between the owner's
+// own accounts: the bank-side debit and the card-side credit carry the
+// Credit Card Payments category, and the Overview omits them like excluded
+// (spending.spec.md, amended 2026-10-07) while the category stays on the
+// rows and the Transactions view reports them under Excluded.
+func TestSpendingOverviewOmitsCreditCardPayments(t *testing.T) {
+	ctx := context.Background()
+	s, db := spendingTestService(t)
+	insertItem(t, db, "item-1")
+	insertSpendingTxn(t, db, "card-credit", "2026-09-04", -200000, 0)
+	insertSpendingTxn(t, db, "bank-debit", "2026-09-09", 200000, 0)
+	insertSpendingTxn(t, db, "groceries", "2026-09-09", 4520, 0)
+	insertSpendingEntry(t, db, "card-credit", CreditCardPaymentsCategory, -200000, "rule")
+	insertSpendingEntry(t, db, "bank-debit", CreditCardPaymentsCategory, 200000, "rule")
+	insertSpendingEntry(t, db, "groceries", "Food", 4520, "rule")
+
+	flow, err := s.InspectSpendingCashFlow(ctx, SpendingCashFlowQuery{Month: "2026-09", HistoryEnd: "2026-09", AsOfDate: "2026-09-30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := SpendingCashFlowTotals{InflowCents: "0", OutflowCents: "4520", NetCents: "-4520", Transactions: 1}
+	if flow.Selected != want {
+		t.Fatalf("selected = %+v, want %+v", flow.Selected, want)
+	}
+	if _, present := cashFlowCategoryMap(flow)["category/"+CreditCardPaymentsCategory]; present {
+		t.Fatal("a Credit Card Payments bar was shown")
+	}
+	page, err := s.InspectSpendingTransactions(ctx, SpendingTransactionsQuery{Month: "2026-09"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Counts != (SpendingClassificationCounts{All: 1, Classified: 1, Excluded: 2}) {
+		t.Fatalf("counts = %+v", page.Counts)
+	}
+	excluded, err := s.InspectSpendingTransactions(ctx, SpendingTransactionsQuery{Month: "2026-09", Status: "excluded"})
+	if err != nil || len(excluded.Transactions) != 2 || excluded.Transactions[0].Entries[0].Category != CreditCardPaymentsCategory {
+		t.Fatalf("excluded = %+v, %v", excluded, err)
+	}
+	day, err := s.InspectSpendingDay(ctx, SpendingDayQuery{Date: "2026-09-09"})
+	if err != nil || day.Summary.Transactions != 1 || day.Summary.OutflowCents != "4520" || len(day.Transactions) != 2 {
+		t.Fatalf("day = %+v, %v", day, err)
+	}
+	for _, row := range day.Transactions {
+		if row.ID == "bank-debit" && row.Classification != "excluded" {
+			t.Fatalf("bank debit = %q", row.Classification)
+		}
+	}
+}

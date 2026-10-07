@@ -10,6 +10,14 @@
 > rule that the raw view reconciles to the bank is superseded for the
 > Overview; the Transactions view keeps every bank row reachable through an
 > Excluded filter.
+>
+> Amended again 2026-10-07: `Credit Card Payments` is omitted from the
+> Overview exactly like `excluded`. Both legs of a card payment are a
+> transfer between the owner's own accounts; the spending was counted at
+> the swipe, so the bank-side debit would count it again and the card-side
+> credit is not income. The category stays on the rows so card payments are
+> grouped and findable. Wherever the amended text below says `excluded`
+> allocations are omitted, read "`excluded` or `Credit Card Payments`".
 
 ## Outcome
 

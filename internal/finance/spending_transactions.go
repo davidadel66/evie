@@ -90,7 +90,7 @@ const spendingMonthTransactions = `WITH month_transactions AS (
 	       t.category, t.category_source,
 	       CASE WHEN t.pending != 0 THEN 'pending'
 	            WHEN EXISTS (SELECT 1 FROM budget_entries e WHERE e.transaction_id = t.transaction_id)
-	                 AND NOT EXISTS (SELECT 1 FROM budget_entries e WHERE e.transaction_id = t.transaction_id AND e.category != 'excluded') THEN 'excluded'
+	                 AND NOT EXISTS (SELECT 1 FROM budget_entries e WHERE e.transaction_id = t.transaction_id AND e.category NOT IN ` + overviewOmittedSQL + `) THEN 'excluded'
 	            WHEN EXISTS (SELECT 1 FROM budget_entries e WHERE e.transaction_id = t.transaction_id) THEN 'classified'
 	            ELSE 'unclassified' END AS classification
 	FROM transactions t

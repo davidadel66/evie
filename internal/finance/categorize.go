@@ -25,6 +25,31 @@ type candidate struct {
 // transaction deliberately does not count as spending.
 const ExcludedCategory = "excluded"
 
+// CreditCardPaymentsCategory groups both legs of a credit-card payment: the
+// bank-side debit and the card-side "PAYMENT, THANK YOU" credit. It is a
+// transfer between the owner's own accounts, so the Overview omits it like
+// excluded (spending.spec.md, amended 2026-10-07): the spending was counted
+// at the swipe, the debit would count it again and the credit is not income.
+const CreditCardPaymentsCategory = "Credit Card Payments"
+
+// overviewOmittedCategories are the categories whose allocations contribute
+// nothing to any Overview figure. OverviewOmitted answers for one category;
+// overviewOmittedSQL is the same set as a SQL list for the Spending queries.
+var overviewOmittedCategories = []string{ExcludedCategory, CreditCardPaymentsCategory}
+
+const overviewOmittedSQL = "('excluded', 'Credit Card Payments')"
+
+// OverviewOmitted reports whether allocations in category are left out of
+// the Overview.
+func OverviewOmitted(category string) bool {
+	for _, c := range overviewOmittedCategories {
+		if c == category {
+			return true
+		}
+	}
+	return false
+}
+
 // matchName finds the name rule for a transaction with no merchant match:
 // among the name_rules patterns that LIKE-match the raw bank string,
 // case-insensitively and in SQL so the pattern semantics are exactly

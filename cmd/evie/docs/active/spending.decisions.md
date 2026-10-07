@@ -31,3 +31,23 @@ show them in the Data/Finance tab."
   shares the Spending queries; its contract shape is unchanged and its
   figures now omit `excluded`, which is what a workflow asking "how much did
   I spend" means.
+
+## 2026-10-07 — Credit card payments are omitted like excluded
+
+Source: the owner, after asking for a `Credit Card Payments` category and
+then seeing September's inflow jump by the card-side credits. His own
+account: the Sept 4 "ONLINE PAYMENT, THANK YOU" +2,000 is an inflow to the
+card but an outflow from checking on Sept 9, so it is not income, and the
+checking debit would double count the purchases already counted at the
+swipe.
+
+- **Chosen: an Overview-omitted category set**, `excluded` and
+  `Credit Card Payments`, applied by the counted-flow helper, the category
+  buckets, the Transactions classification and the day rows. The category
+  remains on each entry and in the Excluded filter, so card payments are
+  grouped without inflating any total.
+- Rejected: pointing the six card-payment patterns back to `excluded`
+  (loses the grouping the owner asked for), and counting one leg only
+  (unbalanced: either invents income or double counts spending).
+- Any future category that names a transfer between the owner's own
+  accounts joins the same set; it is one list in `internal/finance`.

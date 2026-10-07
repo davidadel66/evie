@@ -6,9 +6,10 @@ import (
 	"math/big"
 )
 
-// Overview counting (spending.spec.md, amended 2026-10-06, transfers). The
-// Overview shows the owner's money, not the bank's ledger: an allocation in
-// the excluded category contributes nothing to any Overview figure. The
+// Overview counting (spending.spec.md, amended 2026-10-06 and 2026-10-07).
+// The Overview shows the owner's money, not the bank's ledger: an allocation
+// in an omitted category (excluded, Credit Card Payments) contributes
+// nothing to any Overview figure. The
 // rule is per allocation, so a split's other allocations still count, and
 // it applies only to transactions whose saved entries reconcile exactly to
 // the bank amount with coherent signs and labels; a transaction with no
@@ -24,8 +25,8 @@ type countedTransaction struct {
 	Pending bool
 	// Amount is the raw bank amount; Counted is what the Overview counts.
 	Amount, Counted *big.Int
-	// Omitted is true when every reconciled allocation is excluded, so the
-	// transaction appears in no Overview count.
+	// Omitted is true when every reconciled allocation is in an omitted
+	// category, so the transaction appears in no Overview count.
 	Omitted bool
 }
 
@@ -34,7 +35,7 @@ type spendingQuerier interface {
 }
 
 // countedFlowSQL aggregates each transaction's saved entries: how many,
-// their exact sum, the excluded part of that sum, and how many are
+// their exact sum, the omitted part of that sum, and how many are
 // incoherent (blank label, or a nonzero amount whose sign disagrees with
 // the bank amount's). Sums are over one transaction's few entries, so they
 // stay far inside SQLite's integer range; the Overview totals are summed in
@@ -43,8 +44,8 @@ const countedFlowSQL = `
 	SELECT t.transaction_id, COALESCE(t.date, ''), t.amount_cents, t.pending,
 	       COUNT(e.id),
 	       COALESCE(SUM(e.amount_cents), 0),
-	       COALESCE(SUM(CASE WHEN e.category = 'excluded' THEN e.amount_cents ELSE 0 END), 0),
-	       COALESCE(SUM(CASE WHEN e.category = 'excluded' THEN 1 ELSE 0 END), 0),
+	       COALESCE(SUM(CASE WHEN e.category IN ` + overviewOmittedSQL + ` THEN e.amount_cents ELSE 0 END), 0),
+	       COALESCE(SUM(CASE WHEN e.category IN ` + overviewOmittedSQL + ` THEN 1 ELSE 0 END), 0),
 	       COALESCE(SUM(CASE WHEN TRIM(e.category) = ''
 	                           OR (e.amount_cents != 0 AND SIGN(e.amount_cents) != SIGN(t.amount_cents))
 	                      THEN 1 ELSE 0 END), 0)

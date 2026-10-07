@@ -182,8 +182,8 @@ func (s *SpendingService) InspectSpendingCashFlow(ctx context.Context, query Spe
 			}
 			continue
 		}
-		// Excluded allocations count for nothing (spending.spec.md, amended
-		// 2026-10-06, transfers); the category buckets below skip them too.
+		// Omitted allocations count for nothing (spending.spec.md, amended
+		// 2026-10-06 and 2026-10-07); the category buckets below skip them.
 		if !c.Omitted {
 			total.add(c.Counted)
 		}
@@ -259,7 +259,7 @@ func cashFlowCategories(allocations map[string]*cashFlowAllocation) []SpendingCa
 			add(cashFlowCategoryKey{kind: "unreconciled"}, allocation.amount)
 		default:
 			for category, amount := range allocation.categories {
-				if category == ExcludedCategory {
+				if OverviewOmitted(category) {
 					continue
 				}
 				add(cashFlowCategoryKey{kind: "category", category: category}, amount)

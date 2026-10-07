@@ -37,10 +37,10 @@ func TestNameRulesSeedLoadsTheReviewedPatterns(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM name_rules`).Scan(&count); err != nil || count != 20 {
 		t.Fatalf("after re-seed: %d rules, %v", count, err)
 	}
-	if err := db.QueryRow(`SELECT category, priority FROM name_rules WHERE pattern = '%citi card%'`).Scan(&category, &priority); err != nil || category != ExcludedCategory || priority != 50 {
+	if err := db.QueryRow(`SELECT category, priority FROM name_rules WHERE pattern = '%citi card%'`).Scan(&category, &priority); err != nil || category != "Credit Card Payments" || priority != 50 {
 		t.Fatalf("re-seed did not restore the row: %s %d %v", category, priority, err)
 	}
-	for _, c := range []string{"Loans", "Car Lease", "Mortgage", "Bank Fees", "Income", ExcludedCategory} {
+	for _, c := range []string{"Loans", "Car Lease", "Mortgage", "Bank Fees", "Income", "Credit Card Payments", ExcludedCategory} {
 		var n int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM categories WHERE name = ?`, c).Scan(&n); err != nil || n != 1 {
 			t.Fatalf("category %s seeded = %d, %v", c, n, err)
@@ -63,7 +63,7 @@ func TestNameRulesSeedLoadsTheReviewedPatterns(t *testing.T) {
 	if matched != 7 || unmatched != 1 {
 		t.Fatalf("matched, unmatched = %d, %d", matched, unmatched)
 	}
-	for id, want := range map[string]string{"card": ExcludedCategory, "thanks": ExcludedCategory, "lease": "Car Lease", "mortgage": "Mortgage",
+	for id, want := range map[string]string{"card": "Credit Card Payments", "thanks": "Credit Card Payments", "lease": "Car Lease", "mortgage": "Mortgage",
 		"payroll": "Income", "zelle": ExcludedCategory, "interest": "Bank Fees"} {
 		if got := entryCategory(t, db, id); got != want {
 			t.Fatalf("%s = %q, want %q", id, got, want)
