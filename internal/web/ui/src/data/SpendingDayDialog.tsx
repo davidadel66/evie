@@ -111,7 +111,7 @@ function TransactionRow({ row, categories, busy, onSaving, onReload, onSaved }: 
     }
   };
   return <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-3 py-4 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(15rem,1fr)]">
-    <div className="min-w-0"><p className="text-body break-words text-xs font-medium">{merchant}</p>{row.name && row.name !== merchant && <p className="text-muted-text mt-1 break-words text-xs">{row.name}</p>}</div>
+    <div className="min-w-0"><p className="text-body break-words text-xs font-medium">{merchant}</p>{row.name && row.name !== merchant && <p className="text-muted-text mt-1 break-words text-xs">{row.name}</p>}{row.classification === "excluded" && <p className="text-muted-text mt-1 text-[11px]">Excluded from overview</p>}</div>
     <p className={`${BigInt(row.netCents) > 0n ? "text-teal-hover" : "text-body"} max-w-44 overflow-x-auto whitespace-nowrap text-right text-xs tabular-nums`}>{formatFlow(row.netCents)}</p>
     <div className="col-span-2 min-w-0 space-y-2 sm:col-span-1">
       {entries.map((entry, index) => <div key={entry.id ?? "unclassified"}>

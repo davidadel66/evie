@@ -19,11 +19,15 @@ type SpendingTransactionsQuery struct {
 	PageSize int    `json:"pageSize"`
 }
 
+// SpendingClassificationCounts are disjoint. All is every row the Overview
+// counts, so it leaves Excluded out (spending.spec.md, amended 2026-10-06,
+// transfers).
 type SpendingClassificationCounts struct {
 	All          int `json:"all"`
 	Unclassified int `json:"unclassified"`
 	Classified   int `json:"classified"`
 	Pending      int `json:"pending"`
+	Excluded     int `json:"excluded"`
 }
 
 type SpendingEntry struct {
@@ -64,7 +68,7 @@ func ValidateSpendingTransactionsQuery(query SpendingTransactionsQuery) (Spendin
 		query.Status = "all"
 	}
 	switch query.Status {
-	case "all", "unclassified", "classified", "pending":
+	case "all", "unclassified", "classified", "pending", "excluded":
 	default:
 		return SpendingTransactionsQuery{}, ErrSpendingTransactionsQuery
 	}
@@ -85,6 +89,8 @@ const spendingMonthTransactions = `WITH month_transactions AS (
 	       COALESCE(t.merchant_name, '') AS merchant_name, t.amount_cents,
 	       t.category, t.category_source,
 	       CASE WHEN t.pending != 0 THEN 'pending'
+	            WHEN EXISTS (SELECT 1 FROM budget_entries e WHERE e.transaction_id = t.transaction_id)
+	                 AND NOT EXISTS (SELECT 1 FROM budget_entries e WHERE e.transaction_id = t.transaction_id AND e.category != 'excluded') THEN 'excluded'
 	            WHEN EXISTS (SELECT 1 FROM budget_entries e WHERE e.transaction_id = t.transaction_id) THEN 'classified'
 	            ELSE 'unclassified' END AS classification
 	FROM transactions t
@@ -126,12 +132,13 @@ func (s *SpendingService) InspectSpendingTransactions(ctx context.Context, query
 	// Numeric date spelling plus the exact month's first/last day also
 	// excludes impossible dates such as February 30 before counting/paging.
 	err = tx.QueryRowContext(ctx, spendingMonthTransactions+`
-		SELECT COUNT(*),
+		SELECT COALESCE(SUM(classification != 'excluded'), 0),
 		       COALESCE(SUM(classification = 'unclassified'), 0),
 		       COALESCE(SUM(classification = 'classified'), 0),
-		       COALESCE(SUM(classification = 'pending'), 0)
+		       COALESCE(SUM(classification = 'pending'), 0),
+		       COALESCE(SUM(classification = 'excluded'), 0)
 		FROM month_transactions`, first, last).Scan(
-		&report.Counts.All, &report.Counts.Unclassified, &report.Counts.Classified, &report.Counts.Pending,
+		&report.Counts.All, &report.Counts.Unclassified, &report.Counts.Classified, &report.Counts.Pending, &report.Counts.Excluded,
 	)
 	if err != nil {
 		return SpendingTransactionsReport{}, spendingError(ctx, ErrSpendingUnavailable)
@@ -143,6 +150,8 @@ func (s *SpendingService) InspectSpendingTransactions(ctx context.Context, query
 		report.Total = report.Counts.Classified
 	case "pending":
 		report.Total = report.Counts.Pending
+	case "excluded":
+		report.Total = report.Counts.Excluded
 	default:
 		report.Total = report.Counts.All
 	}
@@ -153,7 +162,7 @@ func (s *SpendingService) InspectSpendingTransactions(ctx context.Context, query
 		SELECT transaction_id, date, name, merchant_name, amount_cents,
 		       classification, category, category_source
 		FROM month_transactions
-		WHERE (? = 'all' OR classification = ?)
+		WHERE (? = 'all' AND classification != 'excluded') OR classification = ?
 		ORDER BY date DESC, transaction_id ASC
 		LIMIT ? OFFSET ?`, first, last, query.Status, query.Status, query.PageSize, query.Offset)
 	if err != nil {

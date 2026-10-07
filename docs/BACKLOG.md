@@ -16,6 +16,15 @@ Details live in active plans/specs and completed feature records.
 - memory — [approved specification](../cmd/evie/docs/active/memory.spec.md);
   Epic 1 complete, with no Epic 2 story currently selected
 
+## finance-daily follow-ups (decided 2026-10-06, see cmd/evie/docs/active/finance-daily.*)
+- approve the finance-daily proposal in the Finance Workspace (owner), then watch the first 09:00 America/Detroit run
+- remove cron job 3 (`cron_remove finance-daily`) after the first clean scheduled run
+- delete `cmd/finance` after one clean week and a parity check of Plaid link and rules seeding in Evie
+- external delivery of workflow notifications (a failed finance-daily run is only visible in `evie workflows status` / `notifications`)
+- fold a `go install` + `scripts/install-serve-agent.sh --restart` step into the release routine so `evie serve` never runs stale code
+- categorize-patterns landed 2026-10-06 (name rules, `excluded`; 339 → 125 awaiting review). Left for chat review: 13 merchant-less rows (5× `TRANSFER CONSUMERS CU`, mobile deposits, Apple Pay, a hotel folio) and 112 one-off merchants; Venmo (48 rows, $5,942.52) is excluded as a transfer per the August decision and worth a second look
+- move categorize-patterns.spec.md to cmd/finance/docs/done once David has eyeballed the excluded list
+
 ## Next (ordered tool roadmap, decided 2026-07-29)
 - budget analysis verdict — ask evie "how am I tracking against budget?"; transcript decides if step 5 needs a dedicated tool
 - review flow live-fire — categorize awaiting-review transactions in chat via edit_db, mint rules from decisions

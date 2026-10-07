@@ -10,6 +10,7 @@ const filters: { value: SpendingStatus; label: string }[] = [
   { value: "unclassified", label: "Needs classification" },
   { value: "classified", label: "Classified" },
   { value: "pending", label: "Pending" },
+  { value: "excluded", label: "Excluded" },
 ];
 const control = "border-hair-strong bg-card text-body focus-visible:ring-teal rounded-md border px-3 py-2 text-xs focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40";
 
@@ -57,7 +58,7 @@ export function SpendingTransactionsView({ month, status, page, counts, loading,
     </div>
     {problem && <div role="alert" className="text-amber-ink border-amber-hair bg-amber-bg mt-4 rounded-md border p-3 text-xs">{problem}{page && " Previous records remain visible."}<button type="button" className="ml-3 underline underline-offset-2" onClick={onRetry}>Try again</button></div>}
     {loading && <p role="status" className="text-muted-text mt-4 text-xs">Loading…</p>}
-    {page && records.length === 0 && <p role="status" className="text-muted-text py-12 text-center text-sm">{offset > 0 ? "No transactions on this page." : status === "unclassified" ? "Nothing to classify." : status === "classified" ? "No classified transactions." : status === "pending" ? "No pending transactions." : "No transactions."}</p>}
+    {page && records.length === 0 && <p role="status" className="text-muted-text py-12 text-center text-sm">{offset > 0 ? "No transactions on this page." : status === "unclassified" ? "Nothing to classify." : status === "classified" ? "No classified transactions." : status === "pending" ? "No pending transactions." : status === "excluded" ? "No excluded transactions." : "No transactions."}</p>}
     {records.length > 0 && <div className="mt-4 max-w-full overflow-x-auto" tabIndex={0} role="region" aria-label="Transaction records; scroll horizontally on small screens">
       <table className="w-full min-w-[760px] text-left text-xs">
         <caption className="sr-only">{monthLabel(month)} transactions. Positive net amounts are money in; negative amounts are money out.</caption>
@@ -82,6 +83,7 @@ function Classification({ record }: { record: SpendingTransaction }) {
   return <>
     {record.classification === "pending" && <p className="text-muted-text mb-1">Pending</p>}
     {record.classification === "unclassified" && <p className="text-amber-ink mb-1">Needs classification</p>}
+    {record.classification === "excluded" && <p className="text-muted-text mb-1">Excluded from overview</p>}
     {record.entries.map((entry, index) => {
       const net = (-BigInt(entry.amountCents)).toString();
       return <p key={index} className="text-body mb-1">{entry.category}{(record.entries.length > 1 || net !== record.netCents) && <span className="text-muted-text ml-2 whitespace-nowrap tabular-nums">{formatFlow(net)}</span>}</p>;

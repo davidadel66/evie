@@ -216,7 +216,7 @@ func TestSpendingHTTPTransactionsPassFiltersPaginationAndContext(t *testing.T) {
 func TestSpendingHTTPTransactionsPreserveTypedRowsAndExactCents(t *testing.T) {
 	const fixture = `{
 		"month":"2026-09","status":"classified","offset":0,"pageSize":1,
-		"total":2,"counts":{"all":4,"unclassified":1,"classified":2,"pending":1},
+		"total":2,"counts":{"all":4,"unclassified":1,"classified":2,"pending":1,"excluded":0},
 		"transactions":[{
 			"id":"transaction-1","date":"2026-09-20","name":"Saved transaction","merchantName":"Merchant",
 			"netCents":"-9223372036854775808","classification":"classified",

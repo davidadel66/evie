@@ -1,5 +1,16 @@
 # Data Spending: monthly overview and transactions
 
+> Amended 2026-10-06 by the owner's decision on transfers (binding record:
+> the "Transfers leave the overview" entry in
+> [spending.decisions.md](spending.decisions.md)). Transfers, credit-card
+> payments and paychecks now carry an `excluded` budget entry, written by the
+> name rules of categorize-patterns; the owner decided that money moving
+> between his own accounts cancels out and should not appear in the Overview.
+> Amended text below is marked "(Amended 2026-10-06, transfers)". The earlier
+> rule that the raw view reconciles to the bank is superseded for the
+> Overview; the Transactions view keeps every bank row reachable through an
+> Excluded filter.
+
 ## Outcome
 
 The owner can open Data > Spending, fetch the latest available transactions
@@ -24,9 +35,13 @@ extends the initial daily-flow view requested on 2026-09-19 with the owner's
 - Provider transaction dates are calendar dates without timezone shifting.
   Stored positive cents mean outflow, so displayed net flow is inflow minus
   outflow. Integer arithmetic and JSON decimal strings preserve exact cents.
-- The raw-flow plot includes all posted transactions, including transfers and
-  credit-card payments, regardless of classification. Pending transactions
-  are excluded. No internal-transfer detection or exclusion is inferred.
+- (Amended 2026-10-06, transfers) The calendar omits `excluded` allocations:
+  a budget entry in category `excluded` contributes to no Overview figure, and
+  a transaction whose entries are all `excluded` does not appear in a day's
+  count or net flow. A transaction's other allocations still count, and a
+  transaction with no entries or an unreconciled split still counts in full.
+  Pending transactions are excluded as before. Exclusion is never inferred:
+  only a saved `excluded` entry removes money from the Overview.
 - Color separates net inflows from net outflows, with stronger color for larger
   magnitude. Exact values remain readable without color. Date buttons retain
   exact flow details in their accessible label and tooltip; clicking a past or
@@ -56,7 +71,11 @@ extends the initial daily-flow view requested on 2026-09-19 with the owner's
   sum exactly to the bank amount and every nonzero allocation agrees with its
   sign. Mismatched, mixed-sign, or blank-label allocations send the whole bank
   amount once to Needs review. Refunds remain inflows in their saved category.
-  Each side reconciles to raw totals, including `excluded` allocations.
+  (Amended 2026-10-06, transfers) `excluded` allocations are omitted from the
+  monthly bars, the net line, the Inflow, Outflow, Net flow and Net rate
+  totals, and the category bars, so no `excluded` category bar is shown and
+  the totals no longer reconcile to the bank statement. The finance workflow
+  read `finance.month_cash_flow` reports the same figures.
 - Synthetic buckets have distinct identities from named categories; colliding
   named labels receive a `(category)` suffix. These display buckets do not
   create or change classification states. The Transactions view still exposes
@@ -69,7 +88,10 @@ extends the initial daily-flow view requested on 2026-09-19 with the owner's
 
 - Transactions is a separate view, not a list below the plot. It reads the
   selected month's saved bank rows and offers All, Needs classification,
-  Classified, and Pending filters, with month-wide counts and bounded pages.
+  Classified, Pending, and (Amended 2026-10-06, transfers) Excluded filters,
+  with month-wide counts and bounded pages. Excluded is a posted transaction
+  whose every budget entry is `excluded`; All is every row the Overview
+  counts, so it leaves Excluded out, and the five counts stay disjoint.
 - Each row shows date, merchant and bank description, net amount, saved
   categories, and recorded classification sources. Split entries stay distinct
   allocations under one transaction; they never multiply rows or totals.
@@ -81,8 +103,10 @@ extends the initial daily-flow view requested on 2026-09-19 with the owner's
 - For posted transactions, any `budget_entries` row means Classified; no entry
   means Needs classification. Pending takes precedence as a separate bank
   settlement state, producing disjoint filter counts. An `excluded` entry is
-  still a saved classification; this raw-flow view does not treat it as a
-  reason to omit the underlying bank transaction.
+  still a saved classification. (Amended 2026-10-06, transfers) A transaction
+  whose entries are all `excluded` is reported under Excluded rather than
+  Classified; a split with one `excluded` allocation among others stays
+  Classified.
 - Entries preserve their source. Known `rule` and `human` sources are identified;
   legacy `manual`/`agent` and other sources are shown without implying a model
   proposal or new approval. Existing split amounts are displayed as recorded,
@@ -102,7 +126,10 @@ extends the initial daily-flow view requested on 2026-09-19 with the owner's
 
 - Clicking any non-future calendar day opens a native modal dialog with the
   selected date, its posted transaction count and net flow, and a bounded page
-  of transactions. Pending rows are excluded to match the calendar. Each row
+  of transactions. Pending rows are excluded to match the calendar. (Amended
+  2026-10-06, transfers) The count and net flow match the calendar cell, so
+  they omit `excluded` money, but excluded rows are still listed, marked, so a
+  wrong exclusion can be corrected in place. Each row
   shows merchant/statement description, exact signed amount, and saved categories.
   Empty days are explicit; pagination covers busy days without truncation.
 - Category labels open an inline selector with the configured `categories`

@@ -33,6 +33,13 @@ describe("Daily transaction popup", () => {
     expect(html).toContain("−120.00");
   });
 
+  it("marks a fully excluded row so a wrong exclusion can be corrected in place", () => {
+    const html = render([{ ...record, id: "transfer", classification: "excluded", entries: [{ id: "4", category: "excluded", amountCents: "12000", source: "rule" }] }]);
+    expect(html).toContain("Excluded from overview");
+    expect(html).toContain("Edit category for Neighborhood shop");
+    expect(render()).not.toContain("Excluded from overview");
+  });
+
   it("escapes bank descriptions and category labels without losing exact large amounts", () => {
     const html = render([{ ...record, name: "<script>private</script>", netCents: "900719925474099301", entries: [{ id: "9007199254740993", category: "<b>Home</b>", amountCents: "-900719925474099301", source: "human" }] }]);
     expect(html).toContain("+9,007,199,254,740,993.01");

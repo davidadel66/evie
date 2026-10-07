@@ -144,7 +144,7 @@ func TestSpendingCategoryCreatesHumanAllocationAndPreservesRawTransaction(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Classification != "classified" || len(updated.Entries) != 1 || updated.Entries[0].Category != "excluded" || updated.Entries[0].AmountCents != "500" || updated.Entries[0].Source != "human" || updated.Revision == row.Revision {
+	if updated.Classification != "excluded" || len(updated.Entries) != 1 || updated.Entries[0].Category != "excluded" || updated.Entries[0].AmountCents != "500" || updated.Entries[0].Source != "human" || updated.Revision == row.Revision {
 		t.Fatalf("created allocation = %+v", updated)
 	}
 	after, err := readSpendingDaySnapshots(context.Background(), db, `WHERE transaction_id='c-unclassified'`)

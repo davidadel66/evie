@@ -52,9 +52,9 @@ func TestFinanceWorkflowReadsTheLocalLedger(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []CapabilityID{FinanceMonthCashFlowCapabilityID, FinanceMonthTransactionsCapabilityID} {
+	for id, version := range map[CapabilityID]string{FinanceMonthCashFlowCapabilityID: "1.0.0", FinanceMonthTransactionsCapabilityID: "1.1.0"} {
 		contract, ok := manager.WorkflowContract(string(id))
-		if !ok || contract.Contract != "1.0.0" || contract.Effect ||
+		if !ok || contract.Contract != version || contract.Effect ||
 			!reflect.DeepEqual(contract.Connections, []string{FinanceConnectionID}) || !reflect.DeepEqual(contract.Resources, []string{FinanceLedgerResource}) {
 			t.Fatalf("%s contract = %+v, %v", id, contract, ok)
 		}
@@ -92,7 +92,7 @@ func TestFinanceWorkflowReadsTheLocalLedger(t *testing.T) {
 	}
 	wantPage := map[string]any{
 		"month": "2026-09", "status": "all", "offset": int64(0), "page_size": int64(2), "total": int64(4), "has_more": true,
-		"counts": map[string]any{"all": int64(4), "unclassified": int64(1), "classified": int64(2), "pending": int64(1)},
+		"counts": map[string]any{"all": int64(4), "unclassified": int64(1), "classified": int64(2), "pending": int64(1), "excluded": int64(0)},
 		"transactions": []any{
 			map[string]any{"id": "t4", "date": "2026-09-20", "name": "STORE", "merchant_name": "Store", "net_cents": int64(-999), "classification": "pending", "entries": []any{}},
 			map[string]any{"id": "t3", "date": "2026-09-15", "name": "PAYROLL", "merchant_name": "", "net_cents": int64(300000), "classification": "unclassified", "entries": []any{}},

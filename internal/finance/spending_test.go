@@ -72,7 +72,7 @@ func TestSpendingDailyFlowUsesPostedDatesAndAllRawTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []SpendingDay{
-		{Date: "2026-01-01", InflowCents: "20000", OutflowCents: "6234", NetCents: "13766", Transactions: 3},
+		{Date: "2026-01-01", InflowCents: "20000", OutflowCents: "1234", NetCents: "18766", Transactions: 2},
 		{Date: "2026-01-02", InflowCents: "100", OutflowCents: "100", NetCents: "0", Transactions: 2},
 	}
 	if !reflect.DeepEqual(report.Days, want) {

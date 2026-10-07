@@ -156,19 +156,13 @@ func (s *SpendingService) InspectSpendingCashFlow(ctx context.Context, query Spe
 		return SpendingCashFlowReport{}, spendingError(ctx, ErrSpendingUnavailable)
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT transaction_id, COALESCE(date, ''), amount_cents, pending FROM transactions`)
+	counted, err := readCountedFlow(ctx, tx, "")
 	if err != nil {
 		return SpendingCashFlowReport{}, spendingError(ctx, ErrSpendingUnavailable)
 	}
-	defer rows.Close()
 	allocations := map[string]*cashFlowAllocation{}
-	for rows.Next() {
-		var id, date string
-		var amount int64
-		var pending int
-		if err := rows.Scan(&id, &date, &amount, &pending); err != nil {
-			return SpendingCashFlowReport{}, spendingError(ctx, ErrSpendingUnavailable)
-		}
+	for _, c := range counted {
+		id, date := c.ID, c.Date
 		day, err := time.Parse("2006-01-02", date)
 		if err != nil || day.Year() < 1 || day.Format("2006-01-02") != date {
 			report.UndatedTransactions++
@@ -182,22 +176,21 @@ func (s *SpendingService) InspectSpendingCashFlow(ctx context.Context, query Spe
 		if !inWindow {
 			continue
 		}
-		if pending != 0 {
+		if c.Pending {
 			if month == query.Month {
 				report.PendingTransactions++
 			}
 			continue
 		}
-		cents := big.NewInt(amount)
-		total.add(cents)
+		// Excluded allocations count for nothing (spending.spec.md, amended
+		// 2026-10-06, transfers); the category buckets below skip them too.
+		if !c.Omitted {
+			total.add(c.Counted)
+		}
 		if month == query.Month {
-			allocations[id] = &cashFlowAllocation{amount: cents, coherent: true, categories: map[string]*big.Int{}}
+			allocations[id] = &cashFlowAllocation{amount: c.Amount, coherent: true, categories: map[string]*big.Int{}}
 		}
 	}
-	if err := rows.Err(); err != nil {
-		return SpendingCashFlowReport{}, spendingError(ctx, ErrSpendingUnavailable)
-	}
-	rows.Close()
 	for i := range report.History {
 		report.History[i].SpendingCashFlowTotals = months[report.History[i].Month].report()
 	}
@@ -266,6 +259,9 @@ func cashFlowCategories(allocations map[string]*cashFlowAllocation) []SpendingCa
 			add(cashFlowCategoryKey{kind: "unreconciled"}, allocation.amount)
 		default:
 			for category, amount := range allocation.categories {
+				if category == ExcludedCategory {
+					continue
+				}
 				add(cashFlowCategoryKey{kind: "category", category: category}, amount)
 			}
 		}

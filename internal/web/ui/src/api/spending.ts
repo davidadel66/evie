@@ -26,7 +26,7 @@ export type SpendingRefresh = {
   refreshedAt: string | null;
 };
 
-export type SpendingStatus = "all" | "unclassified" | "classified" | "pending";
+export type SpendingStatus = "all" | "unclassified" | "classified" | "pending" | "excluded";
 export type SpendingEntry = { category: string; amountCents: string; source: string };
 export type SpendingTransaction = {
   id: string; date: string; name: string; merchantName: string; netCents: string;
@@ -37,7 +37,7 @@ export type SpendingTransaction = {
 export type SpendingTransactionsQuery = { month: string; status: SpendingStatus; offset: number; pageSize: number };
 export type SpendingTransactionsPage = SpendingTransactionsQuery & {
   total: number; hasMore: boolean;
-  counts: { all: number; unclassified: number; classified: number; pending: number };
+  counts: { all: number; unclassified: number; classified: number; pending: number; excluded: number };
   transactions: SpendingTransaction[];
 };
 

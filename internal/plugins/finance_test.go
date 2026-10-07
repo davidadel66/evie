@@ -40,7 +40,7 @@ func TestFinanceManifestAndToolContractsAreStable(t *testing.T) {
 			{ID: FinanceRulesCapabilityID, Version: "1.0.0"},
 			{ID: FinanceCategorizeCapabilityID, Version: "1.0.0"},
 			{ID: FinanceMonthCashFlowCapabilityID, Version: "1.0.0"},
-			{ID: FinanceMonthTransactionsCapabilityID, Version: "1.0.0"},
+			{ID: FinanceMonthTransactionsCapabilityID, Version: "1.1.0"},
 			{ID: FinanceSyncLedgerCapabilityID, Version: "1.0.0"},
 			{ID: FinanceCategorizeLedgerCapabilityID, Version: "1.0.0"},
 		},

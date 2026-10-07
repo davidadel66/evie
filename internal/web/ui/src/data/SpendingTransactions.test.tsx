@@ -5,7 +5,7 @@ import { SpendingTransactionsView } from "./SpendingTransactions";
 
 const page: SpendingTransactionsPage = {
   month: "2026-09", status: "all", offset: 0, pageSize: 50, total: 4, hasMore: false,
-  counts: { all: 4, classified: 2, unclassified: 1, pending: 1 },
+  counts: { all: 4, classified: 2, unclassified: 1, pending: 1, excluded: 3 },
   transactions: [
     { id: "one", date: "2026-09-20", name: "GROCERY STORE CARD", merchantName: "Grocery store", netCents: "-1234", classification: "classified", entries: [{ category: "Groceries", amountCents: "1234", source: "rule" }], legacyCategory: null, legacySource: null },
     { id: "two", date: "2026-09-19", name: "Hardware store", merchantName: "", netCents: "-3000", classification: "classified", entries: [{ category: "Home", amountCents: "2000", source: "human" }, { category: "Work", amountCents: "1000", source: "agent" }], legacyCategory: null, legacySource: null },
@@ -34,6 +34,17 @@ describe("Spending transactions", () => {
     const html = render({ page: { ...page, transactions: [record] } });
     expect(html).toContain("−8.00");
     expect(html).toContain("−5.00");
+  });
+  it("offers an Excluded filter with its own count and marks excluded rows", () => {
+    const html = render();
+    expect(html).toContain("Excluded");
+    expect(html).toContain(">3<");
+    const transfer = { ...page.transactions[0], id: "transfer", name: "ONLINE TRANSFER TO XXXXX9243", merchantName: "", netCents: "-27500", classification: "excluded" as const,
+      entries: [{ category: "excluded", amountCents: "27500", source: "rule" }] };
+    const marked = render({ page: { ...page, status: "excluded", transactions: [transfer] }, status: "excluded" });
+    expect(marked).toContain("Excluded from overview");
+    expect(marked).toContain("ONLINE TRANSFER TO XXXXX9243");
+    expect(render({ page: { ...page, transactions: [] }, status: "excluded" })).toContain("No excluded transactions.");
   });
   it("keeps error, loading, filtered-empty and page-empty states explicit", () => {
     expect(render({ page: undefined, loading: true })).toContain("Loading…");

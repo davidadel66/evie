@@ -178,6 +178,17 @@ func (snapshot spendingDaySnapshot) view() SpendingDayTransaction {
 	}
 	if len(row.Entries) > 0 {
 		row.Classification = "classified"
+		excluded := true
+		for _, entry := range row.Entries {
+			if entry.Category != ExcludedCategory {
+				excluded = false
+			}
+		}
+		if excluded {
+			// Marked so a wrong exclusion can be corrected in place; the
+			// day summary already leaves this row out.
+			row.Classification = "excluded"
+		}
 	}
 	if snapshot.Pending != 0 {
 		row.Classification = "pending"
@@ -258,31 +269,29 @@ func (s *SpendingService) InspectSpendingDay(ctx context.Context, query Spending
 		return SpendingDayReport{}, spendingError(ctx, ErrSpendingUnavailable)
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT amount_cents FROM transactions WHERE date=? AND pending=0`, query.Date)
+	// The summary matches the calendar cell, so excluded money is left out
+	// of it; the rows below still list every posted transaction of the day,
+	// excluded ones included, so a wrong exclusion can be corrected here.
+	counted, err := readCountedFlow(ctx, tx, "t.date = ? AND t.pending = 0", query.Date)
 	if err != nil {
 		return SpendingDayReport{}, spendingError(ctx, ErrSpendingUnavailable)
 	}
 	var inflow, outflow big.Int
-	for rows.Next() {
-		var cents int64
-		if err := rows.Scan(&cents); err != nil {
-			rows.Close()
-			return SpendingDayReport{}, spendingError(ctx, ErrSpendingUnavailable)
-		}
-		if cents < 0 {
-			inflow.Sub(&inflow, big.NewInt(cents))
-		} else {
-			outflow.Add(&outflow, big.NewInt(cents))
-		}
+	summaryCount := 0
+	for _, c := range counted {
 		report.Total++
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return SpendingDayReport{}, spendingError(ctx, ErrSpendingUnavailable)
+		if c.Omitted {
+			continue
+		}
+		if c.Counted.Sign() < 0 {
+			inflow.Sub(&inflow, c.Counted)
+		} else {
+			outflow.Add(&outflow, c.Counted)
+		}
+		summaryCount++
 	}
 	report.Summary.InflowCents, report.Summary.OutflowCents = inflow.String(), outflow.String()
-	report.Summary.NetCents, report.Summary.Transactions = new(big.Int).Sub(&inflow, &outflow).String(), report.Total
+	report.Summary.NetCents, report.Summary.Transactions = new(big.Int).Sub(&inflow, &outflow).String(), summaryCount
 	categories, err := tx.QueryContext(ctx, `SELECT name FROM categories WHERE TRIM(name) != '' ORDER BY name COLLATE NOCASE,name`)
 	if err != nil {
 		return SpendingDayReport{}, spendingError(ctx, ErrSpendingUnavailable)

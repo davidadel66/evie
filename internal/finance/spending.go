@@ -117,24 +117,18 @@ func (s *SpendingService) InspectSpending(ctx context.Context, year int) (Spendi
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM items`).Scan(&report.LinkedBanks); err != nil {
 		return SpendingReport{}, spendingError(ctx, ErrSpendingUnavailable)
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT COALESCE(date, ''), amount_cents, pending FROM transactions`)
+	counted, err := readCountedFlow(ctx, tx, "")
 	if err != nil {
 		return SpendingReport{}, spendingError(ctx, ErrSpendingUnavailable)
 	}
-	defer rows.Close()
 	type dayTotals struct {
 		inflow, outflow big.Int
 		transactions    int
 	}
 	days := map[string]*dayTotals{}
 	years := map[int]bool{year: true}
-	for rows.Next() {
-		var date string
-		var cents int64
-		var pending int
-		if err := rows.Scan(&date, &cents, &pending); err != nil {
-			return SpendingReport{}, spendingError(ctx, ErrSpendingUnavailable)
-		}
+	for _, c := range counted {
+		date := c.Date
 		day, err := time.Parse("2006-01-02", date)
 		if err != nil || day.Year() < 1 || day.Format("2006-01-02") != date {
 			report.UndatedTransactions++
@@ -144,8 +138,11 @@ func (s *SpendingService) InspectSpending(ctx context.Context, year int) (Spendi
 		if day.Year() != year {
 			continue
 		}
-		if pending != 0 {
+		if c.Pending {
 			report.PendingTransactions++
+			continue
+		}
+		if c.Omitted {
 			continue
 		}
 		total := days[date]
@@ -153,16 +150,12 @@ func (s *SpendingService) InspectSpending(ctx context.Context, year int) (Spendi
 			total = &dayTotals{}
 			days[date] = total
 		}
-		amount := big.NewInt(cents)
-		if cents < 0 {
-			total.inflow.Sub(&total.inflow, amount)
+		if c.Counted.Sign() < 0 {
+			total.inflow.Sub(&total.inflow, c.Counted)
 		} else {
-			total.outflow.Add(&total.outflow, amount)
+			total.outflow.Add(&total.outflow, c.Counted)
 		}
 		total.transactions++
-	}
-	if err := rows.Err(); err != nil {
-		return SpendingReport{}, spendingError(ctx, ErrSpendingUnavailable)
 	}
 	for date, total := range days {
 		var net big.Int

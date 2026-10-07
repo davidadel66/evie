@@ -106,17 +106,16 @@ func TestSpendingCashFlowReconcilesRawFlowsAndPreservesAllocationProblems(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := SpendingCashFlowTotals{InflowCents: "11100", OutflowCents: "4800", NetCents: "6300", Transactions: 12}
+	want := SpendingCashFlowTotals{InflowCents: "11100", OutflowCents: "4500", NetCents: "6600", Transactions: 11}
 	if report.Selected != want || report.Month != query.Month || report.HistoryEnd != query.HistoryEnd || report.AsOfDate != query.AsOfDate || report.PendingTransactions != 1 || report.UndatedTransactions != 3 {
 		t.Fatalf("selected report = %+v", report)
 	}
 	categories := cashFlowCategoryMap(report)
 	wantCategories := map[string]SpendingCashFlowTotals{
-		"category/Food":     {InflowCents: "200", OutflowCents: "2100", NetCents: "-1900", Transactions: 4},
-		"category/Home":     {InflowCents: "0", OutflowCents: "400", NetCents: "-400", Transactions: 1},
-		"category/excluded": {InflowCents: "0", OutflowCents: "300", NetCents: "-300", Transactions: 1},
-		"unclassified":      {InflowCents: "10500", OutflowCents: "0", NetCents: "10500", Transactions: 3},
-		"unreconciled":      {InflowCents: "400", OutflowCents: "2000", NetCents: "-1600", Transactions: 4},
+		"category/Food": {InflowCents: "200", OutflowCents: "2100", NetCents: "-1900", Transactions: 4},
+		"category/Home": {InflowCents: "0", OutflowCents: "400", NetCents: "-400", Transactions: 1},
+		"unclassified":  {InflowCents: "10500", OutflowCents: "0", NetCents: "10500", Transactions: 3},
+		"unreconciled":  {InflowCents: "400", OutflowCents: "2000", NetCents: "-1600", Transactions: 4},
 	}
 	if len(categories) != len(wantCategories) {
 		t.Fatalf("category buckets = %+v", categories)
@@ -172,7 +171,7 @@ func TestSpendingCashFlowAsOfDateAndSelectionKeepHistoryWindowStable(t *testing.
 	query.Month = "2026-09"
 	query.AsOfDate = "2026-09-21"
 	later, err := s.InspectSpendingCashFlow(context.Background(), query)
-	if err != nil || later.Selected.OutflowCents != "1004799" || later.Selected.Transactions != 13 || later.PendingTransactions != 2 {
+	if err != nil || later.Selected.OutflowCents != "1004499" || later.Selected.Transactions != 12 || later.PendingTransactions != 2 {
 		t.Fatalf("later cutoff did not include that day's rows: %+v, %v", later, err)
 	}
 	assertCashFlowReconciles(t, later)

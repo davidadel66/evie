@@ -43,7 +43,7 @@ func (Finance) Manifest() Manifest {
 			{ID: FinanceRulesCapabilityID, Version: financeContractVersion},
 			{ID: FinanceCategorizeCapabilityID, Version: financeContractVersion},
 			{ID: FinanceMonthCashFlowCapabilityID, Version: financeReadContractVersion},
-			{ID: FinanceMonthTransactionsCapabilityID, Version: financeReadContractVersion},
+			{ID: FinanceMonthTransactionsCapabilityID, Version: financeTransactionsContractVersion},
 			{ID: FinanceSyncLedgerCapabilityID, Version: financeEffectContractVersion},
 			{ID: FinanceCategorizeLedgerCapabilityID, Version: financeEffectContractVersion},
 		},

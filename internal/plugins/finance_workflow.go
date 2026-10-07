@@ -34,8 +34,12 @@ const (
 	FinanceLedgerResource = "ledger"
 
 	financeReadContractVersion = "1.0.0"
-	financeMaxPageSize         = 100
-	financeMaxOffset           = 1_000_000
+	// 1.1.0 adds the excluded status and count (spending.spec.md, amended
+	// 2026-10-06, transfers); month_cash_flow's shape is unchanged and its
+	// figures now omit excluded allocations like the Overview.
+	financeTransactionsContractVersion = "1.1.0"
+	financeMaxPageSize                 = 100
+	financeMaxOffset                   = 1_000_000
 )
 
 func boundedString(minLength, maxLength int64) *workflow.Type {
@@ -73,6 +77,9 @@ func cashFlowTotals(extra ...workflow.Field) *workflow.Type {
 func (f Finance) WorkflowCapabilities() []WorkflowCapability {
 	served := func(c WorkflowCapability) WorkflowCapability {
 		c.ContractVersion = financeReadContractVersion
+		if c.ID == FinanceMonthTransactionsCapabilityID {
+			c.ContractVersion = financeTransactionsContractVersion
+		}
 		c.Connections, c.Resources = []string{FinanceConnectionID}, []string{FinanceLedgerResource}
 		return c
 	}
@@ -96,13 +103,13 @@ func (f Finance) WorkflowCapabilities() []WorkflowCapability {
 		workflow.Field{Name: "name", Type: workflow.StringType()},
 		workflow.Field{Name: "merchant_name", Type: workflow.StringType()},
 		workflow.Field{Name: "net_cents", Type: workflow.IntegerType()},
-		workflow.Field{Name: "classification", Type: enumString("classified", "pending", "unclassified")},
+		workflow.Field{Name: "classification", Type: enumString("classified", "pending", "unclassified", "excluded")},
 		workflow.Field{Name: "entries", Type: workflow.ArrayType(entry)},
 	)
 	page := workflow.ArrayType(transaction)
 	maxItems := int64(financeMaxPageSize)
 	page.MaxItems = &maxItems
-	statuses := enumString("all", "classified", "pending", "unclassified")
+	statuses := enumString("all", "classified", "pending", "unclassified", "excluded")
 	return []WorkflowCapability{
 		served(WorkflowCapability{
 			ID:     FinanceMonthCashFlowCapabilityID,
@@ -130,6 +137,7 @@ func (f Finance) WorkflowCapabilities() []WorkflowCapability {
 					workflow.Field{Name: "unclassified", Type: workflow.IntegerType()},
 					workflow.Field{Name: "classified", Type: workflow.IntegerType()},
 					workflow.Field{Name: "pending", Type: workflow.IntegerType()},
+					workflow.Field{Name: "excluded", Type: workflow.IntegerType()},
 				)},
 				workflow.Field{Name: "transactions", Type: page},
 			),
@@ -268,7 +276,7 @@ func (f Finance) readMonthTransactions(ctx context.Context, req WorkflowReadRequ
 	}
 	report, err := f.spendingService().InspectSpendingTransactions(ctx, finance.SpendingTransactionsQuery{Month: in.Month, Status: in.Status, Offset: in.Offset, PageSize: in.PageSize})
 	if errors.Is(err, finance.ErrSpendingTransactionsQuery) {
-		return nil, fmt.Errorf("status must be all, classified, pending or unclassified: %w", err)
+		return nil, fmt.Errorf("status must be all, classified, pending, unclassified or excluded: %w", err)
 	}
 	if err != nil {
 		return nil, err
@@ -294,7 +302,7 @@ func (f Finance) readMonthTransactions(ctx context.Context, req WorkflowReadRequ
 		"month": report.Month, "status": report.Status, "offset": int64(report.Offset), "page_size": int64(report.PageSize),
 		"total": int64(report.Total), "has_more": report.HasMore,
 		"counts": map[string]any{"all": int64(report.Counts.All), "unclassified": int64(report.Counts.Unclassified),
-			"classified": int64(report.Counts.Classified), "pending": int64(report.Counts.Pending)},
+			"classified": int64(report.Counts.Classified), "pending": int64(report.Counts.Pending), "excluded": int64(report.Counts.Excluded)},
 		"transactions": transactions,
 	}, nil
 }
