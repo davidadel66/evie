@@ -21,11 +21,17 @@ type financeCapabilityAssociation struct {
 
 func TestFinanceManifestAndToolContractsAreStable(t *testing.T) {
 	finance := NewFinance()
-	// 1.1.0 adds the workflow reads (Stage 14 sub-stage 5) and declares that
-	// it continues 1.0.0's sessions: its tools are unchanged.
+	// 1.1.0 added the workflow reads (Stage 14 sub-stage 5) and 1.2.0 the
+	// ledger effects (finance-daily); the tools are unchanged, so it
+	// continues 1.0.0's and 1.1.0's sessions.
+	tools1 := []CapabilityCompatibility{
+		{ID: FinanceSyncCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.FinanceSyncTool().Schema)},
+		{ID: FinanceRulesCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.FinanceRulesTool().Schema)},
+		{ID: FinanceCategorizeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.FinanceCategorizeTool().Schema)},
+	}
 	want := Manifest{
 		ID:                    FinancePluginID,
-		ImplementationVersion: "1.1.0",
+		ImplementationVersion: "1.2.0",
 		KernelCompatibility: VersionRange{
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
@@ -35,12 +41,13 @@ func TestFinanceManifestAndToolContractsAreStable(t *testing.T) {
 			{ID: FinanceCategorizeCapabilityID, Version: "1.0.0"},
 			{ID: FinanceMonthCashFlowCapabilityID, Version: "1.0.0"},
 			{ID: FinanceMonthTransactionsCapabilityID, Version: "1.0.0"},
+			{ID: FinanceSyncLedgerCapabilityID, Version: "1.0.0"},
+			{ID: FinanceCategorizeLedgerCapabilityID, Version: "1.0.0"},
 		},
-		ResumableFrom: []ImplementationCompatibility{{ImplementationVersion: "1.0.0", Capabilities: []CapabilityCompatibility{
-			{ID: FinanceSyncCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.FinanceSyncTool().Schema)},
-			{ID: FinanceRulesCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.FinanceRulesTool().Schema)},
-			{ID: FinanceCategorizeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.FinanceCategorizeTool().Schema)},
-		}}},
+		ResumableFrom: []ImplementationCompatibility{
+			{ImplementationVersion: "1.0.0", Capabilities: tools1},
+			{ImplementationVersion: "1.1.0", Capabilities: tools1},
+		},
 	}
 	if got := finance.Manifest(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Finance manifest\n got: %+v\nwant: %+v", got, want)

@@ -1,0 +1,18 @@
+{
+  "inputs": {"day": "2026-10-07", "at": "09:00"},
+  "steps": {
+    "sync": {
+      "output": {
+        "banks": [
+          {"label": "Citibank Online", "added": 1, "modified": 0, "removed": 0, "failed": false, "error": "", "warnings": []},
+          {"label": "American Express", "added": 0, "modified": 0, "removed": 0, "failed": false, "error": "", "warnings": []},
+          {"label": "PNC", "added": 2, "modified": 1, "removed": 0, "failed": false, "error": "", "warnings": []}
+        ],
+        "added": 3, "modified": 1, "removed": 0, "failed_banks": 0, "replayed": false
+      }
+    },
+    "categorize": {
+      "output": {"categorized": 2, "uncategorized": 377, "replayed": false}
+    }
+  }
+}

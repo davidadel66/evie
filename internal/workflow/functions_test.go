@@ -116,7 +116,7 @@ func TestWorkflowFunctionRegistryIsReviewedAndPure(t *testing.T) {
 		ids = append(ids, id)
 	}
 	want := []string{"check_citations@1", "collect_claims@1", "dedup_sources@1", "expand_ballots@1", "expand_ballots@2", "majority_filter@1", "rank_claims@1",
-		"split_evenly@1", "tally_adversarial@1", "tally_verdicts@1"}
+		"require_zero@1", "split_evenly@1", "tally_adversarial@1", "tally_verdicts@1"}
 	if !reflect.DeepEqual(sortedStrings(ids), want) {
 		t.Fatalf("registry = %v, want %v", ids, want)
 	}
@@ -125,5 +125,31 @@ func TestWorkflowFunctionRegistryIsReviewedAndPure(t *testing.T) {
 	second, _ := json.Marshal(call(t, "collect_claims@1", args))
 	if string(first) != string(second) {
 		t.Fatal("collect_claims is not deterministic")
+	}
+}
+
+// require_zero@1 passes only a zero count and otherwise fails with the
+// count and the subject, so a workflow can fail a run after the steps
+// that should still happen have happened.
+func TestWorkflowRequireZeroFailsOnAnyCount(t *testing.T) {
+	out := call(t, "require_zero@1", map[string]any{"count": int64(0), "subject": "banks that failed to sync"})
+	if out["count"] != int64(0) {
+		t.Fatalf("zero = %#v", out)
+	}
+	f := reviewedFunctions()["require_zero@1"]
+	for name, tc := range map[string]struct {
+		args map[string]any
+		want string
+	}{
+		"one":         {map[string]any{"count": int64(1), "subject": "banks that failed to sync"}, "1 banks that failed to sync"},
+		"many":        {map[string]any{"count": int64(3), "subject": " items "}, "3 items"},
+		"negative":    {map[string]any{"count": int64(-1), "subject": "x"}, "count must be between"},
+		"no subject":  {map[string]any{"count": int64(0), "subject": "  "}, "subject must name"},
+		"not integer": {map[string]any{"count": 1.5, "subject": "x"}, "count"},
+	} {
+		_, err := f.Call(tc.args)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s: err = %v, want %q", name, err, tc.want)
+		}
 	}
 }

@@ -91,9 +91,29 @@ func RulesSeed(ctx context.Context, db *sql.DB, path string) error {
 // transactions stay entry-less — that is the awaiting-review state. The
 // legacy category column is no longer written.
 func Categorize(ctx context.Context, db *sql.DB) (matched, unmatched int, err error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, 0, fmt.Errorf("begin categorize: %w", err)
+	}
+	defer tx.Rollback()
+	matched, unmatched, err = categorizeTx(ctx, tx)
+	if err != nil {
+		return matched, unmatched, err
+	}
+	if err := tx.Commit(); err != nil {
+		return matched, unmatched, fmt.Errorf("commit categorize: %w", err)
+	}
+	return matched, unmatched, nil
+}
+
+// categorizeTx is Categorize inside one transaction the caller commits:
+// the rules, the candidates and the entries are all read and written on
+// tx, so a caller can record its own row (an effect receipt) atomically
+// with the entries it minted.
+func categorizeTx(ctx context.Context, tx *sql.Tx) (matched, unmatched int, err error) {
 	rules := make(map[string]string)
 
-	rows, err := db.QueryContext(ctx, `SELECT merchant, category FROM rules`)
+	rows, err := tx.QueryContext(ctx, `SELECT merchant, category FROM rules`)
 	if err != nil {
 		return 0, 0, fmt.Errorf("load rules: %w", err)
 	}
@@ -121,7 +141,7 @@ func Categorize(ctx context.Context, db *sql.DB) (matched, unmatched int, err er
 	// to delete — so budget totals moved on their own and the delete
 	// wedged the sync. The posted transaction gets categorized on the next
 	// run; a day's lag beats an entry that is wrong and then vanishes.
-	txns, err := db.QueryContext(ctx, `
+	txns, err := tx.QueryContext(ctx, `
 		SELECT t.transaction_id, COALESCE(t.merchant_name, ''), t.amount_cents,
 		       COALESCE(t.category, ''), COALESCE(t.category_source, 'rule')
 		FROM transactions t
@@ -149,13 +169,6 @@ func Categorize(ctx context.Context, db *sql.DB) (matched, unmatched int, err er
 	}
 
 	txns.Close()
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, 0, fmt.Errorf("begin categorize: %w", err)
-	}
-
-	defer tx.Rollback()
 
 	for _, c := range candidates {
 		category, source := c.category, c.source
@@ -187,14 +200,11 @@ func Categorize(ctx context.Context, db *sql.DB) (matched, unmatched int, err er
 	if err := ctx.Err(); err != nil {
 		return matched, unmatched, err
 	}
-	if err := tx.Commit(); err != nil {
-		return matched, unmatched, fmt.Errorf("commit categorize: %w", err)
-	}
 
 	return matched, unmatched, nil
 }
 
-// Candidate discovery precedes the write transaction. Recheck its inputs and
+// Candidate discovery precedes the writes. Recheck its inputs and
 // the entry-existence fence in the INSERT so a human edit or intervening sync
 // cannot be followed by a duplicate entry or an allocation of a stale amount.
 func insertCategorizedCandidate(ctx context.Context, tx *sql.Tx, c candidate, category, source string) (bool, error) {

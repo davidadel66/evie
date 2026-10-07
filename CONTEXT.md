@@ -459,3 +459,18 @@ execute when Standing Authority does not cover it or the Workflow Definition
 requires an interruption. It is independent of whether the providing plugin is
 loaded.
 _Avoid_: Plugin approval
+
+**Budget Entry**:
+The recorded decision that one posted Transaction counts toward a Category at a
+given amount, whether made by a rule or by the owner.
+_Avoid_: Categorization, label, tag
+
+**Awaiting Review**:
+A posted Transaction that has no Budget Entry. Pending Transactions are never
+Awaiting Review because no decision about them can be made yet.
+_Avoid_: Uncategorized, unmatched, pending
+
+**Pending Fence**:
+The boundary that keeps Pending Transactions out of categorization until the
+provider posts them, so a Budget Entry is only ever minted at the final amount.
+_Avoid_: Pending filter, skip rule

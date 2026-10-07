@@ -56,7 +56,9 @@ func reviewedFunctions() map[string]Function {
 	out := map[string]Function{}
 	for _, f := range []Function{collectClaims(), expandBallots(), majorityFilter(), splitEvenly(), tallyVerdicts(), checkCitations(),
 		// The built-in deep-research v2's steps (2026-10-04, research.go).
-		dedupSources(), rankClaims(), expandBallotsV2(), tallyAdversarial()} {
+		dedupSources(), rankClaims(), expandBallotsV2(), tallyAdversarial(),
+		// finance-daily's final step (2026-10-06).
+		requireZero()} {
 		out[f.ID()] = f
 	}
 	return out
@@ -393,4 +395,44 @@ func containsValue(list []any, v any) bool {
 		}
 	}
 	return false
+}
+
+// Bounds of require_zero@1.
+const (
+	maxRequireCount   = 1_000_000_000
+	maxRequireSubject = 200
+)
+
+// requireZero fails its step, and so the run once its Retry Policy is
+// spent, when a count a prior step produced is not zero: the reviewed way
+// for a workflow to turn "some of what the effect reported went wrong"
+// into a failed run with a durable notification, after the steps that
+// should still happen have happened (finance-daily, 2026-10-06). It is
+// pure: the same count and subject always give the same answer.
+func requireZero() Function {
+	subject := StringType()
+	maxSubject := int64(maxRequireSubject)
+	subject.MaxLength = &maxSubject
+	params := []Param{
+		{Name: "count", Type: IntegerType(), Min: 0, Max: maxRequireCount},
+		{Name: "subject", Type: subject},
+	}
+	return Function{
+		Name: "require_zero", Version: 1, Params: params,
+		Result:  ObjectType(Field{Name: "count", Type: IntegerType()}),
+		Summary: "fail the step unless a count is zero, naming what was counted",
+		Call: func(args map[string]any) (any, error) {
+			if err := checkArgs(params, args); err != nil {
+				return nil, err
+			}
+			count, subject := args["count"].(int64), args["subject"].(string)
+			if strings.TrimSpace(subject) == "" {
+				return nil, fmt.Errorf("subject must name what was counted")
+			}
+			if count != 0 {
+				return nil, fmt.Errorf("%d %s", count, strings.TrimSpace(subject))
+			}
+			return map[string]any{"count": int64(0)}, nil
+		},
+	}
 }

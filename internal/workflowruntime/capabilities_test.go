@@ -324,13 +324,13 @@ func TestWorkflowCapabilityReadRunsEndToEndThroughTheFinancePlugin(t *testing.T)
 	}
 	contract, _ := manager.WorkflowContract(cashFlowID)
 	pins := pinnedProviders(t, d.Run)
-	wantPins := []pinnedTestProvider{{Capability: cashFlowID, Contract: "1.0.0", SchemaSHA256: contract.SchemaSHA256(), Plugin: "finance", Version: "1.1.0",
+	wantPins := []pinnedTestProvider{{Capability: cashFlowID, Contract: "1.0.0", SchemaSHA256: contract.SchemaSHA256(), Plugin: "finance", Version: plugins.NewFinance().Manifest().ImplementationVersion,
 		Connections: []string{plugins.FinanceConnectionID}}}
 	if !reflect.DeepEqual(pins, wantPins) {
 		t.Fatalf("pinned providers = %+v", pins)
 	}
 	text := RunText(d)
-	for _, want := range []string{"Providers: finance.month_cash_flow 1.0.0 from finance 1.1.0 on finance-local", "read attempt 1: succeeded -> split", "leftover_cents: 1"} {
+	for _, want := range []string{"Providers: finance.month_cash_flow 1.0.0 from finance 1.2.0 on finance-local", "read attempt 1: succeeded -> split", "leftover_cents: 1"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("inspection lacks %q:\n%s", want, text)
 		}

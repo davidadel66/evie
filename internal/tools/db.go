@@ -254,6 +254,7 @@ Databases: "finance" — personal finance. Schema:
   transactions(transaction_id, item_id, account_id, date TEXT 'YYYY-MM-DD', name, merchant_name, amount_cents INTEGER (positive = money out), plaid_category, category (legacy — do not use), category_source, reviewed INTEGER 0/1, pending INTEGER 0/1, tags JSON array)
   budget_entries(id, transaction_id, category, amount_cents, source 'rule'|'human', tags JSON array) — where money went; every categorized transaction has one entry with its full amount, a split bill has several entries summing to the total, refunds are negative entries that net the category down
   budget_limits(category, month, limit_cents) — month NULL is the standing monthly template, month 'YYYY-MM' overrides it for that month. Recurring limits ALWAYS go in the template (month NULL); write a 'YYYY-MM' row only for a one-month exception David explicitly asks for
+  effect_receipts(idempotency_key, effect, output, recorded_at) — never edit
   categories(name)
   rules(id, merchant, category)
 

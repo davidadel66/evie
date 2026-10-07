@@ -1,0 +1,101 @@
+# The owner's daily finance run as a scheduled Workspace workflow
+# (finance-daily, 2026-10-06): sync every linked bank, then categorize the
+# posted transactions that have no budget entry, then fail the run if any
+# bank failed to sync. Categorize runs whether or not a bank failed, so one
+# wedged bank never skips the day's categorization, and a failed run leaves
+# a durable notification that a bank needs attention. Each slot's local
+# date and time is the run key, so a day is one logical run.
+schema_version: 1
+name: finance-daily
+description: Sync every linked bank, categorize posted transactions, and fail if any bank failed.
+
+inputs:
+  day:
+    type: string
+    required: true
+    max_length: 10
+  at:
+    type: string
+    required: true
+    max_length: 5
+
+run_key:
+  inputs: [day, at]
+
+limits:
+  max_duration: 30m
+  max_attempts: 10
+  max_parallel: 1
+  max_tokens: 1
+
+authority:
+  operations:
+    - capability: finance.sync_ledger
+      connection: finance-local
+      resources: [ledger]
+      max_calls_per_run: 3
+    - capability: finance.categorize_ledger
+      connection: finance-local
+      resources: [ledger]
+      max_calls_per_run: 3
+
+schedule:
+  cron: "0 9 * * *"
+  timezone: America/Detroit
+  catch_up:
+    policy: each_missed
+    max_runs: 1
+  inputs:
+    day: $schedule.date
+    at: $schedule.time
+
+retention:
+  classification: sensitive
+
+start: sync
+
+steps:
+  - id: sync
+    kind: capability
+    description: Pull every linked bank's new, changed and removed transactions from the committed cursor.
+    capability: finance.sync_ledger
+    contract: 1.0.0
+    connection: finance-local
+    resource: ledger
+    input:
+      day: $inputs.day
+    retry:
+      max_attempts: 3
+      backoff: 10m
+    next: categorize
+
+  - id: categorize
+    kind: capability
+    description: Mint a budget entry for every posted transaction a merchant rule matches.
+    capability: finance.categorize_ledger
+    contract: 1.0.0
+    connection: finance-local
+    resource: ledger
+    input:
+      day: $inputs.day
+    retry:
+      max_attempts: 3
+      backoff: 1m
+    next: check
+
+  - id: check
+    kind: deterministic
+    description: Fail the run when any bank failed to sync, after categorization has run.
+    function: require_zero@1
+    input:
+      count: $steps.sync.output.failed_banks
+      subject: banks failed to sync
+
+outputs:
+  day: $inputs.day
+  added: $steps.sync.output.added
+  modified: $steps.sync.output.modified
+  removed: $steps.sync.output.removed
+  failed_banks: $steps.sync.output.failed_banks
+  categorized: $steps.categorize.output.categorized
+  uncategorized: $steps.categorize.output.uncategorized

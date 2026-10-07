@@ -13,9 +13,10 @@ const (
 	FinanceRulesCapabilityID      CapabilityID = "finance.rules"
 	FinanceCategorizeCapabilityID CapabilityID = "finance.categorize"
 
-	// 1.1.0 adds the workflow reads (Stage 14 sub-stage 5); its tools are
-	// unchanged, so it declares it continues 1.0.0's pinned sessions.
-	financeImplementationVersion = "1.1.0"
+	// 1.1.0 added the workflow reads (Stage 14 sub-stage 5) and 1.2.0 the
+	// ledger effects (finance-daily, 2026-10-06); the tools are unchanged
+	// through both, so it continues 1.0.0's and 1.1.0's pinned sessions.
+	financeImplementationVersion = "1.2.0"
 	financeContractVersion       = "1.0.0"
 )
 
@@ -43,12 +44,23 @@ func (Finance) Manifest() Manifest {
 			{ID: FinanceCategorizeCapabilityID, Version: financeContractVersion},
 			{ID: FinanceMonthCashFlowCapabilityID, Version: financeReadContractVersion},
 			{ID: FinanceMonthTransactionsCapabilityID, Version: financeReadContractVersion},
+			{ID: FinanceSyncLedgerCapabilityID, Version: financeEffectContractVersion},
+			{ID: FinanceCategorizeLedgerCapabilityID, Version: financeEffectContractVersion},
 		},
-		ResumableFrom: []ImplementationCompatibility{{ImplementationVersion: "1.0.0", Capabilities: []CapabilityCompatibility{
-			{ID: FinanceSyncCapabilityID, ContractVersion: financeContractVersion, SchemaSHA256: schemaHash(tools.FinanceSyncTool().Schema)},
-			{ID: FinanceRulesCapabilityID, ContractVersion: financeContractVersion, SchemaSHA256: schemaHash(tools.FinanceRulesTool().Schema)},
-			{ID: FinanceCategorizeCapabilityID, ContractVersion: financeContractVersion, SchemaSHA256: schemaHash(tools.FinanceCategorizeTool().Schema)},
-		}}},
+		ResumableFrom: []ImplementationCompatibility{
+			{ImplementationVersion: "1.0.0", Capabilities: financeToolCompatibility()},
+			{ImplementationVersion: "1.1.0", Capabilities: financeToolCompatibility()},
+		},
+	}
+}
+
+// financeToolCompatibility is the evidence that the chat tools are the
+// same as in every earlier implementation version.
+func financeToolCompatibility() []CapabilityCompatibility {
+	return []CapabilityCompatibility{
+		{ID: FinanceSyncCapabilityID, ContractVersion: financeContractVersion, SchemaSHA256: schemaHash(tools.FinanceSyncTool().Schema)},
+		{ID: FinanceRulesCapabilityID, ContractVersion: financeContractVersion, SchemaSHA256: schemaHash(tools.FinanceRulesTool().Schema)},
+		{ID: FinanceCategorizeCapabilityID, ContractVersion: financeContractVersion, SchemaSHA256: schemaHash(tools.FinanceCategorizeTool().Schema)},
 	}
 }
 

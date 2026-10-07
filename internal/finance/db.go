@@ -71,6 +71,16 @@ CREATE TABLE IF NOT EXISTS budget_limits (
 	limit_cents INTEGER NOT NULL,
 	UNIQUE(category, month)
 );
+
+-- One row per workflow effect the finance plugin performed, keyed by the
+-- Effect Intent's idempotency key: a replay returns the recorded output
+-- instead of acting again, and reconciliation answers from it.
+CREATE TABLE IF NOT EXISTS effect_receipts (
+	idempotency_key TEXT PRIMARY KEY,
+	effect          TEXT NOT NULL,
+	output          TEXT NOT NULL,
+	recorded_at     TEXT NOT NULL
+);
 `
 
 // OpenDB opens (creating if needed) the canonical database at
