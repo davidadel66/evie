@@ -14,6 +14,7 @@ import type { WorkflowCapStatus } from "../api/workflows";
 import { WorkspaceWorkflowsTab } from "./WorkspaceWorkflowsTab";
 import { WorkspaceRuns } from "./WorkspaceRuns";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { WorkspaceRepository } from "./WorkspaceRepository";
 import type { WorkspaceTab, WorkspaceViewState } from "./workspaceActivity";
 
 type DirectoryProps = {
@@ -196,6 +197,7 @@ export function WorkspaceHome({
       </div> : <div id="workspace-tab-panel" role="tabpanel" aria-labelledby={`workspace-tab-${tab}`} className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 sm:px-10">
       <div className="mx-auto max-w-[880px]">
         <>
+        <WorkspaceRepository key={`repository:${workspace.id}`} workspace={workspace} />
         {instructions}
         <WorkspaceResearchSettings key={workspace.id} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceExploreSettings key={`explore:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />

@@ -75,6 +75,13 @@ func gitEnv() []string {
 	return env
 }
 
+// Git runs one hardened git command in dir (no hooks, fsmonitor, pager,
+// signing or transport) and returns its trimmed stdout. The changes
+// package inspects Workspace repositories through it.
+func Git(ctx context.Context, dir string, args ...string) (string, error) {
+	return git(ctx, dir, args...)
+}
+
 // git runs one hardened git command in dir and returns its trimmed stdout.
 func git(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", append(append([]string(nil), hardening...), args...)...)

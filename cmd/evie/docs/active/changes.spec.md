@@ -134,7 +134,8 @@ keeps the owner's checkout current without touching work in progress.
 
 - GitHub is an Account Connection with Connection ID `github`. For this spec
   the credential is a fine-grained personal access token read from
-  `GITHUB_TOKEN` by startup composition and handed to the GitHub client.
+  `GITHUB_TOKEN` (the environment, or `~/.evie/.env`, which `evie serve`
+  loads at startup) by startup composition and handed to the GitHub client.
   There is no secret store; moving the credential into one later changes
   only composition.
 - Token permissions the feature uses: Metadata read, Contents read/write,
@@ -281,9 +282,9 @@ Each story is independently demonstrable and ends with
        `davidadel66/evie` (no such Workspace existed on 2026-10-09; the owner
        creates one with that folder);
      - a folder without git reads as none;
-     - a missing or invalid token is reported;
-     - changing or detaching the folder is refused while a Change is
-       unfinished (tested with a seeded Change).
+     - a missing or invalid token is reported.
+   - The folder guard moved to story 3 (2026-10-09): there are no stored
+     Changes to check against until then.
    - Risk: parsing `origin` forms.
 2. **Repository at creation and Publish to GitHub.**
    - Outcome: the four creation options and Publish work end to end.
@@ -301,6 +302,8 @@ Each story is independently demonstrable and ends with
      branches and, for GitHub Repositories, every open pull request with
      checks, refreshed every 60 seconds and on request.
    - Acceptance:
+     - changing or detaching the folder is refused while a Change is
+       unfinished (moved here from story 1);
      - chat and workflow build branches appear as drafts with their origin;
      - local Repositories hide the owner's branches;
      - merges and closes done on GitHub appear after a sync.
