@@ -91,8 +91,11 @@ Interfaces should normally be owned by the package that consumes them.
 
 - Preserve user-owned and pre-existing working-tree changes.
 - Never reset, discard, overwrite, or broadly reformat unrelated work.
-- Use the branch or worktree assigned to the task.
-- Do not create or switch branches or worktrees unless the task requests it.
+- Work on the branch or worktree assigned to the task, if one is. Otherwise
+  create branches and worktrees as the work needs, for example one worktree
+  per parallel subagent, and remove each worktree once its work is merged.
+- Keep the owner's checkout on its current branch, with its working-tree
+  changes in place.
 - Commit, push, or open a pull request only when explicitly requested.
 - Never merge a pull request on the user's behalf.
 
