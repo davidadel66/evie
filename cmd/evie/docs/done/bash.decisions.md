@@ -31,6 +31,15 @@ Consequence worth stating plainly: `read_file`'s denylist is now a
 defense only against *accidental* leakage through the ungated read path.
 Anything determined to read `~/.zshrc` can just run `cat`.
 
+Observed and accepted again on 2026-10-09: in a Finance Workspace chat,
+Evie ran `sqlite3 -readonly ~/.evie/evie.db` and grepped Evie's source, so
+a Workspace-scoped chat can read every Workspace's runs, notices and
+receipts through the shell, past the scoped tools. The worker sandbox
+denies `~/.evie`; the owner's chat shell does not, by this decision. David
+kept it ungated. A path filter on commands was rejected for the reason
+above; the real alternative, if this is ever revisited, is running the
+chat shell in the OS sandbox with an approval gate to leave it.
+
 ## A non-zero exit is a result, not an error
 
 `grep` finding nothing, a failing test suite, a compile error — the model
