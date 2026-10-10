@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http/httptest"
 	"os"
@@ -94,6 +95,12 @@ func (s *stubRepositories) Publish(_ context.Context, p changes.Publish) (change
 }
 func (s *stubRepositories) Account(context.Context) changes.GitHubStatus {
 	return changes.GitHubStatus{State: changes.Connected, Login: "davidadel66"}
+}
+func (s *stubRepositories) Prepare(context.Context, changes.Prepare) (changes.Repository, error) {
+	return changes.Repository{}, errors.New("not used")
+}
+func (s *stubRepositories) GitHubRepositories(context.Context) ([]github.Repository, error) {
+	return []github.Repository{{Name: "evie", FullName: "davidadel66/evie"}}, nil
 }
 
 // Story 2a: Publish takes the Workspace's folder, never one from the

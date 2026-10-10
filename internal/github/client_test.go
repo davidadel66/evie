@@ -112,3 +112,23 @@ func TestClientCreatesARepositoryOnTheTokensAccount(t *testing.T) {
 		t.Fatalf("crafted name: %v", err)
 	}
 }
+
+func TestClientListsTheTokenOwnersRepositories(t *testing.T) {
+	var query string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		if r.URL.Path != "/user/repos" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte(`[{"name":"evie","full_name":"davidadel66/evie","private":false,"default_branch":"master","owner":{"login":"davidadel66"}},{"name":"notes","full_name":"davidadel66/notes","private":true,"owner":{"login":"davidadel66"}}]`))
+	}))
+	defer server.Close()
+	repos, err := github.New(server.URL, "t", server.Client()).Repositories(context.Background())
+	if err != nil || len(repos) != 2 || repos[0].FullName != "davidadel66/evie" || !repos[1].Private {
+		t.Fatalf("repositories = %+v, %v", repos, err)
+	}
+	if query != "affiliation=owner&per_page=100&sort=updated" {
+		t.Fatalf("query = %q", query)
+	}
+}

@@ -33,5 +33,9 @@ export const repositoryAPI = {
     post("/api/workspaces/repository/publish", { workspace_id: workspaceId, name, private: isPrivate }, "The repository could not be published"),
   /** The token check alone. */
   account: (): Promise<GitHubStatus> => post("/api/github/status", {}, "GitHub could not be checked"),
+  /** The token owner's own repositories, most recently updated first. */
+  githubRepositories: (): Promise<{ repositories: GitHubRepository[] }> => post("/api/github/repositories", {}, "Your GitHub repositories could not be listed"),
 };
+
+export type GitHubRepository = { name: string; full_name: string; private: boolean; default_branch?: string; owner: { login: string } };
 export type RepositoryAPI = typeof repositoryAPI;

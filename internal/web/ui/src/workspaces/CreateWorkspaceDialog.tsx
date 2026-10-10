@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { chooseWorkspaceFolder, type WorkspaceCreation } from "../api/contextSessions";
-import { Cross, Folder } from "../ui/Icon";
+import { repositoryAPI, type GitHubRepository, type GitHubStatus } from "../api/repository";
+import { Folder } from "../ui/Icon";
 import { listPresets, type PresetInspection } from "../api/management";
 import { Dialog } from "../ui/Dialog";
-import { presetDescription, presetLabel, workspaceCreation, type WorkspaceDraft } from "./workspaceCreation";
+import { defaultFolder, presetDescription, presetLabel, workspaceCreation, type RepositoryKind, type WorkspaceDraft } from "./workspaceCreation";
 
 const input = "border-hair-input bg-card text-ink placeholder:text-faint focus-visible:ring-teal w-full min-w-0 rounded-lg border px-3 py-2.5 text-[13px] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50";
-const initialDraft: WorkspaceDraft = { name: "", presetId: "standard", folderPath: "" };
+const initialDraft: WorkspaceDraft = { name: "", presetId: "standard", folderPath: "", repository: "none" };
 
 export function CreateWorkspaceDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (options: WorkspaceCreation) => Promise<void> }) {
   const [draft, setDraft] = useState(initialDraft);
@@ -25,6 +26,25 @@ export function CreateWorkspaceDialog({ onClose, onCreate }: { onClose: () => vo
   const presetId = useId();
   const presetHelpId = useId();
   const folderHelpId = useId();
+  const folderInputId = useId();
+  const [account, setAccount] = useState<GitHubStatus>();
+  const [repos, setRepos] = useState<GitHubRepository[] | null>(null);
+  const [reposProblem, setReposProblem] = useState("");
+
+  useEffect(() => {
+    let current = true;
+    repositoryAPI.account().then((value) => { if (current) setAccount(value); },
+      () => { if (current) setAccount({state: "unreachable", message: "GitHub could not be checked."}); });
+    return () => { current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (draft.repository !== "github_existing" || repos !== null) return;
+    let current = true;
+    repositoryAPI.githubRepositories().then((value) => { if (current) setRepos(value.repositories); },
+      (error: unknown) => { if (current) { setRepos([]); setReposProblem(error instanceof Error ? error.message : "Your GitHub repositories could not be listed."); } });
+    return () => { current = false; };
+  }, [draft.repository, repos]);
 
   useEffect(() => {
     let current = true;
@@ -112,16 +132,26 @@ export function CreateWorkspaceDialog({ onClose, onCreate }: { onClose: () => vo
           </div>}
         </div>
 
+        <RepositoryChoiceFields draft={draft} account={account} repos={repos} reposProblem={reposProblem} disabled={saving || pickingFolder}
+          onChange={(patch) => {
+            const next = {...draft, ...patch};
+            // A repository needs a folder: suggest ~/code/<name> until the owner types one.
+            if (patch.repository && patch.repository !== "none" && !draft.folderPath.trim()) next.folderPath = defaultFolder(next.repoName || next.repoFullName?.split("/")[1] || next.name);
+            if (patch.repository === "github_new" && !draft.repoName) next.repoName = defaultFolder(draft.name).replace("~/code/", "");
+            if (patch.repoFullName && (!draft.folderPath.trim() || draft.folderPath === defaultFolder(draft.repoFullName?.split("/")[1] ?? draft.name))) next.folderPath = defaultFolder(patch.repoFullName.split("/")[1] ?? "");
+            update(next);
+          }} />
+
         <fieldset disabled={saving || pickingFolder}>
-          <legend className="text-body mb-2 text-xs font-medium">Local folder <span className="text-muted-text font-normal">(optional)</span></legend>
-          <button ref={pickerButton} type="button" onClick={() => void chooseFolder()} aria-describedby={folderHelpId} className="border-hair-input text-body hover:bg-hover hover:text-ink focus-visible:ring-teal flex items-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50">
-            <Folder size={14} /> {pickingFolder ? "Choosing folder…" : "Choose folder…"}
-          </button>
-          {draft.folderPath ? <div className="border-hair bg-card mt-3 flex items-start gap-3 rounded-lg border px-3 py-2.5">
-            <p className="text-body min-w-0 flex-1 break-words text-xs leading-5" aria-label="Selected folder">{draft.folderPath}</p>
-            <button type="button" aria-label="Remove selected folder" title="Remove folder" onClick={() => { update({ folderPath: "" }); setFolderProblem(""); pickerButton.current?.focus(); }} className="text-muted-text hover:text-ink focus-visible:ring-teal -mr-1 rounded p-1 focus-visible:ring-2 focus-visible:outline-none"><Cross size={13} /></button>
-          </div> : null}
-          <p id={folderHelpId} className="text-muted-text mt-2 text-xs leading-5">Choose a folder, or use New Folder in the macOS picker.</p>
+          <legend className="text-body mb-2 text-xs font-medium">{folderLabel(draft.repository ?? "none")}</legend>
+          <div className="flex gap-2">
+            <input id={folderInputId} aria-label="Folder path" aria-describedby={folderHelpId} value={draft.folderPath} onChange={(event) => { update({ folderPath: event.target.value }); setFolderProblem(""); }}
+              placeholder="~/code/project" spellCheck={false} autoComplete="off" className={`${input} font-mono`} />
+            <button ref={pickerButton} type="button" onClick={() => void chooseFolder()} title="Choose a folder in the macOS picker" className="border-hair-input text-body hover:bg-hover hover:text-ink focus-visible:ring-teal flex flex-none items-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50">
+              <Folder size={14} /> {pickingFolder ? "Choosing…" : "Choose…"}
+            </button>
+          </div>
+          <p id={folderHelpId} className="text-muted-text mt-2 text-xs leading-5">{folderHelp(draft.repository ?? "none")}</p>
           {pickingFolder && <p role="status" className="text-muted-text mt-2 text-xs">Choose a folder in the macOS window, or cancel to return here.</p>}
           {folderProblem && <p role="alert" className="text-danger-ink mt-2 text-xs leading-5">{folderProblem}</p>}
         </fieldset>
@@ -134,6 +164,69 @@ export function CreateWorkspaceDialog({ onClose, onCreate }: { onClose: () => vo
       </form>
     </Dialog>
   );
+}
+
+function folderLabel(kind: RepositoryKind): string {
+  return kind === "none" ? "Local folder (optional)" : kind === "local" ? "Folder to create" : kind === "github_new" ? "Folder to clone into" : "Folder";
+}
+
+function folderHelp(kind: RepositoryKind): string {
+  switch (kind) {
+  case "none": return "An existing folder, or leave it empty. Type a path or choose one.";
+  case "local": return "Evie creates this folder with a git repository on main and one empty first commit.";
+  case "github_new": return "Evie creates the repository on GitHub with a first commit, then clones it into this new folder.";
+  case "github_existing": return "Evie clones the repository into this new folder, or uses a clone of it already there.";
+  }
+}
+
+const choices: { kind: RepositoryKind; label: string; github: boolean }[] = [
+  {kind: "none", label: "No repository", github: false},
+  {kind: "local", label: "New repository on this Mac", github: false},
+  {kind: "github_new", label: "New repository on GitHub", github: true},
+  {kind: "github_existing", label: "Connect a GitHub repository", github: true},
+];
+
+/** The Repository a new Workspace's folder starts with (changes.spec.md story 2b). GitHub choices need a working token. */
+export function RepositoryChoiceFields({draft, account, repos, reposProblem, disabled, onChange}: {
+  draft: WorkspaceDraft;
+  account?: GitHubStatus;
+  repos: GitHubRepository[] | null;
+  reposProblem?: string;
+  disabled: boolean;
+  onChange: (patch: Partial<WorkspaceDraft>) => void;
+}) {
+  const kind = draft.repository ?? "none";
+  const connected = account?.state === "connected";
+  return <fieldset disabled={disabled}>
+    <legend className="text-body mb-2 text-xs font-medium">Repository</legend>
+    <div className="space-y-1.5">
+      {choices.map((choice) => <label key={choice.kind} className={`${choice.github && !connected ? "text-faint" : "text-body"} flex items-center gap-2 text-xs`}>
+        <input type="radio" name="repository" className="accent-teal" checked={kind === choice.kind} disabled={choice.github && !connected} onChange={() => onChange({repository: choice.kind})} />
+        {choice.label}
+      </label>)}
+    </div>
+    <p className={`${connected ? "text-muted-text" : "text-amber"} mt-2 text-xs leading-5`}>{!account ? "Checking GitHub…" : connected ? `GitHub: connected as ${account.login}.` : account.message}</p>
+    {kind === "github_new" && <div className="border-hair bg-card mt-3 space-y-3 rounded-lg border p-3 text-xs">
+      <label className="text-muted-text flex flex-col gap-1">Repository name
+        <input value={draft.repoName ?? ""} onChange={(event) => onChange({repoName: event.target.value})} maxLength={100} spellCheck={false} autoComplete="off" className={`${input} font-mono`} />
+      </label>
+      <div className="flex gap-5">
+        <label className="text-body flex items-center gap-2"><input type="radio" name="repo-visibility" className="accent-teal" checked={!draft.repoPublic} onChange={() => onChange({repoPublic: false})} />Private</label>
+        <label className="text-body flex items-center gap-2"><input type="radio" name="repo-visibility" className="accent-teal" checked={!!draft.repoPublic} onChange={() => onChange({repoPublic: true})} />Public</label>
+      </div>
+      {draft.repoPublic && <p className="text-amber leading-5">Anyone on the internet will be able to read this repository.</p>}
+    </div>}
+    {kind === "github_existing" && <div className="mt-3 text-xs">
+      {repos === null ? <p className="text-muted-text">Loading your repositories…</p>
+        : reposProblem ? <p role="alert" className="text-danger-ink">{reposProblem}</p>
+          : <label className="text-muted-text flex flex-col gap-1">Repository
+            <select value={draft.repoFullName ?? ""} onChange={(event) => onChange({repoFullName: event.target.value})} className={`${input} font-mono`}>
+              <option value="" disabled>Choose a repository…</option>
+              {repos.map((repo) => <option key={repo.full_name} value={repo.full_name}>{repo.full_name}{repo.private ? " (private)" : ""}</option>)}
+            </select>
+          </label>}
+    </div>}
+  </fieldset>;
 }
 
 export function PresetDiagnostics({ preset }: { preset?: PresetInspection }) {

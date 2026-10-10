@@ -100,6 +100,13 @@ func (c *Client) CreateRepository(ctx context.Context, name string, private, aut
 	return repo, c.do(ctx, http.MethodPost, "/user/repos", body, &repo)
 }
 
+// Repositories lists the token owner's own repositories, most recently
+// updated first, up to 100.
+func (c *Client) Repositories(ctx context.Context) ([]Repository, error) {
+	var repos []Repository
+	return repos, c.do(ctx, http.MethodGet, "/user/repos?affiliation=owner&per_page=100&sort=updated", nil, &repos)
+}
+
 // ValidName says whether GitHub could have an owner or repository named so.
 func ValidName(name string) bool {
 	return validName.MatchString(name) && strings.Trim(name, ".") != ""

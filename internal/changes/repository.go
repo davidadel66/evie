@@ -69,6 +69,7 @@ type GitHubClient interface {
 	User(context.Context) (github.User, error)
 	Repository(ctx context.Context, owner, name string) (github.Repository, error)
 	CreateRepository(ctx context.Context, name string, private, autoInit bool) (github.Repository, error)
+	Repositories(context.Context) ([]github.Repository, error)
 }
 
 // Config is how startup composition builds a Service. Without GitHub (no

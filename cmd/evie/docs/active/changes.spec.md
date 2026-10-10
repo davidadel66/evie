@@ -129,6 +129,15 @@ keeps the owner's checkout current without touching work in progress.
     HTTPS URL, push the base branch only. Drafts stay drafts.
 - Personal account only. No organizations, no visibility changes after
   creation.
+- At creation (story 2b, 2026-10-09) the Repository is set up before the
+  Workspace is registered, at the folder the setup returns, so a failure
+  never leaves a Workspace pointing at a half-made folder. A new local
+  Repository's folder is removed again if its first commit fails; a failed
+  clone leaves no folder. If registration fails after the setup, the error
+  names the ready folder. The dialog takes a typed folder path beside the
+  macOS chooser, suggests `~/code/<name>` for a repository's folder, and the
+  server expands `~/`. The first commit of a new local Repository uses the
+  owner's git identity, or Evie's when none is configured.
 
 ### GitHub connection
 

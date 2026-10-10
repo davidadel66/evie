@@ -63,6 +63,28 @@ func (f *fakeGitHub) rewrite(from, to string) {
 
 func (f *fakeGitHub) bare(name string) string { return filepath.Join(f.root, name+".git") }
 
+// init makes a repository's bare repository; withCommit gives it GitHub's
+// first commit, as auto_init does.
+func (f *fakeGitHub) init(name string, withCommit bool) {
+	gitIn(f.t, f.root, "init", "-q", "--bare", "-b", "main", f.bare(name))
+	if !withCommit {
+		return
+	}
+	seed := f.t.TempDir()
+	gitIn(f.t, seed, "init", "-q", "-b", "main")
+	gitIn(f.t, seed, "-c", "user.name=GitHub", "-c", "user.email=noreply@github.com", "commit", "-q", "--allow-empty", "-m", "Initial commit")
+	gitIn(f.t, seed, "push", "-q", f.bare(name), "main")
+}
+
+// seed is a repository the owner already has on GitHub.
+func (f *fakeGitHub) seed(name string, private bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.init(name, true)
+	f.rewrite(cloneURL(name), f.bare(name))
+	f.created[name] = f.repo(name, private)
+}
+
 func cloneURL(name string) string { return "https://github.com/davidadel66/" + name + ".git" }
 
 func (f *fakeGitHub) repo(name string, private bool) map[string]any {
@@ -80,6 +102,12 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/user":
 		w.Write([]byte(`{"login":"davidadel66"}`))
+	case r.Method == http.MethodGet && r.URL.Path == "/user/repos":
+		list := []map[string]any{}
+		for _, repo := range f.created {
+			list = append(list, repo)
+		}
+		json.NewEncoder(w).Encode(list)
 	case r.Method == http.MethodPost && r.URL.Path == "/user/repos":
 		var body struct {
 			Name     string `json:"name"`
@@ -93,7 +121,7 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !f.unpushable {
-			gitIn(f.t, f.root, "init", "-q", "--bare", "-b", "main", f.bare(body.Name))
+			f.init(body.Name, body.AutoInit)
 		}
 		f.rewrite(cloneURL(body.Name), f.bare(body.Name))
 		repo := f.repo(body.Name, body.Private)
@@ -101,8 +129,9 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		f.created[body.Name] = repo
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(repo)
-	case strings.HasPrefix(r.URL.Path, "/repos/davidadel66/"):
-		name := strings.TrimPrefix(r.URL.Path, "/repos/davidadel66/")
+	case strings.HasPrefix(strings.ToLower(r.URL.Path), "/repos/davidadel66/"):
+		// GitHub matches owner and repository names in any case.
+		name := strings.ToLower(r.URL.Path[len("/repos/davidadel66/"):])
 		if repo, ok := f.created[name]; ok {
 			json.NewEncoder(w).Encode(repo)
 			return

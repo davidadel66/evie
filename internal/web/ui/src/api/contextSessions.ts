@@ -88,6 +88,15 @@ export type WorkspaceCreation = {
   presetId?: string;
   folderPath?: string;
   createFolder?: boolean;
+  /** The Repository the folder starts with (changes.spec.md story 2b). */
+  repository?: RepositoryChoice;
+};
+
+export type RepositoryChoice = {
+  kind: "local" | "github_new" | "github_existing";
+  owner?: string;
+  name?: string;
+  private?: boolean;
 };
 
 export function setWorkspaceResearch(workspaceId: string, revision: string, enabled: boolean): Promise<Workspace> {
