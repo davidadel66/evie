@@ -144,6 +144,12 @@ func main() {
 		}
 		return
 	}
+	if handled, err := runChangeManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore, repositoryReader); handled {
+		if err != nil {
+			log.Fatalf("changes: %v", err)
+		}
+		return
+	}
 	// Workflow activation (Stage 14 sub-stage 2) needs the database and the
 	// procedural repository, and runs (sub-stage 5) the workflow capability
 	// plugins under the owner's enabled choices.
@@ -395,7 +401,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopMemory := startMemoryForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)))
 			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -443,7 +449,7 @@ func main() {
 				agent.WithCompactionMemoryFlush(memoryBackground.runner)), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)))
 		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)

@@ -37,6 +37,10 @@ func (s *Store) WorkspaceFolder(ctx context.Context, id memory.WorkspaceID) (mem
 
 // A revision compare-and-insert avoids a stale browser silently replacing a
 // newer attachment. Empty path detaches without removing files or history.
+// A change or detach is refused while a draft or open Change of the
+// Workspace lives in its current folder (ErrUnfinishedChanges), checked in
+// the same transaction as the write; setting the same folder again is not
+// a change.
 func (s *Store) SetWorkspaceFolder(ctx context.Context, id memory.WorkspaceID, expected int64, path string) (memory.WorkspaceFolder, error) {
 	path = strings.TrimSpace(path)
 	if path == "~" || strings.HasPrefix(path, "~/") {
@@ -59,19 +63,32 @@ func (s *Store) SetWorkspaceFolder(ctx context.Context, id memory.WorkspaceID, e
 	if expected < 0 {
 		return memory.WorkspaceFolder{}, ErrWorkspaceFolderChanged
 	}
-	result, err := s.db.ExecContext(ctx, `INSERT INTO workspace_folder_revisions(workspace_id,revision,path,recorded_at)
- SELECT id, ?, ?, ? FROM workspaces WHERE id = ? AND lifecycle_state = 'active'
- AND COALESCE((SELECT MAX(revision) FROM workspace_folder_revisions WHERE workspace_id = ?),0) = ?`,
-		expected+1, path, s.now().UTC().Format(time.RFC3339Nano), id, id, expected)
-	if err != nil {
-		return memory.WorkspaceFolder{}, fmt.Errorf("save Workspace folder: %w", err)
-	}
-	n, err := result.RowsAffected()
+	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		var current string
+		var revision int64
+		err := conn.QueryRowContext(ctx, `SELECT
+ COALESCE((SELECT path FROM workspace_folder_revisions WHERE workspace_id = w.id ORDER BY revision DESC LIMIT 1), ''),
+ COALESCE((SELECT MAX(revision) FROM workspace_folder_revisions WHERE workspace_id = w.id), 0)
+ FROM workspaces w WHERE w.id = ? AND w.lifecycle_state = 'active'`, id).Scan(&current, &revision)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && revision != expected) {
+			return ErrWorkspaceFolderChanged
+		}
+		if err != nil {
+			return err
+		}
+		if current != path && !sameFolder(current, path) {
+			if err := checkNoUnfinishedChanges(ctx, conn, id, current); err != nil {
+				return err
+			}
+		}
+		if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_folder_revisions(workspace_id,revision,path,recorded_at) VALUES(?,?,?,?)`,
+			id, expected+1, path, s.now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("save Workspace folder: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
 		return memory.WorkspaceFolder{}, err
-	}
-	if n != 1 {
-		return memory.WorkspaceFolder{}, ErrWorkspaceFolderChanged
 	}
 	return memory.WorkspaceFolder{Path: path, Revision: expected + 1}, nil
 }

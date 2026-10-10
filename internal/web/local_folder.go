@@ -46,7 +46,7 @@ func (s *Server) registerFolderRoutes(mux *http.ServeMux) {
 		}
 		folder, err := controller.SetWorkspaceFolder(r.Context(), req.WorkspaceID, req.Revision, req.Path)
 		if err != nil {
-			if errors.Is(err, eviedb.ErrWorkspaceFolderChanged) {
+			if errors.Is(err, eviedb.ErrWorkspaceFolderChanged) || errors.Is(err, eviedb.ErrUnfinishedChanges) {
 				jsonError(w, 409, err.Error())
 			} else {
 				jsonError(w, 422, "The folder could not be attached. Choose an existing absolute folder path.")
