@@ -159,32 +159,50 @@ spend.
 
 ### Runs tab and run panel
 
-- The tab lists runs through the existing runs route, which takes a
-  workflow filter and a limit of up to 200. Earlier is capped by that
-  limit.
+- The tab lists runs through the runs route, which takes a workflow filter
+  and a limit of up to 200. Earlier is capped by that limit. The list
+  refreshes every 15 seconds while the tab is open.
+- The runs route carries each run's step states: the state of each step's
+  latest attempt, map items aside, read for every listed run in one query.
+  So the list never inspects runs one by one; a finance run's attempts
+  carry whole transaction lists.
+- A new read-only `definition` route takes a run ID and returns the
+  `workflow.yaml` that run is pinned to (its recorded commit and path) and
+  its outline from the real parser: each step's id, kind, description, the
+  steps it can lead to, its retry ceiling and its line range. The UI reads
+  it once per workflow version. An older run therefore shows its own steps,
+  not the active version's. (Implemented 2026-10-09 in place of reading the
+  active version and parsing YAML in the UI.)
 - Row notes are derived:
-  - waiting: the question's message;
-  - running: the current step and its detail;
+  - waiting: "Waiting for you at" the step and its description (the
+    question's message can be long instructions, as finance-review's is);
+  - running: the current step and its description;
   - failed: the error;
   - succeeded: the outputs summarized.
 - The step bar has one segment per definition step, colored by state.
-- The panel reads the existing inspect route. Steps come from the active
-  definition's step list in YAML order, matched to node attempts:
-  - done: has a succeeded attempt;
-  - current: running, or waiting on a question;
-  - not reached: no attempt yet while the run is unfinished;
-  - skipped: no attempt once the run finished.
+- The panel reads the existing inspect route. Steps are the run's outline in
+  YAML order, matched to the latest attempt per step:
+  - done: a succeeded attempt;
+  - current: the run's next step, running or waiting on the owner;
+  - failed, or cancelled where a cancelled run stopped;
+  - not reached: no attempt while the run is unfinished, or after it failed
+    or was cancelled;
+  - skipped: no attempt once the run succeeded (a branch not taken).
 
-  Map steps show their item counts.
+  Map steps' item counts are not shown yet (deferred).
+- The panel keeps its frame and header while a newly selected run loads, so
+  the list beside it never changes width.
 - Questions:
   - A response schema that allows only a fixed set of values (an enum)
     renders as buttons.
   - Any other schema uses the existing answer form.
-  - Effect reconciliations use the existing reconciliation form.
+  - Effect reconciliations use the same existing answer form, which
+    already takes a reconciliation.
 - Spend is the sum of model-call and worker-call spend, using the existing
   helpers: recorded usage once finished, estimates while open.
 - Actions:
-  - Cancel (optional reason) for unfinished runs, through the cancel route;
+  - Cancel (optional reason, asked before it fires) for unfinished runs,
+    through the cancel route;
   - Rerun (required reason) for succeeded runs, through the start route
     with `rerun_of`;
   - no action for failed or cancelled runs.
@@ -195,20 +213,21 @@ spend.
   the runs route filtered by workflow (the last 10). Status shows Active,
   Needs approval, Blocked, Inactive or Paused, from the list and the
   schedule status.
-- A new read-only route returns a workflow's `workflow.yaml` text. It reads
-  the active version at its recorded commit, or the pending proposal's
-  commit when nothing is active. It never returns other files, prompts or
-  fixtures.
-- The Steps view is derived in the UI from the YAML text:
+- The `definition` route from story 2 is extended to name a workflow
+  instead of a run: it reads the active version at its recorded commit, or
+  the pending proposal's commit when nothing is active. It never returns
+  other files, prompts or fixtures.
+- The Steps view uses the route's outline:
   - each step's id, kind and description;
-  - notes for `next` and branch cases, conditions, retries and map fan-out;
+  - notes for where it leads and its retries;
   - its line range.
 
   Clicking a step switches to the YAML view with those lines highlighted.
 - The approval banner summarizes the proposal's new authority. Its button
   expands the existing approval card, and approval goes through the
   existing approve route with the hashes the card showed.
-- Start run uses the existing start form. Pause and Resume use the
+- Start run uses the existing start form, which sits on the Runs tab as a
+  small disclosure until this story moves it here. Pause and Resume use the
   schedule route. Deactivate uses the deactivate route. Built-in workflows
   reuse the existing built-in list in the tab.
 

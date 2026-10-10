@@ -12,7 +12,7 @@ import { WorkspaceBuildSettings } from "./WorkspaceBuildSettings";
 import { WorkspaceVerifySettings } from "./WorkspaceVerifySettings";
 import type { WorkflowCapStatus } from "../api/workflows";
 import { WorkspaceWorkflows } from "./WorkspaceWorkflows";
-import { WorkspaceWorkflowRuns } from "./WorkspaceWorkflowRuns";
+import { WorkspaceRuns } from "./WorkspaceRuns";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import type { WorkspaceTab } from "./workspaceActivity";
 
@@ -148,7 +148,12 @@ export function WorkspaceHome({
   tab = "runs",
   waiting = 0,
   caps,
+  selectedRun,
+  sessionTitles,
   onTab,
+  onSelectRun,
+  onOpenSession,
+  onRunsChanged,
   onNewChat,
   onResume,
   onFolderChanged,
@@ -163,7 +168,13 @@ export function WorkspaceHome({
   /** Runs in this Workspace waiting on the owner now. */
   waiting?: number;
   caps?: WorkflowCapStatus;
+  /** The run open in the Runs tab's panel. */
+  selectedRun?: string;
+  sessionTitles?: Record<string, string>;
   onTab?: (tab: WorkspaceTab) => void;
+  onSelectRun?: (runId: string | undefined) => void;
+  onOpenSession?: (sessionId: string) => void;
+  onRunsChanged?: () => void;
   onNewChat: () => void;
   onResume: (session: StoredSession) => void;
   onFolderChanged?: () => Promise<void>;
@@ -174,9 +185,11 @@ export function WorkspaceHome({
   return (
     <main className="flex min-h-0 flex-1 flex-col">
       <WorkspaceHeader tab={tab} waiting={waiting} caps={caps} onTab={(next) => onTab?.(next)} />
-      <div id="workspace-tab-panel" role="tabpanel" aria-labelledby={`workspace-tab-${tab}`} className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 sm:px-10">
+      {tab === "runs" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-runs" className="flex min-h-0 flex-1">
+        <WorkspaceRuns key={`workflow-runs:${workspace.id}`} workspace={workspace} selectedId={selectedRun} sessionTitles={sessionTitles}
+          onSelect={(runId) => onSelectRun?.(runId)} onOpenSession={onOpenSession} onChanged={onRunsChanged} />
+      </div> : <div id="workspace-tab-panel" role="tabpanel" aria-labelledby={`workspace-tab-${tab}`} className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 sm:px-10">
       <div className="mx-auto max-w-[880px]">
-        {tab === "runs" && <WorkspaceWorkflowRuns key={`workflow-runs:${workspace.id}`} workspace={workspace} />}
         {tab === "workflows" && <WorkspaceWorkflows key={`workflows:${workspace.id}`} workspace={workspace} />}
         {tab === "settings" && <>
         {instructions}
@@ -213,7 +226,7 @@ export function WorkspaceHome({
         </section>
         </>}
       </div>
-      </div>
+      </div>}
     </main>
   );
 }

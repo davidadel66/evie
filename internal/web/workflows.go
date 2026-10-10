@@ -30,6 +30,10 @@ type WorkflowManager interface {
 	StartRun(context.Context, workflowruntime.RunRequest) (workflowruntime.RunResult, error)
 	InspectRun(context.Context, string) (eviedb.WorkflowRunDetail, error)
 	ListRuns(context.Context, workflowruntime.RunFilter) ([]eviedb.WorkflowRun, error)
+	// The web run list's step states and a run's pinned definition
+	// outline (workspace-activity.spec.md).
+	RunStepStates(context.Context, []string) (map[string]map[string]string, error)
+	RunDefinition(context.Context, string) (workflowruntime.DefinitionView, error)
 	Reconcile(context.Context, workflowruntime.Reconciliation) (eviedb.WorkflowRunDetail, error)
 	Answer(context.Context, workflowruntime.AnswerRequest) (eviedb.WorkflowRunDetail, error)
 	Interruptions(context.Context, workflowruntime.InterruptionFilter) ([]eviedb.WorkflowInterruption, error)
@@ -69,6 +73,7 @@ func (s *Server) registerWorkflowRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workflows/start", s.managementRoute(s.handleWorkflowStart))
 	mux.Handle("/api/workflows/runs", s.managementRoute(s.handleWorkflowRuns))
 	mux.Handle("/api/workflows/inspect", s.managementRoute(s.handleWorkflowInspect))
+	mux.Handle("/api/workflows/definition", s.managementRoute(s.handleWorkflowDefinition))
 	mux.Handle("/api/workflows/reconcile", s.managementRoute(s.handleWorkflowReconcile))
 	mux.Handle("/api/workflows/answer", s.managementRoute(s.handleWorkflowAnswer))
 	mux.Handle("/api/workflows/interruptions", s.managementRoute(s.handleWorkflowInterruptions))
@@ -603,9 +608,49 @@ func (s *Server) handleWorkflowRuns(w http.ResponseWriter, r *http.Request) {
 		writeWorkflowError(w, err)
 		return
 	}
+	// Each run carries its steps' states for the web run list's step bar
+	// (workspace-activity.spec.md), read in one query for every run.
+	ids := make([]string, len(runs))
+	for i, run := range runs {
+		ids[i] = run.ID
+	}
+	steps, err := s.workflows.RunStepStates(r.Context(), ids)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	type runRow struct {
+		eviedb.WorkflowRun
+		StepStates map[string]string `json:"step_states,omitempty"`
+	}
+	rows := make([]runRow, len(runs))
+	for i, run := range runs {
+		rows[i] = runRow{run, steps[run.ID]}
+	}
 	writeJSON(w, http.StatusOK, struct {
-		Runs []eviedb.WorkflowRun `json:"runs"`
-	}{runs})
+		Runs []runRow `json:"runs"`
+	}{rows})
+}
+
+// handleWorkflowDefinition is the workflow.yaml a run is pinned to and its
+// step outline, for the web run panel (workspace-activity.spec.md).
+func (s *Server) handleWorkflowDefinition(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		RunID string `json:"run_id"`
+	}
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	if request.RunID == "" || len(request.RunID) > 128 {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "definition takes the ID of a run")
+		return
+	}
+	view, err := s.workflows.RunDefinition(r.Context(), request.RunID)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 func (s *Server) handleWorkflowInspect(w http.ResponseWriter, r *http.Request) {

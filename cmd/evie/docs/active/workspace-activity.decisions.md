@@ -51,6 +51,12 @@ Spec: [workspace-activity.spec.md](workspace-activity.spec.md). Decided
   the chat Inspector. Changes never get a card (changes.decisions.md).
 - **A new read-only route for a workflow's source.** The Steps and YAML
   views need the definition's text, and no route returns it today.
+- **Run steps come from the server, per pinned version** (story 2,
+  2026-10-09). The runs route carries each run's step states, read in one
+  query. A `definition` route outlines the exact `workflow.yaml` a run is
+  pinned to, using the real parser. This replaced inspecting every listed
+  run (finance runs carry transaction lists) and parsing YAML in the UI.
+  An older run shows its own steps.
 - **Theme tokens, not the design's raw colors.** The app is styled with
   Tailwind `@theme` tokens.
 - **Four stories in order** (W9): header, tabs, Settings, badges and

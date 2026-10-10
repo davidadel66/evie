@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import type { Workspace } from "../api/contextSessions";
+import { useState } from "react";
 import {
-  modelCallSpend, parseRunInputs, workerCallSpend, workflowAPI, workflowMapViews, workflowRunAPI,
-  type WorkflowAPI, type WorkflowInterruption, type WorkflowRun, type WorkflowRunAPI, type WorkflowRunDetail, type WorkflowRunState, type WorkflowWorkerCall,
+  modelCallSpend, workerCallSpend, workflowMapViews,
+  type WorkflowInterruption, type WorkflowRun, type WorkflowRunDetail, type WorkflowRunState, type WorkflowWorkerCall,
 } from "../api/workflows";
 import { WorkflowInterruptionAnswer } from "./WorkflowInterruptionAnswer";
 
@@ -24,6 +23,10 @@ import { WorkflowInterruptionAnswer } from "./WorkflowInterruptionAnswer";
 // sub-stage 10 the view shows each map step's items (index, state,
 // attempts, worker execution, spend) and every worker call, and names a run
 // Evie started from a chat in this Workspace (workflow_start).
+//
+// The Runs tab (WorkspaceRuns.tsx, workspace-activity.spec.md) replaced the
+// container that lived here; these views stay for the design system, and
+// the start form is still used there until the workflow pop-up has it.
 
 const stateLabel: Record<WorkflowRunState, string> = {
   queued: "Queued",
@@ -248,72 +251,4 @@ export function WorkflowRunStart({workflows, busy, onStart}: {
     </label>
     <div><button type="submit" disabled={busy || !selected} className="bg-teal text-primary-foreground rounded-[6px] px-3 py-1 font-semibold disabled:opacity-40">Start run</button></div>
   </form>;
-}
-
-export function WorkspaceWorkflowRuns({workspace, api = workflowRunAPI, definitionsAPI = workflowAPI}: {
-  workspace: Workspace;
-  api?: WorkflowRunAPI;
-  definitionsAPI?: WorkflowAPI;
-}) {
-  const [runs, setRuns] = useState<WorkflowRun[] | null>(null);
-  const [active, setActive] = useState<string[]>([]);
-  const [detail, setDetail] = useState<WorkflowRunDetail | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState("");
-  const [message, setMessage] = useState("");
-  const refresh = useCallback(async () => {
-    const [page, definitions] = await Promise.all([api.runs(workspace.id), definitionsAPI.list(workspace.id)]);
-    setRuns(page.runs);
-    setActive(definitions.workflows.filter((d) => d.status === "active").map((d) => d.name));
-  }, [api, definitionsAPI, workspace.id]);
-  useEffect(() => {
-    refresh().catch(() => setProblem("Workflow runs could not be loaded."));
-  }, [refresh]);
-  const act = async (action: () => Promise<string>) => {
-    setBusy(true); setProblem(""); setMessage("");
-    try { setMessage(await action()); }
-    catch (error) { setProblem(error instanceof Error ? error.message : "The workflow request failed. Refresh before trying again."); }
-    finally { setBusy(false); }
-  };
-  const start = (name: string, text: string) => act(async () => {
-    const inputs = parseRunInputs(text);
-    if (!inputs) throw new Error("Inputs must be one JSON object of input names to values.");
-    const result = await api.start(workspace.id, name, inputs);
-    setDetail(result.run);
-    await refresh();
-    const run = result.run.run;
-    return result.existing
-      ? `A run of ${run.workflow} already holds this Run Key (${stateLabel[run.state].toLowerCase()}); nothing new was started.`
-      : `Run of ${run.workflow} ${stateLabel[run.state].toLowerCase()}.`;
-  });
-  const inspect = (run: WorkflowRun) => act(async () => {
-    setDetail(await api.inspect(run.id));
-    return "";
-  });
-  const cancel = (why: string) => act(async () => {
-    if (!detail) return "";
-    const cancelled = await api.cancel(detail.run.id, why);
-    setDetail(cancelled);
-    await refresh();
-    return cancelled.run.state === "cancelled"
-      ? "Run cancelled; its completed steps stay recorded and its Run Key is free."
-      : `Cancellation recorded; the run is ${stateLabel[cancelled.run.state].toLowerCase()}.`;
-  });
-  const answer = (step: string, value: Record<string, unknown>) => act(async () => {
-    if (!detail) return "";
-    const answered = await api.answer(detail.run.id, step, value);
-    setDetail(answered);
-    await refresh();
-    return `Answered ${step}; the run is ${stateLabel[answered.run.state].toLowerCase()}.`;
-  });
-  return <section aria-label="Workflow runs" className="border-hair mt-7 border-b pb-7">
-    <h2 className="text-body mb-3 text-sm font-medium">Workflow runs</h2>
-    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Start an active workflow with its inputs. Each run is pinned to the approved version and records every step it takes; a run whose Run Key already ran is shown instead of starting again. Runs keep going if you leave this page, and a run cut short by a restart resumes from its last checkpoint. A run that asks you something waits here until you answer, from this or any later session. Cancelling a run stops its remaining steps; a step already running finishes first. Evie can also start an active workflow from a chat in this Workspace; those runs appear here too.</p>
-    {workspace.state === "active" && <WorkflowRunStart workflows={active} busy={busy} onStart={(name, inputs) => void start(name, inputs)} />}
-    {runs === null ? <p className="text-muted-text text-xs">Loading runs…</p>
-      : <WorkflowRunList runs={runs} busy={busy} onInspect={(run) => void inspect(run)} />}
-    {detail && <WorkflowRunView detail={detail} busy={busy} onAnswer={(step, value) => void answer(step, value)} onCancel={(why) => void cancel(why)} onClose={() => setDetail(null)} />}
-    <p role="status" className="text-muted-text mt-2 text-xs">{busy ? "Working…" : message}</p>
-    {problem && <p role="alert" className="text-danger mt-2 text-xs">{problem}</p>}
-  </section>;
 }

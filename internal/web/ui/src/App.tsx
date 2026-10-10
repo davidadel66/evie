@@ -43,7 +43,7 @@ export type WorkbenchView =
   | { id: "chat"; kind: "chat" }
   | { id: "data"; kind: "data" }
   | { id: "workspaces"; kind: "workspaces" }
-  | { id: `workspace:${string}`; kind: "workspace"; workspaceId: string; label: string; tab?: WorkspaceTab };
+  | { id: `workspace:${string}`; kind: "workspace"; workspaceId: string; label: string; tab?: WorkspaceTab; run?: string };
 
 const textSizeStorageKey = "evie.chatTextSize";
 const sidebarStorageKey = "evie.sidebarCollapsed";
@@ -96,13 +96,16 @@ export default function App() {
   const [dataSource, setDataSource] = useState<DataSource>("memory");
   // Memories Evie proposed on her own wait for review; recount after each turn.
   const memoryReviewPending = usePendingMemoryProposals(status);
-  // Runs waiting on the owner, by Workspace, for the sidebar and tab badges.
-  const waiting = useWorkspaceNeeds(status);
+  // Runs waiting on the owner, by Workspace, for the sidebar and tab badges;
+  // read again after each turn and whenever the owner acts on a run.
+  const [runsChanged, setRunsChanged] = useState(0);
+  const waiting = useWorkspaceNeeds(`${status}:${runsChanged}`);
 
   const activeWorkspace = activeView.kind === "workspace"
     ? contextSessions.snapshot?.workspaces.find((workspace) => workspace.id === activeView.workspaceId)
     : undefined;
   const workflowCaps = useWorkflowCaps(activeWorkspace?.id);
+  const sessionTitles = useMemo(() => Object.fromEntries((contextSessions.snapshot?.sessions ?? []).map((session) => [session.id, session.title.trim() || "Untitled session"])), [contextSessions.snapshot?.sessions]);
   const workspaceNames = useMemo(() => Object.fromEntries((contextSessions.snapshot?.workspaces ?? []).map((workspace) => [workspace.id, workspace.displayName])), [contextSessions.snapshot?.workspaces]);
   const scopeWorkspace=contextSessions.snapshot?.workspaces.find(workspace=>workspace.id===contextSessions.snapshot?.activeScope?.workspaceId);
   // Per-turn instruction receipts only matter when a folder can supply instructions.
@@ -205,15 +208,15 @@ export default function App() {
     setMobileNavOpen(false);
   };
 
-  const openWorkspace = (workspace: Workspace, tab?: WorkspaceTab) => {
-    openView({ id: `workspace:${workspace.id}`, kind: "workspace", workspaceId: workspace.id, label: workspace.displayName, tab });
+  const openWorkspace = (workspace: Workspace, tab?: WorkspaceTab, run?: string) => {
+    openView({ id: `workspace:${workspace.id}`, kind: "workspace", workspaceId: workspace.id, label: workspace.displayName, tab, run });
   };
 
-  // A notice opens what it points to: for now a workflow notice opens its
-  // Workspace's runs (the run panel arrives with the Runs tab).
+  // A notice opens what it points to: a run opens in its Workspace's Runs
+  // tab panel, any other workflow notice opens the Runs tab.
   const openNotice = (notice: Notice) => {
     const workspace = contextSessions.snapshot?.workspaces.find((candidate) => candidate.id === notice.target.workspace_id);
-    if (workspace) openWorkspace(workspace, "runs");
+    if (workspace) openWorkspace(workspace, "runs", notice.target.kind === "workflow_run" ? notice.target.run_id : undefined);
   };
 
   const selectSession = async (selection: ContextSessionSelection) => {
@@ -395,6 +398,11 @@ export default function App() {
                 workspace={activeWorkspace}
                 tab={activeView.tab ?? "runs"}
                 onTab={(tab) => setActiveView({...activeView, tab})}
+                selectedRun={activeView.run}
+                onSelectRun={(run) => setActiveView({...activeView, run})}
+                sessionTitles={sessionTitles}
+                onOpenSession={(sessionId) => void selectSession({ sessionId })}
+                onRunsChanged={() => setRunsChanged((value) => value + 1)}
                 waiting={waiting[activeWorkspace.id] ?? 0}
                 caps={workflowCaps}
                 instructions={<InstructionBadge workspace={activeWorkspace} onOpen={trigger=>openInstructions(activeWorkspace,trigger)}/>}

@@ -172,6 +172,8 @@ type Store interface {
 	// retention sweep's candidates, its redaction, compaction and deletion
 	// with their tombstones, its single runner lease and its state.
 	WorkflowRunRecord(ctx context.Context, id string) (eviedb.WorkflowRun, error)
+	// The web run list's step states (workspace-activity.spec.md).
+	WorkflowRunStepStates(ctx context.Context, runIDs []string) (map[string]map[string]string, error)
 	MigrateWorkflowRun(ctx context.Context, m eviedb.WorkflowMigration) (eviedb.WorkflowRunMigration, error)
 	WorkflowRunMigration(ctx context.Context, successorID string) (eviedb.WorkflowRunMigration, bool, error)
 	WorkflowRetentionCandidates(ctx context.Context, afterRowID int64, limit int) ([]eviedb.WorkflowRetentionCandidate, error)

@@ -134,6 +134,8 @@ export type WorkflowRun = {
   finished_at?: string;
   /** No process advances the run before this time: a retry's backoff, or a paused run's next check. */
   not_before?: string;
+  /** Each step's latest attempt state, as the run list reads it (workspace-activity.spec.md). */
+  step_states?: Record<string, WorkflowNodeAttempt["state"]>;
 };
 
 export type WorkflowNodeAttempt = {
@@ -299,8 +301,34 @@ export type WorkflowRunDetail = {
 
 export type WorkflowRunResult = { run: WorkflowRunDetail; existing: boolean };
 
+/** One step of a definition as the owner reads it: where it leads and the workflow.yaml lines that define it. */
+export type WorkflowStepOutline = {
+  id: string;
+  kind: string;
+  description?: string;
+  next?: string[];
+  max_attempts?: number;
+  first_line: number;
+  last_line: number;
+};
+
+/** The workflow.yaml a run is pinned to, and its steps in YAML order. */
+export type WorkflowDefinitionView = {
+  workspace_id: string;
+  name: string;
+  version: number;
+  commit: string;
+  source: string;
+  steps: WorkflowStepOutline[];
+};
+
 export const workflowRunAPI = {
-  runs: (workspaceId: string): Promise<{ runs: WorkflowRun[] }> => postWorkflows("runs", { workspace_id: workspaceId }),
+  runs: (workspaceId: string, limit = 200): Promise<{ runs: WorkflowRun[] }> => postWorkflows("runs", { workspace_id: workspaceId, limit }),
+  /** The workflow.yaml a run is pinned to, outlined. */
+  definition: (runId: string): Promise<WorkflowDefinitionView> => postWorkflows("definition", { run_id: runId }),
+  /** The owner's audited rerun of a succeeded run with its inputs; returns once the new run is recorded. */
+  rerun: (workspaceId: string, name: string, runId: string, reason: string): Promise<WorkflowRunResult> =>
+    postWorkflows("start", { workspace_id: workspaceId, name, rerun_of: runId, reason, detach: true }),
   start: (workspaceId: string, name: string, inputs: Record<string, unknown>): Promise<WorkflowRunResult> =>
     postWorkflows("start", { workspace_id: workspaceId, name, inputs }),
   inspect: (runId: string): Promise<WorkflowRunDetail> => postWorkflows("inspect", { run_id: runId }),
