@@ -92,6 +92,7 @@ type Server struct {
 	candidateReview   CandidateReviewKernel
 	memoryBackground  MemoryBackgroundStatus
 	usageReader       UsageReader
+	changeSync        ChangeSync
 	spendingService   SpendingService
 	workflows         WorkflowManager
 	repositories      Repositories
@@ -258,6 +259,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerFolderRoutes(mux)
 	s.registerRepositoryInstructionRoutes(mux)
 	s.registerTerminalRoutes(mux)
+	s.registerChangeSyncRoutes(mux)
 	s.registerWorkflowRoutes(mux)
 	s.registerNotificationRoutes(mux)
 	s.registerRepositoryRoutes(mux)

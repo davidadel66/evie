@@ -138,7 +138,8 @@ func (c *Client) do(ctx context.Context, method, path string, payload, out any) 
 		return fmt.Errorf("github: cannot reach %s: %w", req.URL.Host, errors.Unwrap(err))
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	// Bounded, yet room for a full page of pull requests (about 20 KB each).
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return fmt.Errorf("github: read response: %w", err)
 	}

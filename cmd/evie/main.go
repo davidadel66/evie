@@ -394,6 +394,8 @@ func main() {
 		stopWorkflows := startWorkflowScheduler(runtimeCtx, workflowRuntime)
 		defer stopWorkflows()
 		repositories := repositoryReader()
+		changeSync, stopChangeSync := startChangeSync(runtimeCtx, kernelStore)
+		defer stopChangeSync()
 		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
 		if err != nil {
 			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)
@@ -401,7 +403,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopMemory := startMemoryForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync))
 			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -449,7 +451,7 @@ func main() {
 				agent.WithCompactionMemoryFlush(memoryBackground.runner)), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync))
 		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)
@@ -482,4 +484,27 @@ func repositoryReader() *changes.Service {
 		return changes.NewService(changes.Config{})
 	}
 	return changes.NewService(changes.Config{GitHub: github.New(github.API, token, nil), Token: token})
+}
+
+// startChangeSync syncs each Workspace's GitHub pull requests every 60
+// seconds while evie serve runs (changes.spec.md story 3b), when
+// GITHUB_TOKEN is set; the returned stop ends the loop and waits for it.
+// Without a token the Syncer still answers the refresh route: a GitHub
+// Repository is not connected, and a local one has nothing to sync.
+func startChangeSync(ctx context.Context, store *eviedb.Store) (*changes.Syncer, func()) {
+	token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
+	if token == "" {
+		return changes.NewSyncer(changes.SyncConfig{Store: store}), func() {}
+	}
+	syncer := changes.NewSyncer(changes.SyncConfig{GitHub: github.New(github.API, token, nil), Store: store, Workspaces: store})
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		syncer.Run(ctx)
+	}()
+	return syncer, func() {
+		cancel()
+		<-done
+	}
 }
