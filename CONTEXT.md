@@ -111,6 +111,16 @@ memory and configuration a session may use in addition to global and session
 memory.
 _Avoid_: Agent preset, account connection
 
+**Repository**:
+The one version-controlled codebase a Workspace may own, kept only on the
+owner's machine or also on GitHub. A Workspace has no Repository or exactly one.
+_Avoid_: Project, codebase, filesystem project
+
+**Change**:
+One branch of work in a Workspace's Repository, followed from draft through
+review to merged or closed. On GitHub an open Change has a pull request.
+_Avoid_: Pull request, PR, patch, diff, proposal
+
 **Working Memory**:
 The disposable, request-specific projection Evie assembles for a model call
 from selected history, summaries, instructions, and retrieved knowledge.
@@ -382,9 +392,9 @@ progress or outcomes back to one.
 _Avoid_: Cron job, detached session
 
 **Durable Notification**:
-A persisted, deduplicated notice that a Workflow Run completed, failed, or
-needs attention. External channels may mirror it but are not its source of
-truth.
+A persisted, deduplicated notice to the owner from any part of Evie, such as a
+Workflow Run that completed, failed, or needs attention. External channels may
+mirror it but are not its source of truth.
 _Avoid_: Workflow event, transient message
 
 **Plugin Manager**:
