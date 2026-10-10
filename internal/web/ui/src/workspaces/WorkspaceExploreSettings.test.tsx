@@ -9,7 +9,7 @@ const withFolder: Workspace = {...base, folder: {path: "/Users/me/code/evie", re
 const noFolder: Workspace = {...base, explore: {setting: "default", allowed: false}};
 
 function exploreSection(workspace: Workspace, busy = false): string {
-  const html = renderToStaticMarkup(<WorkspaceHome workspace={workspace} sessions={[]} busy={busy} onNewChat={()=>{}} onResume={()=>{}} />);
+  const html = renderToStaticMarkup(<WorkspaceHome tab="settings" workspace={workspace} sessions={[]} busy={busy} onNewChat={()=>{}} onResume={()=>{}} />);
   const match = html.match(/<section aria-label="Explore workers".*?<\/section>/);
   return match?.[0] ?? "";
 }

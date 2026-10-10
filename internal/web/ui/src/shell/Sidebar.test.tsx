@@ -4,8 +4,8 @@ import { Sidebar } from "./Sidebar";
 import type { Workspace } from "../api/contextSessions";
 
 const workspace: Workspace = {id: "one", displayName: "Cairo", state: "active", currentRevisionId: "revision-2", createdAt: "", updatedAt: ""};
-function render(workspaces: Workspace[], busy = false, collapsed = false) {
-  return renderToStaticMarkup(<Sidebar snapshot={{workspaces, projects: [], sessions: [], archivedSessions: []}} destination="chat" busy={busy} collapsed={collapsed} mobileOpen={false} onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+function render(workspaces: Workspace[], busy = false, collapsed = false, waiting: Record<string, number> = {}) {
+  return renderToStaticMarkup(<Sidebar snapshot={{workspaces, projects: [], sessions: [], archivedSessions: []}} destination="chat" busy={busy} collapsed={collapsed} waiting={waiting} mobileOpen={false} onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
 }
 
 describe("workspace session shortcuts", () => {
@@ -22,6 +22,12 @@ describe("workspace session shortcuts", () => {
     expect(html).not.toContain("Choose a workspace to begin");
     expect(html).not.toMatch(/<button[^>]*>(?:(?!<\/button>)[\s\S])*<button/);
     expect(html).not.toContain('disabled=""');
+  });
+
+  it("badges a workspace with the runs waiting on the owner", () => {
+    const html = render([workspace, {...workspace, id: "two", displayName: "Personal"}], false, false, {one: 2});
+    expect(html).toMatch(/Cairo<\/span><span aria-hidden="true" title="Waiting on you"[^>]*>2<\/span><span class="sr-only">, 2 runs wait on you<\/span>/);
+    expect(html.match(/Waiting on you/g)).toHaveLength(1);
   });
 
   it("disables session creation while busy or when a workspace is unavailable", () => {

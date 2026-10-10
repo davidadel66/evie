@@ -10,9 +10,11 @@ import { WorkspaceResearchSettings } from "./WorkspaceResearchSettings";
 import { WorkspaceExploreSettings } from "./WorkspaceExploreSettings";
 import { WorkspaceBuildSettings } from "./WorkspaceBuildSettings";
 import { WorkspaceVerifySettings } from "./WorkspaceVerifySettings";
+import type { WorkflowCapStatus } from "../api/workflows";
 import { WorkspaceWorkflows } from "./WorkspaceWorkflows";
 import { WorkspaceWorkflowRuns } from "./WorkspaceWorkflowRuns";
-import { WorkspaceWorkflowNotifications } from "./WorkspaceWorkflowNotifications";
+import { WorkspaceHeader } from "./WorkspaceHeader";
+import type { WorkspaceTab } from "./workspaceActivity";
 
 type DirectoryProps = {
   snapshot?: ContextSessionSnapshot;
@@ -136,10 +138,17 @@ export function Workspaces({
   );
 }
 
+// A Workspace opens on its header and one tab at a time
+// (workspace-activity.spec.md): Runs by default, Workflows, and Settings,
+// which holds the Workspace's settings sections and its conversations.
 export function WorkspaceHome({
   workspace,
   sessions,
   busy,
+  tab = "runs",
+  waiting = 0,
+  caps,
+  onTab,
   onNewChat,
   onResume,
   onFolderChanged,
@@ -150,6 +159,11 @@ export function WorkspaceHome({
   workspace: Workspace;
   sessions: StoredSession[];
   busy: boolean;
+  tab?: WorkspaceTab;
+  /** Runs in this Workspace waiting on the owner now. */
+  waiting?: number;
+  caps?: WorkflowCapStatus;
+  onTab?: (tab: WorkspaceTab) => void;
   onNewChat: () => void;
   onResume: (session: StoredSession) => void;
   onFolderChanged?: () => Promise<void>;
@@ -158,34 +172,28 @@ export function WorkspaceHome({
   instructions?: React.ReactNode;
 }) {
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8 sm:px-10">
+    <main className="flex min-h-0 flex-1 flex-col">
+      <WorkspaceHeader tab={tab} waiting={waiting} caps={caps} onTab={(next) => onTab?.(next)} />
+      <div id="workspace-tab-panel" role="tabpanel" aria-labelledby={`workspace-tab-${tab}`} className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 sm:px-10">
       <div className="mx-auto max-w-[880px]">
-        <header className="border-hair flex flex-col gap-5 border-b pb-7 sm:flex-row sm:items-end">
-          <div className="min-w-0 flex-1">
-            <div className="text-teal mb-3 flex items-center gap-2 text-xs"><Folder size={14} /> Workspace</div>
-            <h1 className="text-ink truncate text-[24px] font-semibold tracking-[-0.025em]">{workspace.displayName}</h1>
-            <p className="text-muted-text mt-2 max-w-[600px] text-[13px] leading-6">A durable context with isolated memory, reviewed configuration, and its own conversations.</p>
-          </div>
-          {workspace.state === "active" && (
-            <button type="button" disabled={busy} onClick={onNewChat} className="bg-teal text-primary-foreground flex items-center justify-center gap-2 rounded-[8px] px-4 py-2 text-xs font-semibold disabled:opacity-40">
-              <Plus size={13} /> New chat
-            </button>
-          )}
-        </header>
-
+        {tab === "runs" && <WorkspaceWorkflowRuns key={`workflow-runs:${workspace.id}`} workspace={workspace} />}
+        {tab === "workflows" && <WorkspaceWorkflows key={`workflows:${workspace.id}`} workspace={workspace} />}
+        {tab === "settings" && <>
         {instructions}
         <WorkspaceResearchSettings key={workspace.id} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceExploreSettings key={`explore:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceBuildSettings key={`build:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceVerifySettings key={`verify:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
-        <WorkspaceWorkflows key={`workflows:${workspace.id}`} workspace={workspace} />
-        <WorkspaceWorkflowRuns key={`workflow-runs:${workspace.id}`} workspace={workspace} />
-        <WorkspaceWorkflowNotifications key={`workflow-notifications:${workspace.id}`} workspace={workspace} />
         <FolderSettings key={`${workspace.id}:${workspace.folder?.revision ?? 0}`} workspace={workspace} busy={busy} onChanged={onFolderChanged} onOpen={onOpenFiles} />
         <section className="mt-8">
-          <div className="mb-4 flex items-baseline justify-between">
+          <div className="mb-4 flex items-center gap-3">
             <h2 className="text-body text-sm font-semibold">Conversations</h2>
-            <span className="text-fainter text-[11px]">{sessions.length} active</span>
+            <span className="text-fainter flex-1 text-[11px]">{sessions.length} active</span>
+            {workspace.state === "active" && (
+              <button type="button" disabled={busy} onClick={onNewChat} className="border-teal-hair text-teal-hover hover:bg-teal-deep flex items-center gap-1.5 rounded-[7px] border px-3 py-[6px] text-xs disabled:opacity-40">
+                <Plus size={12} /> New chat
+              </button>
+            )}
           </div>
           {sessions.length === 0 ? (
             <button type="button" disabled={busy || workspace.state !== "active"} onClick={onNewChat} className="border-hair text-muted-text hover:border-teal-hair hover:text-body w-full rounded-[10px] border border-dashed px-5 py-10 text-center text-sm disabled:opacity-40">
@@ -203,6 +211,8 @@ export function WorkspaceHome({
             </div>
           )}
         </section>
+        </>}
+      </div>
       </div>
     </main>
   );

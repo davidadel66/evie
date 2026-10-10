@@ -257,6 +257,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerRepositoryInstructionRoutes(mux)
 	s.registerTerminalRoutes(mux)
 	s.registerWorkflowRoutes(mux)
+	s.registerNotificationRoutes(mux)
 	mux.Handle("/", s.staticHandler())
 	return mux
 }

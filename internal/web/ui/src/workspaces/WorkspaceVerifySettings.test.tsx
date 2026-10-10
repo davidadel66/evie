@@ -7,7 +7,7 @@ const base: Workspace = {id: "w", displayName: "Code", state: "active", currentR
   folder: {path: "/Users/me/code/evie", revision: 1}, explore: {setting: "default", allowed: true}, build: {setting: "on", allowed: true}};
 
 function verifySection(workspace: Workspace): string {
-  const html = renderToStaticMarkup(<WorkspaceHome workspace={workspace} sessions={[]} busy={false} onNewChat={()=>{}} onResume={()=>{}} />);
+  const html = renderToStaticMarkup(<WorkspaceHome tab="settings" workspace={workspace} sessions={[]} busy={false} onNewChat={()=>{}} onResume={()=>{}} />);
   const match = html.match(/<section aria-label="Merge checks".*?<\/section>/);
   return match?.[0] ?? "";
 }

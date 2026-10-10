@@ -7,7 +7,7 @@ const base: Workspace = {id: "w", displayName: "Code", state: "active", currentR
   folder: {path: "/Users/me/code/evie", revision: 1}, explore: {setting: "default", allowed: true}};
 
 function buildSection(workspace: Workspace, busy = false): string {
-  const html = renderToStaticMarkup(<WorkspaceHome workspace={workspace} sessions={[]} busy={busy} onNewChat={()=>{}} onResume={()=>{}} />);
+  const html = renderToStaticMarkup(<WorkspaceHome tab="settings" workspace={workspace} sessions={[]} busy={busy} onNewChat={()=>{}} onResume={()=>{}} />);
   const match = html.match(/<section aria-label="Build workers".*?<\/section>/);
   return match?.[0] ?? "";
 }

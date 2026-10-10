@@ -23,6 +23,16 @@ describe("WorkbenchBar", () => {
     expect(html).toMatch(/aria-current="page"[^>]*>Cairo&#x27;s Kitchen</);
     expect(renderToStaticMarkup(<WorkbenchBar {...base} view={{id: "data", kind: "data"}} />)).toMatch(/aria-current="page"[^>]*>Data</);
   });
+
+  it("offers the Inspector toggle only in chat, and the notifications icon on every view", () => {
+    const views: WorkbenchView[] = [{id: "chat", kind: "chat"}, {id: "data", kind: "data"}, {id: "workspaces", kind: "workspaces"},
+      {id: "workspace:one", kind: "workspace", workspaceId: "one", label: "Cairo's Kitchen", tab: "settings"}];
+    for (const view of views) {
+      const html = renderToStaticMarkup(<WorkbenchBar {...base} view={view} notifications={<button type="button" aria-label="Notifications" />} />);
+      expect(html).toContain('aria-label="Notifications"');
+      expect(html.includes('aria-label="Toggle inspector"')).toBe(view.kind === "chat");
+    }
+  });
 });
 
 describe("selectionForScope", () => {

@@ -45,10 +45,9 @@ describe("Workspaces", () => {
 
   it("shows a workspace home with its own chat list", () => {
     const html = renderToStaticMarkup(
-      <WorkspaceHome workspace={workspace} sessions={[session]} busy={false} onNewChat={() => undefined} onResume={() => undefined} />,
+      <WorkspaceHome tab="settings" workspace={workspace} sessions={[session]} busy={false} onNewChat={() => undefined} onResume={() => undefined} />,
     );
-    expect(html).toContain("Workspace");
-    expect(html).toContain("isolated memory");
+    expect(html).toContain("Conversations");
     expect(html).toContain("Dinner prep");
   });
 });

@@ -6,7 +6,7 @@ const workspace = {id: "w", displayName: "Study", state: "active" as const, curr
 
 describe("Workspace research permission", () => {
   it("keeps revocation available while a chat is running", () => {
-    const html = renderToStaticMarkup(<WorkspaceHome workspace={workspace} sessions={[]} busy onNewChat={()=>{}} onResume={()=>{}} />);
+    const html = renderToStaticMarkup(<WorkspaceHome tab="settings" workspace={workspace} sessions={[]} busy onNewChat={()=>{}} onResume={()=>{}} />);
     expect(html).toContain("Allow research delegation");
     expect(html).toMatch(/<input[^>]*type="checkbox"[^>]*checked=""/);
     expect(html).not.toMatch(/<input[^>]*type="checkbox"[^>]*disabled/);
@@ -14,7 +14,7 @@ describe("Workspace research permission", () => {
     expect(html).toContain("stops active research");
   });
   it("does not offer delegation from a Research-only parent", () => {
-    const html = renderToStaticMarkup(<WorkspaceHome workspace={{...workspace, defaultPresetId: "research", allowedPresetIds: ["research"]}} sessions={[]} busy={false} onNewChat={()=>{}} onResume={()=>{}} />);
+    const html = renderToStaticMarkup(<WorkspaceHome tab="settings" workspace={{...workspace, defaultPresetId: "research", allowedPresetIds: ["research"]}} sessions={[]} busy={false} onNewChat={()=>{}} onResume={()=>{}} />);
     expect(html).not.toContain("Allow research delegation");
     expect(html).toContain("cannot delegate");
   });

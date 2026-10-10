@@ -43,7 +43,7 @@ keeps the owner's checkout current without touching work in progress.
 4. As the owner, I want to choose "Connect existing GitHub repository" from a list of my repositories, so that projects like Evie join without manual setup.
 5. As the owner, I want Evie to clone the chosen repository into a folder I pick, starting in `~/code`, so that I decide where code lives.
 6. As the owner, I want to point at a clone I already have and have Evie check that its `origin` matches the chosen repository, so that I never connect the wrong folder.
-7. As the owner, I want my existing Evie Workspace recognized as a GitHub Repository from its folder and `origin`, so that nothing needs migrating.
+7. As the owner, I want any Workspace whose folder is a GitHub clone, such as one on `~/code/evie`, recognized as a GitHub Repository from its folder and `origin`, so that nothing needs migrating.
 8. As the owner, I want Settings → Repository to show whether the Repository is local or on GitHub, its remote, and the token status, so that I know what Evie can do.
 9. As the owner, I want to publish a local Repository to GitHub later from Settings, choosing public or private, so that starting local is not a dead end.
 10. As the owner, I want publishing to push only the default branch and leave unmerged Changes as drafts, so that nothing half-finished goes public.
@@ -277,7 +277,9 @@ Each story is independently demonstrable and ends with
      base branch) plus token status, in Settings → Repository and through
      its web route.
    - Acceptance:
-     - the Evie Workspace reads as GitHub `davidadel66/evie`;
+     - a Workspace whose folder is `~/code/evie` reads as GitHub
+       `davidadel66/evie` (no such Workspace existed on 2026-10-09; the owner
+       creates one with that folder);
      - a folder without git reads as none;
      - a missing or invalid token is reported;
      - changing or detaching the folder is refused while a Change is

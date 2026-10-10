@@ -32,7 +32,7 @@ const card: WorkflowCard = {
 
 describe("Workspace workflows", () => {
   it("is a section of the Workspace home", () => {
-    const html = renderToStaticMarkup(<WorkspaceHome workspace={workspace} sessions={[]} busy={false} onNewChat={()=>{}} onResume={()=>{}} />);
+    const html = renderToStaticMarkup(<WorkspaceHome tab="workflows" workspace={workspace} sessions={[]} busy={false} onNewChat={()=>{}} onResume={()=>{}} />);
     expect(html).toContain('aria-label="Workflows"');
     expect(html).toContain("evie workflows propose");
     // Built-in workflows need no "add from template" step (2026-10-04).

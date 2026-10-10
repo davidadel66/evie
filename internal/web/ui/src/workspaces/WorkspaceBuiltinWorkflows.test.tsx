@@ -15,7 +15,7 @@ const deepResearch: WorkflowBuiltin = {
 
 describe("Built-in workflows", () => {
   it("is part of the Workspace's Workflows section", () => {
-    const html = renderToStaticMarkup(<WorkspaceHome workspace={workspace} sessions={[]} busy={false} onNewChat={()=>{}} onResume={()=>{}} />);
+    const html = renderToStaticMarkup(<WorkspaceHome tab="workflows" workspace={workspace} sessions={[]} busy={false} onNewChat={()=>{}} onResume={()=>{}} />);
     expect(html).toContain('aria-label="Built-in workflows"');
     expect(html).toContain("without a proposal or approval");
   });

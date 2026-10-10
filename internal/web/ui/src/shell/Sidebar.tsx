@@ -12,6 +12,7 @@ export const sidebarWidth = { initial: 240, min: 200, max: 360 } as const;
 const widthKey = "evie.sidebarWidth";
 const clampWidth = (value: number) => Math.max(sidebarWidth.min, Math.min(sidebarWidth.max, Math.round(value)));
 import { ReviewBadge } from "../candidateInbox/MemoryReviewTabs";
+import { waitingText } from "../workspaces/workspaceActivity";
 
 export type SidebarDestination = "chat" | "data" | "workspaces" | `workspace:${string}`;
 
@@ -22,6 +23,8 @@ type Props = {
   busy: boolean;
   /** Memories Evie proposed that await review in Data → Memory → Review. */
   memoryReviewPending?: number;
+  /** Runs waiting on the owner now, by Workspace ID. */
+  waiting?: Record<string, number>;
   mobileOpen: boolean;
   collapsed?: boolean;
   onSettings: () => void;
@@ -40,6 +43,7 @@ export function Sidebar({
   destination,
   busy,
   memoryReviewPending = 0,
+  waiting = {},
   mobileOpen,
   collapsed = false,
   onSettings,
@@ -158,6 +162,7 @@ export function Sidebar({
             workspace={workspace}
             sessions={snapshot.sessions.filter((session) => session.workspaceId === workspace.id && session.status === "active")}
             active={destination === `workspace:${workspace.id}`}
+            waiting={waiting[workspace.id] ?? 0}
             activeSessionId={snapshot.activeSession?.id}
             busy={busy}
             onWorkspace={onWorkspace}
@@ -180,6 +185,7 @@ function WorkspaceNav({
   workspace,
   sessions,
   active,
+  waiting,
   activeSessionId,
   busy,
   onWorkspace,
@@ -190,6 +196,7 @@ function WorkspaceNav({
   workspace: Workspace;
   sessions: StoredSession[];
   active: boolean;
+  waiting: number;
   activeSessionId?: string;
   busy: boolean;
   onWorkspace: (workspace: Workspace) => void;
@@ -209,6 +216,10 @@ function WorkspaceNav({
         <Folder size={14} />
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{workspace.displayName}</span>
         {workspace.state === "archived" && <span className="text-ghost text-[10px]">Archived</span>}
+        {waiting > 0 && <>
+          <span aria-hidden="true" title="Waiting on you" className="border-amber-hair-strong bg-amber-bg text-amber-ink min-w-[18px] flex-none rounded-full border px-[5px] text-center text-[10.5px] leading-4">{waiting}</span>
+          <span className="sr-only">, {waitingText(waiting)}</span>
+        </>}
       </button>
       <button type="button" aria-label={`New session in ${workspace.displayName}`} title={`New session in ${workspace.displayName}`} disabled={busy || workspace.state === "archived" || !workspace.currentRevisionId} onClick={() => onNewChat(workspace)} className="text-faint hover:text-body hover:bg-hover focus-visible:ring-teal mr-1 flex-none cursor-pointer rounded p-1.5 focus-visible:ring-1 focus-visible:outline-none disabled:cursor-default disabled:opacity-30">
         <Plus size={14} />

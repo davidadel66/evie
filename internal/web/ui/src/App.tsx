@@ -31,6 +31,10 @@ import {
   type ChatTextSize,
 } from "./ui/textSize";
 import { WorkspaceHome, Workspaces } from "./workspaces/Workspaces";
+import type { WorkspaceTab } from "./workspaces/workspaceActivity";
+import { Notifications } from "./shell/Notifications";
+import type { Notice } from "./api/notifications";
+import { useWorkflowCaps, useWorkspaceNeeds } from "./store/useWorkspaceNeeds";
 import { CreateWorkspaceDialog } from "./workspaces/CreateWorkspaceDialog";
 import { SettingsDialog } from "./shell/SettingsDialog";
 import { resolveChatFont, type ChatFont } from "./ui/chatFont";
@@ -39,7 +43,7 @@ export type WorkbenchView =
   | { id: "chat"; kind: "chat" }
   | { id: "data"; kind: "data" }
   | { id: "workspaces"; kind: "workspaces" }
-  | { id: `workspace:${string}`; kind: "workspace"; workspaceId: string; label: string };
+  | { id: `workspace:${string}`; kind: "workspace"; workspaceId: string; label: string; tab?: WorkspaceTab };
 
 const textSizeStorageKey = "evie.chatTextSize";
 const sidebarStorageKey = "evie.sidebarCollapsed";
@@ -92,10 +96,14 @@ export default function App() {
   const [dataSource, setDataSource] = useState<DataSource>("memory");
   // Memories Evie proposed on her own wait for review; recount after each turn.
   const memoryReviewPending = usePendingMemoryProposals(status);
+  // Runs waiting on the owner, by Workspace, for the sidebar and tab badges.
+  const waiting = useWorkspaceNeeds(status);
 
   const activeWorkspace = activeView.kind === "workspace"
     ? contextSessions.snapshot?.workspaces.find((workspace) => workspace.id === activeView.workspaceId)
     : undefined;
+  const workflowCaps = useWorkflowCaps(activeWorkspace?.id);
+  const workspaceNames = useMemo(() => Object.fromEntries((contextSessions.snapshot?.workspaces ?? []).map((workspace) => [workspace.id, workspace.displayName])), [contextSessions.snapshot?.workspaces]);
   const scopeWorkspace=contextSessions.snapshot?.workspaces.find(workspace=>workspace.id===contextSessions.snapshot?.activeScope?.workspaceId);
   // Per-turn instruction receipts only matter when a folder can supply instructions.
   const instructionsAttached=!!scopeWorkspace?.folder?.path&&(scopeWorkspace.instructions?.enabled??true);
@@ -197,8 +205,15 @@ export default function App() {
     setMobileNavOpen(false);
   };
 
-  const openWorkspace = (workspace: Workspace) => {
-    openView({ id: `workspace:${workspace.id}`, kind: "workspace", workspaceId: workspace.id, label: workspace.displayName });
+  const openWorkspace = (workspace: Workspace, tab?: WorkspaceTab) => {
+    openView({ id: `workspace:${workspace.id}`, kind: "workspace", workspaceId: workspace.id, label: workspace.displayName, tab });
+  };
+
+  // A notice opens what it points to: for now a workflow notice opens its
+  // Workspace's runs (the run panel arrives with the Runs tab).
+  const openNotice = (notice: Notice) => {
+    const workspace = contextSessions.snapshot?.workspaces.find((candidate) => candidate.id === notice.target.workspace_id);
+    if (workspace) openWorkspace(workspace, "runs");
   };
 
   const selectSession = async (selection: ContextSessionSelection) => {
@@ -257,6 +272,7 @@ export default function App() {
         destination={sidebarDestination(activeView)}
         busy={contextSessions.busy || working}
         memoryReviewPending={memoryReviewPending}
+        waiting={waiting}
         mobileOpen={mobileNavOpen}
         collapsed={sidebarCollapsed}
         onSettings={() => setSettingsOpen(true)}
@@ -264,7 +280,7 @@ export default function App() {
         onArchive={session => void archiveSession(session)}
         onCloseMobile={closeNavigation}
         onData={() => openView({ id: "data", kind: "data" })}
-        onWorkspace={openWorkspace}
+        onWorkspace={(workspace) => openWorkspace(workspace)}
         onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
         onSession={(session) => {
           // Returning to the open chat from another view keeps its draft.
@@ -288,6 +304,7 @@ export default function App() {
                 requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('button[aria-label="Close navigation"]')?.focus());
               }}
               onChat={() => openView(chatView)}
+              notifications={<Notifications refreshKey={status} workspaceNames={workspaceNames} onOpen={openNotice} />}
               onToggleInspector={() => {
                 setInspectorOpen((open) => !open);
                 if (inspectorOpen) setInspectorFocused(false);
@@ -366,7 +383,7 @@ export default function App() {
                 busy={contextSessions.busy || working}
                 problem={contextSessions.problem}
                 onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
-                onOpenWorkspace={openWorkspace}
+                onOpenWorkspace={(workspace) => openWorkspace(workspace)}
                 onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
                 onNewProjectChat={(project) => void startProjectChat(project)}
                 onResume={(session) => void selectSession({ sessionId: session.id })}
@@ -376,6 +393,10 @@ export default function App() {
             {activeView.kind === "workspace" && activeWorkspace && (
               <WorkspaceHome
                 workspace={activeWorkspace}
+                tab={activeView.tab ?? "runs"}
+                onTab={(tab) => setActiveView({...activeView, tab})}
+                waiting={waiting[activeWorkspace.id] ?? 0}
+                caps={workflowCaps}
                 instructions={<InstructionBadge workspace={activeWorkspace} onOpen={trigger=>openInstructions(activeWorkspace,trigger)}/>}
                 onFolderChanged={contextSessions.refresh}
                 onResearchChanged={contextSessions.refresh}
@@ -405,7 +426,7 @@ export default function App() {
           onClose={closeInspector}
           onManageFolder={() => {
             const workspace = activeWorkspace ?? contextSessions.snapshot?.workspaces.find(workspace => workspace.id === contextSessions.snapshot?.activeScope?.workspaceId);
-            if (workspace) openWorkspace(workspace); else openView({id: "workspaces", kind: "workspaces"});
+            if (workspace) openWorkspace(workspace, "settings"); else openView({id: "workspaces", kind: "workspaces"});
             setInspectorOpen(false); setInspectorFocused(false);
           }}
         />
@@ -425,6 +446,7 @@ export function WorkbenchBar({
   navigationCollapsed = false,
   onOpenNavigation,
   onChat,
+  notifications,
   onToggleInspector,
 }: {
   view: WorkbenchView;
@@ -433,6 +455,8 @@ export function WorkbenchBar({
   navigationCollapsed?: boolean;
   onOpenNavigation: () => void;
   onChat: () => void;
+  /** The app-wide notifications icon, on every view. */
+  notifications?: React.ReactNode;
   onToggleInspector: () => void;
 }) {
   const label = view.kind === "data" ? "Data" : view.kind === "workspaces" ? "Workspaces" : view.kind === "workspace" ? view.label : undefined;
@@ -446,7 +470,9 @@ export function WorkbenchBar({
           <span aria-current="page" className="text-ink min-w-0 truncate font-medium">{label}</span>
         </> : <span aria-current="page" className="text-ink min-w-0 truncate font-medium" title={chatLabel}>{chatLabel}</span>}
       </nav>
-      <button type="button" title="Toggle inspector" aria-label="Toggle inspector" aria-pressed={inspectorOpen} onClick={onToggleInspector} className={`${inspectorOpen ? "text-teal" : "text-faint hover:text-body"} focus-visible:ring-teal flex-none rounded p-2 focus-visible:ring-1 focus-visible:outline-none`}><PanelRight size={15} /></button>
+      {notifications}
+      {/* The Inspector belongs to chat; other views open it only from their own controls. */}
+      {view.kind === "chat" && <button type="button" title="Toggle inspector" aria-label="Toggle inspector" aria-pressed={inspectorOpen} onClick={onToggleInspector} className={`${inspectorOpen ? "text-teal" : "text-faint hover:text-body"} focus-visible:ring-teal flex-none rounded p-2 focus-visible:ring-1 focus-visible:outline-none`}><PanelRight size={15} /></button>}
     </header>
   );
 }

@@ -307,6 +307,8 @@ export const workflowRunAPI = {
   answer: (runId: string, step: string, answer: Record<string, unknown>): Promise<WorkflowRunDetail> =>
     postWorkflows("answer", { run_id: runId, step, answer }),
   interruptions: (workspaceId: string): Promise<{ interruptions: WorkflowInterruption[] }> => postWorkflows("interruptions", { workspace_id: workspaceId }),
+  /** Every Workspace's open interruptions: what runs ask the owner now. */
+  openInterruptions: (): Promise<{ interruptions: WorkflowInterruption[] }> => postWorkflows("interruptions", { limit: 200 }),
   cancel: (runId: string, reason: string): Promise<WorkflowRunDetail> =>
     postWorkflows("cancel", reason.trim() === "" ? { run_id: runId } : { run_id: runId, reason: reason.trim() }),
 };
