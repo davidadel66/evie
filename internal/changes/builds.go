@@ -58,7 +58,9 @@ func (b *BuildSource) Changes(ctx context.Context, ws memory.WorkspaceID, repo R
 // draft.
 func buildChange(ws memory.WorkspaceID, a delegation.Attempt) Change {
 	w, g := *a.Worktree, a.Gate
-	c := Change{ID: "build:" + a.ID, WorkspaceID: ws, ExecutionID: a.ID, Author: ByEvie, State: Draft, Branch: w.Branch, Base: w.Base}
+	// The branch, not the attempt, names the Change: a continuation
+	// attempt keeps the branch and so stays the same Change.
+	c := Change{ID: "build:" + w.Branch, WorkspaceID: ws, ExecutionID: a.ID, Author: ByEvie, State: Draft, Branch: w.Branch, Base: w.Base}
 	var report *delegation.BuildReport
 	if a.Result != nil {
 		report = a.Result.Build

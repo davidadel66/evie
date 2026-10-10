@@ -81,8 +81,9 @@ type Check struct {
 
 // Change is one branch of work in a Workspace's Repository.
 type Change struct {
-	// ID is "build:<execution id>" for Evie's build branches and
-	// "pr:<number>" for a pull request no build branch matches.
+	// ID is "build:<branch>" for Evie's build branches (stable across
+	// continuation attempts) and "pr:<number>" for a pull request no build
+	// branch matches.
 	ID          string             `json:"id"`
 	WorkspaceID memory.WorkspaceID `json:"workspace_id"`
 	Branch      string             `json:"branch"`
@@ -146,9 +147,55 @@ func (l *Lister) List(ctx context.Context, ws memory.WorkspaceID, folder string)
 		if err != nil {
 			return repo, nil, err
 		}
-		all = append(all, pulls...)
+		all = link(all, pulls)
 	}
 	return repo, ordered(all), nil
+}
+
+// link joins each pull request to Evie's build Change on the same branch:
+// that Change takes the pull request, its checks, its head and GitHub's
+// state, and keeps Evie's title, notes and origin. Of several pull
+// requests on one branch, the open one, else the newest, is the branch's.
+// Any other pull request is a Change of its own.
+func link(builds, pulls []Change) []Change {
+	onBranch := map[string]int{}
+	for i, c := range builds {
+		onBranch[c.Branch] = i
+	}
+	chosen := map[string]Change{}
+	var own []Change
+	for _, p := range pulls {
+		if _, ok := onBranch[p.Branch]; !ok || p.Branch == "" {
+			own = append(own, p)
+			continue
+		}
+		if current, ok := chosen[p.Branch]; !ok || preferred(p, current) {
+			chosen[p.Branch] = p
+		}
+	}
+	for branch, p := range chosen {
+		c := &builds[onBranch[branch]]
+		c.State, c.PullRequest, c.Checks = p.State, p.PullRequest, p.Checks
+		if p.Head != "" {
+			c.Head = p.Head
+		}
+		if p.Base != "" {
+			c.Base = p.Base
+		}
+		if p.UpdatedAt.After(c.UpdatedAt) {
+			c.UpdatedAt = p.UpdatedAt
+		}
+	}
+	return append(builds, own...)
+}
+
+// preferred says whether pull request p is its branch's over current: an
+// open one over a finished one, else the newer.
+func preferred(p, current Change) bool {
+	if (p.State == Open) != (current.State == Open) {
+		return p.State == Open
+	}
+	return p.UpdatedAt.After(current.UpdatedAt)
 }
 
 func ordered(all []Change) []Change {

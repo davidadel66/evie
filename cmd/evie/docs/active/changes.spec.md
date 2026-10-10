@@ -182,6 +182,18 @@ keeps the owner's checkout current without touching work in progress.
   - in GitHub Repositories, the owner's pull requests found by sync.
 - Notes: Evie's come from the worker's build report; the owner's are the
   pull request body.
+- Identity and linking (2026-10-10): Evie's Change is named by its branch
+  (`build:<branch>`), so a continuation attempt on the same branch stays the
+  same Change. A pull request on that branch is that Change on GitHub: it
+  takes the pull request, its checks, head and GitHub's state, and keeps
+  Evie's title, notes and origin. Of several pull requests on one branch,
+  the open one, else the newest, is the branch's. Any other pull request
+  is the owner's own Change, `pr:<number>`.
+- Sync bounds (2026-10-10): one list plus two reads per open pull request
+  (check runs and commit statuses) plus one per pull request that left the
+  open list. A sync GitHub refuses records nothing, so a missing check is
+  never read as "no checks". `mergeable` is unknown for listed pull
+  requests; story 5 reads it at merge time.
 
 ### Sync
 

@@ -105,14 +105,19 @@ func reported(summary string, limitations []string, subjects ...string) func(*de
 	}
 }
 
+// changeByID finds the Change read from build attempt id; the Change
+// itself is named by its branch.
 func changeByID(t *testing.T, list []changes.Change, id string) changes.Change {
 	t.Helper()
 	for _, c := range list {
-		if c.ID == "build:"+id {
+		if c.ExecutionID == id {
+			if c.ID != "build:"+c.Branch {
+				t.Fatalf("Change %q is not named by its branch %q", c.ID, c.Branch)
+			}
 			return c
 		}
 	}
-	t.Fatalf("no Change build:%s in %+v", id, list)
+	t.Fatalf("no Change from attempt %s in %+v", id, list)
 	return changes.Change{}
 }
 
@@ -223,12 +228,12 @@ func TestBuildChangesFollowTheBuildRecordsOfTheWorkspaceRepository(t *testing.T)
 		t.Fatalf("continued = %+v", c)
 	}
 	for _, c := range list {
-		if c.ID == "build:"+original.ID || strings.Contains(c.Notes, "harness note") {
+		if c.ExecutionID == original.ID || strings.Contains(c.Notes, "harness note") {
 			t.Fatalf("listed %+v", c)
 		}
 	}
 	// Unfinished first; then the finished, most recently updated first.
-	if list[6].ID != "build:"+closed.ID || list[7].ID != "build:"+merged.ID {
+	if list[6].ExecutionID != closed.ID || list[7].ExecutionID != merged.ID {
 		t.Fatalf("order = %+v", list)
 	}
 

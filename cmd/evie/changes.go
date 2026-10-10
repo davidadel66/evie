@@ -15,10 +15,10 @@ import (
 const changesUsage = "usage: evie changes list <workspace-id>"
 
 // changeLister lists a Workspace's Changes for `evie changes` and the web
-// routes: Evie's build branches, read from the build records
-// (changes.spec.md story 3a).
+// routes: Evie's build branches, read from the build records (story 3a),
+// joined with the pull requests the last sync recorded (story 3b).
 func changeLister(repositories *changes.Service, store *eviedb.Store) *changes.Lister {
-	return &changes.Lister{Repositories: repositories, Builds: changes.NewBuildSource(store)}
+	return &changes.Lister{Repositories: repositories, Builds: changes.NewBuildSource(store), PullRequests: changes.PullRequestSource{Store: store}}
 }
 
 // runChangeManagement answers `evie changes list <workspace-id>`, which

@@ -79,7 +79,7 @@ func TestChangesListCommandPrintsTheWorkspaceChanges(t *testing.T) {
 	if listed.Repository.Kind != changes.Local || listed.Repository.Folder != repo || len(listed.Changes) != 1 {
 		t.Fatalf("listed = %s", out)
 	}
-	if c := listed.Changes[0]; c.ID != "build:"+id || c.State != changes.Draft || c.Title != "Fix the flaky test" ||
+	if c := listed.Changes[0]; c.ExecutionID != id || c.ID != "build:"+c.Branch || c.State != changes.Draft || c.Title != "Fix the flaky test" ||
 		c.Origin == nil || *c.Origin != (changes.Origin{RunID: "run-7", Workflow: "fix-bugs", Step: "build"}) || c.Worktree != attempt.Worktree.Path {
 		t.Fatalf("Change = %s", out)
 	}

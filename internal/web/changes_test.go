@@ -88,7 +88,7 @@ func TestChangesRouteListsBuildChangesAndTheFolderStaysWhileOneIsUnfinished(t *t
 	if listed.Repository.Kind != changes.Local || len(listed.Changes) != 1 {
 		t.Fatalf("listed = %+v", listed)
 	}
-	if c := listed.Changes[0]; c.ID != "build:"+id || c.State != changes.Draft || c.Title != "Add the login page" || c.Branch != attempt.Worktree.Branch ||
+	if c := listed.Changes[0]; c.ExecutionID != id || c.ID != "build:"+attempt.Worktree.Branch || c.State != changes.Draft || c.Title != "Add the login page" || c.Branch != attempt.Worktree.Branch ||
 		c.Origin == nil || c.Origin.SessionID != string(parent.ID) {
 		t.Fatalf("Change = %+v", c)
 	}
