@@ -90,6 +90,11 @@ export const workflowAPI = {
   }),
   deactivate: (workspaceId: string, name: string, version: number): Promise<WorkflowActivation> =>
     postWorkflows("deactivate", { workspace_id: workspaceId, name, version }),
+  /** A workflow's current workflow.yaml (or its waiting proposal's), outlined. */
+  source: (workspaceId: string, name: string): Promise<WorkflowDefinitionView> => postWorkflows("definition", { workspace_id: workspaceId, name }),
+  /** The owner pausing or resuming a workflow's schedule. */
+  schedule: (workspaceId: string, name: string, action: "pause" | "resume"): Promise<unknown> =>
+    postWorkflows("schedule", { workspace_id: workspaceId, name, action }),
 };
 export type WorkflowAPI = typeof workflowAPI;
 
@@ -312,13 +317,15 @@ export type WorkflowStepOutline = {
   last_line: number;
 };
 
-/** The workflow.yaml a run is pinned to, and its steps in YAML order. */
+/** A version's workflow.yaml, its description and its steps in YAML order; a proposal not yet approved has version 0 and names the proposal. */
 export type WorkflowDefinitionView = {
   workspace_id: string;
   name: string;
   version: number;
+  proposal?: string;
   commit: string;
   source: string;
+  description?: string;
   steps: WorkflowStepOutline[];
 };
 
@@ -329,8 +336,8 @@ export const workflowRunAPI = {
   /** The owner's audited rerun of a succeeded run with its inputs; returns once the new run is recorded. */
   rerun: (workspaceId: string, name: string, runId: string, reason: string): Promise<WorkflowRunResult> =>
     postWorkflows("start", { workspace_id: workspaceId, name, rerun_of: runId, reason, detach: true }),
-  start: (workspaceId: string, name: string, inputs: Record<string, unknown>): Promise<WorkflowRunResult> =>
-    postWorkflows("start", { workspace_id: workspaceId, name, inputs }),
+  start: (workspaceId: string, name: string, inputs: Record<string, unknown>, detach = false): Promise<WorkflowRunResult> =>
+    postWorkflows("start", detach ? { workspace_id: workspaceId, name, inputs, detach } : { workspace_id: workspaceId, name, inputs }),
   inspect: (runId: string): Promise<WorkflowRunDetail> => postWorkflows("inspect", { run_id: runId }),
   answer: (runId: string, step: string, answer: Record<string, unknown>): Promise<WorkflowRunDetail> =>
     postWorkflows("answer", { run_id: runId, step, answer }),

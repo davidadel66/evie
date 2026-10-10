@@ -72,16 +72,63 @@ func TestWorkflowRunsCarryStepStatesAndARunsDefinitionOutline(t *testing.T) {
 		t.Fatalf("step = %+v", s)
 	}
 
+	// By name: the active version, which a run of it is pinned to.
+	resp = workflowPost(t, h, "definition", map[string]any{"workspace_id": w.ID, "name": "scheduled-split"})
+	var byName struct {
+		Name        string                 `json:"name"`
+		Version     int64                  `json:"version"`
+		Proposal    string                 `json:"proposal"`
+		Description string                 `json:"description"`
+		Source      string                 `json:"source"`
+		Steps       []workflow.StepOutline `json:"steps"`
+	}
+	if resp.Code != http.StatusOK || json.Unmarshal(resp.Body.Bytes(), &byName) != nil || byName.Version != def.Version || byName.Proposal != "" ||
+		byName.Description != "Split a fixed amount every morning in New York." || byName.Source != def.Source || len(byName.Steps) != 1 {
+		t.Fatalf("definition by name = %d %s", resp.Code, resp.Body)
+	}
+	if resp := workflowPost(t, h, "definition", map[string]any{"workspace_id": w.ID, "name": "no-such-workflow"}); resp.Code != http.StatusNotFound {
+		t.Fatalf("unknown workflow = %d %s", resp.Code, resp.Body)
+	}
+
 	if resp := workflowPost(t, h, "definition", map[string]any{"run_id": "no-such-run"}); resp.Code != http.StatusNotFound {
 		t.Fatalf("unknown run = %d %s", resp.Code, resp.Body)
 	}
 	for name, body := range map[string]any{
-		"no run":        map[string]any{},
-		"a long run id": map[string]any{"run_id": strings.Repeat("r", 129)},
-		"another field": map[string]any{"run_id": "r", "path": "prompts/propose.md"},
+		"no run":            map[string]any{},
+		"a long run id":     map[string]any{"run_id": strings.Repeat("r", 129)},
+		"another field":     map[string]any{"run_id": "r", "path": "prompts/propose.md"},
+		"a run and a name":  map[string]any{"run_id": "r", "workspace_id": w.ID, "name": "scheduled-split"},
+		"a name alone":      map[string]any{"name": "scheduled-split"},
+		"a Workspace alone": map[string]any{"workspace_id": w.ID},
 	} {
 		if resp := workflowPost(t, h, "definition", body); resp.Code != http.StatusBadRequest {
 			t.Fatalf("%s = %d %s", name, resp.Code, resp.Body)
 		}
+	}
+}
+
+// A workflow with no approved version shows the proposal waiting for
+// approval, so the owner can read what they are asked to approve.
+func TestWorkflowDefinitionOfAProposedWorkflowIsItsPendingProposal(t *testing.T) {
+	ctx := context.Background()
+	_, rt, w := workflowRuntimeForWeb(t)
+	f, err := workflow.ParseFixtures([]byte(`{"inputs": {"day": "2026-10-05", "at": "07:00", "total_cents": 1000, "people": 3}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	card, err := rt.Propose(ctx, workflowruntime.Proposal{WorkspaceID: w.ID, Dir: filepath.Join("..", "workflow", "testdata", "scheduled-split"), Fixtures: &f, Surface: "cli"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := web.WithWorkflows(web.NewServer(nil), rt).Handler()
+	resp := workflowPost(t, h, "definition", map[string]any{"workspace_id": w.ID, "name": "scheduled-split"})
+	var view struct {
+		Version  int64  `json:"version"`
+		Proposal string `json:"proposal"`
+		Source   string `json:"source"`
+	}
+	if resp.Code != http.StatusOK || json.Unmarshal(resp.Body.Bytes(), &view) != nil || view.Version != 0 || view.Proposal != card.Proposal.ID ||
+		!strings.Contains(view.Source, "id: split") {
+		t.Fatalf("definition = %d %s", resp.Code, resp.Body)
 	}
 }

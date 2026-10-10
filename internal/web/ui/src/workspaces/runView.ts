@@ -1,4 +1,4 @@
-import { modelCallSpend, workerCallSpend, type WorkflowInterruption, type WorkflowRun, type WorkflowRunDetail, type WorkflowRunState, type WorkflowStepOutline } from "../api/workflows";
+import { modelCallSpend, workerCallSpend, workflowMapViews, type WorkflowInterruption, type WorkflowRun, type WorkflowRunDetail, type WorkflowRunState, type WorkflowStepOutline } from "../api/workflows";
 import { duration } from "../ui/time";
 import { compactCount } from "./workspaceActivity";
 
@@ -154,4 +154,21 @@ export function latestStates(detail: WorkflowRunDetail): Record<string, string> 
     if (attempt.item === undefined) states[attempt.step] = attempt.state;
   }
   return states;
+}
+
+/** Each map step's progress in a run, from its latest list of items: "4 of 6 items done, 1 failed". */
+export function mapProgress(detail: WorkflowRunDetail): Record<string, string> {
+  const latest: Record<string, ReturnType<typeof workflowMapViews>[number]> = {};
+  for (const view of workflowMapViews(detail)) {
+    if (!latest[view.step] || view.checkpoint > latest[view.step].checkpoint) latest[view.step] = view;
+  }
+  const out: Record<string, string> = {};
+  for (const [step, view] of Object.entries(latest)) {
+    const count = (state: string) => view.items.filter((item) => item.state === state).length;
+    const parts = [`${count("succeeded")} of ${view.items.length} ${view.items.length === 1 ? "item" : "items"} done`];
+    if (count("failed")) parts.push(`${count("failed")} failed`);
+    if (count("running")) parts.push(`${count("running")} running`);
+    out[step] = parts.join(", ");
+  }
+  return out;
 }

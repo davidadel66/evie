@@ -34,6 +34,7 @@ type WorkflowManager interface {
 	// outline (workspace-activity.spec.md).
 	RunStepStates(context.Context, []string) (map[string]map[string]string, error)
 	RunDefinition(context.Context, string) (workflowruntime.DefinitionView, error)
+	WorkflowDefinitionView(context.Context, memory.WorkspaceID, string) (workflowruntime.DefinitionView, error)
 	Reconcile(context.Context, workflowruntime.Reconciliation) (eviedb.WorkflowRunDetail, error)
 	Answer(context.Context, workflowruntime.AnswerRequest) (eviedb.WorkflowRunDetail, error)
 	Interruptions(context.Context, workflowruntime.InterruptionFilter) ([]eviedb.WorkflowInterruption, error)
@@ -632,20 +633,32 @@ func (s *Server) handleWorkflowRuns(w http.ResponseWriter, r *http.Request) {
 	}{rows})
 }
 
-// handleWorkflowDefinition is the workflow.yaml a run is pinned to and its
-// step outline, for the web run panel (workspace-activity.spec.md).
+// handleWorkflowDefinition is a workflow.yaml and its outline
+// (workspace-activity.spec.md): the version a run is pinned to, for the run
+// panel, or a Workspace workflow's current version (or the proposal waiting
+// when none was approved), for the Workflows tab.
 func (s *Server) handleWorkflowDefinition(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		RunID string `json:"run_id"`
+		RunID       string             `json:"run_id,omitempty"`
+		WorkspaceID memory.WorkspaceID `json:"workspace_id,omitempty"`
+		Name        string             `json:"name,omitempty"`
 	}
 	if !decodeCandidateRequest(w, r, &request) {
 		return
 	}
-	if request.RunID == "" || len(request.RunID) > 128 {
-		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "definition takes the ID of a run")
+	byRun := request.RunID != "" && len(request.RunID) <= 128 && request.WorkspaceID == "" && request.Name == ""
+	byName := request.RunID == "" && boundedID(string(request.WorkspaceID)) && boundedID(request.Name)
+	if !byRun && !byName {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "definition takes the ID of a run, or a Workspace ID and a workflow name")
 		return
 	}
-	view, err := s.workflows.RunDefinition(r.Context(), request.RunID)
+	var view workflowruntime.DefinitionView
+	var err error
+	if byRun {
+		view, err = s.workflows.RunDefinition(r.Context(), request.RunID)
+	} else {
+		view, err = s.workflows.WorkflowDefinitionView(r.Context(), request.WorkspaceID, request.Name)
+	}
 	if err != nil {
 		writeWorkflowError(w, err)
 		return

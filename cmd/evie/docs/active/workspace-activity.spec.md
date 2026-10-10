@@ -189,7 +189,8 @@ spend.
     or was cancelled;
   - skipped: no attempt once the run succeeded (a branch not taken).
 
-  Map steps' item counts are not shown yet (deferred).
+  A map step also shows how many of its items are done, failed or running,
+  from its latest list of items.
 - The panel keeps its frame and header while a newly selected run loads, so
   the list beside it never changes width.
 - Questions:
@@ -211,8 +212,11 @@ spend.
 
 - The list comes from the existing workflow list. Recent-run dots come from
   the runs route filtered by workflow (the last 10). Status shows Active,
-  Needs approval, Blocked, Inactive or Paused, from the list and the
-  schedule status.
+  Needs approval, Update needs approval (an active workflow with a newer
+  version waiting), Blocked, Inactive or Paused, from the list and the
+  schedule status. "Runs when" reads daily, weekday and single-day cron
+  schedules in words with the zone's city; any other schedule shows its
+  cron.
 - The `definition` route from story 2 is extended to name a workflow
   instead of a run: it reads the active version at its recorded commit, or
   the pending proposal's commit when nothing is active. It never returns
@@ -226,8 +230,9 @@ spend.
 - The approval banner summarizes the proposal's new authority. Its button
   expands the existing approval card, and approval goes through the
   existing approve route with the hashes the card showed.
-- Start run uses the existing start form, which sits on the Runs tab as a
-  small disclosure until this story moves it here. Pause and Resume use the
+- Start run uses the existing start form inside the pop-up. It starts the
+  run detached and opens it in the Runs tab. The pop-up also lists the
+  approved versions behind a Versions disclosure. Pause and Resume use the
   schedule route. Deactivate uses the deactivate route. Built-in workflows
   reuse the existing built-in list in the tab.
 

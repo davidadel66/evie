@@ -5,6 +5,9 @@ import type { WorkflowCapStatus, WorkflowInterruption } from "../api/workflows";
 
 export type WorkspaceTab = "runs" | "workflows" | "settings";
 
+/** Where the owner is within a Workspace: its tab, the run open in the Runs panel, and the workflow the runs are narrowed to. */
+export type WorkspaceViewState = { tab?: WorkspaceTab; run?: string; runFilter?: string };
+
 export const workspaceTabs: { id: WorkspaceTab; label: string }[] = [
   { id: "runs", label: "Runs" },
   { id: "workflows", label: "Workflows" },

@@ -1,7 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
-import type { Workspace } from "../api/contextSessions";
-import { pendingProposal, workflowAPI, type WorkflowAPI, type WorkflowCard, type WorkflowDefinition } from "../api/workflows";
-import { WorkspaceBuiltinWorkflows } from "./WorkspaceBuiltinWorkflows";
+import type { WorkflowCard, WorkflowDefinition } from "../api/workflows";
 
 // Workflows bound to this Workspace (Stage 14 sub-stage 2). Definitions are
 // proposed with `evie workflows propose`; here David reviews a proposal's
@@ -10,6 +7,10 @@ import { WorkspaceBuiltinWorkflows } from "./WorkspaceBuiltinWorkflows";
 // starts no run. Since the built-in decision (2026-10-04) the built-in
 // workflows are listed here too, with their on/off switch; there is no
 // "add from template" step.
+//
+// The Workflows tab (WorkspaceWorkflowsTab.tsx, workspace-activity.spec.md)
+// replaced the container that lived here; the approval card is reused in
+// its pop-up, and the list stays for the design system.
 
 const statusLabel: Record<WorkflowDefinition["status"], string> = {
   proposed: "Proposed",
@@ -92,57 +93,4 @@ export function WorkflowApprovalCard({card, busy, onApprove, onClose}: {
       <button type="button" disabled={busy} onClick={onClose} className="text-body underline underline-offset-2">Close</button>
     </div>
   </div>;
-}
-
-export function WorkspaceWorkflows({workspace, api = workflowAPI}: {workspace: Workspace; api?: WorkflowAPI}) {
-  const [definitions, setDefinitions] = useState<WorkflowDefinition[] | null>(null);
-  const [card, setCard] = useState<WorkflowCard | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState("");
-  const [message, setMessage] = useState("");
-  const refresh = useCallback(async () => {
-    const page = await api.list(workspace.id);
-    setDefinitions(page.workflows);
-  }, [api, workspace.id]);
-  useEffect(() => {
-    refresh().catch(() => setProblem("Workflows could not be loaded."));
-  }, [refresh]);
-  const run = async (action: () => Promise<string>) => {
-    setBusy(true); setProblem(""); setMessage("");
-    try { setMessage(await action()); }
-    catch (error) { setProblem(error instanceof Error ? error.message : "The workflow request failed. Refresh before trying again."); }
-    finally { setBusy(false); }
-  };
-  const review = (definition: WorkflowDefinition) => run(async () => {
-    const detail = await api.show(workspace.id, definition.name);
-    // A waiting proposal, or, for a blocked definition, the approved
-    // version's own proposal, which can be approved again.
-    const id = pendingProposal(detail)?.id ?? detail.current?.proposal_id ?? detail.proposals?.[0]?.id;
-    if (!id) return "There is no proposal to review.";
-    setCard(await api.diff(id));
-    return "";
-  });
-  const approve = () => run(async () => {
-    if (!card) return "";
-    const activation = await api.approve(card);
-    setCard(null);
-    await refresh();
-    return `Activated ${activation.name} version ${activation.version}. No run was started.`;
-  });
-  const deactivate = (definition: WorkflowDefinition) => run(async () => {
-    if (!definition.current) return "";
-    const ended = await api.deactivate(workspace.id, definition.name, definition.current.version);
-    await refresh();
-    return `Deactivated ${ended.name} version ${ended.version}. No new run will start.`;
-  });
-  return <section aria-label="Workflows" className="border-hair mt-7 border-b pb-7">
-    <h2 className="text-body mb-3 text-sm font-medium">Workflows</h2>
-    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Reviewed procedures this Workspace can run. Propose your own with <code className="font-mono">evie workflows propose {workspace.id} &lt;folder&gt; --fixtures &lt;file&gt;</code>; approving a version grants exactly the Standing Authority it shows, within this Workspace&apos;s access, and starts no run. Any change to its behavior needs a new approval.</p>
-    {definitions === null ? <p className="text-muted-text text-xs">Loading workflows…</p>
-      : <WorkflowList definitions={definitions} busy={busy || workspace.state !== "active"} onReview={(d) => void review(d)} onDeactivate={(d) => void deactivate(d)} />}
-    {card && <WorkflowApprovalCard card={card} busy={busy || workspace.state !== "active"} onApprove={() => void approve()} onClose={() => setCard(null)} />}
-    <p role="status" className="text-muted-text mt-2 text-xs">{busy ? "Working…" : message}</p>
-    {problem && <p role="alert" className="text-danger mt-2 text-xs">{problem}</p>}
-    <WorkspaceBuiltinWorkflows workspace={workspace} />
-  </section>;
 }

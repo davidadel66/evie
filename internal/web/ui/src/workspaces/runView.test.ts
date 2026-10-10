@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowInterruption, WorkflowRun, WorkflowRunDetail, WorkflowStepOutline } from "../api/workflows";
 import { duration } from "../ui/time";
-import { enumChoices, groupRuns, latestStates, runNote, runSteps, runSummary, stepProgress, summarizeOutputs } from "./runView";
+import { enumChoices, groupRuns, latestStates, mapProgress, runNote, runSteps, runSummary, stepProgress, summarizeOutputs } from "./runView";
 
 // finance-review's shape: a branch either ends the run or asks the owner.
 const outline: WorkflowStepOutline[] = [
@@ -102,5 +102,19 @@ describe("the run panel", () => {
 
   it("reads lengths of time at a glance", () => {
     expect([41_000, 126_000, 240_000, 720_000, 11_520_000, 3_600_000].map(duration)).toEqual(["41s", "2m 06s", "4m", "12m", "3h 12m", "1h"]);
+  });
+});
+
+describe("map steps", () => {
+  it("count their items from the latest list: done, failed and running", () => {
+    const attempt = (seq: number, state: "running" | "succeeded" | "failed", item?: number, checkpoint = 3) =>
+      ({seq, step: "research", kind: "map", attempt: 1, input_checkpoint: checkpoint, input: item === undefined ? {items: ["a", "b", "c", "d", "e", "f"]} : {}, state, started_at: "", item});
+    const detail = {run: base, checkpoints: [], attempts: [
+      attempt(1, "running"),
+      attempt(2, "succeeded", 0), attempt(3, "succeeded", 1), attempt(4, "failed", 2), attempt(5, "succeeded", 2),
+      attempt(6, "succeeded", 3), attempt(7, "failed", 4), attempt(8, "running", 5),
+    ]} as WorkflowRunDetail;
+    expect(mapProgress(detail)).toEqual({research: "4 of 6 items done, 1 failed, 1 running"});
+    expect(mapProgress({...detail, attempts: []})).toEqual({});
   });
 });

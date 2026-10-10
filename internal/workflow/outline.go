@@ -22,17 +22,24 @@ type StepOutline struct {
 	LastLine    int      `json:"last_line"`
 }
 
-// Outline reads workflow.yaml's steps in YAML order under the same accepted
-// subset as validation, without validating anything else, so any version
-// that was once approved can still be outlined.
-func Outline(data []byte) ([]StepOutline, error) {
+// DefinitionOutline is a definition's description and its steps in YAML
+// order.
+type DefinitionOutline struct {
+	Description string        `json:"description,omitempty"`
+	Steps       []StepOutline `json:"steps"`
+}
+
+// Outline reads workflow.yaml's description and steps under the same
+// accepted subset as validation, without validating anything else, so any
+// version that was once approved can still be outlined.
+func Outline(data []byte) (DefinitionOutline, error) {
 	def, problems := parseDefinition(data)
 	if len(problems) > 0 {
-		return nil, errors.New("workflow.yaml: " + problems[0].Message)
+		return DefinitionOutline{}, errors.New("workflow.yaml: " + problems[0].Message)
 	}
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, err
+		return DefinitionOutline{}, err
 	}
 	items := stepNodes(&doc)
 	out := make([]StepOutline, len(def.Steps))
@@ -56,7 +63,7 @@ func Outline(data []byte) ([]StepOutline, error) {
 		}
 		out[i] = o
 	}
-	return out, nil
+	return DefinitionOutline{Description: def.Description, Steps: out}, nil
 }
 
 // stepNodes is the steps sequence's items.

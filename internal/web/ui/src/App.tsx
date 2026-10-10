@@ -31,7 +31,7 @@ import {
   type ChatTextSize,
 } from "./ui/textSize";
 import { WorkspaceHome, Workspaces } from "./workspaces/Workspaces";
-import type { WorkspaceTab } from "./workspaces/workspaceActivity";
+import type { WorkspaceTab, WorkspaceViewState } from "./workspaces/workspaceActivity";
 import { Notifications } from "./shell/Notifications";
 import type { Notice } from "./api/notifications";
 import { useWorkflowCaps, useWorkspaceNeeds } from "./store/useWorkspaceNeeds";
@@ -43,7 +43,7 @@ export type WorkbenchView =
   | { id: "chat"; kind: "chat" }
   | { id: "data"; kind: "data" }
   | { id: "workspaces"; kind: "workspaces" }
-  | { id: `workspace:${string}`; kind: "workspace"; workspaceId: string; label: string; tab?: WorkspaceTab; run?: string };
+  | { id: `workspace:${string}`; kind: "workspace"; workspaceId: string; label: string } & WorkspaceViewState;
 
 const textSizeStorageKey = "evie.chatTextSize";
 const sidebarStorageKey = "evie.sidebarCollapsed";
@@ -397,9 +397,9 @@ export default function App() {
               <WorkspaceHome
                 workspace={activeWorkspace}
                 tab={activeView.tab ?? "runs"}
-                onTab={(tab) => setActiveView({...activeView, tab})}
                 selectedRun={activeView.run}
-                onSelectRun={(run) => setActiveView({...activeView, run})}
+                runFilter={activeView.runFilter}
+                onView={(patch) => setActiveView((view) => view.kind === "workspace" ? {...view, ...patch} : view)}
                 sessionTitles={sessionTitles}
                 onOpenSession={(sessionId) => void selectSession({ sessionId })}
                 onRunsChanged={() => setRunsChanged((value) => value + 1)}

@@ -49,10 +49,14 @@ steps:
     kind: deterministic
     function: require_zero@1
 `
-	got, err := workflow.Outline([]byte(src))
+	outline, err := workflow.Outline([]byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if outline.Description != "Review proposals." {
+		t.Fatalf("description = %q", outline.Description)
+	}
+	got := outline.Steps
 	want := []workflow.StepOutline{
 		{ID: "gather", Kind: "capability", Description: "Read the candidates.", Next: []string{"any"}, MaxAttempts: 2, FirstLine: 8, LastLine: 15},
 		{ID: "any", Kind: "branch", Next: []string{"nothing", "review"}, FirstLine: 17, LastLine: 25},

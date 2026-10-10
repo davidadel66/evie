@@ -11,10 +11,10 @@ import { WorkspaceExploreSettings } from "./WorkspaceExploreSettings";
 import { WorkspaceBuildSettings } from "./WorkspaceBuildSettings";
 import { WorkspaceVerifySettings } from "./WorkspaceVerifySettings";
 import type { WorkflowCapStatus } from "../api/workflows";
-import { WorkspaceWorkflows } from "./WorkspaceWorkflows";
+import { WorkspaceWorkflowsTab } from "./WorkspaceWorkflowsTab";
 import { WorkspaceRuns } from "./WorkspaceRuns";
 import { WorkspaceHeader } from "./WorkspaceHeader";
-import type { WorkspaceTab } from "./workspaceActivity";
+import type { WorkspaceTab, WorkspaceViewState } from "./workspaceActivity";
 
 type DirectoryProps = {
   snapshot?: ContextSessionSnapshot;
@@ -149,9 +149,9 @@ export function WorkspaceHome({
   waiting = 0,
   caps,
   selectedRun,
+  runFilter = "",
   sessionTitles,
-  onTab,
-  onSelectRun,
+  onView,
   onOpenSession,
   onRunsChanged,
   onNewChat,
@@ -170,9 +170,11 @@ export function WorkspaceHome({
   caps?: WorkflowCapStatus;
   /** The run open in the Runs tab's panel. */
   selectedRun?: string;
+  /** The workflow the Runs tab is narrowed to; "" for all. */
+  runFilter?: string;
   sessionTitles?: Record<string, string>;
-  onTab?: (tab: WorkspaceTab) => void;
-  onSelectRun?: (runId: string | undefined) => void;
+  /** Moves within the Workspace: a tab, the open run, the run filter, together. */
+  onView?: (view: WorkspaceViewState) => void;
   onOpenSession?: (sessionId: string) => void;
   onRunsChanged?: () => void;
   onNewChat: () => void;
@@ -184,14 +186,16 @@ export function WorkspaceHome({
 }) {
   return (
     <main className="flex min-h-0 flex-1 flex-col">
-      <WorkspaceHeader tab={tab} waiting={waiting} caps={caps} onTab={(next) => onTab?.(next)} />
+      <WorkspaceHeader tab={tab} waiting={waiting} caps={caps} onTab={(next) => onView?.({tab: next})} />
       {tab === "runs" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-runs" className="flex min-h-0 flex-1">
-        <WorkspaceRuns key={`workflow-runs:${workspace.id}`} workspace={workspace} selectedId={selectedRun} sessionTitles={sessionTitles}
-          onSelect={(runId) => onSelectRun?.(runId)} onOpenSession={onOpenSession} onChanged={onRunsChanged} />
+        <WorkspaceRuns key={`workflow-runs:${workspace.id}`} workspace={workspace} selectedId={selectedRun} filter={runFilter} sessionTitles={sessionTitles}
+          onSelect={(run) => onView?.({run})} onFilter={(filter) => onView?.({runFilter: filter})} onOpenSession={onOpenSession} onChanged={onRunsChanged} />
+      </div> : tab === "workflows" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-workflows" className="flex min-h-0 flex-1">
+        <WorkspaceWorkflowsTab key={`workflows:${workspace.id}`} workspace={workspace}
+          onOpenRun={(run) => onView?.({tab: "runs", run, runFilter: ""})} onAllRuns={(workflow) => onView?.({tab: "runs", run: undefined, runFilter: workflow})} />
       </div> : <div id="workspace-tab-panel" role="tabpanel" aria-labelledby={`workspace-tab-${tab}`} className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 sm:px-10">
       <div className="mx-auto max-w-[880px]">
-        {tab === "workflows" && <WorkspaceWorkflows key={`workflows:${workspace.id}`} workspace={workspace} />}
-        {tab === "settings" && <>
+        <>
         {instructions}
         <WorkspaceResearchSettings key={workspace.id} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceExploreSettings key={`explore:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
@@ -224,7 +228,7 @@ export function WorkspaceHome({
             </div>
           )}
         </section>
-        </>}
+        </>
       </div>
       </div>}
     </main>

@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Workspace } from "../api/contextSessions";
-import { parseRunInputs, workflowAPI, workflowRunAPI, type WorkflowAPI, type WorkflowInterruption, type WorkflowRun, type WorkflowRunAPI, type WorkflowRunDetail, type WorkflowStepOutline } from "../api/workflows";
+import { workflowRunAPI, type WorkflowInterruption, type WorkflowRun, type WorkflowRunAPI, type WorkflowRunDetail, type WorkflowStepOutline } from "../api/workflows";
 import { ago } from "../ui/time";
 import { WorkflowInterruptionAnswer } from "./WorkflowInterruptionAnswer";
-import { WorkflowRunStart } from "./WorkspaceWorkflowRuns";
 import {
-  enumChoices, groupRuns, isFinished, latestStates, outputValue, runNote, runOrigin, runStateLabel, runSteps, runSummary, runTone, runTrigger,
+  enumChoices, groupRuns, isFinished, latestStates, mapProgress, outputValue, runNote, runOrigin, runStateLabel, runSteps, runSummary, runTone, runTrigger,
   type RunStep, type RunTone, type StepState,
 } from "./runView";
 
@@ -129,6 +128,7 @@ export function RunPanel({detail, steps, sessionTitle, now, busy, problem, onClo
   const [reason, setReason] = useState("");
   const unfinished = !isFinished(run);
   const outputs = run.state === "succeeded" ? Object.entries(run.outputs ?? {}) : [];
+  const maps = mapProgress(detail);
   const footer = (unfinished || run.state === "succeeded") && <div className="border-hair flex flex-none flex-wrap items-center gap-2 border-t px-[22px] py-3">
       {unfinished && !cancelling && <>
         <span className="text-faint flex-1 text-xs">Cancelling stops the steps that have not started.</span>
@@ -177,6 +177,7 @@ export function RunPanel({detail, steps, sessionTitle, now, busy, problem, onClo
               <span className={`${step.state === "waiting" ? "text-amber" : step.state === "failed" ? "text-danger" : "text-fainter"} text-[11px]`}>{stepWord[step.state]}</span>
             </span>
             {step.description && <span className="text-muted-text mt-0.5 block text-xs leading-normal">{step.description}</span>}
+            {maps[step.id] && <span className="text-body mt-0.5 block text-xs">{maps[step.id]}</span>}
           </span>
         </li>)}
       </ol>
@@ -214,34 +215,33 @@ function WaitingBox({interruption, busy, onAnswer}: {interruption: WorkflowInter
 }
 
 /** The Runs tab: loads the Workspace's runs, its open questions and each run version's steps, and keeps them current. */
-export function WorkspaceRuns({workspace, selectedId, sessionTitles = {}, onSelect, onOpenSession, onChanged, api = workflowRunAPI, definitionsAPI = workflowAPI}: {
+export function WorkspaceRuns({workspace, selectedId, filter = "", sessionTitles = {}, onSelect, onFilter, onOpenSession, onChanged, api = workflowRunAPI}: {
   workspace: Workspace;
   selectedId?: string;
+  /** The workflow the list is narrowed to; "" for all. */
+  filter?: string;
   sessionTitles?: Record<string, string>;
   onSelect: (runId: string | undefined) => void;
+  onFilter?: (workflow: string) => void;
   onOpenSession?: (sessionId: string) => void;
   /** A run changed because of the owner (answered, cancelled, rerun). */
   onChanged?: () => void;
   api?: WorkflowRunAPI;
-  definitionsAPI?: WorkflowAPI;
 }) {
   const [runs, setRuns] = useState<WorkflowRun[] | null>(null);
   const [questions, setQuestions] = useState<WorkflowInterruption[]>([]);
   const [outlines, setOutlines] = useState<Record<string, WorkflowStepOutline[]>>({});
   const [detail, setDetail] = useState<WorkflowRunDetail | null>(null);
-  const [active, setActive] = useState<string[]>([]);
-  const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
   const [now, setNow] = useState(() => new Date());
 
   const refresh = useCallback(async () => {
-    const [page, open, definitions] = await Promise.all([api.runs(workspace.id), api.interruptions(workspace.id), definitionsAPI.list(workspace.id)]);
+    const [page, open] = await Promise.all([api.runs(workspace.id), api.interruptions(workspace.id)]);
     setRuns(page.runs);
     setQuestions(open.interruptions);
-    setActive(definitions.workflows.filter((d) => d.status === "active").map((d) => d.name));
     setNow(new Date());
-  }, [api, definitionsAPI, workspace.id]);
+  }, [api, workspace.id]);
 
   useEffect(() => {
     let live = true;
@@ -296,17 +296,8 @@ export function WorkspaceRuns({workspace, selectedId, sessionTitles = {}, onSele
   return <div className="relative flex min-h-0 flex-1">
     <section aria-label="Workflow runs" className="min-w-0 flex-1 overflow-y-auto">
       <div className="mx-auto max-w-[1000px] px-6 pt-6 pb-16 sm:px-7">
-        {workspace.state === "active" && active.length > 0 && <details className="mb-5 text-xs">
-          <summary className="text-muted-text hover:text-body cursor-pointer">Start a run</summary>
-          <div className="mt-3"><WorkflowRunStart workflows={active} busy={busy} onStart={(name, input) => void act(async () => {
-            const inputs = parseRunInputs(input);
-            if (!inputs) throw new Error("Inputs must be one JSON object of input names to values.");
-            const result = await api.start(workspace.id, name, inputs);
-            onSelect(result.run.run.id);
-          })} /></div>
-        </details>}
         {runs === null ? <p className="text-muted-text text-xs">{problem || "Loading runs…"}</p>
-          : <RunList rows={rows} workflows={workflows} filter={filter} selectedId={selectedId} now={now} onFilter={setFilter} onSelect={(run) => { setProblem(""); onSelect(run.id); }} />}
+          : <RunList rows={rows} workflows={workflows} filter={filter} selectedId={selectedId} now={now} onFilter={(workflow) => onFilter?.(workflow)} onSelect={(run) => { setProblem(""); onSelect(run.id); }} />}
         {problem && runs !== null && !detail && <p role="alert" className="text-danger mt-2 text-xs">{problem}</p>}
       </div>
     </section>
