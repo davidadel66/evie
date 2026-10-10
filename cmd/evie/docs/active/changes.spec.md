@@ -310,7 +310,13 @@ Each story is independently demonstrable and ends with
    - Depends on 1.
    - Risk: repository creation is outward-facing, so demonstrate it on a
      throwaway repository.
-3. **Change list and sync.**
+3. **Change list and sync.** Split on 2026-10-10 into 3a (Evie's Changes,
+   read from the build attempts that already record their branch, base,
+   origin, gate and worktree removal, so nothing new is stored for them;
+   the folder guard; `evie changes list`; the list route) and 3b (GitHub
+   pull requests and checks, stored in a new table by a 60-second sync,
+   and the refresh route), built in parallel on one shared `Change` type;
+   linking a build branch to its pull request comes after both.
    - Outcome: `evie changes list` and the web route show Evie's build
      branches and, for GitHub Repositories, every open pull request with
      checks, refreshed every 60 seconds and on request.
