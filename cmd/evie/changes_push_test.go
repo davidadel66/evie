@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/google/uuid"
 )
 
@@ -115,5 +117,40 @@ func TestGitHubFoldersReadsTheRepositoryKindFromOrigin(t *testing.T) {
 	cliGit(t, repo, "remote", "add", "origin", "https://github.com/davidadel66/notes.git")
 	if onGitHub, err := folders.OnGitHub(ctx, repo); err != nil || !onGitHub {
 		t.Fatalf("GitHub = %v, %v", onGitHub, err)
+	}
+}
+
+// Story 4b: github.open_change refuses, as proof nothing happened, a run
+// whose Workspace is gone and a process without GITHUB_TOKEN.
+func TestWorkflowChangeOpenerRefusesWhatItCannotOpen(t *testing.T) {
+	ctx := context.Background()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GITHUB_TOKEN", "")
+	repo := filepath.Join(base, "repo")
+	cliGit(t, base, "init", "-q", "-b", "main", repo)
+	db, err := eviedb.OpenDBAt(filepath.Join(base, "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	w, err := store.RegisterWorkspaceWithOptions(ctx, eviedb.WorkspaceRegistration{DisplayName: "Code", FolderPath: repo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	effect := workflowGitHub(store, changes.NewService(changes.Config{})).WorkflowEffects()[0]
+	input := map[string]any{"execution_id": "e1", "title": "Fix the footer", "description": "Moves the footer below the page."}
+	for name, ws := range map[string]memory.WorkspaceID{"no token": w.ID, "no Workspace": "missing"} {
+		_, err := effect.Perform(ctx, plugins.WorkflowEffectRequest{Connection: plugins.GitHubConnectionID, Resource: "repo:davidadel66/notes", Input: input, WorkspaceID: ws, RunID: "run-7"})
+		if !errors.Is(err, plugins.ErrWorkflowEffectNotPerformed) {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if name == "no token" && !strings.Contains(err.Error(), "GITHUB_TOKEN") {
+			t.Fatalf("no token: %v", err)
+		}
 	}
 }

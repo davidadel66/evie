@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/workflow"
 )
 
@@ -59,9 +60,13 @@ type WorkflowEffectCapability struct {
 	Input  *workflow.Type
 	Output *workflow.Type
 	// Connections and Resources are the exact Connection IDs and resource
-	// selectors the effect serves.
-	Connections []string
-	Resources   []string
+	// selectors the effect serves. ResourcePrefix, declared instead of
+	// Resources, serves every resource after it, for resources that differ
+	// per Workspace (story 4b, 2026-10-10); Workspace Access lists the
+	// exact one and Perform checks it.
+	Connections    []string
+	Resources      []string
+	ResourcePrefix string
 	// Idempotent declares that the provider applies one idempotency key at
 	// most once.
 	Idempotent bool
@@ -80,12 +85,18 @@ type WorkflowEffectCapability struct {
 
 // WorkflowEffectRequest is one effect request: the step's connection and
 // resource, already admitted by the runtime, its input, already checked
-// against the contract, and the Effect Intent's idempotency key.
+// against the contract, the Effect Intent's idempotency key, and the run
+// it belongs to.
 type WorkflowEffectRequest struct {
 	Connection     string
 	Resource       string
 	Input          map[string]any
 	IdempotencyKey string
+	// WorkspaceID and RunID are the run's: an effect bound to a
+	// Workspace's own resources, such as its Repository, checks them
+	// (changes.spec.md story 4b).
+	WorkspaceID memory.WorkspaceID
+	RunID       string
 }
 
 // WorkflowEffect performs one effect request and returns its response as
@@ -143,7 +154,7 @@ func (e WorkflowEffectCapability) contract() workflow.CapabilityContract {
 	}
 	return workflow.CapabilityContract{ID: string(e.ID), Contract: e.ContractVersion, Effect: true, Idempotent: e.Idempotent,
 		Reconciles: e.Reconcile != nil, ConflictKeys: rule, Input: e.Input, Output: e.Output,
-		Connections: slices.Clone(e.Connections), Resources: slices.Clone(e.Resources)}
+		Connections: slices.Clone(e.Connections), Resources: slices.Clone(e.Resources), ResourcePrefix: e.ResourcePrefix}
 }
 
 // snapshotWorkflowEffects validates a plugin's workflow effect
@@ -169,8 +180,8 @@ func snapshotWorkflowEffects(manifest Manifest, supplied []WorkflowEffectCapabil
 			return nil, fmt.Errorf("plugin %q contributes Capability %q at contract version %q, manifest declares %q", manifest.ID, e.ID, e.ContractVersion, version)
 		case e.Input == nil || e.Input.Kind != workflow.KindObject || e.Output == nil || e.Output.Kind != workflow.KindObject:
 			return nil, fmt.Errorf("workflow effect %q needs an object input and output type", e.ID)
-		case len(e.Connections) == 0 || len(e.Resources) == 0:
-			return nil, fmt.Errorf("workflow effect %q needs at least one connection and one resource it serves", e.ID)
+		case len(e.Connections) == 0 || (len(e.Resources) == 0) == (e.ResourcePrefix == ""):
+			return nil, fmt.Errorf("workflow effect %q needs at least one connection, and either the resources it serves or one resource prefix", e.ID)
 		case e.Perform == nil:
 			return nil, fmt.Errorf("workflow effect %q has no perform function", e.ID)
 		case (e.ConflictKeys == nil) != (strings.TrimSpace(e.ConflictRule) == ""):
@@ -181,8 +192,13 @@ func snapshotWorkflowEffects(manifest Manifest, supplied []WorkflowEffectCapabil
 			return nil, fmt.Errorf("workflow effect %q: its conflict rule must be a short name", e.ID)
 		}
 		served := workflow.WorkspaceAccess{}
+		resources := e.Resources
+		if e.ResourcePrefix != "" {
+			// A prefix must be a valid selector itself.
+			resources = []string{e.ResourcePrefix}
+		}
 		for _, connection := range e.Connections {
-			served.Connections = append(served.Connections, workflow.ConnectionAccess{ID: connection, Resources: e.Resources})
+			served.Connections = append(served.Connections, workflow.ConnectionAccess{ID: connection, Resources: resources})
 		}
 		if _, err := workflow.NormalizeAccess(served); err != nil {
 			return nil, fmt.Errorf("workflow effect %q: %w", e.ID, err)

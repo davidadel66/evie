@@ -661,6 +661,13 @@ func TestWorkflowEffectAutomaticReconciliationByLookup(t *testing.T) {
 	if performs, lookups := ledger.counts(); performs != 1 || lookups != 1 || ledger.lookups[0].IdempotencyKey != d.Effects[0].IdempotencyKey {
 		t.Fatalf("performs %d lookups %d", performs, lookups)
 	}
+	// The provider learns whose run asks (changes.spec.md story 4b): an
+	// effect bound to a Workspace's resources checks it.
+	for _, req := range []plugins.WorkflowEffectRequest{ledger.performs[0], ledger.lookups[0]} {
+		if req.WorkspaceID == "" || req.WorkspaceID != d.Run.WorkspaceID || req.RunID != d.Run.ID {
+			t.Fatalf("request = %+v, run %s in %s", req, d.Run.ID, d.Run.WorkspaceID)
+		}
+	}
 	// A request that timed out may still be landing: the lookup waits one
 	// effect timeout after the outcome became unknown.
 	if settled := d.Effects[0].Receipt.RecordedAt.Sub(d.Effects[0].Unknown.RecordedAt); settled < 40*time.Millisecond {

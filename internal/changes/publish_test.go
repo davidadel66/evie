@@ -41,6 +41,9 @@ type fakeGitHub struct {
 	unpushable bool
 	// pulls are the pull requests opened on each repository.
 	pulls map[string][]map[string]any
+	// openFails answers every request to open a pull request with this
+	// status when set.
+	openFails int
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
@@ -135,13 +138,20 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(r.URL.Path, "/pulls") && strings.HasPrefix(r.URL.Path, "/repos/davidadel66/"):
 		name := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/repos/davidadel66/"), "/pulls")
 		if r.Method == http.MethodGet {
-			open := []map[string]any{}
+			// state=open by default, or state=all for one head branch.
+			listed := []map[string]any{}
+			head := strings.TrimPrefix(r.URL.Query().Get("head"), "davidadel66:")
 			for _, p := range f.pulls[name] {
-				if p["state"] == "open" {
-					open = append(open, p)
+				if r.URL.Query().Get("state") == "all" && p["head"].(map[string]any)["ref"] == head || r.URL.Query().Get("state") != "all" && p["state"] == "open" {
+					listed = append(listed, p)
 				}
 			}
-			json.NewEncoder(w).Encode(open)
+			json.NewEncoder(w).Encode(listed)
+			return
+		}
+		if f.openFails != 0 {
+			w.WriteHeader(f.openFails)
+			w.Write([]byte(`{"message":"refused by the fake"}`))
 			return
 		}
 		var body struct{ Title, Head, Base, Body string }

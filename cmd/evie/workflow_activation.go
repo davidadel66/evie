@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davidadel66/evie/internal/changes"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -55,17 +54,19 @@ type workflowCommands interface {
 }
 
 // workflowCapabilityPlugins are the compiled plugins that contribute
-// workflow capability reads (Stage 14 sub-stage 5): Finance's fixed reads of
-// the local finance database. The full Plugin Manager of `evie serve` and
-// the REPL compiles the same plugins.
-func workflowCapabilityPlugins() []plugins.Plugin {
-	return []plugins.Plugin{plugins.NewFinance()}
+// workflow capabilities (Stage 14 sub-stage 5): Finance's fixed reads and
+// effects on the local finance database, and GitHub's github.open_change
+// (changes.spec.md story 4b), whose opener is nil where nothing runs. The
+// full Plugin Manager of `evie serve` and the REPL compiles the same
+// plugins.
+func workflowCapabilityPlugins(github plugins.GitHub) []plugins.Plugin {
+	return []plugins.Plugin{plugins.NewFinance(), github}
 }
 
 // workflowCapabilityCatalog is the compiled workflow capability contracts,
 // for reviews that need no plugin to run.
 func workflowCapabilityCatalog() (workflow.Catalog, error) {
-	manager, err := plugins.NewManager(tools.NewToolset(nil), workflowCapabilityPlugins()...)
+	manager, err := plugins.NewManager(tools.NewToolset(nil), workflowCapabilityPlugins(plugins.NewGitHub(nil))...)
 	if err != nil {
 		return nil, err
 	}
@@ -87,11 +88,12 @@ func (c managerCatalog) Capability(id string) (workflow.CapabilityContract, bool
 // supervisor) and the Kernel tools they confine, so a foreground run there
 // runs its workers like `evie serve` does.
 func newWorkflowPluginManager(ctx context.Context, store *eviedb.Store, supervisor *subagents.Supervisor) (*plugins.Manager, error) {
-	compiled := append(workflowCapabilityPlugins(), plugins.NewWeb(), plugins.NewTodo(store))
+	repositories := repositoryReader()
+	compiled := append(workflowCapabilityPlugins(workflowGitHub(store, repositories)), plugins.NewWeb(), plugins.NewTodo(store))
 	if supervisor != nil {
 		// Subagents is on by default since 2026-10-04, so a manager without
 		// a supervisor must not compile it (it would start a nil one).
-		compiled = append(compiled, plugins.NewSubagents(supervisor).WithGitHubRepositories(githubFolders{repositories: changes.NewService(changes.Config{})}))
+		compiled = append(compiled, plugins.NewSubagents(supervisor).WithGitHubRepositories(githubFolders{repositories: repositories}))
 	}
 	manager, err := plugins.NewManager(tools.KernelToolset(), compiled...)
 	if err != nil {

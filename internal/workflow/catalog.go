@@ -34,6 +34,12 @@ type CapabilityContract struct {
 	Output       *Type
 	Connections  []string
 	Resources    []string
+	// ResourcePrefix, declared instead of Resources, serves every resource
+	// that starts with it and names something after it: resources that
+	// differ per Workspace, such as a Repository's repo:<owner>/<name>
+	// (changes.spec.md story 4b, 2026-10-10). Workspace Access still lists
+	// the exact resource, and the provider checks it.
+	ResourcePrefix string
 }
 
 // DefaultConflictKeys is the Resource Conflict Key rule of an effect that

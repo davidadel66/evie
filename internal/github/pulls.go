@@ -85,6 +85,21 @@ func (c *Client) PullRequests(ctx context.Context, owner, name string) ([]PullRe
 	return pulls, c.do(ctx, http.MethodGet, path+"/pulls?state=open&per_page=100", nil, &pulls)
 }
 
+// PullRequestsOnBranch lists the pull requests whose head is branch in the
+// repository itself, open or not, up to 100, newest first (story 4b).
+func (c *Client) PullRequestsOnBranch(ctx context.Context, owner, name, branch string) ([]PullRequest, error) {
+	var pulls []PullRequest
+	path, err := repoPath(owner, name)
+	if err != nil {
+		return nil, err
+	}
+	if !validRef(branch) {
+		return nil, ErrInvalidRef
+	}
+	query := url.Values{"state": {"all"}, "head": {owner + ":" + branch}, "per_page": {"100"}}
+	return pulls, c.do(ctx, http.MethodGet, path+"/pulls?"+query.Encode(), nil, &pulls)
+}
+
 // PullRequest reads one pull request, open or not.
 func (c *Client) PullRequest(ctx context.Context, owner, name string, number int) (PullRequest, error) {
 	var pull PullRequest

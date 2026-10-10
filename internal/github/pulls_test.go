@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -222,5 +223,35 @@ func TestClientOpensAPullRequest(t *testing.T) {
 	}
 	if _, err := client.CreatePullRequest(ctx, "davidadel66", "evie", "evie/x", "main", "  ", ""); err == nil {
 		t.Fatal("a blank title opened")
+	}
+}
+
+// changes.spec.md story 4b: reconciling a workflow's github.open_change
+// finds the branch's pull request whether it is still open or not.
+func TestClientFindsABranchsPullRequestsInAnyState(t *testing.T) {
+	var query url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		if r.URL.Path != "/repos/davidadel66/evie/pulls" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Write([]byte(`[{"number":12,"state":"closed","merged_at":"2026-10-10T12:00:00Z","html_url":"https://github.com/davidadel66/evie/pull/12",
+			"head":{"ref":"evie/1a2b3c4d-fix","sha":"` + sha + `"},"base":{"ref":"main"},"user":{"login":"davidadel66"}}]`))
+	}))
+	defer server.Close()
+	client := github.New(server.URL, "t", server.Client())
+	pulls, err := client.PullRequestsOnBranch(context.Background(), "davidadel66", "evie", "evie/1a2b3c4d-fix")
+	if err != nil || len(pulls) != 1 || pulls[0].Number != 12 || pulls[0].Head.Ref != "evie/1a2b3c4d-fix" {
+		t.Fatalf("pulls = %+v, %v", pulls, err)
+	}
+	if query.Get("state") != "all" || query.Get("head") != "davidadel66:evie/1a2b3c4d-fix" {
+		t.Fatalf("query = %v", query)
+	}
+	if _, err := client.PullRequestsOnBranch(context.Background(), "davidadel66", "evie", "evie/x&state=open"); err != nil || query.Get("state") != "all" || query.Get("head") != "davidadel66:evie/x&state=open" {
+		t.Fatalf("a branch with a query in it = %v %v", query, err)
+	}
+	if _, err := client.PullRequestsOnBranch(context.Background(), "davidadel66", "evie", "evie/x y"); !errors.Is(err, github.ErrInvalidRef) {
+		t.Fatalf("an invalid branch = %v", err)
 	}
 }

@@ -3,12 +3,14 @@ package changes_test
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/davidadel66/evie/internal/changes"
+	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/github"
 	"github.com/davidadel66/evie/internal/memory"
 )
@@ -135,5 +137,77 @@ func TestPushRefusesWhatItCannotPush(t *testing.T) {
 	refused("no token", noGitHub, dir, branch, changes.ErrNoToken, "GITHUB_TOKEN")
 	if got := refs(t, fake.bare("notes")); strings.Contains(got, branch) || len(fake.pulls["notes"]) != 0 {
 		t.Fatalf("a refused push reached GitHub: %q, %d pull requests", got, len(fake.pulls["notes"]))
+	}
+}
+
+// Story 4b: a workflow pushes one of Evie's draft Changes by its build's
+// execution ID, under the Repository's resource, with the pull request text
+// the workflow gives. Unlike the owner's push, Verify must be set and pass.
+func TestAWorkflowPushNeedsVerifyToPassAndGivesItsOwnText(t *testing.T) {
+	ctx := context.Background()
+	fake, server := newFakeGitHub(t)
+	dir, _ := pushRepository(t, fake)
+	built := draftOn(dir)
+	built.Origin = &changes.Origin{RunID: "run-7", Workflow: "fix-bugs", Step: "build"}
+	passed := &changes.VerifyOutcome{Command: "go test ./...", Passed: true}
+	text := delegation.ChangeText{Title: "Move the footer below the page", Description: "The footer overlapped the page; it now sits below it."}
+	const resource = "repo:davidadel66/notes"
+
+	refused := func(name string, outcome *changes.VerifyOutcome, resource, execution string, text delegation.ChangeText, says string) {
+		t.Helper()
+		_, err := newPusher(server, fixedSource{built}, outcome).PushForWorkflow(ctx, "w", dir, resource, execution, text)
+		if !errors.Is(err, changes.ErrNotPushable) || !strings.Contains(err.Error(), says) {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	refused("Verify failed", &changes.VerifyOutcome{Command: "go test ./...", Output: "--- FAIL: TestFooter"}, resource, "e1", text, "--- FAIL: TestFooter")
+	refused("no Verify", nil, resource, "e1", text, "Verify command")
+	refused("another repository", passed, "repo:davidadel66/other", "e1", text, "repo:davidadel66/notes")
+	refused("unknown build", passed, resource, "e9", text, "e9")
+	refused("a local path", passed, resource, "e1", delegation.ChangeText{Title: "Fix", Description: "Edited " + dir + "/footer.go."}, "local folder")
+	refused("no text", passed, resource, "e1", delegation.ChangeText{}, "title")
+	if got := refs(t, fake.bare("notes")); strings.Contains(got, built.Branch) || len(fake.pulls["notes"]) != 0 {
+		t.Fatalf("a refused workflow push reached GitHub: %q, %d pull requests", got, len(fake.pulls["notes"]))
+	}
+
+	p := newPusher(server, fixedSource{built}, passed)
+	if found, err := p.FindPullRequest(ctx, "w", dir, resource, "e1"); err != nil || found != nil {
+		t.Fatalf("before the push = %+v, %v", found, err)
+	}
+	result, err := p.PushForWorkflow(ctx, "w", dir, "repo:DavidAdel66/Notes", "e1", text)
+	if err != nil || result.PullRequest != 1 || result.Existing {
+		t.Fatalf("result = %+v, %v", result, err)
+	}
+	pr := fake.pulls["notes"][0]
+	body, _ := pr["body"].(string)
+	if pr["title"] != text.Title || !strings.Contains(body, text.Description) || strings.Contains(body, built.Notes) ||
+		!strings.Contains(body, "Made by Evie in workflow fix-bugs, step build.") || !strings.Contains(body, "Verify passed: `go test ./...`") {
+		t.Fatalf("pull request = %+v", pr)
+	}
+	found, err := p.FindPullRequest(ctx, "w", dir, resource, "e1")
+	if err != nil || found == nil || found.Number != 1 || found.HTMLURL != result.URL {
+		t.Fatalf("after the push = %+v, %v", found, err)
+	}
+	if again, err := p.PushForWorkflow(ctx, "w", dir, resource, "e1", text); err != nil || !again.Existing || len(fake.pulls["notes"]) != 1 {
+		t.Fatalf("again = %+v, %v", again, err)
+	}
+	if _, err := p.FindPullRequest(ctx, "w", dir, resource, "e9"); !errors.Is(err, changes.ErrNotPushable) {
+		t.Fatalf("finding an unknown build = %v", err)
+	}
+}
+
+// Story 4b: a request to open a pull request that fails without GitHub's
+// refusal may still have opened it, which reconciling a workflow's push
+// settles; GitHub's refusal proves it did not.
+func TestAnOpenGitHubDidNotAnswerMayHaveHappened(t *testing.T) {
+	ctx := context.Background()
+	for status, uncertain := range map[int]bool{http.StatusBadGateway: true, http.StatusUnprocessableEntity: false, http.StatusForbidden: false} {
+		fake, server := newFakeGitHub(t)
+		dir, _ := pushRepository(t, fake)
+		fake.openFails = status
+		_, err := newPusher(server, fixedSource{draftOn(dir)}, nil).Push(ctx, "w", dir, "evie/1a2b3c4d-fix-footer")
+		if err == nil || errors.Is(err, changes.ErrOpenUncertain) != uncertain {
+			t.Fatalf("%d: %v", status, err)
+		}
 	}
 }

@@ -171,7 +171,7 @@ func prepareEffect(run eviedb.WorkflowRun, v *workflow.Validated, step workflow.
 	if err != nil {
 		return plugins.WorkflowEffectRequest{}, nil, err
 	}
-	req := plugins.WorkflowEffectRequest{Connection: step.Connection, Resource: step.Resource, Input: input, IdempotencyKey: key}
+	req := plugins.WorkflowEffectRequest{Connection: step.Connection, Resource: step.Resource, Input: input, IdempotencyKey: key, WorkspaceID: run.WorkspaceID, RunID: run.ID}
 	keys, err := conflictKeys(provider, req)
 	if err != nil {
 		return req, nil, fmt.Errorf("steps.%s: %v", step.ID, err)
@@ -602,7 +602,7 @@ func (r *Runtime) reconcileAutomatically(pc *pass, p eviedb.WorkflowRunProgress)
 	if err != nil {
 		return false, err
 	}
-	req := plugins.WorkflowEffectRequest{Connection: i.Connection, Resource: i.Resource, Input: input, IdempotencyKey: i.IdempotencyKey}
+	req := plugins.WorkflowEffectRequest{Connection: i.Connection, Resource: i.Resource, Input: input, IdempotencyKey: i.IdempotencyKey, WorkspaceID: p.Run.WorkspaceID, RunID: p.Run.ID}
 	if pc.lost.Err() != nil {
 		return false, fmt.Errorf("%w: lost before steps.%s was reconciled", eviedb.ErrWorkflowRunLeaseLost, i.Step)
 	}

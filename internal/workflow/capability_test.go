@@ -104,6 +104,30 @@ func TestWorkflowValidationRefusesConnectionsAndResourcesTheProviderDoesNotServe
 	mustValidate(t, filepath.Join("testdata", "notes-digest"), env)
 }
 
+// changes.spec.md story 4b (2026-10-10): a provider whose resources
+// differ per Workspace, such as a Repository's repo:<owner>/<name>, serves
+// a resource prefix instead of a list; a step must name a resource after
+// that prefix, and Workspace Access still lists the exact one.
+func TestWorkflowValidationChecksAResourcePrefixTheProviderServes(t *testing.T) {
+	prefixed := func(prefix string) func(*Environment) {
+		return func(env *Environment) {
+			list, _ := env.Capabilities.Capability("notes.list")
+			appendNote, _ := env.Capabilities.Capability("notes.append")
+			list.Connections, list.ResourcePrefix = []string{"conn-notes"}, prefix
+			env.Capabilities = NewCatalog(list, appendNote)
+		}
+	}
+	runValidationCases(t, []validationCase{
+		{name: "resource outside the prefix", def: "notes-digest", env: prefixed("sheet:"),
+			fragments: []string{"steps.read.resource", "notes.list", "sheet:", "notebook:inbox"}},
+		{name: "the bare prefix", def: "notes-digest", env: prefixed("notebook:inbox"),
+			fragments: []string{"steps.read.resource", "notebook:inbox"}},
+	})
+	env := testEnvironment()
+	prefixed("notebook:")(&env)
+	mustValidate(t, filepath.Join("testdata", "notes-digest"), env)
+}
+
 // A review outside any Workspace (the standalone validate and simulate
 // commands) checks capability steps against the catalog but not against
 // Workspace Access, which only a Workspace has; every other rule applies.

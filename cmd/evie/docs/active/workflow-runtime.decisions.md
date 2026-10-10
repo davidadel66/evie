@@ -1,5 +1,31 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-10 — Resource prefixes and the run on effect requests (changes.spec.md story 4b)
+
+Source: the owner's decision of 2026-10-10 (binding), made when
+`github.open_change` met the rule of sub-stages 5 and 6 that a provider
+declares the exact resource selectors it serves. A Repository's resource,
+`repo:<owner>/<name>`, differs per Workspace, so no fixed list can name it.
+Of three options (a declared prefix, no declared resources, or one fixed
+`repository` resource meaning the run's Workspace Repository), the owner
+chose the prefix. It keeps "the provider declares what it serves" and keeps
+Workspace Access exact; the fixed resource would have let a change of
+folder or origin move authority silently.
+
+- **Resource prefix.** A workflow effect declares either its exact
+  resources or one `ResourcePrefix`, never both and never neither. A prefix
+  must be a valid selector itself. A step on a prefixed capability must
+  name a resource that starts with the prefix and names something after
+  it; Workspace Access and Standing Authority still list the exact
+  resource, and the provider checks it is the Workspace's own. The
+  contract's schema hash leaves connections and resources out, as before,
+  so no pinned hash changed. Reads still declare exact resources.
+- **The run on effect requests.** `WorkflowEffectRequest` carries the
+  run's Workspace ID and run ID, filled by the runtime when it performs and
+  when it reconciles, so an effect bound to a Workspace's own resources can
+  check them. Existing providers ignore them.
+- **Known limit.** Selectors other than a prefix still match exactly.
+
 ## 2026-10-04 — Built-in workflows and deep-research v2
 
 Source: the owner's decisions of 2026-10-04 (binding): one standard
@@ -2619,7 +2645,9 @@ sub-stages). Every ADR stays binding as written; in particular ADR 0010 and
 - Worker preset versions are not in the executable hash; like capability
   providers they are pinned by the run's Execution Composition (ADR 0016,
   0025).
-- Resource selectors match exactly; no wildcard selectors.
+- Resource selectors match exactly; no wildcard selectors. (Amended
+  2026-10-10: an effect may declare one resource prefix; see the entry of
+  that date.)
 - The report's worst-case token figure counts agent budgets only; AI step
   input tokens are unbounded by declaration and are capped by
   `limits.max_tokens` at run time.

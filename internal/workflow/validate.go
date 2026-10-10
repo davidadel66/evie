@@ -690,6 +690,9 @@ func (v *validator) compileCapability(n *node) {
 	if len(c.Resources) > 0 && s.Resource != "" && !slices.Contains(c.Resources, s.Resource) {
 		v.add(p+".resource", "%s serves resource %s, not %s", s.Capability, strings.Join(c.Resources, ", "), s.Resource)
 	}
+	if c.ResourcePrefix != "" && s.Resource != "" && (!strings.HasPrefix(s.Resource, c.ResourcePrefix) || s.Resource == c.ResourcePrefix) {
+		v.add(p+".resource", "%s serves resources %s<name>, not %s", s.Capability, c.ResourcePrefix, s.Resource)
+	}
 	if s.Connection != "" && !v.env.AccessUnchecked {
 		conn, ok := v.env.Access.connection(s.Connection)
 		switch {

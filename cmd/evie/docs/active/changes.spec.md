@@ -242,6 +242,26 @@ keeps the owner's checkout current without touching work in progress.
     request at once.
   - In a GitHub Repository a build that passed the gate stays Draft until
     it has a pull request.
+- Story 4b (2026-10-10):
+  - `github.open_change` takes `execution_id` (an agent step's output),
+    `title` and `description`. Its resource is `repo:<owner>/<name>` on
+    connection `github`; the capability declares the prefix `repo:` (see
+    workflow-runtime.decisions.md, 2026-10-10). The resource must be the
+    run's Workspace Repository.
+  - The text follows the same rules as `propose_build_merge`'s: one line of
+    at most 72 characters, at most 4096 bytes, and no local folder.
+  - A workflow's push needs a Verify command set, and it must pass;
+    otherwise nothing reaches GitHub.
+  - Every refusal, and every failure before the pull request is asked
+    for, proves nothing happened. A request to open it that fails without
+    GitHub refusing leaves the outcome unknown. Reconciling looks for a pull
+    request with the build's branch as its head, in any state; none proves
+    the effect did not happen.
+  - The GitHub Plugin is on by default. Without `GITHUB_TOKEN` it refuses
+    every request.
+  - Known limit: Evie's Change keeps the commit subject and the worker's
+    words as its title and notes; the pull request carries the workflow's
+    text. Story 6 decides which the Changes tab shows.
 - Who may push and open a pull request:
   - the owner, from the Changes tab or `evie changes push`;
   - a workflow, through a `github.open_change` effect capability (connection

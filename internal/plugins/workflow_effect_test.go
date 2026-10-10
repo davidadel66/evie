@@ -174,6 +174,16 @@ func TestWorkflowEffectRegistrationIsValidated(t *testing.T) {
 			e.Resources = nil
 			return ledgerEffectPlugin("1.0.0", nil, e)
 		}(), want: "resource"},
+		"resources and a prefix": {plugin: func() Plugin {
+			e := post
+			e.ResourcePrefix = "account:"
+			return ledgerEffectPlugin("1.0.0", nil, e)
+		}(), want: "resource prefix"},
+		"a prefix with a space": {plugin: func() Plugin {
+			e := post
+			e.Resources, e.ResourcePrefix = nil, "account: "
+			return ledgerEffectPlugin("1.0.0", nil, e)
+		}(), want: "resource selector"},
 		"conflict keys without a rule": {plugin: func() Plugin {
 			e := post
 			e.ConflictKeys = func(WorkflowEffectRequest) ([]string, error) { return []string{"a"}, nil }
@@ -190,6 +200,13 @@ func TestWorkflowEffectRegistrationIsValidated(t *testing.T) {
 				t.Fatalf("NewManager = %v, want an error containing %q", err, tc.want)
 			}
 		})
+	}
+	// A resource prefix serves resources that differ per Workspace (story
+	// 4b).
+	prefixed := post
+	prefixed.Resources, prefixed.ResourcePrefix = nil, "account:"
+	if _, err := NewManager(tools.NewToolset(nil), ledgerEffectPlugin("1.0.0", nil, prefixed)); err != nil {
+		t.Fatalf("a resource prefix: %v", err)
 	}
 	// A plugin may contribute reads and effects together.
 	if _, err := NewManager(tools.NewToolset(nil), ledgerEffectPlugin("1.0.0", []WorkflowCapability{ledgerRead("1.0.0")}, post)); err != nil {

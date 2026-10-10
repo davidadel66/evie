@@ -49,7 +49,7 @@ import (
 var defaultPluginEnabled = map[plugins.PluginID]bool{
 	plugins.WebPluginID: true, plugins.FinancePluginID: true,
 	plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
-	plugins.SubagentsPluginID: true, plugins.WorkflowsPluginID: true,
+	plugins.SubagentsPluginID: true, plugins.WorkflowsPluginID: true, plugins.GitHubPluginID: true,
 }
 
 func main() {
@@ -211,6 +211,9 @@ func main() {
 			log.Printf("Subagents shutdown: %v", err)
 		}
 	}()
+	// Workspace Repositories (changes.spec.md): one reader, so Settings,
+	// the owner's pushes and workflows' pushes share its folder lock.
+	repositories := repositoryReader()
 	// The chat's workflow tools reach the Workflow Runtime once the runtime
 	// exists; it needs this manager first (sub-stage 10).
 	workflowLink := &plugins.WorkflowLink{}
@@ -223,8 +226,9 @@ func main() {
 		plugins.NewTodo(kernelStore).WithDispatchLimits(task.DispatchLimits{MaxBatch: subagentPolicy.MaxBatch,
 			PerParent: subagentPolicy.PerParent, Runtime: subagentPolicy.Runtime, PerTurn: subagentPolicy.PerTurn}),
 		plugins.NewMemory(kernelStore),
-		plugins.NewSubagents(supervisor).WithGitHubRepositories(githubFolders{repositories: changes.NewService(changes.Config{})}),
+		plugins.NewSubagents(supervisor).WithGitHubRepositories(githubFolders{repositories: repositories}),
 		plugins.NewWorkflows(workflowLink),
+		workflowGitHub(kernelStore, repositories),
 	)
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)
@@ -393,7 +397,6 @@ func main() {
 		// 4) in both its full and management-only modes.
 		stopWorkflows := startWorkflowScheduler(runtimeCtx, workflowRuntime)
 		defer stopWorkflows()
-		repositories := repositoryReader()
 		changeSync, stopChangeSync := startChangeSync(runtimeCtx, kernelStore)
 		defer stopChangeSync()
 		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
