@@ -7,6 +7,21 @@ import { Activity } from "./Activity";
 import { activityTurns } from "./activityModel";
 import type { MemoryOpener } from "./MemoryActivity";
 import { AlwaysAppliesContext, type AlwaysAppliesSetter } from "./alwaysApplies";
+import { workflowStartRun, type ChatRunStart } from "./chatRuns";
+import { RunCard } from "./RunCard";
+import { useChatRuns } from "../store/useChatRuns";
+import { runSteps } from "../workspaces/runView";
+
+/** The runs a turn's workflow_start calls named, once each, in call order. */
+function runStarts(activity: Item[]): ChatRunStart[] {
+  const seen = new Set<string>();
+  return activity.flatMap((item) => {
+    const start = item.kind === "tool" ? workflowStartRun(item) : undefined;
+    if (!start || seen.has(start.runId)) return [];
+    seen.add(start.runId);
+    return [start];
+  });
+}
 
 type Props = {
   items: Item[];
@@ -18,6 +33,9 @@ type Props = {
   onOpenTool?: (key: string, trigger: HTMLButtonElement) => void;
   onOpenMemory?: MemoryOpener;
   onOpenInstructions?: (turnId:string,trigger:HTMLButtonElement)=>void;
+  /** The chat's Workspace, whose runs list keeps the run cards current. */
+  workspaceId?: string;
+  onOpenRun?: (runId: string, trigger: HTMLButtonElement) => void;
   historyLoading?: boolean;
   historyProblem?: string | null;
   hasOlder?: boolean;
@@ -25,8 +43,10 @@ type Props = {
   onRetry?: () => void;
 };
 
-export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOpenFile, onOpenTool, onOpenMemory, onOpenInstructions, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
+export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOpenFile, onOpenTool, onOpenMemory, onOpenInstructions, workspaceId, onOpenRun, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
+  const starts = items.flatMap((item) => item.kind === "tool" ? [workflowStartRun(item)].filter((start) => start !== undefined) : []);
+  const chatRuns = useChatRuns(workspaceId, [...new Set(starts.map((start) => start.runId))], streaming);
   const pinned = useRef(true);
   const prependHeight = useRef<number | null>(null);
 
@@ -60,6 +80,11 @@ export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOp
           {group.user && <UserMessage text={group.user.text} />}
           <Activity group={group} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} onOpenInstructions={onOpenInstructions} />
           {group.answer.map((item) => <AssistantMessage key={item.key} text={item.text} streaming={false} discarded={item.discarded} />)}
+          {runStarts(group.activity).map((start) => {
+            const run = chatRuns.runs[start.runId];
+            return <RunCard key={start.runId} start={start} run={run} steps={run ? runSteps(run, chatRuns.outlineOf(run)) : []}
+              onOpen={onOpenRun ? (trigger) => onOpenRun(start.runId, trigger) : undefined} />;
+          })}
         </Fragment>)}
         {queued.map((text, i) => (
           // Dimmed + marked: the server hasn't seen these yet, and the

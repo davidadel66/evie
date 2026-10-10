@@ -81,6 +81,14 @@ describe("the run list", () => {
     expect(summarizeOutputs({shares: [334, 333, 333], leftover_cents: 1, nested: {a: 1}, ok: true, one: ["x"], five: 5})).toBe("shares 3 items · leftover_cents 1 · ok true · one 1 item");
     expect(summarizeOutputs({note: "x".repeat(41)})).toBe("");
   });
+
+  it("leaves out values masked as sensitive, so a sensitive run reads Succeeded", () => {
+    // finance-daily's outputs are masked on the owner's surfaces (retention classification sensitive).
+    const masked = {added: "[sensitive]", categorized: "[sensitive]", day: "[sensitive]", failed_banks: "[sensitive]"};
+    expect(summarizeOutputs(masked)).toBe("");
+    expect(runNote({...base, state: "succeeded", outputs: masked}, [])).toBe("Succeeded");
+    expect(summarizeOutputs({...masked, rules_minted: 3})).toBe("rules_minted 3");
+  });
 });
 
 describe("the run panel", () => {

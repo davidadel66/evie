@@ -11,6 +11,7 @@ import { FilePath, FileViewer } from "./FileViewer";
 import type { FileInspection as InspectedFile } from "./fileInspection";
 import { MemoryEvidence } from "./MemoryEvidence";
 import { targetTitle, memoryTitle, claimObject } from "./inspectorTitle";
+import { RunInspection } from "./RunInspection";
 
 export type InspectorTarget =
  | ({kind:"repository-instructions"} & InstructionTarget)
@@ -22,6 +23,8 @@ export type InspectorTarget =
   | { kind: "scope"; scope: ContextScope }
   | { kind: "file-diff"; path: string; oldText: string; newText: string; isNew: boolean; state: string }
   | { kind: "data" }
+  /** A run Evie started in this chat (workspace-activity.spec.md). */
+  | { kind: "workflow-run"; runId: string }
   | { kind: "empty" };
 
 type Props = {
@@ -58,7 +61,7 @@ export function Panel({ target, focused, onClose }: Props) {
         </button>
       </header>
 
-      <div className={target.kind === "file" ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 overflow-y-auto"}>
+      <div className={target.kind === "file" || target.kind === "workflow-run" ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 overflow-y-auto"}>
         <InspectorContent target={target} />
       </div>
     </aside>
@@ -76,6 +79,7 @@ export function InspectorContent({target}: {target: InspectorTarget}) {
         {target.kind === "scope" && <ScopeInspection scope={target.scope} />}
         {target.kind === "file-diff" && <FileInspection target={target} />}
         {target.kind === "data" && <DataInspection />}
+        {target.kind === "workflow-run" && <RunInspection key={target.runId} runId={target.runId} />}
         {target.kind === "empty" && <EmptyInspection />}
   </>;
 }

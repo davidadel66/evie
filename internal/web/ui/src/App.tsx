@@ -137,7 +137,7 @@ export default function App() {
     });
   };
   useEffect(() => {
-    if (!inspectorOpen || (!selectedAction && inspectorOverride?.kind !== "memory-evidence")) return;
+    if (!inspectorOpen || (!selectedAction && inspectorOverride?.kind !== "memory-evidence" && inspectorOverride?.kind !== "workflow-run")) return;
     const onEscape = (event: KeyboardEvent) => {
       if (document.querySelector("dialog[open]")) return;
       if (event.key !== "Escape" || (event.target instanceof Element && event.target.closest("[data-terminal]"))) return;
@@ -319,7 +319,16 @@ export default function App() {
             {activeView.kind === "chat" && (
               contextSessions.snapshot?.activeScope ? (
                 <>
-                  <Chat onOpenInstructions={instructionsAttached&&scopeWorkspace?(turnId,trigger)=>openInstructions(scopeWorkspace,trigger,turnId):undefined} key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onAlwaysApplies={setAlwaysApplies} onOpenFile={openTool} onOpenTool={openTool} onOpenMemory={(snapshotId, trigger) => {
+                  <Chat onOpenInstructions={instructionsAttached&&scopeWorkspace?(turnId,trigger)=>openInstructions(scopeWorkspace,trigger,turnId):undefined} key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onAlwaysApplies={setAlwaysApplies} onOpenFile={openTool} onOpenTool={openTool}
+                    workspaceId={scopeWorkspace?.id} onOpenRun={(runId, trigger) => {
+                      fileTrigger.current = trigger;
+                      activityTrigger.current = null;
+                      setSelectedAction(undefined);
+                      setInspectorOverride({kind: "workflow-run", runId});
+                      setInspectionRequest(value => value + 1);
+                      setInspectorOpen(true);
+                      setInspectorFocused(false);
+                    }} onOpenMemory={(snapshotId, trigger) => {
                     const sessionId = contextSessions.snapshot?.activeSession?.id;
                     if (!sessionId) return;
                     fileTrigger.current = trigger;

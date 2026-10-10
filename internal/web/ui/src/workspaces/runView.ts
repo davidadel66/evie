@@ -91,10 +91,14 @@ export function runNote(run: WorkflowRun, steps: RunStep[], question?: WorkflowI
   }
 }
 
-/** A run's outputs in one line: its scalar values and list sizes, at most four. */
+/** How the runtime masks a sensitive run's values on the owner's surfaces. */
+const masked = "[sensitive]";
+
+/** A run's outputs in one line: its scalar values and list sizes, at most four; masked values are left out. */
 export function summarizeOutputs(outputs: Record<string, unknown> | undefined): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(outputs ?? {})) {
+    if (value === masked) continue;
     if (typeof value === "number" || typeof value === "boolean" || (typeof value === "string" && value.length <= 40)) parts.push(`${key} ${value}`);
     else if (Array.isArray(value)) parts.push(`${key} ${value.length === 1 ? "1 item" : `${value.length} items`}`);
     if (parts.length === 4) break;
@@ -171,4 +175,9 @@ export function mapProgress(detail: WorkflowRunDetail): Record<string, string> {
     out[step] = parts.join(", ");
   }
   return out;
+}
+
+/** One workflow version a run is pinned to, for caching its outline. */
+export function versionKey(run: WorkflowRun): string {
+  return `${run.workflow}@${run.version}@${run.commit}`;
 }

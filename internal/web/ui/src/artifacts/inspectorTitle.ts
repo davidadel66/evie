@@ -11,6 +11,7 @@ export function targetTitle(target: InspectorTarget) {
   if (target.kind === "scope") return target.scope.displayName;
   if (target.kind === "file-diff") return target.path;
   if (target.kind === "data") return "Data";
+  if (target.kind === "workflow-run") return "Workflow run";
   return "Inspector";
 }
 

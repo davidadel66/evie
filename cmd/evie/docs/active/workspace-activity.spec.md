@@ -238,11 +238,18 @@ spend.
 
 ### Chat run card
 
-- When a chat turn's `workflow_start` tool call returns a run, the chat
-  shows a run card in place of the generic tool row: workflow, state,
-  current step. It refreshes while the run is unfinished.
+- When a chat turn's `workflow_start` call returns a run, the chat shows a
+  run card after Evie's reply in that turn, once per run: workflow, state,
+  the run's one-line note and its progress (or how long it took). The tool
+  row stays in the turn's activity list, which is collapsed by default, so
+  the card is what the owner sees.
+- The cards of a chat share one read of the Workspace's runs list, repeated
+  every 10 seconds while any of their runs is unfinished and after each
+  turn. A run the list does not show keeps the state `workflow_start`
+  reported.
 - Clicking the card opens the run in the chat Inspector, using the same run
-  detail as the panel.
+  detail as the panel, kept current while the run is unfinished. A rerun
+  from the Inspector shows the new run in its place.
 - Changes never get a card in chat (per the Changes spec).
 
 ### Module shape

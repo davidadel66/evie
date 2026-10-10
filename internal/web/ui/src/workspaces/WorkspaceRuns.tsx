@@ -4,7 +4,7 @@ import { workflowRunAPI, type WorkflowInterruption, type WorkflowRun, type Workf
 import { ago } from "../ui/time";
 import { WorkflowInterruptionAnswer } from "./WorkflowInterruptionAnswer";
 import {
-  enumChoices, groupRuns, isFinished, latestStates, mapProgress, outputValue, runNote, runOrigin, runStateLabel, runSteps, runSummary, runTone, runTrigger,
+  enumChoices, groupRuns, isFinished, latestStates, mapProgress, outputValue, versionKey, runNote, runOrigin, runStateLabel, runSteps, runSummary, runTone, runTrigger,
   type RunStep, type RunTone, type StepState,
 } from "./runView";
 
@@ -87,7 +87,7 @@ const timelineDot: Record<StepState, string> = {
 };
 
 /** The run panel's frame: the same width and header whether its run has loaded or not, so the list beside it never changes width. */
-function RunPanelFrame({runId, onClose, children, footer}: {runId: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode}) {
+function RunPanelFrame({runId, onClose, children}: {runId: string; onClose: () => void; children: React.ReactNode}) {
   return <aside aria-label={`Run ${runId}`} className="border-hair bg-inspector absolute inset-0 z-10 flex min-w-0 flex-col border-l lg:static lg:w-[440px] lg:flex-none">
     <div className="border-hair flex h-12 flex-none items-center gap-2.5 border-b pr-3.5 pl-[22px]">
       <span className="text-faint text-xs">Run</span>
@@ -95,19 +95,26 @@ function RunPanelFrame({runId, onClose, children, footer}: {runId: string; onClo
       <span className="flex-1" />
       <button type="button" onClick={onClose} title="Close (Esc)" aria-label="Close run" className="text-muted-text hover:bg-hover hover:text-ink h-7 w-7 rounded-[6px] text-[17px] leading-none">×</button>
     </div>
-    <div className="min-h-0 flex-1 overflow-y-auto px-[22px] pt-5 pb-8">{children}</div>
-    {footer}
+    {children}
   </aside>;
 }
 
 /** The panel while a newly selected run loads, or when it could not be read. */
 export function RunPanelLoading({runId, problem, onClose}: {runId: string; problem?: string; onClose: () => void}) {
   return <RunPanelFrame runId={runId} onClose={onClose}>
-    {problem ? <p role="alert" className="text-danger text-xs">{problem}</p> : <p role="status" className="text-muted-text text-xs">Loading run…</p>}
+    <div className="min-h-0 flex-1 overflow-y-auto px-[22px] pt-5 pb-8">
+      {problem ? <p role="alert" className="text-danger text-xs">{problem}</p> : <p role="status" className="text-muted-text text-xs">Loading run…</p>}
+    </div>
   </RunPanelFrame>;
 }
 
-export function RunPanel({detail, steps, sessionTitle, now, busy, problem, onClose, onOpenSession, onAnswer, onCancel, onRerun}: {
+/** The Runs tab's panel: the run's detail in the panel frame beside the list. */
+export function RunPanel({onClose, ...props}: Parameters<typeof RunDetail>[0] & {onClose: () => void}) {
+  return <RunPanelFrame runId={props.detail.run.id} onClose={onClose}><RunDetail {...props} /></RunPanelFrame>;
+}
+
+/** A run's detail: its question, error, steps, outputs and provenance, with Cancel or Rerun below; shared by the Runs panel and the chat Inspector. */
+export function RunDetail({detail, steps, sessionTitle, now, busy, problem, onOpenSession, onAnswer, onCancel, onRerun}: {
   detail: WorkflowRunDetail;
   steps: RunStep[];
   /** The chat that started the run, when it is known. */
@@ -115,7 +122,6 @@ export function RunPanel({detail, steps, sessionTitle, now, busy, problem, onClo
   now: Date;
   busy: boolean;
   problem?: string;
-  onClose: () => void;
   onOpenSession?: (sessionId: string) => void;
   onAnswer: (step: string, answer: Record<string, unknown>) => void;
   onCancel: (reason: string) => void;
@@ -146,7 +152,8 @@ export function RunPanel({detail, steps, sessionTitle, now, busy, problem, onClo
           className={`${cancelling ? "bg-danger text-app" : "bg-teal text-primary-foreground"} rounded-[6px] px-3.5 py-1.5 text-[12.5px] font-semibold disabled:opacity-40`}>{cancelling ? "Cancel run" : "Rerun"}</button>
       </form>}
     </div>;
-  return <RunPanelFrame runId={run.id} onClose={onClose} footer={footer}>
+  return <div className="flex min-h-0 flex-1 flex-col">
+    <div className="min-h-0 flex-1 overflow-y-auto px-[22px] pt-5 pb-8">
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="text-ink font-mono text-base font-medium">{run.workflow}</span>
         <span className="text-fainter text-xs">v{run.version}</span>
@@ -197,7 +204,9 @@ export function RunPanel({detail, steps, sessionTitle, now, busy, problem, onClo
         </dl>
       </details>
       {problem && <p role="alert" className="text-danger mt-4 text-xs">{problem}</p>}
-  </RunPanelFrame>;
+    </div>
+    {footer}
+  </div>;
 }
 
 function WaitingBox({interruption, busy, onAnswer}: {interruption: WorkflowInterruption; busy: boolean; onAnswer: (step: string, answer: Record<string, unknown>) => void}) {
@@ -312,8 +321,4 @@ export function WorkspaceRuns({workspace, selectedId, filter = "", sessionTitles
         onSelect(result.run.run.id);
       })} />}
   </div>;
-}
-
-function versionKey(run: WorkflowRun): string {
-  return `${run.workflow}@${run.version}@${run.commit}`;
 }
