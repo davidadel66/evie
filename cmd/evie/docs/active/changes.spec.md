@@ -227,6 +227,14 @@ keeps the owner's checkout current without touching work in progress.
     (a chat, or a workflow and step), then how Verify ended: "Verify
     passed" with the command, or "Verify failed … Pushed anyway by the
     owner" with the end of its output.
+  - The title and notes are Evie's own (2026-10-10, after the live test
+    put a worker's whole report in a pull request). `propose_build_merge`
+    requires a one-line title of at most 72 characters and a description
+    of at most 4096 bytes. The gate records them with the proposal. It
+    refuses text that names the worktree, the repository folder or the
+    owner's home folder. Chats pinned before this keep the old tool; their
+    Changes fall back to the first commit's subject and the worker's
+    summary.
   - Verify runs sandboxed without network in the build's worktree, with
     the gate's runner and its 20-minute limit.
   - Pushing again sends new commits and keeps the branch's open pull

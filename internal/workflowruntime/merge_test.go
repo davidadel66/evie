@@ -56,7 +56,7 @@ func mergeChat(t *testing.T, store *eviedb.Store, w memory.Workspace, execution 
 	if err != nil {
 		t.Fatal(err)
 	}
-	args, _ := json.Marshal(map[string]string{"execution_id": execution})
+	args, _ := json.Marshal(map[string]string{"execution_id": execution, "title": "Add the run's change", "description": "Adds the change the workflow run built."})
 	call := "call-" + uuid.NewString()
 	payload, _ := json.Marshal(memory.ToolIntentPayload{Call: memory.ToolCall{ID: call, Name: delegation.MergeToolName, Arguments: string(args)}})
 	intent, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventToolIntent, ParentID: root.ID,
@@ -85,7 +85,7 @@ func proposeRunMerge(t *testing.T, supervisor *subagents.Supervisor, p delegatio
 		}
 		return tools.Declined
 	}
-	args, _ := json.Marshal(map[string]string{"execution_id": execution})
+	args, _ := json.Marshal(map[string]string{"execution_id": execution, "title": "Add the run's change", "description": "Adds the change the workflow run built."})
 	ctx := tools.WithInvocationContext(context.Background(), tools.InvocationContext{Scope: p.Scope, Lease: p.Lease, SourceEventID: p.SourceEventID, IntentEventID: p.IntentEventID})
 	message, isErr, err := tools.NewToolset([]tools.Tool{merge}).ExecuteWithApprovalAuthorizedCompletion(ctx,
 		openrouter.ToolCall{ID: call, Type: "function", Function: openrouter.FunctionCall{Name: delegation.MergeToolName, Arguments: string(args)}}, decide, nil, nil, nil)
@@ -131,7 +131,7 @@ func TestWorkflowBuildBranchMergesThroughTheGateFromTheOwnersChat(t *testing.T) 
 	// A chat in another Workspace cannot take it to the gate.
 	other := h.folderWorkspace(repo, true)
 	foreign, _ := mergeChat(t, h.store, other, execution)
-	if _, err := supervisor.ProposeMerge(ctx, foreign, execution, ""); !errors.Is(err, delegation.ErrNotFound) {
+	if _, err := supervisor.ProposeMerge(ctx, foreign, execution, "", delegation.ChangeText{}); !errors.Is(err, delegation.ErrNotFound) {
 		t.Fatalf("foreign chat: %v", err)
 	}
 
@@ -191,7 +191,7 @@ func TestWorkflowUnfinishedRunsBuildStaysOutOfTheGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, _ := mergeChat(t, h.store, w, execution)
-	if _, err := supervisor.ProposeMerge(ctx, p, execution, ""); err == nil || !strings.Contains(err.Error(), "once the run has finished") {
+	if _, err := supervisor.ProposeMerge(ctx, p, execution, "", delegation.ChangeText{}); err == nil || !strings.Contains(err.Error(), "once the run has finished") {
 		t.Fatalf("merge of a waiting run's build: %v", err)
 	}
 }

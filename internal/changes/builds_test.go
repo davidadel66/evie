@@ -270,3 +270,35 @@ func TestABuildThatPassedTheGateIsADraftUntilItHasAPullRequestOnGitHub(t *testin
 		t.Fatalf("passed gate on GitHub = %+v", c)
 	}
 }
+
+// Story 4a (2026-10-10): the title and description Evie gave with its
+// merge proposal are the Change's title and notes, and so its pull
+// request's; a build proposed without them keeps the commit subject and
+// the worker's own words.
+func TestAProposalsTitleAndDescriptionAreTheChanges(t *testing.T) {
+	ctx := context.Background()
+	r := newBuildRecords(t)
+	repo := repository(t, "main")
+	ws := memory.WorkspaceID("ws-code")
+	described := r.build(ws, repo, "Append exactly one new line to README.md containing the text", reported("I appended the line in /Users/me/code/notes/.evie/worktrees/x.", nil, "Append exactly one new line to README.md containing the text"))
+	r.gate(described.ID, func(g *delegation.BuildGate) {
+		g.Step, g.Target = delegation.GateAwaiting, "main"
+		g.Change = &delegation.ChangeText{Title: "Add the integration-test line to the README", Description: "Adds one line to README.md.\n\nVerified with `test -s README.md`."}
+	})
+	older := r.build(ws, repo, "Fix the footer", reported("Moved the footer below the page.", nil, "Fix the footer"))
+	r.gate(older.ID, func(g *delegation.BuildGate) { g.Step, g.Target = delegation.GateAwaiting, "main" })
+	read, err := changes.NewService(changes.Config{}).Repository(ctx, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := changes.NewBuildSource(r.store).Changes(ctx, ws, read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := changeByID(t, list, described.ID); c.Title != "Add the integration-test line to the README" || c.Notes != "Adds one line to README.md.\n\nVerified with `test -s README.md`." {
+		t.Fatalf("described Change = %q / %q", c.Title, c.Notes)
+	}
+	if c := changeByID(t, list, older.ID); c.Title != "Fix the footer" || c.Notes != "Moved the footer below the page." {
+		t.Fatalf("Change without text = %q / %q", c.Title, c.Notes)
+	}
+}

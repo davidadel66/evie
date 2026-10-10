@@ -132,6 +132,7 @@ type mergeCall struct {
 func (f *fixture) proposeMerge(t *testing.T, p delegation.Parent, args map[string]string, decide func(*tools.FileChangePreview) tools.Decision) mergeCall {
 	t.Helper()
 	ctx := context.Background()
+	args = withChangeText(args)
 	b, _ := json.Marshal(args)
 	id := "call-" + uuid.NewString()
 	payload, _ := json.Marshal(memory.ToolIntentPayload{Call: memory.ToolCall{ID: id, Name: delegation.MergeToolName, Arguments: string(b)}})
@@ -162,6 +163,16 @@ func (f *fixture) proposeMerge(t *testing.T, p delegation.Parent, args map[strin
 		t.Fatal(err)
 	}
 	out.content, out.isErr = message.Content, isErr
+	return out
+}
+
+// withChangeText gives a proposal the title and description the current
+// propose_build_merge requires, unless the test names its own.
+func withChangeText(args map[string]string) map[string]string {
+	out := map[string]string{"title": "Add the worker's change", "description": "Adds the worker's change; the verify command passed."}
+	for k, v := range args {
+		out[k] = v
+	}
 	return out
 }
 
@@ -578,6 +589,43 @@ func TestMergeProposalNeedsTheOwnersVerifyCommand(t *testing.T) {
 	}
 }
 
+// changes.spec.md story 4a (2026-10-10): the parent's title and
+// description go with the proposal and are recorded for the Change and its
+// pull request. Text that names a local folder is refused before anything
+// runs, and blank text is refused as invalid arguments.
+func TestProposalRecordsTheChangeTextAndRefusesLocalPaths(t *testing.T) {
+	requireGateSandbox(t)
+	f := setup(t, delegation.DefaultPolicy())
+	repo := gateRepo(t)
+	p := f.gateParent(t, repo, "", verifyCommand)
+	tree := f.taskTree(t, p)
+	built := f.buildFiles(t, p, delegation.Assignment{Key: "parser", Objective: "Add a parser", TaskID: string(tree.assigned.ID)},
+		map[string]string{"parser.go": "package main\n\nfunc parse() {}\n"}, nil)
+
+	named := f.proposeMerge(t, p, map[string]string{"execution_id": built.ExecutionID, "title": "Add a parser",
+		"description": "Adds parse() in " + built.Build.Worktree + "/parser.go."}, neverAsked(t))
+	if r := proposal(t, named.content); !named.isErr || r.Status != delegation.MergeRefused || !strings.Contains(strings.Join(r.Notes, " "), "names the local folder "+built.Build.Worktree) {
+		t.Fatalf("text naming the worktree = %+v", named)
+	}
+	if g := gateOf(t, f, p, built.ExecutionID); g != nil {
+		t.Fatalf("refused text reached the gate: %+v", g)
+	}
+	blank := f.proposeMerge(t, p, map[string]string{"execution_id": built.ExecutionID, "title": "  "}, neverAsked(t))
+	if !blank.isErr || !strings.Contains(blank.content, "title and description are required") {
+		t.Fatalf("a blank title = %+v", blank)
+	}
+
+	text := delegation.ChangeText{Title: "Add a parser", Description: "Adds parse() to parser.go.\n\nChecked with `sh ./check.sh`."}
+	declined := f.proposeMerge(t, p, map[string]string{"execution_id": built.ExecutionID, "title": text.Title, "description": text.Description},
+		func(*tools.FileChangePreview) tools.Decision { return tools.Declined })
+	if declined.asked != 1 {
+		t.Fatalf("proposal = %+v", declined)
+	}
+	if g := gateOf(t, f, p, built.ExecutionID); g == nil || g.Change == nil || *g.Change != text {
+		t.Fatalf("gate = %+v", g)
+	}
+}
+
 // Stage 12: interrupted gate steps recover to a consistent state once their
 // turn is gone: a rebase a crash left in the worktree is aborted and the
 // branch is as it was; a merge whose compare-and-swap completed is recorded
@@ -920,7 +968,7 @@ func TestComposedParentProposesAMergeTheOwnerApproves(t *testing.T) {
 				if err := json.Unmarshal([]byte(resultOf(r, "build")), &built); err != nil || len(built) != 1 {
 					return openrouter.ChatResponse{}, fmt.Errorf("build result %q: %v", resultOf(r, "build"), err)
 				}
-				return call("merge", delegation.MergeToolName, map[string]string{"execution_id": built[0].ExecutionID}), nil
+				return call("merge", delegation.MergeToolName, withChangeText(map[string]string{"execution_id": built[0].ExecutionID})), nil
 			}
 			mergedResult = resultOf(r, "merge")
 			return response("Merged."), nil

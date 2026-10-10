@@ -103,6 +103,11 @@ func buildChange(ws memory.WorkspaceID, a delegation.Attempt, kind Kind) Change 
 	}
 	c.Title = buildTitle(a, report)
 	c.Notes = buildNotes(a.Result)
+	if g != nil && g.Change != nil {
+		// Evie's own title and description from its merge proposal (story
+		// 4a, 2026-10-10), which its pull request carries.
+		c.Title, c.Notes = g.Change.Title, g.Change.Description
+	}
 	c.UpdatedAt = buildUpdatedAt(a)
 	return c
 }

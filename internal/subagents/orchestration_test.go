@@ -408,7 +408,7 @@ func TestComposedOrchestratorDispatchesATaskTreeInConflictFreeBatches(t *testing
 			if len(built) != 2 {
 				return openrouter.ChatResponse{}, fmt.Errorf("build1 = %q", resultOf(r, "build1"))
 			}
-			return call(next, delegation.MergeToolName, map[string]string{"execution_id": built[i].ExecutionID}), nil
+			return call(next, delegation.MergeToolName, withChangeText(map[string]string{"execution_id": built[i].ExecutionID})), nil
 		case "ready2", "ready3":
 			return call(next, "todo_ready", map[string]string{"tree_id": string(root.ID)}), nil
 		case "build2":
@@ -423,7 +423,7 @@ func TestComposedOrchestratorDispatchesATaskTreeInConflictFreeBatches(t *testing
 			if len(built) != 2 {
 				return openrouter.ChatResponse{}, fmt.Errorf("build2 = %q", resultOf(r, "build2"))
 			}
-			return call(next, delegation.MergeToolName, map[string]string{"execution_id": built[i].ExecutionID}), nil
+			return call(next, delegation.MergeToolName, withChangeText(map[string]string{"execution_id": built[i].ExecutionID})), nil
 		}
 		o.mu.Lock()
 		for _, step := range steps {

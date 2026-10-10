@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -198,8 +199,10 @@ func stripOutputs(runs []delegation.GateRun) []delegation.GateRun {
 // runs pass; otherwise a MergeGateError carrying the bounded failure output,
 // with nothing merged. It refuses an attempt that is not the parent's, not
 // a finished build, not its child's latest, or has no commits to merge, and
-// a Workspace or project without a verify command.
-func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent, executionID, target string) (delegation.MergeProposal, error) {
+// a Workspace or project without a verify command. text, the parent's
+// title and description of the Change, is recorded with the proposal once
+// verification starts; text that names a local folder is refused first.
+func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent, executionID, target string, text delegation.ChangeText) (delegation.MergeProposal, error) {
 	executionID, target = strings.TrimSpace(executionID), strings.TrimSpace(target)
 	if executionID == "" {
 		return delegation.MergeProposal{}, errors.New("invalid propose_build_merge arguments: execution_id is blank; use the execution_id of a build result from this conversation")
@@ -207,6 +210,10 @@ func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent,
 	if len(executionID) > delegation.MaxKeyBytes || len(target) > delegation.MaxBaseBytes {
 		return delegation.MergeProposal{}, fmt.Errorf("invalid propose_build_merge arguments: execution_id is limited to %d bytes and target to %d", delegation.MaxKeyBytes, delegation.MaxBaseBytes)
 	}
+	if err := text.Check(); err != nil {
+		return delegation.MergeProposal{}, fmt.Errorf("invalid propose_build_merge arguments: %w", err)
+	}
+	text.Title, text.Description = strings.TrimSpace(text.Title), strings.TrimSpace(text.Description)
 	a, commands, err := s.store.PrepareBuildGate(ctx, parent, executionID)
 	if err != nil {
 		return delegation.MergeProposal{}, err
@@ -226,6 +233,10 @@ func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent,
 		target = w.Base
 	}
 	p := delegation.MergeProposal{ExecutionID: a.ID, Branch: w.Branch, Target: target, Repo: w.Repo}
+	home, _ := os.UserHomeDir()
+	if path := text.LocalPath(w.Path, w.Temp, w.Repo, home); path != "" {
+		return p, refuse(p, "the title or description names the local folder %s; it becomes the pull request's text on GitHub, so name files by their path in the repository and propose again", path)
+	}
 	if strings.TrimSpace(commands.Verify) == "" {
 		return p, refuse(p, "%s", noVerifyCommand(parent, w.Repo))
 	}
@@ -278,6 +289,9 @@ func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent,
 	if _, err := s.store.RecordBuildGate(ctx, a.ID, func(g *delegation.BuildGate) {
 		g.Step, g.Owner, g.Problem = delegation.GateVerifying, owner, ""
 		g.Target, g.TargetHead, g.BranchHead, g.Rebased, g.Runs = target, targetHead, branchHead, false, nil
+		if text != (delegation.ChangeText{}) {
+			g.Change = &text
+		}
 	}); err != nil {
 		return p, err
 	}

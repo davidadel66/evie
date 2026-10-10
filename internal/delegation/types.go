@@ -599,6 +599,9 @@ type BuildGate struct {
 	Problem     string      `json:"problem,omitempty"`
 	NeedsRebase *TargetMove `json:"needs_rebase,omitempty"`
 	Merged      *GateMerge  `json:"merged,omitempty"`
+	// Change is the parent's title and description from the latest
+	// proposal that reached verification (changes.spec.md story 4a).
+	Change *ChangeText `json:"change,omitempty"`
 }
 
 // GateMerge is a merge the owner approved and the harness performed.
