@@ -47,16 +47,17 @@ func (b *BuildSource) Changes(ctx context.Context, ws memory.WorkspaceID, repo R
 		if a.Worktree == nil || canonicalPath(a.Worktree.Repo) != folder {
 			continue
 		}
-		out = append(out, buildChange(ws, a))
+		out = append(out, buildChange(ws, a, repo.Kind))
 	}
 	return out, nil
 }
 
 // buildChange reads one Change from its latest build attempt: merged once
 // the gate merged it, closed once its worktree was removed without a
-// merge, open while the gate awaits the owner's approval, and otherwise a
-// draft.
-func buildChange(ws memory.WorkspaceID, a delegation.Attempt) Change {
+// merge, open while the gate awaits the owner's approval in a local
+// Repository, and otherwise a draft. In a GitHub Repository open means a
+// pull request, which List links in (story 4a).
+func buildChange(ws memory.WorkspaceID, a delegation.Attempt, kind Kind) Change {
 	w, g := *a.Worktree, a.Gate
 	// The branch, not the attempt, names the Change: a continuation
 	// attempt keeps the branch and so stays the same Change.
@@ -86,7 +87,7 @@ func buildChange(ws memory.WorkspaceID, a delegation.Attempt) Change {
 		}
 	case w.RemovedAt != nil:
 		c.State = Closed
-	case g != nil && g.Step == delegation.GateAwaiting:
+	case g != nil && g.Step == delegation.GateAwaiting && kind != GitHub:
 		c.State = Open
 	}
 	if g != nil && (c.State == Draft || c.State == Open) {

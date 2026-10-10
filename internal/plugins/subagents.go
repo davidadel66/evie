@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/davidadel66/evie/internal/delegation"
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/tools"
 )
@@ -38,9 +39,26 @@ type ResearchSupervisor interface {
 	ProposeMerge(ctx context.Context, parent delegation.Parent, executionID, target string) (delegation.MergeProposal, error)
 	Merge(ctx context.Context, parent delegation.Parent, approved delegation.MergeProposal) (delegation.MergeProposal, error)
 }
-type Subagents struct{ supervisor ResearchSupervisor }
+type Subagents struct {
+	supervisor ResearchSupervisor
+	github     GitHubRepositories
+}
+
+// GitHubRepositories says whether a repository folder is a Workspace
+// Repository on GitHub (changes.spec.md).
+type GitHubRepositories interface {
+	OnGitHub(ctx context.Context, folder string) (bool, error)
+}
 
 func NewSubagents(s ResearchSupervisor) Subagents { return Subagents{supervisor: s} }
+
+// WithGitHubRepositories lets propose_build_merge tell a GitHub Repository
+// from a local one: in a GitHub Repository a passed gate leaves a draft
+// Change to push from Changes instead of a merge card (story 4a, Q19, Q25).
+func (s Subagents) WithGitHubRepositories(github GitHubRepositories) Subagents {
+	s.github = github
+	return s
+}
 func (s Subagents) Start(ctx context.Context) error {
 	if s.supervisor == nil {
 		return errors.New("Kernel subagent supervisor unavailable")
@@ -227,6 +245,17 @@ func (s Subagents) prepareMerge(ctx context.Context, args string) (tools.Prepare
 	if err != nil {
 		return tools.PreparedTool{}, err
 	}
+	if s.github != nil && proposal.Repo != "" {
+		onGitHub, err := s.github.OnGitHub(ctx, proposal.Repo)
+		if err != nil {
+			return tools.PreparedTool{}, err
+		}
+		if onGitHub {
+			// Every merge in a GitHub Repository goes through its pull
+			// request; the owner pushes the draft.
+			return tools.PreparedTool{Review: func(context.Context) (string, error) { return draftResult(parent.Scope.WorkspaceID, proposal), nil }}, nil
+		}
+	}
 	title, before, after := proposal.ApprovalCard()
 	return tools.PreparedTool{
 		Preview: &tools.FileChangePreview{Path: title, OldText: before, NewText: after},
@@ -238,6 +267,23 @@ func (s Subagents) prepareMerge(ctx context.Context, args string) (tools.Prepare
 			return merged.JSON(), nil
 		},
 	}, nil
+}
+
+// draftResult tells the model a passed gate left a draft Change: nothing
+// merged, and the owner pushes it and opens its pull request.
+func draftResult(ws memory.WorkspaceID, p delegation.MergeProposal) string {
+	b, _ := json.Marshal(struct {
+		Status       string `json:"status"`
+		Branch       string `json:"branch"`
+		Target       string `json:"target"`
+		FilesChanged int    `json:"files_changed"`
+		Insertions   int    `json:"insertions"`
+		Deletions    int    `json:"deletions"`
+		Note         string `json:"note"`
+	}{"draft", p.Branch, p.Target, p.FilesChanged, p.Insertions, p.Deletions,
+		"The merge gate passed. This Workspace's Repository is on GitHub, so nothing merges here: the branch is a draft Change. " +
+			"Tell the owner it is ready to push and open as a pull request with `evie changes push " + string(ws) + " " + p.Branch + "`."})
+	return string(b)
 }
 
 func mergeParameters() openrouter.Parameter {

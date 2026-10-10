@@ -225,7 +225,7 @@ func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent,
 	if target == "" {
 		target = w.Base
 	}
-	p := delegation.MergeProposal{ExecutionID: a.ID, Branch: w.Branch, Target: target}
+	p := delegation.MergeProposal{ExecutionID: a.ID, Branch: w.Branch, Target: target, Repo: w.Repo}
 	if strings.TrimSpace(commands.Verify) == "" {
 		return p, refuse(p, "%s", noVerifyCommand(parent, w.Repo))
 	}

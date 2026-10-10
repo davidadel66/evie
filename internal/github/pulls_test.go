@@ -2,6 +2,7 @@ package github_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -180,5 +181,46 @@ func TestClientRefusesCraftedNamesNumbersAndCommits(t *testing.T) {
 	// Seven hex characters is the shortest commit GitHub resolves.
 	if _, err := client.WorkflowRuns(ctx, "davidadel66", "evie", "abcdef1"); !errors.Is(err, github.ErrNotFound) {
 		t.Fatalf("short commit: %v", err)
+	}
+}
+
+func TestClientOpensAPullRequest(t *testing.T) {
+	var method, path string
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.Path
+		json.NewDecoder(r.Body).Decode(&body)
+		if body["head"] == "taken" {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			w.Write([]byte(`{"message":"Validation Failed","errors":[{"message":"A pull request already exists for davidadel66:taken."}]}`))
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{"number":12,"state":"open","draft":false,"title":"Fix the footer","html_url":"https://github.com/davidadel66/evie/pull/12",
+			"head":{"ref":"evie/1a2b3c4d-fix","sha":"` + sha + `"},"base":{"ref":"main"},"user":{"login":"davidadel66"}}`))
+	}))
+	defer server.Close()
+	client := github.New(server.URL, "t", server.Client())
+	ctx := context.Background()
+	pull, err := client.CreatePullRequest(ctx, "davidadel66", "evie", "evie/1a2b3c4d-fix", "main", "Fix the footer", "Why it changed.")
+	if err != nil || method != http.MethodPost || path != "/repos/davidadel66/evie/pulls" {
+		t.Fatalf("open = %+v, %v; %s %s", pull, err, method, path)
+	}
+	if body["head"] != "evie/1a2b3c4d-fix" || body["base"] != "main" || body["title"] != "Fix the footer" || body["body"] != "Why it changed." || body["draft"] != false {
+		t.Fatalf("sent %v", body)
+	}
+	if pull.Number != 12 || pull.HTMLURL != "https://github.com/davidadel66/evie/pull/12" || pull.Head.Ref != "evie/1a2b3c4d-fix" {
+		t.Fatalf("pull = %+v", pull)
+	}
+	if _, err := client.CreatePullRequest(ctx, "davidadel66", "evie", "taken", "main", "x", ""); !errors.Is(err, github.ErrUnprocessable) || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("taken: %v", err)
+	}
+	for _, refs := range [][2]string{{"", "main"}, {"evie/x", ""}, {"evie/x\n", "main"}} {
+		if _, err := client.CreatePullRequest(ctx, "davidadel66", "evie", refs[0], refs[1], "title", ""); err == nil {
+			t.Fatalf("refs %q opened", refs)
+		}
+	}
+	if _, err := client.CreatePullRequest(ctx, "davidadel66", "evie", "evie/x", "main", "  ", ""); err == nil {
+		t.Fatal("a blank title opened")
 	}
 }

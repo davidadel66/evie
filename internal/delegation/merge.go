@@ -37,9 +37,13 @@ const (
 // Outputs holds the bounded tail of each verification run's output, which
 // the parent reads only inside an untrusted-data frame.
 type MergeProposal struct {
-	ExecutionID  string        `json:"execution_id"`
-	Status       string        `json:"status"`
-	Branch       string        `json:"branch"`
+	ExecutionID string `json:"execution_id"`
+	Status      string `json:"status"`
+	Branch      string `json:"branch"`
+	// Repo is the repository folder the branch belongs to: the owner's
+	// checkout. It decides whether a passed gate merges locally or leaves a
+	// draft Change for GitHub (changes.spec.md story 4a).
+	Repo         string        `json:"-"`
 	Target       string        `json:"target"`
 	TargetHead   string        `json:"target_head,omitempty"`
 	BranchHead   string        `json:"branch_head,omitempty"`

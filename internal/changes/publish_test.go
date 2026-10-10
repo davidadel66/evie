@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -38,10 +39,12 @@ type fakeGitHub struct {
 	// unpushable creates repositories without their bare repository, so a
 	// push to one fails until the test makes it.
 	unpushable bool
+	// pulls are the pull requests opened on each repository.
+	pulls map[string][]map[string]any
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
-	f := &fakeGitHub{t: t, root: t.TempDir(), created: map[string]map[string]any{}}
+	f := &fakeGitHub{t: t, root: t.TempDir(), created: map[string]map[string]any{}, pulls: map[string][]map[string]any{}}
 	f.config = filepath.Join(f.root, "gitconfig")
 	f.rewrite("https://github.com/", filepath.Join(f.root, "no-network")+"/")
 	t.Setenv("GIT_CONFIG_GLOBAL", f.config)
@@ -129,6 +132,27 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		f.created[body.Name] = repo
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(repo)
+	case strings.HasSuffix(r.URL.Path, "/pulls") && strings.HasPrefix(r.URL.Path, "/repos/davidadel66/"):
+		name := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/repos/davidadel66/"), "/pulls")
+		if r.Method == http.MethodGet {
+			open := []map[string]any{}
+			for _, p := range f.pulls[name] {
+				if p["state"] == "open" {
+					open = append(open, p)
+				}
+			}
+			json.NewEncoder(w).Encode(open)
+			return
+		}
+		var body struct{ Title, Head, Base, Body string }
+		json.NewDecoder(r.Body).Decode(&body)
+		number := len(f.pulls[name]) + 1
+		pull := map[string]any{"number": number, "state": "open", "title": body.Title, "body": body.Body,
+			"html_url": fmt.Sprintf("https://github.com/davidadel66/%s/pull/%d", name, number),
+			"head":     map[string]any{"ref": body.Head, "sha": "0000000"}, "base": map[string]any{"ref": body.Base}, "user": map[string]any{"login": "davidadel66"}}
+		f.pulls[name] = append(f.pulls[name], pull)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(pull)
 	case strings.HasPrefix(strings.ToLower(r.URL.Path), "/repos/davidadel66/"):
 		// GitHub matches owner and repository names in any case.
 		name := strings.ToLower(r.URL.Path[len("/repos/davidadel66/"):])

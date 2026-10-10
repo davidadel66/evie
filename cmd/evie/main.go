@@ -144,7 +144,7 @@ func main() {
 		}
 		return
 	}
-	if handled, err := runChangeManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore, repositoryReader); handled {
+	if handled, err := runChangeManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore, repositoryReader, os.Getenv); handled {
 		if err != nil {
 			log.Fatalf("changes: %v", err)
 		}
@@ -223,7 +223,7 @@ func main() {
 		plugins.NewTodo(kernelStore).WithDispatchLimits(task.DispatchLimits{MaxBatch: subagentPolicy.MaxBatch,
 			PerParent: subagentPolicy.PerParent, Runtime: subagentPolicy.Runtime, PerTurn: subagentPolicy.PerTurn}),
 		plugins.NewMemory(kernelStore),
-		plugins.NewSubagents(supervisor),
+		plugins.NewSubagents(supervisor).WithGitHubRepositories(githubFolders{repositories: changes.NewService(changes.Config{})}),
 		plugins.NewWorkflows(workflowLink),
 	)
 	if err != nil {
@@ -403,7 +403,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopMemory := startMemoryForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)))
 			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -451,7 +451,7 @@ func main() {
 				agent.WithCompactionMemoryFlush(memoryBackground.runner)), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)))
 		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)

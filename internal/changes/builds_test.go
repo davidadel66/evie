@@ -246,3 +246,27 @@ func TestBuildChangesFollowTheBuildRecordsOfTheWorkspaceRepository(t *testing.T)
 		t.Fatalf("no Repository = %+v %v", list, err)
 	}
 }
+
+// Story 4a: in a GitHub Repository open means a pull request, so a build
+// whose gate passed is still a draft until it is pushed; in a local one a
+// passed gate awaiting the owner is open.
+func TestABuildThatPassedTheGateIsADraftUntilItHasAPullRequestOnGitHub(t *testing.T) {
+	ctx := context.Background()
+	r := newBuildRecords(t)
+	repo := repository(t, "main")
+	gitIn(t, repo, "remote", "add", "origin", "https://github.com/davidadel66/notes.git")
+	ws := memory.WorkspaceID("ws-code")
+	passed := r.build(ws, repo, "Fix the footer", reported("", nil, "Fix the footer"))
+	r.gate(passed.ID, func(g *delegation.BuildGate) { g.Step, g.Target = delegation.GateAwaiting, "main" })
+	read, err := changes.NewService(changes.Config{}).Repository(ctx, repo)
+	if err != nil || read.Kind != changes.GitHub {
+		t.Fatalf("repository = %+v, %v", read, err)
+	}
+	list, err := changes.NewBuildSource(r.store).Changes(ctx, ws, read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := changeByID(t, list, passed.ID); c.State != changes.Draft {
+		t.Fatalf("passed gate on GitHub = %+v", c)
+	}
+}

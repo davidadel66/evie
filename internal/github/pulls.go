@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -139,4 +140,39 @@ func commitPath(owner, name, sha string) (string, error) {
 		return "", ErrInvalidSHA
 	}
 	return path + "/commits/" + sha, nil
+}
+
+// CreatePullRequest opens a pull request from head into base: a ready one,
+// not a GitHub draft.
+func (c *Client) CreatePullRequest(ctx context.Context, owner, name, head, base, title, body string) (PullRequest, error) {
+	var pull PullRequest
+	path, err := repoPath(owner, name)
+	if err != nil {
+		return pull, err
+	}
+	if !validRef(head) || !validRef(base) {
+		return pull, ErrInvalidRef
+	}
+	if strings.TrimSpace(title) == "" || len(title) > 256 {
+		return pull, errors.New("github: a pull request needs a title of at most 256 bytes")
+	}
+	payload := map[string]any{"title": title, "head": head, "base": base, "body": body, "draft": false}
+	return pull, c.do(ctx, http.MethodPost, path+"/pulls", payload, &pull)
+}
+
+// ErrInvalidRef is a branch name git would refuse.
+var ErrInvalidRef = errors.New("github: invalid branch name")
+
+// validRef is a plausible branch name: no control characters, spaces or
+// the characters git forbids, and no "..".
+func validRef(ref string) bool {
+	if ref == "" || len(ref) > 255 || strings.Contains(ref, "..") || strings.HasPrefix(ref, "-") {
+		return false
+	}
+	for _, r := range ref {
+		if r <= ' ' || r == 0x7f || strings.ContainsRune("~^:?*[\\", r) {
+			return false
+		}
+	}
+	return true
 }

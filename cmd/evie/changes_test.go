@@ -61,7 +61,7 @@ func TestChangesListCommandPrintsTheWorkspaceChanges(t *testing.T) {
 	run := func(args ...string) (string, error) {
 		t.Helper()
 		var out bytes.Buffer
-		handled, err := runChangeManagement(ctx, args, &out, store, func() *changes.Service { return changes.NewService(changes.Config{}) })
+		handled, err := runChangeManagement(ctx, args, &out, store, func() *changes.Service { return changes.NewService(changes.Config{}) }, func(string) string { return "" })
 		if !handled {
 			t.Fatalf("%q was not handled", args)
 		}
@@ -86,13 +86,21 @@ func TestChangesListCommandPrintsTheWorkspaceChanges(t *testing.T) {
 	if out, err := run("changes", "list", "missing"); err == nil || !strings.Contains(err.Error(), "no Workspace") {
 		t.Fatalf("unknown Workspace = %s %v", out, err)
 	}
-	for _, args := range [][]string{{"changes"}, {"changes", "list"}, {"changes", "push", string(w.ID)}} {
+	// Story 4a: pushing needs GitHub; without a token the command says so
+	// before reading the Workspace's branches.
+	if out, err := run("changes", "push", string(w.ID), attempt.Worktree.Branch); err == nil || !strings.Contains(err.Error(), "GITHUB_TOKEN") {
+		t.Fatalf("push without a token = %s %v", out, err)
+	}
+	if out, err := run("changes", "push", "missing", attempt.Worktree.Branch); err == nil || !strings.Contains(err.Error(), "no Workspace") {
+		t.Fatalf("push to an unknown Workspace = %s %v", out, err)
+	}
+	for _, args := range [][]string{{"changes"}, {"changes", "list"}, {"changes", "push", string(w.ID)}, {"changes", "push", string(w.ID), ""}} {
 		if _, err := run(args...); err == nil || !strings.Contains(err.Error(), "usage: evie changes") {
 			t.Fatalf("%q = %v", args, err)
 		}
 	}
 	var out2 bytes.Buffer
-	if handled, _ := runChangeManagement(ctx, []string{"worktrees", "list"}, &out2, store, nil); handled {
+	if handled, _ := runChangeManagement(ctx, []string{"worktrees", "list"}, &out2, store, nil, nil); handled {
 		t.Fatal("another command was handled")
 	}
 }

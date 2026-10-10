@@ -97,6 +97,7 @@ type Server struct {
 	workflows         WorkflowManager
 	repositories      Repositories
 	changeLister      ChangeLister
+	changePusher      ChangePusher
 	terminalMu        sync.Mutex
 	terminals         map[string]*terminalEntry
 	terminalsClosed   bool
@@ -264,6 +265,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerNotificationRoutes(mux)
 	s.registerRepositoryRoutes(mux)
 	s.registerChangeRoutes(mux)
+	s.registerChangePushRoutes(mux)
 	mux.Handle("/", s.staticHandler())
 	return mux
 }

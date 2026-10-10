@@ -220,6 +220,20 @@ keeps the owner's checkout current without touching work in progress.
   the result on the Change.
 - The pull request targets the base branch, with the Change's title and
   notes. It is a ready pull request, not a GitHub draft.
+- Story 4a (2026-10-10):
+  - The base is the branch the Change was built from. A push is refused,
+    naming that branch, when GitHub does not have it.
+  - The pull request body is Evie's notes, then where the Change came from
+    (a chat, or a workflow and step), then how Verify ended: "Verify
+    passed" with the command, or "Verify failed … Pushed anyway by the
+    owner" with the end of its output.
+  - Verify runs sandboxed without network in the build's worktree, with
+    the gate's runner and its 20-minute limit.
+  - Pushing again sends new commits and keeps the branch's open pull
+    request. A sync runs straight after, so the Change shows its pull
+    request at once.
+  - In a GitHub Repository a build that passed the gate stays Draft until
+    it has a pull request.
 - Who may push and open a pull request:
   - the owner, from the Changes tab or `evie changes push`;
   - a workflow, through a `github.open_change` effect capability (connection
@@ -230,7 +244,8 @@ keeps the owner's checkout current without touching work in progress.
   Chat never pushes.
 - `propose_build_merge` still runs the gate (Verify, rebase, Verify).
   - In a GitHub Repository it then records a draft Change and shows no
-    chat card.
+    chat card. Until story 6, its result tells Evie to give the owner the
+    `evie changes push` command for the branch.
   - In a local Repository, until story 6, today's chat card stays and
     approving it is the same action as "Approve and merge". From story 6 it
     records an open Change and shows no card.
@@ -344,7 +359,9 @@ Each story is independently demonstrable and ends with
      - merges and closes done on GitHub appear after a sync.
    - Depends on 1.
    - Risk: GitHub rate limits; the sync is bounded per Workspace.
-4. **Push and open PR.**
+4. **Push and open PR.** Split on 2026-10-10 into 4a (the owner's push:
+   `evie changes push`, the push route, and no chat card in a GitHub
+   Repository) and 4b (`github.open_change` for workflows).
    - Outcome: `evie changes push` and the web route push a draft and open
      its pull request; `github.open_change` does the same for workflows
      under authority.

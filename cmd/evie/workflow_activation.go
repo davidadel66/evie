@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidadel66/evie/internal/changes"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -90,7 +91,7 @@ func newWorkflowPluginManager(ctx context.Context, store *eviedb.Store, supervis
 	if supervisor != nil {
 		// Subagents is on by default since 2026-10-04, so a manager without
 		// a supervisor must not compile it (it would start a nil one).
-		compiled = append(compiled, plugins.NewSubagents(supervisor))
+		compiled = append(compiled, plugins.NewSubagents(supervisor).WithGitHubRepositories(githubFolders{repositories: changes.NewService(changes.Config{})}))
 	}
 	manager, err := plugins.NewManager(tools.KernelToolset(), compiled...)
 	if err != nil {
