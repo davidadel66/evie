@@ -55,8 +55,13 @@ in a grilling session (Q1–Q26), starting from the claude.ai/design template
 - **Pushing is outward-facing; workers never see the token** (Q12, revised
   by Q25). Only Evie's GitHub side pushes. The worker sandbox keeps network
   access off.
-- **Checks** (Q13). In a GitHub Repository, checks are GitHub's check runs
-  and statuses on the latest commit. In a local Repository, the check is
+- **Checks** (Q13, revised 2026-10-10). In a GitHub Repository, checks are
+  the GitHub Actions workflow runs (newest per workflow) and commit
+  statuses on the latest commit. GitHub's Checks API turned out to refuse
+  fine-grained tokens, and there is no Checks permission to grant one. The
+  owner kept the fine-grained token and added Actions read. Rejected: a
+  classic `repo` token (sees every check, but reaches every repository) and
+  a GitHub App. Services that report only as check runs are not seen. In a local Repository, the check is
   the Workspace's Verify command. Evie runs Verify before pushing. The
   owner's push works after a failure and shows it. "Checks pass" means
   every check finished and none failed. No checks means plain "Approve and

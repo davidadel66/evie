@@ -44,9 +44,13 @@ func pullsServer(t *testing.T) (*github.Client, *[]string) {
 		case "/repos/davidadel66/evie/pulls/9":
 			w.Write([]byte(`{"number":9,"state":"open","merged":false,"merged_at":null,"mergeable":false,"draft":false,"title":"Conflicts",
 				"html_url":"https://github.com/davidadel66/evie/pull/9","updated_at":"2026-10-10T07:00:00Z","head":{"ref":"mine","sha":"` + sha + `"},"base":{"ref":"master"},"user":{"login":"davidadel66"}}`))
-		case "/repos/davidadel66/evie/commits/" + sha + "/check-runs":
-			w.Write([]byte(`{"total_count":2,"check_runs":[{"name":"go test","status":"completed","conclusion":"success","html_url":"https://github.com/davidadel66/evie/runs/1"},
-				{"name":"ui","status":"in_progress","conclusion":null,"html_url":"https://github.com/davidadel66/evie/runs/2"}]}`))
+		case "/repos/davidadel66/evie/actions/runs":
+			if r.URL.Query().Get("head_sha") != sha {
+				http.NotFound(w, r)
+				return
+			}
+			w.Write([]byte(`{"total_count":2,"workflow_runs":[{"id":11,"name":"verify","status":"completed","conclusion":"success","html_url":"https://github.com/davidadel66/evie/actions/runs/11"},
+				{"id":12,"name":"ui","status":"in_progress","conclusion":null,"html_url":"https://github.com/davidadel66/evie/actions/runs/12"}]}`))
 		case "/repos/davidadel66/evie/commits/" + sha + "/status":
 			w.Write([]byte(`{"state":"failure","sha":"` + sha + `","statuses":[{"context":"ci/legacy","state":"failure","target_url":"https://ci.example.com/1","description":"broke"}]}`))
 		default:
@@ -99,13 +103,15 @@ func TestClientReadsOnePullRequestWithItsMergeState(t *testing.T) {
 func TestClientReadsTheChecksOnACommit(t *testing.T) {
 	client, seen := pullsServer(t)
 	ctx := context.Background()
-	runs, err := client.CheckRuns(ctx, "davidadel66", "evie", sha)
+	// Fine-grained tokens cannot read the Checks API, so CI is read from
+	// the GitHub Actions workflow runs on the commit.
+	runs, err := client.WorkflowRuns(ctx, "davidadel66", "evie", sha)
 	if err != nil || len(runs) != 2 {
-		t.Fatalf("check runs = %+v, %v", runs, err)
+		t.Fatalf("workflow runs = %+v, %v", runs, err)
 	}
-	if runs[0].Name != "go test" || runs[0].Status != "completed" || runs[0].Conclusion != "success" || runs[0].HTMLURL != "https://github.com/davidadel66/evie/runs/1" ||
-		runs[1].Status != "in_progress" || runs[1].Conclusion != "" {
-		t.Fatalf("check runs = %+v", runs)
+	if runs[0].ID != 11 || runs[0].Name != "verify" || runs[0].Status != "completed" || runs[0].Conclusion != "success" ||
+		runs[0].HTMLURL != "https://github.com/davidadel66/evie/actions/runs/11" || runs[1].Status != "in_progress" || runs[1].Conclusion != "" {
+		t.Fatalf("workflow runs = %+v", runs)
 	}
 	status, err := client.CombinedStatus(ctx, "davidadel66", "evie", sha)
 	if err != nil || status.State != "failure" || len(status.Statuses) != 1 {
@@ -114,7 +120,7 @@ func TestClientReadsTheChecksOnACommit(t *testing.T) {
 	if s := status.Statuses[0]; s.Context != "ci/legacy" || s.State != "failure" || s.TargetURL != "https://ci.example.com/1" {
 		t.Fatalf("status = %+v", s)
 	}
-	want := []string{"/repos/davidadel66/evie/commits/" + sha + "/check-runs?per_page=100", "/repos/davidadel66/evie/commits/" + sha + "/status?per_page=100"}
+	want := []string{"/repos/davidadel66/evie/actions/runs?head_sha=" + sha + "&per_page=100", "/repos/davidadel66/evie/commits/" + sha + "/status?per_page=100"}
 	if strings.Join(*seen, " ") != strings.Join(want, " ") {
 		t.Fatalf("requested %v, want %v", *seen, want)
 	}
@@ -158,21 +164,21 @@ func TestClientRefusesCraftedNamesNumbersAndCommits(t *testing.T) {
 		t.Fatalf("crafted name for one pull request: %v", err)
 	}
 	for _, commit := range []string{"", "main", "abc123", "../../user", sha + "0", "0123456z", sha[:20] + "/status"} {
-		if _, err := client.CheckRuns(ctx, "davidadel66", "evie", commit); !errors.Is(err, github.ErrInvalidSHA) {
-			t.Fatalf("check runs for %q: %v", commit, err)
+		if _, err := client.WorkflowRuns(ctx, "davidadel66", "evie", commit); !errors.Is(err, github.ErrInvalidSHA) {
+			t.Fatalf("workflow runs for %q: %v", commit, err)
 		}
 		if _, err := client.CombinedStatus(ctx, "davidadel66", "evie", commit); !errors.Is(err, github.ErrInvalidSHA) {
 			t.Fatalf("status for %q: %v", commit, err)
 		}
 	}
-	if _, err := client.CheckRuns(ctx, "x?y", "evie", sha); !errors.Is(err, github.ErrInvalidName) {
+	if _, err := client.WorkflowRuns(ctx, "x?y", "evie", sha); !errors.Is(err, github.ErrInvalidName) {
 		t.Fatalf("crafted owner for checks: %v", err)
 	}
 	if len(*seen) != 0 {
 		t.Fatalf("refused requests reached GitHub: %v", *seen)
 	}
 	// Seven hex characters is the shortest commit GitHub resolves.
-	if _, err := client.CheckRuns(ctx, "davidadel66", "evie", "abcdef1"); !errors.Is(err, github.ErrNotFound) {
+	if _, err := client.WorkflowRuns(ctx, "davidadel66", "evie", "abcdef1"); !errors.Is(err, github.ErrNotFound) {
 		t.Fatalf("short commit: %v", err)
 	}
 }

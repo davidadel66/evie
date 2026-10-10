@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -134,14 +135,14 @@ func (f *fakePulls) serve(w http.ResponseWriter, r *http.Request) {
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}
-	case strings.HasPrefix(path, repo+"/commits/") && strings.HasSuffix(path, "/check-runs"):
+	case path == repo+"/actions/runs":
 		if f.refuseChecks {
 			w.WriteHeader(http.StatusForbidden)
 			w.Write([]byte(`{"message":"Resource not accessible by personal access token"}`))
 			return
 		}
-		sha := strings.TrimSuffix(strings.TrimPrefix(path, repo+"/commits/"), "/check-runs")
-		json.NewEncoder(w).Encode(map[string]any{"total_count": len(f.runs[sha]), "check_runs": f.runs[sha]})
+		sha := r.URL.Query().Get("head_sha")
+		json.NewEncoder(w).Encode(map[string]any{"total_count": len(f.runs[sha]), "workflow_runs": f.runs[sha]})
 	case strings.HasPrefix(path, repo+"/commits/") && strings.HasSuffix(path, "/status"):
 		sha := strings.TrimSuffix(strings.TrimPrefix(path, repo+"/commits/"), "/status")
 		json.NewEncoder(w).Encode(map[string]any{"state": "pending", "statuses": f.statuses[sha]})
@@ -150,8 +151,14 @@ func (f *fakePulls) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// runIDs numbers workflow runs in the order a test makes them, as GitHub
+// does: a later run of a workflow has a larger ID.
+var runIDs int
+
 func run(name, status, conclusion string) map[string]any {
-	return map[string]any{"name": name, "status": status, "conclusion": conclusion, "html_url": "https://github.com/davidadel66/evie/runs/" + name}
+	runIDs++
+	return map[string]any{"id": runIDs, "name": name, "status": status, "conclusion": conclusion,
+		"html_url": fmt.Sprintf("https://github.com/davidadel66/evie/actions/runs/%d", runIDs)}
 }
 
 func status(name, state string) map[string]any {
@@ -199,7 +206,9 @@ func TestSyncRecordsOpenPullRequestsWithTheirChecks(t *testing.T) {
 	fake.runs[shaA] = []map[string]any{
 		run("queued", "queued", ""), run("running", "in_progress", ""), run("ok", "completed", "success"), run("broke", "completed", "failure"),
 		run("slow", "completed", "timed_out"), run("stopped", "completed", "cancelled"), run("asks", "completed", "action_required"),
-		run("meh", "completed", "neutral"), run("skipped", "completed", "skipped"),
+		run("meh", "completed", "neutral"), run("skipped", "completed", "skipped"), run("waits", "waiting", ""), run("boot", "completed", "startup_failure"),
+		// A workflow run again: its newest run is its check.
+		run("again", "completed", "failure"), run("again", "completed", "success"),
 	}
 	fake.statuses[shaA] = []map[string]any{status("ci/wait", "pending"), status("ci/ok", "success"), status("ci/no", "failure"), status("ci/err", "error")}
 	store, ws := syncStore(t)
@@ -227,12 +236,18 @@ func TestSyncRecordsOpenPullRequestsWithTheirChecks(t *testing.T) {
 	want := map[string]changes.CheckState{
 		"queued": changes.CheckPending, "running": changes.CheckRunning, "ok": changes.CheckPassed, "broke": changes.CheckFailed,
 		"slow": changes.CheckFailed, "stopped": changes.CheckFailed, "asks": changes.CheckFailed, "meh": changes.CheckNeutral, "skipped": changes.CheckNeutral,
+		"waits": changes.CheckPending, "boot": changes.CheckFailed, "again": changes.CheckPassed,
 		"ci/wait": changes.CheckPending, "ci/ok": changes.CheckPassed, "ci/no": changes.CheckFailed, "ci/err": changes.CheckFailed,
 	}
 	if len(seven.Checks) != len(want) || !equalStates(states, want) {
 		t.Fatalf("checks = %+v", seven.Checks)
 	}
-	if seven.Checks[0].URL != "https://github.com/davidadel66/evie/runs/queued" || seven.Checks[9].URL != "https://ci.example.com/ci/wait" {
+	links := map[string]string{}
+	for _, check := range seven.Checks {
+		links[check.Name] = check.URL
+	}
+	if !strings.HasPrefix(links["queued"], "https://github.com/davidadel66/evie/actions/runs/") || links["ci/wait"] != "https://ci.example.com/ci/wait" ||
+		links["again"] != fmt.Sprintf("https://github.com/davidadel66/evie/actions/runs/%d", runIDs) {
 		t.Fatalf("check links = %+v", seven.Checks)
 	}
 	if eight := got["pr:8"]; eight.State != changes.Open || eight.Checks != nil || eight.PullRequest.Draft || eight.Branch != "evie/1234abcd-x" {
@@ -350,7 +365,9 @@ func TestASyncThatGitHubRefusesRecordsNothing(t *testing.T) {
 	fake.refuseChecks = true
 	store, ws := syncStore(t)
 	_, err := changes.NewSyncer(changes.SyncConfig{GitHub: client, Store: store}).Sync(ctx, ws.ID, evieRepo)
-	if !errors.Is(err, github.ErrForbidden) || !strings.Contains(err.Error(), "#7") || !strings.Contains(err.Error(), "not accessible") {
+	// It names the permission the token lacks.
+	if !errors.Is(err, github.ErrForbidden) || !strings.Contains(err.Error(), "#7") || !strings.Contains(err.Error(), "not accessible") ||
+		!strings.Contains(err.Error(), "Actions permission") {
 		t.Fatalf("refused checks = %v", err)
 	}
 	if strings.Contains(err.Error(), token) {

@@ -148,9 +148,13 @@ keeps the owner's checkout current without touching work in progress.
   There is no secret store; moving the credential into one later changes
   only composition.
 - Token permissions the feature uses: Metadata read, Contents read/write,
-  Pull requests read/write, Checks read, Commit statuses read; Administration
-  read/write only for creating or publishing repositories; Workflows
-  read/write only for pushing edits to `.github/workflows`.
+  Pull requests read/write, Actions read, Commit statuses read;
+  Administration read/write only for creating or publishing repositories;
+  Workflows read/write only for pushing edits to `.github/workflows`.
+  GitHub's Checks API does not accept fine-grained tokens (found live on
+  2026-10-10), so a GitHub Repository's checks are its GitHub Actions
+  workflow runs (the newest run of each workflow) and its commit statuses.
+  Third-party services that report only as check runs are not seen.
 - The token check confirms the token authenticates and can read the
   Repository. A missing permission is reported when GitHub refuses an
   action, naming that action.

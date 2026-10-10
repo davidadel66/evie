@@ -49,9 +49,12 @@ type Ref struct {
 	SHA string `json:"sha"`
 }
 
-// CheckRun is one check run on a commit. Conclusion is empty until Status
-// is completed.
-type CheckRun struct {
+// WorkflowRun is one GitHub Actions workflow run on a commit. Conclusion is
+// empty until Status is completed. Evie reads CI from workflow runs because
+// GitHub's Checks API does not accept fine-grained personal access tokens;
+// workflow runs need the token's Actions permission (read).
+type WorkflowRun struct {
+	ID         int64  `json:"id"`
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
@@ -94,16 +97,20 @@ func (c *Client) PullRequest(ctx context.Context, owner, name string, number int
 	return pull, c.do(ctx, http.MethodGet, path+"/pulls/"+strconv.Itoa(number), nil, &pull)
 }
 
-// CheckRuns lists the check runs on a commit, up to 100.
-func (c *Client) CheckRuns(ctx context.Context, owner, name, sha string) ([]CheckRun, error) {
+// WorkflowRuns lists the GitHub Actions workflow runs on a commit, up to
+// 100, newest first.
+func (c *Client) WorkflowRuns(ctx context.Context, owner, name, sha string) ([]WorkflowRun, error) {
 	var runs struct {
-		CheckRuns []CheckRun `json:"check_runs"`
+		WorkflowRuns []WorkflowRun `json:"workflow_runs"`
 	}
-	path, err := commitPath(owner, name, sha)
+	path, err := repoPath(owner, name)
 	if err != nil {
 		return nil, err
 	}
-	return runs.CheckRuns, c.do(ctx, http.MethodGet, path+"/check-runs?per_page=100", nil, &runs)
+	if !validSHA.MatchString(sha) {
+		return nil, ErrInvalidSHA
+	}
+	return runs.WorkflowRuns, c.do(ctx, http.MethodGet, path+"/actions/runs?head_sha="+sha+"&per_page=100", nil, &runs)
 }
 
 // CombinedStatus reads a commit's statuses, up to 100 contexts.

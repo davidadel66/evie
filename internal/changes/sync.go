@@ -2,6 +2,7 @@ package changes
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -27,7 +28,7 @@ const SyncEvery = 60 * time.Second
 type PullRequestClient interface {
 	PullRequests(ctx context.Context, owner, name string) ([]github.PullRequest, error)
 	PullRequest(ctx context.Context, owner, name string, number int) (github.PullRequest, error)
-	CheckRuns(ctx context.Context, owner, name, sha string) ([]github.CheckRun, error)
+	WorkflowRuns(ctx context.Context, owner, name, sha string) ([]github.WorkflowRun, error)
 	CombinedStatus(ctx context.Context, owner, name, sha string) (github.CombinedStatus, error)
 }
 
@@ -253,19 +254,20 @@ func (s *Syncer) sync(ctx context.Context, gh *countedClient, ws memory.Workspac
 }
 
 // openRecord is an open pull request with the checks on its head commit:
-// its check runs, then its commit statuses.
+// the newest run of each GitHub Actions workflow, then its commit statuses.
+// (GitHub's Checks API does not accept fine-grained tokens.)
 func openRecord(ctx context.Context, gh PullRequestClient, repo Repository, p github.PullRequest) (eviedb.ChangePullRequest, error) {
-	runs, err := gh.CheckRuns(ctx, repo.Owner, repo.Name, p.Head.SHA)
+	runs, err := gh.WorkflowRuns(ctx, repo.Owner, repo.Name, p.Head.SHA)
 	if err != nil {
-		return eviedb.ChangePullRequest{}, fmt.Errorf("read the check runs of pull request #%d: %w", p.Number, err)
+		return eviedb.ChangePullRequest{}, fmt.Errorf("read the workflow runs of pull request #%d: %w%s", p.Number, err, permissionHint(err, "Actions"))
 	}
 	status, err := gh.CombinedStatus(ctx, repo.Owner, repo.Name, p.Head.SHA)
 	if err != nil {
-		return eviedb.ChangePullRequest{}, fmt.Errorf("read the commit statuses of pull request #%d: %w", p.Number, err)
+		return eviedb.ChangePullRequest{}, fmt.Errorf("read the commit statuses of pull request #%d: %w%s", p.Number, err, permissionHint(err, "Commit statuses"))
 	}
 	var checks []eviedb.ChangePullRequestCheck
-	for _, r := range runs {
-		checks = append(checks, eviedb.ChangePullRequestCheck{Name: r.Name, State: string(checkRunState(r)), URL: r.HTMLURL})
+	for _, r := range newestRuns(runs) {
+		checks = append(checks, eviedb.ChangePullRequestCheck{Name: r.Name, State: string(workflowRunState(r)), URL: r.HTMLURL})
 	}
 	for _, st := range status.Statuses {
 		checks = append(checks, eviedb.ChangePullRequestCheck{Name: st.Context, State: string(statusState(st.State)), URL: st.TargetURL})
@@ -279,15 +281,34 @@ func pullRecord(repo Repository, p github.PullRequest, state string, checks []ev
 		URL: p.HTMLURL, Checks: checks, GitHubUpdatedAt: p.UpdatedAt}
 }
 
-// checkRunState maps a check run. A completed run with a conclusion GitHub
-// may add later, or "stale", counts as pending: it neither passes nor fails.
-func checkRunState(r github.CheckRun) CheckState {
+// newestRuns is each workflow's newest run, in the order the workflows
+// first appear: a workflow run again is judged by its latest run.
+func newestRuns(runs []github.WorkflowRun) []github.WorkflowRun {
+	index := map[string]int{}
+	var out []github.WorkflowRun
+	for _, r := range runs {
+		if i, ok := index[r.Name]; ok {
+			if r.ID > out[i].ID {
+				out[i] = r
+			}
+			continue
+		}
+		index[r.Name] = len(out)
+		out = append(out, r)
+	}
+	return out
+}
+
+// workflowRunState maps a workflow run. A completed run with a conclusion
+// GitHub may add later, or "stale", counts as pending: it neither passes
+// nor fails.
+func workflowRunState(r github.WorkflowRun) CheckState {
 	switch r.Status {
 	case "completed":
 		switch r.Conclusion {
 		case "success":
 			return CheckPassed
-		case "failure", "timed_out", "cancelled", "action_required":
+		case "failure", "timed_out", "cancelled", "action_required", "startup_failure":
 			return CheckFailed
 		case "neutral", "skipped":
 			return CheckNeutral
@@ -327,12 +348,20 @@ func (c *countedClient) PullRequest(ctx context.Context, owner, name string, num
 	return c.client.PullRequest(ctx, owner, name, number)
 }
 
-func (c *countedClient) CheckRuns(ctx context.Context, owner, name, sha string) ([]github.CheckRun, error) {
+func (c *countedClient) WorkflowRuns(ctx context.Context, owner, name, sha string) ([]github.WorkflowRun, error) {
 	c.requests++
-	return c.client.CheckRuns(ctx, owner, name, sha)
+	return c.client.WorkflowRuns(ctx, owner, name, sha)
 }
 
 func (c *countedClient) CombinedStatus(ctx context.Context, owner, name, sha string) (github.CombinedStatus, error) {
 	c.requests++
 	return c.client.CombinedStatus(ctx, owner, name, sha)
+}
+
+// permissionHint names the token permission a forbidden read needs.
+func permissionHint(err error, permission string) string {
+	if !errors.Is(err, github.ErrForbidden) {
+		return ""
+	}
+	return ". Give the token the " + permission + " permission (read) in its settings on GitHub"
 }
