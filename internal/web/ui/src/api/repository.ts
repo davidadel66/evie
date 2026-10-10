@@ -19,12 +19,19 @@ export type Repository = {
   github?: GitHubStatus;
 };
 
+async function post<T>(path: string, body: unknown, failure: string): Promise<T> {
+  const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+  const value = await response.json();
+  if (!response.ok) throw new Error(value.error ?? `${failure} (${response.status})`);
+  return value as T;
+}
+
 export const repositoryAPI = {
-  read: async (workspaceId: string): Promise<Repository> => {
-    const response = await fetch("/api/workspaces/repository", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspace_id: workspaceId }), cache: "no-store" });
-    const value = await response.json();
-    if (!response.ok) throw new Error(value.error ?? `The repository could not be read (${response.status})`);
-    return value as Repository;
-  },
+  read: (workspaceId: string): Promise<Repository> => post("/api/workspaces/repository", { workspace_id: workspaceId }, "The repository could not be read"),
+  /** Creates the GitHub repository on the token owner's account, sets origin and pushes the base branch. */
+  publish: (workspaceId: string, name: string, isPrivate: boolean): Promise<Repository> =>
+    post("/api/workspaces/repository/publish", { workspace_id: workspaceId, name, private: isPrivate }, "The repository could not be published"),
+  /** The token check alone. */
+  account: (): Promise<GitHubStatus> => post("/api/github/status", {}, "GitHub could not be checked"),
 };
 export type RepositoryAPI = typeof repositoryAPI;

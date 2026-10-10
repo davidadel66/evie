@@ -2,6 +2,7 @@ package github_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -74,6 +75,40 @@ func TestClientTellsGitHubsRefusalsApart(t *testing.T) {
 	}
 	// Names are path segments: nothing can steer the request elsewhere.
 	if _, err := client.Repository(ctx, "a/../../user", "x"); !errors.Is(err, github.ErrInvalidName) {
+		t.Fatalf("crafted name: %v", err)
+	}
+}
+
+func TestClientCreatesARepositoryOnTheTokensAccount(t *testing.T) {
+	var method, path string
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("body: %v", err)
+		}
+		if body["name"] == "taken" {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			w.Write([]byte(`{"message":"Repository creation failed.","errors":[{"message":"name already exists on this account"}]}`))
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{"name":"notes","full_name":"davidadel66/notes","private":true,"default_branch":"main","html_url":"https://github.com/davidadel66/notes","clone_url":"https://github.com/davidadel66/notes.git","owner":{"login":"davidadel66"}}`))
+	}))
+	defer server.Close()
+	client := github.New(server.URL, "ghp_secret", server.Client())
+	repo, err := client.CreateRepository(context.Background(), "notes", true, false)
+	if err != nil || method != http.MethodPost || path != "/user/repos" || body["name"] != "notes" || body["private"] != true || body["auto_init"] != false {
+		t.Fatalf("create = %+v, %v; %s %s %v", repo, err, method, path, body)
+	}
+	if repo.CloneURL != "https://github.com/davidadel66/notes.git" || repo.Owner.Login != "davidadel66" || !repo.Private {
+		t.Fatalf("repository = %+v", repo)
+	}
+	_, err = client.CreateRepository(context.Background(), "taken", true, false)
+	if !errors.Is(err, github.ErrUnprocessable) || err.Error() != "github: refused: name already exists on this account" {
+		t.Fatalf("taken: %v", err)
+	}
+	if _, err := client.CreateRepository(context.Background(), "../user", true, false); !errors.Is(err, github.ErrInvalidName) {
 		t.Fatalf("crafted name: %v", err)
 	}
 }

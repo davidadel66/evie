@@ -286,7 +286,11 @@ Each story is independently demonstrable and ends with
    - The folder guard moved to story 3 (2026-10-09): there are no stored
      Changes to check against until then.
    - Risk: parsing `origin` forms.
-2. **Repository at creation and Publish to GitHub.**
+2. **Repository at creation and Publish to GitHub.** Split on 2026-10-09
+   into 2a (Publish to GitHub from Settings, with the token-carrying git
+   commands) and 2b (the four choices at creation), each demonstrated on
+   its own, because together they cross GitHub writes, token transport and
+   UI at once.
    - Outcome: the four creation options and Publish work end to end.
    - Acceptance:
      - each option leaves the expected folder, git state and GitHub

@@ -6,6 +6,7 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,6 +33,9 @@ var (
 	ErrForbidden = errors.New("github: forbidden")
 	// ErrInvalidName is an owner or repository name GitHub could not have.
 	ErrInvalidName = errors.New("github: invalid owner or repository name")
+	// ErrUnprocessable is a request GitHub refused as given (422), such as
+	// a repository name the account already has; the message says why.
+	ErrUnprocessable = errors.New("github: refused")
 )
 
 var validName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
@@ -64,6 +68,7 @@ type Repository struct {
 	Private       bool   `json:"private"`
 	DefaultBranch string `json:"default_branch"`
 	HTMLURL       string `json:"html_url"`
+	CloneURL      string `json:"clone_url"`
 	Owner         struct {
 		Login string `json:"login"`
 	} `json:"owner"`
@@ -72,22 +77,49 @@ type Repository struct {
 // User reads the token's owner, which also proves the token works.
 func (c *Client) User(ctx context.Context) (User, error) {
 	var user User
-	return user, c.get(ctx, "/user", &user)
+	return user, c.do(ctx, http.MethodGet, "/user", nil, &user)
 }
 
 // Repository reads one repository the token can see.
 func (c *Client) Repository(ctx context.Context, owner, name string) (Repository, error) {
 	var repo Repository
-	if !validName.MatchString(owner) || !validName.MatchString(name) || strings.Trim(owner, ".") == "" || strings.Trim(name, ".") == "" {
+	if !ValidName(owner) || !ValidName(name) {
 		return repo, ErrInvalidName
 	}
-	return repo, c.get(ctx, "/repos/"+url.PathEscape(owner)+"/"+url.PathEscape(name), &repo)
+	return repo, c.do(ctx, http.MethodGet, "/repos/"+url.PathEscape(owner)+"/"+url.PathEscape(name), nil, &repo)
 }
 
-func (c *Client) get(ctx context.Context, path string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
+// CreateRepository creates a repository on the token owner's personal
+// account. autoInit gives it GitHub's first commit, so it can be cloned.
+func (c *Client) CreateRepository(ctx context.Context, name string, private, autoInit bool) (Repository, error) {
+	var repo Repository
+	if !ValidName(name) {
+		return repo, ErrInvalidName
+	}
+	body := map[string]any{"name": name, "private": private, "auto_init": autoInit}
+	return repo, c.do(ctx, http.MethodPost, "/user/repos", body, &repo)
+}
+
+// ValidName says whether GitHub could have an owner or repository named so.
+func ValidName(name string) bool {
+	return validName.MatchString(name) && strings.Trim(name, ".") != ""
+}
+
+func (c *Client) do(ctx context.Context, method, path string, payload, out any) error {
+	var body io.Reader
+	if payload != nil {
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(encoded)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.base+path, body)
 	if err != nil {
 		return err
+	}
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -99,7 +131,7 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 		return fmt.Errorf("github: cannot reach %s: %w", req.URL.Host, errors.Unwrap(err))
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return fmt.Errorf("github: read response: %w", err)
 	}
@@ -109,26 +141,40 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 	case resp.StatusCode == http.StatusNotFound:
 		return ErrNotFound
 	case resp.StatusCode == http.StatusForbidden:
-		return fmt.Errorf("%w: %s", ErrForbidden, message(body))
+		return fmt.Errorf("%w: %s", ErrForbidden, message(data))
+	case resp.StatusCode == http.StatusUnprocessableEntity:
+		return fmt.Errorf("%w: %s", ErrUnprocessable, message(data))
 	case resp.StatusCode >= 300:
-		return fmt.Errorf("github: %s: %s", resp.Status, message(body))
+		return fmt.Errorf("github: %s: %s", resp.Status, message(data))
 	}
-	if err := json.Unmarshal(body, out); err != nil {
+	if err := json.Unmarshal(data, out); err != nil {
 		return fmt.Errorf("github: unexpected response: %w", err)
 	}
 	return nil
 }
 
-// message is GitHub's own explanation of a refusal, bounded.
+// message is GitHub's own explanation of a refusal, bounded: the first
+// detailed error when it gives one (a 422's "name already exists on this
+// account"), else its message.
 func message(body []byte) string {
 	var value struct {
 		Message string `json:"message"`
+		Errors  []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
 	}
-	if json.Unmarshal(body, &value) != nil || value.Message == "" {
+	if json.Unmarshal(body, &value) != nil {
 		return "no explanation given"
 	}
-	if len(value.Message) > 200 {
-		return value.Message[:200]
+	text := value.Message
+	if len(value.Errors) > 0 && value.Errors[0].Message != "" {
+		text = value.Errors[0].Message
 	}
-	return value.Message
+	if text == "" {
+		return "no explanation given"
+	}
+	if len(text) > 200 {
+		return text[:200]
+	}
+	return text
 }

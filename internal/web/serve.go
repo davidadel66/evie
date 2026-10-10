@@ -94,7 +94,7 @@ type Server struct {
 	usageReader       UsageReader
 	spendingService   SpendingService
 	workflows         WorkflowManager
-	repositories      RepositoryReader
+	repositories      Repositories
 	terminalMu        sync.Mutex
 	terminals         map[string]*terminalEntry
 	terminalsClosed   bool

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/davidadel66/evie/internal/github"
 	"github.com/davidadel66/evie/internal/worktree"
@@ -63,20 +64,37 @@ type GitHubStatus struct {
 	Message string     `json:"message,omitempty"`
 }
 
-// GitHubReader is what reading a Repository needs from GitHub.
-type GitHubReader interface {
+// GitHubClient is what the changes module needs from GitHub.
+type GitHubClient interface {
 	User(context.Context) (github.User, error)
 	Repository(ctx context.Context, owner, name string) (github.Repository, error)
+	CreateRepository(ctx context.Context, name string, private, autoInit bool) (github.Repository, error)
 }
 
-// Service reads Workspace Repositories. A nil GitHub reader means no token
-// is configured; local Repositories work the same either way.
+// Config is how startup composition builds a Service. Without GitHub (no
+// token configured) local Repositories work the same and GitHub actions
+// are refused.
+type Config struct {
+	GitHub GitHubClient
+	// Token reaches git only through a per-command environment, for HTTPS
+	// to github.com; never a remote URL, git config or output.
+	Token string
+	// AllowFileRemotes lets git push to local paths; tests stand bare
+	// repositories in for GitHub with it. Production allows HTTPS only.
+	AllowFileRemotes bool
+}
+
+// Service reads and changes Workspace Repositories.
 type Service struct {
-	github GitHubReader
+	github    GitHubClient
+	token     string
+	allowFile bool
+	mu        sync.Mutex
+	busy      map[string]bool
 }
 
-func NewService(gh GitHubReader) *Service {
-	return &Service{github: gh}
+func NewService(c Config) *Service {
+	return &Service{github: c.GitHub, token: c.Token, allowFile: c.AllowFileRemotes, busy: map[string]bool{}}
 }
 
 // Repository reads the Repository at a Workspace folder ("" for none). Only
@@ -105,7 +123,8 @@ func (s *Service) Repository(ctx context.Context, folder string) (Repository, er
 	}
 	branch, _ := worktree.Git(ctx, real, "symbolic-ref", "--short", "-q", "HEAD")
 	r := Repository{Kind: Local, Folder: folder, BaseBranch: branch}
-	origin, err := worktree.Git(ctx, real, "remote", "get-url", "origin")
+	// origin as configured: get-url would apply insteadOf rewrites.
+	origin, err := worktree.Git(ctx, real, "config", "--get", "remote.origin.url")
 	if err != nil || origin == "" {
 		return r, nil
 	}

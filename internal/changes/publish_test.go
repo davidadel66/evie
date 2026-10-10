@@ -1,0 +1,243 @@
+package changes_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/davidadel66/evie/internal/changes"
+	"github.com/davidadel66/evie/internal/github"
+)
+
+// changes.spec.md story 2a: a local Repository is published to GitHub from
+// Settings: a new repository on the owner's account, origin set, and only
+// the base branch pushed. The token never reaches git config, the remote
+// URL or any output.
+
+const token = "ghp_publishsecret"
+
+// fakeGitHub answers as the token's owner and creates each repository as a
+// bare repository on disk. Its clone URLs are real github.com URLs; a
+// test-only global git config rewrites each one to its bare repository, and
+// every other github.com URL to a path that does not exist, so no test
+// reaches the real GitHub.
+type fakeGitHub struct {
+	t       *testing.T
+	root    string
+	config  string
+	mu      sync.Mutex
+	created map[string]map[string]any
+	// unpushable creates repositories without their bare repository, so a
+	// push to one fails until the test makes it.
+	unpushable bool
+}
+
+func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
+	f := &fakeGitHub{t: t, root: t.TempDir(), created: map[string]map[string]any{}}
+	f.config = filepath.Join(f.root, "gitconfig")
+	f.rewrite("https://github.com/", filepath.Join(f.root, "no-network")+"/")
+	t.Setenv("GIT_CONFIG_GLOBAL", f.config)
+	server := httptest.NewServer(http.HandlerFunc(f.serve))
+	t.Cleanup(server.Close)
+	return f, server
+}
+
+func (f *fakeGitHub) rewrite(from, to string) {
+	file, err := os.OpenFile(f.config, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	defer file.Close()
+	if _, err := file.WriteString("[url \"" + to + "\"]\n\tinsteadOf = " + from + "\n"); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+func (f *fakeGitHub) bare(name string) string { return filepath.Join(f.root, name+".git") }
+
+func cloneURL(name string) string { return "https://github.com/davidadel66/" + name + ".git" }
+
+func (f *fakeGitHub) repo(name string, private bool) map[string]any {
+	return map[string]any{"name": name, "full_name": "davidadel66/" + name, "private": private, "default_branch": "main",
+		"html_url": "https://github.com/davidadel66/" + name, "clone_url": cloneURL(name), "owner": map[string]any{"login": "davidadel66"}}
+}
+
+func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r.Header.Get("Authorization") != "Bearer "+token {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	switch {
+	case r.URL.Path == "/user":
+		w.Write([]byte(`{"login":"davidadel66"}`))
+	case r.Method == http.MethodPost && r.URL.Path == "/user/repos":
+		var body struct {
+			Name     string `json:"name"`
+			Private  bool   `json:"private"`
+			AutoInit bool   `json:"auto_init"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		if _, taken := f.created[body.Name]; taken || body.Name == "taken" {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			w.Write([]byte(`{"message":"Repository creation failed.","errors":[{"message":"name already exists on this account"}]}`))
+			return
+		}
+		if !f.unpushable {
+			gitIn(f.t, f.root, "init", "-q", "--bare", "-b", "main", f.bare(body.Name))
+		}
+		f.rewrite(cloneURL(body.Name), f.bare(body.Name))
+		repo := f.repo(body.Name, body.Private)
+		repo["auto_init"] = body.AutoInit
+		f.created[body.Name] = repo
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(repo)
+	case strings.HasPrefix(r.URL.Path, "/repos/davidadel66/"):
+		name := strings.TrimPrefix(r.URL.Path, "/repos/davidadel66/")
+		if repo, ok := f.created[name]; ok {
+			json.NewEncoder(w).Encode(repo)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
+}
+
+func publishService(server *httptest.Server) *changes.Service {
+	return changes.NewService(changes.Config{GitHub: github.New(server.URL, token, server.Client()), Token: token, AllowFileRemotes: true})
+}
+
+func refs(t *testing.T, bare string) string {
+	t.Helper()
+	cmd := exec.Command("git", "for-each-ref", "--format=%(refname) %(objectname)")
+	cmd.Dir = bare
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("refs: %v", err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func head(t *testing.T, repo, ref string) string {
+	t.Helper()
+	cmd := exec.Command("git", "rev-parse", ref)
+	cmd.Dir = repo
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("rev-parse %s: %v", ref, err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func noToken(t *testing.T, repo string, texts ...string) {
+	t.Helper()
+	config, err := os.ReadFile(filepath.Join(repo, ".git", "config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range append(texts, string(config)) {
+		if strings.Contains(text, token) || strings.Contains(strings.ToLower(text), "extraheader") {
+			t.Fatalf("the token reached %q", text)
+		}
+	}
+}
+
+func TestPublishCreatesTheRepositorySetsOriginAndPushesOnlyTheBaseBranch(t *testing.T) {
+	ctx := context.Background()
+	fake, server := newFakeGitHub(t)
+	repo := repository(t, "main")
+	gitIn(t, repo, "branch", "experiment")
+	r, err := publishService(server).Publish(ctx, changes.Publish{Folder: repo, Name: "notes", Private: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := fake.created["notes"]
+	if created == nil || created["private"] != true || created["auto_init"] != false {
+		t.Fatalf("created = %v", created)
+	}
+	if r.Kind != changes.GitHub || r.Owner != "davidadel66" || r.Name != "notes" || r.RemoteURL != cloneURL("notes") ||
+		r.GitHub == nil || r.GitHub.State != changes.Connected || r.GitHub.Private == nil || !*r.GitHub.Private {
+		t.Fatalf("published = %+v %+v", r, r.GitHub)
+	}
+	if got, want := refs(t, fake.bare("notes")), "refs/heads/main "+head(t, repo, "main"); got != want {
+		t.Fatalf("pushed %q, want only %q", got, want)
+	}
+	noToken(t, repo, r.RemoteURL)
+}
+
+func TestPublishRefusesWhatItCannotPublish(t *testing.T) {
+	ctx := context.Background()
+	fake, server := newFakeGitHub(t)
+	service := publishService(server)
+
+	plain := t.TempDir()
+	if _, err := service.Publish(ctx, changes.Publish{Folder: plain, Name: "x", Private: true}); !errors.Is(err, changes.ErrNotPublishable) {
+		t.Fatalf("not a repository: %v", err)
+	}
+	elsewhere := repository(t, "main")
+	gitIn(t, elsewhere, "remote", "add", "origin", "https://gitlab.com/someone/notes.git")
+	if _, err := service.Publish(ctx, changes.Publish{Folder: elsewhere, Name: "notes", Private: true}); !errors.Is(err, changes.ErrNotPublishable) || !strings.Contains(err.Error(), "gitlab.com") {
+		t.Fatalf("origin elsewhere: %v", err)
+	}
+	repo := repository(t, "main")
+	if _, err := service.Publish(ctx, changes.Publish{Folder: repo, Name: "../user", Private: true}); !errors.Is(err, github.ErrInvalidName) {
+		t.Fatalf("invalid name: %v", err)
+	}
+	if _, err := service.Publish(ctx, changes.Publish{Folder: repo, Name: "taken", Private: true}); !errors.Is(err, github.ErrUnprocessable) || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("taken: %v", err)
+	}
+	if _, err := changes.NewService(changes.Config{}).Publish(ctx, changes.Publish{Folder: repo, Name: "notes", Private: true}); !errors.Is(err, changes.ErrNoToken) {
+		t.Fatalf("no token: %v", err)
+	}
+	detached := repository(t, "main")
+	gitIn(t, detached, "checkout", "-q", "--detach")
+	if _, err := service.Publish(ctx, changes.Publish{Folder: detached, Name: "detached", Private: true}); !errors.Is(err, changes.ErrNotPublishable) {
+		t.Fatalf("detached HEAD: %v", err)
+	}
+	// A refused publish leaves the folder as it was.
+	if r, _ := service.Repository(ctx, repo); r.Kind != changes.Local || r.RemoteURL != "" {
+		t.Fatalf("after refusals = %+v", r)
+	}
+	if len(fake.created) != 0 {
+		t.Fatalf("refusals created %v", fake.created)
+	}
+}
+
+func TestAPublishWhosePushFailedIsRetriedWithoutASecondRepository(t *testing.T) {
+	ctx := context.Background()
+	fake, server := newFakeGitHub(t)
+	service := publishService(server)
+	repo := repository(t, "main")
+	fake.unpushable = true
+	_, err := service.Publish(ctx, changes.Publish{Folder: repo, Name: "notes", Private: true})
+	if !errors.Is(err, changes.ErrPushFailed) || !strings.Contains(err.Error(), "https://github.com/davidadel66/notes") {
+		t.Fatalf("failed push: %v", err)
+	}
+	noToken(t, repo, err.Error())
+	// GitHub now has the repository and origin points at it; publishing
+	// again pushes to it instead of creating another.
+	if r, _ := service.Repository(ctx, repo); r.Kind != changes.GitHub || r.RemoteURL != cloneURL("notes") {
+		t.Fatalf("after the failed push = %+v", r)
+	}
+	gitIn(t, fake.root, "init", "-q", "--bare", "-b", "main", fake.bare("notes"))
+	r, err := service.Publish(ctx, changes.Publish{Folder: repo, Name: "notes", Private: true})
+	if err != nil || r.Name != "notes" {
+		t.Fatalf("retry = %+v, %v", r, err)
+	}
+	if got, want := refs(t, fake.bare("notes")), "refs/heads/main "+head(t, repo, "main"); got != want {
+		t.Fatalf("retried push %q, want %q", got, want)
+	}
+	if len(fake.created) != 1 {
+		t.Fatalf("created %d repositories", len(fake.created))
+	}
+}

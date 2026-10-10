@@ -41,7 +41,7 @@ func repository(t *testing.T, branch string) string {
 
 func TestRepositoryIsNoneWithoutAGitFolderAtItsTop(t *testing.T) {
 	ctx := context.Background()
-	service := changes.NewService(nil)
+	service := changes.NewService(changes.Config{})
 	if r, err := service.Repository(ctx, ""); err != nil || r.Kind != changes.None || !strings.Contains(r.Problem, "no folder") {
 		t.Fatalf("no folder = %+v, %v", r, err)
 	}
@@ -61,7 +61,7 @@ func TestRepositoryIsNoneWithoutAGitFolderAtItsTop(t *testing.T) {
 
 func TestRepositoryIsLocalWithoutAGitHubOrigin(t *testing.T) {
 	ctx := context.Background()
-	service := changes.NewService(nil)
+	service := changes.NewService(changes.Config{})
 	repo := repository(t, "main")
 	r, err := service.Repository(ctx, repo)
 	if err != nil || r.Kind != changes.Local || r.BaseBranch != "main" || r.Folder != repo || r.GitHub != nil {
@@ -75,7 +75,7 @@ func TestRepositoryIsLocalWithoutAGitHubOrigin(t *testing.T) {
 
 func TestRepositoryReadsEveryGitHubOriginForm(t *testing.T) {
 	ctx := context.Background()
-	service := changes.NewService(nil)
+	service := changes.NewService(changes.Config{})
 	for _, origin := range []string{
 		"https://github.com/davidadel66/evie.git",
 		"https://github.com/davidadel66/evie",
@@ -106,7 +106,7 @@ func TestRepositoryReadsEveryGitHubOriginForm(t *testing.T) {
 func TestRepositoryNeverEchoesCredentialsInItsOrigin(t *testing.T) {
 	repo := repository(t, "main")
 	gitIn(t, repo, "remote", "add", "origin", "https://x-access-token:ghp_secret@github.com/davidadel66/evie.git")
-	r, err := changes.NewService(nil).Repository(context.Background(), repo)
+	r, err := changes.NewService(changes.Config{}).Repository(context.Background(), repo)
 	if err != nil || r.Kind != changes.GitHub || r.Owner != "davidadel66" || r.Name != "evie" {
 		t.Fatalf("repository = %+v, %v", r, err)
 	}
@@ -135,7 +135,7 @@ func TestRepositoryChecksTheTokenAgainstGitHub(t *testing.T) {
 	gitIn(t, repo, "remote", "add", "origin", "git@github.com:davidadel66/evie.git")
 	check := func(token string) changes.Repository {
 		t.Helper()
-		r, err := changes.NewService(github.New(server.URL, token, server.Client())).Repository(ctx, repo)
+		r, err := changes.NewService(changes.Config{GitHub: github.New(server.URL, token, server.Client())}).Repository(ctx, repo)
 		if err != nil || r.Kind != changes.GitHub || r.GitHub == nil {
 			t.Fatalf("%s: %+v, %v", token, r, err)
 		}
@@ -154,5 +154,32 @@ func TestRepositoryChecksTheTokenAgainstGitHub(t *testing.T) {
 	server.Close()
 	if r := check("good"); r.GitHub.State != changes.Unreachable || r.BaseBranch != "master" {
 		t.Fatalf("unreachable = %+v %+v", r, r.GitHub)
+	}
+}
+
+func TestAccountReportsTheTokenAlone(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer good" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Write([]byte(`{"login":"davidadel66"}`))
+	}))
+	ctx := context.Background()
+	account := func(token string) changes.GitHubStatus {
+		return changes.NewService(changes.Config{GitHub: github.New(server.URL, token, server.Client()), Token: token}).Account(ctx)
+	}
+	if s := account("good"); s.State != changes.Connected || s.Login != "davidadel66" {
+		t.Fatalf("good = %+v", s)
+	}
+	if s := account("bad"); s.State != changes.InvalidToken {
+		t.Fatalf("bad = %+v", s)
+	}
+	if s := changes.NewService(changes.Config{}).Account(ctx); s.State != changes.NoToken || !strings.Contains(s.Message, "GITHUB_TOKEN") {
+		t.Fatalf("none = %+v", s)
+	}
+	server.Close()
+	if s := account("good"); s.State != changes.Unreachable {
+		t.Fatalf("unreachable = %+v", s)
 	}
 }

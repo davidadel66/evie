@@ -468,12 +468,12 @@ func contextFallbackWarning(d openrouter.ContextProfileDiagnostics) string {
 
 // repositoryReader reads Workspace Repositories for Settings → Repository
 // (changes.spec.md). GitHub is consulted only when GITHUB_TOKEN is set,
-// from the environment or ~/.evie/.env; the token goes no further than the
-// GitHub client.
+// from the environment or ~/.evie/.env; the token goes only to the GitHub
+// client and, as a per-command header, to git commands that reach GitHub.
 func repositoryReader() *changes.Service {
 	token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
 	if token == "" {
-		return changes.NewService(nil)
+		return changes.NewService(changes.Config{})
 	}
-	return changes.NewService(github.New(github.API, token, nil))
+	return changes.NewService(changes.Config{GitHub: github.New(github.API, token, nil), Token: token})
 }
