@@ -301,6 +301,32 @@ keeps the owner's checkout current without touching work in progress.
     "N commits behind", shown in Settings → Repository and the Changes tab.
 - Close asks for confirmation. On GitHub it closes the pull request. It
   removes Evie's branch and worktree, and never the owner's branch.
+- Story 5 decisions (2026-10-10):
+  - The CLI and routes name a Change by the ID the list shows:
+    `build:<branch>` or `pr:<number>`.
+  - Merging a local draft runs the whole gate first (verify, rebase,
+    verify) into the target its gate last aimed at, or the branch it was
+    built from, and merges only if it passes. An open local Change whose
+    branch and target are where the gate verified them merges at once.
+    Either way it is the same merge as an approved chat card.
+  - The owner's merge needs no chat. It checks that the build is the
+    Workspace's own: a chat's, or a finished Workflow Run's. A gate step
+    the owner runs from the CLI holds a claim for twice the verify limit
+    plus ten minutes. `evie serve`'s recovery leaves it alone until then,
+    as it waits for a live chat turn.
+  - Closing needs `--yes` in the CLI and `"confirm": true` on the route.
+    It removes Evie's worktree with any uncommitted edits in it, and its
+    branch.
+  - Story 5b:
+    - "Merge when checks pass" cannot be set while the pull request has
+      no checks. It merges once at least one check exists and every check
+      has finished without failing.
+    - It stays set across new commits and waits for the new head's checks.
+    - Merging it, a failing check clearing it, and a conflict each leave
+      a notification.
+    - "N commits behind" is read from git each time it is shown.
+    - Merging now neither waits for nor requires checks; GitHub's branch
+      protection still applies.
 
 ### Surfaces
 
@@ -402,7 +428,10 @@ Each story is independently demonstrable and ends with
        shows no chat card.
    - Depends on 3.
    - Risk: token handling, so tests assert its absence everywhere.
-5. **Merge and close.**
+5. **Merge and close.** Split on 2026-10-10 into 5a (local Repositories:
+   the owner's merge through the gate, close, `evie changes merge|close`
+   and their routes) and 5b (GitHub: rebase merge, close, "Merge when
+   checks pass", cleanup after merges, and the owner's base branch).
    - Outcome: `evie changes merge|close` and the web routes merge (local
      fast-forward or GitHub rebase merge), arm and disarm "Merge when
      checks pass", close, clean up, and bring the owner's base branch up

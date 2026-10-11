@@ -58,10 +58,12 @@ func TestChangesListCommandPrintsTheWorkspaceChanges(t *testing.T) {
 		id, workers.ID, "key", "digest", child.ID, attempt.State, string(record)); err != nil {
 		t.Fatal(err)
 	}
+	gate := &cliGate{}
 	run := func(args ...string) (string, error) {
 		t.Helper()
 		var out bytes.Buffer
-		handled, err := runChangeManagement(ctx, args, &out, store, func() *changes.Service { return changes.NewService(changes.Config{}) }, func(string) string { return "" })
+		handled, err := runChangeManagement(ctx, args, &out, changeCommands{store: store, repositories: func() *changes.Service { return changes.NewService(changes.Config{}) },
+			getenv: func(string) string { return "" }, gate: func() (changes.BuildGate, error) { return gate, nil }})
 		if !handled {
 			t.Fatalf("%q was not handled", args)
 		}
@@ -94,13 +96,38 @@ func TestChangesListCommandPrintsTheWorkspaceChanges(t *testing.T) {
 	if out, err := run("changes", "push", "missing", attempt.Worktree.Branch); err == nil || !strings.Contains(err.Error(), "no Workspace") {
 		t.Fatalf("push to an unknown Workspace = %s %v", out, err)
 	}
-	for _, args := range [][]string{{"changes"}, {"changes", "list"}, {"changes", "push", string(w.ID)}, {"changes", "push", string(w.ID), ""}} {
+	// Story 5a: merge and close by the ID the list shows, through the merge
+	// gate; closing discards the branch, so it needs --yes.
+	changeID := "build:" + attempt.Worktree.Branch
+	if out, err := run("changes", "merge", string(w.ID), changeID); err != nil || !strings.Contains(out, `"status": "merged"`) || len(gate.merged) != 1 || gate.merged[0] != string(w.ID)+" "+id {
+		t.Fatalf("merge = %s %v; gate %v", out, err, gate.merged)
+	}
+	if _, err := run("changes", "close", string(w.ID), changeID); err == nil || !strings.Contains(err.Error(), "--yes") || len(gate.closed) != 0 {
+		t.Fatalf("close without --yes = %v; gate %v", err, gate.closed)
+	}
+	if out, err := run("changes", "close", string(w.ID), changeID, "--yes"); err != nil || len(gate.closed) != 1 || !strings.Contains(out, changeID) {
+		t.Fatalf("close = %s %v; gate %v", out, err, gate.closed)
+	}
+	for _, args := range [][]string{{"changes"}, {"changes", "list"}, {"changes", "push", string(w.ID)}, {"changes", "push", string(w.ID), ""}, {"changes", "merge", string(w.ID)}, {"changes", "close", string(w.ID), changeID, "--force"}} {
 		if _, err := run(args...); err == nil || !strings.Contains(err.Error(), "usage: evie changes") {
 			t.Fatalf("%q = %v", args, err)
 		}
 	}
 	var out2 bytes.Buffer
-	if handled, _ := runChangeManagement(ctx, []string{"worktrees", "list"}, &out2, store, nil, nil); handled {
+	if handled, _ := runChangeManagement(ctx, []string{"worktrees", "list"}, &out2, changeCommands{store: store}); handled {
 		t.Fatal("another command was handled")
 	}
+}
+
+// cliGate stands in for the Kernel's merge gate.
+type cliGate struct{ merged, closed []string }
+
+func (g *cliGate) MergeAsOwner(_ context.Context, ws memory.WorkspaceID, execution string) (delegation.MergeProposal, error) {
+	g.merged = append(g.merged, string(ws)+" "+execution)
+	return delegation.MergeProposal{ExecutionID: execution, Status: delegation.MergeMerged, Merged: &delegation.GateMerge{Target: "main"}}, nil
+}
+
+func (g *cliGate) CloseAsOwner(_ context.Context, ws memory.WorkspaceID, execution string) error {
+	g.closed = append(g.closed, string(ws)+" "+execution)
+	return nil
 }

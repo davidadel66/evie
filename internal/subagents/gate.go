@@ -203,6 +203,55 @@ func stripOutputs(runs []delegation.GateRun) []delegation.GateRun {
 // title and description of the Change, is recorded with the proposal once
 // verification starts; text that names a local folder is refused first.
 func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent, executionID, target string, text delegation.ChangeText) (delegation.MergeProposal, error) {
+	return s.proposeMerge(ctx, s.chatActor(parent), executionID, target, text)
+}
+
+// gateActor is who runs the gate: a chat's parent turn through
+// propose_build_merge and its approval card (Stage 12), or the owner from
+// Changes or the CLI (changes.spec.md story 5a). The gate and the merge are
+// the same for both; only the authorization and the step's owner differ.
+type gateActor struct {
+	scope     memory.ScopeContext
+	prepare   func(ctx context.Context, id string) (delegation.Attempt, memory.BuildVerify, error)
+	authorize func(ctx context.Context, id string) (delegation.Attempt, error)
+	owner     func() *delegation.GateOwner
+}
+
+func (s *Supervisor) chatActor(parent delegation.Parent) gateActor {
+	return gateActor{scope: parent.Scope,
+		prepare: func(ctx context.Context, id string) (delegation.Attempt, memory.BuildVerify, error) {
+			return s.store.PrepareBuildGate(ctx, parent, id)
+		},
+		authorize: func(ctx context.Context, id string) (delegation.Attempt, error) {
+			return s.store.AuthorizeBuildGate(ctx, parent, id)
+		},
+		owner: func() *delegation.GateOwner { return gateOwner(parent) },
+	}
+}
+
+// ownerActor is the owner acting on Workspace ws's builds, possibly from
+// another process than evie serve: each step holds a claim recovery
+// respects for as long as the rest of the gate can take.
+func (s *Supervisor) ownerActor(ws memory.WorkspaceID) gateActor {
+	return gateActor{scope: memory.ScopeContext{WorkspaceID: ws},
+		prepare: func(ctx context.Context, id string) (delegation.Attempt, memory.BuildVerify, error) {
+			return s.store.PrepareOwnerBuildGate(ctx, ws, id)
+		},
+		authorize: func(ctx context.Context, id string) (delegation.Attempt, error) {
+			return s.store.AuthorizeOwnerBuildGate(ctx, ws, id)
+		},
+		owner: func() *delegation.GateOwner {
+			until := s.now().UTC().Add(2*s.verifyTimeout + ownerGateMargin)
+			return &delegation.GateOwner{Until: &until}
+		},
+	}
+}
+
+// ownerGateMargin is how long an owner's claim on a gate step outlasts
+// its two verify runs: the rebase, the merge and cleanup.
+const ownerGateMargin = 10 * time.Minute
+
+func (s *Supervisor) proposeMerge(ctx context.Context, actor gateActor, executionID, target string, text delegation.ChangeText) (delegation.MergeProposal, error) {
 	executionID, target = strings.TrimSpace(executionID), strings.TrimSpace(target)
 	if executionID == "" {
 		return delegation.MergeProposal{}, errors.New("invalid propose_build_merge arguments: execution_id is blank; use the execution_id of a build result from this conversation")
@@ -214,17 +263,17 @@ func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent,
 		return delegation.MergeProposal{}, fmt.Errorf("invalid propose_build_merge arguments: %w", err)
 	}
 	text.Title, text.Description = strings.TrimSpace(text.Title), strings.TrimSpace(text.Description)
-	a, commands, err := s.store.PrepareBuildGate(ctx, parent, executionID)
+	a, commands, err := actor.prepare(ctx, executionID)
 	if err != nil {
 		return delegation.MergeProposal{}, err
 	}
-	if a.Gate != nil && delegation.GateInProgress(a.Gate.Step) && !s.gateActive(a.ID) {
+	if a.Gate != nil && delegation.GateInProgress(a.Gate.Step) && !s.gateActive(a.ID) && !claimed(a.Gate, s.now()) {
 		// An earlier gate step was cut off and no gate of this process runs
 		// it: settle it first, as recovery would.
 		if err := s.recoverGate(ctx, a); err != nil {
 			return delegation.MergeProposal{}, err
 		}
-		if a, commands, err = s.store.PrepareBuildGate(ctx, parent, executionID); err != nil {
+		if a, commands, err = actor.prepare(ctx, executionID); err != nil {
 			return delegation.MergeProposal{}, err
 		}
 	}
@@ -238,7 +287,7 @@ func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent,
 		return p, refuse(p, "the title or description names the local folder %s; it becomes the pull request's text on GitHub, so name files by their path in the repository and propose again", path)
 	}
 	if strings.TrimSpace(commands.Verify) == "" {
-		return p, refuse(p, "%s", noVerifyCommand(parent, w.Repo))
+		return p, refuse(p, "%s", noVerifyCommand(actor.scope, w.Repo))
 	}
 	if err := s.beginGate(a.ID); err != nil {
 		return p, refuse(p, "%v", err)
@@ -282,7 +331,7 @@ func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent,
 			p.Notes = append(p.Notes, fmt.Sprintf("%s moved after the last verification; the gate rebases onto its current head and verifies again.", moved.NeedsRebase.Target))
 		}
 	}
-	owner := gateOwner(parent)
+	owner := actor.owner()
 	p.TargetHead, p.BranchHead = targetHead, branchHead
 
 	// 1. Verify the branch as the worker left it.
@@ -312,8 +361,8 @@ func (s *Supervisor) ProposeMerge(ctx context.Context, parent delegation.Parent,
 		p.Status = delegation.MergeVerifyFailed
 		return p, s.gateFailure(ctx, a.ID, delegation.GateVerifyFailed, fmt.Sprintf("The verify command changed %d tracked file(s) in the worktree, so the gate stopped before rebasing; nothing was merged. A check should not modify the code it checks: ask the owner to fix the command, or continue the worker so the harness commits those changes with its work.", len(changed)), p)
 	}
-	if _, err := s.store.AuthorizeBuildGate(ctx, parent, a.ID); err != nil {
-		return p, s.gateFailure(ctx, a.ID, delegation.GateInterrupted, "the parent's authority ended during verification", p)
+	if _, err := actor.authorize(ctx, a.ID); err != nil {
+		return p, s.gateFailure(ctx, a.ID, delegation.GateInterrupted, "the authority to merge ended during verification", p)
 	}
 	if targetHead, err = worktree.TargetHead(ctx, w.Repo, target); err != nil {
 		return p, s.gateFailure(ctx, a.ID, delegation.GateRefused, err.Error(), p)
@@ -417,12 +466,12 @@ func verifyProblem(run delegation.GateRun, what string) string {
 // noVerifyCommand refuses a proposal for a scope without a verify command,
 // naming how the owner sets one and what the repository's instructions
 // suggest. Evie never sets it itself.
-func noVerifyCommand(parent delegation.Parent, repo string) string {
-	how := "the owner sets one with `evie workspaces verify " + string(parent.Scope.WorkspaceID) + " --verify '<command>'` or in the Workspace's settings"
-	if parent.Scope.WorkspaceID == "" {
-		how = "the owner sets one with `evie projects verify " + string(parent.Scope.ProjectID) + " --verify '<command>'`"
+func noVerifyCommand(scope memory.ScopeContext, repo string) string {
+	how := "the owner sets one with `evie workspaces verify " + string(scope.WorkspaceID) + " --verify '<command>'` or in the Workspace's settings"
+	if scope.WorkspaceID == "" {
+		how = "the owner sets one with `evie projects verify " + string(scope.ProjectID) + " --verify '<command>'`"
 	}
-	message := "No verify command is set for this " + scopeNoun(parent.Scope) + ", so Evie cannot propose a merge: " + how + ". Evie never sets it itself."
+	message := "No verify command is set for this " + scopeNoun(scope) + ", so Evie cannot propose a merge: " + how + ". Evie never sets it itself."
 	if proposal := worktree.ProposeCommands(repo); proposal.Verify != "" {
 		message += fmt.Sprintf(" The repository's %s suggests verify `%s`", proposal.VerifySource, proposal.Verify)
 		if proposal.Setup != "" {
@@ -505,9 +554,13 @@ func commandPaths(command string) []string {
 // and branch are removed, and other build branches waiting on the target
 // learn that it moved.
 func (s *Supervisor) Merge(ctx context.Context, parent delegation.Parent, approved delegation.MergeProposal) (delegation.MergeProposal, error) {
+	return s.merge(ctx, s.chatActor(parent), approved)
+}
+
+func (s *Supervisor) merge(ctx context.Context, actor gateActor, approved delegation.MergeProposal) (delegation.MergeProposal, error) {
 	p := approved
 	p.Outputs = nil
-	a, err := s.store.AuthorizeBuildGate(ctx, parent, approved.ExecutionID)
+	a, err := actor.authorize(ctx, approved.ExecutionID)
 	if err != nil {
 		return p, err
 	}
@@ -532,7 +585,7 @@ func (s *Supervisor) Merge(ctx context.Context, parent delegation.Parent, approv
 		return p, s.targetMoved(ctx, a, p, current)
 	}
 	if _, err := s.store.RecordBuildGate(ctx, a.ID, func(g *delegation.BuildGate) {
-		g.Step, g.Owner, g.Problem = delegation.GateMerging, gateOwner(parent), ""
+		g.Step, g.Owner, g.Problem = delegation.GateMerging, actor.owner(), ""
 	}); err != nil {
 		return p, err
 	}
@@ -549,6 +602,79 @@ func (s *Supervisor) Merge(ctx context.Context, parent delegation.Parent, approv
 		return p, s.gateFailure(ctx, a.ID, delegation.GateRefused, "the merge failed: "+gateWords(err), p)
 	}
 	return s.completeMerge(context.WithoutCancel(ctx), a, p, delegation.GateMerge{Target: approved.Target, From: approved.TargetHead, To: approved.BranchHead, Where: where, At: s.now().UTC()})
+}
+
+// MergeAsOwner merges build execution id of Workspace ws for the owner,
+// from Changes or the CLI (changes.spec.md story 5a). A Change whose gate
+// passed, with its branch and target where the gate verified them, merges
+// at once, by the same merge as an approved chat card; any other runs the
+// whole gate first (verify, rebase, verify) into the target it last aimed
+// at, or the branch it was built from, and merges only if it passes.
+func (s *Supervisor) MergeAsOwner(ctx context.Context, ws memory.WorkspaceID, id string) (delegation.MergeProposal, error) {
+	actor := s.ownerActor(ws)
+	a, err := actor.authorize(ctx, id)
+	if err != nil {
+		return delegation.MergeProposal{ExecutionID: id}, err
+	}
+	if p, ok := passedProposal(ctx, a); ok {
+		return s.merge(ctx, actor, p)
+	}
+	target := ""
+	if a.Gate != nil {
+		target = a.Gate.Target
+	}
+	p, err := s.proposeMerge(ctx, actor, id, target, delegation.ChangeText{})
+	if err != nil {
+		return p, err
+	}
+	return s.merge(ctx, actor, p)
+}
+
+// passedProposal is the proposal a's gate passed and still awaits, when
+// its branch and target are where the gate verified them.
+func passedProposal(ctx context.Context, a delegation.Attempt) (delegation.MergeProposal, bool) {
+	g, w := a.Gate, *a.Worktree
+	if g == nil || g.Step != delegation.GateAwaiting {
+		return delegation.MergeProposal{}, false
+	}
+	target, err := worktree.TargetHead(ctx, w.Repo, g.Target)
+	if err != nil || target != g.TargetHead {
+		return delegation.MergeProposal{}, false
+	}
+	branch, err := worktree.BranchHead(ctx, w)
+	if err != nil || branch != g.BranchHead {
+		return delegation.MergeProposal{}, false
+	}
+	return delegation.MergeProposal{ExecutionID: a.ID, Status: delegation.MergeReady, Branch: w.Branch, Repo: w.Repo, Target: g.Target,
+		TargetHead: g.TargetHead, BranchHead: g.BranchHead, Rebased: g.Rebased, Verification: g.Runs}, true
+}
+
+// CloseAsOwner closes build execution id of Workspace ws for the owner
+// (story 5a): its worktree and its branch, which are Evie's, are removed,
+// uncommitted edits in the worktree with them, and nothing is merged. The
+// owner's branches and checkout are never touched.
+func (s *Supervisor) CloseAsOwner(ctx context.Context, ws memory.WorkspaceID, id string) error {
+	a, err := s.store.AuthorizeOwnerBuildGate(ctx, ws, id)
+	if err != nil {
+		return err
+	}
+	if err := s.beginGate(a.ID); err != nil {
+		return err
+	}
+	defer s.endGate(a.ID)
+	if a.Gate != nil && delegation.GateInProgress(a.Gate.Step) {
+		return fmt.Errorf("execution %q is in the merge gate (%s); close it once that step ends", id, a.Gate.Step)
+	}
+	if err := worktree.Remove(ctx, *a.Worktree, true); err != nil {
+		return fmt.Errorf("remove the worktree and branch %s: %w", a.Worktree.Branch, err)
+	}
+	return s.store.MarkBuildWorktreeRemoved(context.WithoutCancel(ctx), a.ID)
+}
+
+// claimed reports whether g's in-progress step is the owner's, from
+// another process, whose claim has not ended.
+func claimed(g *delegation.BuildGate, now time.Time) bool {
+	return g.Owner != nil && g.Owner.Until != nil && now.Before(*g.Owner.Until)
 }
 
 // targetMoved records that the target moved between verification and the

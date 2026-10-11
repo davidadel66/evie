@@ -144,7 +144,16 @@ func main() {
 		}
 		return
 	}
-	if handled, err := runChangeManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore, repositoryReader, os.Getenv); handled {
+	if handled, err := runChangeManagement(context.Background(), os.Args[1:], os.Stdout, changeCommands{store: kernelStore, repositories: repositoryReader, getenv: os.Getenv,
+		gate: func() (changes.BuildGate, error) {
+			// The owner's merge gate runs in this process; evie serve's
+			// recovery leaves its steps alone while they run.
+			policy, err := configuredSubagentPolicy(os.Getenv)
+			if err != nil {
+				return nil, err
+			}
+			return subagents.New(kernelStore, policy)
+		}}); handled {
 		if err != nil {
 			log.Fatalf("changes: %v", err)
 		}
@@ -406,7 +415,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopMemory := startMemoryForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), &changes.Merger{Lister: changeLister(repositories, kernelStore), Gate: supervisor}))
 			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -454,7 +463,7 @@ func main() {
 				agent.WithCompactionMemoryFlush(memoryBackground.runner)), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), &changes.Merger{Lister: changeLister(repositories, kernelStore), Gate: supervisor}))
 		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)

@@ -98,6 +98,7 @@ type Server struct {
 	repositories      Repositories
 	changeLister      ChangeLister
 	changePusher      ChangePusher
+	changeMerger      ChangeMerger
 	terminalMu        sync.Mutex
 	terminals         map[string]*terminalEntry
 	terminalsClosed   bool
@@ -266,6 +267,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerRepositoryRoutes(mux)
 	s.registerChangeRoutes(mux)
 	s.registerChangePushRoutes(mux)
+	s.registerChangeMergeRoutes(mux)
 	mux.Handle("/", s.staticHandler())
 	return mux
 }

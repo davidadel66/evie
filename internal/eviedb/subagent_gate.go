@@ -145,29 +145,91 @@ func (s *Store) authorizeBuildGate(ctx context.Context, conn *sql.Conn, p delega
 	if err != nil {
 		return a, err
 	}
+	return a, checkGateAttempt(ctx, conn, a, id, a.Parent.Scope)
+}
+
+// PrepareOwnerBuildGate authorizes the owner's own merge of build
+// execution id from Changes or the CLI (changes.spec.md story 5a). No chat
+// turn is involved, so it checks the attempt alone: a build of Workspace
+// ws, delegated by one of its chats or run by one of its finished Workflow
+// Runs, finished, its child's latest, not merged, with its worktree in the
+// Workspace's current folder. It returns the attempt and the Workspace's
+// commands.
+func (s *Store) PrepareOwnerBuildGate(ctx context.Context, ws memory.WorkspaceID, id string) (delegation.Attempt, memory.BuildVerify, error) {
+	var a delegation.Attempt
+	var verify memory.BuildVerify
+	err := s.withSubagentReadTransaction(ctx, func(conn *sql.Conn) error {
+		var err error
+		if a, err = authorizeOwnerBuildGate(ctx, conn, ws, id); err != nil {
+			return err
+		}
+		verify, err = buildVerify(ctx, conn, verifyScopeWorkspace, string(ws))
+		return err
+	})
+	return a, verify, err
+}
+
+// AuthorizeOwnerBuildGate repeats PrepareOwnerBuildGate's checks before
+// each gate step that changes something, without reading the commands.
+func (s *Store) AuthorizeOwnerBuildGate(ctx context.Context, ws memory.WorkspaceID, id string) (delegation.Attempt, error) {
+	var a delegation.Attempt
+	err := s.withSubagentReadTransaction(ctx, func(conn *sql.Conn) error {
+		var err error
+		a, err = authorizeOwnerBuildGate(ctx, conn, ws, id)
+		return err
+	})
+	return a, err
+}
+
+func authorizeOwnerBuildGate(ctx context.Context, conn *sql.Conn, ws memory.WorkspaceID, id string) (delegation.Attempt, error) {
+	a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE id=?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return a, fmt.Errorf("%w: %q", delegation.ErrNotFound, id)
+	}
+	if err != nil {
+		return a, err
+	}
+	switch {
+	case ws == "":
+		return a, fmt.Errorf("%w: %q", delegation.ErrNotFound, id)
+	case a.Run != nil && a.Run.WorkspaceID == ws:
+		var state WorkflowRunState
+		if err := conn.QueryRowContext(ctx, `SELECT state FROM workflow_runs WHERE id=?`, a.Run.RunID).Scan(&state); err != nil {
+			return a, err
+		}
+		if !state.Terminal() {
+			return a, fmt.Errorf("execution %q is a build of workflow run %s, which is still %s; its branch can be merged once the run has finished", id, a.Run.RunID, state)
+		}
+	case a.Run == nil && a.Parent.Scope.WorkspaceID == ws:
+	default:
+		return a, fmt.Errorf("%w: %q is not a build of this Workspace's", delegation.ErrNotFound, id)
+	}
+	return a, checkGateAttempt(ctx, conn, a, id, memory.ScopeContext{WorkspaceID: ws})
+}
+
+// checkGateAttempt requires attempt a to be a finished build, its child's
+// latest attempt, not merged, with its worktree in scope's current folder.
+func checkGateAttempt(ctx context.Context, conn *sql.Conn, a delegation.Attempt, id string, scope memory.ScopeContext) error {
 	if a.Worker() != delegation.WorkerBuild || a.Worktree == nil {
-		return a, fmt.Errorf("execution %q is not a build execution; only a build worker's branch can be merged", id)
+		return fmt.Errorf("execution %q is not a build execution; only a build worker's branch can be merged", id)
 	}
 	if !a.Terminal() {
-		return a, fmt.Errorf("execution %q is still %s; wait for its result before proposing a merge", id, a.State)
+		return fmt.Errorf("execution %q is still %s; wait for its result before proposing a merge", id, a.State)
 	}
 	var latest string
 	if err := conn.QueryRowContext(ctx, `SELECT id FROM subagent_executions WHERE child_session_id=? ORDER BY rowid DESC LIMIT 1`, a.Child.ID).Scan(&latest); err != nil {
-		return a, err
+		return err
 	}
 	if latest != a.ID {
-		return a, fmt.Errorf("execution %q was continued as execution %q; propose the merge with the child's latest execution", id, latest)
+		return fmt.Errorf("execution %q was continued as execution %q; propose the merge with the child's latest execution", id, latest)
 	}
 	if a.Gate != nil && a.Gate.Merged != nil {
-		return a, fmt.Errorf("execution %q was already merged into %s", id, a.Gate.Merged.Target)
+		return fmt.Errorf("execution %q was already merged into %s", id, a.Gate.Merged.Target)
 	}
 	if a.Worktree.RemovedAt != nil {
-		return a, fmt.Errorf("the worktree of execution %q was removed, so there is no branch to verify", id)
+		return fmt.Errorf("the worktree of execution %q was removed, so there is no branch to verify", id)
 	}
-	if err := authorizeBuildWorktree(ctx, conn, a.Parent.Scope, *a.Worktree); err != nil {
-		return a, err
-	}
-	return a, nil
+	return authorizeBuildWorktree(ctx, conn, scope, *a.Worktree)
 }
 
 // authorizeGateParent proves the calling parent: its live turn committed
@@ -338,7 +400,13 @@ func (s *Store) BuildGateRecoveryCandidates(ctx context.Context) ([]delegation.A
 		now := s.now().UTC().Format(turnLeaseTimeFormat)
 		for _, a := range found {
 			owner := a.Gate.Owner
-			if owner != nil {
+			if owner != nil && owner.Until != nil {
+				// The owner's own step, from another process: live until
+				// its claim ends.
+				if s.now().Before(*owner.Until) {
+					continue
+				}
+			} else if owner != nil {
 				err := checkTurnLeaseLive(ctx, conn, owner.SessionID, owner.HolderID, owner.FencingToken, now)
 				if err == nil {
 					continue

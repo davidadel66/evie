@@ -572,12 +572,15 @@ type TargetMove struct {
 	At          time.Time `json:"at"`
 }
 
-// GateOwner is the parent turn that runs an in-progress gate step: recovery
-// settles the step only once that turn's lease is gone.
+// GateOwner is who runs an in-progress gate step: a parent turn, which
+// recovery waits for until its lease is gone, or the owner merging from
+// Changes or the CLI (changes.spec.md story 5a), whose claim recovery
+// respects until Until.
 type GateOwner struct {
-	SessionID    memory.SessionID     `json:"session_id"`
-	HolderID     memory.LeaseHolderID `json:"holder_id"`
-	FencingToken memory.FencingToken  `json:"fencing_token"`
+	SessionID    memory.SessionID     `json:"session_id,omitempty"`
+	HolderID     memory.LeaseHolderID `json:"holder_id,omitempty"`
+	FencingToken memory.FencingToken  `json:"fencing_token,omitempty"`
+	Until        *time.Time           `json:"until,omitempty"`
 }
 
 // BuildGate is a build attempt's merge-gate record (Stage 12): its last step
