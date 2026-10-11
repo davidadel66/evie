@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Notice } from "../api/notifications";
 import { NotificationList, NotificationsMenu } from "./Notifications";
-import { noticeContext, noticeTime, unreadBadge } from "./notices";
+import { noticeContext, noticeDestination, noticeTime, unreadBadge } from "./notices";
 
 const now = new Date("2026-10-09T12:00:00Z");
 const names = {finance: "Finance", code: "evie-core"};
@@ -32,6 +32,16 @@ describe("notices", () => {
     expect(noticeTime("2026-10-05T09:00:00Z", now)).toBe("Oct 5");
   });
 
+  it("lead to what they are about: a run in the Runs tab, a Change in its Workspace", () => {
+    expect(noticeDestination(waiting)).toEqual({tab: "runs", run: "run-9"});
+    expect(noticeDestination({...waiting, target: {kind: "workspace_runs", workspace_id: "finance"}})).toEqual({tab: "runs"});
+    // changes.spec.md story 5c; the Changes tab comes with story 6.
+    const merged: Notice = {id: "change:10", source: "change", label: "Changes", text: "Pull request #7 merged once its checks passed.",
+      created_at: "2026-10-09T11:50:00Z", target: {kind: "change", workspace_id: "code", change_id: "pr:7"}};
+    expect(noticeDestination(merged)).toEqual({});
+    expect(noticeContext(merged, names)).toBe("evie-core · Changes");
+  });
+
   it("cap the unread badge", () => {
     expect(unreadBadge(3)).toBe("3");
     expect(unreadBadge(120)).toBe("99+");
@@ -52,7 +62,7 @@ describe("notifications list", () => {
 
   it("says what will show up when there is nothing yet", () => {
     expect(renderToStaticMarkup(<NotificationList notices={[]} workspaceNames={names} now={now} onOpen={()=>{}} />))
-      .toContain("Workflow runs that finish or need you show up here.");
+      .toContain("Workflow runs and Changes that finish or need you show up here.");
   });
 });
 

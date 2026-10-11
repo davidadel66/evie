@@ -124,7 +124,7 @@ var (
 	resolutionColumns      = []string{"run_id", "interruption_seq", "resolution", "answer", "actor", "surface", "session_id", "detail", "lease_holder", "lease_token", "recorded_at"}
 	modelCallColumnsAll    = []string{"run_id", "attempt_seq", "step_id", "policy", "policy_version", "provider", "model", "parameters", "prompt_sha256", "schema_sha256", "request_sha256", "estimated_input_tokens", "estimated_output_tokens", "estimated_micro_usd", "lease_holder", "lease_token", "started_at", "finished_at", "requests", "input_tokens", "output_tokens", "usage_reported", "micro_usd", "pricing_source", "response", "error"}
 	workerCallColumnsAll   = []string{"run_id", "attempt_seq", "step_id", "item_index", "worker", "policy", "policy_version", "provider", "model", "objective_sha256", "schema_sha256", "budget_ms", "budget_tokens", "input_per_million", "output_per_million", "pricing_source", "estimated_micro_usd", "adopted_from", "continues", "execution_id", "child_session_id", "lease_holder", "lease_token", "started_at", "finished_at", "status", "reason", "input_tokens", "output_tokens", "usage_complete", "counted_tokens", "micro_usd"}
-	notificationContent    = []string{"id", "dedup_key", "workspace_id", "workflow", "run_id", "kind", "run_state", "detail", "origin_surface", "session_id", "created_at"}
+	notificationContent    = []string{"id", "dedup_key", "workspace_id", "workflow", "run_id", "kind", "run_state", "detail", "origin_surface", "session_id", "created_at", "change_id"}
 	slotColumnsAll         = []string{"workspace_id", "workflow", "version", "timezone", "slot_key", "due_at", "shifted", "outcome", "run_id", "detail", "decided_by", "decided_at"}
 )
 

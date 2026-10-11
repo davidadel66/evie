@@ -15,7 +15,7 @@ export function NotificationList({notices, workspaceNames, now, onOpen}: {
   onOpen: (notice: Notice) => void;
 }) {
   if (notices.length === 0) {
-    return <p className="text-muted-text px-4 py-6 text-xs leading-5">Nothing yet. Workflow runs that finish or need you show up here.</p>;
+    return <p className="text-muted-text px-4 py-6 text-xs leading-5">Nothing yet. Workflow runs and Changes that finish or need you show up here.</p>;
   }
   return <ul className="max-h-[420px] overflow-y-auto">
     {notices.map((notice) => <li key={notice.id} className="border-hair border-t first:border-t-0">

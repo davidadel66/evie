@@ -32,11 +32,65 @@ const changePullRequestsSchema = `CREATE TABLE IF NOT EXISTS change_pull_request
 // pullRequestTime is fixed width, so the stored times sort as text.
 const pullRequestTime = "2006-01-02T15:04:05.000000000Z"
 
+// changeMergeArmsSchema is "Merge when checks pass" (story 5c): one marker
+// per pull request, with when the owner set it.
+const changeMergeArmsSchema = `CREATE TABLE IF NOT EXISTS change_merge_arms (
+ workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+ number INTEGER NOT NULL CHECK(number > 0),
+ armed_at TEXT NOT NULL,
+ PRIMARY KEY(workspace_id, number))`
+
 func ensureChangePullRequests(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, changePullRequestsSchema); err != nil {
 		return fmt.Errorf("create change pull requests: %w", err)
 	}
+	if _, err := db.ExecContext(ctx, changeMergeArmsSchema); err != nil {
+		return fmt.Errorf("create change merge arms: %w", err)
+	}
 	return nil
+}
+
+// ArmChangeMerge sets "Merge when checks pass" on pull request number; set
+// again, it keeps the first time.
+func (s *Store) ArmChangeMerge(ctx context.Context, ws memory.WorkspaceID, number int) error {
+	_, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO change_merge_arms(workspace_id,number,armed_at) VALUES(?,?,?)`, ws, number, s.now().UTC().Format(pullRequestTime))
+	if err != nil {
+		return fmt.Errorf("set merge when checks pass on #%d: %w", number, err)
+	}
+	return nil
+}
+
+// DisarmChangeMerge clears "Merge when checks pass" on pull request number
+// and says whether it was set.
+func (s *Store) DisarmChangeMerge(ctx context.Context, ws memory.WorkspaceID, number int) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM change_merge_arms WHERE workspace_id=? AND number=?`, ws, number)
+	if err != nil {
+		return false, fmt.Errorf("clear merge when checks pass on #%d: %w", number, err)
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// ChangeMergeArms is when "Merge when checks pass" was set on each of the
+// Workspace's pull requests that have it.
+func (s *Store) ChangeMergeArms(ctx context.Context, ws memory.WorkspaceID) (map[int]time.Time, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT number,armed_at FROM change_merge_arms WHERE workspace_id=?`, ws)
+	if err != nil {
+		return nil, fmt.Errorf("read merge when checks pass: %w", err)
+	}
+	defer rows.Close()
+	arms := map[int]time.Time{}
+	for rows.Next() {
+		var number int
+		var at string
+		if err := rows.Scan(&number, &at); err != nil {
+			return nil, err
+		}
+		if arms[number], err = time.Parse(pullRequestTime, at); err != nil {
+			return nil, err
+		}
+	}
+	return arms, rows.Err()
 }
 
 // ChangePullRequest is one synced pull request.

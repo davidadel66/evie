@@ -10,9 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/changes"
 	"github.com/davidadel66/evie/internal/delegation"
+	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/github"
 	"github.com/davidadel66/evie/internal/memory"
 )
@@ -86,6 +88,14 @@ type mergeRecords struct{ recorded []string }
 
 func (r *mergeRecords) RecordChangeMergeable(_ context.Context, ws memory.WorkspaceID, number int, head string, mergeable bool) error {
 	r.recorded = append(r.recorded, fmt.Sprintf("%s #%d %s %v", ws, number, head, mergeable))
+	return nil
+}
+
+func (*mergeRecords) ArmChangeMerge(context.Context, memory.WorkspaceID, int) error { return nil }
+func (*mergeRecords) DisarmChangeMerge(context.Context, memory.WorkspaceID, int) (bool, error) {
+	return false, nil
+}
+func (*mergeRecords) RecordChangeNotification(context.Context, eviedb.ChangeNotification) error {
 	return nil
 }
 
@@ -211,5 +221,137 @@ func TestTheOwnerMergesAndClosesOnGitHub(t *testing.T) {
 	merger(mergedOnGitHub).AfterSync(ctx, "w", changes.Repository{Kind: changes.GitHub, Folder: dir}, changes.SyncResult{Synced: true, Finished: 1})
 	if len(gate.closed) != 1 || gate.closed[0] != "w e2" || head(t, dir, "main") != built[fix].PullRequest.HeadSHA {
 		t.Fatalf("after sync: closed %v, main %s", gate.closed, head(t, dir, "main"))
+	}
+}
+
+// changes.spec.md story 5c: "Merge when checks pass" cannot be set while a
+// pull request has no checks. Each sync then merges it once at least one
+// check exists and every one passed, clears it when a check fails or the
+// merge conflicts, and leaves a notice of each; meanwhile it waits.
+func TestMergeWhenChecksPassFiresOnGreenAndClearsOnRed(t *testing.T) {
+	ctx := context.Background()
+	fake, server := newFakeGitHub(t)
+	const fix, docs, clash = "evie/1a2b3c4d-fix", "evie/2b3c4d5e-docs", "evie/3c4d5e6f-clash"
+	dir, built := trackedRepository(t, fake, server, fix, docs, clash)
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	w, err := store.RegisterWorkspace(ctx, "notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := w.ID
+	synced := func(states map[string]string) {
+		t.Helper()
+		var records []eviedb.ChangePullRequest
+		for _, branch := range []string{fix, docs, clash} {
+			c := built[branch]
+			record := eviedb.ChangePullRequest{Number: c.PullRequest.Number, Owner: "davidadel66", Repository: "notes", Branch: branch, Base: "main",
+				Title: c.Title, Author: "davidadel66", State: "open", HeadSHA: c.PullRequest.HeadSHA, URL: "https://github.com/davidadel66/notes/pull/1", GitHubUpdatedAt: time.Now()}
+			if state, ok := states[branch]; ok && state != "" {
+				record.Checks = []eviedb.ChangePullRequestCheck{{Name: "ci", State: state}}
+			}
+			if _, gone := states[branch]; gone || len(states) == 0 {
+				records = append(records, record)
+			}
+		}
+		if err := store.SaveChangePullRequests(ctx, ws, records); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var drafts []changes.Change
+	for _, branch := range []string{fix, docs, clash} {
+		c := built[branch]
+		c.State, c.PullRequest = changes.Draft, nil
+		drafts = append(drafts, c)
+	}
+	gate := &fakeGate{}
+	m := &changes.Merger{Lister: &changes.Lister{Repositories: publishService(server), Builds: fixedSource(drafts),
+		PullRequests: changes.PullRequestSource{Store: store, Arms: store}}, Gate: gate, GitHub: github.New(server.URL, token, server.Client()), Records: store}
+	repo := changes.Repository{Kind: changes.GitHub, Folder: dir}
+	after := func() { m.AfterSync(ctx, ws, repo, changes.SyncResult{Synced: true}) }
+	notices := func() map[string]eviedb.WorkflowNotification {
+		t.Helper()
+		list, err := store.ListWorkflowNotifications(ctx, eviedb.WorkflowNotificationFilter{WorkspaceID: ws, All: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]eviedb.WorkflowNotification{}
+		for _, n := range list {
+			out[n.ChangeID+" "+string(n.Kind)] = n
+		}
+		return out
+	}
+
+	synced(map[string]string{fix: "running", docs: "", clash: "running"})
+	if _, err := m.Arm(ctx, ws, dir, "build:"+docs); !errors.Is(err, changes.ErrNotMerged) || !strings.Contains(err.Error(), "no checks") {
+		t.Fatalf("arming without checks = %v", err)
+	}
+	armed, err := m.Arm(ctx, ws, dir, "build:"+fix)
+	if err != nil || armed.ArmedAt == nil {
+		t.Fatalf("arm = %+v, %v", armed, err)
+	}
+	if _, err := m.Arm(ctx, ws, dir, "build:"+clash); err != nil {
+		t.Fatal(err)
+	}
+	mainBefore := head(t, fake.bare("notes"), "refs/heads/main")
+	after()
+	if head(t, fake.bare("notes"), "refs/heads/main") != mainBefore || len(notices()) != 0 {
+		t.Fatal("an armed merge fired while its checks ran")
+	}
+
+	// Green: it merges, clears and says so.
+	synced(map[string]string{fix: "passed", docs: "", clash: "running"})
+	after()
+	if head(t, fake.bare("notes"), "refs/heads/main") != built[fix].PullRequest.HeadSHA || len(gate.closed) != 1 {
+		t.Fatalf("green did not merge: main %s, closed %v", head(t, fake.bare("notes"), "refs/heads/main"), gate.closed)
+	}
+	if n, ok := notices()["build:"+fix+" change_merged"]; !ok || !strings.Contains(n.Detail, "#1") {
+		t.Fatalf("notices = %+v", notices())
+	}
+	if arms, _ := store.ChangeMergeArms(ctx, ws); len(arms) != 1 {
+		t.Fatalf("arms after the merge = %v", arms)
+	}
+
+	// A conflict clears it, records the rebase it needs, and says so.
+	fake.notMergeable = true
+	synced(map[string]string{docs: "", clash: "passed"})
+	after()
+	if n, ok := notices()["build:"+clash+" change_needs_rebase"]; !ok || !strings.Contains(n.Detail, "rebase") {
+		t.Fatalf("notices = %+v", notices())
+	}
+	if arms, _ := store.ChangeMergeArms(ctx, ws); len(arms) != 0 {
+		t.Fatalf("arms after the conflict = %v", arms)
+	}
+	fake.notMergeable = false
+
+	// Red: a failing check clears it without merging.
+	synced(map[string]string{docs: "running"})
+	if _, err := m.Arm(ctx, ws, dir, "build:"+docs); err != nil {
+		t.Fatal(err)
+	}
+	synced(map[string]string{docs: "failed"})
+	mainBefore = head(t, fake.bare("notes"), "refs/heads/main")
+	after()
+	if n, ok := notices()["build:"+docs+" change_merge_cleared"]; !ok || !strings.Contains(n.Detail, "ci") || head(t, fake.bare("notes"), "refs/heads/main") != mainBefore {
+		t.Fatalf("notices = %+v", notices())
+	}
+	if _, err := m.Arm(ctx, ws, dir, "build:"+docs); !errors.Is(err, changes.ErrNotMerged) || !strings.Contains(err.Error(), "failed") {
+		t.Fatalf("arming with a failed check = %v", err)
+	}
+
+	// The owner clears it.
+	synced(map[string]string{docs: "running"})
+	if _, err := m.Arm(ctx, ws, dir, "build:"+docs); err != nil {
+		t.Fatal(err)
+	}
+	if disarmed, err := m.Disarm(ctx, ws, dir, "build:"+docs); err != nil || disarmed.ArmedAt != nil {
+		t.Fatalf("disarm = %+v, %v", disarmed, err)
+	}
+	if _, err := m.Disarm(ctx, ws, dir, "build:"+docs); !errors.Is(err, changes.ErrNotMerged) {
+		t.Fatalf("disarm again = %v", err)
 	}
 }

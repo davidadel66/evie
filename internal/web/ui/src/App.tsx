@@ -33,6 +33,7 @@ import {
 import { WorkspaceHome, Workspaces } from "./workspaces/Workspaces";
 import type { WorkspaceTab, WorkspaceViewState } from "./workspaces/workspaceActivity";
 import { Notifications } from "./shell/Notifications";
+import { noticeDestination } from "./shell/notices";
 import type { Notice } from "./api/notifications";
 import { useWorkflowCaps, useWorkspaceNeeds } from "./store/useWorkspaceNeeds";
 import { CreateWorkspaceDialog } from "./workspaces/CreateWorkspaceDialog";
@@ -212,11 +213,12 @@ export default function App() {
     openView({ id: `workspace:${workspace.id}`, kind: "workspace", workspaceId: workspace.id, label: workspace.displayName, tab, run });
   };
 
-  // A notice opens what it points to: a run opens in its Workspace's Runs
-  // tab panel, any other workflow notice opens the Runs tab.
+  // A notice opens what it points to in its Workspace (noticeDestination).
   const openNotice = (notice: Notice) => {
     const workspace = contextSessions.snapshot?.workspaces.find((candidate) => candidate.id === notice.target.workspace_id);
-    if (workspace) openWorkspace(workspace, "runs", notice.target.kind === "workflow_run" ? notice.target.run_id : undefined);
+    if (!workspace) return;
+    const {tab, run} = noticeDestination(notice);
+    openWorkspace(workspace, tab, run);
   };
 
   const selectSession = async (selection: ContextSessionSelection) => {

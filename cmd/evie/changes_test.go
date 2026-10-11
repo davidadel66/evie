@@ -102,13 +102,20 @@ func TestChangesListCommandPrintsTheWorkspaceChanges(t *testing.T) {
 	if out, err := run("changes", "merge", string(w.ID), changeID); err != nil || !strings.Contains(out, `"status": "merged"`) || len(gate.merged) != 1 || gate.merged[0] != string(w.ID)+" "+id {
 		t.Fatalf("merge = %s %v; gate %v", out, err, gate.merged)
 	}
+	// Story 5c: "Merge when checks pass" is for GitHub pull requests.
+	if _, err := run("changes", "merge", string(w.ID), changeID, "--when-checks-pass"); err == nil || !strings.Contains(err.Error(), "GitHub") {
+		t.Fatalf("arming a local Change = %v", err)
+	}
+	if _, err := run("changes", "disarm", string(w.ID), changeID); err == nil || !strings.Contains(err.Error(), "not set") {
+		t.Fatalf("disarming = %v", err)
+	}
 	if _, err := run("changes", "close", string(w.ID), changeID); err == nil || !strings.Contains(err.Error(), "--yes") || len(gate.closed) != 0 {
 		t.Fatalf("close without --yes = %v; gate %v", err, gate.closed)
 	}
 	if out, err := run("changes", "close", string(w.ID), changeID, "--yes"); err != nil || len(gate.closed) != 1 || !strings.Contains(out, changeID) {
 		t.Fatalf("close = %s %v; gate %v", out, err, gate.closed)
 	}
-	for _, args := range [][]string{{"changes"}, {"changes", "list"}, {"changes", "push", string(w.ID)}, {"changes", "push", string(w.ID), ""}, {"changes", "merge", string(w.ID)}, {"changes", "close", string(w.ID), changeID, "--force"}} {
+	for _, args := range [][]string{{"changes"}, {"changes", "list"}, {"changes", "push", string(w.ID)}, {"changes", "push", string(w.ID), ""}, {"changes", "merge", string(w.ID)}, {"changes", "close", string(w.ID), changeID, "--force"}, {"changes", "merge", string(w.ID), changeID, "--now"}, {"changes", "disarm", string(w.ID)}} {
 		if _, err := run(args...); err == nil || !strings.Contains(err.Error(), "usage: evie changes") {
 			t.Fatalf("%q = %v", args, err)
 		}

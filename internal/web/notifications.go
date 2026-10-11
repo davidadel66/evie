@@ -12,8 +12,9 @@ import (
 
 // The app-wide notifications list (workspace-activity.spec.md): every
 // Durable Notification the owner should hear about, from every Workspace,
-// in one general shape so later sources join the same list. The workflow
-// runtime's notices are the only source today; the per-Workspace workflow
+// in one general shape so later sources join the same list: workflow runs'
+// notices and, since changes.spec.md story 5c, Changes' notices, both rows
+// of the one store the workflow runtime lists. The per-Workspace workflow
 // notification routes stay for the CLI.
 
 // notice is one notification in the general shape. Its ID names its
@@ -34,9 +35,16 @@ type noticeTarget struct {
 	Kind        string `json:"kind"`
 	WorkspaceID string `json:"workspace_id,omitempty"`
 	RunID       string `json:"run_id,omitempty"`
+	// ChangeID is a Change's notice's Change (story 5c).
+	ChangeID string `json:"change_id,omitempty"`
 }
 
-const workflowNoticePrefix = "workflow:"
+// A workflow notice's and a Change's notice's IDs: both are rows of the one
+// notifications store.
+const (
+	workflowNoticePrefix = "workflow:"
+	changeNoticePrefix   = "change:"
+)
 
 func (s *Server) registerNotificationRoutes(mux *http.ServeMux) {
 	if s.workflows == nil {
@@ -93,8 +101,12 @@ func (s *Server) handleNotificationsRead(w http.ResponseWriter, r *http.Request)
 	mark := workflowruntime.NotificationMark{Read: request.Read, All: request.All, Surface: "web"}
 	valid := len(request.IDs) <= 200 && (request.All && request.Read && len(request.IDs) == 0 || !request.All && len(request.IDs) > 0)
 	for _, id := range request.IDs {
-		n, err := strconv.ParseInt(strings.TrimPrefix(id, workflowNoticePrefix), 10, 64)
-		valid = valid && strings.HasPrefix(id, workflowNoticePrefix) && err == nil && n > 0
+		number, ok := strings.CutPrefix(id, workflowNoticePrefix)
+		if !ok {
+			number, ok = strings.CutPrefix(id, changeNoticePrefix)
+		}
+		n, err := strconv.ParseInt(number, 10, 64)
+		valid = valid && ok && err == nil && n > 0
 		mark.IDs = append(mark.IDs, n)
 	}
 	if !valid {
@@ -115,6 +127,11 @@ func (s *Server) handleNotificationsRead(w http.ResponseWriter, r *http.Request)
 // the workflow; its text says what happened without the CLI's commands.
 // The detail was already scrubbed of sensitive run inputs by the runtime.
 func workflowNotice(n workflowruntime.Notification) notice {
+	if n.ChangeID != "" {
+		// A Change's notice (story 5c): its detail is the whole text.
+		return notice{ID: changeNoticePrefix + strconv.FormatInt(n.ID, 10), Source: "change", Label: "Changes", Text: n.Detail,
+			CreatedAt: n.CreatedAt, ReadAt: n.ReadAt, Target: noticeTarget{Kind: "change", WorkspaceID: string(n.WorkspaceID), ChangeID: n.ChangeID}}
+	}
 	target := noticeTarget{Kind: "workspace_runs", WorkspaceID: string(n.WorkspaceID)}
 	if n.RunID != "" {
 		target = noticeTarget{Kind: "workflow_run", WorkspaceID: string(n.WorkspaceID), RunID: n.RunID}

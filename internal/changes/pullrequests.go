@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
@@ -22,6 +23,14 @@ type PullRequestRecords interface {
 // after this story.
 type PullRequestSource struct {
 	Store PullRequestRecords
+	// Arms, when set, says which pull requests have "Merge when checks
+	// pass" (story 5c).
+	Arms MergeArms
+}
+
+// MergeArms reads "Merge when checks pass".
+type MergeArms interface {
+	ChangeMergeArms(context.Context, memory.WorkspaceID) (map[int]time.Time, error)
 }
 
 // Changes lists the Workspace's synced pull requests of repo. A Repository
@@ -36,9 +45,19 @@ func (s PullRequestSource) Changes(ctx context.Context, ws memory.WorkspaceID, r
 	if err != nil {
 		return nil, err
 	}
+	arms := map[int]time.Time{}
+	if s.Arms != nil {
+		if arms, err = s.Arms.ChangeMergeArms(ctx, ws); err != nil {
+			return nil, err
+		}
+	}
 	for _, p := range records {
 		if sameRepository(p, repo) {
-			list = append(list, pullRequestChange(ws, p))
+			c := pullRequestChange(ws, p)
+			if at, ok := arms[p.Number]; ok && c.State == Open {
+				c.ArmedAt = &at
+			}
+			list = append(list, c)
 		}
 	}
 	return list, nil

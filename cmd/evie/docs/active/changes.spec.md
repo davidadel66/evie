@@ -335,7 +335,23 @@ keeps the owner's checkout current without touching work in progress.
       The owner's own pull requests merge and close, and their branches
       stay.
   - Story 5c (split from 5b on 2026-10-10, because its notifications need a
-    migration of the notifications store):
+    migration of the notifications store; built the same day):
+    - `evie changes merge <workspace-id> <change-id> --when-checks-pass`
+      sets it and `evie changes disarm` clears it. The routes are
+      `/api/changes/merge` with `"when_checks_pass": true` and
+      `/api/changes/disarm`. The marker is stored per pull request.
+    - Setting it is also refused when a check already failed, when GitHub
+      marks the pull request a draft, or when it needs a rebase.
+    - A conflict at merge time clears the marker and records the rebase
+      it needs. New commits, or an error that may pass, keep it for the
+      next sync.
+    - The notifications store is one store. The table that held workflow
+      runs' notices is rebuilt once, every notice kept, to take Change
+      notices too: `change_merged`, `change_merge_cleared` and
+      `change_needs_rebase`. Each names its Change, has no workflow or
+      run, is recorded once per event, and is immutable but for its read
+      state. The notifications list shows them as "Changes", and opening
+      one opens its Workspace until story 6's Changes tab.
     - "Merge when checks pass" cannot be set while the pull request has
       no checks. It merges once at least one check exists and every check
       has finished without failing.

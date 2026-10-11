@@ -104,7 +104,9 @@ type Change struct {
 	ExecutionID string       `json:"execution_id,omitempty"`
 	PullRequest *PullRequest `json:"pull_request,omitempty"`
 	Checks      []Check      `json:"checks,omitempty"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+	// ArmedAt is when the owner set "Merge when checks pass" (story 5c).
+	ArmedAt   *time.Time `json:"armed_at,omitempty"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 // Source reads one kind of a Workspace's Changes.
@@ -175,7 +177,7 @@ func link(builds, pulls []Change) []Change {
 	}
 	for branch, p := range chosen {
 		c := &builds[onBranch[branch]]
-		c.State, c.PullRequest, c.Checks = p.State, p.PullRequest, p.Checks
+		c.State, c.PullRequest, c.Checks, c.ArmedAt = p.State, p.PullRequest, p.Checks, p.ArmedAt
 		c.NeedsRebase = c.NeedsRebase || p.NeedsRebase
 		if p.Head != "" {
 			c.Head = p.Head

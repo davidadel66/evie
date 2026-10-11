@@ -39,6 +39,10 @@ type NotificationMark struct {
 
 // NotificationText is a notice in one line.
 func NotificationText(n eviedb.WorkflowNotification) string {
+	if n.ChangeID != "" {
+		// A Change's notice (changes.spec.md story 5c) says it all.
+		return n.Detail
+	}
 	run := fmt.Sprintf("%s run %s", n.Workflow, n.RunID)
 	origin := ""
 	switch n.Surface {

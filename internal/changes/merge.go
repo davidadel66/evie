@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/davidadel66/evie/internal/delegation"
+	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/github"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/worktree"
@@ -29,6 +30,13 @@ import (
 // why.
 var ErrNotMerged = errors.New("nothing was merged or closed")
 
+var (
+	// errNeedsRebase is a merge GitHub refused for a conflict.
+	errNeedsRebase = errors.New("it conflicts")
+	// errNewCommits is a merge of a head the pull request no longer has.
+	errNewCommits = errors.New("new commits arrived")
+)
+
 // BuildGate is the Kernel's merge gate acting for the owner.
 type BuildGate interface {
 	MergeAsOwner(ctx context.Context, ws memory.WorkspaceID, execution string) (delegation.MergeProposal, error)
@@ -42,9 +50,13 @@ type PullRequestMerger interface {
 	ClosePullRequest(ctx context.Context, owner, name string, number int) error
 }
 
-// MergeableRecords keeps a conflict GitHub reports when the owner merges.
-type MergeableRecords interface {
+// MergeRecords is what merging keeps: a conflict GitHub reports (story
+// 5b), "Merge when checks pass" and the notices it leaves (story 5c).
+type MergeRecords interface {
 	RecordChangeMergeable(ctx context.Context, ws memory.WorkspaceID, number int, head string, mergeable bool) error
+	ArmChangeMerge(ctx context.Context, ws memory.WorkspaceID, number int) error
+	DisarmChangeMerge(ctx context.Context, ws memory.WorkspaceID, number int) (bool, error)
+	RecordChangeNotification(ctx context.Context, n eviedb.ChangeNotification) error
 }
 
 // Merger merges and closes a Workspace's Changes for the owner.
@@ -54,7 +66,7 @@ type Merger struct {
 	// GitHub is nil without a token: a GitHub Repository's Changes then
 	// cannot merge or close.
 	GitHub  PullRequestMerger
-	Records MergeableRecords
+	Records MergeRecords
 	// Syncer, when set, records a merge or close done on GitHub at once.
 	Syncer interface {
 		Sync(ctx context.Context, ws memory.WorkspaceID, repo Repository) (SyncResult, error)
@@ -163,7 +175,7 @@ func (m *Merger) mergeOnGitHub(ctx context.Context, ws memory.WorkspaceID, folde
 		return result, fmt.Errorf("%w: GitHub marks pull request #%d as a draft; mark it ready for review there first", ErrNotMerged, pr.Number)
 	case pull.Head.SHA != pr.HeadSHA:
 		m.sync(ctx, ws, repo)
-		return result, fmt.Errorf("%w: pull request #%d has new commits since Evie last read it; review them before merging", ErrNotMerged, pr.Number)
+		return result, fmt.Errorf("%w: %w: pull request #%d has new commits since Evie last read it; review them before merging", ErrNotMerged, errNewCommits, pr.Number)
 	case pull.Mergeable != nil && !*pull.Mergeable:
 		return result, m.needsRebase(ctx, ws, repo, c)
 	}
@@ -173,7 +185,7 @@ func (m *Merger) mergeOnGitHub(ctx context.Context, ws memory.WorkspaceID, folde
 		return result, m.needsRebase(ctx, ws, repo, c)
 	case errors.Is(err, github.ErrHeadChanged):
 		m.sync(ctx, ws, repo)
-		return result, fmt.Errorf("%w: pull request #%d has new commits since Evie last read it; review them before merging", ErrNotMerged, pr.Number)
+		return result, fmt.Errorf("%w: %w: pull request #%d has new commits since Evie last read it; review them before merging", ErrNotMerged, errNewCommits, pr.Number)
 	case err != nil:
 		return result, gitHubRefusal(err)
 	}
@@ -191,7 +203,7 @@ func (m *Merger) needsRebase(ctx context.Context, ws memory.WorkspaceID, repo Re
 	if m.Records != nil {
 		_ = m.Records.RecordChangeMergeable(ctx, ws, c.PullRequest.Number, c.PullRequest.HeadSHA, false)
 	}
-	return fmt.Errorf("%w: pull request #%d conflicts with %s and needs a rebase; once its branch is rebased and pushed, merge it again", ErrNotMerged, c.PullRequest.Number, c.Base)
+	return fmt.Errorf("%w: %w: pull request #%d conflicts with %s and needs a rebase; once its branch is rebased and pushed, merge it again", ErrNotMerged, errNeedsRebase, c.PullRequest.Number, c.Base)
 }
 
 // gitHubRefusal marks GitHub's refusal of a merge or close as one that did
@@ -288,6 +300,120 @@ func (m *Merger) AfterSync(ctx context.Context, ws memory.WorkspaceID, synced Re
 	for base := range bases {
 		m.catchUp(ctx, repo.Folder, base)
 	}
+	for _, c := range list {
+		if c.ArmedAt != nil && c.State == Open && c.PullRequest != nil {
+			m.fire(ctx, ws, repo, c)
+		}
+	}
+}
+
+// Arm sets "Merge when checks pass" on Change id's pull request (story
+// 5c): each sync then merges it once at least one check exists and every
+// check passed, and clears it when a check fails or the merge conflicts.
+// It cannot be set while the pull request has no checks, a failed one,
+// GitHub's draft marking or a conflict.
+func (m *Merger) Arm(ctx context.Context, ws memory.WorkspaceID, folder, id string) (Change, error) {
+	release, err := m.Lister.Repositories.claim(folder)
+	if err != nil {
+		return Change{}, err
+	}
+	defer release()
+	repo, c, err := m.find(ctx, ws, folder, id)
+	if err != nil {
+		return Change{}, err
+	}
+	pr := c.PullRequest
+	switch {
+	case repo.Kind != GitHub:
+		return c, fmt.Errorf("%w: \"Merge when checks pass\" is for pull requests on GitHub; merge %s now instead", ErrNotMerged, id)
+	case m.Records == nil || m.GitHub == nil:
+		return c, ErrNoToken
+	case pr == nil || pr.State != "open":
+		return c, fmt.Errorf("%w: %s has no open pull request; push it first with evie changes push", ErrNotMerged, id)
+	case pr.Draft:
+		return c, fmt.Errorf("%w: GitHub marks pull request #%d as a draft; mark it ready for review there first", ErrNotMerged, pr.Number)
+	case c.NeedsRebase:
+		return c, fmt.Errorf("%w: pull request #%d needs a rebase first", ErrNotMerged, pr.Number)
+	case len(c.Checks) == 0:
+		return c, fmt.Errorf("%w: pull request #%d has no checks yet, so nothing would tell Evie when to merge it; merge it now, or set this once its checks appear", ErrNotMerged, pr.Number)
+	}
+	if failed, ok := failedCheck(c.Checks); ok {
+		return c, fmt.Errorf("%w: the check %s failed on pull request #%d; fix it first", ErrNotMerged, failed, pr.Number)
+	}
+	if err := m.Records.ArmChangeMerge(ctx, ws, pr.Number); err != nil {
+		return c, err
+	}
+	return m.after(ctx, ws, folder, c), nil
+}
+
+// Disarm clears "Merge when checks pass" on Change id's pull request.
+func (m *Merger) Disarm(ctx context.Context, ws memory.WorkspaceID, folder, id string) (Change, error) {
+	_, list, err := m.Lister.List(ctx, ws, folder)
+	if err != nil {
+		return Change{}, err
+	}
+	c, ok := changeByID(list, id)
+	if !ok || c.ArmedAt == nil || c.PullRequest == nil || m.Records == nil {
+		return c, fmt.Errorf("%w: \"Merge when checks pass\" is not set on %s", ErrNotMerged, id)
+	}
+	if _, err := m.Records.DisarmChangeMerge(ctx, ws, c.PullRequest.Number); err != nil {
+		return c, err
+	}
+	return m.after(ctx, ws, folder, c), nil
+}
+
+// fire acts on one armed Change after a sync: a failed check clears it, a
+// head whose checks all passed merges, and anything else waits. A merge
+// GitHub refuses for good clears it; new commits or an error that may pass
+// leave it set for the next sync. Each outcome but waiting leaves a notice.
+func (m *Merger) fire(ctx context.Context, ws memory.WorkspaceID, repo Repository, c Change) {
+	pr := c.PullRequest
+	clear := func(kind eviedb.WorkflowNotificationKind, event, detail string) {
+		if _, err := m.Records.DisarmChangeMerge(ctx, ws, pr.Number); err != nil {
+			return
+		}
+		_ = m.Records.RecordChangeNotification(ctx, eviedb.ChangeNotification{WorkspaceID: ws, ChangeID: c.ID, Kind: kind,
+			Key: c.ID + ":" + event + ":" + pr.HeadSHA, Detail: detail})
+	}
+	if failed, ok := failedCheck(c.Checks); ok {
+		clear(eviedb.ChangeNotifyCleared, "failed:"+failed, fmt.Sprintf("\"Merge when checks pass\" was cleared on pull request #%d, %s: the check %s failed.", pr.Number, c.Title, failed))
+		return
+	}
+	if !checksPassed(c.Checks) {
+		return
+	}
+	_, err := m.mergeOnGitHub(ctx, ws, repo.Folder, repo, c)
+	switch {
+	case err == nil:
+		clear(eviedb.ChangeNotifyMerged, "merged", fmt.Sprintf("Pull request #%d, %s, merged into %s once its checks passed.", pr.Number, c.Title, c.Base))
+	case errors.Is(err, errNeedsRebase):
+		clear(eviedb.ChangeNotifyNeedsRebase, "needs_rebase", fmt.Sprintf("Pull request #%d, %s, passed its checks but conflicts with %s and needs a rebase; \"Merge when checks pass\" was cleared.", pr.Number, c.Title, c.Base))
+	case errors.Is(err, errNewCommits) || !errors.Is(err, ErrNotMerged):
+		// The next sync reads the new head's checks, or tries again.
+	default:
+		clear(eviedb.ChangeNotifyCleared, "refused", fmt.Sprintf("\"Merge when checks pass\" was cleared on pull request #%d, %s: %v", pr.Number, c.Title, err))
+	}
+}
+
+// failedCheck is the first failed check, if any.
+func failedCheck(checks []Check) (string, bool) {
+	for _, check := range checks {
+		if check.State == CheckFailed {
+			return check.Name, true
+		}
+	}
+	return "", false
+}
+
+// checksPassed says whether at least one check exists and every check
+// finished without failing.
+func checksPassed(checks []Check) bool {
+	for _, check := range checks {
+		if check.State != CheckPassed && check.State != CheckNeutral {
+			return false
+		}
+	}
+	return len(checks) > 0
 }
 
 func (m *Merger) sync(ctx context.Context, ws memory.WorkspaceID, repo Repository) {

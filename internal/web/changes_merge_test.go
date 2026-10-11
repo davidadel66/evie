@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/changes"
 	"github.com/davidadel66/evie/internal/delegation"
@@ -37,6 +38,17 @@ func (s *stubChangeMerger) Close(_ context.Context, ws memory.WorkspaceID, folde
 		return changes.CloseResult{}, s.err
 	}
 	return changes.CloseResult{Change: changes.Change{ID: id, State: changes.Closed}}, nil
+}
+
+func (s *stubChangeMerger) Arm(_ context.Context, ws memory.WorkspaceID, folder, id string) (changes.Change, error) {
+	s.calls = append(s.calls, "arm "+string(ws)+" "+folder+" "+id)
+	at := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	return changes.Change{ID: id, State: changes.Open, ArmedAt: &at}, s.err
+}
+
+func (s *stubChangeMerger) Disarm(_ context.Context, ws memory.WorkspaceID, folder, id string) (changes.Change, error) {
+	s.calls = append(s.calls, "disarm "+string(ws)+" "+folder+" "+id)
+	return changes.Change{ID: id, State: changes.Open}, s.err
 }
 
 // changes.spec.md story 5a: the owner merges and closes a Workspace's
@@ -79,7 +91,16 @@ func TestChangesMergeAndCloseRoutes(t *testing.T) {
 	if res := call("/api/changes/close", `{`+ws+`,"change_id":"build:evie/1a2b3c4d-fix","confirm":true}`); res.Code != 200 || !strings.Contains(res.Body.String(), `"state":"closed"`) {
 		t.Fatalf("close = %d %s", res.Code, res.Body)
 	}
-	want := []string{"merge " + string(workspace.ID) + " " + folder.Path + " build:evie/1a2b3c4d-fix", "close " + string(workspace.ID) + " " + folder.Path + " build:evie/1a2b3c4d-fix"}
+	// Story 5c: "Merge when checks pass" is set through merge and cleared
+	// through disarm.
+	if res := call("/api/changes/merge", `{`+ws+`,"change_id":"pr:3","when_checks_pass":true}`); res.Code != 200 || !strings.Contains(res.Body.String(), `"armed_at"`) {
+		t.Fatalf("arm = %d %s", res.Code, res.Body)
+	}
+	if res := call("/api/changes/disarm", `{`+ws+`,"change_id":"pr:3"}`); res.Code != 200 || strings.Contains(res.Body.String(), `"armed_at"`) {
+		t.Fatalf("disarm = %d %s", res.Code, res.Body)
+	}
+	want := []string{"merge " + string(workspace.ID) + " " + folder.Path + " build:evie/1a2b3c4d-fix", "close " + string(workspace.ID) + " " + folder.Path + " build:evie/1a2b3c4d-fix",
+		"arm " + string(workspace.ID) + " " + folder.Path + " pr:3", "disarm " + string(workspace.ID) + " " + folder.Path + " pr:3"}
 	if fmt.Sprint(stub.calls) != fmt.Sprint(want) {
 		t.Fatalf("calls = %v", stub.calls)
 	}

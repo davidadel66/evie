@@ -60,8 +60,11 @@ type WorkflowNotification struct {
 	Detail      string                   `json:"detail,omitempty"`
 	Surface     string                   `json:"surface,omitempty"`
 	SessionID   memory.SessionID         `json:"session_id,omitempty"`
-	CreatedAt   time.Time                `json:"created_at"`
-	ReadAt      *time.Time               `json:"read_at,omitempty"`
+	// ChangeID is a Change's notice's Change (story 5c); its Workflow and
+	// RunID are empty.
+	ChangeID  string     `json:"change_id,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	ReadAt    *time.Time `json:"read_at,omitempty"`
 }
 
 // WorkflowNotificationFilter narrows a listing: one Workspace, the session
@@ -82,15 +85,49 @@ type WorkflowNotificationCounts struct {
 	Total  int `json:"total"`
 }
 
-// workflowNotificationKinds is the kind check.
-const workflowNotificationKinds = `'succeeded','failed','cancelled','waiting_for_human','needs_reconciliation','paused','cap_reached','schedule_skipped','schedule_failed'`
+// workflowNotificationKinds is the kind check: a workflow run's and
+// schedule's kinds, then a Change's (story 5c, change_notifications.go).
+const (
+	workflowNotificationKindsBeforeChanges = `'succeeded','failed','cancelled','waiting_for_human','needs_reconciliation','paused','cap_reached','schedule_skipped','schedule_failed'`
+	workflowNotificationKinds              = workflowNotificationKindsBeforeChanges + `,'change_merged','change_merge_cleared','change_needs_rebase'`
+)
 
 func ensureWorkflowNotificationSchema(ctx context.Context, db *sql.DB) error {
+	if err := createWorkflowNotificationSchema(ctx, db); err != nil {
+		return err
+	}
+	// Story 5c: a table that predates Change notices takes them, then its
+	// triggers are made again as they are now.
+	if err := rebuildTable(ctx, db, "workflow_notifications", notificationsBeforeChanges, false); err != nil {
+		return fmt.Errorf("migrate workflow notifications for Changes: %w", err)
+	}
+	return createWorkflowNotificationSchema(ctx, db)
+}
+
+// notificationsBeforeChanges turns the notifications table as sub-stage 11
+// made it into the table with Change notices (story 5c): a Change's kinds,
+// no workflow and no run, and its Change.
+var notificationsBeforeChanges = [][2]string{
+	{"workflow TEXT NOT NULL CHECK(length(workflow) BETWEEN 1 AND 64),", "workflow TEXT NOT NULL CHECK(length(workflow) <= 64),"},
+	{"kind TEXT NOT NULL CHECK(kind IN (" + workflowNotificationKindsBeforeChanges + ")),", "kind TEXT NOT NULL CHECK(kind IN (" + workflowNotificationKinds + ")),"},
+	{" read_at TEXT,\n CHECK((kind IN ('schedule_skipped','schedule_failed')) = (run_id IS NULL)))", notificationsChecks},
+}
+
+// notificationsChecks ends the table: a Change's notice names its Change
+// and no workflow or run; every other names a workflow, and a run unless
+// it is a schedule's.
+const notificationsChecks = ` read_at TEXT,
+ change_id TEXT,
+ CHECK((kind IN ('schedule_skipped','schedule_failed') OR substr(kind,1,7) = 'change_') = (run_id IS NULL)),
+ CHECK((substr(kind,1,7) = 'change_') = (change_id IS NOT NULL)),
+ CHECK(substr(kind,1,7) = 'change_' OR length(workflow) >= 1))`
+
+func createWorkflowNotificationSchema(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS workflow_notifications (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  dedup_key TEXT NOT NULL UNIQUE,
  workspace_id TEXT NOT NULL,
- workflow TEXT NOT NULL CHECK(length(workflow) BETWEEN 1 AND 64),
+ workflow TEXT NOT NULL CHECK(length(workflow) <= 64),
  run_id TEXT REFERENCES workflow_runs(id),
  kind TEXT NOT NULL CHECK(kind IN (`+workflowNotificationKinds+`)),
  run_state TEXT NOT NULL,
@@ -98,12 +135,11 @@ func ensureWorkflowNotificationSchema(ctx context.Context, db *sql.DB) error {
  origin_surface TEXT NOT NULL,
  session_id TEXT,
  created_at TEXT NOT NULL,
- read_at TEXT,
- CHECK((kind IN ('schedule_skipped','schedule_failed')) = (run_id IS NULL)));
+`+notificationsChecks+`;
  CREATE INDEX IF NOT EXISTS workflow_notifications_by_workspace ON workflow_notifications(workspace_id, id);
  CREATE INDEX IF NOT EXISTS workflow_notifications_by_session ON workflow_notifications(session_id, id) WHERE session_id IS NOT NULL;
  CREATE INDEX IF NOT EXISTS workflow_notifications_by_run ON workflow_notifications(run_id, id) WHERE run_id IS NOT NULL;
- CREATE TRIGGER IF NOT EXISTS workflow_notifications_content BEFORE UPDATE OF id,dedup_key,workspace_id,workflow,run_id,kind,run_state,detail,origin_surface,session_id,created_at ON workflow_notifications
+ CREATE TRIGGER IF NOT EXISTS workflow_notifications_content BEFORE UPDATE OF id,dedup_key,workspace_id,workflow,run_id,kind,run_state,detail,origin_surface,session_id,created_at,change_id ON workflow_notifications
  BEGIN SELECT RAISE(ABORT,'workflow notifications are immutable; only their read state changes'); END;
  CREATE TRIGGER IF NOT EXISTS workflow_notifications_no_delete BEFORE DELETE ON workflow_notifications
  BEGIN SELECT RAISE(ABORT,'workflow notifications are immutable'); END;
@@ -132,16 +168,16 @@ func insertScheduleNotification(ctx context.Context, conn *sql.Conn, key string,
 	return nil
 }
 
-const notificationColumns = `id,workspace_id,workflow,run_id,kind,run_state,detail,origin_surface,session_id,created_at,read_at`
+const notificationColumns = `id,workspace_id,workflow,run_id,kind,run_state,detail,origin_surface,session_id,created_at,read_at,change_id`
 
 func scanWorkflowNotification(scanner rowScanner) (WorkflowNotification, error) {
 	var n WorkflowNotification
-	var run, session, read sql.NullString
+	var run, session, read, change sql.NullString
 	var created string
-	if err := scanner.Scan(&n.ID, &n.WorkspaceID, &n.Workflow, &run, &n.Kind, &n.RunState, &n.Detail, &n.Surface, &session, &created, &read); err != nil {
+	if err := scanner.Scan(&n.ID, &n.WorkspaceID, &n.Workflow, &run, &n.Kind, &n.RunState, &n.Detail, &n.Surface, &session, &created, &read, &change); err != nil {
 		return n, err
 	}
-	n.RunID, n.SessionID = run.String, memory.SessionID(session.String)
+	n.RunID, n.SessionID, n.ChangeID = run.String, memory.SessionID(session.String), change.String
 	var err error
 	if n.CreatedAt, err = parseTime(created); err != nil {
 		return n, err

@@ -173,3 +173,42 @@ func TestAPullRequestsConflictLastsWhileItsHeadDoes(t *testing.T) {
 		t.Fatalf("new commits kept the conflict: %v", *m)
 	}
 }
+
+// changes.spec.md story 5c: "Merge when checks pass" is a marker per pull
+// request: set once (a second set keeps the first time), cleared by the
+// owner or by the sync that merges or gives up.
+func TestMergeWhenChecksPassIsAMarkerPerPullRequest(t *testing.T) {
+	ctx := context.Background()
+	db, err := OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := NewStore(db)
+	at := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	store.UseClock(func() time.Time { return at }, time.UTC)
+	ws, err := store.RegisterWorkspace(ctx, "notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ArmChangeMerge(ctx, ws.ID, 4); err != nil {
+		t.Fatal(err)
+	}
+	at = at.Add(time.Hour)
+	if err := store.ArmChangeMerge(ctx, ws.ID, 4); err != nil {
+		t.Fatal(err)
+	}
+	arms, err := store.ChangeMergeArms(ctx, ws.ID)
+	if err != nil || len(arms) != 1 || !arms[4].Equal(at.Add(-time.Hour)) {
+		t.Fatalf("arms = %v, %v", arms, err)
+	}
+	if cleared, err := store.DisarmChangeMerge(ctx, ws.ID, 4); err != nil || !cleared {
+		t.Fatalf("disarm = %v, %v", cleared, err)
+	}
+	if cleared, err := store.DisarmChangeMerge(ctx, ws.ID, 4); err != nil || cleared {
+		t.Fatalf("disarm again = %v, %v", cleared, err)
+	}
+	if arms, err := store.ChangeMergeArms(ctx, ws.ID); err != nil || len(arms) != 0 {
+		t.Fatalf("arms after = %v, %v", arms, err)
+	}
+}

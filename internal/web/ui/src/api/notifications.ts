@@ -1,15 +1,15 @@
 // The app-wide notifications list (workspace-activity.spec.md): every
 // notice the owner should hear about, from every Workspace, in one general
-// shape so later sources join the same list. Workflow runs are the only
-// source today.
+// shape so later sources join the same list: workflow runs and, since
+// changes.spec.md story 5c, Changes.
 
-/** Where opening a notice leads: a run in its Workspace, or a Workspace's runs. */
-export type NoticeTarget = { kind: "workflow_run" | "workspace_runs" | string; workspace_id?: string; run_id?: string };
+/** Where opening a notice leads: a run in its Workspace, a Workspace's runs, or a Change (changes.spec.md story 5c). */
+export type NoticeTarget = { kind: "workflow_run" | "workspace_runs" | "change" | string; workspace_id?: string; run_id?: string; change_id?: string };
 
 export type Notice = {
   /** Names its source, e.g. "workflow:12". */
   id: string;
-  source: "workflow" | string;
+  source: "workflow" | "change" | string;
   /** What the notice is about, e.g. the workflow's name. */
   label: string;
   text: string;

@@ -32,6 +32,7 @@ type notice struct {
 		Kind        string `json:"kind"`
 		WorkspaceID string `json:"workspace_id"`
 		RunID       string `json:"run_id"`
+		ChangeID    string `json:"change_id"`
 	} `json:"target"`
 }
 
@@ -92,7 +93,10 @@ func TestNotificationsListEveryWorkspaceInTheGeneralShape(t *testing.T) {
 			Detail: detail, CreatedAt: time.Date(2026, 10, 9, 10, 0, 0, 0, time.UTC).Add(time.Duration(id) * time.Minute), ReadAt: readAt},
 			Text: "cli text (evie workflows interruptions --run " + run + ")"}
 	}
+	merged := note(10, "code", "", "", eviedb.ChangeNotifyMerged, "Pull request #7, Fix the footer, merged into main once its checks passed.", nil)
+	merged.ChangeID = "pr:7"
 	source := &noticeSource{list: []workflowruntime.Notification{
+		merged,
 		note(9, "finance", "finance-review", "run-9", eviedb.WorkflowNotifyWaitingForHuman, "", nil),
 		note(8, "code", "deps-weekly", "run-8", eviedb.WorkflowNotifyFailed, "steps.collect failed: rate limited", nil),
 		note(7, "finance", "finance-daily", "", eviedb.WorkflowNotifyScheduleSkipped, "2026-10-09 09:00 (catch-up skip)", &read),
@@ -104,15 +108,22 @@ func TestNotificationsListEveryWorkspaceInTheGeneralShape(t *testing.T) {
 	if resp.Code != http.StatusOK || json.Unmarshal(resp.Body.Bytes(), &page) != nil {
 		t.Fatalf("list = %d %s", resp.Code, resp.Body)
 	}
-	if page.Unread != 2 || len(page.Notifications) != 3 {
-		t.Fatalf("unread %d of %d notices, want 2 of 3: %s", page.Unread, len(page.Notifications), resp.Body)
+	if page.Unread != 3 || len(page.Notifications) != 4 {
+		t.Fatalf("unread %d of %d notices, want 3 of 4: %s", page.Unread, len(page.Notifications), resp.Body)
 	}
 	for _, f := range source.filters {
 		if f.WorkspaceID != "" {
 			t.Fatalf("listing was narrowed to Workspace %q; every Workspace is wanted", f.WorkspaceID)
 		}
 	}
-	waiting, failed, skipped := page.Notifications[0], page.Notifications[1], page.Notifications[2]
+	// changes.spec.md story 5c: a Change's notice is its own source and
+	// leads to its Change.
+	change := page.Notifications[0]
+	if change.ID != "change:10" || change.Source != "change" || change.Label != "Changes" || change.Text != merged.Detail ||
+		change.Target.Kind != "change" || change.Target.WorkspaceID != "code" || change.Target.ChangeID != "pr:7" {
+		t.Fatalf("change notice = %+v", change)
+	}
+	waiting, failed, skipped := page.Notifications[1], page.Notifications[2], page.Notifications[3]
 	if waiting.ID != "workflow:9" || waiting.Source != "workflow" || waiting.Label != "finance-review" || waiting.Text != "Waiting for your answer" ||
 		waiting.Target.Kind != "workflow_run" || waiting.Target.WorkspaceID != "finance" || waiting.Target.RunID != "run-9" || waiting.ReadAt != nil {
 		t.Fatalf("waiting notice = %+v", waiting)
@@ -130,11 +141,11 @@ func TestNotificationsListEveryWorkspaceInTheGeneralShape(t *testing.T) {
 		t.Fatalf("notice text carries CLI hints: %s", resp.Body)
 	}
 
-	if resp := notificationsPost(t, h, "/read", map[string]any{"ids": []string{"workflow:9", "workflow:8"}, "read": true}); resp.Code != http.StatusOK ||
+	if resp := notificationsPost(t, h, "/read", map[string]any{"ids": []string{"workflow:9", "change:10"}, "read": true}); resp.Code != http.StatusOK ||
 		!strings.Contains(resp.Body.String(), `"marked":2`) {
 		t.Fatalf("read = %d %s", resp.Code, resp.Body)
 	}
-	if got := source.marks[0]; len(got.IDs) != 2 || got.IDs[0] != 9 || got.IDs[1] != 8 || !got.Read || got.All || got.Surface != "web" {
+	if got := source.marks[0]; len(got.IDs) != 2 || got.IDs[0] != 9 || got.IDs[1] != 10 || !got.Read || got.All || got.Surface != "web" {
 		t.Fatalf("mark = %+v", got)
 	}
 	if resp := notificationsPost(t, h, "/read", map[string]any{"all": true, "read": true}); resp.Code != http.StatusOK {

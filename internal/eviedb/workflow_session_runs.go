@@ -189,6 +189,19 @@ func rebuildWorkflowRuns(ctx context.Context, db *sql.DB, from, to string) error
 // from text, with every such text replaced by its to (Stage 14 sub-stage
 // 12 changes the state check and the finished check together).
 func rebuildWorkflowRunsWith(ctx context.Context, db *sql.DB, replacements [][2]string) error {
+	return rebuildTable(ctx, db, "workflow_runs", replacements, true)
+}
+
+// rebuildTable rebuilds table when its definition holds any replacement's
+// from text, with every such text replaced by its to. Under the write lock,
+// with foreign keys off, it copies every row with its rowid into the new
+// table (a column the new definition adds starts NULL), drops the old one,
+// renames the new one, and recreates the old one's indexes and, when
+// keepTriggers is set, its triggers (read from the schema first), then
+// checks foreign keys before committing. Competing startups rebuild it
+// once: each re-reads the definition under the lock.
+func rebuildTable(ctx context.Context, db *sql.DB, table string, replacements [][2]string, keepTriggers bool) error {
+	tableName := regexp.MustCompile(`^CREATE TABLE\s+"?` + regexp.QuoteMeta(table) + `"?\s*\(`)
 	needed := func(definition string) bool {
 		for _, r := range replacements {
 			if strings.Contains(definition, r[0]) {
@@ -198,7 +211,7 @@ func rebuildWorkflowRunsWith(ctx context.Context, db *sql.DB, replacements [][2]
 		return false
 	}
 	var definition string
-	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='workflow_runs'`).Scan(&definition); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&definition); err != nil {
 		return err
 	}
 	if !needed(definition) {
@@ -213,9 +226,10 @@ func rebuildWorkflowRunsWith(ctx context.Context, db *sql.DB, replacements [][2]
 		return err
 	}
 	defer conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA foreign_keys=ON`)
-	// Triggers of other tables read workflow_runs (sub-stage 12's retention
-	// guards): the rename must not re-check them while the table is being
-	// replaced, as SQLite's own procedure for such changes does.
+	// Triggers of other tables may read the table (sub-stage 12's retention
+	// guards, the notifications trigger on workflow_runs): the rename must
+	// not re-check them while the table is being replaced, as SQLite's own
+	// procedure for such changes does.
 	if _, err := conn.ExecContext(ctx, `PRAGMA legacy_alter_table=ON`); err != nil {
 		return err
 	}
@@ -229,21 +243,28 @@ func rebuildWorkflowRunsWith(ctx context.Context, db *sql.DB, replacements [][2]
 			_, _ = conn.ExecContext(context.WithoutCancel(ctx), `ROLLBACK`)
 		}
 	}()
-	if err := conn.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='workflow_runs'`).Scan(&definition); err != nil {
+	if err := conn.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&definition); err != nil {
 		return err
 	}
 	if !needed(definition) {
 		return nil
 	}
-	if !workflowRunsTableName.MatchString(definition) {
-		return errors.New("unsupported workflow run table schema")
+	if !tableName.MatchString(definition) {
+		return fmt.Errorf("unsupported %s table schema", table)
 	}
 	for _, r := range replacements {
 		definition = strings.Replace(definition, r[0], r[1], 1)
 	}
-	rebuilt := workflowRunsTableName.ReplaceAllString(definition, "CREATE TABLE workflow_runs_rebuilt (")
+	if needed(definition) {
+		return fmt.Errorf("the %s table schema did not take every change", table)
+	}
+	rebuilt := tableName.ReplaceAllString(definition, "CREATE TABLE "+table+"_rebuilt (")
+	kinds := `'index'`
+	if keepTriggers {
+		kinds += `,'trigger'`
+	}
 	var dependents []string
-	rows, err := conn.QueryContext(ctx, `SELECT sql FROM sqlite_master WHERE tbl_name='workflow_runs' AND type IN ('index','trigger') AND sql IS NOT NULL ORDER BY type,name`)
+	rows, err := conn.QueryContext(ctx, `SELECT sql FROM sqlite_master WHERE tbl_name=? AND type IN (`+kinds+`) AND sql IS NOT NULL ORDER BY type,name`, table)
 	if err != nil {
 		return err
 	}
@@ -259,7 +280,7 @@ func rebuildWorkflowRunsWith(ctx context.Context, db *sql.DB, replacements [][2]
 		return err
 	}
 	var columns []string
-	rows, err = conn.QueryContext(ctx, `SELECT name FROM pragma_table_info('workflow_runs') ORDER BY cid`)
+	rows, err = conn.QueryContext(ctx, `SELECT name FROM pragma_table_info(?) ORDER BY cid`, table)
 	if err != nil {
 		return err
 	}
@@ -276,12 +297,12 @@ func rebuildWorkflowRunsWith(ctx context.Context, db *sql.DB, replacements [][2]
 	}
 	list := strings.Join(columns, ",")
 	for _, statement := range append([]string{rebuilt,
-		`INSERT INTO workflow_runs_rebuilt(rowid,` + list + `) SELECT rowid,` + list + ` FROM workflow_runs`,
-		`DROP TABLE workflow_runs`,
-		`ALTER TABLE workflow_runs_rebuilt RENAME TO workflow_runs`,
+		`INSERT INTO ` + table + `_rebuilt(rowid,` + list + `) SELECT rowid,` + list + ` FROM ` + table,
+		`DROP TABLE ` + table,
+		`ALTER TABLE ` + table + `_rebuilt RENAME TO ` + table,
 	}, dependents...) {
 		if _, err := conn.ExecContext(ctx, statement); err != nil {
-			return fmt.Errorf("rebuild workflow runs: %w", err)
+			return fmt.Errorf("rebuild %s: %w", table, err)
 		}
 	}
 	rows, err = conn.QueryContext(ctx, `PRAGMA foreign_key_check`)
@@ -295,7 +316,7 @@ func rebuildWorkflowRunsWith(ctx context.Context, db *sql.DB, replacements [][2]
 		return scanErr
 	}
 	if violated {
-		return errors.New("the workflow run rebuild would violate a foreign key")
+		return fmt.Errorf("the %s rebuild would violate a foreign key", table)
 	}
 	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
 		return err
