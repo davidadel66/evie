@@ -72,14 +72,27 @@ func TestProposeBuildMergeInAGitHubRepositoryLeavesADraftWithoutACard(t *testing
 		t.Fatal("a GitHub Repository merged locally")
 	}
 
+	// Story 6b: a local Repository's Change waits in the Workspace's Changes
+	// tab too; only a project chat, which has no Changes tab, gets the card.
+	project := tools.WithInvocationContext(context.Background(), tools.InvocationContext{Scope: memory.ScopeContext{ProjectID: "p"}})
 	for name, s := range map[string]Subagents{
 		"local":     NewSubagents(supervisor).WithGitHubRepositories(onGitHub{}),
 		"not wired": NewSubagents(supervisor),
 	} {
 		prepared, err := s.prepareMerge(ctx, args, false)
-		if err != nil || prepared.Preview == nil || prepared.Execute == nil || prepared.Review != nil {
-			t.Fatalf("%s prepared = %+v, %v", name, prepared, err)
+		if err != nil || prepared.Review == nil || prepared.Preview != nil || prepared.Execute != nil {
+			t.Fatalf("%s in a Workspace prepared = %+v, %v", name, prepared, err)
 		}
+		result, err := prepared.Review(ctx)
+		if err != nil || !strings.Contains(result, `"status":"ready"`) || !strings.Contains(result, "Changes tab") || strings.Contains(result, "David") {
+			t.Fatalf("%s result = %s, %v", name, result, err)
+		}
+		if prepared, err := s.prepareMerge(project, args, false); err != nil || prepared.Preview == nil || prepared.Execute == nil || prepared.Review != nil {
+			t.Fatalf("%s in a project prepared = %+v, %v", name, prepared, err)
+		}
+	}
+	if supervisor.merged {
+		t.Fatal("a Workspace's Change merged from the chat")
 	}
 }
 
@@ -104,8 +117,8 @@ func TestProposeBuildMergeTakesTheChangesTitleAndDescription(t *testing.T) {
 	if len(supervisor.proposed) != 1 {
 		t.Fatalf("an incomplete proposal reached the gate: %+v", supervisor.proposed)
 	}
-	merge := s.mergeCapability(false)
-	if merge.ContractVersion != "1.1.0" || !strings.Contains(string(mustJSON(t, merge.Tool.Schema.Function.Parameters)), `"required":["execution_id","title","description"]`) {
+	merge := s.mergeCapability("1.2.0")
+	if merge.ContractVersion != "1.2.0" || !strings.Contains(string(mustJSON(t, merge.Tool.Schema.Function.Parameters)), `"required":["execution_id","title","description"]`) {
 		t.Fatalf("propose_build_merge = %s %s", merge.ContractVersion, mustJSON(t, merge.Tool.Schema.Function.Parameters))
 	}
 }
@@ -117,9 +130,14 @@ func TestProposeBuildMergeTakesTheChangesTitleAndDescription(t *testing.T) {
 func TestChatsPinnedBeforeTheChangeTextReopenWithTheirMergeTool(t *testing.T) {
 	t.Setenv("EVIE_REMOTE_MEMORY", "on")
 	const pinned = "2737678c19e298dccc2648b1bf2a4779dadb851f023d51a51ceaa76c86e6518d"
-	legacy := Subagents{}.mergeCapability(true)
+	legacy := Subagents{}.mergeCapability("1.0.0")
 	if got := schemaHash(legacy.Tool.Schema); got != pinned || legacy.ContractVersion != "1.0.0" {
 		t.Fatalf("frozen propose_build_merge = %s %s, want %s 1.0.0", got, legacy.ContractVersion, pinned)
+	}
+	// Two chats on the owner's machine pinned 1.1.0 (fb61acb5…) on
+	// 2026-10-10, before story 6b changed what the description says.
+	if got := schemaHash(Subagents{}.mergeCapability("1.1.0").Tool.Schema); got != "fb61acb52c7efae6e8cb7dfa2468fd46bcefdfc4d25a0481b9bb0bcec32d4090" {
+		t.Fatalf("frozen 1.1.0 propose_build_merge = %s", got)
 	}
 	supervisor := &proposingSupervisor{}
 	manager := func(subagents Plugin) *Manager {
@@ -147,7 +165,7 @@ func TestChatsPinnedBeforeTheChangeTextReopenWithTheirMergeTool(t *testing.T) {
 		t.Fatal("reopening changed the pinned receipt or its tools")
 	}
 	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.0.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.1.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.2.0" {
 		t.Fatalf("compatibility = %+v", resumed.CompatibilityResolutions)
 	}
 	ctx := tools.WithInvocationContext(context.Background(), tools.InvocationContext{Scope: memory.ScopeContext{WorkspaceID: "w"}})
@@ -165,7 +183,7 @@ func TestChatsPinnedBeforeTheChangeTextReopenWithTheirMergeTool(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range current.Receipt.Capabilities {
-		if c.ID == string(SubagentsMergeCapabilityID) && (c.ContractVersion != "1.1.0" || c.SchemaSHA256 == pinned) {
+		if c.ID == string(SubagentsMergeCapabilityID) && (c.ContractVersion != "1.2.0" || c.SchemaSHA256 == pinned) {
 			t.Fatalf("a new chat's propose_build_merge = %+v", c)
 		}
 	}

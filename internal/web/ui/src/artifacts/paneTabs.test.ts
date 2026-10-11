@@ -40,7 +40,9 @@ describe("shared inspector tabs", () => {
   expect(tabs.map(tab=>tab.kind)).toEqual(["disk","inspection"]);
   tabs=openPaneTab(tabs,{id:key,kind:"inspection",target});
   expect(tabs).toHaveLength(2);
-  expect(closePaneTab(tabs,key,key)).toEqual({tabs:[file],active:file.id});
+  expect(closePaneTab(tabs,key,key)).toEqual({tabs:[file],active:file.id,closeInspector:false});
+  // Closing the last tab closes the Inspector with it.
+  expect(closePaneTab([file],file.id,file.id)).toEqual({tabs:[],active:"",closeInspector:true});
  });
  it("keeps a recorded file distinct from the current disk file",()=>{
   const target={kind:"file",file:{key:"read-1",path:"notes.md",status:"Read",content:{kind:"code",coverage:"full",text:"old"}}} as const;
@@ -51,12 +53,12 @@ describe("shared inspector tabs", () => {
   const html=renderToStaticMarkup(createElement(InspectorPane,{visible:true,focused:false,onClose:()=>{},onManageFolder:()=>{}}));
   expect(html.match(/aria-label="Inspector"/g)).toHaveLength(1);
   expect(html).toContain("Open files");expect(html).toContain("Open Workspaces");
-  expect(html).not.toContain("Open changes");expect(html).not.toContain("Open terminal");
+  expect(html).not.toContain("Open working tree");expect(html).not.toContain("Open terminal");
  });
  it("labels every folder view once a folder is attached",()=>{
   const workspace={id:"w",displayName:"Evie",state:"active",currentRevisionId:"r",createdAt:"",updatedAt:"",folder:{path:"/code/evie",revision:1}} as const;
   const html=renderToStaticMarkup(createElement(InspectorPane,{visible:true,focused:false,workspace,onClose:()=>{},onManageFolder:()=>{}}));
-  for(const label of ["Files","Changes","Terminal"])expect(html).toMatch(new RegExp(`aria-label="Open ${label.toLowerCase()}"[^>]*>.*?${label}</button>`));
+  for(const label of ["Files","Working tree","Terminal"])expect(html).toMatch(new RegExp(`aria-label="Open ${label.toLowerCase()}"[^>]*>.*?${label}</button>`));
   expect(html).toMatch(/aria-label="Open files" aria-pressed="true"/);
   expect(html).toContain(">evie</span>");
  });

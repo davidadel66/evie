@@ -7,7 +7,7 @@ import {
   type ChangeAction, type ChangeGroup, type ChangeTone,
 } from "./changeView";
 import {
-  isViewed, markViewed, parsePatch, readLayout, readViewed, splitPath, splitRows, wordSpans, writeLayout, writeViewed,
+  browserStorage, isViewed, markViewed, parsePatch, readLayout, readViewed, splitPath, splitRows, wordSpans, writeLayout, writeViewed,
   type DiffLayout, type DiffLine, type Hunk, type ViewedMarks,
 } from "./diffView";
 
@@ -270,13 +270,7 @@ export function ChangeReview({detail, now, busy, message, problem, viewed, layou
   </div>;
 }
 
-const storage = (): Storage | undefined => {
-  try {
-    return typeof window === "undefined" ? undefined : window.localStorage;
-  } catch {
-    return undefined;
-  }
-};
+const storage = browserStorage;
 
 /** The Changes tab: the list, or one Change's review page when one is open. */
 export function WorkspaceChanges({workspace, listing, selected, sessionTitles, api = changesAPI, onSelect, onChanged, onOpenRun, onOpenSession}: {

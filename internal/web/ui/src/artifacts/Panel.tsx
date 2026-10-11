@@ -12,6 +12,8 @@ import type { FileInspection as InspectedFile } from "./fileInspection";
 import { MemoryEvidence } from "./MemoryEvidence";
 import { targetTitle, memoryTitle, claimObject } from "./inspectorTitle";
 import { RunInspection } from "./RunInspection";
+import { BuildInspection } from "./BuildInspection";
+import type { BuildRef } from "./chatBuilds";
 
 export type InspectorTarget =
  | ({kind:"repository-instructions"} & InstructionTarget)
@@ -25,6 +27,8 @@ export type InspectorTarget =
   | { kind: "data" }
   /** A run Evie started in this chat (workspace-activity.spec.md). */
   | { kind: "workflow-run"; runId: string }
+  /** The builds one chat row made, each with its Change (changes.spec.md story 6b). */
+  | { kind: "build"; key: string; workspaceId?: string; builds: BuildRef[] }
   | { kind: "empty" };
 
 type Props = {
@@ -68,7 +72,7 @@ export function Panel({ target, focused, onClose }: Props) {
   );
 }
 
-export function InspectorContent({target}: {target: InspectorTarget}) {
+export function InspectorContent({target, onOpenChange}: {target: InspectorTarget; onOpenChange?: (workspaceId: string, changeId: string) => void}) {
   return <>
         {target.kind === "file" && <FileViewer key={target.file.key} file={target.file} />}
         {target.kind === "tool" && <ToolInspection key={target.tool.key} tool={target.tool} />}
@@ -80,6 +84,7 @@ export function InspectorContent({target}: {target: InspectorTarget}) {
         {target.kind === "file-diff" && <FileInspection target={target} />}
         {target.kind === "data" && <DataInspection />}
         {target.kind === "workflow-run" && <RunInspection key={target.runId} runId={target.runId} />}
+        {target.kind === "build" && <BuildInspection key={target.key} builds={target.builds} workspaceId={target.workspaceId} onOpenChange={onOpenChange} />}
         {target.kind === "empty" && <EmptyInspection />}
   </>;
 }

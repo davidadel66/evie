@@ -12,7 +12,6 @@ import (
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/plugins"
-	"github.com/davidadel66/evie/internal/tools"
 )
 
 // workspaceGateParent is a live turn of a Standard chat in a Workspace on
@@ -80,13 +79,14 @@ func TestTheOwnerMergesAndClosesAWorkspacesBuilds(t *testing.T) {
 		t.Fatalf("merging again = %v", err)
 	}
 
-	// Open: the chat's proposal passed and the owner declined the card; the
-	// owner's merge reuses it without verifying again.
+	// Open: the chat's proposal passed the gate and, in a Workspace, asked
+	// nothing (story 6b): the Change waits in the Changes tab, and the
+	// owner's merge there reuses the gate's runs without verifying again.
 	open := f.buildFiles(t, p, delegation.Assignment{Key: "lexer", Objective: "Add a lexer", TaskID: string(tree.sibling.ID)},
 		map[string]string{"lexer.go": "package main\n\nfunc lex() {}\n"}, nil)
-	declined := f.proposeMerge(t, p, map[string]string{"execution_id": open.ExecutionID}, func(*tools.FileChangePreview) tools.Decision { return tools.Declined })
-	if declined.asked != 1 {
-		t.Fatalf("proposal = %+v", declined)
+	proposed := f.proposeMerge(t, p, map[string]string{"execution_id": open.ExecutionID}, neverAsked(t))
+	if proposed.asked != 0 || proposed.isErr || !strings.Contains(proposed.content, `"status":"ready"`) || !strings.Contains(proposed.content, "Changes tab") {
+		t.Fatalf("proposal = %+v", proposed)
 	}
 	verified := gateOf(t, f, p, open.ExecutionID)
 	opened, err := f.supervisor.MergeAsOwner(ctx, ws, open.ExecutionID)

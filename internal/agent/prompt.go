@@ -19,7 +19,7 @@ const (
 // mergeGuidance is the Delegation line for a session that can propose
 // merging a build worker's branch (Stage 12, 2026-10-04). Sessions pinned
 // before propose_build_merge existed keep their exact prompt.
-const mergeGuidance = "- When a build result looks right, call " + proposeBuildMergeTool + " with the child's latest execution_id: Evie verifies the branch, rebases it onto its target and verifies again, and only then asks David to approve the fast-forward. If a check fails, continue the worker with the failure output and propose again; never try to merge by other means.\n"
+const mergeGuidance = "- When a build result looks right, call " + proposeBuildMergeTool + " with the child's latest execution_id: Evie verifies the branch, rebases it onto its target and verifies again, and only then David reviews it and may approve the merge: in a Workspace from its Changes tab, in a project chat on an approval card. If a check fails, continue the worker with the failure output and propose again; never try to merge by other means.\n"
 
 // exploreGuidance is the Delegation line for a session that can delegate to
 // read-only explore workers (Stage 7, 2026-10-03). Sessions pinned before

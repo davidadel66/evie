@@ -12,6 +12,7 @@ export function targetTitle(target: InspectorTarget) {
   if (target.kind === "file-diff") return target.path;
   if (target.kind === "data") return "Data";
   if (target.kind === "workflow-run") return "Workflow run";
+  if (target.kind === "build") return target.builds.length === 1 ? target.builds[0].branch : `${target.builds.length} builds`;
   return "Inspector";
 }
 

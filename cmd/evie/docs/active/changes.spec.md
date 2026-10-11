@@ -408,6 +408,20 @@ keeps the owner's checkout current without touching work in progress.
     linked pull request's title and description are the Change's, which
     is how a workflow's text shows.
 - The folder view's "Changes" tab is renamed "Working tree".
+- Story 6b decisions (2026-10-10):
+  - A chat's `delegate_build`, `continue_research` or `propose_build_merge`
+    row opens the Inspector on the Change it made: title, state, branch,
+    and its files' diffs (unified, with the same "Viewed" marks as the
+    Changes tab). "Open in Changes" opens it on its review page. Nothing
+    is approved in the Inspector.
+  - In a Workspace chat, `propose_build_merge` no longer shows a card.
+    The gate passes, and the Change waits as "Needs your review" in the
+    Changes tab. A project chat has no Changes tab, so it keeps the card.
+  - The tool's description says where the owner reviews (Subagents
+    1.2.0). Chats pinned to 1.0.0 and 1.1.0 keep their schemas exactly,
+    and run the same gate.
+  - Closing the Inspector's last tab closes the Inspector. Reopened, a
+    folder's Inspector starts on its files.
 - Settings → Repository sits with the other Workspace settings sections and
   moves into the Settings tab when the workspace-activity header lands.
 

@@ -34,6 +34,7 @@ import { WorkspaceHome, Workspaces } from "./workspaces/Workspaces";
 import type { WorkspaceTab, WorkspaceViewState } from "./workspaces/workspaceActivity";
 import { Notifications } from "./shell/Notifications";
 import { noticeDestination } from "./shell/notices";
+import { buildsOfTool } from "./artifacts/chatBuilds";
 import type { Notice } from "./api/notifications";
 import { useWorkflowCaps, useWorkspaceNeeds } from "./store/useWorkspaceNeeds";
 import { CreateWorkspaceDialog } from "./workspaces/CreateWorkspaceDialog";
@@ -117,15 +118,19 @@ export default function App() {
     setInspectionRequest(value=>value+1);setInspectorOpen(true);setInspectorFocused(false);setMobileNavOpen(false);
   };
   const selectedTool = selectedToolInspection(selectedAction, contextSessions.snapshot?.activeSession?.id, items);
-  const selectedInspection = selectedTool ? inspectToolFile(selectedTool) : null;
-  const latestFileDiff = [...items].reverse().find((item) => item.kind === "tool" && item.approval?.preview);
+  // A build row opens its Change, not a file (changes.spec.md story 6b).
+  const selectedBuilds = selectedTool ? buildsOfTool(selectedTool) : [];
+  const selectedInspection = selectedTool && selectedBuilds.length === 0 ? inspectToolFile(selectedTool) : null;
+  const latestFileDiff = [...items].reverse().find((item) => item.kind === "tool" && item.name !== "propose_build_merge" && item.approval?.preview);
   const latestFile = latestFileDiff?.kind === "tool" ? inspectToolFile(latestFileDiff) : null;
   const visibleOverride = inspectorOverride?.kind==="repository-instructions"&&inspectorOverride.turnId&&inspectorOverride.sessionId!==contextSessions.snapshot?.activeSession?.id?undefined:inspectorOverride?.kind === "memory-evidence"
     ? inspectorOverride.sessionId === contextSessions.snapshot?.activeSession?.id
       ? {...inspectorOverride, memoryTools: selectedMemoryTools(inspectorOverride, contextSessions.snapshot?.activeSession?.id, items)}
       : undefined
     : inspectorOverride;
-  const inspectorTarget: InspectorTarget = selectedInspection
+  const inspectorTarget: InspectorTarget = selectedTool && selectedBuilds.length > 0
+    ? {kind: "build", key: selectedTool.key, workspaceId: contextSessions.snapshot?.activeScope?.workspaceId, builds: selectedBuilds}
+    : selectedInspection
     ? {kind: "file", file: selectedInspection}
     : selectedTool ? {kind: "tool", tool: selectedTool}
     : visibleOverride ?? defaultInspectorTarget(activeView, activeWorkspace, contextSessions.snapshot?.activeScope, latestFile ? {kind: "file", file: latestFile} : undefined);
@@ -444,6 +449,10 @@ export default function App() {
           focused={inspectorFocused}
           onToggleFocus={() => setInspectorFocused((focused) => !focused)}
           onClose={closeInspector}
+          onOpenChange={(workspaceId, changeId) => {
+            const workspace = contextSessions.snapshot?.workspaces.find((candidate) => candidate.id === workspaceId);
+            if (workspace) openWorkspace(workspace, "changes", undefined, changeId);
+          }}
           onManageFolder={() => {
             const workspace = activeWorkspace ?? contextSessions.snapshot?.workspaces.find(workspace => workspace.id === contextSessions.snapshot?.activeScope?.workspaceId);
             if (workspace) openWorkspace(workspace, "settings"); else openView({id: "workspaces", kind: "workspaces"});

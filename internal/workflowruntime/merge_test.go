@@ -135,17 +135,17 @@ func TestWorkflowBuildBranchMergesThroughTheGateFromTheOwnersChat(t *testing.T) 
 		t.Fatalf("foreign chat: %v", err)
 	}
 
-	// Declined: verified and shown, nothing merged.
+	// The owner's chat takes it through the gate: verified, and, in a
+	// Workspace, no card (changes.spec.md story 6b). Nothing merged; the
+	// Change waits in the Changes tab.
 	p, call := mergeChat(t, h.store, w, execution)
 	content, isErr, asked := proposeRunMerge(t, supervisor, p, call, execution, false)
-	if asked != 1 || isErr || !strings.Contains(content, "declined") || gitIn(t, repo, "rev-parse", "master") != master {
-		t.Fatalf("declined merge = %q (error %v, asked %d)", content, isErr, asked)
+	if asked != 0 || isErr || !strings.Contains(content, `"status":"ready"`) || gitIn(t, repo, "rev-parse", "master") != master {
+		t.Fatalf("proposal = %q (error %v, asked %d)", content, isErr, asked)
 	}
-	// Approved: the owner's approval fast-forwards master.
-	p, call = mergeChat(t, h.store, w, execution)
-	content, isErr, asked = proposeRunMerge(t, supervisor, p, call, execution, true)
-	if asked != 1 || isErr {
-		t.Fatalf("approved merge = %q (error %v, asked %d)", content, isErr, asked)
+	// The owner merges it from the Changes tab: master fast-forwards.
+	if merged, err := supervisor.MergeAsOwner(ctx, w.ID, execution); err != nil || merged.Status != delegation.MergeMerged {
+		t.Fatalf("owner's merge = %+v, %v", merged, err)
 	}
 	if files := gitIn(t, repo, "show", "--name-only", "--format=", "master"); files != "hello.txt" {
 		t.Fatalf("master's last commit changed %q", files)

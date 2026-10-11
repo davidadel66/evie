@@ -10,12 +10,14 @@ import { InspectorContent, type InspectorTarget } from "./Panel";
 import { targetTitle } from "./inspectorTitle";
 import { closePaneTab, inspectionKey, openPaneTab, refreshInspection, type PaneTab } from "./paneTabs";
 
-export type InspectorPaneProps = {target?:InspectorTarget;items?:Item[];requestVersion?:number;filesRequest?:number;workspace?:Workspace;sessionId?:string;visible:boolean;focused:boolean;onToggleFocus?:()=>void;onClose:()=>void;onManageFolder:()=>void};
+export type InspectorPaneProps = {target?:InspectorTarget;items?:Item[];requestVersion?:number;filesRequest?:number;workspace?:Workspace;sessionId?:string;visible:boolean;focused:boolean;onToggleFocus?:()=>void;onClose:()=>void;onManageFolder:()=>void;
+ /** Opens a build's Change in its Workspace's Changes tab (changes.spec.md story 6b). */
+ onOpenChange?:(workspaceId:string,changeId:string)=>void};
 export function InspectorPane(props:InspectorPaneProps) {
  const folderIdentity=`${props.workspace?.id ?? "none"}:${props.workspace?.folder?.revision ?? 0}`;
  return <Pane key={`${folderIdentity}:${props.sessionId ?? "none"}`} {...props}/>;
 }
-function Pane({target,items=[],sessionId,requestVersion=0,filesRequest=0,workspace,visible,focused,onToggleFocus,onClose,onManageFolder}:InspectorPaneProps) {
+function Pane({target,items=[],sessionId,requestVersion=0,filesRequest=0,workspace,visible,focused,onToggleFocus,onClose,onManageFolder,onOpenChange}:InspectorPaneProps) {
  const hasFolder=!!workspace?.folder?.path;
  const [tabs,setTabs]=useState<PaneTab[]>(hasFolder?[{id:"files",kind:"files"}]:[]);
  const [active,setActive]=useState(hasFolder?"files":"");
@@ -32,12 +34,14 @@ function Pane({target,items=[],sessionId,requestVersion=0,filesRequest=0,workspa
   if(visible)closeRef.current?.focus();
  },[requestKey,requestVersion,target,visible]);
  useEffect(()=>{if(filesRequest>0){setTabs(current=>openPaneTab(current,{id:"files",kind:"files"}));setActive("files");}},[filesRequest]);
+ // Reopened with every tab closed, a folder's pane starts on its files again.
+ useEffect(()=>{if(visible&&hasFolder){setTabs(current=>{if(current.length>0)return current;setActive("files");return [{id:"files",kind:"files"}];});}},[visible,hasFolder]);
  useEffect(()=>{try{localStorage.setItem("evie.fileTree",String(treeVisible));localStorage.setItem("evie.paneWidth",String(width));}catch{/* preferences stay in memory */}},[treeVisible,width]);
  const selected=tabs.find(tab=>tab.id===active);
  const root=workspace?folderRef(workspace):undefined;
  const toggleTree=()=>setTreeVisible(value=>!value);
  const openFile=(path:string)=>open({id:`disk:${path}`,kind:"disk",path});
- const close=(id:string)=>{const next=closePaneTab(tabs,active,id);setTabs(next.tabs);setActive(next.active);};
+ const close=(id:string)=>{const next=closePaneTab(tabs,active,id);setTabs(next.tabs);setActive(next.active);if(next.closeInspector)onClose();};
  const resize=(event:React.PointerEvent)=>{
   const start=event.clientX,initial=width;event.currentTarget.setPointerCapture(event.pointerId);
   const move=(next:PointerEvent)=>setWidth(Math.max(380,Math.min(1100,initial+start-next.clientX)));
@@ -65,7 +69,7 @@ function Pane({target,items=[],sessionId,requestVersion=0,filesRequest=0,workspa
   <header className="border-editor-hair bg-topbar flex h-11 flex-none items-center gap-1 border-b pr-1.5 pl-2">
    <div role="group" aria-label="Inspector views" className="flex flex-none items-center gap-0.5">
     <PaneButton label="Files" action="Open files" icon={<Folder size={13}/>} active={selected?.kind==="files"||selected?.kind==="disk"} onClick={()=>open({id:"files",kind:"files"})}/>
-    {hasFolder&&<PaneButton label="Changes" action="Open changes" icon={<Layers size={13}/>} active={selected?.kind==="changes"} onClick={()=>open({id:"changes",kind:"changes"})}/>}
+    {hasFolder&&<PaneButton label="Working tree" action="Open working tree" icon={<Layers size={13}/>} active={selected?.kind==="changes"} onClick={()=>open({id:"changes",kind:"changes"})}/>}
     {hasFolder&&<PaneButton label="Terminal" action="Open terminal" icon={<TerminalIcon size={13}/>} active={selected?.kind==="terminal"} onClick={()=>open({id:"terminal",kind:"terminal"})}/>}
    </div>
    <span className="text-editor-muted ml-2 min-w-0 flex-1 truncate text-right text-xs" title={workspace?.folder?.path}>{workspace?.folder?.path?.split("/").pop()}</span>
@@ -85,7 +89,7 @@ function Pane({target,items=[],sessionId,requestVersion=0,filesRequest=0,workspa
   </div>}
   <div id="pane-content" role="tabpanel" aria-labelledby={selected?`pane-tab-${encodeURIComponent(selected.id)}`:undefined} className="flex min-h-0 min-w-0 flex-1">
    {root&&tabs.some(tab=>tab.kind==="terminal")&&<div hidden={selected?.kind!=="terminal"} className={selected?.kind==="terminal"?"flex min-h-0 min-w-0 flex-1":"hidden"}><TerminalView root={root} active={visible&&selected?.kind==="terminal"}/></div>}
-   {selected?.kind==="terminal"?null:selected?.kind==="inspection"?<div className="flex min-h-0 min-w-0 flex-1 flex-col"><div className="border-editor-hair text-muted-text border-b px-4 py-2 text-xs">{targetTitle(selected.target)}{selected.target.kind==="file"?" · Recorded in conversation":""}</div><div className="flex min-h-0 flex-1 flex-col overflow-auto"><InspectorContent key={selected.id} target={refreshInspection(selected.id===requestKey&&target?target:selected.target,sessionId,items,workspace)}/></div></div>
+   {selected?.kind==="terminal"?null:selected?.kind==="inspection"?<div className="flex min-h-0 min-w-0 flex-1 flex-col"><div className="border-editor-hair text-muted-text border-b px-4 py-2 text-xs">{targetTitle(selected.target)}{selected.target.kind==="file"?" · Recorded in conversation":""}</div><div className="flex min-h-0 flex-1 flex-col overflow-auto"><InspectorContent key={selected.id} target={refreshInspection(selected.id===requestKey&&target?target:selected.target,sessionId,items,workspace)} onOpenChange={onOpenChange}/></div></div>
    :!hasFolder||!root?<div className="text-muted-text m-auto max-w-80 p-6 text-center text-sm leading-6"><Folder size={24} className="mx-auto mb-4"/><p>Attach a local folder to browse files and review changes alongside your conversation.</p><button type="button" onClick={onManageFolder} className="text-teal mt-4 text-xs">{workspace?"Set Workspace folder":"Open Workspaces"}</button></div>
    :selected?.kind==="changes"?<ChangesView root={root}/>
    :selected?.kind==="disk"?<><DiskFileView key={selected.path} root={root} path={selected.path} treeVisible={treeVisible} onToggleTree={toggleTree}/>{treeVisible&&<div className="border-editor-hair w-[220px] min-w-[150px] max-w-[42%] flex-none border-l"><FileTree root={root} onOpen={openFile}/></div>}</>
@@ -98,5 +102,5 @@ function PaneButton({label,action,icon,active,onClick}:{label:string;action:stri
  return <button type="button" aria-label={action} aria-pressed={active} onClick={onClick} className={`${active?"bg-selected text-ink":"text-muted-text hover:bg-hover hover:text-body"} flex items-center gap-1.5 rounded-md px-2 py-1 text-xs`}>{icon}{label}</button>;
 }
 function tabLabel(tab:PaneTab):string {
- switch(tab.kind){case "files":return "Files";case "changes":return "Changes";case "terminal":return "Terminal";case "disk":return tab.path.split("/").pop()??tab.path;case "inspection":return targetTitle(tab.target);}
+ switch(tab.kind){case "files":return "Files";case "changes":return "Working tree";case "terminal":return "Terminal";case "disk":return tab.path.split("/").pop()??tab.path;case "inspection":return targetTitle(tab.target);}
 }

@@ -28,13 +28,15 @@ export function inspectionKey(target: InspectorTarget): string {
  case "memory":return `record:${target.detail.scope.scope_id}:${target.detail.object_kind}:${target.detail.object_id}`;
  case "workspace":return `workspace:${target.workspace.id}`;
  case "scope":return `scope:${target.scope.workspaceId ?? target.scope.projectId ?? "global"}`;
+ case "build":return `build:${target.key}`;
  default:return target.kind;
  }
 }
 export function openPaneTab(tabs:PaneTab[], tab:PaneTab):PaneTab[] {
  return tabs.some(item=>item.id===tab.id)?tabs.map(item=>item.id===tab.id?tab:item):[...tabs,tab];
 }
-export function closePaneTab(tabs:PaneTab[],active:string,id:string):{tabs:PaneTab[];active:string} {
+// Closing the last tab closes the Inspector too: an empty pane has nothing to show.
+export function closePaneTab(tabs:PaneTab[],active:string,id:string):{tabs:PaneTab[];active:string;closeInspector:boolean} {
  const index=tabs.findIndex(tab=>tab.id===id);const next=tabs.filter(tab=>tab.id!==id);
- return {tabs:next,active:active===id?next[Math.max(0,index-1)]?.id??"":active};
+ return {tabs:next,active:active===id?next[Math.max(0,index-1)]?.id??"":active,closeInspector:next.length===0};
 }

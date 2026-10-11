@@ -104,6 +104,15 @@ export function splitPath(path: string): { dir: string; name: string } {
  */
 export type ViewedMarks = Record<string, string>;
 
+/** The browser's storage, when it keeps any. */
+export function browserStorage(): Storage | undefined {
+  try {
+    return typeof window === "undefined" ? undefined : window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
 const viewedKey = (workspaceId: string, changeId: string) => `evie.changes.viewed:${workspaceId}:${changeId}`;
 const fileVersion = (file: ComparedFile) => file.blob ?? `deleted:${file.path}`;
 
