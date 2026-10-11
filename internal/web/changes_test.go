@@ -92,6 +92,19 @@ func TestChangesRouteListsBuildChangesAndTheFolderStaysWhileOneIsUnfinished(t *t
 		c.Origin == nil || c.Origin.SessionID != string(parent.ID) {
 		t.Fatalf("Change = %+v", c)
 	}
+	// Story 6a: one Change with its diff. This one's branch was never made,
+	// so the detail says why there is no diff.
+	res = call("/api/changes/show", `{"workspace_id":"`+string(workspace.ID)+`","change_id":"build:`+attempt.Worktree.Branch+`"}`)
+	var shown changes.ChangeDetail
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &shown) != nil || shown.Change.ExecutionID != id || shown.Files == nil || !strings.Contains(shown.Problem, "gone") {
+		t.Fatalf("show = %d %s", res.Code, res.Body)
+	}
+	if res := call("/api/changes/show", `{"workspace_id":"`+string(workspace.ID)+`","change_id":"pr:9"}`); res.Code != 404 {
+		t.Fatalf("unknown Change = %d %s", res.Code, res.Body)
+	}
+	if res := call("/api/changes/show", `{"workspace_id":"`+string(workspace.ID)+`"}`); res.Code != 400 {
+		t.Fatalf("no Change = %d %s", res.Code, res.Body)
+	}
 	if res := call("/api/changes/list", `{"workspace_id":"missing"}`); res.Code != 404 {
 		t.Fatalf("unknown Workspace = %d %s", res.Code, res.Body)
 	}

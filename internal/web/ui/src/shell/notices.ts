@@ -20,15 +20,15 @@ export function unreadBadge(unread: number): string {
 
 /**
  * Where opening a notice leads in its Workspace: a run opens in the Runs
- * tab, a Change opens its Workspace (the Changes tab comes with
- * changes.spec.md story 6), and any other workflow notice opens the Runs tab.
+ * tab, a Change on its review page in the Changes tab (changes.spec.md
+ * story 6a), and any other workflow notice opens the Runs tab.
  */
-export function noticeDestination(notice: Notice): { tab?: WorkspaceTab; run?: string } {
+export function noticeDestination(notice: Notice): { tab?: WorkspaceTab; run?: string; change?: string } {
   switch (notice.target.kind) {
     case "workflow_run":
       return {tab: "runs", run: notice.target.run_id};
     case "change":
-      return {};
+      return {tab: "changes", change: notice.target.change_id};
     default:
       return {tab: "runs"};
   }

@@ -209,16 +209,16 @@ export default function App() {
     setMobileNavOpen(false);
   };
 
-  const openWorkspace = (workspace: Workspace, tab?: WorkspaceTab, run?: string) => {
-    openView({ id: `workspace:${workspace.id}`, kind: "workspace", workspaceId: workspace.id, label: workspace.displayName, tab, run });
+  const openWorkspace = (workspace: Workspace, tab?: WorkspaceTab, run?: string, change?: string) => {
+    openView({ id: `workspace:${workspace.id}`, kind: "workspace", workspaceId: workspace.id, label: workspace.displayName, tab, run, change });
   };
 
   // A notice opens what it points to in its Workspace (noticeDestination).
   const openNotice = (notice: Notice) => {
     const workspace = contextSessions.snapshot?.workspaces.find((candidate) => candidate.id === notice.target.workspace_id);
     if (!workspace) return;
-    const {tab, run} = noticeDestination(notice);
-    openWorkspace(workspace, tab, run);
+    const {tab, run, change} = noticeDestination(notice);
+    openWorkspace(workspace, tab, run, change);
   };
 
   const selectSession = async (selection: ContextSessionSelection) => {
@@ -410,6 +410,7 @@ export default function App() {
                 tab={activeView.tab ?? "runs"}
                 selectedRun={activeView.run}
                 runFilter={activeView.runFilter}
+                selectedChange={activeView.change}
                 onView={(patch) => setActiveView((view) => view.kind === "workspace" ? {...view, ...patch} : view)}
                 sessionTitles={sessionTitles}
                 onOpenSession={(sessionId) => void selectSession({ sessionId })}

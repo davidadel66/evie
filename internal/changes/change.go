@@ -105,8 +105,14 @@ type Change struct {
 	PullRequest *PullRequest `json:"pull_request,omitempty"`
 	Checks      []Check      `json:"checks,omitempty"`
 	// ArmedAt is when the owner set "Merge when checks pass" (story 5c).
-	ArmedAt   *time.Time `json:"armed_at,omitempty"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	ArmedAt *time.Time `json:"armed_at,omitempty"`
+	// MergedFrom is the commit a local merge moved its target from: the
+	// diff of a merged Change is from it to Head (story 6a).
+	MergedFrom string    `json:"merged_from,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	// titled says Evie gave the Change its title and description with its
+	// merge proposal; a pull request's own replace them otherwise.
+	titled bool
 }
 
 // Source reads one kind of a Workspace's Changes.
@@ -156,7 +162,8 @@ func (l *Lister) List(ctx context.Context, ws memory.WorkspaceID, folder string)
 
 // link joins each pull request to Evie's build Change on the same branch:
 // that Change takes the pull request, its checks, its head and GitHub's
-// state, and keeps Evie's title, notes and origin. Of several pull
+// state, and keeps Evie's title, notes and origin when Evie gave them with
+// its merge proposal. Of several pull
 // requests on one branch, the open one, else the newest, is the branch's.
 // Any other pull request is a Change of its own.
 func link(builds, pulls []Change) []Change {
@@ -179,6 +186,11 @@ func link(builds, pulls []Change) []Change {
 		c := &builds[onBranch[branch]]
 		c.State, c.PullRequest, c.Checks, c.ArmedAt = p.State, p.PullRequest, p.Checks, p.ArmedAt
 		c.NeedsRebase = c.NeedsRebase || p.NeedsRebase
+		if !c.titled && p.Title != "" {
+			// A workflow's pull request carries the text it gave (story 6a);
+			// the commit subject and the worker's words are not as good.
+			c.Title, c.Notes = p.Title, p.Notes
+		}
 		if p.Head != "" {
 			c.Head = p.Head
 		}

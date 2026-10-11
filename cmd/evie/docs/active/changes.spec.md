@@ -381,6 +381,32 @@ keeps the owner's checkout current without touching work in progress.
     side-by-side or unified diffs.
   - Diffs are computed from local git (fetching the pull request head for
     the owner's pull requests), reusing the folder view's git diff code.
+- Story 6a decisions (2026-10-10):
+  - The tab sits between Runs and Workflows and shows only for a Workspace
+    with a Repository.
+  - Groups:
+    - "Needs your review" holds everything waiting on the owner: ready to
+      merge, checks failing, or needs rebase. Its count is the tab's badge.
+    - "In progress" holds drafts ("Draft, not pushed" on GitHub, "Draft,
+      not verified" locally), checks running, and merges when checks pass.
+    - "Merged and closed" holds the finished ones.
+  - The review page's header has the state's action ("Approve and merge",
+    "Merge when checks pass" then "Undo auto-merge", or "Push and open
+    PR"), with a "Close" button and an inline confirmation for unfinished
+    Changes. The number links to the pull request on GitHub.
+  - Diffs:
+    - `/api/changes/show` reads one Change with its files' diffs, through
+      `localfiles.Compare`. It uses the folder view's hardened git, and
+      withholds what review excludes, such as `.env`.
+    - Evie's branch is compared with the base it left, and a local merge
+      with the commit it moved its target from. A pull request is fetched
+      into `refs/evie/pull/<number>`.
+    - Patches are read for at most 100 files.
+  - "Viewed" remembers each file's blob per browser, so a new commit
+    clears it; the diff layout is remembered per browser too.
+  - Evie's build that Evie titled keeps that title and notes. Otherwise a
+    linked pull request's title and description are the Change's, which
+    is how a workflow's text shows.
 - The folder view's "Changes" tab is renamed "Working tree".
 - Settings → Repository sits with the other Workspace settings sections and
   moves into the Settings tab when the workspace-activity header lands.

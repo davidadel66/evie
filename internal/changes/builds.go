@@ -83,7 +83,7 @@ func buildChange(ws memory.WorkspaceID, a delegation.Attempt, kind Kind) Change 
 	case g != nil && g.Merged != nil:
 		c.State = Merged
 		if g.Merged.To != "" {
-			c.Head = g.Merged.To
+			c.Head, c.MergedFrom = g.Merged.To, g.Merged.From
 		}
 	case w.RemovedAt != nil:
 		c.State = Closed
@@ -106,7 +106,7 @@ func buildChange(ws memory.WorkspaceID, a delegation.Attempt, kind Kind) Change 
 	if g != nil && g.Change != nil {
 		// Evie's own title and description from its merge proposal (story
 		// 4a, 2026-10-10), which its pull request carries.
-		c.Title, c.Notes = g.Change.Title, g.Change.Description
+		c.Title, c.Notes, c.titled = g.Change.Title, g.Change.Description, true
 	}
 	c.UpdatedAt = buildUpdatedAt(a)
 	return c

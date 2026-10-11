@@ -32,13 +32,13 @@ describe("notices", () => {
     expect(noticeTime("2026-10-05T09:00:00Z", now)).toBe("Oct 5");
   });
 
-  it("lead to what they are about: a run in the Runs tab, a Change in its Workspace", () => {
+  it("lead to what they are about: a run in the Runs tab, a Change on its review page", () => {
     expect(noticeDestination(waiting)).toEqual({tab: "runs", run: "run-9"});
     expect(noticeDestination({...waiting, target: {kind: "workspace_runs", workspace_id: "finance"}})).toEqual({tab: "runs"});
-    // changes.spec.md story 5c; the Changes tab comes with story 6.
+    // changes.spec.md stories 5c and 6a.
     const merged: Notice = {id: "change:10", source: "change", label: "Changes", text: "Pull request #7 merged once its checks passed.",
       created_at: "2026-10-09T11:50:00Z", target: {kind: "change", workspace_id: "code", change_id: "pr:7"}};
-    expect(noticeDestination(merged)).toEqual({});
+    expect(noticeDestination(merged)).toEqual({tab: "changes", change: "pr:7"});
     expect(noticeContext(merged, names)).toBe("evie-core · Changes");
   });
 

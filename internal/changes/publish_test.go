@@ -168,6 +168,8 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 			"html_url": fmt.Sprintf("https://github.com/davidadel66/%s/pull/%d", name, number),
 			"head":     map[string]any{"ref": body.Head, "sha": head(f.t, f.bare(name), "refs/heads/"+body.Head)}, "base": map[string]any{"ref": body.Base}, "user": map[string]any{"login": "davidadel66"}}
 		f.pulls[name] = append(f.pulls[name], pull)
+		// GitHub keeps every pull request's head at refs/pull/<number>/head.
+		gitIn(f.t, f.bare(name), "update-ref", fmt.Sprintf("refs/pull/%d/head", number), pull["head"].(map[string]any)["sha"].(string))
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(pull)
 	case strings.HasPrefix(strings.ToLower(r.URL.Path), "/repos/davidadel66/"):

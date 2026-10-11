@@ -82,6 +82,9 @@
   --color-ok-ink: #a8d4b5;
   --color-ok-gutter: #4a6b55;
 
+  /* a diff's unchanged lines (changes.spec.md story 6a) */
+  --color-diff-context: #9aa39f;
+
   /* Streamdown speaks shadcn-style semantic names. Keep this bridge here so
      its generated controls share Evie's surfaces instead of falling back to
      currentColor (the bright white borders we had before). `muted` is a

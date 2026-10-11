@@ -17,6 +17,8 @@ import (
 // ChangeLister lists the Changes of a Workspace's Repository at its folder.
 type ChangeLister interface {
 	List(ctx context.Context, ws memory.WorkspaceID, folder string) (changes.Repository, []changes.Change, error)
+	// Show reads one Change with its diff (story 6a).
+	Show(ctx context.Context, ws memory.WorkspaceID, folder, id string) (changes.ChangeDetail, error)
 }
 
 // WithChanges adds the Change routes.
@@ -62,5 +64,36 @@ func (s *Server) registerChangeRoutes(mux *http.ServeMux) {
 			Repository changes.Repository `json:"repository"`
 			Changes    []changes.Change   `json:"changes"`
 		}{repository, list})
+	}))
+	mux.Handle("/api/changes/show", s.managementRoute(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			WorkspaceID memory.WorkspaceID `json:"workspace_id"`
+			ChangeID    string             `json:"change_id"`
+		}
+		if !decodeCandidateRequest(w, r, &request) {
+			return
+		}
+		if !boundedID(string(request.WorkspaceID)) || !boundedID(request.ChangeID) {
+			managementJSONError(w, http.StatusBadRequest, "invalid_changes_request", "show takes a Workspace ID and a Change ID")
+			return
+		}
+		folder, err := controller.WorkspaceFolder(r.Context(), request.WorkspaceID)
+		if errors.Is(err, eviedb.ErrWorkspaceNotFound) {
+			managementJSONError(w, http.StatusNotFound, "workspace_not_found", "no such Workspace")
+			return
+		}
+		if err != nil {
+			managementJSONError(w, http.StatusInternalServerError, "changes_unavailable", "the Workspace folder could not be read")
+			return
+		}
+		detail, err := s.changeLister.Show(r.Context(), request.WorkspaceID, folder.Path, request.ChangeID)
+		switch {
+		case errors.Is(err, changes.ErrUnknownChange):
+			managementJSONError(w, http.StatusNotFound, "change_not_found", err.Error())
+		case err != nil:
+			managementJSONError(w, http.StatusInternalServerError, "changes_unavailable", "the Change could not be read")
+		default:
+			writeJSON(w, http.StatusOK, detail)
+		}
 	}))
 }

@@ -15,6 +15,9 @@ import { WorkspaceWorkflowsTab } from "./WorkspaceWorkflowsTab";
 import { WorkspaceRuns } from "./WorkspaceRuns";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceRepository } from "./WorkspaceRepository";
+import { WorkspaceChanges } from "./WorkspaceChanges";
+import { useChangeListing } from "./useChangeListing";
+import { reviewCount } from "./changeView";
 import type { WorkspaceTab, WorkspaceViewState } from "./workspaceActivity";
 
 type DirectoryProps = {
@@ -140,8 +143,9 @@ export function Workspaces({
 }
 
 // A Workspace opens on its header and one tab at a time
-// (workspace-activity.spec.md): Runs by default, Workflows, and Settings,
-// which holds the Workspace's settings sections and its conversations.
+// (workspace-activity.spec.md): Runs by default, Changes when it has a
+// Repository (changes.spec.md story 6a), Workflows, and Settings, which
+// holds the Workspace's settings sections and its conversations.
 export function WorkspaceHome({
   workspace,
   sessions,
@@ -151,6 +155,7 @@ export function WorkspaceHome({
   caps,
   selectedRun,
   runFilter = "",
+  selectedChange,
   sessionTitles,
   onView,
   onOpenSession,
@@ -173,6 +178,8 @@ export function WorkspaceHome({
   selectedRun?: string;
   /** The workflow the Runs tab is narrowed to; "" for all. */
   runFilter?: string;
+  /** The Change open on the Changes tab's review page. */
+  selectedChange?: string;
   sessionTitles?: Record<string, string>;
   /** Moves within the Workspace: a tab, the open run, the run filter, together. */
   onView?: (view: WorkspaceViewState) => void;
@@ -185,10 +192,17 @@ export function WorkspaceHome({
   onOpenFiles?: () => void;
   instructions?: React.ReactNode;
 }) {
+  const {listing, reload} = useChangeListing(workspace.id);
+  const hasRepository = !!listing && listing.repository.kind !== "none";
   return (
     <main className="flex min-h-0 flex-1 flex-col">
-      <WorkspaceHeader tab={tab} waiting={waiting} caps={caps} onTab={(next) => onView?.({tab: next})} />
-      {tab === "runs" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-runs" className="flex min-h-0 flex-1">
+      <WorkspaceHeader tab={tab} waiting={waiting} caps={caps} showChanges={hasRepository || tab === "changes"}
+        review={listing ? reviewCount(listing.changes, listing.repository.kind, new Date()) : 0} onTab={(next) => onView?.({tab: next})} />
+      {tab === "changes" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-changes" className="flex min-h-0 flex-1">
+        <WorkspaceChanges key={`changes:${workspace.id}`} workspace={workspace} listing={listing} selected={selectedChange} sessionTitles={sessionTitles}
+          onSelect={(change) => onView?.({change})} onChanged={reload}
+          onOpenRun={(run) => onView?.({tab: "runs", run, runFilter: ""})} onOpenSession={onOpenSession} />
+      </div> : tab === "runs" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-runs" className="flex min-h-0 flex-1">
         <WorkspaceRuns key={`workflow-runs:${workspace.id}`} workspace={workspace} selectedId={selectedRun} filter={runFilter} sessionTitles={sessionTitles}
           onSelect={(run) => onView?.({run})} onFilter={(filter) => onView?.({runFilter: filter})} onOpenSession={onOpenSession} onChanged={onRunsChanged} />
       </div> : tab === "workflows" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-workflows" className="flex min-h-0 flex-1">

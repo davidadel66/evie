@@ -91,7 +91,9 @@ func TestListLinksAPullRequestToEviesBuildBranch(t *testing.T) {
 		t.Fatalf("list = %+v", list)
 	}
 	fix := byID["build:evie/1a2b3c4d-fix-x"]
-	if fix.State != changes.Open || fix.Author != changes.ByEvie || fix.Title != "Fix x" || fix.Notes != "Fixed x." || fix.ExecutionID != "e1" ||
+	// Evie gave this build no title of its own, so its pull request's title
+	// and description are the Change's (story 6a).
+	if fix.State != changes.Open || fix.Author != changes.ByEvie || fix.Title != "Fix x (PR)" || fix.Notes != "PR body" || fix.ExecutionID != "e1" ||
 		fix.PullRequest == nil || fix.PullRequest.Number != 12 || len(fix.Checks) != 1 {
 		t.Fatalf("linked = %+v", fix)
 	}

@@ -3,13 +3,19 @@ import type { WorkflowCapStatus, WorkflowInterruption } from "../api/workflows";
 // The Workspace header (workspace-activity.spec.md): tabs, what needs the
 // owner now, and today's workflow spend against the daily cap.
 
-export type WorkspaceTab = "runs" | "workflows" | "settings";
+export type WorkspaceTab = "runs" | "changes" | "workflows" | "settings";
 
-/** Where the owner is within a Workspace: its tab, the run open in the Runs panel, and the workflow the runs are narrowed to. */
-export type WorkspaceViewState = { tab?: WorkspaceTab; run?: string; runFilter?: string };
+/**
+ * Where the owner is within a Workspace: its tab, the run open in the Runs
+ * panel, the workflow the runs are narrowed to, and the Change open on its
+ * review page (changes.spec.md story 6a).
+ */
+export type WorkspaceViewState = { tab?: WorkspaceTab; run?: string; runFilter?: string; change?: string };
 
+/** The Workspace's tabs; Changes only when it has a Repository. */
 export const workspaceTabs: { id: WorkspaceTab; label: string }[] = [
   { id: "runs", label: "Runs" },
+  { id: "changes", label: "Changes" },
   { id: "workflows", label: "Workflows" },
   { id: "settings", label: "Settings" },
 ];
@@ -33,6 +39,11 @@ export function needsByWorkspace(interruptions: WorkflowInterruption[]): Record<
 /** A waiting count for assistive technology. */
 export function waitingText(runs: number): string {
   return `${runs} ${runs === 1 ? "run waits" : "runs wait"} on you`;
+}
+
+/** Changes waiting on the owner, for assistive technology. */
+export function reviewText(changes: number): string {
+  return `${changes} ${changes === 1 ? "Change waits" : "Changes wait"} on you`;
 }
 
 /** A token count at a glance: 950, 1.5k, 412k, 2M. */

@@ -302,3 +302,34 @@ func TestAProposalsTitleAndDescriptionAreTheChanges(t *testing.T) {
 		t.Fatalf("Change without text = %q / %q", c.Title, c.Notes)
 	}
 }
+
+// Story 6a: a build Evie titled with its merge proposal keeps that title
+// and description once linked to its pull request; one it did not takes
+// the pull request's.
+func TestALinkedBuildKeepsEviesOwnTitleOverThePullRequests(t *testing.T) {
+	ctx := context.Background()
+	r := newBuildRecords(t)
+	repo := repository(t, "main")
+	gitIn(t, repo, "remote", "add", "origin", "https://github.com/davidadel66/notes.git")
+	ws := memory.WorkspaceID("ws-code")
+	titled := r.build(ws, repo, "Append exactly one new line", reported("worker words", nil, "Append exactly one new line"))
+	r.gate(titled.ID, func(g *delegation.BuildGate) {
+		g.Step = delegation.GateAwaiting
+		g.Change = &delegation.ChangeText{Title: "Add the integration-test line", Description: "Adds one line."}
+	})
+	untitled := r.build(ws, repo, "Make the change the note asks for", reported("worker words", nil, "Make the change the note asks for"))
+	pulls := fixedSource{
+		{ID: "pr:4", Branch: titled.Worktree.Branch, State: changes.Open, Author: changes.ByOwner, Title: "PR title", Notes: "PR body", PullRequest: &changes.PullRequest{Number: 4, State: "open"}},
+		{ID: "pr:6", Branch: untitled.Worktree.Branch, State: changes.Open, Author: changes.ByOwner, Title: "Add CHANGELOG.md", Notes: "The workflow's text.", PullRequest: &changes.PullRequest{Number: 6, State: "open"}},
+	}
+	_, list, err := (&changes.Lister{Repositories: changes.NewService(changes.Config{}), Builds: changes.NewBuildSource(r.store), PullRequests: pulls}).List(ctx, ws, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := changeByID(t, list, titled.ID); c.Title != "Add the integration-test line" || c.Notes != "Adds one line." || c.PullRequest == nil {
+		t.Fatalf("titled = %q / %q", c.Title, c.Notes)
+	}
+	if c := changeByID(t, list, untitled.ID); c.Title != "Add CHANGELOG.md" || c.Notes != "The workflow's text." {
+		t.Fatalf("untitled = %q / %q", c.Title, c.Notes)
+	}
+}
