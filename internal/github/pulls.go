@@ -175,6 +175,40 @@ func (c *Client) CreatePullRequest(ctx context.Context, owner, name, head, base,
 	return pull, c.do(ctx, http.MethodPost, path+"/pulls", payload, &pull)
 }
 
+// MergePullRequest merges pull request number with GitHub's "Rebase and
+// merge", only if its head is still sha (story 5b), and returns the merge
+// commit GitHub reports.
+func (c *Client) MergePullRequest(ctx context.Context, owner, name string, number int, sha string) (string, error) {
+	path, err := repoPath(owner, name)
+	if err != nil {
+		return "", err
+	}
+	if number < 1 {
+		return "", ErrInvalidNumber
+	}
+	if !validSHA.MatchString(sha) {
+		return "", ErrInvalidSHA
+	}
+	var merged struct {
+		SHA string `json:"sha"`
+	}
+	err = c.do(ctx, http.MethodPut, path+"/pulls/"+strconv.Itoa(number)+"/merge", map[string]any{"merge_method": "rebase", "sha": sha}, &merged)
+	return merged.SHA, err
+}
+
+// ClosePullRequest closes pull request number without merging it.
+func (c *Client) ClosePullRequest(ctx context.Context, owner, name string, number int) error {
+	path, err := repoPath(owner, name)
+	if err != nil {
+		return err
+	}
+	if number < 1 {
+		return ErrInvalidNumber
+	}
+	var closed PullRequest
+	return c.do(ctx, http.MethodPatch, path+"/pulls/"+strconv.Itoa(number), map[string]any{"state": "closed"}, &closed)
+}
+
 // ErrInvalidRef is a branch name git would refuse.
 var ErrInvalidRef = errors.New("github: invalid branch name")
 

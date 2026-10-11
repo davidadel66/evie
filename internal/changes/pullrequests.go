@@ -79,7 +79,9 @@ func pullRequestChange(ws memory.WorkspaceID, p eviedb.ChangePullRequest) Change
 		Head:        p.HeadSHA,
 		PullRequest: &PullRequest{Number: p.Number, URL: p.URL, State: p.State, Draft: p.Draft, HeadSHA: p.HeadSHA,
 			Author: p.Author, Mergeable: mergeable, UpdatedAt: p.GitHubUpdatedAt},
-		Checks:    checks,
-		UpdatedAt: p.GitHubUpdatedAt,
+		Checks: checks,
+		// GitHub found the head conflicts when the owner merged (story 5b).
+		NeedsRebase: state == Open && mergeable != nil && !*mergeable,
+		UpdatedAt:   p.GitHubUpdatedAt,
 	}
 }

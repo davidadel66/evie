@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -44,6 +45,10 @@ type fakeGitHub struct {
 	// openFails answers every request to open a pull request with this
 	// status when set.
 	openFails int
+	// pullDraft and notMergeable describe every pull request read alone;
+	// mergeFails answers every merge with this status when set.
+	pullDraft, notMergeable bool
+	mergeFails              int
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
@@ -135,6 +140,8 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		f.created[body.Name] = repo
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(repo)
+	case strings.HasPrefix(r.URL.Path, "/repos/davidadel66/") && strings.Contains(r.URL.Path, "/pulls/"):
+		f.servePull(w, r)
 	case strings.HasSuffix(r.URL.Path, "/pulls") && strings.HasPrefix(r.URL.Path, "/repos/davidadel66/"):
 		name := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/repos/davidadel66/"), "/pulls")
 		if r.Method == http.MethodGet {
@@ -159,7 +166,7 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		number := len(f.pulls[name]) + 1
 		pull := map[string]any{"number": number, "state": "open", "title": body.Title, "body": body.Body,
 			"html_url": fmt.Sprintf("https://github.com/davidadel66/%s/pull/%d", name, number),
-			"head":     map[string]any{"ref": body.Head, "sha": "0000000"}, "base": map[string]any{"ref": body.Base}, "user": map[string]any{"login": "davidadel66"}}
+			"head":     map[string]any{"ref": body.Head, "sha": head(f.t, f.bare(name), "refs/heads/"+body.Head)}, "base": map[string]any{"ref": body.Base}, "user": map[string]any{"login": "davidadel66"}}
 		f.pulls[name] = append(f.pulls[name], pull)
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(pull)
@@ -173,6 +180,60 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	default:
 		w.WriteHeader(http.StatusNotFound)
+	}
+}
+
+// servePull reads, merges or closes one pull request. A merge is GitHub's
+// rebase merge of a branch already on its base, so the base moves to the
+// pull request's head.
+func (f *fakeGitHub) servePull(w http.ResponseWriter, r *http.Request) {
+	name, tail, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/repos/davidadel66/"), "/pulls/")
+	numberText, merge := strings.CutSuffix(tail, "/merge")
+	number, _ := strconv.Atoi(numberText)
+	var pull map[string]any
+	for _, p := range f.pulls[name] {
+		if p["number"] == number {
+			pull = p
+		}
+	}
+	if pull == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	headSHA := pull["head"].(map[string]any)["sha"].(string)
+	switch {
+	case merge && r.Method == http.MethodPut:
+		var body struct {
+			SHA         string `json:"sha"`
+			MergeMethod string `json:"merge_method"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		switch {
+		case f.mergeFails != 0:
+			w.WriteHeader(f.mergeFails)
+			w.Write([]byte(`{"message":"Rebase merges are not allowed on this repository."}`))
+			return
+		case body.SHA != headSHA:
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte(`{"message":"Head branch was modified. Review and try the merge again."}`))
+			return
+		case body.MergeMethod != "rebase":
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			return
+		}
+		gitIn(f.t, f.bare(name), "update-ref", "refs/heads/"+pull["base"].(map[string]any)["ref"].(string), headSHA)
+		pull["state"], pull["merged"] = "closed", true
+		json.NewEncoder(w).Encode(map[string]any{"sha": headSHA, "merged": true})
+	case r.Method == http.MethodPatch:
+		pull["state"] = "closed"
+		json.NewEncoder(w).Encode(pull)
+	default:
+		read := map[string]any{}
+		for k, v := range pull {
+			read[k] = v
+		}
+		read["draft"], read["mergeable"] = f.pullDraft, !f.notMergeable
+		json.NewEncoder(w).Encode(read)
 	}
 }
 

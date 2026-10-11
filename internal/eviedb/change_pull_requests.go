@@ -76,7 +76,9 @@ type ChangePullRequestCheck struct {
 }
 
 // SaveChangePullRequests records one sync's pull requests for a Workspace,
-// replacing each one's earlier record, all or none.
+// replacing each one's earlier record, all or none. A record without
+// mergeability (GitHub's lists carry none) keeps what was known about the
+// same head (story 5b).
 func (s *Store) SaveChangePullRequests(ctx context.Context, ws memory.WorkspaceID, pulls []ChangePullRequest) error {
 	syncedAt := s.now().UTC().Format(pullRequestTime)
 	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
@@ -97,7 +99,7 @@ func (s *Store) SaveChangePullRequests(ctx context.Context, ws memory.WorkspaceI
  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
  ON CONFLICT(workspace_id,number) DO UPDATE SET owner=excluded.owner,repository=excluded.repository,branch=excluded.branch,base=excluded.base,
  title=excluded.title,body=excluded.body,author=excluded.author,state=excluded.state,draft=excluded.draft,head_sha=excluded.head_sha,
- mergeable=excluded.mergeable,url=excluded.url,checks_json=excluded.checks_json,github_updated_at=excluded.github_updated_at,synced_at=excluded.synced_at`,
+ mergeable=CASE WHEN excluded.mergeable IS NULL AND head_sha=excluded.head_sha THEN mergeable ELSE excluded.mergeable END,url=excluded.url,checks_json=excluded.checks_json,github_updated_at=excluded.github_updated_at,synced_at=excluded.synced_at`,
 				ws, p.Number, p.Owner, p.Repository, p.Branch, p.Base, p.Title, p.Body, p.Author, p.State, p.Draft, p.HeadSHA, mergeable, p.URL,
 				string(encoded), p.GitHubUpdatedAt.UTC().Format(pullRequestTime), syncedAt); err != nil {
 				return fmt.Errorf("record pull request #%d: %w", p.Number, err)
@@ -105,6 +107,18 @@ func (s *Store) SaveChangePullRequests(ctx context.Context, ws memory.WorkspaceI
 		}
 		return nil
 	})
+}
+
+// RecordChangeMergeable records whether GitHub can merge pull request
+// number at head (story 5b): a conflict found when the owner merges lasts
+// until new commits change the head. An answer about another head than the
+// recorded one changes nothing.
+func (s *Store) RecordChangeMergeable(ctx context.Context, ws memory.WorkspaceID, number int, head string, mergeable bool) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE change_pull_requests SET mergeable=? WHERE workspace_id=? AND number=? AND head_sha=?`, mergeable, ws, number, head)
+	if err != nil {
+		return fmt.Errorf("record pull request #%d mergeability: %w", number, err)
+	}
+	return nil
 }
 
 // ChangePullRequests reads a Workspace's synced pull requests, most

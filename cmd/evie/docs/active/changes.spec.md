@@ -317,7 +317,25 @@ keeps the owner's checkout current without touching work in progress.
   - Closing needs `--yes` in the CLI and `"confirm": true` on the route.
     It removes Evie's worktree with any uncommitted edits in it, and its
     branch.
-  - Story 5b:
+  - Story 5b (built 2026-10-10):
+    - A merge reads the pull request first. A GitHub draft is refused.
+      So is a head other than the one Evie last showed: new commits need
+      review first.
+    - Evie merges with GitHub's "Rebase and merge", passing that head.
+      GitHub's refusal is shown with its reason. A conflict is recorded
+      against the head, shows "Needs rebase" until new commits arrive,
+      and survives syncs, whose lists carry no mergeability.
+    - Each sync that recorded something cleans up after the merges it
+      observed: Evie's branch on GitHub, its local branch and worktree.
+      It then fetches the base branch and fast-forwards it in the owner's
+      checkout only when the checkout is on it with no uncommitted edits.
+      The Repository reports how many commits behind the local base
+      branch is.
+    - Closing a pull request on GitHub removes Evie's branch there too.
+      The owner's own pull requests merge and close, and their branches
+      stay.
+  - Story 5c (split from 5b on 2026-10-10, because its notifications need a
+    migration of the notifications store):
     - "Merge when checks pass" cannot be set while the pull request has
       no checks. It merges once at least one check exists and every check
       has finished without failing.
@@ -430,8 +448,9 @@ Each story is independently demonstrable and ends with
    - Risk: token handling, so tests assert its absence everywhere.
 5. **Merge and close.** Split on 2026-10-10 into 5a (local Repositories:
    the owner's merge through the gate, close, `evie changes merge|close`
-   and their routes) and 5b (GitHub: rebase merge, close, "Merge when
-   checks pass", cleanup after merges, and the owner's base branch).
+   and their routes), 5b (GitHub: rebase merge, close, cleanup after
+   merges, and the owner's base branch) and 5c ("Merge when checks pass"
+   and its notifications).
    - Outcome: `evie changes merge|close` and the web routes merge (local
      fast-forward or GitHub rebase merge), arm and disarm "Merge when
      checks pass", close, clean up, and bring the owner's base branch up

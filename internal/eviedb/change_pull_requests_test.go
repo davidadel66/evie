@@ -116,3 +116,60 @@ func TestChangePullRequestsRefuseWhatGitHubCouldNotHaveSent(t *testing.T) {
 		t.Fatalf("after refusals = %+v, %v", list, err)
 	}
 }
+
+// changes.spec.md story 5b: a conflict GitHub reports when the owner
+// merges is recorded against the head it was about; a sync, whose lists
+// carry no mergeability, keeps it while the head is the same, and new
+// commits clear it.
+func TestAPullRequestsConflictLastsWhileItsHeadDoes(t *testing.T) {
+	ctx := context.Background()
+	db, err := OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := NewStore(db)
+	ws, err := store.RegisterWorkspace(ctx, "notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pull := ChangePullRequest{Number: 4, Owner: "davidadel66", Repository: "notes", Branch: "evie/1a2b3c4d-fix", Base: "main", Title: "Fix",
+		Author: "davidadel66", State: "open", HeadSHA: "abcdef1", URL: "https://github.com/davidadel66/notes/pull/4", GitHubUpdatedAt: time.Now()}
+	mergeable := func() *bool {
+		t.Helper()
+		list, err := store.ChangePullRequests(ctx, ws.ID)
+		if err != nil || len(list) != 1 {
+			t.Fatalf("list = %+v, %v", list, err)
+		}
+		return list[0].Mergeable
+	}
+	if err := store.SaveChangePullRequests(ctx, ws.ID, []ChangePullRequest{pull}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordChangeMergeable(ctx, ws.ID, 4, "abcdef1", false); err != nil {
+		t.Fatal(err)
+	}
+	if m := mergeable(); m == nil || *m {
+		t.Fatalf("recorded conflict = %v", m)
+	}
+	if err := store.SaveChangePullRequests(ctx, ws.ID, []ChangePullRequest{pull}); err != nil {
+		t.Fatal(err)
+	}
+	if m := mergeable(); m == nil || *m {
+		t.Fatalf("a sync of the same head dropped the conflict: %v", m)
+	}
+	// A conflict about an older head records nothing.
+	if err := store.RecordChangeMergeable(ctx, ws.ID, 4, "0000000", true); err != nil {
+		t.Fatal(err)
+	}
+	if m := mergeable(); m == nil || *m {
+		t.Fatalf("a stale head's answer = %v", m)
+	}
+	pull.HeadSHA = "abcdef2"
+	if err := store.SaveChangePullRequests(ctx, ws.ID, []ChangePullRequest{pull}); err != nil {
+		t.Fatal(err)
+	}
+	if m := mergeable(); m != nil {
+		t.Fatalf("new commits kept the conflict: %v", *m)
+	}
+}

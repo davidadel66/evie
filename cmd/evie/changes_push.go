@@ -39,6 +39,24 @@ func changePusher(store *eviedb.Store, repositories *changes.Service, token stri
 	return p
 }
 
+// changeMerger merges and closes Changes for the owner (changes.spec.md
+// stories 5a and 5b): local ones through the Kernel's merge gate and, with
+// a token, GitHub ones through their pull requests. syncer records a merge
+// or close done on GitHub at once; nil makes one for this command.
+func changeMerger(store *eviedb.Store, repositories *changes.Service, gate changes.BuildGate, token string, syncer *changes.Syncer) *changes.Merger {
+	m := &changes.Merger{Lister: changeLister(repositories, store), Gate: gate, Records: store}
+	if token == "" {
+		return m
+	}
+	client := github.New(github.API, token, nil)
+	m.GitHub = client
+	if syncer == nil {
+		syncer = changes.NewSyncer(changes.SyncConfig{GitHub: client, Store: store, After: m.AfterSync})
+	}
+	m.Syncer = syncer
+	return m
+}
+
 // storeVerifier runs the Workspace's Verify command on a build branch's
 // worktree before a push, sandboxed without network as the merge gate runs
 // it.

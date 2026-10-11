@@ -31,12 +31,12 @@ func (s *stubChangeMerger) Merge(_ context.Context, ws memory.WorkspaceID, folde
 	return changes.MergeResult{Change: changes.Change{ID: id, State: changes.Merged}, Status: delegation.MergeMerged}, nil
 }
 
-func (s *stubChangeMerger) Close(_ context.Context, ws memory.WorkspaceID, folder, id string) (changes.Change, error) {
+func (s *stubChangeMerger) Close(_ context.Context, ws memory.WorkspaceID, folder, id string) (changes.CloseResult, error) {
 	s.calls = append(s.calls, "close "+string(ws)+" "+folder+" "+id)
 	if s.err != nil {
-		return changes.Change{}, s.err
+		return changes.CloseResult{}, s.err
 	}
-	return changes.Change{ID: id, State: changes.Closed}, nil
+	return changes.CloseResult{Change: changes.Change{ID: id, State: changes.Closed}}, nil
 }
 
 // changes.spec.md story 5a: the owner merges and closes a Workspace's

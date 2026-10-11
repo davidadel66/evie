@@ -255,3 +255,49 @@ func TestClientFindsABranchsPullRequestsInAnyState(t *testing.T) {
 		t.Fatalf("an invalid branch = %v", err)
 	}
 }
+
+// changes.spec.md story 5b: the owner's merge is GitHub's "Rebase and
+// merge" of the head the owner saw; GitHub's refusals keep their reason.
+func TestClientRebaseMergesAndClosesAPullRequest(t *testing.T) {
+	var method, path string
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.Path
+		body = nil
+		json.NewDecoder(r.Body).Decode(&body)
+		switch {
+		case strings.HasSuffix(path, "/pulls/12/merge"):
+			w.Write([]byte(`{"sha":"` + sha + `","merged":true,"message":"Pull Request successfully merged"}`))
+		case strings.HasSuffix(path, "/pulls/13/merge"):
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Write([]byte(`{"message":"Pull Request is not mergeable"}`))
+		case strings.HasSuffix(path, "/pulls/14/merge"):
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte(`{"message":"Head branch was modified. Review and try the merge again."}`))
+		case strings.HasSuffix(path, "/pulls/12"):
+			w.Write([]byte(`{"number":12,"state":"closed","head":{"ref":"evie/x","sha":"` + sha + `"},"base":{"ref":"main"},"user":{"login":"davidadel66"}}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client := github.New(server.URL, "t", server.Client())
+	ctx := context.Background()
+	merged, err := client.MergePullRequest(ctx, "davidadel66", "evie", 12, sha)
+	if err != nil || merged != sha || method != http.MethodPut || path != "/repos/davidadel66/evie/pulls/12/merge" ||
+		body["merge_method"] != "rebase" || body["sha"] != sha {
+		t.Fatalf("merge = %q, %v; %s %s %v", merged, err, method, path, body)
+	}
+	if _, err := client.MergePullRequest(ctx, "davidadel66", "evie", 13, sha); !errors.Is(err, github.ErrNotMergeable) || !strings.Contains(err.Error(), "not mergeable") {
+		t.Fatalf("not mergeable = %v", err)
+	}
+	if _, err := client.MergePullRequest(ctx, "davidadel66", "evie", 14, sha); !errors.Is(err, github.ErrHeadChanged) || !strings.Contains(err.Error(), "Head branch was modified") {
+		t.Fatalf("moved head = %v", err)
+	}
+	if _, err := client.MergePullRequest(ctx, "davidadel66", "evie", 12, "not-a-sha"); !errors.Is(err, github.ErrInvalidSHA) {
+		t.Fatalf("a bad head = %v", err)
+	}
+	if err := client.ClosePullRequest(ctx, "davidadel66", "evie", 12); err != nil || method != http.MethodPatch || path != "/repos/davidadel66/evie/pulls/12" || body["state"] != "closed" {
+		t.Fatalf("close = %v; %s %s %v", err, method, path, body)
+	}
+}

@@ -176,6 +176,7 @@ func link(builds, pulls []Change) []Change {
 	for branch, p := range chosen {
 		c := &builds[onBranch[branch]]
 		c.State, c.PullRequest, c.Checks = p.State, p.PullRequest, p.Checks
+		c.NeedsRebase = c.NeedsRebase || p.NeedsRebase
 		if p.Head != "" {
 			c.Head = p.Head
 		}

@@ -36,6 +36,13 @@ var (
 	// ErrUnprocessable is a request GitHub refused as given (422), such as
 	// a repository name the account already has; the message says why.
 	ErrUnprocessable = errors.New("github: refused")
+	// ErrNotMergeable is a merge GitHub will not make as asked (405): the
+	// pull request conflicts, or the repository does not allow the merge
+	// method; the message says which.
+	ErrNotMergeable = errors.New("github: not merged")
+	// ErrHeadChanged is a merge of a head the pull request no longer has
+	// (409): new commits arrived.
+	ErrHeadChanged = errors.New("github: the pull request's head changed")
 )
 
 var validName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
@@ -152,6 +159,10 @@ func (c *Client) do(ctx context.Context, method, path string, payload, out any) 
 		return fmt.Errorf("%w: %s", ErrForbidden, message(data))
 	case resp.StatusCode == http.StatusUnprocessableEntity:
 		return fmt.Errorf("%w: %s", ErrUnprocessable, message(data))
+	case resp.StatusCode == http.StatusMethodNotAllowed:
+		return fmt.Errorf("%w: %s", ErrNotMergeable, message(data))
+	case resp.StatusCode == http.StatusConflict:
+		return fmt.Errorf("%w: %s", ErrHeadChanged, message(data))
 	case resp.StatusCode >= 300:
 		return fmt.Errorf("github: %s: %s", resp.Status, message(data))
 	}

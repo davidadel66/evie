@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -53,6 +54,11 @@ type Repository struct {
 	Owner     string        `json:"owner,omitempty"`
 	Name      string        `json:"name,omitempty"`
 	GitHub    *GitHubStatus `json:"github,omitempty"`
+	// Behind is how many commits GitHub's base branch, as last fetched,
+	// has that the owner's local base branch lacks (story 5b): Evie
+	// fast-forwards it only when it is checked out with no uncommitted
+	// edits.
+	Behind int `json:"behind,omitempty"`
 }
 
 // GitHubStatus is the token check for a GitHub Repository.
@@ -136,7 +142,22 @@ func (s *Service) Repository(ctx context.Context, folder string) (Repository, er
 	}
 	r.Kind, r.Owner, r.Name = GitHub, owner, name
 	r.GitHub = s.check(ctx, &r)
+	r.Behind = behind(ctx, real, r.BaseBranch)
 	return r, nil
+}
+
+// behind counts the commits origin's base branch, as last fetched, has
+// that the local one lacks; 0 when either is missing.
+func behind(ctx context.Context, folder, base string) int {
+	if base == "" {
+		return 0
+	}
+	out, err := worktree.Git(ctx, folder, "rev-list", "--count", "refs/heads/"+base+"..refs/remotes/origin/"+base)
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(out)
+	return n
 }
 
 // check reads the token's owner and the repository; GitHub's default branch

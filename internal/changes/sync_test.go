@@ -289,7 +289,15 @@ func TestSyncRecordsMergesAndClosesDoneOnGitHub(t *testing.T) {
 	fake.open[2] = pull(2, "two", shaB, false, at)
 	fake.open[3] = pull(3, "three", shaC, false, at)
 	store, ws := syncStore(t)
-	syncer := changes.NewSyncer(changes.SyncConfig{GitHub: client, Store: store})
+	// Story 5b: each sync that recorded something is followed by the
+	// cleanup after merges it observed.
+	var after []changes.SyncResult
+	syncer := changes.NewSyncer(changes.SyncConfig{GitHub: client, Store: store,
+		After: func(_ context.Context, synced memory.WorkspaceID, repo changes.Repository, result changes.SyncResult) {
+			if synced == ws.ID && repo == evieRepo {
+				after = append(after, result)
+			}
+		}})
 	if result, err := syncer.Sync(ctx, ws.ID, evieRepo); err != nil || result.PullRequests != 3 || result.Requests != 7 {
 		t.Fatalf("first sync = %+v, %v", result, err)
 	}
@@ -301,6 +309,9 @@ func TestSyncRecordsMergesAndClosesDoneOnGitHub(t *testing.T) {
 	// One list, two for the open #3, one read each of #1 and #2.
 	if err != nil || result != (changes.SyncResult{Synced: true, PullRequests: 1, Finished: 2, Requests: 5}) || fake.count() != 5 {
 		t.Fatalf("second sync = %+v, %v; GitHub answered %d", result, err, fake.count())
+	}
+	if len(after) != 2 || after[1].Finished != 2 {
+		t.Fatalf("after = %+v", after)
 	}
 	got := pullChanges(t, store, ws.ID)
 	if got["pr:1"].State != changes.Merged || got["pr:1"].PullRequest.State != "merged" || !got["pr:1"].UpdatedAt.Equal(at.Add(time.Minute)) {
@@ -364,7 +375,12 @@ func TestASyncThatGitHubRefusesRecordsNothing(t *testing.T) {
 	fake.open[7] = pull(7, "feature", shaA, false, time.Now())
 	fake.refuseChecks = true
 	store, ws := syncStore(t)
-	_, err := changes.NewSyncer(changes.SyncConfig{GitHub: client, Store: store}).Sync(ctx, ws.ID, evieRepo)
+	cleaned := false
+	_, err := changes.NewSyncer(changes.SyncConfig{GitHub: client, Store: store,
+		After: func(context.Context, memory.WorkspaceID, changes.Repository, changes.SyncResult) { cleaned = true }}).Sync(ctx, ws.ID, evieRepo)
+	if cleaned {
+		t.Fatal("a refused sync was followed by cleanup")
+	}
 	// It names the permission the token lacks.
 	if !errors.Is(err, github.ErrForbidden) || !strings.Contains(err.Error(), "#7") || !strings.Contains(err.Error(), "not accessible") ||
 		!strings.Contains(err.Error(), "Actions permission") {

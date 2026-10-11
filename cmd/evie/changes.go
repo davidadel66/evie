@@ -78,7 +78,7 @@ func runChangeManagement(ctx context.Context, args []string, out io.Writer, c ch
 		if err != nil {
 			return true, err
 		}
-		merger := &changes.Merger{Lister: changeLister(c.repositories(), c.store), Gate: gate}
+		merger := changeMerger(c.store, c.repositories(), gate, strings.TrimSpace(c.getenv("GITHUB_TOKEN")), nil)
 		if command == "close" {
 			closed, err := merger.Close(ctx, ws, folder.Path, args[3])
 			if err != nil {

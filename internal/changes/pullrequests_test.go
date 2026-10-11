@@ -48,8 +48,10 @@ func TestPullRequestSourceMapsSyncedPullRequestsToChanges(t *testing.T) {
 		Title: "Add sync", Notes: "Why it changed.", Head: "0123456789abcdef0123456789abcdef01234567",
 		PullRequest: &changes.PullRequest{Number: 7, URL: "https://github.com/davidadel66/evie/pull/7", State: "open", Draft: true,
 			HeadSHA: "0123456789abcdef0123456789abcdef01234567", Author: "davidadel66", Mergeable: &no, UpdatedAt: at},
-		Checks:    []changes.Check{{Name: "go test", State: changes.CheckPassed, URL: "https://github.com/davidadel66/evie/runs/1"}, {Name: "ui", State: changes.CheckFailed}},
-		UpdatedAt: at}
+		Checks: []changes.Check{{Name: "go test", State: changes.CheckPassed, URL: "https://github.com/davidadel66/evie/runs/1"}, {Name: "ui", State: changes.CheckFailed}},
+		// GitHub found it cannot merge this head (story 5b).
+		NeedsRebase: true,
+		UpdatedAt:   at}
 	if !reflect.DeepEqual(list[0], want) {
 		t.Fatalf("open = %+v %+v\nwant   %+v %+v", list[0], list[0].PullRequest, want, want.PullRequest)
 	}

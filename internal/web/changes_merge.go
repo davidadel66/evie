@@ -17,7 +17,7 @@ import (
 // Workspace's folder.
 type ChangeMerger interface {
 	Merge(ctx context.Context, ws memory.WorkspaceID, folder, id string) (changes.MergeResult, error)
-	Close(ctx context.Context, ws memory.WorkspaceID, folder, id string) (changes.Change, error)
+	Close(ctx context.Context, ws memory.WorkspaceID, folder, id string) (changes.CloseResult, error)
 }
 
 // WithChangeMerger adds the merge and close routes.

@@ -57,6 +57,9 @@ type SyncConfig struct {
 	Ticker func(time.Duration) (<-chan time.Time, func())
 	// Logf reports a failed sync in Run; nil is log.Printf.
 	Logf func(format string, args ...any)
+	// After, when set, runs after each sync that recorded something: the
+	// cleanup after merges done on GitHub (story 5b).
+	After func(ctx context.Context, ws memory.WorkspaceID, repo Repository, result SyncResult)
 }
 
 // SyncResult is what one sync did.
@@ -83,12 +86,13 @@ type Syncer struct {
 	ticker       func(time.Duration) (<-chan time.Time, func())
 	logf         func(format string, args ...any)
 	repositories *Service
+	after        func(ctx context.Context, ws memory.WorkspaceID, repo Repository, result SyncResult)
 	mu           sync.Mutex
 	running      map[memory.WorkspaceID]bool
 }
 
 func NewSyncer(c SyncConfig) *Syncer {
-	s := &Syncer{github: c.GitHub, store: c.Store, workspaces: c.Workspaces, every: c.Every, ticker: c.Ticker, logf: c.Logf,
+	s := &Syncer{github: c.GitHub, store: c.Store, workspaces: c.Workspaces, every: c.Every, ticker: c.Ticker, logf: c.Logf, after: c.After,
 		// Without a GitHub client the Repository is read from git alone,
 		// so finding what to sync makes no GitHub request.
 		repositories: NewService(Config{}), running: map[memory.WorkspaceID]bool{}}
@@ -180,6 +184,9 @@ func (s *Syncer) Sync(ctx context.Context, ws memory.WorkspaceID, repo Repositor
 	gh := &countedClient{client: s.github}
 	result, err := s.sync(ctx, gh, ws, repo)
 	result.Requests = gh.requests
+	if err == nil && s.after != nil {
+		s.after(ctx, ws, repo, result)
+	}
 	return result, err
 }
 

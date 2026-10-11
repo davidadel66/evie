@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -406,8 +407,16 @@ func main() {
 		// 4) in both its full and management-only modes.
 		stopWorkflows := startWorkflowScheduler(runtimeCtx, workflowRuntime)
 		defer stopWorkflows()
-		changeSync, stopChangeSync := startChangeSync(runtimeCtx, kernelStore)
+		// The sync cleans up after merges done on GitHub with the owner's
+		// Merger, which in turn syncs after its own merges.
+		var merger atomic.Pointer[changes.Merger]
+		changeSync, stopChangeSync := startChangeSync(runtimeCtx, kernelStore, func(ctx context.Context, ws memory.WorkspaceID, repo changes.Repository, result changes.SyncResult) {
+			if m := merger.Load(); m != nil {
+				m.AfterSync(ctx, ws, repo, result)
+			}
+		})
 		defer stopChangeSync()
+		merger.Store(changeMerger(kernelStore, repositories, supervisor, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync))
 		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
 		if err != nil {
 			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)
@@ -415,7 +424,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopMemory := startMemoryForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), &changes.Merger{Lister: changeLister(repositories, kernelStore), Gate: supervisor}))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()))
 			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -463,7 +472,7 @@ func main() {
 				agent.WithCompactionMemoryFlush(memoryBackground.runner)), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), &changes.Merger{Lister: changeLister(repositories, kernelStore), Gate: supervisor}))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()))
 		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)
@@ -500,15 +509,17 @@ func repositoryReader() *changes.Service {
 
 // startChangeSync syncs each Workspace's GitHub pull requests every 60
 // seconds while evie serve runs (changes.spec.md story 3b), when
-// GITHUB_TOKEN is set; the returned stop ends the loop and waits for it.
+// GITHUB_TOKEN is set, and runs after after each sync (story 5b's cleanup
+// after merges done on GitHub); the returned stop ends the loop and waits
+// for it.
 // Without a token the Syncer still answers the refresh route: a GitHub
 // Repository is not connected, and a local one has nothing to sync.
-func startChangeSync(ctx context.Context, store *eviedb.Store) (*changes.Syncer, func()) {
+func startChangeSync(ctx context.Context, store *eviedb.Store, after func(context.Context, memory.WorkspaceID, changes.Repository, changes.SyncResult)) (*changes.Syncer, func()) {
 	token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
 	if token == "" {
 		return changes.NewSyncer(changes.SyncConfig{Store: store}), func() {}
 	}
-	syncer := changes.NewSyncer(changes.SyncConfig{GitHub: github.New(github.API, token, nil), Store: store, Workspaces: store})
+	syncer := changes.NewSyncer(changes.SyncConfig{GitHub: github.New(github.API, token, nil), Store: store, Workspaces: store, After: after})
 	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
