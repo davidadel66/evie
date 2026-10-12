@@ -27,11 +27,12 @@ function render(value: ProposalInboxState) {
 }
 
 describe("memory proposal inbox", () => {
-  it("shows Evie's proposal with its kind, scope, the owner's words and the Always applies switch", () => {
+  it("shows the memory as one line with its kind, where it applies, the owner's words and the Always applies switch", () => {
     const html = render(state);
-    for (const text of ["Proposed by Evie", "Nothing is saved until you approve it", "From Weekend plans", "You · answer style · short answers",
-      "Applies to: Everywhere", "Your words", "Keep it short, I hate long answers.", "Always applies", "Preference",
-      "Evie sees this memory on every request.", "Approve", "Decline"]) expect(html).toContain(text);
+    for (const text of ["Proposed by Evie", "Nothing is saved until you approve it", "Weekend plans", "You — answer style: short answers",
+      "Preference · applies everywhere", "Your words", "Keep it short, I hate long answers.", "Always applies",
+      "Evie sees this on every request.", "Exact change", "Approve", "Decline"]) expect(html).toContain(text);
+    expect(html).not.toContain("Evie’s wording");
     expect(html).toMatch(/role="switch" aria-checked="true"/);
     expect(html).not.toMatch(/disabled=""[^>]*>Approve/);
   });
@@ -39,7 +40,31 @@ describe("memory proposal inbox", () => {
   it("shows the owner's switch choice instead of the default", () => {
     const html = render({ ...state, alwaysApplies: { "proposal-1:1": false } });
     expect(html).toMatch(/role="switch" aria-checked="false"/);
-    expect(html).toContain("Evie recalls this memory only when it’s relevant.");
+    expect(html).toContain("Evie recalls this only when it’s relevant.");
+  });
+
+  it("groups proposals under the message Evie read and tags Evie's wording once explained", () => {
+    const evie = (value: string, scope: string) => JSON.stringify({ ...JSON.parse(proposal), scope: { scope_key: scope }, predicate: { label: "monthly item" },
+      literal: { value }, source: { authority: "evie_proposed", evidence: "" }, classification: { kind: "fact", standing: false } });
+    const message = "add the cru sum every month these are tithes. also the credit cards are $100 each";
+    const items: MemoryProposalItem[] = [
+      { ...item, proposal_id: "a", reason: "background", scope_key: "workspace:fin", proposal: evie("CRU tithe", "workspace:fin"), source_message: message },
+      { ...item, proposal_id: "b", reason: "background", scope_key: "workspace:fin", proposal: evie("$100 per credit card", "workspace:fin"), source_message: message },
+      { ...item, proposal_id: "c", session_id: "session-2", session_title: "Other chat", source_message: "Keep it short, I hate long answers." },
+    ];
+    const html = render({ ...state, page: { items, pending: 3 } });
+    expect(html.match(/aria-label="Proposals from one message"/g)).toHaveLength(2);
+    expect(html.split(message)).toHaveLength(2);
+    for (const text of ["From your message", "Found in your conversations", "You — monthly item: CRU tithe", "You — monthly item: $100 per credit card",
+      "Fact · applies in Workspace", "means you didn’t say it in these words"]) expect(html).toContain(text);
+    expect(html.match(/Evie’s wording/g)).toHaveLength(3);
+  });
+
+  it("folds a long source message behind Show all", () => {
+    const html = render({ ...state, page: { items: [{ ...item, source_message: "word ".repeat(80) }], pending: 1 } });
+    expect(html).toContain("line-clamp-3");
+    expect(html).toContain("Show all");
+    expect(render(state)).not.toContain("Show all");
   });
 
   it("explains a proposal held because the owner did not ask, and a refreshed one", () => {

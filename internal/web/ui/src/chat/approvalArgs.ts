@@ -6,7 +6,7 @@
 export type MemoryClassification = { kind: string; standing: boolean };
 
 export type ApprovalView =
-  | { shape: "memory"; subject: string; scopeKey: string; evidence: string; evieProposed: boolean; identities: string[]; json: string; classification?: MemoryClassification; standingChange?: { from: MemoryClassification; to: MemoryClassification } }
+  | { shape: "memory"; subject: string; statement: string; scopeKey: string; evidence: string; evieProposed: boolean; identities: string[]; json: string; classification?: MemoryClassification; standingChange?: { from: MemoryClassification; to: MemoryClassification } }
   | { shape: "diff"; subject: string; oldText: string; newText: string }
   | { shape: "statement"; subject: string; statement: string }
   | { shape: "json"; subject: string; json: string; evieProposed?: boolean; classification?: MemoryClassification };
@@ -47,14 +47,19 @@ export function readApprovalArgs(name: string, args: string, ownerName = "You"):
     const value = str(literal?.value);
     const entities = Array.isArray(parsed.entities) ? parsed.entities.map(object) : [];
     const label = (entity: Record<string, unknown> | null | undefined) => entity?.anchor_kind === "owner" && entity?.canonical_name === "owner" ? ownerName : str(entity?.canonical_name);
-    const subject = [label(object(parsed.subject)) || label(entities.find(e => e?.entity_id === claim?.subject_entity_id)), predicate?.label, value || label(entities.find(e => e?.entity_id === claim?.object_entity_id))].filter(Boolean).join(" · ");
+    const subjectName = label(object(parsed.subject)) || label(entities.find(e => e?.entity_id === claim?.subject_entity_id));
+    const objectText = value || label(entities.find(e => e?.entity_id === claim?.object_entity_id));
+    const subject = [subjectName, predicate?.label, objectText].filter(Boolean).join(" · ");
+    // The memory as one readable line, in the Claim text form the memory
+    // list uses: "David — answer style: short answers".
+    const statement = subjectName && str(predicate?.label) && objectText ? `${subjectName} — ${str(predicate?.label)}: ${objectText}` : subject;
     // Harness review M5/M6: an Evie-proposed value has no quote from the
     // owner, and each reused or created Entity is named with what tells
     // same-named Entities apart.
     const evieProposed = str(source?.authority) === "evie_proposed";
     const identities = Array.isArray(parsed.identities) ? parsed.identities.map(object).filter((identity) => identity !== null).map(identityLine) : [];
     const classification = readClassification(parsed.classification);
-    if (scope && str(scope.scope_key) && subject) return { shape: "memory", subject: `${polarity === "denied" ? "Not: " : ""}${subject}`, scopeKey: str(scope.scope_key), evidence: evieProposed ? "" : str(source?.evidence), evieProposed, identities, json: pretty(args), ...(classification ? { classification } : {}) };
+    if (scope && str(scope.scope_key) && subject) return { shape: "memory", subject: `${polarity === "denied" ? "Not: " : ""}${subject}`, statement: `${polarity === "denied" ? "Not: " : ""}${statement}`, scopeKey: str(scope.scope_key), evidence: evieProposed ? "" : str(source?.evidence), evieProposed, identities, json: pretty(args), ...(classification ? { classification } : {}) };
   }
 
   if (name === "memory_correct_claim" && parsed) {
@@ -76,7 +81,7 @@ export function readApprovalArgs(name: string, args: string, ownerName = "You"):
     const scopeKey = str(object(parsed.scope)?.scope_key);
     if (from && to && text && scopeKey) {
       const subject = text.startsWith("owner — ") ? `${ownerName} — ${text.slice("owner — ".length)}` : text;
-      return { shape: "memory", subject, scopeKey, evidence: "", evieProposed: false, identities: [], json: pretty(args), standingChange: { from, to } };
+      return { shape: "memory", subject, statement: subject, scopeKey, evidence: "", evieProposed: false, identities: [], json: pretty(args), standingChange: { from, to } };
     }
   }
 

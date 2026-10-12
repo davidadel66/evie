@@ -159,7 +159,9 @@ var (
 )
 
 const (
-	memoryProposalListLimit     = 50
+	memoryProposalListLimit = 50
+	// inboxSourceMessageLimit bounds the source message an inbox item shows.
+	inboxSourceMessageLimit     = 2000
 	memoryProposalLeaseDuration = 30 * time.Second
 	// inboxPending is the pending condition for the alias inbox.
 	inboxPending = `NOT EXISTS (SELECT 1 FROM memory_proposal_inbox_declines AS declines WHERE declines.proposal_id = inbox.proposal_id)
@@ -750,6 +752,9 @@ func (s *Store) ListMemoryProposals(ctx context.Context) (memory.MemoryProposalP
 		if err != nil {
 			return page, err
 		}
+		if item.SourceMessage, err = s.inboxSourceMessage(ctx, row.id); err != nil {
+			return page, err
+		}
 		page.Items = append(page.Items, item)
 	}
 	return page, nil
@@ -771,6 +776,23 @@ func (s *Store) PendingMemoryProposalCount(ctx context.Context, scopeKeys ...str
 		return 0, fmt.Errorf("count memory proposals: %w", err)
 	}
 	return count, nil
+}
+
+// inboxSourceMessage is the owner's message a proposal was prepared from, so
+// the reviewer can judge what Evie read. Only the owner's own message in the
+// proposal's conversation is returned; anything else returns nothing.
+func (s *Store) inboxSourceMessage(ctx context.Context, proposalID string) (string, error) {
+	var message string
+	err := s.db.QueryRowContext(ctx, `SELECT events.content FROM memory_proposal_inbox AS inbox
+		JOIN events ON events.id = inbox.source_event_id AND events.session_id = inbox.session_id
+		WHERE inbox.proposal_id = ? AND events.event_type = ? AND events.role = 'user'`, proposalID, memory.EventUserMessage).Scan(&message)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read memory proposal source message: %w", err)
+	}
+	return clipText(strings.TrimSpace(message), inboxSourceMessageLimit), nil
 }
 
 const inboxArchivedProblem = "its conversation is archived; restore the conversation to approve it"

@@ -81,6 +81,17 @@ func claimCount(t *testing.T, store *Store) int {
 	return count
 }
 
+func TestInboxShowsAClippedSourceMessage(t *testing.T) {
+	f := newStandingFixture(t)
+	session := f.globalSession(t)
+	message := "I prefer short answers. " + strings.Repeat("é", inboxSourceMessageLimit)
+	f.propose(t, session, message, "answer_style", "answer style", "short answers", memory.ClaimKindPreference)
+	got := pendingProposals(t, f.store).Items[0].SourceMessage
+	if len(got) > inboxSourceMessageLimit || !strings.HasPrefix(got, "I prefer short answers. ") || !strings.HasSuffix(got, "é…") {
+		t.Fatalf("source message = %d bytes, %q…%q", len(got), got[:24], got[len(got)-8:])
+	}
+}
+
 func TestQueuedProposalCreatesNoClaimUntilApprovedFromTheInbox(t *testing.T) {
 	f := newStandingFixture(t)
 	ctx := context.Background()
@@ -100,7 +111,7 @@ func TestQueuedProposalCreatesNoClaimUntilApprovedFromTheInbox(t *testing.T) {
 	exact, _ := json.Marshal(proposal)
 	if item.ProposalID != queued.ProposalID || item.Proposal != string(exact) || item.PreparedSHA256 != proposal.PreparedSHA256 ||
 		!item.Approvable || item.ScopeKey != "global" || item.SessionID != session.ID || item.Reason != memory.MemoryProposalNotRequested ||
-		item.ToolName != memory.RememberLiteralToolName || item.Revision != 1 {
+		item.ToolName != memory.RememberLiteralToolName || item.Revision != 1 || item.SourceMessage != "Keep it short, I hate long answers." {
 		t.Fatalf("inbox item = %+v", item)
 	}
 

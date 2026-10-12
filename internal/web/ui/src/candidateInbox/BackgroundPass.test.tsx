@@ -82,6 +82,7 @@ describe("background proposals in the inbox", () => {
 
   it("marks a value the owner's words don't state", () => {
     const html = inbox([background({ change: { action: "update", current: "owner — music: rock", replacement: "owner — music: jazz", evie_proposed: true } })]);
-    expect(html).toContain("your words don’t state this value");
+    expect(html).toContain("Evie’s wording");
+    expect(html).toContain("means you didn’t say it in these words");
   });
 });

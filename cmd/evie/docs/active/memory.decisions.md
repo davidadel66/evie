@@ -727,6 +727,14 @@
     no text. The approval card shows the span under "Your words", or "Evie's
     proposal: this value is not in your message…" with no quote; the REPL
     proposal line prints the authority.
+  - *Inbox context (amended 2026-10-10).* David decided the review inbox
+    shows the owner message each proposal was prepared from, so he can judge
+    what Evie read. It is labelled "From your message", shown once per
+    message with that message's proposals under it, and is context, never
+    "Your words": an Evie-proposed value still cites no text and carries an
+    "Evie's wording" tag. The list returns only the owner's own
+    `user_message` in the proposal's conversation, clipped to 2,000 bytes.
+    Accepted sources, receipts and the chat approval card are unchanged.
   - *Validation.* Prepare decides; Apply and replay re-verify only structure:
     a range span with owner authority quoting exactly its bytes and hash, a
     whole message with owner authority quoting all of it, or a whole-message

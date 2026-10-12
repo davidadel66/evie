@@ -127,6 +127,10 @@ type MemoryProposalItem struct {
 	PreparedSHA256 string               `json:"prepared_sha256"`
 	Approvable     bool                 `json:"approvable"`
 	Problem        string               `json:"problem,omitempty"`
+	// SourceMessage is the owner's message the proposal was prepared from,
+	// clipped. It is context for the reviewer, not cited evidence: an
+	// Evie-proposed value still cites no words.
+	SourceMessage string `json:"source_message,omitempty"`
 	// Change describes what approving does in plain terms: add a memory,
 	// update (correct) an existing one, or retire one.
 	Change *MemoryProposalChange `json:"change,omitempty"`

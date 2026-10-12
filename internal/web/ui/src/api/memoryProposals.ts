@@ -32,6 +32,8 @@ export type MemoryProposalItem = {
   approvable: boolean;
   problem?: string;
   change?: MemoryProposalChange;
+  /** The owner's message Evie prepared it from: context, not cited words. */
+  source_message?: string;
 };
 
 export type MemoryProposalPage = { items: MemoryProposalItem[]; pending: number };
