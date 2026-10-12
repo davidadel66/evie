@@ -1,0 +1,93 @@
+{
+  "projectId": "13e70c07-2371-4663-b3b7-66415cf3a40a",
+  "shape": "package",
+  "pkg": "ui",
+  "globalName": "Evie",
+  "entry": "internal/web/ui/src/designSystem.ts",
+  "buildCmd": "npm --prefix internal/web/ui run build && cp internal/web/ui/dist/assets/index-*.css internal/web/ui/dist/design-system.css && (cd internal/web/ui && npx tsc -p tsconfig.app.json --declaration --emitDeclarationOnly --noEmit false --rootDir src --outDir dist/types)",
+  "srcDir": "src",
+  "tsconfig": "tsconfig.app.json",
+  "cssEntry": "dist/design-system.css",
+  "componentSrcMap": {
+    "Banner": "src/ui/Banner.tsx",
+    "Dialog": "src/ui/Dialog.tsx",
+    "TextSizeMenu": "src/ui/TextSizeMenu.tsx",
+    "Sidebar": "src/shell/Sidebar.tsx",
+    "SettingsDialog": "src/shell/SettingsDialog.tsx",
+    "ArchivedSessions": "src/shell/SettingsDialog.tsx",
+    "CreateWorkspaceDialog": "src/workspaces/CreateWorkspaceDialog.tsx",
+    "PresetDiagnostics": "src/workspaces/CreateWorkspaceDialog.tsx",
+    "SpendingView": "src/data/Spending.tsx",
+    "CashFlowView": "src/data/CashFlow.tsx",
+    "SpendingTransactionsView": "src/data/SpendingTransactions.tsx",
+    "DayTransactionRows": "src/data/SpendingDayDialog.tsx",
+    "SpendingAccountsView": "src/data/SpendingAccounts.tsx",
+    "DataHubView": "src/data/DataHub.tsx",
+    "DatabaseView": "src/data/Database.tsx",
+    "UsageView": "src/data/Usage.tsx",
+    "WorkflowList": "src/workspaces/WorkspaceWorkflows.tsx",
+    "WorkflowApprovalCard": "src/workspaces/WorkspaceWorkflows.tsx",
+    "WorkflowRunList": "src/workspaces/WorkspaceWorkflowRuns.tsx",
+    "WorkflowRunView": "src/workspaces/WorkspaceWorkflowRuns.tsx",
+    "WorkflowRunStart": "src/workspaces/WorkspaceWorkflowRuns.tsx",
+    "WorkflowInterruptionAnswer": "src/workspaces/WorkflowInterruptionAnswer.tsx",
+    "WorkflowNotificationList": "src/workspaces/WorkspaceWorkflowNotifications.tsx",
+    "WorkflowCapLine": "src/workspaces/WorkspaceWorkflowNotifications.tsx",
+    "BuiltinWorkflowList": "src/workspaces/WorkspaceBuiltinWorkflows.tsx"
+  },
+  "readmeHeader": ".design-sync/conventions.md",
+  "overrides": {
+    "Dialog": {
+      "cardMode": "single",
+      "viewport": "900x700"
+    },
+    "SettingsDialog": {
+      "cardMode": "single",
+      "viewport": "900x700"
+    },
+    "CreateWorkspaceDialog": {
+      "cardMode": "single",
+      "viewport": "900x700"
+    },
+    "SpendingView": {
+      "cardMode": "column",
+      "viewport": "1100x1800"
+    },
+    "CashFlowView": {
+      "cardMode": "column",
+      "viewport": "1100x1000"
+    },
+    "UsageView": {
+      "cardMode": "column",
+      "viewport": "900x1400"
+    },
+    "DataHubView": {
+      "cardMode": "column",
+      "viewport": "900x1400"
+    },
+    "WorkflowList": {
+      "cardMode": "column"
+    },
+    "WorkflowRunList": {
+      "cardMode": "column"
+    },
+    "WorkflowNotificationList": {
+      "cardMode": "column"
+    },
+    "WorkflowCapLine": {
+      "cardMode": "column"
+    },
+    "BuiltinWorkflowList": {
+      "cardMode": "column"
+    },
+    "DayTransactionRows": {
+      "cardMode": "column"
+    },
+    "WorkflowApprovalCard": {
+      "cardMode": "column"
+    },
+    "WorkflowRunView": {
+      "cardMode": "column"
+    }
+  }
+}

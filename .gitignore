@@ -10,3 +10,8 @@ cmd/finance/data/
 # Run `npm --prefix internal/web/ui run build` before `go build ./cmd/evie`.
 internal/web/ui/node_modules/
 internal/web/ui/dist/
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
