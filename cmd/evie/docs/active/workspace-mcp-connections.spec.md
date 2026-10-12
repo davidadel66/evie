@@ -86,7 +86,11 @@ server process.
      offers it. Otherwise use the pre-registered client ID, plus a secret the
      owner pipes in on stdin (for example, from Canva's Developer Portal).
      Client ID Metadata Documents are not used, because they need a public
-     https URL that Evie does not have.
+     https URL that Evie does not have. A reconnect reuses an earlier dynamic
+     registration while its issuer and redirect URI are unchanged (the
+     redirect is recorded with the OAuth metadata). A confidential client
+     authenticates with HTTP Basic, unless the server lists only
+     `client_secret_post`.
   3. Send the resource indicator, and request the scopes the metadata
      advertises. Square advertises none and grants read scopes.
 
@@ -115,16 +119,30 @@ server process.
   once after a 401. It sends the `resource` parameter, and it stores the
   rotated tokens under the same Connection ID before using them (ADR 0024).
   Square rotates the refresh token on every refresh, so a lost write means
-  signing in again. If refresh fails, the status becomes `needs_sign_in` and calls
-  return a readable result without retrying.
+  signing in again.
+  - The code exchange and refresh, together with saving their results, run
+    detached from the caller with a 30-second limit. A cancelled turn
+    therefore cannot drop a rotation.
+  - If the Keychain refuses the rotated tokens, serve keeps them in memory,
+    unused, and retries the save on the next call.
+  - Only an OAuth refusal (`invalid_grant`, `invalid_client` or
+    `unauthorized_client`) sets `needs_sign_in`. That status drops the
+    tokens, keeps the client registration, and makes calls return a readable
+    result without retrying.
+  - Any other failure sets `unreachable` and keeps the refresh token.
+  - A later success sets `connected` again, as does a successful Keychain
+    read after `keychain_unavailable`.
 - **Status** is one of `not_connected`, `connected`, `needs_sign_in`,
   `unreachable` or `keychain_unavailable`, and serve writes it to the record.
   The `mcp` plugin reports `ConnectionReadiness` as `not_required`, because
   connections are optional per Workspace. Per-connection status appears in
   `evie connections list`, in `mcp_list_tools`, and in Workspace Settings.
-- **Disconnect** deletes the Keychain item, attempts revocation if the server
-  advertises a revocation endpoint, closes the live MCP session, and sets the
-  status to `not_connected`. The record and any Workspace references remain.
+- **Disconnect** attempts revocation if the server advertises a revocation
+  endpoint, deletes the tokens from the Keychain, closes the live MCP
+  session, and sets the status to `not_connected`. The client registration
+  stays, including a pre-registered client's secret, so reconnecting works
+  without adding the connection again. The record and any Workspace
+  references remain.
 - **Live MCP sessions.** Serve keeps at most one live MCP session per
   connection, shared by chats. It opens the session on first use and reopens
   it after a failure or a closed connection.
@@ -138,17 +156,21 @@ server process.
     the context. `http.Client.Timeout` is not used.
 - **HTTP transport (owned by Evie).** The Streamable HTTP transport gets one
   `http.Client` per connection whose RoundTripper:
-  - adds `Authorization: Bearer` only for requests to the connection's own
-    host;
+  - adds `Authorization: Bearer` only over https, and only to the
+    connection's own host;
   - takes the token from the per-connection token source;
   - on a 401, refreshes under the lock and re-sends that request exactly
     once from its own buffered copy of the body;
   - never re-sends after a 403 or any other status;
+  - never follows a redirect: the client returns the 3xx as it is, and the
+    transport refuses a redirected request;
   - clears `GetBody`, so `net/http` cannot replay a POST on its own;
-  - records through `httptrace` whether a connection was obtained and
-    whether the request was written. A request with no connection obtained
-    was never sent. A request that was written, with no complete response,
-    has an unknown outcome.
+  - records whether a connection was obtained, through `httptrace`, and
+    which status answered. The resulting outcome is one of:
+    - no connection obtained: the request was never sent;
+    - a complete 4xx answer: rejected;
+    - anything else (no answer, a broken stream, or a 5xx from a gateway
+      that may have forwarded the request): unknown.
 
   The SDK is given no `OAuthHandler`.
 
@@ -232,11 +254,12 @@ composition.
     - A result with `isError: true` reaches the model as a tool error.
   - **No blind retries.** Evie re-sends a call only once, and only after a
     401 answered by a successful refresh, because the server rejected the
-    first request. If the transport's trace shows the request was written
-    but no complete response arrived (a timeout, a dropped connection or a
-    broken stream), the result is "outcome unknown: check in <connection>
-    before retrying". Evie does not retry. If no connection was obtained,
-    the result is "not sent: <reason>".
+    first request. The transport's outcome sets the result:
+    - unknown (a timeout, a dropped connection, a broken stream or a 5xx):
+      "outcome unknown: check in <connection> before retrying", and Evie
+      does not retry;
+    - never sent: "not sent: <reason>";
+    - a complete 4xx answer: "rejected by <connection>: <status>".
 
 ## Surfaces
 

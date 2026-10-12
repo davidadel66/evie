@@ -84,6 +84,13 @@ func main() {
 		}
 		return
 	}
+	// MCP connections live in evie serve; the CLI only talks to it.
+	if handled, err := runConnectionManagement(context.Background(), os.Args[1:], os.Stdout, os.Stdin, defaultConnectionCommands(os.Getenv)); handled {
+		if err != nil {
+			log.Fatalf("connections: %v", err)
+		}
+		return
+	}
 
 	db, err := eviedb.OpenDB()
 	if err != nil {
@@ -417,6 +424,7 @@ func main() {
 		})
 		defer stopChangeSync()
 		merger.Store(changeMerger(kernelStore, repositories, supervisor, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync))
+		mcpConnections := newMCPConnectionManager(kernelStore, os.Getenv)
 		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
 		if err != nil {
 			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)
@@ -424,7 +432,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopMemory := startMemoryForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithMCPConnections(web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()), mcpConnections))
 			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -472,7 +480,7 @@ func main() {
 				agent.WithCompactionMemoryFlush(memoryBackground.runner)), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithMCPConnections(web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()), mcpConnections))
 		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)

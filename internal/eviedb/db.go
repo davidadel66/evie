@@ -1203,6 +1203,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, err
 	}
+	if err := ensureMCPConnections(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := ensureSubagentSchema(ctx, db); err != nil {
 		db.Close()
 		return nil, err

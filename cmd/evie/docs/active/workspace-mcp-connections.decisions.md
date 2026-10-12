@@ -170,6 +170,33 @@ David signing in. The token was revoked afterwards.
 The exact list Evie's `go.mod` gains is recorded with story 2, the first
 story that imports the SDK.
 
+## Story 1 review (2026-10-12)
+
+A code review of story 1 found these changes, now in the spec:
+
+- **Disconnect keeps the client registration.** The spec first said
+  Disconnect deletes the Keychain item. That also deleted a pre-registered
+  client's secret (the Canva path), and the owner could then neither
+  reconnect nor add the connection again. Now only the tokens go.
+- **Token work is detached from the turn.** Square rotates the refresh
+  token on every refresh, so a cancelled turn that dropped the response
+  would have forced a new sign-in.
+- **A rotation the Keychain refuses is kept in memory, unused,** and saved
+  on the next call.
+- **Only an OAuth refusal requires signing in again.** A firewall's HTML 400
+  or a 503 sets `unreachable` and keeps the refresh token.
+- **Redirects are never followed, and the bearer goes only over https.**
+  `net/http` would otherwise re-POST a body on a 307 or 308.
+- **The outcome adds "rejected"** for a complete 4xx answer. Before, a 403
+  would have read as "outcome unknown".
+- **A dynamic registration is reused** while its issuer and redirect are
+  unchanged, so Square doesn't collect an orphan client per sign-in.
+- **A confidential client defaults to HTTP Basic** (RFC 8414).
+- **`Wait` waits for a callback that has already started,** even past the
+  deadline.
+- **The fake authorization server moved to `internal/mcpconn/mcptest`,** so
+  the leak test can run against the real SQLite file, WAL included.
+
 ## Source facts (2026-10-11, superseded where the spike answered)
 
 - Canva: hosted at `https://mcp.canva.com/mcp` (Streamable HTTP) with OAuth.
