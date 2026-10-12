@@ -21,7 +21,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:7f31ed96c814e676d51c7f9288cb0c15bca18352a2dc271d7b3894f3f20f14dd"
+	StandardPresetVersion                               = "sha256:d52283fa9f2a7ecc53add46d4abc811262da0ab3da88a9190117ce91d2f29a56"
+	preMCPStandardPresetVersion                         = "sha256:7f31ed96c814e676d51c7f9288cb0c15bca18352a2dc271d7b3894f3f20f14dd"
 	preWorkflowsStandardPresetVersion                   = "sha256:377b51c09706fba7741ad0f6f0e9ba8281921ba6b0043b8f9985a5c31966b3c0"
 	preReadyStandardPresetVersion                       = "sha256:6566fc2a89af6fb8661b00d2222d49125b9181153ef5a2e97888552221864a54"
 	preMergeStandardPresetVersion                       = "sha256:535755ad0e6b11cadd91edd54db59c8196a3970ff256b3feddac838babc38a72"
@@ -729,6 +730,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preWorkflowsStandardPresetVersion {
 		return m.resumePreset(preWorkflowsStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preMCPStandardPresetVersion {
+		return m.resumePreset(preMCPStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -1033,23 +1037,46 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 	return ImplementationCompatibility{}, false
 }
 
-// standardPresetContent is the current standard preset: every Memory
-// Capability including the stored tool result reader, past-session episode
-// search, the standing tier's memory_set_standing and memory_overview, then
-// delegation, its report reader and continuation, then explore delegation
-// (Stage 7, 2026-10-03), then build delegation (Stage 11, 2026-10-03), then
-// the build merge gate (Stage 12, 2026-10-04), todo_ready after the
-// required Todo Capabilities (Stage 13, 2026-10-04), and the chat's
-// workflow_start and workflow_status (Stage 14 sub-stage 10, 2026-10-04),
-// optional so a disabled Workflows plugin only warns. A later Memory
-// Capability must freeze this Memory list, as
-// preProactiveMemoryCapabilityRequirements does for the version before it.
+// standardPresetContent is the current standard preset: everything before
+// the MCP tools, then mcp_list_tools and mcp_call (workspace-mcp-
+// connections.spec.md story 2, 2026-10-12), optional so a disabled MCP
+// plugin only warns. Outside a Workspace they reach nothing.
 func standardPresetContent() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preMCPStandardPresetContent()
+	p.OptionalCapabilities = append(p.OptionalCapabilities,
+		CapabilityRequirement{ID: MCPListToolsCapabilityID, Compatibility: compatibility},
+		CapabilityRequirement{ID: MCPCallCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preMCPStandardPresetContent is the content of version 7f31ed96…, the
+// standard preset before the MCP tools: every Memory Capability including
+// the stored tool result reader, past-session episode search, the standing
+// tier's memory_set_standing and memory_overview, then delegation, its
+// report reader and continuation, then explore delegation (Stage 7,
+// 2026-10-03), then build delegation (Stage 11, 2026-10-03), then the build
+// merge gate (Stage 12, 2026-10-04), todo_ready after the required Todo
+// Capabilities (Stage 13, 2026-10-04), and the chat's workflow_start and
+// workflow_status (Stage 14 sub-stage 10, 2026-10-04), optional so a
+// disabled Workflows plugin only warns. A later Memory Capability must
+// freeze this Memory list, as preProactiveMemoryCapabilityRequirements does
+// for the version before it.
+func preMCPStandardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preWorkflowsStandardPresetContent()
 	p.OptionalCapabilities = append(p.OptionalCapabilities,
 		CapabilityRequirement{ID: WorkflowsStartCapabilityID, Compatibility: compatibility},
 		CapabilityRequirement{ID: WorkflowsStatusCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preMCPStandardPreset is the standard preset before mcp_list_tools and
+// mcp_call (version 7f31ed96…); sessions pinned to it keep their exact
+// tools and prompt.
+func preMCPStandardPreset() Preset {
+	p := preMCPStandardPresetContent()
+	p.Version = preMCPStandardPresetVersion
 	return p
 }
 

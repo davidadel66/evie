@@ -117,8 +117,8 @@ func TestStandardPresetTreatsMemoryCapabilitiesAsOptional(t *testing.T) {
 	if err != nil {
 		t.Fatalf("disabled optional Memory Plugin invalidated standard: %v", err)
 	}
-	// Plus the uncompiled Subagents delegation, report, continuation, explore, build and merge capabilities and the uncompiled Workflows start and status.
-	if len(disabled.Warnings) != len(want)+8 || containsMemorySchema(disabled.Toolset) {
+	// Plus the uncompiled Subagents delegation, report, continuation, explore, build and merge capabilities, the uncompiled Workflows start and status, and the uncompiled MCP list and call.
+	if len(disabled.Warnings) != len(want)+10 || containsMemorySchema(disabled.Toolset) {
 		t.Fatalf("disabled composition warnings/schemas = %d/%v", len(disabled.Warnings), disabled.Toolset.Schemas())
 	}
 	if err := manager.Enable(context.Background(), MemoryPluginID); err != nil {
@@ -134,7 +134,7 @@ func TestStandardPresetTreatsMemoryCapabilitiesAsOptional(t *testing.T) {
 			memoryReceipts++
 		}
 	}
-	if len(enabled.Warnings) != 8 || memoryReceipts != len(want) { // the six uncompiled Subagents and two Workflows capabilities
+	if len(enabled.Warnings) != 10 || memoryReceipts != len(want) { // the six uncompiled Subagents, two Workflows and two MCP capabilities
 		t.Fatalf("enabled composition warnings/capabilities = %v/%v", enabled.Warnings, enabled.Receipt.Capabilities)
 	}
 }
@@ -176,8 +176,8 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 	if !containsSchema(resolved.Toolset, "read_tool_result") {
 		t.Fatal("remote-memory opt-out removed the stored tool result reader")
 	}
-	// Eleven Memory reads plus the uncompiled Subagents delegation, report, continuation, explore, build and merge capabilities and Workflows start and status.
-	if len(resolved.Warnings) != 19 {
+	// Eleven Memory reads plus the uncompiled Subagents delegation, report, continuation, explore, build and merge capabilities, Workflows start and status, and MCP list and call.
+	if len(resolved.Warnings) != 21 {
 		t.Fatalf("remote-memory opt-out warnings = %v, want one per unavailable read Capability", resolved.Warnings)
 	}
 }
@@ -647,8 +647,8 @@ func TestFailedMemoryPluginStaysOutOfComposition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed optional Memory Plugin invalidated standard preset: %v", err)
 	}
-	// Plus the uncompiled Subagents delegation, report, continuation, explore, build and merge capabilities and the uncompiled Workflows start and status.
-	if containsMemorySchema(composition.Toolset) || len(composition.Warnings) != len(allMemoryCapabilityIDs())+8 {
+	// Plus the uncompiled Subagents delegation, report, continuation, explore, build and merge capabilities, the uncompiled Workflows start and status, and the uncompiled MCP list and call.
+	if containsMemorySchema(composition.Toolset) || len(composition.Warnings) != len(allMemoryCapabilityIDs())+10 {
 		t.Fatalf("failed Memory Plugin composition = warnings %v schemas %v", composition.Warnings, composition.Toolset.Schemas())
 	}
 }
