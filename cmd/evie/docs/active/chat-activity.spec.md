@@ -360,3 +360,73 @@ choice: a very cheap model writing a short headline instead of the sentence
 (BACKLOG Ideas). Verification covers withholding an unfinished sentence, the
 latest complete sentence and heading preference, abbreviations not splitting a
 sentence, the tool row taking over, and Thinking after a settled tool.
+
+## Subagent inspector amendment — October 12, 2026
+
+David saw `delegate_research` sit at "requested" / "No result recorded" while
+its four research children ran, with no way to see them. He asked to see
+subagents working, which finished, and what each was asked: in the chat UI
+and its inspector, not in Runs. Decision record: the 2026-10-12 entry in
+[subagents.decisions.md](subagents.decisions.md).
+
+- Delegate rows (`delegate_research`, `delegate_explore`, `delegate_build`,
+  `continue_research`) read as "Research with subagents", "Explore with
+  subagents", "Build with a subagent" and "Continue a subagent". While the
+  turn is live and the row has no result, its label reports its children,
+  such as "Researching · 2 of 4 done", read every two seconds. This applies in
+  the expanded trace and in the collapsed live line.
+- Inspecting a delegate row opens **Subagents** in the inspector (a build row
+  that names its Changes still opens them). It lists each child: state
+  (Queued, Working, Done, Partial report, Failed, Cancelled, Interrupted),
+  its assignment clamped to two lines, elapsed time, its latest requested
+  action as its chat row would read, and its action count. The list refreshes
+  every two seconds while the call is unresolved or any child is unfinished,
+  and keeps retrying after a failed read until then. Debug details keep the
+  parent call's exact arguments and result. A call that started no children,
+  including one refused for reusing an idempotency key, shows the generic tool
+  inspector.
+- Selecting a child shows its full assignment, any context Evie gave it
+  (collapsed), and its own trace for that attempt only (commentary, grouped
+  actions and its report) using the chat's activity rows, refreshed every three
+  seconds while it works; selecting one of its actions shows that action's
+  inspector, with Back at each level. A continued child's earlier attempt
+  never shows the continuation's work. Traces cut tool results to 4 KiB and
+  child text to 64 KiB, and shorten long argument values while keeping the
+  arguments JSON so each row keeps its subject; this is for display only.
+- Reads go through `/api/subagents/list` (one call's children, identified by
+  turn and provider call ID, since call IDs can repeat across turns) and
+  `/api/subagents/trace` (one child), answered only for the open conversation.
+  Child sessions stay out of session lists and cannot be opened as chats.
+
+No persistence, migration, event, preset or dependency changes. Not included:
+stopping or continuing a child from the UI, or showing children in Runs.
+
+### Verification — October 12, 2026
+
+- `go test ./internal/eviedb -run 'TestSubagentsOfCall|TestSubagentProgress|TestBoundToolArguments'`
+  and `go test ./internal/web -run 'TestSubagent|TestHistory'` passed, also
+  under `-race`, with real SQLite: queued → running → latest action; another
+  top-level session with the same call ID and key reads nothing (a mutation
+  dropping the parent filter fails it); a later web search or delegation
+  reusing a call ID, a replayed key and a refused key; a continuation kept out
+  of the original attempt; the open-conversation gate; a live child's action
+  staying requested; bounded arguments keeping their subject.
+- UI suite: 597 tests in 91 files passed, including the live reasoning line
+  (abbreviations, initials, numbers and years), empty memory receipts, no
+  per-turn instructions control, delegate labels, the subagent list and child
+  views with context, the request shape and the subagents pane tab. The
+  polling hooks and the two-second hold have no automated test (the UI suite
+  has no DOM environment).
+- A fresh-context review found no data-boundary issue; its two correctness
+  findings (continuations leaking into the original attempt, and call IDs
+  reused across turns) and its smaller ones were fixed with the tests above.
+- Browser check without model requests: a disposable copy of the live
+  database served offline (no credentials, all outbound HTTP refused) and
+  driven with headless Chromium at 1440 px and 390 px. The October 12
+  superintelligence turn showed "Research with subagents", its four real
+  children (Done, Partial report ×2, Done; 38–81 actions; 49s–2m 45s), one
+  child's trace, and one of its web searches, with no console errors and no
+  horizontal overflow. The live states (polling a running child, the waiting
+  row label, the reasoning line) were not exercised in a browser: they need a
+  live turn, and the copy's recovery correctly settled a simulated running
+  child at once.

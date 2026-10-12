@@ -14,6 +14,7 @@ import { targetTitle, memoryTitle, claimObject } from "./inspectorTitle";
 import { RunInspection } from "./RunInspection";
 import { BuildInspection } from "./BuildInspection";
 import type { BuildRef } from "./chatBuilds";
+import { SubagentInspection } from "../subagents/SubagentInspection";
 
 export type InspectorTarget =
  | ({kind:"repository-instructions"} & InstructionTarget)
@@ -29,6 +30,8 @@ export type InspectorTarget =
   | { kind: "workflow-run"; runId: string }
   /** The builds one chat row made, each with its Change (changes.spec.md story 6b). */
   | { kind: "build"; key: string; workspaceId?: string; builds: BuildRef[] }
+  /** The subagents one chat row started (chat-activity.spec.md, subagent inspector amendment). */
+  | { kind: "subagents"; sessionId: string; tool: ToolItem }
   | { kind: "empty" };
 
 type Props = {
@@ -39,7 +42,7 @@ type Props = {
 
 export function Panel({ target, focused, onClose }: Props) {
   const closeButton = useRef<HTMLButtonElement>(null);
-  const selectionKey = target.kind === "file" ? target.file.key : target.kind === "tool" ? target.tool.key : target.kind === "memory-evidence" ? `${target.sessionId}:${target.snapshotId}` : undefined;
+  const selectionKey = target.kind === "file" ? target.file.key : target.kind === "tool" || target.kind === "subagents" ? target.tool.key : target.kind === "memory-evidence" ? `${target.sessionId}:${target.snapshotId}` : undefined;
   useEffect(() => {
     if (selectionKey) closeButton.current?.focus();
   }, [selectionKey]);
@@ -84,6 +87,7 @@ export function InspectorContent({target, onOpenChange}: {target: InspectorTarge
         {target.kind === "file-diff" && <FileInspection target={target} />}
         {target.kind === "data" && <DataInspection />}
         {target.kind === "workflow-run" && <RunInspection key={target.runId} runId={target.runId} />}
+        {target.kind === "subagents" && <SubagentInspection key={target.tool.key} tool={target.tool} sessionId={target.sessionId} />}
         {target.kind === "build" && <BuildInspection key={target.key} builds={target.builds} workspaceId={target.workspaceId} onOpenChange={onOpenChange} />}
         {target.kind === "empty" && <EmptyInspection />}
   </>;

@@ -4,6 +4,7 @@ import type { SemanticObjectInspection } from "../api/memory";
 export function targetTitle(target: InspectorTarget) {
   if (target.kind === "repository-instructions") return target.turnId ? "Turn instructions" : "Repository instructions";
   if (target.kind === "tool") return "Tool activity";
+  if (target.kind === "subagents") return "Subagents";
   if (target.kind === "file") return target.file.path.split("/").filter(Boolean).pop() ?? target.file.path;
   if (target.kind === "memory") return memoryTitle(target.detail);
   if (target.kind === "memory-evidence") return "Memory inspection";

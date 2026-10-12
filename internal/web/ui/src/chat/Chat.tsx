@@ -11,6 +11,7 @@ import { workflowStartRun, type ChatRunStart } from "./chatRuns";
 import { RunCard } from "./RunCard";
 import { useChatRuns } from "../store/useChatRuns";
 import { runSteps } from "../workspaces/runView";
+import { SubagentSessionContext } from "../subagents/useSubagents";
 
 /** The runs a turn's workflow_start calls named, once each, in call order. */
 function runStarts(activity: Item[]): ChatRunStart[] {
@@ -32,6 +33,8 @@ type Props = {
   onOpenFile?: (key: string, trigger: HTMLButtonElement) => void;
   onOpenTool?: (key: string, trigger: HTMLButtonElement) => void;
   onOpenMemory?: MemoryOpener;
+  /** The open conversation, whose delegate rows read their subagents. */
+  sessionId?: string;
   /** The chat's Workspace, whose runs list keeps the run cards current. */
   workspaceId?: string;
   onOpenRun?: (runId: string, trigger: HTMLButtonElement) => void;
@@ -42,7 +45,7 @@ type Props = {
   onRetry?: () => void;
 };
 
-export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOpenFile, onOpenTool, onOpenMemory, workspaceId, onOpenRun, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
+export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOpenFile, onOpenTool, onOpenMemory, sessionId, workspaceId, onOpenRun, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const starts = items.flatMap((item) => item.kind === "tool" ? [workflowStartRun(item)].filter((start) => start !== undefined) : []);
   const chatRuns = useChatRuns(workspaceId, [...new Set(starts.map((start) => start.runId))], streaming);
@@ -60,7 +63,7 @@ export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOp
   }, [items, queued, streaming]);
 
   return (
-    <AlwaysAppliesContext.Provider value={onAlwaysApplies}>
+    <AlwaysAppliesContext.Provider value={onAlwaysApplies}><SubagentSessionContext.Provider value={sessionId}>
     <div
       ref={scroller}
       onScroll={(e) => {
@@ -96,7 +99,7 @@ export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOp
         <div className="h-2 flex-none" />
       </div>
     </div>
-    </AlwaysAppliesContext.Provider>
+    </SubagentSessionContext.Provider></AlwaysAppliesContext.Provider>
   );
 }
 

@@ -22,6 +22,12 @@ describe("shared inspector tabs", () => {
   for(const target of [current,historical])tabs=openPaneTab(tabs,{id:inspectionKey(target),kind:"inspection",target});
   expect(tabs).toHaveLength(3);expect(tabs[0]).toEqual({id:"terminal",kind:"terminal"});expect(tabs[1].id).not.toBe(tabs[2].id);
  });
+ it("keeps a subagents tab on its delegate row and picks up the row's result",()=>{
+  const waiting:ToolItem={kind:"tool",key:"delegate",id:"call",name:"delegate_research",args:"{}",startedAt:0};
+  const target={kind:"subagents",sessionId:"session",tool:waiting} as const;
+  expect(inspectionKey(target)).toBe("subagents:delegate");
+  expect(refreshInspection(target,"session",[{...waiting,result:"[]"}])).toEqual({...target,tool:{...waiting,result:"[]"}});
+ });
  it("refreshes an older tool tab after another tool was selected",()=>{
   const first:ToolItem={kind:"tool",key:"first",id:"a",name:"bash",args:"{}",startedAt:0};
   const second:ToolItem={...first,key:"second",id:"b"};

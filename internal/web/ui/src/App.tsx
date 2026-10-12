@@ -41,6 +41,7 @@ import { CreateWorkspaceDialog } from "./workspaces/CreateWorkspaceDialog";
 import { SettingsDialog } from "./shell/SettingsDialog";
 import { DeleteWorkspaceDialog } from "./shell/DeleteWorkspaceDialog";
 import { resolveChatFont, type ChatFont } from "./ui/chatFont";
+import { startsSubagents } from "./subagents/subagentView";
 
 export type WorkbenchView =
   | { id: "chat"; kind: "chat" }
@@ -121,6 +122,8 @@ export default function App() {
   // A build row opens its Change, not a file (changes.spec.md story 6b).
   const selectedBuilds = selectedTool ? buildsOfTool(selectedTool) : [];
   const selectedInspection = selectedTool && selectedBuilds.length === 0 ? inspectToolFile(selectedTool) : null;
+  // A delegate row opens its subagents until it names a build.
+  const selectedSubagents = selectedTool && selectedBuilds.length === 0 && activeSessionId && startsSubagents(selectedTool) ? selectedTool : undefined;
   const latestFileDiff = [...items].reverse().find((item) => item.kind === "tool" && item.name !== "propose_build_merge" && item.approval?.preview);
   const latestFile = latestFileDiff?.kind === "tool" ? inspectToolFile(latestFileDiff) : null;
   const visibleOverride = inspectorOverride?.kind==="repository-instructions"&&inspectorOverride.turnId&&inspectorOverride.sessionId!==contextSessions.snapshot?.activeSession?.id?undefined:inspectorOverride?.kind === "memory-evidence"
@@ -130,6 +133,8 @@ export default function App() {
     : inspectorOverride;
   const inspectorTarget: InspectorTarget = selectedTool && selectedBuilds.length > 0
     ? {kind: "build", key: selectedTool.key, workspaceId: contextSessions.snapshot?.activeScope?.workspaceId, builds: selectedBuilds}
+    : selectedSubagents && activeSessionId
+    ? {kind: "subagents", sessionId: activeSessionId, tool: selectedSubagents}
     : selectedInspection
     ? {kind: "file", file: selectedInspection}
     : selectedTool ? {kind: "tool", tool: selectedTool}
@@ -341,7 +346,7 @@ export default function App() {
             {activeView.kind === "chat" && (
               contextSessions.snapshot?.activeScope ? (
                 <>
-                  <Chat key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onAlwaysApplies={setAlwaysApplies} onOpenFile={openTool} onOpenTool={openTool}
+                  <Chat sessionId={contextSessions.snapshot.activeSession?.id} key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onAlwaysApplies={setAlwaysApplies} onOpenFile={openTool} onOpenTool={openTool}
                     workspaceId={scopeWorkspace?.id} onOpenRun={(runId, trigger) => {
                       fileTrigger.current = trigger;
                       activityTrigger.current = null;

@@ -93,6 +93,10 @@ const actions: Record<string, { kind: ActionKind; action: string; done: string; 
   memory_traverse: {kind: "memory", action: "Follow memory links", done: "Followed memory links", subject: []},
   memory_search_conversations: {kind: "memory", action: "Search conversations", done: "Searched conversations", subject: ["query"]},
   memory_expand_conversation: {kind: "memory", action: "Read conversation context", done: "Read conversation context", subject: []},
+  delegate_research: {kind: "tool", action: "Research with subagents", done: "Research with subagents", subject: []},
+  delegate_explore: {kind: "tool", action: "Explore with subagents", done: "Explore with subagents", subject: []},
+  delegate_build: {kind: "tool", action: "Build with a subagent", done: "Build with a subagent", subject: []},
+  continue_research: {kind: "tool", action: "Continue a subagent", done: "Continue a subagent", subject: ["execution_id"]},
 };
 
 export function toolLabel(tool: ToolItem) {

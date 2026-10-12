@@ -7,10 +7,11 @@ import { selectedMemoryTools } from "./toolSelection";
 export function refreshInspection(target:InspectorTarget, sessionId:string|undefined, items:Item[], workspace?:Workspace):InspectorTarget {
  if(target.kind==="repository-instructions"&&!target.turnId&&workspace?.id===target.workspaceId)return {...target,folderRevision:workspace.folder?.revision??0,settingsRevision:workspace.instructions?.revision??0};
  if(target.kind==="memory-evidence")return {...target,memoryTools:selectedMemoryTools(target,sessionId,items)};
- const key=target.kind==="file"?target.file.key:target.kind==="tool"?target.tool.key:undefined;
+ const key=target.kind==="file"?target.file.key:target.kind==="tool"||target.kind==="subagents"?target.tool.key:undefined;
  const tool=key?items.find(item=>item.kind==="tool"&&item.key===key):undefined;
  if(tool?.kind!=="tool")return target;
  if(target.kind==="file"){const file=inspectToolFile(tool);return file?{kind:"file",file}:target;}
+ if(target.kind==="subagents")return {...target,tool};
  return {kind:"tool",tool};
 }
 export type PaneTab =
@@ -24,6 +25,7 @@ export function inspectionKey(target: InspectorTarget): string {
  case "repository-instructions": return target.turnId?`instructions:${target.sessionId}:${target.turnId}`:`instructions:${target.workspaceId}`;
  case "file":return `recorded-file:${target.file.key}`;
  case "tool":return `tool:${target.tool.key}`;
+ case "subagents":return `subagents:${target.tool.key}`;
  case "memory-evidence":return `memory:${target.sessionId}:${target.snapshotId}`;
  case "memory":return `record:${target.detail.scope.scope_id}:${target.detail.object_kind}:${target.detail.object_id}`;
  case "workspace":return `workspace:${target.workspace.id}`;

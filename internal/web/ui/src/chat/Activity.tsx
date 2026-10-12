@@ -6,6 +6,8 @@ import { ChevronDown, Database, FileIcon, Wrench } from "../ui/Icon";
 import { ApprovalCard } from "./ApprovalCard";
 import { AssistantMessage, DiscardWarning } from "./Message";
 import { MemoryActivity, type MemoryOpener } from "./MemoryActivity";
+import { startsSubagents, subagentProgressLabel } from "../subagents/subagentView";
+import { useSubagentList, useSubagentSession } from "../subagents/useSubagents";
 import { awaitingApproval, currentThought, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
 
 type FileOpener = (key: string, trigger: HTMLButtonElement) => void;
@@ -67,7 +69,7 @@ function LiveStatus({activity, onAnswer, onOpenFile, onOpenTool}: {activity: Ite
   const tool = [...activity].reverse().find((item): item is ToolItem => item.kind === "tool" && item.result === undefined);
   return <div role="status">
     {thought ? <ThoughtLine thought={thought} />
-      : tool ? <ToolRow tool={tool} active onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} />
+      : tool ? <ToolRow key={tool.key} tool={tool} active onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} />
       : <p className="text-muted-text py-1 text-[13px]">Thinking…</p>}
   </div>;
 }
@@ -137,7 +139,11 @@ function ToolRow({ tool, active, onAnswer, onInspect, onOpenFile, onOpenTool }: 
   const path = toolFilePath(tool);
   const fileButton = path && onOpenFile;
   const pending = tool.approval?.state === "pending" && tool.result === undefined;
-  const displayLabel = !active && tool.result === undefined && !tool.approval ? "No result recorded" : label;
+  // A delegate row waits on its children, so it reports how far they got.
+  const waiting = active && tool.result === undefined && startsSubagents(tool);
+  const {list: children} = useSubagentList(useSubagentSession(), waiting ? tool : undefined, waiting);
+  const progress = waiting && children ? subagentProgressLabel(children) : null;
+  const displayLabel = progress ?? (!active && tool.result === undefined && !tool.approval ? "No result recorded" : label);
   const result = readMemoryToolResult(tool);
   const returned = result?.kind === "records" ? `${result.records.length} ${result.records.length === 1 ? "record" : "records"} returned`
     : result?.kind === "search" ? `${result.matches} ${result.matches === 1 ? "match" : "matches"} returned` : "";
