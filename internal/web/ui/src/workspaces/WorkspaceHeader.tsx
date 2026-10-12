@@ -17,7 +17,7 @@ export function WorkspaceHeader({tab, waiting, review = 0, showChanges = false, 
   onTab: (tab: WorkspaceTab) => void;
 }) {
   return <div className="border-hair bg-topbar flex h-[42px] flex-none items-stretch gap-6 border-b px-6 sm:px-10">
-    <div role="tablist" aria-label="Workspace sections" className="flex min-w-0 items-stretch gap-[22px] overflow-x-auto">
+    <div role="tablist" aria-label="Workspace sections" className="flex min-w-0 items-stretch gap-[22px]">
       {workspaceTabs.filter(({id}) => id !== "changes" || showChanges).map(({id, label}) => {
         const selected = tab === id;
         const badge = id === "runs" ? waiting : id === "changes" ? review : 0;
