@@ -23,6 +23,7 @@ import (
 var (
 	ErrToolNotOffered   = errors.New("the server does not offer that tool")
 	ErrToolUnselectable = errors.New("that tool's name cannot be enabled (whitespace, control characters, or longer than 64 characters)")
+	ErrToolNotEnabled   = errors.New("enable the tool's current version before allowing it")
 )
 
 // Store is the Workspace Access and connection state the service reads
@@ -33,6 +34,8 @@ type Store interface {
 	WorkspaceAccessAt(ctx context.Context, ws memory.WorkspaceID, revision int64) (eviedb.WorkspaceAccessRevision, error)
 	SetWorkspaceAccess(ctx context.Context, ws memory.WorkspaceID, expected int64, access workflow.WorkspaceAccess) (eviedb.WorkspaceAccessRevision, error)
 	MCPConnection(ctx context.Context, id string) (mcpconn.Connection, error)
+	MCPToolPolicies(ctx context.Context, ws memory.WorkspaceID) (int64, map[string]map[string]bool, error)
+	SetMCPToolPolicy(ctx context.Context, ws memory.WorkspaceID, expected int64, connectionID, selector string, allow bool) (int64, error)
 }
 
 // Tools reaches the servers; mcpconn.Pool implements it.
@@ -106,10 +109,83 @@ func (s *Service) CallTool(ctx context.Context, id, name string, arguments json.
 	return s.tools.CallTool(ctx, id, name, arguments)
 }
 
-// Allowed reports whether the owner set a reviewed tool to Allow in ws.
-// Every call asks until the Tool Policy table exists (story 3).
-func (s *Service) Allowed(context.Context, memory.WorkspaceID, string, string) (bool, error) {
-	return false, nil
+// Allowed reports whether the owner set this exact reviewed tool to Allow
+// in ws; the latest policy revision applies to the next call.
+func (s *Service) Allowed(ctx context.Context, ws memory.WorkspaceID, connectionID, selector string) (bool, error) {
+	_, policies, err := s.store.MCPToolPolicies(ctx, ws)
+	if err != nil {
+		return false, err
+	}
+	return policies[connectionID][selector], nil
+}
+
+// SetToolPolicy sets an enabled tool's current version to Allow or back to
+// Ask. Allow names the exact reviewed version, so a changed tool asks again.
+func (s *Service) SetToolPolicy(ctx context.Context, ws memory.WorkspaceID, name, toolName string, allow bool) (Review, error) {
+	connection, current, tools, err := s.reviewInputs(ctx, ws, name, true)
+	if err != nil {
+		return Review{}, err
+	}
+	i := slices.IndexFunc(tools, func(t mcpconn.Tool) bool { return t.Name == toolName })
+	if i < 0 {
+		return Review{}, fmt.Errorf("%w: %s on %s", ErrToolNotOffered, toolName, connection.Name)
+	}
+	selector := tools[i].Selector()
+	if !enabledIn(current, connection.ID, selector) {
+		return Review{}, fmt.Errorf("%w: %s on %s", ErrToolNotEnabled, toolName, connection.Name)
+	}
+	revision, _, err := s.store.MCPToolPolicies(ctx, ws)
+	if err != nil {
+		return Review{}, err
+	}
+	if _, err := s.store.SetMCPToolPolicy(ctx, ws, revision, connection.ID, selector, allow); err != nil {
+		return Review{}, err
+	}
+	return s.withPolicies(ctx, ws, review(connection, current, tools))
+}
+
+// clearAllow sets every allowed version of one tool back to Ask.
+func (s *Service) clearAllow(ctx context.Context, ws memory.WorkspaceID, connectionID, toolName string) error {
+	revision, policies, err := s.store.MCPToolPolicies(ctx, ws)
+	if err != nil {
+		return err
+	}
+	for selector := range policies[connectionID] {
+		if name, _ := mcpconn.SplitSelector(selector); name != toolName {
+			continue
+		}
+		if revision, err = s.store.SetMCPToolPolicy(ctx, ws, revision, connectionID, selector, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func enabledIn(access eviedb.WorkspaceAccessRevision, connectionID, selector string) bool {
+	for _, c := range access.Access.Connections {
+		if c.ID == connectionID && slices.Contains(c.Resources, selector) {
+			return true
+		}
+	}
+	return false
+}
+
+// withPolicies fills each enabled tool's policy.
+func (s *Service) withPolicies(ctx context.Context, ws memory.WorkspaceID, r Review) (Review, error) {
+	_, policies, err := s.store.MCPToolPolicies(ctx, ws)
+	if err != nil {
+		return Review{}, err
+	}
+	for i, tool := range r.Tools {
+		if tool.State != ToolEnabled {
+			continue
+		}
+		r.Tools[i].Policy = PolicyAsk
+		if policies[r.Connection.ID][tool.Selector()] {
+			r.Tools[i].Policy = PolicyAllow
+		}
+	}
+	return r, nil
 }
 
 // ToolState is a server tool's standing in one Workspace.
@@ -125,7 +201,17 @@ const (
 type ReviewedTool struct {
 	mcpconn.Tool
 	State ToolState `json:"state"`
+	// Policy is set for enabled tools: whether a call asks first.
+	Policy ToolPolicy `json:"policy,omitempty"`
 }
+
+// ToolPolicy is the owner's per-Workspace choice for one reviewed tool.
+type ToolPolicy string
+
+const (
+	PolicyAsk   ToolPolicy = "ask"
+	PolicyAllow ToolPolicy = "allow"
+)
 
 // Review is one connection's tools as one Workspace sees them.
 type Review struct {
@@ -145,7 +231,7 @@ func (s *Service) Review(ctx context.Context, ws memory.WorkspaceID, name string
 	if err != nil {
 		return Review{}, err
 	}
-	return review(connection, current, tools), nil
+	return s.withPolicies(ctx, ws, review(connection, current, tools))
 }
 
 // SetToolEnabled enables (replacing any older reviewed version) or
@@ -187,7 +273,13 @@ func (s *Service) SetToolEnabled(ctx context.Context, ws memory.WorkspaceID, nam
 	if err != nil {
 		return Review{}, err
 	}
-	return review(connection, written, tools), nil
+	if !enabled {
+		// A disabled tool forgets Allow, so enabling it again asks first.
+		if err := s.clearAllow(ctx, ws, connection.ID, toolName); err != nil {
+			return Review{}, err
+		}
+	}
+	return s.withPolicies(ctx, ws, review(connection, written, tools))
 }
 
 // withTool drops every reviewed version of toolName and adds selector.

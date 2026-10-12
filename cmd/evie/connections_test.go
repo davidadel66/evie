@@ -158,15 +158,20 @@ func TestWorkspaceMCPToolsCLITalksToServe(t *testing.T) {
 	if _, err := run("ws-1", "square", "--disable", "make_api_request"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := run("ws-1", "square", "--policy", "make_api_request_read=allow"); err != nil {
+		t.Fatal(err)
+	}
 	want := []string{
 		`/api/connections/tools {"workspace_id":"ws-1","name":"square"}`,
 		`/api/connections/tools/set {"workspace_id":"ws-1","name":"square","tool":"make_api_request_read","enabled":true}`,
 		`/api/connections/tools/set {"workspace_id":"ws-1","name":"square","tool":"make_api_request","enabled":false}`,
+		`/api/connections/tools/policy {"workspace_id":"ws-1","name":"square","tool":"make_api_request_read","policy":"allow"}`,
 	}
 	if strings.Join(bodies, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("requests =\n%s", strings.Join(bodies, "\n"))
 	}
-	for _, args := range [][]string{{"ws-1"}, {"ws-1", "square", "--enable"}, {"ws-1", "square", "--bogus", "x"}} {
+	for _, args := range [][]string{{"ws-1"}, {"ws-1", "square", "--enable"}, {"ws-1", "square", "--bogus", "x"},
+		{"ws-1", "square", "--policy", "make_api_request_read=sometimes"}, {"ws-1", "square", "--policy", "noequals"}} {
 		if _, err := run(args...); err == nil || !strings.Contains(err.Error(), "usage: evie workspaces mcp-tools") {
 			t.Fatalf("%v error = %v", args, err)
 		}

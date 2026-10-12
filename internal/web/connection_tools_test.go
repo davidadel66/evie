@@ -38,6 +38,43 @@ func (f *fakeToolReview) SetToolEnabled(_ context.Context, ws memory.WorkspaceID
 	return f.Review(context.Background(), ws, name)
 }
 
+func (f *fakeToolReview) SetToolPolicy(_ context.Context, ws memory.WorkspaceID, name, tool string, allow bool) (mcpchat.Review, error) {
+	if f.err != nil {
+		return mcpchat.Review{}, f.err
+	}
+	policy := "ask"
+	if allow {
+		policy = "allow"
+	}
+	f.set = append(f.set, string(ws)+" "+name+" "+tool+" "+policy)
+	return f.Review(context.Background(), ws, name)
+}
+
+func TestConnectionToolPolicyRoute(t *testing.T) {
+	review := &fakeToolReview{}
+	handler := WithMCPToolReview(NewServer(nil), review).Handler()
+	call := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, managementRequest("/api/connections/tools/policy", body))
+		return rec
+	}
+	if rec := call(`{"workspace_id":"ws-1","name":"square","tool":"make_api_request_read","policy":"allow"}`); rec.Code != http.StatusOK ||
+		len(review.set) != 1 || review.set[0] != "ws-1 square make_api_request_read allow" {
+		t.Fatalf("policy = %d %s, %v", rec.Code, rec.Body, review.set)
+	}
+	if rec := call(`{"workspace_id":"ws-1","name":"square","tool":"x","policy":"always"}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown policy = %d", rec.Code)
+	}
+	review.err = mcpchat.ErrToolNotEnabled
+	if rec := call(`{"workspace_id":"ws-1","name":"square","tool":"x","policy":"allow"}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("not enabled = %d", rec.Code)
+	}
+	review.err = eviedb.ErrMCPToolPoliciesChanged
+	if rec := call(`{"workspace_id":"ws-1","name":"square","tool":"x","policy":"allow"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("stale policy = %d", rec.Code)
+	}
+}
+
 func TestConnectionToolReviewRoutes(t *testing.T) {
 	review := &fakeToolReview{}
 	handler := WithMCPToolReview(NewServer(nil), review).Handler()

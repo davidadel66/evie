@@ -118,7 +118,7 @@ func TestWorkspaceChatReachesOnlyItsReviewedMCPTools(t *testing.T) {
 		t.Fatalf("fresh chat listing = %q, %v", listing, err)
 	}
 	if ask, err := chatTools[plugins.MCPCallToolName].RequiresApproval(turn(fresh), callEcho); err != nil || !ask {
-		t.Fatalf("approval = %v, %v; every call asks in story 2", ask, err)
+		t.Fatalf("approval = %v, %v; the default is ask", ask, err)
 	}
 	out, err := chatTools[plugins.MCPCallToolName].Execute(turn(fresh), callEcho)
 	if err != nil || !strings.Contains(out, "echo: hi") {
@@ -126,6 +126,17 @@ func TestWorkspaceChatReachesOnlyItsReviewedMCPTools(t *testing.T) {
 	}
 
 	outputs := []string{listing, out}
+
+	// Allow skips the card for this exact version; Ask brings it back.
+	if _, err := service.SetToolPolicy(ctx, ws.ID, "square", "echo", true); err != nil {
+		t.Fatal(err)
+	}
+	if ask, err := chatTools[plugins.MCPCallToolName].RequiresApproval(turn(fresh), callEcho); err != nil || ask {
+		t.Fatalf("allowed tool approval = %v, %v; want no card", ask, err)
+	}
+	if _, err := service.SetToolPolicy(ctx, ws.ID, "square", "echo", false); err != nil {
+		t.Fatal(err)
+	}
 
 	// A chat started before the tool was enabled does not reach it.
 	_, err = chatTools[plugins.MCPCallToolName].Execute(turn(early), callEcho)

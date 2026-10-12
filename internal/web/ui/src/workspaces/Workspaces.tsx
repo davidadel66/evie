@@ -9,6 +9,7 @@ import { FolderSettings } from "../folder/FolderSettings";
 import { WorkspaceResearchSettings } from "./WorkspaceResearchSettings";
 import { WorkspaceExploreSettings } from "./WorkspaceExploreSettings";
 import { WorkspaceBuildSettings } from "./WorkspaceBuildSettings";
+import { WorkspaceConnections } from "./WorkspaceConnections";
 import { WorkspaceVerifySettings } from "./WorkspaceVerifySettings";
 import type { WorkflowCapStatus } from "../api/workflows";
 import { WorkspaceWorkflowsTab } from "./WorkspaceWorkflowsTab";
@@ -219,6 +220,7 @@ export function WorkspaceHome({
         <WorkspaceExploreSettings key={`explore:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceBuildSettings key={`build:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceVerifySettings key={`verify:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
+        <WorkspaceConnections key={`connections:${workspace.id}`} workspace={workspace} />
         <FolderSettings key={`${workspace.id}:${workspace.folder?.revision ?? 0}`} workspace={workspace} busy={busy} onChanged={onFolderChanged} onOpen={onOpenFiles} />
         <section className="mt-8">
           <div className="mb-4 flex items-center gap-3">

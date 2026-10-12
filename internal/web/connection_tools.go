@@ -19,6 +19,7 @@ import (
 type MCPToolReview interface {
 	Review(ctx context.Context, ws memory.WorkspaceID, name string) (mcpchat.Review, error)
 	SetToolEnabled(ctx context.Context, ws memory.WorkspaceID, name, tool string, enabled bool) (mcpchat.Review, error)
+	SetToolPolicy(ctx context.Context, ws memory.WorkspaceID, name, tool string, allow bool) (mcpchat.Review, error)
 }
 
 // WithMCPToolReview adds the tool review routes.
@@ -72,12 +73,35 @@ func (s *Server) registerConnectionToolRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, result)
 	}))
+	mux.Handle("/api/connections/tools/policy", s.managementRoute(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			WorkspaceID memory.WorkspaceID `json:"workspace_id"`
+			Name        string             `json:"name"`
+			Tool        string             `json:"tool"`
+			Policy      mcpchat.ToolPolicy `json:"policy"`
+		}
+		if !decodeCandidateRequest(w, r, &request) {
+			return
+		}
+		if !boundedID(string(request.WorkspaceID)) || request.Tool == "" || (request.Policy != mcpchat.PolicyAsk && request.Policy != mcpchat.PolicyAllow) {
+			managementJSONError(w, http.StatusBadRequest, "invalid_connection_request", "policy takes a Workspace ID, a connection name, a tool and ask or allow")
+			return
+		}
+		result, err := review.SetToolPolicy(r.Context(), request.WorkspaceID, request.Name, request.Tool, request.Policy == mcpchat.PolicyAllow)
+		if err != nil {
+			toolReviewError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	}))
 }
 
 func toolReviewError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, eviedb.ErrWorkspaceAccessChanged):
-		managementJSONError(w, http.StatusConflict, "access_changed", "the Workspace Access changed; nothing was written, try again")
+	case errors.Is(err, eviedb.ErrWorkspaceAccessChanged), errors.Is(err, eviedb.ErrMCPToolPoliciesChanged):
+		managementJSONError(w, http.StatusConflict, "access_changed", "the Workspace's tools changed; nothing was written, try again")
+	case errors.Is(err, mcpchat.ErrToolNotEnabled):
+		managementJSONError(w, http.StatusBadRequest, "invalid_tool", err.Error())
 	case errors.Is(err, eviedb.ErrWorkspaceInactive):
 		managementJSONError(w, http.StatusConflict, "workspace_archived", "the Workspace is archived; restore it to change its tools")
 	case errors.Is(err, eviedb.ErrWorkspaceNotFound):

@@ -211,6 +211,11 @@ server process.
   the latest revision, because a policy changes only whether Evie asks, not
   what Evie can reach. A policy is bound to its hash, so a re-reviewed tool
   starts at `ask`.
+  - Only Allow entries are stored.
+  - A tool can be set to Allow only while its current version is enabled.
+  - Disabling a tool clears its Allow, so enabling it again asks first.
+  - A write expects the latest revision, and a concurrent change is
+    refused.
 
 ## Chat tools
 
@@ -296,8 +301,9 @@ composition.
   `WorkspaceExploreSettings`. It can add a server or pick an existing
   connection, Connect or Reconnect, show status, list tools with their
   description and an expandable schema, enable or disable each tool, and set
-  Ask or Allow. A changed tool appears as "Changed since review", with the
-  reviewed and current versions side by side.
+  Ask or Allow. A changed tool appears as "Changed since review" with its
+  current description and schema. Only the reviewed hash is stored, not the
+  reviewed text, so the two versions are not shown side by side.
 
 ## Stories
 

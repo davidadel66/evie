@@ -13,11 +13,44 @@ import (
 	"github.com/davidadel66/evie/internal/workflow"
 )
 
-// memoryStore keeps Workspace Access revisions and chat pins in memory.
+// memoryStore keeps Workspace Access revisions, chat pins and Tool
+// Policies in memory.
 type memoryStore struct {
-	revisions []workflow.WorkspaceAccess // index = revision - 1
-	pins      map[memory.SessionID]int64
-	archived  bool
+	revisions      []workflow.WorkspaceAccess // index = revision - 1
+	pins           map[memory.SessionID]int64
+	archived       bool
+	policyRevision int64
+	policies       map[string]map[string]bool
+}
+
+func (m *memoryStore) MCPToolPolicies(context.Context, memory.WorkspaceID) (int64, map[string]map[string]bool, error) {
+	out := map[string]map[string]bool{}
+	for id, selectors := range m.policies {
+		out[id] = map[string]bool{}
+		for s, v := range selectors {
+			out[id][s] = v
+		}
+	}
+	return m.policyRevision, out, nil
+}
+
+func (m *memoryStore) SetMCPToolPolicy(_ context.Context, _ memory.WorkspaceID, expected int64, id, selector string, allow bool) (int64, error) {
+	if expected != m.policyRevision {
+		return 0, eviedb.ErrMCPToolPoliciesChanged
+	}
+	if m.policies == nil {
+		m.policies = map[string]map[string]bool{}
+	}
+	if allow {
+		if m.policies[id] == nil {
+			m.policies[id] = map[string]bool{}
+		}
+		m.policies[id][selector] = true
+	} else {
+		delete(m.policies[id], selector)
+	}
+	m.policyRevision++
+	return m.policyRevision, nil
 }
 
 const ws = memory.WorkspaceID("ws-cairo")
@@ -254,6 +287,72 @@ func TestReachIsThePinnedAccessIntersectedWithTheCurrentAccess(t *testing.T) {
 	if _, err := service.Reach(ctx, "early", "another-workspace"); err == nil {
 		t.Fatal("a chat reached another Workspace's access")
 	}
+}
+
+func TestAllowIsBoundToTheEnabledVersion(t *testing.T) {
+	ctx := context.Background()
+	store := &memoryStore{}
+	tools := &fakeTools{tools: map[string][]mcpconn.Tool{"mcp-square": squareTools()}}
+	service := New(store, tools)
+	if _, err := service.SetToolPolicy(ctx, ws, "square", "make_api_request_read", true); !errors.Is(err, ErrToolNotEnabled) {
+		t.Fatalf("allowing a tool that is not enabled: %v", err)
+	}
+	if _, err := service.SetToolEnabled(ctx, ws, "square", "make_api_request_read", true); err != nil {
+		t.Fatal(err)
+	}
+	if allowed, _ := service.Allowed(ctx, ws, "mcp-square", "make_api_request_read@r1"); allowed {
+		t.Fatal("a newly enabled tool is allowed; the default is ask")
+	}
+	review, err := service.SetToolPolicy(ctx, ws, "square", "make_api_request_read", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if policyOf(review, "make_api_request_read") != PolicyAllow || policyOf(review, "make_api_request") != "" {
+		t.Fatalf("review = %+v", review.Tools)
+	}
+	if allowed, _ := service.Allowed(ctx, ws, "mcp-square", "make_api_request_read@r1"); !allowed {
+		t.Fatal("the allowed version asks")
+	}
+	// The server changes the tool; David re-enables the new version, which
+	// starts at ask.
+	tools.tools["mcp-square"][0].Hash = "r2"
+	if review, err = service.SetToolEnabled(ctx, ws, "square", "make_api_request_read", true); err != nil {
+		t.Fatal(err)
+	}
+	if policyOf(review, "make_api_request_read") != PolicyAsk {
+		t.Fatalf("a re-reviewed tool's policy = %q", policyOf(review, "make_api_request_read"))
+	}
+	if allowed, _ := service.Allowed(ctx, ws, "mcp-square", "make_api_request_read@r2"); allowed {
+		t.Fatal("the new version inherited Allow")
+	}
+	if _, err := service.SetToolPolicy(ctx, ws, "square", "make_api_request_read", true); err != nil {
+		t.Fatal(err)
+	}
+	if review, err = service.SetToolPolicy(ctx, ws, "square", "make_api_request_read", false); err != nil || policyOf(review, "make_api_request_read") != PolicyAsk {
+		t.Fatalf("back to ask = %+v, %v", review.Tools, err)
+	}
+	// Disabling forgets Allow: enabling the same version again asks.
+	if _, err := service.SetToolPolicy(ctx, ws, "square", "make_api_request_read", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SetToolEnabled(ctx, ws, "square", "make_api_request_read", false); err != nil {
+		t.Fatal(err)
+	}
+	if review, err = service.SetToolEnabled(ctx, ws, "square", "make_api_request_read", true); err != nil || policyOf(review, "make_api_request_read") != PolicyAsk {
+		t.Fatalf("re-enabled after disabling = %+v, %v", review.Tools, err)
+	}
+	if allowed, _ := service.Allowed(ctx, ws, "mcp-square", "make_api_request_read@r2"); allowed {
+		t.Fatal("a disabled and re-enabled tool kept Allow")
+	}
+}
+
+func policyOf(review Review, name string) ToolPolicy {
+	for _, tool := range review.Tools {
+		if tool.Name == name {
+			return tool.Policy
+		}
+	}
+	return "missing"
 }
 
 func stateOf(review Review, name string) ToolState {

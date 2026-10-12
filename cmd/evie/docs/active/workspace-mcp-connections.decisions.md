@@ -250,6 +250,21 @@ now in the spec:
 - **Tool errors are capped below the 16 KiB error limit,** so the frame's
   end marker survives.
 
+## Story 3 (2026-10-12)
+
+- **A changed tool is not shown side by side with its reviewed version.**
+  Workspace Access stores only `<name>@<hash>`. Keeping the reviewed text
+  would add another table to compare against, for a screen David can
+  already read: the current description and schema are shown, marked
+  "Changed since review".
+- **Disabling a tool clears its Allow.** Otherwise disabling and
+  re-enabling the same version would bring Allow back silently.
+- **Allow requires the tool's current version to be enabled.** That way a
+  policy never names a version the Workspace cannot reach.
+- **The UI's tests are pure view renders, like the other Settings
+  sections.** The `vitest` suite is not part of `verify-change.sh`, so it
+  was run separately (91 files, 587 tests).
+
 ## Source facts (2026-10-11, superseded where the spike answered)
 
 - Canva: hosted at `https://mcp.canva.com/mcp` (Streamable HTTP) with OAuth.

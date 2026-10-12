@@ -47,7 +47,7 @@ func newMCPConnectionManager(store mcpconn.Records, getenv func(string) string) 
 	})
 }
 
-const mcpToolsUsage = "usage: evie workspaces mcp-tools <workspace-id> <connection> [--enable <tool> | --disable <tool>]"
+const mcpToolsUsage = "usage: evie workspaces mcp-tools <workspace-id> <connection> [--enable <tool> | --disable <tool> | --policy <tool>=ask|allow]"
 
 func runConnectionManagement(ctx context.Context, args []string, out io.Writer, in io.Reader, c connectionCommands) (bool, error) {
 	if len(args) >= 2 && args[0] == "workspaces" && args[1] == "mcp-tools" {
@@ -124,6 +124,16 @@ func (c connectionCommands) mcpTools(ctx context.Context, out io.Writer, args []
 			Tool    string `json:"tool"`
 			Enabled bool   `json:"enabled"`
 		}{target{args[0], args[1]}, args[3], args[2] == "--enable"}, 60*time.Second)
+	case len(args) == 4 && args[2] == "--policy":
+		tool, policy, ok := strings.Cut(args[3], "=")
+		if !ok || tool == "" || (policy != "ask" && policy != "allow") {
+			return errors.New(mcpToolsUsage)
+		}
+		return c.call(ctx, out, "tools/policy", struct {
+			target
+			Tool   string `json:"tool"`
+			Policy string `json:"policy"`
+		}{target{args[0], args[1]}, tool, policy}, 60*time.Second)
 	default:
 		return errors.New(mcpToolsUsage)
 	}
