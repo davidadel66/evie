@@ -97,6 +97,8 @@ type Server struct {
 	workflows         WorkflowManager
 	repositories      Repositories
 	changeLister      ChangeLister
+	mcpConnections    MCPConnections
+	mcpToolReview     MCPToolReview
 	changePusher      ChangePusher
 	changeMerger      ChangeMerger
 	terminalMu        sync.Mutex
@@ -272,6 +274,8 @@ func (s *Server) Handler() http.Handler {
 	s.registerChangeRoutes(mux)
 	s.registerChangePushRoutes(mux)
 	s.registerChangeMergeRoutes(mux)
+	s.registerConnectionRoutes(mux)
+	s.registerConnectionToolRoutes(mux)
 	mux.Handle("/", s.staticHandler())
 	return mux
 }
