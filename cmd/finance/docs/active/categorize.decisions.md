@@ -83,3 +83,8 @@ Spec: [categorize.spec.md](categorize.spec.md). In flight.
   inflow on the card side, on top of the purchases that were counted when
   the card was swiped. If that double count turns out to matter, the
   Overview can treat this category like `excluded`.
+- **`agent` source is live** (2026-10-07, finance-review). The value
+  reserved in categorize.spec.md for LLM-assisted categorization is now
+  written by `finance.apply_review`, and only for an entry David accepted
+  from a review batch; the model never writes. `review_decisions` records
+  every answer. See cmd/evie/docs/active/finance-review.spec.md.

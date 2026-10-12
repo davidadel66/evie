@@ -1,0 +1,116 @@
+{
+  "inputs": {
+    "day": "2026-10-13",
+    "at": "09:30"
+  },
+  "steps": {
+    "gather": {
+      "output": {
+        "candidates": [
+          {
+            "id": "t-notion",
+            "date": "2026-09-30",
+            "name": "NOTION LABS",
+            "merchant_name": "Notion Labs Inc.",
+            "net_cents": -2400,
+            "plaid_category": "GENERAL_SERVICES",
+            "similar": [
+              {
+                "label": "Notion",
+                "category": "Subscriptions",
+                "source": "rule",
+                "count": 1
+              }
+            ],
+            "suggested_category": "Subscriptions",
+            "suggestion_reason": "an existing rule names this merchant"
+          },
+          {
+            "id": "t-roca",
+            "date": "2026-09-27",
+            "name": "ROCA",
+            "merchant_name": "Roca",
+            "net_cents": -10800,
+            "plaid_category": "FOOD_AND_DRINK",
+            "similar": [],
+            "suggested_category": "",
+            "suggestion_reason": ""
+          },
+          {
+            "id": "t-transfer",
+            "date": "2026-09-26",
+            "name": "*8384 TRANSFER CONSUMERS CU ACH WEB",
+            "merchant_name": "",
+            "net_cents": -38700,
+            "plaid_category": "TRANSFER_OUT",
+            "similar": [
+              {
+                "label": "*8384 TRANSFER CONSUMERS CU ACH WEB",
+                "category": "excluded",
+                "source": "human",
+                "count": 1
+              }
+            ],
+            "suggested_category": "",
+            "suggestion_reason": ""
+          }
+        ],
+        "remaining": 7,
+        "categories": [
+          "Coffee",
+          "Dining",
+          "Subscriptions",
+          "excluded"
+        ]
+      }
+    },
+    "propose": {
+      "output": {
+        "proposals": [
+          {
+            "id": "t-notion",
+            "category": "Subscriptions",
+            "confidence": 0.98,
+            "reason": "An existing rule names Notion.",
+            "rule": true,
+            "recurring": true
+          },
+          {
+            "id": "t-roca",
+            "category": "Dining",
+            "confidence": 0.7,
+            "reason": "Roca is a restaurant; Plaid agrees.",
+            "rule": true,
+            "recurring": true
+          },
+          {
+            "id": "t-transfer",
+            "category": "excluded",
+            "confidence": 0.9,
+            "reason": "A transfer to the owner's credit union, excluded before.",
+            "rule": false,
+            "recurring": true
+          }
+        ]
+      },
+      "tokens": 900
+    },
+    "review": {
+      "response": {
+        "reject": [
+          "t-roca"
+        ],
+        "no_rule": []
+      }
+    },
+    "apply": {
+      "output": {
+        "applied": 2,
+        "rules_minted": 1,
+        "rejected": 1,
+        "skipped": 0,
+        "replayed": false
+      }
+    }
+  }
+}

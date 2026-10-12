@@ -237,7 +237,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		t.Fatalf("resumed schemas = %#v, want exact standard schemas %#v", resumed.Toolset.Schemas(), wantSchemas)
 	}
 	wantProviders := []plugins.ProviderReceipt{
-		{ID: "finance", ImplementationVersion: "1.2.0"},
+		{ID: "finance", ImplementationVersion: "1.3.0"},
 		{ID: "todo", ImplementationVersion: "1.8.0"},
 		{ID: "web", ImplementationVersion: "1.1.0"},
 		{ID: "youtube", ImplementationVersion: "1.0.0"},

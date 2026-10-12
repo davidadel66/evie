@@ -20,7 +20,7 @@ function render(overrides: Partial<Parameters<typeof SpendingTransactionsView>[0
 describe("Spending transactions", () => {
   it("shows bank descriptions, classification filters, and actual recorded sources without inventing model proposals", () => {
     const html = render();
-    for (const expected of ["Needs classification", "Classified", "Pending", "GROCERY STORE CARD", "Grocery store", "Groceries", "Merchant rule", "Human", "Agent (legacy)", "Legacy label: Shopping", "−12.34", "1–4 of 4"]) expect(html).toContain(expected);
+    for (const expected of ["Needs classification", "Classified", "Pending", "GROCERY STORE CARD", "Grocery store", "Groceries", "Merchant rule", "Human", "Agent (approved)", "Legacy label: Shopping", "−12.34", "1–4 of 4"]) expect(html).toContain(expected);
     expect(html).not.toContain("Proposed");
     expect(html).not.toContain("Approved");
   });

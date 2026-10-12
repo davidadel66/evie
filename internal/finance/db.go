@@ -92,6 +92,18 @@ CREATE TABLE IF NOT EXISTS budget_limits (
 -- decision. Spend queries that sum across all categories must leave it out.
 INSERT OR IGNORE INTO categories (name) VALUES ('excluded');
 
+-- The owner's answers to finance-review batches (finance-review.spec.md):
+-- one row per reviewed transaction, so a rejected row is not proposed again
+-- and an accepted one is traceable to the run that applied it.
+CREATE TABLE IF NOT EXISTS review_decisions (
+	transaction_id TEXT PRIMARY KEY REFERENCES transactions(transaction_id),
+	decision       TEXT NOT NULL,
+	category       TEXT NOT NULL DEFAULT '',
+	reason         TEXT NOT NULL DEFAULT '',
+	run_key        TEXT NOT NULL,
+	decided_at     TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS effect_receipts (
 	idempotency_key TEXT PRIMARY KEY,
 	effect          TEXT NOT NULL,

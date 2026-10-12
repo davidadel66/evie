@@ -252,9 +252,10 @@ var queryDBTool = openrouter.Tool{
 
 Databases: "finance" — personal finance. Schema:
   transactions(transaction_id, item_id, account_id, date TEXT 'YYYY-MM-DD', name, merchant_name, amount_cents INTEGER (positive = money out), plaid_category, category (legacy — do not use), category_source, reviewed INTEGER 0/1, pending INTEGER 0/1, tags JSON array)
-  budget_entries(id, transaction_id, category, amount_cents, source 'rule'|'human', tags JSON array) — where money went; every categorized transaction has one entry with its full amount, a split bill has several entries summing to the total, refunds are negative entries that net the category down
+  budget_entries(id, transaction_id, category, amount_cents, source 'rule'|'human'|'agent' (agent = David approved a finance-review proposal), tags JSON array) — where money went; every categorized transaction has one entry with its full amount, a split bill has several entries summing to the total, refunds are negative entries that net the category down
   budget_limits(category, month, limit_cents) — month NULL is the standing monthly template, month 'YYYY-MM' overrides it for that month. Recurring limits ALWAYS go in the template (month NULL); write a 'YYYY-MM' row only for a one-month exception David explicitly asks for
   effect_receipts(idempotency_key, effect, output, recorded_at) — never edit
+  review_decisions(transaction_id, decision 'accepted'|'rejected'|'changed', category, reason, run_key, decided_at) — David's answers to finance-review batches; a rejected row is never proposed again, so DELETE its row to re-propose it
   categories(name)
   rules(id, merchant, category) — exact merchant_name match
   name_rules(id, pattern, category, priority) — LIKE patterns on transactions.name for merchant-less rows; used only when no merchant rule matches, lowest priority wins

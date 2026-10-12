@@ -65,7 +65,7 @@ func (f Finance) WorkflowEffects() []WorkflowEffectCapability {
 	// behavior: the runtime derives the idempotency key from the node's
 	// input, so naming the day makes each day's intent its own key.
 	day := workflow.ObjectType(workflow.Field{Name: "day", Type: boundedString(1, 10)})
-	return []WorkflowEffectCapability{
+	return append([]WorkflowEffectCapability{
 		served(WorkflowEffectCapability{
 			ID:    FinanceSyncLedgerCapabilityID,
 			Input: day,
@@ -78,7 +78,7 @@ func (f Finance) WorkflowEffects() []WorkflowEffectCapability {
 				workflow.Field{Name: "replayed", Type: workflow.BooleanType()},
 			),
 			Perform:   f.performSyncLedger,
-			Reconcile: reconcileFinanceEffect(func() any { return &finance.SyncLedgerOutput{} }),
+			Reconcile: reconcileFinanceEffect(func() any { return &finance.SyncLedgerOutput{} }, financeEffectRequest),
 		}),
 		served(WorkflowEffectCapability{
 			ID:    FinanceCategorizeLedgerCapabilityID,
@@ -89,9 +89,9 @@ func (f Finance) WorkflowEffects() []WorkflowEffectCapability {
 				workflow.Field{Name: "replayed", Type: workflow.BooleanType()},
 			),
 			Perform:   f.performCategorizeLedger,
-			Reconcile: reconcileFinanceEffect(func() any { return &finance.CategorizeLedgerOutput{} }),
+			Reconcile: reconcileFinanceEffect(func() any { return &finance.CategorizeLedgerOutput{} }, financeEffectRequest),
 		}),
-	}
+	}, financeReviewEffects(f)...)
 }
 
 // financeEffectRequest refuses a request outside the ledger or without a
@@ -159,11 +159,12 @@ func (f Finance) performCategorizeLedger(ctx context.Context, req WorkflowEffect
 }
 
 // reconcileFinanceEffect answers from the effect receipt under the
-// request's key. A lookup that cannot be made now is an error, and the
-// runtime asks again later.
-func reconcileFinanceEffect(newOutput func() any) WorkflowEffectReconcile {
+// request's key, after validate has refused a request outside the ledger
+// or outside the effect's contract. A lookup that cannot be made now is an
+// error, and the runtime asks again later.
+func reconcileFinanceEffect(newOutput func() any, validate func(WorkflowEffectRequest) error) WorkflowEffectReconcile {
 	return func(ctx context.Context, req WorkflowEffectRequest) (WorkflowEffectLookup, error) {
-		if err := financeEffectRequest(req); err != nil {
+		if err := validate(req); err != nil {
 			return WorkflowEffectLookup{}, err
 		}
 		db, err := finance.OpenDBContext(ctx)

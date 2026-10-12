@@ -413,8 +413,8 @@ func TestSessionCompositionReopenAuditsOnlyDeclaredCompatibleReplacement(t *test
 		t.Fatal(err)
 	}
 	if len(resolutions) != 1 || resolutions[0].OriginalProvider.ID != "finance" ||
-		resolutions[0].OriginalProvider.ImplementationVersion != "1.2.0" ||
-		resolutions[0].ReplacementImplementationVersion != "1.3.0" ||
+		resolutions[0].OriginalProvider.ImplementationVersion != "1.3.0" ||
+		resolutions[0].ReplacementImplementationVersion != "1.4.0" ||
 		resolutions[0].KernelAPIVersion != plugins.KernelAPIVersion ||
 		len(resolutions[0].Capabilities) != 3 || resolutions[0].ResolvedAt.IsZero() {
 		t.Fatalf("Compatibility Resolutions = %#v, want exact Finance substitution evidence", resolutions)
@@ -439,7 +439,7 @@ func TestSessionCompositionRealSQLiteReopenBlocksEveryIncompatibleReplacement(t 
 		want       string
 		managerErr bool
 	}{
-		{name: "undeclared", mutation: replacementMutation{undeclared: true}, want: `loaded version "1.3.0" does not declare it resumable`},
+		{name: "undeclared", mutation: replacementMutation{undeclared: true}, want: `loaded version "1.4.0" does not declare it resumable`},
 		{name: "schema changing", mutation: replacementMutation{changeSchema: true}, want: `pinned Capability "finance.sync" requires schema`},
 		{name: "contract changing", mutation: replacementMutation{changeContract: true}, want: `pinned Capability "finance.sync" requires contract version "1.0.0"`},
 		{name: "Kernel incompatible", mutation: replacementMutation{kernelIncompatible: true}, want: `plugin "finance" is incompatible with Kernel API 1.0.0`, managerErr: true},
@@ -515,7 +515,7 @@ func TestSessionCompositionMissingPinnedProviderNeverFallsBackAfterSQLiteReopen(
 		}
 	}
 	if _, err := bindSessionComposition(ctx, store, manager, session.ID, plugins.ResolvedComposition{}, nil); err == nil ||
-		!strings.Contains(err.Error(), `pinned provider plugin "finance" version "1.2.0" is not compiled into Evie`) {
+		!strings.Contains(err.Error(), `pinned provider plugin "finance" version "1.3.0" is not compiled into Evie`) {
 		t.Fatalf("missing pinned provider error = %v", err)
 	}
 	stored, err := store.GetCompositionReceipt(ctx, session.ID)
@@ -580,7 +580,7 @@ func newReplacementSessionCompositionManager(
 	t.Helper()
 	finance := plugins.NewFinance()
 	manifest := finance.Manifest()
-	manifest.ImplementationVersion = "1.3.0"
+	manifest.ImplementationVersion = "1.4.0"
 	capabilities := finance.ToolCapabilities()
 	for i := range capabilities {
 		capabilityID := capabilities[i].ID
@@ -599,7 +599,7 @@ func newReplacementSessionCompositionManager(
 		manifest.KernelCompatibility = plugins.VersionRange{Minimum: "2.0.0", MaximumExclusive: "3.0.0"}
 	}
 	if !mutation.undeclared {
-		declaration := plugins.ImplementationCompatibility{ImplementationVersion: "1.2.0"}
+		declaration := plugins.ImplementationCompatibility{ImplementationVersion: "1.3.0"}
 		for _, capability := range capabilities {
 			declaration.Capabilities = append(declaration.Capabilities, plugins.CapabilityCompatibility{
 				ID: capability.ID, ContractVersion: capability.ContractVersion,

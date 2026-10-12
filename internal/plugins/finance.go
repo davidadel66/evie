@@ -13,10 +13,11 @@ const (
 	FinanceRulesCapabilityID      CapabilityID = "finance.rules"
 	FinanceCategorizeCapabilityID CapabilityID = "finance.categorize"
 
-	// 1.1.0 added the workflow reads (Stage 14 sub-stage 5) and 1.2.0 the
-	// ledger effects (finance-daily, 2026-10-06); the tools are unchanged
-	// through both, so it continues 1.0.0's and 1.1.0's pinned sessions.
-	financeImplementationVersion = "1.2.0"
+	// 1.1.0 added the workflow reads (Stage 14 sub-stage 5), 1.2.0 the
+	// ledger effects (finance-daily, 2026-10-06) and 1.3.0 the review read
+	// and effect (finance-review, 2026-10-07); the tools are unchanged
+	// throughout, so it continues every earlier version's pinned sessions.
+	financeImplementationVersion = "1.3.0"
 	financeContractVersion       = "1.0.0"
 )
 
@@ -46,10 +47,13 @@ func (Finance) Manifest() Manifest {
 			{ID: FinanceMonthTransactionsCapabilityID, Version: financeTransactionsContractVersion},
 			{ID: FinanceSyncLedgerCapabilityID, Version: financeEffectContractVersion},
 			{ID: FinanceCategorizeLedgerCapabilityID, Version: financeEffectContractVersion},
+			{ID: FinanceReviewCandidatesCapabilityID, Version: financeReviewContractVersion},
+			{ID: FinanceApplyReviewCapabilityID, Version: financeReviewContractVersion},
 		},
 		ResumableFrom: []ImplementationCompatibility{
 			{ImplementationVersion: "1.0.0", Capabilities: financeToolCompatibility()},
 			{ImplementationVersion: "1.1.0", Capabilities: financeToolCompatibility()},
+			{ImplementationVersion: "1.2.0", Capabilities: financeToolCompatibility()},
 		},
 	}
 }

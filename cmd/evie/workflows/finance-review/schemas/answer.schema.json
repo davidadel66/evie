@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "reject": {"type": "array", "maxItems": 40, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+    "change": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1, "maxLength": 128},
+          "category": {"type": "string", "minLength": 1, "maxLength": 80}
+        }
+      }
+    },
+    "no_rule": {"type": "array", "maxItems": 40, "items": {"type": "string", "minLength": 1, "maxLength": 128}}
+  }
+}

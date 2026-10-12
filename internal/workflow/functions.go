@@ -57,8 +57,8 @@ func reviewedFunctions() map[string]Function {
 	for _, f := range []Function{collectClaims(), expandBallots(), majorityFilter(), splitEvenly(), tallyVerdicts(), checkCitations(),
 		// The built-in deep-research v2's steps (2026-10-04, research.go).
 		dedupSources(), rankClaims(), expandBallotsV2(), tallyAdversarial(),
-		// finance-daily's final step (2026-10-06).
-		requireZero()} {
+		// finance-daily's final step (2026-10-06) and finance-review's gate (2026-10-07).
+		requireZero(), gateProposals()} {
 		out[f.ID()] = f
 	}
 	return out

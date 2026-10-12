@@ -330,7 +330,7 @@ func TestWorkflowCapabilityReadRunsEndToEndThroughTheFinancePlugin(t *testing.T)
 		t.Fatalf("pinned providers = %+v", pins)
 	}
 	text := RunText(d)
-	for _, want := range []string{"Providers: finance.month_cash_flow 1.0.0 from finance 1.2.0 on finance-local", "read attempt 1: succeeded -> split", "leftover_cents: 1"} {
+	for _, want := range []string{"Providers: finance.month_cash_flow 1.0.0 from finance 1.3.0 on finance-local", "read attempt 1: succeeded -> split", "leftover_cents: 1"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("inspection lacks %q:\n%s", want, text)
 		}

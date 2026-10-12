@@ -96,6 +96,6 @@ function sourceLabel(source: string): string {
   if (source === "rule") return "Merchant rule";
   if (source === "human") return "Human";
   if (source === "manual") return "Manual (legacy)";
-  if (source === "agent") return "Agent (legacy)";
+  if (source === "agent") return "Agent (approved)";
   return source || "Not recorded";
 }

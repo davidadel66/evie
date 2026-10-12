@@ -110,7 +110,7 @@ func (f Finance) WorkflowCapabilities() []WorkflowCapability {
 	maxItems := int64(financeMaxPageSize)
 	page.MaxItems = &maxItems
 	statuses := enumString("all", "classified", "pending", "unclassified", "excluded")
-	return []WorkflowCapability{
+	return append(financeReviewReads(), []WorkflowCapability{
 		served(WorkflowCapability{
 			ID:     FinanceMonthCashFlowCapabilityID,
 			Input:  workflow.ObjectType(workflow.Field{Name: "month", Type: financeMonth()}),
@@ -143,7 +143,7 @@ func (f Finance) WorkflowCapabilities() []WorkflowCapability {
 			),
 			Read: f.readMonthTransactions,
 		}),
-	}
+	}...)
 }
 
 func (f Finance) spendingService() *finance.SpendingService {

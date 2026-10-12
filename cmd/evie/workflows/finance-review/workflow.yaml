@@ -1,0 +1,165 @@
+# Weekly classification review (finance-review.spec.md, 2026-10-07): gather
+# the unclassified posted transactions with deterministic evidence, have a
+# model propose a category for each as typed data, gate the proposals,
+# pause for the owner's per-line answer, then apply the accepted lines in
+# one effect that mints an exact merchant rule with each. The model never
+# writes; nothing is written before the owner answers.
+schema_version: 1
+name: finance-review
+description: Propose categories for unclassified transactions and apply the ones the owner accepts.
+
+inputs:
+  day:
+    type: string
+    required: true
+    max_length: 10
+  at:
+    type: string
+    required: true
+    max_length: 5
+  limit:
+    type: integer
+    required: false
+    default: 25
+    minimum: 1
+    maximum: 40
+  min_confidence:
+    type: number
+    required: false
+    default: 0.6
+    minimum: 0
+    maximum: 1
+
+run_key:
+  inputs: [day, at]
+
+model_policies:
+  propose:
+    version: 1
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    temperature: 0
+    max_output_tokens: 8000
+
+limits:
+  max_duration: 168h
+  max_attempts: 20
+  max_parallel: 1
+  max_tokens: 60000
+
+authority:
+  operations:
+    - capability: finance.review_candidates
+      connection: finance-local
+      resources: [ledger]
+      max_calls_per_run: 2
+    - capability: finance.apply_review
+      connection: finance-local
+      resources: [ledger]
+      max_calls_per_run: 2
+
+schedule:
+  cron: "30 9 * * 1"
+  timezone: America/Detroit
+  catch_up:
+    policy: skip
+  inputs:
+    day: $schedule.date
+    at: $schedule.time
+
+retention:
+  classification: sensitive
+
+start: gather
+
+steps:
+  - id: gather
+    kind: capability
+    description: The unclassified posted transactions with rules and similar past transactions as evidence.
+    capability: finance.review_candidates
+    contract: 1.0.0
+    connection: finance-local
+    resource: ledger
+    input:
+      limit: $inputs.limit
+    retry:
+      max_attempts: 2
+      backoff: 1m
+    next: propose
+
+  - id: propose
+    kind: ai
+    description: Propose one category per candidate from the evidence and the vocabulary, as typed data.
+    model_policy: propose
+    prompt: prompts/propose.md
+    output_schema: schemas/proposals.schema.json
+    input:
+      candidates: $steps.gather.output.candidates
+      categories: $steps.gather.output.categories
+    retry:
+      max_attempts: 2
+      backoff: 1m
+    next: gate
+
+  - id: gate
+    kind: deterministic
+    description: Keep only proposals that name a candidate, use a known category exactly, reach the threshold, and ask for a rule only with a merchant name.
+    function: gate_proposals@1
+    input:
+      candidates: $steps.gather.output.candidates
+      proposals: $steps.propose.output.proposals
+      categories: $steps.gather.output.categories
+      min_confidence: $inputs.min_confidence
+    next: any
+
+  - id: any
+    kind: branch
+    cases:
+      - when:
+          ref: $steps.gate.output.kept
+          op: eq
+          value: 0
+        next: nothing
+    default: review
+
+  - id: nothing
+    kind: deterministic
+    description: No proposal survived the gate; the run ends without asking.
+    function: require_zero@1
+    input:
+      count: $steps.gate.output.kept
+      subject: proposals left unreviewed
+
+  - id: review
+    kind: interrupt
+    description: The owner accepts, rejects or changes each proposed line.
+    message: "Review the proposed classifications in this step's input (lines). Answer {} to accept every line as proposed, with its rule. Exceptions: {\"reject\": [ids], \"change\": [{\"id\": ..., \"category\": ...}], \"no_rule\": [ids]}. Rejected lines are not proposed again; handle them in chat."
+    response_schema: schemas/answer.schema.json
+    input:
+      lines: $steps.gate.output.lines
+    next: apply
+
+  - id: apply
+    kind: capability
+    description: Insert the accepted entries and their exact merchant rules, and record every decision.
+    capability: finance.apply_review
+    contract: 1.0.0
+    connection: finance-local
+    resource: ledger
+    input:
+      lines: $steps.gate.output.lines
+      answer: $steps.review.output
+      run_key: $inputs.day
+    retry:
+      max_attempts: 2
+      backoff: 1m
+
+outputs:
+  day: $inputs.day
+  candidates: $steps.gather.output.remaining
+  proposed: $steps.gate.output.kept
+  dropped: $steps.gate.output.dropped
+  applied: $steps.apply.output.applied
+  rules_minted: $steps.apply.output.rules_minted
+  rejected: $steps.apply.output.rejected
+  skipped: $steps.apply.output.skipped

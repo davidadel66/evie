@@ -31,7 +31,7 @@ func TestFinanceManifestAndToolContractsAreStable(t *testing.T) {
 	}
 	want := Manifest{
 		ID:                    FinancePluginID,
-		ImplementationVersion: "1.2.0",
+		ImplementationVersion: "1.3.0",
 		KernelCompatibility: VersionRange{
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
@@ -43,10 +43,13 @@ func TestFinanceManifestAndToolContractsAreStable(t *testing.T) {
 			{ID: FinanceMonthTransactionsCapabilityID, Version: "1.1.0"},
 			{ID: FinanceSyncLedgerCapabilityID, Version: "1.0.0"},
 			{ID: FinanceCategorizeLedgerCapabilityID, Version: "1.0.0"},
+			{ID: FinanceReviewCandidatesCapabilityID, Version: "1.0.0"},
+			{ID: FinanceApplyReviewCapabilityID, Version: "1.0.0"},
 		},
 		ResumableFrom: []ImplementationCompatibility{
 			{ImplementationVersion: "1.0.0", Capabilities: tools1},
 			{ImplementationVersion: "1.1.0", Capabilities: tools1},
+			{ImplementationVersion: "1.2.0", Capabilities: tools1},
 		},
 	}
 	if got := finance.Manifest(); !reflect.DeepEqual(got, want) {
