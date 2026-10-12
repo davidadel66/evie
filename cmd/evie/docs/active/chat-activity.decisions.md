@@ -75,3 +75,8 @@
   The routine receipt shown is the latest one that supplied accepted memory or
   conversation excerpts; warning receipts keep their existing visibility.
   This is presentation only; receipt recording and evidence are unchanged.
+
+- David's October 12 request lets the live line read streamed reasoning: its
+  latest heading or complete sentence, held two seconds. This reverses the
+  October 3 events-only choice; models without exposed reasoning still show
+  the event-derived line. A cheap headline model is deferred, not rejected.

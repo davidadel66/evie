@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { appendUser, reduce, type Item } from "../store/reducer";
 import { Activity, ActivityItems } from "./Activity";
-import { activityTurns, toolLabel } from "./activityModel";
+import { activityTurns, currentThought, toolLabel } from "./activityModel";
 
 describe("activity transcript", () => {
   it.each([
@@ -178,6 +178,47 @@ describe("activity transcript", () => {
     html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
     expect(html).toContain("Two things are stored.");
     expect(html).not.toContain("Thinking…");
+  });
+
+  it("shows the latest reasoning sentence as the live line until a tool takes over", () => {
+    let items = appendUser([], "think about it");
+    items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: 1000});
+    items = reduce(items, {type: "reasoning", text: "I need to think about what David is asking. Let me check memory for prior con"});
+    let html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(html).toContain('role="status"');
+    expect(html).toContain("I need to think about what David is asking.");
+    expect(html).not.toContain("prior con");
+    expect(html).not.toContain("Thinking…");
+
+    items = reduce(items, {type: "reasoning", text: "text."});
+    items = reduce(items, {type: "reasoning_done"});
+    html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(html).toContain("Let me check memory for prior context.");
+
+    items = reduce(items, {type: "tool_call", id: "m", name: "memory_search", args: '{"query":"superintelligence"}'});
+    html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(html).toContain("Search memory requested");
+    expect(html).not.toContain("Let me check memory");
+
+    items = reduce(items, {type: "tool_result", id: "m", content: "none", isError: false});
+    html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(html).toContain("Thinking…");
+  });
+
+  it("picks the current thought from reasoning text", () => {
+    expect(currentThought("Let me look", true)).toBeNull();
+    expect(currentThought("Let me look", false)).toBe("Let me look");
+    expect(currentThought("First idea. Then the second", true)).toBe("First idea.");
+    expect(currentThought("Compare tools, e.g. search and fetch. Done", true)).toBe("Compare tools, e.g. search and fetch.");
+    expect(currentThought("**Planning the answer**\n\nI should outline the cruxes. Then", true)).toBe("Planning the answer");
+    expect(currentThought("- Check the `transcripts` table.\n", true)).toBe("Check the transcripts table.");
+    expect(currentThought("First idea. Compare tools, e.g.", true)).toBe("First idea.");
+    expect(currentThought("First idea. Check the U.S. Census", true)).toBe("First idea.");
+    expect(currentThought("First idea. Ask Dr. Smith about it", true)).toBe("First idea.");
+    expect(currentThought("First idea. Try version 3.", true)).toBe("First idea.");
+    expect(currentThought("First idea. Try version 3.", false)).toBe("Try version 3.");
+    expect(currentThought("Scaling slowed in 2026. Then RL took over.", false)).toBe("Then RL took over.");
+    expect(currentThought("Ask Dr. Smith about the U.S. data. Done", true)).toBe("Ask Dr. Smith about the U.S. data.");
   });
 
   it("has no per-turn repository instructions control", () => {

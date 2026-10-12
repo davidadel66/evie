@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { toolFilePath } from "../artifacts/fileInspection";
 import { readMemoryToolResult } from "../artifacts/memoryToolResult";
 import type { Item } from "../store/reducer";
@@ -6,7 +6,7 @@ import { ChevronDown, Database, FileIcon, Wrench } from "../ui/Icon";
 import { ApprovalCard } from "./ApprovalCard";
 import { AssistantMessage, DiscardWarning } from "./Message";
 import { MemoryActivity, type MemoryOpener } from "./MemoryActivity";
-import { awaitingApproval, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
+import { awaitingApproval, currentThought, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
 
 type FileOpener = (key: string, trigger: HTMLButtonElement) => void;
 type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener };
@@ -57,17 +57,35 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
   );
 }
 
-// One line while working: text as it streams, else the latest requested tool,
-// else Thinking. Built from events alone, so it reads the same whether or not
-// the model exposes reasoning.
+// One line while working: text as it streams; else, when reasoning is the
+// latest thing, its current sentence; else the latest requested tool; else
+// Thinking, which is all a model that hides its reasoning ever shows here.
 function LiveStatus({activity, onAnswer, onOpenFile, onOpenTool}: {activity: Item[]; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenTool?: FileOpener}) {
   const last = activity[activity.length - 1];
   if (last?.kind === "assistant" && last.streaming && !last.discarded) return <AssistantMessage text={last.text} streaming />;
+  const thought = last?.kind === "reasoning" ? currentThought(last.text, last.streaming) : null;
   const tool = [...activity].reverse().find((item): item is ToolItem => item.kind === "tool" && item.result === undefined);
   return <div role="status">
-    {tool ? <ToolRow tool={tool} active onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} />
+    {thought ? <ThoughtLine thought={thought} />
+      : tool ? <ToolRow tool={tool} active onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} />
       : <p className="text-muted-text py-1 text-[13px]">Thinking…</p>}
   </div>;
+}
+
+const thoughtHoldMs = 2000;
+
+// Reasoning completes sentences faster than they can be read, so each one
+// stays up for a moment before the line moves to the newest.
+function ThoughtLine({thought}: {thought: string}) {
+  const [shown, setShown] = useState(thought);
+  const since = useRef(0);
+  useEffect(() => {
+    if (since.current === 0) since.current = Date.now();
+    if (thought === shown) return;
+    const timer = window.setTimeout(() => { since.current = Date.now(); setShown(thought); }, Math.max(0, since.current + thoughtHoldMs - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [thought, shown]);
+  return <p title={shown} className="text-muted-text truncate py-1 text-[13px]">{shown}</p>;
 }
 
 export function ActivityItems({items, active, onAnswer, onOpenFile, onOpenTool, onOpenMemory}: {items: Item[]; active: boolean; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener}) {

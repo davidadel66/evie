@@ -144,3 +144,41 @@ export function elapsedLabel(start?: number, end?: number): string | null {
   if (seconds < 1) return "<1s";
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
+
+// The live line's view of reasoning: the latest bold heading when the model
+// writes them, else its latest complete sentence. Null until one completes,
+// so a half-written sentence never shows.
+export function currentThought(text: string, streaming: boolean): string | null {
+  const headings = [...text.matchAll(/^\s*\*\*(.+?)\*\*\s*$/gm)];
+  if (headings.length > 0) return plainThought(headings[headings.length - 1][1]);
+  const sentences: string[] = [];
+  for (const line of text.split(/\n+/)) {
+    // "Dr. Smith" and "the U.S. Census" stay one sentence.
+    let current = "";
+    for (const part of line.split(/(?<=[.!?…]["'”)]?)\s+(?=["'“(]?[A-Z0-9])/)) {
+      current = current ? `${current} ${part}` : part;
+      if (!abbreviated.test(current)) {
+        sentences.push(current);
+        current = "";
+      }
+    }
+    if (current) sentences.push(current);
+  }
+  const plain = sentences.map(plainThought).filter(Boolean);
+  if (streaming && plain.length > 0 && !endsSentence(plain[plain.length - 1])) plain.pop();
+  return plain[plain.length - 1] ?? null;
+}
+
+// A period after these is not a sentence end: common abbreviations and
+// initials such as "U.S.".
+const abbreviated = /(?:\b(?:e\.g|i\.e|etc|vs|cf|approx|Dr|Mr|Mrs|Ms|Prof|St|No)|\b[A-Z](?:\.[A-Z])*)\.$/;
+
+// Whether streamed text has finished its last sentence. A trailing number
+// and period may still become "3.5", so it waits for more text.
+function endsSentence(text: string): boolean {
+  return /[.!?…:]["'”)]?$/.test(text) && !abbreviated.test(text) && !/\d\.$/.test(text);
+}
+
+function plainThought(text: string): string {
+  return text.replace(/^\s*(?:[-*>#]+|\d+[.)])\s+/, "").replace(/\*\*|__|`/g, "").replace(/\s+/g, " ").trim();
+}

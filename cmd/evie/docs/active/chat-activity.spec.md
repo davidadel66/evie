@@ -337,3 +337,26 @@ chat.
 Verification covers empty receipts hidden while working and after completion,
 the latest supplying receipt kept over a later empty one, and earlier warnings
 kept visible.
+
+## Live reasoning line amendment — October 12, 2026
+
+David asked for a one-line summary of what the model is doing, updating as it
+works, like ChatGPT's thinking line. This supersedes "It is derived from events
+only, never from reasoning text" in the October 3 live status line amendment.
+
+- While working and collapsed, when streamed reasoning is the latest activity,
+  the live line shows its latest bold heading if the model writes headings,
+  otherwise its latest complete sentence, as one muted, truncated line with the
+  full sentence in its tooltip. A sentence still being written is never shown.
+- Each shown sentence stays at least two seconds before the line moves to the
+  newest, so fast reasoning does not flicker.
+- Streamed assistant text, then a newer requested tool, still take over as
+  before; with neither, and no reasoning sentence, the line reads "Thinking…".
+  A model that does not expose reasoning therefore behaves exactly as before.
+- Pending approvals still replace the line. The expanded trace is unchanged.
+
+No backend, persistence, event or dependency changes. Deferred, by David's
+choice: a very cheap model writing a short headline instead of the sentence
+(BACKLOG Ideas). Verification covers withholding an unfinished sentence, the
+latest complete sentence and heading preference, abbreviations not splitting a
+sentence, the tool row taking over, and Thinking after a settled tool.

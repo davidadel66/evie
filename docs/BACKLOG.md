@@ -40,6 +40,7 @@ Details live in active plans/specs and completed feature records.
   button over POST /api/cancel (disconnect ≠ cancel still deliberate); what
   remains needs Session rollback of the lone user message (harness capability
   in internal/agent, UX web-only). Deferred 2026-08-08 for bigger fish.
+- live headline model — a very cheap model writes a ChatGPT-style few-word headline for the live status line instead of the reasoning's own latest sentence (deferred 2026-10-12; see chat-activity.spec.md "Live reasoning line")
 - web frontend (`evie serve`) — rich output door (images/diffs/diagrams); decided over desktop/TUI, see decisions.md
 - subagents — evie spawns scoped sub-conversations; design session when long tasks clog one context
 - dynamic tool loading — deferred schemas (researched, design in task notes); trigger ~20 tools
