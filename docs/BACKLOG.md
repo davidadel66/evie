@@ -17,6 +17,7 @@ Details live in active plans/specs and completed feature records.
   Epic 1 complete, with no Epic 2 story currently selected
 
 ## finance-daily follow-ups (decided 2026-10-06, see cmd/evie/docs/active/finance-daily.*)
+- finance-review (2026-10-07, cmd/evie/docs/active/finance-review.*): proposed in the Finance Workspace; needs David's approval, then the first Monday 09:30 run or a chat start; answer on the Workspace page or `evie workflows answer <run> review --answer '{}'`
 - finance-daily approved 2026-10-06; first scheduled run 2026-10-07 09:00 America/Detroit succeeded (run 9cbf8363); cron job 3 removed the same day
 - delete `cmd/finance` after one clean week and a parity check of Plaid link and rules seeding in Evie
 - external delivery of workflow notifications (a failed finance-daily run is only visible in `evie workflows status` / `notifications`)
@@ -61,6 +62,30 @@ by the current story's acceptance criteria.
   - Impact: The pre-existing UI build chain remains exposed to an infinite-loop availability advisory when a custom generator receives size zero.
   - Why deferred: The issue predates Story 4, does not affect its acceptance criteria, and dependency updates are outside the approved provider-usage story.
   - Verification: Complete an approved dependency update, then require `npm audit --json` to omit GHSA-2v37-7h3g-55p8, `npm run build` to pass, and `go test ./...` to pass.
+
+- [ ] Workspace folder chooser does not let the owner pick a folder
+  - ID: `CH-S1-BACKLOG-FOLDER-CHOOSER`
+  - Discovered during: Changes story 1 setup, 2026-10-09 (creating the evie Workspace on `~/code/evie`)
+  - Evidence: Choosing a folder in Create workspace did not yield a folder; typing the path in Settings → Folder worked. The chooser is `osascript` JXA (`NSOpenPanel`) run by the launchd-managed `evie serve` (`internal/web/native_folder_picker.go`), and its stderr is discarded, so `~/.evie/logs/serve.log` records nothing. Exact symptom (no dialog, dialog behind the browser, or a disabled choice) not yet confirmed.
+  - Impact: Creating a Workspace with a folder needs a second step through Settings → Folder.
+  - Why deferred: Pre-existing; outside Changes story 1.
+  - Verification: Reproduce from the launchd-managed serve, log the picker's failure, then choose `~/code/evie` from Create workspace end to end.
+
+- [ ] Self-sufficient tool results when a tool declines or does nothing
+  - ID: `WA-S4-BACKLOG-SELF-SUFFICIENT-RESULTS`
+  - Discovered during: the same demo
+  - Evidence: `workflow_start` returned `existing: true` and "nothing new was started" within the first minute; Evie then spent several minutes establishing what the result left out (what the run did, that equal inputs are one run by its Run Key, how a rerun works) from the database, the procedural repo, ADRs and Evie's source.
+  - Impact: Slow, costly turns that rediscover facts the tool already had.
+  - Why deferred: A convention for every tool, not part of the run-card story.
+  - Verification: Every declined, refused or no-op tool result states what happened, why, and what only the owner can do next (with the UI path); for `workflow_start`, the existing run's outcome, the Run Key rule and "rerun: your Rerun button on this run's card, with a reason". Tests per tool assert those fields.
+
+- [ ] Per-turn budget with a check-in gate
+  - ID: `WA-S4-BACKLOG-TURN-BUDGET`
+  - Discovered during: the same demo
+  - Evidence: The turn ran past 2m38s and 20+ tool calls with no limit; no per-turn time or tool-call budget exists in `internal/agent`.
+  - Impact: Any over-deliberation runs unbounded until the owner presses Stop.
+  - Why deferred: A runtime mechanism for every turn, not part of the run-card story.
+  - Verification: Past a configured wall time or tool-call count, the turn pauses at a check-in card (Continue / Wrap up / Stop); Wrap up ends with a final answer from what is known; tests cover each choice and that approvals still gate as before.
 
 ## Recently done
 <!-- newest first, max 10; older entries are deleted — git history is the archive -->
