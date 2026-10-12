@@ -320,3 +320,20 @@ No backend, persistence, event or dependency changes. Verification covers the
 collapsed live line for a requested tool, Thinking between tools, streamed
 text replacing the line, approvals replacing it, the problem summary, and
 quiet versus streaming progress text.
+
+## Empty memory receipt amendment — October 12, 2026
+
+David asked to see memory activity only when retrieval supplied something.
+This supersedes "Both collapsed and expanded activity show the latest routine
+memory receipt" above: both now show the latest receipt that supplied accepted
+memory or conversation excerpts, and a receipt that supplied nothing is not
+shown. Receipts with warnings (failed, partial, unavailable, cancelled,
+exhausted or interrupted requests, and historical, retired or conflicting
+evidence) stay visible as before. Receipts are still recorded; the source
+inspector, memory tool rows and their returned counts are unchanged.
+Trade-off: an empty retrieval's request details are no longer reachable from
+chat.
+
+Verification covers empty receipts hidden while working and after completion,
+the latest supplying receipt kept over a later empty one, and earlier warnings
+kept visible.

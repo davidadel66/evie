@@ -9,9 +9,9 @@ import { MemoryActivity, type MemoryOpener } from "./MemoryActivity";
 import { awaitingApproval, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
 
 type FileOpener = (key: string, trigger: HTMLButtonElement) => void;
-type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener; onOpenInstructions?: (turnId:string,trigger:HTMLButtonElement)=>void };
+type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener };
 
-export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory, onOpenInstructions }: Props) {
+export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory }: Props) {
   const [manual, setManual] = useState<boolean | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const bodyID = useId();
@@ -22,7 +22,8 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
   }, [group.active]);
   const pending = group.activity.some(awaitingApproval);
   const open = manual ?? false;
-  const latestMemory = [...group.activity].reverse().find((item) => item.kind === "memory");
+  // A receipt that supplied nothing is routine noise; warnings still show below.
+  const latestMemory = [...group.activity].reverse().find((item) => item.kind === "memory" && item.memory.acceptedCount + item.memory.excerptCount > 0);
   const visibleActivity = group.activity.filter((item) => item.kind !== "memory" || item === latestMemory || needsAttention(item));
   const collapsedActivity = group.activity.filter((item) => item === latestMemory || (needsAttention(item) && (item.kind !== "tool" || awaitingApproval(item))));
   const problems = problemSummary(group.activity);
@@ -39,7 +40,6 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
         <span>{label}{elapsed && `${complete && !pending ? " for" : " ·"} ${elapsed}`}</span>
         <span className={open ? "rotate-180" : ""}><ChevronDown size={13} /></span>
       </button>
-      {onOpenInstructions&&group.turn?.id&&<button type="button" aria-label="Inspect instructions for this turn" onClick={event=>onOpenInstructions(group.turn!.id,event.currentTarget)} className="text-muted-text hover:text-teal mt-1 flex items-center gap-1.5 text-[11px]"><FileIcon size={12}/>Repository instructions</button>}
       <div id={bodyID} hidden={!open} className="border-hair mt-3 space-y-4 border-t pt-4">
         {open && <ActivityItems items={visibleActivity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />}
         {open && group.activity.length === 0 && <p className="text-muted-text text-xs">{group.active ? "Waiting for a response…" : "No additional activity to show."}</p>}

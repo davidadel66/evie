@@ -80,3 +80,14 @@ enabled. Receipts are still captured and stored for every turn exactly as
 above; the sidebar instruction control is unchanged. Trade-off: after a folder
 is detached or instructions are disabled, earlier turns' receipts are no longer
 reachable from chat, though they remain durable.
+
+## Per-turn control removal — October 12, 2026
+
+David asked for no per-turn instruction control: the Workspace folder settings
+and the sidebar instruction badge are where he checks them. This supersedes the
+October 3 per-turn control amendment and the "per-turn inspection opens its
+durable snapshot" control above. Chat no longer shows a **Repository
+instructions** action under any turn. Receipts are still captured and stored
+for every turn exactly as above, and the sidebar badge and settings toggle are
+unchanged. Trade-off: a turn's stored snapshot is no longer reachable from the
+web UI.

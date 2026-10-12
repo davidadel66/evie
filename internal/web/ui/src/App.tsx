@@ -112,11 +112,9 @@ export default function App() {
   const sessionTitles = useMemo(() => Object.fromEntries((contextSessions.snapshot?.sessions ?? []).map((session) => [session.id, session.title.trim() || "Untitled session"])), [contextSessions.snapshot?.sessions]);
   const workspaceNames = useMemo(() => Object.fromEntries((contextSessions.snapshot?.workspaces ?? []).map((workspace) => [workspace.id, workspace.displayName])), [contextSessions.snapshot?.workspaces]);
   const scopeWorkspace=contextSessions.snapshot?.workspaces.find(workspace=>workspace.id===contextSessions.snapshot?.activeScope?.workspaceId);
-  // Per-turn instruction receipts only matter when a folder can supply instructions.
-  const instructionsAttached=!!scopeWorkspace?.folder?.path&&(scopeWorkspace.instructions?.enabled??true);
-  const openInstructions=(workspace:Workspace,trigger:HTMLButtonElement,turnId?:string)=>{
+  const openInstructions=(workspace:Workspace,trigger:HTMLButtonElement)=>{
     fileTrigger.current=trigger;activityTrigger.current=null;
-    setSelectedAction(undefined);setInspectorOverride({kind:"repository-instructions",workspaceId:workspace.id,folderRevision:workspace.folder?.revision??0,settingsRevision:workspace.instructions?.revision??0,sessionId:turnId?contextSessions.snapshot?.activeSession?.id:undefined,turnId});
+    setSelectedAction(undefined);setInspectorOverride({kind:"repository-instructions",workspaceId:workspace.id,folderRevision:workspace.folder?.revision??0,settingsRevision:workspace.instructions?.revision??0});
     setInspectionRequest(value=>value+1);setInspectorOpen(true);setInspectorFocused(false);setMobileNavOpen(false);
   };
   const selectedTool = selectedToolInspection(selectedAction, contextSessions.snapshot?.activeSession?.id, items);
@@ -343,7 +341,7 @@ export default function App() {
             {activeView.kind === "chat" && (
               contextSessions.snapshot?.activeScope ? (
                 <>
-                  <Chat onOpenInstructions={instructionsAttached&&scopeWorkspace?(turnId,trigger)=>openInstructions(scopeWorkspace,trigger,turnId):undefined} key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onAlwaysApplies={setAlwaysApplies} onOpenFile={openTool} onOpenTool={openTool}
+                  <Chat key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onAlwaysApplies={setAlwaysApplies} onOpenFile={openTool} onOpenTool={openTool}
                     workspaceId={scopeWorkspace?.id} onOpenRun={(runId, trigger) => {
                       fileTrigger.current = trigger;
                       activityTrigger.current = null;

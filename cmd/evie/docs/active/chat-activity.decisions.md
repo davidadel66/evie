@@ -70,3 +70,8 @@
 - With his agreement, settled tool problems no longer render as individual
   rows while activity is collapsed; one summary line expands the trace. Pending
   approvals, notices and memory receipt visibility are unchanged.
+
+- David's October 12 request hides memory receipts that supplied nothing.
+  The routine receipt shown is the latest one that supplied accepted memory or
+  conversation excerpts; warning receipts keep their existing visibility.
+  This is presentation only; receipt recording and evidence are unchanged.

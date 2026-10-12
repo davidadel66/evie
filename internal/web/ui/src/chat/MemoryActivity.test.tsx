@@ -4,17 +4,17 @@ import { MemoryActivity } from "./MemoryActivity";
 import { appendUser, reduce } from "../store/reducer";
 import { Chat } from "./Chat";
 
-it("keeps one routine receipt while working and gives an empty retrieval an honest label", () => {
+it("hides retrieval receipts that supplied nothing", () => {
   let items = appendUser([], "Look up my preferences.");
   items = reduce(items, {type: "turn_started", id: "root", status: "working"});
   for (const snapshotId of ["first", "second", "third"]) items = reduce(items, {type: "memory_activity", snapshotId, status: "empty", acceptedCount: 0, excerptCount: 0});
   const html = renderToStaticMarkup(<Chat items={items} queued={[]} streaming onAnswer={() => undefined} onOpenMemory={() => undefined} />);
-  expect(html.match(/No matches/g)).toHaveLength(1);
-  expect(html).toContain("Memory retrieval");
-  expect(html).not.toContain("Accepted memory");
+  expect(html).not.toContain("No matches");
+  expect(html).not.toContain("Memory retrieval");
+  expect(items.filter((item) => item.kind === "memory")).toHaveLength(3);
 });
 
-it("keeps only the latest routine receipt in collapsed chat while preserving earlier warnings", () => {
+it("keeps the latest receipt that supplied memory while preserving earlier warnings", () => {
   let items = appendUser([], "Check my saved preferences.");
   items = reduce(items, {type: "turn_started", id: "root", status: "working"});
   for (const [index, status] of ["unavailable", "empty", "success", "empty"].entries()) {
@@ -22,9 +22,9 @@ it("keeps only the latest routine receipt in collapsed chat while preserving ear
   }
   items = reduce(items, {type: "assistant_done", content: "Checked.", terminal: true});
   const html = renderToStaticMarkup(<Chat items={items} queued={[]} streaming={false} onAnswer={() => undefined} onOpenMemory={() => undefined} />);
-  expect(html.match(/No matches/g)).toHaveLength(1);
+  expect(html).not.toContain("No matches");
   expect(html).toContain("Memory unavailable");
-  expect(html).not.toContain("2 supplied");
+  expect(html.match(/2 supplied/g)).toHaveLength(1);
   expect(items.filter((item) => item.kind === "memory")).toHaveLength(4);
 });
 
@@ -40,7 +40,8 @@ it.each([
   items = reduce(items, {type: "memory_activity", snapshotId: "latest", requestStatus: "completed", status: "empty", acceptedCount: 0, excerptCount: 0});
   items = reduce(items, {type: "assistant_done", content: "Checked.", terminal: true});
   const html = renderToStaticMarkup(<Chat items={items} queued={[]} streaming={false} onAnswer={() => undefined} onOpenMemory={() => undefined} />);
-  for (const value of [label, "No matches"]) expect(html).toContain(value);
+  expect(html).toContain(label);
+  expect(html).not.toContain("No matches");
 });
 
 it("labels a saved request as recorded until its assistant response commits", () => {

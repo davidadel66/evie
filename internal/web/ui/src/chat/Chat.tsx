@@ -32,7 +32,6 @@ type Props = {
   onOpenFile?: (key: string, trigger: HTMLButtonElement) => void;
   onOpenTool?: (key: string, trigger: HTMLButtonElement) => void;
   onOpenMemory?: MemoryOpener;
-  onOpenInstructions?: (turnId:string,trigger:HTMLButtonElement)=>void;
   /** The chat's Workspace, whose runs list keeps the run cards current. */
   workspaceId?: string;
   onOpenRun?: (runId: string, trigger: HTMLButtonElement) => void;
@@ -43,7 +42,7 @@ type Props = {
   onRetry?: () => void;
 };
 
-export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOpenFile, onOpenTool, onOpenMemory, onOpenInstructions, workspaceId, onOpenRun, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
+export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOpenFile, onOpenTool, onOpenMemory, workspaceId, onOpenRun, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const starts = items.flatMap((item) => item.kind === "tool" ? [workflowStartRun(item)].filter((start) => start !== undefined) : []);
   const chatRuns = useChatRuns(workspaceId, [...new Set(starts.map((start) => start.runId))], streaming);
@@ -78,7 +77,7 @@ export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOp
         {items.length === 0 && !historyLoading && !historyProblem && <Empty />}
         {activityTurns(items, streaming).map((group) => <Fragment key={group.key}>
           {group.user && <UserMessage text={group.user.text} />}
-          <Activity group={group} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} onOpenInstructions={onOpenInstructions} />
+          <Activity group={group} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />
           {group.answer.map((item) => <AssistantMessage key={item.key} text={item.text} streaming={false} discarded={item.discarded} />)}
           {runStarts(group.activity).map((start) => {
             const run = chatRuns.runs[start.runId];

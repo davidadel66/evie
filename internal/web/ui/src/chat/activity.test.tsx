@@ -180,6 +180,17 @@ describe("activity transcript", () => {
     expect(html).not.toContain("Thinking…");
   });
 
+  it("has no per-turn repository instructions control", () => {
+    const turn = {id: "u", status: "complete", startedAt: 1000, finishedAt: 5000} as const;
+    const items: Item[] = [
+      {kind: "user", key: "u", text: "hello", turn},
+      {kind: "assistant", key: "answer", text: "Hi", streaming: false, phase: "final_answer", turn},
+    ];
+    const html = renderToStaticMarkup(<Activity group={activityTurns(items, false)[0]} onAnswer={() => {}} />);
+    expect(html).not.toContain("Repository instructions");
+    expect(html).not.toContain("Inspect instructions for this turn");
+  });
+
   it("replaces the live line with actionable approval controls while waiting", () => {
     let items = appendUser([], "edit");
     items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: 1000});
