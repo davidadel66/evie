@@ -43,10 +43,16 @@ func (f *standingFixture) intent(t *testing.T, session memory.Session, lease mem
 // remember tool does when the owner did not ask.
 func (f *standingFixture) propose(t *testing.T, session memory.Session, message, predicate, label, value string, kind memory.ClaimKind) (memory.RememberLiteralProposal, memory.MemoryProposalQueued) {
 	t.Helper()
+	return f.proposeTo(t, session, "", message, predicate, label, value, kind)
+}
+
+// proposeTo is propose with an explicit memory destination.
+func (f *standingFixture) proposeTo(t *testing.T, session memory.Session, destination memory.MemoryDestination, message, predicate, label, value string, kind memory.ClaimKind) (memory.RememberLiteralProposal, memory.MemoryProposalQueued) {
+	t.Helper()
 	lease := f.lease(t, session)
 	said := f.say(t, session, lease, message)
 	proposal, err := f.store.PrepareRememberLiteral(context.Background(), session.ScopeContext(), memory.RememberLiteralRequest{
-		IdempotencyKey: f.key(), SourceEventID: said.ID, Predicate: predicate, PredicateLabel: label,
+		Destination: destination, IdempotencyKey: f.key(), SourceEventID: said.ID, Predicate: predicate, PredicateLabel: label,
 		PredicateCardinality: memory.CardinalityMany, Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: value},
 		Polarity: memory.PolarityAffirmed, Kind: kind,
 	})
@@ -79,6 +85,92 @@ func claimCount(t *testing.T, store *Store) int {
 		t.Fatal(err)
 	}
 	return count
+}
+
+// An archived Workspace has no memory proposals (workspaces.decisions.md,
+// 2026-10-11): the ones targeting it or found in its conversations are
+// hidden, uncounted and refused, nothing new is queued for it, and restoring
+// it brings the hidden ones back.
+func TestArchivedWorkspaceProposalsAreHiddenUntilRestored(t *testing.T) {
+	f := newStandingFixture(t)
+	ctx := context.Background()
+	workspace, session := f.workspaceSession(t, "Old project")
+	elsewhere := f.globalSession(t)
+	f.proposeTo(t, session, memory.MemoryWorkspace, "Deploys go out on Fridays.", "deploy_day", "deploy day", "Fridays", memory.ClaimKindFact)
+	f.proposeTo(t, session, memory.MemoryEverywhere, "I merge my own changes.", "merge_style", "merge style", "merge my own changes", memory.ClaimKindPreference)
+	f.propose(t, elsewhere, "Keep it short, I hate long answers.", "answer_style", "answer style", "short answers", memory.ClaimKindPreference)
+	before := pendingProposals(t, f.store)
+	scopes := map[string]bool{}
+	for _, item := range before.Items {
+		scopes[item.ScopeKey] = true
+	}
+	workspaceKey := "workspace:" + string(workspace.ID)
+	if before.Pending != 3 || len(before.Items) != 3 || !scopes[workspaceKey] || !scopes["global"] {
+		t.Fatalf("inbox before archive = %+v", before)
+	}
+	// A proposal prepared before the archive is not queued after it.
+	lease := f.lease(t, session)
+	said := f.say(t, session, lease, "I prefer green tea.")
+	late, err := f.store.PrepareRememberLiteral(ctx, session.ScopeContext(), memory.RememberLiteralRequest{
+		Destination: memory.MemoryEverywhere, IdempotencyKey: f.key(), SourceEventID: said.ID, Predicate: "drink", PredicateLabel: "drink",
+		PredicateCardinality: memory.CardinalityMany, Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: "green tea"},
+		Polarity: memory.PolarityAffirmed, Kind: memory.ClaimKindPreference,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	intent := f.intent(t, session, lease, said.ID)
+	f.release(t, session)
+	f.release(t, elsewhere)
+
+	if _, err := f.store.ArchiveWorkspace(ctx, workspace.ID); err != nil {
+		t.Fatal(err)
+	}
+	page := pendingProposals(t, f.store)
+	if page.Pending != 1 || len(page.Items) != 1 || page.Items[0].SessionID != elsewhere.ID {
+		t.Fatalf("inbox while archived = %+v", page)
+	}
+	if count, err := f.store.PendingMemoryProposalCount(ctx, workspaceKey, "global"); err != nil || count != 1 {
+		t.Fatalf("pending count while archived = %d, %v", count, err)
+	}
+	for _, item := range before.Items {
+		if item.SessionID != session.ID {
+			continue
+		}
+		_, err := f.store.ApproveMemoryProposal(ctx, memory.MemoryProposalApproval{ProposalID: item.ProposalID, PreparedSHA256: item.PreparedSHA256})
+		if !errors.Is(err, ErrMemoryProposalUnavailable) || !strings.Contains(err.Error(), "workspace is archived") {
+			t.Fatalf("approving %s while archived = %v", item.ScopeKey, err)
+		}
+	}
+	if claimCount(t, f.store) != 0 {
+		t.Fatal("an archived Workspace's proposal saved memory")
+	}
+	lease = f.lease(t, session)
+	if _, err := f.store.QueueMemoryProposal(ctx, lease, memory.QueuedMemoryProposal{
+		ToolName: memory.RememberLiteralToolName, IntentEventID: intent.ID, Reason: memory.MemoryProposalNotRequested, Literal: &late,
+	}); !errors.Is(err, ErrMemoryProposalWorkspaceArchived) {
+		t.Fatalf("queueing into an archived Workspace = %v", err)
+	}
+	f.release(t, session)
+
+	if _, err := f.store.RestoreWorkspace(ctx, workspace.ID); err != nil {
+		t.Fatal(err)
+	}
+	after := pendingProposals(t, f.store)
+	if after.Pending != 3 || len(after.Items) != 3 {
+		t.Fatalf("inbox after restore = %+v", after)
+	}
+	for _, item := range after.Items {
+		if item.ScopeKey != workspaceKey {
+			continue
+		}
+		if _, err := f.store.ApproveMemoryProposal(ctx, memory.MemoryProposalApproval{ProposalID: item.ProposalID, PreparedSHA256: item.PreparedSHA256}); err != nil {
+			t.Fatalf("approving after restore: %v", err)
+		}
+	}
+	if claimCount(t, f.store) != 1 {
+		t.Fatal("the restored Workspace's proposal did not apply")
+	}
 }
 
 func TestInboxShowsAClippedSourceMessage(t *testing.T) {

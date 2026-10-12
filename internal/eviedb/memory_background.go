@@ -173,7 +173,8 @@ func compactedPendingSQL(session, cursor, through string) string {
 // (the compaction flush, Stage 10, regardless of the other triggers), at
 // least Turns new owner messages since the cursor, or at least one and no
 // activity for Idle. A conversation whose turn lease is held by a live turn,
-// that is archived, delegated, or waiting out a failure backoff is not due.
+// that is archived or in an archived Workspace, delegated, or waiting out a
+// failure backoff is not due; its cursor holds until it is restored.
 func (s *Store) DueMemoryBackgroundSessions(ctx context.Context, q memory.BackgroundDueQuery) ([]memory.BackgroundDue, error) {
 	if q.Turns < 1 || q.Idle <= 0 || q.Limit < 1 {
 		return nil, errors.New("background due query needs positive triggers and limit")
@@ -192,6 +193,9 @@ func (s *Store) DueMemoryBackgroundSessions(ctx context.Context, q memory.Backgr
 			FROM sessions
 			LEFT JOIN memory_background_cursors AS cursors ON cursors.session_id = sessions.id
 			WHERE sessions.parent_session_id IS NULL AND sessions.status = ?
+			  AND NOT EXISTS (
+			      SELECT 1 FROM workspaces
+			      WHERE workspaces.id = sessions.workspace_id AND workspaces.lifecycle_state = ?)
 			  AND (cursors.next_attempt_at IS NULL OR cursors.next_attempt_at <= ?)
 			  AND NOT EXISTS (
 			      SELECT 1 FROM session_turn_leases AS leases
@@ -201,7 +205,7 @@ func (s *Store) DueMemoryBackgroundSessions(ctx context.Context, q memory.Backgr
 			        AND events.sequence > `+cursor+`)
 		) AS due
 		ORDER BY due.id
-	`, memory.SessionActive, formatSemanticTime(now), now.Format(turnLeaseTimeFormat))
+	`, memory.SessionActive, memory.WorkspaceArchived, formatSemanticTime(now), now.Format(turnLeaseTimeFormat))
 	if err != nil {
 		return nil, fmt.Errorf("list due background passes: %w", err)
 	}

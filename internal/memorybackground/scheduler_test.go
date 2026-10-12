@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 )
 
@@ -104,6 +105,41 @@ func TestOnlyRootConversationsAreRead(t *testing.T) {
 	}
 	if _, err := f.store.MemoryBackgroundBatch(f.ctx, child.ID, memory.BackgroundBatchLimits{MaxMessages: 5, MaxBytes: 1000}); err == nil {
 		t.Fatal("a delegated child conversation was readable")
+	}
+}
+
+// An archived Workspace's conversations are not read, and a pass already
+// running when the Workspace was archived queues nothing and keeps the
+// cursor; after a restore the same messages are read again
+// (workspaces.decisions.md, 2026-10-11).
+func TestArchivedWorkspaceConversationsAreNotReadAndQueueNothing(t *testing.T) {
+	f := newFixture(t)
+	session := f.workspaceSession("Old project")
+	f.turn(session, "I'm a vegetarian.")
+	start := f.cursor(session)
+	f.offset = f.config.Idle + time.Second
+	if due := f.due(); due[session.ID] != memory.BackgroundTriggerIdle {
+		t.Fatalf("before the archive: %v", due)
+	}
+	if _, err := f.store.ArchiveWorkspace(f.ctx, session.WorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if due := f.due(); due[session.ID] != "" {
+		t.Fatalf("a conversation in an archived Workspace was due: %v", due)
+	}
+	f.model.extract(memoryItem(0, "profile_fact", "profile", "diet", "diet", "vegetarian"))
+	run, err := f.run(session)
+	if !errors.Is(err, eviedb.ErrMemoryProposalWorkspaceArchived) || run.Status != memory.BackgroundRunFailed ||
+		f.cursor(session) != start || f.inbox().Pending != 0 {
+		t.Fatalf("pass in flight at the archive: run = %+v err = %v cursor = %d", run, err, f.cursor(session))
+	}
+	if _, err := f.store.RestoreWorkspace(f.ctx, session.WorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	f.model.extract(memoryItem(0, "profile_fact", "profile", "diet", "diet", "vegetarian"))
+	f.mustRun(session)
+	if f.inbox().Pending != 1 {
+		t.Fatalf("inbox after the restore = %+v", f.inbox())
 	}
 }
 

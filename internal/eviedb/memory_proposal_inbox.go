@@ -156,6 +156,9 @@ var (
 	ErrMemoryProposalChanged     = errors.New("memory proposal changed since it was shown; review the updated proposal")
 	ErrMemoryProposalBusy        = errors.New("the proposal's conversation is running a turn; approve it when the turn finishes")
 	ErrMemoryProposalUnavailable = errors.New("memory proposal can no longer apply")
+	// ErrMemoryProposalWorkspaceArchived refuses queueing a proposal whose
+	// conversation or target scope belongs to an archived Workspace.
+	ErrMemoryProposalWorkspaceArchived = errors.New("the Workspace is archived, so no memory proposal is queued for it")
 )
 
 const (
@@ -167,6 +170,21 @@ const (
 	inboxPending = `NOT EXISTS (SELECT 1 FROM memory_proposal_inbox_declines AS declines WHERE declines.proposal_id = inbox.proposal_id)
 	  AND NOT EXISTS (SELECT 1 FROM semantic_operations AS operations WHERE operations.idempotency_key = inbox.idempotency_key)`
 )
+
+// inboxReviewable is a pending proposal the owner can see: one for an
+// archived Workspace stays pending but hidden until the Workspace is
+// restored (workspaces.decisions.md, 2026-10-11).
+var inboxReviewable = inboxPending + ` AND NOT ` + workspaceArchivedSQL("inbox.session_id", "inbox.scope_key")
+
+// workspaceArchivedSQL is true when the conversation session or the memory
+// scope scopeKey belongs to an archived Workspace. session and scopeKey are
+// SQL expressions.
+func workspaceArchivedSQL(session, scopeKey string) string {
+	return `EXISTS (SELECT 1 FROM workspaces AS archived_workspaces
+		WHERE archived_workspaces.lifecycle_state = '` + string(memory.WorkspaceArchived) + `'
+		  AND (archived_workspaces.id = (SELECT owner_sessions.workspace_id FROM sessions AS owner_sessions WHERE owner_sessions.id = ` + session + `)
+		    OR ` + scopeKey + ` = 'workspace:' || archived_workspaces.id))`
+}
 
 // inboxProposal is one exact prepared proposal: a remember of either shape,
 // or (from the background pass) a correction or a retirement.
@@ -589,6 +607,13 @@ func (s *Store) insertInboxProposal(ctx context.Context, writer turnLeaseWriteEx
 		outcome.alreadyApplied = true
 		return outcome, nil
 	}
+	var archived bool
+	if err := writer.queryRowContext(ctx, `SELECT `+workspaceArchivedSQL("?", "?"), p.sessionID(), p.scopeKey()).Scan(&archived); err != nil {
+		return outcome, err
+	}
+	if archived {
+		return outcome, ErrMemoryProposalWorkspaceArchived
+	}
 	dedupe := p.dedupeKey()
 	var existingID, existingDedupe string
 	err := writer.queryRowContext(ctx, `SELECT proposal_id, dedupe_key FROM memory_proposal_inbox WHERE idempotency_key = ?`, p.idempotencyKey()).Scan(&existingID, &existingDedupe)
@@ -728,7 +753,7 @@ func (s *Store) ListMemoryProposals(ctx context.Context) (memory.MemoryProposalP
 	page.Pending = pending
 	rows, err := s.db.QueryContext(ctx, `SELECT `+inboxRowColumns+`
 		FROM memory_proposal_inbox AS inbox JOIN sessions ON sessions.id = inbox.session_id
-		WHERE `+inboxPending+` ORDER BY inbox.queued_at, inbox.proposal_id LIMIT ?`, memoryProposalListLimit)
+		WHERE `+inboxReviewable+` ORDER BY inbox.queued_at, inbox.proposal_id LIMIT ?`, memoryProposalListLimit)
 	if err != nil {
 		return page, fmt.Errorf("list memory proposals: %w", err)
 	}
@@ -763,7 +788,7 @@ func (s *Store) ListMemoryProposals(ctx context.Context) (memory.MemoryProposalP
 // PendingMemoryProposalCount counts pending proposals, optionally only those
 // targeting the given scope keys.
 func (s *Store) PendingMemoryProposalCount(ctx context.Context, scopeKeys ...string) (int, error) {
-	query := `SELECT COUNT(*) FROM memory_proposal_inbox AS inbox WHERE ` + inboxPending
+	query := `SELECT COUNT(*) FROM memory_proposal_inbox AS inbox WHERE ` + inboxReviewable
 	args := make([]any, 0, len(scopeKeys))
 	if len(scopeKeys) > 0 {
 		query += ` AND inbox.scope_key IN (` + strings.TrimSuffix(strings.Repeat("?,", len(scopeKeys)), ",") + `)`
@@ -795,7 +820,10 @@ func (s *Store) inboxSourceMessage(ctx context.Context, proposalID string) (stri
 	return clipText(strings.TrimSpace(message), inboxSourceMessageLimit), nil
 }
 
-const inboxArchivedProblem = "its conversation is archived; restore the conversation to approve it"
+const (
+	inboxArchivedProblem          = "its conversation is archived; restore the conversation to approve it"
+	inboxWorkspaceArchivedProblem = "its workspace is archived; restore the workspace to approve it"
+)
 
 func (s *Store) reviewInboxRow(ctx context.Context, row inboxRow) (memory.MemoryProposalItem, error) {
 	item := memory.MemoryProposalItem{
@@ -1041,6 +1069,14 @@ func (s *Store) ApproveMemoryProposal(ctx context.Context, approval memory.Memor
 		defer cancel()
 		_ = s.ReleaseTurnLease(releaseCtx, lease.SessionID, lease.HolderID, lease.FencingToken)
 	}()
+	var archived bool
+	if err := s.db.QueryRowContext(ctx, `SELECT `+workspaceArchivedSQL("inbox.session_id", "inbox.scope_key")+`
+		FROM memory_proposal_inbox AS inbox WHERE inbox.proposal_id = ?`, row.id).Scan(&archived); err != nil {
+		return result, err
+	}
+	if archived {
+		return result, fmt.Errorf("%w: %s", ErrMemoryProposalUnavailable, inboxWorkspaceArchivedProblem)
+	}
 	changed := func() error {
 		if _, err := s.refreshInboxProposal(ctx, row, p); err != nil && !errors.Is(err, ErrMemoryProposalResolved) {
 			return fmt.Errorf("%w (%v)", ErrMemoryProposalChanged, err)
