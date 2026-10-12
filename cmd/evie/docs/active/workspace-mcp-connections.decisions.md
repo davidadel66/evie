@@ -83,22 +83,96 @@ Decided 2026-10-11 with the owner, one question at a time.
   plus a successful refresh, where the server provably rejected the first
   request. This keeps ADR 0009's rule ("never blindly retry an uncertain
   write") in chats too.
-- **A spike comes first (story 0)**, because the no-retry and token-rotation
-  rules depend on SDK behaviour that is not yet verified. The fallback is an
+- **A spike came first (story 0)**, because the no-retry and token-rotation
+  rules depended on unverified SDK behaviour. It chose the fallback: an
   Evie-owned HTTP transport that handles auth and sending, with the SDK used
-  only for the protocol.
+  only for the protocol. See "Spike answers" below.
 - **Three build stories after the spike** (connections, chat tools, policy
   and web UI). Each crosses one high-risk boundary, as AGENTS.md asks.
 
-## Source facts (2026-10-11, to recheck in story 0)
+## Spike answers (story 0, 2026-10-12)
 
-- Square: hosted at `https://mcp.squareup.com/sse` (legacy SSE) with OAuth.
-  Its tools are `get_service_info`, `get_type_info` and `make_api_request`.
-  This comes from third-party listings (mcpservers.org, goose docs), not
-  developer.squareup.com.
+The spike code lives in `experiments/mcp-spike/`, which is not tracked. It
+was checked against go-sdk v1.8.0 and against Square's live server, with
+David signing in. The token was revoked afterwards.
+
+1. **Does the SDK refresh and re-send on its own? It re-sends, but it never
+   refreshes.**
+   - On a 401 or 403, the Streamable transport calls `OAuthHandler.Authorize`.
+     If that succeeds, the transport POSTs the same body once more
+     (`mcp/streamable.go:2324-2352`).
+   - `AuthorizationCodeHandler` answers a 401 by running the whole
+     interactive flow from inside the call, not by refreshing.
+   - A plain 403 is re-sent with nothing changed.
+   - Two 401s in a row break the connection permanently.
+
+   Outcome: Evie gives the SDK no `OAuthHandler`.
+2. **Can Evie persist rotated tokens? Only if Evie wires it.**
+   - Without `NewTokenSource`, the SDK refreshes internally and keeps the
+     rotated refresh token only in memory.
+   - The default refresh omits `resource`.
+   - `Token()` runs while holding the connection mutex.
+
+   Outcome: Evie owns refresh.
+3. **Can the code come from Evie's callback? Yes, but the handler hides the
+   DCR registration and repeats DCR on every authorization.**
+
+   Outcome: Evie runs discovery, DCR, PKCE and the exchange itself. The spike
+   did this end to end with the standard library alone.
+4. **Do the transports re-send POSTs? Streamable does not.**
+   - Its `MaxRetries` covers only GET stream reconnects.
+   - The SSE client has no auth hook and follows a server-chosen endpoint.
+   - The 2026-07-28 multi-round-trip feature can re-send `tools/call`; turn it
+     off with `MultiRoundTrip.Disabled`.
+   - `net/http` can replay a POST on some HTTP/2 errors when `GetBody` is set.
+
+   Outcome: Evie clears `GetBody` and disables multi-round-trip.
+5. **Can the SDK tell "never sent" from "sent, no response"? No.** A dial
+   failure and "the server ran the tool and then dropped the connection" give
+   identical errors (code -32005). An Evie-owned RoundTripper using
+   `httptrace` (`GotConn`, `WroteRequest`) separated them cleanly in a probe.
+   Outcome: the fallback transport.
+6. **Square's live server:**
+   - It serves Streamable HTTP at `/mcp` (protocol 2025-11-25, "Square MCP
+     Server 1.0.0").
+   - `/sse` rejects a token issued for `/mcp`.
+   - DCR works as a public client (`token_endpoint_auth_method: none`, no
+     secret issued).
+   - PKCE uses S256.
+   - It advertises no scopes and granted only `*_READ` scopes.
+   - Access tokens last 3,600 seconds, and every refresh rotates the refresh
+     token. Both tokens are 63 characters.
+   - Revoking through the advertised endpoint (`/token`) returns 200.
+   - Its 4 tools are `get_service_info`, `get_type_info`, `make_api_request`
+     (annotated destructive) and `make_api_request_read`.
+   - The server sends 2,298 characters of `instructions`, which Evie ignores.
+7. **Does the Keychain accept the value over stdin? Yes, within a limit.**
+   `security -i` reads one line of about 4 KB. Through stdin it round-tripped
+   at most 2,018 secret bytes as hex `-X`, or 3,027 bytes as quoted base64
+   `-w "..."`. Outcome: base64 quoted, with a 3,000-byte cap on the JSON.
+
+**Spec changes from the spike:**
+- Streamable HTTP only.
+- An Evie-owned transport, plus OAuth run by Evie.
+- Tools listed fresh before every call instead of cached.
+- Base64 Keychain values.
+- The demo uses `make_api_request_read`.
+
+**Modules go-sdk v1.8.0 brings in** (from `go list -m all`):
+- `github.com/google/jsonschema-go` v0.4.3
+- `github.com/segmentio/encoding` v0.5.4 and `segmentio/asm` v1.1.3
+- `github.com/yosida95/uritemplate/v3` v3.0.2
+- `github.com/golang-jwt/jwt/v5` v5.3.1
+- `golang.org/x/time` v0.15.0
+- `golang.org/x/oauth2`, `x/sync`, `x/sys` and `x/tools`, at versions Evie
+  already meets or exceeds
+
+The exact list Evie's `go.mod` gains is recorded with story 2, the first
+story that imports the SDK.
+
+## Source facts (2026-10-11, superseded where the spike answered)
+
 - Canva: hosted at `https://mcp.canva.com/mcp` (Streamable HTTP) with OAuth.
   It needs a Developer Portal client (canva.dev/docs/mcp).
 - Metricool: an HTTP/OAuth endpoint at `https://ai.metricool.com/mcp`
   (help.metricool.com).
-- MCP Go SDK: client OAuth (`auth.AuthorizationCodeHandler`, DCR config) since
-  v1.5.0. v1.7.0 added protocol 2026-07-28, which drops `initialize`.

@@ -1,6 +1,7 @@
 # Workspace MCP connections
 
-Status: approved by David on 2026-10-11. Story 0 (the spike) is next. The
+Status: approved by David on 2026-10-11. Story 0 (the spike) finished on
+2026-10-12 and its answers are folded in below. Story 1 is next. The
 decisions are in
 [workspace-mcp-connections.decisions.md](workspace-mcp-connections.decisions.md).
 Requested by David on 2026-10-11 for Cairo's Kitchen.
@@ -33,11 +34,13 @@ server process.
 
 ## Boundaries
 
-- **Hosted servers only.** The supported transports are Streamable HTTP and
-  the older HTTP+SSE transport, because Square documents only
-  `https://mcp.squareup.com/sse`. The URL must be `https`. Local stdio servers
-  are out of scope, so ADR 0004 holds: the client is compiled first-party
-  code, and the servers are external systems.
+- **Hosted servers over Streamable HTTP only.** The spike showed Square
+  serves Streamable HTTP at `https://mcp.squareup.com/mcp`. Its `/sse`
+  endpoint rejects tokens issued for `/mcp`. The SDK's SSE client also has
+  no auth hook and follows a message endpoint the server chooses, so the
+  older HTTP+SSE transport is out. The URL must be `https`. Local stdio
+  servers are out of scope, so ADR 0004 holds: the client is compiled
+  first-party code, and the servers are external systems.
 - **Web chats only.** MCP tools work in chats run by `evie serve`. In the
   terminal REPL they return "MCP tools run only in evie serve chats".
   Workflow Definitions cannot reference MCP tools. A follow-up spec covers
@@ -61,9 +64,10 @@ server process.
   which `guard` already accepts from a non-browser client). If serve is not
   running, the command fails with "evie serve is not running at <addr>".
 - **One new production dependency:** `github.com/modelcontextprotocol/go-sdk`
-  (v1.5.0 or later, for client OAuth), pinned to an exact version in
-  `go.mod`. If story 0 keeps SDK OAuth, `golang.org/x/oauth2` moves from
-  indirect to direct. No other dependencies.
+  v1.8.0, pinned exactly. It brings in its own module requirements, which
+  the decisions file lists. Evie uses only its `mcp` client package. Evie
+  runs OAuth itself with the standard library, so `golang.org/x/oauth2`
+  stays indirect.
 
 ## Connections
 
@@ -84,9 +88,13 @@ server process.
      Client ID Metadata Documents are not used, because they need a public
      https URL that Evie does not have.
   3. Send the resource indicator, and request the scopes the metadata
-     advertises.
+     advertises. Square advertises none and grants read scopes.
 
-  Serve keeps each pending attempt (`state`, PKCE verifier, registration) in
+  Evie runs discovery, registration, PKCE and the code exchange itself. The
+  SDK's `AuthorizationCodeHandler` is not used, because it repeats DCR on
+  every authorization and never exposes the registration. It also runs the
+  full interactive flow from inside a call when the call gets a 401, instead
+  of refreshing. Serve keeps each pending attempt (`state`, PKCE verifier, registration) in
   memory. It is single-use and expires after 10 minutes, and a restart drops
   it. The redirect URI is `http://<EVIE_ADDR>/api/connections/oauth/callback`.
   That GET route is exempt from `guard` because the authorization server's
@@ -97,10 +105,17 @@ server process.
   service `dev.evie.mcp` and account set to the Connection ID. Its value is
   JSON holding the access token, refresh token, expiry, client ID and client
   secret. The store runs `/usr/bin/security` through an injectable command
-  runner, and secret material reaches it over stdin, never in argv.
+  runner, and secret material reaches it over stdin, never in argv. The
+  value goes through `security -i` as a quoted base64 `-w "..."` argument.
+  `security -i` reads one line of at most about 4 KB, so the JSON may be at
+  most 3,000 bytes. A larger value is refused with status
+  `keychain_unavailable` and the detail "credentials too large". Square's
+  tokens are 63 characters each.
 - **Refresh.** Serve refreshes under a per-connection lock, before expiry or
-  once after a 401, and stores the rotated tokens under the same Connection ID
-  (ADR 0024). If refresh fails, the status becomes `needs_sign_in` and calls
+  once after a 401. It sends the `resource` parameter, and it stores the
+  rotated tokens under the same Connection ID before using them (ADR 0024).
+  Square rotates the refresh token on every refresh, so a lost write means
+  signing in again. If refresh fails, the status becomes `needs_sign_in` and calls
   return a readable result without retrying.
 - **Status** is one of `not_connected`, `connected`, `needs_sign_in`,
   `unreachable` or `keychain_unavailable`, and serve writes it to the record.
@@ -112,10 +127,30 @@ server process.
   status to `not_connected`. The record and any Workspace references remain.
 - **Live MCP sessions.** Serve keeps at most one live MCP session per
   connection, shared by chats. It opens the session on first use and reopens
-  it after a failure. Opening the session or listing tools times out after 10
-  seconds. Serve caches the tool list per live session and refreshes it on a
-  `tools/list_changed` notification, on `mcp_list_tools`, and on owner
-  review.
+  it after a failure or a closed connection.
+  - Sessions run with `DisableStandaloneSSE: true` and
+    `MultiRoundTrip.Disabled: true`. The second setting stops the SDK from
+    re-sending a call on protocol 2026-07-28.
+  - Tools are listed fresh by `mcp_list_tools`, by owner review, and
+    immediately before every `mcp_call`. Nothing caches them and nothing
+    waits for list-changed notifications.
+  - Opening the session or listing tools times out after 10 seconds through
+    the context. `http.Client.Timeout` is not used.
+- **HTTP transport (owned by Evie).** The Streamable HTTP transport gets one
+  `http.Client` per connection whose RoundTripper:
+  - adds `Authorization: Bearer` only for requests to the connection's own
+    host;
+  - takes the token from the per-connection token source;
+  - on a 401, refreshes under the lock and re-sends that request exactly
+    once from its own buffered copy of the body;
+  - never re-sends after a 403 or any other status;
+  - clears `GetBody`, so `net/http` cannot replay a POST on its own;
+  - records through `httptrace` whether a connection was obtained and
+    whether the request was written. A request with no connection obtained
+    was never sent. A request that was written, with no complete response,
+    has an unknown outcome.
+
+  The SDK is given no `OAuthHandler`.
 
 ## Workspace access and tool review
 
@@ -180,8 +215,8 @@ composition.
     error it returns true. The existing approval card shows the three
     arguments.
   - **Check before sending.** Inside `Execute`, after approval and
-    immediately before sending, Evie checks that the tool's current hash is
-    in the chat's effective access. If not, nothing is sent, and the result
+    immediately before sending, Evie lists the server's tools again. It then
+    checks that the tool's current hash is in the chat's effective access. If not, nothing is sent, and the result
     is "removed from this Workspace" or "changed since review". A tool
     removed while its card is open therefore never runs.
   - **Timeout and cancellation.** Each call has a 60-second timeout. If the
@@ -197,9 +232,11 @@ composition.
     - A result with `isError: true` reaches the model as a tool error.
   - **No blind retries.** Evie re-sends a call only once, and only after a
     401 answered by a successful refresh, because the server rejected the
-    first request. If a request may have reached the server but no response
-    arrived, the result is "outcome unknown: check in <connection> before
-    retrying". Evie does not retry.
+    first request. If the transport's trace shows the request was written
+    but no complete response arrived (a timeout, a dropped connection or a
+    broken stream), the result is "outcome unknown: check in <connection>
+    before retrying". Evie does not retry. If no connection was obtained,
+    the result is "not sent: <reason>".
 
 ## Surfaces
 
@@ -223,22 +260,11 @@ composition.
 
 ## Stories
 
-0. **Spike, with no production code.** Answer these against the pinned SDK
-   and the live Square server, and record the answers in the decisions file:
-   1. Does the SDK's auth transport refresh and re-send requests silently?
-   2. Can Evie persist rotated tokens through a custom `TokenSource`?
-   3. Can the authorization code come from Evie's own callback route
-      (`AuthorizationCodeFetcher`)?
-   4. Do the Streamable HTTP and SSE transports retry POSTs?
-   5. Can Evie tell "never sent" apart from "sent, no response"?
-   6. Does Square's live server use SSE or Streamable HTTP? Does it support
-      DCR, and which scopes does it advertise?
-   7. Does `security -i` accept a hex `-X` value of about 4 KB on stdin?
-      Does `find-generic-password -w` return it intact?
-
-   Fallback, if 1, 2, 4 or 5 fails: an Evie-owned `http.RoundTripper` holds
-   the token, refresh and send-once rules, and the SDK is used only for the
-   protocol.
+0. **Spike** (done 2026-10-12). It answered seven questions about the SDK,
+   Square's live server and the Keychain. The answers are in the decisions
+   file. Outcome: the fallback applies. An Evie-owned RoundTripper holds the
+   token, refresh and send-once rules, the SDK is used only for the
+   protocol, and only Streamable HTTP is supported.
 1. **Connections and OAuth.** The `mcp_connections` table, the Keychain
    store, OAuth and the callback, refresh, status, the serve routes and
    `evie connections`. Demo: connect Square; `evie connections list` shows
@@ -270,8 +296,10 @@ composition.
 
 ## Risks
 
-- Square's single `make_api_request` tool covers reads and writes, so `allow`
-  on it allows writes. Keep it on `ask` until a per-argument policy exists.
+- Square's `make_api_request` covers reads and writes, so `allow` on it would
+  allow writes. On 2026-10-12, Square granted only `*_READ` scopes, and it
+  also offers `make_api_request_read`. Enable and allow the read tool, and
+  keep `make_api_request` disabled or on `ask`.
 - Each server tool takes the model two steps: list, then call. That costs
   one extra round trip in exchange for an unchanged composition model.
 - A tool description is a prompt-injection surface. Untrusted framing, owner
@@ -287,15 +315,19 @@ composition.
 
 ## Verification
 
-- An in-process fake MCP server (the SDK's server on `httptest`), offered
-  over both transports, plus a fake authorization server, cover:
+- An in-process fake MCP server (the SDK's Streamable HTTP server on
+  `httptest`) and a fake authorization server cover:
   - DCR and a pre-registered client;
   - PKCE;
   - `state` that is mismatched, replayed or expired is rejected;
-  - refresh rotation under concurrent calls;
+  - refresh rotation under concurrent calls, with `resource` sent;
   - 401, then refresh, then exactly one re-send;
+  - a 403 is never re-sent;
   - refresh failure leading to `needs_sign_in`;
-  - an unknown outcome is never retried.
+  - no bearer token is sent to another host;
+  - a dial failure reports "not sent";
+  - a server that runs the tool and then drops the connection reports
+    "outcome unknown" and is never retried.
 - The Keychain store is tested with a fake command runner that captures
   argv and stdin. One opt-in test (`EVIE_KEYCHAIN_TEST=1`) round-trips
   against the real Keychain, because CI has none.
@@ -325,8 +357,8 @@ composition.
   new `standard` sessions carry the two optional Capabilities.
 - Manual demonstration with real data:
   1. Connect Square.
-  2. Enable `make_api_request` in Cairo's Kitchen.
+  2. Enable `make_api_request_read` in Cairo's Kitchen.
   3. Ask for last week's sales at location `L85HMPN9N4MZ9`.
-  4. Approve the card.
+  4. Approve the card (in story 3, set the tool to Allow and see no card).
   5. Compare the answer to the Square Dashboard.
 - Run `./scripts/verify-change.sh` before each handoff.
