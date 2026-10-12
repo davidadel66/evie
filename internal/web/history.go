@@ -90,6 +90,13 @@ func (s *Server) handleContextSessionHistory(w http.ResponseWriter, r *http.Requ
 // Project persisted events, not the compacted model view. Tool outcomes and
 // decisions attach only to their durable execution; old approvals cannot act.
 func projectHistory(events []memory.Event) ([]historyItem, error) {
+	return projectEvents(events, true)
+}
+
+// projectEvents projects a conversation's events into chat items. A settled
+// conversation reports a tool with no recorded outcome as failed; a live one,
+// such as a running subagent's, leaves it requested.
+func projectEvents(events []memory.Event, settled bool) ([]historyItem, error) {
 	items := make([]historyItem, 0)
 	tools := map[memory.ExecutionID]int{}
 	roots := map[memory.EventID]*activityTurn{}
@@ -164,7 +171,7 @@ func projectHistory(events []memory.Event) ([]historyItem, error) {
 		}
 	}
 	for i := range items {
-		if items[i].Kind == "tool" && items[i].Result == nil {
+		if settled && items[i].Kind == "tool" && items[i].Result == nil {
 			text := "No completed result was recorded."
 			items[i].Result = &text
 			items[i].IsError = true

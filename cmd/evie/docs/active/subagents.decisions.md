@@ -1,5 +1,36 @@
 # Subagents implementation decisions
 
+## 2026-10-12 — Owner can watch children from the parent conversation
+
+Source: the owner's October 12 request to see delegated subagents working, which
+ones finished, and what each was asked, in the chat UI and its inspector, not
+in Runs. Specified in the "Subagent inspector amendment" of
+[chat-activity.spec.md](chat-activity.spec.md).
+
+- **Read-only view through the parent.** Two web reads expose a parent
+  conversation's children: the children one delegation call admitted,
+  continued or resolved by an identical assignment's idempotency key
+  (assignment and context, worker, state, times, deadline, action count and
+  latest requested action), and one child's events for that attempt projected
+  as chat items. A call is named by its turn's root event and provider call ID,
+  because providers reuse call IDs across turns. An attempt's events run from
+  the start of the child, or of its own continuation turn, up to where the
+  next continuation of that child began. Both answer only for the owner's open
+  conversation, and a child of another session reads as missing. This
+  supersedes "inspectable through the parent with `read_subagent_report` and
+  by ID" in Hidden child sessions only by adding the owner's view; child
+  sessions stay hidden from session lists and still cannot be opened as owner
+  conversations, and nothing here changes admission, authority or results.
+- **Bounded for display.** A trace cuts each tool result to 4 KiB and each
+  child text to 64 KiB, and shortens long argument values so the arguments stay
+  JSON within 4 KiB (1 KiB for a listing's latest action); the stored events are
+  unchanged and the parent still pages full reports with `read_subagent_report`.
+- **A live child's action is requested, not failed.** While an attempt is
+  admitted or running, a tool without a recorded outcome stays requested; once
+  it has ended, the history rule applies and it reads as having no result.
+- **Not Runs.** Children are part of the turn that started them, so they are
+  not listed with Workflow Runs.
+
 ## 2026-10-04 — Subagents on by default for built-in deep research
 
 Source: the owner's built-in decision of 2026-10-04 ("with
