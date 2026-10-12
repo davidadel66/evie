@@ -13,17 +13,60 @@ func TestChatModelCatalogFiltersDeduplicatesAndGroupsProviders(t *testing.T) {
 			t.Errorf("unexpected metadata request: %s", r.URL.Path)
 		}
 		_, _ = w.Write([]byte(`{"data":[
-		{"id":"openai/gpt-test","name":"GPT Test","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["tools"]},
-		{"id":"anthropic/claude-test","name":"Claude Test","architecture":{"input_modalities":["text","image"],"output_modalities":["text"]},"supported_parameters":["tools"]},
-		{"id":"openai/gpt-test","name":"Duplicate","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["tools"]},
-		{"id":"image/model","architecture":{"input_modalities":["text"],"output_modalities":["image"]},"supported_parameters":["tools"]},
-		{"id":"text/model","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":[]},
-		{"id":"invalid","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["tools"]}
+		{"id":"openai/gpt-test","name":"GPT Test","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"],"top_provider":{"max_completion_tokens":32000}},
+		{"id":"anthropic/claude-test","name":"Claude Test","architecture":{"input_modalities":["text","image"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"],"top_provider":{"max_completion_tokens":32000}},
+		{"id":"openai/gpt-test","name":"Duplicate","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"],"top_provider":{"max_completion_tokens":32000}},
+		{"id":"image/model","architecture":{"input_modalities":["text"],"output_modalities":["image"]},"supported_parameters":["max_tokens","tools"],"top_provider":{"max_completion_tokens":32000}},
+		{"id":"text/model","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens"],"top_provider":{"max_completion_tokens":32000}},
+		{"id":"invalid","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"],"top_provider":{"max_completion_tokens":32000}}
 		]}`))
 	}))
 	models, err := client.ListChatModels(context.Background())
 	if err != nil || len(models) != 2 || models[0].Provider != "anthropic" || models[1].ID != "openai/gpt-test" || models[1].Name != "GPT Test" {
 		t.Fatalf("models=%+v err=%v", models, err)
+	}
+}
+
+func TestChatModelCatalogListsOnlySelectableModels(t *testing.T) {
+	t.Setenv("EVIE_CONTEXT_WINDOW_TOKENS", "")
+	t.Setenv("EVIE_CONTEXT_WORKING_TOKENS", "")
+	client, _ := contextProfileClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[
+		{"id":"vendor/kept","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"],"top_provider":{"max_completion_tokens":16384}},
+		{"id":"vendor/kept:free","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"],"top_provider":{"max_completion_tokens":16384}},
+		{"id":"vendor/kept:batch","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"],"top_provider":{"max_completion_tokens":16384}},
+		{"id":"~vendor/latest","architecture":{"tokenizer":"Router","input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"],"top_provider":{"max_completion_tokens":128000}},
+		{"id":"openrouter/auto","architecture":{"tokenizer":"Router","input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"]},
+		{"id":"vendor/completion-only","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_completion_tokens","tools"],"top_provider":{"max_completion_tokens":128000}},
+		{"id":"openai/gpt-6-astra","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_completion_tokens","reasoning","tool_choice","tools"],"top_provider":{"max_completion_tokens":128000}},
+		{"id":"vendor/short-output","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"],"top_provider":{"max_completion_tokens":16383}},
+		{"id":"vendor/unknown-output","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"]}
+		]}`))
+	}))
+	ids := func() []string {
+		t.Helper()
+		models, err := client.ListChatModels(context.Background())
+		if err != nil {
+			t.Fatalf("list chat models: %v", err)
+		}
+		listed := make([]string, 0, len(models))
+		for _, model := range models {
+			listed = append(listed, model.ID)
+		}
+		return listed
+	}
+
+	t.Setenv("EVIE_CONTEXT_OUTPUT_RESERVE_TOKENS", "")
+	if got := strings.Join(ids(), ","); got != "openai/gpt-6-astra,vendor/kept" {
+		t.Fatalf("default reserve listed %s", got)
+	}
+	t.Setenv("EVIE_CONTEXT_OUTPUT_RESERVE_TOKENS", "20000")
+	if got := strings.Join(ids(), ","); got != "openai/gpt-6-astra" {
+		t.Fatalf("explicit reserve listed %s", got)
+	}
+	t.Setenv("EVIE_CONTEXT_OUTPUT_RESERVE_TOKENS", "not-a-number")
+	if _, err := client.ListChatModels(context.Background()); err == nil {
+		t.Fatal("invalid output reserve accepted")
 	}
 }
 

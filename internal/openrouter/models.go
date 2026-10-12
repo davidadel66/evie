@@ -26,11 +26,19 @@ func (c *Client) ListChatModels(ctx context.Context) ([]Model, error) {
 			ID           string `json:"id"`
 			Name         string `json:"name"`
 			Architecture struct {
-				Input  []string `json:"input_modalities"`
-				Output []string `json:"output_modalities"`
+				Tokenizer string   `json:"tokenizer"`
+				Input     []string `json:"input_modalities"`
+				Output    []string `json:"output_modalities"`
 			} `json:"architecture"`
-			Parameters []string `json:"supported_parameters"`
+			Parameters  []string `json:"supported_parameters"`
+			TopProvider struct {
+				MaxCompletionTokens *int64 `json:"max_completion_tokens"`
+			} `json:"top_provider"`
 		} `json:"data"`
+	}
+	config, err := loadContextProfileConfig()
+	if err != nil {
+		return nil, err
 	}
 	if err := c.getMetadata(ctx, "/models", &response, 8<<20); err != nil {
 		return nil, err
@@ -40,6 +48,13 @@ func (c *Client) ListChatModels(ctx context.Context) ([]Model, error) {
 	for _, entry := range response.Data {
 		provider, _, err := modelSegments(entry.ID)
 		if err != nil || seen[entry.ID] || !containsParameter(entry.Architecture.Input, "text") || !containsParameter(entry.Architecture.Output, "text") || !containsParameter(entry.Parameters, "tools") {
+			continue
+		}
+		// List only models chat selection can use: ":batch" variants run only
+		// through the batch API, other variants fail the route identity check,
+		// routers list no endpoints, and the reply reserve must fit the output.
+		maxOutput := entry.TopProvider.MaxCompletionTokens
+		if strings.Contains(entry.ID, ":") || entry.Architecture.Tokenizer == "Router" || !outputLimitSupported(entry.Parameters, UsesResponses(entry.ID)) || maxOutput == nil || *maxOutput < config.output {
 			continue
 		}
 		name := strings.TrimSpace(entry.Name)

@@ -114,3 +114,29 @@ seven Chrome scenarios with zero page errors (command menu filtering,
 navigation, dismissal and completion; keyboard picker; reload; failed
 selection; `/model` during a reply; stale-browser recovery; parked queue;
 390px menu and picker fit).
+
+## Selectable catalog amendment — October 11, 2026
+
+David asked that `/model` list only models Evie can select. Picking OpenRouter's
+"Claude Opus Latest" failed, and a live check found 125 of 390 catalog chat
+models failing selection. The catalog still requires text input/output and
+tool support, and now also excludes, using only the catalog list's metadata:
+
+- Variant IDs with a `:` suffix such as `:batch` or `:free`. Batch variants run
+  only through OpenRouter's batch API; other variants fail the route identity
+  check.
+- Router models, whose architecture tokenizer is `Router` (for example
+  `~anthropic/claude-opus-latest` and `openrouter/auto`). They list no
+  endpoints, so no route-safe window exists.
+- Models that support neither `max_tokens` nor, for the Responses transport,
+  `max_completion_tokens` or `max_output_tokens`.
+- Models whose top provider's maximum completion tokens are missing or below
+  the configured output reserve (`EVIE_CONTEXT_OUTPUT_RESERVE_TOKENS`, default
+  16,384).
+
+Selection still resolves the route context profile before committing. A listed
+model can still fail there, because per-endpoint status and limits are not in
+the catalog list: on October 11, 2026, 2 of 255 listed models failed
+consistently and up to 4 more failed while their providers were down. Such a
+selection fails as before and leaves the current model unchanged. Catalog fixture tests cover each exclusion and a
+kept model.

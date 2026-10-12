@@ -254,14 +254,10 @@ func routeSafeWindow(response endpointMetadataResponse, outputReserve int64, res
 		if endpoint.Status == nil {
 			return 0, fmt.Errorf("endpoint %d is missing status", i)
 		}
-		outputSupported := containsParameter(endpoint.SupportedParameters, "max_tokens")
-		if responses {
-			outputSupported = outputSupported || containsParameter(endpoint.SupportedParameters, "max_completion_tokens") || containsParameter(endpoint.SupportedParameters, "max_output_tokens")
-			if !containsParameter(endpoint.SupportedParameters, "tools") || !containsParameter(endpoint.SupportedParameters, "tool_choice") || !containsParameter(endpoint.SupportedParameters, "reasoning") {
-				continue
-			}
+		if responses && (!containsParameter(endpoint.SupportedParameters, "tools") || !containsParameter(endpoint.SupportedParameters, "tool_choice") || !containsParameter(endpoint.SupportedParameters, "reasoning")) {
+			continue
 		}
-		if *endpoint.Status != 0 || !outputSupported {
+		if *endpoint.Status != 0 || !outputLimitSupported(endpoint.SupportedParameters, responses) {
 			continue
 		}
 		if endpoint.ContextLength == nil || *endpoint.ContextLength <= 0 ||
@@ -286,6 +282,13 @@ func routeSafeWindow(response endpointMetadataResponse, outputReserve int64, res
 		return 0, errors.New("model has no endpoint eligible for the configured output reserve")
 	}
 	return hardWindow, nil
+}
+
+// outputLimitSupported reports whether a route accepts Evie's reply limit:
+// max_tokens, or for the Responses transport also its output-limit names.
+func outputLimitSupported(parameters []string, responses bool) bool {
+	return containsParameter(parameters, "max_tokens") ||
+		responses && (containsParameter(parameters, "max_completion_tokens") || containsParameter(parameters, "max_output_tokens"))
 }
 
 func containsParameter(parameters []string, want string) bool {
