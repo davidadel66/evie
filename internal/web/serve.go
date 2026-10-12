@@ -216,6 +216,10 @@ func (s *Server) Handler() http.Handler {
 			mux.Handle("/api/context-sessions/restore", s.managementRoute(s.handleContextSessionRestore))
 		}
 		mux.Handle("/api/workspaces/register", s.managementRoute(s.handleWorkspaceRegister))
+		if _, ok := s.contextSessions.(workspaceArchiveController); ok {
+			mux.Handle("/api/workspaces/archive", s.managementRoute(s.handleWorkspaceArchive))
+			mux.Handle("/api/workspaces/restore", s.managementRoute(s.handleWorkspaceRestore))
+		}
 		if _, ok := s.contextSessions.(workspaceResearchController); ok {
 			mux.Handle("/api/workspaces/research", s.managementRoute(s.handleWorkspaceResearch))
 		}

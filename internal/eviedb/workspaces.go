@@ -199,17 +199,28 @@ func (s *Store) RenameWorkspace(ctx context.Context, id memory.WorkspaceID, disp
 	return workspace, nil
 }
 
+// ArchiveWorkspace stops new sessions and runs in a Workspace while keeping
+// its sessions, memory and history (workspaces.spec.md).
 func (s *Store) ArchiveWorkspace(ctx context.Context, id memory.WorkspaceID) (memory.Workspace, error) {
+	return s.setWorkspaceState(ctx, id, memory.WorkspaceArchived)
+}
+
+// RestoreWorkspace makes an archived Workspace active again.
+func (s *Store) RestoreWorkspace(ctx context.Context, id memory.WorkspaceID) (memory.Workspace, error) {
+	return s.setWorkspaceState(ctx, id, memory.WorkspaceActive)
+}
+
+func (s *Store) setWorkspaceState(ctx context.Context, id memory.WorkspaceID, state memory.WorkspaceState) (memory.Workspace, error) {
 	now := s.now().UTC()
 	workspace, err := scanWorkspace(s.db.QueryRowContext(ctx, `
 		UPDATE workspaces SET lifecycle_state = ?, updated_at = ? WHERE id = ?
 		RETURNING id, display_name, lifecycle_state, current_revision_id, created_at, updated_at
-	`, memory.WorkspaceArchived, now.Format(time.RFC3339Nano), id))
+	`, state, now.Format(time.RFC3339Nano), id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return memory.Workspace{}, fmt.Errorf("%w: %s", ErrWorkspaceNotFound, id)
 	}
 	if err != nil {
-		return memory.Workspace{}, fmt.Errorf("archive Workspace: %w", err)
+		return memory.Workspace{}, fmt.Errorf("set Workspace %s: %w", state, err)
 	}
 	settings, err := s.RepositoryInstructionSettings(ctx, workspace.ID)
 	if err != nil {

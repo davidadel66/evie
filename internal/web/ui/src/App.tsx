@@ -39,6 +39,7 @@ import type { Notice } from "./api/notifications";
 import { useWorkflowCaps, useWorkspaceNeeds } from "./store/useWorkspaceNeeds";
 import { CreateWorkspaceDialog } from "./workspaces/CreateWorkspaceDialog";
 import { SettingsDialog } from "./shell/SettingsDialog";
+import { DeleteWorkspaceDialog } from "./shell/DeleteWorkspaceDialog";
 import { resolveChatFont, type ChatFont } from "./ui/chatFont";
 
 export type WorkbenchView =
@@ -80,6 +81,7 @@ export default function App() {
   const [textSize, setTextSize] = useState<ChatTextSize>(loadChatTextSize);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [deletingWorkspace, setDeletingWorkspace] = useState<Workspace>();
   const [chatFont, setChatFont] = useState<ChatFont>(() => {
     try { return resolveChatFont(localStorage.getItem("evie.chatFont")); } catch { return "default"; }
   });
@@ -266,6 +268,20 @@ export default function App() {
     }
   };
 
+  // Deleting archives the Workspace; its open chat and page close with it.
+  const deleteWorkspace = async (workspace: Workspace) => {
+    const openInside = contextSessions.snapshot?.activeSession?.workspaceId === workspace.id;
+    await contextSessions.setWorkspaceArchived(workspace.id, true);
+    if (openInside) {
+      setDraft("");
+      setInspectorOverride(undefined);
+      setSelectedAction(undefined);
+      setInspectorOpen(false);
+      setInspectorFocused(false);
+    }
+    setActiveView((view) => view.kind === "workspace" && view.workspaceId === workspace.id ? chatView : view);
+  };
+
   const workspaceSessions = useMemo(
     () => activeWorkspace
       ? contextSessions.snapshot?.sessions.filter((session) => session.workspaceId === activeWorkspace.id) ?? []
@@ -288,6 +304,7 @@ export default function App() {
         onSettings={() => setSettingsOpen(true)}
         onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
         onArchive={session => void archiveSession(session)}
+        onDeleteWorkspace={setDeletingWorkspace}
         onCloseMobile={closeNavigation}
         onData={() => openView({ id: "data", kind: "data" })}
         onWorkspace={(workspace) => openWorkspace(workspace)}
@@ -461,7 +478,8 @@ export default function App() {
         />
       </div>
       {createWorkspaceOpen && <CreateWorkspaceDialog onClose={() => setCreateWorkspaceOpen(false)} onCreate={registerWorkspace} />}
-      {settingsOpen && <SettingsDialog snapshot={contextSessions.snapshot} problem={contextSessions.problem} onRefresh={contextSessions.refresh} busy={contextSessions.busy || working} textSize={textSize} onTextSize={setTextSize} font={chatFont} onFont={setChatFont} onClose={() => setSettingsOpen(false)} onRestore={session => contextSessions.setArchived(session.id, false)} />}
+      {settingsOpen && <SettingsDialog snapshot={contextSessions.snapshot} problem={contextSessions.problem} onRefresh={contextSessions.refresh} busy={contextSessions.busy || working} textSize={textSize} onTextSize={setTextSize} font={chatFont} onFont={setChatFont} onClose={() => setSettingsOpen(false)} onRestore={session => contextSessions.setArchived(session.id, false)} onRestoreWorkspace={workspace => contextSessions.setWorkspaceArchived(workspace.id, false)} />}
+      {deletingWorkspace && <DeleteWorkspaceDialog workspace={deletingWorkspace} onDelete={deleteWorkspace} onClose={() => setDeletingWorkspace(undefined)} />}
     </div></MemoryPresentationProvider>
   );
 }

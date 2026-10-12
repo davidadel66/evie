@@ -65,6 +65,14 @@ func (c *webContextSessionController) RestoreSession(ctx context.Context, id mem
 	return c.store.RestoreSession(ctx, id)
 }
 
+func (c *webContextSessionController) ArchiveWorkspace(ctx context.Context, id memory.WorkspaceID) (memory.Workspace, error) {
+	return c.store.ArchiveWorkspace(ctx, id)
+}
+
+func (c *webContextSessionController) RestoreWorkspace(ctx context.Context, id memory.WorkspaceID) (memory.Workspace, error) {
+	return c.store.RestoreWorkspace(ctx, id)
+}
+
 func (c *webContextSessionController) RegisterWorkspace(ctx context.Context, displayName string) (memory.Workspace, error) {
 	return c.RegisterWorkspaceWithOptions(ctx, eviedb.WorkspaceRegistration{DisplayName: displayName})
 }

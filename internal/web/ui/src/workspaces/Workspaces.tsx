@@ -43,6 +43,8 @@ export function Workspaces({
   onResume,
   onNewUnscopedChat,
 }: DirectoryProps) {
+  // Archived ("deleted") Workspaces are restored from Settings.
+  const activeWorkspaces = snapshot?.workspaces.filter((workspace) => workspace.state === "active") ?? [];
   return (
     <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8 sm:px-10">
       <div className="mx-auto max-w-[920px]">
@@ -69,12 +71,12 @@ export function Workspaces({
         {!snapshot && <p className="text-faint mt-8">Loading workspaces…</p>}
 
         <section aria-label="Workspaces" className="mt-7">
-          {snapshot?.workspaces.length === 0 && (
+          {snapshot && activeWorkspaces.length === 0 && (
             <div className="border-hair text-muted-text border-y py-8 text-sm">
               Create a workspace for an ongoing area such as Cairo&apos;s Kitchen or a research project.
             </div>
           )}
-          {snapshot?.workspaces.map((workspace) => {
+          {snapshot && activeWorkspaces.map((workspace) => {
             const sessions = snapshot.sessions.filter((session) => session.workspaceId === workspace.id);
             return (
               <article key={workspace.id} className="border-hair flex flex-col gap-4 border-b py-5 sm:flex-row sm:items-center">

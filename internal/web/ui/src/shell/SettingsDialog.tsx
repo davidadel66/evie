@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { ContextSessionSnapshot, StoredSession } from "../api/contextSessions";
+import type { ContextSessionSnapshot, StoredSession, Workspace } from "../api/contextSessions";
 import { Dialog } from "../ui/Dialog";
-import { Archive, ChevronLeft, ChevronRight, MessageSquare } from "../ui/Icon";
+import { Archive, ChevronLeft, ChevronRight, Folder, MessageSquare } from "../ui/Icon";
 import type { ChatTextSize } from "../ui/textSize";
 import { resolveChatFont, type ChatFont } from "../ui/chatFont";
 
@@ -15,11 +15,15 @@ type Props = {
   font: ChatFont;
   onFont: (font: ChatFont) => void;
   onRestore: (session: StoredSession) => Promise<void>;
+  onRestoreWorkspace?: (workspace: Workspace) => Promise<void>;
   onClose: () => void;
 };
 
-export function SettingsDialog({ snapshot, problem, onRefresh, busy, textSize, onTextSize, font, onFont, onRestore, onClose }: Props) {
-  const [archivedOpen, setArchivedOpen] = useState(false);
+type ArchivedView = "sessions" | "workspaces";
+
+export function SettingsDialog({ snapshot, problem, onRefresh, busy, textSize, onTextSize, font, onFont, onRestore, onRestoreWorkspace, onClose }: Props) {
+  const [archivedView, setArchivedView] = useState<ArchivedView>();
+  const archivedOpen = archivedView !== undefined;
   const [error, setError] = useState("");
   const [restoring, setRestoring] = useState<string>();
   const [restoredTitle, setRestoredTitle] = useState("");
@@ -29,17 +33,20 @@ export function SettingsDialog({ snapshot, problem, onRefresh, busy, textSize, o
   const restoringRef = useRef(false);
   const backButton = useRef<HTMLButtonElement>(null);
   const archivedButton = useRef<HTMLButtonElement>(null);
+  const archivedWorkspacesButton = useRef<HTMLButtonElement>(null);
+  const lastArchivedView = useRef<ArchivedView>("sessions");
   const focusAfterChange = useRef<"back" | "archived" | undefined>(undefined);
   useEffect(() => {
     const target = focusAfterChange.current;
     if (!target || restoring || refreshing) return;
-    (target === "back" ? backButton : archivedButton).current?.focus();
+    (target === "back" ? backButton : lastArchivedView.current === "workspaces" ? archivedWorkspacesButton : archivedButton).current?.focus();
     focusAfterChange.current = undefined;
   }, [archivedOpen, restoring, refreshing]);
-  const showArchived = (open: boolean) => {
+  const showArchived = (view?: ArchivedView) => {
     if (restoringRef.current) return;
-    focusAfterChange.current = open ? "back" : "archived";
-    setArchivedOpen(open);
+    focusAfterChange.current = view ? "back" : "archived";
+    if (view) lastArchivedView.current = view;
+    setArchivedView(view);
     setError("");
     setRestoredTitle("");
   };
@@ -56,17 +63,17 @@ export function SettingsDialog({ snapshot, problem, onRefresh, busy, textSize, o
       setRefreshing(false);
     }
   };
-  const restore = async (session: StoredSession) => {
+  const restore = async (id: string, title: string, change: () => Promise<void>, failure: string) => {
     if (restoringRef.current || busy) return;
     restoringRef.current = true;
-    setRestoring(session.id);
+    setRestoring(id);
     setError("");
     setRestoredTitle("");
     try {
-      await onRestore(session);
-      setRestoredTitle(session.title.trim() || "Untitled session");
+      await change();
+      setRestoredTitle(title);
     }
-    catch (error) { setError(error instanceof Error ? error.message : "Session could not be restored."); }
+    catch (error) { setError(error instanceof Error ? error.message : failure); }
     finally {
       restoringRef.current = false;
       focusAfterChange.current = "back";
@@ -74,11 +81,16 @@ export function SettingsDialog({ snapshot, problem, onRefresh, busy, textSize, o
     }
   };
   return (
-    <Dialog title={archivedOpen ? "Archived sessions" : "Settings"} onClose={onClose} busy={!!restoring}>
-      {archivedOpen ? <>
-        <button ref={backButton} type="button" disabled={!!restoring} onClick={() => showArchived(false)} className="text-muted-text hover:text-ink focus-visible:ring-teal mb-5 flex items-center gap-1 rounded text-xs focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"><ChevronLeft size={13} /> Settings</button>
+    <Dialog title={archivedView === "sessions" ? "Archived sessions" : archivedView === "workspaces" ? "Archived workspaces" : "Settings"} onClose={onClose} busy={!!restoring}>
+      {archivedView === "workspaces" ? <>
+        <button ref={backButton} type="button" disabled={!!restoring} onClick={() => showArchived()} className="text-muted-text hover:text-ink focus-visible:ring-teal mb-5 flex items-center gap-1 rounded text-xs focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"><ChevronLeft size={13} /> Settings</button>
+        <p className="text-muted-text mb-5 text-xs leading-5">Restore a workspace to bring it back to the sidebar with its conversations and memories.</p>
+        <ArchivedWorkspaces snapshot={snapshot} busy={busy || !!restoring || !onRestoreWorkspace} restoring={restoring}
+          onRestore={workspace => void restore(workspace.id, workspace.displayName, () => onRestoreWorkspace?.(workspace) ?? Promise.resolve(), "Workspace could not be restored.")} />
+      </> : archivedOpen ? <>
+        <button ref={backButton} type="button" disabled={!!restoring} onClick={() => showArchived()} className="text-muted-text hover:text-ink focus-visible:ring-teal mb-5 flex items-center gap-1 rounded text-xs focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"><ChevronLeft size={13} /> Settings</button>
         <p className="text-muted-text mb-5 text-xs leading-5">Restore a conversation to bring it back to your workspace.</p>
-        <ArchivedSessions snapshot={snapshot} problem={refreshProblem || problem} refreshing={refreshing} onRefresh={onRefresh ? () => void refresh() : undefined} busy={busy || !!restoring} restoring={restoring} onRestore={session => void restore(session)} />
+        <ArchivedSessions snapshot={snapshot} problem={refreshProblem || problem} refreshing={refreshing} onRefresh={onRefresh ? () => void refresh() : undefined} busy={busy || !!restoring} restoring={restoring} onRestore={session => void restore(session.id, session.title.trim() || "Untitled session", () => onRestore(session), "Session could not be restored.")} />
       </> : <>
         <section aria-label="Conversation appearance">
           <h3 className="text-body mb-4 text-sm font-medium">Conversation appearance</h3>
@@ -102,8 +114,11 @@ export function SettingsDialog({ snapshot, problem, onRefresh, busy, textSize, o
           </fieldset>
           <p className="border-hair text-body mt-4 rounded-lg border p-4 leading-relaxed" style={{ fontSize: textSize === "compact" ? 13 : textSize === "large" ? 17 : 15, fontFamily: font === "serif" ? "Georgia, serif" : font === "system" ? "system-ui, sans-serif" : "var(--font-sans)" }}>A little space to think, plan, and make progress.</p>
         </section>
-        <button ref={archivedButton} type="button" onClick={() => showArchived(true)} className="border-hair text-body hover:text-ink focus-visible:ring-teal mt-6 flex w-full items-center gap-3 border-t pt-5 text-left focus-visible:ring-1 focus-visible:outline-none">
+        <button ref={archivedButton} type="button" onClick={() => showArchived("sessions")} className="border-hair text-body hover:text-ink focus-visible:ring-teal mt-6 flex w-full items-center gap-3 border-t pt-5 text-left focus-visible:ring-1 focus-visible:outline-none">
           <Archive size={16} /><span className="flex-1 text-sm">Archived sessions</span><span className="text-muted-text text-xs">{snapshot ? snapshot.archivedSessions?.length ?? 0 : "…"}</span><ChevronRight size={14} />
+        </button>
+        <button ref={archivedWorkspacesButton} type="button" onClick={() => showArchived("workspaces")} className="text-body hover:text-ink focus-visible:ring-teal mt-4 flex w-full items-center gap-3 text-left focus-visible:ring-1 focus-visible:outline-none">
+          <Folder size={16} /><span className="flex-1 text-sm">Archived workspaces</span><span className="text-muted-text text-xs">{snapshot ? snapshot.workspaces.filter(workspace => workspace.state === "archived").length : "…"}</span><ChevronRight size={14} />
         </button>
       </>}
       {error && <p role="alert" className="text-danger mt-4 text-xs">{error}</p>}
@@ -126,6 +141,22 @@ export function ArchivedSessions({ snapshot, problem, refreshing, onRefresh, bus
         <MessageSquare size={14} className="text-faint" />
         <div className="min-w-0 flex-1"><p className="text-body truncate text-xs" title={session.title}>{session.title.trim() || "Untitled session"}</p><p className="text-muted-text mt-1 truncate text-[11px]">{scope}</p></div>
         <button type="button" disabled={busy} onClick={() => onRestore(session)} aria-label={`Restore ${session.title.trim() || "Untitled session"}`} className="border-hair-input text-body hover:border-teal focus-visible:ring-teal rounded-md border px-3 py-1.5 text-xs focus-visible:ring-1 focus-visible:outline-none disabled:opacity-40">{restoring === session.id ? "Restoring…" : "Restore"}</button>
+      </li>;
+    })}
+  </ul>;
+}
+
+export function ArchivedWorkspaces({ snapshot, busy, restoring, onRestore }: { snapshot?: ContextSessionSnapshot; busy: boolean; restoring?: string; onRestore: (workspace: Workspace) => void }) {
+  if (!snapshot) return <p role="status" className="text-muted-text py-6 text-sm">Loading workspaces…</p>;
+  const workspaces = snapshot.workspaces.filter(workspace => workspace.state === "archived");
+  if (!workspaces.length) return <p className="text-muted-text border-hair rounded-lg border border-dashed px-5 py-8 text-center text-sm">No archived workspaces.</p>;
+  return <ul className="divide-hair divide-y">
+    {workspaces.map(workspace => {
+      const conversations = snapshot.sessions.filter(session => session.workspaceId === workspace.id).length;
+      return <li key={workspace.id} className="flex items-center gap-3 py-3">
+        <Folder size={14} className="text-faint" />
+        <div className="min-w-0 flex-1"><p className="text-body truncate text-xs" title={workspace.displayName}>{workspace.displayName}</p><p className="text-muted-text mt-1 truncate text-[11px]">{conversations} {conversations === 1 ? "conversation" : "conversations"} kept</p></div>
+        <button type="button" disabled={busy} onClick={() => onRestore(workspace)} aria-label={`Restore ${workspace.displayName}`} className="border-hair-input text-body hover:border-teal focus-visible:ring-teal rounded-md border px-3 py-1.5 text-xs focus-visible:ring-1 focus-visible:outline-none disabled:opacity-40">{restoring === workspace.id ? "Restoring…" : "Restore"}</button>
       </li>;
     })}
   </ul>;

@@ -30,6 +30,8 @@ type Props = {
   onSettings: () => void;
   onCreateWorkspace: () => void;
   onArchive: (session: StoredSession) => void;
+  /** Asks to delete (archive) a Workspace; the caller confirms first. */
+  onDeleteWorkspace?: (workspace: Workspace) => void;
   onCloseMobile: () => void;
   onData: () => void;
   onWorkspace: (workspace: Workspace) => void;
@@ -49,12 +51,15 @@ export function Sidebar({
   onSettings,
   onCreateWorkspace,
   onArchive,
+  onDeleteWorkspace,
   onCloseMobile,
   onData,
   onWorkspace,
   onNewWorkspaceChat,
   onSession,
 }: Props) {
+  // An archived ("deleted") Workspace leaves the sidebar; Settings restores it.
+  const activeWorkspaces = snapshot?.workspaces.filter((workspace) => workspace.state === "active") ?? [];
   const [width, setWidth] = useState(() => {
     try {
       const stored = Number(localStorage.getItem(widthKey));
@@ -146,7 +151,7 @@ export function Sidebar({
           </button>
         </div>
 
-        {snapshot?.workspaces.length === 0 && (
+        {activeWorkspaces.length === 0 && snapshot && (
           <button
             type="button"
             onClick={onCreateWorkspace}
@@ -156,19 +161,20 @@ export function Sidebar({
           </button>
         )}
 
-        {snapshot?.workspaces.map((workspace) => (
+        {activeWorkspaces.map((workspace) => (
           <WorkspaceNav
             key={workspace.id}
             workspace={workspace}
-            sessions={snapshot.sessions.filter((session) => session.workspaceId === workspace.id && session.status === "active")}
+            sessions={(snapshot?.sessions ?? []).filter((session) => session.workspaceId === workspace.id && session.status === "active")}
             active={destination === `workspace:${workspace.id}`}
             waiting={waiting[workspace.id] ?? 0}
-            activeSessionId={snapshot.activeSession?.id}
+            activeSessionId={snapshot?.activeSession?.id}
             busy={busy}
             onWorkspace={onWorkspace}
             onNewChat={onNewWorkspaceChat}
             onSession={onSession}
             onArchive={onArchive}
+            onDelete={onDeleteWorkspace}
           />
         ))}
       </nav>
@@ -192,6 +198,7 @@ function WorkspaceNav({
   onNewChat,
   onSession,
   onArchive,
+  onDelete,
 }: {
   workspace: Workspace;
   sessions: StoredSession[];
@@ -203,10 +210,11 @@ function WorkspaceNav({
   onNewChat: (workspace: Workspace) => void;
   onSession: (session: StoredSession) => void;
   onArchive: (session: StoredSession) => void;
+  onDelete?: (workspace: Workspace) => void;
 }) {
   return (
     <div className="mb-1">
-      <div className="flex min-w-0 items-center gap-1">
+      <div className="group flex min-w-0 items-center gap-1">
       <button
         type="button"
         onClick={() => onWorkspace(workspace)}
@@ -215,12 +223,14 @@ function WorkspaceNav({
       >
         <Folder size={14} />
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{workspace.displayName}</span>
-        {workspace.state === "archived" && <span className="text-ghost text-[10px]">Archived</span>}
         {waiting > 0 && <>
           <span aria-hidden="true" title="Waiting on you" className="border-amber-hair-strong bg-amber-bg text-amber-ink min-w-[18px] flex-none rounded-full border px-[5px] text-center text-[10.5px] leading-4">{waiting}</span>
           <span className="sr-only">, {waitingText(waiting)}</span>
         </>}
       </button>
+      {onDelete && <button type="button" aria-label={`Delete ${workspace.displayName}`} title="Delete workspace" disabled={busy} onClick={() => onDelete(workspace)} className="text-faint hover:text-body hover:bg-hover focus-visible:ring-teal flex-none cursor-pointer rounded p-1.5 opacity-100 focus-visible:ring-1 focus-visible:outline-none disabled:cursor-default disabled:opacity-30 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+        <Archive size={13} />
+      </button>}
       <button type="button" aria-label={`New session in ${workspace.displayName}`} title={`New session in ${workspace.displayName}`} disabled={busy || workspace.state === "archived" || !workspace.currentRevisionId} onClick={() => onNewChat(workspace)} className="text-faint hover:text-body hover:bg-hover focus-visible:ring-teal mr-1 flex-none cursor-pointer rounded p-1.5 focus-visible:ring-1 focus-visible:outline-none disabled:cursor-default disabled:opacity-30">
         <Plus size={14} />
       </button>

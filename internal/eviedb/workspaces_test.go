@@ -144,6 +144,36 @@ func TestWorkspaceSessionChooserRejectsStaleOrArchivedSelection(t *testing.T) {
 	assertSessionCount(t, db, 0)
 }
 
+func TestRestoredWorkspaceAcceptsNewSessionsAgain(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	workspace, err := store.RegisterWorkspace(ctx, "Cairo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ArchiveWorkspace(ctx, workspace.ID); err != nil {
+		t.Fatal(err)
+	}
+	if active, err := store.ListWorkspaces(ctx, false); err != nil || len(active) != 0 {
+		t.Fatalf("active Workspaces after archive = %+v, %v", active, err)
+	}
+	restored, err := store.RestoreWorkspace(ctx, workspace.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.State != memory.WorkspaceActive || restored.CurrentRevisionID != workspace.CurrentRevisionID || restored.DisplayName != "Cairo" {
+		t.Fatalf("restored Workspace = %+v", restored)
+	}
+	if _, err := store.CreateWorkspaceSessionForChooserWithComposition(ctx, workspace.ID, workspace.CurrentRevisionID, standardReceipt(t)); err != nil {
+		t.Fatalf("new session after restore: %v", err)
+	}
+	assertSessionCount(t, db, 1)
+	if _, err := store.RestoreWorkspace(ctx, "missing"); !errors.Is(err, ErrWorkspaceNotFound) {
+		t.Fatalf("restore missing Workspace error=%v, want ErrWorkspaceNotFound", err)
+	}
+}
+
 func TestWorkspaceSessionScopeIsExclusiveAndImmutableInSQLite(t *testing.T) {
 	db := newTestDB(t)
 	store := NewStore(db)

@@ -5,6 +5,8 @@ import {
   selectContextSession,
   archiveSession,
   restoreSession,
+  archiveWorkspace,
+  restoreWorkspace,
   type StoredSession,
   type WorkspaceCreation,
   type ContextSessionSelection,
@@ -105,7 +107,26 @@ export function useContextSessions() {
     }
   }, [refresh]);
 
-  return { snapshot, busy, problem, select, register, refresh, setArchived };
+  const setWorkspaceArchived = useCallback(async (workspaceId: string, archived: boolean) => {
+    ++snapshotGeneration.current;
+    setBusy(true);
+    setProblem(null);
+    try {
+      const { workspace } = await (archived ? archiveWorkspace(workspaceId) : restoreWorkspace(workspaceId));
+      setSnapshot(current => current && {
+        ...current,
+        workspaces: current.workspaces.map(item => item.id === workspace.id ? { ...item, state: workspace.state } : item),
+      });
+      await refresh().catch((error: unknown) => setProblem(describe(error)));
+    } catch (error) {
+      setProblem(describe(error));
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [refresh]);
+
+  return { snapshot, busy, problem, select, register, refresh, setArchived, setWorkspaceArchived };
 }
 
 export function applySessionArchive(snapshot: ContextSessionSnapshot, session: StoredSession): ContextSessionSnapshot {

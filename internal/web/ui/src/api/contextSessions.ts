@@ -144,6 +144,16 @@ export function restoreSession(sessionId: string): Promise<{session: StoredSessi
   return postJSON("/api/context-sessions/restore", { sessionId });
 }
 
+/** archiveWorkspace is the owner's "delete": the Workspace leaves the
+ *  sidebar and takes no new sessions or runs; its history is kept. */
+export function archiveWorkspace(workspaceId: string): Promise<{workspace: Workspace}> {
+  return postJSON("/api/workspaces/archive", { workspaceId });
+}
+
+export function restoreWorkspace(workspaceId: string): Promise<{workspace: Workspace}> {
+  return postJSON("/api/workspaces/restore", { workspaceId });
+}
+
 export function selectContextSession(selection: ContextSessionSelection): Promise<OpenedContextSession> {
   return postJSON("/api/context-sessions/select", selection);
 }

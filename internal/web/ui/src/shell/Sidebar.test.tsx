@@ -4,8 +4,8 @@ import { Sidebar } from "./Sidebar";
 import type { Workspace } from "../api/contextSessions";
 
 const workspace: Workspace = {id: "one", displayName: "Cairo", state: "active", currentRevisionId: "revision-2", createdAt: "", updatedAt: ""};
-function render(workspaces: Workspace[], busy = false, collapsed = false, waiting: Record<string, number> = {}) {
-  return renderToStaticMarkup(<Sidebar snapshot={{workspaces, projects: [], sessions: [], archivedSessions: []}} destination="chat" busy={busy} collapsed={collapsed} waiting={waiting} mobileOpen={false} onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+function render(workspaces: Workspace[], busy = false, collapsed = false, waiting: Record<string, number> = {}, onDeleteWorkspace?: (workspace: Workspace) => void) {
+  return renderToStaticMarkup(<Sidebar snapshot={{workspaces, projects: [], sessions: [], archivedSessions: []}} destination="chat" busy={busy} collapsed={collapsed} waiting={waiting} mobileOpen={false} onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onDeleteWorkspace={onDeleteWorkspace} onCloseMobile={() => {}} onData={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
 }
 
 describe("workspace session shortcuts", () => {
@@ -31,10 +31,18 @@ describe("workspace session shortcuts", () => {
   });
 
   it("disables session creation while busy or when a workspace is unavailable", () => {
-    for (const [entry, busy] of [[workspace, true], [{...workspace, state: "archived"}, false], [{...workspace, currentRevisionId: ""}, false]] as const) {
+    for (const [entry, busy] of [[workspace, true], [{...workspace, currentRevisionId: ""}, false]] as const) {
       const html = render([entry], busy);
       expect(html).toMatch(/<button[^>]*aria-label="New session in Cairo"[^>]*disabled=""/);
     }
+  });
+
+  it("offers delete on each workspace and leaves a deleted (archived) one out", () => {
+    const html = render([workspace, {...workspace, id: "two", displayName: "Old project", state: "archived"}], false, false, {}, () => {});
+    expect(html).toMatch(/<button[^>]*aria-label="Delete Cairo"[^>]*title="Delete workspace"/);
+    expect(html).not.toContain("Old project");
+    expect(render([{...workspace, state: "archived"}])).toContain("Create your first workspace");
+    expect(render([workspace])).not.toContain("Delete Cairo");
   });
 
   it("keeps a collapse control in desktop navigation", () => {
