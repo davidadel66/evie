@@ -4,13 +4,24 @@ import type {
   Workspace,
 } from "../api/contextSessions";
 import { useEffect, useState } from "react";
-import { Archive, Database, Folder, MessageSquare, Plus, Settings, Sidebar as SidebarIcon } from "../ui/Icon";
+import { Archive, ChevronDown, ChevronRight, Database, MessageSquare, Plus, Settings, Sidebar as SidebarIcon } from "../ui/Icon";
 
 // Desktop width is the person's to set: drag or arrow keys on the edge,
 // double-click to reset. Saved per browser like the Inspector's width.
 export const sidebarWidth = { initial: 240, min: 200, max: 360 } as const;
 const widthKey = "evie.sidebarWidth";
 const clampWidth = (value: number) => Math.max(sidebarWidth.min, Math.min(sidebarWidth.max, Math.round(value)));
+// Collapsed Workspaces are the person's choice too, saved per browser as
+// the IDs whose chats are hidden; every Workspace starts expanded.
+const collapsedKey = "evie.sidebarCollapsedWorkspaces";
+function readCollapsed(): string[] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(collapsedKey) ?? "[]");
+    return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
 import { ReviewBadge } from "../candidateInbox/MemoryReviewTabs";
 import { waitingText } from "../workspaces/workspaceActivity";
 
@@ -71,6 +82,12 @@ export function Sidebar({
   useEffect(() => {
     try { localStorage.setItem(widthKey, String(width)); } catch { /* the width stays in memory */ }
   }, [width]);
+  const [collapsedIds, setCollapsedIds] = useState(readCollapsed);
+  const toggleWorkspace = (id: string) => setCollapsedIds((current) => {
+    const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+    try { localStorage.setItem(collapsedKey, JSON.stringify(next)); } catch { /* the choice stays in memory */ }
+    return next;
+  });
   const resize = (event: React.PointerEvent) => {
     const start = event.clientX, initial = width;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -170,6 +187,8 @@ export function Sidebar({
             waiting={waiting[workspace.id] ?? 0}
             activeSessionId={snapshot?.activeSession?.id}
             busy={busy}
+            expanded={!collapsedIds.includes(workspace.id)}
+            onToggle={() => toggleWorkspace(workspace.id)}
             onWorkspace={onWorkspace}
             onNewChat={onNewWorkspaceChat}
             onSession={onSession}
@@ -194,6 +213,8 @@ function WorkspaceNav({
   waiting,
   activeSessionId,
   busy,
+  expanded,
+  onToggle,
   onWorkspace,
   onNewChat,
   onSession,
@@ -206,35 +227,49 @@ function WorkspaceNav({
   waiting: number;
   activeSessionId?: string;
   busy: boolean;
+  expanded: boolean;
+  onToggle: () => void;
   onWorkspace: (workspace: Workspace) => void;
   onNewChat: (workspace: Workspace) => void;
   onSession: (session: StoredSession) => void;
   onArchive: (session: StoredSession) => void;
   onDelete?: (workspace: Workspace) => void;
 }) {
+  const sessionsId = `workspace-sessions-${workspace.id}`;
   return (
     <div className="mb-1">
-      <div className="group flex min-w-0 items-center gap-1">
+      <div className={`${active ? "bg-selected text-ink" : "text-muted-text hover:bg-hover hover:text-body"} group flex min-w-0 items-center rounded-[7px]`}>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={sessionsId}
+        aria-label={`${expanded ? "Collapse" : "Expand"} ${workspace.displayName}`}
+        title={expanded ? "Hide chats" : "Show chats"}
+        onClick={onToggle}
+        className="text-faint hover:text-body focus-visible:ring-teal flex-none cursor-pointer rounded py-[9px] pr-1 pl-2 focus-visible:ring-1 focus-visible:outline-none"
+      >
+        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+      </button>
       <button
         type="button"
         onClick={() => onWorkspace(workspace)}
         aria-current={active ? "page" : undefined}
-        className={`${active ? "bg-selected text-ink" : "text-muted-text hover:bg-hover hover:text-body"} flex min-w-0 flex-1 items-center gap-2 rounded-[7px] px-2 py-[7px] text-left`}
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-[7px] py-[7px] pr-2 pl-1 text-left"
       >
-        <Folder size={14} />
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{workspace.displayName}</span>
         {waiting > 0 && <>
           <span aria-hidden="true" title="Waiting on you" className="border-amber-hair-strong bg-amber-bg text-amber-ink min-w-[18px] flex-none rounded-full border px-[5px] text-center text-[10.5px] leading-4">{waiting}</span>
           <span className="sr-only">, {waitingText(waiting)}</span>
         </>}
       </button>
-      {onDelete && <button type="button" aria-label={`Delete ${workspace.displayName}`} title="Delete workspace" disabled={busy} onClick={() => onDelete(workspace)} className="text-faint hover:text-body hover:bg-hover focus-visible:ring-teal flex-none cursor-pointer rounded p-1.5 opacity-100 focus-visible:ring-1 focus-visible:outline-none disabled:cursor-default disabled:opacity-30 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+      {onDelete && <button type="button" aria-label={`Delete ${workspace.displayName}`} title="Delete workspace" disabled={busy} onClick={() => onDelete(workspace)} className="text-faint hover:text-body focus-visible:ring-teal flex-none cursor-pointer rounded p-1.5 opacity-100 focus-visible:ring-1 focus-visible:outline-none disabled:cursor-default disabled:opacity-30 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
         <Archive size={13} />
       </button>}
-      <button type="button" aria-label={`New session in ${workspace.displayName}`} title={`New session in ${workspace.displayName}`} disabled={busy || workspace.state === "archived" || !workspace.currentRevisionId} onClick={() => onNewChat(workspace)} className="text-faint hover:text-body hover:bg-hover focus-visible:ring-teal mr-1 flex-none cursor-pointer rounded p-1.5 focus-visible:ring-1 focus-visible:outline-none disabled:cursor-default disabled:opacity-30">
+      <button type="button" aria-label={`New session in ${workspace.displayName}`} title={`New session in ${workspace.displayName}`} disabled={busy || workspace.state === "archived" || !workspace.currentRevisionId} onClick={() => onNewChat(workspace)} className="text-faint hover:text-body focus-visible:ring-teal mr-1 flex-none cursor-pointer rounded p-1.5 focus-visible:ring-1 focus-visible:outline-none disabled:cursor-default disabled:opacity-30">
         <Plus size={14} />
       </button>
       </div>
+      {expanded && <div id={sessionsId}>
       {sessions.slice(0, 5).map((session) => (
         <div key={session.id} className="group flex items-center rounded-[6px] hover:bg-hover focus-within:bg-hover">
           <button
@@ -258,6 +293,7 @@ function WorkspaceNav({
           </button>
         </div>
       ))}
+      </div>}
     </div>
   );
 }

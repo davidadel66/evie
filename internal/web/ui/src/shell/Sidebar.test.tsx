@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "./Sidebar";
-import type { Workspace } from "../api/contextSessions";
+import type { StoredSession, Workspace } from "../api/contextSessions";
 
 const workspace: Workspace = {id: "one", displayName: "Cairo", state: "active", currentRevisionId: "revision-2", createdAt: "", updatedAt: ""};
 function render(workspaces: Workspace[], busy = false, collapsed = false, waiting: Record<string, number> = {}, onDeleteWorkspace?: (workspace: Workspace) => void) {
@@ -57,5 +57,40 @@ describe("workspace session shortcuts", () => {
     const html = render([workspace]);
     expect(html).toContain("width:240px");
     expect(html).toMatch(/role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuenow="240" aria-valuemin="200" aria-valuemax="360" tabindex="0"/);
+  });
+});
+
+describe("collapsible workspaces", () => {
+  const personal: Workspace = {...workspace, id: "two", displayName: "Personal"};
+  const chat = (id: string, workspaceId: string, title: string): StoredSession => ({id, workspaceId, title, status: "active", createdAt: "", updatedAt: ""});
+  const sessions = [chat("a", "one", "Cairo menu"), chat("b", "two", "Personal budget")];
+  const renderWithChats = (waiting: Record<string, number> = {}) => renderToStaticMarkup(<Sidebar snapshot={{workspaces: [workspace, personal], projects: [], sessions, archivedSessions: []}} destination="chat" busy={false} waiting={waiting} mobileOpen={false}
+    onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("starts every workspace expanded with its chats under a labelled toggle", () => {
+    const html = renderWithChats();
+    expect(html).toMatch(/<button[^>]*aria-expanded="true" aria-controls="workspace-sessions-one" aria-label="Collapse Cairo"/);
+    expect(html).toMatch(/<button[^>]*aria-expanded="true" aria-controls="workspace-sessions-two" aria-label="Collapse Personal"/);
+    expect(html).toContain('id="workspace-sessions-one"');
+    expect(html).toContain("Cairo menu");
+    expect(html).toContain("Personal budget");
+  });
+
+  it("hides a collapsed workspace's chats, remembered per browser, and keeps its waiting badge", () => {
+    vi.stubGlobal("localStorage", { getItem: (key: string) => key === "evie.sidebarCollapsedWorkspaces" ? JSON.stringify(["one"]) : null, setItem: () => {} });
+    const html = renderWithChats({one: 2});
+    expect(html).toMatch(/<button[^>]*aria-expanded="false" aria-controls="workspace-sessions-one" aria-label="Expand Cairo"/);
+    expect(html).not.toContain("Cairo menu");
+    expect(html).not.toContain('id="workspace-sessions-one"');
+    expect(html).toContain("Personal budget");
+    expect(html).toContain("2 runs wait on you");
+  });
+
+  it("falls back to expanded when browser storage is unreadable", () => {
+    vi.stubGlobal("localStorage", { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } });
+    expect(renderWithChats()).toContain("Cairo menu");
+    vi.stubGlobal("localStorage", { getItem: () => "{not json", setItem: () => {} });
+    expect(renderWithChats()).toContain("Cairo menu");
   });
 });
