@@ -360,6 +360,13 @@ func (s *Store) createWorkspaceSession(
 		if err := insertCompositionReceipt(ctx, conn, session.ID, encodedReceipt, now); err != nil {
 			return fmt.Errorf("insert Workspace session Composition Receipt: %w", err)
 		}
+		// The chat's MCP reach is this access revision intersected with
+		// the current one (workspace-mcp-connections.spec.md).
+		if _, err := conn.ExecContext(ctx, `INSERT INTO session_workspace_access_pins(session_id, workspace_id, access_revision)
+ VALUES(?, ?, COALESCE((SELECT MAX(revision) FROM workspace_access_revisions WHERE workspace_id=?), 0))`,
+			session.ID, storedWorkspaceID, storedWorkspaceID); err != nil {
+			return fmt.Errorf("pin Workspace session access: %w", err)
+		}
 		return nil
 	})
 	if err != nil {

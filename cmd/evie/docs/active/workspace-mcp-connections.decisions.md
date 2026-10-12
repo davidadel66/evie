@@ -197,6 +197,59 @@ A code review of story 1 found these changes, now in the spec:
 - **The fake authorization server moved to `internal/mcpconn/mcptest`,** so
   the leak test can run against the real SQLite file, WAL included.
 
+## Story 2 (2026-10-12)
+
+- **What `go.mod` gained:** `github.com/modelcontextprotocol/go-sdk` v1.8.0
+  directly. Indirectly, it gained `google/jsonschema-go` v0.4.3,
+  `segmentio/encoding` v0.5.4, `segmentio/asm` v1.1.3,
+  `yosida95/uritemplate/v3` v3.0.2 and `golang.org/x/time` v0.15.0.
+  `golang-jwt` is not pulled in, because Evie imports only the SDK's `mcp`
+  package, not `auth`.
+- **Reach and tool review live in `internal/mcpchat`.** That way the chat
+  tools and the owner's review routes share one definition of "reviewed at
+  this hash, in pinned ∩ current access". The plugin keeps only the
+  model-facing wording, framing and caps.
+- **The approval check lists the server's tools too.** It has to know the
+  tool's current hash to bind Allow to it. An approved call is then listed
+  again just before sending, so a call costs two `tools/list` requests.
+  Square's listing is small, so that cost was accepted rather than adding a
+  cache that could go stale.
+- **The `mcp` plugin is enabled by default.** It reaches nothing until a
+  Workspace enables a tool, and outside `evie serve` it only says it needs
+  serve.
+- **The standard preset's new version** is
+  `sha256:d52283fa9f2a7ecc53add46d4abc811262da0ab3da88a9190117ce91d2f29a56`.
+  Chats pinned to `7f31ed96…` resume on the frozen `preMCP` branch, without
+  MCP tools.
+- **Chats created before this change have no access pin, so they reach no
+  MCP tools.** They are also pinned to the pre-MCP preset, so they have no
+  MCP tools to call.
+
+### Story 2 review (2026-10-12)
+
+A code review reproduced a deadlock and found other problems. The fixes are
+now in the spec:
+
+- **The deadlock.**
+  - Disconnect held the connection's token lock while closing the live
+    session.
+  - Opening a session held the pool's lock across the network handshake,
+    and that handshake needs a token.
+  - Now no lock spans network work, closes run in the background, and
+    disconnect hooks run after the token lock is released.
+- **One chat's timeout no longer tears down the shared session.** It used
+  to make other chats' calls wait, and a cancelled turn could take about 60
+  seconds to return. Only a broken connection drops the session.
+- **A server's JSON-RPC error is an answer, not an unknown outcome.** All
+  server words in errors are now framed. The review saw an injection in an
+  error message reach the model unframed.
+- **Disabling a tool works without the server.** A signed-out or unreachable
+  connection must not block revoking access.
+- **The approval decision runs only after the turn may prepare tools.** It
+  is network work.
+- **Tool errors are capped below the 16 KiB error limit,** so the frame's
+  end marker survives.
+
 ## Source facts (2026-10-11, superseded where the spike answered)
 
 - Canva: hosted at `https://mcp.canva.com/mcp` (Streamable HTTP) with OAuth.

@@ -47,7 +47,12 @@ func newMCPConnectionManager(store mcpconn.Records, getenv func(string) string) 
 	})
 }
 
+const mcpToolsUsage = "usage: evie workspaces mcp-tools <workspace-id> <connection> [--enable <tool> | --disable <tool>]"
+
 func runConnectionManagement(ctx context.Context, args []string, out io.Writer, in io.Reader, c connectionCommands) (bool, error) {
+	if len(args) >= 2 && args[0] == "workspaces" && args[1] == "mcp-tools" {
+		return true, c.mcpTools(ctx, out, args[2:])
+	}
 	if len(args) == 0 || args[0] != "connections" {
 		return false, nil
 	}
@@ -100,6 +105,27 @@ func runConnectionManagement(ctx context.Context, args []string, out io.Writer, 
 		}{args[1]}, 60*time.Second)
 	default:
 		return true, errors.New(connectionsUsage)
+	}
+}
+
+// mcpTools lists one connection's live tools as a Workspace sees them, or
+// enables or disables one (story 2's tool review).
+func (c connectionCommands) mcpTools(ctx context.Context, out io.Writer, args []string) error {
+	type target struct {
+		WorkspaceID string `json:"workspace_id"`
+		Name        string `json:"name"`
+	}
+	switch {
+	case len(args) == 2:
+		return c.call(ctx, out, "tools", target{args[0], args[1]}, 60*time.Second)
+	case len(args) == 4 && (args[2] == "--enable" || args[2] == "--disable") && args[3] != "":
+		return c.call(ctx, out, "tools/set", struct {
+			target
+			Tool    string `json:"tool"`
+			Enabled bool   `json:"enabled"`
+		}{target{args[0], args[1]}, args[3], args[2] == "--enable"}, 60*time.Second)
+	default:
+		return errors.New(mcpToolsUsage)
 	}
 }
 

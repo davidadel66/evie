@@ -34,6 +34,10 @@ type Tool struct {
 	Execute       func(ctx context.Context, args string) (string, error)
 	Prepare       func(ctx context.Context, args string) (PreparedTool, error)
 	NeedsApproval bool
+	// RequiresApproval, when set, decides per call in place of
+	// NeedsApproval; an error means ask. MCP tools use it for the owner's
+	// per-Workspace Ask or Allow (workspace-mcp-connections.spec.md).
+	RequiresApproval func(ctx context.Context, args string) (bool, error)
 }
 
 // Toolset is the immutable set of model-facing schemas and execution behavior
@@ -402,9 +406,23 @@ func (t Toolset) ExecuteWithApprovalAuthorizedCompletion(
 			continue
 		}
 
-		var prepared *PreparedTool
-		if tool.NeedsApproval {
+		needsApproval := tool.NeedsApproval
+		preparationAuthorized := false
+		if tool.RequiresApproval != nil {
+			// Deciding may reach a server, so it is preparation work an
+			// interrupted turn must not start.
 			if authorize != nil {
+				if err := authorize(ctx, AuthorizePreparation); err != nil {
+					return openrouter.Message{}, false, fmt.Errorf("authorize tool preparation: %w", err)
+				}
+				preparationAuthorized = true
+			}
+			required, err := tool.RequiresApproval(ctx, call.Function.Arguments)
+			needsApproval = required || err != nil
+		}
+		var prepared *PreparedTool
+		if needsApproval {
+			if authorize != nil && !preparationAuthorized {
 				if err := authorize(ctx, AuthorizePreparation); err != nil {
 					return openrouter.Message{}, false, fmt.Errorf("authorize tool preparation: %w", err)
 				}
@@ -513,7 +531,7 @@ func (t Toolset) ExecuteWithApprovalAuthorizedCompletion(
 				}, false)
 			}
 		}
-		if !tool.NeedsApproval && authorize != nil {
+		if !needsApproval && authorize != nil {
 			if err := authorize(ctx, AuthorizeExecution); err != nil {
 				return openrouter.Message{}, false, fmt.Errorf("authorize tool execution: %w", err)
 			}

@@ -154,6 +154,14 @@ server process.
     waits for list-changed notifications.
   - Opening the session or listing tools times out after 10 seconds through
     the context. `http.Client.Timeout` is not used.
+  - No lock is held across network work. Callers that arrive while a
+    session opens wait for it, or for their own context.
+  - A session is dropped, and closed in the background, only when its
+    connection breaks. A caller's own cancellation or timeout does not drop
+    it, and neither does the server's JSON-RPC error answer.
+  - A disconnect forgets the session and closes it in the background. It
+    runs after the connection's token lock is released, so it never waits on
+    a request.
 - **HTTP transport (owned by Evie).** The Streamable HTTP transport gets one
   `http.Client` per connection whose RoundTripper:
   - adds `Authorization: Bearer` only over https, and only to the
@@ -187,7 +195,8 @@ server process.
   with that revision as `expect`. If another change landed first, the owner
   sees "access changed, try again" and nothing is written. Archived
   Workspaces cannot be changed, which is existing `SetWorkspaceAccess`
-  behaviour.
+  behaviour. Disable needs no server: revoking a tool works while the
+  connection is signed out or unreachable.
 - **A tool is visible but cannot be enabled when** its name contains
   whitespace or control characters, or is longer than 64 characters.
 - **Session pin** (workspaces.spec.md). When a chat session is created in a
@@ -234,13 +243,17 @@ composition.
     `internal/tools/registry.go` consults in place of the static
     `NeedsApproval`. For `mcp_call` it returns false only when the tool's
     current `<name>@<sha256>` has policy `allow` in this Workspace. On any
-    error it returns true. The existing approval card shows the three
+    error it returns true. The dispatcher authorizes the preparation step
+    before calling the hook, because the decision lists the server's tools.
+    Outside serve the hook shows no card, because the call can only report
+    that it needs serve. The existing approval card shows the three
     arguments.
   - **Check before sending.** Inside `Execute`, after approval and
     immediately before sending, Evie lists the server's tools again. It then
-    checks that the tool's current hash is in the chat's effective access. If not, nothing is sent, and the result
-    is "removed from this Workspace" or "changed since review". A tool
-    removed while its card is open therefore never runs.
+    checks that the tool's current hash is in the chat's effective access.
+    If not, nothing is sent, and the result is "removed from this Workspace"
+    or "changed since review". A tool removed while its card is open
+    therefore never runs.
   - **Timeout and cancellation.** Each call has a 60-second timeout. If the
     turn is cancelled, Evie cancels the in-flight request.
   - **Results.**
@@ -258,8 +271,13 @@ composition.
     - unknown (a timeout, a dropped connection, a broken stream or a 5xx):
       "outcome unknown: check in <connection> before retrying", and Evie
       does not retry;
-    - never sent: "not sent: <reason>";
-    - a complete 4xx answer: "rejected by <connection>: <status>".
+    - never sent: "not sent; nothing reached <connection>";
+    - a complete 4xx answer, or the server's JSON-RPC error: "rejected by
+      <connection>".
+
+    Any server words in these errors stay inside an untrusted frame. A
+    tool-error result is capped at 15,000 bytes before framing, so the frame
+    survives the 16 KiB limit on tool errors.
 
 ## Surfaces
 

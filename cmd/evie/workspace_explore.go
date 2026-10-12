@@ -12,7 +12,8 @@ import (
 )
 
 const workspacesUsage = "usage: evie workspaces list | evie workspaces explore <workspace-id> on|off|default | evie workspaces build <workspace-id> on|off|default | evie workspaces verify <workspace-id> [--setup <command>] [--verify <command>]" +
-	" | evie workspaces access <workspace-id> [--expect <revision> (--set <connection>=<resource>[,<resource>...]... | --clear)]"
+	" | evie workspaces access <workspace-id> [--expect <revision> (--set <connection>=<resource>[,<resource>...]... | --clear)]" +
+	" | evie workspaces mcp-tools <workspace-id> <connection> [--enable <tool> | --disable <tool>]"
 
 // runWorkspaceManagement answers `evie workspaces list`, which shows each
 // Workspace with its folder and explore and build settings, `evie workspaces

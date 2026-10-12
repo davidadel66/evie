@@ -5,17 +5,33 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/davidadel66/evie/internal/mcpconn"
+	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/workflow"
 )
 
 // MCP Connection records (workspace-mcp-connections.spec.md). Credentials
 // never live here; the Keychain holds them.
 
+var (
+	// ErrNoWorkspaceAccessPin is a session created outside a Workspace, or
+	// before chats pinned their access revision.
+	ErrNoWorkspaceAccessPin            = errors.New("eviedb: the session has no Workspace Access pin")
+	ErrWorkspaceAccessRevisionNotFound = errors.New("eviedb: no such Workspace Access revision")
+)
+
 func ensureMCPConnections(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS mcp_connections (
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS session_workspace_access_pins (
+ session_id TEXT PRIMARY KEY NOT NULL REFERENCES sessions(id),
+ workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+ access_revision INTEGER NOT NULL CHECK(access_revision >= 0));
+ CREATE TRIGGER IF NOT EXISTS session_workspace_access_pins_no_update BEFORE UPDATE ON session_workspace_access_pins BEGIN SELECT RAISE(ABORT,'Workspace Access pins are immutable'); END;
+ CREATE TRIGGER IF NOT EXISTS session_workspace_access_pins_no_delete BEFORE DELETE ON session_workspace_access_pins BEGIN SELECT RAISE(ABORT,'Workspace Access pins are immutable'); END;
+ CREATE TABLE IF NOT EXISTS mcp_connections (
  id TEXT PRIMARY KEY NOT NULL CHECK(id GLOB 'mcp-*'),
  name TEXT NOT NULL UNIQUE,
  url TEXT NOT NULL CHECK(url GLOB 'https://*'),
@@ -85,6 +101,40 @@ func (s *Store) SetMCPConnectionStatus(ctx context.Context, id string, status mc
 		return mcpconn.ErrConnectionNotFound
 	}
 	return nil
+}
+
+// SessionWorkspaceAccessPin is the Workspace and Workspace Access revision a
+// chat pinned at creation (workspace-mcp-connections.spec.md).
+func (s *Store) SessionWorkspaceAccessPin(ctx context.Context, session memory.SessionID) (memory.WorkspaceID, int64, error) {
+	var ws string
+	var revision int64
+	err := s.db.QueryRowContext(ctx, `SELECT workspace_id, access_revision FROM session_workspace_access_pins WHERE session_id=?`, session).Scan(&ws, &revision)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", 0, ErrNoWorkspaceAccessPin
+	}
+	return memory.WorkspaceID(ws), revision, err
+}
+
+// WorkspaceAccessAt reads one Workspace Access revision; revision 0 is the
+// empty access every Workspace starts with.
+func (s *Store) WorkspaceAccessAt(ctx context.Context, id memory.WorkspaceID, revision int64) (WorkspaceAccessRevision, error) {
+	out := WorkspaceAccessRevision{WorkspaceID: id, Revision: revision, Access: workflow.WorkspaceAccess{Connections: []workflow.ConnectionAccess{}}}
+	if revision == 0 {
+		return out, nil
+	}
+	var encoded, recorded string
+	err := s.db.QueryRowContext(ctx, `SELECT access, recorded_at FROM workspace_access_revisions WHERE workspace_id=? AND revision=?`, id, revision).Scan(&encoded, &recorded)
+	if errors.Is(err, sql.ErrNoRows) {
+		return out, ErrWorkspaceAccessRevisionNotFound
+	}
+	if err != nil {
+		return out, err
+	}
+	if err := json.Unmarshal([]byte(encoded), &out.Access); err != nil {
+		return out, fmt.Errorf("decode Workspace Access: %w", err)
+	}
+	out.RecordedAt, err = parseTime(recorded)
+	return out, err
 }
 
 const mcpConnectionSelect = `SELECT id,name,url,client_id,status,status_detail,oauth_json,created_at,updated_at FROM mcp_connections`

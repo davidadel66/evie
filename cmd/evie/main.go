@@ -23,6 +23,8 @@ import (
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/finance"
 	"github.com/davidadel66/evie/internal/github"
+	"github.com/davidadel66/evie/internal/mcpchat"
+	"github.com/davidadel66/evie/internal/mcpconn"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
@@ -51,6 +53,7 @@ var defaultPluginEnabled = map[plugins.PluginID]bool{
 	plugins.WebPluginID: true, plugins.FinancePluginID: true,
 	plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
 	plugins.SubagentsPluginID: true, plugins.WorkflowsPluginID: true, plugins.GitHubPluginID: true,
+	plugins.MCPPluginID: true,
 }
 
 func main() {
@@ -234,6 +237,9 @@ func main() {
 	// The chat's workflow tools reach the Workflow Runtime once the runtime
 	// exists; it needs this manager first (sub-stage 10).
 	workflowLink := &plugins.WorkflowLink{}
+	// The chat's MCP tools reach serve's connections; anywhere else they
+	// say they need evie serve (workspace-mcp-connections.spec.md).
+	mcpLink := &plugins.MCPLink{}
 	pluginManager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		plugins.NewWeb(),
@@ -246,6 +252,7 @@ func main() {
 		plugins.NewSubagents(supervisor).WithGitHubRepositories(githubFolders{repositories: repositories}),
 		plugins.NewWorkflows(workflowLink),
 		workflowGitHub(kernelStore, repositories),
+		plugins.NewMCP(mcpLink),
 	)
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)
@@ -425,6 +432,11 @@ func main() {
 		defer stopChangeSync()
 		merger.Store(changeMerger(kernelStore, repositories, supervisor, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync))
 		mcpConnections := newMCPConnectionManager(kernelStore, os.Getenv)
+		mcpPool := mcpconn.NewPool(mcpconn.PoolConfig{Records: kernelStore, Tokens: mcpConnections.TokenSource})
+		defer mcpPool.CloseAll()
+		mcpConnections.OnDisconnect(mcpPool.Close)
+		mcpChat := mcpchat.New(kernelStore, mcpPool)
+		mcpLink.Bind(mcpChat)
 		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
 		if err != nil {
 			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)
@@ -432,7 +444,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopMemory := startMemoryForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithMCPConnections(web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()), mcpConnections))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithMCPToolReview(web.WithMCPConnections(web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()), mcpConnections), mcpChat))
 			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -480,7 +492,7 @@ func main() {
 				agent.WithCompactionMemoryFlush(memoryBackground.runner)), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithMCPConnections(web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()), mcpConnections))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithMCPToolReview(web.WithMCPConnections(web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()), mcpConnections), mcpChat))
 		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)

@@ -511,6 +511,20 @@ func TestDisconnectRevokesAndForgetsTheTokens(t *testing.T) {
 	}
 }
 
+func TestDisconnectRunsTheRegisteredHooks(t *testing.T) {
+	f := newManagerFixture(t)
+	f.add("square")
+	f.connect("square")
+	var closed []string
+	f.m.OnDisconnect(func(id string) { closed = append(closed, id) })
+	if _, err := f.m.Disconnect(context.Background(), "square"); err != nil {
+		t.Fatal(err)
+	}
+	if len(closed) != 1 || closed[0] != "mcp-square" {
+		t.Fatalf("hooks ran for %v", closed)
+	}
+}
+
 func TestKeychainFailureMarksTheConnection(t *testing.T) {
 	ctx := context.Background()
 	f := newManagerFixture(t)

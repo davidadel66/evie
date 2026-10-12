@@ -121,6 +121,60 @@ func TestConnectionsCLIExplainsWhenServeIsNotRunning(t *testing.T) {
 			t.Fatalf("%v error = %v", args, err)
 		}
 	}
+	for _, args := range [][]string{{"ws-1", "square"}, {"ws-1", "square", "--disable", "make_api_request"}} {
+		var out bytes.Buffer
+		_, err := runConnectionManagement(context.Background(), append([]string{"workspaces", "mcp-tools"}, args...), &out, strings.NewReader(""), connectionCommands{addr: addr})
+		if err == nil || !strings.Contains(err.Error(), "evie serve is not running at "+addr) {
+			t.Fatalf("mcp-tools %v error = %v", args, err)
+		}
+	}
+}
+
+func TestWorkspaceMCPToolsCLITalksToServe(t *testing.T) {
+	var bodies []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body bytes.Buffer
+		_, _ = body.ReadFrom(r.Body)
+		bodies = append(bodies, r.URL.Path+" "+body.String())
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_revision":2,"tools":[{"name":"make_api_request_read","state":"enabled"}]}`))
+	}))
+	defer srv.Close()
+	addr := strings.TrimPrefix(srv.URL, "http://")
+	run := func(args ...string) (string, error) {
+		var out bytes.Buffer
+		handled, err := runConnectionManagement(context.Background(), append([]string{"workspaces", "mcp-tools"}, args...), &out, strings.NewReader(""), connectionCommands{addr: addr})
+		if !handled {
+			t.Fatal("workspaces mcp-tools not handled")
+		}
+		return out.String(), err
+	}
+	if out, err := run("ws-1", "square"); err != nil || !strings.Contains(out, `"state": "enabled"`) {
+		t.Fatalf("list = %q, %v", out, err)
+	}
+	if _, err := run("ws-1", "square", "--enable", "make_api_request_read"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run("ws-1", "square", "--disable", "make_api_request"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		`/api/connections/tools {"workspace_id":"ws-1","name":"square"}`,
+		`/api/connections/tools/set {"workspace_id":"ws-1","name":"square","tool":"make_api_request_read","enabled":true}`,
+		`/api/connections/tools/set {"workspace_id":"ws-1","name":"square","tool":"make_api_request","enabled":false}`,
+	}
+	if strings.Join(bodies, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("requests =\n%s", strings.Join(bodies, "\n"))
+	}
+	for _, args := range [][]string{{"ws-1"}, {"ws-1", "square", "--enable"}, {"ws-1", "square", "--bogus", "x"}} {
+		if _, err := run(args...); err == nil || !strings.Contains(err.Error(), "usage: evie workspaces mcp-tools") {
+			t.Fatalf("%v error = %v", args, err)
+		}
+	}
+	var out bytes.Buffer
+	if handled, _ := runConnectionManagement(context.Background(), []string{"workspaces", "list"}, &out, strings.NewReader(""), connectionCommands{}); handled {
+		t.Fatal("another workspaces command was handled")
+	}
 }
 
 func TestConnectionsCLIUsage(t *testing.T) {

@@ -59,9 +59,18 @@ type Config struct {
 type Manager struct {
 	cfg Config
 
-	mu       sync.Mutex
-	attempts map[string]*attempt // keyed by state, which is also the attempt ID
-	conns    map[string]*connectionState
+	mu           sync.Mutex
+	attempts     map[string]*attempt // keyed by state, which is also the attempt ID
+	conns        map[string]*connectionState
+	disconnected []func(id string)
+}
+
+// OnDisconnect registers f to run after a connection is disconnected, such
+// as closing its live MCP session.
+func (m *Manager) OnDisconnect(f func(id string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.disconnected = append(m.disconnected, f)
 }
 
 type attempt struct {
@@ -312,12 +321,27 @@ func (m *Manager) Disconnect(ctx context.Context, name string) (Connection, erro
 	if err != nil {
 		return Connection{}, err
 	}
+	if err := m.forgetTokens(ctx, connection); err != nil {
+		return Connection{}, err
+	}
+	// Hooks run without the connection's lock: closing a live session may
+	// wait on a request that is itself waiting for a token.
+	m.mu.Lock()
+	hooks := append([]func(string){}, m.disconnected...)
+	m.mu.Unlock()
+	for _, hook := range hooks {
+		hook(connection.ID)
+	}
+	return m.cfg.Records.MCPConnection(ctx, connection.ID)
+}
+
+func (m *Manager) forgetTokens(ctx context.Context, connection Connection) error {
 	state := m.state(connection.ID)
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	credentials, err := m.cfg.Secrets.Load(ctx, connection.ID)
 	if err != nil && !errors.Is(err, ErrNoCredentials) {
-		return Connection{}, err
+		return err
 	}
 	if state.unsaved {
 		credentials = state.credentials
@@ -334,13 +358,10 @@ func (m *Manager) Disconnect(ctx context.Context, name string) (Connection, erro
 		err = m.cfg.Secrets.Save(ctx, connection.ID, client)
 	}
 	if err != nil {
-		return Connection{}, err
+		return err
 	}
 	state.credentials, state.loaded, state.unsaved = client, true, false
-	if err := m.setStatus(ctx, connection.ID, StatusNotConnected, "", nil); err != nil {
-		return Connection{}, err
-	}
-	return m.cfg.Records.MCPConnection(ctx, connection.ID)
+	return m.setStatus(ctx, connection.ID, StatusNotConnected, "", nil)
 }
 
 // TokenSource is one connection's bearer tokens for the transport.
