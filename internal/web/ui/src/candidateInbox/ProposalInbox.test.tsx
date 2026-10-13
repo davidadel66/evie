@@ -27,23 +27,22 @@ function render(value: ProposalInboxState) {
 }
 
 describe("memory proposal inbox", () => {
-  it("shows the memory as one line with its kind, where it applies, the owner's words and the Always applies switch", () => {
+  it("leads with the memory, then where it applies, its kind and one quote", () => {
     const html = render(state);
-    for (const text of ["Proposed by Evie", "Nothing is saved until you approve it", "Weekend plans", "You — answer style: short answers",
-      "Preference · applies everywhere", "Your words", "Keep it short, I hate long answers.", "Always applies",
-      "Evie sees this on every request.", "Exact change", "Approve", "Decline"]) expect(html).toContain(text);
-    expect(html).not.toContain("Evie’s wording");
-    expect(html).toMatch(/role="switch" aria-checked="true"/);
+    for (const text of ["Review", "1 of 1", ">answer style<", ">short answers<", ">Everywhere<", ">Preference<", "“Keep it short, I hate long answers.”",
+      "Always applies", "Approve", "Decline", "Details"]) expect(html).toContain(text);
+    for (const gone of ["Evie’s wording", "Nothing is saved", "Your words", "You — answer style", "Skip", "Decline all"]) expect(html).not.toContain(gone);
+    expect(html).toMatch(/role="switch" aria-checked="true" aria-label="Always applies"/);
     expect(html).not.toMatch(/disabled=""[^>]*>Approve/);
   });
 
   it("shows the owner's switch choice instead of the default", () => {
     const html = render({ ...state, alwaysApplies: { "proposal-1:1": false } });
-    expect(html).toMatch(/role="switch" aria-checked="false"/);
+    expect(html).toMatch(/role="switch" aria-checked="false" aria-label="Always applies"/);
     expect(html).toContain("Evie recalls this only when it’s relevant.");
   });
 
-  it("groups proposals under the message Evie read and tags Evie's wording once explained", () => {
+  it("shows one card at a time, with chips by place and decline-all for one message", () => {
     const evie = (value: string, scope: string) => JSON.stringify({ ...JSON.parse(proposal), scope: { scope_key: scope }, predicate: { label: "monthly item" },
       literal: { value }, source: { authority: "evie_proposed", evidence: "" }, classification: { kind: "fact", standing: false } });
     const message = "add the cru sum every month these are tithes. also the credit cards are $100 each";
@@ -52,12 +51,20 @@ describe("memory proposal inbox", () => {
       { ...item, proposal_id: "b", reason: "background", scope_key: "workspace:fin", proposal: evie("$100 per credit card", "workspace:fin"), source_message: message },
       { ...item, proposal_id: "c", session_id: "session-2", session_title: "Other chat", source_message: "Keep it short, I hate long answers." },
     ];
-    const html = render({ ...state, page: { items, pending: 3 } });
-    expect(html.match(/aria-label="Proposals from one message"/g)).toHaveLength(2);
-    expect(html.split(message)).toHaveLength(2);
-    for (const text of ["From your message", "Found in your conversations", "You — monthly item: CRU tithe", "You — monthly item: $100 per credit card",
-      "Fact · applies in Workspace", "means you didn’t say it in these words"]) expect(html).toContain(text);
-    expect(html.match(/Evie’s wording/g)).toHaveLength(3);
+    const html = renderToStaticMarkup(<MemoryPresentationProvider snapshot={{ workspaces: [{ id: "fin", displayName: "Finance", state: "active", currentRevisionId: "r", createdAt: "", updatedAt: "" }], projects: [], sessions: [] }}>
+      <ProposalInboxView state={{ ...state, page: { items, pending: 3 } }} onAlwaysApplies={() => undefined} onApprove={() => undefined}
+        onDecline={() => undefined} onDeclineAll={() => undefined} onRefresh={() => undefined} /></MemoryPresentationProvider>);
+    expect(html.match(/aria-label="Memory proposal"/g)).toHaveLength(1);
+    for (const text of ["1 of 3", ">All 3<", ">Finance 2<", ">Everywhere 1<", ">monthly item<", ">CRU tithe<", ">Finance<", ">Fact<", "Evie’s wording",
+      message, "Skip", "Decline all 2 from this message"]) expect(html).toContain(text);
+    expect(html).not.toContain("$100 per credit card");
+    expect(html).toMatch(/aria-pressed="true"[^>]*>All 3</);
+  });
+
+  it("shows an update as the new value with the old one struck through", () => {
+    const html = render({ ...state, page: { items: [{ ...item, reason: "background", tool_name: "memory_correct_claim", proposal: JSON.stringify({ kind: "correct_claim" }),
+      change: { action: "update", current: "owner — home city: Boston", replacement: "owner — home city: Chicago", evidence: "I moved to Chicago last month." } }], pending: 1 } });
+    for (const text of [">home city<", ">Chicago<", 'aria-label="Was">Boston<', ">Update<", "“I moved to Chicago last month.”"]) expect(html).toContain(text);
   });
 
   it("offers a Workspace memory everywhere when Evie suggests it, and shows the chosen version", () => {
@@ -66,32 +73,31 @@ describe("memory proposal inbox", () => {
     const offered: MemoryProposalItem = { ...item, reason: "background", scope_key: "workspace:fin", proposal: own,
       everywhere: { scope_key: "global", proposal: global, prepared_sha256: "sha256:global" } };
     const html = render({ ...state, page: { items: [offered], pending: 1 } });
-    for (const text of ["Preference · applies in Workspace", "Save everywhere instead", "Evie thinks this may apply beyond Workspace."]) expect(html).toContain(text);
-    expect(html).toMatch(/role="switch" aria-checked="false" aria-label="Save everywhere instead"/);
+    expect(html).toContain(">Workspace<");
+    expect(html).toContain("Evie thinks this may apply beyond Workspace.");
+    expect(html).toMatch(/role="switch" aria-checked="false" aria-label="Everywhere instead"/);
     expect(html).not.toContain("global-version");
     const chosen = render({ ...state, page: { items: [offered], pending: 1 }, everywhere: { "proposal-1:1": true } });
-    expect(chosen).toContain("Preference · applies everywhere");
-    expect(chosen).toMatch(/role="switch" aria-checked="true" aria-label="Save everywhere instead"/);
+    expect(chosen).toContain(">Everywhere<");
+    expect(chosen).toMatch(/role="switch" aria-checked="true" aria-label="Everywhere instead"/);
     expect(chosen).toContain("global-version");
-    expect(render(state)).not.toContain("Save everywhere instead");
+    expect(render(state)).not.toContain("Everywhere instead");
   });
 
-  it("folds a long source message behind Show all", () => {
+  it("keeps a long message to two lines", () => {
     const html = render({ ...state, page: { items: [{ ...item, source_message: "word ".repeat(80) }], pending: 1 } });
-    expect(html).toContain("line-clamp-3");
-    expect(html).toContain("Show all");
-    expect(render(state)).not.toContain("Show all");
+    expect(html).toContain("line-clamp-2");
   });
 
-  it("explains a proposal held because the owner did not ask, and a refreshed one", () => {
+  it("flags a proposal held because the owner did not ask, and a refreshed one", () => {
     const html = render({ ...state, page: { items: [{ ...item, reason: "no_explicit_cue", revision: 2 }], pending: 1 } });
-    expect(html).toContain("your message didn’t ask her to remember anything");
-    expect(html).toContain("Updated against newer memory since Evie proposed it");
+    expect(html).toContain("You didn’t ask Evie to remember this.");
+    expect(html).toContain("updated against newer memory");
   });
 
   it("blocks approval of a proposal that can no longer apply but still allows declining", () => {
     const html = render({ ...state, page: { items: [{ ...item, approvable: false, problem: "its conversation is archived; restore the conversation to approve it" }], pending: 1 } });
-    expect(html).toContain("This can’t be approved now: its conversation is archived");
+    expect(html).toContain("Can’t approve: its conversation is archived");
     expect(html).toMatch(/disabled=""[^>]*>Approve/);
     expect(html).not.toMatch(/disabled=""[^>]*>Decline/);
   });

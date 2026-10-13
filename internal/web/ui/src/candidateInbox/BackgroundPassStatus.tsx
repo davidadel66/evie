@@ -47,39 +47,41 @@ export function BackgroundPassStatus({ api = memoryBackgroundAPI, refreshKey }: 
 
 export function BackgroundPassStatusView({ status, problem }: { status?: MemoryBackgroundStatus; problem: string }) {
   if (!status) {
-    return problem ? <section aria-label="Background memory pass" className="text-muted-text border-hair flex-none border-b px-5 py-3 text-xs">Background memory pass: {problem}</section> : null;
+    return problem ? <section aria-label="Background memory pass" className="text-muted-text border-hair flex-none border-b px-5 py-2 text-xs">Background memory pass: {problem}</section> : null;
   }
   const today = status.progress.today;
   const spentTokens = today.input_tokens + today.output_tokens;
   const lastRun = status.progress.last_run;
   const lastError = status.progress.last_error;
-  return <section aria-label="Background memory pass" className="text-body border-hair flex-none border-b px-5 py-3 text-xs">
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <h2 className="text-ink text-sm font-medium">Background memory pass</h2>
+  const problemText = lastError && (lastError.run_id !== lastRun?.run_id || lastError.error) ? lastError.error || runSummary(lastError) : "";
+  // One line at a glance; what explains or audits the pass is under Details.
+  return <section aria-label="Background memory pass" className="text-muted-text border-hair flex-none border-b px-5 py-2 text-xs">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <h2 className="text-body font-medium">Background memory pass</h2>
       <span className={status.state === "on" ? "text-ok-ink" : "text-amber-ink"}>{stateLabels[status.state]}</span>
-      {status.model && <span className="text-muted-text font-mono">{status.model}</span>}
+      <span>· {dollars(today.cost_micro_usd)} of {dollars(status.daily_micro_usd_cap)} today</span>
+      {lastRun && <span>· Last run {when(lastRun.finished_at)}: {runSummary(lastRun)}</span>}
+      <details className="ml-auto">
+        <summary className="hover:text-body cursor-pointer">Details</summary>
+        <div className="mt-1 space-y-1">
+          {status.model && <p className="font-mono">{status.model}</p>}
+          {status.enabled && <p>Reads only your own messages, after {status.idle_minutes} minutes idle or every {status.turn_trigger} messages, and queues what it finds here. Nothing is saved until you approve it.</p>}
+          <p>Today: {tokens(spentTokens)} of {tokens(status.daily_token_cap)} tokens{status.progress.pending_proposals > 0 && ` · ${status.progress.pending_proposals} waiting for review`}</p>
+          {status.progress.sessions.length > 0 && <>
+            <p>Conversations</p>
+            <ul className="space-y-[2px]">
+              {status.progress.sessions.map((session) => <li key={session.session_id}>
+                {session.title || "Untitled conversation"} · read through event {session.cursor}
+                {session.pending_owner_messages > 0 && ` · ${session.pending_owner_messages} new ${session.pending_owner_messages === 1 ? "message" : "messages"}`}
+                {session.last_status && ` · last run ${session.last_status}`}
+                {session.failures > 0 && ` · ${session.failures} ${session.failures === 1 ? "failure" : "failures"}, next try ${session.next_attempt_at ? when(session.next_attempt_at) : "soon"}`}
+              </li>)}
+            </ul>
+          </>}
+        </div>
+      </details>
     </div>
     {status.reason && <p className="text-amber-ink mt-1">{status.reason}</p>}
-    {status.enabled && <p className="text-muted-text mt-1">
-      Reads only your own messages, after {status.idle_minutes} minutes idle or every {status.turn_trigger} messages, and queues what it finds here. Nothing is saved until you approve it.
-    </p>}
-    <p className="text-muted-text mt-1">
-      Today: {tokens(spentTokens)} of {tokens(status.daily_token_cap)} tokens · {dollars(today.cost_micro_usd)} of {dollars(status.daily_micro_usd_cap)}
-      {status.progress.pending_proposals > 0 && ` · ${status.progress.pending_proposals} waiting for review`}
-    </p>
-    {lastRun && <p className="text-muted-text mt-1">Last run {when(lastRun.finished_at)}: {runSummary(lastRun)}</p>}
-    {lastError && lastError.run_id !== lastRun?.run_id && <p className="text-muted-text mt-1">Last problem {when(lastError.finished_at)}: {lastError.error || runSummary(lastError)}</p>}
-    {lastError && lastError.run_id === lastRun?.run_id && lastError.error && <p className="text-amber-ink mt-1">Last problem: {lastError.error}</p>}
-    {status.progress.sessions.length > 0 && <details className="mt-1">
-      <summary className="text-muted-text hover:text-body cursor-pointer">Conversations</summary>
-      <ul className="text-muted-text mt-1 space-y-[2px]">
-        {status.progress.sessions.map((session) => <li key={session.session_id}>
-          {session.title || "Untitled conversation"} · read through event {session.cursor}
-          {session.pending_owner_messages > 0 && ` · ${session.pending_owner_messages} new ${session.pending_owner_messages === 1 ? "message" : "messages"}`}
-          {session.last_status && ` · last run ${session.last_status}`}
-          {session.failures > 0 && ` · ${session.failures} ${session.failures === 1 ? "failure" : "failures"}, next try ${session.next_attempt_at ? when(session.next_attempt_at) : "soon"}`}
-        </li>)}
-      </ul>
-    </details>}
+    {problemText && <p className="text-amber-ink mt-1">Last problem {lastError && when(lastError.finished_at)}: {problemText}</p>}
   </section>;
 }

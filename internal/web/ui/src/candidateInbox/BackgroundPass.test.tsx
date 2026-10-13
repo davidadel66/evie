@@ -66,16 +66,16 @@ function inbox(items: MemoryProposalItem[]) {
 }
 
 describe("background proposals in the inbox", () => {
-  it("labels them as found in your conversations and shows an update as current → new", () => {
+  it("shows an update as the new value with the old one struck through, and its source", () => {
     const html = inbox([background({ change: { action: "update", current: "owner — home city: Boston", replacement: "owner — home city: Chicago", evidence: "I moved to Chicago last month." } })]);
-    for (const text of ["Found in your conversations", "Update", "You — home city: Boston", "You — home city: Chicago", "Your words", "I moved to Chicago last month.", "Always applies", "Approve", "Decline"]) expect(html).toContain(text);
+    for (const text of [">home city<", ">Chicago<", ">Boston<", ">Update<", "I moved to Chicago last month.", "Always applies", "Approve", "Decline"]) expect(html).toContain(text);
   });
 
   it("shows a retirement plainly, with no Always applies switch", () => {
     const html = inbox([background({ tool_name: "memory_retire", proposal: JSON.stringify({ kind: "retire_memory_object" }),
       change: { action: "retire", current: "owner — morning drink: coffee", evidence: "I quit coffee for good." } })]);
-    expect(html).toContain("Retire");
-    expect(html).toContain("You — morning drink: coffee");
+    expect(html).toContain("Forget: ");
+    expect(html).toContain(">morning drink<");
     expect(html).toContain("I quit coffee for good.");
     expect(html).not.toContain("Always applies");
   });
@@ -83,6 +83,6 @@ describe("background proposals in the inbox", () => {
   it("marks a value the owner's words don't state", () => {
     const html = inbox([background({ change: { action: "update", current: "owner — music: rock", replacement: "owner — music: jazz", evie_proposed: true } })]);
     expect(html).toContain("Evie’s wording");
-    expect(html).toContain("means you didn’t say it in these words");
+    expect(html).toContain("You didn’t say it in these words");
   });
 });

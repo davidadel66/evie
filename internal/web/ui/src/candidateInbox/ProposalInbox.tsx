@@ -1,18 +1,20 @@
 // Memories Evie proposed on her own wait here instead of interrupting the
-// chat with an approval card (memory architecture Stage 2). Proposals are
-// grouped under the owner's message Evie read, shown as context, and each
-// leads with the memory as one readable line. The exact proposal and the
-// "Always applies" switch stay on every item, and a Workspace memory Evie
-// thinks holds everywhere also offers "Save everywhere instead", which shows
-// and approves its prepared Global version. Nothing is saved until the owner
-// approves it.
+// chat with an approval card (memory architecture Stage 2). The owner
+// reviews them one at a time, readable at a glance: the memory itself
+// first, then where it applies, its kind and whether it is in Evie's
+// wording, then one line of the message Evie read. Chips narrow the queue
+// to one place; A, D and → approve, decline and skip. Each card keeps the
+// "Always applies" switch, "Everywhere instead" for a Workspace memory Evie
+// thinks holds everywhere, and the exact change under Details. Nothing is
+// saved until the owner approves it.
 
 import { useCallback, useEffect, useState } from "react";
 import { memoryProposalAPI, type MemoryProposalAPI, type MemoryProposalChange, type MemoryProposalItem, type MemoryProposalPage } from "../api/memoryProposals";
-import { kindLabel, readApprovalArgs, type MemoryClassification } from "../chat/approvalArgs";
+import { kindLabel, readApprovalArgs } from "../chat/approvalArgs";
 import { scopeLabel, useMemoryPresentation } from "../memory/presentation";
 
-const button = "border-hair-input text-body hover:bg-hover rounded border px-3 py-2 text-xs disabled:opacity-40";
+const button = "border-hair-input text-body hover:bg-hover rounded border px-3 py-1.5 text-xs disabled:opacity-40";
+const chip = "border-hair text-muted-text rounded-full border px-2 py-px text-[11px] whitespace-nowrap";
 
 export type ProposalInboxState = {
   page?: MemoryProposalPage;
@@ -39,6 +41,11 @@ function problemText(error: unknown): string {
   return error instanceof Error ? error.message : "The memory inbox could not complete that request.";
 }
 
+/** sameMessage is every listed proposal from the message item came from. */
+function sameMessage(items: MemoryProposalItem[], item: MemoryProposalItem): MemoryProposalItem[] {
+  return items.filter((other) => other.session_id === item.session_id && (other.source_message ?? "") === (item.source_message ?? ""));
+}
+
 export function ProposalInbox({ api = memoryProposalAPI, onChanged }: { api?: MemoryProposalAPI; onChanged?: () => void }) {
   const [state, setState] = useState<ProposalInboxState>({ busy: true, problem: "", notice: "", alwaysApplies: {}, everywhere: {} });
   const load = useCallback(async (notice = "", problem = "") => {
@@ -59,16 +66,10 @@ export function ProposalInbox({ api = memoryProposalAPI, onChanged }: { api?: Me
     const view = readApprovalArgs(item.tool_name, version(item, everywhereChoice(item)).proposal);
     return (view.shape === "memory" || view.shape === "json") && view.classification ? view.classification.standing : false;
   };
-  const decide = async (item: MemoryProposalItem, approve: boolean) => {
+  const act = async (run: () => Promise<string>) => {
     setState((current) => ({ ...current, busy: true, problem: "", notice: "" }));
     try {
-      let notice = "Declined. Nothing was saved.";
-      if (approve) {
-        const result = await api.approve(item, standingChoice(item), everywhereChoice(item));
-        notice = result.standing ? "Saved. It applies to every request." : "Saved. Evie recalls it when it’s relevant.";
-      } else {
-        await api.decline(item.proposal_id);
-      }
+      const notice = await run();
       onChanged?.();
       await load(notice);
     } catch (error) {
@@ -76,99 +77,100 @@ export function ProposalInbox({ api = memoryProposalAPI, onChanged }: { api?: Me
       await load("", problemText(error));
     }
   };
+  const decide = (item: MemoryProposalItem, approve: boolean) => act(async () => {
+    if (!approve) {
+      await api.decline(item.proposal_id);
+      return "Declined";
+    }
+    const result = await api.approve(item, standingChoice(item), everywhereChoice(item));
+    return result.standing ? "Saved · always applies" : "Saved";
+  });
+  const declineAll = (items: MemoryProposalItem[]) => act(async () => {
+    for (const item of items) await api.decline(item.proposal_id);
+    return `Declined ${items.length}`;
+  });
 
   return <ProposalInboxView state={state}
     onAlwaysApplies={(item, value) => setState((current) => ({ ...current, alwaysApplies: { ...current.alwaysApplies, [switchKey(item)]: value } }))}
     onEverywhere={(item, value) => setState((current) => ({ ...current, everywhere: { ...current.everywhere, [switchKey(item)]: value } }))}
-    onApprove={(item) => void decide(item, true)} onDecline={(item) => void decide(item, false)} onRefresh={() => void load()} />;
+    onApprove={(item) => void decide(item, true)} onDecline={(item) => void decide(item, false)} onDeclineAll={(items) => void declineAll(items)} onRefresh={() => void load()} />;
 }
 
-export function ProposalInboxView({ state, onAlwaysApplies, onEverywhere, onApprove, onDecline, onRefresh }: {
+/** placeName names where a memory applies, in a word or two. */
+function placeName(scopeKey: string, names: Record<string, string>): string {
+  if (scopeKey === "global") return "Everywhere";
+  if (scopeKey.startsWith("session:")) return "This chat";
+  return scopeLabel(scopeKey, names);
+}
+
+/** scopeChips counts the queue by where each proposal applies. */
+function scopeChips(items: MemoryProposalItem[], names: Record<string, string>): { key: string; label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const item of items) counts.set(item.scope_key, (counts.get(item.scope_key) ?? 0) + 1);
+  return [...counts].map(([key, count]) => ({ key, label: placeName(key, names), count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+export function ProposalInboxView({ state, onAlwaysApplies, onEverywhere, onApprove, onDecline, onDeclineAll, onRefresh }: {
   state: ProposalInboxState;
   onAlwaysApplies: (item: MemoryProposalItem, value: boolean) => void;
   onEverywhere?: (item: MemoryProposalItem, value: boolean) => void;
   onApprove: (item: MemoryProposalItem) => void;
   onDecline: (item: MemoryProposalItem) => void;
+  onDeclineAll?: (items: MemoryProposalItem[]) => void;
   onRefresh: () => void;
 }) {
+  const { names } = useMemoryPresentation();
+  const [filter, setFilter] = useState("all");
+  const [index, setIndex] = useState(0);
   const items = state.page?.items ?? [];
   const pending = state.page?.pending ?? 0;
+  const chips = scopeChips(items, names);
+  const place = chips.some((option) => option.key === filter) ? filter : "all";
+  const queue = place === "all" ? items : items.filter((item) => item.scope_key === place);
+  const at = queue.length ? Math.min(index, queue.length - 1) : 0;
+  const item = queue[at];
+  const skip = (step: number) => setIndex(queue.length ? (at + step + queue.length) % queue.length : 0);
+  // A, D and the arrow keys work while the review shows a card and no field
+  // has focus.
+  useEffect(() => {
+    if (!item) return;
+    const keys = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (event.metaKey || event.ctrlKey || event.altKey || state.busy || (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)))) return;
+      const key = event.key.toLowerCase();
+      if (key === "a" && item.approvable) onApprove(item);
+      else if (key === "d") onDecline(item);
+      else if (key === "arrowright" || key === "s") skip(1);
+      else if (key === "arrowleft") skip(-1);
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener("keydown", keys);
+    return () => window.removeEventListener("keydown", keys);
+  });
   if (items.length === 0 && !state.problem && !state.notice) return null;
-  const evieWording = items.some(isEvieProposed);
-  return <section aria-label="Proposed by Evie" className="text-body border-hair flex-none border-b p-5 text-sm">
-    <div className="flex flex-wrap items-center gap-3">
-      <h2 className="text-ink font-medium">Proposed by Evie</h2>
-      {pending > 0 && <span className="text-muted-text text-xs">{pending} waiting</span>}
+  return <section aria-label="Proposed by Evie" className="text-body border-hair flex-none border-b px-5 py-4 text-sm">
+    <div className="flex flex-wrap items-center gap-2">
+      <h2 className="text-ink font-medium">Review</h2>
+      {queue.length > 0 && <span className="text-muted-text text-xs">{at + 1} of {queue.length}</span>}
       <div className="flex-1" />
-      <button type="button" className={button} disabled={state.busy} onClick={onRefresh}>Refresh</button>
+      {state.notice && <span role="status" className="text-ok-ink text-xs">{state.notice}</span>}
+      <button type="button" aria-label="Refresh" title="Refresh" className="text-muted-text hover:text-body rounded px-1.5 text-sm disabled:opacity-40" disabled={state.busy} onClick={onRefresh}>↻</button>
     </div>
-    <p className="text-muted-text mt-1 text-xs">Evie noticed these in your conversations. Nothing is saved until you approve it.</p>
-    {evieWording && <p className="text-muted-text mt-1 text-xs"><EvieWording /> means you didn’t say it in these words. Approving saves it as Evie’s proposal, not as something you said.</p>}
-    {state.problem && <p role="alert" className="border-danger-hair bg-danger-bg text-danger-ink my-3 rounded border p-3 whitespace-pre-wrap">{state.problem}</p>}
-    {state.notice && <p role="status" className="text-ok-ink my-3">{state.notice}</p>}
-    {items.length > 0 && <div className="mt-4 space-y-5">
-      {groupBySource(items).map((group) => <SourceGroup key={group.key} items={group.items} busy={state.busy} alwaysApplies={state.alwaysApplies}
-        everywhere={state.everywhere ?? {}} onAlwaysApplies={onAlwaysApplies} onEverywhere={onEverywhere} onApprove={onApprove} onDecline={onDecline} />)}
+    {chips.length > 1 && <div role="group" aria-label="Where it applies" className="mt-2 flex flex-wrap gap-1.5">
+      {[{ key: "all", label: "All", count: items.length }, ...chips].map((option) => <button key={option.key} type="button" aria-pressed={place === option.key}
+        onClick={() => { setFilter(option.key); setIndex(0); }}
+        className={`rounded-full border px-2.5 py-0.5 text-xs ${place === option.key ? "border-teal-hair text-teal" : "border-hair text-muted-text hover:text-body"}`}>
+        {option.label} {option.count}
+      </button>)}
     </div>}
-    {pending > items.length && <p className="text-muted-text mt-3 text-xs">{pending - items.length} more after these.</p>}
+    {state.problem && <p role="alert" className="border-danger-hair bg-danger-bg text-danger-ink mt-3 rounded border p-3 whitespace-pre-wrap">{state.problem}</p>}
+    {item && <ProposalCard key={switchKey(item)} item={item} siblings={sameMessage(items, item)} busy={state.busy}
+      chosen={state.alwaysApplies[switchKey(item)]} everywhere={state.everywhere?.[switchKey(item)]}
+      onAlwaysApplies={onAlwaysApplies} onEverywhere={onEverywhere} onApprove={onApprove} onDecline={onDecline}
+      onSkip={queue.length > 1 ? () => skip(1) : undefined} onDeclineAll={onDeclineAll} />}
+    {pending > items.length && <p className="text-muted-text mt-2 text-xs">{pending - items.length} more after these</p>}
   </section>;
-}
-
-function isEvieProposed(item: MemoryProposalItem): boolean {
-  if (item.change?.action === "update" || item.change?.action === "retire") return item.change.evie_proposed === true && !item.change.evidence;
-  const view = readApprovalArgs(item.tool_name, item.proposal);
-  return (view.shape === "memory" || view.shape === "json") && view.evieProposed === true;
-}
-
-/** groupBySource keeps proposals from one message together, in list order. */
-function groupBySource(items: MemoryProposalItem[]): { key: string; items: MemoryProposalItem[] }[] {
-  const groups = new Map<string, MemoryProposalItem[]>();
-  for (const item of items) {
-    const key = `${item.session_id}\u0000${item.source_message ?? ""}`;
-    groups.set(key, [...(groups.get(key) ?? []), item]);
-  }
-  return [...groups].map(([key, grouped]) => ({ key, items: grouped }));
-}
-
-function EvieWording() {
-  return <span className="border-amber-hair-strong text-amber-ink rounded border px-1.5 py-px text-[11px] font-medium whitespace-nowrap">Evie’s wording</span>;
-}
-
-/** sourceClampAt is the length past which a source message starts folded. */
-const sourceClampAt = 280;
-
-function SourceGroup({ items, busy, alwaysApplies, everywhere, onAlwaysApplies, onEverywhere, onApprove, onDecline }: {
-  items: MemoryProposalItem[];
-  busy: boolean;
-  alwaysApplies: Record<string, boolean>;
-  everywhere: Record<string, boolean>;
-  onAlwaysApplies: (item: MemoryProposalItem, value: boolean) => void;
-  onEverywhere?: (item: MemoryProposalItem, value: boolean) => void;
-  onApprove: (item: MemoryProposalItem) => void;
-  onDecline: (item: MemoryProposalItem) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const first = items[0];
-  const message = first.source_message ?? "";
-  const queued = new Date(first.queued_at);
-  const long = message.length > sourceClampAt;
-  return <article aria-label="Proposals from one message" className="border-hair bg-card overflow-hidden rounded border">
-    <div className="border-hair border-b px-4 py-3">
-      <p className="text-muted-text text-xs">
-        {first.reason === "background" && <span className="text-teal font-medium">Found in your conversations · </span>}
-        {first.session_title || "A conversation"}{Number.isNaN(queued.getTime()) ? "" : ` · ${queued.toLocaleString()}`}
-      </p>
-      {message && <figure className="mt-2">
-        <figcaption className="text-muted-text text-xs">From your message</figcaption>
-        <blockquote className={`border-hair text-body mt-1 border-l-2 pl-3 whitespace-pre-wrap ${long && !open ? "line-clamp-3" : ""}`}>{message}</blockquote>
-        {long && <button type="button" className="text-teal mt-1 cursor-pointer text-xs hover:underline" onClick={() => setOpen(!open)}>{open ? "Show less" : "Show all"}</button>}
-      </figure>}
-    </div>
-    <ul className="divide-hair divide-y">
-      {items.map((item) => <ProposalItem key={item.proposal_id} item={item} busy={busy} chosen={alwaysApplies[switchKey(item)]}
-        everywhere={everywhere[switchKey(item)]} onAlwaysApplies={onAlwaysApplies} onEverywhere={onEverywhere} onApprove={onApprove} onDecline={onDecline} />)}
-    </ul>
-  </article>;
 }
 
 /** ownerText shows a Claim's owner anchor as the owner's name. */
@@ -180,52 +182,37 @@ function ownerText(text: string | undefined, ownerName: string): string {
   return text;
 }
 
-/** ChangeSummary shows a background update or retirement of an existing
- *  memory in plain terms, with the owner's words it cites. */
-function ChangeSummary({ change, ownerName }: { change: MemoryProposalChange; ownerName: string }) {
-  return <div>
-    <p className="text-ink font-medium">{change.action === "update" ? "Update a memory" : "Retire a memory"}{change.evie_proposed && !change.evidence && <> <EvieWording /></>}</p>
-    <p className={change.action === "update" ? "text-muted-text line-through" : "text-body"}>{ownerText(change.current, ownerName) || "a memory that can no longer be read"}</p>
-    {change.action === "update" && <p className="text-body">→ {ownerText(change.replacement, ownerName)}</p>}
-    {change.evidence && <YourWords text={change.evidence} />}
-  </div>;
+type Line = { label: string; value: string; not?: boolean };
+
+/** splitLine turns "David — workspace purpose: X" into a small label and
+ *  the value; the owner's own name is left out, another subject kept. */
+function splitLine(text: string, ownerName: string): Line {
+  let rest = text;
+  const not = rest.startsWith("Not: ");
+  if (not) rest = rest.slice("Not: ".length);
+  if (rest.startsWith(`${ownerName} — `)) rest = rest.slice(ownerName.length + 3);
+  const colon = rest.indexOf(": ");
+  return colon < 0 ? { label: "", value: rest, not } : { label: rest.slice(0, colon), value: rest.slice(colon + 2), not };
 }
 
-function YourWords({ text }: { text: string }) {
-  return <p className="text-muted-text mt-1 text-xs">Your words: <q className="text-body">{text}</q></p>;
+function EvieWording() {
+  return <span title="You didn’t say it in these words. Approving saves it as Evie’s proposal, not as something you said."
+    className="border-amber-hair-strong text-amber-ink rounded-full border px-2 py-px text-[11px] whitespace-nowrap">Evie’s wording</span>;
 }
 
-/** applies says where an approved memory applies, in a few words. */
-function applies(scopeKey: string, names: Record<string, string>): string {
-  if (scopeKey === "global") return "applies everywhere";
-  if (scopeKey.startsWith("session:")) return "applies in this conversation";
-  return `applies in ${scopeLabel(scopeKey, names)}`;
-}
-
-function StandingSwitch({ classification, checked, onChange }: { classification: MemoryClassification; checked: boolean; onChange?: (value: boolean) => void }) {
-  return <div className="flex min-w-0 items-center gap-2">
-    <button type="button" role="switch" aria-checked={checked} aria-label="Always applies" disabled={!onChange} onClick={() => onChange?.(!checked)}
-      className={`flex h-[18px] w-[32px] flex-none cursor-pointer items-center rounded-full border-none p-[2px] disabled:cursor-default ${checked ? "bg-teal justify-end" : "bg-hair-strong justify-start"}`}>
-      <span className="bg-app h-[14px] w-[14px] rounded-full" />
+function Switch({ label, title, checked, onChange }: { label: string; title: string; checked: boolean; onChange?: (value: boolean) => void }) {
+  return <span title={title} className="flex items-center gap-1.5 text-xs">
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={!onChange} onClick={() => onChange?.(!checked)}
+      className={`flex h-[16px] w-[28px] flex-none cursor-pointer items-center rounded-full border-none p-[2px] disabled:cursor-default ${checked ? "bg-teal justify-end" : "bg-hair-strong justify-start"}`}>
+      <span className="bg-app h-[12px] w-[12px] rounded-full" />
     </button>
-    <span className="text-xs"><span className="text-ink">Always applies</span> <span className="text-muted-text">· {checked ? "Evie sees this on every request." : "Evie recalls this only when it’s relevant."}</span>
-      <span className="sr-only"> ({kindLabel(classification.kind)})</span></span>
-  </div>;
+    <span className={checked ? "text-ink" : "text-muted-text"}>{label}</span>
+  </span>;
 }
 
-/** EverywhereSwitch offers a Workspace memory's Global version. */
-function EverywhereSwitch({ scopeName, checked, onChange }: { scopeName: string; checked: boolean; onChange?: (value: boolean) => void }) {
-  return <div className="mt-2 flex min-w-0 items-center gap-2">
-    <button type="button" role="switch" aria-checked={checked} aria-label="Save everywhere instead" disabled={!onChange} onClick={() => onChange?.(!checked)}
-      className={`flex h-[18px] w-[32px] flex-none cursor-pointer items-center rounded-full border-none p-[2px] disabled:cursor-default ${checked ? "bg-teal justify-end" : "bg-hair-strong justify-start"}`}>
-      <span className="bg-app h-[14px] w-[14px] rounded-full" />
-    </button>
-    <span className="text-xs"><span className="text-ink">Save everywhere instead</span> <span className="text-muted-text">· Evie thinks this may apply beyond {scopeName}.</span></span>
-  </div>;
-}
-
-function ProposalItem({ item, busy, chosen, everywhere, onAlwaysApplies, onEverywhere, onApprove, onDecline }: {
+function ProposalCard({ item, siblings, busy, chosen, everywhere, onAlwaysApplies, onEverywhere, onApprove, onDecline, onSkip, onDeclineAll }: {
   item: MemoryProposalItem;
+  siblings: MemoryProposalItem[];
   busy: boolean;
   chosen?: boolean;
   everywhere?: boolean;
@@ -233,38 +220,60 @@ function ProposalItem({ item, busy, chosen, everywhere, onAlwaysApplies, onEvery
   onEverywhere?: (item: MemoryProposalItem, value: boolean) => void;
   onApprove: (item: MemoryProposalItem) => void;
   onDecline: (item: MemoryProposalItem) => void;
+  onSkip?: () => void;
+  onDeclineAll?: (items: MemoryProposalItem[]) => void;
 }) {
   const { ownerName, names } = useMemoryPresentation();
   const shown = version(item, everywhere);
   const view = readApprovalArgs(item.tool_name, shown.proposal, ownerName);
   const classification = view.shape === "memory" || view.shape === "json" ? view.classification : undefined;
   const alwaysApplies = chosen ?? classification?.standing ?? false;
-  const change = item.change?.action === "update" || item.change?.action === "retire" ? item.change : undefined;
-  const meta = [classification && kindLabel(classification.kind), applies(shown.scope_key, names)].filter(Boolean).join(" · ");
+  const change: MemoryProposalChange | undefined = item.change?.action === "update" || item.change?.action === "retire" ? item.change : undefined;
+  const line = change
+    ? splitLine(ownerText(change.action === "update" ? change.replacement : change.current, ownerName) || "a memory that can no longer be read", ownerName)
+    : view.shape === "memory" ? splitLine(view.statement, ownerName) : { label: "", value: "A change to memory" };
+  const was = change?.action === "update" ? splitLine(ownerText(change.current, ownerName), ownerName).value : "";
+  const evieWording = change ? change.evie_proposed === true && !change.evidence : (view.shape === "memory" || view.shape === "json") && view.evieProposed === true;
+  const yourWords = change?.evidence || (view.shape === "memory" ? view.evidence : "");
+  const quote = yourWords || item.source_message || "";
+  const queued = new Date(item.queued_at);
   const json = view.shape === "memory" || view.shape === "json" ? view.json : shown.proposal;
-  return <li className="px-4 py-3" aria-label="Memory proposal">
-    {change
-      ? <ChangeSummary change={change} ownerName={ownerName} />
-      : view.shape === "memory"
-        ? <div>
-            <p className="text-ink text-[15px] leading-snug font-medium">{view.statement}{view.evieProposed && <> <EvieWording /></>}</p>
-            {view.evidence && <YourWords text={view.evidence} />}
-            {view.identities.length > 0 && <ul className="text-muted-text mt-1 space-y-0.5 text-xs">{view.identities.map((line) => <li key={line}>{line}</li>)}</ul>}
-          </div>
-        : <pre className="text-muted-text m-0 overflow-x-auto font-mono text-[11.5px] leading-[1.6]">{shown.proposal}</pre>}
-    <p className="text-muted-text mt-1 text-xs">{meta}</p>
-    {item.everywhere && <EverywhereSwitch scopeName={scopeLabel(item.scope_key, names)} checked={Boolean(everywhere)}
-      onChange={item.approvable && !busy && onEverywhere ? (value) => onEverywhere(item, value) : undefined} />}
-    {item.reason === "no_explicit_cue" && <p className="text-amber-ink mt-2 text-xs">Evie said you asked for this, but your message didn’t ask her to remember anything, so it waits here.</p>}
-    {item.revision > 1 && <p className="text-muted-text mt-2 text-xs">Updated against newer memory since Evie proposed it.</p>}
-    {!item.approvable && item.problem && <p className="text-amber-ink mt-2 text-xs">This can’t be approved now: {item.problem}</p>}
-    <div className="mt-3 flex flex-wrap items-center gap-3">
-      {classification && <StandingSwitch classification={classification} checked={alwaysApplies}
-        onChange={item.approvable && !busy ? (value) => onAlwaysApplies(item, value) : undefined} />}
-      <div className="flex-1" />
-      <button type="button" className={button} disabled={busy} onClick={() => onDecline(item)}>Decline</button>
-      <button type="button" className={`${button} border-teal-hair text-teal`} disabled={busy || !item.approvable} onClick={() => onApprove(item)}>Approve</button>
+  return <article aria-label="Memory proposal" className="border-hair bg-card mt-3 rounded-lg border p-4">
+    {line.label && <p className="text-muted-text text-xs">{line.label}</p>}
+    <p className="text-ink text-base leading-snug font-medium">{change?.action === "retire" ? "Forget: " : ""}{line.not ? "Not: " : ""}{line.value}</p>
+    {was && <p className="text-muted-text mt-0.5 text-xs line-through" aria-label="Was">{was}</p>}
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <span className={chip}>{placeName(shown.scope_key, names)}</span>
+      {classification && <span className={chip}>{kindLabel(classification.kind)}</span>}
+      {change && <span className={chip}>{change.action === "update" ? "Update" : "Forget"}</span>}
+      {evieWording && <EvieWording />}
     </div>
-    <details className="text-muted-text mt-2 text-xs"><summary className="cursor-pointer">Exact change</summary><pre className="mt-2 overflow-auto whitespace-pre-wrap break-all">{json}</pre></details>
-  </li>;
+    {quote && <blockquote title={quote} className="border-hair text-muted-text mt-3 line-clamp-2 border-l-2 pl-3 text-xs whitespace-pre-wrap">
+      {yourWords ? <span className="text-body">“{quote}”</span> : quote}
+    </blockquote>}
+    {item.reason === "no_explicit_cue" && <p className="text-amber-ink mt-2 text-xs">You didn’t ask Evie to remember this.</p>}
+    {!item.approvable && item.problem && <p className="text-amber-ink mt-2 text-xs">Can’t approve: {item.problem}</p>}
+    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+      {classification && <Switch label="Always applies" title={alwaysApplies ? "Evie sees this on every request." : "Evie recalls this only when it’s relevant."}
+        checked={alwaysApplies} onChange={item.approvable && !busy ? (value) => onAlwaysApplies(item, value) : undefined} />}
+      {item.everywhere && <Switch label="Everywhere instead" title={`Evie thinks this may apply beyond ${scopeLabel(item.scope_key, names)}.`}
+        checked={Boolean(everywhere)} onChange={item.approvable && !busy && onEverywhere ? (value) => onEverywhere(item, value) : undefined} />}
+      <div className="flex-1" />
+      <button type="button" className={button} disabled={busy} onClick={() => onDecline(item)} title="D">Decline</button>
+      {onSkip && <button type="button" className={button} disabled={busy} onClick={onSkip} title="→">Skip</button>}
+      <button type="button" className={`${button} border-teal-hair text-teal`} disabled={busy || !item.approvable} onClick={() => onApprove(item)} title="A">Approve</button>
+    </div>
+    <div className="text-muted-text mt-3 flex flex-wrap items-center gap-3 text-xs">
+      {siblings.length > 1 && onDeclineAll && <button type="button" disabled={busy} onClick={() => onDeclineAll(siblings)} className="hover:text-body underline underline-offset-2 disabled:opacity-40">
+        Decline all {siblings.length} from this message</button>}
+      <details className="min-w-0 flex-1">
+        <summary className="hover:text-body cursor-pointer">Details</summary>
+        <p className="mt-2">{item.session_title || "A conversation"}{Number.isNaN(queued.getTime()) ? "" : ` · ${queued.toLocaleString()}`}
+          {item.revision > 1 && " · updated against newer memory"}</p>
+        {yourWords && item.source_message && <p className="mt-1 whitespace-pre-wrap">From your message: {item.source_message}</p>}
+        {view.shape === "memory" && view.identities.length > 0 && <ul className="mt-1 space-y-0.5">{view.identities.map((identity) => <li key={identity}>{identity}</li>)}</ul>}
+        <pre className="mt-2 overflow-auto whitespace-pre-wrap break-all">{json}</pre>
+      </details>
+    </div>
+  </article>;
 }
