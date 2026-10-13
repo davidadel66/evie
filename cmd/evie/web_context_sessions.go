@@ -77,6 +77,10 @@ func (c *webContextSessionController) RegisterWorkspace(ctx context.Context, dis
 	return c.RegisterWorkspaceWithOptions(ctx, eviedb.WorkspaceRegistration{DisplayName: displayName})
 }
 
+func (c *webContextSessionController) ActiveWorkspaceFolder(ctx context.Context, id memory.WorkspaceID) (string, error) {
+	return c.store.ActiveWorkspaceFolder(ctx, id)
+}
+
 func (c *webContextSessionController) WorkspaceFolder(ctx context.Context, id memory.WorkspaceID) (memory.WorkspaceFolder, error) {
 	return c.store.WorkspaceFolder(ctx, id)
 }

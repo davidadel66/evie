@@ -300,6 +300,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerMemoryProposalRoutes(mux)
 	s.registerMemoryBackgroundRoutes(mux)
 	s.registerFolderRoutes(mux)
+	s.registerWorkspaceTabRoutes(mux)
 	s.registerRepositoryInstructionRoutes(mux)
 	s.registerTerminalRoutes(mux)
 	s.registerChangeSyncRoutes(mux)
@@ -346,17 +347,21 @@ func (s *Server) guard(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}
-		if host, _, err := net.SplitHostPort(r.Host); err == nil {
-			if !isLoopbackHost(host) {
-				jsonError(w, http.StatusForbidden, "unexpected host")
-				return
-			}
-		} else if !isLoopbackHost(r.Host) {
+		if !loopbackRequestHost(r) {
 			jsonError(w, http.StatusForbidden, "unexpected host")
 			return
 		}
 		next(w, r)
 	}
+}
+
+// loopbackRequestHost is whether the request's Host names this machine; a
+// foreign Host is DNS rebinding.
+func loopbackRequestHost(r *http.Request) bool {
+	if host, _, err := net.SplitHostPort(r.Host); err == nil {
+		return isLoopbackHost(host)
+	}
+	return isLoopbackHost(r.Host)
 }
 
 func isLoopbackHost(host string) bool {

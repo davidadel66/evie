@@ -35,6 +35,20 @@ func (s *Store) WorkspaceFolder(ctx context.Context, id memory.WorkspaceID) (mem
 	return folder, err
 }
 
+// ActiveWorkspaceFolder is an active Workspace's folder path, "" when it has
+// none. A missing or archived Workspace is ErrWorkspaceNotFound, so nothing
+// is served from an archived Workspace's folder (workspace-tabs.spec.md).
+func (s *Store) ActiveWorkspaceFolder(ctx context.Context, id memory.WorkspaceID) (string, error) {
+	var path string
+	err := s.db.QueryRowContext(ctx, `SELECT
+ COALESCE((SELECT path FROM workspace_folder_revisions WHERE workspace_id = w.id ORDER BY revision DESC LIMIT 1), '')
+ FROM workspaces w WHERE w.id = ? AND w.lifecycle_state = ?`, id, memory.WorkspaceActive).Scan(&path)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("%w: %s", ErrWorkspaceNotFound, id)
+	}
+	return path, err
+}
+
 // A revision compare-and-insert avoids a stale browser silently replacing a
 // newer attachment. Empty path detaches without removing files or history.
 // A change or detach is refused while a draft or open Change of the
