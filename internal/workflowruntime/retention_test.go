@@ -567,3 +567,39 @@ func TestWorkflowRetentionKeepsEvidenceOfAnUnknownEffect(t *testing.T) {
 		t.Fatal("the needs-reconciliation notice was deleted")
 	}
 }
+
+// A tab sees runs as a chat does: a sensitive input's value never reaches
+// it, finished or not and whatever the masking policy, and it gets no inputs.
+func TestTabRunsNeverCarrySensitiveInputs(t *testing.T) {
+	ctx := context.Background()
+	h := newLeaseHarness(t)
+	off := DefaultRetention()
+	off.Ordinary.Mask = false
+	h.retention = &off
+	h.reopen()
+	w := h.workspace()
+	h.approveDir(w.ID, secretSplit(t, "split-bill", workflow.ClassificationOrdinary))
+	done := h.startNamed(w.ID, "split-bill", secretBill)
+	if !strings.Contains(string(h.inspect(done.Run.ID).Run.Inputs), secretBill) {
+		t.Fatal("with masking off the owner should see the input")
+	}
+	h.pauseAfterSplit(w.ID)
+	paused := h.startNamed(w.ID, "split-bill", "dave-brunch-3")
+	runs, err := h.rt.TabRuns(ctx, w.ID, 100)
+	if err != nil || len(runs) != 2 {
+		t.Fatalf("tab runs = %d, %v", len(runs), err)
+	}
+	encoded := encodedDetail(t, runs)
+	if strings.Contains(encoded, secretBill) || strings.Contains(encoded, "dave-brunch-3") {
+		t.Fatalf("a sensitive input reached a tab: %s", encoded)
+	}
+	for _, run := range runs {
+		if len(run.Inputs) != 0 {
+			t.Fatalf("a tab got inputs: %s", run.Inputs)
+		}
+		if run.ID == done.Run.ID && !strings.Contains(string(run.Outputs), `"leftover_cents":1`) {
+			t.Fatalf("the finished run's outputs = %s", run.Outputs)
+		}
+	}
+	_ = paused
+}

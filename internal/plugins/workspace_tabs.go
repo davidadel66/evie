@@ -132,7 +132,7 @@ func (t WorkspaceTabs) status(ctx context.Context, args string) (string, error) 
 	views := make([]workspaceTabView, len(list))
 	for i, tab := range list {
 		views[i] = workspaceTabView{ID: tab.ID, Title: tab.Title, Order: tab.Order, Shown: tab.Problem == "", Problem: tab.Problem, Data: tab.Data,
-			DataAllowed: tab.Problem == "" && tab.DataKey != "" && approvals[tab.ID] == tab.DataKey}
+			DataAllowed: tab.Problem == "" && tab.DataKey != "" && approvals[tab.ID] == workspacetabs.ApprovalKey(folder, tab.DataKey)}
 	}
 	encoded, err := json.MarshalIndent(struct {
 		Folder string             `json:"folder"`

@@ -54,6 +54,8 @@ var (
 	ErrNotFound = errors.New("workspace tab not found")
 	ErrInvalid  = errors.New("workspace tab has a problem")
 	ErrPath     = errors.New("workspace tab path is not allowed")
+	// ErrRefused is a file a tab may not read; its message says why.
+	ErrRefused = errors.New("refused")
 	// ErrTooMany is a .evie/tabs folder with more than maxEntries entries.
 	ErrTooMany = fmt.Errorf(".evie/tabs holds over %d entries", maxEntries)
 )
@@ -103,6 +105,16 @@ type manifest struct {
 }
 
 var databaseNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
+
+// ApprovalKey is what the owner's approval of a tab's data list pins: the
+// list's key in this Workspace folder, so a changed folder asks again.
+func ApprovalKey(folder, dataKey string) string {
+	if dataKey == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(folder + "\x00" + dataKey))
+	return hex.EncodeToString(sum[:])
+}
 
 // dataKey is the hex SHA-256 of a data list, "" for none.
 func dataKey(data []DataSource) string {
@@ -216,7 +228,7 @@ func openRegular(root *os.Root, rel string) (*os.File, fs.FileInfo, error) {
 			return nil, nil, ErrPath
 		}
 	}
-	file, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	file, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, nil, ErrPath
 	}
@@ -370,17 +382,31 @@ func (source DataSource) problem() string {
 	return ""
 }
 
+// maxGlobSegments and maxPathSegments bound glob matching.
+const (
+	maxGlobSegments = 16
+	maxPathSegments = 32
+)
+
 // validGlob accepts a relative slash glob of path.Match segments and "**",
-// with no dot segment.
+// at most maxGlobSegments of them, with no dot segment and no "**" twice in
+// a row.
 func validGlob(pattern string) bool {
 	if len(pattern) > 200 || strings.ContainsAny(pattern, "\\\x00") || path.IsAbs(pattern) {
 		return false
 	}
-	for _, segment := range strings.Split(pattern, "/") {
+	segments := strings.Split(pattern, "/")
+	if len(segments) > maxGlobSegments {
+		return false
+	}
+	for i, segment := range segments {
 		if segment == "" || strings.HasPrefix(segment, ".") {
 			return false
 		}
 		if segment == "**" {
+			if i > 0 && segments[i-1] == "**" {
+				return false
+			}
 			continue
 		}
 		if _, err := path.Match(segment, ""); err != nil {
@@ -390,54 +416,80 @@ func validGlob(pattern string) bool {
 	return true
 }
 
-// matchGlob matches a slash path against a validGlob pattern, where "**"
-// matches zero or more whole segments.
+// matchGlob matches a slash path of at most maxPathSegments segments
+// against a validGlob pattern, where "**" matches zero or more whole
+// segments. It fills a table of pattern × path positions, so its time is
+// their product whatever the pattern.
 func matchGlob(pattern, name string) bool {
-	return matchSegments(strings.Split(pattern, "/"), strings.Split(name, "/"))
+	globs, parts := strings.Split(pattern, "/"), strings.Split(name, "/")
+	if len(parts) > maxPathSegments || len(globs) > maxGlobSegments {
+		return false
+	}
+	// matched[i][j]: globs[i:] matches parts[j:].
+	matched := make([][]bool, len(globs)+1)
+	for i := range matched {
+		matched[i] = make([]bool, len(parts)+1)
+	}
+	matched[len(globs)][len(parts)] = true
+	for i := len(globs) - 1; i >= 0; i-- {
+		for j := len(parts); j >= 0; j-- {
+			if globs[i] == "**" {
+				matched[i][j] = matched[i+1][j] || (j < len(parts) && matched[i][j+1])
+				continue
+			}
+			if j < len(parts) {
+				ok, err := path.Match(globs[i], parts[j])
+				matched[i][j] = err == nil && ok && matched[i+1][j+1]
+			}
+		}
+	}
+	return matched[0][0]
 }
 
-func matchSegments(pattern, name []string) bool {
-	if len(pattern) == 0 {
-		return len(name) == 0
-	}
-	if pattern[0] == "**" {
-		for i := 0; i <= len(name); i++ {
-			if matchSegments(pattern[1:], name[i:]) {
+// secretName is a path that looks like it holds a secret or a raw database:
+// any folder or file name with a secret word, a key or env file, or SQLite
+// files. Tabs never read one, whatever the glob says; databases are read
+// through query_db's fences instead.
+func secretName(rel string) bool {
+	for _, segment := range strings.Split(strings.ToLower(rel), "/") {
+		for _, word := range []string{"secret", "credential", "password", "passwd", "token", "apikey", "api_key", "api-key", "private", "id_rsa", "id_ed25519", "id_ecdsa", "oauth"} {
+			if strings.Contains(segment, word) {
 				return true
 			}
 		}
-		return false
-	}
-	if len(name) == 0 {
-		return false
-	}
-	ok, err := path.Match(pattern[0], name[0])
-	return err == nil && ok && matchSegments(pattern[1:], name[1:])
-}
-
-// secretName is a file name that looks like it holds a secret; tabs never
-// read one, whatever the glob says.
-func secretName(rel string) bool {
-	base := strings.ToLower(path.Base(rel))
-	for _, word := range []string{"secret", "credential", "password", "passwd", "token", "id_rsa", "id_ed25519", "id_ecdsa"} {
-		if strings.Contains(base, word) {
+		if (strings.HasPrefix(segment, "auth") && !strings.HasPrefix(segment, "author")) || segment == "key" || segment == "keys" {
 			return true
 		}
-	}
-	for _, ext := range []string{".pem", ".key", ".p12", ".pfx", ".keychain", ".kdbx"} {
-		if strings.HasSuffix(base, ext) {
+		for _, ext := range []string{".pem", ".key", ".p12", ".pfx", ".keychain", ".kdbx", ".env", ".db", ".sqlite", ".sqlite3", "-journal", "-wal", "-shm"} {
+			if strings.HasSuffix(segment, ext) {
+				return true
+			}
+		}
+		if strings.HasPrefix(segment, "key.") || strings.HasPrefix(segment, "keys.") {
 			return true
 		}
 	}
 	return false
 }
 
+// sqliteHeader starts every SQLite database file.
+const sqliteHeader = "SQLite format 3\x00"
+
 // ReadFile reads one file of the Workspace folder for a tab's declared
-// globs: a regular file reached without a link, matching a glob, with no
-// dot segment or secret-looking name, at most MaxFileBytes.
+// globs: a regular file with one link, reached without a symlink, matching a
+// glob, with no dot segment or secret-looking name and not a SQLite
+// database, at most MaxFileBytes. A refusal wraps ErrRefused with why.
 func ReadFile(folder, rel string, globs []string) ([]byte, error) {
-	if folder == "" || !allowedPath(rel) || secretName(rel) || !slices.ContainsFunc(globs, func(glob string) bool { return matchGlob(glob, rel) }) {
-		return nil, ErrPath
+	refuse := func(why string) ([]byte, error) { return nil, fmt.Errorf("%w: %s", ErrRefused, why) }
+	switch {
+	case folder == "":
+		return nil, ErrNotFound
+	case !allowedPath(rel) || len(rel) > 512:
+		return refuse("the path must be relative to the Workspace folder, with no dot folders or ..")
+	case !slices.ContainsFunc(globs, func(glob string) bool { return matchGlob(glob, rel) }):
+		return refuse("tab.json declares no files matching " + rel)
+	case secretName(rel):
+		return refuse("tabs never read files whose names look like secrets, keys or databases")
 	}
 	root, err := os.OpenRoot(folder)
 	if err != nil {
@@ -445,14 +497,34 @@ func ReadFile(folder, rel string, globs []string) ([]byte, error) {
 	}
 	defer root.Close()
 	file, info, err := openRegular(root, rel)
+	if errors.Is(err, ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return refuse("only regular files reached without a link can be read")
+	}
+	defer file.Close()
+	if hardLinked(info) {
+		return refuse("the file has another name elsewhere (a hard link)")
+	}
+	if info.Size() > MaxFileBytes {
+		return refuse("the file is over 1 MB")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, MaxFileBytes))
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-	if info.Size() > MaxFileBytes {
-		return nil, fmt.Errorf("%w: the file is over 1 MB", ErrPath)
+	if strings.HasPrefix(string(data), sqliteHeader) {
+		return refuse("the file is a SQLite database; declare it as a db instead")
 	}
-	return io.ReadAll(io.LimitReader(file, MaxFileBytes))
+	return data, nil
+}
+
+// hardLinked is a file with more than one name, which could be a name for a
+// file outside the folder.
+func hardLinked(info fs.FileInfo) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat.Nlink > 1
 }
 
 // checkSize walks the tab folder and stops as soon as it is over a limit.

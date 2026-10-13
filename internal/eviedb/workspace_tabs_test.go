@@ -81,3 +81,28 @@ func TestWorkspaceTabProblemsKeepTheLatestPerTab(t *testing.T) {
 		t.Fatalf("record in an archived Workspace: %v", err)
 	}
 }
+
+func TestWorkspaceTabDataApprovalsStayWithTheirWorkspace(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(newTestDB(t))
+	finance, err := store.RegisterWorkspace(ctx, "Finance")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lab, err := store.RegisterWorkspace(ctx, "Lab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApproveWorkspaceTabData(ctx, finance.ID, "reports", strings.Repeat("a", 64)); err != nil {
+		t.Fatal(err)
+	}
+	if approvals, err := store.WorkspaceTabDataApprovals(ctx, lab.ID); err != nil || len(approvals) != 0 {
+		t.Fatalf("another Workspace's approvals = %v, %v", approvals, err)
+	}
+	if err := store.WithdrawWorkspaceTabData(ctx, lab.ID, "reports"); err != nil {
+		t.Fatal(err)
+	}
+	if approvals, _ := store.WorkspaceTabDataApprovals(ctx, finance.ID); approvals["reports"] == "" {
+		t.Fatal("withdrawing in one Workspace removed another's approval")
+	}
+}

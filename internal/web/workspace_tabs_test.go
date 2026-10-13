@@ -215,7 +215,7 @@ func TestWorkspaceTabsListRefusesAnOverfullTabsFolder(t *testing.T) {
 func TestAppShellFramesOnlyEvie(t *testing.T) {
 	handler, _ := tabsFixture(t)
 	result := getTab(handler, http.MethodGet, "/", "", nil)
-	if result.Code != http.StatusOK || result.Header().Get("Content-Security-Policy") != "frame-src 'self'" {
+	if result.Code != http.StatusOK || result.Header().Get("Content-Security-Policy") != "frame-src 'self'; frame-ancestors 'none'" {
 		t.Fatalf("status=%d policy=%q", result.Code, result.Header().Get("Content-Security-Policy"))
 	}
 }
@@ -405,7 +405,8 @@ func TestTabDataIsReadOnlyAfterTheOwnerApprovesItsExactList(t *testing.T) {
 		status  int
 	}{
 		"undeclared database": {`{"kind":"query","db":"evie","sql":"SELECT 1"}`, http.StatusForbidden},
-		"oversized query":     {`{"kind":"query","db":"finance","sql":"SELECT '` + strings.Repeat("x", 17<<10) + `'"}`, http.StatusRequestEntityTooLarge},
+		"oversized query":     {`{"kind":"query","db":"finance","sql":"SELECT '` + strings.Repeat("x", 17<<10) + `'"}`, http.StatusForbidden},
+		"10 KB query":         {`{"kind":"query","db":"finance","sql":"SELECT '` + strings.Repeat("x", 10<<10) + `'"}`, http.StatusOK},
 		"declared file":       {`{"kind":"file","path":"eval/loss.json"}`, http.StatusOK},
 		"undeclared file":     {`{"kind":"file","path":"eval/notes.txt"}`, http.StatusForbidden},
 		"secret-looking file": {`{"kind":"file","path":"eval/api_token.json"}`, http.StatusForbidden},
@@ -463,10 +464,115 @@ func TestTabProblemsAreRecordedListedAndCleared(t *testing.T) {
 	// A refused data request is recorded as the tab's problem too.
 	postTabs(handler, "/api/workspaces/tabs/data", `{"workspaceId":"finance","tabId":"reports","request":{"kind":"query","db":"finance","sql":"SELECT 1"}}`)
 	recent := listedTabs(t, handler)["reports"].Recent
-	if len(recent) != 3 || recent[0].Kind != "refused" || !strings.Contains(recent[0].Message, "until you allow its data") || recent[2].Kind != "error" {
+	if len(recent) != 3 || recent[0].Kind != "refused" || !strings.Contains(recent[0].Message, "until you allow its data") || recent[1].Kind+recent[2].Kind != "errorblocked" && recent[1].Kind+recent[2].Kind != "blockederror" {
 		t.Fatalf("recent problems = %+v", recent)
 	}
 	if result := postTabs(handler, "/api/workspaces/tabs/problems", `{"workspaceId":"finance","tabId":"reports","clear":true}`); result.Code != http.StatusNoContent || len(controller.problems) != 0 {
 		t.Fatalf("clear status=%d problems=%v", result.Code, controller.problems)
+	}
+}
+
+// tabRunsSource is a WorkflowManager whose only use here is TabRuns.
+type tabRunsSource struct {
+	WorkflowManager
+	runs  []eviedb.WorkflowRun
+	asked memory.WorkspaceID
+}
+
+func (s *tabRunsSource) TabRuns(_ context.Context, workspace memory.WorkspaceID, _ int) ([]eviedb.WorkflowRun, error) {
+	s.asked = workspace
+	return s.runs, nil
+}
+
+func TestTabRunsComeFromTheScrubbedReaderAndAreCapped(t *testing.T) {
+	folder := t.TempDir()
+	writeTabFiles(t, folder, "runs", map[string]string{"tab.json": `{"title":"Runs","data":[{"runs":true}]}`, "index.html": "x"})
+	controller := &fakeTabDataController{fakeTabsController: fakeTabsController{folders: map[memory.WorkspaceID]string{"lab": folder}}, approvals: map[string]string{}}
+	big := json.RawMessage(`"` + strings.Repeat("x", 600<<10) + `"`)
+	source := &tabRunsSource{runs: []eviedb.WorkflowRun{
+		{ID: "r1", Workflow: "split-bill", State: eviedb.WorkflowRunSucceeded, Outputs: json.RawMessage(`{"bill":"[sensitive]"}`), Inputs: json.RawMessage(`{"bill_id":"alice"}`)},
+		{ID: "r2", Workflow: "big", State: eviedb.WorkflowRunSucceeded, Outputs: big},
+		{ID: "r3", Workflow: "big", State: eviedb.WorkflowRunSucceeded, Outputs: big},
+	}}
+	handler := WithWorkflows(NewContextServer(nil, nil, nil, controller), source).Handler()
+	tab := listedTabsIn(t, handler, "lab")["runs"]
+	if result := postTabs(handler, "/api/workspaces/tabs/approve", `{"workspaceId":"lab","tabId":"runs","dataKey":"`+tab.DataKey+`"}`); result.Code != http.StatusOK {
+		t.Fatalf("approve status=%d", result.Code)
+	}
+	result := postTabs(handler, "/api/workspaces/tabs/data", `{"workspaceId":"lab","tabId":"runs","request":{"kind":"runs"}}`)
+	var page struct {
+		Result []tabRun `json:"result"`
+	}
+	if err := json.Unmarshal(result.Body.Bytes(), &page); err != nil || result.Code != http.StatusOK {
+		t.Fatalf("runs status=%d err=%v", result.Code, err)
+	}
+	if source.asked != "lab" || len(page.Result) != 2 || page.Result[0].ID != "r1" || strings.Contains(result.Body.String(), "alice") {
+		t.Fatalf("runs = %d %+v, asked %q", len(page.Result), page.Result[0], source.asked)
+	}
+}
+
+func listedTabsIn(t *testing.T, handler http.Handler, workspace string) map[string]tabListing {
+	t.Helper()
+	var page struct {
+		Tabs []tabListing `json:"tabs"`
+	}
+	result := postTabs(handler, "/api/workspaces/tabs", `{"workspaceId":"`+workspace+`"}`)
+	if err := json.Unmarshal(result.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	tabs := map[string]tabListing{}
+	for _, tab := range page.Tabs {
+		tabs[tab.ID] = tab
+	}
+	return tabs
+}
+
+// An approval holds for the folder it was given in; a tab folder that is
+// gone takes its approval with it; a tab with a problem can still be
+// withdrawn.
+func TestTabApprovalsFollowTheFolderAndTheTabFolder(t *testing.T) {
+	handler, controller, folder := tabDataFixture(t)
+	reports := listedTabs(t, handler)["reports"]
+	if result := postTabs(handler, "/api/workspaces/tabs/approve", `{"workspaceId":"finance","tabId":"reports","dataKey":"`+reports.DataKey+`"}`); result.Code != http.StatusOK {
+		t.Fatalf("approve status=%d", result.Code)
+	}
+	moved := t.TempDir()
+	if err := os.Rename(filepath.Join(folder, ".evie"), filepath.Join(moved, ".evie")); err != nil {
+		t.Fatal(err)
+	}
+	controller.folders["finance"] = moved
+	if tab := listedTabs(t, handler)["reports"]; tab.Approved || !tab.ApprovalStored {
+		t.Fatalf("after the folder moved = %+v", tab)
+	}
+	writeTabFiles(t, moved, "reports", map[string]string{"tab.json": `{"title":"Reports","layout":1,"data":[{"db":"finance"}]}`})
+	if tab := listedTabs(t, handler)["reports"]; tab.Problem == "" || !tab.ApprovalStored {
+		t.Fatalf("a broken tab's approval is not shown for withdrawing: %+v", tab)
+	}
+	if err := os.RemoveAll(filepath.Join(moved, ".evie", "tabs", "reports")); err != nil {
+		t.Fatal(err)
+	}
+	listedTabs(t, handler)
+	if _, kept := controller.approvals["reports"]; kept {
+		t.Fatal("a removed tab kept its approval")
+	}
+}
+
+func TestTabFileRefusalsSayWhyAndTabReadsAreBounded(t *testing.T) {
+	handler, _, folder := tabDataFixture(t)
+	reports := listedTabs(t, handler)["reports"]
+	postTabs(handler, "/api/workspaces/tabs/approve", `{"workspaceId":"finance","tabId":"reports","dataKey":"`+reports.DataKey+`"}`)
+	if err := os.WriteFile(filepath.Join(folder, "eval", "big.json"), []byte(strings.Repeat("x", workspacetabs.MaxFileBytes+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for path, why := range map[string]string{"eval/big.json": "over 1 MB", "eval/api_token.json": "look like secrets", "eval/notes.txt": "declares no files matching"} {
+		result := postTabs(handler, "/api/workspaces/tabs/data", `{"workspaceId":"finance","tabId":"reports","request":{"kind":"file","path":"`+path+`"}}`)
+		if result.Code != http.StatusForbidden || !strings.Contains(result.Body.String(), why) {
+			t.Errorf("%s: status=%d body=%s", path, result.Code, result.Body.String())
+		}
+	}
+	// The archived Workspace's tabs read nothing.
+	result := postTabs(handler, "/api/workspaces/tabs/data", `{"workspaceId":"archived","tabId":"reports","request":{"kind":"file","path":"eval/loss.json"}}`)
+	if result.Code != http.StatusNotFound {
+		t.Fatalf("archived Workspace status=%d", result.Code)
 	}
 }

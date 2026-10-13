@@ -15,7 +15,6 @@ import (
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
-	"github.com/davidadel66/evie/internal/workflowruntime"
 	"github.com/davidadel66/evie/internal/workspacetabs"
 )
 
@@ -52,15 +51,31 @@ type workspaceTabProblemsController interface {
 // data list is the one the owner approved, and its latest problems.
 type tabListing struct {
 	workspacetabs.Tab
-	Approved bool                    `json:"approved,omitempty"`
-	Recent   []workspacetabs.Problem `json:"recentProblems,omitempty"`
+	Approved bool `json:"approved,omitempty"`
+	// ApprovalStored is any approval on record, so the owner can withdraw
+	// one even while the tab has a problem.
+	ApprovalStored bool                    `json:"approvalStored,omitempty"`
+	Recent         []workspacetabs.Problem `json:"recentProblems,omitempty"`
 }
 
 // tabProblemKinds are the problems a tab's page reports.
 var tabProblemKinds = map[string]bool{"error": true, "blocked": true}
 
-// maxTabQueryBytes bounds one SQL text a tab sends.
-const maxTabQueryBytes = 16 << 10
+// maxTabQueryBytes bounds one SQL text a tab sends, within the data route's
+// own body limit; maxTabRunsBytes bounds the runs a tab reads; and
+// maxTabReads is how many tab reads run at once across Evie.
+const (
+	maxTabQueryBytes   = 16 << 10
+	maxTabRequestBytes = 32 << 10
+	maxTabRunsBytes    = 1 << 20
+	maxTabReads        = 4
+)
+
+// tabRunReader lists a Workspace's runs as a tab may see them: scrubbed of
+// sensitive inputs as a chat sees them, without inputs.
+type tabRunReader interface {
+	TabRuns(context.Context, memory.WorkspaceID, int) ([]eviedb.WorkflowRun, error)
+}
 
 // workspaceIDPattern bounds a Workspace ID in a tab URL before it is used
 // in a redirect or a policy.
@@ -124,6 +139,15 @@ func (s *Server) registerWorkspaceTabRoutes(mux *http.ServeMux) {
 				managementJSONError(w, http.StatusInternalServerError, "workspace_tabs_failed", "the Workspace's tab approvals could not be read")
 				return
 			}
+			// A tab folder that is gone takes its approval with it, so a tab
+			// made later under the same name starts unapproved.
+			for id := range approvals {
+				if !slices.ContainsFunc(tabs, func(tab workspacetabs.Tab) bool { return tab.ID == id }) {
+					if err := data.WithdrawWorkspaceTabData(r.Context(), request.WorkspaceID, id); err == nil {
+						delete(approvals, id)
+					}
+				}
+			}
 		}
 		recent := map[string][]workspacetabs.Problem{}
 		if problems, ok := controller.(workspaceTabProblemsController); ok {
@@ -140,7 +164,9 @@ func (s *Server) registerWorkspaceTabRoutes(mux *http.ServeMux) {
 		}
 		listings := make([]tabListing, len(tabs))
 		for i, tab := range tabs {
-			listings[i] = tabListing{Tab: tab, Approved: tab.Problem == "" && tab.DataKey != "" && approvals[tab.ID] == tab.DataKey, Recent: recent[tab.ID]}
+			_, stored := approvals[tab.ID]
+			listings[i] = tabListing{Tab: tab, Approved: tab.Problem == "" && tab.DataKey != "" && approvals[tab.ID] == workspacetabs.ApprovalKey(folder, tab.DataKey),
+				ApprovalStored: stored, Recent: recent[tab.ID]}
 		}
 		writeJSON(w, http.StatusOK, struct {
 			Tabs []tabListing `json:"tabs"`
@@ -311,7 +337,7 @@ func (s *Server) registerWorkspaceTabDataRoutes(mux *http.ServeMux, folders work
 	// shownTab reads the request and the named tab as it is now; it has
 	// answered the request when ok is false.
 	shownTab := func(w http.ResponseWriter, r *http.Request) (request tabRequest, folder string, tab workspacetabs.Tab, ok bool) {
-		if status, err := decodeManagementJSON(w, r, &request); err != nil || !workspaceIDPattern.MatchString(string(request.WorkspaceID)) || !workspacetabs.ValidID(request.TabID) {
+		if status, err := decodeManagementJSONUpTo(w, r, &request, maxTabRequestBytes); err != nil || !workspaceIDPattern.MatchString(string(request.WorkspaceID)) || !workspacetabs.ValidID(request.TabID) {
 			if err == nil {
 				status = http.StatusBadRequest
 			}
@@ -337,7 +363,7 @@ func (s *Server) registerWorkspaceTabDataRoutes(mux *http.ServeMux, folders work
 		return request, "", tab, false
 	}
 	mux.Handle("/api/workspaces/tabs/approve", s.managementRoute(func(w http.ResponseWriter, r *http.Request) {
-		request, _, tab, ok := shownTab(w, r)
+		request, folder, tab, ok := shownTab(w, r)
 		if !ok {
 			return
 		}
@@ -345,7 +371,7 @@ func (s *Server) registerWorkspaceTabDataRoutes(mux *http.ServeMux, folders work
 			managementJSONError(w, http.StatusConflict, "workspace_tab_data_changed", "The tab's data list changed; review it again before allowing it")
 			return
 		}
-		if err := data.ApproveWorkspaceTabData(r.Context(), request.WorkspaceID, tab.ID, tab.DataKey); err != nil {
+		if err := data.ApproveWorkspaceTabData(r.Context(), request.WorkspaceID, tab.ID, workspacetabs.ApprovalKey(folder, tab.DataKey)); err != nil {
 			managementJSONError(w, http.StatusInternalServerError, "workspace_tab_approve_failed", "The tab's data could not be allowed")
 			return
 		}
@@ -370,7 +396,15 @@ func (s *Server) registerWorkspaceTabDataRoutes(mux *http.ServeMux, folders work
 			Approved bool `json:"approved"`
 		}{false})
 	}))
+	reads := make(chan struct{}, maxTabReads)
 	mux.Handle("/api/workspaces/tabs/data", s.managementRoute(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case reads <- struct{}{}:
+			defer func() { <-reads }()
+		default:
+			managementJSONError(w, http.StatusTooManyRequests, "workspace_tab_reads_busy", "Evie is already running its most tab reads at once; try again shortly")
+			return
+		}
 		request, folder, tab, ok := shownTab(w, r)
 		if !ok {
 			return
@@ -391,7 +425,7 @@ func (s *Server) registerWorkspaceTabDataRoutes(mux *http.ServeMux, folders work
 			managementJSONError(w, http.StatusInternalServerError, "workspace_tabs_failed", "the Workspace's tab approvals could not be read")
 			return
 		}
-		if tab.DataKey == "" || approvals[tab.ID] != tab.DataKey {
+		if tab.DataKey == "" || approvals[tab.ID] != workspacetabs.ApprovalKey(folder, tab.DataKey) {
 			refuse("This tab may read nothing until you allow its data in Settings → Tabs")
 			return
 		}
@@ -423,8 +457,12 @@ func (s *Server) registerWorkspaceTabDataRoutes(mux *http.ServeMux, folders work
 				managementJSONError(w, http.StatusNotFound, "workspace_tab_file_missing", "No such file")
 				return
 			}
+			if errors.Is(err, workspacetabs.ErrRefused) {
+				refuse(strings.TrimPrefix(err.Error(), workspacetabs.ErrRefused.Error()+": "))
+				return
+			}
 			if err != nil {
-				refuse("tab.json does not declare that file, or it is not one a tab may read")
+				managementJSONError(w, http.StatusInternalServerError, "workspace_tab_file_failed", "The file could not be read")
 				return
 			}
 			result = string(text)
@@ -433,18 +471,22 @@ func (s *Server) registerWorkspaceTabDataRoutes(mux *http.ServeMux, folders work
 				refuse("tab.json does not declare runs")
 				return
 			}
-			if s.workflows == nil {
+			reader, ok := s.workflows.(tabRunReader)
+			if !ok {
 				managementJSONError(w, http.StatusUnprocessableEntity, "workflows_unavailable", "Workflows are unavailable")
 				return
 			}
-			runs, err := s.workflows.ListRuns(r.Context(), workflowruntime.RunFilter{WorkspaceID: request.WorkspaceID, Limit: 100})
+			runs, err := reader.TabRuns(r.Context(), request.WorkspaceID, 100)
 			if err != nil {
 				writeWorkflowError(w, err)
 				return
 			}
-			rows := make([]tabRun, len(runs))
-			for i, run := range runs {
-				rows[i] = tabRun{ID: run.ID, Workflow: run.Workflow, State: string(run.State), CreatedAt: run.CreatedAt, FinishedAt: run.FinishedAt, Outputs: run.Outputs, Error: run.Error}
+			rows, size := []tabRun{}, 0
+			for _, run := range runs {
+				if size += len(run.Outputs) + len(run.Error); size > maxTabRunsBytes {
+					break
+				}
+				rows = append(rows, tabRun{ID: run.ID, Workflow: run.Workflow, State: string(run.State), CreatedAt: run.CreatedAt, FinishedAt: run.FinishedAt, Outputs: run.Outputs, Error: run.Error})
 			}
 			result = rows
 		default:

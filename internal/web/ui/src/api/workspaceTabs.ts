@@ -15,12 +15,12 @@ export type WorkspaceTabsAPI = {
   list(workspaceId: string): Promise<CustomTabList>;
   approve(workspaceId: string, tabId: string, dataKey: string): Promise<unknown>;
   withdraw(workspaceId: string, tabId: string): Promise<unknown>;
-  data(workspaceId: string, tabId: string, request: TabDataRequest): Promise<{ result: unknown }>;
+  data(workspaceId: string, tabId: string, request: TabDataRequest, signal?: AbortSignal): Promise<{ result: unknown }>;
   problem(workspaceId: string, tabId: string, problem: { kind: string; message: string }): Promise<unknown>;
 };
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store", signal });
   if (response.status === 204) return undefined as T;
   const value = (await response.json()) as T & { error?: string };
   if (!response.ok) throw new Error(value.error ?? `Request failed (${response.status})`);
@@ -31,7 +31,7 @@ export const workspaceTabsAPI: WorkspaceTabsAPI = {
   list: (workspaceId) => post("/api/workspaces/tabs", { workspaceId }),
   approve: (workspaceId, tabId, dataKey) => post("/api/workspaces/tabs/approve", { workspaceId, tabId, dataKey }),
   withdraw: (workspaceId, tabId) => post("/api/workspaces/tabs/withdraw", { workspaceId, tabId }),
-  data: (workspaceId, tabId, request) => post("/api/workspaces/tabs/data", { workspaceId, tabId, request }),
+  data: (workspaceId, tabId, request, signal) => post("/api/workspaces/tabs/data", { workspaceId, tabId, request }, signal),
   problem: (workspaceId, tabId, problem) => post("/api/workspaces/tabs/problems", { workspaceId, tabId, ...problem }),
 };
 

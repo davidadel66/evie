@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/finance"
@@ -94,5 +95,29 @@ func TestReadDBCapsRows(t *testing.T) {
 	}
 	if len(rows.Rows) != MaxReadRows || !rows.Truncated {
 		t.Fatalf("rows = %d, truncated = %v", len(rows.Rows), rows.Truncated)
+	}
+}
+
+// A runaway query ends at the read timeout and leaves finance.db writable,
+// and no value larger than MaxReadBytes is built.
+func TestReadDBEndsRunawayQueriesAndRefusesHugeValues(t *testing.T) {
+	seedFinanceFenceDB(t)
+	readTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { readTimeout = ReadTimeout })
+	start := time.Now()
+	_, err := ReadDB(context.Background(), "finance", "SELECT (WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c) SELECT count(*) FROM c) FROM transactions")
+	if elapsed := time.Since(start); err == nil || !strings.Contains(err.Error(), "took longer than") || elapsed > 3*time.Second {
+		t.Fatalf("runaway query: err = %v after %s", err, elapsed)
+	}
+	db, err := finance.OpenDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE transactions SET merchant_name = 'Coffee' WHERE transaction_id = 'txn-1'`); err != nil {
+		t.Fatalf("finance.db stayed locked after the read: %v", err)
+	}
+	if _, err := ReadDB(context.Background(), "finance", "SELECT randomblob(3000000) FROM transactions"); err == nil {
+		t.Fatal("a 3 MB value was built")
 	}
 }

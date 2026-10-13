@@ -328,13 +328,84 @@ func TestReadFileReadsOnlyDeclaredFilesInTheWorkspace(t *testing.T) {
 			t.Errorf("read %s = %q, %v", rel, got, err)
 		}
 	}
-	for _, rel := range []string{"eval/notes.txt", "eval/api_token.json", "eval/.hidden.json", "train/data.json", "eval/linked.json", "eval/big.json", "eval/../train/data.json", "/etc/passwd"} {
-		if _, err := ReadFile(folder, rel, globs); !errors.Is(err, ErrPath) {
-			t.Errorf("read %s: err = %v, want ErrPath", rel, err)
+	for rel, why := range map[string]string{
+		"eval/notes.txt":          "declares no files matching",
+		"eval/api_token.json":     "look like secrets",
+		"eval/.hidden.json":       "no dot folders",
+		"train/data.json":         "declares no files matching",
+		"eval/linked.json":        "reached without a link",
+		"eval/big.json":           "over 1 MB",
+		"eval/../train/data.json": "no dot folders",
+		"/etc/passwd":             "relative to the Workspace folder",
+	} {
+		if _, err := ReadFile(folder, rel, globs); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), why) {
+			t.Errorf("read %s: err = %v, want a refusal saying %q", rel, err, why)
 		}
 	}
-	if _, err := ReadFile(folder, "eval/summary.json", nil); !errors.Is(err, ErrPath) {
+	if _, err := ReadFile(folder, "eval/summary.json", nil); !errors.Is(err, ErrRefused) {
 		t.Errorf("read with no declared files: %v", err)
+	}
+}
+
+// Secrets and raw databases stay out whatever the glob: by any folder or
+// file name, by a SQLite header, or through a hard link.
+func TestReadFileRefusesSecretsDatabasesAndHardLinks(t *testing.T) {
+	folder, outside := t.TempDir(), t.TempDir()
+	write := func(dir, rel, content string) string {
+		path := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	for _, rel := range []string{"secrets/prod.json", "credentials/gcp.json", "config/api_key.json", "prod.env", "finance.db", "finance.db-journal", "auth.json", "keys/a.json", "private/notes.json"} {
+		write(folder, rel, "{}")
+		if _, err := ReadFile(folder, rel, []string{"**"}); !errors.Is(err, ErrRefused) {
+			t.Errorf("read %s: %v", rel, err)
+		}
+	}
+	write(folder, "data/ledger.json", "SQLite format 3\x00rest")
+	if _, err := ReadFile(folder, "data/ledger.json", []string{"**"}); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "SQLite database") {
+		t.Errorf("a SQLite file under another name: %v", err)
+	}
+	key := write(outside, "id", "PRIVATE KEY")
+	if err := os.Link(key, filepath.Join(folder, "data", "notes.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadFile(folder, "data/notes.json", []string{"**"}); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "hard link") {
+		t.Errorf("a hard link: %v", err)
+	}
+	write(folder, "eval/authors.json", `{"a":1}`)
+	if got, err := ReadFile(folder, "eval/authors.json", []string{"**"}); err != nil || string(got) != `{"a":1}` {
+		t.Errorf("an ordinary file = %q, %v", got, err)
+	}
+}
+
+// Matching costs pattern × path, so a pattern of many ** cannot stall.
+func TestGlobMatchingIsBoundedAndCapped(t *testing.T) {
+	long := strings.Repeat("a/", 31) + "b"
+	start := time.Now()
+	if matchGlob("**/x/**/x/**/x/**/x/**/x/**/x/**/z", long) {
+		t.Fatal("matched")
+	}
+	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		t.Fatalf("matching took %s", elapsed)
+	}
+	for pattern, want := range map[string]bool{"eval/**/*.json": true, "**": true, "eval/*.json": false, "**/run-*/**": true} {
+		if got := matchGlob(pattern, "eval/run-1/deep/metrics.json"); got != want {
+			t.Errorf("matchGlob(%q) = %v", pattern, got)
+		}
+	}
+	if matchGlob("**", strings.Repeat("a/", 40)+"b") {
+		t.Error("a path of over 32 segments matched")
+	}
+	for _, pattern := range []string{"**/**/x", strings.Repeat("a/", 16) + "b"} {
+		if validGlob(pattern) {
+			t.Errorf("validGlob(%q) accepted", pattern)
+		}
 	}
 }
 

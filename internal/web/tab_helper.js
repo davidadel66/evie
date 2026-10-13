@@ -32,28 +32,42 @@
   }, true);
   addEventListener('unhandledrejection', event => report('error', `unhandled: ${(event.reason && event.reason.message) || event.reason}`));
   document.addEventListener('securitypolicyviolation', event => report('blocked', `${event.effectiveDirective} blocked ${event.blockedURI || 'inline code'}`));
+  // The helper makes the private channel and sends its far end with the
+  // greeting, so the channel stays with this page. It greets again until
+  // Evie answers, in case Evie's page was not listening yet.
   const connected = new Promise((resolve, reject) => {
     if (window.parent === window) {
       reject(new Error('Open this tab in Evie to read its data.'));
       return;
     }
-    const greeted = event => {
-      if (event.source !== window.parent || !event.data || event.data.evie !== 'tab-port' || !event.ports[0]) return;
-      removeEventListener('message', greeted);
-      const port = event.ports[0];
-      port.onmessage = ({ data }) => {
-        const pending = waiting.get(data && data.id);
-        if (!pending) return;
-        waiting.delete(data.id);
-        if (data.ok) pending.resolve(data.result);
-        else pending.reject(new Error(data.error || 'Evie refused the request.'));
+    let attempts = 0;
+    let done = false;
+    const greet = () => {
+      if (done) return;
+      if (attempts++ === 20) {
+        reject(new Error('Evie did not answer this tab; reload it.'));
+        return;
+      }
+      const { port1, port2 } = new MessageChannel();
+      port1.onmessage = ({ data }) => {
+        if (!done && data && data.ready) {
+          done = true;
+          port1.onmessage = ({ data: reply }) => {
+            const pending = waiting.get(reply && reply.id);
+            if (!pending) return;
+            waiting.delete(reply.id);
+            if (reply.ok) pending.resolve(reply.result);
+            else pending.reject(new Error(reply.error || 'Evie refused the request.'));
+          };
+          channel = port1;
+          flush();
+          resolve(port1);
+        }
       };
-      channel = port;
-      flush();
-      resolve(port);
+      window.parent.postMessage({ evie: 'tab-hello', key }, '*', [port2]);
+      setTimeout(greet, 300);
     };
-    addEventListener('message', greeted);
-    window.parent.postMessage({ evie: 'tab-hello', key }, '*');
+    greet();
   });
   const ask = async request => {
     const port = await connected;

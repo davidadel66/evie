@@ -125,16 +125,28 @@ sealed off from the rest of Evie:
 - The page talks to the host through a small helper Evie serves to every
   tab at `_evie/tab.js` (a tab folder's own `_evie/` is never served):
   `evie.query(db, sql)`, `evie.file(path)` and `evie.runs()`. Evie's page puts
-  a one-time key in the tab's address; the helper greets with it once and
-  Evie hands back a private `MessageChannel` for every later request, so a
-  page the frame is navigated to afterwards cannot use the tab's access. At
-  most 4 requests are in flight. The server checks every request against the
-  approved list and answers or refuses with a reason. There are no writes.
+  a one-time key in the tab's address; the helper greets with it, sending
+  the far end of a private `MessageChannel` it made (and greeting again
+  until Evie answers), and Evie answers only over the first such channel
+  from that frame, so a page the frame is navigated to afterwards cannot use
+  the tab's access. At most 4 requests are in flight per tab and 4 tab reads
+  across Evie; a tab's requests are cancelled when it closes or reloads. The
+  server checks every request against the approved list and answers or
+  refuses with a reason. There are no writes.
 - Databases are read through `query_db`'s own fences (`tools.ReadDB`):
-  finance and Evie's listed tables, typed rows, at most 5,000 rows and 2 MB.
-  Files: at most 1 MB each, regular files reached without a link, never a
-  dotfile or a secret-looking name. Runs: this Workspace's latest 100, with
-  their outputs.
+  finance and Evie's listed tables, typed rows, at most 5,000 rows, 2 MB in
+  all and 2 MB per value, ending within 4 seconds (before a writer's busy
+  wait on finance.db gives up). Files: at most 1 MB each, regular files with
+  one link reached without a symlink, never a dotfile, a path with a
+  secret-looking folder or file name, an env or key file, or a SQLite
+  database by name or header. Globs match in time proportional to pattern
+  × path, with at most 16 pattern and 32 path segments. Runs: this
+  Workspace's latest 100, scrubbed of sensitive inputs as a chat sees them,
+  without inputs, at most 1 MB of outputs.
+- An approval pins the data list's key in the Workspace's folder, so a
+  changed folder asks again; a tab folder that is gone takes its approval
+  with it. Evie's page cannot be framed by another site, so no page can
+  trick the owner into allowing a tab's data.
 
 ### Evie's loop (story 3)
 

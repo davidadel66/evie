@@ -146,7 +146,13 @@ func decodeManagementEmptyObject(w http.ResponseWriter, r *http.Request) (int, e
 }
 
 func decodeManagementJSON(w http.ResponseWriter, r *http.Request, destination any) (int, error) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxManagementBodyBytes)
+	return decodeManagementJSONUpTo(w, r, destination, maxManagementBodyBytes)
+}
+
+// decodeManagementJSONUpTo is decodeManagementJSON with its own body limit,
+// for a route whose body legitimately carries more, such as a tab's query.
+func decodeManagementJSONUpTo(w http.ResponseWriter, r *http.Request, destination any, limit int64) (int, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()

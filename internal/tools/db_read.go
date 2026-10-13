@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/finance"
@@ -13,10 +14,17 @@ import (
 )
 
 const (
-	// MaxReadRows and MaxReadBytes bound one ReadDB result.
+	// MaxReadRows and MaxReadBytes bound one ReadDB result; MaxReadBytes
+	// also caps any single value SQLite builds or returns.
 	MaxReadRows  = 5000
 	MaxReadBytes = 2 << 20
+	// ReadTimeout ends a read before a writer's 5-second busy wait on
+	// finance.db (journal_mode=delete) gives up.
+	ReadTimeout = 4 * time.Second
 )
+
+// readTimeout is ReadTimeout; tests shorten it.
+var readTimeout = ReadTimeout
 
 // ReadDBDatabases are the registered databases ReadDB serves. Transcripts
 // stay with query_db, which labels their untrusted output.
@@ -34,8 +42,11 @@ type DBRows struct {
 // Workspace tab (workspace-tabs.spec.md, story 2), behind exactly query_db's
 // fences (queryDB): the single-SELECT check and engine-level mode=ro for
 // both; for finance no items table and a connection that cannot ATTACH; for
-// evie only its listed tables, judged on the compiled program.
+// evie only its listed tables, judged on the compiled program. Each read
+// ends within ReadTimeout, and no value may exceed MaxReadBytes.
 func ReadDB(ctx context.Context, name, query string) (DBRows, error) {
+	ctx, cancel := context.WithTimeout(ctx, readTimeout)
+	defer cancel()
 	q := strings.TrimSpace(query)
 	if !strings.HasPrefix(strings.ToUpper(q), "SELECT") {
 		return DBRows{}, fmt.Errorf("only SELECT statements are allowed")
@@ -68,6 +79,9 @@ func ReadDB(ctx context.Context, name, query string) (DBRows, error) {
 		return DBRows{}, fmt.Errorf("open connection: %w", err)
 	}
 	defer conn.Close()
+	if _, err := sqlite.Limit(conn, sqlite3.SQLITE_LIMIT_LENGTH, MaxReadBytes); err != nil {
+		return DBRows{}, fmt.Errorf("fence connection: %w", err)
+	}
 	switch name {
 	case "finance":
 		if _, err := sqlite.Limit(conn, sqlite3.SQLITE_LIMIT_ATTACHED, 0); err != nil {
@@ -85,7 +99,7 @@ func ReadDB(ctx context.Context, name, query string) (DBRows, error) {
 func readRows(ctx context.Context, conn *sql.Conn, query string) (DBRows, error) {
 	result, err := conn.QueryContext(ctx, query)
 	if err != nil {
-		return DBRows{}, fmt.Errorf("run query: %w", err)
+		return DBRows{}, readError(ctx, err)
 	}
 	defer result.Close()
 	columns, err := result.Columns()
@@ -105,7 +119,7 @@ func readRows(ctx context.Context, conn *sql.Conn, query string) (DBRows, error)
 			pointers[i] = &values[i]
 		}
 		if err := result.Scan(pointers...); err != nil {
-			return DBRows{}, fmt.Errorf("scan row: %w", err)
+			return DBRows{}, readError(ctx, err)
 		}
 		for i, value := range values {
 			switch typed := value.(type) {
@@ -124,5 +138,16 @@ func readRows(ctx context.Context, conn *sql.Conn, query string) (DBRows, error)
 		}
 		out.Rows = append(out.Rows, values)
 	}
-	return out, result.Err()
+	if err := result.Err(); err != nil {
+		return DBRows{}, readError(ctx, err)
+	}
+	return out, nil
+}
+
+// readError says a read ran out of time in words a tab's author can act on.
+func readError(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return fmt.Errorf("the query took longer than %s; narrow it", readTimeout)
+	}
+	return fmt.Errorf("run query: %w", err)
 }

@@ -278,6 +278,24 @@ func (r *Runtime) inputScrubber(ctx context.Context, run eviedb.WorkflowRun) evi
 	return eviedb.NewWorkflowRedactor(s, run.Inputs, eviedb.WorkflowMaskMarker, false)
 }
 
+// TabRuns lists a Workspace's latest runs for one of its tabs
+// (workspace-tabs.spec.md story 2): as an owner surface shows them, then
+// with every sensitive input's value taken out as a chat sees them, and
+// without their inputs. A tab is Evie-written code, closer to a chat than to
+// the owner's own screen.
+func (r *Runtime) TabRuns(ctx context.Context, workspace memory.WorkspaceID, limit int) ([]eviedb.WorkflowRun, error) {
+	runs, err := r.store.ListWorkflowRuns(ctx, eviedb.WorkflowRunFilter{WorkspaceID: workspace, Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	for i, run := range runs {
+		shown := r.inputScrubber(ctx, run).Run(r.presentRun(ctx, run))
+		shown.Inputs = nil
+		runs[i] = shown
+	}
+	return runs, nil
+}
+
 // StartRun starts a run as startRun does; the run it returns is shown as
 // an owner surface shows it.
 func (r *Runtime) StartRun(ctx context.Context, req RunRequest) (RunResult, error) {

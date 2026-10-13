@@ -62,8 +62,10 @@ func (s *Server) staticHandler() http.Handler {
 // answering, so it would 301 in a circle.
 func serveIndex(w http.ResponseWriter, r *http.Request, dist fs.FS) {
 	w.Header().Set("Cache-Control", "no-store")
-	// Frames show only Evie's own pages, and a Workspace tab cannot
-	// navigate its frame anywhere else (workspace-tabs.spec.md).
-	w.Header().Set("Content-Security-Policy", "frame-src 'self'")
+	// Frames show only Evie's own pages, so a Workspace tab cannot navigate
+	// its frame anywhere else, and no other site may frame Evie and trick
+	// the owner into a click such as allowing a tab's data
+	// (workspace-tabs.spec.md).
+	w.Header().Set("Content-Security-Policy", "frame-src 'self'; frame-ancestors 'none'")
 	http.ServeFileFS(w, r, dist, "index.html")
 }
