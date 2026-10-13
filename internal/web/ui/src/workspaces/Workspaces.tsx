@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type {
   ContextSessionSnapshot,
   Project,
@@ -20,6 +21,9 @@ import { WorkspaceChanges } from "./WorkspaceChanges";
 import { useChangeListing } from "./useChangeListing";
 import { reviewCount } from "./changeView";
 import type { WorkspaceTab, WorkspaceViewState } from "./workspaceActivity";
+import { customTabID, customTabKey, useWorkspaceTabs } from "./workspaceTabs";
+import { WorkspaceTabFrame } from "./WorkspaceTabFrame";
+import { WorkspaceTabsSettings } from "./WorkspaceTabsSettings";
 
 type DirectoryProps = {
   snapshot?: ContextSessionSnapshot;
@@ -197,11 +201,21 @@ export function WorkspaceHome({
 }) {
   const {listing, reload} = useChangeListing(workspace.id);
   const hasRepository = !!listing && listing.repository.kind !== "none";
+  const ownTabs = useWorkspaceTabs(workspace.id, workspace.folder?.path);
+  const [tabReloads, setTabReloads] = useState(0);
+  const ownTabID = customTabID(tab);
+  const ownTab = ownTabs.shown.find(({id}) => id === ownTabID);
   return (
     <main className="flex min-h-0 flex-1 flex-col">
       <WorkspaceHeader tab={tab} waiting={waiting} caps={caps} showChanges={hasRepository || tab === "changes"}
-        review={listing ? reviewCount(listing.changes, listing.repository.kind, new Date()) : 0} onTab={(next) => onView?.({tab: next})} />
-      {tab === "changes" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-changes" className="flex min-h-0 flex-1">
+        review={listing ? reviewCount(listing.changes, listing.repository.kind, new Date()) : 0} onTab={(next) => onView?.({tab: next})}
+        customTabs={ownTabs.shown.map(({id, title}) => ({id: customTabKey(id), label: title}))}
+        onReload={() => { setTabReloads((count) => count + 1); ownTabs.reload(); }} />
+      {ownTabID !== undefined ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby={`workspace-tab-${tab}`} className="flex min-h-0 flex-1 flex-col">
+        {ownTab
+          ? <WorkspaceTabFrame workspaceId={workspace.id} tab={ownTab} reloadKey={tabReloads} />
+          : <p className="text-muted-text m-auto text-sm">{ownTabs.tabs ? "This tab isn’t available. Settings → Tabs says why." : "Loading tab…"}</p>}
+      </div> : tab === "changes" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-changes" className="flex min-h-0 flex-1">
         <WorkspaceChanges key={`changes:${workspace.id}`} workspace={workspace} listing={listing} selected={selectedChange} sessionTitles={sessionTitles}
           onSelect={(change) => onView?.({change})} onChanged={reload}
           onOpenRun={(run) => onView?.({tab: "runs", run, runFilter: ""})} onOpenSession={onOpenSession} />
@@ -222,6 +236,7 @@ export function WorkspaceHome({
         <WorkspaceVerifySettings key={`verify:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceConnections key={`connections:${workspace.id}`} workspace={workspace} />
         <FolderSettings key={`${workspace.id}:${workspace.folder?.revision ?? 0}`} workspace={workspace} busy={busy} onChanged={onFolderChanged} onOpen={onOpenFiles} />
+        <WorkspaceTabsSettings folder={workspace.folder?.path} tabs={ownTabs.tabs} problem={ownTabs.problem} onRefresh={ownTabs.reload} />
         <section className="mt-8">
           <div className="mb-4 flex items-center gap-3">
             <h2 className="text-body text-sm font-semibold">Conversations</h2>

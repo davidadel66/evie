@@ -3,7 +3,8 @@ import type { WorkflowCapStatus, WorkflowInterruption } from "../api/workflows";
 // The Workspace header (workspace-activity.spec.md): tabs, what needs the
 // owner now, and today's workflow spend against the daily cap.
 
-export type WorkspaceTab = "runs" | "changes" | "workflows" | "settings";
+/** A built-in tab, or one of the Workspace's own as `tab:<id>` (workspace-tabs.spec.md). */
+export type WorkspaceTab = "runs" | "changes" | "workflows" | "settings" | `tab:${string}`;
 
 /**
  * Where the owner is within a Workspace: its tab, the run open in the Runs
@@ -13,7 +14,7 @@ export type WorkspaceTab = "runs" | "changes" | "workflows" | "settings";
 export type WorkspaceViewState = { tab?: WorkspaceTab; run?: string; runFilter?: string; change?: string };
 
 /** The Workspace's tabs; Changes only when it has a Repository. */
-export const workspaceTabs: { id: WorkspaceTab; label: string }[] = [
+export const workspaceTabs: { id: "runs" | "changes" | "workflows" | "settings"; label: string }[] = [
   { id: "runs", label: "Runs" },
   { id: "changes", label: "Changes" },
   { id: "workflows", label: "Workflows" },
