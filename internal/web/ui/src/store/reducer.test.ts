@@ -421,3 +421,31 @@ describe("parseEvent", () => {
     });
   });
 });
+
+// multi-chat.spec.md Stage 3: a followed turn's message is shown once.
+describe("user_message", () => {
+  const started: ServerEvent = { type: "turn_started", id: "root", startedAt: 1, status: "working" };
+  const message: ServerEvent = { type: "user_message", turnId: "root", text: "edit it" };
+
+  it("adds the message for a tab that did not send it, then joins its turn", () => {
+    const items = [message, started].reduce((acc, ev) => reduce(acc, ev), [] as Item[]);
+    expect(items).toMatchObject([{ kind: "user", text: "edit it", turn: { id: "root" } }]);
+  });
+
+  it("keeps the sender's own copy instead of adding another", () => {
+    const items = [message, started].reduce((acc, ev) => reduce(acc, ev), appendUser([], "edit it"));
+    expect(items.filter((item) => item.kind === "user")).toHaveLength(1);
+    expect(items[0]).toMatchObject({ turn: { id: "root" } });
+  });
+
+  it("skips a message history already holds for that turn", () => {
+    const history: Item[] = [{ kind: "user", key: "root", text: "edit it", turn: { id: "root", status: "working" } }];
+    expect(reduce(history, message)).toBe(history);
+    expect(reduce(history, { type: "feed_state", running: true })).toBe(history);
+  });
+
+  it("parses the feed's own events", () => {
+    expect(parseEvent("feed_state", '{"running":true}')).toEqual({ type: "feed_state", running: true });
+    expect(parseEvent("user_message", '{"turnId":"root","text":"hi"}')).toEqual({ type: "user_message", turnId: "root", text: "hi" });
+  });
+});

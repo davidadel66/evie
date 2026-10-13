@@ -13,7 +13,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/eviedb"
@@ -83,6 +85,17 @@ type Server struct {
 	modelRevision int64
 	chats         map[memory.SessionID]*openChat
 	chatUses      uint64
+	// feeds are the chats' live feeds (feed.go); detached counts turns
+	// running without a request.
+	feeds    map[memory.SessionID]*chatFeed
+	detached sync.WaitGroup
+	// Presence: tabs following a feed, and since when none has.
+	presenceMu    sync.Mutex
+	followers     int
+	aloneSince    time.Time
+	now           func() time.Time
+	approvalGrace time.Duration
+	presenceCheck time.Duration
 	// selectingSession serializes opening chats, model changes and archival.
 	// It never blocks another chat's turn.
 	selectingSession  bool
@@ -135,11 +148,16 @@ type ReceiptInspector interface {
 // arbitrates.
 func NewServer(session *agent.Session) *Server {
 	return &Server{
-		session:   session,
-		pending:   make(map[string]chan tools.Decision),
-		terminals: make(map[string]*terminalEntry),
-		turns:     make(map[memory.SessionID]*webTurn),
-		chats:     make(map[memory.SessionID]*openChat),
+		session:       session,
+		pending:       make(map[string]chan tools.Decision),
+		terminals:     make(map[string]*terminalEntry),
+		turns:         make(map[memory.SessionID]*webTurn),
+		chats:         make(map[memory.SessionID]*openChat),
+		feeds:         make(map[memory.SessionID]*chatFeed),
+		now:           time.Now,
+		aloneSince:    time.Now(),
+		approvalGrace: approvalGrace,
+		presenceCheck: time.Second,
 	}
 }
 
@@ -199,6 +217,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/chat", s.guard(s.handleChat))
 	mux.HandleFunc("POST /api/approve", s.guard(s.handleApprove))
+	mux.Handle("/api/chats/follow", s.managementRoute(s.handleFollow))
 	mux.Handle("/api/cancel", s.managementRoute(s.handleCancel))
 	mux.Handle("/api/compact", s.managementRoute(s.handleCompact))
 	if s.manager != nil {
@@ -347,6 +366,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		Message   string           `json:"message"`
 		SessionID memory.SessionID `json:"sessionId"`
 		Model     string           `json:"model"`
+		// Detach starts the turn and answers at once; its events reach the
+		// browser through the chat's feed (multi-chat.spec.md Stage 3).
+		Detach bool `json:"detach"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "body must be JSON with a message field")
@@ -376,54 +398,135 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusConflict, "Chat model changed; refresh before sending")
 		return
 	}
-	turnCtx, stopTurn := context.WithCancelCause(turnLifecycleContext(r))
-	defer stopTurn(nil)
-	turn := &webTurn{stop: stopTurn}
-	if session != nil && !s.beginWebTurn(turnKey, turn) {
-		s.sessionMu.Unlock()
-		jsonError(w, http.StatusConflict, "a turn is already in progress")
-		return
-	}
-	s.sessionMu.Unlock()
 	if session == nil {
+		s.sessionMu.Unlock()
 		jsonError(w, http.StatusServiceUnavailable, "chat is unavailable because the active Agent Preset is invalid; use plugin diagnostics to repair startup")
 		return
 	}
-	defer s.finishWebTurn(turnKey, turn)
+	turnCtx, stopTurn := context.WithCancelCause(turnLifecycleContext(r))
+	turn := &webTurn{stop: stopTurn}
+	if !s.beginWebTurn(turnKey, turn) {
+		s.sessionMu.Unlock()
+		stopTurn(nil)
+		jsonError(w, http.StatusConflict, "a turn is already in progress")
+		return
+	}
+	feed := s.feedLocked(turnKey)
+	ev := &sseEvents{feed: feed, generation: feed.begin(), message: req.Message}
+	s.sessionMu.Unlock()
+	run := chatTurn{ctx: turnCtx, stop: stopTurn, key: turnKey, turn: turn, session: session, message: req.Message, ev: ev}
 
-	ev, err := newSSEEvents(w)
+	if req.Detach {
+		s.detached.Add(1)
+		writeJSON(w, http.StatusAccepted, struct {
+			Status string `json:"status"`
+		}{"started"})
+		go func() {
+			defer s.detached.Done()
+			s.runTurn(run, s.followedApprover(ev), nil)
+		}()
+		return
+	}
+	stream, err := newSSEEvents(w)
 	if err != nil {
+		feed.end(ev.generation)
+		s.finishWebTurn(turnKey, turn)
+		stopTurn(nil)
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	ev.w, ev.flush = stream.w, stream.flush
+	s.runTurn(run, s.approver(r.Context(), ev), func(message string) bool {
+		// Nothing streamed yet: the response can still be a plain 409.
+		if ev.wrote {
+			return false
+		}
+		jsonError(w, http.StatusConflict, message)
+		return true
+	})
+}
 
-	measurementCtx, finalizeMeasurement := agent.BeginResponseMeasurement(turnCtx)
-	sendErr := session.Send(measurementCtx, req.Message, ev, s.approver(r.Context(), ev))
-	s.finishWebTurn(turnKey, turn)
+// chatTurn is one registered turn: its context and stop control, its chat,
+// and where its events go.
+type chatTurn struct {
+	ctx     context.Context
+	stop    context.CancelCauseFunc
+	key     memory.SessionID
+	turn    *webTurn
+	session *agent.Session
+	message string
+	ev      *sseEvents
+}
+
+// runTurn runs a registered turn to its end: errors, turn_done, the end of
+// its feed buffer and its stop control. refuse, when set, answers a turn the
+// agent refused to start (busy, or its model changed) and reports whether it
+// did; a detached turn has none and reports the refusal as an error event.
+func (s *Server) runTurn(t chatTurn, approver tools.Approver, refuse func(message string) bool) {
+	defer t.stop(nil)
+	defer s.finishWebTurn(t.key, t.turn)
+	defer t.ev.feed.end(t.ev.generation)
+	// A panic in a detached turn would otherwise end the whole server. It
+	// ends this turn as a failure instead, and closes the chat so reopening
+	// it builds a fresh agent.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("turn panicked: %v\n%s", recovered, debug.Stack())
+			t.ev.Error("This turn failed unexpectedly. Reopen the chat to continue.")
+			t.ev.TurnDone()
+			s.finishWebTurn(t.key, t.turn)
+			if s.contextSessions != nil {
+				s.sessionMu.Lock()
+				if !s.busyLocked(t.key) {
+					s.closeLocked(t.key)
+				}
+				s.sessionMu.Unlock()
+			}
+		}
+	}()
+	measurementCtx, finalizeMeasurement := agent.BeginResponseMeasurement(t.ctx)
+	sendErr := t.session.Send(measurementCtx, t.message, t.ev, approver)
+	s.finishWebTurn(t.key, t.turn)
 
 	if errors.Is(sendErr, eviedb.ErrSessionModelChanged) && s.contextSessions != nil {
 		// The model changed elsewhere: close the chat so reopening it builds
 		// an agent on the current model.
 		s.sessionMu.Lock()
-		if !s.busyLocked(turnKey) {
-			s.closeLocked(turnKey)
+		if !s.busyLocked(t.key) {
+			s.closeLocked(t.key)
 		}
 		s.sessionMu.Unlock()
 	}
-	if errors.Is(sendErr, eviedb.ErrSessionModelChanged) && !ev.wrote {
-		jsonError(w, http.StatusConflict, "Chat model changed; refresh before sending")
-		return
+	refusal := ""
+	switch {
+	case errors.Is(sendErr, eviedb.ErrSessionModelChanged):
+		refusal = "Chat model changed; refresh before sending"
+	case errors.Is(sendErr, agent.ErrBusy) || errors.Is(sendErr, agent.ErrLeaseConflict):
+		refusal = "a turn is already in progress"
 	}
-	if (errors.Is(sendErr, agent.ErrBusy) || errors.Is(sendErr, agent.ErrLeaseConflict)) && !ev.wrote {
-		jsonError(w, http.StatusConflict, "a turn is already in progress")
-		return
+	if refusal != "" {
+		if refuse != nil && refuse(refusal) {
+			// Followers saw the turn begin; tell them it ended.
+			t.ev.publishOnly("error", struct {
+				Message string `json:"message"`
+			}{refusal})
+			t.ev.publishOnly("turn_done", struct{}{})
+			return
+		}
+		if refuse == nil {
+			// A detached turn reports the refusal with its own code, so the
+			// browser holds queued messages instead of sending them into it.
+			t.ev.Refused(refusal)
+			t.ev.TurnDone()
+			return
+		}
 	}
-	if stoppedByOwner(turnCtx, sendErr) {
-		ev.TurnStopped()
+	if stoppedByOwner(t.ctx, sendErr) {
+		t.ev.TurnStopped()
 	} else if sendErr != nil {
-		ev.Error(sendErr.Error())
+		t.ev.Error(sendErr.Error())
 	}
-	outputErr := ev.TurnDone()
+	outputErr := t.ev.TurnDone()
 	if measurementErr := finalizeMeasurement(outputErr); measurementErr != nil {
 		log.Printf("compiler foreground measurement unavailable")
 	}

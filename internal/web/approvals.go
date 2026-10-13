@@ -55,26 +55,46 @@ func (s *Server) approver(visibilityCtx context.Context, ev *sseEvents) tools.Ap
 
 		ev.ApprovalRequest(id, name, args, preview)
 
-		select {
-		case decision := <-ch:
-			return decision
-		case <-visibilityCtx.Done():
-			if _, ok := s.claimPending(id); ok {
-				return tools.Expired
+		decision := func() tools.Decision {
+			select {
+			case decision := <-ch:
+				return decision
+			case <-visibilityCtx.Done():
+				if _, ok := s.claimPending(id); ok {
+					return tools.Expired
+				}
+				// A POST removed the entry first under the same lock. Honor that
+				// already-claimed decision even though the disconnect is now visible.
+				return <-ch
+			case <-lifecycleCtx.Done():
+				if _, ok := s.claimPending(id); ok {
+					return tools.Expired
+				}
+				// A POST claimed the approval first. Return its decision; the
+				// dispatcher resamples lifecycleCtx and still reports cancellation
+				// before observation or execution.
+				return <-ch
 			}
-			// A POST removed the entry first under the same lock. Honor that
-			// already-claimed decision even though the disconnect is now visible.
-			return <-ch
-		case <-lifecycleCtx.Done():
-			if _, ok := s.claimPending(id); ok {
-				return tools.Expired
-			}
-			// A POST claimed the approval first. Return its decision; the
-			// dispatcher resamples lifecycleCtx and still reports cancellation
-			// before observation or execution.
-			return <-ch
-		}
+		}()
+		ev.approvalDecided(id, decision)
+		return decision
 	}
+}
+
+// approvalDecided tells the chat's feed how an approval ended, so a tab that
+// joins the turn later shows the recorded decision, not a pending card.
+func (e *sseEvents) approvalDecided(id string, decision tools.Decision) {
+	state := "declined"
+	switch decision {
+	case tools.Approved, tools.ApprovedAlternative:
+		state = "approved"
+	case tools.Expired:
+		state = "expired"
+	}
+	e.publishOnly("approval_decided", struct {
+		ID    string `json:"id"`
+		State string `json:"state"`
+	}{id, state})
 }
 
 // handleApprove resolves one pending approval. Taking the channel out

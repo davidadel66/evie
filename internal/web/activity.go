@@ -58,6 +58,12 @@ func activityTimestamp(at time.Time) int64 {
 }
 
 func (e *sseEvents) TurnStarted(id memory.EventID, at time.Time) {
+	// A follower that did not send the message learns it here, with the
+	// turn it starts, once the turn has recorded it.
+	e.publishOnly("user_message", struct {
+		TurnID string `json:"turnId"`
+		Text   string `json:"text"`
+	}{string(id), e.message})
 	e.emit("turn_started", activityTurn{ID: string(id), StartedAt: activityTimestamp(at), Status: "working"})
 }
 

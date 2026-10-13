@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readHistory } from "../api/history";
 import { answerApproval } from "../api/approve";
-import { ApiError, StreamTruncated, streamChat } from "../api/stream";
+import { ApiError, StreamTruncated, followChat, sendDetached } from "../api/stream";
 import { cancelTurn, compactSession, compactionNotice, type ComposerNotice } from "../api/turnControls";
 import { composerCommand } from "../chat/composerCommand";
 import { approvalAlternative } from "../chat/approvalArgs";
@@ -13,6 +13,14 @@ import { isOwnerStop, type ServerEvent } from "./events";
 import { appendUser, reduce, setApprovalAlwaysApplies, setApprovalState, type Item } from "./reducer";
 
 export type Status = "idle" | "streaming" | "error";
+
+// Each chat's last view, so switching back shows it at once while its
+// history and feed catch up; queued messages wait with their chat
+// (multi-chat.spec.md Stage 3).
+const views = new Map<string, { items: Item[]; queue: string[] }>();
+
+/** How long to wait before following a chat's feed again after it dropped. */
+const RECONNECT_MS = 1000;
 
 /** Flush cadence and text pacing, the load-bearing perf decision
  *  (serve.decisions.md): render cost scales with flushes, not tokens, so
@@ -101,6 +109,8 @@ export function useSession(sessionId?: string, model?: string): Session {
   latestItems.current = items;
   const [status, setStatus] = useState<Status>("idle");
   const [queue, setQueue] = useState<string[]>([]);
+  const latestQueue = useRef(queue);
+  latestQueue.current = queue;
   const [problem, setProblem] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
   const [compacting, setCompacting] = useState(false);
@@ -157,11 +167,16 @@ export function useSession(sessionId?: string, model?: string): Session {
     [flush],
   );
 
-  // A turn outliving the component would flush into a dead setState; abort it.
-  const abortRef = useRef<AbortController | null>(null);
+  // The followed feed outliving the component would flush into a dead
+  // setState; abort it. Aborting never stops a turn: only stop does.
+  const followRef = useRef<AbortController | null>(null);
+  const reconnectRef = useRef<number | null>(null);
+  // Turns this view follows live; history copies of them are left out.
+  const liveTurns = useRef(new Set<string>());
   useEffect(() => {
     return () => {
-      abortRef.current?.abort();
+      followRef.current?.abort();
+      if (reconnectRef.current !== null) clearTimeout(reconnectRef.current);
       if (timerRef.current !== null) clearTimeout(timerRef.current);
     };
   }, []);
@@ -210,40 +225,20 @@ export function useSession(sessionId?: string, model?: string): Session {
       setProblem(null);
       setNotice(null);
 
-      const ctl = new AbortController();
-      abortRef.current = ctl;
-
-      streamChat(
-        message,
-        (ev) => {
-          if (ctl.signal.aborted) return;
-          // Keep the banner and stop activity if the server reports an error.
-          // A stop David asked for is his own action, shown in the transcript.
-          if (ev.type === "error" && !isOwnerStop(ev)) setProblem(ev.message);
-          enqueue(ev);
-        },
-        ctl.signal,
-        sessionId,
-        model,
-      )
-        .then(() => {
-          if (ctl.signal.aborted) return;
-          setStopping(false);
-          // A turn that reported an error still completed; keep the banner but
-          // let David type again.
-          setStatus((s) => (s === "error" ? s : "idle"));
-        })
-        .catch((err: unknown) => {
-          if (ctl.signal.aborted) return;
-          setStopping(false);
-          flush(false);
-          setItems((prev) => reduce(prev, { type: "error", message: describe(err) }));
-          setProblem(describe(err));
-          setStatus("error");
-        });
+      // The turn runs on the server whether or not this tab stays; its
+      // events arrive through the chat's feed, which this view follows.
+      const generation = epoch.current;
+      sendDetached(message, sessionId, model).catch((err: unknown) => {
+        if (generation !== epoch.current) return;
+        setStopping(false);
+        flush(false);
+        setItems((prev) => reduce(prev, { type: "error", message: describe(err) }));
+        setProblem(describe(err));
+        setStatus("error");
+      });
       return true;
     },
-    [enqueue, flush, compact, status, compacting, historyLoading, historyProblem, sessionId, model],
+    [flush, compact, status, compacting, historyLoading, historyProblem, sessionId, model],
   );
 
   // Stopping is a request: the turn keeps streaming until the server records
@@ -294,16 +289,20 @@ export function useSession(sessionId?: string, model?: string): Session {
     setStatus((s) => (s === "error" ? s : "idle"));
   }, []);
 
-  const reset = useCallback(() => {
+  const reset = useCallback((id?: string) => {
     epoch.current++;
     historyReady.current = false;
-    abortRef.current?.abort();
-    abortRef.current = null;
+    followRef.current?.abort();
+    followRef.current = null;
+    if (reconnectRef.current !== null) clearTimeout(reconnectRef.current);
+    reconnectRef.current = null;
     if (timerRef.current !== null) clearTimeout(timerRef.current);
     timerRef.current = null;
     pendingRef.current = [];
-    setItems([]);
-    setQueue([]);
+    liveTurns.current = new Set();
+    const view = id ? views.get(id) : undefined;
+    setItems(view?.items ?? []);
+    setQueue(view?.queue ?? []);
     setProblem(null);
     setStopping(false);
     setCompacting(false);
@@ -323,7 +322,8 @@ export function useSession(sessionId?: string, model?: string): Session {
     try {
       const page = await readHistory(sessionId, cursor, ctl.signal);
       if (ctl.signal.aborted) return;
-      setItems((current) => cursor ? [...page.items, ...current] : page.items);
+      const settled = page.items.filter((item) => !(item.turn && liveTurns.current.has(item.turn.id)));
+      setItems((current) => cursor ? [...settled, ...current] : settled);
       setBefore(page.before);
       historyReady.current = true;
     } catch (error) {
@@ -333,15 +333,96 @@ export function useSession(sessionId?: string, model?: string): Session {
     }
   }, [sessionId]);
 
+  // Live events of the followed chat, after its history is in place.
+  const onLive = useCallback((ev: ServerEvent) => {
+    if (ev.type === "feed_state") return;
+    if (ev.type === "user_message") liveTurns.current.add(ev.turnId);
+    if (ev.type === "turn_started") liveTurns.current.add(ev.id);
+    if (ev.type === "user_message" || ev.type === "turn_started") setStatus((s) => (s === "error" ? s : "streaming"));
+    // Keep the banner if the server reports an error. A stop David asked
+    // for is his own action, shown in the transcript.
+    if (ev.type === "error" && !isOwnerStop(ev)) setProblem(ev.message);
+    // A refused turn holds queued messages, as a refused send always has.
+    if (ev.type === "error" && ev.code === "turn_refused") setStatus("error");
+    if (ev.type === "turn_done") {
+      setStopping(false);
+      setStatus((s) => (s === "error" ? s : "idle"));
+    }
+    enqueue(ev);
+  }, [enqueue]);
+
+  // follow subscribes to the chat's feed first, then reads its latest history
+  // page: the running turn is rebuilt from the feed and its history copy left
+  // out, so nothing is missed or shown twice. A dropped feed is followed
+  // again after a pause, catching up the same way.
+  const follow = useCallback((id: string) => {
+    followRef.current?.abort();
+    const ctl = new AbortController();
+    followRef.current = ctl;
+    const early: ServerEvent[] = [];
+    let live = false;
+    let running = false;
+    historyReady.current = false;
+    setHistoryLoading(true);
+    setHistoryProblem(null);
+    const catchUp = async () => {
+      try {
+        const page = await readHistory(id, undefined, ctl.signal);
+        if (ctl.signal.aborted) return;
+        const merged = mergeFollowed(page.items, early, running);
+        liveTurns.current = merged.liveTurns;
+        if (merged.problem) setProblem(merged.problem);
+        pendingRef.current = [];
+        setItems(merged.items);
+        setBefore(page.before);
+        setStatus((s) => (merged.status === "idle" && s === "error" ? s : merged.status));
+        historyReady.current = true;
+        live = true;
+      } catch (error) {
+        if (!ctl.signal.aborted) setHistoryProblem(describe(error));
+      } finally {
+        if (!ctl.signal.aborted) setHistoryLoading(false);
+      }
+    };
+    followChat(id, (ev) => {
+      if (ctl.signal.aborted) return;
+      if (live) return onLive(ev);
+      if (ev.type === "feed_state") {
+        running = ev.running;
+        void catchUp();
+        return;
+      }
+      early.push(ev);
+    }, ctl.signal).then(
+      () => {
+        if (ctl.signal.aborted) return;
+        reconnectRef.current = window.setTimeout(() => follow(id), RECONNECT_MS);
+      },
+      (error: unknown) => {
+        if (ctl.signal.aborted) return;
+        if (error instanceof ApiError && error.status === 409) {
+          setHistoryProblem(error.message);
+          setHistoryLoading(false);
+          return;
+        }
+        reconnectRef.current = window.setTimeout(() => follow(id), RECONNECT_MS);
+      },
+    );
+  }, [onLive]);
+
   useEffect(() => {
     historySession.current = sessionId;
-    reset();
+    reset(sessionId);
     setBefore(undefined);
     setHistoryProblem(null);
-    if (sessionId) void loadHistory();
+    if (sessionId) follow(sessionId);
     else setHistoryLoading(false);
-    return () => { historyAbort.current?.abort(); };
-  }, [sessionId, reset, loadHistory]);
+    return () => {
+      historyAbort.current?.abort();
+      // Keep this chat's view for switching back.
+      if (sessionId) views.set(sessionId, { items: latestItems.current, queue: latestQueue.current });
+    };
+  }, [sessionId, reset, follow]);
 
   // Drain the queue: a finished turn fires the next waiting message. Only
   // "idle" drains — after an error the queue parks until David sends
@@ -354,7 +435,27 @@ export function useSession(sessionId?: string, model?: string): Session {
     send(next);
   }, [status, compacting, queue, send, sessionId]);
 
-  return { items: historySession.current === sessionId ? items : [], status, queue, clearQueue: () => setQueue([]), problem, send, answer, setAlwaysApplies, stop, stopping, compacting, notice, dismissProblem, reset, historyLoading, historyProblem, hasOlder: !!before, loadOlder: () => void loadHistory(before), retryHistory: () => void loadHistory(historyCursor.current) };
+  return { items: historySession.current === sessionId ? items : (sessionId ? views.get(sessionId)?.items : undefined) ?? [], status, queue, clearQueue: () => setQueue([]), problem, send, answer, setAlwaysApplies, stop, stopping, compacting, notice, dismissProblem, reset, historyLoading, historyProblem, hasOlder: !!before, loadOlder: () => void loadHistory(before), retryHistory: () => { if (historyCursor.current || !sessionId) void loadHistory(historyCursor.current); else follow(sessionId); } };
+}
+
+/** mergeFollowed joins a followed chat's latest history page with the feed
+ *  events that arrived before it: the turns the feed carries are rebuilt from
+ *  it and their history copies left out, so nothing shows twice or goes
+ *  missing. running is the feed's state when it was followed. */
+export function mergeFollowed(page: Item[], early: ServerEvent[], running: boolean): { items: Item[]; liveTurns: Set<string>; status: Status; problem?: string } {
+  const liveTurns = new Set<string>();
+  let problem: string | undefined;
+  let status: Status = running ? "streaming" : "idle";
+  for (const ev of early) {
+    if (ev.type === "user_message") liveTurns.add(ev.turnId);
+    if (ev.type === "turn_started") liveTurns.add(ev.id);
+    if (ev.type === "user_message" || ev.type === "turn_started") status = "streaming";
+    if (ev.type === "turn_done" && status === "streaming") status = "idle";
+    if (ev.type === "error" && !isOwnerStop(ev)) problem = ev.message;
+    if (ev.type === "error" && ev.code === "turn_refused") status = "error";
+  }
+  const settled = page.filter((item) => !(item.turn && liveTurns.has(item.turn.id)));
+  return { items: early.reduce((acc, ev) => reduce(acc, ev), settled), liveTurns, status, problem };
 }
 
 /** describe turns a thrown value into banner text. The two typed failures get

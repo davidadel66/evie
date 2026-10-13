@@ -218,4 +218,15 @@ func (s *Server) Close() {
 		cleanup.Go(entry.process.Close)
 	}
 	cleanup.Wait()
+	// Detached turns end with the runtime context; give them a bounded moment
+	// to record how they ended.
+	detached := make(chan struct{})
+	go func() {
+		s.detached.Wait()
+		close(detached)
+	}()
+	select {
+	case <-detached:
+	case <-time.After(10 * time.Second):
+	}
 }

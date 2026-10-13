@@ -74,9 +74,36 @@ model's metadata, two sequential requests (about 170 ms, up to 3 s).
 - A pending approval stays pending while any Evie tab is connected, and
   expires as a disconnect does today only after no tab has been connected for
   2 minutes, or when its turn is stopped. It can be answered whenever its chat
-  is shown.
+  is shown. How each approval ended is published to the feed, so a tab that
+  rejoins shows the recorded answer, not a pending card.
+- A turn the agent refuses to start (another turn holds the conversation, or
+  its model changed) ends with an error the browser keeps, so queued messages
+  wait as they did before. A panic inside a turn ends that turn with an error
+  and closes its chat; the server and other chats keep running.
 - The browser keeps each open chat's view (transcript, queued messages,
-  status) so switching back is immediate; queued messages stay with their chat.
+  status) so switching back is immediate; queued messages stay with their chat
+  and are sent when the owner is back on it and its turn has ended.
+- Verified October 12: `TestDetachedTurnReachesFollowersAndLateJoiners`
+  (live followers, a mid-turn joiner receiving the turn with its text merged,
+  the sending tab closing while another approves, and nothing replayed after
+  the end), `TestDetachedApprovalWaitsForATab` and
+  `TestChatFeedReplayAndSlowFollowers` passed under `-race`; the existing
+  streaming tests pass unchanged. In headless Chromium against the opt-in
+  `TestMultiChatBrowserFixture` (temporary database, scripted model, no
+  network): the reasoning line showed "I need to read the notes first.";
+  switching to the other chat mid-turn took 40 ms and it answered while the
+  first still thought; switching back showed Working with the live line; a
+  reload mid-turn rejoined it, which then finished with the message shown
+  once; no failed requests or page errors.
+- A fresh-context review found no lock-order or boundary issue and four
+  defects, fixed with regression tests under `-race`: an answered approval
+  showing as pending then Expired after rejoining
+  (`TestApprovalDecisionReachesTheFeed`, `mergeFollowed` tests); a panic in a
+  detached turn ending the server (`TestDetachedTurnPanicEndsOnlyThatTurn`);
+  chat fields read after the lock while a model change wrote them
+  (`TestModelChangeAndHistoryReadsDoNotRace`); and a refused detached turn
+  releasing queued messages (`TestRefusedDetachedTurnIsMarked`). Per-chat model
+  and compaction gates and Workspace archival closing its chats gained tests.
 
 ## Stage 4 — Chat status in the sidebar
 

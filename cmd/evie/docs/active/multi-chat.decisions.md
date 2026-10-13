@@ -15,3 +15,7 @@
   the least recently used idle one; a pending approval expires only after no
   Evie tab has been connected for 2 minutes (it expired on disconnect before,
   which would end every approval in a chat David leaves).
+- **2026-10-12 — Detached turns are contained.** A turn now runs without the
+  request that started it, so a panic inside it is recovered there: the turn
+  ends with an error, its chat closes, and the server and other chats keep
+  running, as they did when each turn was its own request.

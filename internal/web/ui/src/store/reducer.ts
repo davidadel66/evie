@@ -87,6 +87,16 @@ export function reduce(
   ev: ServerEvent,
   now: Clock = Date.now,
 ): Item[] {
+  if (ev.type === "feed_state") return items;
+  if (ev.type === "approval_decided") return setApprovalState(items, ev.id, ev.state);
+  // A followed turn's message: kept once, whether history already has it
+  // or this tab sent it and shows it already.
+  if (ev.type === "user_message") {
+    if (items.some((item) => item.kind === "user" && item.turn?.id === ev.turnId)) return items;
+    const last = items.findLast((item) => item.kind === "user");
+    if (last?.kind === "user" && !last.turn && last.text === ev.text) return items;
+    return appendUser(items, ev.text);
+  }
   if (ev.type === "turn_started") {
     const idx = items.findLastIndex((item) => item.kind === "user");
     if (idx < 0) return items;
@@ -116,7 +126,7 @@ export function reduce(
   });
 }
 
-function reduceEvent(items: Item[], ev: Exclude<ServerEvent, { type: "turn_started" }>, now: Clock): Item[] {
+function reduceEvent(items: Item[], ev: Exclude<ServerEvent, { type: "turn_started" | "feed_state" | "user_message" | "approval_decided" }>, now: Clock): Item[] {
   switch (ev.type) {
     case "memory_activity":
       return [...items, { kind: "memory", key: ev.snapshotId, memory: { snapshotId: ev.snapshotId, requestStatus: ev.requestStatus, iteration: ev.iteration, answerId: ev.answerId, status: ev.status, acceptedCount: ev.acceptedCount, excerptCount: ev.excerptCount, historicalCount: ev.historicalCount, retiredCount: ev.retiredCount, conflictCount: ev.conflictCount } }];

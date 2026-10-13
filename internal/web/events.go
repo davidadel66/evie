@@ -19,8 +19,15 @@ import (
 // flushed immediately — an unflushed event sits in Go's response buffer
 // and the stream stops being a stream.
 type sseEvents struct {
+	// w is nil for a detached turn, whose events reach the browser only
+	// through its chat's feed.
 	w     http.ResponseWriter
 	flush func() error
+	// feed, when set, receives every event of the turn of generation, and
+	// message is the owner's text it reports when the turn starts.
+	feed       *chatFeed
+	generation uint64
+	message    string
 	// err keeps the first failed write/flush through TurnDone. A later successful
 	// event cannot establish completion of a stream whose earlier output failed.
 	err error
@@ -49,18 +56,40 @@ func newSSEEvents(w http.ResponseWriter) (*sseEvents, error) {
 // flush. json.Marshal escapes newlines inside strings, which is what
 // keeps any payload a single data: line — the format's one hard rule.
 func (e *sseEvents) emit(event string, payload any) {
-	if e.err != nil {
-		return
-	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		// Payloads are our own flat structs; this cannot fail. Guard
 		// anyway so a future payload type can't wedge the stream.
-		e.err = err
+		if e.err == nil {
+			e.err = err
+		}
+		return
+	}
+	// The feed never blocks and outlives this response, so a tab that went
+	// away does not stop other followers from seeing the turn.
+	if e.feed != nil {
+		e.feed.publish(e.generation, event, data)
+	}
+	e.write(fmt.Sprintf("event: %s\ndata: %s\n\n", event, data))
+}
+
+// publishOnly sends an event to the feed alone: the turn's own response
+// keeps its existing vocabulary.
+func (e *sseEvents) publishOnly(event string, payload any) {
+	if e.feed == nil {
+		return
+	}
+	data, err := json.Marshal(payload)
+	if err == nil {
+		e.feed.publish(e.generation, event, data)
+	}
+}
+
+func (e *sseEvents) write(block string) {
+	if e.err != nil || e.w == nil {
 		return
 	}
 	e.wrote = true
-	block := fmt.Sprintf("event: %s\ndata: %s\n\n", event, data)
 	n, err := e.w.Write([]byte(block))
 	if err == nil && n != len(block) {
 		err = io.ErrShortWrite
@@ -145,6 +174,15 @@ func (e *sseEvents) TurnStopped() {
 		Message string `json:"message"`
 		Code    string `json:"code"`
 	}{"Turn stopped.", "turn_stopped"})
+}
+
+// Refused reports a turn the agent would not start (another turn holds the
+// conversation, or its model changed), with a code the browser keeps.
+func (e *sseEvents) Refused(message string) {
+	e.emit("error", struct {
+		Message string `json:"message"`
+		Code    string `json:"code"`
+	}{message, "turn_refused"})
 }
 
 func (e *sseEvents) TurnDone() error {

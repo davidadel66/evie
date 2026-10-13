@@ -47,7 +47,13 @@ export type ServerEvent =
   | { type: "response_discarded"; reason: DiscardReason; message: string }
   /** code "turn_stopped" marks a turn the owner stopped through /api/cancel. */
   | { type: "error"; message: string; code?: string }
-  | { type: "turn_done" };
+  | { type: "turn_done" }
+  /** A chat feed's first event: whether a turn is running (multi-chat.spec.md). */
+  | { type: "feed_state"; running: boolean }
+  /** The owner's message of the turn it starts, as a chat feed reports it. */
+  | { type: "user_message"; turnId: string; text: string }
+  /** How an approval ended, as a chat feed reports it. */
+  | { type: "approval_decided"; id: string; state: "approved" | "declined" | "expired" };
 
 /** Event names we handle. Anything else on the wire is ignored on purpose:
  *  the whiteboard feature adds board_start/delta/end and critic_note to this
@@ -65,6 +71,9 @@ const KNOWN = new Set([
   "response_discarded",
   "error",
   "turn_done",
+  "feed_state",
+  "user_message",
+  "approval_decided",
 ]);
 
 /** parseEvent turns one raw SSE block into a typed event, or null if the name

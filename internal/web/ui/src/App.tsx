@@ -299,7 +299,7 @@ export default function App() {
         snapshot={contextSessions.snapshot}
         instructions={scopeWorkspace&&<InstructionBadge workspace={scopeWorkspace} refresh={status} onOpen={trigger=>openInstructions(scopeWorkspace,trigger)}/>}
         destination={sidebarDestination(activeView)}
-        busy={contextSessions.busy || working}
+        busy={contextSessions.busy}
         memoryReviewPending={memoryReviewPending}
         waiting={waiting}
         mobileOpen={mobileNavOpen}
@@ -419,7 +419,7 @@ export default function App() {
             {activeView.kind === "workspaces" && (
               <Workspaces
                 snapshot={contextSessions.snapshot}
-                busy={contextSessions.busy || working}
+                busy={contextSessions.busy}
                 problem={contextSessions.problem}
                 onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
                 onOpenWorkspace={(workspace) => openWorkspace(workspace)}
@@ -447,7 +447,7 @@ export default function App() {
                 onResearchChanged={contextSessions.refresh}
                 onOpenFiles={() => {setFilesRequest(value => value + 1); setSelectedAction(undefined); setInspectorOverride(undefined); setInspectorOpen(true);}}
                 sessions={workspaceSessions}
-                busy={contextSessions.busy || working}
+                busy={contextSessions.busy}
                 onNewChat={() => void startWorkspaceChat(activeWorkspace)}
                 onResume={(session) => void selectSession({ sessionId: session.id })}
               />
@@ -481,7 +481,7 @@ export default function App() {
         />
       </div>
       {createWorkspaceOpen && <CreateWorkspaceDialog onClose={() => setCreateWorkspaceOpen(false)} onCreate={registerWorkspace} />}
-      {settingsOpen && <SettingsDialog snapshot={contextSessions.snapshot} problem={contextSessions.problem} onRefresh={contextSessions.refresh} busy={contextSessions.busy || working} textSize={textSize} onTextSize={setTextSize} font={chatFont} onFont={setChatFont} onClose={() => setSettingsOpen(false)} onRestore={session => contextSessions.setArchived(session.id, false)} onRestoreWorkspace={workspace => contextSessions.setWorkspaceArchived(workspace.id, false)} />}
+      {settingsOpen && <SettingsDialog snapshot={contextSessions.snapshot} problem={contextSessions.problem} onRefresh={contextSessions.refresh} busy={contextSessions.busy} textSize={textSize} onTextSize={setTextSize} font={chatFont} onFont={setChatFont} onClose={() => setSettingsOpen(false)} onRestore={session => contextSessions.setArchived(session.id, false)} onRestoreWorkspace={workspace => contextSessions.setWorkspaceArchived(workspace.id, false)} />}
       {deletingWorkspace && <DeleteWorkspaceDialog workspace={deletingWorkspace} onDelete={deleteWorkspace} onClose={() => setDeletingWorkspace(undefined)} />}
     </div></MemoryPresentationProvider>
   );
