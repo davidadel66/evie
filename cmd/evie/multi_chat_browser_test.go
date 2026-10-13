@@ -20,15 +20,24 @@ import (
 
 // scriptedThinker is the browser fixture's model. A message containing
 // "slow" thinks aloud for several seconds, one sentence at a time, before
-// answering; anything else is answered at once, echoing the message.
-type scriptedThinker struct{}
+// answering; one containing "approve" asks to edit note; anything else is
+// answered at once, echoing the message.
+type scriptedThinker struct{ note string }
 
-func (scriptedThinker) ChatStream(ctx context.Context, request openrouter.ChatRequest, handlers openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+func (m scriptedThinker) ChatStream(ctx context.Context, request openrouter.ChatRequest, handlers openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
 	last := ""
 	for _, message := range request.Messages {
 		if message.Role == "user" {
 			last = message.Content
 		}
+	}
+	if final := request.Messages[len(request.Messages)-1]; final.Role == "tool" {
+		return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{Role: "assistant", Content: "Edited the note."}}}}, nil
+	}
+	if strings.Contains(last, "approve") {
+		args := fmt.Sprintf(`{"path":%q,"old_string":"world","new_string":"evie"}`, m.note)
+		call := openrouter.ToolCall{ID: "edit-" + fmt.Sprint(time.Now().UnixNano()), Type: "function", Function: openrouter.FunctionCall{Name: "edit_file", Arguments: args}}
+		return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{Role: "assistant", ToolCalls: []openrouter.ToolCall{call}}}}}, nil
 	}
 	answer := "Quick answer to: " + last
 	if strings.Contains(last, "slow") {
@@ -69,9 +78,13 @@ func TestMultiChatBrowserFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	note := filepath.Join(t.TempDir(), "note.txt")
+	if err := os.WriteFile(note, []byte("hello world"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	controller := newWebContextSessionController(store, sessionCompositionManager(t), func(session memory.Session, composition plugins.ResolvedComposition) (*agent.Session, error) {
 		holder := memory.LeaseHolderID("web-" + session.ID)
-		return agent.NewWithToolset(scriptedThinker{}, profile, store.BindHistory(session.ID, holder), session.ScopeContext(), store.BindTurnOwner(session.ID, holder), composition.Toolset), nil
+		return agent.NewWithToolset(scriptedThinker{note: note}, profile, store.BindHistory(session.ID, holder), session.ScopeContext(), store.BindTurnOwner(session.ID, holder), composition.Toolset), nil
 	})
 	workspace, err := store.RegisterWorkspace(ctx, "Demo")
 	if err != nil {

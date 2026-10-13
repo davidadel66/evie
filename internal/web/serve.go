@@ -96,6 +96,11 @@ type Server struct {
 	now           func() time.Time
 	approvalGrace time.Duration
 	presenceCheck time.Duration
+	// Chat status (status.go): its followers, and when each chat's latest
+	// turn finished (guarded by sessionMu).
+	statusMu        sync.Mutex
+	statusFollowers map[chan struct{}]struct{}
+	finishedAt      map[memory.SessionID]int64
 	// selectingSession serializes opening chats, model changes and archival.
 	// It never blocks another chat's turn.
 	selectingSession  bool
@@ -130,6 +135,8 @@ type Server struct {
 
 	mu      sync.Mutex
 	pending map[string]chan tools.Decision
+	// pendingChat names the chat each pending approval belongs to.
+	pendingChat map[string]memory.SessionID
 
 	// turns holds the stop control of each running web turn, keyed by its
 	// conversation. Guarded by sessionMu.
@@ -148,16 +155,19 @@ type ReceiptInspector interface {
 // arbitrates.
 func NewServer(session *agent.Session) *Server {
 	return &Server{
-		session:       session,
-		pending:       make(map[string]chan tools.Decision),
-		terminals:     make(map[string]*terminalEntry),
-		turns:         make(map[memory.SessionID]*webTurn),
-		chats:         make(map[memory.SessionID]*openChat),
-		feeds:         make(map[memory.SessionID]*chatFeed),
-		now:           time.Now,
-		aloneSince:    time.Now(),
-		approvalGrace: approvalGrace,
-		presenceCheck: time.Second,
+		session:         session,
+		pending:         make(map[string]chan tools.Decision),
+		terminals:       make(map[string]*terminalEntry),
+		turns:           make(map[memory.SessionID]*webTurn),
+		chats:           make(map[memory.SessionID]*openChat),
+		feeds:           make(map[memory.SessionID]*chatFeed),
+		pendingChat:     make(map[string]memory.SessionID),
+		finishedAt:      make(map[memory.SessionID]int64),
+		statusFollowers: make(map[chan struct{}]struct{}),
+		now:             time.Now,
+		aloneSince:      time.Now(),
+		approvalGrace:   approvalGrace,
+		presenceCheck:   time.Second,
 	}
 }
 
@@ -218,6 +228,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/chat", s.guard(s.handleChat))
 	mux.HandleFunc("POST /api/approve", s.guard(s.handleApprove))
 	mux.Handle("/api/chats/follow", s.managementRoute(s.handleFollow))
+	mux.Handle("/api/chats/status", s.managementRoute(s.handleChatStatus))
 	mux.Handle("/api/cancel", s.managementRoute(s.handleCancel))
 	mux.Handle("/api/compact", s.managementRoute(s.handleCompact))
 	if s.manager != nil {
@@ -412,7 +423,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	feed := s.feedLocked(turnKey)
-	ev := &sseEvents{feed: feed, generation: feed.begin(), message: req.Message}
+	ev := &sseEvents{feed: feed, generation: feed.begin(), message: req.Message, session: turnKey}
 	s.sessionMu.Unlock()
 	run := chatTurn{ctx: turnCtx, stop: stopTurn, key: turnKey, turn: turn, session: session, message: req.Message, ev: ev}
 

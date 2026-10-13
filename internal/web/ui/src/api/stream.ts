@@ -75,9 +75,22 @@ export async function followChat(sessionId: string, onEvent: (ev: ServerEvent) =
   if (res.body) await readEvents(res.body, onEvent);
 }
 
-/** readEvents parses a body's event blocks in wire order and reports whether
- *  turn_done arrived. SSE comments (heartbeats) parse to nothing. */
+/** readEvents parses a body's turn events in wire order and reports whether
+ *  turn_done arrived. */
 async function readEvents(body: NonNullable<Response["body"]>, onEvent: (ev: ServerEvent) => void): Promise<boolean> {
+  let sawTurnDone = false;
+  await readBlocks(body, (name, data) => {
+    const ev = parseEvent(name, data);
+    if (!ev) return;
+    if (ev.type === "turn_done") sawTurnDone = true;
+    onEvent(ev);
+  });
+  return sawTurnDone;
+}
+
+/** readBlocks reads a body's `event:`/`data:` blocks as they arrive. SSE
+ *  comments (heartbeats) carry neither and are skipped. */
+export async function readBlocks(body: NonNullable<Response["body"]>, onBlock: (name: string, data: string) => void): Promise<void> {
   const reader = body
     .pipeThrough(new TextDecoderStream())
     .getReader();
@@ -85,8 +98,6 @@ async function readEvents(body: NonNullable<Response["body"]>, onEvent: (ev: Ser
   // Blocks are separated by a blank line; a chunk can split one anywhere, so
   // whatever follows the last separator stays buffered for the next chunk.
   let buffer = "";
-  let sawTurnDone = false;
-
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -96,33 +107,28 @@ async function readEvents(body: NonNullable<Response["body"]>, onEvent: (ev: Ser
     while ((sep = buffer.indexOf("\n\n")) !== -1) {
       const block = buffer.slice(0, sep);
       buffer = buffer.slice(sep + 2);
-
-      const ev = parseBlock(block);
-      if (!ev) continue;
-      if (ev.type === "turn_done") sawTurnDone = true;
-      onEvent(ev);
+      const [name, data] = parseBlock(block);
+      if (name && data) onBlock(name, data);
     }
   }
-  return sawTurnDone;
 }
 
 /** parseBlock reads the `event:`/`data:` lines of one block. Multiple data
  *  lines concatenate, per the SSE spec — our server never emits them, but
  *  following the spec costs one line. */
-function parseBlock(block: string): ServerEvent | null {
+function parseBlock(block: string): [name: string, data: string] {
   let name = "";
   let data = "";
   for (const line of block.split("\n")) {
     if (line.startsWith("event:")) name = line.slice(6).trim();
     else if (line.startsWith("data:")) data += line.slice(5).trim();
   }
-  if (!name || !data) return null;
-  return parseEvent(name, data);
+  return [name, data];
 }
 
 /** errorText pulls the message out of the server's {"error": "..."} body,
  *  falling back to the status line when the body isn't that shape. */
-async function errorText(res: Response): Promise<string> {
+export async function errorText(res: Response): Promise<string> {
   try {
     const body = await res.json();
     if (body && typeof body.error === "string") return body.error;

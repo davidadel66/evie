@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/tools"
 )
 
@@ -43,7 +44,21 @@ func (s *Server) claimPending(id string) (chan tools.Decision, bool) {
 		return nil, false
 	}
 	delete(s.pending, id)
+	if _, tagged := s.pendingChat[id]; tagged {
+		delete(s.pendingChat, id)
+		s.statusChanged()
+	}
 	return ch, true
+}
+
+// tagPending records the chat a pending approval belongs to, for chat status.
+func (s *Server) tagPending(id string, chat memory.SessionID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.pending[id]; ok {
+		s.pendingChat[id] = chat
+		s.statusChanged()
+	}
 }
 
 // approver builds the per-turn gate handed to Send: emit the request on
@@ -52,6 +67,7 @@ func (s *Server) claimPending(id string) (chan tools.Decision, bool) {
 func (s *Server) approver(visibilityCtx context.Context, ev *sseEvents) tools.Approver {
 	return func(lifecycleCtx context.Context, name, args string, preview *tools.FileChangePreview) tools.Decision {
 		id, ch := s.newPending()
+		s.tagPending(id, ev.session)
 
 		ev.ApprovalRequest(id, name, args, preview)
 

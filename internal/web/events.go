@@ -12,6 +12,7 @@ import (
 	"net/http"
 
 	"github.com/davidadel66/evie/internal/agent"
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/tools"
 )
 
@@ -28,6 +29,8 @@ type sseEvents struct {
 	feed       *chatFeed
 	generation uint64
 	message    string
+	// session is the chat the turn runs in, for chat status.
+	session memory.SessionID
 	// err keeps the first failed write/flush through TurnDone. A later successful
 	// event cannot establish completion of a stream whose earlier output failed.
 	err error

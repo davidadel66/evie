@@ -117,6 +117,15 @@ model's metadata, two sequential requests (about 170 ms, up to 3 s).
   page is visible marks it read. Turns that finished before this browser first
   recorded read state do not make a chat bold.
 - No notification or sound.
+- Verified October 12: `TestChatStatusFollowsATurnThroughItsApproval`
+  (`-race`) follows a chat from running to waiting on its approval to finished;
+  UI tests cover read state, unread and running rules, hidden-chat summaries,
+  screen-reader text and the sidebar rendering. In headless Chromium against
+  the fixture: a spinner while the chat away ran; its title bold once it
+  finished, plain again when opened; spinner and amber dot while it waited on
+  an approval; the collapsed Workspace row summarizing both; approving after
+  switching back cleared the dot; 390 px navigation without overflow; no
+  failed requests or page errors.
 
 ## Non-goals
 

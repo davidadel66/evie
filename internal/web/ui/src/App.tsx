@@ -42,6 +42,8 @@ import { SettingsDialog } from "./shell/SettingsDialog";
 import { DeleteWorkspaceDialog } from "./shell/DeleteWorkspaceDialog";
 import { resolveChatFont, type ChatFont } from "./ui/chatFont";
 import { startsSubagents } from "./subagents/subagentView";
+import { useChatStatus } from "./chats/useChatStatus";
+import { chatMark, loadReadState, markRead } from "./chats/chatMarks";
 
 export type WorkbenchView =
   | { id: "chat"; kind: "chat" }
@@ -105,6 +107,22 @@ export default function App() {
   // read again after each turn and whenever the owner acts on a run.
   const [runsChanged, setRunsChanged] = useState(0);
   const waiting = useWorkspaceNeeds(`${status}:${runsChanged}`);
+  // Sidebar markers (multi-chat.spec.md Stage 4): live chat status, and what
+  // this browser has read. Showing a chat while the page is visible marks it
+  // read, again whenever its latest turn finishes or its activity moves.
+  const chatStatuses = useChatStatus();
+  const [readState, setReadState] = useState(() => loadReadState(Date.now()));
+  const viewedId = activeView.kind === "chat" ? contextSessions.snapshot?.activeSession?.id : undefined;
+  const viewedFinished = viewedId ? chatStatuses[viewedId]?.finishedAt : undefined;
+  const viewedActivity = contextSessions.snapshot?.sessions.find((session) => session.id === viewedId)?.activityAt;
+  useEffect(() => {
+    if (!viewedId) return;
+    const mark = () => { if (document.visibilityState === "visible") setReadState((state) => markRead(state, viewedId, Date.now())); };
+    mark();
+    document.addEventListener("visibilitychange", mark);
+    return () => document.removeEventListener("visibilitychange", mark);
+  }, [viewedId, viewedFinished, viewedActivity]);
+  const chatMarks = useMemo(() => Object.fromEntries((contextSessions.snapshot?.sessions ?? []).map((session) => [session.id, chatMark(chatStatuses[session.id], session.activityAt, readState, session.id)])), [contextSessions.snapshot?.sessions, chatStatuses, readState]);
 
   const activeWorkspace = activeView.kind === "workspace"
     ? contextSessions.snapshot?.workspaces.find((workspace) => workspace.id === activeView.workspaceId)
@@ -302,6 +320,7 @@ export default function App() {
         busy={contextSessions.busy}
         memoryReviewPending={memoryReviewPending}
         waiting={waiting}
+        marks={chatMarks}
         mobileOpen={mobileNavOpen}
         collapsed={sidebarCollapsed}
         onSettings={() => setSettingsOpen(true)}

@@ -35,6 +35,7 @@ func (s *Server) beginWebTurn(key memory.SessionID, turn *webTurn) bool {
 		return false
 	}
 	s.turns[key] = turn
+	s.statusChanged()
 	return true
 }
 
@@ -45,6 +46,8 @@ func (s *Server) finishWebTurn(key memory.SessionID, turn *webTurn) {
 	defer s.sessionMu.Unlock()
 	if s.turns[key] == turn {
 		delete(s.turns, key)
+		s.finishedAt[key] = s.now().UnixMilli()
+		s.statusChanged()
 	}
 }
 

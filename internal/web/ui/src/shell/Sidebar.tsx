@@ -4,7 +4,8 @@ import type {
   Workspace,
 } from "../api/contextSessions";
 import { useEffect, useState } from "react";
-import { Archive, ChevronDown, ChevronRight, Database, MessageSquare, Plus, Settings, Sidebar as SidebarIcon } from "../ui/Icon";
+import { Archive, ChevronDown, ChevronRight, Database, MessageSquare, Plus, Settings, Sidebar as SidebarIcon, Spinner } from "../ui/Icon";
+import { combineMarks, markText, type ChatMark } from "../chats/chatMarks";
 
 // Desktop width is the person's to set: drag or arrow keys on the edge,
 // double-click to reset. Saved per browser like the Inspector's width.
@@ -36,6 +37,8 @@ type Props = {
   memoryReviewPending?: number;
   /** Runs waiting on the owner now, by Workspace ID. */
   waiting?: Record<string, number>;
+  /** Each chat's running, approval and unread markers, by session ID. */
+  marks?: Record<string, ChatMark>;
   mobileOpen: boolean;
   collapsed?: boolean;
   onSettings: () => void;
@@ -57,6 +60,7 @@ export function Sidebar({
   busy,
   memoryReviewPending = 0,
   waiting = {},
+  marks = {},
   mobileOpen,
   collapsed = false,
   onSettings,
@@ -185,6 +189,7 @@ export function Sidebar({
             sessions={(snapshot?.sessions ?? []).filter((session) => session.workspaceId === workspace.id && session.status === "active")}
             active={destination === `workspace:${workspace.id}`}
             waiting={waiting[workspace.id] ?? 0}
+            marks={marks}
             activeSessionId={snapshot?.activeSession?.id}
             busy={busy}
             expanded={!collapsedIds.includes(workspace.id)}
@@ -211,6 +216,7 @@ function WorkspaceNav({
   sessions,
   active,
   waiting,
+  marks,
   activeSessionId,
   busy,
   expanded,
@@ -225,6 +231,7 @@ function WorkspaceNav({
   sessions: StoredSession[];
   active: boolean;
   waiting: number;
+  marks: Record<string, ChatMark>;
   activeSessionId?: string;
   busy: boolean;
   expanded: boolean;
@@ -236,6 +243,11 @@ function WorkspaceNav({
   onDelete?: (workspace: Workspace) => void;
 }) {
   const sessionsId = `workspace-sessions-${workspace.id}`;
+  // The row carries the markers of chats the list does not show: all of
+  // them while collapsed, and those past the first five while open.
+  const shown = expanded ? sessions.slice(0, 5) : [];
+  const hidden = combineMarks(sessions.filter((session) => !shown.includes(session)).flatMap((session) => marks[session.id] ?? []));
+  const hiddenText = markText(hidden);
   return (
     <div className="mb-1">
       <div className={`${active ? "bg-selected text-ink" : "text-muted-text hover:bg-hover hover:text-body"} group flex min-w-0 items-center rounded-[7px]`}>
@@ -256,7 +268,9 @@ function WorkspaceNav({
         aria-current={active ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2 rounded-[7px] py-[7px] pr-2 pl-1 text-left"
       >
-        <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{workspace.displayName}</span>
+        <span className={`min-w-0 flex-1 truncate text-[12.5px] ${hidden.unread ? "text-ink font-semibold" : "font-medium"}`}>{workspace.displayName}</span>
+        <ChatMarkers mark={hidden} />
+        {hiddenText && <span className="sr-only">, other chats: {hiddenText}</span>}
         {waiting > 0 && <>
           <span aria-hidden="true" title="Waiting on you" className="border-amber-hair-strong bg-amber-bg text-amber-ink min-w-[18px] flex-none rounded-full border px-[5px] text-center text-[10.5px] leading-4">{waiting}</span>
           <span className="sr-only">, {waitingText(waiting)}</span>
@@ -270,16 +284,21 @@ function WorkspaceNav({
       </button>
       </div>
       {expanded && <div id={sessionsId}>
-      {sessions.slice(0, 5).map((session) => (
-        <div key={session.id} className="group flex items-center rounded-[6px] hover:bg-hover focus-within:bg-hover">
+      {shown.map((session) => {
+        const mark = marks[session.id];
+        const unread = mark?.unread && activeSessionId !== session.id;
+        const text = mark ? markText({...mark, unread: !!unread}) : "";
+        return <div key={session.id} className="group flex items-center rounded-[6px] hover:bg-hover focus-within:bg-hover">
           <button
             type="button"
             disabled={busy}
             onClick={() => onSession(session)}
-            className={`${activeSessionId === session.id ? "text-teal" : "text-muted-text hover:text-body"} focus-visible:ring-teal flex min-w-0 flex-1 items-center gap-2 rounded-[6px] py-[7px] pr-1 pl-7 text-left focus-visible:ring-1 focus-visible:outline-none disabled:opacity-50`}
+            className={`${activeSessionId === session.id ? "text-teal" : unread ? "text-ink" : "text-muted-text hover:text-body"} focus-visible:ring-teal flex min-w-0 flex-1 items-center gap-2 rounded-[6px] py-[7px] pr-1 pl-7 text-left focus-visible:ring-1 focus-visible:outline-none disabled:opacity-50`}
           >
-            <MessageSquare size={12} />
-            <span className="truncate text-[11.5px]">{session.title.trim() || "Untitled session"}</span>
+            {mark?.running ? <Spinner size={12} className="text-teal animate-spin motion-reduce:animate-none" /> : <MessageSquare size={12} />}
+            <span className={`min-w-0 flex-1 truncate text-[11.5px] ${unread ? "font-semibold" : ""}`}>{session.title.trim() || "Untitled session"}</span>
+            {mark?.waiting && <span aria-hidden="true" title="Waiting for your approval" className="bg-amber-ink size-1.5 flex-none rounded-full" />}
+            {text && <span className="sr-only">, {text}</span>}
           </button>
           <button
             type="button"
@@ -291,11 +310,20 @@ function WorkspaceNav({
           >
             <Archive size={13} />
           </button>
-        </div>
-      ))}
+        </div>;
+      })}
       </div>}
     </div>
   );
+}
+
+// A Workspace row's summary of its hidden chats: a spinner while one runs a
+// turn, an amber dot while one waits on an approval.
+function ChatMarkers({mark}: {mark: ChatMark}) {
+  return <>
+    {mark.running && <Spinner size={11} className="text-teal animate-spin motion-reduce:animate-none" />}
+    {mark.waiting && <span aria-hidden="true" title="A chat is waiting for your approval" className="bg-amber-ink size-1.5 flex-none rounded-full" />}
+  </>;
 }
 
 function SidebarButton({

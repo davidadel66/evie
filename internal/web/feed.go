@@ -240,6 +240,7 @@ func (s *Server) unattended() bool {
 func (s *Server) followedApprover(ev *sseEvents) tools.Approver {
 	return func(lifecycleCtx context.Context, name, args string, preview *tools.FileChangePreview) tools.Decision {
 		id, ch := s.newPending()
+		s.tagPending(id, ev.session)
 		ev.ApprovalRequest(id, name, args, preview)
 		check := time.NewTicker(s.presenceCheck)
 		defer check.Stop()
