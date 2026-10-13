@@ -27,7 +27,8 @@ func (s *Server) handleModelList(w http.ResponseWriter, r *http.Request) {
 	models, err := controller.ListChatModels(r.Context())
 	s.sessionMu.RLock()
 	defer s.sessionMu.RUnlock()
-	if request.SessionID == "" || request.SessionID != s.activeSession.ID || s.session == nil || s.selectingSession {
+	chat := s.chatReadLocked(request.SessionID)
+	if chat == nil || chat.changingModel {
 		managementJSONError(w, http.StatusConflict, "model_session_changed", "Chat changed; refresh and try again")
 		return
 	}
@@ -43,7 +44,7 @@ func (s *Server) handleModelList(w http.ResponseWriter, r *http.Request) {
 		Model    string             `json:"model"`
 		Revision int64              `json:"revision"`
 		Problem  string             `json:"problem,omitempty"`
-	}{models, s.session.ContextProfile().ConfiguredModel, s.modelRevision, problem})
+	}{models, chat.agent.ContextProfile().ConfiguredModel, chat.modelRevision, problem})
 }
 
 func (s *Server) handleModelSelect(w http.ResponseWriter, r *http.Request) {
@@ -61,14 +62,19 @@ func (s *Server) handleModelSelect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.sessionMu.Lock()
-	if s.selectingSession || s.activeTurns > 0 || s.session == nil || request.SessionID == "" || request.SessionID != s.activeSession.ID || *request.Revision != s.modelRevision {
+	chat := s.chatLocked(request.SessionID)
+	if s.selectingSession || chat == nil || s.busyLocked(chat.session.ID) || *request.Revision != chat.modelRevision {
 		s.sessionMu.Unlock()
 		managementJSONError(w, http.StatusConflict, "model_selection_conflict", "Chat is busy or changed; refresh and try again")
 		return
 	}
-	s.selectingSession = true
+	s.selectingSession, chat.changingModel = true, true
 	s.sessionMu.Unlock()
-	defer func() { s.sessionMu.Lock(); s.selectingSession = false; s.sessionMu.Unlock() }()
+	defer func() {
+		s.sessionMu.Lock()
+		s.selectingSession, chat.changingModel = false, false
+		s.sessionMu.Unlock()
+	}()
 	opened, err := s.contextSessions.(ModelController).SelectModel(r.Context(), request.SessionID, *request.Revision, request.Model)
 	if err != nil {
 		status := http.StatusUnprocessableEntity
@@ -80,7 +86,9 @@ func (s *Server) handleModelSelect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.sessionMu.Lock()
-	s.session, s.activeSession, s.modelRevision = opened.Agent, opened.Session, opened.ModelRevision
+	chat.agent, chat.session, chat.modelRevision = opened.Agent, opened.Session, opened.ModelRevision
+	s.chats[chat.session.ID] = chat
+	s.mirrorLocked(chat)
 	s.sessionMu.Unlock()
 	writeJSON(w, http.StatusOK, eviedb.SessionModel{Model: request.Model, Revision: opened.ModelRevision})
 }

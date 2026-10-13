@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"github.com/davidadel66/evie/internal/agent"
 	"net/http"
 	"strconv"
 
@@ -51,18 +52,25 @@ func (s *Server) handleContextSessionHistory(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
+	// An open chat's history is readable while its turn runs: committed
+	// events only, with the running turn left working (multi-chat.spec.md).
 	s.sessionMu.RLock()
-	defer s.sessionMu.RUnlock()
-	if s.selectingSession || s.activeTurns > 0 || s.activeSession.ID != req.SessionID || s.session == nil {
-		managementJSONError(w, 409, "history_session_changed", "Conversation changed or a turn is still running. Try again.")
+	var session *agent.Session
+	if chat := s.chatReadLocked(req.SessionID); chat != nil {
+		session = chat.agent
+	}
+	_, running := s.turns[req.SessionID]
+	s.sessionMu.RUnlock()
+	if session == nil {
+		managementJSONError(w, 409, "history_session_changed", "Conversation changed. Try again.")
 		return
 	}
-	events, err := s.session.HistoryEvents(r.Context())
+	events, err := session.CommittedEvents(r.Context())
 	if err != nil {
 		managementJSONError(w, 409, "history_unavailable", "Conversation history could not be loaded. Try again.")
 		return
 	}
-	items, err := projectHistory(events)
+	items, err := projectEvents(events, !running)
 	if err != nil {
 		managementJSONError(w, 500, "history_unavailable", "Conversation history could not be loaded.")
 		return
@@ -169,6 +177,9 @@ func projectEvents(events []memory.Event, settled bool) ([]historyItem, error) {
 		for i := first; i < len(items); i++ {
 			items[i].Turn = turn
 		}
+	}
+	if !settled && current != nil && current.Status == "incomplete" && current.FinishedAt == 0 {
+		current.Status = "working"
 	}
 	for i := range items {
 		if settled && items[i].Kind == "tool" && items[i].Result == nil {

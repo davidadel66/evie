@@ -97,27 +97,37 @@ func (s *Server) handleCompact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.sessionMu.Lock()
-	if s.selectingSession || (s.contextSessions != nil && (req.SessionID == "" || req.SessionID != s.activeSession.ID)) {
-		s.sessionMu.Unlock()
-		managementJSONError(w, http.StatusConflict, "context_session_changed", "the active conversation changed; reload before compacting")
-		return
+	// A context-managed server compacts the chat the request names; the
+	// legacy server has only its one session.
+	session, key := s.session, s.activeSession.ID
+	var chat *openChat
+	if s.contextSessions != nil {
+		if chat = s.chatLocked(req.SessionID); chat == nil || chat.held() != "" {
+			s.sessionMu.Unlock()
+			managementJSONError(w, http.StatusConflict, "context_session_changed", "the active conversation changed; reload before compacting")
+			return
+		}
+		session, key = chat.agent, chat.session.ID
 	}
-	if _, running := s.turns[s.activeSession.ID]; running {
+	if s.busyLocked(key) {
 		s.sessionMu.Unlock()
 		managementJSONError(w, http.StatusConflict, "turn_in_progress", "finish or stop the current turn before compacting")
 		return
 	}
-	session := s.session
 	if session == nil {
 		s.sessionMu.Unlock()
 		managementJSONError(w, http.StatusServiceUnavailable, "chat_unavailable", "chat is unavailable because the active Agent Preset is invalid")
 		return
 	}
-	s.activeTurns++
+	if chat != nil {
+		chat.compacting = true
+	}
 	s.sessionMu.Unlock()
 	defer func() {
 		s.sessionMu.Lock()
-		s.activeTurns--
+		if chat != nil {
+			chat.compacting = false
+		}
 		s.sessionMu.Unlock()
 	}()
 

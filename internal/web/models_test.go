@@ -64,7 +64,7 @@ func TestChatModelSelectionRejectsBusyStaleAndCrossOriginRequests(t *testing.T) 
 			s, c := modelTestServer()
 			body := `{"sessionId":"session-1","model":"anthropic/test","revision":0}`
 			if variant == "busy" {
-				s.activeTurns = 1
+				s.turns["session-1"] = &webTurn{}
 			}
 			if variant == "selecting" {
 				s.selectingSession = true

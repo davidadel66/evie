@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"github.com/davidadel66/evie/internal/agent"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -71,7 +72,7 @@ func TestRepositoryInstructionHTTPSettingsAndSessionIsolation(t *testing.T) {
 	if _, err = history.RepositoryInstructions(ctx, lease, turn.ID); err != nil {
 		t.Fatal(err)
 	}
-	server := NewContextServer(nil, nil, nil, &instructionTestController{store: store})
+	server := NewContextServer(&agent.Session{}, nil, nil, &instructionTestController{store: store})
 	server.activeSession = session
 	handler := server.Handler()
 	call := func(action string, body repositoryInstructionRequest) *httptest.ResponseRecorder {
@@ -107,11 +108,11 @@ func TestRepositoryInstructionHTTPSettingsAndSessionIsolation(t *testing.T) {
 	}
 	off := false
 	req.Enabled = &off
-	server.activeTurns = 1
+	finish := runningChat(server, "busy", ws.ID)
 	if got := call("settings", req); got.Code != 409 {
 		t.Fatalf("busy=%d", got.Code)
 	}
-	server.activeTurns = 0
+	finish()
 	if got := call("settings", req); got.Code != 200 {
 		t.Fatalf("save=%d %s", got.Code, got.Body)
 	}

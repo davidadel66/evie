@@ -112,7 +112,7 @@ func TestContextSessionArchiveHTTPValidationAndBusyBoundaries(t *testing.T) {
 			controller := &fakeArchiveController{err: tc.cause}
 			server := NewContextServer(nil, nil, nil, controller)
 			if tc.busy {
-				server.activeTurns = 1
+				runningChat(server, "one", "")
 			}
 			server.selectingSession = tc.selecting
 			result := httptest.NewRecorder()

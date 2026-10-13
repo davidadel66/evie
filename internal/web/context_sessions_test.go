@@ -130,9 +130,10 @@ func TestWorkspaceHTTPRegistrationExplicitSelectionChatAndResume(t *testing.T) {
 		t.Fatalf("chat status=%d body=%s", chat.Code, chat.Body.String())
 	}
 
+	// The chat is still open, so resuming it focuses it without rebuilding.
 	resumed := httptest.NewRecorder()
 	handler.ServeHTTP(resumed, managementRequest("/api/context-sessions/select", `{"sessionId":"session-1"}`))
-	if resumed.Code != http.StatusOK || len(controller.selected) != 2 || controller.selected[1].SessionID != "session-1" {
+	if resumed.Code != http.StatusOK || len(controller.selected) != 1 || !strings.Contains(resumed.Body.String(), `"kind":"workspace"`) {
 		t.Fatalf("resume status=%d body=%s calls=%+v", resumed.Code, resumed.Body.String(), controller.selected)
 	}
 }
@@ -157,7 +158,8 @@ func TestContextSessionHTTPRequiresExactlyOneExplicitScopeVariant(t *testing.T) 
 	}
 }
 
-func TestContextSessionSelectionWaitsForTheCurrentSessionTurnBoundary(t *testing.T) {
+// multi-chat.spec.md Stage 2: opening chats no longer waits for a turn.
+func TestContextSessionSelectionDuringATurnLeavesItRunning(t *testing.T) {
 	entered := make(chan struct{}, 1)
 	release := make(chan struct{})
 	client := &fakeClient{entered: entered, release: release, steps: []fakeStep{{content: "done"}}}
@@ -177,8 +179,13 @@ func TestContextSessionSelectionWaitsForTheCurrentSessionTurnBoundary(t *testing
 
 	selection := httptest.NewRecorder()
 	handler.ServeHTTP(selection, managementRequest("/api/context-sessions/select", `{"sessionId":"session-1"}`))
-	if selection.Code != http.StatusConflict || len(controller.selected) != 0 {
+	if selection.Code != http.StatusOK || len(controller.selected) != 0 {
 		t.Fatalf("selection status=%d body=%s calls=%+v", selection.Code, selection.Body.String(), controller.selected)
+	}
+	select {
+	case <-chatDone:
+		t.Fatal("selection ended the running turn")
+	default:
 	}
 	close(release)
 	<-chatDone

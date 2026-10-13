@@ -77,11 +77,17 @@ func TestHistoryPagingAndRecordedToolDecisions(t *testing.T) {
 	if cursor != "" || len(seen) != 205 {
 		t.Fatal("missing history")
 	}
-	server.activeTurns = 1
+	// A running turn no longer hides the chat's history (multi-chat.spec.md).
+	server.turns["one"] = &webTurn{}
 	rr := httptest.NewRecorder()
 	server.Handler().ServeHTTP(rr, managementRequest("/api/context-sessions/history", `{"sessionId":"one"}`))
-	if rr.Code != 409 {
-		t.Fatal(rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Fatal(rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	server.Handler().ServeHTTP(rr, managementRequest("/api/context-sessions/history", `{"sessionId":"two"}`))
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("a chat that is not open: %d", rr.Code)
 	}
 }
 
@@ -93,7 +99,7 @@ func TestChatRejectsAnotherTabsSelectedSession(t *testing.T) {
 	for _, body := range []string{`{"message":"belongs to one","sessionId":"one"}`, `{"message":"missing binding"}`} {
 		rr := httptest.NewRecorder()
 		server.Handler().ServeHTTP(rr, managementRequest("/api/chat", body))
-		if rr.Code != http.StatusConflict || len(h.events) != 0 || server.activeTurns != 0 {
+		if rr.Code != http.StatusConflict || len(h.events) != 0 || len(server.turns) != 0 {
 			t.Fatalf("unbound send: %d %s events=%v", rr.Code, rr.Body.String(), h.events)
 		}
 	}

@@ -33,7 +33,7 @@ func (c *exploreWorkspaceController) SetWorkspaceExplore(_ context.Context, id m
 func TestWorkspaceExploreHTTPSetsTheSettingBehindTheManagementGuard(t *testing.T) {
 	c := &exploreWorkspaceController{}
 	s := NewContextServer(nil, nil, nil, c)
-	s.activeTurns = 1
+	runningChat(s, "chat", "workspace")
 	handler := s.Handler()
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, managementRequest("/api/workspaces/explore", `{"workspaceId":"workspace","revision":"revision","setting":"off"}`))

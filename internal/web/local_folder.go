@@ -40,7 +40,7 @@ func (s *Server) registerFolderRoutes(mux *http.ServeMux) {
 		}
 		s.sessionMu.Lock()
 		defer s.sessionMu.Unlock()
-		if s.activeTurns > 0 || s.selectingSession {
+		if s.workspaceBusyLocked(req.WorkspaceID) || s.selectingSession {
 			jsonError(w, 409, "Finish the current turn before changing folders")
 			return
 		}

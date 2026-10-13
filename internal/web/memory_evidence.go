@@ -29,8 +29,12 @@ func (s *Server) handleMemoryEvidence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.sessionMu.RLock()
-	defer s.sessionMu.RUnlock()
-	if s.selectingSession || s.activeSession.ID != request.SessionID || s.session == nil {
+	var chat openChat
+	if open := s.chatReadLocked(request.SessionID); open != nil {
+		chat = *open
+	}
+	s.sessionMu.RUnlock()
+	if chat.agent == nil {
 		managementJSONError(w, http.StatusConflict, "memory_session_changed", "The selected conversation changed. Open its sources again.")
 		return
 	}
@@ -39,7 +43,7 @@ func (s *Server) handleMemoryEvidence(w http.ResponseWriter, r *http.Request) {
 	if history, ok := s.memoryEvidence.(MemoryEvidenceHistory); ok {
 		events, err = history.LoadEvents(r.Context(), request.SessionID)
 	} else {
-		events, err = s.session.HistoryEvents(r.Context())
+		events, err = chat.agent.CommittedEvents(r.Context())
 	}
 	if err != nil {
 		managementJSONError(w, http.StatusConflict, "memory_evidence_unavailable", "The original request could not be inspected.")
@@ -50,7 +54,7 @@ func (s *Server) handleMemoryEvidence(w http.ResponseWriter, r *http.Request) {
 		managementJSONError(w, http.StatusConflict, "memory_evidence_unavailable", "The original request could not be inspected.")
 		return
 	}
-	result, err := inspectMemoryRequests(r.Context(), s.memoryEvidence, s.activeSession.ScopeContext(), records, request.SnapshotID, request.AnswerID)
+	result, err := inspectMemoryRequests(r.Context(), s.memoryEvidence, chat.session.ScopeContext(), records, request.SnapshotID, request.AnswerID)
 	if err != nil {
 		managementJSONError(w, http.StatusUnprocessableEntity, "memory_evidence_unavailable", "The original evidence is unavailable under current access.")
 		return

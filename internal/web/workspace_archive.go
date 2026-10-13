@@ -39,16 +39,18 @@ func (s *Server) handleWorkspaceLifecycle(w http.ResponseWriter, r *http.Request
 	}
 	controller := s.contextSessions.(workspaceArchiveController)
 	s.sessionMu.Lock()
-	if s.selectingSession || s.activeTurns > 0 {
+	if s.selectingSession || s.workspaceBusyLocked(request.WorkspaceID) {
 		s.sessionMu.Unlock()
 		managementJSONError(w, http.StatusConflict, "context_session_busy", "finish the current turn before changing a workspace")
 		return
 	}
 	s.selectingSession = true
+	release := s.holdArchivingLocked(func(chat *openChat) bool { return chat.session.WorkspaceID == request.WorkspaceID })
 	s.sessionMu.Unlock()
 	defer func() {
 		s.sessionMu.Lock()
 		s.selectingSession = false
+		release()
 		s.sessionMu.Unlock()
 	}()
 	change := controller.RestoreWorkspace
@@ -64,14 +66,11 @@ func (s *Server) handleWorkspaceLifecycle(w http.ResponseWriter, r *http.Request
 		managementJSONError(w, http.StatusInternalServerError, "workspace_archive_failed", "Workspace archival could not be changed")
 		return
 	}
-	// The open conversation leaves with its archived Workspace, as it does
-	// when the conversation itself is archived.
+	// Its open chats leave with an archived Workspace, as a chat does when it
+	// is archived itself.
 	if archived {
 		s.sessionMu.Lock()
-		if s.activeSession.WorkspaceID == request.WorkspaceID {
-			s.session = nil
-			s.activeSession = memory.Session{}
-		}
+		s.closeWorkspaceLocked(request.WorkspaceID)
 		s.sessionMu.Unlock()
 	}
 	writeJSON(w, http.StatusOK, struct {

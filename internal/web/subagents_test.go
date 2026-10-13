@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 )
@@ -47,7 +48,7 @@ func newSubagentServer(state string) (*Server, *fakeSubagents) {
 			{ID: "r3", Sequence: 6, Type: memory.EventToolSucceeded, ExecutionID: "e3", Content: "written"},
 		},
 	}
-	server := WithSubagents(NewServer(nil), reader)
+	server := WithSubagents(NewServer(&agent.Session{}), reader)
 	server.activeSession = memory.Session{ID: "parent"}
 	return server, reader
 }

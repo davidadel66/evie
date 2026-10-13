@@ -36,16 +36,18 @@ func (s *Server) handleContextSessionLifecycle(w http.ResponseWriter, r *http.Re
 	}
 	controller := s.contextSessions.(contextSessionArchiveController)
 	s.sessionMu.Lock()
-	if s.selectingSession || s.activeTurns > 0 {
+	if s.selectingSession || s.busyLocked(request.SessionID) {
 		s.sessionMu.Unlock()
 		managementJSONError(w, http.StatusConflict, "context_session_busy", "finish the current turn before changing session archival")
 		return
 	}
 	s.selectingSession = true
+	release := s.holdArchivingLocked(func(chat *openChat) bool { return chat.session.ID == request.SessionID })
 	s.sessionMu.Unlock()
 	defer func() {
 		s.sessionMu.Lock()
 		s.selectingSession = false
+		release()
 		s.sessionMu.Unlock()
 	}()
 	change := controller.RestoreSession
@@ -68,10 +70,7 @@ func (s *Server) handleContextSessionLifecycle(w http.ResponseWriter, r *http.Re
 	}
 	if archived {
 		s.sessionMu.Lock()
-		if s.activeSession.ID == request.SessionID {
-			s.session = nil
-			s.activeSession = memory.Session{}
-		}
+		s.closeLocked(request.SessionID)
 		s.sessionMu.Unlock()
 	}
 	writeJSON(w, http.StatusOK, struct {

@@ -27,7 +27,7 @@ func (c *researchWorkspaceController) SetWorkspaceResearch(_ context.Context, id
 func TestWorkspaceResearchHTTPAllowsRevocationDuringChatAndRejectsStaleEdits(t *testing.T) {
 	c := &researchWorkspaceController{}
 	s := NewContextServer(nil, nil, nil, c)
-	s.activeTurns = 1
+	runningChat(s, "chat", "workspace")
 	handler := s.Handler()
 	request := `{"workspaceId":"workspace","revision":"revision","enabled":false}`
 	w := httptest.NewRecorder()

@@ -51,7 +51,7 @@ func (s *Server) registerSubagentRoutes(mux *http.ServeMux) {
 			jsonError(w, status, "A conversation and tool call are required")
 			return
 		}
-		if !s.isActiveSession(req.SessionID) {
+		if !s.isOpenChat(req.SessionID) {
 			managementJSONError(w, http.StatusConflict, "subagents_session_changed", "Conversation changed; reopen the subagents")
 			return
 		}
@@ -79,7 +79,7 @@ func (s *Server) registerSubagentRoutes(mux *http.ServeMux) {
 			jsonError(w, status, "A conversation and subagent are required")
 			return
 		}
-		if !s.isActiveSession(req.SessionID) {
+		if !s.isOpenChat(req.SessionID) {
 			managementJSONError(w, http.StatusConflict, "subagents_session_changed", "Conversation changed; reopen the subagent")
 			return
 		}
@@ -116,14 +116,6 @@ func (s *Server) registerSubagentRoutes(mux *http.ServeMux) {
 			Items    []historyItem           `json:"items"`
 		}{progress, items})
 	}))
-}
-
-// isActiveSession reports whether id is the owner's selected conversation.
-// Subagent reads follow the other per-conversation reads: only the open one.
-func (s *Server) isActiveSession(id memory.SessionID) bool {
-	s.sessionMu.RLock()
-	defer s.sessionMu.RUnlock()
-	return !s.selectingSession && s.activeSession.ID != "" && s.activeSession.ID == id
 }
 
 func boundTraceText(value string, n int) string {

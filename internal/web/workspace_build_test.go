@@ -34,7 +34,7 @@ func (c *buildWorkspaceController) SetWorkspaceBuild(_ context.Context, id memor
 func TestWorkspaceBuildHTTPSetsTheSettingBehindTheManagementGuard(t *testing.T) {
 	c := &buildWorkspaceController{}
 	s := NewContextServer(nil, nil, nil, c)
-	s.activeTurns = 1
+	runningChat(s, "chat", "workspace")
 	handler := s.Handler()
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, managementRequest("/api/workspaces/build", `{"workspaceId":"workspace","revision":"revision","setting":"off"}`))

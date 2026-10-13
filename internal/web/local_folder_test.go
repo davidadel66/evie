@@ -73,13 +73,16 @@ func TestWorkspaceFolderHTTPReadsCurrentFolderAndRejectsStaleOrBusyChanges(t *te
 	if res := call("/api/folder/read", req); res.Code != 409 {
 		t.Fatalf("stale read=%d", res.Code)
 	}
-	server.activeTurns = 1
+	// Only a turn in this Workspace holds its folder.
+	elsewhere := runningChat(server, "elsewhere", "another-workspace")
+	finish := runningChat(server, "busy", workspace.ID)
 	req.Revision = 1
 	req.Path = ""
 	if res := call("/api/workspaces/folder", req); res.Code != 409 {
 		t.Fatalf("busy edit=%d", res.Code)
 	}
-	server.activeTurns = 0
+	finish()
+	defer elsewhere()
 	if res := call("/api/workspaces/folder", req); res.Code != 200 {
 		t.Fatalf("detach=%d %s", res.Code, res.Body)
 	}

@@ -51,6 +51,16 @@ model's metadata, two sequential requests (about 170 ms, up to 3 s).
   idle chat (no running turn, pending approval or compaction). If none is
   idle, opening is refused with a message saying so.
 - Turn leases, the REPL, and one-turn-per-chat persistence rules are unchanged.
+- Verified October 12: `TestWebChatsRunSideBySide` (real SQLite, `-race`)
+  holds one chat's turn at its model while a second chat opens and answers,
+  the running chat's history reads with its turn working, a second turn and
+  archiving in it are refused, reopening it reuses its agent, the idle chat
+  archives and closes, and the held turn then completes. `TestOpenChats…`
+  covers closing the least recently used idle chat, keeping running and just
+  used ones, and refusing a ninth while all 8 are busy. Gates for archival,
+  folders, instructions, models and compaction now count only the chat or
+  Workspace concerned. `go test ./...`, `go vet ./...` and
+  `go test -race ./internal/web` passed.
 
 ## Stage 3 — A live feed per chat, and rejoining a running turn
 

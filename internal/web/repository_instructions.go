@@ -46,7 +46,7 @@ func (s *Server) registerRepositoryInstructionRoutes(mux *http.ServeMux) {
 				}
 				s.sessionMu.Lock()
 				defer s.sessionMu.Unlock()
-				if s.activeTurns > 0 || s.selectingSession {
+				if s.workspaceBusyLocked(req.WorkspaceID) || s.selectingSession {
 					jsonError(w, 409, "Finish the current turn before changing repository instructions")
 					return
 				}
@@ -69,7 +69,7 @@ func (s *Server) registerRepositoryInstructionRoutes(mux *http.ServeMux) {
 					jsonError(w, 400, "A conversation and turn are required")
 					return
 				}
-				if req.SessionID != s.activeSession.ID || req.WorkspaceID != s.activeSession.WorkspaceID {
+				if chat := s.chatReadLocked(req.SessionID); chat == nil || req.WorkspaceID != chat.session.WorkspaceID {
 					jsonError(w, 409, "Conversation changed; reopen the instruction details")
 					return
 				}

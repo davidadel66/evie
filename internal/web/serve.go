@@ -73,15 +73,18 @@ func listenAddr() (string, error) {
 	return addr, nil
 }
 
-// Server is the web frontend's selected conversation plus the approvals
-// waiting for a browser answer. Context-managed servers may replace the
-// selected conversation only between turns.
+// Server is the web frontend's open conversations plus the approvals waiting
+// for a browser answer. session, activeSession and modelRevision mirror the
+// focused chat; chats holds every open one (open_chats.go).
 type Server struct {
-	sessionMu         sync.RWMutex
-	session           *agent.Session
-	activeSession     memory.Session
-	activeTurns       int
-	modelRevision     int64
+	sessionMu     sync.RWMutex
+	session       *agent.Session
+	activeSession memory.Session
+	modelRevision int64
+	chats         map[memory.SessionID]*openChat
+	chatUses      uint64
+	// selectingSession serializes opening chats, model changes and archival.
+	// It never blocks another chat's turn.
 	selectingSession  bool
 	manager           *plugins.Manager
 	receipts          ReceiptInspector
@@ -136,6 +139,7 @@ func NewServer(session *agent.Session) *Server {
 		pending:   make(map[string]chan tools.Decision),
 		terminals: make(map[string]*terminalEntry),
 		turns:     make(map[memory.SessionID]*webTurn),
+		chats:     make(map[memory.SessionID]*openChat),
 	}
 }
 
@@ -350,45 +354,42 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.sessionMu.Lock()
-	if s.selectingSession {
-		s.sessionMu.Unlock()
-		jsonError(w, http.StatusConflict, "a Context Scope selection is in progress")
-		return
+	// A context-managed server runs the turn in the chat the request names,
+	// whichever chat is focused; the legacy server has only its one session.
+	session, turnKey := s.session, s.activeSession.ID
+	if s.contextSessions != nil {
+		chat := s.chatLocked(req.SessionID)
+		if chat == nil {
+			s.sessionMu.Unlock()
+			jsonError(w, http.StatusConflict, "this conversation is not open; reload before sending")
+			return
+		}
+		if reason := chat.held(); reason != "" {
+			s.sessionMu.Unlock()
+			jsonError(w, http.StatusConflict, reason)
+			return
+		}
+		session, turnKey = chat.agent, chat.session.ID
 	}
-	if s.contextSessions != nil && (req.SessionID == "" || req.SessionID != s.activeSession.ID) {
-		s.sessionMu.Unlock()
-		jsonError(w, http.StatusConflict, "the active conversation changed; reload before sending")
-		return
-	}
-	session := s.session
 	if session != nil && req.Model != "" && req.Model != session.ContextProfile().ConfiguredModel {
 		s.sessionMu.Unlock()
 		jsonError(w, http.StatusConflict, "Chat model changed; refresh before sending")
 		return
 	}
-	turnKey := s.activeSession.ID
 	turnCtx, stopTurn := context.WithCancelCause(turnLifecycleContext(r))
 	defer stopTurn(nil)
 	turn := &webTurn{stop: stopTurn}
-	if session != nil {
-		if !s.beginWebTurn(turnKey, turn) {
-			s.sessionMu.Unlock()
-			jsonError(w, http.StatusConflict, "a turn is already in progress")
-			return
-		}
-		s.activeTurns++
+	if session != nil && !s.beginWebTurn(turnKey, turn) {
+		s.sessionMu.Unlock()
+		jsonError(w, http.StatusConflict, "a turn is already in progress")
+		return
 	}
 	s.sessionMu.Unlock()
 	if session == nil {
 		jsonError(w, http.StatusServiceUnavailable, "chat is unavailable because the active Agent Preset is invalid; use plugin diagnostics to repair startup")
 		return
 	}
-	defer func() {
-		s.finishWebTurn(turnKey, turn)
-		s.sessionMu.Lock()
-		s.activeTurns--
-		s.sessionMu.Unlock()
-	}()
+	defer s.finishWebTurn(turnKey, turn)
 
 	ev, err := newSSEEvents(w)
 	if err != nil {
@@ -400,6 +401,15 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	sendErr := session.Send(measurementCtx, req.Message, ev, s.approver(r.Context(), ev))
 	s.finishWebTurn(turnKey, turn)
 
+	if errors.Is(sendErr, eviedb.ErrSessionModelChanged) && s.contextSessions != nil {
+		// The model changed elsewhere: close the chat so reopening it builds
+		// an agent on the current model.
+		s.sessionMu.Lock()
+		if !s.busyLocked(turnKey) {
+			s.closeLocked(turnKey)
+		}
+		s.sessionMu.Unlock()
+	}
 	if errors.Is(sendErr, eviedb.ErrSessionModelChanged) && !ev.wrote {
 		jsonError(w, http.StatusConflict, "Chat model changed; refresh before sending")
 		return

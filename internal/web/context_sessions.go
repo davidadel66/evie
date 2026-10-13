@@ -107,9 +107,22 @@ func (s *Server) handleContextSessionSelect(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.sessionMu.Lock()
-	if s.selectingSession || s.activeTurns > 0 {
+	if s.selectingSession {
 		s.sessionMu.Unlock()
-		managementJSONError(w, http.StatusConflict, "context_session_busy", "finish the current turn before selecting another Context Scope")
+		managementJSONError(w, http.StatusConflict, "context_session_busy", "another chat is opening; try again")
+		return
+	}
+	// An open chat is focused again as it is, running turn and all.
+	if chat := s.chatLocked(selection.SessionID); chat != nil {
+		s.focusLocked(chat)
+		session := chat.session
+		s.sessionMu.Unlock()
+		s.writeOpenedChat(w, r, session)
+		return
+	}
+	if !s.roomLocked() {
+		s.sessionMu.Unlock()
+		managementJSONError(w, http.StatusConflict, "context_session_capacity", "8 chats are busy; stop or finish one before opening another")
 		return
 	}
 	s.selectingSession = true
@@ -139,21 +152,23 @@ func (s *Server) handleContextSessionSelect(w http.ResponseWriter, r *http.Reque
 		managementJSONError(w, http.StatusInternalServerError, "context_session_unavailable", "selected session could not be opened")
 		return
 	}
+	s.sessionMu.Lock()
+	s.makeRoomLocked()
+	s.focusLocked(&openChat{agent: opened.Agent, session: opened.Session, modelRevision: opened.ModelRevision})
+	s.sessionMu.Unlock()
+	s.writeOpenedChat(w, r, opened.Session)
+}
+
+func (s *Server) writeOpenedChat(w http.ResponseWriter, r *http.Request, session memory.Session) {
 	snapshot, err := s.contextSessions.Snapshot(r.Context())
 	if err != nil {
 		managementJSONError(w, http.StatusInternalServerError, "context_sessions_unavailable", "selected Context Scope could not be displayed")
 		return
 	}
-	descriptor := describeContextScope(opened.Session, snapshot)
-	s.sessionMu.Lock()
-	s.session = opened.Agent
-	s.activeSession = opened.Session
-	s.modelRevision = opened.ModelRevision
-	s.sessionMu.Unlock()
 	writeJSON(w, http.StatusOK, struct {
 		Session memory.Session         `json:"session"`
 		Scope   ContextScopeDescriptor `json:"scope"`
-	}{opened.Session, descriptor})
+	}{session, describeContextScope(session, snapshot)})
 }
 
 func validContextSessionSelection(selection ContextSessionSelection) bool {

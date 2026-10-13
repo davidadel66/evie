@@ -289,6 +289,13 @@ func decodeEventPayload(event memory.Event, destination any) error {
 	return nil
 }
 
+// CommittedEvents reads the conversation's stored events without waiting for
+// a running turn, so a reader sees what that turn has committed so far. The
+// history store is fixed at construction and reads from the database.
+func (s *Session) CommittedEvents(ctx context.Context) ([]memory.Event, error) {
+	return s.history.Events(ctx)
+}
+
 // HistoryEvents returns saved evidence for a frontend, without replaying tools
 // or applying model-context compaction. It never exposes a partial local turn.
 func (s *Session) HistoryEvents(ctx context.Context) ([]memory.Event, error) {
