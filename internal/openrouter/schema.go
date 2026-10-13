@@ -59,6 +59,8 @@ type Client struct {
 	// streamIdleTimeout fails a streaming request after this long without a
 	// received line. It bounds silence, not total stream duration.
 	streamIdleTimeout time.Duration
+	// profiles reuses discovered context profiles (multi-chat.spec.md Stage 1).
+	profiles *profileCache
 }
 
 // Tool is the wire format for advertising one tool to the model. Type is

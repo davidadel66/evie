@@ -198,6 +198,7 @@ func NewClient(key string) (*Client, error) {
 		httpClient:              newProviderHTTPClient(),
 		contextDiscoveryTimeout: 3 * time.Second,
 		streamIdleTimeout:       defaultStreamIdleTimeout,
+		profiles:                newProfileCache(time.Now),
 	}, nil
 }
 

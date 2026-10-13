@@ -12,6 +12,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 const (
@@ -162,11 +164,16 @@ func (c *Client) resolveContextProfile(ctx context.Context, model string, adapti
 		return NewExplicitContextProfile(model, config.hardOverride, config.working, config.output)
 	}
 
+	config.adaptive = adaptive && strings.TrimSpace(os.Getenv("EVIE_CONTEXT_WORKING_TOKENS")) == ""
+	key := profileKey{model: model, config: config}
+	if profile, ok := c.profiles.get(key); ok {
+		return profile, nil
+	}
 	discoveryCtx, cancel := context.WithTimeout(ctx, c.contextDiscoveryTimeout)
 	defer cancel()
-	config.adaptive = adaptive && strings.TrimSpace(os.Getenv("EVIE_CONTEXT_WORKING_TOKENS")) == ""
 	profile, discoveryErr := c.discoverContextProfile(discoveryCtx, model, config)
 	if discoveryErr == nil {
+		c.profiles.put(key, profile)
 		return profile, nil
 	}
 	var validationErr *contextProfileValidationError
@@ -444,4 +451,53 @@ func (p ContextProfile) WithOutputLimit(limit int64) (ContextProfile, error) {
 		d.OutputReserveTokens = limit
 	}
 	return newContextProfile(d)
+}
+
+// profileReuse is how long a discovered context profile is reused, so opening
+// a chat does not ask OpenRouter for a recently resolved model's metadata
+// again (multi-chat.spec.md Stage 1). Failed lookups and built-in fallbacks
+// are never stored, so a later successful lookup replaces them.
+const profileReuse = 10 * time.Minute
+
+type profileKey struct {
+	model  string
+	config contextProfileConfig
+}
+
+type cachedProfile struct {
+	profile ContextProfile
+	expires time.Time
+}
+
+type profileCache struct {
+	mu      sync.Mutex
+	now     func() time.Time
+	entries map[profileKey]cachedProfile
+}
+
+func newProfileCache(now func() time.Time) *profileCache {
+	return &profileCache{now: now, entries: map[profileKey]cachedProfile{}}
+}
+
+func (c *profileCache) get(key profileKey) (ContextProfile, bool) {
+	if c == nil {
+		return ContextProfile{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.entries[key]
+	if !ok || !c.now().Before(entry.expires) {
+		delete(c.entries, key)
+		return ContextProfile{}, false
+	}
+	return entry.profile, true
+}
+
+func (c *profileCache) put(key profileKey, profile ContextProfile) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries[key] = cachedProfile{profile: profile, expires: c.now().Add(profileReuse)}
 }
