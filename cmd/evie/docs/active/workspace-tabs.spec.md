@@ -106,10 +106,12 @@ sealed off from the rest of Evie:
 
 - WebRTC (`RTCPeerConnection` with a STUN or TURN server) is outside what a
   page policy can block in Chrome, so a tab's code could signal out over DNS
-  or UDP. Story 1 gives tabs no data. Before story 2 gives tabs the owner's
-  data, the owner decides whether to accept this with its mitigations (the
-  owner approves each tab's data list, and Evie's tab changes are reviewable)
-  or to add a hardening step.
+  or UDP. The owner accepted this (decisions, 2026-10-12) with its
+  mitigations, the owner's approval of each tab's data list and reviewable
+  tab code, plus a partial block: every HTML page a tab serves starts with
+  an inline script that removes the WebRTC constructors and blocks reaching
+  a fresh window through a frame before the tab's code runs. It is defence
+  in depth, not a seal.
 
 ### Data channel (story 2)
 

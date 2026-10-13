@@ -131,7 +131,7 @@ function assertSealed(where, report) {
   assert.equal(report.inlineScript, true, `${where}: inline script ran`);
   assert.equal(report.externalScript, true, `${where}: the tab's own app.js ran`);
   assert.equal(report.origin, 'null', `${where}: the tab has an opaque origin`);
-  for (const name of ['apiFetch', 'externalFetch', 'webSocket', 'beacon', 'imageLeak', 'otherTabScript', 'localStorage', 'popup']) {
+  for (const name of ['apiFetch', 'externalFetch', 'webSocket', 'beacon', 'imageLeak', 'otherTabScript', 'localStorage', 'popup', 'webRTC']) {
     assert.match(String(report[name]), /^blocked/, `${where}: ${name} = ${report[name]}`);
   }
 }

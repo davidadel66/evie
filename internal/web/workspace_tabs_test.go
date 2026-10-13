@@ -137,8 +137,8 @@ func TestWorkspaceTabFilesAreSealedAndConfined(t *testing.T) {
 	handler, _ := tabsFixture(t)
 	reports := "http://127.0.0.1:6687/workspace-tabs/finance/reports/"
 	for path, want := range map[string]string{
-		"/workspace-tabs/finance/reports/":           "text/html; charset=utf-8|<p>Reports</p>",
-		"/workspace-tabs/finance/reports/index.html": "text/html; charset=utf-8|<p>Reports</p>",
+		"/workspace-tabs/finance/reports/":           "text/html; charset=utf-8|<script>" + tabPrelude + "</script><p>Reports</p>",
+		"/workspace-tabs/finance/reports/index.html": "text/html; charset=utf-8|<script>" + tabPrelude + "</script><p>Reports</p>",
 		"/workspace-tabs/finance/reports/app.js":     "text/javascript; charset=utf-8|window.ran = true",
 	} {
 		result := getTab(handler, http.MethodGet, path, "", nil)
@@ -270,7 +270,7 @@ func TestWorkspaceTabsAgainstARealStore(t *testing.T) {
 	if result := list(); result.Code != http.StatusOK || !strings.Contains(result.Body.String(), `"title":"Reports"`) {
 		t.Fatalf("list status=%d body=%s", result.Code, result.Body.String())
 	}
-	if result := getTab(handler, http.MethodGet, page, "", nil); result.Code != http.StatusOK || result.Body.String() != "<p>Reports</p>" {
+	if result := getTab(handler, http.MethodGet, page, "", nil); result.Code != http.StatusOK || !strings.HasSuffix(result.Body.String(), "</script><p>Reports</p>") {
 		t.Fatalf("page status=%d body=%q", result.Code, result.Body.String())
 	}
 	if _, err := store.ArchiveWorkspace(ctx, workspace.ID); err != nil {
@@ -585,4 +585,22 @@ func TestTabsGetEviesStylesheet(t *testing.T) {
 		t.Fatalf("stylesheet status=%d type=%q has tokens=%v", result.Code, result.Header().Get("Content-Type"), strings.Contains(result.Body.String(), "--color-teal"))
 	}
 	assertSealed(t, "stylesheet", result, "http://127.0.0.1:6687/workspace-tabs/finance/reports/")
+}
+
+// Every HTML page a tab serves starts with the partial WebRTC block, after
+// its doctype so the page keeps standards mode.
+func TestTabPagesStartWithThePartialWebRTCBlock(t *testing.T) {
+	script := "<script>" + tabPrelude + "</script>"
+	for page, want := range map[string]string{
+		"<!DOCTYPE html>\n<p>x</p>":       "<!DOCTYPE html>" + script + "\n<p>x</p>",
+		"\ufeff  <!doctype html><title>t": "\ufeff  <!doctype html>" + script + "<title>t",
+		"<p>no doctype</p>":               script + "<p>no doctype</p>",
+	} {
+		if got := string(withPrelude([]byte(page))); got != want {
+			t.Errorf("withPrelude(%q) = %q", page, got)
+		}
+	}
+	if !strings.Contains(tabPrelude, "RTCPeerConnection") || !strings.Contains(tabPrelude, "contentWindow") {
+		t.Fatal("the prelude does not remove WebRTC")
+	}
 }

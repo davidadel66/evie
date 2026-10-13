@@ -19,3 +19,11 @@ Spec: [workspace-tabs.spec.md](workspace-tabs.spec.md).
   Evie's loop (stories 2 and 3), Evie writes a Reports tab in the Finance
   folder on the finance database. Data → Spending stays until the owner
   decides otherwise.
+- **2026-10-12 — WebRTC is an accepted residual risk, with a partial block.**
+  No page policy can stop a tab's code from signalling out over WebRTC
+  (STUN/TURN over DNS or UDP). David accepted that risk for tabs that read
+  data, relying on his approval of each tab's exact data list and on Evie's
+  tab code being reviewable, and asked for a partial block as defence in
+  depth: every tab page starts with a script that removes the WebRTC
+  constructors and the ways to reach a fresh window before the tab's own
+  code runs. It is not a seal; a determined page may find another way.

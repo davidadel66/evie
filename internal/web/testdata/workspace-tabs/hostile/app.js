@@ -35,8 +35,16 @@
     script.src = '/workspace-tabs/lab/plain-0/index.html';
     document.head.appendChild(script);
   }));
-  // WebRTC is outside what a page policy can block; report whether it exists.
-  await attempt('webRTC', () => typeof RTCPeerConnection === 'function' ? 'available' : 'blocked: missing');
+  // WebRTC is outside what a page policy can block; Evie's prelude removes
+  // it (a partial block), and the check reports whether a frame's fresh
+  // window still offers it.
+  await attempt('webRTC', () => typeof RTCPeerConnection === 'function' || typeof webkitRTCPeerConnection === 'function' ? 'available' : 'blocked: missing');
+  await attempt('webRTCViaFrame', () => {
+    const frame = document.createElement('iframe');
+    document.body.appendChild(frame);
+    const fresh = frame.contentWindow || window.frames[0];
+    return fresh && typeof fresh.RTCPeerConnection === 'function' ? 'available' : 'blocked: no fresh window';
+  });
   await attempt('localStorage', () => { localStorage.setItem('evie-tab', 'x'); return 'writable'; });
   await attempt('parentDocument', () => report.framed ? 'read: ' + window.parent.document.title : 'not framed');
   await attempt('parentStorage', () => report.framed ? 'read: ' + window.parent.localStorage.length : 'not framed');

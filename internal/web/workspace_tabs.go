@@ -1,10 +1,12 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -24,6 +26,26 @@ import (
 //
 //go:embed tab_helper.js
 var tabHelper []byte
+
+// tabPrelude starts every HTML page a tab serves: the partial WebRTC block
+// (workspace-tabs.decisions.md, 2026-10-12).
+//
+//go:embed tab_prelude.js
+var tabPrelude string
+
+// withPrelude puts the prelude first in an HTML page, after its doctype so
+// the page keeps standards mode.
+func withPrelude(page []byte) []byte {
+	script := []byte("<script>" + tabPrelude + "</script>")
+	start := len(page) - len(bytes.TrimLeft(page, "\ufeff \t\r\n"))
+	insert := 0
+	if rest := page[start:]; len(rest) >= 9 && strings.EqualFold(string(rest[:9]), "<!doctype") {
+		if end := bytes.IndexByte(rest, '>'); end >= 0 {
+			insert = start + end + 1
+		}
+	}
+	return append(append(append([]byte{}, page[:insert]...), script...), page[insert:]...)
+}
 
 // workspaceTabsController finds the folder whose .evie/tabs a Workspace
 // shows (workspace-tabs.spec.md). A missing or archived Workspace is
@@ -245,6 +267,15 @@ func (s *Server) registerWorkspaceTabRoutes(mux *http.ServeMux) {
 		}
 		w.Header().Set("Content-Security-Policy", tabContentSecurityPolicy(origin+"/workspace-tabs/"+workspace+"/"+tab+"/"))
 		w.Header().Set("Content-Type", tabContentType(rel))
+		if ext := strings.ToLower(path.Ext(rel)); ext == ".html" || ext == ".htm" {
+			page, err := io.ReadAll(io.LimitReader(file, workspacetabs.MaxTabBytes))
+			if err != nil {
+				http.Error(w, "The tab could not be read.", http.StatusInternalServerError)
+				return
+			}
+			http.ServeContent(w, r, "", info.ModTime(), bytes.NewReader(withPrelude(page)))
+			return
+		}
 		http.ServeContent(w, r, "", info.ModTime(), file)
 	})
 }
