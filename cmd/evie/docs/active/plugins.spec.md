@@ -13,7 +13,9 @@ inspectable while preserving a small trusted Kernel. Sessions need explicit,
 versioned Agent Presets instead of inferred session types or model-selected
 plugin activation. The first implementation must prove the architecture with
 capabilities Evie already owns, without accepting untrusted executable code or
-prematurely turning every subsystem into a plugin.
+prematurely turning every subsystem into a plugin. (Amended 2026-10-12:
+Evie-written Workspace tab pages may run in the browser sandbox only; see
+workspace-tabs.decisions.md.)
 
 ## Solution
 

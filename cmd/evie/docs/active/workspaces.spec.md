@@ -123,7 +123,9 @@ and promotion to global memory is explicit.
   from Workspace to global uses an explicit promotion operation with provenance;
   retrieval never widens scope.
 - Generic Workspace management is Kernel-owned. Plugins do not inject custom
-  Workspace administration UI in the first implementation.
+  Workspace administration UI in the first implementation. (2026-10-12:
+  Workspace tabs from the Workspace's folder are the one exception; see
+  workspace-tabs.decisions.md.)
 - Archive and hard-deletion behavior are not conflated. Archive prevents new
   sessions and scheduled runs while retaining history. Any later hard erasure
   must obey the memory and workflow retention policies and cannot strand active
