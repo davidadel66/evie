@@ -22,19 +22,31 @@ func TestWorkspaceTabsBrowserFixture(t *testing.T) {
 		t.Skip("opt-in workspace tabs browser fixture")
 	}
 	folder := t.TempDir()
-	source := filepath.Join("testdata", "workspace-tabs", "hostile")
-	target := filepath.Join(folder, workspacetabs.Dir, "hostile")
-	if err := os.MkdirAll(target, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"tab.json", "index.html", "app.js"} {
-		data, err := os.ReadFile(filepath.Join(source, name))
+	for _, tab := range []string{"hostile", "data", "thief"} {
+		source := filepath.Join("testdata", "workspace-tabs", tab)
+		target := filepath.Join(folder, workspacetabs.Dir, tab)
+		if err := os.MkdirAll(target, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		entries, err := os.ReadDir(source)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(target, name), data, 0o644); err != nil {
-			t.Fatal(err)
+		for _, entry := range entries {
+			data, err := os.ReadFile(filepath.Join(source, entry.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(target, entry.Name()), data, 0o644); err != nil {
+				t.Fatal(err)
+			}
 		}
+	}
+	if err := os.MkdirAll(filepath.Join(folder, "eval"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "eval", "loss.json"), []byte(`{"loss":1}`), 0o644); err != nil {
+		t.Fatal(err)
 	}
 	// Benign tabs with long titles, so a phone-width header needs More.
 	for i, title := range []string{"Evaluation metrics", "Reading map", "Budget"} {
@@ -50,7 +62,7 @@ func TestWorkspaceTabsBrowserFixture(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	controller := &fakeTabsController{folders: map[memory.WorkspaceID]string{"lab": folder}}
+	controller := &fakeTabDataController{fakeTabsController: fakeTabsController{folders: map[memory.WorkspaceID]string{"lab": folder}}, approvals: map[string]string{}}
 	controller.snapshot = ContextSessionSnapshot{Workspaces: []memory.Workspace{{
 		ID: "lab", DisplayName: "Lab", State: memory.WorkspaceActive, CurrentRevisionID: "revision-1",
 		Folder: memory.WorkspaceFolder{Path: folder, Revision: 1},

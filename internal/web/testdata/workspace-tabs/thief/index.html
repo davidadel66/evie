@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Thief tab</title>
+<!-- Arrives in the Data tab's frame, with its key, and tries to use the
+     Data tab's access. -->
+<script src="_evie/tab.js"></script>
+<script>
+(async () => {
+  const result = await Promise.race([
+    evie.file('eval/loss.json').then(text => 'read: ' + text, error => 'refused: ' + error.message),
+    new Promise(resolve => setTimeout(() => resolve('no answer'), 3000)),
+  ]);
+  window.parent.postMessage({ thief: result }, '*');
+})();
+</script>

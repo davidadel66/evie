@@ -10,6 +10,7 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/web"
 )
 
@@ -79,6 +80,23 @@ func (c *webContextSessionController) RegisterWorkspace(ctx context.Context, dis
 
 func (c *webContextSessionController) ActiveWorkspaceFolder(ctx context.Context, id memory.WorkspaceID) (string, error) {
 	return c.store.ActiveWorkspaceFolder(ctx, id)
+}
+
+func (c *webContextSessionController) WorkspaceTabDataApprovals(ctx context.Context, id memory.WorkspaceID) (map[string]string, error) {
+	return c.store.WorkspaceTabDataApprovals(ctx, id)
+}
+
+func (c *webContextSessionController) ApproveWorkspaceTabData(ctx context.Context, id memory.WorkspaceID, tab, key string) error {
+	return c.store.ApproveWorkspaceTabData(ctx, id, tab, key)
+}
+
+func (c *webContextSessionController) WithdrawWorkspaceTabData(ctx context.Context, id memory.WorkspaceID, tab string) error {
+	return c.store.WithdrawWorkspaceTabData(ctx, id, tab)
+}
+
+// ReadTabDatabase is query_db's fenced read path for a Workspace tab.
+func (c *webContextSessionController) ReadTabDatabase(ctx context.Context, db, query string) (any, error) {
+	return tools.ReadDB(ctx, db, query)
 }
 
 func (c *webContextSessionController) WorkspaceFolder(ctx context.Context, id memory.WorkspaceID) (memory.WorkspaceFolder, error) {

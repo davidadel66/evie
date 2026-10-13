@@ -204,7 +204,28 @@ try {
   const appNavigation = await assertNavigationRefused('inside Evie', page, base);
   results.push({ case: 'inside Evie', report: inEvie, navigation: appNavigation });
 
-  // 5. At phone width, tabs that do not fit are in More and nothing scrolls.
+  // 5. Story 2: the Data tab reads nothing until the owner allows its data
+  // in Settings → Tabs, then reads what it declared and nothing else; the
+  // Thief tab it navigates its frame to, with its key, gets nothing.
+  await page.evaluate(`window.__tabMessages = []; addEventListener('message', event => { if (event.data && (event.data.dataTab || event.data.thief)) window.__tabMessages.push(event.data); })`);
+  await clickText('[role=tab]', 'Data');
+  const before = await until(`const found = window.__tabMessages.find(message => message.dataTab); return found && found.dataTab;`, 'the Data tab sent no report before approval');
+  assert.match(String(before.file), /^refused: .*until you allow its data/, `before approval: file = ${before.file}`);
+  assert.match(String(before.query), /^refused/, `before approval: query = ${before.query}`);
+  await clickText('[role=tab]', 'Settings');
+  await clickText('button', 'Allow this data');
+  await until(`return [...document.querySelectorAll('section[aria-label=Tabs] span')].some(span => span.textContent === 'Allowed')`, 'the Data tab was not allowed');
+  await page.evaluate('window.__tabMessages = []');
+  await clickText('[role=tab]', 'Data');
+  const after = await until(`const found = window.__tabMessages.find(message => message.dataTab); return found && found.dataTab;`, 'the Data tab sent no report after approval');
+  assert.equal(after.file, '{"loss":1}', `after approval: file = ${after.file}`);
+  assert.deepEqual(after.query, { columns: ['n'], rows: [[1]] }, `after approval: query = ${JSON.stringify(after.query)}`);
+  assert.match(String(after.undeclared), /^refused: tab.json does not declare the database/, `after approval: undeclared = ${after.undeclared}`);
+  const thief = await until(`const found = window.__tabMessages.find(message => message.thief); return found && found.thief;`, 'the Thief tab sent no report');
+  assert.equal(thief, 'no answer', `the Thief tab got: ${thief}`);
+  results.push({ case: 'data channel', report: { before, after, thief } });
+
+  // 6. At phone width, tabs that do not fit are in More and nothing scrolls.
   await page.send('Emulation.setDeviceMetricsOverride', { width: 360, height: 780, deviceScaleFactor: 2, mobile: true });
   await page.open(`${base}/`);
   await until(`const open = document.querySelector('button[aria-label="Open navigation"]'); if (open) open.click(); return true;`, 'no navigation');

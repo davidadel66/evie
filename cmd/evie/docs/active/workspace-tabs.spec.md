@@ -122,9 +122,19 @@ sealed off from the rest of Evie:
 - The owner approves a tab's data list in Settings → Tabs. The approval is
   pinned to the exact list; a changed list runs the tab with no data until
   approved again.
-- The page talks to the host through `postMessage` using a small helper
-  script Evie serves to every tab. The host checks every request against the
+- The page talks to the host through a small helper Evie serves to every
+  tab at `_evie/tab.js` (a tab folder's own `_evie/` is never served):
+  `evie.query(db, sql)`, `evie.file(path)` and `evie.runs()`. Evie's page puts
+  a one-time key in the tab's address; the helper greets with it once and
+  Evie hands back a private `MessageChannel` for every later request, so a
+  page the frame is navigated to afterwards cannot use the tab's access. At
+  most 4 requests are in flight. The server checks every request against the
   approved list and answers or refuses with a reason. There are no writes.
+- Databases are read through `query_db`'s own fences (`tools.ReadDB`):
+  finance and Evie's listed tables, typed rows, at most 5,000 rows and 2 MB.
+  Files: at most 1 MB each, regular files reached without a link, never a
+  dotfile or a secret-looking name. Runs: this Workspace's latest 100, with
+  their outputs.
 
 ### Evie's loop (story 3)
 

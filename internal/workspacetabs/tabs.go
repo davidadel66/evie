@@ -9,6 +9,8 @@ package workspacetabs
 import (
 	"bytes"
 	"cmp"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,6 +41,12 @@ const (
 	// maxManifestBytes bounds tab.json.
 	maxManifestBytes = 16 << 10
 	maxTitleRunes    = 24
+	// maxSources bounds a tab's data list, and MaxFileBytes one file read.
+	maxSources   = 8
+	MaxFileBytes = 1 << 20
+	// Reserved is the path inside a tab where Evie serves its own helper;
+	// a tab folder's own files there are never served.
+	Reserved = "_evie"
 )
 
 var (
@@ -55,19 +63,44 @@ var tabIDPattern = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
 func ValidID(id string) bool { return tabIDPattern.MatchString(id) }
 
 // Tab is one tab as the header and Settings → Tabs show it. A tab with a
-// Problem is listed but never shown or served.
+// Problem is listed but never shown or served. Data is what it may read once
+// the owner approves; DataKey pins an approval to that exact list.
 type Tab struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Order   int    `json:"order"`
-	Problem string `json:"problem,omitempty"`
+	ID      string       `json:"id"`
+	Title   string       `json:"title"`
+	Order   int          `json:"order"`
+	Data    []DataSource `json:"data,omitempty"`
+	DataKey string       `json:"dataKey,omitempty"`
+	Problem string       `json:"problem,omitempty"`
 }
 
-// manifest is tab.json, version 1. Unknown fields are a problem, so a newer
-// manifest on an older Evie says so instead of being half read.
+// DataSource is one thing a tab may read (story 2): exactly one of a
+// registered database, files in the Workspace folder matching a glob, or
+// this Workspace's workflow runs.
+type DataSource struct {
+	DB    string `json:"db,omitempty"`
+	Files string `json:"files,omitempty"`
+	Runs  bool   `json:"runs,omitempty"`
+}
+
+// manifest is tab.json. Unknown fields are a problem, so a newer manifest
+// on an older Evie says so instead of being half read.
 type manifest struct {
-	Title *string `json:"title"`
-	Order int     `json:"order"`
+	Title *string      `json:"title"`
+	Order int          `json:"order"`
+	Data  []DataSource `json:"data"`
+}
+
+var databaseNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
+
+// dataKey is the hex SHA-256 of a data list, "" for none.
+func dataKey(data []DataSource) string {
+	if len(data) == 0 {
+		return ""
+	}
+	encoded, _ := json.Marshal(data)
+	sum := sha256.Sum256(encoded)
+	return hex.EncodeToString(sum[:])
 }
 
 // List returns the tabs in folder's .evie/tabs, sorted by order then id.
@@ -133,7 +166,7 @@ func Open(folder, id, rel string) (*os.File, fs.FileInfo, error) {
 	if rel == "" {
 		rel = "index.html"
 	}
-	if !allowedPath(rel) {
+	if !allowedPath(rel) || rel == Reserved || strings.HasPrefix(rel, Reserved+"/") {
 		return nil, nil, ErrPath
 	}
 	// Open lists every tab so a 13th or broken tab is refused exactly as
@@ -257,7 +290,7 @@ func inspect(tabs *os.Root, name string) Tab {
 		tab.Problem = problem
 		return tab
 	}
-	tab.Title, tab.Order = strings.TrimSpace(*m.Title), m.Order
+	tab.Title, tab.Order, tab.Data, tab.DataKey = strings.TrimSpace(*m.Title), m.Order, m.Data, dataKey(m.Data)
 	if info, err := root.Lstat("index.html"); err != nil || !info.Mode().IsRegular() {
 		tab.Problem = "index.html is missing or not a regular file"
 		return tab
@@ -297,7 +330,118 @@ func readManifest(root *os.Root) (manifest, string) {
 	if title := strings.TrimSpace(*m.Title); title == "" || utf8.RuneCountInString(title) > maxTitleRunes {
 		return m, fmt.Sprintf("the title must be 1–%d characters", maxTitleRunes)
 	}
+	if len(m.Data) > maxSources {
+		return m, fmt.Sprintf("data lists at most %d sources", maxSources)
+	}
+	for _, source := range m.Data {
+		if problem := source.problem(); problem != "" {
+			return m, "data: " + problem
+		}
+	}
 	return m, ""
+}
+
+func (source DataSource) problem() string {
+	set := 0
+	for _, present := range []bool{source.DB != "", source.Files != "", source.Runs} {
+		if present {
+			set++
+		}
+	}
+	switch {
+	case set != 1:
+		return `each source names exactly one of "db", "files" or "runs": true`
+	case source.DB != "" && !databaseNamePattern.MatchString(source.DB):
+		return fmt.Sprintf("%q is not a database name", source.DB)
+	case source.Files != "" && !validGlob(source.Files):
+		return fmt.Sprintf("%q must be a relative glob with no dot folders or ..", source.Files)
+	}
+	return ""
+}
+
+// validGlob accepts a relative slash glob of path.Match segments and "**",
+// with no dot segment.
+func validGlob(pattern string) bool {
+	if len(pattern) > 200 || strings.ContainsAny(pattern, "\\\x00") || path.IsAbs(pattern) {
+		return false
+	}
+	for _, segment := range strings.Split(pattern, "/") {
+		if segment == "" || strings.HasPrefix(segment, ".") {
+			return false
+		}
+		if segment == "**" {
+			continue
+		}
+		if _, err := path.Match(segment, ""); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// matchGlob matches a slash path against a validGlob pattern, where "**"
+// matches zero or more whole segments.
+func matchGlob(pattern, name string) bool {
+	return matchSegments(strings.Split(pattern, "/"), strings.Split(name, "/"))
+}
+
+func matchSegments(pattern, name []string) bool {
+	if len(pattern) == 0 {
+		return len(name) == 0
+	}
+	if pattern[0] == "**" {
+		for i := 0; i <= len(name); i++ {
+			if matchSegments(pattern[1:], name[i:]) {
+				return true
+			}
+		}
+		return false
+	}
+	if len(name) == 0 {
+		return false
+	}
+	ok, err := path.Match(pattern[0], name[0])
+	return err == nil && ok && matchSegments(pattern[1:], name[1:])
+}
+
+// secretName is a file name that looks like it holds a secret; tabs never
+// read one, whatever the glob says.
+func secretName(rel string) bool {
+	base := strings.ToLower(path.Base(rel))
+	for _, word := range []string{"secret", "credential", "password", "passwd", "token", "id_rsa", "id_ed25519", "id_ecdsa"} {
+		if strings.Contains(base, word) {
+			return true
+		}
+	}
+	for _, ext := range []string{".pem", ".key", ".p12", ".pfx", ".keychain", ".kdbx"} {
+		if strings.HasSuffix(base, ext) {
+			return true
+		}
+	}
+	return false
+}
+
+// ReadFile reads one file of the Workspace folder for a tab's declared
+// globs: a regular file reached without a link, matching a glob, with no
+// dot segment or secret-looking name, at most MaxFileBytes.
+func ReadFile(folder, rel string, globs []string) ([]byte, error) {
+	if folder == "" || !allowedPath(rel) || secretName(rel) || !slices.ContainsFunc(globs, func(glob string) bool { return matchGlob(glob, rel) }) {
+		return nil, ErrPath
+	}
+	root, err := os.OpenRoot(folder)
+	if err != nil {
+		return nil, ErrNotFound
+	}
+	defer root.Close()
+	file, info, err := openRegular(root, rel)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	if info.Size() > MaxFileBytes {
+		return nil, fmt.Errorf("%w: the file is over 1 MB", ErrPath)
+	}
+	return io.ReadAll(io.LimitReader(file, MaxFileBytes))
 }
 
 // checkSize walks the tab folder and stops as soon as it is over a limit.

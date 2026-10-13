@@ -283,3 +283,145 @@ func TestWorkspaceTabsAgainstARealStore(t *testing.T) {
 		t.Fatalf("archived page status=%d", result.Code)
 	}
 }
+
+// fakeTabDataController keeps approvals in memory and answers database
+// reads with the query it was asked, so tests see exactly what reached it.
+type fakeTabDataController struct {
+	fakeTabsController
+	approvals map[string]string
+	queries   []string
+}
+
+func (c *fakeTabDataController) WorkspaceTabDataApprovals(context.Context, memory.WorkspaceID) (map[string]string, error) {
+	return c.approvals, nil
+}
+
+func (c *fakeTabDataController) ApproveWorkspaceTabData(_ context.Context, _ memory.WorkspaceID, tab, key string) error {
+	c.approvals[tab] = key
+	return nil
+}
+
+func (c *fakeTabDataController) WithdrawWorkspaceTabData(_ context.Context, _ memory.WorkspaceID, tab string) error {
+	delete(c.approvals, tab)
+	return nil
+}
+
+func (c *fakeTabDataController) ReadTabDatabase(_ context.Context, db, query string) (any, error) {
+	c.queries = append(c.queries, db+": "+query)
+	return map[string]any{"columns": []string{"n"}, "rows": [][]any{{1}}}, nil
+}
+
+func tabDataFixture(t *testing.T) (http.Handler, *fakeTabDataController, string) {
+	t.Helper()
+	folder := t.TempDir()
+	writeTabFiles(t, folder, "reports", map[string]string{
+		"tab.json":   `{"title":"Reports","data":[{"db":"finance"},{"files":"eval/*.json"}]}`,
+		"index.html": "<p>Reports</p>", "_evie/tab.js": "not Evie's helper",
+	})
+	writeTabFiles(t, folder, "plain", map[string]string{"tab.json": `{"title":"Plain"}`, "index.html": "x"})
+	for rel, content := range map[string]string{"eval/loss.json": `{"loss":1}`, "eval/notes.txt": "n", "eval/api_token.json": "secret"} {
+		path := filepath.Join(folder, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	controller := &fakeTabDataController{fakeTabsController: fakeTabsController{folders: map[memory.WorkspaceID]string{"finance": folder}}, approvals: map[string]string{}}
+	return NewContextServer(nil, nil, nil, controller).Handler(), controller, folder
+}
+
+func postTabs(handler http.Handler, path, body string) *httptest.ResponseRecorder {
+	result := httptest.NewRecorder()
+	handler.ServeHTTP(result, managementRequest(path, body))
+	return result
+}
+
+func listedTabs(t *testing.T, handler http.Handler) map[string]tabListing {
+	t.Helper()
+	var page struct {
+		Tabs []tabListing `json:"tabs"`
+	}
+	result := postTabs(handler, "/api/workspaces/tabs", `{"workspaceId":"finance"}`)
+	if err := json.Unmarshal(result.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	tabs := map[string]tabListing{}
+	for _, tab := range page.Tabs {
+		tabs[tab.ID] = tab
+	}
+	return tabs
+}
+
+func TestTabDataIsReadOnlyAfterTheOwnerApprovesItsExactList(t *testing.T) {
+	handler, controller, folder := tabDataFixture(t)
+	reports := listedTabs(t, handler)["reports"]
+	if reports.Approved || len(reports.Data) != 2 || reports.DataKey == "" {
+		t.Fatalf("reports before approval = %+v", reports)
+	}
+	query := `{"workspaceId":"finance","tabId":"reports","request":{"kind":"query","db":"finance","sql":"SELECT 1"}}`
+	if result := postTabs(handler, "/api/workspaces/tabs/data", query); result.Code != http.StatusForbidden || !strings.Contains(result.Body.String(), "until you allow its data") {
+		t.Fatalf("before approval status=%d body=%s", result.Code, result.Body.String())
+	}
+	if result := postTabs(handler, "/api/workspaces/tabs/approve", `{"workspaceId":"finance","tabId":"reports","dataKey":"stale"}`); result.Code != http.StatusConflict {
+		t.Fatalf("stale approval status=%d", result.Code)
+	}
+	if result := postTabs(handler, "/api/workspaces/tabs/approve", `{"workspaceId":"finance","tabId":"plain","dataKey":""}`); result.Code != http.StatusConflict {
+		t.Fatalf("approving a tab with no data status=%d", result.Code)
+	}
+	if result := postTabs(handler, "/api/workspaces/tabs/approve", `{"workspaceId":"finance","tabId":"reports","dataKey":"`+reports.DataKey+`"}`); result.Code != http.StatusOK {
+		t.Fatalf("approve status=%d body=%s", result.Code, result.Body.String())
+	}
+	if !listedTabs(t, handler)["reports"].Approved {
+		t.Fatal("the approved tab is not listed as approved")
+	}
+	if result := postTabs(handler, "/api/workspaces/tabs/data", query); result.Code != http.StatusOK || strings.Join(controller.queries, ";") != "finance: SELECT 1" {
+		t.Fatalf("approved query status=%d body=%s queries=%v", result.Code, result.Body.String(), controller.queries)
+	}
+	for name, test := range map[string]struct {
+		request string
+		status  int
+	}{
+		"undeclared database": {`{"kind":"query","db":"evie","sql":"SELECT 1"}`, http.StatusForbidden},
+		"oversized query":     {`{"kind":"query","db":"finance","sql":"SELECT '` + strings.Repeat("x", 17<<10) + `'"}`, http.StatusRequestEntityTooLarge},
+		"declared file":       {`{"kind":"file","path":"eval/loss.json"}`, http.StatusOK},
+		"undeclared file":     {`{"kind":"file","path":"eval/notes.txt"}`, http.StatusForbidden},
+		"secret-looking file": {`{"kind":"file","path":"eval/api_token.json"}`, http.StatusForbidden},
+		"escaping file":       {`{"kind":"file","path":"../eval/loss.json"}`, http.StatusForbidden},
+		"missing file":        {`{"kind":"file","path":"eval/none.json"}`, http.StatusNotFound},
+		"undeclared runs":     {`{"kind":"runs"}`, http.StatusForbidden},
+		"unknown kind":        {`{"kind":"write"}`, http.StatusBadRequest},
+	} {
+		result := postTabs(handler, "/api/workspaces/tabs/data", `{"workspaceId":"finance","tabId":"reports","request":`+test.request+`}`)
+		if result.Code != test.status || strings.Contains(result.Body.String(), "secret") && test.status == http.StatusOK {
+			t.Errorf("%s: status=%d body=%.120s", name, result.Code, result.Body.String())
+		}
+	}
+	if result := postTabs(handler, "/api/workspaces/tabs/data", `{"workspaceId":"finance","tabId":"reports","request":{"kind":"file","path":"eval/loss.json"}}`); !strings.Contains(result.Body.String(), `"result":"{\"loss\":1}"`) {
+		t.Errorf("file body = %s", result.Body.String())
+	}
+	// Changing the data list withdraws access until approved again.
+	writeTabFiles(t, folder, "reports", map[string]string{"tab.json": `{"title":"Reports","data":[{"db":"finance"},{"db":"evie"}]}`})
+	if listedTabs(t, handler)["reports"].Approved {
+		t.Fatal("a changed data list stayed approved")
+	}
+	if result := postTabs(handler, "/api/workspaces/tabs/data", query); result.Code != http.StatusForbidden {
+		t.Fatalf("after the list changed status=%d", result.Code)
+	}
+	if result := postTabs(handler, "/api/workspaces/tabs/withdraw", `{"workspaceId":"finance","tabId":"reports"}`); result.Code != http.StatusOK || len(controller.approvals) != 0 {
+		t.Fatalf("withdraw status=%d approvals=%v", result.Code, controller.approvals)
+	}
+}
+
+func TestEvieServesItsHelperInPlaceOfATabsOwnReservedFolder(t *testing.T) {
+	handler, _, _ := tabDataFixture(t)
+	result := getTab(handler, http.MethodGet, "/workspace-tabs/finance/reports/_evie/tab.js", "", nil)
+	if result.Code != http.StatusOK || !strings.Contains(result.Body.String(), "window.evie = Object.freeze") || result.Header().Get("Content-Type") != "text/javascript; charset=utf-8" {
+		t.Fatalf("helper status=%d type=%q body=%.80s", result.Code, result.Header().Get("Content-Type"), result.Body.String())
+	}
+	assertSealed(t, "helper", result, "http://127.0.0.1:6687/workspace-tabs/finance/reports/")
+	if result := getTab(handler, http.MethodGet, "/workspace-tabs/finance/reports/_evie/other.js", "", nil); result.Code != http.StatusNotFound {
+		t.Fatalf("the tab's own _evie file status=%d", result.Code)
+	}
+}

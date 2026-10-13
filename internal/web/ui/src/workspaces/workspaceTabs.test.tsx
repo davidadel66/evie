@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { customTabURL } from "../api/workspaceTabs";
+import { customTabURL, describeSource } from "../api/workspaceTabs";
 import { MoreTabs, WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceTabFrame } from "./WorkspaceTabFrame";
 import { WorkspaceTabsSettings } from "./WorkspaceTabsSettings";
@@ -53,7 +53,7 @@ describe("a Workspace tab's page", () => {
   it("is framed sealed: scripts only, no same-origin, at its own folder's URL", () => {
     const html = renderToStaticMarkup(<WorkspaceTabFrame workspaceId="ws 1" tab={{ id: "reports", title: "Reports", order: 0 }} />);
     expect(html).toContain('sandbox="allow-scripts"');
-    expect(html).toContain(`src="${customTabURL("ws 1", "reports")}"`);
+    expect(html).toMatch(new RegExp(`src="${customTabURL("ws 1", "reports")}#evie-key=[0-9a-f]{32}"`));
     expect(customTabURL("ws 1", "reports")).toBe("/workspace-tabs/ws%201/reports/");
     expect(html).toContain('title="Reports"');
   });
@@ -70,5 +70,27 @@ describe("Settings → Tabs", () => {
     for (const text of ["Reports", "Shown", "broken", "index.html is missing", "Refresh"]) expect(html).toContain(text);
     expect(renderToStaticMarkup(<WorkspaceTabsSettings folder="/code/finance" tabs={[]} />)).toContain("/code/finance/.evie/tabs/");
     expect(renderToStaticMarkup(<WorkspaceTabsSettings folder="/code/finance" problem="the Workspace folder's .evie/tabs cannot be read" />)).toContain('role="alert"');
+  });
+});
+
+describe("Settings → Tabs, a tab's data", () => {
+  const data = [{ db: "finance" }, { files: "eval/*.json" }, { runs: true }];
+  it("says exactly what a tab would read and asks before allowing it", () => {
+    const html = renderToStaticMarkup(<WorkspaceTabsSettings folder="/code/finance" tabs={[{ id: "reports", title: "Reports", order: 1, data, dataKey: "k" }]} />);
+    expect(html).toContain("Reads the finance database (read-only), files matching eval/*.json, this workspace&#x27;s workflow runs.");
+    expect(html).toContain("Allow this data");
+    expect(html).not.toContain("Withdraw");
+  });
+  it("shows an allowed tab with a way to withdraw, and no data controls for a tab that reads nothing", () => {
+    const html = renderToStaticMarkup(<WorkspaceTabsSettings folder="/code/finance" busy="reports" actionProblem="The tab's data list changed; review it again before allowing it" tabs={[
+      { id: "reports", title: "Reports", order: 1, data, dataKey: "k", approved: true }, { id: "plain", title: "Plain", order: 2 },
+    ]} />);
+    expect(html).toContain("Allowed");
+    expect(html).toMatch(/disabled=""[^>]*>Withdraw/);
+    expect(html.match(/Reads /g)).toHaveLength(1);
+    expect(html).toContain('role="alert"');
+  });
+  it("names each kind of source", () => {
+    expect(data.map(describeSource)).toEqual(["the finance database (read-only)", "files matching eval/*.json", "this workspace's workflow runs"]);
   });
 });

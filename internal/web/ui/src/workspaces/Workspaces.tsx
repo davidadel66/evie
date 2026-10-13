@@ -22,6 +22,7 @@ import { useChangeListing } from "./useChangeListing";
 import { reviewCount } from "./changeView";
 import type { WorkspaceTab, WorkspaceViewState } from "./workspaceActivity";
 import { customTabID, customTabKey, useWorkspaceTabs } from "./workspaceTabs";
+import { workspaceTabsAPI, type CustomTab } from "../api/workspaceTabs";
 import { WorkspaceTabFrame } from "./WorkspaceTabFrame";
 import { WorkspaceTabsSettings } from "./WorkspaceTabsSettings";
 
@@ -203,6 +204,23 @@ export function WorkspaceHome({
   const hasRepository = !!listing && listing.repository.kind !== "none";
   const ownTabs = useWorkspaceTabs(workspace.id, workspace.folder?.path);
   const [tabReloads, setTabReloads] = useState(0);
+  const [tabSaving, setTabSaving] = useState<string>();
+  const [tabProblem, setTabProblem] = useState("");
+  // Allowing or withdrawing a tab's data reloads the list and the open tab.
+  const chooseTabData = async (tab: CustomTab, allow: boolean) => {
+    setTabSaving(tab.id);
+    setTabProblem("");
+    try {
+      if (allow) await workspaceTabsAPI.approve(workspace.id, tab.id, tab.dataKey ?? "");
+      else await workspaceTabsAPI.withdraw(workspace.id, tab.id);
+    } catch (error) {
+      setTabProblem(error instanceof Error ? error.message : "The tab's data choice could not be saved.");
+    } finally {
+      setTabSaving(undefined);
+      ownTabs.reload();
+      setTabReloads((count) => count + 1);
+    }
+  };
   const ownTabID = customTabID(tab);
   const ownTab = ownTabs.shown.find(({id}) => id === ownTabID);
   return (
@@ -213,7 +231,7 @@ export function WorkspaceHome({
         onReload={() => { setTabReloads((count) => count + 1); ownTabs.reload(); }} />
       {ownTabID !== undefined ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby={`workspace-tab-${tab}`} className="flex min-h-0 flex-1 flex-col">
         {ownTab
-          ? <WorkspaceTabFrame workspaceId={workspace.id} tab={ownTab} reloadKey={tabReloads} />
+          ? <WorkspaceTabFrame key={`${workspace.id}:${ownTab.id}:${tabReloads}`} workspaceId={workspace.id} tab={ownTab} />
           : <p className="text-muted-text m-auto text-sm">{ownTabs.tabs ? "This tab isn’t available. Settings → Tabs says why." : "Loading tab…"}</p>}
       </div> : tab === "changes" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-changes" className="flex min-h-0 flex-1">
         <WorkspaceChanges key={`changes:${workspace.id}`} workspace={workspace} listing={listing} selected={selectedChange} sessionTitles={sessionTitles}
@@ -236,7 +254,8 @@ export function WorkspaceHome({
         <WorkspaceVerifySettings key={`verify:${workspace.id}`} workspace={workspace} onChanged={onResearchChanged} />
         <WorkspaceConnections key={`connections:${workspace.id}`} workspace={workspace} />
         <FolderSettings key={`${workspace.id}:${workspace.folder?.revision ?? 0}`} workspace={workspace} busy={busy} onChanged={onFolderChanged} onOpen={onOpenFiles} />
-        <WorkspaceTabsSettings folder={workspace.folder?.path} tabs={ownTabs.tabs} problem={ownTabs.problem} onRefresh={ownTabs.reload} />
+        <WorkspaceTabsSettings folder={workspace.folder?.path} tabs={ownTabs.tabs} problem={ownTabs.problem} onRefresh={ownTabs.reload}
+          busy={tabSaving} actionProblem={tabProblem} onApprove={(tab) => void chooseTabData(tab, true)} onWithdraw={(tab) => void chooseTabData(tab, false)} />
         <section className="mt-8">
           <div className="mb-4 flex items-center gap-3">
             <h2 className="text-body text-sm font-semibold">Conversations</h2>

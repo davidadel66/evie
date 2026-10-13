@@ -1171,6 +1171,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("upgrade Workspace folders: %w", err)
 	}
+	if err := ensureWorkspaceTabApprovals(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade Workspace tab approvals: %w", err)
+	}
 	if err := ensureWorkspacePresets(ctx, db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("upgrade Workspace presets: %w", err)

@@ -45,7 +45,7 @@ func TestListShowsValidTabsInOrderAndExplainsInvalidOnes(t *testing.T) {
 	writeTab(t, folder, "reports", valid("Reports", 20))
 	writeTab(t, folder, "budget", valid("Budget", 10))
 	writeTab(t, folder, "same-order", valid("Same order", 10))
-	writeTab(t, folder, "unknown-field", map[string]string{"tab.json": `{"title":"X","data":[]}`, "index.html": "x"})
+	writeTab(t, folder, "unknown-field", map[string]string{"tab.json": `{"title":"X","layout":"wide"}`, "index.html": "x"})
 	writeTab(t, folder, "no-title", map[string]string{"tab.json": `{"order":1}`, "index.html": "x"})
 	writeTab(t, folder, "long-title", map[string]string{"tab.json": `{"title":"` + strings.Repeat("t", 25) + `"}`, "index.html": "x"})
 	writeTab(t, folder, "two-objects", map[string]string{"tab.json": `{"title":"A"} {}`, "index.html": "x"})
@@ -73,7 +73,7 @@ func TestListShowsValidTabsInOrderAndExplainsInvalidOnes(t *testing.T) {
 	}
 	got := problems(tabs)
 	for id, want := range map[string]string{
-		"unknown-field": `unknown field "data"`, "no-title": "needs a title", "long-title": "1–24 characters",
+		"unknown-field": `unknown field "layout"`, "no-title": "needs a title", "long-title": "1–24 characters",
 		"two-objects": "one JSON object", "no-index": "index.html is missing", "Bad_Name": "lowercase letters",
 		"linked": "cannot be a link",
 	} {
@@ -257,5 +257,95 @@ func TestFoldersCountTowardATabsLimitAndTabsHoldsABoundedNumberOfEntries(t *test
 	}
 	if _, err := List(crowded); !errors.Is(err, ErrTooMany) {
 		t.Fatalf("crowded .evie/tabs: %v", err)
+	}
+}
+
+func TestATabDeclaresTheDataItMayReadAndItsKeyPinsTheList(t *testing.T) {
+	folder := t.TempDir()
+	declared := `{"title":"Reports","data":[{"db":"finance"},{"files":"eval/**/*.json"},{"runs":true}]}`
+	writeTab(t, folder, "reports", map[string]string{"tab.json": declared, "index.html": "x"})
+	for id, manifest := range map[string]string{
+		"two-kinds":   `{"title":"A","data":[{"db":"finance","runs":true}]}`,
+		"no-kind":     `{"title":"A","data":[{}]}`,
+		"bad-db":      `{"title":"A","data":[{"db":"Finance DB"}]}`,
+		"escape-glob": `{"title":"A","data":[{"files":"../secrets/*"}]}`,
+		"dot-glob":    `{"title":"A","data":[{"files":".evie/**"}]}`,
+		"abs-glob":    `{"title":"A","data":[{"files":"/etc/*"}]}`,
+		"extra-field": `{"title":"A","data":[{"db":"finance","write":true}]}`,
+	} {
+		writeTab(t, folder, id, map[string]string{"tab.json": manifest, "index.html": "x"})
+	}
+	tabs, err := List(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]Tab{}
+	for _, tab := range tabs {
+		byID[tab.ID] = tab
+	}
+	reports := byID["reports"]
+	if reports.Problem != "" || len(reports.Data) != 3 || reports.Data[0].DB != "finance" || reports.Data[1].Files != "eval/**/*.json" || !reports.Data[2].Runs || len(reports.DataKey) != 64 {
+		t.Fatalf("reports = %+v", reports)
+	}
+	for _, id := range []string{"two-kinds", "no-kind", "bad-db", "escape-glob", "dot-glob", "abs-glob", "extra-field"} {
+		if !strings.HasPrefix(byID[id].Problem, "data: ") && !strings.Contains(byID[id].Problem, "unknown field") {
+			t.Errorf("%s problem = %q", id, byID[id].Problem)
+		}
+	}
+	writeTab(t, folder, "reports", map[string]string{"tab.json": `{"title":"Reports","data":[{"db":"finance"}]}`})
+	again, _ := List(folder)
+	for _, tab := range again {
+		if tab.ID == "reports" && (tab.DataKey == reports.DataKey || tab.DataKey == "") {
+			t.Fatalf("a changed data list kept its key: %q", tab.DataKey)
+		}
+	}
+}
+
+func TestReadFileReadsOnlyDeclaredFilesInTheWorkspace(t *testing.T) {
+	folder := t.TempDir()
+	write := func(rel, content string) {
+		path := filepath.Join(folder, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("eval/run-1/metrics.json", `{"loss":0.4}`)
+	write("eval/summary.json", `{"best":1}`)
+	write("eval/notes.txt", "not json")
+	write("eval/api_token.json", `{"token":"x"}`)
+	write("eval/.hidden.json", `{}`)
+	write("train/data.json", `{}`)
+	write("eval/big.json", strings.Repeat("x", MaxFileBytes+1))
+	if err := os.Symlink(filepath.Join(folder, "train/data.json"), filepath.Join(folder, "eval/linked.json")); err != nil {
+		t.Fatal(err)
+	}
+	globs := []string{"eval/**/*.json"}
+	for rel, want := range map[string]string{"eval/run-1/metrics.json": `{"loss":0.4}`, "eval/summary.json": `{"best":1}`} {
+		if got, err := ReadFile(folder, rel, globs); err != nil || string(got) != want {
+			t.Errorf("read %s = %q, %v", rel, got, err)
+		}
+	}
+	for _, rel := range []string{"eval/notes.txt", "eval/api_token.json", "eval/.hidden.json", "train/data.json", "eval/linked.json", "eval/big.json", "eval/../train/data.json", "/etc/passwd"} {
+		if _, err := ReadFile(folder, rel, globs); !errors.Is(err, ErrPath) {
+			t.Errorf("read %s: err = %v, want ErrPath", rel, err)
+		}
+	}
+	if _, err := ReadFile(folder, "eval/summary.json", nil); !errors.Is(err, ErrPath) {
+		t.Errorf("read with no declared files: %v", err)
+	}
+}
+
+func TestATabsOwnReservedFolderIsNeverServed(t *testing.T) {
+	folder := t.TempDir()
+	files := valid("Reports", 1)
+	files["_evie/tab.js"] = "fake helper"
+	writeTab(t, folder, "reports", files)
+	for _, rel := range []string{"_evie/tab.js", "_evie"} {
+		if _, _, err := Open(folder, "reports", rel); !errors.Is(err, ErrPath) {
+			t.Errorf("open %s: %v", rel, err)
+		}
 	}
 }

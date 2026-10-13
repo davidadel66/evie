@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Data tab</title>
+<!-- Reads its declared data through Evie's helper, reports to the browser
+     check, then navigates its frame to the Thief tab with its key. -->
+<p id="report">running</p>
+<script src="_evie/tab.js"></script>
+<script>
+(async () => {
+  const report = {};
+  const read = async (name, run) => {
+    try { report[name] = await run(); } catch (error) { report[name] = 'refused: ' + error.message; }
+  };
+  await read('file', () => evie.file('eval/loss.json'));
+  await read('query', () => evie.query('finance', 'SELECT 1 AS n'));
+  await read('undeclared', () => evie.query('evie', 'SELECT 1'));
+  document.getElementById('report').textContent = JSON.stringify(report);
+  window.parent.postMessage({ dataTab: report }, '*');
+  if (typeof report.file === 'string' && !report.file.startsWith('refused')) {
+    setTimeout(() => { location.href = '../thief/' + location.hash; }, 300);
+  }
+})();
+</script>
