@@ -210,6 +210,10 @@ Each story is independently demonstrable and ends with
    design-sync 2026-10-08) and theme tokens are served to tabs so Evie's tabs
    match the app.
    - Depends on 1.
+   - Built (2026-10-12): the app's own built stylesheet is served to every tab
+     at `_evie/evie.css`, giving its theme tokens, font and utility classes;
+     it references no other files. The React components of `designSystem.ts`
+     need React bundled for tabs and are left for a later story.
 
 ## Testing Decisions
 

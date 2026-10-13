@@ -5,12 +5,14 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net"
 	"net/http"
 	"path"
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
@@ -214,6 +216,17 @@ func (s *Server) registerWorkspaceTabRoutes(mux *http.ServeMux) {
 			_, _ = w.Write(tabHelper)
 			return
 		}
+		if rel == workspacetabs.Reserved+"/evie.css" {
+			css, err := appStylesheet()
+			if err != nil {
+				http.Error(w, "Evie's stylesheet is not built.", http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Security-Policy", tabContentSecurityPolicy(origin+"/workspace-tabs/"+workspace+"/"+tab+"/"))
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			_, _ = w.Write(css)
+			return
+		}
 		file, info, err := workspacetabs.Open(folder, tab, rel)
 		switch {
 		case errors.Is(err, workspacetabs.ErrInvalid):
@@ -235,6 +248,17 @@ func (s *Server) registerWorkspaceTabRoutes(mux *http.ServeMux) {
 		http.ServeContent(w, r, "", info.ModTime(), file)
 	})
 }
+
+// appStylesheet is the app's own built stylesheet: its theme tokens and
+// utility classes, served to tabs at _evie/evie.css so they look like Evie
+// (story 5). It references no fonts or other files.
+var appStylesheet = sync.OnceValues(func() ([]byte, error) {
+	matches, err := fs.Glob(distFS, "ui/dist/assets/index-*.css")
+	if err != nil || len(matches) == 0 {
+		return nil, errors.New("no built stylesheet")
+	}
+	return fs.ReadFile(distFS, matches[0])
+})
 
 // sealTabResponse sets the headers every tab response carries, errors
 // included; a served file replaces the policy with its folder's.

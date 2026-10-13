@@ -5,6 +5,7 @@
      check, then navigates its frame to the Thief tab with its key. -->
 <p id="report">running</p>
 <script src="_evie/tab.js"></script>
+<link rel="stylesheet" href="_evie/evie.css">
 <script>
 (async () => {
   const report = {};
@@ -14,6 +15,7 @@
   await read('file', () => evie.file('eval/loss.json'));
   await read('query', () => evie.query('finance', 'SELECT 1 AS n'));
   await read('undeclared', () => evie.query('evie', 'SELECT 1'));
+  report.teal = getComputedStyle(document.documentElement).getPropertyValue('--color-teal').trim();
   document.getElementById('report').textContent = JSON.stringify(report);
   window.parent.postMessage({ dataTab: report }, '*');
   if (typeof report.file === 'string' && !report.file.startsWith('refused')) {

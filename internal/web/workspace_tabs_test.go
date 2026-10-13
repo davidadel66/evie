@@ -576,3 +576,13 @@ func TestTabFileRefusalsSayWhyAndTabReadsAreBounded(t *testing.T) {
 		t.Fatalf("archived Workspace status=%d", result.Code)
 	}
 }
+
+// A tab can load Evie's own stylesheet, sealed like its other files.
+func TestTabsGetEviesStylesheet(t *testing.T) {
+	handler, _, _ := tabDataFixture(t)
+	result := getTab(handler, http.MethodGet, "/workspace-tabs/finance/reports/_evie/evie.css", "", nil)
+	if result.Code != http.StatusOK || result.Header().Get("Content-Type") != "text/css; charset=utf-8" || !strings.Contains(result.Body.String(), "--color-teal") || strings.Contains(result.Body.String(), "url(") {
+		t.Fatalf("stylesheet status=%d type=%q has tokens=%v", result.Code, result.Header().Get("Content-Type"), strings.Contains(result.Body.String(), "--color-teal"))
+	}
+	assertSealed(t, "stylesheet", result, "http://127.0.0.1:6687/workspace-tabs/finance/reports/")
+}

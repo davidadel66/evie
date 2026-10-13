@@ -221,6 +221,7 @@ try {
   assert.equal(after.file, '{"loss":1}', `after approval: file = ${after.file}`);
   assert.deepEqual(after.query, { columns: ['n'], rows: [[1]] }, `after approval: query = ${JSON.stringify(after.query)}`);
   assert.match(String(after.undeclared), /^refused: tab.json does not declare the database/, `after approval: undeclared = ${after.undeclared}`);
+  assert.match(String(after.teal), /^#[0-9a-f]{6}$/i, `Evie's stylesheet did not load in the tab: --color-teal = ${after.teal}`);
   const thief = await until(`const found = window.__tabMessages.find(message => message.thief); return found && found.thief;`, 'the Thief tab sent no report');
   assert.equal(thief, 'no answer', `the Thief tab got: ${thief}`);
   results.push({ case: 'data channel', report: { before, after, thief } });
