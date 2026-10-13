@@ -10,7 +10,10 @@ import { browserPendingDecisionJournal } from "./pendingDecision";
 
 const button = "border-hair-input text-body hover:bg-hover rounded border px-3 py-2 text-xs disabled:opacity-40";
 
-export function CandidateInbox() {
+/** CandidateInbox reviews the memory compiler's candidates. With
+ *  hideWhenEmpty it shows nothing until its scope has a candidate or a
+ *  decision to finish, so an empty queue does not crowd the review. */
+export function CandidateInbox({ hideWhenEmpty = false }: { hideWhenEmpty?: boolean }) {
   const { preferredScope } = useMemoryPresentation();
   const [controller] = useState(() => new CandidateInboxController(candidateReviewAPI, undefined, browserPendingDecisionJournal()));
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
@@ -21,6 +24,7 @@ export function CandidateInbox() {
     const initial = scopes.find((scope) => scope.scope_key === preferredScope) ?? scopes.find((scope) => scope.scope_key === "global");
     if (initial) void controller.selectScope(initial.scope_key);
   }, [controller, preferredScope, state.scope, state.scopes, state.recovery]);
+  if (hideWhenEmpty && !state.detail && !state.recovery && !state.pending && !state.problem && !state.batchPending && (state.page?.candidates.length ?? 0) === 0) return null;
   return <CandidateInboxView state={state} onScope={(scope) => void controller.selectScope(scope)} onScopes={(cursor) => void controller.loadScopes(cursor)} onLoad={(cursor) => void controller.load(cursor)} onInspect={(id) => void controller.inspect(id)} onPrepare={(action) => void controller.prepare(action)} onResolve={() => void controller.resolve()} onRecover={() => void controller.recover()} onReason={(reason) => controller.setReason(reason)} controller={controller} />;
 }
 

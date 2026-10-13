@@ -27,13 +27,16 @@ function render(value: ProposalInboxState) {
 }
 
 describe("memory proposal inbox", () => {
-  it("leads with the memory, then where it applies, its kind and one quote", () => {
+  it("puts only the memory on the face, and where it came from on the back", () => {
     const html = render(state);
-    for (const text of ["Review", "1 of 1", ">answer style<", ">short answers<", ">Everywhere<", ">Preference<", "“Keep it short, I hate long answers.”",
-      "Always applies", "Approve", "Decline", "Details"]) expect(html).toContain(text);
-    for (const gone of ["Evie’s wording", "Nothing is saved", "Your words", "You — answer style", "Skip", "Decline all"]) expect(html).not.toContain(gone);
+    const [front, back] = html.split("[transform:rotateY(180deg)]");
+    for (const text of ["1 to review", ">answer style<", ">short answers<", ">Everywhere<", ">Preference<", "Always applies"]) expect(front).toContain(text);
+    for (const gone of ["Keep it short", "Evie’s wording", "Exact change"]) expect(front).not.toContain(gone);
+    for (const text of ["Weekend plans", "Your words", "“Keep it short, I hate long answers.”", "Exact change"]) expect(back).toContain(text);
     expect(html).toMatch(/role="switch" aria-checked="true" aria-label="Always applies"/);
-    expect(html).not.toMatch(/disabled=""[^>]*>Approve/);
+    for (const label of ["Decline", "Save", "Show where it came from"]) expect(html).toContain(`aria-label="${label}"`);
+    expect(html).not.toMatch(/aria-label="Save"[^>]*disabled=""/);
+    expect(html).not.toContain('aria-label="Skip"');
   });
 
   it("shows the owner's switch choice instead of the default", () => {
@@ -42,7 +45,7 @@ describe("memory proposal inbox", () => {
     expect(html).toContain("Evie recalls this only when it’s relevant.");
   });
 
-  it("shows one card at a time, with chips by place and decline-all for one message", () => {
+  it("deals one card at a time from a stack, with chips by place and decline-all on the back", () => {
     const evie = (value: string, scope: string) => JSON.stringify({ ...JSON.parse(proposal), scope: { scope_key: scope }, predicate: { label: "monthly item" },
       literal: { value }, source: { authority: "evie_proposed", evidence: "" }, classification: { kind: "fact", standing: false } });
     const message = "add the cru sum every month these are tithes. also the credit cards are $100 each";
@@ -54,9 +57,10 @@ describe("memory proposal inbox", () => {
     const html = renderToStaticMarkup(<MemoryPresentationProvider snapshot={{ workspaces: [{ id: "fin", displayName: "Finance", state: "active", currentRevisionId: "r", createdAt: "", updatedAt: "" }], projects: [], sessions: [] }}>
       <ProposalInboxView state={{ ...state, page: { items, pending: 3 } }} onAlwaysApplies={() => undefined} onApprove={() => undefined}
         onDecline={() => undefined} onDeclineAll={() => undefined} onRefresh={() => undefined} /></MemoryPresentationProvider>);
-    expect(html.match(/aria-label="Memory proposal"/g)).toHaveLength(1);
-    for (const text of ["1 of 3", ">All 3<", ">Finance 2<", ">Everywhere 1<", ">monthly item<", ">CRU tithe<", ">Finance<", ">Fact<", "Evie’s wording",
-      message, "Skip", "Decline all 2 from this message"]) expect(html).toContain(text);
+    expect(html.match(/aria-roledescription="card"/g)).toHaveLength(1);
+    expect(html.match(/aria-hidden="true" class="border-hair bg-card absolute inset-0 rounded-2xl/g)).toHaveLength(2);
+    for (const text of ["3 to review", ">All 3<", ">Finance 2<", ">Everywhere 1<", ">monthly item<", ">CRU tithe<", ">Finance<", ">Fact<", "Evie’s wording",
+      message, "Decline all 2 from this message", 'aria-label="Skip"']) expect(html).toContain(text);
     expect(html).not.toContain("$100 per credit card");
     expect(html).toMatch(/aria-pressed="true"[^>]*>All 3</);
   });
@@ -84,9 +88,9 @@ describe("memory proposal inbox", () => {
     expect(render(state)).not.toContain("Everywhere instead");
   });
 
-  it("keeps a long message to two lines", () => {
-    const html = render({ ...state, page: { items: [{ ...item, source_message: "word ".repeat(80) }], pending: 1 } });
-    expect(html).toContain("line-clamp-2");
+  it("keeps the whole message on the back", () => {
+    const long = "word ".repeat(80).trim();
+    expect(render({ ...state, page: { items: [{ ...item, source_message: long }], pending: 1 } })).toContain(long);
   });
 
   it("flags a proposal held because the owner did not ask, and a refreshed one", () => {
@@ -95,18 +99,20 @@ describe("memory proposal inbox", () => {
     expect(html).toContain("updated against newer memory");
   });
 
-  it("blocks approval of a proposal that can no longer apply but still allows declining", () => {
+  it("blocks saving a proposal that can no longer apply but still allows declining", () => {
     const html = render({ ...state, page: { items: [{ ...item, approvable: false, problem: "its conversation is archived; restore the conversation to approve it" }], pending: 1 } });
-    expect(html).toContain("Can’t approve: its conversation is archived");
-    expect(html).toMatch(/disabled=""[^>]*>Approve/);
-    expect(html).not.toMatch(/disabled=""[^>]*>Decline/);
+    expect(html).toContain("Can’t save: its conversation is archived");
+    expect(html).toMatch(/aria-label="Save"[^>]*disabled=""/);
+    expect(html).not.toMatch(/aria-label="Decline"[^>]*disabled=""/);
   });
 
-  it("shows memory full and other refusals, and hides itself when nothing waits", () => {
+  it("shows refusals, and All caught up once nothing waits", () => {
     const html = render({ ...state, problem: "memory full: standing memory for the profile holds 480 of 500 tokens" });
     expect(html).toContain('role="alert"');
     expect(html).toContain("memory full");
-    expect(render({ ...state, page: { items: [], pending: 0 } })).toBe("");
+    const empty = render({ ...state, page: { items: [], pending: 0 } });
+    expect(empty).toContain("All caught up");
+    expect(empty).not.toContain("to review");
   });
 
   it("counts waiting proposals with a badge on the Data navigation", () => {

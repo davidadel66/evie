@@ -68,7 +68,7 @@ function inbox(items: MemoryProposalItem[]) {
 describe("background proposals in the inbox", () => {
   it("shows an update as the new value with the old one struck through, and its source", () => {
     const html = inbox([background({ change: { action: "update", current: "owner — home city: Boston", replacement: "owner — home city: Chicago", evidence: "I moved to Chicago last month." } })]);
-    for (const text of [">home city<", ">Chicago<", ">Boston<", ">Update<", "I moved to Chicago last month.", "Always applies", "Approve", "Decline"]) expect(html).toContain(text);
+    for (const text of [">home city<", ">Chicago<", ">Boston<", ">Update<", "I moved to Chicago last month.", "Always applies", 'aria-label="Save"', 'aria-label="Decline"']) expect(html).toContain(text);
   });
 
   it("shows a retirement plainly, with no Always applies switch", () => {

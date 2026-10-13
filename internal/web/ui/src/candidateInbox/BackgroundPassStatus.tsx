@@ -32,6 +32,29 @@ function runSummary(run: MemoryBackgroundRun): string {
   }
 }
 
+/** BackgroundPassDot is the pass as one coloured dot beside the review; its
+ *  status opens from it. */
+export function BackgroundPassDot({ api = memoryBackgroundAPI, refreshKey }: { api?: MemoryBackgroundAPI; refreshKey?: unknown }) {
+  const [status, setStatus] = useState<MemoryBackgroundStatus>();
+  const [problem, setProblem] = useState("");
+  useEffect(() => {
+    let live = true;
+    api.status().then((value) => { if (live) { setStatus(value); setProblem(""); } },
+      (error: unknown) => { if (live) setProblem(error instanceof Error ? error.message : "The background pass status is unavailable."); });
+    return () => { live = false; };
+  }, [api, refreshKey]);
+  if (!status && !problem) return null;
+  const tone = status?.state === "on" ? "bg-ok-ink" : "bg-amber-ink";
+  return <details className="relative">
+    <summary className="text-muted-text hover:text-body flex cursor-pointer list-none items-center gap-1.5 text-xs" title="Background memory pass">
+      <span className={`h-2 w-2 rounded-full ${tone}`} />Pass {status ? stateLabels[status.state].toLowerCase() : "unknown"}
+    </summary>
+    <div className="border-hair-input bg-sidebar absolute right-0 top-full z-30 mt-2 w-80 overflow-hidden rounded-lg border shadow-xl">
+      <BackgroundPassStatusView status={status} problem={problem} />
+    </div>
+  </details>;
+}
+
 export function BackgroundPassStatus({ api = memoryBackgroundAPI, refreshKey }: { api?: MemoryBackgroundAPI; refreshKey?: unknown }) {
   const [status, setStatus] = useState<MemoryBackgroundStatus>();
   const [problem, setProblem] = useState("");

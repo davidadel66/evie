@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from "react";
-import { BackgroundPassStatus } from "./BackgroundPassStatus";
+import { BackgroundPassDot } from "./BackgroundPassStatus";
 import { CandidateInbox } from "./CandidateInbox";
 import { ProposalInbox } from "./ProposalInbox";
 import { pendingLabel, usePendingMemoryProposals } from "./pendingProposals";
 import { CompilerHealth } from "../compilerDiagnostics/CompilerHealth";
 
 export function MemoryReviewTabs({ children }: { children: ReactNode }) {
-  const [view, setView] = useState<"accepted" | "review" | "health">("accepted");
+  const [view, setView] = useState<"accepted" | "review" | "health" | "candidates">("accepted");
   const [reviewed, setReviewed] = useState(0);
   const pending = usePendingMemoryProposals(reviewed);
   return <section className="flex min-h-0 flex-1 flex-col overflow-hidden" aria-label="Memory workspace">
@@ -14,11 +14,14 @@ export function MemoryReviewTabs({ children }: { children: ReactNode }) {
       <button type="button" className={`${view === "accepted" ? "border-teal text-ink" : "border-transparent text-muted-text hover:text-body"} border-b-2 py-3 text-sm`} aria-pressed={view === "accepted"} onClick={() => setView("accepted")}>Memories</button>
       <button type="button" className={`${view === "review" ? "border-teal text-ink" : "border-transparent text-muted-text hover:text-body"} flex items-center gap-2 border-b-2 py-3 text-sm`} aria-pressed={view === "review"} onClick={() => setView("review")}>Review<ReviewBadge pending={pending} /></button>
       <div className="flex-1" />
-      <details className="relative py-2"><summary aria-label="Memory tools" className="text-muted-text hover:text-body cursor-pointer rounded px-2 py-1 text-sm">More</summary><div className="border-hair bg-sidebar absolute right-0 top-full z-40 w-52 rounded-lg border p-1 shadow-lg"><button type="button" className="text-body hover:bg-hover w-full rounded px-3 py-2 text-left text-sm" onClick={(event) => { setView("health"); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Background activity</button></div></details>
+      <details className="relative py-2"><summary aria-label="Memory tools" className="text-muted-text hover:text-body cursor-pointer rounded px-2 py-1 text-sm">More</summary><div className="border-hair bg-sidebar absolute right-0 top-full z-40 w-52 rounded-lg border p-1 shadow-lg">
+        <button type="button" className="text-body hover:bg-hover w-full rounded px-3 py-2 text-left text-sm" onClick={(event) => { setView("health"); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Background activity</button>
+        <button type="button" className="text-body hover:bg-hover w-full rounded px-3 py-2 text-left text-sm" onClick={(event) => { setView("candidates"); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Compiler candidates</button>
+      </div></details>
     </nav>
     {view === "review"
-      ? <div className="flex min-h-0 flex-1 flex-col overflow-auto"><BackgroundPassStatus refreshKey={reviewed} /><ProposalInbox onChanged={() => setReviewed((count) => count + 1)} /><CandidateInbox /></div>
-      : view === "health" ? <CompilerHealth /> : children}
+      ? <div className="flex min-h-0 flex-1 flex-col overflow-auto"><ProposalInbox onChanged={() => setReviewed((count) => count + 1)} status={<BackgroundPassDot refreshKey={reviewed} />} /><CandidateInbox hideWhenEmpty /></div>
+      : view === "health" ? <CompilerHealth /> : view === "candidates" ? <CandidateInbox /> : children}
   </section>;
 }
 
