@@ -1,7 +1,8 @@
 // Evie's helper for a Workspace tab (workspace-tabs.spec.md, story 2).
 // A tab loads it with <script src="_evie/tab.js"></script> and then reads
 // only what its tab.json declares and the owner approved:
-//   await evie.query("finance", "SELECT ...")  -> {columns, rows, truncated}
+//   await evie.query("finance", "SELECT ...")  -> {columns, rows, truncated},
+//                                                 rows as objects by column name
 //   await evie.file("eval/run-1/metrics.json") -> the file's text
 //   await evie.runs()                          -> this Workspace's runs
 // It greets Evie's page once with the key Evie put in this page's address
@@ -56,7 +57,7 @@
             const pending = waiting.get(reply && reply.id);
             if (!pending) return;
             waiting.delete(reply.id);
-            if (reply.ok) pending.resolve(reply.result);
+            if (reply.ok) pending.resolve(pending.shape ? pending.shape(reply.result) : reply.result);
             else pending.reject(new Error(reply.error || 'Evie refused the request.'));
           };
           channel = port1;
@@ -69,16 +70,21 @@
     };
     greet();
   });
-  const ask = async request => {
+  const ask = async (request, shape) => {
     const port = await connected;
     return new Promise((resolve, reject) => {
       const id = ++next;
-      waiting.set(id, { resolve, reject });
+      waiting.set(id, { resolve, reject, shape });
       port.postMessage({ id, request });
     });
   };
+  // A query's rows arrive as arrays in column order; a tab gets objects
+  // keyed by column name, with columns still giving the order.
+  const byColumn = result => result && Array.isArray(result.columns) && Array.isArray(result.rows)
+    ? { ...result, rows: result.rows.map(row => Object.fromEntries(result.columns.map((column, i) => [column, row[i]]))) }
+    : result;
   window.evie = Object.freeze({
-    query: (db, sql) => ask({ kind: 'query', db, sql }),
+    query: (db, sql) => ask({ kind: 'query', db, sql }, byColumn),
     file: path => ask({ kind: 'file', path }),
     runs: () => ask({ kind: 'runs' }),
   });

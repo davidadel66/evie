@@ -136,7 +136,8 @@ sealed off from the rest of Evie:
   server checks every request against the approved list and answers or
   refuses with a reason. There are no writes.
 - Databases are read through `query_db`'s own fences (`tools.ReadDB`):
-  finance and Evie's listed tables, typed rows, at most 5,000 rows, 2 MB in
+  finance and Evie's listed tables, typed rows (the helper gives a tab
+  objects keyed by column name), at most 5,000 rows, 2 MB in
   all and 2 MB per value, ending within 4 seconds (before a writer's busy
   wait on finance.db gives up). Files: at most 1 MB each, regular files with
   one link reached without a symlink, never a dotfile, a path with a
