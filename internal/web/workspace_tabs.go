@@ -40,12 +40,24 @@ type workspaceTabDataController interface {
 	ReadTabDatabase(ctx context.Context, db, query string) (any, error)
 }
 
+// workspaceTabProblemsController keeps what went wrong in each tab (story
+// 3) so Evie and the owner can see it.
+type workspaceTabProblemsController interface {
+	RecordWorkspaceTabProblem(context.Context, memory.WorkspaceID, workspacetabs.Problem) error
+	WorkspaceTabProblems(context.Context, memory.WorkspaceID) ([]workspacetabs.Problem, error)
+	ClearWorkspaceTabProblems(context.Context, memory.WorkspaceID, string) error
+}
+
 // tabListing is a tab as the owner manages it: Approved when its current
-// data list is the one the owner approved.
+// data list is the one the owner approved, and its latest problems.
 type tabListing struct {
 	workspacetabs.Tab
-	Approved bool `json:"approved,omitempty"`
+	Approved bool                    `json:"approved,omitempty"`
+	Recent   []workspacetabs.Problem `json:"recentProblems,omitempty"`
 }
+
+// tabProblemKinds are the problems a tab's page reports.
+var tabProblemKinds = map[string]bool{"error": true, "blocked": true}
 
 // maxTabQueryBytes bounds one SQL text a tab sends.
 const maxTabQueryBytes = 16 << 10
@@ -113,9 +125,22 @@ func (s *Server) registerWorkspaceTabRoutes(mux *http.ServeMux) {
 				return
 			}
 		}
+		recent := map[string][]workspacetabs.Problem{}
+		if problems, ok := controller.(workspaceTabProblemsController); ok {
+			found, err := problems.WorkspaceTabProblems(r.Context(), request.WorkspaceID)
+			if err != nil {
+				managementJSONError(w, http.StatusInternalServerError, "workspace_tabs_failed", "the Workspace's tab problems could not be read")
+				return
+			}
+			for _, problem := range found {
+				if len(recent[problem.TabID]) < 3 {
+					recent[problem.TabID] = append(recent[problem.TabID], problem)
+				}
+			}
+		}
 		listings := make([]tabListing, len(tabs))
 		for i, tab := range tabs {
-			listings[i] = tabListing{Tab: tab, Approved: tab.Problem == "" && tab.DataKey != "" && approvals[tab.ID] == tab.DataKey}
+			listings[i] = tabListing{Tab: tab, Approved: tab.Problem == "" && tab.DataKey != "" && approvals[tab.ID] == tab.DataKey, Recent: recent[tab.ID]}
 		}
 		writeJSON(w, http.StatusOK, struct {
 			Tabs []tabListing `json:"tabs"`
@@ -123,6 +148,9 @@ func (s *Server) registerWorkspaceTabRoutes(mux *http.ServeMux) {
 	}))
 	if data, ok := controller.(workspaceTabDataController); ok {
 		s.registerWorkspaceTabDataRoutes(mux, controller, data)
+	}
+	if problems, ok := controller.(workspaceTabProblemsController); ok {
+		s.registerWorkspaceTabProblemRoutes(mux, problems)
 	}
 	// A tab's relative links need the trailing slash. The Location is built
 	// only from checked IDs, so it can never point off Evie.
@@ -348,6 +376,10 @@ func (s *Server) registerWorkspaceTabDataRoutes(mux *http.ServeMux, folders work
 			return
 		}
 		refuse := func(message string) {
+			// A refusal is a problem Evie should see, to fix the tab.
+			if problems, ok := folders.(workspaceTabProblemsController); ok {
+				_ = problems.RecordWorkspaceTabProblem(r.Context(), request.WorkspaceID, workspacetabs.Problem{TabID: tab.ID, Kind: "refused", Message: message})
+			}
 			managementJSONError(w, http.StatusForbidden, "workspace_tab_data_refused", message)
 		}
 		if request.Request == nil {
@@ -430,4 +462,41 @@ func quoteName(name string) string {
 		name = name[:40]
 	}
 	return `"` + name + `"`
+}
+
+// registerWorkspaceTabProblemRoutes lets Evie's page record what went wrong
+// in a tab it shows, and clear a tab's problems.
+func (s *Server) registerWorkspaceTabProblemRoutes(mux *http.ServeMux, problems workspaceTabProblemsController) {
+	mux.Handle("/api/workspaces/tabs/problems", s.managementRoute(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			WorkspaceID memory.WorkspaceID `json:"workspaceId"`
+			TabID       string             `json:"tabId"`
+			Kind        string             `json:"kind"`
+			Message     string             `json:"message"`
+			Clear       bool               `json:"clear,omitempty"`
+		}
+		if status, err := decodeManagementJSON(w, r, &request); err != nil || !workspaceIDPattern.MatchString(string(request.WorkspaceID)) || !workspacetabs.ValidID(request.TabID) ||
+			(!request.Clear && (!tabProblemKinds[request.Kind] || strings.TrimSpace(request.Message) == "")) {
+			if err == nil {
+				status = http.StatusBadRequest
+			}
+			jsonError(w, status, `body must name a Workspace, one of its tabs, and a problem of kind "error" or "blocked", or "clear": true`)
+			return
+		}
+		var err error
+		if request.Clear {
+			err = problems.ClearWorkspaceTabProblems(r.Context(), request.WorkspaceID, request.TabID)
+		} else {
+			err = problems.RecordWorkspaceTabProblem(r.Context(), request.WorkspaceID, workspacetabs.Problem{TabID: request.TabID, Kind: request.Kind, Message: request.Message})
+		}
+		if errors.Is(err, eviedb.ErrWorkspaceNotFound) {
+			managementJSONError(w, http.StatusNotFound, "workspace_not_found", "Workspace not found; refresh and try again")
+			return
+		}
+		if err != nil {
+			managementJSONError(w, http.StatusInternalServerError, "workspace_tab_problem_failed", "The tab's problem could not be saved")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
 }

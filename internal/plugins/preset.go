@@ -21,7 +21,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:d52283fa9f2a7ecc53add46d4abc811262da0ab3da88a9190117ce91d2f29a56"
+	StandardPresetVersion                               = "sha256:695e10586716301681141b44b53e41eef1050bef971bf92655957cf65e928339"
+	preTabsStandardPresetVersion                        = "sha256:d52283fa9f2a7ecc53add46d4abc811262da0ab3da88a9190117ce91d2f29a56"
 	preMCPStandardPresetVersion                         = "sha256:7f31ed96c814e676d51c7f9288cb0c15bca18352a2dc271d7b3894f3f20f14dd"
 	preWorkflowsStandardPresetVersion                   = "sha256:377b51c09706fba7741ad0f6f0e9ba8281921ba6b0043b8f9985a5c31966b3c0"
 	preReadyStandardPresetVersion                       = "sha256:6566fc2a89af6fb8661b00d2222d49125b9181153ef5a2e97888552221864a54"
@@ -733,6 +734,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preMCPStandardPresetVersion {
 		return m.resumePreset(preMCPStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preTabsStandardPresetVersion {
+		return m.resumePreset(preTabsStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -1038,15 +1042,37 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 }
 
 // standardPresetContent is the current standard preset: everything before
-// the MCP tools, then mcp_list_tools and mcp_call (workspace-mcp-
-// connections.spec.md story 2, 2026-10-12), optional so a disabled MCP
-// plugin only warns. Outside a Workspace they reach nothing.
+// Workspace tabs, then workspace_tabs (workspace-tabs.spec.md story 3,
+// 2026-10-12), optional so a disabled Workspace tabs plugin only warns.
+// Outside a Workspace it says tabs belong to one.
 func standardPresetContent() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preTabsStandardPresetContent()
+	p.OptionalCapabilities = append(p.OptionalCapabilities,
+		CapabilityRequirement{ID: WorkspaceTabsCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preTabsStandardPresetContent is the content of version d52283fa…, the
+// standard preset before Workspace tabs: everything before the MCP tools,
+// then mcp_list_tools and mcp_call (workspace-mcp-connections.spec.md story
+// 2, 2026-10-12), optional so a disabled MCP plugin only warns. Outside a
+// Workspace they reach nothing.
+func preTabsStandardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preMCPStandardPresetContent()
 	p.OptionalCapabilities = append(p.OptionalCapabilities,
 		CapabilityRequirement{ID: MCPListToolsCapabilityID, Compatibility: compatibility},
 		CapabilityRequirement{ID: MCPCallCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preTabsStandardPreset is the standard preset before workspace_tabs
+// (version d52283fa…); sessions pinned to it keep their exact tools and
+// prompt.
+func preTabsStandardPreset() Preset {
+	p := preTabsStandardPresetContent()
+	p.Version = preTabsStandardPresetVersion
 	return p
 }
 

@@ -4,7 +4,9 @@
 
 /** One thing a tab may read: a registered database, files matching a glob, or this Workspace's runs. */
 export type TabDataSource = { db?: string; files?: string; runs?: boolean };
-export type CustomTab = { id: string; title: string; order: number; data?: TabDataSource[]; dataKey?: string; approved?: boolean; problem?: string };
+/** Something that went wrong in a tab's page, or a data request it was refused. */
+export type TabProblem = { tabId: string; kind: string; message: string; recordedAt: string };
+export type CustomTab = { id: string; title: string; order: number; data?: TabDataSource[]; dataKey?: string; approved?: boolean; problem?: string; recentProblems?: TabProblem[] };
 export type CustomTabList = { tabs: CustomTab[] };
 /** A read a tab asks for through Evie's page; the server checks it against the approved list. */
 export type TabDataRequest = { kind: string; db?: string; sql?: string; path?: string };
@@ -14,10 +16,12 @@ export type WorkspaceTabsAPI = {
   approve(workspaceId: string, tabId: string, dataKey: string): Promise<unknown>;
   withdraw(workspaceId: string, tabId: string): Promise<unknown>;
   data(workspaceId: string, tabId: string, request: TabDataRequest): Promise<{ result: unknown }>;
+  problem(workspaceId: string, tabId: string, problem: { kind: string; message: string }): Promise<unknown>;
 };
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+  if (response.status === 204) return undefined as T;
   const value = (await response.json()) as T & { error?: string };
   if (!response.ok) throw new Error(value.error ?? `Request failed (${response.status})`);
   return value;
@@ -28,6 +32,7 @@ export const workspaceTabsAPI: WorkspaceTabsAPI = {
   approve: (workspaceId, tabId, dataKey) => post("/api/workspaces/tabs/approve", { workspaceId, tabId, dataKey }),
   withdraw: (workspaceId, tabId) => post("/api/workspaces/tabs/withdraw", { workspaceId, tabId }),
   data: (workspaceId, tabId, request) => post("/api/workspaces/tabs/data", { workspaceId, tabId, request }),
+  problem: (workspaceId, tabId, problem) => post("/api/workspaces/tabs/problems", { workspaceId, tabId, ...problem }),
 };
 
 /** customTabURL is where a tab's page is served; the trailing slash keeps its relative links inside the tab. */

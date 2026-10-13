@@ -49,6 +49,15 @@ const (
 		"Tell David it runs in the background and give him its run ID; check it with " + workflowStatusTool + " before answering from it. Only David proposes, approves or cancels workflows.\n"
 )
 
+// A session with workspace_tabs (workspace-tabs.spec.md story 3,
+// 2026-10-12) is told to build a Workspace's own views as its tabs; sessions
+// pinned before it keep their exact prompt.
+const (
+	workspaceTabsTool     = "workspace_tabs"
+	workspaceTabsGuidance = "- When David wants a view of this Workspace's own (a report, dashboard, metrics or analysis), build it as one of the Workspace's tabs: call " + workspaceTabsTool +
+		" first for how, write the tab's files, then call it again to see the tab's problems and fix them.\n"
+)
+
 // delegationFollowUpAnchor starts the Delegation line that the follow-up
 // guidance precedes.
 const delegationFollowUpAnchor = "- Worker findings"
@@ -96,7 +105,7 @@ const (
 // toolset is pinned, so its instructions stay stable and cacheable across
 // its turns.
 func primaryInstructions(tools []openrouter.Tool) string {
-	var report, continuation, explore, build, merge, ready, duties, overview, workflowStart, workflowStatus bool
+	var report, continuation, explore, build, merge, ready, duties, overview, workflowStart, workflowStatus, workspaceTabs bool
 	for _, tool := range tools {
 		switch tool.Function.Name {
 		case workflowStartTool:
@@ -119,6 +128,8 @@ func primaryInstructions(tools []openrouter.Tool) string {
 			_, duties = tool.Function.Parameters.Properties[requestedByOwnerFlag]
 		case memoryOverviewTool:
 			overview = true
+		case workspaceTabsTool:
+			workspaceTabs = true
 		}
 	}
 	prompt := systemPrompt
@@ -142,6 +153,9 @@ func primaryInstructions(tools []openrouter.Tool) string {
 	}
 	if workflowStart && workflowStatus {
 		line += workflowGuidance
+	}
+	if workspaceTabs {
+		line += workspaceTabsGuidance
 	}
 	if line != "" {
 		prompt = strings.Replace(prompt, delegationFollowUpAnchor, line+delegationFollowUpAnchor, 1)

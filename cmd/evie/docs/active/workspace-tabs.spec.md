@@ -141,9 +141,21 @@ sealed off from the rest of Evie:
 - Evie knows the tab contract (folder layout, manifest, helper API, limits)
   and creates or edits tabs with its existing file tools, or as a Change in a
   Workspace with a Repository.
+- The `workspace-tabs` plugin gives Workspace chats one read tool,
+  `workspace_tabs`: the contract (in the result, so it can change without a
+  new tool version), each tab's status, data list and approval, and the
+  recorded problems, with tab and problem text framed as data. `clear` with a
+  tab id forgets that tab's problems once fixed. The standard preset adds it
+  as an optional Capability; version d52283fa… is frozen so earlier chats
+  resume unchanged. Sessions with the tool get one prompt line: build a
+  Workspace's own views as its tabs, and check `workspace_tabs` first.
 - Problems inside a tab (script errors, refused data requests, invalid
   manifest) are recorded per tab and readable by Evie in that Workspace, so
   it can fix what it wrote.
+- The helper reports the page's script errors, failed loads and anything its
+  policy blocks (at most 20 per page load) over the same private channel;
+  the server records refused data requests itself. Each tab keeps its latest
+  20 problems in SQLite; Settings → Tabs shows the latest 3.
 
 ## Delivery Stories
 

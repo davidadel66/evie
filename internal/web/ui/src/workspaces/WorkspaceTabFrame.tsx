@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { customTabURL, workspaceTabsAPI, type CustomTab, type TabDataRequest, type WorkspaceTabsAPI } from "../api/workspaceTabs";
 
-/** maxInFlight bounds a tab's unanswered data requests. */
+/** maxInFlight bounds a tab's unanswered data requests, and maxProblems the problems one page load records. */
 const maxInFlight = 4;
+const maxProblems = 20;
 
 function newKey(): string {
   const bytes = new Uint8Array(16);
@@ -20,7 +21,8 @@ function newKey(): string {
  * address carries a one-time key, the helper greets with it once, and every
  * request then travels over a private channel Evie hands back. A page the
  * frame is navigated to later has neither, so it can read nothing. The
- * server still checks every request against the approved data list.
+ * server still checks every request against the approved data list. The
+ * same channel carries the page's problems, which Evie records (story 3).
  */
 export function WorkspaceTabFrame({workspaceId, tab, api = workspaceTabsAPI}: {workspaceId: string; tab: CustomTab; api?: WorkspaceTabsAPI}) {
   const frame = useRef<HTMLIFrameElement>(null);
@@ -29,9 +31,14 @@ export function WorkspaceTabFrame({workspaceId, tab, api = workspaceTabsAPI}: {w
     let channel: MessageChannel | undefined;
     let greeted = false;
     let inFlight = 0;
+    let problems = 0;
     const answer = async (message: unknown) => {
       if (!channel || typeof message !== "object" || message === null) return;
-      const {id, request} = message as {id?: unknown; request?: unknown};
+      const {id, request, problem} = message as {id?: unknown; request?: unknown; problem?: {kind?: unknown; message?: unknown}};
+      if (problem && typeof problem.kind === "string" && typeof problem.message === "string") {
+        if (problems++ < maxProblems) api.problem(workspaceId, tab.id, {kind: problem.kind, message: problem.message}).catch(() => undefined);
+        return;
+      }
       if (typeof id !== "number" || typeof request !== "object" || request === null) return;
       const port = channel.port1;
       if (inFlight >= maxInFlight) {

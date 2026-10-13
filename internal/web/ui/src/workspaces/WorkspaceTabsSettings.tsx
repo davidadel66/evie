@@ -38,6 +38,9 @@ export function WorkspaceTabsSettings({folder, tabs, problem, busy, actionProble
                   <code className="text-faint w-32 flex-none truncate">{tab.id}</code>
                   {tab.problem ? <span className="text-amber-ink min-w-0 flex-1">{tab.problem}</span> : <span className="text-muted-text flex-1">Shown</span>}
                 </div>
+                {(tab.recentProblems?.length ?? 0) > 0 && <ul aria-label={`Recent problems in ${tab.title}`} className="mt-1.5 ml-[172px] space-y-0.5">
+                  {tab.recentProblems?.map((problem, i) => <li key={i} className="text-amber-ink truncate" title={problem.message}>{problem.kind}: {problem.message}</li>)}
+                </ul>}
                 {!tab.problem && (tab.data?.length ?? 0) > 0 && <div className="mt-2 ml-[172px] flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="text-muted-text min-w-0">Reads {(tab.data ?? []).map(describeSource).join(", ")}.</span>
                   {tab.approved

@@ -225,7 +225,22 @@ try {
   assert.equal(thief, 'no answer', `the Thief tab got: ${thief}`);
   results.push({ case: 'data channel', report: { before, after, thief } });
 
-  // 6. At phone width, tabs that do not fit are in More and nothing scrolls.
+  // 6. Story 3: the Broken tab's mistakes reach its recorded problems, so
+  // Evie can read and fix them.
+  await clickText('[role=tab]', 'Broken');
+  let brokenProblems = [];
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const page = await (await fetch(`${base}/api/workspaces/tabs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"workspaceId":"lab"}' })).json();
+    brokenProblems = (page.tabs.find(tab => tab.id === 'broken') || {}).recentProblems || [];
+    if (brokenProblems.some(problem => problem.kind === 'blocked' && problem.message.includes('cdn.jsdelivr.net')) &&
+      brokenProblems.some(problem => problem.kind === 'error' && problem.message.includes('drawChart'))) break;
+    await sleep(500);
+  }
+  assert.ok(brokenProblems.some(problem => problem.kind === 'blocked' && problem.message.includes('cdn.jsdelivr.net')), `no blocked CDN problem: ${JSON.stringify(brokenProblems)}`);
+  assert.ok(brokenProblems.some(problem => problem.kind === 'error' && problem.message.includes('drawChart')), `no script error problem: ${JSON.stringify(brokenProblems)}`);
+  results.push({ case: 'problems recorded', report: brokenProblems.map(problem => `${problem.kind}: ${problem.message}`) });
+
+  // 7. At phone width, tabs that do not fit are in More and nothing scrolls.
   await page.send('Emulation.setDeviceMetricsOverride', { width: 360, height: 780, deviceScaleFactor: 2, mobile: true });
   await page.open(`${base}/`);
   await until(`const open = document.querySelector('button[aria-label="Open navigation"]'); if (open) open.click(); return true;`, 'no navigation');

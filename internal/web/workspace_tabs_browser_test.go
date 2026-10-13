@@ -22,7 +22,7 @@ func TestWorkspaceTabsBrowserFixture(t *testing.T) {
 		t.Skip("opt-in workspace tabs browser fixture")
 	}
 	folder := t.TempDir()
-	for _, tab := range []string{"hostile", "data", "thief"} {
+	for _, tab := range []string{"hostile", "data", "thief", "broken"} {
 		source := filepath.Join("testdata", "workspace-tabs", tab)
 		target := filepath.Join(folder, workspacetabs.Dir, tab)
 		if err := os.MkdirAll(target, 0o755); err != nil {

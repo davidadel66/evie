@@ -290,6 +290,7 @@ type fakeTabDataController struct {
 	fakeTabsController
 	approvals map[string]string
 	queries   []string
+	problems  []workspacetabs.Problem
 }
 
 func (c *fakeTabDataController) WorkspaceTabDataApprovals(context.Context, memory.WorkspaceID) (map[string]string, error) {
@@ -303,6 +304,26 @@ func (c *fakeTabDataController) ApproveWorkspaceTabData(_ context.Context, _ mem
 
 func (c *fakeTabDataController) WithdrawWorkspaceTabData(_ context.Context, _ memory.WorkspaceID, tab string) error {
 	delete(c.approvals, tab)
+	return nil
+}
+
+func (c *fakeTabDataController) RecordWorkspaceTabProblem(_ context.Context, _ memory.WorkspaceID, problem workspacetabs.Problem) error {
+	c.problems = append([]workspacetabs.Problem{problem}, c.problems...)
+	return nil
+}
+
+func (c *fakeTabDataController) WorkspaceTabProblems(context.Context, memory.WorkspaceID) ([]workspacetabs.Problem, error) {
+	return c.problems, nil
+}
+
+func (c *fakeTabDataController) ClearWorkspaceTabProblems(_ context.Context, _ memory.WorkspaceID, tab string) error {
+	kept := c.problems[:0]
+	for _, problem := range c.problems {
+		if problem.TabID != tab {
+			kept = append(kept, problem)
+		}
+	}
+	c.problems = kept
 	return nil
 }
 
@@ -423,5 +444,29 @@ func TestEvieServesItsHelperInPlaceOfATabsOwnReservedFolder(t *testing.T) {
 	assertSealed(t, "helper", result, "http://127.0.0.1:6687/workspace-tabs/finance/reports/")
 	if result := getTab(handler, http.MethodGet, "/workspace-tabs/finance/reports/_evie/other.js", "", nil); result.Code != http.StatusNotFound {
 		t.Fatalf("the tab's own _evie file status=%d", result.Code)
+	}
+}
+
+func TestTabProblemsAreRecordedListedAndCleared(t *testing.T) {
+	handler, controller, _ := tabDataFixture(t)
+	for body, status := range map[string]int{
+		`{"workspaceId":"finance","tabId":"reports","kind":"error","message":"drawChart is not defined (index.html:9)"}`:       http.StatusNoContent,
+		`{"workspaceId":"finance","tabId":"reports","kind":"blocked","message":"script-src-elem blocked https://cdn.example"}`: http.StatusNoContent,
+		`{"workspaceId":"finance","tabId":"reports","kind":"refused","message":"forged"}`:                                      http.StatusBadRequest,
+		`{"workspaceId":"finance","tabId":"reports","kind":"error","message":" "}`:                                             http.StatusBadRequest,
+		`{"workspaceId":"finance","tabId":"../x","kind":"error","message":"m"}`:                                                http.StatusBadRequest,
+	} {
+		if result := postTabs(handler, "/api/workspaces/tabs/problems", body); result.Code != status {
+			t.Errorf("%s status=%d", body, result.Code)
+		}
+	}
+	// A refused data request is recorded as the tab's problem too.
+	postTabs(handler, "/api/workspaces/tabs/data", `{"workspaceId":"finance","tabId":"reports","request":{"kind":"query","db":"finance","sql":"SELECT 1"}}`)
+	recent := listedTabs(t, handler)["reports"].Recent
+	if len(recent) != 3 || recent[0].Kind != "refused" || !strings.Contains(recent[0].Message, "until you allow its data") || recent[2].Kind != "error" {
+		t.Fatalf("recent problems = %+v", recent)
+	}
+	if result := postTabs(handler, "/api/workspaces/tabs/problems", `{"workspaceId":"finance","tabId":"reports","clear":true}`); result.Code != http.StatusNoContent || len(controller.problems) != 0 {
+		t.Fatalf("clear status=%d problems=%v", result.Code, controller.problems)
 	}
 }

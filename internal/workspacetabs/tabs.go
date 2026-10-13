@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"time"
 	"unicode/utf8"
 )
 
@@ -72,6 +73,16 @@ type Tab struct {
 	Data    []DataSource `json:"data,omitempty"`
 	DataKey string       `json:"dataKey,omitempty"`
 	Problem string       `json:"problem,omitempty"`
+}
+
+// Problem is one thing that went wrong in a tab (story 3): a script error,
+// something its page policy blocked, or a refused data request, kept so
+// Evie can fix what it wrote.
+type Problem struct {
+	TabID      string    `json:"tabId"`
+	Kind       string    `json:"kind"`
+	Message    string    `json:"message"`
+	RecordedAt time.Time `json:"recordedAt"`
 }
 
 // DataSource is one thing a tab may read (story 2): exactly one of a

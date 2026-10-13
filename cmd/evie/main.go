@@ -53,7 +53,7 @@ var defaultPluginEnabled = map[plugins.PluginID]bool{
 	plugins.WebPluginID: true, plugins.FinancePluginID: true,
 	plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
 	plugins.SubagentsPluginID: true, plugins.WorkflowsPluginID: true, plugins.GitHubPluginID: true,
-	plugins.MCPPluginID: true,
+	plugins.MCPPluginID: true, plugins.WorkspaceTabsPluginID: true,
 }
 
 func main() {
@@ -253,6 +253,8 @@ func main() {
 		plugins.NewWorkflows(workflowLink),
 		workflowGitHub(kernelStore, repositories),
 		plugins.NewMCP(mcpLink),
+		// workspace_tabs shows a Workspace chat its own tabs (workspace-tabs.spec.md).
+		plugins.NewWorkspaceTabs(kernelStore),
 	)
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)

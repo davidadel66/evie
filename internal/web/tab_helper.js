@@ -6,11 +6,32 @@
 //   await evie.runs()                          -> this Workspace's runs
 // It greets Evie's page once with the key Evie put in this page's address
 // and talks only over the private channel Evie returns, so a page this frame
-// is navigated to later cannot use the tab's access.
+// is navigated to later cannot use the tab's access. It also tells Evie what
+// goes wrong on the page (script errors, anything the page's policy blocks),
+// so Evie can fix the tab it wrote. Load it first, in <head>.
 (() => {
   const key = new URLSearchParams(location.hash.slice(1)).get('evie-key') || '';
   const waiting = new Map();
   let next = 0;
+  // Problems wait here until the channel is open; at most 20 per page.
+  const problems = [];
+  let channel;
+  let reported = 0;
+  const flush = () => {
+    while (channel && problems.length) channel.postMessage({ problem: problems.shift() });
+  };
+  const report = (kind, message) => {
+    if (reported++ >= 20) return;
+    problems.push({ kind, message: String(message).slice(0, 500) });
+    flush();
+  };
+  addEventListener('error', event => {
+    const target = event.target;
+    if (target && target !== window && (target.src || target.href)) report('error', `${target.tagName.toLowerCase()} ${target.src || target.href} failed to load`);
+    else report('error', `${event.message || 'error'} (${(event.filename || '').split('/').pop() || 'index.html'}:${event.lineno || 0})`);
+  }, true);
+  addEventListener('unhandledrejection', event => report('error', `unhandled: ${(event.reason && event.reason.message) || event.reason}`));
+  document.addEventListener('securitypolicyviolation', event => report('blocked', `${event.effectiveDirective} blocked ${event.blockedURI || 'inline code'}`));
   const connected = new Promise((resolve, reject) => {
     if (window.parent === window) {
       reject(new Error('Open this tab in Evie to read its data.'));
@@ -27,6 +48,8 @@
         if (data.ok) pending.resolve(data.result);
         else pending.reject(new Error(data.error || 'Evie refused the request.'));
       };
+      channel = port;
+      flush();
       resolve(port);
     };
     addEventListener('message', greeted);

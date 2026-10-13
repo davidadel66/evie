@@ -239,3 +239,22 @@ func TestOrchestrationGuidanceOnlyWhenTheSessionCanReadyAndBuild(t *testing.T) {
 		t.Fatal("a session that cannot delegate builds got orchestration guidance")
 	}
 }
+
+func TestWorkspaceTabsGuidanceOnlyWhenTheSessionHasTheTool(t *testing.T) {
+	without := primaryInstructions(delegationTools)
+	with := primaryInstructions(append(append([]openrouter.Tool(nil), delegationTools...), toolNamed("workspace_tabs")))
+	if strings.Contains(without, "workspace_tabs") {
+		t.Fatal("a session without workspace_tabs is told to use it")
+	}
+	for _, want := range []string{"workspace_tabs", "Workspace's tabs", "report, dashboard", "problems"} {
+		if !strings.Contains(workspaceTabsGuidance, want) {
+			t.Errorf("tabs guidance lacks %q:\n%s", want, workspaceTabsGuidance)
+		}
+	}
+	if strings.Replace(with, workspaceTabsGuidance, "", 1) != without || strings.Count(with, workspaceTabsGuidance) != 1 {
+		t.Fatal("tabs guidance changed more than its own line")
+	}
+	if len(workspaceTabsGuidance) > 400 {
+		t.Errorf("tabs guidance is %d bytes; keep it short, it is resident in every request", len(workspaceTabsGuidance))
+	}
+}

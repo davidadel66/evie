@@ -12,6 +12,7 @@ import (
 	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/web"
+	"github.com/davidadel66/evie/internal/workspacetabs"
 )
 
 type webContextCompositionManager interface {
@@ -92,6 +93,18 @@ func (c *webContextSessionController) ApproveWorkspaceTabData(ctx context.Contex
 
 func (c *webContextSessionController) WithdrawWorkspaceTabData(ctx context.Context, id memory.WorkspaceID, tab string) error {
 	return c.store.WithdrawWorkspaceTabData(ctx, id, tab)
+}
+
+func (c *webContextSessionController) RecordWorkspaceTabProblem(ctx context.Context, id memory.WorkspaceID, problem workspacetabs.Problem) error {
+	return c.store.RecordWorkspaceTabProblem(ctx, id, problem)
+}
+
+func (c *webContextSessionController) WorkspaceTabProblems(ctx context.Context, id memory.WorkspaceID) ([]workspacetabs.Problem, error) {
+	return c.store.WorkspaceTabProblems(ctx, id)
+}
+
+func (c *webContextSessionController) ClearWorkspaceTabProblems(ctx context.Context, id memory.WorkspaceID, tab string) error {
+	return c.store.ClearWorkspaceTabProblems(ctx, id, tab)
 }
 
 // ReadTabDatabase is query_db's fenced read path for a Workspace tab.
