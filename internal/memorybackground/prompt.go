@@ -128,13 +128,16 @@ type extractedMemory struct {
 	Polarity    string `json:"polarity"`
 }
 
-// candidate is one validated extracted memory with its routing.
+// candidate is one validated extracted memory with its routing. Everywhere
+// is Evie's suggestion that a Workspace or project memory holds everywhere,
+// which earns it a prepared Global version.
 type candidate struct {
 	Index       int
 	Message     memory.BackgroundOwnerMessage
 	Kind        memory.ClaimKind
 	Destination memory.MemoryDestination
 	TargetScope string
+	Everywhere  bool
 	Predicate   string
 	Label       string
 	Cardinality memory.PredicateCardinality
@@ -196,18 +199,20 @@ func parseExtraction(raw string, batch memory.BackgroundBatch, pool memory.Backg
 			continue
 		}
 		c.Destination, c.TargetScope = memory.MemoryEverywhere, "global"
-		if item.Applies == "workspace" {
-			c.Destination, c.TargetScope = memory.MemoryWorkspace, pool.ContextScopeKey
+		if workspace {
+			// A Workspace or project conversation's memories stay in its
+			// scope (memory.decisions.md, 2026-10-12); "profile" only
+			// suggests the memory holds everywhere.
+			c.Destination, c.TargetScope, c.Everywhere = memory.MemoryWorkspace, pool.ContextScopeKey, item.Applies == "profile"
 		}
 		candidates = append(candidates, c)
 	}
 	return candidates, dropped, nil
 }
 
-// usableCandidate is the per-item content check. Scope follows meaning:
-// profile memories go to Global, Workspace memories to the conversation's
-// own Workspace or project, and a Workspace memory cannot exist in a Global
-// conversation.
+// usableCandidate is the per-item content check. A Workspace memory cannot
+// exist in a Global conversation, and a kind must agree with where the model
+// says it applies.
 func usableCandidate(c candidate, applies string, workspace bool) bool {
 	text := c.Label + "\n" + c.Literal.Value
 	switch {

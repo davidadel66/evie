@@ -72,6 +72,14 @@ by the current story's acceptance criteria.
   - Why deferred: Pre-existing; outside Changes story 1.
   - Verification: Reproduce from the launchd-managed serve, log the picker's failure, then choose `~/code/evie` from Create workspace end to end.
 
+- [ ] Background memory pass proposes requests to change data or settings as memories
+  - ID: `MEM-BG-BACKLOG-ACTION-REQUESTS`
+  - Discovered during: memory scope routing, 2026-10-12
+  - Evidence: From a Finance chat message asking to add Costco gas and Kroger fuel to Gas in the merchant lookup, the pass proposed "fuel retailers: Costco and Kroger" as a profile fact (inbox proposal `9bdd729b`, 2026-10-12).
+  - Impact: Action requests arrive as memories to decline; approving one would store a task as a fact about David.
+  - Why deferred: David kept the scope change separate; a prompt change needs its own before/after check on real messages.
+  - Verification: A `memory-background-v2` extraction rule with a fixture of real action requests that yields no memories, and the existing fixtures unchanged.
+
 - [ ] Self-sufficient tool results when a tool declines or does nothing
   - ID: `WA-S4-BACKLOG-SELF-SUFFICIENT-RESULTS`
   - Discovered during: the same demo

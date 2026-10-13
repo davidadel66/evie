@@ -242,6 +242,21 @@ func (f *fixture) approve(item memory.MemoryProposalItem, alwaysApplies bool) me
 	return result
 }
 
+// approveEverywhere approves a proposal's Global version, as "Save
+// everywhere instead" does, with its default "Always applies".
+func (f *fixture) approveEverywhere(item memory.MemoryProposalItem) memory.MemoryProposalResult {
+	f.t.Helper()
+	if item.Everywhere == nil {
+		f.t.Fatalf("proposal %s has no Global version", item.ProposalID)
+	}
+	result, err := f.store.ApproveMemoryProposal(f.ctx, memory.MemoryProposalApproval{ProposalID: item.ProposalID,
+		PreparedSHA256: item.Everywhere.PreparedSHA256, AlwaysApplies: true, Everywhere: true})
+	if err != nil {
+		f.t.Fatalf("approve everywhere: %v", err)
+	}
+	return result
+}
+
 // remember saves one owner memory through the background pass and an inbox
 // approval, the way David would.
 func (f *fixture) remember(session memory.Session, message, predicate, label, value string, kind memory.ClaimKind) memory.MemoryProposalResult {

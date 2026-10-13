@@ -2,8 +2,10 @@
 // chat with an approval card (memory architecture Stage 2). Proposals are
 // grouped under the owner's message Evie read, shown as context, and each
 // leads with the memory as one readable line. The exact proposal and the
-// "Always applies" switch stay on every item; nothing is saved until the
-// owner approves it.
+// "Always applies" switch stay on every item, and a Workspace memory Evie
+// thinks holds everywhere also offers "Save everywhere instead", which shows
+// and approves its prepared Global version. Nothing is saved until the owner
+// approves it.
 
 import { useCallback, useEffect, useState } from "react";
 import { memoryProposalAPI, type MemoryProposalAPI, type MemoryProposalChange, type MemoryProposalItem, type MemoryProposalPage } from "../api/memoryProposals";
@@ -19,10 +21,18 @@ export type ProposalInboxState = {
   notice: string;
   /** The owner's "Always applies" choice per proposal revision. */
   alwaysApplies: Record<string, boolean>;
+  /** The owner's "Save everywhere instead" choice per proposal revision. */
+  everywhere?: Record<string, boolean>;
 };
 
 function switchKey(item: MemoryProposalItem): string {
   return `${item.proposal_id}:${item.revision}`;
+}
+
+/** version is the proposal the owner is looking at: its Global version when
+ *  they chose "Save everywhere instead", else the proposal itself. */
+function version(item: MemoryProposalItem, everywhere: boolean | undefined): { proposal: string; scope_key: string } {
+  return everywhere && item.everywhere ? item.everywhere : item;
 }
 
 function problemText(error: unknown): string {
@@ -30,7 +40,7 @@ function problemText(error: unknown): string {
 }
 
 export function ProposalInbox({ api = memoryProposalAPI, onChanged }: { api?: MemoryProposalAPI; onChanged?: () => void }) {
-  const [state, setState] = useState<ProposalInboxState>({ busy: true, problem: "", notice: "", alwaysApplies: {} });
+  const [state, setState] = useState<ProposalInboxState>({ busy: true, problem: "", notice: "", alwaysApplies: {}, everywhere: {} });
   const load = useCallback(async (notice = "", problem = "") => {
     setState((current) => ({ ...current, busy: true }));
     try {
@@ -42,10 +52,11 @@ export function ProposalInbox({ api = memoryProposalAPI, onChanged }: { api?: Me
   }, [api]);
   useEffect(() => { void load(); }, [load]);
 
+  const everywhereChoice = (item: MemoryProposalItem): boolean => Boolean(item.everywhere && state.everywhere?.[switchKey(item)]);
   const standingChoice = (item: MemoryProposalItem): boolean => {
     const chosen = state.alwaysApplies[switchKey(item)];
     if (chosen !== undefined) return chosen;
-    const view = readApprovalArgs(item.tool_name, item.proposal);
+    const view = readApprovalArgs(item.tool_name, version(item, everywhereChoice(item)).proposal);
     return (view.shape === "memory" || view.shape === "json") && view.classification ? view.classification.standing : false;
   };
   const decide = async (item: MemoryProposalItem, approve: boolean) => {
@@ -53,7 +64,7 @@ export function ProposalInbox({ api = memoryProposalAPI, onChanged }: { api?: Me
     try {
       let notice = "Declined. Nothing was saved.";
       if (approve) {
-        const result = await api.approve(item, standingChoice(item));
+        const result = await api.approve(item, standingChoice(item), everywhereChoice(item));
         notice = result.standing ? "Saved. It applies to every request." : "Saved. Evie recalls it when it’s relevant.";
       } else {
         await api.decline(item.proposal_id);
@@ -68,12 +79,14 @@ export function ProposalInbox({ api = memoryProposalAPI, onChanged }: { api?: Me
 
   return <ProposalInboxView state={state}
     onAlwaysApplies={(item, value) => setState((current) => ({ ...current, alwaysApplies: { ...current.alwaysApplies, [switchKey(item)]: value } }))}
+    onEverywhere={(item, value) => setState((current) => ({ ...current, everywhere: { ...current.everywhere, [switchKey(item)]: value } }))}
     onApprove={(item) => void decide(item, true)} onDecline={(item) => void decide(item, false)} onRefresh={() => void load()} />;
 }
 
-export function ProposalInboxView({ state, onAlwaysApplies, onApprove, onDecline, onRefresh }: {
+export function ProposalInboxView({ state, onAlwaysApplies, onEverywhere, onApprove, onDecline, onRefresh }: {
   state: ProposalInboxState;
   onAlwaysApplies: (item: MemoryProposalItem, value: boolean) => void;
+  onEverywhere?: (item: MemoryProposalItem, value: boolean) => void;
   onApprove: (item: MemoryProposalItem) => void;
   onDecline: (item: MemoryProposalItem) => void;
   onRefresh: () => void;
@@ -95,7 +108,7 @@ export function ProposalInboxView({ state, onAlwaysApplies, onApprove, onDecline
     {state.notice && <p role="status" className="text-ok-ink my-3">{state.notice}</p>}
     {items.length > 0 && <div className="mt-4 space-y-5">
       {groupBySource(items).map((group) => <SourceGroup key={group.key} items={group.items} busy={state.busy} alwaysApplies={state.alwaysApplies}
-        onAlwaysApplies={onAlwaysApplies} onApprove={onApprove} onDecline={onDecline} />)}
+        everywhere={state.everywhere ?? {}} onAlwaysApplies={onAlwaysApplies} onEverywhere={onEverywhere} onApprove={onApprove} onDecline={onDecline} />)}
     </div>}
     {pending > items.length && <p className="text-muted-text mt-3 text-xs">{pending - items.length} more after these.</p>}
   </section>;
@@ -124,11 +137,13 @@ function EvieWording() {
 /** sourceClampAt is the length past which a source message starts folded. */
 const sourceClampAt = 280;
 
-function SourceGroup({ items, busy, alwaysApplies, onAlwaysApplies, onApprove, onDecline }: {
+function SourceGroup({ items, busy, alwaysApplies, everywhere, onAlwaysApplies, onEverywhere, onApprove, onDecline }: {
   items: MemoryProposalItem[];
   busy: boolean;
   alwaysApplies: Record<string, boolean>;
+  everywhere: Record<string, boolean>;
   onAlwaysApplies: (item: MemoryProposalItem, value: boolean) => void;
+  onEverywhere?: (item: MemoryProposalItem, value: boolean) => void;
   onApprove: (item: MemoryProposalItem) => void;
   onDecline: (item: MemoryProposalItem) => void;
 }) {
@@ -151,7 +166,7 @@ function SourceGroup({ items, busy, alwaysApplies, onAlwaysApplies, onApprove, o
     </div>
     <ul className="divide-hair divide-y">
       {items.map((item) => <ProposalItem key={item.proposal_id} item={item} busy={busy} chosen={alwaysApplies[switchKey(item)]}
-        onAlwaysApplies={onAlwaysApplies} onApprove={onApprove} onDecline={onDecline} />)}
+        everywhere={everywhere[switchKey(item)]} onAlwaysApplies={onAlwaysApplies} onEverywhere={onEverywhere} onApprove={onApprove} onDecline={onDecline} />)}
     </ul>
   </article>;
 }
@@ -198,21 +213,35 @@ function StandingSwitch({ classification, checked, onChange }: { classification:
   </div>;
 }
 
-function ProposalItem({ item, busy, chosen, onAlwaysApplies, onApprove, onDecline }: {
+/** EverywhereSwitch offers a Workspace memory's Global version. */
+function EverywhereSwitch({ scopeName, checked, onChange }: { scopeName: string; checked: boolean; onChange?: (value: boolean) => void }) {
+  return <div className="mt-2 flex min-w-0 items-center gap-2">
+    <button type="button" role="switch" aria-checked={checked} aria-label="Save everywhere instead" disabled={!onChange} onClick={() => onChange?.(!checked)}
+      className={`flex h-[18px] w-[32px] flex-none cursor-pointer items-center rounded-full border-none p-[2px] disabled:cursor-default ${checked ? "bg-teal justify-end" : "bg-hair-strong justify-start"}`}>
+      <span className="bg-app h-[14px] w-[14px] rounded-full" />
+    </button>
+    <span className="text-xs"><span className="text-ink">Save everywhere instead</span> <span className="text-muted-text">· Evie thinks this may apply beyond {scopeName}.</span></span>
+  </div>;
+}
+
+function ProposalItem({ item, busy, chosen, everywhere, onAlwaysApplies, onEverywhere, onApprove, onDecline }: {
   item: MemoryProposalItem;
   busy: boolean;
   chosen?: boolean;
+  everywhere?: boolean;
   onAlwaysApplies: (item: MemoryProposalItem, value: boolean) => void;
+  onEverywhere?: (item: MemoryProposalItem, value: boolean) => void;
   onApprove: (item: MemoryProposalItem) => void;
   onDecline: (item: MemoryProposalItem) => void;
 }) {
   const { ownerName, names } = useMemoryPresentation();
-  const view = readApprovalArgs(item.tool_name, item.proposal, ownerName);
+  const shown = version(item, everywhere);
+  const view = readApprovalArgs(item.tool_name, shown.proposal, ownerName);
   const classification = view.shape === "memory" || view.shape === "json" ? view.classification : undefined;
   const alwaysApplies = chosen ?? classification?.standing ?? false;
   const change = item.change?.action === "update" || item.change?.action === "retire" ? item.change : undefined;
-  const meta = [classification && kindLabel(classification.kind), applies(item.scope_key, names)].filter(Boolean).join(" · ");
-  const json = view.shape === "memory" || view.shape === "json" ? view.json : item.proposal;
+  const meta = [classification && kindLabel(classification.kind), applies(shown.scope_key, names)].filter(Boolean).join(" · ");
+  const json = view.shape === "memory" || view.shape === "json" ? view.json : shown.proposal;
   return <li className="px-4 py-3" aria-label="Memory proposal">
     {change
       ? <ChangeSummary change={change} ownerName={ownerName} />
@@ -222,8 +251,10 @@ function ProposalItem({ item, busy, chosen, onAlwaysApplies, onApprove, onDeclin
             {view.evidence && <YourWords text={view.evidence} />}
             {view.identities.length > 0 && <ul className="text-muted-text mt-1 space-y-0.5 text-xs">{view.identities.map((line) => <li key={line}>{line}</li>)}</ul>}
           </div>
-        : <pre className="text-muted-text m-0 overflow-x-auto font-mono text-[11.5px] leading-[1.6]">{item.proposal}</pre>}
+        : <pre className="text-muted-text m-0 overflow-x-auto font-mono text-[11.5px] leading-[1.6]">{shown.proposal}</pre>}
     <p className="text-muted-text mt-1 text-xs">{meta}</p>
+    {item.everywhere && <EverywhereSwitch scopeName={scopeLabel(item.scope_key, names)} checked={Boolean(everywhere)}
+      onChange={item.approvable && !busy && onEverywhere ? (value) => onEverywhere(item, value) : undefined} />}
     {item.reason === "no_explicit_cue" && <p className="text-amber-ink mt-2 text-xs">Evie said you asked for this, but your message didn’t ask her to remember anything, so it waits here.</p>}
     {item.revision > 1 && <p className="text-muted-text mt-2 text-xs">Updated against newer memory since Evie proposed it.</p>}
     {!item.approvable && item.problem && <p className="text-amber-ink mt-2 text-xs">This can’t be approved now: {item.problem}</p>}

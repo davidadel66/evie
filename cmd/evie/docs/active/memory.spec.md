@@ -420,7 +420,12 @@ The default write scope is `global` for a global session and its one bound
 Workspace or project for a scoped session. Model-called writes can target only
 that bound value. A local command may explicitly choose the current
 `session:<id>`; writing global from a Workspace or project requires the typed
-promotion operation.
+promotion operation. (Amended 2026-09-05 and 2026-10-12: an approved
+recommended destination, per
+[session-history-and-memory-scope.spec.md](session-history-and-memory-scope.spec.md),
+and the owner's choice of a background proposal's prepared Global version,
+per [Background Memory Pass](#background-memory-pass), also write global; in
+both the owner approves the exact destination.)
 
 Conversational Memory tools are constructed per session with an unexported
 `ScopeContext` and current turn-fencing token supplied by the harness. Scope is
@@ -1434,10 +1439,12 @@ start. Historical backfill stays a separate explicit choice.
    applicability (`profile` or `workspace`), Predicate token and label, one
    typed value, polarity, and the index of the stating message. The prompt
    lists the Predicate vocabulary already in use so tokens are reused.
-2. *Route* by meaning: profile memories go to Global; Workspace memories to
-   the conversation's own Workspace or project; a Workspace memory in a
-   Global conversation, a `workspace_brief` for the profile or a
-   `profile_fact` for the Workspace is dropped.
+2. *Route* to the conversation's Context Scope (amended 2026-10-12): in a
+   Global conversation every memory goes to Global and a Workspace memory is
+   dropped; in a Workspace or project conversation every memory goes to that
+   Workspace or project, and `applies: profile` only marks Evie's suggestion
+   that it holds everywhere. A `workspace_brief` the model calls profile, or
+   a `profile_fact` it calls workspace, is still dropped.
 3. *Compare* each candidate with the current memories the conversation can
    read (Global, its Workspace or project, itself) and the pending inbox
    remembers in those scopes: a deterministic lexical score (same Predicate
@@ -1460,6 +1467,12 @@ start. Historical backfill stays a separate explicit choice.
    a pending proposal is never changed; one Claim gets one change per pass;
    an identical current Claim is a NOOP, and an identical retired or
    superseded one is skipped (restoring is the owner's explicit action).
+   An ADD that Evie suggested holds everywhere, in a Workspace or project
+   conversation, is also prepared with destination Everywhere under the same
+   idempotency key: its Global version. An identical current Global Claim
+   makes the proposal a NOOP; if the Global version cannot be prepared, or
+   its identical Claim is retired or superseded, the proposal keeps only its
+   own scope.
 6. *Commit* under the conversation's turn lease (holder
    `memory-background:…`, 10-second expiry, never held during model calls,
    released right after one short transaction): the proposals and the
@@ -1482,6 +1495,18 @@ records the durable approval in the source conversation and runs the
 ordinary Apply (memory full applies). Idempotency keys are derived from the
 conversation, source message and proposed change, so a repeated batch
 proposes the identical change under the identical key.
+
+**Global version (2026-10-12).** A proposal with a Global version stores it
+beside the proposal, with its own "Always applies" alternative. The card
+says where the memory applies, that Evie suggests it may apply everywhere,
+and offers "Save everywhere instead"; choosing it approves the exact Global
+version, whose prepared hash the approval must name. Both versions share
+one idempotency key, so approving either resolves the proposal and the
+other can never apply. Revalidation prepares both again when either
+version's scopes changed; a Global version that no longer prepares is
+dropped, and the proposal stays approvable in its own scope. Only
+background ADDs from a Workspace or project conversation carry one;
+in-turn proposals, corrections and retirements never do.
 
 **Model.** Default `deepseek/deepseek-v4.1-flash` through OpenRouter Chat
 Completions, pinned: `EVIE_MEMORY_BACKGROUND_MODEL` must be

@@ -603,6 +603,13 @@ func (r *Runner) prepare(ctx context.Context, scope memory.ScopeContext, c candi
 			return queued, false, errors.New("the same memory exists but is retired or superseded; restoring it is an explicit owner action")
 		}
 		queued.ToolName, queued.Literal = memory.RememberLiteralToolName, &proposal
+		if c.Everywhere {
+			everywhere, noop := r.prepareEverywhere(ctx, scope, proposal.Request, current)
+			if noop {
+				return queued, true, nil
+			}
+			queued.Everywhere = everywhere
+		}
 	case memory.BackgroundUpdate:
 		target := d.target
 		if target.Literal == nil || target.SubjectEntityID == "" || target.PredicateID == "" {
@@ -641,6 +648,27 @@ func (r *Runner) prepare(ctx context.Context, scope memory.ScopeContext, c candi
 		return queued, false, fmt.Errorf("unsupported operation %q", d.op)
 	}
 	return queued, false, nil
+}
+
+// prepareEverywhere prepares a Workspace or project memory's Global version:
+// the same request with destination Everywhere, under the same idempotency
+// key, so approving either version resolves the proposal. noop is true when
+// the identical memory is already current everywhere. When the Global
+// version cannot be prepared, or its memory is retired or superseded, the
+// proposal is offered in its own scope only.
+func (r *Runner) prepareEverywhere(ctx context.Context, scope memory.ScopeContext, request memory.RememberLiteralRequest,
+	current map[memory.SemanticID]bool,
+) (*memory.RememberLiteralProposal, bool) {
+	request.Destination = memory.MemoryEverywhere
+	proposal, err := r.store.PrepareRememberLiteral(ctx, scope, request)
+	if err != nil {
+		r.logf("memory background pass could not prepare a Global version: %v", err)
+		return nil, false
+	}
+	if !proposal.ClaimCreate {
+		return nil, current[proposal.ClaimID]
+	}
+	return &proposal, false
 }
 
 // idempotencyKey is derived from what the proposal says and where it came

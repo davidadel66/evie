@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -35,6 +36,11 @@ CREATE TABLE IF NOT EXISTS memory_proposal_inbox (
     revision                    INTEGER NOT NULL CHECK (revision > 0),
     queued_at                   TEXT NOT NULL,
     refreshed_at                TEXT,
+    everywhere_proposal_json               TEXT,
+    everywhere_proposal_sha256             TEXT,
+    everywhere_prepared_sha256             TEXT,
+    everywhere_alternative_proposal_sha256 TEXT,
+    everywhere_alternative_prepared_sha256 TEXT,
     CHECK ((reason = 'background') = (intent_event_id IS NULL)),
     CHECK (reason = 'background' OR tool_name IN ('memory_remember_literal', 'memory_remember_entity'))
 );`
@@ -49,7 +55,10 @@ CREATE TABLE IF NOT EXISTS memory_proposal_inbox (
 // card: a durable approval event in the source conversation, then the
 // ordinary Apply under that conversation's turn lease. A proposal is pending
 // until it is declined or an operation with its idempotency key is accepted;
-// nothing else marks it resolved.
+// nothing else marks it resolved. A background remember from a Workspace or
+// project conversation may also carry its Global version (the everywhere_*
+// columns), the same memory prepared for Global under the same idempotency
+// key, so approving either version resolves the proposal.
 const memoryProposalInboxSchema = memoryProposalInboxTable + `
 CREATE INDEX IF NOT EXISTS memory_proposal_inbox_dedupe_idx ON memory_proposal_inbox(dedupe_key);
 CREATE INDEX IF NOT EXISTS memory_proposal_inbox_scope_idx ON memory_proposal_inbox(scope_key);
@@ -72,6 +81,36 @@ func ensureMemoryProposalInbox(ctx context.Context, db *sql.DB) error {
 	}
 	if _, err := db.ExecContext(ctx, memoryProposalInboxSchema); err != nil {
 		return fmt.Errorf("create memory proposal inbox: %w", err)
+	}
+	if err := ensureMemoryProposalInboxEverywhere(ctx, db); err != nil {
+		return fmt.Errorf("add memory proposal Global versions: %w", err)
+	}
+	return nil
+}
+
+// memoryProposalInboxEverywhereColumns hold a proposal's Global version
+// (memory.decisions.md, 2026-10-12).
+var memoryProposalInboxEverywhereColumns = []string{
+	"everywhere_proposal_json", "everywhere_proposal_sha256", "everywhere_prepared_sha256",
+	"everywhere_alternative_proposal_sha256", "everywhere_alternative_prepared_sha256",
+}
+
+// ensureMemoryProposalInboxEverywhere adds the Global version columns to an
+// inbox created before them, in place; existing rows keep NULL.
+func ensureMemoryProposalInboxEverywhere(ctx context.Context, db *sql.DB) error {
+	for _, column := range memoryProposalInboxEverywhereColumns {
+		present, err := tableHasColumn(ctx, db, "memory_proposal_inbox", column)
+		if err != nil {
+			return err
+		}
+		if present {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE memory_proposal_inbox ADD COLUMN `+column+` TEXT`); err != nil {
+			if present, checkErr := tableHasColumn(ctx, db, "memory_proposal_inbox", column); checkErr != nil || !present {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -524,6 +563,58 @@ func encodeInboxProposal(p inboxProposal) ([]byte, error) {
 
 var errInboxProposalSecret = errors.New("this memory may contain a secret, so it was not queued; never propose secrets as memories")
 
+// inboxVersion is a proposal's Global version, checked and encoded for the
+// everywhere_* columns.
+type inboxVersion struct {
+	proposal inboxProposal
+	encoded  []byte
+}
+
+func newInboxVersion(p, everywhere inboxProposal) (*inboxVersion, error) {
+	if err := checkEverywhereVersion(p, everywhere); err != nil {
+		return nil, err
+	}
+	encoded, err := encodeInboxProposal(everywhere)
+	if err != nil {
+		return nil, err
+	}
+	return &inboxVersion{proposal: everywhere, encoded: encoded}, nil
+}
+
+// columns are the everywhere_* values: the version's document, its hashes
+// and its "Always applies" alternative's hashes, or all NULL without one.
+func (v *inboxVersion) columns() []any {
+	if v == nil {
+		return []any{nil, nil, nil, nil, nil}
+	}
+	proposalHash, preparedHash := v.proposal.hashes()
+	alternativeProposal, alternativePrepared := alternativeColumns(v.proposal)
+	return []any{string(v.encoded), proposalHash, preparedHash, alternativeProposal, alternativePrepared}
+}
+
+// checkEverywhereVersion proves a Global version states the same memory as
+// its proposal: a literal remember in a Workspace or project, prepared from
+// the identical request with destination Everywhere instead.
+func checkEverywhereVersion(p, everywhere inboxProposal) error {
+	own, global := p.literal, everywhere.literal
+	switch {
+	case own == nil || global == nil:
+		return errors.New("only a literal remember has a Global version")
+	case own.Scope.Key == "global" || own.Request.Destination != memory.MemoryWorkspace:
+		return errors.New("only a Workspace or project memory has a Global version")
+	case global.Scope.Key != "global" || global.Request.Destination != memory.MemoryEverywhere:
+		return errors.New("a Global version targets Global")
+	case global.SessionID != own.SessionID:
+		return errors.New("a Global version belongs to its proposal's conversation")
+	}
+	same := global.Request
+	same.Destination = own.Request.Destination
+	if !reflect.DeepEqual(same, own.Request) {
+		return errors.New("a Global version states the same memory as its proposal")
+	}
+	return nil
+}
+
 func alternativeColumns(p inboxProposal) (any, any) {
 	if alternative := p.alternative(); alternative != nil {
 		return alternative.ProposalSHA256, alternative.PreparedSHA256
@@ -554,6 +645,9 @@ func (s *Store) QueueMemoryProposal(ctx context.Context, lease memory.TurnLease,
 	if !queued.Reason.Valid() || queued.Reason == memory.MemoryProposalBackground {
 		return result, fmt.Errorf("unsupported inbox reason %q", queued.Reason)
 	}
+	if queued.Everywhere != nil {
+		return result, errors.New("only a background proposal has a Global version")
+	}
 	if lease.SessionID != p.sessionID() {
 		return result, errors.New("inbox proposal does not match its turn lease")
 	}
@@ -567,7 +661,7 @@ func (s *Store) QueueMemoryProposal(ctx context.Context, lease memory.TurnLease,
 			intentType != string(memory.EventToolIntent) {
 			return errors.New("inbox proposal must cite its tool intent in the proposing conversation")
 		}
-		outcome, err := s.insertInboxProposal(ctx, writer, p, encoded, queued.Reason, string(queued.IntentEventID))
+		outcome, err := s.insertInboxProposal(ctx, writer, p, encoded, queued.Reason, string(queued.IntentEventID), nil)
 		if err != nil {
 			return err
 		}
@@ -594,9 +688,9 @@ type inboxInsertion struct {
 // a duplicate. Background proposals are also suppressed when the owner
 // declined the same memory before, and when another change to the same
 // Claim is already pending, so the owner never reviews two competing
-// changes to one memory.
+// changes to one memory. everywhere is the proposal's Global version, or nil.
 func (s *Store) insertInboxProposal(ctx context.Context, writer turnLeaseWriteExecutor, p inboxProposal, encoded []byte,
-	reason memory.MemoryProposalReason, intentEventID string,
+	reason memory.MemoryProposalReason, intentEventID string, everywhere *inboxVersion,
 ) (inboxInsertion, error) {
 	var outcome inboxInsertion
 	var accepted int
@@ -669,15 +763,17 @@ func (s *Store) insertInboxProposal(ctx context.Context, writer turnLeaseWriteEx
 	}
 	proposalHash, preparedHash := p.hashes()
 	alternativeProposal, alternativePrepared := alternativeColumns(p)
+	args := append([]any{id.String(), p.sessionID(), p.scopeKey(), p.toolName(), reason, p.idempotencyKey(), p.sourceEventID(), intent,
+		nullableClaimID(p.targetClaimID()), dedupe, string(encoded), proposalHash, preparedHash, alternativeProposal, alternativePrepared,
+		formatSemanticTime(s.now())}, everywhere.columns()...)
 	if _, err := writer.execContext(ctx, `
 		INSERT INTO memory_proposal_inbox (
 			proposal_id, session_id, scope_key, tool_name, reason, idempotency_key, source_event_id, intent_event_id,
 			target_claim_id, dedupe_key, proposal_json, proposal_sha256, prepared_sha256, alternative_proposal_sha256,
-			alternative_prepared_sha256, revision, queued_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-	`, id.String(), p.sessionID(), p.scopeKey(), p.toolName(), reason, p.idempotencyKey(), p.sourceEventID(), intent,
-		nullableClaimID(p.targetClaimID()), dedupe, string(encoded), proposalHash, preparedHash, alternativeProposal, alternativePrepared,
-		formatSemanticTime(s.now())); err != nil {
+			alternative_prepared_sha256, revision, queued_at, everywhere_proposal_json, everywhere_proposal_sha256,
+			everywhere_prepared_sha256, everywhere_alternative_proposal_sha256, everywhere_alternative_prepared_sha256
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+	`, args...); err != nil {
 		return outcome, fmt.Errorf("queue memory proposal: %w", err)
 	}
 	outcome.proposalID = id.String()
@@ -710,19 +806,26 @@ type inboxRow struct {
 	revision                                                          int64
 	queuedAt, sessionTitle, sessionStatus                             string
 	accepted, declined                                                bool
+	// The Global version's document, hashes and alternative hashes.
+	everywhereJSON, everywhereProposal, everywherePrepared sql.NullString
+	everywhereAlternativeProposal                          sql.NullString
+	everywhereAlternativePrepared                          sql.NullString
 }
 
 const inboxRowColumns = `inbox.proposal_id, inbox.session_id, inbox.scope_key, inbox.tool_name, inbox.reason, inbox.idempotency_key,
 	inbox.dedupe_key, inbox.proposal_json, inbox.proposal_sha256, inbox.prepared_sha256, inbox.alternative_proposal_sha256,
 	inbox.alternative_prepared_sha256, inbox.revision, inbox.queued_at, COALESCE(sessions.title, ''), sessions.status,
 	EXISTS (SELECT 1 FROM semantic_operations AS operations WHERE operations.idempotency_key = inbox.idempotency_key),
-	EXISTS (SELECT 1 FROM memory_proposal_inbox_declines AS declines WHERE declines.proposal_id = inbox.proposal_id)`
+	EXISTS (SELECT 1 FROM memory_proposal_inbox_declines AS declines WHERE declines.proposal_id = inbox.proposal_id),
+	inbox.everywhere_proposal_json, inbox.everywhere_proposal_sha256, inbox.everywhere_prepared_sha256,
+	inbox.everywhere_alternative_proposal_sha256, inbox.everywhere_alternative_prepared_sha256`
 
 func scanInboxRow(scanner rowScanner) (inboxRow, error) {
 	var row inboxRow
 	err := scanner.Scan(&row.id, &row.sessionID, &row.scopeKey, &row.toolName, &row.reason, &row.idempotencyKey,
 		&row.dedupe, &row.proposalJSON, &row.proposalHash, &row.preparedHash, &row.alternativeProposal,
-		&row.alternativePrepared, &row.revision, &row.queuedAt, &row.sessionTitle, &row.sessionStatus, &row.accepted, &row.declined)
+		&row.alternativePrepared, &row.revision, &row.queuedAt, &row.sessionTitle, &row.sessionStatus, &row.accepted, &row.declined,
+		&row.everywhereJSON, &row.everywhereProposal, &row.everywherePrepared, &row.everywhereAlternativeProposal, &row.everywhereAlternativePrepared)
 	return row, err
 }
 
@@ -737,6 +840,31 @@ func (s *Store) loadInboxRow(ctx context.Context, id string) (inboxRow, error) {
 
 func (row inboxRow) proposal() (inboxProposal, error) {
 	return decodeInboxProposal(row.toolName, row.proposalJSON, row.proposalHash, row.preparedHash, row.alternativeProposal, row.alternativePrepared)
+}
+
+// everywhere restores the proposal's Global version, or nil without one.
+func (row inboxRow) everywhere() (*inboxProposal, error) {
+	if !row.everywhereJSON.Valid {
+		return nil, nil
+	}
+	if !row.everywhereProposal.Valid || !row.everywherePrepared.Valid {
+		return nil, errors.New("stored Global version lacks its exact hashes")
+	}
+	p, err := decodeInboxProposal(memory.RememberLiteralToolName, row.everywhereJSON.String, row.everywhereProposal.String,
+		row.everywherePrepared.String, row.everywhereAlternativeProposal, row.everywhereAlternativePrepared)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// everywhereItem is the Global version as the owner reviews it. checkEverywhereVersion
+// admitted it only with a Global target.
+func (row inboxRow) everywhereItem() *memory.MemoryProposalVersion {
+	if !row.everywhereJSON.Valid {
+		return nil
+	}
+	return &memory.MemoryProposalVersion{ScopeKey: "global", Proposal: row.everywhereJSON.String, PreparedSHA256: row.everywherePrepared.String}
 }
 
 // ListMemoryProposals returns the pending proposals, oldest first, each
@@ -839,11 +967,16 @@ func (s *Store) reviewInboxRow(ctx context.Context, row inboxRow) (memory.Memory
 		item.Problem = "the stored proposal cannot be read: " + err.Error()
 		return item, nil
 	}
+	everywhere, err := row.everywhere()
+	if err != nil {
+		item.Problem = "the stored Global version cannot be read: " + err.Error()
+		return item, nil
+	}
 	if row.sessionStatus != string(memory.SessionActive) {
 		item.Problem = inboxArchivedProblem
 		return item, nil
 	}
-	stale, err := s.inboxProposalStale(ctx, p)
+	stale, err := s.inboxVersionsStale(ctx, p, everywhere)
 	if err != nil {
 		return item, err
 	}
@@ -854,11 +987,13 @@ func (s *Store) reviewInboxRow(ctx context.Context, row inboxRow) (memory.Memory
 			item.Problem = "it no longer applies to current memory: " + err.Error()
 			return item, nil
 		}
+		row = refreshed
 		item.Revision, item.Proposal, item.PreparedSHA256 = refreshed.revision, refreshed.proposalJSON, refreshed.preparedHash
 		if fresh, err := refreshed.proposal(); err == nil {
 			item.Change = s.inboxChange(ctx, fresh)
 		}
 	}
+	item.Everywhere = row.everywhereItem()
 	item.Approvable = true
 	return item, nil
 }
@@ -920,6 +1055,16 @@ func (s *Store) claimDisplayText(ctx context.Context, id memory.SemanticID) stri
 	return standingClaimText(subject, label, objectKind, literal, objectName, polarity)
 }
 
+// inboxVersionsStale reports whether the proposal or its Global version (nil
+// without one) was prepared against a scope that has since changed.
+func (s *Store) inboxVersionsStale(ctx context.Context, p inboxProposal, everywhere *inboxProposal) (bool, error) {
+	stale, err := s.inboxProposalStale(ctx, p)
+	if err != nil || stale || everywhere == nil {
+		return stale, err
+	}
+	return s.inboxProposalStale(ctx, *everywhere)
+}
+
 // inboxProposalStale reports whether any scope the proposal was prepared
 // against has since changed, so applying it would meet newer memory.
 func (s *Store) inboxProposalStale(ctx context.Context, p inboxProposal) (bool, error) {
@@ -946,7 +1091,9 @@ func (s *Store) inboxProposalStale(ctx context.Context, p inboxProposal) (bool, 
 // refreshInboxProposal prepares the proposal again from its exact request in
 // its own conversation's scope and stores the result as the proposal's next
 // revision. It is revalidation, not a rewrite: the request, source message,
-// kind and budget ratio are the ones Evie proposed.
+// kind and budget ratio are the ones Evie proposed. A Global version is
+// prepared again with it; one that no longer prepares, or whose memory now
+// exists, is dropped and the proposal stays approvable in its own scope.
 func (s *Store) refreshInboxProposal(ctx context.Context, row inboxRow, p inboxProposal) (inboxRow, error) {
 	session, err := s.GetSession(ctx, memory.SessionID(row.sessionID))
 	if err != nil {
@@ -983,17 +1130,29 @@ func (s *Store) refreshInboxProposal(ctx context.Context, row inboxRow, p inboxP
 	if err != nil {
 		return row, err
 	}
+	stored, err := row.everywhere()
+	if err != nil {
+		return row, err
+	}
+	var everywhere *inboxVersion
+	if stored != nil {
+		everywhere = s.refreshEverywhere(ctx, session.ScopeContext(), fresh, *stored)
+	}
 	proposalHash, preparedHash := fresh.hashes()
 	alternativeProposal, alternativePrepared := alternativeColumns(fresh)
 	refreshedAt := formatSemanticTime(s.now())
+	args := append([]any{string(encoded), proposalHash, preparedHash, alternativeProposal, alternativePrepared, fresh.scopeKey(), refreshedAt},
+		everywhere.columns()...)
+	args = append(args, row.id, row.revision)
 	var updated bool
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		result, err := conn.ExecContext(ctx, `
 			UPDATE memory_proposal_inbox AS inbox
 			SET proposal_json = ?, proposal_sha256 = ?, prepared_sha256 = ?, alternative_proposal_sha256 = ?,
-			    alternative_prepared_sha256 = ?, scope_key = ?, revision = revision + 1, refreshed_at = ?
-			WHERE inbox.proposal_id = ? AND inbox.revision = ? AND `+inboxPending,
-			string(encoded), proposalHash, preparedHash, alternativeProposal, alternativePrepared, fresh.scopeKey(), refreshedAt, row.id, row.revision)
+			    alternative_prepared_sha256 = ?, scope_key = ?, revision = revision + 1, refreshed_at = ?,
+			    everywhere_proposal_json = ?, everywhere_proposal_sha256 = ?, everywhere_prepared_sha256 = ?,
+			    everywhere_alternative_proposal_sha256 = ?, everywhere_alternative_prepared_sha256 = ?
+			WHERE inbox.proposal_id = ? AND inbox.revision = ? AND `+inboxPending, args...)
 		if err != nil {
 			return fmt.Errorf("refresh memory proposal: %w", err)
 		}
@@ -1018,8 +1177,23 @@ func (s *Store) refreshInboxProposal(ctx context.Context, row inboxRow, p inboxP
 	return s.loadInboxRow(ctx, row.id)
 }
 
+// refreshEverywhere prepares a Global version again from its exact request,
+// or returns nil when it no longer prepares or its memory already exists.
+func (s *Store) refreshEverywhere(ctx context.Context, scope memory.ScopeContext, fresh, stored inboxProposal) *inboxVersion {
+	literal, err := s.PrepareRememberLiteral(ctx, scope, stored.literal.Request)
+	if err != nil || !literal.ClaimCreate {
+		return nil
+	}
+	version, err := newInboxVersion(fresh, inboxProposal{literal: &literal})
+	if err != nil {
+		return nil
+	}
+	return version
+}
+
 // ApproveMemoryProposal applies the exact proposal the owner reviewed, with
-// the "Always applies" switch as set. It holds the source conversation's turn
+// the "Always applies" switch as set, or its Global version when the owner
+// chose "Save everywhere instead". It holds the source conversation's turn
 // lease, records the durable approval there, and applies through the
 // ordinary Apply, which enforces scope, source binding and the standing
 // budget. A proposal whose memory changed since it was shown is refreshed
@@ -1033,23 +1207,36 @@ func (s *Store) ApproveMemoryProposal(ctx context.Context, approval memory.Memor
 	if row.accepted || row.declined {
 		return result, ErrMemoryProposalResolved
 	}
-	if approval.PreparedSHA256 != row.preparedHash {
+	listed := row.preparedHash
+	if approval.Everywhere {
+		// Empty when the Global version was dropped since it was shown.
+		listed = row.everywherePrepared.String
+	}
+	if listed == "" || approval.PreparedSHA256 != listed {
 		return result, ErrMemoryProposalChanged
 	}
 	p, err := row.proposal()
 	if err != nil {
 		return result, fmt.Errorf("%w: %v", ErrMemoryProposalUnavailable, err)
 	}
+	everywhere, err := row.everywhere()
+	if err != nil {
+		return result, fmt.Errorf("%w: %v", ErrMemoryProposalUnavailable, err)
+	}
 	if row.sessionStatus != string(memory.SessionActive) {
 		return result, fmt.Errorf("%w: %s", ErrMemoryProposalUnavailable, inboxArchivedProblem)
 	}
-	chosen := p
-	classification := p.classification()
+	version := p
+	if approval.Everywhere {
+		version = *everywhere
+	}
+	chosen := version
+	classification := version.classification()
 	switch {
 	case classification == nil && approval.AlwaysApplies:
 		return result, errors.New("this memory has no kind, so it cannot always apply")
 	case classification != nil && classification.Standing != approval.AlwaysApplies:
-		if chosen, err = p.switched(); err != nil {
+		if chosen, err = version.switched(); err != nil {
 			return result, err
 		}
 	}
@@ -1083,7 +1270,7 @@ func (s *Store) ApproveMemoryProposal(ctx context.Context, approval memory.Memor
 		}
 		return ErrMemoryProposalChanged
 	}
-	if stale, err := s.inboxProposalStale(ctx, p); err != nil {
+	if stale, err := s.inboxVersionsStale(ctx, p, everywhere); err != nil {
 		return result, err
 	} else if stale {
 		return result, changed()
@@ -1095,7 +1282,7 @@ func (s *Store) ApproveMemoryProposal(ctx context.Context, approval memory.Memor
 		return result, err
 	}
 	if _, err := s.AppendEventWithLease(ctx, lease.SessionID, lease.HolderID, lease.FencingToken, memory.EventInput{
-		ParentID: p.sourceEventID(), Type: memory.EventApproval, ExecutionID: memory.ExecutionID(p.operationID()), Payload: payload,
+		ParentID: chosen.sourceEventID(), Type: memory.EventApproval, ExecutionID: memory.ExecutionID(chosen.operationID()), Payload: payload,
 	}); err != nil {
 		return result, fmt.Errorf("record inbox approval: %w", err)
 	}
@@ -1110,7 +1297,7 @@ func (s *Store) ApproveMemoryProposal(ctx context.Context, approval memory.Memor
 		_, err = s.ApplyMemoryLifecycle(ctx, lease, *chosen.lifecycle)
 	}
 	if err != nil {
-		if stale, staleErr := s.inboxProposalStale(ctx, p); staleErr == nil && stale && !errors.Is(err, memory.ErrStandingMemoryFull) {
+		if stale, staleErr := s.inboxVersionsStale(ctx, p, everywhere); staleErr == nil && stale && !errors.Is(err, memory.ErrStandingMemoryFull) {
 			return result, changed()
 		}
 		return result, err
@@ -1119,7 +1306,7 @@ func (s *Store) ApproveMemoryProposal(ctx context.Context, approval memory.Memor
 	if applied := chosen.classification(); applied != nil {
 		standing = applied.Standing
 	}
-	return memory.MemoryProposalResult{ProposalID: row.id, OperationID: p.operationID(), ClaimID: p.claimID(), Standing: standing,
+	return memory.MemoryProposalResult{ProposalID: row.id, OperationID: chosen.operationID(), ClaimID: chosen.claimID(), Standing: standing,
 		ProposalSHA256: proposalHash, PreparedSHA256: preparedHash}, nil
 }
 

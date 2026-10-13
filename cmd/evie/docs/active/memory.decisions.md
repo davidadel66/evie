@@ -1,5 +1,43 @@
 # memory - decisions
 
+- **2026-10-12 — Background proposals from a Workspace or project
+  conversation target that scope; the card offers a prepared Global
+  version.** David decided this after the pass turned a Finance chat's
+  request to add Costco and Kroger fuel to the Gas merchant rule into a
+  Global profile fact ("fuel retailers: Costco and Kroger"). It supersedes
+  the *Scope* bullet of the 2026-10-03 background pass entry; the spec
+  section is [Background Memory Pass](memory.spec.md#background-memory-pass).
+  Implementation choices:
+  - *Scope.* Every proposal from a Workspace or project conversation targets
+    its Context Scope. The model's `applies: profile` no longer routes; it
+    marks a suggestion. Global conversations are unchanged. This follows the
+    2026-09-05 rule to prefer the narrow scope when uncertain
+    ([session-history-and-memory-scope.spec.md](session-history-and-memory-scope.spec.md))
+    and [ADR 0034](../../../../docs/adr/0034-isolate-context-memory-and-require-explicit-promotion.md).
+  - *A Global version, not promotion.* "Save everywhere instead" approves a
+    second exact proposal the pass prepared with destination Everywhere, so
+    one Global memory results. David chose this over approving the Workspace
+    memory and then promoting it, which keeps the Workspace original and
+    shows the memory twice there. Choosing the exact Global destination is
+    the owner's explicit step, as for an approved recommended destination.
+  - *One key, one result.* Both versions carry the same idempotency key, as
+    the "Always applies" alternative does, so exactly one can apply and
+    either resolves the proposal. The approval event names the chosen
+    version's operation and hashes.
+  - *Storage.* Five nullable `everywhere_*` columns on
+    `memory_proposal_inbox` (the Global version's JSON, its two hashes and
+    its "Always applies" alternative's two hashes), added in place; existing
+    rows keep NULL and behave as before. Queueing requires the Global
+    version to be a literal remember whose request differs from the
+    proposal's only in destination, in the same conversation.
+  - *Revalidation.* Either version's scopes changing prepares both again; a
+    Global version that no longer prepares is dropped rather than blocking
+    the proposal.
+  - *Not in this change.* In-turn proposals keep their recommended
+    destination. Telling the extractor that requests to change data or
+    settings are actions, not memories, is a backlog item
+    (`MEM-BG-BACKLOG-ACTION-REQUESTS`).
+
 - **2026-10-03 — Memory flush before compaction (memory architecture
   Stage 10).** Implements Stage 10 of
   [the memory architecture plan](../../../../docs/memory-architecture.md)
@@ -333,8 +371,10 @@
     the comparison pool, so a pending memory is a NOOP rather than a second
     proposal. Only owner-subject literal memories are extracted; Entity
     memories remain the in-turn `memory_remember_entity`'s job.
-  - *Scope.* Profile → Global, Workspace → the conversation's Workspace or
-    project, by the model's `applies` field, with kind constraints enforced.
+  - *Scope.* (Superseded 2026-10-12 for Workspace and project
+    conversations; see that entry.) Profile → Global, Workspace → the
+    conversation's Workspace or project, by the model's `applies` field,
+    with kind constraints enforced.
     UPDATE and INVALIDATE may target only the conversation's own Context
     Scope, exactly the card tools' fence, so a Workspace conversation saying
     "I moved to Chicago" cannot correct a Global "home city: Boston"; the

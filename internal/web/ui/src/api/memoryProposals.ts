@@ -1,7 +1,8 @@
 // The owner's review inbox for memories Evie proposed without being asked
 // (memory architecture Stage 2). Each item carries the exact prepared
 // proposal, the same document an approval card shows; approving it applies
-// exactly that proposal, or its "Always applies" alternative.
+// exactly that proposal, or its "Always applies" alternative, or its Global
+// version when the owner chooses "Save everywhere instead".
 
 /** background: the always-on background pass found it in the owner's
  *  conversations (memory architecture Stage 4); the others were proposed by
@@ -17,6 +18,10 @@ export type MemoryProposalChange = {
   evidence?: string;
   evie_proposed?: boolean;
 };
+
+/** A Workspace or project memory's prepared Global version, offered when
+ *  Evie suggests the memory holds everywhere. */
+export type MemoryProposalVersion = { scope_key: string; proposal: string; prepared_sha256: string };
 
 export type MemoryProposalItem = {
   proposal_id: string;
@@ -34,6 +39,7 @@ export type MemoryProposalItem = {
   change?: MemoryProposalChange;
   /** The owner's message Evie prepared it from: context, not cited words. */
   source_message?: string;
+  everywhere?: MemoryProposalVersion;
 };
 
 export type MemoryProposalPage = { items: MemoryProposalItem[]; pending: number };
@@ -54,8 +60,10 @@ async function postMemoryProposals<T>(path: string, body: unknown): Promise<T> {
 export const memoryProposalAPI = {
   list: (): Promise<MemoryProposalPage> => postMemoryProposals("list", {}),
   count: (): Promise<{ pending: number }> => postMemoryProposals("count", {}),
-  approve: (item: MemoryProposalItem, alwaysApplies: boolean): Promise<MemoryProposalResult> =>
-    postMemoryProposals("approve", { proposal_id: item.proposal_id, prepared_sha256: item.prepared_sha256, always_applies: alwaysApplies }),
+  approve: (item: MemoryProposalItem, alwaysApplies: boolean, everywhere = false): Promise<MemoryProposalResult> =>
+    postMemoryProposals("approve", everywhere && item.everywhere
+      ? { proposal_id: item.proposal_id, prepared_sha256: item.everywhere.prepared_sha256, always_applies: alwaysApplies, everywhere: true }
+      : { proposal_id: item.proposal_id, prepared_sha256: item.prepared_sha256, always_applies: alwaysApplies }),
   decline: (id: string): Promise<{ proposal_id: string; declined: boolean }> => postMemoryProposals("decline", { proposal_id: id }),
 };
 export type MemoryProposalAPI = typeof memoryProposalAPI;

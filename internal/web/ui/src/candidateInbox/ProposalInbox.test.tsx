@@ -60,6 +60,22 @@ describe("memory proposal inbox", () => {
     expect(html.match(/Evie’s wording/g)).toHaveLength(3);
   });
 
+  it("offers a Workspace memory everywhere when Evie suggests it, and shows the chosen version", () => {
+    const own = JSON.stringify({ ...JSON.parse(proposal), scope: { scope_key: "workspace:fin" } });
+    const global = JSON.stringify({ ...JSON.parse(proposal), scope: { scope_key: "global" }, operation_id: "global-version" });
+    const offered: MemoryProposalItem = { ...item, reason: "background", scope_key: "workspace:fin", proposal: own,
+      everywhere: { scope_key: "global", proposal: global, prepared_sha256: "sha256:global" } };
+    const html = render({ ...state, page: { items: [offered], pending: 1 } });
+    for (const text of ["Preference · applies in Workspace", "Save everywhere instead", "Evie thinks this may apply beyond Workspace."]) expect(html).toContain(text);
+    expect(html).toMatch(/role="switch" aria-checked="false" aria-label="Save everywhere instead"/);
+    expect(html).not.toContain("global-version");
+    const chosen = render({ ...state, page: { items: [offered], pending: 1 }, everywhere: { "proposal-1:1": true } });
+    expect(chosen).toContain("Preference · applies everywhere");
+    expect(chosen).toMatch(/role="switch" aria-checked="true" aria-label="Save everywhere instead"/);
+    expect(chosen).toContain("global-version");
+    expect(render(state)).not.toContain("Save everywhere instead");
+  });
+
   it("folds a long source message behind Show all", () => {
     const html = render({ ...state, page: { items: [{ ...item, source_message: "word ".repeat(80) }], pending: 1 } });
     expect(html).toContain("line-clamp-3");

@@ -101,6 +101,11 @@ type QueuedMemoryProposal struct {
 	Entity        *RememberEntityProposal
 	Correction    *CorrectClaimProposal
 	Lifecycle     *MemoryLifecycleProposal
+	// Everywhere is a background remember's Global version: the same request
+	// prepared with destination Everywhere under the same idempotency key,
+	// offered as "Save everywhere instead". Only a background literal
+	// remember from a Workspace or project conversation carries one.
+	Everywhere *RememberLiteralProposal
 }
 
 // MemoryProposalQueued is what queueing reports to the model. Duplicate means
@@ -134,6 +139,17 @@ type MemoryProposalItem struct {
 	// Change describes what approving does in plain terms: add a memory,
 	// update (correct) an existing one, or retire one.
 	Change *MemoryProposalChange `json:"change,omitempty"`
+	// Everywhere is the proposal's Global version, when Evie suggested the
+	// memory holds everywhere.
+	Everywhere *MemoryProposalVersion `json:"everywhere,omitempty"`
+}
+
+// MemoryProposalVersion is a proposal's prepared Global version as the owner
+// reviews it: the exact document and the hash an approval of it names.
+type MemoryProposalVersion struct {
+	ScopeKey       string `json:"scope_key"`
+	Proposal       string `json:"proposal"`
+	PreparedSHA256 string `json:"prepared_sha256"`
 }
 
 // MemoryProposalChange is the owner-facing summary of an inbox proposal.
@@ -165,10 +181,13 @@ type MemoryProposalPage struct {
 
 // MemoryProposalApproval approves the exact proposal the owner saw, with the
 // "Always applies" switch as set. PreparedSHA256 must be the listed hash.
+// Everywhere approves the proposal's Global version instead, and
+// PreparedSHA256 is then the Global version's listed hash.
 type MemoryProposalApproval struct {
 	ProposalID     string `json:"proposal_id"`
 	PreparedSHA256 string `json:"prepared_sha256"`
 	AlwaysApplies  bool   `json:"always_applies"`
+	Everywhere     bool   `json:"everywhere,omitempty"`
 }
 
 // MemoryProposalResult is the accepted operation an inbox approval applied.

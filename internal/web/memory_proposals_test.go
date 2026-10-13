@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/web"
@@ -116,5 +117,86 @@ func TestMemoryProposalInboxRoutesApproveAndDecline(t *testing.T) {
 	}
 	if w := proposalPost(t, handler, "decline", map[string]any{"proposal_id": "missing"}); w.Code != http.StatusNotFound {
 		t.Fatalf("decline of a missing proposal = %d %s", w.Code, w.Body.String())
+	}
+}
+
+// A background proposal from a Workspace conversation lists its Global
+// version, and "Save everywhere instead" approves it with that version's
+// hash (memory.decisions.md, 2026-10-12).
+func TestMemoryProposalInboxApprovesTheGlobalVersion(t *testing.T) {
+	ctx := context.Background()
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "inbox.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	store := eviedb.NewStore(db)
+	workspace, err := store.RegisterWorkspace(ctx, "Finance")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const hash = "0000000000000000000000000000000000000000000000000000000000000000"
+	receipt := composition.Receipt{FormatVersion: composition.FormatVersion, Preset: composition.PresetIdentity{ID: "standard", Version: "sha256:" + hash},
+		EvieVersion: "1.0.0", Providers: []composition.Provider{{ID: "fixture", ImplementationVersion: "1.0.0"}},
+		Capabilities: []composition.Capability{{ID: "fixture.echo", ProviderID: "fixture", ContractVersion: "1.0.0", SchemaSHA256: hash}},
+		ToolSchemas:  []composition.ToolSchema{{Name: "fixture_echo", SHA256: hash}}, Instructions: []composition.InstructionReference{{ID: "fixture-instructions", SHA256: hash}}}
+	session, err := store.CreateWorkspaceSessionWithComposition(ctx, workspace.ID, workspace.CurrentRevisionID, receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	turn, err := store.AcquireTurnLease(ctx, session.ID, "turn", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	said, err := store.AppendEventWithLease(ctx, session.ID, turn.HolderID, turn.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer short answers."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReleaseTurnLease(ctx, session.ID, turn.HolderID, turn.FencingToken); err != nil {
+		t.Fatal(err)
+	}
+	request := memory.RememberLiteralRequest{Destination: memory.MemoryWorkspace, IdempotencyKey: "idem:v1:92000000-0000-4000-8000-000000000001",
+		SourceEventID: said.ID, Predicate: "answer_style", PredicateLabel: "answer style", PredicateCardinality: memory.CardinalityMany,
+		Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: "short answers"}, Polarity: memory.PolarityAffirmed, Kind: memory.ClaimKindPreference}
+	own, err := store.PrepareRememberLiteral(ctx, session.ScopeContext(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Destination = memory.MemoryEverywhere
+	everywhere, err := store.PrepareRememberLiteral(ctx, session.ScopeContext(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	background, err := store.AcquireTurnLease(ctx, session.ID, "memory-background:web", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if _, err := store.CommitMemoryBackgroundPass(ctx, background, memory.BackgroundCommit{
+		Proposals: []memory.QueuedMemoryProposal{{ToolName: memory.RememberLiteralToolName, Reason: memory.MemoryProposalBackground, Literal: &own, Everywhere: &everywhere}},
+		Run: memory.BackgroundRun{RunID: "run-web", SessionID: session.ID, Trigger: memory.BackgroundTriggerIdle, Model: "fake",
+			ThroughSequence: said.Sequence, StartedAt: now, FinishedAt: now},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReleaseTurnLease(ctx, session.ID, background.HolderID, background.FencingToken); err != nil {
+		t.Fatal(err)
+	}
+	handler := web.WithCandidateReview(web.NewServer(nil), store).Handler()
+
+	page := reviewResponse[memory.MemoryProposalPage](t, proposalPost(t, handler, "list", map[string]any{}), 200)
+	if len(page.Items) != 1 || page.Items[0].Everywhere == nil || page.Items[0].Everywhere.ScopeKey != "global" ||
+		page.Items[0].Everywhere.PreparedSHA256 != everywhere.PreparedSHA256 || page.Items[0].ScopeKey != "workspace:"+string(workspace.ID) {
+		t.Fatalf("inbox page = %+v", page)
+	}
+	item := page.Items[0]
+	if w := proposalPost(t, handler, "approve", map[string]any{"proposal_id": item.ProposalID, "prepared_sha256": item.PreparedSHA256,
+		"always_applies": true, "everywhere": true}); w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "proposal_changed") {
+		t.Fatalf("the Global version approved under its proposal's hash = %d %s", w.Code, w.Body.String())
+	}
+	approved := reviewResponse[memory.MemoryProposalResult](t, proposalPost(t, handler, "approve", map[string]any{"proposal_id": item.ProposalID,
+		"prepared_sha256": item.Everywhere.PreparedSHA256, "always_applies": true, "everywhere": true}), 200)
+	if approved.ClaimID != everywhere.ClaimID || !approved.Standing {
+		t.Fatalf("approved = %+v", approved)
 	}
 }

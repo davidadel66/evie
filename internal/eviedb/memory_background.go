@@ -497,8 +497,9 @@ func (s *Store) CommitMemoryBackgroundPass(ctx context.Context, lease memory.Tur
 		return result, errors.New("background commit does not match its turn lease")
 	}
 	type encodedProposal struct {
-		proposal inboxProposal
-		encoded  []byte
+		proposal   inboxProposal
+		encoded    []byte
+		everywhere *inboxVersion
 	}
 	var proposals []encodedProposal
 	for _, queued := range commit.Proposals {
@@ -513,6 +514,10 @@ func (s *Store) CommitMemoryBackgroundPass(ctx context.Context, lease memory.Tur
 			return result, errors.New("a background proposal belongs to its pass's conversation")
 		}
 		encoded, err := encodeInboxProposal(p)
+		var everywhere *inboxVersion
+		if err == nil && queued.Everywhere != nil {
+			everywhere, err = newInboxVersion(p, inboxProposal{literal: queued.Everywhere})
+		}
 		if errors.Is(err, errInboxProposalSecret) {
 			result.Refused++
 			continue
@@ -520,14 +525,14 @@ func (s *Store) CommitMemoryBackgroundPass(ctx context.Context, lease memory.Tur
 		if err != nil {
 			return result, err
 		}
-		proposals = append(proposals, encodedProposal{proposal: p, encoded: encoded})
+		proposals = append(proposals, encodedProposal{proposal: p, encoded: encoded, everywhere: everywhere})
 	}
 	err := s.withTurnLeaseWrite(ctx, lease.SessionID, lease.HolderID, lease.FencingToken, func(writer turnLeaseWriteExecutor) error {
 		if err := checkBackgroundCursor(ctx, writer, run); err != nil {
 			return err
 		}
 		for _, item := range proposals {
-			outcome, err := s.insertInboxProposal(ctx, writer, item.proposal, item.encoded, memory.MemoryProposalBackground, "")
+			outcome, err := s.insertInboxProposal(ctx, writer, item.proposal, item.encoded, memory.MemoryProposalBackground, "", item.everywhere)
 			if err != nil {
 				return err
 			}

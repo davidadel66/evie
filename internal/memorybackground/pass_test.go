@@ -225,7 +225,11 @@ func TestPassDedupesAgainstPendingAndDeclinedProposals(t *testing.T) {
 // Scope routing by meaning: in a Workspace conversation, profile memories go
 // to Global and the Workspace brief to the Workspace; a Workspace memory in
 // a Global conversation is dropped.
-func TestPassRoutesProfileToGlobalAndWorkspaceMemoryToTheWorkspace(t *testing.T) {
+// A Workspace conversation's memories stay in its Workspace
+// (memory.decisions.md, 2026-10-12). One Evie suggests holds everywhere also
+// carries a prepared Global version, which "Save everywhere instead"
+// approves. A Global conversation routes as before.
+func TestPassKeepsWorkspaceMemoriesInTheWorkspaceAndOffersAGlobalVersion(t *testing.T) {
 	f := newFixture(t)
 	kitchen := f.workspaceSession("Kitchen")
 	f.turn(kitchen, "This workspace is for planning weekend brunches. I'm vegetarian.")
@@ -234,21 +238,61 @@ func TestPassRoutesProfileToGlobalAndWorkspaceMemoryToTheWorkspace(t *testing.T)
 		memoryItem(0, "profile_fact", "profile", "diet", "diet", "vegetarian"),
 	)
 	f.mustRun(kitchen)
-	scopes := map[string]string{}
-	for _, item := range backgroundItems(f.inbox()) {
-		scopes[item.ScopeKey] = item.Proposal
-	}
 	workspaceKey := "workspace:" + string(kitchen.WorkspaceID)
-	if !strings.Contains(scopes["global"], "vegetarian") || !strings.Contains(scopes[workspaceKey], "weekend brunches") {
-		t.Fatalf("routing = %v", scopes)
+	items := map[string]memory.MemoryProposalItem{}
+	for _, item := range backgroundItems(f.inbox()) {
+		if item.ScopeKey != workspaceKey {
+			t.Fatalf("a Workspace conversation proposed for %s: %+v", item.ScopeKey, item)
+		}
+		for _, value := range []string{"weekend brunches", "vegetarian"} {
+			if strings.Contains(item.Proposal, value) {
+				items[value] = item
+			}
+		}
+	}
+	brief, diet := items["weekend brunches"], items["vegetarian"]
+	if brief.ProposalID == "" || brief.Everywhere != nil {
+		t.Fatalf("brief = %+v", brief)
+	}
+	if diet.ProposalID == "" || diet.Everywhere == nil || diet.Everywhere.ScopeKey != "global" || !strings.Contains(diet.Everywhere.Proposal, "vegetarian") {
+		t.Fatalf("diet = %+v", diet)
+	}
+	f.approveEverywhere(diet)
+	if texts := strings.Join(f.claimTexts(f.globalSession()), "\n"); !strings.Contains(texts, "global owner — diet: vegetarian") {
+		t.Fatalf("Global memories = %q", texts)
+	}
+	if texts := strings.Join(f.claimTexts(kitchen), "\n"); strings.Contains(texts, workspaceKey+" owner — diet") {
+		t.Fatalf("the Workspace also kept the memory: %q", texts)
 	}
 
 	global := f.globalSession()
-	f.turn(global, "This project uses tabs.")
-	f.model.extract(memoryItem(0, "fact", "workspace", "indentation", "indentation", "tabs"))
+	f.turn(global, "This project uses tabs. I prefer short answers.")
+	f.model.extract(
+		memoryItem(0, "fact", "workspace", "indentation", "indentation", "tabs"),
+		memoryItem(0, "preference", "profile", "answer_length", "answer length", "short answers"),
+	)
 	run := f.mustRun(global)
-	if run.Queued != 0 || run.Skipped != 1 {
-		t.Fatalf("a Workspace memory in a Global conversation = %+v", run)
+	if run.Queued != 1 || run.Skipped != 1 {
+		t.Fatalf("a Global conversation's pass = %+v", run)
+	}
+	for _, item := range backgroundItems(f.inbox()) {
+		if strings.Contains(item.Proposal, "short answers") && (item.ScopeKey != "global" || item.Everywhere != nil) {
+			t.Fatalf("a Global conversation's memory = %+v", item)
+		}
+	}
+}
+
+// A memory already saved everywhere is known in every conversation, so a
+// Workspace conversation proposes nothing for it.
+func TestPassProposesNothingForAMemoryThatAlreadyAppliesEverywhere(t *testing.T) {
+	f := newFixture(t)
+	f.remember(f.globalSession(), "I'm vegetarian.", "diet", "diet", "vegetarian", memory.ClaimKindProfileFact)
+	kitchen := f.workspaceSession("Kitchen")
+	f.turn(kitchen, "As you know, I'm vegetarian.")
+	f.model.extract(memoryItem(0, "profile_fact", "profile", "diet", "diet", "vegetarian"))
+	run := f.mustRun(kitchen)
+	if run.Queued != 0 || run.Noops != 1 {
+		t.Fatalf("run = %+v", run)
 	}
 }
 
