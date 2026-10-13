@@ -36,7 +36,8 @@ export function WorkspaceTabsSettings({folder, tabs, problem, busy, actionProble
                 <div className="flex items-start gap-3">
                   <span className="text-body w-40 flex-none truncate font-medium" title={tab.title}>{tab.title}</span>
                   <code className="text-faint w-32 flex-none truncate">{tab.id}</code>
-                  {tab.problem ? <span className="text-amber-ink min-w-0 flex-1">{tab.problem}</span> : <span className="text-muted-text flex-1">Shown</span>}
+                  {tab.problem ? <span className="text-amber-ink min-w-0 flex-1">{tab.problem}</span>
+                    : <span className="text-muted-text flex-1">{tab.builtin ? `Shown · Evie's built-in ${tab.builtin} view` : "Shown"}</span>}
                 </div>
                 {(tab.recentProblems?.length ?? 0) > 0 && <ul aria-label={`Recent problems in ${tab.title}`} className="mt-1.5 ml-[172px] space-y-0.5">
                   {tab.recentProblems?.map((problem, i) => <li key={i} className="text-amber-ink truncate" title={problem.message}>{problem.kind}: {problem.message}</li>)}

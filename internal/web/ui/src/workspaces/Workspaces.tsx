@@ -24,6 +24,7 @@ import type { WorkspaceTab, WorkspaceViewState } from "./workspaceActivity";
 import { customTabID, customTabKey, useWorkspaceTabs } from "./workspaceTabs";
 import { workspaceTabsAPI, type CustomTab } from "../api/workspaceTabs";
 import { WorkspaceTabFrame } from "./WorkspaceTabFrame";
+import { BuiltinTab } from "./BuiltinTab";
 import { WorkspaceTabsSettings } from "./WorkspaceTabsSettings";
 
 type DirectoryProps = {
@@ -231,7 +232,9 @@ export function WorkspaceHome({
         onReload={() => { setTabReloads((count) => count + 1); ownTabs.reload(); }} />
       {ownTabID !== undefined ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby={`workspace-tab-${tab}`} className="flex min-h-0 flex-1 flex-col">
         {ownTab
-          ? <WorkspaceTabFrame key={`${workspace.id}:${ownTab.id}:${tabReloads}`} workspaceId={workspace.id} tab={ownTab} />
+          ? ownTab.builtin
+            ? <BuiltinTab key={`${workspace.id}:${ownTab.id}:${tabReloads}`} view={ownTab.builtin} />
+            : <WorkspaceTabFrame key={`${workspace.id}:${ownTab.id}:${tabReloads}`} workspaceId={workspace.id} tab={ownTab} />
           : <p className="text-muted-text m-auto text-sm">{ownTabs.tabs ? "This tab isn’t available. Settings → Tabs says why." : "Loading tab…"}</p>}
       </div> : tab === "changes" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-changes" className="flex min-h-0 flex-1">
         <WorkspaceChanges key={`changes:${workspace.id}`} workspace={workspace} listing={listing} selected={selectedChange} sessionTitles={sessionTitles}

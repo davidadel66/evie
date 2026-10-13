@@ -27,3 +27,11 @@ Spec: [workspace-tabs.spec.md](workspace-tabs.spec.md).
   depth: every tab page starts with a script that removes the WebRTC
   constructors and the ways to reach a fresh window before the tab's own
   code runs. It is not a seal; a determined page may find another way.
+- **2026-10-12 — A tab can show one of Evie's built-in views.** Evie's
+  Reports tab analysed Finance well but was not what Data → Spending shows,
+  and a sealed tab cannot reproduce Spending's buttons (refresh, add
+  account, fetch, categorize) or its bank names (they sit beside the
+  access tokens in the items table). David chose a built-in tab:
+  `tab.json` may name `"builtin": "spending"`, and the Workspace shows the
+  real Spending view, with its data and buttons, beside the page tabs. Such
+  a tab has no page or data list. Data → Spending stays for now.

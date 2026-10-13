@@ -6,7 +6,8 @@
 export type TabDataSource = { db?: string; files?: string; runs?: boolean };
 /** Something that went wrong in a tab's page, or a data request it was refused. */
 export type TabProblem = { tabId: string; kind: string; message: string; recordedAt: string };
-export type CustomTab = { id: string; title: string; order: number; data?: TabDataSource[]; dataKey?: string; approved?: boolean; problem?: string; recentProblems?: TabProblem[] };
+/** A tab is a page from the folder, or with builtin one of Evie's own views (decisions, 2026-10-12). */
+export type CustomTab = { id: string; title: string; order: number; builtin?: string; data?: TabDataSource[]; dataKey?: string; approved?: boolean; approvalStored?: boolean; problem?: string; recentProblems?: TabProblem[] };
 export type CustomTabList = { tabs: CustomTab[] };
 /** A read a tab asks for through Evie's page; the server checks it against the approved list. */
 export type TabDataRequest = { kind: string; db?: string; sql?: string; path?: string };

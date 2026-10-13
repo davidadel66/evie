@@ -66,6 +66,10 @@ sealed off from the rest of Evie:
   adds `data`. Unknown fields are a problem, not ignored, so a newer
   manifest on an older Evie says so.
 - A Workspace without a folder has no custom tabs (decisions, 2026-10-12).
+- `tab.json` may instead name one of Evie's built-in views,
+  `{"title": "Spending", "builtin": "spending"}`: the tab shows that view as
+  under Data, with its own data and buttons, and has no `index.html` or
+  `data` (decisions, 2026-10-12). Built-in views: `spending`.
 - Limits: at most 12 tabs per Workspace; a tab folder at most 5 MB and 200
   files and folders; `.evie/tabs` at most 256 entries, of which the first 32
   folders by name are examined. Anything over is listed as a problem, not

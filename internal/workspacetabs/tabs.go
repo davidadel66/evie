@@ -69,9 +69,12 @@ func ValidID(id string) bool { return tabIDPattern.MatchString(id) }
 // Problem is listed but never shown or served. Data is what it may read once
 // the owner approves; DataKey pins an approval to that exact list.
 type Tab struct {
-	ID      string       `json:"id"`
-	Title   string       `json:"title"`
-	Order   int          `json:"order"`
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Order int    `json:"order"`
+	// Builtin names one of Evie's own views the tab shows instead of a page
+	// (decisions, 2026-10-12); such a tab has no page or data of its own.
+	Builtin string       `json:"builtin,omitempty"`
 	Data    []DataSource `json:"data,omitempty"`
 	DataKey string       `json:"dataKey,omitempty"`
 	Problem string       `json:"problem,omitempty"`
@@ -99,10 +102,14 @@ type DataSource struct {
 // manifest is tab.json. Unknown fields are a problem, so a newer manifest
 // on an older Evie says so instead of being half read.
 type manifest struct {
-	Title *string      `json:"title"`
-	Order int          `json:"order"`
-	Data  []DataSource `json:"data"`
+	Title   *string      `json:"title"`
+	Order   int          `json:"order"`
+	Builtin string       `json:"builtin"`
+	Data    []DataSource `json:"data"`
 }
+
+// Builtins are Evie's own views a tab may show by name.
+var Builtins = []string{"spending"}
 
 var databaseNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 
@@ -192,6 +199,7 @@ func Open(folder, id, rel string) (*os.File, fs.FileInfo, error) {
 	if !allowedPath(rel) || rel == Reserved || strings.HasPrefix(rel, Reserved+"/") {
 		return nil, nil, ErrPath
 	}
+	// A built-in tab shows Evie's own view; it serves no files.
 	// Open lists every tab so a 13th or broken tab is refused exactly as
 	// the header leaves it out. Folder and entry limits bound that work.
 	tabs, err := List(folder)
@@ -204,6 +212,9 @@ func Open(folder, id, rel string) (*os.File, fs.FileInfo, error) {
 	}
 	if tabs[i].Problem != "" {
 		return nil, nil, fmt.Errorf("%w: %s", ErrInvalid, tabs[i].Problem)
+	}
+	if tabs[i].Builtin != "" {
+		return nil, nil, ErrNotFound
 	}
 	root, err := openTab(folder, id)
 	if err != nil {
@@ -313,7 +324,10 @@ func inspect(tabs *os.Root, name string) Tab {
 		tab.Problem = problem
 		return tab
 	}
-	tab.Title, tab.Order, tab.Data, tab.DataKey = strings.TrimSpace(*m.Title), m.Order, m.Data, dataKey(m.Data)
+	tab.Title, tab.Order, tab.Builtin, tab.Data, tab.DataKey = strings.TrimSpace(*m.Title), m.Order, m.Builtin, m.Data, dataKey(m.Data)
+	if tab.Builtin != "" {
+		return tab
+	}
 	if info, err := root.Lstat("index.html"); err != nil || !info.Mode().IsRegular() {
 		tab.Problem = "index.html is missing or not a regular file"
 		return tab
@@ -352,6 +366,14 @@ func readManifest(root *os.Root) (manifest, string) {
 	}
 	if title := strings.TrimSpace(*m.Title); title == "" || utf8.RuneCountInString(title) > maxTitleRunes {
 		return m, fmt.Sprintf("the title must be 1–%d characters", maxTitleRunes)
+	}
+	if m.Builtin != "" {
+		switch {
+		case !slices.Contains(Builtins, m.Builtin):
+			return m, fmt.Sprintf("%q is not one of Evie's built-in views (%s)", m.Builtin, strings.Join(Builtins, ", "))
+		case len(m.Data) > 0:
+			return m, "a built-in view reads its own data; leave out data"
+		}
 	}
 	if len(m.Data) > maxSources {
 		return m, fmt.Sprintf("data lists at most %d sources", maxSources)

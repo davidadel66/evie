@@ -66,6 +66,7 @@ func (t WorkspaceTabs) ToolCapabilities() []ToolCapability {
 const workspaceTabsGuide = `How Workspace tabs work (workspace-tabs.spec.md):
 - Each folder %[1]s/.evie/tabs/<id>/ is one tab. <id> is 1-32 lowercase letters, digits or hyphens.
 - tab.json holds exactly {"title": "Reports", "order": 10, "data": [...]}: a title of 1-24 characters, an optional order (lower comes first) and optional data. Any other field is a problem.
+- A tab can instead show one of Evie's own views, with no page or data of its own: {"title": "Spending", "builtin": "spending"} shows the Spending view (accounts, cash flow, transactions and their buttons) exactly as under Data. Built-in views: spending.
 - index.html is the page; scripts, styles, images and fonts it uses live in the same folder (at most 200 files and folders, 5 MB, 12 tabs per Workspace).
 - Load Evie's helper first, in <head>: <script src="_evie/tab.js"></script>. It reports the page's errors to you and reads data. Evie serves _evie/tab.js and _evie/evie.css itself, at that path inside every tab: they are not files on disk, so do not look for them or create them.
 - For Evie's look, add <link rel="stylesheet" href="_evie/evie.css"> and <body class="bg-app text-body">: the app's own colors as CSS variables (var(--color-teal), var(--color-ink), var(--color-body), var(--color-muted-text), var(--color-card), var(--color-hair)), its font (var(--font-sans)) and the utility classes the app uses (text-sm, rounded, border, border-hair, bg-card, p-4, flex, gap-3 and so on).

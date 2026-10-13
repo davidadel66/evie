@@ -420,3 +420,28 @@ func TestATabsOwnReservedFolderIsNeverServed(t *testing.T) {
 		}
 	}
 }
+
+// A tab can show one of Evie's own views by name instead of a page.
+func TestABuiltinTabNamesOneOfEviesViews(t *testing.T) {
+	folder := t.TempDir()
+	writeTab(t, folder, "spending", map[string]string{"tab.json": `{"title":"Spending","order":5,"builtin":"spending"}`})
+	writeTab(t, folder, "unknown", map[string]string{"tab.json": `{"title":"X","builtin":"payroll"}`})
+	writeTab(t, folder, "with-data", map[string]string{"tab.json": `{"title":"X","builtin":"spending","data":[{"db":"finance"}]}`})
+	tabs, err := List(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]Tab{}
+	for _, tab := range tabs {
+		byID[tab.ID] = tab
+	}
+	if tab := byID["spending"]; tab.Problem != "" || tab.Builtin != "spending" || tab.Title != "Spending" || tab.Order != 5 {
+		t.Fatalf("spending = %+v", tab)
+	}
+	if !strings.Contains(byID["unknown"].Problem, "not one of Evie's built-in views") || !strings.Contains(byID["with-data"].Problem, "leave out data") {
+		t.Fatalf("unknown = %q, with-data = %q", byID["unknown"].Problem, byID["with-data"].Problem)
+	}
+	if _, _, err := Open(folder, "spending", ""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a built-in tab served a page: %v", err)
+	}
+}

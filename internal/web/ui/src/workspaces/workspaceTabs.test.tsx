@@ -4,6 +4,7 @@ import { customTabURL, describeSource } from "../api/workspaceTabs";
 import { MoreTabs, WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceTabFrame } from "./WorkspaceTabFrame";
 import { WorkspaceTabsSettings } from "./WorkspaceTabsSettings";
+import { BuiltinTab } from "./BuiltinTab";
 import { customTabID, customTabKey, fitCustomTabs } from "./workspaceTabs";
 
 describe("fitting a Workspace's own tabs into the header", () => {
@@ -92,5 +93,15 @@ describe("Settings → Tabs, a tab's data", () => {
   });
   it("names each kind of source", () => {
     expect(data.map(describeSource)).toEqual(["the finance database (read-only)", "files matching eval/*.json", "this workspace's workflow runs"]);
+  });
+});
+
+describe("a built-in tab", () => {
+  it("shows Evie's own view, and says so in Settings → Tabs", () => {
+    expect(renderToStaticMarkup(<BuiltinTab view="payroll" />)).toContain("no built-in view named payroll");
+    expect(renderToStaticMarkup(<BuiltinTab view="spending" />)).not.toContain("no built-in view");
+    const html = renderToStaticMarkup(<WorkspaceTabsSettings folder="/code/finance" tabs={[{ id: "spending", title: "Spending", order: 5, builtin: "spending" }]} />);
+    expect(html).toContain("Shown · Evie&#x27;s built-in spending view");
+    expect(html).not.toContain("Allow this data");
   });
 });

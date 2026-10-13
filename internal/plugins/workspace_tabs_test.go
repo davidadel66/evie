@@ -74,7 +74,7 @@ func TestWorkspaceTabsToolTellsTheContractStatusAndProblems(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		folder + "/.evie/tabs/<id>/", `<script src="_evie/tab.js"></script>`, "not files on disk", "no network at all", `await evie.query("finance"`, "Settings → Tabs",
+		folder + "/.evie/tabs/<id>/", `<script src="_evie/tab.js"></script>`, "not files on disk", `"builtin": "spending"`, "no network at all", `await evie.query("finance"`, "Settings → Tabs",
 		`"id": "reports"`, `"data_allowed": true`, `"id": "broken"`, `unknown field \"layout\"`, "[begin workspace tabs", "[begin tab problems", "drawChart is not defined",
 	} {
 		if !strings.Contains(out, want) {
