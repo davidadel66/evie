@@ -67,19 +67,26 @@ sealed off from the rest of Evie:
   manifest on an older Evie says so.
 - A Workspace without a folder has no custom tabs (decisions, 2026-10-12).
 - Limits: at most 12 tabs per Workspace; a tab folder at most 5 MB and 200
-  files. Anything over is listed as a problem, not served.
+  files and folders; `.evie/tabs` at most 256 entries, of which the first 32
+  folders by name are examined. Anything over is listed as a problem, not
+  served.
 
 ### Discovery and serving
 
 - A management route lists a Workspace's tabs: id, title, order, and a
   problem message for an invalid one. Invalid tabs show in Settings → Tabs
   with their problem, never in the header.
-- A GET route serves files from one tab folder only. Paths are confined to
-  that folder: no `..`, no absolute paths, no symlink that leaves it, no
-  dotfiles. Responses carry a Content-Security-Policy that sandboxes the
-  document (scripts allowed, same-origin not allowed), allows scripts,
-  styles and images only from the tab folder or inline, and allows no
-  network connections, forms, popups or top navigation.
+- A GET route serves files from one tab folder only: regular files reached
+  without a link, with no `..`, absolute path or dotfile. (A link inside the
+  tab could serve a dotfile, and a pipe would hang the request.) Responses
+  carry a Content-Security-Policy that sandboxes the document (scripts
+  allowed, same-origin not allowed), allows scripts, styles, images, fonts
+  and media only from that tab's folder URL or inline, and allows no network
+  connections, frames, workers, forms, popups or top navigation. Error
+  responses run nothing. The trailing-slash redirect is built only from
+  checked IDs, so it cannot point off Evie.
+- Evie's app shell sends `frame-src 'self'`, so a tab cannot navigate its own
+  frame to another site.
 - The frame element is `sandbox="allow-scripts"`: no `allow-same-origin`,
   `allow-top-navigation`, `allow-popups` or `allow-forms`.
 - The existing management-route guard already refuses the frame's requests:
@@ -90,9 +97,19 @@ sealed off from the rest of Evie:
 
 - Order: Runs, Changes (with a Repository), Workflows, the custom tabs by
   `order`, then Settings last.
-- The strip does not scroll (2026-10-12 fix). Tabs that do not fit move,
-  from the right, into a More menu; the selected tab always stays visible.
+- The strip does not scroll (2026-10-12 fix). Built-in tabs always show.
+  Custom tabs that do not fit move, from the right, into a More menu after
+  Settings; the selected tab always stays visible.
 - A custom tab reloads when it is selected again, and has a Reload control.
+
+### Known residual risk
+
+- WebRTC (`RTCPeerConnection` with a STUN or TURN server) is outside what a
+  page policy can block in Chrome, so a tab's code could signal out over DNS
+  or UDP. Story 1 gives tabs no data. Before story 2 gives tabs the owner's
+  data, the owner decides whether to accept this with its mitigations (the
+  owner approves each tab's data list, and Evie's tab changes are reviewable)
+  or to add a hardening step.
 
 ### Data channel (story 2)
 

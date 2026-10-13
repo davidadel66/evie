@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // writeTab writes a tab folder with the given files under folder.
@@ -142,6 +144,12 @@ func TestOpenServesOnlyFilesInsideAValidTab(t *testing.T) {
 	if err := os.Symlink("app.js", filepath.Join(dir, "alias.js")); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Symlink(".env", filepath.Join(dir, "public.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("lib", filepath.Join(dir, "linked-lib")); err != nil {
+		t.Fatal(err)
+	}
 	read := func(rel string) (string, error) {
 		file, _, err := Open(folder, "reports", rel)
 		if err != nil {
@@ -151,12 +159,14 @@ func TestOpenServesOnlyFilesInsideAValidTab(t *testing.T) {
 		data, err := io.ReadAll(file)
 		return string(data), err
 	}
-	for rel, want := range map[string]string{"": "<p>Reports</p>", "index.html": "<p>Reports</p>", "lib/chart.js": "chart", "alias.js": "console.log(1)"} {
+	for rel, want := range map[string]string{"": "<p>Reports</p>", "index.html": "<p>Reports</p>", "lib/chart.js": "chart"} {
 		if got, err := read(rel); err != nil || got != want {
 			t.Errorf("read %q = %q, %v", rel, got, err)
 		}
 	}
-	for _, rel := range []string{"../../secret.txt", "/etc/passwd", "lib/../app.js", "./app.js", ".env", "lib/", "a\\b", "escape.txt"} {
+	// Only regular files reached without a link: a link inside the tab could
+	// serve a dotfile (public.txt -> .env).
+	for _, rel := range []string{"../../secret.txt", "/etc/passwd", "lib/../app.js", "./app.js", ".env", "lib/", "a\\b", "escape.txt", "alias.js", "public.txt", "linked-lib/chart.js"} {
 		if _, err := read(rel); !errors.Is(err, ErrPath) {
 			t.Errorf("read %q: err = %v, want ErrPath", rel, err)
 		}
@@ -191,5 +201,61 @@ func TestATabsFolderLinkedOutsideTheWorkspaceIsRefused(t *testing.T) {
 	}
 	if _, _, err := Open(folder, "reports", ""); err == nil {
 		t.Fatal("opened a tab through a link that leaves the Workspace folder")
+	}
+}
+
+// A pipe where a file should be must not hang the list or a request.
+func TestPipesInATabAreRefusedWithoutBlocking(t *testing.T) {
+	folder := t.TempDir()
+	dir := writeTab(t, folder, "reports", valid("Reports", 1))
+	if err := syscall.Mkfifo(filepath.Join(dir, "data.json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	piped := filepath.Join(folder, Dir, "piped")
+	if err := os.MkdirAll(piped, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(piped, "tab.json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(piped, "index.html"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan string, 1)
+	go func() {
+		tabs, err := List(folder)
+		_, _, openErr := Open(folder, "reports", "data.json")
+		done <- fmt.Sprintf("%v|%v|%v", problems(tabs)["piped"], err, errors.Is(openErr, ErrPath))
+	}()
+	select {
+	case got := <-done:
+		if got != "tab.json must be a regular file|<nil>|true" {
+			t.Fatalf("pipes = %s", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a pipe in a tab folder blocked the reader")
+	}
+}
+
+func TestFoldersCountTowardATabsLimitAndTabsHoldsABoundedNumberOfEntries(t *testing.T) {
+	folder := t.TempDir()
+	dir := writeTab(t, folder, "nested", valid("Nested", 1))
+	for i := range MaxTabFiles {
+		if err := os.Mkdir(filepath.Join(dir, fmt.Sprintf("d%03d", i)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tabs, err := List(folder)
+	if err != nil || !strings.Contains(problems(tabs)["nested"], "over 200 files and folders") {
+		t.Fatalf("nested = %v, %v", tabs, err)
+	}
+	crowded := t.TempDir()
+	for i := range maxEntries + 1 {
+		if err := os.MkdirAll(filepath.Join(crowded, Dir, fmt.Sprintf("t%03d", i)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := List(crowded); !errors.Is(err, ErrTooMany) {
+		t.Fatalf("crowded .evie/tabs: %v", err)
 	}
 }

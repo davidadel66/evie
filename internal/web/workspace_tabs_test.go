@@ -96,61 +96,127 @@ func TestWorkspaceTabsListShowsTabsInOrderWithProblems(t *testing.T) {
 	}
 }
 
+func getTab(handler http.Handler, method, path, host string, header http.Header) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, "http://127.0.0.1:6687"+path, nil)
+	if host != "" {
+		request.Host = host
+	}
+	for name, values := range header {
+		request.Header[name] = values
+	}
+	result := httptest.NewRecorder()
+	handler.ServeHTTP(result, request)
+	return result
+}
+
+// assertSealed checks the headers every tab response carries; a served file
+// may load only from its own folder, an error page runs nothing.
+func assertSealed(t *testing.T, path string, result *httptest.ResponseRecorder, folder string) {
+	t.Helper()
+	policy := result.Header().Get("Content-Security-Policy")
+	want := []string{"default-src 'none'", "frame-ancestors 'self'"}
+	if folder == "" {
+		want = append(want, "sandbox;")
+	} else {
+		want = append(want, "sandbox allow-scripts;", "connect-src 'none'", "form-action 'none'", "frame-src 'none'",
+			"script-src "+folder+" 'unsafe-inline'", "img-src "+folder+" data:")
+	}
+	for _, part := range want {
+		if !strings.Contains(policy, part) {
+			t.Errorf("%s policy %q lacks %q", path, policy, part)
+		}
+	}
+	if strings.Contains(policy, "allow-same-origin") || strings.Contains(policy, "'self' 'unsafe-inline'") ||
+		result.Header().Get("X-Content-Type-Options") != "nosniff" || result.Header().Get("Cache-Control") != "no-store" ||
+		result.Header().Get("X-DNS-Prefetch-Control") != "off" {
+		t.Errorf("%s headers = %v", path, result.Header())
+	}
+}
+
 func TestWorkspaceTabFilesAreSealedAndConfined(t *testing.T) {
 	handler, _ := tabsFixture(t)
-	get := func(path string, host string) *httptest.ResponseRecorder {
-		request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1"+path, nil)
-		if host != "" {
-			request.Host = host
-		}
-		result := httptest.NewRecorder()
-		handler.ServeHTTP(result, request)
-		return result
-	}
-	sealed := func(path string, result *httptest.ResponseRecorder) {
-		t.Helper()
-		policy := result.Header().Get("Content-Security-Policy")
-		for _, want := range []string{"sandbox allow-scripts;", "connect-src 'none'", "frame-ancestors 'self'", "form-action 'none'"} {
-			if !strings.Contains(policy, want) {
-				t.Errorf("%s policy %q lacks %q", path, policy, want)
-			}
-		}
-		if strings.Contains(policy, "allow-same-origin") || result.Header().Get("X-Content-Type-Options") != "nosniff" || result.Header().Get("Cache-Control") != "no-store" {
-			t.Errorf("%s headers = %v", path, result.Header())
-		}
-	}
+	reports := "http://127.0.0.1:6687/workspace-tabs/finance/reports/"
 	for path, want := range map[string]string{
 		"/workspace-tabs/finance/reports/":           "text/html; charset=utf-8|<p>Reports</p>",
 		"/workspace-tabs/finance/reports/index.html": "text/html; charset=utf-8|<p>Reports</p>",
 		"/workspace-tabs/finance/reports/app.js":     "text/javascript; charset=utf-8|window.ran = true",
 	} {
-		result := get(path, "")
+		result := getTab(handler, http.MethodGet, path, "", nil)
 		contentType, body, _ := strings.Cut(want, "|")
 		if result.Code != http.StatusOK || result.Header().Get("Content-Type") != contentType || result.Body.String() != body {
 			t.Errorf("%s status=%d type=%q body=%q", path, result.Code, result.Header().Get("Content-Type"), result.Body.String())
 		}
-		sealed(path, result)
+		assertSealed(t, path, result, reports)
 	}
-	if result := get("/workspace-tabs/finance/reports", ""); result.Code != http.StatusFound || result.Header().Get("Location") != "/workspace-tabs/finance/reports/" {
+	head := getTab(handler, http.MethodHead, "/workspace-tabs/finance/reports/app.js", "", nil)
+	partial := getTab(handler, http.MethodGet, "/workspace-tabs/finance/reports/app.js", "", http.Header{"Range": {"bytes=0-5"}})
+	if head.Code != http.StatusOK || partial.Code != http.StatusPartialContent || partial.Body.String() != "window" {
+		t.Errorf("HEAD status=%d, Range status=%d body=%q", head.Code, partial.Code, partial.Body.String())
+	}
+	assertSealed(t, "HEAD", head, reports)
+	assertSealed(t, "Range", partial, reports)
+	if result := getTab(handler, http.MethodGet, "/workspace-tabs/finance/reports", "", nil); result.Code != http.StatusFound || result.Header().Get("Location") != "/workspace-tabs/finance/reports/" {
 		t.Errorf("no trailing slash status=%d location=%q", result.Code, result.Header().Get("Location"))
 	}
 	for path, want := range map[string]string{
-		"/workspace-tabs/finance/reports/.env":       "not part of the tab",
-		"/workspace-tabs/finance/reports/escape.txt": "not part of the tab",
-		"/workspace-tabs/finance/reports/missing.js": "not part of the tab",
-		"/workspace-tabs/finance/missing/":           "not part of the tab",
-		"/workspace-tabs/finance/broken/":            `This tab has a problem: tab.json is not valid: json: unknown field "extra"`,
-		"/workspace-tabs/archived/reports/":          "not available",
-		"/workspace-tabs/general/reports/":           "not part of the tab",
+		"/workspace-tabs/finance/reports/.env":                     "not part of the tab",
+		"/workspace-tabs/finance/reports/escape.txt":               "not part of the tab",
+		"/workspace-tabs/finance/reports/missing.js":               "not part of the tab",
+		"/workspace-tabs/finance/reports/..%2F..%2Fsecret.txt":     "not part of the tab",
+		"/workspace-tabs/finance/reports/%2e%2e/%2e%2e/secret.txt": "not part of the tab",
+		"/workspace-tabs/finance/missing/":                         "not part of the tab",
+		"/workspace-tabs/finance/broken/":                          `This tab has a problem: tab.json is not valid: json: unknown field "extra"`,
+		"/workspace-tabs/archived/reports/":                        "not available",
+		"/workspace-tabs/general/reports/":                         "not part of the tab",
+		"/workspace-tabs/fin%2Fance/reports/":                      "not part of the tab",
 	} {
-		result := get(path, "")
+		result := getTab(handler, http.MethodGet, path, "", nil)
 		if result.Code != http.StatusNotFound || !strings.Contains(result.Body.String(), want) || strings.Contains(result.Body.String(), "outside") {
 			t.Errorf("%s status=%d body=%q", path, result.Code, result.Body.String())
 		}
-		sealed(path, result)
+		assertSealed(t, path, result, "")
 	}
-	if result := get("/workspace-tabs/finance/reports/", "evil.example:6687"); result.Code != http.StatusForbidden {
-		t.Errorf("foreign host status=%d", result.Code)
+	for _, host := range []string{"evil.example:6687", "127.0.0.1:6687;script-src *", "localhost:x"} {
+		if result := getTab(handler, http.MethodGet, "/workspace-tabs/finance/reports/", host, nil); result.Code != http.StatusForbidden {
+			t.Errorf("host %q status=%d", host, result.Code)
+		}
+	}
+}
+
+// The trailing-slash redirect builds its Location only from checked IDs, so
+// Evie's origin cannot bounce a browser to another site.
+func TestWorkspaceTabRedirectStaysOnEvie(t *testing.T) {
+	handler, _ := tabsFixture(t)
+	for _, path := range []string{"/workspace-tabs/..%2F..%2F%5Cevil.com/x", "/workspace-tabs/finance/%5Cevil.com", "/workspace-tabs/a%2F%2Fevil.com/reports"} {
+		result := getTab(handler, http.MethodGet, path, "", nil)
+		if result.Code == http.StatusFound || result.Header().Get("Location") != "" {
+			t.Errorf("%s status=%d location=%q", path, result.Code, result.Header().Get("Location"))
+		}
+	}
+}
+
+func TestWorkspaceTabsListRefusesAnOverfullTabsFolder(t *testing.T) {
+	folder := t.TempDir()
+	for i := range 257 {
+		if err := os.MkdirAll(filepath.Join(folder, workspacetabs.Dir, fmt.Sprintf("t%03d", i)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := NewContextServer(nil, nil, nil, &fakeTabsController{folders: map[memory.WorkspaceID]string{"crowded": folder}}).Handler()
+	result := httptest.NewRecorder()
+	handler.ServeHTTP(result, managementRequest("/api/workspaces/tabs", `{"workspaceId":"crowded"}`))
+	if result.Code != http.StatusUnprocessableEntity || !strings.Contains(result.Body.String(), "over 256 entries") {
+		t.Fatalf("status=%d body=%s", result.Code, result.Body.String())
+	}
+}
+
+// Evie's own page allows frames only from itself, so a tab cannot navigate
+// its frame to another site.
+func TestAppShellFramesOnlyEvie(t *testing.T) {
+	handler, _ := tabsFixture(t)
+	result := getTab(handler, http.MethodGet, "/", "", nil)
+	if result.Code != http.StatusOK || result.Header().Get("Content-Security-Policy") != "frame-src 'self'" {
+		t.Fatalf("status=%d policy=%q", result.Code, result.Header().Get("Content-Security-Policy"))
 	}
 }
 
@@ -164,5 +230,56 @@ func TestManagementRoutesRefuseOpaqueOriginRequests(t *testing.T) {
 	handler.ServeHTTP(result, request)
 	if result.Code != http.StatusForbidden || !strings.Contains(result.Body.String(), "cross-origin request rejected") {
 		t.Fatalf("opaque origin status=%d body=%s", result.Code, result.Body.String())
+	}
+}
+
+// storeTabsController reads Workspace folders from a real store.
+type storeTabsController struct {
+	fakeContextSessionController
+	store *eviedb.Store
+}
+
+func (c *storeTabsController) ActiveWorkspaceFolder(ctx context.Context, id memory.WorkspaceID) (string, error) {
+	return c.store.ActiveWorkspaceFolder(ctx, id)
+}
+
+func TestWorkspaceTabsAgainstARealStore(t *testing.T) {
+	ctx := context.Background()
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	workspace, err := store.RegisterWorkspace(ctx, "Finance")
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := t.TempDir()
+	writeTabFiles(t, folder, "reports", map[string]string{"tab.json": `{"title":"Reports"}`, "index.html": "<p>Reports</p>"})
+	if _, err := store.SetWorkspaceFolder(ctx, workspace.ID, 0, folder); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewContextServer(nil, nil, nil, &storeTabsController{store: store}).Handler()
+	list := func() *httptest.ResponseRecorder {
+		result := httptest.NewRecorder()
+		handler.ServeHTTP(result, managementRequest("/api/workspaces/tabs", `{"workspaceId":"`+string(workspace.ID)+`"}`))
+		return result
+	}
+	page := "/workspace-tabs/" + string(workspace.ID) + "/reports/"
+	if result := list(); result.Code != http.StatusOK || !strings.Contains(result.Body.String(), `"title":"Reports"`) {
+		t.Fatalf("list status=%d body=%s", result.Code, result.Body.String())
+	}
+	if result := getTab(handler, http.MethodGet, page, "", nil); result.Code != http.StatusOK || result.Body.String() != "<p>Reports</p>" {
+		t.Fatalf("page status=%d body=%q", result.Code, result.Body.String())
+	}
+	if _, err := store.ArchiveWorkspace(ctx, workspace.ID); err != nil {
+		t.Fatal(err)
+	}
+	if result := list(); result.Code != http.StatusNotFound {
+		t.Fatalf("archived list status=%d", result.Code)
+	}
+	if result := getTab(handler, http.MethodGet, page, "", nil); result.Code != http.StatusNotFound {
+		t.Fatalf("archived page status=%d", result.Code)
 	}
 }

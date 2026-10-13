@@ -1,7 +1,9 @@
 // Package workspacetabs reads a Workspace's own tabs from its folder
 // (workspace-tabs.spec.md). Each tab is a folder .evie/tabs/<tab-id>/ that
 // holds tab.json and index.html. Every read goes through an os.Root opened
-// on the tab folder, so no path, ".." or symlink can reach outside it.
+// on the tab folder, so no path or ".." reaches outside it, and only regular
+// files reached without a link are read: a link could otherwise serve a
+// dotfile, and a pipe would hang the reader.
 package workspacetabs
 
 import (
@@ -17,6 +19,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"syscall"
 	"unicode/utf8"
 )
 
@@ -25,11 +28,14 @@ const (
 	Dir = ".evie/tabs"
 	// MaxTabs is how many tabs one Workspace shows; later ones are problems.
 	MaxTabs = 12
-	// MaxTabBytes and MaxTabFiles bound one tab folder.
+	// MaxTabBytes and MaxTabFiles bound one tab folder; MaxTabFiles counts
+	// folders inside it too.
 	MaxTabBytes = 5 << 20
 	MaxTabFiles = 200
-	// maxFolders bounds how many tab folders are examined at all.
+	// maxFolders bounds how many tab folders are examined at all, and
+	// maxEntries how many entries .evie/tabs may hold.
 	maxFolders = 32
+	maxEntries = 256
 	// maxManifestBytes bounds tab.json.
 	maxManifestBytes = 16 << 10
 	maxTitleRunes    = 24
@@ -39,9 +45,14 @@ var (
 	ErrNotFound = errors.New("workspace tab not found")
 	ErrInvalid  = errors.New("workspace tab has a problem")
 	ErrPath     = errors.New("workspace tab path is not allowed")
+	// ErrTooMany is a .evie/tabs folder with more than maxEntries entries.
+	ErrTooMany = fmt.Errorf(".evie/tabs holds over %d entries", maxEntries)
 )
 
 var tabIDPattern = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+
+// ValidID is whether id can name a tab folder.
+func ValidID(id string) bool { return tabIDPattern.MatchString(id) }
 
 // Tab is one tab as the header and Settings → Tabs show it. A tab with a
 // Problem is listed but never shown or served.
@@ -125,6 +136,8 @@ func Open(folder, id, rel string) (*os.File, fs.FileInfo, error) {
 	if !allowedPath(rel) {
 		return nil, nil, ErrPath
 	}
+	// Open lists every tab so a 13th or broken tab is refused exactly as
+	// the header leaves it out. Folder and entry limits bound that work.
 	tabs, err := List(folder)
 	if err != nil {
 		return nil, nil, err
@@ -141,12 +154,26 @@ func Open(folder, id, rel string) (*os.File, fs.FileInfo, error) {
 		return nil, nil, ErrNotFound
 	}
 	defer root.Close()
-	file, err := root.Open(rel)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil, ErrNotFound
+	return openRegular(root, rel)
+}
+
+// openRegular opens rel only if it and every folder on the way are reached
+// without a link and it is a regular file. The open does not block, so a
+// pipe swapped in after the checks cannot hang the reader.
+func openRegular(root *os.Root, rel string) (*os.File, fs.FileInfo, error) {
+	segments := strings.Split(rel, "/")
+	for i := range segments {
+		info, err := root.Lstat(strings.Join(segments[:i+1], "/"))
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil, ErrNotFound
+		}
+		last := i == len(segments)-1
+		if err != nil || info.Mode()&fs.ModeSymlink != 0 || (last && !info.Mode().IsRegular()) || (!last && !info.IsDir()) {
+			return nil, nil, ErrPath
+		}
 	}
+	file, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		// os.Root refuses a path that escapes the tab folder.
 		return nil, nil, ErrPath
 	}
 	info, err := file.Stat()
@@ -192,13 +219,23 @@ func openTab(folder, id string) (*os.Root, error) {
 	return tabs.OpenRoot(id)
 }
 
+// readDir reads at most maxEntries entries, sorted by name so which tab
+// folders are examined does not depend on the filesystem's order.
 func readDir(root *os.Root) ([]fs.DirEntry, error) {
 	dir, err := root.Open(".")
 	if err != nil {
 		return nil, err
 	}
 	defer dir.Close()
-	return dir.ReadDir(-1)
+	entries, err := dir.ReadDir(maxEntries + 1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	if len(entries) > maxEntries {
+		return nil, ErrTooMany
+	}
+	slices.SortFunc(entries, func(a, b fs.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
+	return entries, nil
 }
 
 // inspect validates one tab folder: its name, its manifest, its index.html
@@ -221,8 +258,8 @@ func inspect(tabs *os.Root, name string) Tab {
 		return tab
 	}
 	tab.Title, tab.Order = strings.TrimSpace(*m.Title), m.Order
-	if info, err := root.Stat("index.html"); err != nil || !info.Mode().IsRegular() {
-		tab.Problem = "index.html is missing"
+	if info, err := root.Lstat("index.html"); err != nil || !info.Mode().IsRegular() {
+		tab.Problem = "index.html is missing or not a regular file"
 		return tab
 	}
 	tab.Problem = checkSize(root)
@@ -231,9 +268,12 @@ func inspect(tabs *os.Root, name string) Tab {
 
 func readManifest(root *os.Root) (manifest, string) {
 	var m manifest
-	file, err := root.Open("tab.json")
-	if err != nil {
+	file, _, err := openRegular(root, "tab.json")
+	if errors.Is(err, ErrNotFound) {
 		return m, "tab.json is missing"
+	}
+	if err != nil {
+		return m, "tab.json must be a regular file"
 	}
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxManifestBytes+1))
@@ -265,15 +305,15 @@ func checkSize(root *os.Root) string {
 	files, size := 0, int64(0)
 	over := errors.New("over")
 	problem := ""
-	err := fs.WalkDir(root.FS(), ".", func(_ string, entry fs.DirEntry, err error) error {
+	err := fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() {
+		if name == "." {
 			return nil
 		}
 		if files++; files > MaxTabFiles {
-			problem = fmt.Sprintf("the tab folder has over %d files", MaxTabFiles)
+			problem = fmt.Sprintf("the tab folder has over %d files and folders", MaxTabFiles)
 			return over
 		}
 		if info, err := entry.Info(); err == nil && info.Mode().IsRegular() {
