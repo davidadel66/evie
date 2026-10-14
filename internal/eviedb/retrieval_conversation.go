@@ -70,21 +70,6 @@ func loadConversationEvidence(ctx context.Context, q semanticInspectionQueryer, 
 	return e, true, nil
 }
 
-// A Source Link is the durable association, including when several Claims
-// share it. Suppression is the union of exact locators; retirement never asks
-// a model to guess which characters should disappear.
-func eligibleConversationSpans(ctx context.Context, q semanticInspectionQueryer, e conversationEvidence) ([]evidenceSpan, error) {
-	spans, err := conversationReadSpans(ctx, q, e, memory.RetrievalCurrent, time.Time{})
-	if err != nil {
-		return nil, err
-	}
-	result := make([]evidenceSpan, 0, len(spans))
-	for _, span := range spans {
-		result = append(result, span.evidenceSpan)
-	}
-	return result, nil
-}
-
 func conversationLocatorSpan(e conversationEvidence, locator memory.EvidenceLocator) (evidenceSpan, error) {
 	span := evidenceSpan{0, len(e.content)}
 	if locator.EventID != e.id || locator.EventPart != memory.EvidenceContent {

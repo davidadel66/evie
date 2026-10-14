@@ -135,10 +135,6 @@ func OpenDBContext(ctx context.Context) (*sql.DB, error) {
 	return openDBAtContext(ctx, filepath.Join(dir, "finance.db"))
 }
 
-func OpenDBReadOnly() (*sql.DB, error) {
-	return OpenDBReadOnlyContext(context.Background())
-}
-
 func OpenDBReadOnlyContext(ctx context.Context) (*sql.DB, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

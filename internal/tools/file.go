@@ -452,13 +452,9 @@ func executePreparedFileEdit(ctx context.Context, edit preparedFileEdit) (string
 	return fmt.Sprintf("OK — replaced 1 occurrence in %s at line %d\n", edit.path, edit.line), nil
 }
 
-// prepareFileEdit owns every read-side rule shared by preview and execution.
-// Keeping one preparation path prevents the UI from approving bytes produced
-// by subtly different validation or line-number stripping logic.
-func prepareFileEdit(args string) (preparedFileEdit, error) {
-	return prepareFileEditContext(context.Background(), args)
-}
-
+// prepareFileEditContext owns every read-side rule shared by preview and
+// execution. Keeping one preparation path prevents the UI from approving bytes
+// produced by subtly different validation or line-number stripping logic.
 func prepareFileEditContext(ctx context.Context, args string) (preparedFileEdit, error) {
 	var params struct {
 		Path      string `json:"path"`

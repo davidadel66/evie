@@ -181,8 +181,6 @@ func buildReport(summary string) string {
 	return "## Summary\n" + summary + "\n\n## Details\nparser.go added; main.go calls it.\n\n## Limitations\n- Only the happy path is tested.\n"
 }
 
-func toolNamesOf(r openrouter.ChatRequest) []string { return toolNames(r) }
-
 // Stage 11 through the primary acceptance seam: the parent model delegates
 // a code change on its Task through the real Plugin, dispatcher and agent
 // loop. The build child claims and updates its Task, writes and edits files

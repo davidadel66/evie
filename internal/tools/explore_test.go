@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/davidadel66/evie/internal/delegation"
 )
 
 func TestExploreReadFileStaysInsideTheWorkerRoot(t *testing.T) {
@@ -115,7 +117,7 @@ func TestExploreToolsetBindsARootWithoutChangingSchemas(t *testing.T) {
 	for _, schema := range bound.Schemas() {
 		names = append(names, schema.Function.Name)
 	}
-	if !reflect.DeepEqual(names, ExploreToolNames) {
+	if !reflect.DeepEqual(names, delegation.ExploreToolNames) {
 		t.Fatalf("explore tools = %v", names)
 	}
 	for _, tool := range bound.tools {

@@ -2,7 +2,6 @@ package plugins
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/davidadel66/evie/internal/finance"
@@ -96,12 +95,6 @@ func readReviewCandidates(ctx context.Context, req WorkflowReadRequest) (any, er
 		categories = append(categories, c)
 	}
 	return map[string]any{"candidates": candidates, "remaining": int64(report.Remaining), "categories": categories}, nil
-}
-
-// reviewJSON is a test-friendly rendering of a read result.
-func reviewJSON(v any) string {
-	data, _ := json.Marshal(v)
-	return string(data)
 }
 
 // FinanceApplyReviewCapabilityID is the review workflow's one effect.

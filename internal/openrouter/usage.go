@@ -53,10 +53,6 @@ func parseUsage(data []byte, responses bool) (*TokenUsage, bool, error) {
 	return usage, true, err
 }
 
-func normalizeUsage(data json.RawMessage) (*TokenUsage, error) {
-	return normalizeUsageFields(data, false)
-}
-
 func normalizeUsageFields(data json.RawMessage, responses bool) (*TokenUsage, error) {
 	members, object, err := parseJSONObject(data)
 	if err != nil {

@@ -24,42 +24,10 @@ import (
 	"github.com/davidadel66/evie/internal/tools"
 )
 
-// Serve runs the web frontend until the process exits. Loopback only:
-// there is no auth story yet, and off loopback the approval gate stops
-// being a defense (docs/decisions.md) — so a non-loopback EVIE_ADDR
-// is refused outright rather than warned about.
-func Serve(session *agent.Session) error {
-	return serveServer(NewServer(session))
-}
-
-// ServeManaged keeps Kernel-owned management available even when a degraded
-// startup could not compose a chat session.
-func ServeManaged(session *agent.Session, manager *plugins.Manager, receipts ReceiptInspector) error {
-	return serveServer(NewManagedServer(session, manager, receipts))
-}
-
-func ServeContextManaged(
-	manager *plugins.Manager,
-	receipts ReceiptInspector,
-	contextSessions ContextSessionController,
-	semanticMemory agent.SemanticGraphMemory,
-	databaseInspector DatabaseInspector,
-) error {
-	return serveServer(NewContextDataServer(nil, manager, receipts, contextSessions, semanticMemory, databaseInspector))
-}
-
-func serveServer(server *Server) error {
-	defer server.Close()
-	addr, err := listenAddr()
-	if err != nil {
-		return err
-	}
-	log.Printf("evie serve listening on http://%s", addr)
-	return http.ListenAndServe(addr, server.Handler())
-}
-
 // listenAddr resolves EVIE_ADDR (default 127.0.0.1:6687) and enforces
-// the loopback-only rule.
+// the loopback-only rule: there is no auth story yet, and off loopback the
+// approval gate stops being a defense (docs/decisions.md) — so a
+// non-loopback EVIE_ADDR is refused outright rather than warned about.
 func listenAddr() (string, error) {
 	addr := os.Getenv("EVIE_ADDR")
 	if addr == "" {

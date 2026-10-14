@@ -50,12 +50,6 @@ func (c *stoppableClient) ChatStream(ctx context.Context, _ openrouter.ChatReque
 	return openrouter.ChatResponse{}, ctx.Err()
 }
 
-func (c *stoppableClient) callCount() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.calls
-}
-
 // countingTurnOwner records lease acquisition and release so a stop can be
 // shown to give the session back.
 type countingTurnOwner struct {

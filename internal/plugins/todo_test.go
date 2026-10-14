@@ -519,16 +519,3 @@ func executeTodoToolContext(t *testing.T, ctx context.Context, toolset tools.Too
 	}
 	return todoToolOutcome{Content: message.Content, IsErr: isErr}
 }
-
-func todoSchemasNamed(toolset tools.Toolset, names ...string) []openrouter.Tool {
-	selected := make([]openrouter.Tool, 0, len(names))
-	for _, name := range names {
-		for _, schema := range toolset.Schemas() {
-			if schema.Function.Name == name {
-				selected = append(selected, schema)
-				break
-			}
-		}
-	}
-	return selected
-}

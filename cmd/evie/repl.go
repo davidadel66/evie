@@ -474,16 +474,12 @@ func createGlobalREPLSession(
 	return session, nil
 }
 
-// smoothPrinter decouples token arrival from display so bursty network
+// smoothPrinterTo decouples token arrival from display so bursty network
 // chunks render as steady typing. Deltas go into a channel; a printer
 // goroutine drains them into a buffer and prints a few characters per
 // tick — more when the buffer is deep, so it catches up instead of
 // lagging. Call the returned onDelta from the stream, then done() to
 // flush the tail and stop the printer.
-func smoothPrinter() (onDelta func(string), done func()) {
-	return smoothPrinterTo(os.Stdout)
-}
-
 func smoothPrinterTo(out io.Writer) (onDelta func(string), done func()) {
 	ch := make(chan string, 64)
 	finished := make(chan struct{})
@@ -625,16 +621,8 @@ func (r *replEvents) ResponseDiscarded(_ agent.DiscardReason, message string) {
 	_, _ = fmt.Fprintln(r.writer(), message)
 }
 
-// runREPL is the outer loop: one prompt, one Send, repeat. Turn failures
-// print and return to the prompt rather than killing the session.
-func runREPL(session *agent.Session, scanner *bufio.Scanner) {
-	runREPLContext(context.Background(), session, scanner)
-}
-
-func runREPLWithMemory(session *agent.Session, scanner *bufio.Scanner, semantic agent.SemanticMemory) {
-	runREPLContextIOWithMemory(context.Background(), session, scanner, os.Stdout, semantic)
-}
-
+// runREPLContext is the outer loop: one prompt, one Send, repeat. Turn
+// failures print and return to the prompt rather than killing the session.
 func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.Scanner) {
 	runREPLContextIO(ctx, session, scanner, os.Stdout)
 }
