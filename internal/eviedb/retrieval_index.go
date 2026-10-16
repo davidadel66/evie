@@ -58,8 +58,10 @@ END;
 `
 
 func ensureRetrievalSchema(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, retrievalSchema+conversationRetrievalSchema+denseRetrievalSchema)
-	return err
+	if _, err := db.ExecContext(ctx, retrievalSchema+conversationRetrievalSchema+retrievalRowsSchema+denseRetrievalSchema); err != nil {
+		return err
+	}
+	return reconcileRetrievalRows(ctx, db)
 }
 
 func memoryIndexCoverage(ctx context.Context, q semanticInspectionQueryer) (memory.RetrievalCoverage, error) {
@@ -163,7 +165,7 @@ func (s *Store) refreshAcceptedMemoryIndex(ctx context.Context, limit int) (memo
 }
 
 func (s *Store) refreshMemoryClaim(ctx context.Context, q *sql.Conn, id memory.SemanticID) error {
-	if _, err := q.ExecContext(ctx, `DELETE FROM memory_retrieval_fts_v3 WHERE generation=? AND claim_id=?`, memoryIndexGeneration, id); err != nil {
+	if err := acceptedIndexRows.remove(ctx, q, string(id)); err != nil {
 		return err
 	}
 	claim, err := loadSemanticClaim(ctx, q, id)
@@ -231,7 +233,7 @@ func (s *Store) refreshMemoryClaim(ctx context.Context, q *sql.Conn, id memory.S
 	if len(body) > 16384 || compilerHasSecret(body) {
 		return nil
 	}
-	_, err = q.ExecContext(ctx, `INSERT INTO memory_retrieval_fts_v3(generation,claim_id,scope_key,body) VALUES(?,?,?,?)`, memoryIndexGeneration, id, claim.ScopeKey, body)
+	err = acceptedIndexRows.insert(ctx, retrievalConn{q}, string(id), `INSERT INTO memory_retrieval_fts_v3(generation,claim_id,scope_key,body) VALUES(?,?,?,?)`, memoryIndexGeneration, id, claim.ScopeKey, body)
 	if err != nil {
 		return fmt.Errorf("refresh accepted memory projection: %w", err)
 	}
