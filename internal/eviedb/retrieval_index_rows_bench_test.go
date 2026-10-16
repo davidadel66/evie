@@ -133,3 +133,38 @@ func BenchmarkOpenIndexedDatabase(b *testing.B) {
 		db.Close()
 	}
 }
+
+// BenchmarkIdleMemoryIndexRefresh times the maintenance loop's once-a-second
+// tick when every index is current and there is nothing to do.
+func BenchmarkIdleMemoryIndexRefresh(b *testing.B) {
+	store := conversationIndexCorpus(b, 50000)
+	ctx := context.Background()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := store.RefreshMemoryIndex(ctx, 256); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkConversationSearch times one conversation search over the same
+// 50,000 messages.
+func BenchmarkConversationSearch(b *testing.B) {
+	store := conversationIndexCorpus(b, 50000)
+	ctx := context.Background()
+	reader, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		b.Fatal(err)
+	}
+	query := memory.RetrievalQuery{Kind: memory.RetrievalConversationExcerpt, Text: "dinner budget garden", Limit: 2, MaxBytes: 6 * 1024}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := store.SearchMemory(ctx, reader.ScopeContext(), query)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if len(result.Evidence) == 0 {
+			b.Fatalf("search found nothing: %s", result.Status)
+		}
+	}
+}

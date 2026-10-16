@@ -64,12 +64,14 @@ func ensureRetrievalSchema(ctx context.Context, db *sql.DB) error {
 	return reconcileRetrievalRows(ctx, db)
 }
 
+// memoryIndexCoverage counts indexed rows in the lookup, as
+// conversationIndexCoverage does.
 func memoryIndexCoverage(ctx context.Context, q semanticInspectionQueryer) (memory.RetrievalCoverage, error) {
 	c := memory.RetrievalCoverage{Generation: memoryIndexGeneration}
 	err := q.QueryRowContext(ctx, `SELECT state,
  (SELECT count(*) FROM semantic_claims WHERE rowid>g.checkpoint)
- +(SELECT count(*) FROM memory_retrieval_dirty d JOIN semantic_claims c ON c.claim_id=d.claim_id WHERE c.rowid<=g.checkpoint),
- (SELECT count(*) FROM memory_retrieval_fts_v3 WHERE generation=g.generation)
+ +(SELECT count(*) FROM memory_retrieval_dirty d CROSS JOIN semantic_claims c ON c.claim_id=d.claim_id WHERE c.rowid<=g.checkpoint),
+ (SELECT count(*) FROM memory_retrieval_fts_v3_rows)
  FROM memory_retrieval_generations g WHERE generation=?`, memoryIndexGeneration).Scan(&c.State, &c.Pending, &c.Indexed)
 	return c, err
 }

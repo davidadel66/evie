@@ -211,3 +211,68 @@ func TestOpeningRepairsTheIndexLookup(t *testing.T) {
 		}
 	})
 }
+
+// Coverage counts the lookups and the dirty queues, never the FTS tables, so
+// its numbers must keep matching the indexes through appends, refreshes and
+// removals.
+func TestIndexCoverageMatchesTheIndexes(t *testing.T) {
+	ctx := context.Background()
+	store := openIndexedStore(t, filepath.Join(t.TempDir(), "evie.db"))
+	project, err := store.RegisterProject(ctx, "Garden", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	inProject, err := store.CreateProjectSession(ctx, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	global, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireConversationCoverage := func(t *testing.T, pending, indexed int) {
+		t.Helper()
+		coverage, err := conversationIndexCoverage(ctx, store.db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if actual := countIndexRows(t, store.db, `SELECT count(*) FROM memory_retrieval_event_fts_v4`); actual != indexed {
+			t.Fatalf("index holds %d rows, want %d", actual, indexed)
+		}
+		if coverage.Pending != int64(pending) || coverage.Indexed != int64(indexed) {
+			t.Fatalf("coverage pending=%d indexed=%d, want pending=%d indexed=%d", coverage.Pending, coverage.Indexed, pending, indexed)
+		}
+	}
+
+	appendIndexedMessages(t, store, inProject.ID, 0, 6)
+	appendIndexedMessages(t, store, global.ID, 6, 4)
+	requireConversationCoverage(t, 0, 10)
+
+	if _, err := store.db.Exec(`INSERT OR IGNORE INTO memory_retrieval_event_dirty
+ SELECT id FROM events WHERE event_type IN ('user_message','assistant_message') ORDER BY rowid LIMIT 3`); err != nil {
+		t.Fatal(err)
+	}
+	requireConversationCoverage(t, 3, 10)
+	refreshUntilActive(t, store)
+	requireConversationCoverage(t, 0, 10)
+
+	if _, err := store.db.Exec(`UPDATE projects SET archived=1 WHERE id=?`, project.ID); err != nil {
+		t.Fatal(err)
+	}
+	requireConversationCoverage(t, 6, 10)
+	refreshUntilActive(t, store)
+	requireConversationCoverage(t, 0, 4)
+
+	proposal := rememberLiteralAt(t, ctx, store, global, "Remember that my home city is Lisbon.", "home_city", text("Lisbon"), "71500000-0000-4000-8000-0000000000a2")
+	refreshUntilActive(t, store)
+	if _, err := store.db.Exec(`INSERT OR IGNORE INTO memory_retrieval_dirty VALUES(?)`, proposal.ClaimID); err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := memoryIndexCoverage(ctx, store.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actual := countIndexRows(t, store.db, `SELECT count(*) FROM memory_retrieval_fts_v3`); accepted.Pending != 1 || accepted.Indexed != int64(actual) || actual != 1 {
+		t.Fatalf("accepted coverage pending=%d indexed=%d, want pending=1 indexed=1 (index holds %d)", accepted.Pending, accepted.Indexed, actual)
+	}
+}

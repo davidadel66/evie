@@ -44,12 +44,17 @@ CREATE TRIGGER IF NOT EXISTS memory_retrieval_event_project_changed AFTER UPDATE
 END;
 `
 
+// conversationIndexCoverage counts indexed rows in the lookup, which holds one
+// small entry per FTS row: counting the FTS table itself reads every indexed
+// message, and every search and maintenance tick reads coverage. CROSS JOIN
+// keeps the dirty queue, usually empty, as the outer loop; left to itself the
+// planner walks every event below the checkpoint and probes the queue.
 func conversationIndexCoverage(ctx context.Context, q semanticInspectionQueryer) (memory.RetrievalCoverage, error) {
 	c := memory.RetrievalCoverage{Generation: conversationIndexGeneration}
 	err := q.QueryRowContext(ctx, `SELECT state,
  (SELECT count(*) FROM events WHERE rowid>g.checkpoint)
- +(SELECT count(*) FROM memory_retrieval_event_dirty d JOIN events e ON e.id=d.event_id WHERE e.rowid<=g.checkpoint),
- (SELECT count(*) FROM memory_retrieval_event_fts_v4 WHERE generation=g.generation)
+ +(SELECT count(*) FROM memory_retrieval_event_dirty d CROSS JOIN events e ON e.id=d.event_id WHERE e.rowid<=g.checkpoint),
+ (SELECT count(*) FROM memory_retrieval_event_fts_v4_rows)
  FROM memory_retrieval_generations g WHERE generation=?`, conversationIndexGeneration).Scan(&c.State, &c.Pending, &c.Indexed)
 	return c, err
 }
