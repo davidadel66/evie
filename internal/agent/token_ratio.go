@@ -132,6 +132,12 @@ func contextTokenRatio(
 	if calibrated, ok := estimator.(tokenRatioEstimator); ok {
 		ratio = calibrated.bytesPerToken(events, canonicalModel)
 	}
+	return rejectionBoundedRatio(ratio, hardWindowTokens, outputReserveTokens, rejectedRequestBytes)
+}
+
+// rejectionBoundedRatio caps a calibrated ratio at the bound a rejected
+// request in this turn proved.
+func rejectionBoundedRatio(ratio tokenRatio, hardWindowTokens, outputReserveTokens, rejectedRequestBytes int64) tokenRatio {
 	if rejectedRequestBytes > 0 {
 		bound := rejectionBytesPerTokenMilli(rejectedRequestBytes, hardWindowTokens, outputReserveTokens)
 		if ratio.milli == 0 || bound < ratio.milli {

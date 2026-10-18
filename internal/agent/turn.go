@@ -208,7 +208,13 @@ func (s *Session) runOwnedTurn(
 		if err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("load durable history: %w", err))
 		}
-		summary, _, err := reconstructCompactionChain(events)
+		// Validating the history once serves the compaction chain and every
+		// composition pass of this request.
+		history, err := newRequestHistory(events)
+		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("reconstruct durable compaction chain: %w", err))
+		}
+		summary, _, err := validatedCompactionChain(events)
 		if err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("reconstruct durable compaction chain: %w", err))
 		}
@@ -237,6 +243,7 @@ func (s *Session) runOwnedTurn(
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: modelTools.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,
 			Continuation: continuation, RejectedRequestBytes: rejectedRequestBytes,
+			history: history,
 		}
 		rejectedRequestBytes = 0
 		// The last permitted model response is requested without tools, so

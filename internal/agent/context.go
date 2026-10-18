@@ -115,6 +115,9 @@ type ContextComposeInput struct {
 	// durable, so history validation still checks earlier snapshots'
 	// placeholders against stored content.
 	toolResultReductions map[memory.EventID]string
+	// history, set by a turn, carries what was derived once from Events for
+	// every composition pass of the request.
+	history *requestHistory
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -256,11 +259,11 @@ func (c *ContextComposer) prepare(
 		return contextPreparation{}, errors.New("context summary identity and content must be present")
 	}
 	profile := input.Profile.Diagnostics()
-	turnCompactions, err := durableTurnCompactions(input.Events)
+	turnCompactions, err := input.history.compactions(input.Events)
 	if err != nil {
 		return contextPreparation{}, err
 	}
-	ratio := contextTokenRatio(c.estimator, input.Events, profileCanonicalModel(profile),
+	ratio := rejectionBoundedRatio(input.history.calibratedRatio(c.estimator, input.Events, profileCanonicalModel(profile)),
 		profile.HardWindowTokens, profile.OutputReserveTokens, input.RejectedRequestBytes)
 	usable, err := usableInputBytes(profile, ratio)
 	if err != nil {
