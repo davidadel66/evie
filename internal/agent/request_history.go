@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -72,4 +73,28 @@ func (h *requestHistory) calibratedRatio(estimator RequestEstimator, events []me
 		panic("agent: reused token ratio differs from the history's")
 	}
 	return ratio
+}
+
+// turnEvents is the durable history for a turn's next request. The turn keeps
+// what it loaded and, when the history can list them, reads only the events
+// committed since; the first request, or a history without a tail, loads it
+// whole. The result never shares spare capacity with loaded, so an append to
+// it cannot write into what the turn keeps.
+func (s *Session) turnEvents(ctx context.Context, loaded []memory.Event) ([]memory.Event, error) {
+	tail, ok := s.history.(historyTail)
+	if !ok || len(loaded) == 0 {
+		return s.history.Events(ctx)
+	}
+	newer, err := tail.EventsAfter(ctx, loaded[len(loaded)-1].Sequence)
+	if err != nil {
+		return nil, err
+	}
+	events := append(loaded[:len(loaded):len(loaded)], newer...)
+	if verifyRequestHistory {
+		full, err := s.history.Events(ctx)
+		if err != nil || !reflect.DeepEqual(full, events) {
+			panic(fmt.Sprintf("agent: incrementally loaded history differs from a full load (%v)", err))
+		}
+	}
+	return events, nil
 }

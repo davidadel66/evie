@@ -187,6 +187,8 @@ func (s *Session) runOwnedTurn(
 	// per turn: the same iteration is composed again for its trigger.
 	var rejectedRequestBytes int64
 	contextRetryUsed := false
+	// loaded is the stored history as of this turn's latest request.
+	var loaded []memory.Event
 	for {
 		if !coordinator.transitionIfActive(memory.StageContextCompose, func() {
 			progress.requestParentID = requestParentID
@@ -199,7 +201,7 @@ func (s *Session) runOwnedTurn(
 			iteration++
 		}
 
-		events, err := s.history.Events(coordinator.ctx)
+		events, err := s.turnEvents(coordinator.ctx, loaded)
 		if err == nil {
 			if ctxErr := coordinator.ctx.Err(); ctxErr != nil {
 				err = ctxErr
@@ -208,6 +210,7 @@ func (s *Session) runOwnedTurn(
 		if err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("load durable history: %w", err))
 		}
+		loaded = events
 		// Validating the history once serves the compaction chain and every
 		// composition pass of this request.
 		history, err := newRequestHistory(events)

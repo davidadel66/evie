@@ -811,10 +811,22 @@ func (s *Store) LoadEvents(
 	ctx context.Context,
 	sessionID memory.SessionID,
 ) ([]memory.Event, error) {
+	return s.LoadEventsAfter(ctx, sessionID, 0)
+}
+
+// LoadEventsAfter lists a session's events after sequence, in order.
+// Sequences start at 1 and are assigned in commit order, and events are never
+// changed or removed, so a reader holding a session's events through sequence
+// needs only these.
+func (s *Store) LoadEventsAfter(
+	ctx context.Context,
+	sessionID memory.SessionID,
+	sequence int64,
+) ([]memory.Event, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, session_id, sequence, workspace_id, project_id, parent_id, event_type, role, execution_id, content, payload_json, recorded_at, format_version FROM events WHERE session_id = ?
+		SELECT id, session_id, sequence, workspace_id, project_id, parent_id, event_type, role, execution_id, content, payload_json, recorded_at, format_version FROM events WHERE session_id = ? AND sequence > ?
 		ORDER BY sequence
-		`, sessionID)
+		`, sessionID, sequence)
 	if err != nil {
 		return nil, fmt.Errorf("query events: %w", err)
 	}

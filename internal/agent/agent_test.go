@@ -112,6 +112,19 @@ func (f *fakeHistory) Events(_ context.Context) ([]memory.Event, error) {
 	return append([]memory.Event(nil), f.events...), f.eventsErr
 }
 
+// EventsAfter makes every test turn read its history incrementally; with
+// verifyRequestHistory each such read is checked against a full load.
+func (f *fakeHistory) EventsAfter(ctx context.Context, sequence int64) ([]memory.Event, error) {
+	events, err := f.Events(ctx)
+	var newer []memory.Event
+	for _, event := range events {
+		if event.Sequence > sequence {
+			newer = append(newer, event)
+		}
+	}
+	return newer, err
+}
+
 func (f *fakeHistory) allEvents() []memory.Event {
 	if f.ordered != nil {
 		return f.ordered
