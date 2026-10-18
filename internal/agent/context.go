@@ -998,6 +998,12 @@ func validateDurableContextHistory(events []memory.Event) error {
 // compaction of a durable history and returns each root turn's latest
 // accepted in-turn compaction by root event ID.
 func durableTurnCompactions(events []memory.Event) (map[memory.EventID]*acceptedTurnCompaction, error) {
+	return decodedTurnCompactions(events, nil)
+}
+
+// decodedTurnCompactions is durableTurnCompactions reusing decodes' results
+// for events a turn already decoded.
+func decodedTurnCompactions(events []memory.Event, decodes *turnDecodes) (map[memory.EventID]*acceptedTurnCompaction, error) {
 	type indexedEvent struct {
 		event memory.Event
 		index int
@@ -1040,12 +1046,9 @@ func durableTurnCompactions(events []memory.Event) (map[memory.EventID]*accepted
 		if event.Type != memory.EventContextSnapshot {
 			continue
 		}
-		if err := validateSnapshotEvent(event); err != nil {
+		payload, err := decodes.snapshot(event)
+		if err != nil {
 			return nil, err
-		}
-		var payload memory.ContextSnapshotPayload
-		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			return nil, fmt.Errorf("decode context snapshot event %q: %w", event.ID, err)
 		}
 		parent, ok := byID[event.ParentID]
 		// The single compact-and-retry after a provider context-length
@@ -1109,9 +1112,8 @@ func durableTurnCompactions(events []memory.Event) (map[memory.EventID]*accepted
 			if _, duplicate := seenPlaceholders[placeholder.EventID]; duplicate || projected.event.Sequence <= previousSequence {
 				return nil, fmt.Errorf("context snapshot event %q has unordered or repeated placeholders", event.ID)
 			}
-			digest := sha256.Sum256([]byte(projected.event.Content))
 			if placeholder.OriginalBytes != int64(len(projected.event.Content)) ||
-				placeholder.SHA256 != hex.EncodeToString(digest[:]) {
+				placeholder.SHA256 != decodes.contentDigest(projected.event) {
 				return nil, fmt.Errorf("context snapshot event %q placeholder %q does not match durable content", event.ID, placeholder.EventID)
 			}
 			seenPlaceholders[placeholder.EventID] = struct{}{}

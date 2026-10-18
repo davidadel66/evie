@@ -15,7 +15,9 @@ import (
 // used to decode and validate every context snapshot in the session again.
 // It is used by one turn at a time.
 type requestHistory struct {
-	events          []memory.Event
+	events []memory.Event
+	// decodes is the turn's, shared by all of its requests.
+	decodes         *turnDecodes
 	turnCompactions map[memory.EventID]*acceptedTurnCompaction
 	// ratios are calibrated ratios by canonical model, before any bound a
 	// rejected request sets.
@@ -27,12 +29,18 @@ type requestHistory struct {
 // turn scenario checks the reuse against the uncached derivation.
 var verifyRequestHistory = false
 
-func newRequestHistory(events []memory.Event) (*requestHistory, error) {
-	compactions, err := durableTurnCompactions(events)
+func newRequestHistory(events []memory.Event, decodes *turnDecodes) (*requestHistory, error) {
+	compactions, err := decodedTurnCompactions(events, decodes)
+	if verifyRequestHistory {
+		fresh, freshErr := durableTurnCompactions(events)
+		if fmt.Sprint(freshErr) != fmt.Sprint(err) || !reflect.DeepEqual(fresh, compactions) {
+			panic(fmt.Sprintf("agent: in-turn compactions from reused decodes differ from fresh ones (%v, %v)", err, freshErr))
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
-	return &requestHistory{events: events, turnCompactions: compactions, ratios: make(map[string]tokenRatio)}, nil
+	return &requestHistory{events: events, decodes: decodes, turnCompactions: compactions, ratios: make(map[string]tokenRatio)}, nil
 }
 
 // holds reports whether events is the very history h was derived from: the
@@ -44,7 +52,10 @@ func (h *requestHistory) holds(events []memory.Event) bool {
 
 func (h *requestHistory) compactions(events []memory.Event) (map[memory.EventID]*acceptedTurnCompaction, error) {
 	if !h.holds(events) {
-		return durableTurnCompactions(events)
+		if h == nil {
+			return durableTurnCompactions(events)
+		}
+		return decodedTurnCompactions(events, h.decodes)
 	}
 	if verifyRequestHistory {
 		fresh, err := durableTurnCompactions(events)
@@ -62,15 +73,18 @@ func (h *requestHistory) calibratedRatio(estimator RequestEstimator, events []me
 	if !ok {
 		return tokenRatio{}
 	}
-	if !h.holds(events) {
-		return calibrated.bytesPerToken(events, canonicalModel)
+	if h == nil {
+		return calibrated.bytesPerToken(events, canonicalModel, nil)
 	}
 	ratio, ok := h.ratios[canonicalModel]
-	if !ok {
-		ratio = calibrated.bytesPerToken(events, canonicalModel)
-		h.ratios[canonicalModel] = ratio
-	} else if verifyRequestHistory && calibrated.bytesPerToken(events, canonicalModel) != ratio {
-		panic("agent: reused token ratio differs from the history's")
+	if !ok || !h.holds(events) {
+		ratio = calibrated.bytesPerToken(events, canonicalModel, h.decodes)
+		if h.holds(events) {
+			h.ratios[canonicalModel] = ratio
+		}
+	}
+	if verifyRequestHistory && calibrated.bytesPerToken(events, canonicalModel, nil) != ratio {
+		panic("agent: reused token ratio differs from a fresh one")
 	}
 	return ratio
 }
