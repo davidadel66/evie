@@ -454,7 +454,18 @@ func (c *ContextComposer) projectAtStart(
 	unpressured.selectedProjected = append([]memory.Event(nil), projection.selectedProjected...)
 	// Protected results are projected only in a second pass, when the
 	// request still cannot fit without them.
-	projectOlder := func(protected bool) error {
+	// projectOlder shortens eligible older results, oldest first, until the
+	// request reaches pressureTarget. Shortening one changes only its tool
+	// message's content, which both request encodings carry as one JSON
+	// string, so the request's size changes by exactly the difference of the
+	// two encoded strings; the request is encoded once when the pass ends.
+	// Encoding it after every shortening made a pass quadratic. With
+	// reencode, the original form, it is encoded after each one; a pass
+	// whose final size disagrees with the running total is redone that way.
+	var projectOlder func(protected, reencode bool) error
+	projectOlder = func(protected, reencode bool) error {
+		before := append([]memory.Event(nil), projection.selectedProjected...)
+		shortened := false
 		for groupIndex := 0; projection.estimate.SerializedBytes > pressureTarget && groupIndex < eligibleGroups; groupIndex++ {
 			group := groups[groupIndex]
 			for i, resultIndex := range group.resultIndexes {
@@ -469,22 +480,51 @@ func (c *ContextComposer) projectAtStart(
 				if protected {
 					pressureProjection = projectProtectedToolResult(original)
 				}
-				if len(pressureProjection) >= len(projection.selectedProjected[resultIndex].Content) {
+				current := projection.selectedProjected[resultIndex].Content
+				if len(pressureProjection) >= len(current) {
 					continue
 				}
 				projection.selectedProjected[resultIndex].Content = pressureProjection
-				if err := composeProjected(projection.selectedProjected); err != nil {
-					return err
+				if reencode {
+					if err := composeProjected(projection.selectedProjected); err != nil {
+						return err
+					}
+					continue
+				}
+				shortened = true
+				projection.estimate.SerializedBytes += encodedStringGrowth(current, pressureProjection)
+				if verifyReuse {
+					running := projection.estimate.SerializedBytes
+					if err := composeProjected(projection.selectedProjected); err != nil {
+						return err
+					}
+					if projection.estimate.SerializedBytes != running {
+						panic(fmt.Sprintf("agent: running request size %d differs from the encoded %d", running, projection.estimate.SerializedBytes))
+					}
 				}
 			}
 		}
-		return nil
+		if !shortened {
+			return nil
+		}
+		running := projection.estimate.SerializedBytes
+		if err := composeProjected(projection.selectedProjected); err != nil {
+			return err
+		}
+		if projection.estimate.SerializedBytes == running {
+			return nil
+		}
+		projection.selectedProjected = before
+		if err := composeProjected(projection.selectedProjected); err != nil {
+			return err
+		}
+		return projectOlder(protected, true)
 	}
-	if err := projectOlder(false); err != nil {
+	if err := projectOlder(false, false); err != nil {
 		return contextProjection{}, err
 	}
 	if projection.estimate.SerializedBytes > usable {
-		if err := projectOlder(true); err != nil {
+		if err := projectOlder(true, false); err != nil {
 			return contextProjection{}, err
 		}
 	}
@@ -1147,4 +1187,13 @@ func validateSnapshotEvent(event memory.Event) error {
 		return fmt.Errorf("context snapshot event %q payload is not canonical", event.ID)
 	}
 	return nil
+}
+
+// encodedStringGrowth is how much a JSON encoding grows when one string value
+// in it changes from old to new: JSON escapes each character on its own, so
+// the rest of the encoding is unaffected.
+func encodedStringGrowth(old, new string) int64 {
+	oldEncoded, _ := json.Marshal(old)
+	newEncoded, _ := json.Marshal(new)
+	return int64(len(newEncoded) - len(oldEncoded))
 }

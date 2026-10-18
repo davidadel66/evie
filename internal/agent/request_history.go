@@ -24,14 +24,15 @@ type requestHistory struct {
 	ratios map[string]tokenRatio
 }
 
-// verifyRequestHistory makes every reuse also derive the value afresh and
-// panic on any difference. The package's tests turn it on, so each existing
-// turn scenario checks the reuse against the uncached derivation.
-var verifyRequestHistory = false
+// verifyReuse makes every reused or incrementally maintained value also be
+// derived afresh, panicking on any difference. The package's tests turn it
+// on, so each existing turn scenario checks the shortcut against the original
+// derivation.
+var verifyReuse = false
 
 func newRequestHistory(events []memory.Event, decodes *turnDecodes) (*requestHistory, error) {
 	compactions, err := decodedTurnCompactions(events, decodes)
-	if verifyRequestHistory {
+	if verifyReuse {
 		fresh, freshErr := durableTurnCompactions(events)
 		if fmt.Sprint(freshErr) != fmt.Sprint(err) || !reflect.DeepEqual(fresh, compactions) {
 			panic(fmt.Sprintf("agent: in-turn compactions from reused decodes differ from fresh ones (%v, %v)", err, freshErr))
@@ -57,7 +58,7 @@ func (h *requestHistory) compactions(events []memory.Event) (map[memory.EventID]
 		}
 		return decodedTurnCompactions(events, h.decodes)
 	}
-	if verifyRequestHistory {
+	if verifyReuse {
 		fresh, err := durableTurnCompactions(events)
 		if err != nil || !reflect.DeepEqual(fresh, h.turnCompactions) {
 			panic(fmt.Sprintf("agent: reused in-turn compactions differ from the history's (%v)", err))
@@ -83,7 +84,7 @@ func (h *requestHistory) calibratedRatio(estimator RequestEstimator, events []me
 			h.ratios[canonicalModel] = ratio
 		}
 	}
-	if verifyRequestHistory && calibrated.bytesPerToken(events, canonicalModel, nil) != ratio {
+	if verifyReuse && calibrated.bytesPerToken(events, canonicalModel, nil) != ratio {
 		panic("agent: reused token ratio differs from a fresh one")
 	}
 	return ratio
@@ -104,7 +105,7 @@ func (s *Session) turnEvents(ctx context.Context, loaded []memory.Event) ([]memo
 		return nil, err
 	}
 	events := append(loaded[:len(loaded):len(loaded)], newer...)
-	if verifyRequestHistory {
+	if verifyReuse {
 		full, err := s.history.Events(ctx)
 		if err != nil || !reflect.DeepEqual(full, events) {
 			panic(fmt.Sprintf("agent: incrementally loaded history differs from a full load (%v)", err))

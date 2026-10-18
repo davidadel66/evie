@@ -5,9 +5,10 @@ import (
 	"testing"
 )
 
-// Every test in the package checks the turn's reused history derivations
-// against fresh ones, so each existing scenario also proves the reuse exact.
+// Every test in the package checks the turn's shortcuts (reused history
+// derivations, incrementally loaded events, running request sizes) against
+// the original derivations, so each existing scenario also proves them exact.
 func TestMain(m *testing.M) {
-	verifyRequestHistory = true
+	verifyReuse = true
 	os.Exit(m.Run())
 }
