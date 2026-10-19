@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -46,4 +47,46 @@ func TestPressureProjectionRunningSizeMatchesEveryEncoding(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Groups leaving the retained window become eligible for pressure projection
+// in whole batches while the request fits, so the projected set, and with it
+// the provider's cached history, changes once a batch rather than on every
+// tool call. A request that would not fit is projected as far as before.
+func TestPressureProjectionWaitsForAWholeBatchWhileTheRequestFits(t *testing.T) {
+	b := &contextEvents{t: t}
+	b.user("root", "run")
+	var results []memory.EventID
+	for i := 0; i < retainedCompleteToolResultGroups+pressureProjectionGroupBatch+2; i++ {
+		results = append(results, b.toolGroup("root", strings.Repeat(string(rune('a'+i)), 16*1024)))
+	}
+	projected := func(t *testing.T, usable int64) []memory.EventID {
+		t.Helper()
+		profile, err := openrouter.NewExplicitContextProfile("test/model", usable+1+4096, usable+1+4096, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
+			Profile: profile, Events: b.events, ActiveRootID: "root", TriggerEventID: results[len(results)-1], Iteration: 1,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ids []memory.EventID
+		for _, placeholder := range result.Snapshot.Placeholders {
+			ids = append(ids, placeholder.EventID)
+		}
+		return ids
+	}
+	t.Run("fits with one batch projected", func(t *testing.T) {
+		if got := projected(t, 160_000); !slices.Equal(got, results[:pressureProjectionGroupBatch]) {
+			t.Fatalf("projected %v, want the oldest batch %v", got, results[:pressureProjectionGroupBatch])
+		}
+	})
+	t.Run("fits only with every eligible group projected", func(t *testing.T) {
+		eligible := len(results) - retainedCompleteToolResultGroups
+		if got := projected(t, 85_000); !slices.Equal(got, results[:eligible]) {
+			t.Fatalf("projected %v, want every eligible group %v", got, results[:eligible])
+		}
+	})
 }

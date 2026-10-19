@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ContextComposerVersion            = "context-composer-v5"
+	ContextComposerVersion            = "context-composer-v6"
 	CanonicalRequestEstimatorVersion  = "canonical-provider-json-bytes-v2"
 	CalibratedRequestEstimatorVersion = "calibrated-provider-json-bytes-v3"
 )
@@ -449,7 +449,12 @@ func (c *ContextComposer) projectAtStart(
 			pressureTarget = projection.estimate.SerializedBytes - (excess+band-1)/band*band
 		}
 	}
-	eligibleGroups := max(0, len(groups)-retainedCompleteToolResultGroups)
+	// Groups leave the retained window one tool call at a time, and shortening
+	// each as it leaves re-bills the cached history after it on every call.
+	// While the request fits, they become eligible in whole batches, so the
+	// projected set changes once a batch.
+	allEligibleGroups := max(0, len(groups)-retainedCompleteToolResultGroups)
+	eligibleGroups := allEligibleGroups / pressureProjectionGroupBatch * pressureProjectionGroupBatch
 	unpressured := projection
 	unpressured.selectedProjected = append([]memory.Event(nil), projection.selectedProjected...)
 	// Protected results are projected only in a second pass, when the
@@ -522,6 +527,13 @@ func (c *ContextComposer) projectAtStart(
 	}
 	if err := projectOlder(false, false); err != nil {
 		return contextProjection{}, err
+	}
+	if projection.estimate.SerializedBytes > usable && eligibleGroups < allEligibleGroups {
+		// A request that cannot fit is projected as far as it always was.
+		eligibleGroups = allEligibleGroups
+		if err := projectOlder(false, false); err != nil {
+			return contextProjection{}, err
+		}
 	}
 	if projection.estimate.SerializedBytes > usable {
 		if err := projectOlder(true, false); err != nil {

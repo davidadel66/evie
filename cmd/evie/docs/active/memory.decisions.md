@@ -1,5 +1,28 @@
 # memory - decisions
 
+- **2026-10-18 — Older tool-result groups become eligible for pressure
+  projection in batches of four.** Amends the 2026-10-01 band decision. Cached
+  token counts in the owner's history (September 5 to October 13) showed that
+  pressure projection caused most avoidable provider cache misses: about 1.24
+  million input tokens re-billed over 51 requests. Of those, 47 projected one
+  to three results that had just left the three retained groups, so nearly
+  every tool call rewrote history about 70 percent of the way in and re-billed
+  everything after it (about 1.03 million tokens). Band jumps were rare.
+  Widening the band to 40 percent made this worse in a replay (45 rewrites
+  instead of 26): with too little projectable output to free a whole band,
+  every group is projected as soon as it is eligible. While the request fits
+  usable input, groups past the retained three now become eligible only in
+  whole batches of four, so the projected set changes once a batch. A request
+  that does not fit is projected as far as before, protected results last.
+  Bands, the 60 percent target, `clear_at_least`, the three retained groups,
+  eligibility and the excerpt format are unchanged. In a replay of a long
+  chat under pressure, the previous request's bytes left unreused fell from
+  1.70 MB to 1.37 MB (the rolling share by about 40 percent) for 1.6 percent
+  more bytes sent; batches of three, five and six did no better. Memory
+  evidence keeps its specified position before the active root, and its
+  once-per-turn re-bill (about 140,000 tokens) is accepted as before.
+  The composer version becomes `context-composer-v6`.
+
 - **2026-10-12 — Background proposals from a Workspace or project
   conversation target that scope; the card offers a prepared Global
   version.** David decided this after the pass turned a Finance chat's
@@ -1542,7 +1565,8 @@
   verbatim. When the canonical serialized request is above 60% of usable input,
   eligible results in older complete groups are projected oldest first until
   that target is reached or candidates are exhausted (amended 2026-10-01: the
-  bytes to free round up to 20 percent bands). Only durable results
+  bytes to free round up to 20 percent bands; amended 2026-10-18: while the
+  request fits, older groups become eligible in batches of four). Only durable results
   larger than 4 KiB are eligible. The older-result projection contains
   UTF-8-safe 512-byte head and tail excerpts plus its event ID, original byte
   count, and SHA-256; the diagnostic projected-byte count includes that visible

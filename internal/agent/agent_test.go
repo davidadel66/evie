@@ -1282,7 +1282,16 @@ func TestSessionSendProjectsOldToolResultWithoutChangingDurableHistory(t *testin
 	}
 	events := []memory.Event{{ID: "root", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run"}}
 	sequence := int64(2)
-	for group := 1; group <= 5; group++ {
+	// Two small newest groups make four older groups eligible: a whole batch
+	// (pressureProjectionGroupBatch), so pressure projection applies while
+	// the request fits.
+	resultBytes := func(group int) int {
+		if group > 5 {
+			return 100
+		}
+		return 20 * 1024
+	}
+	for group := 1; group <= 7; group++ {
 		assistantID := memory.EventID(fmt.Sprintf("assistant-%d", group))
 		callID := fmt.Sprintf("call-%d", group)
 		resultID := memory.EventID(fmt.Sprintf("result-%d", group))
@@ -1290,7 +1299,7 @@ func TestSessionSendProjectsOldToolResultWithoutChangingDurableHistory(t *testin
 			memory.Event{ID: assistantID, Sequence: sequence, ParentID: "root", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
 				Payload: historyPayload(t, memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{{ID: callID, Name: "large", Arguments: `{}`}}})},
 			memory.Event{ID: resultID, Sequence: sequence + 1, ParentID: assistantID, Type: memory.EventToolSucceeded, Role: memory.RoleTool,
-				Content: strings.Repeat(string(rune('a'+group-1)), 20*1024), Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: callID})},
+				Content: strings.Repeat(string(rune('a'+group-1)), resultBytes(group)), Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: callID})},
 		)
 		sequence += 2
 	}
@@ -1353,13 +1362,13 @@ func TestSessionSendProjectsOldToolResultWithoutChangingDurableHistory(t *testin
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: "run"},
 	}
-	for group := 1; group <= 5; group++ {
+	for group := 1; group <= 7; group++ {
 		callID := fmt.Sprintf("call-%d", group)
 		wantMessages = append(wantMessages,
 			openrouter.Message{Role: "assistant", ToolCalls: []openrouter.ToolCall{{
 				ID: callID, Type: "function", Function: openrouter.FunctionCall{Name: "large", Arguments: `{}`},
 			}}},
-			openrouter.Message{Role: "tool", ToolCallID: callID, Content: strings.Repeat(string(rune('a'+group-1)), 20*1024)},
+			openrouter.Message{Role: "tool", ToolCallID: callID, Content: strings.Repeat(string(rune('a'+group-1)), resultBytes(group))},
 		)
 	}
 	wantMessages[3].Content = exactProjection

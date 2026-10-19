@@ -26,6 +26,14 @@ const (
 	toolResultProjectionThreshold    = 4 * 1024
 	toolResultProjectionExcerpt      = 1024
 	retainedCompleteToolResultGroups = 3
+	// pressureProjectionGroupBatch is how many groups past the retained ones
+	// become eligible for pressure projection at once while a request fits.
+	// Projecting each group as it left the retained window re-billed the
+	// cached history after it on every tool call; in a replay of a long chat
+	// under pressure, batches of 4 left about 40 percent fewer of those bytes
+	// unreused for about 1.6 percent more bytes sent, and larger batches did
+	// no better.
+	pressureProjectionGroupBatch = 4
 
 	// modelToolResultBytes bounds what a request that offers read_tool_result
 	// shows of one tool result (memory architecture Stage 9). A larger durable
