@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -287,7 +288,8 @@ func TestComposedParentDelegatesBuildAndReceivesBranchCommitsAndFiles(t *testing
 		t.Fatalf("build result = %+v", r)
 	}
 	payload := sealedBuildFrame(t, r.Summary)
-	if !strings.Contains(payload, "BUILD-SUMMARY-SENTINEL") || !strings.Contains(payload, "Commands run (outcome recorded by Evie's harness):") {
+	// Without a sandbox the worker has no bash, so no commands are listed.
+	if !strings.Contains(payload, "BUILD-SUMMARY-SENTINEL") || sandbox && !strings.Contains(payload, "Commands run (outcome recorded by Evie's harness):") {
 		t.Fatalf("framed build output = %q", payload)
 	}
 	if sandbox && (!strings.Contains(payload, "- exit 0: test -f parser.go") || !strings.Contains(payload, "echo pwned")) {
@@ -339,8 +341,13 @@ func TestComposedParentDelegatesBuildAndReceivesBranchCommitsAndFiles(t *testing
 			t.Fatalf("escape %s = %q; want refusal naming %q", id, got, want)
 		}
 	}
-	if sandbox && !strings.Contains(resultOf(last, "escape-bash"), "Operation not permitted") {
-		t.Fatalf("bash escape = %q", resultOf(last, "escape-bash"))
+	// Seatbelt denies the write; bubblewrap's read-only bind refuses it.
+	refusal := "Operation not permitted"
+	if runtime.GOOS == "linux" {
+		refusal = "Read-only file system"
+	}
+	if sandbox && !strings.Contains(resultOf(last, "escape-bash"), refusal) {
+		t.Fatalf("bash escape = %q, want %q", resultOf(last, "escape-bash"), refusal)
 	}
 
 	// The Task: the worker's own subtree changed; nothing else did.

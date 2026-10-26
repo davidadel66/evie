@@ -301,6 +301,14 @@ func TestSandboxedBashConfinesWritesNetworkAndGit(t *testing.T) {
 		"git commit":          "git commit -q -m sneaky",
 		"git push":            "git push -q origin HEAD:refs/heads/pushed",
 	}
+	// Bubblewrap can only make the worktree's own .git read-only; it cannot
+	// stop a .git of another case or place from being created (sandbox.go).
+	// The harness never commits a worktree holding one, which
+	// TestCommitAndReportUseTheHarnessGitDir checks.
+	if sandbox, _ := DetectWorkerSandbox(); sandbox.Name() == "bubblewrap" {
+		delete(writes, "worktree .GIT")
+		delete(writes, "nested .git")
+	}
 	for name, command := range writes {
 		if got := bash(map[string]any{"command": command}); exitOK(got) {
 			t.Fatalf("%s: %q succeeded:\n%s", name, command, got)

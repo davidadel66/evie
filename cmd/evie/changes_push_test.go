@@ -15,6 +15,7 @@ import (
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/tools"
 	"github.com/google/uuid"
 )
 
@@ -22,6 +23,10 @@ import (
 // runs on the build branch's worktree the way the merge gate runs it,
 // sandboxed without network.
 func TestVerifyBeforeAPushRunsTheWorkspaceCommandInTheWorktree(t *testing.T) {
+	// Verify runs only inside an OS sandbox and refuses without one.
+	if _, err := tools.DetectWorkerSandbox(); err != nil {
+		t.Skipf("no OS sandbox on this host: %v", err)
+	}
 	ctx := context.Background()
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

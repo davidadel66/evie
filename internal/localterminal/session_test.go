@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -104,7 +105,7 @@ func TestTerminalStartsInFolderResizesAndStopsItsJobs(t *testing.T) {
 					t.Fatalf("terminal ended before %q: %s", marker, text.String())
 				}
 				text.WriteString(part)
-				if strings.Contains(text.String(), marker) {
+				if strings.Contains(withoutControlSequences(text.String()), marker) {
 					return text.String()
 				}
 			case <-timer.C:
@@ -196,5 +197,23 @@ func TestTerminalRejectsMissingOrReplacedRootAndInvalidSize(t *testing.T) {
 	if s, err := Start(context.Background(), root, 80, 24); err == nil {
 		s.Close()
 		t.Fatal("accepted replaced root")
+	}
+}
+
+// controlSequence matches what a terminal acts on without displaying: an
+// operating system command (such as the OSC 3008 context markers systemd's
+// shell profile prints around each command) or a control sequence (such as
+// bash 5's bracketed-paste switch before each prompt). Output checks ignore
+// them.
+var controlSequence = regexp.MustCompile(`\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]`)
+
+func withoutControlSequences(text string) string {
+	return controlSequence.ReplaceAllString(text, "")
+}
+
+func TestWithoutControlSequencesKeepsWhatATerminalShows(t *testing.T) {
+	raw := "__ROOT__/tmp/x\r\n\x1b]3008;end=9be8;exit=success\x1b\\\x1b]3008;start=abe9;user=runner\x1b\\\x1b[?2004h__EVIE_PROMPT__ \x1b]0;title\x07\x1b[1;32mdone\x1b[0m"
+	if got, want := withoutControlSequences(raw), "__ROOT__/tmp/x\r\n__EVIE_PROMPT__ done"; got != want {
+		t.Fatalf("withoutControlSequences = %q, want %q", got, want)
 	}
 }
