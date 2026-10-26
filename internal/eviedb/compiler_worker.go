@@ -498,6 +498,10 @@ func (s *Store) ResumeCompilation(ctx context.Context, owner memory.ScopeContext
 type CompilerSupervisorConfig struct {
 	Extractors      map[string]CompilerExtractor
 	ReleaseVerifier CompilerReleaseVerifier
+	// ReconcileHealth, when set, hears RunCompilerHost's reconciliation start
+	// failing (a non-nil error) and recover (nil), once per change rather than
+	// once per tick. Obligations stay durable either way; the host retries.
+	ReconcileHealth func(error)
 }
 
 // RunCompilerSupervisor returns on host shutdown. It polls durable work, keeps

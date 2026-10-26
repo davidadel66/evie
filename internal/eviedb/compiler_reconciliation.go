@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
@@ -202,8 +203,24 @@ func discoverCompilerEvidenceInTransaction(ctx context.Context, conn compilerAct
 	return err
 }
 
+const (
+	// compilerReadyTick paces the host while ready work remains.
+	compilerReadyTick = 25 * time.Millisecond
+	// compilerIdleTick paces the host's look for new work otherwise: each look
+	// wakes a cold process, so 40 a second cost about 3% of a core.
+	compilerIdleTick = 250 * time.Millisecond
+	// compilerWaitingRecheck is how often the host revisits roots that only
+	// time or a released turn lease can move (a turn still in progress, or a
+	// generation this host has no extractor for), and how often it retries
+	// after a failed reconciliation.
+	compilerWaitingRecheck = time.Second
+)
+
 // RunCompilerHost owns independent selection and extraction loops. A blocked
 // local request cannot prevent new obligations from being materialized.
+// Every tick first looks for work without the write lock (compilerHostWork):
+// ready work is reconciled every tick until it is gone, waiting roots once a
+// second, and an idle host takes no write lock at all.
 func (s *Store) RunCompilerHost(ctx context.Context, config CompilerSupervisorConfig) error {
 	if len(config.Extractors) == 0 || len(config.Extractors) > 32 {
 		return ErrCompilerNotConfigured
@@ -220,8 +237,10 @@ func (s *Store) RunCompilerHost(ctx context.Context, config CompilerSupervisorCo
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- s.RunCompilerSupervisor(ctx, config) }()
-	ticker := time.NewTicker(25 * time.Millisecond)
-	defer ticker.Stop()
+	tick := time.NewTimer(compilerReadyTick)
+	defer tick.Stop()
+	var slowChecked time.Time
+	failing := false
 	for {
 		select {
 		case err := <-done:
@@ -236,12 +255,82 @@ func (s *Store) RunCompilerHost(ctx context.Context, config CompilerSupervisorCo
 			case <-timer.C:
 				return errors.Join(ctx.Err(), errors.New("compiler host cleanup deadline"))
 			}
-		case <-ticker.C:
-			_, err := s.ReconcileCompilerEvidence(ctx, config)
-			if err != nil && ctx.Err() == nil {
-				continue
-			} // obligations remain durable
-			_, _ = s.ReconcileCompilerHistory(ctx, config)
+		case <-tick.C:
+			delay := compilerIdleTick
+			work, err := compilerHostWork(ctx, s.db, config)
+			if err == nil {
+				// Waiting roots, and every retry after a failure, run once a
+				// second; a failing host retries even with nothing pending so it
+				// can report recovery.
+				ready := work == compilerWorkReady && !failing
+				slow := failing || work == compilerWorkWaiting
+				if ready {
+					delay = compilerReadyTick
+				}
+				if ready || slow && time.Since(slowChecked) >= compilerWaitingRecheck {
+					if slow {
+						slowChecked = time.Now()
+					}
+					// Obligations remain durable when either pass fails.
+					if _, err = s.ReconcileCompilerEvidence(ctx, config); err == nil {
+						_, err = s.ReconcileCompilerHistory(ctx, config)
+					}
+				}
+			}
+			if ctx.Err() == nil && (err != nil) != failing {
+				failing = err != nil
+				if config.ReconcileHealth != nil {
+					config.ReconcileHealth(err)
+				}
+			}
+			tick.Reset(delay)
 		}
 	}
+}
+
+type compilerWork int
+
+const (
+	compilerWorkNone compilerWork = iota
+	// compilerWorkWaiting is roots that a reconciliation can only re-check:
+	// a turn still in progress closes when a later message arrives (which is
+	// ready work) or when its turn lease is released or expires, and a root
+	// of a generation without an extractor here cannot move until restart.
+	compilerWorkWaiting
+	// compilerWorkReady is work a reconciliation can advance now: activation
+	// events or history ranges not yet scanned, or a selected root of a
+	// generation this host extracts.
+	compilerWorkReady
+)
+
+// compilerHostWork classifies durable reconciliation work without taking the
+// write lock. It mirrors the reconciliation queries' own conditions, so it
+// never reports no work where a reconciliation would find some.
+func compilerHostWork(ctx context.Context, q semanticInspectionQueryer, config CompilerSupervisorConfig) (compilerWork, error) {
+	configured := make([]any, 0, len(config.Extractors))
+	for id := range config.Extractors {
+		configured = append(configured, id)
+	}
+	in := "NULL"
+	if len(configured) > 0 {
+		in = "?" + strings.Repeat(",?", len(configured)-1)
+	}
+	var ready, pending bool
+	err := q.QueryRowContext(ctx, `SELECT
+ EXISTS(SELECT 1 FROM memory_compiler_activation_dirty d JOIN memory_compiler_activations a USING(activation_id) WHERE d.scanned_position<d.high_position AND a.work_paused=0)
+ OR EXISTS(SELECT 1 FROM memory_compiler_history_requests WHERE cancelled=0 AND pending_ranges>0)
+ OR EXISTS(SELECT 1 FROM memory_compiler_activation_roots r JOIN memory_compiler_activations a USING(activation_id) WHERE a.work_paused=0 AND r.state='selected_unmaterialized' AND a.generation_id IN (`+in+`))
+ OR EXISTS(SELECT 1 FROM memory_compiler_history_roots r JOIN memory_compiler_history_requests q USING(request_id) WHERE q.cancelled=0 AND q.pending_roots>0 AND r.state='selected_unmaterialized' AND q.generation_id IN (`+in+`)),
+ EXISTS(SELECT 1 FROM memory_compiler_activation_roots r JOIN memory_compiler_activations a USING(activation_id) WHERE a.work_paused=0 AND r.state IN ('selected_unmaterialized','deferred_live'))
+ OR EXISTS(SELECT 1 FROM memory_compiler_history_roots r JOIN memory_compiler_history_requests q USING(request_id) WHERE q.cancelled=0 AND q.pending_roots>0 AND r.state IN ('selected_unmaterialized','deferred_live'))`,
+		append(configured, configured...)...).Scan(&ready, &pending)
+	switch {
+	case err != nil:
+		return compilerWorkNone, err
+	case ready:
+		return compilerWorkReady, nil
+	case pending:
+		return compilerWorkWaiting, nil
+	}
+	return compilerWorkNone, nil
 }

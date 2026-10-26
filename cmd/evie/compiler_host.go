@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
@@ -27,7 +28,20 @@ func startConfiguredCompilerHost(ctx context.Context, path string, kernel compil
 	if err != nil {
 		return nil, err
 	}
-	return startCompilerHost(ctx, kernel, eviedb.CompilerSupervisorConfig{Extractors: map[string]eviedb.CompilerExtractor{id: extractor}}), nil
+	return startCompilerHost(ctx, kernel, eviedb.CompilerSupervisorConfig{
+		Extractors:      map[string]eviedb.CompilerExtractor{id: extractor},
+		ReconcileHealth: logCompilerReconcileHealth,
+	}), nil
+}
+
+// logCompilerReconcileHealth reports the compiler host's reconciliation
+// starting to fail and recovering, as memory retrieval maintenance does.
+func logCompilerReconcileHealth(err error) {
+	if err != nil {
+		log.Printf("memory compiler reconciliation failing; will retry: %v", err)
+		return
+	}
+	log.Print("memory compiler reconciliation recovered")
 }
 
 func startCompilerHost(ctx context.Context, kernel compilerHostKernel, config eviedb.CompilerSupervisorConfig) func() error {
