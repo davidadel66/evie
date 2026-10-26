@@ -1,2 +1,0 @@
-PASS nonempty-array accepted=0 expected=0
-PASS empty-array accepted=1 expected=1

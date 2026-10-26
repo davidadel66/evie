@@ -15,3 +15,9 @@ ds-bundle/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+
+# Local run output, scratch builds and rendered drafts. Curated evidence
+# belongs under cmd/*/docs/fixtures/, not here.
+.scratch/
+/tmp/
+__pycache__/

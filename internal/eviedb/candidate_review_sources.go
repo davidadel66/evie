@@ -35,13 +35,6 @@ func projectAcceptedSource(source memory.SemanticSource, reviewOrigin, policyCur
 	return source
 }
 
-func reviewSourcePolicyCurrent(ctx context.Context, q interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}) bool {
-	var policy string
-	return q.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&policy) == nil && policy == memory.CompilerPolicyVersion
-}
-
 func loadReviewRecordedSource(ctx context.Context, q reviewQuery, id memory.SemanticID, evidence string) (memory.SemanticSource, error) {
 	var source memory.SemanticSource
 	err := q.QueryRowContext(ctx, `SELECT source_link_id,created_operation_id,event_id,source_session_id,source_scope_key,event_part,locator_kind,locator_value,evidence_sha256,source_actor,source_type,authority,observed_at,eligibility FROM semantic_source_links WHERE source_link_id=?`, id).Scan(&source.ID, &source.OperationID, &source.EventID, &source.SessionID, &source.ScopeKey, &source.EventPart, &source.LocatorKind, &source.LocatorValue, &source.EvidenceSHA256, &source.Actor, &source.SourceType, &source.Authority, &source.ObservedAt, &source.Eligibility)

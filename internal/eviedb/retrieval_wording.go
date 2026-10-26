@@ -307,10 +307,6 @@ func (w *claimWording) addSubject(name string, owner bool) {
 	}
 }
 
-func (w claimWording) valueIn(s wordingSentence) bool {
-	return len(w.valueSpans(s)) > 0
-}
-
 // valueSpans returns every occurrence of a saved value in the sentence.
 func (w claimWording) valueSpans(s wordingSentence) []wordingSpan {
 	var spans []wordingSpan

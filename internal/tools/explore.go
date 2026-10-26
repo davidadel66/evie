@@ -19,9 +19,6 @@ import (
 // bash runs only vetted read-only commands (readonly_bash.go), and query_db
 // is the Kernel's existing read-only tool with its existing fences.
 
-// ExploreToolNames are the explore worker's tools, in schema order.
-var ExploreToolNames = []string{"read_file", "query_db", "bash"}
-
 // ExploreTools returns fresh definitions of the explore worker's tools. Both
 // confined tools refuse to run unless the supervisor bound a root with
 // Toolset.WithWorkerRoot.

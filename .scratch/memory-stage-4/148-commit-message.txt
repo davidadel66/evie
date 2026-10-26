@@ -1,3 +1,0 @@
-feat(memory): expose bounded compiler health and measured progress (#148)
-
-Add exact-scope diagnostics across Kernel, CLI and web, incremental legacy status counters, explicit selection and backlog states, and real foreground/publication timing. Preserve incomplete finalization when writes or flushes fail.
