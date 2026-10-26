@@ -44,12 +44,17 @@ CREATE TRIGGER IF NOT EXISTS memory_retrieval_event_project_changed AFTER UPDATE
 END;
 `
 
+// conversationIndexCoverage counts indexed rows in the lookup, which holds one
+// small entry per FTS row: counting the FTS table itself reads every indexed
+// message, and every search and maintenance tick reads coverage. CROSS JOIN
+// keeps the dirty queue, usually empty, as the outer loop; left to itself the
+// planner walks every event below the checkpoint and probes the queue.
 func conversationIndexCoverage(ctx context.Context, q semanticInspectionQueryer) (memory.RetrievalCoverage, error) {
 	c := memory.RetrievalCoverage{Generation: conversationIndexGeneration}
 	err := q.QueryRowContext(ctx, `SELECT state,
  (SELECT count(*) FROM events WHERE rowid>g.checkpoint)
- +(SELECT count(*) FROM memory_retrieval_event_dirty d JOIN events e ON e.id=d.event_id WHERE e.rowid<=g.checkpoint),
- (SELECT count(*) FROM memory_retrieval_event_fts_v4 WHERE generation=g.generation)
+ +(SELECT count(*) FROM memory_retrieval_event_dirty d CROSS JOIN events e ON e.id=d.event_id WHERE e.rowid<=g.checkpoint),
+ (SELECT count(*) FROM memory_retrieval_event_fts_v4_rows)
  FROM memory_retrieval_generations g WHERE generation=?`, conversationIndexGeneration).Scan(&c.State, &c.Pending, &c.Indexed)
 	return c, err
 }
@@ -99,9 +104,8 @@ func appendConversationProjection(ctx context.Context, q eventQueryExecutor, eve
 	}
 	eligible := primary && ((event.Type == memory.EventUserMessage && event.Role == memory.RoleUser) || (event.Type == memory.EventAssistantMessage && event.Role == memory.RoleAssistant))
 	if eligible && event.Content != "" && len(event.Content) <= 32768 && utf8.ValidString(event.Content) && !memory.HasRetrievalSecret([]byte(event.Content)) {
-		var generation string
-		if err := q.queryRowContext(ctx, `INSERT INTO memory_retrieval_event_fts_v4(generation,event_id,scope_key,body,keys) VALUES(?,?,?,?,'') RETURNING generation`,
-			conversationIndexGeneration, event.ID, scopeKeyForContext(memory.ScopeContext{SessionID: event.SessionID, WorkspaceID: event.WorkspaceID, ProjectID: event.ProjectID}), event.Content).Scan(&generation); err != nil {
+		if err := conversationIndexRows.insert(ctx, q, string(event.ID), `INSERT INTO memory_retrieval_event_fts_v4(generation,event_id,scope_key,body,keys) VALUES(?,?,?,?,'')`,
+			conversationIndexGeneration, event.ID, scopeKeyForContext(memory.ScopeContext{SessionID: event.SessionID, WorkspaceID: event.WorkspaceID, ProjectID: event.ProjectID}), event.Content); err != nil {
 			return err
 		}
 	}
@@ -188,7 +192,7 @@ func (s *Store) refreshConversationIndex(ctx context.Context, limit int) error {
 			rows.Close()
 		}
 		for _, e := range entries {
-			if _, err = q.ExecContext(ctx, `DELETE FROM memory_retrieval_event_fts_v4 WHERE generation=? AND event_id=?`, conversationIndexGeneration, e.id); err != nil {
+			if err = conversationIndexRows.remove(ctx, q, string(e.id)); err != nil {
 				return err
 			}
 			event, eligible, err := loadConversationEvidence(ctx, q, e.id)
@@ -211,7 +215,7 @@ func (s *Store) refreshConversationIndex(ctx context.Context, limit int) error {
 							return err
 						}
 					}
-					if _, err = q.ExecContext(ctx, `INSERT INTO memory_retrieval_event_fts_v4(generation,event_id,scope_key,body,keys) VALUES(?,?,?,?,?)`, conversationIndexGeneration, e.id, event.scope, body, conversationFactKeyText(keys)); err != nil {
+					if err = conversationIndexRows.insert(ctx, retrievalConn{q}, string(e.id), `INSERT INTO memory_retrieval_event_fts_v4(generation,event_id,scope_key,body,keys) VALUES(?,?,?,?,?)`, conversationIndexGeneration, e.id, event.scope, body, conversationFactKeyText(keys)); err != nil {
 						return err
 					}
 				}
