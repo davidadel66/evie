@@ -681,7 +681,7 @@ func TestCalibrationCountsARejectedRequestThatEndedItsTurn(t *testing.T) {
 		}, want: tokenRatio{milli: 3000}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if got := (CalibratedRequestEstimator{}).bytesPerToken(test.events, "test/model"); got != test.want {
+			if got := (CalibratedRequestEstimator{}).bytesPerToken(test.events, "test/model", nil); got != test.want {
 				t.Fatalf("ratio=%+v, want %+v", got, test.want)
 			}
 		})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -245,7 +246,14 @@ func TestContextComposerRetainsThreeNewestGroupsAndProjectsOlderResultsOldestFir
 	}
 	events := []memory.Event{{ID: "root", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run"}}
 	sequence := int64(2)
-	for group := 1; group <= 5; group++ {
+	// Two small newest groups make four older groups eligible, a whole batch.
+	resultBytes := func(group int) int {
+		if group > 5 {
+			return 100
+		}
+		return 16 * 1024
+	}
+	for group := 1; group <= 7; group++ {
 		assistantID := memory.EventID(fmt.Sprintf("assistant-%d", group))
 		callID := fmt.Sprintf("call-%d", group)
 		resultID := memory.EventID(fmt.Sprintf("result-%d", group))
@@ -253,12 +261,12 @@ func TestContextComposerRetainsThreeNewestGroupsAndProjectsOlderResultsOldestFir
 			memory.Event{ID: assistantID, Sequence: sequence, ParentID: "root", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
 				Payload: historyPayload(t, memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{{ID: callID, Name: "large", Arguments: `{}`}}})},
 			memory.Event{ID: resultID, Sequence: sequence + 1, ParentID: assistantID, Type: memory.EventToolSucceeded, Role: memory.RoleTool,
-				Content: strings.Repeat(string(rune('a'+group-1)), 16*1024), Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: callID})},
+				Content: strings.Repeat(string(rune('a'+group-1)), resultBytes(group)), Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: callID})},
 		)
 		sequence += 2
 	}
 	result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
-		Profile: profile, Events: events, ActiveRootID: "root", TriggerEventID: "result-5", Iteration: 1,
+		Profile: profile, Events: events, ActiveRootID: "root", TriggerEventID: "result-7", Iteration: 1,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -271,8 +279,8 @@ func TestContextComposerRetainsThreeNewestGroupsAndProjectsOlderResultsOldestFir
 			continue
 		}
 		n := strings.TrimPrefix(message.ToolCallID, "call-")
-		if n == "3" || n == "4" || n == "5" {
-			if len(message.Content) != 16*1024 {
+		if group, _ := strconv.Atoi(n); group >= 5 {
+			if len(message.Content) != resultBytes(group) {
 				t.Fatalf("recent group %s bytes=%d", n, len(message.Content))
 			}
 		}

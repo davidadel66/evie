@@ -187,6 +187,11 @@ func (s *Session) runOwnedTurn(
 	// per turn: the same iteration is composed again for its trigger.
 	var rejectedRequestBytes int64
 	contextRetryUsed := false
+	// loaded is the stored history as of this turn's latest request; decodes
+	// keeps what decoding its events yielded, so each request decodes only
+	// the events committed since the one before.
+	var loaded []memory.Event
+	decodes := newTurnDecodes()
 	for {
 		if !coordinator.transitionIfActive(memory.StageContextCompose, func() {
 			progress.requestParentID = requestParentID
@@ -199,7 +204,7 @@ func (s *Session) runOwnedTurn(
 			iteration++
 		}
 
-		events, err := s.history.Events(coordinator.ctx)
+		events, err := s.turnEvents(coordinator.ctx, loaded)
 		if err == nil {
 			if ctxErr := coordinator.ctx.Err(); ctxErr != nil {
 				err = ctxErr
@@ -208,7 +213,14 @@ func (s *Session) runOwnedTurn(
 		if err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("load durable history: %w", err))
 		}
-		summary, _, err := reconstructCompactionChain(events)
+		loaded = events
+		// Validating the history once serves the compaction chain and every
+		// composition pass of this request.
+		history, err := newRequestHistory(events, decodes)
+		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("reconstruct durable compaction chain: %w", err))
+		}
+		summary, _, err := validatedCompactionChain(events)
 		if err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("reconstruct durable compaction chain: %w", err))
 		}
@@ -237,6 +249,7 @@ func (s *Session) runOwnedTurn(
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: modelTools.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,
 			Continuation: continuation, RejectedRequestBytes: rejectedRequestBytes,
+			history: history,
 		}
 		rejectedRequestBytes = 0
 		// The last permitted model response is requested without tools, so

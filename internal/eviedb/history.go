@@ -41,6 +41,12 @@ func (h *SessionHistory) Events(ctx context.Context) ([]memory.Event, error) {
 	return h.store.LoadEvents(ctx, h.sessionID)
 }
 
+// EventsAfter lets a turn read only the events committed since its last
+// request.
+func (h *SessionHistory) EventsAfter(ctx context.Context, sequence int64) ([]memory.Event, error) {
+	return h.store.LoadEventsAfter(ctx, h.sessionID, sequence)
+}
+
 func (h *SessionHistory) WorkingContext(ctx context.Context) (string, error) {
 	return h.store.workingTaskContext(ctx, h.sessionID)
 }

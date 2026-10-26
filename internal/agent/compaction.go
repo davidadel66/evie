@@ -549,6 +549,12 @@ func reconstructCompactionChain(events []memory.Event) (*ContextSummary, []accep
 	if err := validateDurableContextHistory(events); err != nil {
 		return nil, nil, err
 	}
+	return validatedCompactionChain(events)
+}
+
+// validatedCompactionChain is reconstructCompactionChain for a history whose
+// context records were already validated (newRequestHistory).
+func validatedCompactionChain(events []memory.Event) (*ContextSummary, []acceptedCompaction, error) {
 	turns, err := compactionRootTurns(events)
 	if err != nil {
 		return nil, nil, err

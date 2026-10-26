@@ -615,6 +615,11 @@ func TestPressureProjectionClearsAtLeastTheMinimum(t *testing.T) {
 		b := &contextEvents{t: t}
 		b.user("old", "look it up")
 		id := b.toolGroup("old", strings.Repeat("e", eligible))
+		// Small results complete a batch of eligible groups
+		// (pressureProjectionGroupBatch); only the one above is projectable.
+		for i := 1; i < pressureProjectionGroupBatch; i++ {
+			b.toolGroup("old", "small")
+		}
 		// Unprojectable bulk keeps the bytes to free above the minimum.
 		b.answer("old", "old-answer", strings.Repeat("answer ", 10_000))
 		b.user("active", "continue")

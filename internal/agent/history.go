@@ -18,6 +18,13 @@ type History interface {
 	Events(ctx context.Context) ([]memory.Event, error)
 }
 
+// historyTail is a History that can list only the events committed after a
+// sequence. Events are append-only and numbered in commit order, so a turn
+// that holds its earlier events needs only the newer ones.
+type historyTail interface {
+	EventsAfter(ctx context.Context, sequence int64) ([]memory.Event, error)
+}
+
 type workingContextProvider interface {
 	WorkingContext(context.Context) (string, error)
 }

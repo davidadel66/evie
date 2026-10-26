@@ -36,7 +36,9 @@ type tokenRatio struct {
 // tokenRatioEstimator is implemented by estimators that calibrate the ratio
 // from durable history. Other estimators charge one token per byte.
 type tokenRatioEstimator interface {
-	bytesPerToken(events []memory.Event, canonicalModel string) tokenRatio
+	// bytesPerToken reuses decodes' results for events a turn already
+	// decoded; nil decodes every event.
+	bytesPerToken(events []memory.Event, canonicalModel string, decodes *turnDecodes) tokenRatio
 }
 
 // CalibratedRequestEstimator measures the same canonical request bytes as
@@ -55,7 +57,7 @@ func (CalibratedRequestEstimator) Version() string { return CalibratedRequestEst
 // provider stage. Only requests to canonicalModel count. The ratio is the
 // minimum over the newest samples, capped at the uncalibrated floor until
 // enough exist.
-func (CalibratedRequestEstimator) bytesPerToken(events []memory.Event, canonicalModel string) tokenRatio {
+func (CalibratedRequestEstimator) bytesPerToken(events []memory.Event, canonicalModel string, decodes *turnDecodes) tokenRatio {
 	pending := make(map[memory.EventID]memory.ContextSnapshotPayload)
 	var samples []int64
 	rejectedSample := func(trigger memory.EventID) {
@@ -68,8 +70,8 @@ func (CalibratedRequestEstimator) bytesPerToken(events []memory.Event, canonical
 	for _, event := range events {
 		switch event.Type {
 		case memory.EventContextSnapshot:
-			var snapshot memory.ContextSnapshotPayload
-			if json.Unmarshal(event.Payload, &snapshot) != nil {
+			snapshot, ok := decodes.calibrationSnapshot(event)
+			if !ok {
 				continue
 			}
 			rejectedSample(event.ParentID)
@@ -87,12 +89,11 @@ func (CalibratedRequestEstimator) bytesPerToken(events []memory.Event, canonical
 			if !ok || snapshot.CanonicalModel != canonicalModel || snapshot.SerializedBytes <= 0 {
 				continue
 			}
-			var payload memory.AssistantMessagePayload
-			if json.Unmarshal(event.Payload, &payload) != nil || payload.Usage == nil ||
-				payload.Usage.InputTokens == nil || *payload.Usage.InputTokens <= 0 {
+			inputTokens, ok := decodes.assistantInputTokens(event)
+			if !ok {
 				continue
 			}
-			sample := bytesPerTokenMilli(snapshot.SerializedBytes, *payload.Usage.InputTokens)
+			sample := bytesPerTokenMilli(snapshot.SerializedBytes, inputTokens)
 			samples = append(samples, max(minimumUsageBytesPerTokenMilli, min(sample, maximumBytesPerTokenMilli)))
 		}
 	}
@@ -130,8 +131,14 @@ func contextTokenRatio(
 ) tokenRatio {
 	var ratio tokenRatio
 	if calibrated, ok := estimator.(tokenRatioEstimator); ok {
-		ratio = calibrated.bytesPerToken(events, canonicalModel)
+		ratio = calibrated.bytesPerToken(events, canonicalModel, nil)
 	}
+	return rejectionBoundedRatio(ratio, hardWindowTokens, outputReserveTokens, rejectedRequestBytes)
+}
+
+// rejectionBoundedRatio caps a calibrated ratio at the bound a rejected
+// request in this turn proved.
+func rejectionBoundedRatio(ratio tokenRatio, hardWindowTokens, outputReserveTokens, rejectedRequestBytes int64) tokenRatio {
 	if rejectedRequestBytes > 0 {
 		bound := rejectionBytesPerTokenMilli(rejectedRequestBytes, hardWindowTokens, outputReserveTokens)
 		if ratio.milli == 0 || bound < ratio.milli {

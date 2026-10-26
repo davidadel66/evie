@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ContextComposerVersion            = "context-composer-v5"
+	ContextComposerVersion            = "context-composer-v6"
 	CanonicalRequestEstimatorVersion  = "canonical-provider-json-bytes-v2"
 	CalibratedRequestEstimatorVersion = "calibrated-provider-json-bytes-v3"
 )
@@ -115,6 +115,9 @@ type ContextComposeInput struct {
 	// durable, so history validation still checks earlier snapshots'
 	// placeholders against stored content.
 	toolResultReductions map[memory.EventID]string
+	// history, set by a turn, carries what was derived once from Events for
+	// every composition pass of the request.
+	history *requestHistory
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -256,11 +259,11 @@ func (c *ContextComposer) prepare(
 		return contextPreparation{}, errors.New("context summary identity and content must be present")
 	}
 	profile := input.Profile.Diagnostics()
-	turnCompactions, err := durableTurnCompactions(input.Events)
+	turnCompactions, err := input.history.compactions(input.Events)
 	if err != nil {
 		return contextPreparation{}, err
 	}
-	ratio := contextTokenRatio(c.estimator, input.Events, profileCanonicalModel(profile),
+	ratio := rejectionBoundedRatio(input.history.calibratedRatio(c.estimator, input.Events, profileCanonicalModel(profile)),
 		profile.HardWindowTokens, profile.OutputReserveTokens, input.RejectedRequestBytes)
 	usable, err := usableInputBytes(profile, ratio)
 	if err != nil {
@@ -446,12 +449,28 @@ func (c *ContextComposer) projectAtStart(
 			pressureTarget = projection.estimate.SerializedBytes - (excess+band-1)/band*band
 		}
 	}
-	eligibleGroups := max(0, len(groups)-retainedCompleteToolResultGroups)
+	// Groups leave the retained window one tool call at a time, and shortening
+	// each as it leaves re-bills the cached history after it on every call.
+	// While the request fits, they become eligible in whole batches, so the
+	// projected set changes once a batch.
+	allEligibleGroups := max(0, len(groups)-retainedCompleteToolResultGroups)
+	eligibleGroups := allEligibleGroups / pressureProjectionGroupBatch * pressureProjectionGroupBatch
 	unpressured := projection
 	unpressured.selectedProjected = append([]memory.Event(nil), projection.selectedProjected...)
 	// Protected results are projected only in a second pass, when the
 	// request still cannot fit without them.
-	projectOlder := func(protected bool) error {
+	// projectOlder shortens eligible older results, oldest first, until the
+	// request reaches pressureTarget. Shortening one changes only its tool
+	// message's content, which both request encodings carry as one JSON
+	// string, so the request's size changes by exactly the difference of the
+	// two encoded strings; the request is encoded once when the pass ends.
+	// Encoding it after every shortening made a pass quadratic. With
+	// reencode, the original form, it is encoded after each one; a pass
+	// whose final size disagrees with the running total is redone that way.
+	var projectOlder func(protected, reencode bool) error
+	projectOlder = func(protected, reencode bool) error {
+		before := append([]memory.Event(nil), projection.selectedProjected...)
+		shortened := false
 		for groupIndex := 0; projection.estimate.SerializedBytes > pressureTarget && groupIndex < eligibleGroups; groupIndex++ {
 			group := groups[groupIndex]
 			for i, resultIndex := range group.resultIndexes {
@@ -466,22 +485,58 @@ func (c *ContextComposer) projectAtStart(
 				if protected {
 					pressureProjection = projectProtectedToolResult(original)
 				}
-				if len(pressureProjection) >= len(projection.selectedProjected[resultIndex].Content) {
+				current := projection.selectedProjected[resultIndex].Content
+				if len(pressureProjection) >= len(current) {
 					continue
 				}
 				projection.selectedProjected[resultIndex].Content = pressureProjection
-				if err := composeProjected(projection.selectedProjected); err != nil {
-					return err
+				if reencode {
+					if err := composeProjected(projection.selectedProjected); err != nil {
+						return err
+					}
+					continue
+				}
+				shortened = true
+				projection.estimate.SerializedBytes += encodedStringGrowth(current, pressureProjection)
+				if verifyReuse {
+					running := projection.estimate.SerializedBytes
+					if err := composeProjected(projection.selectedProjected); err != nil {
+						return err
+					}
+					if projection.estimate.SerializedBytes != running {
+						panic(fmt.Sprintf("agent: running request size %d differs from the encoded %d", running, projection.estimate.SerializedBytes))
+					}
 				}
 			}
 		}
-		return nil
+		if !shortened {
+			return nil
+		}
+		running := projection.estimate.SerializedBytes
+		if err := composeProjected(projection.selectedProjected); err != nil {
+			return err
+		}
+		if projection.estimate.SerializedBytes == running {
+			return nil
+		}
+		projection.selectedProjected = before
+		if err := composeProjected(projection.selectedProjected); err != nil {
+			return err
+		}
+		return projectOlder(protected, true)
 	}
-	if err := projectOlder(false); err != nil {
+	if err := projectOlder(false, false); err != nil {
 		return contextProjection{}, err
 	}
+	if projection.estimate.SerializedBytes > usable && eligibleGroups < allEligibleGroups {
+		// A request that cannot fit is projected as far as it always was.
+		eligibleGroups = allEligibleGroups
+		if err := projectOlder(false, false); err != nil {
+			return contextProjection{}, err
+		}
+	}
 	if projection.estimate.SerializedBytes > usable {
-		if err := projectOlder(true); err != nil {
+		if err := projectOlder(true, false); err != nil {
 			return contextProjection{}, err
 		}
 	}
@@ -995,6 +1050,12 @@ func validateDurableContextHistory(events []memory.Event) error {
 // compaction of a durable history and returns each root turn's latest
 // accepted in-turn compaction by root event ID.
 func durableTurnCompactions(events []memory.Event) (map[memory.EventID]*acceptedTurnCompaction, error) {
+	return decodedTurnCompactions(events, nil)
+}
+
+// decodedTurnCompactions is durableTurnCompactions reusing decodes' results
+// for events a turn already decoded.
+func decodedTurnCompactions(events []memory.Event, decodes *turnDecodes) (map[memory.EventID]*acceptedTurnCompaction, error) {
 	type indexedEvent struct {
 		event memory.Event
 		index int
@@ -1037,12 +1098,9 @@ func durableTurnCompactions(events []memory.Event) (map[memory.EventID]*accepted
 		if event.Type != memory.EventContextSnapshot {
 			continue
 		}
-		if err := validateSnapshotEvent(event); err != nil {
+		payload, err := decodes.snapshot(event)
+		if err != nil {
 			return nil, err
-		}
-		var payload memory.ContextSnapshotPayload
-		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			return nil, fmt.Errorf("decode context snapshot event %q: %w", event.ID, err)
 		}
 		parent, ok := byID[event.ParentID]
 		// The single compact-and-retry after a provider context-length
@@ -1106,9 +1164,8 @@ func durableTurnCompactions(events []memory.Event) (map[memory.EventID]*accepted
 			if _, duplicate := seenPlaceholders[placeholder.EventID]; duplicate || projected.event.Sequence <= previousSequence {
 				return nil, fmt.Errorf("context snapshot event %q has unordered or repeated placeholders", event.ID)
 			}
-			digest := sha256.Sum256([]byte(projected.event.Content))
 			if placeholder.OriginalBytes != int64(len(projected.event.Content)) ||
-				placeholder.SHA256 != hex.EncodeToString(digest[:]) {
+				placeholder.SHA256 != decodes.contentDigest(projected.event) {
 				return nil, fmt.Errorf("context snapshot event %q placeholder %q does not match durable content", event.ID, placeholder.EventID)
 			}
 			seenPlaceholders[placeholder.EventID] = struct{}{}
@@ -1142,4 +1199,13 @@ func validateSnapshotEvent(event memory.Event) error {
 		return fmt.Errorf("context snapshot event %q payload is not canonical", event.ID)
 	}
 	return nil
+}
+
+// encodedStringGrowth is how much a JSON encoding grows when one string value
+// in it changes from old to new: JSON escapes each character on its own, so
+// the rest of the encoding is unaffected.
+func encodedStringGrowth(old, new string) int64 {
+	oldEncoded, _ := json.Marshal(old)
+	newEncoded, _ := json.Marshal(new)
+	return int64(len(newEncoded) - len(oldEncoded))
 }
