@@ -113,8 +113,15 @@ func denseIndexCoverage(ctx context.Context, q semanticInspectionQueryer) (memor
 	return coverage, err
 }
 
+// ensureDenseGeneration runs on every retrieval maintenance tick, so it reads
+// before it writes: an UPDATE or BEGIN IMMEDIATE takes the write lock even
+// when the selection already matches the configuration.
 func (s *Store) ensureDenseGeneration(ctx context.Context) (memory.RetrievalCoverage, error) {
 	if denseEndpoint() == "" {
+		var enabled bool
+		if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM memory_dense_selection WHERE enabled=1)`).Scan(&enabled); err != nil || !enabled {
+			return memory.RetrievalCoverage{State: "disabled"}, err
+		}
 		_, err := s.db.ExecContext(ctx, `UPDATE memory_dense_selection SET enabled=0 WHERE enabled=1`)
 		return memory.RetrievalCoverage{State: "disabled"}, err
 	}
@@ -123,6 +130,13 @@ func (s *Store) ensureDenseGeneration(ctx context.Context) (memory.RetrievalCove
 		return memory.RetrievalCoverage{State: "unavailable"}, err
 	}
 	client.Close()
+	current, err := denseSelectionCurrent(ctx, s.db)
+	if err != nil {
+		return memory.RetrievalCoverage{}, err
+	}
+	if current {
+		return denseIndexCoverage(ctx, s.db)
+	}
 	err = s.withImmediateTransaction(ctx, func(q *sql.Conn) error {
 		var id, configuration, configurationHash string
 		var enabled int
@@ -436,4 +450,17 @@ func encodeDenseVector(vector []float32) []byte {
 		binary.LittleEndian.PutUint32(data[i*4:], math.Float32bits(value))
 	}
 	return data
+}
+
+// denseSelectionCurrent reports whether the selected generation is enabled
+// and built for the current configuration, so ensureDenseGeneration has
+// nothing to write.
+func denseSelectionCurrent(ctx context.Context, q semanticInspectionQueryer) (bool, error) {
+	var configuration, configurationHash string
+	var enabled int
+	err := q.QueryRowContext(ctx, `SELECT g.configuration,g.configuration_hash,s.enabled FROM memory_dense_selection s JOIN memory_dense_generations g ON g.generation=s.generation WHERE s.singleton=1`).Scan(&configuration, &configurationHash, &enabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil && enabled == 1 && configuration == denseConfiguration && configurationHash == memory.CompilerHash([]byte(denseConfiguration)), err
 }
