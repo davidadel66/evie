@@ -131,7 +131,8 @@ func ensureWorkflowRunLeaseSchema(ctx context.Context, db *sql.DB) error {
  BEGIN SELECT RAISE(ABORT,'workflow run events are immutable'); END;
  CREATE TRIGGER IF NOT EXISTS workflow_run_events_no_delete BEFORE DELETE ON workflow_run_events
  BEGIN SELECT RAISE(ABORT,'workflow run events are immutable'); END;
- CREATE INDEX IF NOT EXISTS workflow_runs_unfinished ON workflow_runs(state) WHERE state IN ('queued','running','waiting_for_dependency');`)
+ DROP INDEX IF EXISTS workflow_runs_unfinished;
+ CREATE INDEX IF NOT EXISTS workflow_runs_due ON workflow_runs(state) WHERE state IN `+dueWorkflowRunStates+`;`)
 	if err != nil {
 		return fmt.Errorf("create workflow run lease schema: %w", err)
 	}
@@ -591,13 +592,7 @@ func (s *Store) DueWorkflowRuns(ctx context.Context, limit int) ([]string, error
 		return nil, nil
 	}
 	now := formatLeaseTime(s.now())
-	rows, err := s.db.QueryContext(ctx, `SELECT r.id FROM workflow_runs r LEFT JOIN workflow_run_leases l ON l.run_id=r.id
- WHERE (r.state IN ('queued','running','waiting_for_dependency') AND (r.not_before IS NULL OR r.not_before<=?)
- OR r.state='needs_reconciliation' AND r.not_before IS NOT NULL AND r.not_before<=?
- OR r.state='cancelling' AND (r.not_before IS NOT NULL AND r.not_before<=? OR NOT EXISTS(SELECT 1 FROM workflow_effect_unknowns u WHERE u.run_id=r.id
- AND NOT EXISTS(SELECT 1 FROM workflow_effect_receipts x WHERE x.run_id=u.run_id AND x.intent_seq=u.intent_seq))))
- AND (l.run_id IS NULL OR l.released_at IS NOT NULL OR l.expires_at<=?)
- ORDER BY r.rowid LIMIT ?`, now, now, now, now, limit)
+	rows, err := s.db.QueryContext(ctx, dueWorkflowRunsSQL, now, now, now, now, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -612,3 +607,20 @@ func (s *Store) DueWorkflowRuns(ctx context.Context, limit int) ([]string, error
 	}
 	return ids, rows.Err()
 }
+
+// dueWorkflowRunStates are the only states DueWorkflowRuns can list; the
+// workflow_runs_due index holds just those runs.
+const dueWorkflowRunStates = `('queued','running','waiting_for_dependency','needs_reconciliation','cancelling')`
+
+// dueWorkflowRunsSQL repeats the due states as one plain IN term ahead of the
+// per-state conditions. SQLite cannot use an index for the OR of those
+// conditions, so without it every pass of the once-a-second scheduler read
+// every run ever kept; with it, it reads only the unfinished ones.
+const dueWorkflowRunsSQL = `SELECT r.id FROM workflow_runs r LEFT JOIN workflow_run_leases l ON l.run_id=r.id
+ WHERE r.state IN ` + dueWorkflowRunStates + `
+ AND (r.state IN ('queued','running','waiting_for_dependency') AND (r.not_before IS NULL OR r.not_before<=?)
+ OR r.state='needs_reconciliation' AND r.not_before IS NOT NULL AND r.not_before<=?
+ OR r.state='cancelling' AND (r.not_before IS NOT NULL AND r.not_before<=? OR NOT EXISTS(SELECT 1 FROM workflow_effect_unknowns u WHERE u.run_id=r.id
+ AND NOT EXISTS(SELECT 1 FROM workflow_effect_receipts x WHERE x.run_id=u.run_id AND x.intent_seq=u.intent_seq))))
+ AND (l.run_id IS NULL OR l.released_at IS NOT NULL OR l.expires_at<=?)
+ ORDER BY r.rowid LIMIT ?`
