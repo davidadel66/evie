@@ -808,6 +808,7 @@
         labelWidth: label ? round(textWidth(label, 11) + 12) : 0,
         change: r.link.change || "",
         faded: !!r.link.faded,
+        refs: list(r.link.refs),
         x1: r.p1.x,
         y1: r.p1.y,
         x2: r.p2.x,
@@ -1164,14 +1165,14 @@
     var offset = 0;
     var targets = row.map(function (n, i) {
       var t = wanted[i] - n.width / 2 - offset;
-      offset += n.width + gap;
+      offset += n.width + (n.extraRight || 0) + gap;
       return t;
     });
     var z = isotonic(targets);
     offset = 0;
     row.forEach(function (n, i) {
       n.x = z[i] + offset;
-      offset += n.width + gap;
+      offset += n.width + (n.extraRight || 0) + gap;
     });
   }
 
@@ -1200,39 +1201,20 @@
     return c;
   }
 
-  var LAYERED = { rankGap: 70, nodeGap: 28, dummyWidth: 8, sweeps: 16, placeRounds: 10, portGap: 14 };
-
-  // layered lays out boxes ({id, width, height, last}) joined by links
-  // ({from, to}) from top to bottom. Boxes marked last share the bottom
-  // layer. It sets each box's x and y and returns one route per link: the
-  // points it passes through and the sides it leaves and arrives on.
-  function layered(boxes, links, opts) {
-    opts = opts || {};
-    var rankGap = opts.rankGap || LAYERED.rankGap;
-    var nodeGap = opts.nodeGap || LAYERED.nodeGap;
-    var byId = {};
-    var ids = boxes
-      .map(function (b) {
-        byId[b.id] = b;
-        return b.id;
-      })
-      .sort(byString);
+  // rankEdges ranks ids by longest path along edges ({from, to, index,
+  // self}). A depth-first search first reverses the edges that lead back to
+  // an id on its stack, so cycles rank too; each edge gets
+  // reversed, top, and bottom. Self edges are left out of the ranking.
+  function rankEdges(ids, edges) {
     var out = {};
     var inn = {};
     ids.forEach(function (id) {
       out[id] = [];
       inn[id] = [];
     });
-    var edges = [];
-    links.forEach(function (link, index) {
-      if (!byId[link.from] || !byId[link.to]) return;
-      edges.push({ link: link, index: index, from: link.from, to: link.to, self: link.from === link.to });
-    });
     edges.forEach(function (e) {
       if (!e.self) out[e.from].push(e);
     });
-    // Break cycles: a depth-first search in id order reverses the edges that
-    // lead back to a box on its stack.
     var state = {};
     function visit(id) {
       state[id] = 1;
@@ -1247,25 +1229,31 @@
         });
       state[id] = 2;
     }
-    ids.forEach(function (id) {
-      if (!state[id]) visit(id);
+    // Sources first, so a cycle is broken where the walk from a source
+    // closes it, not at an arbitrary id.
+    var indegree = {};
+    edges.forEach(function (e) {
+      if (!e.self) indegree[e.to] = (indegree[e.to] || 0) + 1;
     });
-    var dag = edges.filter(function (e) {
-      return !e.self;
-    });
-    dag.forEach(function (e) {
-      e.top = e.reversed ? e.to : e.from;
-      e.bottom = e.reversed ? e.from : e.to;
-    });
+    ids
+      .filter(function (id) {
+        return !indegree[id];
+      })
+      .concat(ids)
+      .forEach(function (id) {
+        if (!state[id]) visit(id);
+      });
     ids.forEach(function (id) {
       out[id] = [];
       inn[id] = [];
     });
-    dag.forEach(function (e) {
+    edges.forEach(function (e) {
+      if (e.self) return;
+      e.top = e.reversed ? e.to : e.from;
+      e.bottom = e.reversed ? e.from : e.to;
       out[e.top].push(e);
       inn[e.bottom].push(e);
     });
-    // Rank by longest path from the sources, in topological order.
     var rank = {};
     var pending = {};
     ids.forEach(function (id) {
@@ -1283,9 +1271,40 @@
         if (--pending[e.bottom] === 0) queue.push(e.bottom);
       });
     }
-    var maxRank = 0;
     ids.forEach(function (id) {
       if (rank[id] === undefined) rank[id] = 0;
+    });
+    return rank;
+  }
+
+  var LAYERED = { rankGap: 70, nodeGap: 28, dummyWidth: 8, sweeps: 16, placeRounds: 10, portGap: 14 };
+
+  // layered lays out boxes ({id, width, height, last}) joined by links
+  // ({from, to}) from top to bottom. Boxes marked last share the bottom
+  // layer. It sets each box's x and y and returns one route per link: the
+  // points it passes through and the sides it leaves and arrives on.
+  function layered(boxes, links, opts) {
+    opts = opts || {};
+    var rankGap = opts.rankGap || LAYERED.rankGap;
+    var nodeGap = opts.nodeGap || LAYERED.nodeGap;
+    var byId = {};
+    var ids = boxes
+      .map(function (b) {
+        byId[b.id] = b;
+        return b.id;
+      })
+      .sort(byString);
+    var edges = [];
+    links.forEach(function (link, index) {
+      if (!byId[link.from] || !byId[link.to]) return;
+      edges.push({ link: link, index: index, from: link.from, to: link.to, self: link.from === link.to });
+    });
+    var rank = rankEdges(ids, edges);
+    var dag = edges.filter(function (e) {
+      return !e.self;
+    });
+    var maxRank = 0;
+    ids.forEach(function (id) {
       if (!byId[id].last) maxRank = Math.max(maxRank, rank[id]);
     });
     var hasLast = ids.some(function (id) {
@@ -1389,7 +1408,7 @@
       var x = 0;
       row.forEach(function (n) {
         n.x = x;
-        x += n.width + nodeGap;
+        x += n.width + (n.extraRight || 0) + nodeGap;
       });
     });
     var widest = Math.max.apply(null, rows.map(function (row) {
@@ -1526,6 +1545,7 @@
       labelWidth: label ? round(textWidth(label, 11) + 12) : 0,
       change: link.change || "",
       faded: !!link.faded,
+      refs: list(link.refs),
       x1: a.x,
       y1: a.y,
       x2: b.x,
@@ -1547,7 +1567,7 @@
 
   function packageBox(node, data, boundary) {
     var path = packagePath(node.id);
-    var subtitle = boundary ? groupLabel(node.group) || "Outside" : path || kindLabel(node.kind);
+    var subtitle = boundary ? (node.group ? groupLabel(node.group) : kindLabel(node.kind)) : path || kindLabel(node.kind);
     var width = Math.max(GROUP_VIEW.minWidth, textWidth(node.title, 14) + 34, textWidth(subtitle, 11) + 34);
     var box = drawnNode(node, width, boundary ? GROUP_VIEW.chipHeight : GROUP_VIEW.nodeHeight, {
       subtitle: subtitle,
@@ -1582,7 +1602,7 @@
       if (!member[l.from] || l.from === l.to) return;
       if (member[l.to]) {
         links.push(l);
-      } else if (data.nodeById[l.to] && data.nodeById[l.to].level === "component") {
+      } else if (data.nodeById[l.to]) {
         outside[l.to] = true;
         var faded = copy(l);
         faded.faded = true;
@@ -1629,6 +1649,810 @@
       return emptyLayout("group", "No packages in " + label + " yet", "Packages appear here once a content file gives them this group.");
     }
     return layoutMembers(data, "group", ids, label);
+  }
+
+  // layoutInside draws what a container zooms into: the nodes it contains,
+  // laid out like a group.
+  function layoutInside(data, containerId) {
+    var container = data.nodeById[containerId];
+    var ids = container
+      ? container.contains.filter(function (id) {
+          return !!data.nodeById[id];
+        })
+      : [];
+    if (!ids.length) {
+      return emptyLayout(
+        "inside",
+        container ? "Nothing inside " + container.title + " yet" : "No such container",
+        "A container shows the nodes its contains list names; this one names none yet."
+      );
+    }
+    return layoutMembers(data, "inside", ids, container.title);
+  }
+
+  // ------------------------------------------------------------- focus view
+
+  var FOCUS = { margin: 36, columnGap: 150, chipHeight: 44, chipGap: 12, minChip: 170, focusWidth: 300, header: 34, portGap: 14 };
+
+  // layoutFocus draws one node with who calls it on the left and what it
+  // depends on on the right, from the import graph and the content edges.
+  function layoutFocus(data, id) {
+    var f = FOCUS;
+    var node = data.nodeById[id];
+    if (!node) return emptyLayout("focus", "No such node", "The address names a node the data does not have.");
+    var seen = { callers: {}, dependencies: {} };
+    var links = [];
+    data.links.forEach(function (l) {
+      if (l.from === l.to) return;
+      if (l.to === id && data.nodeById[l.from]) {
+        seen.callers[l.from] = true;
+        links.push(l);
+      } else if (l.from === id && data.nodeById[l.to]) {
+        seen.dependencies[l.to] = true;
+        links.push(l);
+      }
+    });
+    function column(side) {
+      return Object.keys(seen[side])
+        .map(function (other) {
+          var n = data.nodeById[other];
+          var subtitle = n.group ? groupLabel(n.group) : kindLabel(n.kind);
+          return drawnNode(n, Math.max(f.minChip, textWidth(n.title, 13) + 40, textWidth(subtitle, 11) + 40), f.chipHeight, {
+            side: side,
+            subtitle: subtitle,
+          });
+        })
+        .sort(function (a, b) {
+          return groupIndex(a.group) - groupIndex(b.group) || byTitleThenId(a, b);
+        });
+    }
+    var callers = column("callers");
+    var deps = column("dependencies");
+    var summary = node.summary && node.summary.text ? node.summary.text : "";
+    var summaryLines = wrapText(summary, f.focusWidth - 36, 12.5, 6);
+    var ports = Math.max(callers.length, deps.length);
+    var focusHeight = Math.max(96 + summaryLines.length * 17, (ports + 1) * f.portGap);
+    var path = packagePath(id);
+    var focus = drawnNode(node, f.focusWidth, focusHeight, {
+      focus: true,
+      side: "focus",
+      subtitle: path || kindLabel(node.kind),
+      summaryLines: summaryLines,
+    });
+    var top = f.margin + f.header;
+    var colHeight = function (col) {
+      return col.reduce(function (h, n, i) {
+        return h + n.height + (i ? f.chipGap : 0);
+      }, 0);
+    };
+    var tallest = Math.max(colHeight(callers), colHeight(deps), focusHeight);
+    var leftWidth = Math.max.apply(null, callers.map(function (n) { return n.width; }).concat([f.minChip]));
+    var rightWidth = Math.max.apply(null, deps.map(function (n) { return n.width; }).concat([f.minChip]));
+    var x = f.margin;
+    function stack(col, colX, width) {
+      var y = top + (tallest - colHeight(col)) / 2;
+      col.forEach(function (n) {
+        n.x = colX + (width - n.width) / 2;
+        n.y = y;
+        y += n.height + f.chipGap;
+      });
+    }
+    stack(callers, x, leftWidth);
+    focus.x = x + leftWidth + f.columnGap;
+    focus.y = top + (tallest - focusHeight) / 2;
+    var rightX = focus.x + focus.width + f.columnGap;
+    stack(deps, rightX, rightWidth);
+    var nodes = callers.concat([focus], deps);
+    links.sort(function (a, b) {
+      return byString(linkKey(a), linkKey(b));
+    });
+    var columns = [
+      { id: "callers", title: "Who calls it", count: callers.length, x: round(x), y: f.margin, width: round(leftWidth) },
+      { id: "dependencies", title: "Depends on", count: deps.length, x: round(rightX), y: f.margin, width: round(rightWidth) },
+    ];
+    var layout = {
+      kind: "focus",
+      title: node.title,
+      nodes: nodes,
+      edges: routeLinks(nodes, links, { portGap: f.portGap }),
+      columns: columns,
+      lanes: [],
+      empty: null,
+    };
+    finishLayout(layout, f.margin);
+    layout.width = Math.max(layout.width, round(rightX + rightWidth + f.margin));
+    layout.height = Math.max(layout.height, round(top + tallest + f.margin));
+    return layout;
+  }
+
+  // ---------------------------------------------------------- sequence view
+
+  var SEQUENCE = {
+    margin: 32,
+    headHeight: 54,
+    minHead: 130,
+    headGap: 48,
+    labelMax: 230,
+    labelSize: 12,
+    lineHeight: 15,
+    rowPad: 30,
+    selfReach: 44,
+    selfDrop: 26,
+    noteMax: 260,
+    notePad: 36,
+    firstRow: 34,
+    tail: 34,
+  };
+
+  // flowIndex lists every flow for the flows view, by title.
+  function flowIndex(data) {
+    return data.flows
+      .map(function (f) {
+        return {
+          id: f.id,
+          title: f.title || f.id,
+          summary: f.summary || null,
+          trigger: f.trigger || null,
+          participants: list(f.participants).length,
+          steps: list(f.steps).length,
+          change: f.change || "",
+        };
+      })
+      .sort(byTitleThenId);
+  }
+
+  // layoutSequence draws a flow, or a sequence diagram, with one lifeline per
+  // participant and its steps numbered top to bottom. Gaps between lifelines
+  // grow until every step's label fits between the lifelines it joins.
+  function layoutSequence(data, flow) {
+    var q = SEQUENCE;
+    var ids = list(flow && flow.participants);
+    if (!ids.length) return emptyLayout("sequence", "No participants yet", "A flow needs participants and steps to draw.");
+    var index = {};
+    var participants = ids.map(function (id, i) {
+      index[id] = i;
+      var node = data.nodeById[id];
+      var title = node ? node.title || id : id;
+      var subtitle = node ? (node.group ? groupLabel(node.group) : kindLabel(node.kind)) : "";
+      return {
+        id: id,
+        ref: node ? id : null,
+        title: title,
+        subtitle: subtitle,
+        kind: node ? node.kind || "" : "",
+        group: node ? node.group || "" : "",
+        change: node ? node.change || "" : "",
+        x: 0,
+        y: q.margin,
+        width: round(Math.max(q.minHead, textWidth(title, 13.5) + 32, textWidth(subtitle, 11) + 32)),
+        height: q.headHeight,
+      };
+    });
+    var steps = list(flow.steps)
+      .map(function (step, i) {
+        return { step: step, number: i + 1 };
+      })
+      .filter(function (s) {
+        return index[s.step.from] !== undefined && index[s.step.to] !== undefined;
+      });
+    // Gaps between neighbouring lifelines: room for the heads, then for each
+    // label, narrowest spans first.
+    var gaps = [];
+    for (var i = 0; i + 1 < participants.length; i++) {
+      gaps.push((participants[i].width + participants[i + 1].width) / 2 + q.headGap);
+    }
+    var tailRoom = 0;
+    var laid = steps.map(function (s) {
+      var step = s.step;
+      var a = index[step.from];
+      var b = index[step.to];
+      var kind = step.kind || "call";
+      var self = kind !== "note" && a === b;
+      var width = kind === "note" ? q.noteMax : q.labelMax;
+      var lines = wrapText(step.label || "", width, q.labelSize, 4);
+      var labelWidth = Math.max.apply(null, lines.map(function (l) { return textWidth(l, q.labelSize); }).concat([0]));
+      return { s: s, a: a, b: b, kind: kind, self: self, lines: lines, labelWidth: labelWidth };
+    });
+    laid
+      .filter(function (l) {
+        return l.kind !== "note" && !l.self;
+      })
+      .sort(function (p, r) {
+        return Math.abs(p.a - p.b) - Math.abs(r.a - r.b) || p.s.number - r.s.number;
+      })
+      .forEach(function (l) {
+        var lo = Math.min(l.a, l.b);
+        var hi = Math.max(l.a, l.b);
+        var have = 0;
+        for (var g = lo; g < hi; g++) have += gaps[g];
+        var need = l.labelWidth + 40;
+        if (need > have) {
+          for (g = lo; g < hi; g++) gaps[g] += (need - have) / (hi - lo);
+        }
+      });
+    laid.forEach(function (l) {
+      if (!l.self) return;
+      var need = q.selfReach + l.labelWidth + 30;
+      if (l.a < gaps.length) gaps[l.a] = Math.max(gaps[l.a], need + participants[l.a + 1].width / 2 - 10);
+      else tailRoom = Math.max(tailRoom, need);
+    });
+    var x = q.margin + participants[0].width / 2;
+    participants.forEach(function (p, k) {
+      if (k > 0) x += gaps[k - 1];
+      p.lifeline = round(x);
+      p.x = round(x - p.width / 2);
+    });
+    var top = q.margin + q.headHeight;
+    var y = top + q.firstRow;
+    var out = laid.map(function (l) {
+      var step = l.s.step;
+      var from = participants[l.a];
+      var to = participants[l.b];
+      var labelHeight = l.lines.length * q.lineHeight;
+      var drawn = {
+        number: l.s.number,
+        from: step.from,
+        to: step.to,
+        kind: l.kind,
+        via: step.via || "",
+        label: step.label || "",
+        lines: l.lines,
+        refs: list(step.refs),
+        change: step.change || "",
+        self: l.self,
+      };
+      if (l.kind === "note") {
+        var lo = Math.min(from.lifeline, to.lifeline) - q.notePad;
+        var hi = Math.max(from.lifeline, to.lifeline) + q.notePad;
+        var noteWidth = Math.max(hi - lo, l.labelWidth + 28);
+        var mid = (lo + hi) / 2;
+        var noteHeight = labelHeight + 16;
+        drawn.box = { x: round(mid - noteWidth / 2), y: round(y - 6), width: round(noteWidth), height: round(noteHeight) };
+        drawn.y = round(y - 6 + noteHeight / 2);
+        drawn.labelX = round(mid);
+        drawn.labelY = round(y + 8);
+        y += noteHeight + q.rowPad - 6;
+        return drawn;
+      }
+      y += labelHeight;
+      drawn.y = round(y);
+      drawn.x1 = from.lifeline;
+      drawn.x2 = to.lifeline;
+      if (l.self) {
+        var reach = drawn.x1 + q.selfReach;
+        drawn.y2 = round(y + q.selfDrop);
+        drawn.d =
+          "M" + drawn.x1 + "," + drawn.y +
+          " C" + reach + "," + drawn.y + " " + reach + "," + drawn.y2 + " " + drawn.x2 + "," + drawn.y2;
+        drawn.labelX = round(reach + 10);
+        drawn.labelY = round(y - labelHeight + q.lineHeight - 3);
+        drawn.anchor = "start";
+        y += q.selfDrop;
+      } else {
+        var dir = drawn.x2 > drawn.x1 ? 1 : -1;
+        drawn.d =
+          "M" + drawn.x1 + "," + drawn.y +
+          " C" + round(drawn.x1 + dir * 10) + "," + drawn.y + " " + round(drawn.x2 - dir * 10) + "," + drawn.y + " " + drawn.x2 + "," + drawn.y;
+        drawn.labelX = round((drawn.x1 + drawn.x2) / 2);
+        drawn.labelY = round(y - labelHeight - 1 + q.lineHeight - 4);
+        drawn.anchor = "middle";
+      }
+      y += q.rowPad;
+      return drawn;
+    });
+    var bottom = y + q.tail - q.rowPad;
+    participants.forEach(function (p) {
+      p.lifelineTop = round(top);
+      p.lifelineBottom = round(bottom);
+    });
+    var width = participants[participants.length - 1].x + participants[participants.length - 1].width + q.margin + tailRoom;
+    out.forEach(function (s) {
+      if (s.box) width = Math.max(width, s.box.x + s.box.width + q.margin);
+    });
+    return {
+      kind: "sequence",
+      title: flow.title || "",
+      nodes: participants,
+      participants: participants,
+      steps: out,
+      edges: [],
+      lanes: [],
+      width: round(width),
+      height: round(bottom + q.margin),
+      empty: null,
+    };
+  }
+
+  // ----------------------------------------------------------- diagram views
+
+  // findDiagram finds a diagram by id and the node that carries it.
+  function findDiagram(data, id) {
+    var ids = Object.keys(data.nodeById).sort(byString);
+    for (var i = 0; i < ids.length; i++) {
+      var node = data.nodeById[ids[i]];
+      var diagrams = list(node.diagrams);
+      for (var j = 0; j < diagrams.length; j++) {
+        if (diagrams[j] && diagrams[j].id === id) return { node: node, diagram: diagrams[j] };
+      }
+    }
+    return null;
+  }
+
+  var DIAGRAM = { margin: 32, nodeHeight: 46, minWidth: 110, rankGap: 74, nodeGap: 40, loopRoom: 60 };
+
+  function diagramBox(id, title, ref, data) {
+    var target = ref ? data.nodeById[ref] : null;
+    return {
+      id: id,
+      ref: target ? ref : null,
+      title: title,
+      subtitle: target ? target.title : "",
+      kind: target ? target.kind || "" : "",
+      group: target ? target.group || "" : "",
+      change: target ? target.change || "" : "",
+      x: 0,
+      y: 0,
+      width: round(Math.max(DIAGRAM.minWidth, textWidth(title, 13) + 32)),
+      height: DIAGRAM.nodeHeight,
+    };
+  }
+
+  // layoutLayeredDiagram lays out a plain graph or a state diagram top to
+  // bottom with the layered engine.
+  function layoutLayeredDiagram(kind, boxes, links, title) {
+    var d = DIAGRAM;
+    var selfLoops = {};
+    links.forEach(function (l) {
+      if (l.from === l.to) selfLoops[l.from] = Math.max(selfLoops[l.from] || 0, textWidth(l.label, 11) + d.loopRoom);
+    });
+    boxes.forEach(function (b) {
+      if (selfLoops[b.id]) b.extraRight = round(selfLoops[b.id]);
+    });
+    var result = layered(boxes, links, { rankGap: d.rankGap, nodeGap: d.nodeGap });
+    boxes.forEach(function (b) {
+      b.x = round(b.x + d.margin);
+      b.y = round(b.y + d.margin);
+      delete b.extraRight;
+    });
+    var edges = result.routes.map(function (route) {
+      route.points = route.points.map(function (p) {
+        return { x: round(p.x + d.margin), y: round(p.y + d.margin) };
+      });
+      return layeredEdge(route, route.link.from, route.link.to);
+    });
+    return finishLayout({ kind: kind, title: title, nodes: boxes, edges: edges, lanes: [], empty: null }, d.margin);
+  }
+
+  function graphLinks(diagram, known) {
+    return list(diagram.edges)
+      .filter(function (e) {
+        return known[e.from] && known[e.to];
+      })
+      .map(function (e) {
+        return { from: e.from, to: e.to, label: e.label || "", refs: list(e.refs), via: "" };
+      });
+  }
+
+  function layoutGraphDiagram(data, diagram) {
+    var known = {};
+    var boxes = list(diagram.nodes).map(function (n) {
+      known[n.id] = true;
+      return diagramBox(n.id, n.label || n.id, n.node, data);
+    });
+    if (!boxes.length) return emptyLayout("graph", "Nothing to draw yet", "This diagram lists no nodes.");
+    var links = graphLinks(diagram, known);
+    if (list(diagram.lanes).length) return layoutLaneGraph(data, diagram, boxes, links);
+    return layoutLayeredDiagram("graph", boxes, links, diagram.title);
+  }
+
+  var LANES = { margin: 28, header: 132, pad: 18, colGap: 96, rowGap: 18, bandGap: 10, passPad: 6 };
+
+  // layoutLaneGraph draws a graph with lanes as horizontal bands, its nodes
+  // flowing left to right by longest path, each in its lane's band.
+  function layoutLaneGraph(data, diagram, boxes, links) {
+    var g = LANES;
+    var byId = {};
+    var ids = boxes
+      .map(function (b) {
+        byId[b.id] = b;
+        return b.id;
+      })
+      .sort(byString);
+    var edges = links.map(function (l, index) {
+      return { link: l, index: index, from: l.from, to: l.to, self: l.from === l.to };
+    });
+    var rank = rankEdges(ids, edges);
+    var laneDefs = list(diagram.lanes).map(function (l) {
+      return { id: l.id, title: l.title || l.id };
+    });
+    var laneOf = {};
+    list(diagram.nodes).forEach(function (n) {
+      laneOf[n.id] = n.lane || "";
+    });
+    var laneIndex = {};
+    laneDefs.forEach(function (l, i) {
+      laneIndex[l.id] = i;
+    });
+    if (ids.some(function (id) { return laneIndex[laneOf[id]] === undefined; })) {
+      laneIndex[""] = laneDefs.length;
+      laneDefs.push({ id: "", title: "Other" });
+    }
+    var maxRank = 0;
+    ids.forEach(function (id) {
+      maxRank = Math.max(maxRank, rank[id]);
+    });
+    var cells = laneDefs.map(function () {
+      var row = [];
+      for (var r = 0; r <= maxRank; r++) row.push([]);
+      return row;
+    });
+    ids.forEach(function (id) {
+      var li = laneIndex[laneOf[id]] === undefined ? laneIndex[""] : laneIndex[laneOf[id]];
+      cells[li][rank[id]].push(byId[id]);
+    });
+    var colWidth = [];
+    for (var r = 0; r <= maxRank; r++) {
+      colWidth[r] = 0;
+      cells.forEach(function (row) {
+        row[r].forEach(function (b) {
+          colWidth[r] = Math.max(colWidth[r], b.width);
+        });
+      });
+    }
+    var colX = [];
+    var x = g.margin + g.header + g.pad;
+    for (r = 0; r <= maxRank; r++) {
+      colX[r] = x;
+      x += colWidth[r] + g.colGap;
+    }
+    var right = x - g.colGap + g.pad;
+    var y = g.margin;
+    var lanes = laneDefs.map(function (def, li) {
+      var tallest = 0;
+      cells[li].forEach(function (cell) {
+        cell.sort(function (a, b) {
+          return byString(a.title, b.title) || byString(a.id, b.id);
+        });
+        tallest = Math.max(tallest, cell.reduce(function (h, b, k) {
+          return h + b.height + (k ? g.rowGap : 0);
+        }, 0));
+      });
+      var height = tallest + 2 * g.pad;
+      cells[li].forEach(function (cell, rr) {
+        var h = cell.reduce(function (sum, b, k) {
+          return sum + b.height + (k ? g.rowGap : 0);
+        }, 0);
+        var cy = y + g.pad + (tallest - h) / 2;
+        cell.forEach(function (b) {
+          b.x = round(colX[rr] + (colWidth[rr] - b.width) / 2);
+          b.y = round(cy);
+          cy += b.height + g.rowGap;
+        });
+      });
+      var lane = {
+        id: def.id || "~other",
+        title: def.title,
+        x: g.margin,
+        y: round(y),
+        width: round(right - g.margin),
+        height: round(height),
+        nodes: [],
+      };
+      cells[li].forEach(function (cell) {
+        cell.forEach(function (b) {
+          lane.nodes.push(b.id);
+        });
+      });
+      y += height + g.bandGap;
+      return lane;
+    });
+    var columns = [];
+    for (r = 0; r <= maxRank; r++) {
+      var colBoxes = [];
+      cells.forEach(function (row) {
+        colBoxes = colBoxes.concat(row[r]);
+      });
+      columns.push({ x: colX[r], width: colWidth[r], y: g.margin, height: y - g.margin, boxes: colBoxes });
+    }
+    var laneAt = {};
+    lanes.forEach(function (l) {
+      l.nodes.forEach(function (id) {
+        laneAt[id] = l;
+      });
+    });
+    var forward = [];
+    var special = [];
+    edges.forEach(function (e) {
+      if (!e.self && rank[e.to] > rank[e.from]) forward.push(e.link);
+      else special.push(e);
+    });
+    var drawn = routeLinks(boxes, forward, {
+      portGap: 12,
+      waypointsFor: function (link, p1, p2) {
+        return passThrough(columns, p1, p2, g.passPad);
+      },
+    });
+    special.forEach(function (e) {
+      var a = byId[e.from];
+      var b = byId[e.to];
+      var route;
+      if (e.self) {
+        route = { self: true, link: e.link, points: [
+          { x: round(a.x + a.width), y: round(a.y + a.height * 0.3) },
+          { x: round(a.x + a.width), y: round(a.y + a.height * 0.7) },
+        ] };
+        drawn.push(layeredEdge(route, e.from, e.to));
+        return;
+      }
+      if (rank[e.to] === rank[e.from]) {
+        drawn = drawn.concat(routeLinks(boxes, [e.link], { axis: "v" }));
+        return;
+      }
+      // A return to an earlier node runs back along the bottom of the lower
+      // node's band, below every node in it.
+      var lower = laneAt[e.from].y >= laneAt[e.to].y ? laneAt[e.from] : laneAt[e.to];
+      var corridor = round(lower.y + lower.height - g.pad / 2);
+      var p1 = { x: round(a.x + a.width / 2), y: round(a.y + a.height) };
+      var p2 = { x: round(b.x + b.width / 2), y: round(b.y + b.height) };
+      var path = curvePath(p1, NORMALS.bottom, p2, NORMALS.bottom, [
+        { x: p1.x, y: corridor },
+        { x: p2.x, y: corridor },
+      ], "h");
+      var label = e.link.label || "";
+      drawn.push({
+        id: e.link.from + ">" + e.link.to + ">",
+        from: e.from,
+        to: e.to,
+        via: "",
+        label: label,
+        labelWidth: label ? round(textWidth(label, 11) + 12) : 0,
+        change: "",
+        faded: false,
+        refs: list(e.link.refs),
+        x1: p1.x,
+        y1: p1.y,
+        x2: p2.x,
+        y2: p2.y,
+        d: path.d,
+        labelX: round((p1.x + p2.x) / 2),
+        labelY: corridor,
+        back: true,
+      });
+    });
+    drawn.sort(function (p, q) {
+      return byString(p.id, q.id);
+    });
+    return finishLayout({ kind: "graph", title: diagram.title, nodes: boxes, edges: drawn, lanes: lanes, empty: null }, g.margin);
+  }
+
+  // layoutStateDiagram draws states top to bottom from the initial marker,
+  // with every transition, loops and returns included.
+  function layoutStateDiagram(data, diagram) {
+    var known = {};
+    var boxes = list(diagram.states).map(function (st) {
+      known[st.id] = true;
+      var box = diagramBox(st.id, st.label || st.id, null, data);
+      box.shape = "state";
+      box.refs = list(st.refs);
+      return box;
+    });
+    if (!boxes.length) return emptyLayout("state", "No states yet", "This state diagram lists no states.");
+    var links = list(diagram.transitions)
+      .filter(function (t) {
+        return known[t.from] && known[t.to];
+      })
+      .map(function (t) {
+        return { from: t.from, to: t.to, label: t.label || "", refs: list(t.refs), via: "" };
+      });
+    if (known[diagram.initial]) {
+      boxes.push({ id: "~initial", ref: null, title: "", subtitle: "", kind: "", group: "", change: "", shape: "initial", x: 0, y: 0, width: 18, height: 18 });
+      links.push({ from: "~initial", to: diagram.initial, label: "", refs: [], via: "" });
+    }
+    return layoutLayeredDiagram("state", boxes, links, diagram.title);
+  }
+
+  var ER = { margin: 32, header: 34, row: 24, colGap: 120, rowGap: 30, minWidth: 200, stubHeight: 34 };
+
+  // layoutErDiagram draws an er diagram from the facts: a card per table
+  // with its columns, parents left of the tables that reference them, and a
+  // connector from each foreign-key column to the column it references.
+  // Referenced tables the diagram does not list are faded stubs.
+  function layoutErDiagram(data, diagram) {
+    var e = ER;
+    var db = null;
+    data.facts.databases.forEach(function (candidate) {
+      if (candidate && candidate.id === diagram.database) db = candidate;
+    });
+    if (!db) {
+      return emptyLayout("er", "No tables for " + (diagram.database || "this database") + " yet", "Columns and keys come from the extracted facts, which do not list this database yet.");
+    }
+    var tables = {};
+    list(db.tables).forEach(function (t) {
+      tables[t.name] = t;
+    });
+    var owner = db.package && data.nodeById["pkg:" + db.package] ? "pkg:" + db.package : null;
+    var cards = {};
+    var names = [];
+    function card(name, stub) {
+      if (cards[name]) return cards[name];
+      var table = tables[name];
+      var fkCols = {};
+      list(table && table.foreignKeys).forEach(function (fk) {
+        list(fk.columns).forEach(function (c) {
+          fkCols[c] = true;
+        });
+      });
+      var columns = stub || !table
+        ? []
+        : list(table.columns).map(function (c, i) {
+            return {
+              name: c.name,
+              type: c.type || "",
+              primaryKey: c.primaryKey || 0,
+              foreignKey: !!fkCols[c.name],
+              notNull: !!c.notNull,
+              y: e.header + i * e.row,
+              height: e.row,
+            };
+          });
+      var width = Math.max(e.minWidth, textWidth(name, 14) + 48);
+      columns.forEach(function (c) {
+        width = Math.max(width, textWidth(c.name, 12) + textWidth(c.type, 11) + 74);
+      });
+      var missing = !stub && !table;
+      var height = stub ? e.stubHeight : e.header + Math.max(columns.length, missing ? 1 : 0) * e.row + 8;
+      cards[name] = {
+        id: name,
+        ref: owner,
+        title: name,
+        subtitle: db.id,
+        kind: "table",
+        group: "",
+        change: "",
+        shape: "table",
+        stub: !!stub,
+        faded: !!stub,
+        missing: missing,
+        columns: columns,
+        x: 0,
+        y: 0,
+        width: round(width),
+        height: round(height),
+      };
+      names.push(name);
+      return cards[name];
+    }
+    list(diagram.tables).forEach(function (name) {
+      card(name, false);
+    });
+    var listed = names.slice();
+    var relations = [];
+    listed.forEach(function (name) {
+      var table = tables[name];
+      list(table && table.foreignKeys).forEach(function (fk) {
+        var parent = card(fk.table, listed.indexOf(fk.table) < 0);
+        var refs = list(fk.references);
+        list(fk.columns).forEach(function (col, i) {
+          var target = refs[i];
+          if (!target && parent.columns.length) {
+            var pk = parent.columns.filter(function (c) {
+              return c.primaryKey;
+            })[i];
+            target = pk ? pk.name : "";
+          }
+          relations.push({ from: name, to: parent.id, fromColumn: col, toColumn: target || "" });
+        });
+      });
+    });
+    var ids = names.slice().sort(byString);
+    var rankInput = relations.map(function (r, index) {
+      return { from: r.to, to: r.from, index: index, self: r.from === r.to };
+    });
+    var rank = rankEdges(ids, rankInput);
+    var maxRank = 0;
+    ids.forEach(function (id) {
+      maxRank = Math.max(maxRank, rank[id]);
+    });
+    var cols = [];
+    for (var r = 0; r <= maxRank; r++) cols.push([]);
+    ids.forEach(function (id) {
+      cols[rank[id]].push(cards[id]);
+    });
+    var x = e.margin;
+    var tallest = 0;
+    var heights = cols.map(function (col) {
+      col.sort(function (a, b) {
+        return (a.stub ? 1 : 0) - (b.stub ? 1 : 0) || byString(a.id, b.id);
+      });
+      var h = col.reduce(function (sum, c, k) {
+        return sum + c.height + (k ? e.rowGap : 0);
+      }, 0);
+      tallest = Math.max(tallest, h);
+      return h;
+    });
+    var columns = cols.map(function (col, ci) {
+      var width = Math.max.apply(null, col.map(function (c) { return c.width; }).concat([0]));
+      var y = e.margin + (tallest - heights[ci]) / 2;
+      col.forEach(function (c) {
+        c.x = round(x + (width - c.width) / 2);
+        c.y = round(y);
+        y += c.height + e.rowGap;
+      });
+      var column = { x: x, width: width, y: e.margin, height: tallest, boxes: col };
+      x += width + e.colGap;
+      return column;
+    });
+    function rowY(c, name) {
+      var col = c.columns.filter(function (k) {
+        return k.name === name;
+      })[0];
+      return col ? c.y + col.y + col.height / 2 : c.y + Math.min(c.height, e.header) / 2;
+    }
+    var edges = relations.map(function (rel) {
+      var child = cards[rel.from];
+      var parent = cards[rel.to];
+      var p1;
+      var p2;
+      var d;
+      var extent = [];
+      if (child === parent) {
+        var sx = child.x + child.width;
+        p1 = { x: round(sx), y: round(rowY(child, rel.fromColumn)) };
+        p2 = { x: round(sx), y: round(rowY(parent, rel.toColumn)) };
+        d = "M" + pt(p1) + " C" + pt({ x: sx + 44, y: p1.y }) + " " + pt({ x: sx + 44, y: p2.y }) + " " + pt(p2);
+        extent.push({ x: sx + 48, y: Math.max(p1.y, p2.y) });
+      } else {
+        var sides = facingSides(child, parent);
+        if (sides[0] === "top" || sides[0] === "bottom") sides = ["right", "right"];
+        p1 = sidePoint(child, sides[0], rowY(child, rel.fromColumn));
+        p2 = sidePoint(parent, sides[1], rowY(parent, rel.toColumn));
+        p1 = { x: round(p1.x), y: round(p1.y) };
+        p2 = { x: round(p2.x), y: round(p2.y) };
+        var path = curvePath(p1, NORMALS[sides[0]], p2, NORMALS[sides[1]], passThrough(columns, p1, p2, 8), "h");
+        d = path.d;
+      }
+      return {
+        id: rel.from + "." + rel.fromColumn + ">" + rel.to + "." + rel.toColumn,
+        from: rel.from,
+        to: rel.to,
+        fromColumn: rel.fromColumn,
+        toColumn: rel.toColumn,
+        via: "sql",
+        label: "",
+        labelWidth: 0,
+        change: "",
+        faded: !!parent.stub,
+        refs: [],
+        x1: p1.x,
+        y1: p1.y,
+        x2: p2.x,
+        y2: p2.y,
+        d: d,
+        extent: extent,
+      };
+    });
+    edges.sort(function (a, b) {
+      return byString(a.id, b.id);
+    });
+    var nodes = ids.map(function (id) {
+      return cards[id];
+    });
+    return finishLayout({ kind: "er", title: diagram.title, database: db.id, nodes: nodes, edges: edges, lanes: [], empty: null }, e.margin);
+  }
+
+  // layoutDiagram draws one of a node's diagrams by its kind.
+  function layoutDiagram(data, diagram) {
+    switch (diagram && diagram.kind) {
+      case "graph":
+        return layoutGraphDiagram(data, diagram);
+      case "sequence":
+        return layoutSequence(data, diagram);
+      case "state":
+        return layoutStateDiagram(data, diagram);
+      case "er":
+        return layoutErDiagram(data, diagram);
+    }
+    return emptyLayout("diagram", "Cannot draw this diagram", "Its kind is not one the explorer knows.");
   }
 
   function describePackage(data, path) {
@@ -1933,6 +2757,12 @@
     layoutContext: layoutContext,
     layoutContainers: layoutContainers,
     layoutGroup: layoutGroup,
+    layoutInside: layoutInside,
+    layoutFocus: layoutFocus,
+    layoutSequence: layoutSequence,
+    flowIndex: flowIndex,
+    layoutDiagram: layoutDiagram,
+    findDiagram: findDiagram,
     textWidth: textWidth,
     wrapText: wrapText,
     packageDetails: packageDetails,

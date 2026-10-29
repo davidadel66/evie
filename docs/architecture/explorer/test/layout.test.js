@@ -154,10 +154,11 @@ test("group view: out-of-group dependencies are faded boundary chips below the g
   const layout = model.layoutGroup(data(), "runtime");
   const chips = layout.nodes.filter((n) => n.boundary);
 
-  assert.deepEqual(chips.map((n) => [n.id, n.group]).sort(), [
-    ["pkg:internal/beta", "infrastructure"],
-    ["pkg:internal/eta", "memory"],
-    ["pkg:internal/gamma", "intelligence"],
+  assert.deepEqual(chips.map((n) => [n.id, n.subtitle]).sort(), [
+    ["external:bank", "External system"],
+    ["pkg:internal/beta", "Infrastructure"],
+    ["pkg:internal/eta", "Memory"],
+    ["pkg:internal/gamma", "Intelligence"],
   ]);
   const lowest = Math.max(...layout.nodes.filter((n) => !n.boundary).map((n) => n.y + n.height));
   for (const chip of chips) {
@@ -221,4 +222,63 @@ test("group view: a proposal's added, changed, and removed parts carry their cha
 
 test("group view: the layout is deterministic and independent of input order", () => {
   assert.deepEqual(model.layoutGroup(data(shuffled()), "runtime"), model.layoutGroup(data(), "runtime"));
+});
+
+test("focus view: callers on the left, the node in the middle, its dependencies on the right", () => {
+  const layout = model.layoutFocus(data(), "pkg:internal/alpha");
+
+  assert.equal(layout.kind, "focus");
+  const focus = layout.nodes.find((n) => n.focus);
+  assert.equal(focus.id, "pkg:internal/alpha");
+  const left = layout.nodes.filter((n) => n.side === "callers").map((n) => n.id).sort();
+  const right = layout.nodes.filter((n) => n.side === "dependencies").map((n) => n.id).sort();
+  assert.deepEqual(left, ["pkg:cmd/tool", "pkg:internal/alphatest"]);
+  assert.deepEqual(right, ["pkg:internal/epsilon", "pkg:internal/gamma", "pkg:internal/zeta"]);
+  for (const n of layout.nodes) {
+    if (n.side === "callers") assert.ok(n.x + n.width < focus.x, `${n.id} sits left of the node`);
+    if (n.side === "dependencies") assert.ok(n.x > focus.x + focus.width, `${n.id} sits right of the node`);
+  }
+  assertSound(layout, "focus");
+  assert.equal(layout.edges.length, 5);
+  assert.ok(focus.summaryLines.length >= 1, "the focused node carries its summary");
+  assert.deepEqual(
+    layout.columns.map((c) => [c.id, c.title, c.count]),
+    [
+      ["callers", "Who calls it", 2],
+      ["dependencies", "Depends on", 3],
+    ]
+  );
+});
+
+test("focus view: any node's connections count, with their labels, and an empty side says so", () => {
+  const layout = model.layoutFocus(data(), "container:server");
+  assert.deepEqual(layout.nodes.filter((n) => n.side === "callers").map((n) => n.id), ["container:ui"]);
+  assert.deepEqual(layout.nodes.filter((n) => n.side === "dependencies").map((n) => n.id).sort(), ["container:db", "external:api"]);
+  assert.ok(layout.edges.some((e) => e.label === "reads and writes" && e.via === "sql"));
+  assertSound(layout, "focus on a container");
+
+  const lonely = model.layoutFocus(data(), "pkg:cmd/tool");
+  assert.equal(lonely.columns.find((c) => c.id === "callers").count, 0);
+
+  const missing = model.layoutFocus(data(), "pkg:internal/ghost");
+  assert.deepEqual(missing.nodes, []);
+  assert.ok(missing.empty && missing.empty.title);
+});
+
+test("focus view: the layout is deterministic and independent of input order", () => {
+  assert.deepEqual(model.layoutFocus(data(shuffled()), "pkg:internal/alpha"), model.layoutFocus(data(), "pkg:internal/alpha"));
+});
+
+test("inside a container: the nodes it contains, layered by import depth", () => {
+  const layout = model.layoutInside(data(), "container:server");
+
+  assert.equal(layout.kind, "inside");
+  assert.equal(layout.title, "server");
+  assert.deepEqual(layout.nodes.filter((n) => !n.boundary).map((n) => n.id).sort(), ["pkg:internal/alpha", "pkg:internal/delta", "pkg:internal/epsilon"]);
+  assert.ok(layout.nodes.some((n) => n.boundary && n.id === "pkg:internal/zeta"));
+  assertSound(layout, "inside");
+
+  const empty = model.layoutInside(data(), "container:ui");
+  assert.deepEqual(empty.nodes, []);
+  assert.ok(empty.empty && empty.empty.title);
 });
