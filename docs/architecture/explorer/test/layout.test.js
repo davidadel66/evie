@@ -122,11 +122,14 @@ test("containers: no containers yet shows an empty state", () => {
   assert.ok(layout.empty && layout.empty.title);
 });
 
+// assertSound checks a layout's geometry. Edges drawn only on demand (when
+// their node is hovered or selected) are drawn over the picture, so they
+// may cross other nodes.
 function assertSound(layout, what) {
   assertNoOverlap(layout.nodes, what);
   assertWithinLayout(layout);
   assertEdgesOnNodes(layout);
-  assertEdgesAvoidNodes(layout);
+  assertEdgesAvoidNodes(layout, (e) => e.onDemand);
 }
 
 test("group view: packages are layered by import depth, importers above what they import", () => {
@@ -165,9 +168,12 @@ test("group view: out-of-group dependencies are faded boundary chips below the g
     assert.ok(chip.faded, `${chip.id} is faded`);
     assert.ok(chip.y >= lowest, `${chip.id} sits below the group`);
   }
-  for (const e of layout.edges.filter((e) => chips.some((c) => c.id === e.to))) {
-    assert.ok(e.faded, `the edge to ${e.to} is faded`);
+  const chipEdges = layout.edges.filter((e) => chips.some((c) => c.id === e.to));
+  assert.equal(chipEdges.length, 4);
+  for (const e of chipEdges) {
+    assert.ok(e.faded && e.onDemand, `the edge to ${e.to} is faded and drawn on demand`);
   }
+  assert.ok(layout.edges.filter((e) => !e.onDemand).every((e) => !chips.some((c) => c.id === e.to)), "only edges to chips wait for demand");
 });
 
 test("group view: a node shown in other groups joins their view, and an empty group shows an empty state", () => {
@@ -281,4 +287,31 @@ test("inside a container: the nodes it contains, layered by import depth", () =>
   const empty = model.layoutInside(data(), "container:ui");
   assert.deepEqual(empty.nodes, []);
   assert.ok(empty.empty && empty.empty.title);
+});
+
+test("group view: a layer with more packages than fit across wraps onto extra rows, still sound", () => {
+  const leaves = Array.from({ length: 20 }, (_, i) => "leaf" + String(i).padStart(2, "0"));
+  const pkgs = ["root"].concat(leaves, ["base"]);
+  const imports = leaves.map((l) => ({ from: "internal/root", to: "internal/" + l }));
+  imports.push({ from: "internal/leaf03", to: "internal/base" }, { from: "internal/root", to: "internal/base" });
+  const objects = [
+    { format: 1, kind: "facts", packages: pkgs.map((p) => ({ path: "internal/" + p, name: p, command: false, doc: "", testSupport: false })), imports },
+    {
+      format: 1,
+      kind: "content",
+      owner: "x",
+      nodes: pkgs.map((p) => ({ id: "pkg:internal/" + p, level: "component", kind: "package", title: p, group: "runtime", summary: { text: p, refs: ["code:x"] } })),
+    },
+  ];
+  const layout = model.layoutGroup(model.mergeData(objects), "runtime");
+  const rows = new Map();
+  for (const n of layout.nodes) rows.set(n.y, (rows.get(n.y) || 0) + 1);
+  assert.ok(Math.max(...rows.values()) <= 8, `no row holds more than eight packages: ${[...rows.values()]}`);
+  assert.ok(layout.width < 1700, `the layout stays narrow enough to read: ${layout.width}`);
+  assertSound(layout, "wrapped layers");
+  const root = nodeAt(layout, "pkg:internal/root");
+  for (const e of layout.edges) {
+    assert.ok(nodeAt(layout, e.from).y < nodeAt(layout, e.to).y, `${e.from} still sits above ${e.to}`);
+  }
+  assert.equal(root.y, Math.min(...layout.nodes.map((n) => n.y)));
 });

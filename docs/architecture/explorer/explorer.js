@@ -1167,18 +1167,22 @@
 
   // placeRow puts a row's boxes, kept in order with at least gap between
   // them, as close as it can to the centres they want.
+  // placeRow puts a row's boxes, kept in order with gap(a, b) between
+  // neighbours, as close as it can to the centres they want.
   function placeRow(row, wanted, gap) {
+    var offsets = [];
     var offset = 0;
-    var targets = row.map(function (n, i) {
-      var t = wanted[i] - n.width / 2 - offset;
-      offset += n.width + (n.extraRight || 0) + gap;
-      return t;
-    });
-    var z = isotonic(targets);
-    offset = 0;
     row.forEach(function (n, i) {
-      n.x = z[i] + offset;
-      offset += n.width + (n.extraRight || 0) + gap;
+      if (i > 0) offset += row[i - 1].width + (row[i - 1].extraRight || 0) + gap(row[i - 1], n);
+      offsets.push(offset);
+    });
+    var z = isotonic(
+      row.map(function (n, i) {
+        return wanted[i] - n.width / 2 - offsets[i];
+      })
+    );
+    row.forEach(function (n, i) {
+      n.x = z[i] + offsets[i];
     });
   }
 
@@ -1283,7 +1287,7 @@
     return rank;
   }
 
-  var LAYERED = { rankGap: 70, nodeGap: 28, dummyWidth: 8, sweeps: 16, placeRounds: 10, portGap: 14 };
+  var LAYERED = { rankGap: 70, nodeGap: 28, dummyWidth: 6, dummyGap: 6, dummyNodeGap: 16, sweeps: 16, placeRounds: 10, portGap: 14 };
 
   // layered lays out boxes ({id, width, height, last}) joined by links
   // ({from, to}) from top to bottom. Boxes marked last share the bottom
@@ -1320,6 +1324,39 @@
       if (byId[id].last) rank[id] = maxRank + 1;
     });
     if (hasLast) maxRank += 1;
+    // A layer with more boxes than fit across wraps onto extra rows: boxes
+    // fed from above first, boxes feeding the layer below last, so edges
+    // stay short.
+    var perRow = opts.maxPerRow || 0;
+    if (perRow) {
+      var balance = {};
+      dag.forEach(function (e) {
+        balance[e.top] = (balance[e.top] || 0) + 1;
+        balance[e.bottom] = (balance[e.bottom] || 0) - 1;
+      });
+      var next = 0;
+      var remap = {};
+      for (var lr = 0; lr <= maxRank; lr++) {
+        var members = ids
+          .filter(function (id) {
+            return rank[id] === lr;
+          })
+          .sort(function (a, b) {
+            return (balance[a] || 0) - (balance[b] || 0) || byString(byId[a].sortKey || a, byId[b].sortKey || b);
+          });
+        if (!members.length) continue;
+        var subRows = Math.ceil(members.length / perRow);
+        var size = Math.ceil(members.length / subRows);
+        members.forEach(function (id, i) {
+          remap[id] = next + Math.floor(i / size);
+        });
+        next += subRows;
+      }
+      ids.forEach(function (id) {
+        rank[id] = remap[id];
+      });
+      maxRank = next - 1;
+    }
     // Rows of boxes and dummies.
     var rows = [];
     for (var r = 0; r <= maxRank; r++) rows.push([]);
@@ -1330,7 +1367,7 @@
     dag.forEach(function (e) {
       var chain = [e.top];
       for (var k = rank[e.top] + 1; k < rank[e.bottom]; k++) {
-        var dummy = { id: "~" + e.index + "~" + k, width: LAYERED.dummyWidth, height: 0, dummy: true };
+        var dummy = { id: "~" + e.index + "~" + k, width: LAYERED.dummyWidth, height: 0, dummy: true, toward: e.bottom };
         byId[dummy.id] = dummy;
         rows[k].push(dummy);
         chain.push(dummy.id);
@@ -1345,9 +1382,43 @@
       (down[s[0]] = down[s[0]] || []).push(s[1]);
       (up[s[1]] = up[s[1]] || []).push(s[0]);
     });
+    // Start each row with its boxes in name order and its dummies spread
+    // evenly between them, so edges passing a wrapped layer go between its
+    // boxes rather than around one end.
+    var relative = {};
     rows.forEach(function (row) {
-      row.sort(function (a, b) {
-        return (a.dummy ? 1 : 0) - (b.dummy ? 1 : 0) || byString(a.sortKey || a.id, b.sortKey || b.id);
+      var real = row
+        .filter(function (n) {
+          return !n.dummy;
+        })
+        .sort(function (a, b) {
+          return byString(a.sortKey || a.id, b.sortKey || b.id);
+        });
+      real.forEach(function (n, i) {
+        relative[n.id] = (i + 0.5) / real.length;
+      });
+    });
+    rows = rows.map(function (row) {
+      var real = row.filter(function (n) {
+        return !n.dummy;
+      });
+      var dummies = row.filter(function (n) {
+        return n.dummy;
+      });
+      var placed = real
+        .map(function (n) {
+          return { n: n, at: relative[n.id], tie: 0 };
+        })
+        .concat(
+          dummies.map(function (n) {
+            return { n: n, at: relative[n.toward], tie: 1 };
+          })
+        );
+      placed.sort(function (a, b) {
+        return a.at - b.at || a.tie - b.tie || byString(a.n.id, b.n.id);
+      });
+      return placed.map(function (p) {
+        return p.n;
       });
     });
     function total(rs) {
@@ -1410,11 +1481,17 @@
       });
       y += h + rankGap;
     });
+    function gap(a, b) {
+      if (a.dummy && b.dummy) return LAYERED.dummyGap;
+      if (a.dummy || b.dummy) return Math.min(nodeGap, LAYERED.dummyNodeGap);
+      return nodeGap;
+    }
     rows.forEach(function (row) {
       var x = 0;
-      row.forEach(function (n) {
+      row.forEach(function (n, i) {
+        if (i > 0) x += gap(row[i - 1], n);
         n.x = x;
-        x += n.width + (n.extraRight || 0) + nodeGap;
+        x += n.width + (n.extraRight || 0);
       });
     });
     var widest = Math.max.apply(null, rows.map(function (row) {
@@ -1442,7 +1519,7 @@
           }, 0) / ns.length
         );
       });
-      placeRow(row, wanted, nodeGap);
+      placeRow(row, wanted, gap);
     }
     for (var round_ = 0; round_ < LAYERED.placeRounds; round_++) {
       var k;
@@ -1569,7 +1646,7 @@
 
   // ------------------------------------------------------------- group view
 
-  var GROUP_VIEW = { margin: 36, nodeHeight: 54, chipHeight: 38, minWidth: 140, rankGap: 64, nodeGap: 26 };
+  var GROUP_VIEW = { margin: 36, nodeHeight: 54, chipHeight: 38, minWidth: 140, rankGap: 64, nodeGap: 26, rowBudget: 1400, chipGap: 12, chipRowGap: 12 };
 
   function packageBox(node, data, boundary) {
     var path = packagePath(node.id);
@@ -1588,7 +1665,9 @@
   }
 
   // layoutMembers lays out a set of nodes by import depth, with what they
-  // depend on outside the set as faded chips along the bottom.
+  // depend on outside the set as faded chips in rows below, each chip under
+  // the members that use it. Edges to chips are drawn on demand: when a
+  // member is hovered or selected.
   function layoutMembers(data, kind, memberIds, title) {
     var g = GROUP_VIEW;
     var member = {};
@@ -1604,39 +1683,98 @@
       });
     var outside = {};
     var links = [];
+    var chipLinks = [];
     data.links.forEach(function (l) {
       if (!member[l.from] || l.from === l.to) return;
       if (member[l.to]) {
         links.push(l);
       } else if (data.nodeById[l.to]) {
         outside[l.to] = true;
-        var faded = copy(l);
-        faded.faded = true;
-        links.push(faded);
+        chipLinks.push(l);
       }
     });
-    Object.keys(outside)
-      .sort(byString)
-      .forEach(function (id) {
-        boxes.push(packageBox(data.nodeById[id], data, true));
-      });
     links.sort(function (a, b) {
       return byString(linkKey(a), linkKey(b));
     });
-    var result = layered(boxes, links, { rankGap: g.rankGap, nodeGap: g.nodeGap });
+    chipLinks.sort(function (a, b) {
+      return byString(linkKey(a), linkKey(b));
+    });
+    function perRow(bs) {
+      var average = bs.reduce(function (sum, b) {
+        return sum + b.width;
+      }, 0) / Math.max(bs.length, 1);
+      return Math.max(3, Math.floor(g.rowBudget / (average + g.nodeGap)));
+    }
+    var result = layered(boxes, links, { rankGap: g.rankGap, nodeGap: g.nodeGap, maxPerRow: perRow(boxes) });
+    var byId = {};
     boxes.forEach(function (b) {
-      b.x = round(b.x + g.margin);
+      byId[b.id] = b;
+    });
+    // Chips in rows below, each under the mean of the members that use it.
+    var chips = Object.keys(outside)
+      .sort(byString)
+      .map(function (id) {
+        var chip = packageBox(data.nodeById[id], data, true);
+        var users = chipLinks.filter(function (l) {
+          return l.to === id;
+        });
+        chip.want = users.reduce(function (sum, l) {
+          return sum + byId[l.from].x + byId[l.from].width / 2;
+        }, 0) / users.length;
+        return chip;
+      })
+      .sort(function (a, b) {
+        return a.want - b.want || byString(a.sortKey, b.sortKey);
+      });
+    var chipTop = result.height + (boxes.length ? g.rankGap : 0);
+    var cap = perRow(chips);
+    var rowsOfChips = Math.ceil(chips.length / cap);
+    var size = Math.ceil(chips.length / Math.max(rowsOfChips, 1));
+    for (var r = 0; r < rowsOfChips; r++) {
+      var row = chips.slice(r * size, (r + 1) * size);
+      row.forEach(function (c) {
+        c.y = chipTop + r * (g.chipHeight + g.chipRowGap);
+      });
+      placeRow(
+        row,
+        row.map(function (c) {
+          return c.want;
+        }),
+        function () {
+          return g.chipGap;
+        }
+      );
+    }
+    var all = boxes.concat(chips);
+    var minX = Math.min.apply(null, all.map(function (b) { return b.x; }).concat([0]));
+    all.forEach(function (b) {
+      b.x = round(b.x - minX + g.margin);
       b.y = round(b.y + g.margin);
       delete b.last;
       delete b.sortKey;
+      delete b.want;
     });
     var edges = result.routes.map(function (route) {
       route.points = route.points.map(function (p) {
-        return { x: round(p.x + g.margin), y: round(p.y + g.margin) };
+        return { x: round(p.x - minX + g.margin), y: round(p.y + g.margin) };
       });
       return layeredEdge(route, route.link.from, route.link.to);
     });
-    return finishLayout({ kind: kind, title: title, nodes: boxes, edges: edges, lanes: [], empty: null }, g.margin);
+    chips.forEach(function (c) {
+      byId[c.id] = c;
+    });
+    chipLinks.forEach(function (l) {
+      var a = byId[l.from];
+      var b = byId[l.to];
+      var p1 = { x: round(a.x + a.width / 2), y: round(a.y + a.height) };
+      var p2 = { x: round(b.x + b.width / 2), y: round(b.y) };
+      var faded = copy(l);
+      faded.faded = true;
+      var edge = layeredEdge({ link: faded, points: [p1, p2] }, l.from, l.to);
+      edge.onDemand = true;
+      edges.push(edge);
+    });
+    return finishLayout({ kind: kind, title: title, nodes: all, edges: edges, lanes: [], empty: null }, g.margin);
   }
 
   // layoutGroup draws one component group: its packages layered by import

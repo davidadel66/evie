@@ -15,7 +15,7 @@ function sound(layout, what, avoid) {
   assertWithinLayout(layout);
   if (layout.edges.length) {
     assertEdgesOnNodes(layout);
-    if (avoid) assertEdgesAvoidNodes(layout);
+    if (avoid) assertEdgesAvoidNodes(layout, (e) => e.onDemand);
   }
 }
 
