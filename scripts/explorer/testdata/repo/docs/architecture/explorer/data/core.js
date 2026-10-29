@@ -11,7 +11,8 @@ evieExplorer.register(
       "title": "cmd/tool",
       "group": "infrastructure",
       "subgroup": "Surfaces",
-      "summary": {"text": "Command tool prints the fixture name.", "refs": ["code:cmd/tool/main.go#main"]}
+      "summary": {"text": "Command tool prints the fixture name.", "refs": ["code:cmd/tool/main.go#main"]},
+      "interfaces": [{"text": "The admin users list command.", "refs": ["command:tool admin users list", "command:tool", "code:cmd/tool/main.go#admin"]}]
     },
     {
       "id": "pkg:internal/alpha",
@@ -22,7 +23,10 @@ evieExplorer.register(
       "summary": {"text": "Alpha serves the fixture.", "refs": ["code:internal/alpha/alpha.go#Server", "pkg:internal/alpha"], "detail": "Reserved for the depth pass."},
       "does": [{"text": "Starts a server.", "refs": ["code:internal/alpha/alpha.go#Server.Start"]}],
       "owns": [{"text": "The listen address.", "refs": ["code:internal/alpha/alpha.go#Server.Addr"]}],
-      "interfaces": [{"text": "Handlers serve requests.", "refs": ["code:internal/alpha/alpha.go#Handler.Serve"]}],
+      "interfaces": [
+        {"text": "Handlers serve requests.", "refs": ["code:internal/alpha/alpha.go#Handler.Serve"]},
+        {"text": "Lists widgets for the owner and reports health.", "refs": ["route:GET /widgets", "route:/health", "route:/jobs/start", "code:internal/alpha/routes.go#Server.routes"]}
+      ],
       "gotchas": [{"text": "The limit is fixed.", "refs": ["code:internal/alpha/alpha.go#Limit", "adr:0002", "term:Widget"]}],
       "terms": ["Widget", "Ledger Entry"],
       "links": ["code:internal/alpha", "doc:docs/guide.md#using-alpha-with-links", "adr:0001"],
@@ -88,7 +92,18 @@ evieExplorer.register(
       "title": "beta",
       "group": "memory",
       "alsoIn": ["runtime"],
-      "summary": {"text": "Beta names the fixture.", "refs": ["code:internal/beta/beta.go#Name"]}
+      "summary": {"text": "Beta names the fixture.", "refs": ["code:internal/beta/beta.go#Name"]},
+      "owns": [{"text": "Widgets and their owners.", "refs": ["table:fixture.widgets", "table:fixture.owners"]}],
+      "diagrams": [
+        {
+          "id": "beta-tables",
+          "title": "Widget tables",
+          "kind": "er",
+          "summary": {"text": "Widgets belong to owners and carry tags.", "refs": ["table:fixture.widgets", "table:fixture.widget_tags"]},
+          "database": "fixture",
+          "tables": ["owners", "widgets", "widget_tags"]
+        }
+      ]
     },
     {
       "id": "pkg:internal/delta",

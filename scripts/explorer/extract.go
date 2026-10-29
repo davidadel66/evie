@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"go/ast"
 	"go/doc"
 	"go/parser"
 	"go/token"
@@ -112,8 +113,8 @@ type ADR struct {
 }
 
 // writeFacts extracts the facts from the repository at root and writes them.
-func writeFacts(root string) error {
-	data, err := renderFacts(root)
+func writeFacts(root string, databases []databaseSource) error {
+	data, err := renderFacts(root, databases)
 	if err != nil {
 		return err
 	}
@@ -125,15 +126,17 @@ func writeFacts(root string) error {
 }
 
 // renderFacts extracts the facts and renders them as the facts data file.
-func renderFacts(root string) ([]byte, error) {
-	facts, err := extractFacts(root)
+func renderFacts(root string, databases []databaseSource) ([]byte, error) {
+	facts, err := extractFacts(root, databases)
 	if err != nil {
 		return nil, err
 	}
 	return wrap(registerOpen, facts)
 }
 
-func extractFacts(root string) (Facts, error) {
+// extractFacts reads the facts from the repository at root, creating its
+// databases from databases.
+func extractFacts(root string, databases []databaseSource) (Facts, error) {
 	facts := Facts{
 		Format:    formatVersion,
 		Kind:      "facts",
@@ -164,6 +167,21 @@ func extractFacts(root string) (Facts, error) {
 		}
 		facts.Packages = append(facts.Packages, pkg.Package)
 		facts.Imports = append(facts.Imports, moduleImports(module, pkg, isPackage)...)
+		routes, err := packageRoutes(pkg)
+		if err != nil {
+			return facts, err
+		}
+		facts.Routes = append(facts.Routes, routes...)
+		commands, err := packageCommands(pkg)
+		if err != nil {
+			return facts, err
+		}
+		facts.Commands = append(facts.Commands, commands...)
+	}
+	sortRoutes(facts.Routes)
+	sortCommands(facts.Commands)
+	if facts.Databases, err = extractDatabases(databases, isPackage); err != nil {
+		return facts, err
 	}
 	if facts.Glossary, err = readGlossary(root); err != nil {
 		return facts, err
@@ -362,7 +380,9 @@ func isSourceFile(name string) bool {
 
 type packageInfo struct {
 	Package
-	imports []string // import paths from every non-test file
+	imports []string    // import paths from every non-test file
+	files   []*ast.File // every non-test file, parsed, in name order
+	fset    *token.FileSet
 }
 
 // readPackage parses every non-test Go file of dir, ignoring build
@@ -372,8 +392,8 @@ func readPackage(root, dir string) (packageInfo, error) {
 	if err != nil {
 		return packageInfo{}, err
 	}
-	info := packageInfo{Package: Package{Path: dir}}
 	fset := token.NewFileSet()
+	info := packageInfo{Package: Package{Path: dir}, fset: fset}
 	for _, entry := range entries { // ReadDir sorts by name
 		if entry.IsDir() || !isSourceFile(entry.Name()) {
 			continue
@@ -383,7 +403,7 @@ func readPackage(root, dir string) (packageInfo, error) {
 		if err != nil {
 			return packageInfo{}, err
 		}
-		file, err := parser.ParseFile(fset, name, src, parser.ImportsOnly|parser.ParseComments)
+		file, err := parser.ParseFile(fset, name, src, parser.ParseComments|parser.SkipObjectResolution)
 		if err != nil {
 			return packageInfo{}, fmt.Errorf("parse %s: %w", name, err)
 		}
@@ -396,6 +416,7 @@ func readPackage(root, dir string) (packageInfo, error) {
 		for _, spec := range file.Imports {
 			info.imports = append(info.imports, strings.Trim(spec.Path.Value, `"`))
 		}
+		info.files = append(info.files, file)
 	}
 	info.Command = info.Name == "main"
 	info.TestSupport = strings.HasSuffix(info.Name, "test")
