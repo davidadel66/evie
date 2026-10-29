@@ -178,12 +178,6 @@
       .sort(byString);
   }
 
-  // applyProposals returns the data as the active design proposals would
-  // leave it, without touching the built data: added items carry change
-  // "added", changed items carry change "changed" with the changed field
-  // names and the item as built in "was", and removed items stay in place
-  // with change "removed" so the page can strike them through. Proposals
-  // apply in the order the data lists them; unknown ids are ignored.
   // applyOp applies one add, change, or remove operation to a list of items
   // identified by keyOf, and returns the new list. normalize shapes an added
   // item; listKeys names the fields that are lists.
@@ -3375,7 +3369,7 @@
     return layoutContext(data);
   }
 
-  // -------------------------------------------------------------- viewport
+  // --------------------------------------------------------- viewport model
   //
   // The canvas shows a box of the drawing (an SVG viewBox) with the
   // canvas's own aspect, so zooming and panning are box arithmetic.
@@ -4010,7 +4004,10 @@
     else refreshCanvasState();
   }
 
-  // ------------------------------------------------------------ viewport
+  // ------------------------------------------------------ viewport on screen
+
+  // ZOOM_STEP is how far one press of a zoom button or key zooms in or out.
+  var ZOOM_STEP = 1.3;
 
   function canvasSize() {
     var canvas = byId("canvas");
@@ -5708,10 +5705,10 @@
     htmlIcon("zoom-out", zout);
     htmlIcon("fit", zfit);
     zin.addEventListener("click", function () {
-      zoomBy(1.3);
+      zoomBy(ZOOM_STEP);
     });
     zout.addEventListener("click", function () {
-      zoomBy(1 / 1.3);
+      zoomBy(1 / ZOOM_STEP);
     });
     zfit.addEventListener("click", fit);
     wireSearch();
@@ -5730,9 +5727,9 @@
         event.preventDefault();
         setStep((app.state.step || 1) - 1);
       } else if (event.key === "+" || event.key === "=") {
-        zoomBy(1.3);
+        zoomBy(ZOOM_STEP);
       } else if (event.key === "-" || event.key === "_") {
-        zoomBy(1 / 1.3);
+        zoomBy(1 / ZOOM_STEP);
       } else if (event.key === "0") {
         fit();
       }

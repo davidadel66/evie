@@ -98,9 +98,14 @@ func (c *checker) readManifest() []string {
 }
 
 func validDataPath(entry string) bool {
-	return entry != "" && entry != "manifest.js" && strings.HasSuffix(entry, ".js") &&
-		!strings.HasPrefix(entry, "/") && !strings.Contains(entry, `\`) &&
-		path.Clean(entry) == entry && !strings.HasPrefix(entry, "../")
+	return cleanRelative(entry) && entry != "manifest.js" && strings.HasSuffix(entry, ".js")
+}
+
+// cleanRelative reports whether p is a clean slash path that stays inside
+// the directory it is relative to.
+func cleanRelative(p string) bool {
+	return p != "" && p != "." && p != ".." && !strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "../") &&
+		!strings.Contains(p, `\`) && path.Clean(p) == p
 }
 
 // listJS returns the .js files beneath dir, other than its manifest, as

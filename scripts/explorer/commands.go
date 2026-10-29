@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"maps"
 	"path"
 	"sort"
 	"strconv"
@@ -723,10 +724,7 @@ func (st cmdState) withCtx(ctx wordSet) cmdState {
 // assign binds each name on the left to how its value relates to the
 // arguments; a name given anything else no longer holds an argument.
 func (st cmdState) assign(r *commandReader, f frame, lhs, rhs []ast.Expr) cmdState {
-	env := argEnv{}
-	for k, v := range st.env {
-		env[k] = v
-	}
+	env := maps.Clone(st.env)
 	for i, l := range lhs {
 		id, ok := l.(*ast.Ident)
 		if !ok || id.Name == "_" {
@@ -750,10 +748,7 @@ func (st cmdState) restore(outer argEnv, declared []string) cmdState {
 	if len(declared) == 0 {
 		return st
 	}
-	env := argEnv{}
-	for k, v := range st.env {
-		env[k] = v
-	}
+	env := maps.Clone(st.env)
 	for _, name := range declared {
 		if v, ok := outer[name]; ok {
 			env[name] = v
@@ -767,10 +762,7 @@ func (st cmdState) restore(outer argEnv, declared []string) cmdState {
 // joinStates merges two paths through the code: words that hold on both,
 // and each name's value, with its position unknown where the paths differ.
 func joinStates(a, b cmdState) cmdState {
-	env := argEnv{}
-	for k, v := range a.env {
-		env[k] = v
-	}
+	env := maps.Clone(a.env)
 	for k, v := range b.env {
 		if prev, ok := env[k]; ok && prev != v {
 			env[k] = argValue{slice: prev.slice}

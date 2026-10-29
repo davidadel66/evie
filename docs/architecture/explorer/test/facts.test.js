@@ -6,27 +6,15 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
 const model = require("../explorer.js");
-
-// realFacts evaluates the generated facts file the way the page does.
-function realFacts() {
-  const objects = [];
-  const context = vm.createContext({ evieExplorer: { register: (object) => objects.push(object) } });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "data", "facts.js"), "utf8"), context);
-  // Objects built inside the vm context belong to another realm; a JSON
-  // round trip gives plain objects of this one.
-  return JSON.parse(JSON.stringify(objects));
-}
+const { loadRealData } = require("./real-data.js");
 
 function sectionTitles(data, id) {
   return model.packageDetails(data, id).facts.map((section) => section.key);
 }
 
 test("the panel lists the web package's routes with their guards", () => {
-  const data = model.mergeData(realFacts());
+  const data = model.mergeData(loadRealData());
   const [routes] = model.packageDetails(data, "pkg:internal/web").facts;
 
   assert.equal(routes.key, "routes");
@@ -38,7 +26,7 @@ test("the panel lists the web package's routes with their guards", () => {
 });
 
 test("the panel lists commands for each command package", () => {
-  const data = model.mergeData(realFacts());
+  const data = model.mergeData(loadRealData());
   for (const [pkg, command] of [
     ["cmd/evie", "evie workflows propose"],
     ["cmd/finance", "finance sync"],
@@ -55,7 +43,7 @@ test("the panel lists commands for each command package", () => {
 });
 
 test("the panel lists tables for the eviedb, finance, and youtube packages", () => {
-  const data = model.mergeData(realFacts());
+  const data = model.mergeData(loadRealData());
   for (const [pkg, table] of [
     ["internal/eviedb", "evie.workspaces"],
     ["internal/finance", "finance.transactions"],

@@ -121,7 +121,7 @@ func (c *checker) validateStates(file, item string, d Diagram, sc scope) {
 		}
 		states[s.ID] = true
 		if len(s.Refs) == 0 {
-			c.add(file, stateItem, "the state has no source", "cite at least one reference in refs")
+			c.noSource(file, stateItem, "state")
 		}
 		c.refs(file, stateItem, s.Refs, sc.added)
 	}
@@ -138,7 +138,7 @@ func (c *checker) validateStates(file, item string, d Diagram, sc scope) {
 			}
 		}
 		if len(t.Refs) == 0 {
-			c.add(file, transitionItem, "the transition has no source", "cite at least one reference in refs")
+			c.noSource(file, transitionItem, "transition")
 		}
 		c.refs(file, transitionItem, t.Refs, sc.added)
 	}

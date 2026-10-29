@@ -5,10 +5,8 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
 const model = require("../explorer.js");
+const { loadRealData } = require("./real-data.js");
 
 function pkgNode(pkgPath, group, extra) {
   return Object.assign(
@@ -425,29 +423,6 @@ test("the address fragment round-trips the view and the selected node", () => {
   assert.deepEqual(model.parseHash(""), {});
   assert.deepEqual(model.parseHash(model.formatHash({ node: "x & y" })), { node: "x & y" });
 });
-
-// loadRealData evaluates the explorer's own data files the way the page
-// does: the manifest lists them and each registers one object.
-function loadRealData() {
-  const dir = path.join(__dirname, "..", "data");
-  const objects = [];
-  let listed = [];
-  const context = vm.createContext({
-    evieExplorer: {
-      manifest: (list) => {
-        listed = list;
-      },
-      register: (object) => objects.push(object),
-    },
-  });
-  vm.runInContext(fs.readFileSync(path.join(dir, "manifest.js"), "utf8"), context);
-  for (const file of listed) {
-    vm.runInContext(fs.readFileSync(path.join(dir, file), "utf8"), context);
-  }
-  // Objects built inside the vm context belong to another realm; a JSON
-  // round trip gives plain objects of this one.
-  return JSON.parse(JSON.stringify(objects));
-}
 
 test("the real explorer data draws every package exactly once in the group overview", () => {
   const data = model.mergeData(loadRealData());

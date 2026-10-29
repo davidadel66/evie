@@ -5,8 +5,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
-	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -26,8 +26,6 @@ var refFixes = map[string]string{
 	"node":    "use the id of an existing explorer node",
 }
 
-const refKindsFix = "use one of code:, doc:, adr:, term:, table:, route:, command:, pkg:, node:"
-
 // statement checks a statement's text, that it cites at least one source,
 // and that every reference resolves.
 func (c *checker) statement(file, item string, s *Statement, extra map[string]bool) {
@@ -38,7 +36,7 @@ func (c *checker) statement(file, item string, s *Statement, extra map[string]bo
 		c.missing(file, item, "text")
 	}
 	if len(s.Refs) == 0 {
-		c.add(file, item, "the statement has no source", "cite at least one reference in refs")
+		c.noSource(file, item, "statement")
 	}
 	c.refs(file, item, s.Refs, extra)
 }
@@ -59,7 +57,8 @@ func (c *checker) ref(file, item, ref string, extra map[string]bool) {
 	}
 	fix, ok := refFixes[kind]
 	if !ok {
-		fix = refKindsFix
+		kinds := slices.Sorted(maps.Keys(refFixes))
+		fix = "use one of " + strings.Join(kinds, ":, ") + ":"
 	}
 	c.add(file, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix)
 }
@@ -151,19 +150,12 @@ func splitRoute(target string) (method, pattern string, ok bool) {
 	return m[1], m[2], true
 }
 
-// repoPath reports why p is not a clean relative path inside the repository.
-func repoPath(p string) string {
-	if p == "" || strings.HasPrefix(p, "/") || strings.Contains(p, `\`) ||
-		path.Clean(p) != p || p == "." || p == ".." || strings.HasPrefix(p, "../") {
-		return "the path must be a clean relative path inside the repository"
-	}
-	return ""
-}
+const notInRepo = "the path must be a clean relative path inside the repository"
 
 func (c *checker) resolveCode(target string) string {
 	file, symbol, hasSymbol := strings.Cut(target, "#")
-	if why := repoPath(file); why != "" {
-		return why
+	if !cleanRelative(file) {
+		return notInRepo
 	}
 	info, err := os.Stat(c.path(file))
 	if err != nil {
@@ -187,8 +179,8 @@ func (c *checker) resolveCode(target string) string {
 
 func (c *checker) resolveDoc(target string) string {
 	file, anchor, hasAnchor := strings.Cut(target, "#")
-	if why := repoPath(file); why != "" {
-		return why
+	if !cleanRelative(file) {
+		return notInRepo
 	}
 	info, err := os.Stat(c.path(file))
 	if err != nil {
@@ -225,11 +217,7 @@ func (c *checker) goDecls(file string) (map[string]bool, error) {
 	for _, decl := range parsed.Decls {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			if d.Recv == nil || len(d.Recv.List) == 0 {
-				decls[d.Name.Name] = true
-			} else {
-				decls[receiverName(d.Recv.List[0].Type)+"."+d.Name.Name] = true
-			}
+			decls[funcName(d)] = true
 		case *ast.GenDecl:
 			for _, spec := range d.Specs {
 				switch s := spec.(type) {

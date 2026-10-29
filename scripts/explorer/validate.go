@@ -72,22 +72,11 @@ func (c *checker) index(files []dataFile) {
 	var walk func(file, parent string, nodes []Node)
 	walk = func(file, parent string, nodes []Node) {
 		for _, n := range nodes {
-			if n.ID != "" {
-				if first, dup := c.nodes[n.ID]; dup {
-					c.add(file, "node "+n.ID, "duplicate node id, also defined in "+first, "give each node a unique id")
-				} else {
-					c.nodes[n.ID] = file
-					if parent != "" {
-						c.parts[n.ID] = parent
-					}
-				}
+			if c.unique(c.nodes, file, "node "+n.ID, "node", n.ID) && parent != "" {
+				c.parts[n.ID] = parent
 			}
 			for _, d := range n.Diagrams {
-				if first, dup := c.diagrams[d.ID]; dup && d.ID != "" {
-					c.add(file, "node "+n.ID+" diagram "+d.ID, "duplicate diagram id, also defined in "+first, "give each diagram a unique id")
-				} else if d.ID != "" {
-					c.diagrams[d.ID] = file
-				}
+				c.unique(c.diagrams, file, "node "+n.ID+" diagram "+d.ID, "diagram", d.ID)
 			}
 			walk(file, n.ID, n.Children)
 		}
@@ -98,13 +87,28 @@ func (c *checker) index(files []dataFile) {
 		}
 		walk(file.Path, "", file.Content.Nodes)
 		for _, f := range file.Content.Flows {
-			if first, dup := c.flows[f.ID]; dup && f.ID != "" {
-				c.add(file.Path, "flow "+f.ID, "duplicate flow id, also defined in "+first, "give each flow a unique id")
-			} else if f.ID != "" {
-				c.flows[f.ID] = file.Path
-			}
+			c.unique(c.flows, file.Path, "flow "+f.ID, "flow", f.ID)
 		}
 	}
+}
+
+// unique records that file defines id and reports whether it is the first
+// to; a later definition is a duplicate. An empty id records nothing.
+func (c *checker) unique(defined map[string]string, file, item, what, id string) bool {
+	if id == "" {
+		return false
+	}
+	if first, dup := defined[id]; dup {
+		c.add(file, item, "duplicate "+what+" id, also defined in "+first, "give each "+what+" a unique id")
+		return false
+	}
+	defined[id] = file
+	return true
+}
+
+// noSource reports an item that must cite a source and cites none.
+func (c *checker) noSource(file, item, what string) {
+	c.add(file, item, "the "+what+" has no source", "cite at least one reference in refs")
 }
 
 // checkPackageCoverage reports every package without a component node.
@@ -251,7 +255,7 @@ func (c *checker) validateEdge(file, prefix string, e Edge, sc scope) {
 	c.refs(file, item, e.Refs, sc.added)
 	if e.Via != "import" {
 		if len(e.Refs) == 0 && slices.Contains(vias, e.Via) {
-			c.add(file, item, "the edge has no source", "cite at least one reference in refs")
+			c.noSource(file, item, "edge")
 		}
 		return
 	}
@@ -329,7 +333,7 @@ func (c *checker) validateStep(file, item string, step Step, participants map[st
 	c.oneOf(file, item, "via", step.Via, vias, false)
 	switch {
 	case len(step.Refs) == 0:
-		c.add(file, item, "the step has no source", "cite at least one reference in refs")
+		c.noSource(file, item, "step")
 	case !sc.proposal && !slices.ContainsFunc(step.Refs, isCodeRef):
 		// A design proposal's steps describe code that does not exist yet.
 		c.add(file, item, "the step cites no code", "add a code: reference to the code that carries the step")
