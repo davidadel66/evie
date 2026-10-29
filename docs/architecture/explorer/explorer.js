@@ -569,6 +569,11 @@
     return round(w * (size || 13));
   }
 
+  // monoWidth measures text set in a monospace face.
+  function monoWidth(text, size) {
+    return round(String(text == null ? "" : text).length * 0.62 * (size || 13));
+  }
+
   // wrapText breaks text into lines no wider than maxWidth, at spaces where
   // it can; a word too long for a line is cut. At most maxLines lines are
   // kept, the last ending in an ellipsis when text was dropped.
@@ -2122,6 +2127,8 @@
     notePad: 36,
     firstRow: 34,
     tail: 34,
+    farSpan: 260,
+    labelInset: 30,
   };
 
   // flowIndex lists every flow for the flows view, by title.
@@ -2230,6 +2237,7 @@
       var from = participants[l.a];
       var to = participants[l.b];
       var labelHeight = l.lines.length * q.lineHeight;
+      var dir = l.b >= l.a ? 1 : -1;
       var drawn = {
         number: l.s.number,
         from: step.from,
@@ -2238,6 +2246,7 @@
         via: step.via || "",
         label: step.label || "",
         lines: l.lines,
+        labelWidth: round(l.labelWidth),
         refs: list(step.refs),
         change: step.change || "",
         self: l.self,
@@ -2270,11 +2279,15 @@
         drawn.anchor = "start";
         y += q.selfDrop;
       } else {
-        var dir = drawn.x2 > drawn.x1 ? 1 : -1;
         drawn.d =
           "M" + drawn.x1 + "," + drawn.y +
           " C" + round(drawn.x1 + dir * 10) + "," + drawn.y + " " + round(drawn.x2 - dir * 10) + "," + drawn.y + " " + drawn.x2 + "," + drawn.y;
-        drawn.labelX = round((drawn.x1 + drawn.x2) / 2);
+        // A message across many lifelines is labelled near its sender, so
+        // the label is in view where the message starts.
+        var span = Math.abs(drawn.x2 - drawn.x1);
+        drawn.labelX = span > l.labelWidth + q.farSpan
+          ? round(drawn.x1 + dir * (l.labelWidth / 2 + q.labelInset))
+          : round((drawn.x1 + drawn.x2) / 2);
         drawn.labelY = round(y - labelHeight - 1 + q.lineHeight - 4);
         drawn.anchor = "middle";
       }
@@ -2319,22 +2332,30 @@
     return null;
   }
 
-  var DIAGRAM = { margin: 32, nodeHeight: 46, minWidth: 110, rankGap: 74, nodeGap: 40, loopRoom: 60 };
+  var DIAGRAM = { margin: 32, nodeHeight: 46, minWidth: 110, maxLabel: 210, lineHeight: 16, rankGap: 74, nodeGap: 40, loopRoom: 60 };
 
+  // diagramBox makes a node of a graph or state diagram, its label wrapped
+  // onto lines no wider than the diagram's label width.
   function diagramBox(id, title, ref, data) {
     var target = ref ? data.nodeById[ref] : null;
+    var lines = wrapText(title, DIAGRAM.maxLabel, 13, 5);
+    if (!lines.length) lines = [""];
+    var widest = Math.max.apply(null, lines.map(function (l) { return textWidth(l, 13); }));
+    var subtitle = target && lines.length === 1 ? target.title : "";
     return {
       id: id,
       ref: target ? ref : null,
       title: title,
-      subtitle: target ? target.title : "",
+      lines: lines,
+      subtitle: subtitle,
       kind: target ? target.kind || "" : "",
       group: target ? target.group || "" : "",
       change: target ? target.change || "" : "",
+      shape: "part",
       x: 0,
       y: 0,
-      width: round(Math.max(DIAGRAM.minWidth, textWidth(title, 13) + 32)),
-      height: DIAGRAM.nodeHeight,
+      width: round(Math.max(DIAGRAM.minWidth, widest + 34, textWidth(subtitle, 11) + 34)),
+      height: round(Math.max(DIAGRAM.nodeHeight, lines.length * DIAGRAM.lineHeight + 22)),
     };
   }
 
@@ -2386,99 +2407,147 @@
     return layoutLayeredDiagram("graph", boxes, links, diagram.title);
   }
 
-  var LANES = { margin: 28, header: 132, pad: 18, colGap: 96, rowGap: 18, bandGap: 10, passPad: 6 };
+  var LANES = { margin: 28, header: 150, titleWidth: 104, pad: 26, colGap: 72, maxColGap: 190, rowGap: 16, bandGap: 44, portGap: 14, gapPad: 8 };
 
-  // layoutLaneGraph draws a graph with lanes as horizontal bands, its nodes
-  // flowing left to right by longest path, each in its lane's band.
+  // laneTitleLines wraps a lane title as the page draws it: upper case and
+  // letter-spaced, so it is measured in capitals with room to spare.
+  function laneTitleLines(title) {
+    return wrapText(String(title || "").toUpperCase(), LANES.titleWidth, 11.5, 5);
+  }
+
+  // freeSpot returns the point nearest want inside one of the free intervals
+  // left between boxes along an axis, within [lo, hi].
+  function freeSpot(want, boxes, axis, lo, hi, pad) {
+    var spans = boxes
+      .map(function (b) {
+        return axis === "x" ? [b.x - pad, b.x + b.width + pad] : [b.y - pad, b.y + b.height + pad];
+      })
+      .sort(function (a, b) {
+        return a[0] - b[0];
+      });
+    var gaps = [];
+    var at = lo;
+    spans.forEach(function (sp) {
+      if (sp[0] > at) gaps.push([at, sp[0]]);
+      at = Math.max(at, sp[1]);
+    });
+    if (hi > at) gaps.push([at, hi]);
+    var best = null;
+    gaps.forEach(function (g) {
+      var v = Math.min(Math.max(want, g[0]), g[1]);
+      if (best === null || Math.abs(v - want) < Math.abs(best - want)) best = v;
+    });
+    return best === null ? want : best;
+  }
+
+  // layoutLaneGraph draws a graph with lanes as horizontal bands. Each lane
+  // flows left to right by the order of its own nodes, in columns shared by
+  // every lane, so the gaps between columns and between bands are clear
+  // streets: an edge between lanes leaves its band straight, travels along
+  // the streets, and enters its target's band straight.
   function layoutLaneGraph(data, diagram, boxes, links) {
     var g = LANES;
     var byId = {};
-    var ids = boxes
-      .map(function (b) {
-        byId[b.id] = b;
-        return b.id;
-      })
-      .sort(byString);
-    var edges = links.map(function (l, index) {
-      return { link: l, index: index, from: l.from, to: l.to, self: l.from === l.to };
+    boxes.forEach(function (b) {
+      byId[b.id] = b;
     });
-    var rank = rankEdges(ids, edges);
     var laneDefs = list(diagram.lanes).map(function (l) {
       return { id: l.id, title: l.title || l.id };
-    });
-    var laneOf = {};
-    list(diagram.nodes).forEach(function (n) {
-      laneOf[n.id] = n.lane || "";
     });
     var laneIndex = {};
     laneDefs.forEach(function (l, i) {
       laneIndex[l.id] = i;
     });
-    if (ids.some(function (id) { return laneIndex[laneOf[id]] === undefined; })) {
-      laneIndex[""] = laneDefs.length;
+    var laneOfNode = {};
+    list(diagram.nodes).forEach(function (n) {
+      laneOfNode[n.id] = laneIndex[n.lane];
+    });
+    if (boxes.some(function (b) { return laneOfNode[b.id] === undefined; })) {
       laneDefs.push({ id: "", title: "Other" });
+      boxes.forEach(function (b) {
+        if (laneOfNode[b.id] === undefined) laneOfNode[b.id] = laneDefs.length - 1;
+      });
     }
+    // Ranks within each lane, from the edges inside it. A cycle is broken
+    // where the author's order of nodes starts it.
+    var rank = {};
+    laneDefs.forEach(function (def, li) {
+      var ids = boxes
+        .filter(function (b) {
+          return laneOfNode[b.id] === li;
+        })
+        .map(function (b) {
+          return b.id;
+        });
+      var inside = [];
+      links.forEach(function (l, index) {
+        if (laneOfNode[l.from] === li && laneOfNode[l.to] === li) inside.push({ from: l.from, to: l.to, index: index, self: l.from === l.to });
+      });
+      var r = rankEdges(ids, inside);
+      ids.forEach(function (id) {
+        rank[id] = r[id];
+      });
+    });
     var maxRank = 0;
-    ids.forEach(function (id) {
-      maxRank = Math.max(maxRank, rank[id]);
+    boxes.forEach(function (b) {
+      maxRank = Math.max(maxRank, rank[b.id]);
     });
     var cells = laneDefs.map(function () {
       var row = [];
       for (var r = 0; r <= maxRank; r++) row.push([]);
       return row;
     });
-    ids.forEach(function (id) {
-      var li = laneIndex[laneOf[id]] === undefined ? laneIndex[""] : laneIndex[laneOf[id]];
-      cells[li][rank[id]].push(byId[id]);
+    boxes
+      .slice()
+      .sort(function (a, b) {
+        return byString(a.title, b.title) || byString(a.id, b.id);
+      })
+      .forEach(function (b) {
+        cells[laneOfNode[b.id]][rank[b.id]].push(b);
+      });
+    // The gap between columns holds the labels of the edges that cross it.
+    var colGap = g.colGap;
+    links.forEach(function (l) {
+      if (l.label && laneOfNode[l.from] === laneOfNode[l.to] && rank[l.to] > rank[l.from]) {
+        colGap = Math.max(colGap, Math.min(labelWidth(wrapText(l.label, 150, LABEL_SIZE, 3)) + 28, g.maxColGap));
+      }
     });
     var colWidth = [];
-    for (var r = 0; r <= maxRank; r++) {
-      colWidth[r] = 0;
+    var colX = [];
+    var x = g.margin + g.header;
+    for (var c = 0; c <= maxRank; c++) {
+      colWidth[c] = 0;
       cells.forEach(function (row) {
-        row[r].forEach(function (b) {
-          colWidth[r] = Math.max(colWidth[r], b.width);
+        row[c].forEach(function (b) {
+          colWidth[c] = Math.max(colWidth[c], b.width);
         });
       });
+      colX[c] = x;
+      x += colWidth[c] + colGap;
     }
-    var colX = [];
-    var x = g.margin + g.header + g.pad;
-    for (r = 0; r <= maxRank; r++) {
-      colX[r] = x;
-      x += colWidth[r] + g.colGap;
-    }
-    var right = x - g.colGap + g.pad;
+    var right = x - colGap + g.pad;
     var y = g.margin;
     var lanes = laneDefs.map(function (def, li) {
       var tallest = 0;
       cells[li].forEach(function (cell) {
-        cell.sort(function (a, b) {
-          return byString(a.title, b.title) || byString(a.id, b.id);
-        });
         tallest = Math.max(tallest, cell.reduce(function (h, b, k) {
           return h + b.height + (k ? g.rowGap : 0);
         }, 0));
       });
-      var height = tallest + 2 * g.pad;
-      cells[li].forEach(function (cell, rr) {
+      var titleLines = laneTitleLines(def.title).length;
+      var height = Math.max(tallest + 2 * g.pad, titleLines * 15 + 30);
+      cells[li].forEach(function (cell, cc) {
         var h = cell.reduce(function (sum, b, k) {
           return sum + b.height + (k ? g.rowGap : 0);
         }, 0);
-        var cy = y + g.pad + (tallest - h) / 2;
+        var cy = y + (height - h) / 2;
         cell.forEach(function (b) {
-          b.x = round(colX[rr] + (colWidth[rr] - b.width) / 2);
+          b.x = round(colX[cc] + (colWidth[cc] - b.width) / 2);
           b.y = round(cy);
           cy += b.height + g.rowGap;
         });
       });
-      var lane = {
-        id: def.id || "~other",
-        title: def.title,
-        x: g.margin,
-        y: round(y),
-        width: round(right - g.margin),
-        height: round(height),
-        nodes: [],
-      };
+      var lane = { id: def.id || "~other", title: def.title, x: g.margin, y: round(y), width: round(right - g.margin), height: round(height), nodes: [] };
       cells[li].forEach(function (cell) {
         cell.forEach(function (b) {
           lane.nodes.push(b.id);
@@ -2487,85 +2556,151 @@
       y += height + g.bandGap;
       return lane;
     });
-    var columns = [];
-    for (r = 0; r <= maxRank; r++) {
-      var colBoxes = [];
-      cells.forEach(function (row) {
-        colBoxes = colBoxes.concat(row[r]);
-      });
-      columns.push({ x: colX[r], width: colWidth[r], y: g.margin, height: y - g.margin, boxes: colBoxes });
+    function bandOf(id) {
+      return lanes[laneOfNode[id]];
     }
-    var laneAt = {};
-    lanes.forEach(function (l) {
-      l.nodes.forEach(function (id) {
-        laneAt[id] = l;
+    function bandBoxes(li) {
+      var out = [];
+      cells[li].forEach(function (cell) {
+        out = out.concat(cell);
+      });
+      return out;
+    }
+    // Decide each edge's sides, then spread the edges sharing a side.
+    var routes = [];
+    links
+      .slice()
+      .sort(function (a, b) {
+        return byString(linkKey(a), linkKey(b));
+      })
+      .forEach(function (link) {
+        var a = byId[link.from];
+        var b = byId[link.to];
+        var la = laneOfNode[a.id];
+        var lb = laneOfNode[b.id];
+        var kind;
+        var sides;
+        if (a === b) {
+          kind = "self";
+          sides = ["right", "right"];
+        } else if (la === lb && rank[b.id] > rank[a.id]) {
+          kind = "along";
+          sides = ["right", "left"];
+        } else if (la === lb) {
+          kind = "back";
+          sides = ["bottom", "bottom"];
+        } else {
+          kind = la < lb ? "down" : "up";
+          sides = la < lb ? ["bottom", "top"] : ["top", "bottom"];
+        }
+        routes.push({ link: link, a: a, b: b, kind: kind, sides: sides });
+      });
+    var slots = {};
+    routes.forEach(function (r, i) {
+      if (r.kind === "self") return;
+      [[r.a, r.sides[0], r.b], [r.b, r.sides[1], r.a]].forEach(function (end, k) {
+        var key = end[0].id + "|" + end[1];
+        var vertical = end[1] === "left" || end[1] === "right";
+        var other = end[2];
+        (slots[key] = slots[key] || { box: end[0], side: end[1], entries: [] }).entries.push({
+          route: r,
+          end: k,
+          order: vertical ? other.y + other.height / 2 : other.x + other.width / 2,
+          index: i,
+        });
       });
     });
-    var forward = [];
-    var special = [];
-    edges.forEach(function (e) {
-      if (!e.self && rank[e.to] > rank[e.from]) forward.push(e.link);
-      else special.push(e);
-    });
-    var drawn = routeLinks(boxes, forward, {
-      portGap: 12,
-      waypointsFor: function (link, p1, p2) {
-        return passThrough(columns, p1, p2, g.passPad);
-      },
-    });
-    special.forEach(function (e) {
-      var a = byId[e.from];
-      var b = byId[e.to];
-      var route;
-      if (e.self) {
-        route = { self: true, link: e.link, points: [
-          { x: round(a.x + a.width), y: round(a.y + a.height * 0.3) },
-          { x: round(a.x + a.width), y: round(a.y + a.height * 0.7) },
-        ] };
-        drawn.push(layeredEdge(route, e.from, e.to));
-        return;
+    Object.keys(slots)
+      .sort(byString)
+      .forEach(function (key) {
+        var sl = slots[key];
+        sl.entries.sort(function (p, q) {
+          return p.order - q.order || p.index - q.index || p.end - q.end;
+        });
+        var vertical = sl.side === "left" || sl.side === "right";
+        var length = vertical ? sl.box.height : sl.box.width;
+        var start = vertical ? sl.box.y : sl.box.x;
+        var n = sl.entries.length;
+        var spacing = n > 1 ? Math.min(g.portGap, (length - 12) / (n - 1)) : 0;
+        var first = start + length / 2 - (spacing * (n - 1)) / 2;
+        sl.entries.forEach(function (entry, i) {
+          var p = sidePoint(sl.box, sl.side, first + i * spacing);
+          entry.route[entry.end === 0 ? "p1" : "p2"] = { x: round(p.x), y: round(p.y) };
+        });
+      });
+    var edges = routes.map(function (r) {
+      var link = r.link;
+      if (r.kind === "self") {
+        return layeredEdge({ self: true, link: link, points: [
+          { x: round(r.a.x + r.a.width), y: round(r.a.y + r.a.height * 0.3) },
+          { x: round(r.a.x + r.a.width), y: round(r.a.y + r.a.height * 0.7) },
+        ] }, link.from, link.to);
       }
-      if (rank[e.to] === rank[e.from]) {
-        drawn = drawn.concat(routeLinks(boxes, [e.link], { axis: "v" }));
-        return;
+      var p1 = r.p1;
+      var p2 = r.p2;
+      var band = bandOf(r.a.id);
+      var points = [];
+      var axis = "v";
+      var label;
+      if (r.kind === "along") {
+        axis = "h";
+        for (var cc = rank[r.a.id] + 1; cc < rank[r.b.id]; cc++) {
+          var cx = colX[cc];
+          var t = (cx - p1.x) / (p2.x - p1.x || 1);
+          var yy = freeSpot(p1.y + (p2.y - p1.y) * t, cells[laneOfNode[r.a.id]][cc], "y", band.y + 6, band.y + band.height - 6, g.gapPad);
+          points.push({ x: round(cx), y: round(yy) }, { x: round(cx + colWidth[cc]), y: round(yy) });
+        }
+        var next = points[0] || p2;
+        label = { x: (p1.x + next.x) / 2, y: (p1.y + next.y) / 2 };
+      } else if (r.kind === "back") {
+        var corridor = round(band.y + band.height - g.pad / 2);
+        points = [{ x: p1.x, y: corridor }, { x: p2.x, y: corridor }];
+        axis = "h";
+        label = { x: (p1.x + p2.x) / 2, y: corridor };
+      } else {
+        var down = r.kind === "down";
+        var from = laneOfNode[r.a.id];
+        var to = laneOfNode[r.b.id];
+        var bandA = lanes[from];
+        var bandB = lanes[to];
+        points.push({ x: p1.x, y: round(down ? bandA.y + bandA.height : bandA.y) });
+        var step = down ? 1 : -1;
+        var count = Math.abs(to - from);
+        for (var l = from + step, k = 1; l !== to; l += step, k++) {
+          var mid = lanes[l];
+          var want = p1.x + ((p2.x - p1.x) * k) / count;
+          var fx = round(freeSpot(want, bandBoxes(l), "x", mid.x + g.header, mid.x + mid.width, g.gapPad));
+          var top = { x: fx, y: round(mid.y) };
+          var bottom = { x: fx, y: round(mid.y + mid.height) };
+          if (down) points.push(top, bottom);
+          else points.push(bottom, top);
+        }
+        points.push({ x: p2.x, y: round(down ? bandB.y : bandB.y + bandB.height) });
+        label = { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
       }
-      // A return to an earlier node runs back along the bottom of the lower
-      // node's band, below every node in it.
-      var lower = laneAt[e.from].y >= laneAt[e.to].y ? laneAt[e.from] : laneAt[e.to];
-      var corridor = round(lower.y + lower.height - g.pad / 2);
-      var p1 = { x: round(a.x + a.width / 2), y: round(a.y + a.height) };
-      var p2 = { x: round(b.x + b.width / 2), y: round(b.y + b.height) };
-      var path = curvePath(p1, NORMALS.bottom, p2, NORMALS.bottom, [
-        { x: p1.x, y: corridor },
-        { x: p2.x, y: corridor },
-      ], "h");
-      var label = e.link.label || "";
-      var lines = label ? wrapText(label, 150, LABEL_SIZE, 3) : [];
-      drawn.push({
-        id: e.link.from + ">" + e.link.to + ">",
-        from: e.from,
-        to: e.to,
+      var path = curvePath(p1, NORMALS[r.sides[0]], p2, NORMALS[r.sides[1]], points, axis);
+      var lines = link.label ? wrapText(link.label, 150, LABEL_SIZE, 3) : [];
+      return {
+        id: link.from + ">" + link.to + ">",
+        from: link.from,
+        to: link.to,
         via: "",
-        label: label,
+        label: link.label || "",
         labelLines: lines,
         labelWidth: labelWidth(lines),
         change: "",
         faded: false,
-        refs: list(e.link.refs),
+        refs: list(link.refs),
         x1: p1.x,
         y1: p1.y,
         x2: p2.x,
         y2: p2.y,
         d: path.d,
-        labelX: round((p1.x + p2.x) / 2),
-        labelY: corridor,
-        back: true,
-      });
+        labelX: round(label.x),
+        labelY: round(label.y),
+      };
     });
-    drawn.sort(function (p, q) {
-      return byString(p.id, q.id);
-    });
-    return finishLayout({ kind: "graph", title: diagram.title, nodes: boxes, edges: drawn, lanes: lanes, empty: null }, g.margin);
+    return finishLayout({ kind: "graph", title: diagram.title, nodes: boxes, edges: edges, lanes: lanes, empty: null }, g.margin);
   }
 
   // layoutStateDiagram draws states top to bottom from the initial marker,
@@ -2638,9 +2773,11 @@
               height: e.row,
             };
           });
-      var width = Math.max(e.minWidth, textWidth(name, 14) + 48);
+      // Names and types are drawn in a monospace face.
+      var caption = stub ? "not in this diagram" : db.id;
+      var width = Math.max(e.minWidth, 34 + monoWidth(name, 13) + 18 + textWidth(caption, 10.5) + 14);
       columns.forEach(function (c) {
-        width = Math.max(width, textWidth(c.name, 12) + textWidth(c.type, 11) + 74);
+        width = Math.max(width, 56 + monoWidth(c.name, 12) + 16 + monoWidth((c.type || "ANY") + "?", 11) + 12);
       });
       var missing = !stub && !table;
       var height = stub ? e.stubHeight : e.header + Math.max(columns.length, missing ? 1 : 0) * e.row + 8;
@@ -3896,7 +4033,15 @@
       var x = layout.width + 40 <= w ? layout.width / 2 - w / 2 : -20;
       return { x: x, y: -8, width: w, height: h };
     }
-    return fitBox(layoutRect(layout), size.w, size.h, { pad: 24, maxScale: 1.15 });
+    var fitted = fitBox(layoutRect(layout), size.w, size.h, { pad: 24, maxScale: 1.15 });
+    if (layout.kind === "er" && size.w / fitted.width < 0.7) {
+      // A large schema opens readable at its first tables; Fit shows it all.
+      var left = Math.min.apply(null, layout.nodes.map(function (n) { return n.x; }));
+      var top = Math.min.apply(null, layout.nodes.filter(function (n) { return n.x < left + 160; }).map(function (n) { return n.y; }));
+      var k = 0.85;
+      return { x: left - 40, y: Math.max(-20, top - 60), width: size.w / k, height: size.h / k };
+    }
+    return fitted;
   }
 
   function animateBox(target, ms, done) {
@@ -4196,10 +4341,10 @@
     } else {
       svg("rect", { class: "body", width: w, height: h, rx: n.shape === "state" ? Math.min(h / 2, 18) : n.boundary ? 8 : 10 }, g);
     }
-    if (!n.shape && !n.boundary && n.kind !== "system" && !n.focus) {
+    if ((!n.shape || n.shape === "part") && !n.boundary && n.kind !== "system" && !n.focus) {
       svg("rect", { class: "accent", x: 0, y: 10, width: 3, height: h - 20, rx: 1.5 }, g);
     }
-    var iconName = KIND_ICON[n.kind] || (n.kind === "package" && !n.boundary ? "package" : null);
+    var iconName = n.shape ? null : KIND_ICON[n.kind] || (n.kind === "package" && !n.boundary ? "package" : null);
     var tx = 14;
     if (iconName && !n.focus && !list(n.summaryLines).length && h >= 40) {
       svgIcon(iconName, g, 13, h / 2 - 9, 18);
@@ -4214,6 +4359,11 @@
       svg("line", { class: "divider", x1: 16, x2: w - 16, y1: 66, y2: 66 }, g);
       list(n.summaryLines).forEach(function (line, i) {
         svg("text", { class: "summary", x: 18, y: 88 + i * 17 }, g).textContent = line;
+      });
+    } else if (list(n.lines).length > 1) {
+      var top = h / 2 - (n.lines.length * 16) / 2 + 12;
+      n.lines.forEach(function (line, k) {
+        svg("text", { class: "title", x: tx, y: top + k * 16, "text-anchor": anchor }, g).textContent = line;
       });
     } else if (n.subtitle && h >= 36) {
       svg("text", { class: "title", x: tx, y: h / 2 - 2, "text-anchor": anchor }, g).textContent = n.title;
@@ -4279,7 +4429,7 @@
         svg("text", { class: "lane-title", x: lane.x + 16, y: lane.y + 26 }, lg).textContent = lane.title;
         svg("text", { class: "lane-count", x: lane.x + lane.width - 16, y: lane.y + 26, "text-anchor": "end" }, lg).textContent = String(lane.nodes.length);
       } else {
-        wrapText(lane.title, 104, 12, 3).forEach(function (line, k) {
+        laneTitleLines(lane.title).forEach(function (line, k) {
           svg("text", { class: "lane-title", x: lane.x + 16, y: lane.y + 26 + k * 15 }, lg).textContent = line;
         });
       }
@@ -4753,6 +4903,11 @@
     if (!s) return null;
     var lo = s.box ? s.box.x : Math.min(s.x1, s.x2) - 30;
     var hi = s.box ? s.box.x + s.box.width : Math.max(s.x1, s.x2) + (s.self ? 200 : 30);
+    if (hi - lo > box.width - 40 && !s.box) {
+      // Too wide to show whole: show the sender and the label beside it.
+      lo = Math.min(s.x1, s.labelX - s.labelWidth / 2) - 60;
+      hi = Math.max(s.x1, s.labelX + s.labelWidth / 2) + 60;
+    }
     var y = s.box ? s.box.y : s.y - s.lines.length * 15;
     var headroom = app.layout.participants[0].height + 40;
     var next = { x: box.x, y: box.y, width: box.width, height: box.height };

@@ -113,3 +113,26 @@ test("the flows index lists every flow by title, and none yet is an empty list",
   );
   assert.deepEqual(model.flowIndex(model.mergeData([])), []);
 });
+
+test("a message across many lifelines is labelled near its sender, where the view follows it", () => {
+  const d = data();
+  const ids = ["person:owner", "pkg:internal/alpha", "pkg:internal/epsilon", "pkg:internal/delta", "pkg:internal/zeta", "pkg:internal/beta"];
+  const flow = {
+    id: "wide",
+    title: "Wide",
+    participants: ids,
+    steps: [
+      { from: ids[0], to: ids[5], label: "Reaches across", kind: "call", refs: ["code:x"] },
+      { from: ids[5], to: ids[0], label: "Comes back", kind: "return", refs: ["code:x"] },
+      { from: ids[1], to: ids[2], label: "Next door", kind: "call", refs: ["code:x"] },
+    ],
+  };
+  const layout = model.layoutSequence(d, flow);
+  const [out, back, near] = layout.steps;
+  assert.ok(out.labelX - out.x1 < (out.x2 - out.x1) / 3, "the label sits near the sender, not mid-span");
+  assert.ok(back.x1 - back.labelX < (back.x1 - back.x2) / 3, "the same going right to left");
+  assert.equal(near.labelX, (near.x1 + near.x2) / 2, "a short message keeps its label in the middle");
+  for (const s of [out, back]) {
+    assert.ok(Math.abs(s.labelX - s.x1) >= s.labelWidth / 2, "the label clears the sender's lifeline");
+  }
+});

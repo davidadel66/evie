@@ -60,7 +60,8 @@ test("a graph diagram with lanes puts each node in its lane's band, flowing left
     }
   }
   sound(layout, "lane graph");
-  assert.ok(nodeAt(layout, "read").x < nodeAt(layout, "parse").x && nodeAt(layout, "parse").x < nodeAt(layout, "save").x);
+  assert.ok(nodeAt(layout, "read").x < nodeAt(layout, "parse").x, "a lane flows left to right");
+  assert.ok(nodeAt(layout, "save").x < nodeAt(layout, "index").x, "every lane flows left to right");
   assert.equal(nodeAt(layout, "save").ref, "pkg:internal/beta", "a diagram node can stand for an explorer node");
   assert.equal(nodeAt(layout, "read").ref, null);
   assert.equal(nodeAt(layout, "parse").title, "Parse <widget> & check", "labels are kept as text, never as markup");
@@ -163,4 +164,29 @@ test("transition labels never cover one another", () => {
   const layout = model.layoutDiagram(d, model.findDiagram(d, "delta-states").diagram);
   assert.ok(labelBoxes(layout).length >= 7);
   assertNoOverlap(labelBoxes(layout), "transition labels");
+});
+
+test("a lane graph stays compact: each lane is only as long as its own chain, and long labels wrap", () => {
+  const lanes = ["a", "b", "c", "d"];
+  const nodes = [];
+  const edges = [];
+  // A chain that runs through every lane, three nodes per lane, and a
+  // label far too long for one line.
+  lanes.forEach((lane, li) => {
+    for (let k = 0; k < 3; k++) nodes.push({ id: lane + k, label: lane + " step " + k, lane });
+    edges.push({ from: lane + "0", to: lane + "1" }, { from: lane + "1", to: lane + "2" });
+    if (li > 0) edges.push({ from: lanes[li - 1] + "2", to: lane + "0", label: "hands over to the next lane" });
+  });
+  edges.push({ from: "a0", to: "d2", label: "skips every lane between" }, { from: "c2", to: "a1", label: "goes back up" });
+  nodes[4].label = "A very long label that says everything about this step, its guards, its hashes, and its idempotency key";
+  const diagram = { id: "chain", title: "Chain", kind: "graph", summary: { text: "x", refs: ["code:x"] }, lanes: lanes.map((id) => ({ id, title: "Lane " + id })), nodes, edges };
+  const layout = model.layoutDiagram(data(), diagram);
+  const columns = new Set(layout.nodes.map((n) => n.x));
+  assert.ok(columns.size <= 4, `three nodes per lane need at most a few columns, not ${columns.size}`);
+  const long = nodeAt(layout, nodes[4].id);
+  assert.ok(long.lines.length >= 2 && long.width <= 260, "a long label wraps onto lines");
+  for (const line of long.lines) assert.ok(model.textWidth(line, 13) <= long.width - 20, `"${line}" fits its box`);
+  sound(layout, "compact lane graph");
+  const { labelBoxes } = require("./geometry.js");
+  assertNoOverlap(labelBoxes(layout), "lane graph labels");
 });

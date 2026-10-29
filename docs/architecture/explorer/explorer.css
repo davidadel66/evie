@@ -1107,8 +1107,17 @@ button.crumb:hover {
   stroke-width: 1.3;
 }
 
-.node.shape-state .title {
+.node.shape-state .title,
+.node.shape-part .title {
   font-size: 13px;
+}
+
+.node.shape-part .accent {
+  fill: var(--group);
+}
+
+.node.shape-part:not(.group-memory):not(.group-runtime):not(.group-intelligence):not(.group-infrastructure) .accent {
+  fill: var(--border-2);
 }
 
 .initial-dot {
