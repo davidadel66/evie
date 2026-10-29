@@ -110,13 +110,22 @@ from the repository root:
 
 Install UI dependencies first with `npm --prefix internal/web/ui ci` when
 needed. The verification script runs the full Go test and vet suites, UI lint
-and build, and staged and unstaged whitespace checks. Format changed Go files
-with `gofmt` before running it.
+and build, the system explorer's drift check (`go run ./scripts/explorer
+check`) and viewer tests (`node --test
+'docs/architecture/explorer/test/*.test.js'`), and staged and unstaged
+whitespace checks. Format changed Go files with `gofmt` before running it.
 
-For documentation-only changes, `git diff --check` is sufficient locally; CI
-still runs the full required check. Report exact commands, results, warnings,
-and every skipped check with its reason. Model review never replaces these
-checks.
+The drift check fails when the code and the explorer data disagree. Stale
+facts are repaired with `go run ./scripts/explorer extract`; a new package
+needs a component node with a cited summary. Repair everything else it
+reports by following
+[`docs/architecture/explorer/README.md`](docs/architecture/explorer/README.md).
+
+For documentation-only changes, `git diff --check` and `go run
+./scripts/explorer check` are sufficient locally, since glossary, ADR, and
+heading edits can drift the explorer; CI still runs the full required check.
+Report exact commands, results, warnings, and every skipped check with its
+reason. Model review never replaces these checks.
 
 ## Review priorities
 
