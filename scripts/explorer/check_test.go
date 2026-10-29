@@ -589,3 +589,177 @@ func TestCheckReportsDiagramProblems(t *testing.T) {
 		},
 	})
 }
+
+func editSample(edit func(sample map[string]any)) func(*testing.T, string) {
+	return func(t *testing.T, root string) {
+		editData(t, root, fixtureData+"proposals/sample.js", edit)
+	}
+}
+
+func TestCheckReportsProposalProblems(t *testing.T) {
+	const sample = fixtureData + "proposals/sample.js"
+	runCheckCases(t, []checkCase{
+		{
+			name: "change of a node that does not exist",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "nodes", map[string]any{"op": "change", "id": "pkg:internal/ghost", "title": "ghost"})
+			}),
+			want: []string{sample, "proposal sample change node pkg:internal/ghost", "does not exist"},
+		},
+		{
+			name: "removal of a node that does not exist",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "nodes", map[string]any{"op": "remove", "id": "nobody"})
+			}),
+			want: []string{"proposal sample remove node nobody", "does not exist"},
+		},
+		{
+			name: "added node that collides with an existing node",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "nodes", map[string]any{"op": "add", "id": "pkg:internal/beta", "level": "component", "kind": "package", "title": "beta", "group": "memory", "summary": statement("Beta again.", "doc:docs/guide.md")})
+			}),
+			want: []string{"proposal sample add node pkg:internal/beta", "already exists"},
+		},
+		{
+			name: "added node with a statement that has no source",
+			break_: editSample(func(p map[string]any) {
+				p["nodes"].([]any)[0].(map[string]any)["summary"] = statement("Unsourced.")
+			}),
+			want: []string{"proposal sample add node pkg:internal/epsilon summary", "no source"},
+		},
+		{
+			name: "added edge that collides with an import edge from the facts",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "edges", map[string]any{"op": "add", "from": "pkg:internal/alpha", "to": "pkg:internal/beta", "label": "again", "via": "import"})
+			}),
+			want: []string{"proposal sample add edge pkg:internal/alpha -> pkg:internal/beta (import)", "already exists"},
+		},
+		{
+			name: "added edge to a node that neither exists nor is added",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "edges", map[string]any{"op": "add", "from": "pkg:internal/alpha", "to": "pkg:internal/omega", "label": "uses", "via": "import"})
+			}),
+			want: []string{"proposal sample add edge pkg:internal/alpha -> pkg:internal/omega (import)", "node:pkg:internal/omega"},
+		},
+		{
+			name: "change of an edge that does not exist",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "edges", map[string]any{"op": "change", "from": "pkg:internal/beta", "to": "pkg:internal/alpha", "via": "call", "label": "x"})
+			}),
+			want: []string{"proposal sample change edge pkg:internal/beta -> pkg:internal/alpha (call)", "does not exist"},
+		},
+		{
+			name: "removal of a flow that does not exist",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "flows", map[string]any{"op": "remove", "id": "ghost-flow"})
+			}),
+			want: []string{"proposal sample remove flow ghost-flow", "does not exist"},
+		},
+		{
+			name: "added flow that collides with an existing flow",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "flows", map[string]any{"op": "add", "id": "run", "title": "Run again",
+					"summary": statement("Again.", "doc:docs/guide.md"), "trigger": statement("Again.", "doc:docs/guide.md"),
+					"participants": []any{"pkg:cmd/tool"},
+					"steps":        []any{map[string]any{"from": "pkg:cmd/tool", "to": "pkg:cmd/tool", "label": "x", "kind": "note", "refs": []any{"doc:docs/guide.md"}}}})
+			}),
+			want: []string{"proposal sample add flow run", "already exists"},
+		},
+		{
+			name: "operation outside its enumeration",
+			break_: editSample(func(p map[string]any) {
+				p["nodes"].([]any)[1].(map[string]any)["op"] = "rename"
+			}),
+			want: []string{"proposal sample", `op "rename"`},
+		},
+		{
+			name: "status outside its enumeration",
+			break_: editSample(func(p map[string]any) {
+				p["status"] = "shipped"
+			}),
+			want: []string{"proposal sample", `status "shipped"`},
+		},
+		{
+			name: "requirement with no source",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "requirements", statement("Unsourced."))
+			}),
+			want: []string{"proposal sample requirements 2", "no source"},
+		},
+		{
+			name: "dead spec reference",
+			break_: editSample(func(p map[string]any) {
+				p["spec"] = "doc:docs/missing.spec.md"
+			}),
+			want: []string{"proposal sample spec", "doc:docs/missing.spec.md"},
+		},
+		{
+			name: "missing proposal id",
+			break_: editSample(func(p map[string]any) {
+				delete(p, "id")
+			}),
+			want: []string{sample, "missing id"},
+		},
+		{
+			name: "duplicate proposal id",
+			break_: func(t *testing.T, root string) {
+				editData(t, root, "docs/architecture/explorer/examples/example.js", func(p map[string]any) {
+					p["id"] = "sample"
+				})
+			},
+			want: []string{"docs/architecture/explorer/examples/example.js", "proposal sample", "duplicate proposal id"},
+		},
+		{
+			name: "example proposal that removes a missing node",
+			break_: func(t *testing.T, root string) {
+				editData(t, root, "docs/architecture/explorer/examples/example.js", func(p map[string]any) {
+					p["nodes"] = []any{map[string]any{"op": "remove", "id": "pkg:internal/ghost"}}
+				})
+			},
+			want: []string{"docs/architecture/explorer/examples/example.js", "proposal example remove node pkg:internal/ghost", "does not exist"},
+		},
+		{
+			name: "content in the examples directory",
+			break_: func(t *testing.T, root string) {
+				writeFile(t, root, "docs/architecture/explorer/examples/content.js",
+					"evieExplorer.register(\n{\"format\": 1, \"kind\": \"content\", \"owner\": \"x\"}\n);\n")
+			},
+			want: []string{"docs/architecture/explorer/examples/content.js", "examples are proposals"},
+		},
+	})
+}
+
+func TestCheckReportsEveryProblemNotJustTheFirst(t *testing.T) {
+	root := newFixture(t)
+	extractFixture(t, root)
+	editCore(func(core map[string]any) {
+		node(t, core, "pkg:internal/delta")["summary"] = statement("Unsourced.")
+	})(t, root)
+	editSystem(func(system map[string]any) {
+		appendTo(node(t, system, "owner"), "links", "adr:0098")
+	})(t, root)
+	writeFile(t, root, fixtureData+"stray.js", "evieExplorer.register(\n{\"format\": 1, \"kind\": \"content\", \"owner\": \"stray\"}\n);\n")
+	writeFile(t, root, "internal/zeta/zeta.go", "package zeta\n")
+
+	code, out := checkFixture(t, root)
+	if code != 1 {
+		t.Fatalf("check exit %d, want 1:\n%s", code, out)
+	}
+	for _, want := range []string{
+		factsPath + ": facts:",
+		fixtureData + "core.js: node pkg:internal/delta summary:",
+		fixtureData + "system.js: node owner links:",
+		fixtureData + "stray.js: manifest:",
+		factsPath + ": package internal/zeta:",
+		"5 problem(s)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if !strings.Contains(line, "problem(s)") && !strings.Contains(line, ". Fix: ") {
+			t.Errorf("problem line has no fix hint: %q", line)
+		}
+	}
+}

@@ -43,13 +43,14 @@ func (c *checker) validate(files []dataFile) {
 				c.validateNode(file.Path, n, nodeRules{})
 			}
 			for _, e := range file.Content.Edges {
-				c.validateEdge(file.Path, e, scope{})
+				c.validateEdge(file.Path, "", e, scope{})
 			}
 			for _, f := range file.Content.Flows {
 				c.validateFlow(file.Path, "flow "+f.ID, f, false, scope{})
 			}
 		}
 	}
+	c.validateProposals(files)
 	c.checkPackageCoverage()
 }
 
@@ -127,16 +128,17 @@ type scope struct {
 
 // nodeRules adjusts node validation to where the node appears.
 type nodeRules struct {
-	part bool // a child beneath another node
+	part   bool   // a child beneath another node
+	prefix string // names the proposal operation that holds the node, if any
 	scope
 }
 
 // validateNode checks one node and its children.
 func (c *checker) validateNode(file string, n Node, rules nodeRules) {
 	part := rules.part
-	item := "node " + n.ID
+	item := rules.prefix + "node " + n.ID
 	if n.ID == "" {
-		item = fmt.Sprintf("node %q", n.Title)
+		item = fmt.Sprintf("%snode %q", rules.prefix, n.Title)
 		c.missing(file, item, "id")
 	}
 	if n.Title == "" {
@@ -152,28 +154,11 @@ func (c *checker) validateNode(file string, n Node, rules nodeRules) {
 	if n.Summary == nil {
 		c.missing(file, item, "summary")
 	}
-	c.statement(file, item+" summary", n.Summary, rules.added)
-	c.statements(file, item+" does", n.Does, rules.added)
-	c.statements(file, item+" owns", n.Owns, rules.added)
-	c.statements(file, item+" interfaces", n.Interfaces, rules.added)
-	c.statements(file, item+" gotchas", n.Gotchas, rules.added)
-	for _, term := range n.Terms {
-		c.ref(file, item+" terms", "term:"+term, rules.added)
-	}
-	c.refs(file, item+" links", n.Links, rules.added)
-	for _, id := range n.Contains {
-		c.ref(file, item+" contains", "node:"+id, rules.added)
-	}
-	for _, d := range n.Diagrams {
-		c.validateDiagram(file, item, d, rules.scope)
-	}
+	c.nodeFields(file, item, n, rules.scope)
 	if n.Level == componentLevel {
 		c.oneOf(file, item, "group", n.Group, groups, true)
 	} else {
 		c.oneOf(file, item, "group", n.Group, groups, false)
-	}
-	for _, g := range n.AlsoIn {
-		c.oneOf(file, item, "alsoIn", g, groups, true)
 	}
 	if pkgPath, ok := strings.CutPrefix(n.ID, packagePrefix); ok {
 		if n.Level != componentLevel || n.Kind != "package" {
@@ -185,7 +170,30 @@ func (c *checker) validateNode(file string, n Node, rules nodeRules) {
 		}
 	}
 	for _, child := range n.Children {
-		c.validateNode(file, child, nodeRules{part: true, scope: rules.scope})
+		c.validateNode(file, child, nodeRules{part: true, prefix: rules.prefix, scope: rules.scope})
+	}
+}
+
+// nodeFields checks a node's optional fields: statements, glossary terms,
+// links, contained nodes, diagrams, and other groups.
+func (c *checker) nodeFields(file, item string, n Node, sc scope) {
+	c.statement(file, item+" summary", n.Summary, sc.added)
+	c.statements(file, item+" does", n.Does, sc.added)
+	c.statements(file, item+" owns", n.Owns, sc.added)
+	c.statements(file, item+" interfaces", n.Interfaces, sc.added)
+	c.statements(file, item+" gotchas", n.Gotchas, sc.added)
+	for _, term := range n.Terms {
+		c.ref(file, item+" terms", "term:"+term, sc.added)
+	}
+	c.refs(file, item+" links", n.Links, sc.added)
+	for _, id := range n.Contains {
+		c.ref(file, item+" contains", "node:"+id, sc.added)
+	}
+	for _, d := range n.Diagrams {
+		c.validateDiagram(file, item, d, sc)
+	}
+	for _, g := range n.AlsoIn {
+		c.oneOf(file, item, "alsoIn", g, groups, true)
 	}
 }
 
@@ -222,8 +230,8 @@ func edgeItem(e Edge) string {
 // validateEdge checks an authored edge. An import edge must be in the facts'
 // import graph unless a design proposal adds it; any other edge cites a
 // source.
-func (c *checker) validateEdge(file string, e Edge, sc scope) {
-	item := edgeItem(e)
+func (c *checker) validateEdge(file, prefix string, e Edge, sc scope) {
+	item := prefix + edgeItem(e)
 	for field, value := range map[string]string{"from": e.From, "to": e.To} {
 		if value == "" {
 			c.missing(file, item, field)
