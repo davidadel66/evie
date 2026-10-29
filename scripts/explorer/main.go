@@ -35,6 +35,8 @@ func run(args []string, root string, stdout, stderr io.Writer) int {
 		}
 		fmt.Fprintf(stdout, "wrote %s\n", factsPath)
 		return 0
+	case "check":
+		return runCheck(root, stdout, stderr)
 	default:
 		fmt.Fprintln(stderr, usage)
 		return 2
