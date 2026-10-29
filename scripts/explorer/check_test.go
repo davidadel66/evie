@@ -299,6 +299,12 @@ func TestCheckReportsDeadReferences(t *testing.T) {
 		{"symbol in a non-Go file", "code:docs/guide.md#Guide", "Go file"},
 		{"heading", "doc:docs/guide.md#no-such-heading", "no heading"},
 		{"heading in a code fence", "doc:docs/guide.md#not-a-heading", "no heading"},
+		{"heading in a fence closed only by a longer fence", "doc:docs/guide.md#inside-a-longer-fence", "no heading"},
+		{"heading in a tilde fence closed only by a longer fence", "doc:docs/guide.md#inside-a-four-tilde-fence", "no heading"},
+		{"heading in a tilde fence holding backticks", "doc:docs/guide.md#inside-a-tilde-fence", "no heading"},
+		{"list item above a thematic break", "doc:docs/guide.md#a-list-item", "no heading"},
+		{"table row above a thematic break", "doc:docs/guide.md#-a--b-", "no heading"},
+		{"front matter", "doc:docs/adr/0001-first-decision.md#status-accepted", "no heading"},
 		{"doc that is a directory", "doc:docs", "not a file"},
 		{"ADR", "adr:0099", "no ADR 0099"},
 		{"glossary term", "term:Gadget", "no glossary term"},
@@ -622,6 +628,40 @@ func TestCheckReportsProposalProblems(t *testing.T) {
 			want: []string{sample, "proposal sample change node pkg:internal/ghost", "does not exist"},
 		},
 		{
+			name: "change of a part node",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "nodes", map[string]any{"op": "change", "id": "part:alpha-server", "title": "Server, changed"})
+			}),
+			want: []string{sample, "proposal sample change node part:alpha-server", "a part of another node", "top-level nodes only"},
+		},
+		{
+			name: "removal of a part node",
+			break_: editSample(func(p map[string]any) {
+				appendTo(p, "nodes", map[string]any{"op": "remove", "id": "part:alpha-server"})
+			}),
+			want: []string{sample, "proposal sample remove node part:alpha-server", "top-level nodes only"},
+		},
+		{
+			name: "added node that carries children",
+			break_: editSample(func(p map[string]any) {
+				p["nodes"].([]any)[0].(map[string]any)["children"] = []any{map[string]any{
+					"id": "part:epsilon-core", "level": "part", "title": "Core",
+					"summary": statement("The core.", "doc:docs/guide.md"),
+				}}
+			}),
+			want: []string{sample, "proposal sample add node pkg:internal/epsilon", "children", "depth pass"},
+		},
+		{
+			name: "changed node that sets children",
+			break_: editSample(func(p map[string]any) {
+				p["nodes"].([]any)[1].(map[string]any)["children"] = []any{map[string]any{
+					"id": "part:alpha-client", "level": "part", "title": "Client",
+					"summary": statement("The client.", "doc:docs/guide.md"),
+				}}
+			}),
+			want: []string{sample, "proposal sample change node pkg:internal/alpha", "children", "depth pass"},
+		},
+		{
 			name: "removal of a node that does not exist",
 			break_: editSample(func(p map[string]any) {
 				appendTo(p, "nodes", map[string]any{"op": "remove", "id": "nobody"})
@@ -776,5 +816,58 @@ func TestCheckReportsEveryProblemNotJustTheFirst(t *testing.T) {
 		if !strings.Contains(line, "problem(s)") && !strings.Contains(line, ". Fix: ") {
 			t.Errorf("problem line has no fix hint: %q", line)
 		}
+	}
+}
+
+func TestCheckOutputIsTheSameOnEveryRun(t *testing.T) {
+	root := newFixture(t)
+	extractFixture(t, root)
+	editCore(func(core map[string]any) {
+		appendTo(core, "edges", map[string]any{"label": "nowhere", "via": "call", "refs": []any{"code:internal/alpha"}})
+	})(t, root)
+
+	_, first := checkFixture(t, root)
+	from, to := strings.Index(first, "missing from"), strings.Index(first, "missing to")
+	if from < 0 || to < 0 || from > to {
+		t.Fatalf("want missing from reported before missing to:\n%s", first)
+	}
+	for range 30 {
+		if _, again := checkFixture(t, root); again != first {
+			t.Fatalf("check output changed between runs:\n%s\n---\n%s", first, again)
+		}
+	}
+}
+
+func TestCheckReportsCRLFLineEndingsClearly(t *testing.T) {
+	root := newFixture(t)
+	extractFixture(t, root)
+	// A checkout that turned LF into CRLF. Each file still decodes and is
+	// validated, and each is named with the line endings as the problem
+	// rather than as a wrapper or facts mismatch.
+	files := []string{factsPath, manifestPath, fixtureData + "core.js"}
+	for _, name := range files {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, root, name, strings.ReplaceAll(string(data), "\n", "\r\n"))
+	}
+
+	code, out := checkFixture(t, root)
+	if code != 1 {
+		t.Fatalf("check exit %d, want 1:\n%s", code, out)
+	}
+	for _, name := range files {
+		if !strings.Contains(out, name+": file: the file has CRLF line endings") {
+			t.Errorf("output does not name %s's line endings:\n%s", name, out)
+		}
+	}
+	for _, opaque := range []string{"first line is", "last line is", "differ from a fresh extraction"} {
+		if strings.Contains(out, opaque) {
+			t.Errorf("output reports %q for a line-ending problem:\n%s", opaque, out)
+		}
+	}
+	if !strings.Contains(out, "3 problem(s)") {
+		t.Errorf("want only the three line-ending problems:\n%s", out)
 	}
 }

@@ -54,6 +54,7 @@ func (c *checker) readManifest() []string {
 		c.add(manifestPath, "manifest", "the manifest cannot be read", "create it with every data file listed")
 		return nil
 	}
+	c.lineEndings(manifestPath, data)
 	body, err := unwrap(manifestOpen, data)
 	var entries []string
 	if err == nil {
@@ -141,6 +142,7 @@ func (c *checker) readDataFile(rel string, example bool) (dataFile, bool) {
 	if err != nil {
 		return malformed(err.Error())
 	}
+	c.lineEndings(rel, data)
 	body, err := unwrap(registerOpen, data)
 	if err != nil {
 		return malformed(err.Error())

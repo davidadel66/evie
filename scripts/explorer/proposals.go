@@ -64,6 +64,10 @@ func (c *checker) validateProposal(file, item string, p *Proposal, edges map[str
 		opItem := fmt.Sprintf("%s %s node %s", item, op.Op, op.ID)
 		c.oneOf(file, opItem, "op", op.Op, operations, true)
 		_, exists := c.nodes[op.ID]
+		if len(op.Children) > 0 {
+			c.add(file, opItem, "malformed data: a design proposal node operation carries no children; children are reserved for the depth pass",
+				"remove children")
+		}
 		switch op.Op {
 		case "add":
 			if exists {
@@ -72,9 +76,11 @@ func (c *checker) validateProposal(file, item string, p *Proposal, edges map[str
 			c.validateNode(file, op.Node, nodeRules{prefix: item + " add ", scope: sc})
 		case "change":
 			c.targetExists(file, opItem, exists, "node")
+			c.topLevel(file, opItem, op.ID)
 			c.validateNodeChange(file, opItem, op.Node, sc)
 		case "remove":
 			c.targetExists(file, opItem, exists, "node")
+			c.topLevel(file, opItem, op.ID)
 		}
 	}
 	for _, op := range p.Edges {
@@ -117,6 +123,15 @@ func (c *checker) validateProposal(file, item string, p *Proposal, edges map[str
 		case "remove":
 			c.targetExists(file, opItem, exists, "flow")
 		}
+	}
+}
+
+// topLevel reports a design proposal node operation that targets a part;
+// node operations change and remove top-level nodes only.
+func (c *checker) topLevel(file, item, id string) {
+	if parent, ok := c.parts[id]; ok {
+		c.add(file, item, "the node is a part of another node ("+parent+"); design proposal node operations target top-level nodes only",
+			"target "+parent+" instead")
 	}
 }
 

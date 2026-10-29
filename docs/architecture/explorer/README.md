@@ -264,6 +264,10 @@ the page toggles it on top of the built system.
   the fields that change; `remove` gives only the identity.
 - Nodes and flows are identified by `id`; edges by `from`, `to`, and `via`.
   Existing edges include the facts' import edges between package nodes.
+- Node operations target top-level nodes only: a part (a node's child) is
+  not changed or removed on its own, and a node operation carries no
+  `children`, which stay reserved for the depth pass. To change a part,
+  change the node that holds it.
 - Added packages and import edges describe code that does not exist yet, so
   they are not matched against the facts. Statements still cite sources that
   exist, usually the feature's spec, and nodes the proposal adds can be cited
@@ -301,7 +305,7 @@ References are typed strings. Line numbers are never a reference form.
 | `code:path#Name` | The Go file declares a top-level function, type, variable, or constant `Name`. |
 | `code:path#Type.Name` | The Go file declares method `Name` on `Type`, a field `Name` of struct `Type`, or a method `Name` of interface `Type`. |
 | `doc:path` | The repository file exists. |
-| `doc:path#anchor` | The Markdown file has an ATX heading with that GitHub anchor: lower-cased, letters, digits, `-` and `_` kept, spaces turned into `-`, `-1`, `-2` for repeats; headings in code fences do not count. |
+| `doc:path#anchor` | The Markdown file has an ATX (`## Title`) or setext (`Title` over a line of `=` or `-`) heading with that GitHub anchor: lower-cased, letters, digits, `-` and `_` kept, spaces turned into `-`, `-1`, `-2` for repeats. Headings in code fences and front matter do not count; a fence closes only on a run of its own character (backtick or tilde) at least as long as the one that opened it, and a list item, table row, or quote above a line of `-` is not a heading. |
 | `adr:0007` | `docs/adr/` has ADR 0007. |
 | `term:Agent Preset` | `GLOSSARY.md` has that term, spelled exactly. |
 | `table:evie.jobs` | The facts have database `evie` with table `jobs`. |
@@ -326,8 +330,11 @@ defines them with the fact highlighted.
   source;
 - an import edge or `via: import` flow step the import graph lacks;
 - a design proposal that changes or removes a missing item, or adds one that
-  exists;
+  exists; a design proposal node operation on a part, or one that carries
+  `children`;
 - a data file missing from the manifest, or listed but missing;
+- a data file with CRLF line endings (the repository's `.gitattributes`
+  checks the explorer's files out with LF);
 - malformed data: wrapper lines, JSON, unknown or wrongly cased keys, missing
   required fields, values outside their vocabulary, a diagram field of another
   kind, unsupported format versions;

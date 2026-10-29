@@ -14,6 +14,7 @@ type checker struct {
 	facts    Facts
 	problems []problem
 	nodes    map[string]string // node id -> data file that defines it
+	parts    map[string]string // part node id -> id of the node that holds it
 	flows    map[string]string // flow id -> data file that defines it
 	diagrams map[string]string // diagram id -> data file that defines it
 	packages map[string]bool   // package paths from the facts
@@ -57,6 +58,7 @@ func (c *checker) validate(files []dataFile) {
 // index records every node id, including children, and reports duplicates.
 func (c *checker) index(files []dataFile) {
 	c.nodes = map[string]string{}
+	c.parts = map[string]string{}
 	c.flows = map[string]string{}
 	c.diagrams = map[string]string{}
 	c.packages = map[string]bool{}
@@ -67,14 +69,17 @@ func (c *checker) index(files []dataFile) {
 	for _, imp := range c.facts.Imports {
 		c.imports[imp] = true
 	}
-	var walk func(file string, nodes []Node)
-	walk = func(file string, nodes []Node) {
+	var walk func(file, parent string, nodes []Node)
+	walk = func(file, parent string, nodes []Node) {
 		for _, n := range nodes {
 			if n.ID != "" {
 				if first, dup := c.nodes[n.ID]; dup {
 					c.add(file, "node "+n.ID, "duplicate node id, also defined in "+first, "give each node a unique id")
 				} else {
 					c.nodes[n.ID] = file
+					if parent != "" {
+						c.parts[n.ID] = parent
+					}
 				}
 			}
 			for _, d := range n.Diagrams {
@@ -84,14 +89,14 @@ func (c *checker) index(files []dataFile) {
 					c.diagrams[d.ID] = file
 				}
 			}
-			walk(file, n.Children)
+			walk(file, n.ID, n.Children)
 		}
 	}
 	for _, file := range files {
 		if file.Content == nil {
 			continue
 		}
-		walk(file.Path, file.Content.Nodes)
+		walk(file.Path, "", file.Content.Nodes)
 		for _, f := range file.Content.Flows {
 			if first, dup := c.flows[f.ID]; dup && f.ID != "" {
 				c.add(file.Path, "flow "+f.ID, "duplicate flow id, also defined in "+first, "give each flow a unique id")
@@ -232,16 +237,12 @@ func edgeItem(e Edge) string {
 // source.
 func (c *checker) validateEdge(file, prefix string, e Edge, sc scope) {
 	item := prefix + edgeItem(e)
-	for field, value := range map[string]string{"from": e.From, "to": e.To} {
-		if value == "" {
-			c.missing(file, item, field)
+	for _, end := range []struct{ field, id string }{{"from", e.From}, {"to", e.To}} {
+		if end.id == "" {
+			c.missing(file, item, end.field)
+		} else {
+			c.ref(file, item, "node:"+end.id, sc.added)
 		}
-	}
-	if e.From != "" {
-		c.ref(file, item, "node:"+e.From, sc.added)
-	}
-	if e.To != "" {
-		c.ref(file, item, "node:"+e.To, sc.added)
 	}
 	if e.Label == "" {
 		c.missing(file, item, "label")

@@ -53,7 +53,11 @@ func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 	}
 	c := &checker{root: root, facts: facts}
 	current, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(factsPath)))
-	if err != nil || !bytes.Equal(current, fresh) {
+	switch {
+	case err == nil && bytes.Equal(current, fresh):
+	case err == nil && hasCRLF(current) && bytes.Equal(bytes.ReplaceAll(current, []byte("\r\n"), []byte("\n")), fresh):
+		c.lineEndings(factsPath, current)
+	default:
 		c.add(factsPath, "facts", "the facts differ from a fresh extraction of the code",
 			"run "+extractCommand+" and commit the result")
 	}

@@ -29,7 +29,7 @@ evieExplorer.register(
       ],
       "gotchas": [{"text": "The limit is fixed.", "refs": ["code:internal/alpha/alpha.go#Limit", "adr:0002", "term:Widget"]}],
       "terms": ["Widget", "Ledger Entry"],
-      "links": ["code:internal/alpha", "doc:docs/guide.md#using-alpha-with-links", "adr:0001"],
+      "links": ["code:internal/alpha", "doc:docs/guide.md#using-alpha-with-links", "doc:docs/guide.md#after-the-fences", "doc:docs/guide.md#setext-top", "doc:docs/guide.md#setext-second", "adr:0001"],
       "diagrams": [
         {
           "id": "alpha-graph",

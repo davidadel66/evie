@@ -37,18 +37,32 @@ func wrap(open string, value any) ([]byte, error) {
 }
 
 // unwrap returns the JSON body of a data file after checking its fixed first
-// and last lines.
+// and last lines. A line may end in CRLF, so a file a checkout converted
+// still decodes; hasCRLF lets the check name that problem on its own.
 func unwrap(open string, data []byte) ([]byte, error) {
 	text := strings.TrimSuffix(string(data), "\n")
 	lines := strings.Split(text, "\n")
 	if len(lines) < 3 {
 		return nil, fmt.Errorf("want the line %q, a JSON body, and the line %q", open, wrapperClose)
 	}
-	if lines[0] != open {
-		return nil, fmt.Errorf("first line is %q, want exactly %q", lines[0], open)
+	if first := strings.TrimSuffix(lines[0], "\r"); first != open {
+		return nil, fmt.Errorf("first line is %q, want exactly %q", first, open)
 	}
-	if lines[len(lines)-1] != wrapperClose {
-		return nil, fmt.Errorf("last line is %q, want exactly %q", lines[len(lines)-1], wrapperClose)
+	if last := strings.TrimSuffix(lines[len(lines)-1], "\r"); last != wrapperClose {
+		return nil, fmt.Errorf("last line is %q, want exactly %q", last, wrapperClose)
 	}
 	return []byte(strings.Join(lines[1:len(lines)-1], "\n")), nil
+}
+
+// hasCRLF reports whether a file has CRLF line endings.
+func hasCRLF(data []byte) bool {
+	return bytes.Contains(data, []byte("\r\n"))
+}
+
+// lineEndings reports a data file with CRLF line endings.
+func (c *checker) lineEndings(file string, data []byte) {
+	if hasCRLF(data) {
+		c.add(file, "file", "the file has CRLF line endings",
+			"convert it to LF line endings; the repository's .gitattributes checks explorer files out with LF")
+	}
 }

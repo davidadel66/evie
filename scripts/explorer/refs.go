@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -112,7 +113,7 @@ func (c *checker) resolve(ref string, extra map[string]bool) string {
 			return "the reference names no binary"
 		}
 		for _, cmd := range c.facts.Commands {
-			if cmd.Binary == words[0] && (len(words) == 1 || slicesEqual(cmd.Words, words[1:])) {
+			if cmd.Binary == words[0] && (len(words) == 1 || slices.Equal(cmd.Words, words[1:])) {
 				return ""
 			}
 		}
@@ -138,18 +139,6 @@ func splitRoute(target string) (string, string) {
 		return "", target
 	}
 	return method, strings.TrimSpace(pattern)
-}
-
-func slicesEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // repoPath reports why p is not a clean relative path inside the repository.
@@ -295,39 +284,50 @@ func typeMembers(expr ast.Expr) []string {
 }
 
 var (
-	atxHeading = regexp.MustCompile(`^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$`)
-	mdImage    = regexp.MustCompile(`!\[([^\]]*)\]\([^)]*\)`)
-	mdLink     = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
-	htmlTag    = regexp.MustCompile(`<[^>]+>`)
+	atxHeading      = regexp.MustCompile(`^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$`)
+	setextUnderline = regexp.MustCompile(`^ {0,3}(?:=+|-+)[ \t]*$`)
+	listItem        = regexp.MustCompile(`^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$)`)
+	mdImage         = regexp.MustCompile(`!\[([^\]]*)\]\([^)]*\)`)
+	mdLink          = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+	htmlTag         = regexp.MustCompile(`<[^>]+>`)
 )
 
-// headings returns the GitHub anchors of a Markdown file's ATX headings,
-// ignoring fenced code blocks; a repeated heading gets -1, -2, and so on.
+// codeFence is an open fenced code block: its character and length.
+type codeFence struct {
+	char byte
+	size int
+}
+
+// fenceLine reads a line as a code fence: a run of three or more backticks
+// or tildes and the info string after it. A backtick fence's info string
+// holds no backtick.
+func fenceLine(line string) (fence codeFence, info string, ok bool) {
+	trimmed := strings.TrimLeft(line, " \t")
+	if trimmed == "" || (trimmed[0] != '`' && trimmed[0] != '~') {
+		return codeFence{}, "", false
+	}
+	size := len(trimmed) - len(strings.TrimLeft(trimmed, trimmed[:1]))
+	info = strings.TrimSpace(trimmed[size:])
+	if size < 3 || (trimmed[0] == '`' && strings.Contains(info, "`")) {
+		return codeFence{}, "", false
+	}
+	return codeFence{char: trimmed[0], size: size}, info, true
+}
+
+// headings returns the GitHub anchors of a Markdown file's ATX and setext
+// headings, ignoring fenced code blocks; a repeated heading gets -1, -2, and
+// so on. A fence closes only on a run of its own character at least as long
+// as the one that opened it. A setext heading is a paragraph followed by a
+// line of = or -; a list item, table row, quote, or indented code above such
+// a line is not a paragraph, so the line is a thematic break.
 func (c *checker) headings(file string) map[string]bool {
 	if anchors, ok := c.headingCache[file]; ok {
 		return anchors
 	}
 	anchors := map[string]bool{}
-	data, _ := os.ReadFile(c.path(file))
-	fence := ""
 	counts := map[string]int{}
-	for _, line := range strings.Split(string(data), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if fence != "" {
-			if strings.HasPrefix(trimmed, fence) {
-				fence = ""
-			}
-			continue
-		}
-		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-			fence = trimmed[:3]
-			continue
-		}
-		m := atxHeading.FindStringSubmatch(line)
-		if m == nil {
-			continue
-		}
-		slug := githubSlug(m[1])
+	addHeading := func(text string) {
+		slug := githubSlug(text)
 		if n := counts[slug]; n > 0 {
 			anchors[fmt.Sprintf("%s-%d", slug, n)] = true
 		} else {
@@ -335,11 +335,75 @@ func (c *checker) headings(file string) map[string]bool {
 		}
 		counts[slug]++
 	}
+	data, _ := os.ReadFile(c.path(file))
+	var open codeFence
+	var paragraph []string // the open paragraph's lines, if it can become a heading
+	inBlock := false       // inside a list, table, quote, or indented code until a blank line
+	lines := strings.Split(string(data), "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimSuffix(line, "\r")
+	}
+	for _, line := range skipFrontMatter(lines) {
+		if open.size > 0 {
+			if f, info, ok := fenceLine(line); ok && info == "" && f.char == open.char && f.size >= open.size {
+				open = codeFence{}
+			}
+			continue
+		}
+		if f, _, ok := fenceLine(line); ok {
+			open, paragraph = f, nil
+			continue
+		}
+		if m := atxHeading.FindStringSubmatch(line); m != nil {
+			addHeading(m[1])
+			paragraph = nil
+			continue
+		}
+		if setextUnderline.MatchString(line) && len(paragraph) > 0 {
+			addHeading(strings.Join(paragraph, "\n"))
+			paragraph = nil
+			continue
+		}
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case trimmed == "":
+			paragraph, inBlock = nil, false
+		case thematicBreak(trimmed):
+			paragraph = nil
+		case inBlock:
+		case listItem.MatchString(line) || strings.HasPrefix(trimmed, "|") || strings.HasPrefix(trimmed, ">") ||
+			(len(paragraph) == 0 && (strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "\t"))):
+			paragraph, inBlock = nil, true
+		default:
+			paragraph = append(paragraph, trimmed)
+		}
+	}
 	if c.headingCache == nil {
 		c.headingCache = map[string]map[string]bool{}
 	}
 	c.headingCache[file] = anchors
 	return anchors
+}
+
+// skipFrontMatter drops a leading YAML front matter block, which GitHub
+// renders as a table rather than as headings.
+func skipFrontMatter(lines []string) []string {
+	if len(lines) == 0 || lines[0] != "---" {
+		return lines
+	}
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" || lines[i] == "..." {
+			return lines[i+1:]
+		}
+	}
+	return lines
+}
+
+// thematicBreak reports whether a trimmed line is three or more of the same
+// -, *, or _ with optional spaces between them.
+func thematicBreak(trimmed string) bool {
+	run := strings.ReplaceAll(strings.ReplaceAll(trimmed, " ", ""), "\t", "")
+	return len(run) >= 3 && strings.Trim(run, run[:1]) == "" && strings.ContainsAny(run[:1], "-*_")
 }
 
 // githubSlug turns heading text into its GitHub anchor: the rendered text,
