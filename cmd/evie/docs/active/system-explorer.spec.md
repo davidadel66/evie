@@ -66,7 +66,7 @@ change, or remove; the page toggles it on top of the built system.
 31. As the owner, I want an example proposal I can load on demand, so that I can see the overlay working before any real proposal exists.
 32. As an agent, I want a documented data format, so that I can add or correct content without touching the page.
 33. As an agent, I want one written-content file per subsystem, so that parallel work rarely conflicts.
-34. As an agent, I want one file per design proposal, so that `/flow` can add a proposal without editing anything else.
+34. As an agent, I want one file per design proposal, listed in the manifest, so that `/flow` can add a proposal without touching the page or any other data file.
 35. As an agent, I want a single command that regenerates the facts, so that keeping them current costs one step.
 36. As an agent, I want the drift check to list every problem with its file, item, and fix, so that I can repair drift in one pass.
 37. As an agent, I want the check to fail when a package has no node, so that new packages are always described.
