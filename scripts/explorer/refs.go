@@ -108,6 +108,9 @@ func (c *checker) resolve(ref string, extra map[string]bool) string {
 		return "there is no route " + target + " in the facts"
 	case "command":
 		words := strings.Fields(target)
+		if len(words) == 0 {
+			return "the reference names no binary"
+		}
 		for _, cmd := range c.facts.Commands {
 			if cmd.Binary == words[0] && (len(words) == 1 || slicesEqual(cmd.Words, words[1:])) {
 				return ""

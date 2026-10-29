@@ -305,6 +305,7 @@ func TestCheckReportsDeadReferences(t *testing.T) {
 		{"table", "table:fixture.widgets", "no table"},
 		{"route", "route:GET /widgets", "no route"},
 		{"command", "command:tool run", "no command"},
+		{"command without a binary", "command: ", "names no binary"},
 		{"package", "pkg:internal/ghost", "no package"},
 		{"node", "node:missing-node", "no node"},
 		{"unknown kind", "url:https://example.com", "unknown reference kind"},
