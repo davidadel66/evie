@@ -199,3 +199,15 @@ Memory: memory, memorybackground, memoryeval. Agent runtime: agent, tools, plugi
 
 - The explorer is repository tooling, not Evie domain language, so no glossary entries are added. Within the explorer, "design proposal" distinguishes its proposals from the glossary's Memory Operation Proposal.
 - The memory originals live in `docs/architecture/memory/`.
+
+## Tickets
+
+- #186 System explorer: tracer bullet from extraction to page (blocked by: none)
+- #187 System explorer: extract commands, routes, and tables (blocked by: #186)
+- #188 System explorer: full viewer with levels, flows, and design proposals (blocked by: #186)
+- #189 System explorer content: system context, containers, and Intelligence (blocked by: #186)
+- #190 System explorer content: agent loop and capabilities (blocked by: #186)
+- #191 System explorer content: workflows (blocked by: #186)
+- #192 System explorer content: integrations and local host (blocked by: #186)
+- #193 System explorer content: Memory and the redrawn memory diagrams (blocked by: #186, #187)
+- #194 System explorer content: persistence and surfaces (blocked by: #186, #187)
