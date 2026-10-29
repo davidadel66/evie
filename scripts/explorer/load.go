@@ -164,7 +164,7 @@ func (c *checker) readDataFile(rel string, example bool) (dataFile, bool) {
 		file.Proposal = &Proposal{}
 		err = decodeStrict(body, file.Proposal)
 	case example:
-		return malformed(fmt.Sprintf("kind %q is not allowed here; examples are proposals", head.Kind))
+		return malformed(fmt.Sprintf("kind %q is not allowed here; examples are design proposals", head.Kind))
 	case head.Kind == "facts":
 		return malformed("only the generated facts.js holds facts")
 	default:

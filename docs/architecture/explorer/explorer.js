@@ -302,9 +302,9 @@
 
   // How the page draws each kind of change a design proposal makes.
   var CHANGE_STYLES = {
-    added: { label: "Added", dashed: true, badge: "", struck: false, faded: false, legend: "Added by a proposal (dashed outline)" },
-    changed: { label: "Changed", dashed: false, badge: "Δ", struck: false, faded: false, legend: "Changed by a proposal (Δ badge)" },
-    removed: { label: "Removed", dashed: false, badge: "", struck: true, faded: true, legend: "Removed by a proposal (struck through)" },
+    added: { label: "Added", dashed: true, badge: "", struck: false, faded: false, legend: "Added by a design proposal (dashed outline)" },
+    changed: { label: "Changed", dashed: false, badge: "Δ", struck: false, faded: false, legend: "Changed by a design proposal (Δ badge)" },
+    removed: { label: "Removed", dashed: false, badge: "", struck: true, faded: true, legend: "Removed by a design proposal (struck through)" },
   };
   var CHANGES = ["added", "changed", "removed"];
 
@@ -3481,7 +3481,7 @@
     } else if (n.kind) {
       parts.push(kindLabel(n.kind));
     }
-    if (own(CHANGE_WORDS, n.change)) parts.push(CHANGE_WORDS[n.change] + " by a proposal");
+    if (own(CHANGE_WORDS, n.change)) parts.push(CHANGE_WORDS[n.change] + " by a design proposal");
     return parts.filter(Boolean).join(", ");
   }
 
@@ -3773,12 +3773,12 @@
       try {
         value = decodeURIComponent(eq < 0 ? "" : pairs[i].slice(eq + 1));
       } catch (e) {
-        return { error: "The proposal parameter is not a valid escape sequence." };
+        return { error: "The design proposal parameter is not a valid escape sequence." };
       }
       if (!PROPOSAL_PATH.test(value)) {
         return {
           error:
-            "The proposal parameter must be a relative path to a .js file inside the explorer directory, such as examples/design-proposal.js; absolute paths, schemes, and .. are refused.",
+            "The design proposal parameter must be a relative path to a .js file inside the explorer directory, such as examples/design-proposal.js; absolute paths, schemes, and .. are refused.",
         };
       }
       return { path: value };
@@ -5819,7 +5819,7 @@
         var before = registered.length;
         load(wanted.path, function (ok) {
           var added = registered.splice(before);
-          if (!ok) app.problems.push("The proposal file " + wanted.path + " did not load.");
+          if (!ok) app.problems.push("The design proposal file " + wanted.path + " did not load.");
           var known = dict();
           registered.forEach(function (o) {
             if (o && o.kind === "proposal") known[o.id] = true;
@@ -5828,7 +5828,7 @@
             if (!o || o.kind !== "proposal") {
               app.problems.push(wanted.path + " registered something other than a design proposal; it was ignored.");
             } else if (known[o.id]) {
-              app.problems.push("The proposal " + o.id + " in " + wanted.path + " is already loaded; the copy was ignored.");
+              app.problems.push("The design proposal " + o.id + " in " + wanted.path + " is already loaded; the copy was ignored.");
             } else {
               known[o.id] = true;
               registered.push(o);

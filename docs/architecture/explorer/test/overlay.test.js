@@ -110,13 +110,13 @@ test("each kind of change has its own style: added dashed, changed badged, remov
   assert.equal(model.changeStyle("renamed"), null);
 });
 
-test("the proposal legend explains every kind of change in a fixed order", () => {
+test("the design proposal legend explains every kind of change in a fixed order", () => {
   assert.deepEqual(
     model.proposalLegend().map((entry) => [entry.change, entry.className, entry.text]),
     [
-      ["added", "change-added", "Added by a proposal (dashed outline)"],
-      ["changed", "change-changed", "Changed by a proposal (Δ badge)"],
-      ["removed", "change-removed", "Removed by a proposal (struck through)"],
+      ["added", "change-added", "Added by a design proposal (dashed outline)"],
+      ["changed", "change-changed", "Changed by a design proposal (Δ badge)"],
+      ["removed", "change-removed", "Removed by a design proposal (struck through)"],
     ]
   );
 });

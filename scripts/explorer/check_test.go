@@ -628,7 +628,7 @@ func TestCheckReportsProposalProblems(t *testing.T) {
 			break_: editSample(func(p map[string]any) {
 				appendTo(p, "nodes", map[string]any{"op": "change", "id": "pkg:internal/ghost", "title": "ghost"})
 			}),
-			want: []string{sample, "proposal sample change node pkg:internal/ghost", "does not exist"},
+			want: []string{sample + ": design proposal sample change node pkg:internal/ghost:", "does not exist"},
 		},
 		{
 			name: "change of a part node",
@@ -765,7 +765,7 @@ func TestCheckReportsProposalProblems(t *testing.T) {
 					p["id"] = "sample"
 				})
 			},
-			want: []string{"docs/architecture/explorer/examples/example.js", "proposal sample", "duplicate proposal id"},
+			want: []string{"docs/architecture/explorer/examples/example.js", ": design proposal sample:", "duplicate design proposal id"},
 		},
 		{
 			name: "example proposal that removes a missing node",
@@ -782,7 +782,7 @@ func TestCheckReportsProposalProblems(t *testing.T) {
 				writeFile(t, root, "docs/architecture/explorer/examples/content.js",
 					"evieExplorer.register(\n{\"format\": 1, \"kind\": \"content\", \"owner\": \"x\"}\n);\n")
 			},
-			want: []string{"docs/architecture/explorer/examples/content.js", "examples are proposals"},
+			want: []string{"docs/architecture/explorer/examples/content.js", "examples are design proposals"},
 		},
 	})
 }

@@ -24,11 +24,11 @@ func (c *checker) validateProposals(files []dataFile) {
 			continue
 		}
 		p := file.Proposal
-		item := "proposal " + p.ID
+		item := "design proposal " + p.ID
 		if p.ID == "" {
 			c.missing(file.Path, item, "id")
 		} else if first, dup := ids[p.ID]; dup {
-			c.add(file.Path, item, "duplicate proposal id, also defined in "+first, "give each design proposal a unique id")
+			c.add(file.Path, item, "duplicate design proposal id, also defined in "+first, "give each design proposal a unique id")
 		} else {
 			ids[p.ID] = file.Path
 		}

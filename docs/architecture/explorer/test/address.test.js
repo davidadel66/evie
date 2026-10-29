@@ -73,7 +73,9 @@ test("the proposal parameter refuses absolute paths, schemes, parent directories
     const result = model.proposalPath("?proposal=" + encodeURIComponent(value));
     assert.ok(result && result.error, `${JSON.stringify(value)} was not refused`);
     assert.equal(result.path, undefined);
+    assert.match(result.error, /design proposal/, "the refusal names a design proposal");
   }
   const raw = model.proposalPath("?proposal=%E0%A4%A");
   assert.ok(raw && raw.error, "a malformed escape is refused");
+  assert.match(raw.error, /design proposal/);
 });
