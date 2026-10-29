@@ -142,3 +142,18 @@ function center(n) {
 }
 
 module.exports = { overlaps, insideOrOn, onBoundary, assertNoOverlap, assertEdgesOnNodes, assertWithinLayout, assertEdgesAvoidNodes, samplePath, strictlyInside, crossings, center };
+
+// labelBoxes returns the boxes of a layout's edge labels.
+function labelBoxes(layout) {
+  return layout.edges
+    .filter((e) => e.labelLines && e.labelLines.length)
+    .map((e) => ({
+      id: `${e.from}->${e.to}:${e.label}`,
+      x: e.labelX - e.labelWidth / 2,
+      y: e.labelY - (e.labelLines.length * 14 + 6) / 2,
+      width: e.labelWidth,
+      height: e.labelLines.length * 14 + 6,
+    }));
+}
+
+module.exports.labelBoxes = labelBoxes;

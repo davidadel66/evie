@@ -644,8 +644,65 @@
     return { kind: kind, width: 0, height: 0, nodes: [], edges: [], lanes: [], empty: { title: title, text: text } };
   }
 
+  // separateLabels moves edge labels apart. In reading order, each label
+  // takes the nearest free spot around where its edge puts it, clear of the
+  // labels already placed and of the nodes; failing that, it moves down
+  // below the labels it would cover.
+  function separateLabels(edges, nodes) {
+    var boxes = [];
+    edges.forEach(function (e) {
+      var lines = list(e.labelLines).length;
+      if (!lines) return;
+      var h = lines * LABEL_LINE + 6;
+      boxes.push({ e: e, x: e.labelX - e.labelWidth / 2, y: e.labelY - h / 2, w: e.labelWidth, h: h });
+    });
+    boxes.sort(function (a, b) {
+      return a.y - b.y || a.x - b.x || byString(a.e.id, b.e.id);
+    });
+    var obstacles = list(nodes)
+      .filter(function (n) {
+        return n.shape !== "initial";
+      })
+      .map(function (n) {
+        return { x: n.x, y: n.y, w: n.width, h: n.height };
+      });
+    var placed = [];
+    function hits(b, x, y, among) {
+      for (var i = 0; i < among.length; i++) {
+        var p = among[i];
+        if (x < p.x + p.w + 2 && p.x < x + b.w + 2 && y < p.y + p.h + 2 && p.y < y + b.h + 2) return p;
+      }
+      return null;
+    }
+    boxes.forEach(function (b) {
+      var dy = b.h + 3;
+      var dx = b.w / 2 + 12;
+      var tries = [[0, 0], [0, dy], [0, -dy], [dx, 0], [-dx, 0], [0, 2 * dy], [0, -2 * dy], [dx, dy], [-dx, dy], [dx, -dy], [-dx, -dy]];
+      var spot = null;
+      for (var t = 0; t < tries.length && !spot; t++) {
+        var x = b.x + tries[t][0];
+        var y = b.y + tries[t][1];
+        if (!hits(b, x, y, placed) && !hits(b, x, y, obstacles)) spot = [x, y];
+      }
+      if (spot) {
+        b.x = spot[0];
+        b.y = spot[1];
+      } else {
+        for (var guard = 0; guard <= boxes.length; guard++) {
+          var hit = hits(b, b.x, b.y, placed);
+          if (!hit) break;
+          b.y = hit.y + hit.h + 3;
+        }
+      }
+      placed.push(b);
+      b.e.labelX = round(b.x + b.w / 2);
+      b.e.labelY = round(b.y + b.h / 2);
+    });
+  }
+
   // finishLayout gives the layout its extent and rounds every box.
   function finishLayout(layout, margin) {
+    separateLabels(layout.edges || [], layout.nodes);
     var w = 0;
     var h = 0;
     layout.nodes.forEach(function (n) {
@@ -661,7 +718,7 @@
     (layout.edges || []).forEach(function (e) {
       if (e.labelX != null) {
         w = Math.max(w, e.labelX + (e.labelWidth || 0) / 2);
-        h = Math.max(h, e.labelY + 10);
+        h = Math.max(h, e.labelY + (list(e.labelLines).length * LABEL_LINE) / 2 + 6);
       }
       (e.extent || []).forEach(function (p) {
         w = Math.max(w, p.x);
@@ -801,17 +858,19 @@
           entry.route[entry.end === 0 ? "p1" : "p2"] = { x: round(p.x), y: round(p.y) };
         });
       });
-    return routes.map(function (r) {
+    var edges = routes.map(function (r) {
       var waypoints = opts.waypointsFor ? opts.waypointsFor(r.link, r.p1, r.p2, r.a, r.b) : [];
       var path = curvePath(r.p1, NORMALS[r.sides[0]], r.p2, NORMALS[r.sides[1]], waypoints, opts.axis || "h");
       var label = r.link.label || "";
+      var lines = label ? wrapText(label, opts.labelMax || 180, LABEL_SIZE, 3) : [];
       return {
         id: r.link.from + ">" + r.link.to + ">" + (r.link.via || ""),
         from: r.a.id,
         to: r.b.id,
         via: r.link.via || "",
         label: label,
-        labelWidth: label ? round(textWidth(label, 11) + 12) : 0,
+        labelLines: lines,
+        labelWidth: labelWidth(lines),
         change: r.link.change || "",
         faded: !!r.link.faded,
         refs: list(r.link.refs),
@@ -823,6 +882,56 @@
         labelX: round(path.mid.x),
         labelY: round(path.mid.y),
       };
+    });
+    stackParallelLabels(edges);
+    return edges;
+  }
+
+  var LABEL_SIZE = 12;
+  var LABEL_LINE = 14;
+
+  function labelWidth(lines) {
+    if (!lines.length) return 0;
+    return round(Math.max.apply(null, lines.map(function (l) { return textWidth(l, LABEL_SIZE); })) + 14);
+  }
+
+  // stackParallelLabels keeps the labels of edges between the same two
+  // nodes apart: stacked across the edges' direction around their shared
+  // middle.
+  function stackParallelLabels(edges) {
+    var groups = {};
+    edges.forEach(function (e) {
+      if (!e.labelLines.length || e.from === e.to) return;
+      var key = e.from < e.to ? e.from + "\u0000" + e.to : e.to + "\u0000" + e.from;
+      (groups[key] = groups[key] || []).push(e);
+    });
+    Object.keys(groups).forEach(function (key) {
+      var group = groups[key];
+      if (group.length < 2) return;
+      group.sort(function (a, b) {
+        return byString(a.id, b.id);
+      });
+      var mx = 0;
+      var my = 0;
+      group.forEach(function (e) {
+        mx += e.labelX / group.length;
+        my += e.labelY / group.length;
+      });
+      var e0 = group[0];
+      var across = Math.abs(e0.x2 - e0.x1) >= Math.abs(e0.y2 - e0.y1) ? "y" : "x";
+      var sizes = group.map(function (e) {
+        return across === "y" ? e.labelLines.length * LABEL_LINE + 8 : e.labelWidth + 8;
+      });
+      var total = sizes.reduce(function (a, b) {
+        return a + b;
+      }, 0);
+      var at = -total / 2;
+      group.forEach(function (e, k) {
+        var c = at + sizes[k] / 2;
+        at += sizes[k];
+        e.labelX = round(across === "x" ? mx + c : mx);
+        e.labelY = round(across === "y" ? my + c : my);
+      });
     });
   }
 
@@ -871,11 +980,24 @@
 
   // ----------------------------------------------------------- context view
 
-  var CONTEXT = { margin: 40, columnGap: 170, rowGap: 30, nodeHeight: 78, minWidth: 210, systemWidth: 260, systemMinHeight: 160 };
+  var CONTEXT = {
+    margin: 40,
+    columnGap: 230,
+    rowGap: 22,
+    nodeHeight: 62,
+    minWidth: 210,
+    systemWidth: 280,
+    systemMinHeight: 170,
+    personGap: 120,
+    peopleGap: 48,
+    splitAbove: 5,
+  };
 
-  // layoutContext arranges the system context by role: people on the left,
-  // the system in the middle, and the outside systems it talks to on the
-  // right.
+  var REMOTE_VIAS = ["http", "network"];
+
+  // layoutContext arranges the system context by role: people above the
+  // system, the outside services it reaches over the network on its right,
+  // and the local programs it runs or that run it on its left.
   function layoutContext(data) {
     var c = CONTEXT;
     var nodes = data.nodes.filter(function (n) {
@@ -885,23 +1007,93 @@
       return emptyLayout("context", "No system context yet", "The context view fills in once content names the owner and the outside systems Evie talks to.");
     }
     nodes.sort(byTitleThenId);
-    var columns = [[], [], []];
+    var people = [];
+    var systems = [];
+    var others = [];
     nodes.forEach(function (node) {
-      var col = node.kind === "person" ? 0 : node.kind === "system" ? 1 : 2;
-      var width = Math.max(col === 1 ? c.systemWidth : c.minWidth, textWidth(node.title, 15) + 72);
-      columns[col].push(drawnNode(node, width, c.nodeHeight));
+      (node.kind === "person" ? people : node.kind === "system" ? systems : others).push(node);
     });
-    var outer = Math.max(columns[0].length, columns[2].length);
-    var tall = outer * c.nodeHeight + Math.max(outer - 1, 0) * c.rowGap;
-    columns[1].forEach(function (n) {
-      n.height = round(Math.max(c.systemMinHeight, (tall - (columns[1].length - 1) * c.rowGap) / columns[1].length * 0.7));
+    var systemIds = {};
+    systems.forEach(function (n) {
+      systemIds[n.id] = true;
     });
-    stackColumns(columns, c.margin, c.margin, c.columnGap, c.rowGap);
-    var drawn = columns[0].concat(columns[1], columns[2]);
+    var links = linksAmong(
+      data,
+      nodes.map(function (n) {
+        return n.id;
+      })
+    );
+    var left = [];
+    var right = [];
+    others.forEach(function (node) {
+      var via = "";
+      links.forEach(function (l) {
+        if (!via && ((l.from === node.id && systemIds[l.to]) || (l.to === node.id && systemIds[l.from]))) via = l.via;
+      });
+      (via && REMOTE_VIAS.indexOf(via) < 0 ? left : right).push(node);
+    });
+    if (!left.length && right.length > c.splitAbove) left = right.splice(0, Math.floor(right.length / 2));
+    if (!right.length && left.length > c.splitAbove) right = left.splice(Math.ceil(left.length / 2));
+    function box(node, min) {
+      return drawnNode(node, Math.max(min, textWidth(node.title, 15) + 72), c.nodeHeight);
+    }
+    var leftBoxes = left.map(function (n) { return box(n, c.minWidth); });
+    var rightBoxes = right.map(function (n) { return box(n, c.minWidth); });
+    var peopleBoxes = people.map(function (n) { return box(n, c.minWidth); });
+    var systemBoxes = systems.map(function (n) { return box(n, c.systemWidth); });
+    function stackHeight(bs) {
+      return bs.reduce(function (h, b, i) {
+        return h + b.height + (i ? c.rowGap : 0);
+      }, 0);
+    }
+    function widest(bs) {
+      return Math.max.apply(null, bs.map(function (b) { return b.width; }).concat([0]));
+    }
+    var sides = Math.max(stackHeight(leftBoxes), stackHeight(rightBoxes));
+    var fan = Math.max(leftBoxes.length, rightBoxes.length) + links.length / Math.max(systemBoxes.length, 1) / 3;
+    systemBoxes.forEach(function (b) {
+      var node = data.nodeById[b.id];
+      b.summaryLines = wrapText(node.summary && node.summary.text, b.width - 36, 12.5, 6);
+      b.height = round(Math.max(c.systemMinHeight, 74 + b.summaryLines.length * 17, (fan + 1) * 18));
+    });
+    var body = Math.max(sides, stackHeight(systemBoxes));
+    var top = c.margin + (peopleBoxes.length ? c.nodeHeight + c.personGap : 0);
+    var x = c.margin;
+    function place(bs, colX, width) {
+      var y = top + (body - stackHeight(bs)) / 2;
+      bs.forEach(function (b) {
+        b.x = colX + (width - b.width) / 2;
+        b.y = y;
+        y += b.height + c.rowGap;
+      });
+    }
+    if (leftBoxes.length) {
+      place(leftBoxes, x, widest(leftBoxes));
+      x += widest(leftBoxes) + c.columnGap;
+    }
+    var middle = Math.max(widest(systemBoxes), c.systemWidth);
+    place(systemBoxes, x, middle);
+    var centreX = x + middle / 2;
+    x += middle + c.columnGap;
+    if (rightBoxes.length) place(rightBoxes, x, widest(rightBoxes));
+    var rowWidth = peopleBoxes.reduce(function (w, b, i) {
+      return w + b.width + (i ? c.peopleGap : 0);
+    }, 0);
+    var px = centreX - rowWidth / 2;
+    peopleBoxes.forEach(function (b) {
+      b.x = px;
+      b.y = c.margin;
+      px += b.width + c.peopleGap;
+    });
+    var drawn = peopleBoxes.concat(leftBoxes, systemBoxes, rightBoxes);
+    var minX = Math.min.apply(null, drawn.map(function (b) { return b.x; }));
+    drawn.forEach(function (b) {
+      b.x += c.margin - Math.min(minX, c.margin);
+    });
     var layout = {
       kind: "context",
       nodes: drawn,
-      edges: routeLinks(drawn, linksAmong(data, drawn.map(function (n) { return n.id; })), { portGap: 18 }),
+      edges: routeLinks(drawn, links, { portGap: 44, labelMax: 190 }),
       lanes: [],
       empty: null,
     };
@@ -920,11 +1112,11 @@
 
   var CONTAINERS = {
     margin: 32,
-    laneGap: 120,
+    laneGap: 96,
     lanePad: 20,
     laneHeader: 42,
-    rowGap: 30,
-    nodeHeight: 66,
+    rowGap: 24,
+    nodeHeight: 58,
     minWidth: 190,
     boundaryPad: 16,
     boundaryHeader: 34,
@@ -1619,13 +1811,15 @@
     }
     var link = route.link;
     var label = link.label || "";
+    var lines = label ? wrapText(label, 150, LABEL_SIZE, 3) : [];
     var out = {
       id: link.from + ">" + link.to + ">" + (link.via || ""),
       from: from,
       to: to,
       via: link.via || "",
       label: label,
-      labelWidth: label ? round(textWidth(label, 11) + 12) : 0,
+      labelLines: lines,
+      labelWidth: labelWidth(lines),
       change: link.change || "",
       faded: !!link.faded,
       refs: list(link.refs),
@@ -1651,7 +1845,9 @@
   function packageBox(node, data, boundary) {
     var path = packagePath(node.id);
     var subtitle = boundary ? (node.group ? groupLabel(node.group) : kindLabel(node.kind)) : path || kindLabel(node.kind);
-    var width = Math.max(GROUP_VIEW.minWidth, textWidth(node.title, 14) + 34, textWidth(subtitle, 11) + 34);
+    // Room for the icon (packages and containers) or the chip's padding.
+    var inset = boundary ? 34 : 58;
+    var width = Math.max(GROUP_VIEW.minWidth, textWidth(node.title, 14) + inset, textWidth(subtitle, 11) + inset);
     var box = drawnNode(node, width, boundary ? GROUP_VIEW.chipHeight : GROUP_VIEW.nodeHeight, {
       subtitle: subtitle,
       boundary: !!boundary,
@@ -1816,7 +2012,7 @@
 
   // ------------------------------------------------------------- focus view
 
-  var FOCUS = { margin: 36, columnGap: 150, chipHeight: 44, chipGap: 12, minChip: 170, focusWidth: 300, header: 34, portGap: 14 };
+  var FOCUS = { margin: 36, columnGap: 230, chipHeight: 44, chipGap: 12, minChip: 170, focusWidth: 300, header: 34, portGap: 14 };
 
   // layoutFocus draws one node with who calls it on the left and what it
   // depends on on the right, from the import graph and the content edges.
@@ -1898,7 +2094,7 @@
       kind: "focus",
       title: node.title,
       nodes: nodes,
-      edges: routeLinks(nodes, links, { portGap: f.portGap }),
+      edges: routeLinks(nodes, links, { portGap: f.portGap, labelMax: 180 }),
       columns: columns,
       lanes: [],
       empty: null,
@@ -1914,9 +2110,9 @@
   var SEQUENCE = {
     margin: 32,
     headHeight: 54,
-    minHead: 130,
-    headGap: 48,
-    labelMax: 230,
+    minHead: 124,
+    headGap: 36,
+    labelMax: 200,
     labelSize: 12,
     lineHeight: 15,
     rowPad: 30,
@@ -2343,13 +2539,15 @@
         { x: p2.x, y: corridor },
       ], "h");
       var label = e.link.label || "";
+      var lines = label ? wrapText(label, 150, LABEL_SIZE, 3) : [];
       drawn.push({
         id: e.link.from + ">" + e.link.to + ">",
         from: e.from,
         to: e.to,
         via: "",
         label: label,
-        labelWidth: label ? round(textWidth(label, 11) + 12) : 0,
+        labelLines: lines,
+        labelWidth: labelWidth(lines),
         change: "",
         faded: false,
         refs: list(e.link.refs),
@@ -2563,6 +2761,7 @@
         toColumn: rel.toColumn,
         via: "sql",
         label: "",
+        labelLines: [],
         labelWidth: 0,
         change: "",
         faded: !!parent.stub,
@@ -3492,13 +3691,17 @@
   if (typeof document === "undefined") return;
 
   // ------------------------------------------------------------- rendering
+  //
+  // Everything below draws the model into the page. Data only ever reaches
+  // the page as text (textContent) or attribute values (setAttribute), never
+  // as markup.
 
   var SVG_NS = "http://www.w3.org/2000/svg";
 
   function svg(name, attrs, parent) {
     var el = document.createElementNS(SVG_NS, name);
     Object.keys(attrs || {}).forEach(function (key) {
-      el.setAttribute(key, String(attrs[key]));
+      if (attrs[key] !== undefined && attrs[key] !== null) el.setAttribute(key, String(attrs[key]));
     });
     if (parent) parent.appendChild(el);
     return el;
@@ -3507,289 +3710,1971 @@
   function html(name, attrs, parent, text) {
     var el = document.createElement(name);
     Object.keys(attrs || {}).forEach(function (key) {
-      el.setAttribute(key, String(attrs[key]));
+      if (attrs[key] !== undefined && attrs[key] !== null && attrs[key] !== false) el.setAttribute(key, String(attrs[key]));
     });
     if (text !== undefined) el.textContent = text;
     if (parent) parent.appendChild(el);
     return el;
   }
 
-  var app = { data: null, state: {}, missing: [] };
-
-  function select(id) {
-    app.state = { view: "components", node: id || "" };
-    var hash = formatHash(app.state);
-    try {
-      history.replaceState(null, "", hash || location.pathname + location.search);
-    } catch (e) {
-      location.hash = hash;
-    }
-    render();
+  function byId(id) {
+    return document.getElementById(id);
   }
 
-  function renderOverview(canvas) {
-    var data = app.data;
-    var layout = layoutGroupOverview(groupOverview(data));
-    canvas.textContent = "";
-    var root = svg(
-      "svg",
-      {
-        viewBox: "0 0 " + layout.width + " " + layout.height,
-        class: "overview",
-        role: "group",
-        "aria-label": "Component group overview",
-        preserveAspectRatio: "xMidYMin meet",
-      },
-      canvas
-    );
-    var defs = svg("defs", {}, root);
-    var marker = svg(
-      "marker",
-      { id: "arrow", viewBox: "0 0 10 10", refX: 10, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
-      defs
-    );
-    svg("path", { d: "M0,0 L10,5 L0,10 z", class: "arrowhead" }, marker);
+  function clear(el) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+  }
 
+  // Icons are 16 by 16 stroked paths.
+  var ICONS = {
+    person: "M8 7.2a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2zM2.8 14.2c.4-2.9 2.6-4.6 5.2-4.6s4.8 1.7 5.2 4.6",
+    system: "M2.5 3.5h11v9h-11zM2.5 6h11M5 4.75h.01M7 4.75h.01",
+    "external-system": "M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8zM1.8 8h12.4M8 1.8c1.7 1.8 2.5 3.9 2.5 6.2S9.7 12.4 8 14.2M8 1.8C6.3 3.6 5.5 5.7 5.5 8s.8 4.4 2.5 6.2",
+    process: "M2.5 2.5h11v4.5h-11zM2.5 9h11v4.5h-11zM5 4.75h.01M5 11.25h.01",
+    "user-interface": "M2 3h12v10H2zM2 5.8h12M4.2 4.4h.01M5.8 4.4h.01",
+    cli: "M2 3h12v10H2zM4.5 6.5l2 1.5-2 1.5M8 10h3.5",
+    store: "M3 4c0-1.1 2.2-2 5-2s5 .9 5 2v8c0 1.1-2.2 2-5 2s-5-.9-5-2zM3 4c0 1.1 2.2 2 5 2s5-.9 5-2M3 8c0 1.1 2.2 2 5 2s5-.9 5-2",
+    package: "M8 1.6l5.6 3v6.8L8 14.4l-5.6-3V4.6zM2.4 4.6L8 7.6l5.6-3M8 7.6v6.8",
+    table: "M2 3h12v10H2zM2 6.3h12M2 9.6h12M6.5 6.3V13",
+    state: "M3 5.5h10a2.5 2.5 0 0 1 0 5H3a2.5 2.5 0 0 1 0-5z",
+    flow: "M2 4.5h9M8.5 2l2.5 2.5L8.5 7M14 11.5H5M7.5 9L5 11.5 7.5 14",
+    diagram: "M2.5 2.5h4v4h-4zM9.5 9.5h4v4h-4zM6.5 4.5h3.5v5",
+    search: "M7 2.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM10.3 10.3L13.5 13.5",
+    "zoom-in": "M7 2.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM10.3 10.3L13.5 13.5M5 7h4M7 5v4",
+    "zoom-out": "M7 2.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM10.3 10.3L13.5 13.5M5 7h4",
+    fit: "M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10",
+    close: "M4 4l8 8M12 4l-8 8",
+    prev: "M10 3.5L5.5 8l4.5 4.5",
+    next: "M6 3.5l4.5 4.5L6 12.5",
+    code: "M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5",
+    doc: "M4 1.8h5l3 3v9.4H4zM9 1.8v3h3M6 8h4M6 10.5h4",
+    adr: "M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8zM5.2 8.1l1.9 1.9 3.8-3.9",
+    term: "M2.5 3h4a1.8 1.8 0 0 1 1.5.8A1.8 1.8 0 0 1 9.5 3h4v9.5h-4a1.5 1.5 0 0 0-1.5 1.2 1.5 1.5 0 0 0-1.5-1.2h-4z",
+    route: "M2 8h10M9 4.5L12.5 8 9 11.5M2 4.5v7",
+    command: "M2 3h12v10H2zM4.5 6.5l2 1.5-2 1.5M8 10h3.5",
+    node: "M8 2.2l5 2.9v5.8L8 13.8l-5-2.9V5.1z",
+    open: "M9.5 2.5h4v4M13.5 2.5L8 8M12 9.5v4H2.5V4h4",
+    focus: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM1.5 8h3M11.5 8h3",
+    inside: "M2.5 2.5h11v11h-11zM5.5 5.5h5v5h-5z",
+    group: "M2 2.5h5v5H2zM9 2.5h5v5H9zM2 9.5h5v4H2zM9 9.5h5v4H9z",
+  };
+
+  function htmlIcon(name, parent, cls) {
+    var el = svg("svg", { viewBox: "0 0 16 16", class: "icon" + (cls ? " " + cls : ""), "aria-hidden": "true", focusable: "false" }, parent);
+    svg("path", { d: ICONS[name] || ICONS.node }, el);
+    return el;
+  }
+
+  function svgIcon(name, parent, x, y, size) {
+    var g = svg("g", { class: "glyph", transform: "translate(" + x + "," + y + ") scale(" + size / 16 + ")" }, parent);
+    svg("path", { d: ICONS[name] || ICONS.node }, g);
+    return g;
+  }
+
+  var app = {
+    base: null,
+    data: null,
+    raw: {},
+    state: {},
+    layout: null,
+    viewKey: "",
+    box: null,
+    svg: null,
+    content: null,
+    nodeEls: {},
+    edgeEls: [],
+    problems: [],
+    flash: null,
+    expanded: {},
+    overlays: {},
+    animating: null,
+  };
+
+  var reduceMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // -------------------------------------------------------- state changes
+
+  function overlayFor(ids) {
+    var key = list(ids).join(",");
+    if (!app.overlays[key]) app.overlays[key] = applyProposals(app.base, ids);
+    return app.overlays[key];
+  }
+
+  function writeHash(raw, push) {
+    var hash = formatHash(raw);
+    var url = location.pathname + location.search + hash;
+    try {
+      if (push) history.pushState(null, "", url);
+      else history.replaceState(null, "", url);
+    } catch (e) {
+      // file:// pages in some browsers refuse history changes; the fragment
+      // still works.
+      if (location.hash !== hash) location.hash = hash;
+    }
+  }
+
+  var DEPTH = { context: 0, containers: 1, components: 1, flows: 1, inside: 2, group: 2, flow: 2, focus: 3, diagram: 4 };
+
+  // go moves the page to a new address. View changes add a history entry
+  // and animate; selection and step changes replace the current one.
+  function go(next, opts) {
+    opts = opts || {};
+    var raw = {};
+    Object.keys(next).forEach(function (key) {
+      if (next[key] !== undefined && next[key] !== "") raw[key] = next[key];
+    });
+    if (!("proposals" in next)) raw.proposals = list(app.raw.proposals);
+    var viewChange = raw.view !== app.state.view || raw.of !== app.state.of || list(raw.proposals).join(",") !== list(app.state.proposals).join(",");
+    writeHash(raw, viewChange && !opts.replace);
+    apply(raw, opts);
+  }
+
+  // select changes only the selection, keeping the view.
+  function select(id, extra) {
+    var next = { view: app.state.view, of: app.state.of, step: app.state.step, node: id || undefined, proposals: app.state.proposals };
+    Object.keys(extra || {}).forEach(function (k) {
+      next[k] = extra[k];
+    });
+    go(next, { replace: true });
+  }
+
+  function apply(raw, opts) {
+    opts = opts || {};
+    app.raw = raw;
+    app.data = overlayFor(raw.proposals);
+    var previous = app.state;
+    var state = resolveState(app.data, raw);
+    app.state = state;
+    var clean = copy(state);
+    delete clean.notice;
+    if (formatHash(clean) !== formatHash(raw)) writeHash(clean, false);
+    var key = state.view + "|" + (state.of || "") + "|" + list(state.proposals).join(",");
+    var changed = key !== app.viewKey;
+    if (changed) {
+      app.viewKey = key;
+      app.layout = layoutView(app.data, state);
+    }
+    // The panel and bars first: they decide the canvas's size, which the
+    // new view is fitted to.
+    renderNotice(state.notice);
+    renderLevels();
+    renderCrumbs();
+    renderStepper();
+    renderRail();
+    renderPanel();
+    if (changed) showLayout(previous, state, opts);
+    else refreshCanvasState();
+  }
+
+  // ------------------------------------------------------------ viewport
+
+  function canvasSize() {
+    var canvas = byId("canvas");
+    return { w: Math.max(canvas.clientWidth, 200), h: Math.max(canvas.clientHeight, 200) };
+  }
+
+  function setBox(box) {
+    app.box = box;
+    app.size = canvasSize();
+    if (app.svg) app.svg.setAttribute("viewBox", [box.x, box.y, box.width, box.height].map(function (n) { return round(n); }).join(" "));
+    pinHeads();
+  }
+
+  function layoutRect(layout) {
+    return { x: 0, y: 0, width: layout.width, height: layout.height };
+  }
+
+  // homeBox is where a view opens: the whole drawing, or for a long flow
+  // the top at a readable scale.
+  function homeBox(layout) {
+    var size = canvasSize();
+    if (layout.kind === "sequence") {
+      var scale = Math.min(Math.max(size.w / (layout.width + 40), 0.88), 1.1);
+      var w = size.w / scale;
+      var h = size.h / scale;
+      var x = layout.width + 40 <= w ? layout.width / 2 - w / 2 : -20;
+      return { x: x, y: -8, width: w, height: h };
+    }
+    return fitBox(layoutRect(layout), size.w, size.h, { pad: 24, maxScale: 1.15 });
+  }
+
+  function animateBox(target, ms, done) {
+    if (app.animating) cancelAnimationFrame(app.animating);
+    if (reduceMotion || !app.box) {
+      setBox(target);
+      if (done) done();
+      return;
+    }
+    var from = app.box;
+    var start = null;
+    function frame(now) {
+      if (start === null) start = now;
+      var t = Math.min((now - start) / ms, 1);
+      setBox(lerpBox(from, target, ease(t)));
+      if (t < 1) app.animating = requestAnimationFrame(frame);
+      else {
+        app.animating = null;
+        if (done) done();
+      }
+    }
+    app.animating = requestAnimationFrame(frame);
+  }
+
+  function scaleBox(box, k) {
+    var cx = box.x + box.width / 2;
+    var cy = box.y + box.height / 2;
+    return { x: cx - (box.width * k) / 2, y: cy - (box.height * k) / 2, width: box.width * k, height: box.height * k };
+  }
+
+  function rectOf(layout, id) {
+    if (!layout || !id) return null;
+    var found = null;
+    list(layout.nodes).concat(list(layout.panels)).forEach(function (n) {
+      if (!found && n.id === id) found = n;
+    });
+    if (!found && layout.kind === "sequence") {
+      list(layout.participants).forEach(function (p) {
+        if (!found && p.id === id) found = p;
+      });
+    }
+    return found ? { x: found.x, y: found.y, width: found.width, height: found.height } : null;
+  }
+
+  function zoomBy(factor, fx, fy) {
+    if (!app.box) return;
+    var size = canvasSize();
+    var cx = fx === undefined ? app.box.x + app.box.width / 2 : fx;
+    var cy = fy === undefined ? app.box.y + app.box.height / 2 : fy;
+    var next = zoomBox(app.box, factor, cx, cy, size.w, { minScale: 0.08, maxScale: 4 });
+    if (fx === undefined) animateBox(next, 180);
+    else setBox(next);
+  }
+
+  function fit() {
+    if (!app.layout || !app.svg) return;
+    var size = canvasSize();
+    animateBox(fitBox(layoutRect(app.layout), size.w, size.h, { pad: 24, maxScale: 1.15 }), 320);
+  }
+
+  // ---------------------------------------------------------- the canvas
+
+  // showLayout replaces the drawing. Moving down a level zooms into the
+  // part opened and grows the new view out of it; moving up shrinks the old
+  // view and zooms out of the part it came from.
+  function showLayout(previous, state, opts) {
+    var canvas = byId("canvas");
+    var layout = app.layout;
+    var oldSvg = app.svg;
+    var oldBox = app.box;
+    var oldLayout = app.drawnLayout;
+    app.drawnLayout = layout;
+    Array.prototype.slice.call(canvas.querySelectorAll(".loading, .empty-state, .flow-index")).forEach(function (el) {
+      el.parentNode.removeChild(el);
+    });
+    var drawn = drawLayout(layout);
+    app.nodeEls = drawn.nodeEls;
+    app.edgeEls = drawn.edgeEls;
+    app.svg = drawn.svg;
+    app.content = drawn.content;
+    if (drawn.svg) canvas.appendChild(drawn.svg);
+    if (drawn.overlay) canvas.appendChild(drawn.overlay);
+    var target = drawn.svg ? homeBox(layout) : null;
+    if (drawn.svg && layout.kind === "sequence") target = stepBox(target, state.step) || target;
+    refreshCanvasState();
+    var animate = !reduceMotion && oldSvg && drawn.svg && !opts.instant;
+    if (!animate) {
+      if (oldSvg && oldSvg.parentNode) oldSvg.parentNode.removeChild(oldSvg);
+      if (target) {
+        app.box = null;
+        setBox(target);
+      }
+      return;
+    }
+    var size = canvasSize();
+    var depthNew = DEPTH[state.view] || 0;
+    var depthOld = DEPTH[previous.view] || 0;
+    var oldEnd = scaleBox(oldBox, 1.04);
+    var newStart = scaleBox(target, 0.97);
+    if (depthNew > depthOld) {
+      var into = rectOf(oldLayout, state.of) || rectOf(oldLayout, opts.anchor);
+      if (into) oldEnd = fitBox(into, size.w, size.h, { pad: 8, maxScale: 6 });
+      newStart = scaleBox(target, 1.7);
+    } else if (depthNew < depthOld) {
+      var from = rectOf(layout, previous.of) || rectOf(layout, previous.node);
+      oldEnd = scaleBox(oldBox, 1.7);
+      if (from) newStart = fitBox(from, size.w, size.h, { pad: 8, maxScale: 6 });
+    }
+    oldSvg.classList.add("leaving");
+    var ms = 420;
+    var start = null;
+    if (app.animating) cancelAnimationFrame(app.animating);
+    app.box = newStart;
+    function frame(now) {
+      if (start === null) start = now;
+      var t = Math.min((now - start) / ms, 1);
+      var e = ease(t);
+      var ob = lerpBox(oldBox, oldEnd, e);
+      oldSvg.setAttribute("viewBox", [ob.x, ob.y, ob.width, ob.height].join(" "));
+      oldSvg.style.opacity = String(Math.max(0, 1 - t * 1.8));
+      setBox(lerpBox(newStart, target, e));
+      app.svg.style.opacity = String(Math.min(1, Math.max(0, (t - 0.2) / 0.6)));
+      if (t < 1) {
+        app.animating = requestAnimationFrame(frame);
+      } else {
+        app.animating = null;
+        app.svg.style.opacity = "";
+        if (oldSvg.parentNode) oldSvg.parentNode.removeChild(oldSvg);
+      }
+    }
+    app.svg.style.opacity = "0";
+    app.animating = requestAnimationFrame(frame);
+  }
+
+  function defs(root) {
+    var d = svg("defs", {}, root);
+    function arrow(id, cls, open) {
+      var m = svg("marker", { id: id, viewBox: "0 0 10 10", refX: 9.5, refY: 5, markerWidth: 8, markerHeight: 8, orient: "auto-start-reverse", markerUnits: "userSpaceOnUse" }, d);
+      if (open) svg("path", { d: "M1,1 L9.5,5 L1,9", class: "arrowhead open " + cls }, m);
+      else svg("path", { d: "M0,0.5 L10,5 L0,9.5 z", class: "arrowhead " + cls }, m);
+    }
+    arrow("arrow", "");
+    arrow("arrow-lit", "lit");
+    arrow("arrow-faded", "faded");
+    arrow("arrow-added", "added");
+    arrow("arrow-changed", "changed");
+    arrow("arrow-removed", "removed");
+    arrow("arrow-open", "", true);
+    arrow("arrow-open-lit", "lit", true);
+    var many = svg("marker", { id: "er-many", viewBox: "0 0 14 14", refX: 0.5, refY: 7, markerWidth: 14, markerHeight: 14, orient: "auto-start-reverse", markerUnits: "userSpaceOnUse" }, d);
+    svg("path", { d: "M13,7 L0.5,7 M13,7 L1,1.5 M13,7 L1,12.5 M13,2 L13,12", class: "er-mark" }, many);
+    var one = svg("marker", { id: "er-one", viewBox: "0 0 14 14", refX: 13.5, refY: 7, markerWidth: 14, markerHeight: 14, orient: "auto", markerUnits: "userSpaceOnUse" }, d);
+    svg("path", { d: "M0,7 L13.5,7 M9,2 L9,12 M12.5,2 L12.5,12", class: "er-mark" }, one);
+  }
+
+  function markerFor(edge, lit, open) {
+    if (lit) return open ? "url(#arrow-open-lit)" : "url(#arrow-lit)";
+    if (open) return "url(#arrow-open)";
+    if (edge.change) return "url(#arrow-" + edge.change + ")";
+    if (edge.faded) return "url(#arrow-faded)";
+    return "url(#arrow)";
+  }
+
+  // drawLayout draws one view: an SVG for diagrams, HTML for the flows
+  // index, and an empty-state card when a view has nothing yet.
+  function drawLayout(layout) {
+    var result = { svg: null, content: null, overlay: null, nodeEls: {}, edgeEls: [] };
+    if (layout.kind === "flows") {
+      result.overlay = drawFlowIndex(layout);
+      return result;
+    }
+    if (layout.empty) {
+      result.overlay = emptyCard(layout.empty);
+      return result;
+    }
+    var root = svg("svg", {
+      class: "diagram kind-" + layout.kind,
+      role: "group",
+      "aria-label": viewLabel(layout),
+      preserveAspectRatio: "xMidYMid meet",
+    });
+    defs(root);
+    var content = svg("g", { class: "content" }, root);
+    result.svg = root;
+    result.content = content;
+    switch (layout.kind) {
+      case "overview":
+        drawOverview(layout, content, result);
+        break;
+      case "sequence":
+        drawSequence(layout, content, result);
+        break;
+      case "er":
+        drawEr(layout, content, result);
+        break;
+      default:
+        drawGraph(layout, content, result);
+    }
+    wireCanvas(root, layout);
+    return result;
+  }
+
+  function viewLabel(layout) {
+    var names = {
+      overview: "Component group overview",
+      context: "System context",
+      containers: "Containers",
+      inside: "Inside " + (layout.title || ""),
+      group: (layout.title || "") + " group",
+      focus: "Focus on " + (layout.title || ""),
+      sequence: "Sequence diagram: " + (layout.title || ""),
+      graph: "Diagram: " + (layout.title || ""),
+      state: "State diagram: " + (layout.title || ""),
+      er: "Data diagram: " + (layout.title || ""),
+    };
+    return names[layout.kind] || "Diagram";
+  }
+
+  function emptyCard(empty) {
+    var card = html("div", { class: "empty-state", role: "status" });
+    var inner = html("div", { class: "empty-inner" }, card);
+    htmlIcon("diagram", inner, "empty-icon");
+    html("h2", {}, inner, empty.title);
+    html("p", {}, inner, empty.text);
+    return card;
+  }
+
+  function nodeClasses(n, base) {
+    var classes = [base || "node"];
+    if (n.kind) classes.push("kind-" + n.kind);
+    if (n.group) classes.push("group-" + n.group);
+    if (n.shape) classes.push("shape-" + n.shape);
+    var style = changeStyle(n.change);
+    if (style) classes.push(style.className);
+    if (n.faded) classes.push("faded");
+    if (n.boundary) classes.push("boundary");
+    if (n.command) classes.push("command");
+    if (n.testSupport) classes.push("test-support");
+    if (n.focus) classes.push("focus-node");
+    if (n.stub) classes.push("stub");
+    if (!n.ref) classes.push("inert");
+    return classes.join(" ");
+  }
+
+  var KIND_ICON = {
+    person: "person",
+    system: "system",
+    "external-system": "external-system",
+    process: "process",
+    "user-interface": "user-interface",
+    cli: "cli",
+    store: "store",
+  };
+
+  function tooltip(n) {
+    var node = n.ref && app.data.nodeById[n.ref];
+    var text = accessibleName(n);
+    if (node && node.summary && node.summary.text) text += "\n" + node.summary.text;
+    return text;
+  }
+
+  function badge(g, n) {
+    var style = changeStyle(n.change);
+    if (style && style.badge) {
+      var b = svg("g", { class: "change-badge", transform: "translate(" + (n.width - 4) + ",4)" }, g);
+      svg("circle", { r: 9 }, b);
+      svg("text", { "text-anchor": "middle", y: 4 }, b).textContent = style.badge;
+    }
+  }
+
+  // drawBox draws a node of the graph-like views: a card with an icon, its
+  // title, and a subtitle, shaped by what it is.
+  function drawBox(parent, n, result) {
+    var g = svg("g", {
+      class: nodeClasses(n),
+      transform: "translate(" + n.x + "," + n.y + ")",
+      "data-id": n.id,
+      tabindex: n.ref ? 0 : -1,
+      role: n.ref ? "button" : "img",
+      "aria-label": accessibleName(n),
+    }, parent);
+    svg("title", {}, g).textContent = tooltip(n);
+    var w = n.width;
+    var h = n.height;
+    if (n.shape === "initial") {
+      svg("circle", { cx: w / 2, cy: h / 2, r: w / 2, class: "initial-dot" }, g);
+      result.nodeEls[n.id] = g;
+      return g;
+    }
+    if (n.kind === "store") {
+      var e = 7;
+      svg("path", {
+        class: "body",
+        d: "M0," + e + " A" + w / 2 + "," + e + " 0 0 1 " + w + "," + e + " V" + (h - e) + " A" + w / 2 + "," + e + " 0 0 1 0," + (h - e) + " Z",
+      }, g);
+      svg("path", { class: "rim", d: "M0," + e + " A" + w / 2 + "," + e + " 0 0 0 " + w + "," + e }, g);
+    } else {
+      svg("rect", { class: "body", width: w, height: h, rx: n.shape === "state" ? Math.min(h / 2, 18) : n.boundary ? 8 : 10 }, g);
+    }
+    if (!n.shape && !n.boundary && n.kind !== "system" && !n.focus) {
+      svg("rect", { class: "accent", x: 0, y: 10, width: 3, height: h - 20, rx: 1.5 }, g);
+    }
+    var iconName = KIND_ICON[n.kind] || (n.kind === "package" && !n.boundary ? "package" : null);
+    var tx = 14;
+    if (iconName && !n.focus && !list(n.summaryLines).length && h >= 40) {
+      svgIcon(iconName, g, 13, h / 2 - 9, 18);
+      tx = 40;
+    }
+    var anchor = n.shape === "state" ? "middle" : "start";
+    if (anchor === "middle") tx = w / 2;
+    if (n.focus || list(n.summaryLines).length) {
+      svgIcon(KIND_ICON[n.kind] || "package", g, 16, 16, 20);
+      svg("text", { class: "title focus-title", x: 46, y: 32 }, g).textContent = n.title;
+      svg("text", { class: "subtitle", x: 46, y: 50 }, g).textContent = n.subtitle || "";
+      svg("line", { class: "divider", x1: 16, x2: w - 16, y1: 66, y2: 66 }, g);
+      list(n.summaryLines).forEach(function (line, i) {
+        svg("text", { class: "summary", x: 18, y: 88 + i * 17 }, g).textContent = line;
+      });
+    } else if (n.subtitle && h >= 36) {
+      svg("text", { class: "title", x: tx, y: h / 2 - 2, "text-anchor": anchor }, g).textContent = n.title;
+      svg("text", { class: "subtitle", x: tx, y: h / 2 + 14, "text-anchor": anchor }, g).textContent = n.subtitle;
+    } else {
+      svg("text", { class: "title", x: tx, y: h / 2 + 4.5, "text-anchor": anchor }, g).textContent = n.title;
+    }
+    if (n.change === "removed") {
+      svg("line", { class: "strike", x1: 8, x2: w - 8, y1: h / 2, y2: h / 2 }, g);
+    }
+    badge(g, n);
+    result.nodeEls[n.id] = g;
+    return g;
+  }
+
+  function drawEdge(parent, e, i, result, opts) {
+    opts = opts || {};
+    var classes = ["edge"];
+    if (e.via) classes.push("via-" + e.via);
+    var style = changeStyle(e.change);
+    if (style) classes.push(style.className);
+    if (e.faded) classes.push("faded");
+    if (e.onDemand) classes.push("on-demand");
+    var g = svg("g", { class: classes.join(" "), "data-index": i }, parent);
+    var title = (titleOf(app.data, e.from) || e.from) + " → " + (titleOf(app.data, e.to) || e.to);
+    if (e.label) title += ": " + e.label;
+    if (e.via) title += " (" + e.via + ")";
+    svg("title", {}, g).textContent = title;
+    svg("path", { class: "hit", d: e.d }, g);
+    var path = svg("path", { class: "line", d: e.d, "marker-end": opts.noArrow ? null : markerFor(e) }, g);
+    if (opts.er) {
+      path.setAttribute("marker-start", "url(#er-many)");
+      path.setAttribute("marker-end", "url(#er-one)");
+    }
+    result.edgeEls[i] = g;
+    return g;
+  }
+
+  function drawLabel(parent, e, i, dense) {
+    var lines = list(e.labelLines);
+    if (!lines.length) return;
+    var g = svg("g", { class: "edge-label" + (e.onDemand || dense ? " on-demand" : ""), "data-index": i }, parent);
+    var h = lines.length * LABEL_LINE + 6;
+    svg("rect", { x: e.labelX - e.labelWidth / 2, y: e.labelY - h / 2, width: e.labelWidth, height: h, rx: 6 }, g);
+    lines.forEach(function (line, k) {
+      svg("text", { x: e.labelX, y: e.labelY - h / 2 + 3 + LABEL_LINE * (k + 1) - 3, "text-anchor": "middle" }, g).textContent = line;
+    });
+    return g;
+  }
+
+  function drawGraph(layout, content, result) {
+    if (layout.boundary) {
+      var b = layout.boundary;
+      var bg = svg("g", { class: "boundary-box" }, content);
+      svg("rect", { x: b.x, y: b.y, width: b.width, height: b.height, rx: 18 }, bg);
+      svg("text", { class: "boundary-title", x: b.x + 18, y: b.y + 23 }, bg).textContent = b.title;
+      svg("text", { class: "boundary-caption", x: b.x + 18 + textWidth(b.title, 14) + 12, y: b.y + 23 }, bg).textContent = "system boundary";
+    }
+    list(layout.lanes).forEach(function (lane, i) {
+      var lg = svg("g", { class: "lane lane-" + (i % 2 ? "odd" : "even") + (layout.kind === "containers" ? " lane-column" : " lane-row") }, content);
+      svg("rect", { x: lane.x, y: lane.y, width: lane.width, height: lane.height, rx: 12 }, lg);
+      if (layout.kind === "containers") {
+        svg("text", { class: "lane-title", x: lane.x + 16, y: lane.y + 26 }, lg).textContent = lane.title;
+        svg("text", { class: "lane-count", x: lane.x + lane.width - 16, y: lane.y + 26, "text-anchor": "end" }, lg).textContent = String(lane.nodes.length);
+      } else {
+        wrapText(lane.title, 104, 12, 3).forEach(function (line, k) {
+          svg("text", { class: "lane-title", x: lane.x + 16, y: lane.y + 26 + k * 15 }, lg).textContent = line;
+        });
+      }
+    });
+    list(layout.columns).forEach(function (col) {
+      var cg = svg("g", { class: "column-head" }, content);
+      svg("text", { x: col.x + col.width / 2, y: col.y + 12, "text-anchor": "middle" }, cg).textContent = col.title.toUpperCase() + "  ·  " + col.count;
+      if (!col.count) {
+        var focus = layout.nodes.filter(function (n) { return n.focus; })[0];
+        svg("text", { class: "column-empty", x: col.x + col.width / 2, y: focus ? focus.y + focus.height / 2 : col.y + 60, "text-anchor": "middle" }, cg).textContent = col.id === "callers" ? "Nothing calls it" : "It depends on nothing";
+      }
+    });
+    if (layout.kind === "group" || layout.kind === "inside") {
+      var chips = layout.nodes.filter(function (n) { return n.boundary; });
+      if (chips.length) {
+        var top = Math.min.apply(null, chips.map(function (c) { return c.y; }));
+        var left = Math.min.apply(null, chips.map(function (c) { return c.x; }));
+        svg("text", { class: "chips-caption", x: left, y: top - 12 }, content).textContent = "ALSO DEPENDS ON, OUTSIDE THIS " + (layout.kind === "group" ? "GROUP" : "CONTAINER");
+      }
+    }
+    var edgeLayer = svg("g", { class: "edges" }, content);
+    layout.edges.forEach(function (e, i) {
+      drawEdge(edgeLayer, e, i, result);
+    });
+    var nodeLayer = svg("g", { class: "nodes" }, content);
+    layout.nodes.forEach(function (n) {
+      drawBox(nodeLayer, n, result);
+    });
+    // In a busy view, labels show for the edges of the node in hand.
+    var dense = layout.edges.length > DENSE_EDGES && layout.kind !== "state" && layout.kind !== "graph";
+    if (dense) content.parentNode.classList.add("dense");
+    var labelLayer = svg("g", { class: "labels" }, content);
+    layout.edges.forEach(function (e, i) {
+      drawLabel(labelLayer, e, i, dense);
+    });
+  }
+
+  var DENSE_EDGES = 18;
+
+  function drawOverview(layout, content, result) {
     layout.panels.forEach(function (p) {
-      var g = svg("g", { class: "group-panel group-" + p.id }, root);
-      svg("rect", { x: p.x, y: p.y, width: p.width, height: p.height, rx: 12 }, g);
-      svg("text", { x: p.x + OVERVIEW.pad, y: p.y + 28, class: "panel-title" }, g).textContent = p.label;
-      svg("text", { x: p.x + p.width - OVERVIEW.pad, y: p.y + 28, class: "panel-count", "text-anchor": "end" }, g).textContent =
-        p.count + (p.count === 1 ? " package" : " packages");
+      var g = svg("g", {
+        class: "group-panel group-" + p.id,
+        "data-panel": p.id,
+        tabindex: 0,
+        role: "button",
+        "aria-label": "Open the " + p.label + " group, " + p.count + " packages",
+      }, content);
+      svg("rect", { class: "panel-body", x: p.x, y: p.y, width: p.width, height: p.height, rx: 14 }, g);
+      var head = svg("g", { class: "panel-head" }, g);
+      svg("rect", { class: "panel-head-hit", x: p.x, y: p.y, width: p.width, height: 42, rx: 14 }, head);
+      svg("text", { x: p.x + OVERVIEW.pad, y: p.y + 28, class: "panel-title" }, head).textContent = p.label;
+      svg("text", { x: p.x + p.width - OVERVIEW.pad, y: p.y + 28, class: "panel-count", "text-anchor": "end" }, head).textContent = p.count + (p.count === 1 ? " package  ›" : " packages  ›");
       p.subgroups.forEach(function (s) {
-        svg("text", { x: s.x, y: s.y, class: "subgroup-label" }, g).textContent = s.label;
+        svg("text", { x: s.x, y: s.y, class: "subgroup-label" }, g).textContent = s.label.toUpperCase();
       });
     });
-
-    layout.edges.forEach(function (e) {
-      var g = svg("g", { class: "dependency" }, root);
-      svg("title", {}, g).textContent =
-        groupLabel(e.from) + " imports " + groupLabel(e.to) + ": " + e.count + (e.count === 1 ? " import edge" : " import edges");
-      svg("line", { x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, "marker-end": "url(#arrow)" }, g);
+    var arrows = svg("g", { class: "edges" }, content);
+    layout.edges.forEach(function (e, i) {
+      var g = svg("g", { class: "edge group-arrow", "data-index": i }, arrows);
+      svg("title", {}, g).textContent = groupLabel(e.from) + " imports " + groupLabel(e.to) + ": " + e.count + (e.count === 1 ? " import edge" : " import edges");
+      svg("line", { class: "line", x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, "marker-end": "url(#arrow)" }, g);
       var text = String(e.count);
-      var w = 10 + 7 * text.length;
-      svg("rect", { x: e.labelX - w / 2, y: e.labelY - 9, width: w, height: 18, rx: 9, class: "count-pill" }, g);
+      var w = 14 + 7 * text.length;
+      svg("rect", { x: e.labelX - w / 2, y: e.labelY - 10, width: w, height: 20, rx: 10, class: "count-pill" }, g);
       svg("text", { x: e.labelX, y: e.labelY + 4, "text-anchor": "middle", class: "count" }, g).textContent = text;
+      result.edgeEls[i] = g;
     });
-
+    var nodes = svg("g", { class: "nodes" }, content);
     layout.nodes.forEach(function (n) {
       var path = packagePath(n.id);
-      var pkg = path ? data.packageByPath[path] : null;
-      var node = data.nodeById[n.id];
-      var classes = ["chip", "group-" + n.group];
-      if (pkg && pkg.command) classes.push("command");
-      if (pkg && pkg.testSupport) classes.push("test-support");
-      if (app.state.node === n.id) classes.push("selected");
-      var g = svg(
-        "g",
-        { class: classes.join(" "), tabindex: 0, role: "button", "aria-label": "Package " + (path || n.title), "data-id": n.id },
-        root
-      );
-      svg("title", {}, g).textContent = (path || n.title) + (node && node.summary ? ": " + node.summary.text : "");
-      svg("rect", { x: n.x, y: n.y, width: n.width, height: n.height, rx: 7 }, g);
-      svg("text", { x: n.x + 12, y: n.y + 20 }, g).textContent = n.title;
-      g.addEventListener("click", function () {
-        select(n.id);
+      var pkg = path ? app.data.packageByPath[path] : null;
+      var chip = {
+        id: n.id,
+        ref: n.id,
+        title: n.title,
+        kind: "package",
+        group: n.group,
+        change: n.change,
+        command: !!(pkg && pkg.command),
+        testSupport: !!(pkg && pkg.testSupport),
+        x: n.x,
+        y: n.y,
+        width: n.width,
+        height: n.height,
+      };
+      var g = svg("g", {
+        class: nodeClasses(chip, "node chip"),
+        transform: "translate(" + n.x + "," + n.y + ")",
+        "data-id": n.id,
+        tabindex: 0,
+        role: "button",
+        "aria-label": accessibleName(chip),
+      }, nodes);
+      svg("title", {}, g).textContent = tooltip(chip);
+      svg("rect", { class: "body", width: n.width, height: n.height, rx: 8 }, g);
+      svg("circle", { class: "dot", cx: 14, cy: n.height / 2, r: 3.5 }, g);
+      svg("text", { class: "title", x: 26, y: n.height / 2 + 4.5 }, g).textContent = n.title;
+      if (chip.change === "removed") svg("line", { class: "strike", x1: 24, x2: n.width - 10, y1: n.height / 2, y2: n.height / 2 }, g);
+      badge(g, chip);
+      result.nodeEls[n.id] = g;
+    });
+  }
+
+  function drawSequence(layout, content, result) {
+    var width = layout.width;
+    var bands = svg("g", { class: "step-bands" }, content);
+    var lifelines = svg("g", { class: "lifelines" }, content);
+    layout.participants.forEach(function (p) {
+      svg("line", { class: "lifeline", x1: p.lifeline, x2: p.lifeline, y1: p.lifelineTop, y2: p.lifelineBottom }, lifelines);
+    });
+    var steps = svg("g", { class: "steps" }, content);
+    app.stepEls = {};
+    layout.steps.forEach(function (s) {
+      var top = s.box ? s.box.y - 8 : s.y - s.lines.length * 15 - 12;
+      var bottom = s.box ? s.box.y + s.box.height + 8 : s.self ? s.y2 + 10 : s.y + 12;
+      svg("rect", { class: "step-band", "data-step": s.number, x: 8, y: top, width: width - 16, height: bottom - top, rx: 8 }, bands);
+      var cls = ["step", "kind-" + s.kind];
+      var style = changeStyle(s.change);
+      if (style) cls.push(style.className);
+      var g = svg("g", { class: cls.join(" "), "data-step": s.number, tabindex: -1, role: "button", "aria-label": "Step " + s.number + ": " + s.label }, steps);
+      svg("title", {}, g).textContent = "Step " + s.number + ": " + s.label + (s.via ? " (" + s.via + ")" : "");
+      if (s.kind === "note") {
+        svg("rect", { class: "note", x: s.box.x, y: s.box.y, width: s.box.width, height: s.box.height, rx: 6 }, g);
+        s.lines.forEach(function (line, k) {
+          svg("text", { class: "note-text", x: s.labelX, y: s.labelY + k * 15 + 2, "text-anchor": "middle" }, g).textContent = line;
+        });
+        var nb = svg("g", { class: "step-number", transform: "translate(" + (s.box.x + 2) + "," + (s.box.y + 2) + ")" }, g);
+        svg("circle", { r: 10 }, nb);
+        svg("text", { y: 4, "text-anchor": "middle" }, nb).textContent = String(s.number);
+      } else {
+        var open = s.kind === "return" || s.kind === "async";
+        svg("path", { class: "hit", d: s.d }, g);
+        svg("path", { class: "line", d: s.d, "marker-end": open ? "url(#arrow-open)" : "url(#arrow)" }, g);
+        s.lines.forEach(function (line, k) {
+          svg("text", { class: "step-label", x: s.labelX, y: s.labelY + k * 15, "text-anchor": s.anchor || "middle" }, g).textContent = line;
+        });
+        var dir = s.self ? 1 : s.x2 > s.x1 ? 1 : -1;
+        var nx = s.x1 + dir * 15;
+        var num = svg("g", { class: "step-number", transform: "translate(" + nx + "," + s.y + ")" }, g);
+        svg("circle", { r: 10 }, num);
+        svg("text", { y: 4, "text-anchor": "middle" }, num).textContent = String(s.number);
+      }
+      app.stepEls[s.number] = g;
+    });
+    var heads = svg("g", { class: "heads" }, content);
+    svg("rect", { class: "heads-backdrop", x: -4000, y: layout.participants[0].y - 12, width: width + 8000, height: layout.participants[0].height + 22 }, heads);
+    layout.participants.forEach(function (p) {
+      drawBox(heads, p, result);
+    });
+    app.heads = heads;
+    app.headsY = layout.participants[0].y;
+    var footer = svg("g", { class: "feet" }, content);
+    if (layout.steps.length > 6) {
+      layout.participants.forEach(function (p) {
+        var feet = copy(p);
+        feet.y = p.lifelineBottom + 6;
+        feet.height = 30;
+        feet.subtitle = "";
+        var g = drawBox(footer, feet, { nodeEls: {} });
+        g.setAttribute("tabindex", "-1");
+        g.setAttribute("aria-hidden", "true");
+        g.setAttribute("data-id", p.id);
+        g.classList.add("foot");
       });
-      g.addEventListener("keydown", function (event) {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          select(n.id);
+    }
+  }
+
+  // pinHeads keeps a flow's participant heads at the top of the canvas
+  // while the view scrolls down its steps.
+  function pinHeads() {
+    if (!app.heads || !app.box || !app.layout || app.layout.kind !== "sequence" || !app.heads.isConnected) return;
+    var shift = Math.max(0, app.box.y + 10 - app.headsY);
+    app.heads.setAttribute("transform", "translate(0," + round(shift) + ")");
+  }
+
+  function drawEr(layout, content, result) {
+    var edges = svg("g", { class: "edges" }, content);
+    layout.edges.forEach(function (e, i) {
+      drawEdge(edges, e, i, result, { er: true });
+    });
+    var nodes = svg("g", { class: "nodes" }, content);
+    layout.nodes.forEach(function (n) {
+      var g = svg("g", {
+        class: nodeClasses(n, "node table-card"),
+        transform: "translate(" + n.x + "," + n.y + ")",
+        "data-id": n.id,
+        tabindex: n.ref ? 0 : -1,
+        role: n.ref ? "button" : "img",
+        "aria-label": accessibleName(n),
+      }, nodes);
+      svg("title", {}, g).textContent = accessibleName(n);
+      svg("rect", { class: "body", width: n.width, height: n.height, rx: 9 }, g);
+      svg("path", { class: "table-head", d: "M0,9 A9,9 0 0 1 9,0 H" + (n.width - 9) + " A9,9 0 0 1 " + n.width + ",9 V" + (n.stub ? n.height - 9 : 34) + (n.stub ? " A9,9 0 0 1 " + (n.width - 9) + "," + n.height + " H9 A9,9 0 0 1 0," + (n.height - 9) : " H0") + " Z" }, g);
+      svgIcon("table", g, 12, 9, 16);
+      svg("text", { class: "title", x: 34, y: 22 }, g).textContent = n.title;
+      svg("text", { class: "subtitle", x: n.width - 12, y: 22, "text-anchor": "end" }, g).textContent = n.stub ? "not in this diagram" : n.subtitle;
+      if (n.missing) {
+        svg("text", { class: "column-missing", x: 14, y: 52 }, g).textContent = "Not in the extracted facts yet";
+      }
+      n.columns.forEach(function (c, k) {
+        var row = svg("g", { class: "column" + (c.primaryKey ? " pk" : "") + (c.foreignKey ? " fk" : "") }, g);
+        if (k > 0) svg("line", { class: "row-rule", x1: 10, x2: n.width - 10, y1: c.y, y2: c.y }, row);
+        var cy = c.y + c.height / 2 + 4;
+        var kx = 12;
+        if (c.primaryKey) {
+          svg("text", { class: "key-tag pk-tag", x: kx, y: cy }, row).textContent = "PK";
         }
+        if (c.foreignKey) {
+          svg("text", { class: "key-tag fk-tag", x: c.primaryKey ? kx + 22 : kx, y: cy }, row).textContent = "FK";
+        }
+        var nameX = c.primaryKey && c.foreignKey ? 56 : 38;
+        svg("text", { class: "column-name" + (c.notNull ? " not-null" : ""), x: nameX, y: cy }, row).textContent = c.name;
+        svg("text", { class: "column-type" + (c.notNull ? "" : " nullable"), x: n.width - 12, y: cy, "text-anchor": "end" }, row).textContent = (c.type || "ANY") + (c.notNull ? "" : "?");
+      });
+      result.nodeEls[n.id] = g;
+    });
+  }
+
+  function drawFlowIndex(layout) {
+    var wrap = html("div", { class: "flow-index" });
+    if (layout.empty) {
+      wrap.appendChild(emptyCard(layout.empty));
+      return wrap;
+    }
+    html("h2", { class: "flow-index-title" }, wrap, "Key runtime flows");
+    html("p", { class: "flow-index-lead" }, wrap, "Each flow is a sequence diagram. Open one and step through it with the arrow keys.");
+    var grid = html("ul", { class: "flow-grid" }, wrap);
+    layout.items.forEach(function (f) {
+      var li = html("li", {}, grid);
+      var style = changeStyle(f.change);
+      var card = html("button", { type: "button", class: "flow-card" + (style ? " " + style.className : "") }, li);
+      var head = html("span", { class: "flow-card-head" }, card);
+      htmlIcon("flow", head);
+      html("span", { class: "flow-card-title" }, head, f.title);
+      if (style) html("span", { class: "change-pill " + style.className }, head, style.label);
+      if (f.summary && f.summary.text) html("span", { class: "flow-card-summary" }, card, f.summary.text);
+      if (f.trigger && f.trigger.text) html("span", { class: "flow-card-trigger" }, card, "Starts when: " + f.trigger.text);
+      html("span", { class: "flow-card-meta" }, card, f.participants + " participants · " + f.steps + " steps");
+      card.addEventListener("click", function () {
+        go({ view: "flow", of: f.id, step: 1 });
+      });
+    });
+    return wrap;
+  }
+
+  // ------------------------------------------------------- canvas events
+
+  function nodeTarget(event) {
+    var el = event.target;
+    while (el && el !== event.currentTarget) {
+      if (el.getAttribute && el.getAttribute("data-id")) return el;
+      if (el.getAttribute && el.getAttribute("data-panel")) return el;
+      if (el.getAttribute && el.getAttribute("data-step") && el.classList.contains("step")) return el;
+      el = el.parentNode;
+    }
+    return null;
+  }
+
+  function drawnNodeById(id) {
+    var found = null;
+    list(app.layout && app.layout.nodes).forEach(function (n) {
+      if (!found && n.id === id) found = n;
+    });
+    return found;
+  }
+
+  function activate(el, open) {
+    var panel = el.getAttribute("data-panel");
+    if (panel) {
+      go({ view: "group", of: panel }, { anchor: panel });
+      return;
+    }
+    var step = el.getAttribute("data-step");
+    if (step && !el.getAttribute("data-id")) {
+      setStep(Number(step));
+      return;
+    }
+    var n = drawnNodeById(el.getAttribute("data-id"));
+    if (!n || !n.ref) return;
+    if (open || app.state.node === n.ref) drill(n.ref, n.id);
+    else select(n.ref);
+  }
+
+  // drill opens what a node stands for, one level down.
+  function drill(ref, drawnId) {
+    var node = app.data.nodeById[ref];
+    if (!node) return;
+    var anchor = drawnId || ref;
+    if (node.kind === "system" && app.state.view === "context") {
+      go({ view: "containers", node: ref }, { anchor: anchor });
+    } else if (node.contains.length && !(app.state.view === "inside" && app.state.of === ref)) {
+      go({ view: "inside", of: ref }, { anchor: anchor });
+    } else if (app.state.view === "focus" && app.state.of === ref) {
+      if (node.diagrams.length) go({ view: "diagram", of: node.diagrams[0].id, node: ref }, { anchor: anchor });
+    } else {
+      go({ view: "focus", of: ref, node: ref }, { anchor: anchor });
+    }
+  }
+
+  function wireCanvas(root, layout) {
+    var drag = null;
+    root.addEventListener("click", function (event) {
+      if (app.dragged) {
+        app.dragged = false;
+        return;
+      }
+      var el = nodeTarget(event);
+      if (el) activate(el, false);
+      else if (app.state.node || app.state.term) select("");
+    });
+    root.addEventListener("dblclick", function (event) {
+      var el = nodeTarget(event);
+      if (el) {
+        event.preventDefault();
+        activate(el, true);
+      }
+    });
+    root.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      var el = nodeTarget(event);
+      if (!el) return;
+      event.preventDefault();
+      activate(el, event.shiftKey);
+    });
+    root.addEventListener("mouseover", function (event) {
+      var el = nodeTarget(event);
+      var id = el && el.getAttribute("data-id");
+      if (id && id !== app.hover) light(id);
+    });
+    root.addEventListener("mouseout", function (event) {
+      var to = event.relatedTarget;
+      var el = nodeTarget(event);
+      if (!el) return;
+      while (to && to !== root) {
+        if (to === el) return;
+        to = to.parentNode;
+      }
+      light(null);
+    });
+    root.addEventListener("focusin", function (event) {
+      var el = nodeTarget(event);
+      var id = el && el.getAttribute("data-id");
+      if (id) light(id);
+    });
+    root.addEventListener("focusout", function () {
+      light(null);
+    });
+    root.addEventListener("pointerdown", function (event) {
+      if (event.button !== 0) return;
+      drag = { x: event.clientX, y: event.clientY, box: app.box, moved: false, id: event.pointerId };
+    });
+    root.addEventListener("pointermove", function (event) {
+      if (!drag || drag.id !== event.pointerId) return;
+      var dx = event.clientX - drag.x;
+      var dy = event.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        root.setPointerCapture(event.pointerId);
+        root.classList.add("panning");
+      }
+      var rect = root.getBoundingClientRect();
+      var k = drag.box.width / rect.width;
+      setBox({ x: drag.box.x - dx * k, y: drag.box.y - dy * k, width: drag.box.width, height: drag.box.height });
+    });
+    function endDrag(event) {
+      if (!drag || drag.id !== event.pointerId) return;
+      if (drag.moved) {
+        app.dragged = true;
+        setTimeout(function () {
+          app.dragged = false;
+        }, 0);
+      }
+      root.classList.remove("panning");
+      drag = null;
+    }
+    root.addEventListener("pointerup", endDrag);
+    root.addEventListener("pointercancel", endDrag);
+    root.addEventListener(
+      "wheel",
+      function (event) {
+        event.preventDefault();
+        var rect = root.getBoundingClientRect();
+        var fx = app.box.x + ((event.clientX - rect.left) / rect.width) * app.box.width;
+        var fy = app.box.y + ((event.clientY - rect.top) / rect.height) * app.box.height;
+        var speed = event.ctrlKey ? 0.01 : 0.0018;
+        zoomBy(Math.exp(-event.deltaY * speed), fx, fy);
+      },
+      { passive: false }
+    );
+    void layout;
+  }
+
+  // light highlights a node, its neighbours, and the edges between them,
+  // and dims the rest.
+  function light(id) {
+    app.hover = id;
+    if (!app.svg || !app.layout) return;
+    var lit = id ? neighbours(app.layout, id) : { nodes: [], edges: [] };
+    app.svg.classList.toggle("dimming", !!id && lit.nodes.length > 0);
+    Object.keys(app.nodeEls).forEach(function (key) {
+      app.nodeEls[key].classList.toggle("lit", lit.nodes.indexOf(key) >= 0);
+    });
+    app.edgeEls.forEach(function (el, i) {
+      if (!el) return;
+      var on = lit.edges.indexOf(i) >= 0;
+      el.classList.toggle("lit", on);
+      var line = el.querySelector(".line");
+      var e = app.layout.edges[i];
+      if (line && e && e.d && line.getAttribute("marker-end")) line.setAttribute("marker-end", markerFor(e, on));
+    });
+    Array.prototype.forEach.call(app.svg.querySelectorAll(".edge-label"), function (el) {
+      el.classList.toggle("lit", lit.edges.indexOf(Number(el.getAttribute("data-index"))) >= 0);
+    });
+  }
+
+  // refreshCanvasState marks the selected node and the current flow step
+  // without redrawing.
+  function refreshCanvasState() {
+    if (!app.svg) return;
+    var selected = app.state.node;
+    Object.keys(app.nodeEls).forEach(function (key) {
+      var n = drawnNodeById(key);
+      app.nodeEls[key].classList.toggle("selected", !!(n && n.ref && n.ref === selected));
+    });
+    var sel = selected ? neighbours(app.layout, drawnIdFor(selected)) : { nodes: [], edges: [] };
+    app.edgeEls.forEach(function (el, i) {
+      if (el) el.classList.toggle("shown", sel.edges.indexOf(i) >= 0);
+    });
+    Array.prototype.forEach.call(app.svg.querySelectorAll(".edge-label.on-demand"), function (el) {
+      el.classList.toggle("shown", sel.edges.indexOf(Number(el.getAttribute("data-index"))) >= 0);
+    });
+    if (app.layout.kind === "sequence") markStep();
+  }
+
+  function drawnIdFor(ref) {
+    var found = null;
+    list(app.layout && app.layout.nodes).forEach(function (n) {
+      if (!found && n.ref === ref) found = n.id;
+    });
+    return found;
+  }
+
+  // ------------------------------------------------------------- stepping
+
+  function stepCount() {
+    return app.layout && app.layout.kind === "sequence" ? app.layout.steps.length : 0;
+  }
+
+  function markStep() {
+    var current = app.state.step || 0;
+    var step = null;
+    app.layout.steps.forEach(function (s) {
+      var el = app.stepEls && app.stepEls[s.number];
+      if (!el) return;
+      el.classList.toggle("current", s.number === current);
+      el.classList.toggle("later", current > 0 && s.number > current);
+      if (s.number === current) step = s;
+    });
+    Array.prototype.forEach.call(app.svg.querySelectorAll(".step-band"), function (el) {
+      el.classList.toggle("current", Number(el.getAttribute("data-step")) === current);
+    });
+    Object.keys(app.nodeEls).forEach(function (key) {
+      app.nodeEls[key].classList.toggle("in-step", !!step && (step.from === key || step.to === key));
+    });
+  }
+
+  function stepBox(box, number) {
+    if (!app.layout || app.layout.kind !== "sequence" || !number || !box) return null;
+    var s = app.layout.steps[number - 1];
+    if (!s) return null;
+    var lo = s.box ? s.box.x : Math.min(s.x1, s.x2) - 30;
+    var hi = s.box ? s.box.x + s.box.width : Math.max(s.x1, s.x2) + (s.self ? 200 : 30);
+    var y = s.box ? s.box.y : s.y - s.lines.length * 15;
+    var headroom = app.layout.participants[0].height + 40;
+    var next = { x: box.x, y: box.y, width: box.width, height: box.height };
+    if (lo < next.x + 20 || hi > next.x + next.width - 20) {
+      next.x = (lo + hi) / 2 - next.width / 2;
+      next.x = Math.min(Math.max(next.x, -40), Math.max(app.layout.width - next.width + 40, -40));
+    }
+    if (y < next.y + headroom || y > next.y + next.height * 0.75) {
+      next.y = Math.max(-8, y - next.height * 0.38);
+    }
+    return next;
+  }
+
+  function setStep(n) {
+    var count = stepCount();
+    if (!count) return;
+    var step = Math.min(Math.max(n, 1), count);
+    var target = stepBox(app.box, step);
+    select(app.state.node, { step: step });
+    if (target && (target.x !== app.box.x || target.y !== app.box.y)) animateBox(target, 360);
+  }
+
+  function renderStepper() {
+    var el = byId("stepper");
+    var count = stepCount();
+    clear(el);
+    el.hidden = !count;
+    if (!count) return;
+    var current = app.state.step || 1;
+    var prev = html("button", { type: "button", class: "tool", "aria-label": "Previous step", title: "Previous step (←)" }, el);
+    htmlIcon("prev", prev);
+    prev.disabled = current <= 1;
+    prev.addEventListener("click", function () {
+      setStep(current - 1);
+    });
+    html("span", { class: "step-count", "aria-live": "polite" }, el, "Step " + current + " of " + count);
+    var next = html("button", { type: "button", class: "tool", "aria-label": "Next step", title: "Next step (→)" }, el);
+    htmlIcon("next", next);
+    next.disabled = current >= count;
+    next.addEventListener("click", function () {
+      setStep(current + 1);
+    });
+  }
+
+  // --------------------------------------------------------------- chrome
+
+  function renderLevels() {
+    var nav = byId("levels");
+    clear(nav);
+    var level = levelOf(app.state.view);
+    if (app.state.view === "focus" && app.data.nodeById[app.state.of]) {
+      var focused = app.data.nodeById[app.state.of];
+      if (focused.level === "context") level = "context";
+      if (focused.level === "container") level = "containers";
+    }
+    LEVELS.forEach(function (l) {
+      var b = html("button", { type: "button", class: "level" + (l.id === level ? " active" : ""), "aria-current": l.id === level ? "page" : null }, nav, l.label);
+      b.addEventListener("click", function () {
+        go({ view: l.id === "components" ? "components" : l.id });
       });
     });
   }
 
-  function renderRefs(refs, parent) {
-    var ul = html("ul", { class: "sources" }, parent);
-    list(refs).forEach(function (ref) {
-      var link = resolveRef(ref, app.data);
-      var li = html("li", { class: "source source-" + link.kind }, ul);
-      var el;
-      if (link.href) {
-        el = html("a", { href: link.href }, li, link.text);
-      } else if (link.target && link.target.type === "node" && app.data.nodeById[link.target.value]) {
-        el = html("button", { type: "button", class: "linklike" }, li, link.text);
-        el.addEventListener("click", function () {
-          select(link.target.value);
+  function renderCrumbs() {
+    var nav = byId("crumbs");
+    clear(nav);
+    var ol = html("ol", {}, nav);
+    breadcrumb(app.data, app.state).forEach(function (c, i, all) {
+      var li = html("li", {}, ol);
+      if (c.state && i < all.length - 1) {
+        var b = html("button", { type: "button", class: "crumb" }, li, c.label);
+        b.addEventListener("click", function () {
+          go(c.state);
         });
       } else {
-        el = html("span", {}, li, link.text);
+        html("span", { class: "crumb current", "aria-current": "page" }, li, c.label);
       }
-      if (link.title) el.setAttribute("title", link.title);
     });
   }
 
-  function renderStatement(statement, parent) {
-    if (!statement) return;
-    var block = html("div", { class: "statement" }, parent);
-    html("p", {}, block, statement.text || "");
-    renderRefs(statement.refs, block);
+  function renderNotice(text) {
+    var el = byId("notice");
+    el.hidden = !text;
+    el.textContent = text || "";
   }
 
-  function section(parent, title) {
-    var s = html("section", {}, parent);
-    html("h3", {}, s, title);
-    return s;
+  function renderProblems() {
+    var banner = byId("problems");
+    banner.hidden = app.problems.length === 0;
+    clear(banner);
+    app.problems.forEach(function (p) {
+      html("p", {}, banner, p);
+    });
   }
 
-  function renderPackageList(parent, title, packages) {
-    var s = section(parent, title + " (" + packages.length + ")");
-    if (!packages.length) {
-      html("p", { class: "empty" }, s, "None.");
+  var LEGENDS = {
+    overview: [
+      ["chip", "Package"],
+      ["chip command", "Command (bold)"],
+      ["chip test-support", "Test support (dashed)"],
+      ["count", "Imports between groups, with the count"],
+    ],
+    group: [
+      ["chip", "Package in this group"],
+      ["chip command", "Command (bold)"],
+      ["chip boundary", "Outside this group (faded)"],
+      ["arrow", "Imports; edges to outside packages show on hover"],
+    ],
+    inside: [
+      ["chip", "Part of this container"],
+      ["chip boundary", "Outside it (faded)"],
+      ["arrow", "Imports or calls; edges outside show on hover"],
+    ],
+    focus: [
+      ["chip", "Callers on the left, dependencies on the right"],
+      ["arrow", "Imports or calls, with how"],
+    ],
+    context: [
+      ["icon person", "Person"],
+      ["icon system", "Evie"],
+      ["icon external-system", "Outside system"],
+      ["arrow", "Calls, labelled with what for"],
+      ["via http", "Over HTTP or the network"],
+      ["via process", "Runs or is run as a process"],
+      ["via sql", "Reads or writes data or files"],
+    ],
+    containers: [
+      ["icon user-interface", "User interface"],
+      ["icon cli", "Command-line tool"],
+      ["icon process", "Process"],
+      ["icon store", "Data store"],
+      ["icon external-system", "Outside service"],
+      ["via http", "Over HTTP or the network"],
+      ["via process", "Runs or is run as a process"],
+      ["via sql", "SQL or files"],
+    ],
+    sequence: [
+      ["arrow", "Call"],
+      ["arrow open", "Return or async message (open head)"],
+      ["note", "Note"],
+      ["step", "Current step (← →)"],
+    ],
+    graph: [
+      ["chip", "Part"],
+      ["arrow", "Leads to"],
+    ],
+    state: [
+      ["initial", "Initial state"],
+      ["state", "State"],
+      ["arrow", "Transition"],
+    ],
+    er: [
+      ["pk", "PK primary key, FK foreign key"],
+      ["nullable", "TYPE? may be null"],
+      ["crow", "Many rows reference one"],
+      ["chip boundary", "Referenced table not listed (faded)"],
+    ],
+    flows: [["flow", "Open a flow to step through it"]],
+  };
+
+  function legendSwatch(kind, li) {
+    var parts = kind.split(" ");
+    if (parts[0] === "icon") {
+      htmlIcon(parts[1], li, "legend-icon kind-" + parts[1]);
       return;
     }
-    var ul = html("ul", { class: "package-list" }, s);
-    packages.forEach(function (p) {
+    if (parts[0] === "flow") {
+      htmlIcon("flow", li, "legend-icon");
+      return;
+    }
+    if (parts[0] === "via") {
+      var line = svg("svg", { class: "legend-via via-" + parts[1], viewBox: "0 0 26 8", "aria-hidden": "true" }, li);
+      svg("line", { x1: 0, y1: 4, x2: 26, y2: 4 }, line);
+      return;
+    }
+    html("span", { class: "swatch-" + parts.join(" swatch-"), "aria-hidden": "true" }, li);
+  }
+
+  function renderLegend() {
+    var ul = byId("legend");
+    clear(ul);
+    (LEGENDS[app.layout ? app.layout.kind : "context"] || []).forEach(function (entry) {
       var li = html("li", {}, ul);
-      var button = html("button", { type: "button", class: "package-button", title: p.path }, li, p.title);
-      button.addEventListener("click", function () {
-        select(p.id);
-      });
+      legendSwatch(entry[0], li);
+      html("span", {}, li, entry[1]);
     });
+    if (list(app.state.proposals).length) {
+      proposalLegend().forEach(function (entry) {
+        var li = html("li", { class: "proposal-legend" }, ul);
+        html("span", { class: "swatch-change " + entry.className, "aria-hidden": "true" }, li);
+        html("span", {}, li, entry.text);
+      });
+    }
   }
 
-  function renderPanel(panel) {
-    var id = app.state.node;
-    var details = id ? packageDetails(app.data, id) : null;
-    panel.textContent = "";
-    if (!details || !details.node) {
-      panel.hidden = true;
-      return;
-    }
-    panel.hidden = false;
-    var node = details.node;
-    var header = html("header", { class: "panel-header" }, panel);
-    html("h2", {}, header, node.title || node.id);
-    var close = html("button", { type: "button", class: "close", "aria-label": "Close panel" }, header, "×");
-    close.addEventListener("click", function () {
-      select("");
-    });
-
-    var meta = html("p", { class: "meta" }, panel);
-    if (details.path) html("code", {}, meta, details.path);
-    var tags = [];
-    if (details.pkg) tags.push(details.pkg.command ? "command" : "library");
-    if (details.pkg && details.pkg.testSupport) tags.push("test support");
-    tags.push(groupLabel(node.group) + (node.subgroup ? " / " + node.subgroup : ""));
-    tags.forEach(function (tag) {
-      html("span", { class: "tag" }, meta, tag);
-    });
-
-    renderStatement(node.summary, section(panel, "Summary"));
-    if (details.pkg && details.pkg.doc) {
-      html("p", { class: "package-doc" }, section(panel, "Package doc"), details.pkg.doc);
-    }
-    STATEMENT_LISTS.forEach(function (key) {
-      if (!node[key].length) return;
-      var titles = { does: "What it does", owns: "Data it owns", interfaces: "Interfaces", gotchas: "Gotchas" };
-      var s = section(panel, titles[key]);
-      node[key].forEach(function (statement) {
-        renderStatement(statement, s);
-      });
-    });
-    renderPackageList(panel, "Who calls it", details.callers);
-    renderPackageList(panel, "Depends on", details.dependencies);
-
-    var termSection = section(panel, "Glossary terms");
-    if (!details.terms.length) {
-      html("p", { class: "empty" }, termSection, "None yet.");
-    } else {
-      var dl = html("dl", { class: "terms" }, termSection);
-      details.terms.forEach(function (t) {
-        html("dt", {}, dl, t.term);
-        html("dd", {}, dl, t.definition || "Not in GLOSSARY.md.");
-        if (t.avoid.length) html("dd", { class: "avoid" }, dl, "Avoid: " + t.avoid.join(", "));
-      });
-    }
-
-    var factSection = section(panel, "Extracted facts");
-    if (!details.facts.length) {
-      html("p", { class: "empty" }, factSection, "No routes, commands, or tables extracted for this package.");
-    }
-    details.facts.forEach(function (group) {
-      html("h4", {}, factSection, group.title + " (" + group.items.length + ")");
-      var ul = html("ul", { class: "facts" }, factSection);
-      group.items.forEach(function (item) {
-        var li = html("li", {}, ul);
-        html("code", {}, li, item.title);
-        item.detail.forEach(function (line) {
-          html("div", { class: "fact-detail" }, li, line);
-        });
-      });
-    });
-
-    if (node.links.length) renderRefs(node.links, section(panel, "Links"));
-  }
-
-  function renderRail(rail) {
-    var listEl = rail.querySelector("#group-list");
-    if (!listEl) return;
-    listEl.textContent = "";
+  function renderRail() {
+    var groups = byId("group-list");
+    clear(groups);
     groupOverview(app.data).groups.forEach(function (g) {
       var count = 0;
       g.subgroups.forEach(function (s) {
         count += s.nodes.length;
       });
-      var li = html("li", { class: "group-" + g.id }, listEl);
-      html("span", { class: "swatch", "aria-hidden": "true" }, li);
-      html("span", {}, li, g.label);
-      html("span", { class: "rail-count" }, li, String(count));
+      var li = html("li", {}, groups);
+      var active = app.state.view === "group" && app.state.of === g.id;
+      var b = html("button", { type: "button", class: "group-link group-" + g.id + (active ? " active" : ""), "aria-current": active ? "page" : null }, li);
+      html("span", { class: "swatch", "aria-hidden": "true" }, b);
+      html("span", { class: "group-name" }, b, g.label);
+      html("span", { class: "rail-count" }, b, String(count));
+      b.addEventListener("click", function () {
+        go({ view: "group", of: g.id });
+      });
+    });
+    renderLegend();
+    var ul = byId("proposal-list");
+    clear(ul);
+    if (!app.base.proposals.length) {
+      var li = html("li", { class: "hint" }, ul);
+      html("span", {}, li, "No design proposals yet. ");
+      html("a", { href: "?proposal=examples/design-proposal.js" + location.hash }, li, "Load the example");
+      return;
+    }
+    app.base.proposals.forEach(function (p) {
+      var active = list(app.state.proposals).indexOf(p.id) >= 0;
+      var item = html("li", { class: "proposal" + (active ? " on" : "") }, ul);
+      var label = html("label", { class: "switch" }, item);
+      var box = html("input", { type: "checkbox", role: "switch", "aria-checked": active ? "true" : "false" }, label);
+      box.checked = active;
+      html("span", { class: "switch-track", "aria-hidden": "true" }, label);
+      var text = html("span", { class: "proposal-text" }, label);
+      html("span", { class: "proposal-title" }, text, p.title || p.id);
+      html("span", { class: "status status-" + (p.status || "") }, text, p.status || "");
+      box.addEventListener("change", function () {
+        var ids = list(app.state.proposals).filter(function (id) {
+          return id !== p.id;
+        });
+        if (box.checked) ids.push(p.id);
+        var next = { view: app.state.view, of: app.state.of, step: app.state.step, proposals: ids };
+        if (box.checked) next.panel = "proposals";
+        go(next);
+      });
+      if (active) {
+        var more = html("button", { type: "button", class: "linklike proposal-more" }, item, "Requirements and decisions");
+        more.addEventListener("click", function () {
+          go({ view: app.state.view, of: app.state.of, step: app.state.step, proposals: app.state.proposals, panel: "proposals" }, { replace: true });
+        });
+      }
     });
   }
 
-  function renderProblems() {
-    var banner = document.getElementById("problems");
-    if (!banner) return;
-    banner.hidden = app.missing.length === 0;
-    banner.textContent = app.missing.length ? "These data files did not load: " + app.missing.join(", ") : "";
-  }
+  // --------------------------------------------------------------- search
 
-  function render() {
-    renderProblems();
-    renderRail(document.getElementById("rail"));
-    renderOverview(document.getElementById("canvas"));
-    renderPanel(document.getElementById("panel"));
-  }
+  var searchState = { results: [], active: -1 };
 
-  function boot(objects, missing) {
-    app.data = mergeData(objects);
-    app.missing = missing;
-    app.state = parseHash(location.hash);
-    render();
-    window.addEventListener("hashchange", function () {
-      app.state = parseHash(location.hash);
-      render();
+  function renderSearch() {
+    var input = byId("search-input");
+    var ul = byId("search-results");
+    clear(ul);
+    var results = searchState.results;
+    ul.hidden = !input.value.trim();
+    input.setAttribute("aria-expanded", ul.hidden ? "false" : "true");
+    if (!results.length) {
+      html("li", { class: "search-empty", role: "option", "aria-disabled": "true" }, ul, "Nothing matches “" + input.value.trim() + "”");
+      input.removeAttribute("aria-activedescendant");
+      return;
+    }
+    var typeIcon = { node: "package", term: "term", flow: "flow", diagram: "diagram" };
+    var typeName = { node: "", term: "Glossary", flow: "Flow", diagram: "Diagram" };
+    results.forEach(function (r, i) {
+      var li = html("li", { id: "search-result-" + i, role: "option", class: "search-result" + (i === searchState.active ? " active" : ""), "aria-selected": i === searchState.active ? "true" : "false" }, ul);
+      var node = r.type === "node" ? app.data.nodeById[r.id] : null;
+      htmlIcon(node ? KIND_ICON[node.kind] || "package" : typeIcon[r.type], li, "result-icon" + (node && node.group ? " group-" + node.group : ""));
+      var text = html("span", { class: "result-text" }, li);
+      html("span", { class: "result-label" }, text, r.label);
+      html("span", { class: "result-detail" }, text, r.detail);
+      if (typeName[r.type]) html("span", { class: "result-type" }, li, typeName[r.type]);
+      li.addEventListener("mousedown", function (event) {
+        event.preventDefault();
+        choose(i);
+      });
     });
+    if (searchState.active >= 0) input.setAttribute("aria-activedescendant", "search-result-" + searchState.active);
+    else input.removeAttribute("aria-activedescendant");
+  }
+
+  function choose(i) {
+    var r = searchState.results[i];
+    if (!r) return;
+    var input = byId("search-input");
+    input.value = "";
+    searchState = { results: [], active: -1 };
+    renderSearch();
+    input.blur();
+    if (r.type === "term") {
+      go({ view: app.state.view, of: app.state.of, step: app.state.step, term: r.id, proposals: app.state.proposals }, { replace: true });
+    } else {
+      go(r.state);
+    }
+  }
+
+  function wireSearch() {
+    var input = byId("search-input");
+    input.addEventListener("input", function () {
+      searchState.results = search(app.data, input.value, 10);
+      searchState.active = searchState.results.length ? 0 : -1;
+      renderSearch();
+    });
+    input.addEventListener("keydown", function (event) {
+      var n = searchState.results.length;
+      if (event.key === "ArrowDown" && n) {
+        event.preventDefault();
+        searchState.active = (searchState.active + 1) % n;
+        renderSearch();
+      } else if (event.key === "ArrowUp" && n) {
+        event.preventDefault();
+        searchState.active = (searchState.active - 1 + n) % n;
+        renderSearch();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        choose(Math.max(searchState.active, 0));
+      } else if (event.key === "Escape") {
+        input.value = "";
+        searchState = { results: [], active: -1 };
+        renderSearch();
+        input.blur();
+      }
+    });
+    input.addEventListener("blur", function () {
+      setTimeout(function () {
+        byId("search-results").hidden = true;
+        input.setAttribute("aria-expanded", "false");
+      }, 120);
+    });
+    input.addEventListener("focus", function () {
+      if (input.value.trim()) renderSearch();
+    });
+  }
+
+  // ---------------------------------------------------------------- panel
+
+  // jump follows an in-page reference: a node it draws is selected where it
+  // stands, anything else opens where it lives.
+  function jumpToNode(id, flash) {
+    app.flash = flash || null;
+    var node = app.data.nodeById[id];
+    if (!node) return;
+    if (drawnIdFor(id)) {
+      select(id);
+      var n = drawnNodeById(drawnIdFor(id));
+      var size = canvasSize();
+      if (n && app.box && (n.x < app.box.x || n.y < app.box.y || n.x + n.width > app.box.x + app.box.width || n.y + n.height > app.box.y + app.box.height)) {
+        animateBox(fitBox({ x: n.x - 200, y: n.y - 150, width: n.width + 400, height: n.height + 300 }, size.w, size.h, { maxScale: 1 }), 360);
+      }
+      return;
+    }
+    go(nodeHome(node));
+  }
+
+  function renderRef(ref, parent, statementEl) {
+    var link = resolveRef(ref, app.data);
+    var li = html("li", { class: "source source-" + link.kind }, parent);
+    var iconName = { code: "code", doc: "doc", adr: "adr", term: "term", pkg: "package", node: "node", table: "table", route: "route", command: "command" }[link.kind] || "doc";
+    var el;
+    if (link.href) {
+      el = html("a", { href: link.href, target: "_blank", rel: "noopener" }, li);
+    } else if (link.kind === "term") {
+      el = html("button", { type: "button", class: "ref-button", "aria-expanded": "false" }, li);
+      el.addEventListener("click", function () {
+        var open = el.getAttribute("aria-expanded") === "true";
+        el.setAttribute("aria-expanded", open ? "false" : "true");
+        var existing = statementEl.querySelector('.term-def[data-term="' + cssEscape(link.text) + '"]');
+        if (existing) existing.parentNode.removeChild(existing);
+        if (!open) {
+          var def = html("div", { class: "term-def", "data-term": link.text }, statementEl);
+          html("strong", {}, def, link.text);
+          html("span", {}, def, " " + (link.definition || "is not in GLOSSARY.md."));
+          var more = html("button", { type: "button", class: "linklike" }, def, "Who uses it");
+          more.addEventListener("click", function () {
+            select(app.state.node, { term: link.text, node: undefined });
+          });
+        }
+      });
+    } else if (link.target && link.target.node) {
+      el = html("button", { type: "button", class: "ref-button" }, li);
+      el.addEventListener("click", function () {
+        jumpToNode(link.target.node, link.target.type === "node" ? null : link.target);
+      });
+    } else if (link.target && link.target.type === "node" && app.data.nodeById[link.target.value]) {
+      el = html("button", { type: "button", class: "ref-button" }, li);
+      el.addEventListener("click", function () {
+        jumpToNode(link.target.value);
+      });
+    } else {
+      el = html("span", { class: "ref-text" }, li);
+    }
+    htmlIcon(iconName, el, "ref-icon");
+    html("span", { class: "ref-label" }, el, link.text);
+    if (link.title) el.setAttribute("title", link.title);
+  }
+
+  function cssEscape(text) {
+    return String(text).replace(/["\\]/g, "\\$&");
+  }
+
+  function renderStatement(statement, parent, cls) {
+    if (!statement) return null;
+    var block = html("div", { class: "statement" + (cls ? " " + cls : "") }, parent);
+    html("p", {}, block, statement.text || "");
+    var refs = list(statement.refs);
+    if (refs.length) {
+      var ul = html("ul", { class: "sources", "aria-label": "Sources" }, block);
+      refs.forEach(function (ref) {
+        renderRef(ref, ul, block);
+      });
+    }
+    return block;
+  }
+
+  function section(parent, title, count, key) {
+    var s = html("section", { class: "panel-section" + (key ? " section-" + key : "") }, parent);
+    var h = html("h3", {}, s, title);
+    if (count !== undefined) html("span", { class: "count" }, h, String(count));
+    return s;
+  }
+
+  var SHOW_FIRST = 6;
+
+  function renderStatements(parent, key, title, statements) {
+    if (!statements.length) return;
+    var s = section(parent, title, statements.length > 1 ? statements.length : undefined, key);
+    var expandKey = (app.state.node || "") + "|" + key;
+    var all = app.expanded[expandKey] || statements.length <= SHOW_FIRST + 2;
+    statements.slice(0, all ? statements.length : SHOW_FIRST).forEach(function (st) {
+      renderStatement(st, s);
+    });
+    if (!all) {
+      var more = html("button", { type: "button", class: "show-more" }, s, "Show all " + statements.length);
+      more.addEventListener("click", function () {
+        app.expanded[expandKey] = true;
+        renderPanel();
+      });
+    }
+  }
+
+  function renderRelations(parent, title, items, empty, key) {
+    var s = section(parent, title, items.length, key);
+    if (!items.length) {
+      html("p", { class: "empty" }, s, empty);
+      return;
+    }
+    var ul = html("ul", { class: "relation-list" }, s);
+    items.forEach(function (r) {
+      var style = changeStyle(r.change);
+      var li = html("li", { class: style ? style.className : null }, ul);
+      var node = app.data.nodeById[r.id];
+      var b = html("button", { type: "button", class: "relation" + (node && node.group ? " group-" + node.group : "") }, li);
+      html("span", { class: "dot", "aria-hidden": "true" }, b);
+      html("span", { class: "relation-title" }, b, r.title);
+      if (r.label || (r.via && r.via !== "import")) html("span", { class: "relation-how" }, b, [r.label, r.via && r.via !== "import" ? r.via : ""].filter(Boolean).join(" · "));
+      if (style) html("span", { class: "change-pill " + style.className }, b, style.label);
+      b.addEventListener("click", function () {
+        jumpToNode(r.id);
+      });
+    });
+  }
+
+  function panelHeader(panel, iconName, title, sub, onClose, cls) {
+    var header = html("header", { class: "panel-header" + (cls ? " " + cls : "") }, panel);
+    var badgeEl = html("span", { class: "panel-icon" }, header);
+    htmlIcon(iconName, badgeEl);
+    var titles = html("div", { class: "panel-titles" }, header);
+    html("h2", {}, titles, title);
+    if (sub) html("p", { class: "panel-sub" }, titles, sub);
+    var close = html("button", { type: "button", class: "tool close", "aria-label": "Close details", title: "Close (Esc)" }, header);
+    htmlIcon("close", close);
+    close.addEventListener("click", onClose);
+    return header;
+  }
+
+  function actionButton(parent, iconName, label, onClick, primary) {
+    var b = html("button", { type: "button", class: "action" + (primary ? " primary" : "") }, parent);
+    htmlIcon(iconName, b);
+    html("span", {}, b, label);
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  function renderPanel() {
+    var panel = byId("panel");
+    var scroll = panel.scrollTop;
+    var sameSubject = panel.getAttribute("data-subject");
+    clear(panel);
+    var subject = "";
+    if (app.state.node && app.data.nodeById[app.state.node]) {
+      subject = "node:" + app.state.node;
+      renderNodePanel(panel, app.state.node);
+    } else if (app.state.term) {
+      subject = "term:" + app.state.term;
+      renderTermPanel(panel, app.state.term);
+    } else if (app.state.panel === "proposals") {
+      subject = "proposals";
+      renderProposalPanel(panel);
+    } else if (stepCount()) {
+      subject = "flow:" + app.state.of;
+      renderFlowPanel(panel);
+    }
+    panel.hidden = !subject;
+    document.body.classList.toggle("has-panel", !!subject);
+    panel.setAttribute("data-subject", subject);
+    if (subject && subject === sameSubject) panel.scrollTop = scroll;
+    else panel.scrollTop = 0;
+    if (app.flash) {
+      var hit = panel.querySelector(".flash");
+      if (hit) hit.scrollIntoView({ block: "center" });
+      app.flash = null;
+    }
+  }
+
+  function closePanel() {
+    go({ view: app.state.view, of: app.state.of, step: app.state.step, proposals: app.state.proposals }, { replace: true });
+  }
+
+  function renderNodePanel(panel, id) {
+    var details = nodeDetails(app.data, id);
+    var node = details.node;
+    var sub = details.path || kindLabel(node.kind);
+    panelHeader(panel, KIND_ICON[node.kind] || "package", node.title || node.id, sub, closePanel, node.group ? "group-" + node.group : "kind-" + node.kind);
+    var tags = html("p", { class: "tags" }, panel);
+    if (node.group) html("span", { class: "tag group-tag group-" + node.group }, tags, groupLabel(node.group) + (node.subgroup ? " · " + node.subgroup : ""));
+    if (details.pkg) html("span", { class: "tag" }, tags, details.pkg.command ? "command" : "library");
+    if (details.pkg && details.pkg.testSupport) html("span", { class: "tag" }, tags, "test support");
+    node.alsoIn.forEach(function (g) {
+      html("span", { class: "tag" }, tags, "also in " + groupLabel(g));
+    });
+    var style = changeStyle(details.change);
+    if (style) {
+      var banner = html("div", { class: "change-banner " + style.className }, panel);
+      html("strong", {}, banner, style.label);
+      var by = details.proposal ? " by “" + details.proposal.title + "”" : "";
+      var what = details.changed.length ? ": " + details.changed.join(", ") : "";
+      html("span", {}, banner, by + what + ".");
+      if (details.change === "changed" && node.was && node.was.summary && node.changed.indexOf("summary") >= 0) {
+        html("p", { class: "was" }, banner, "Was: " + node.was.summary.text);
+      }
+    }
+    var actions = html("div", { class: "actions" }, panel);
+    var here = app.state.view;
+    if (node.kind === "system") {
+      actionButton(actions, "inside", "Open containers", function () { go({ view: "containers", node: id }, { anchor: id }); }, true);
+    } else if (details.contains.length && !(here === "inside" && app.state.of === id)) {
+      actionButton(actions, "inside", "Look inside", function () { go({ view: "inside", of: id }, { anchor: id }); }, true);
+    }
+    if (!(here === "focus" && app.state.of === id)) {
+      actionButton(actions, "focus", "Focus view", function () { go({ view: "focus", of: id, node: id }, { anchor: id }); }, !details.contains.length && node.kind !== "system");
+    }
+    if (node.group && !(here === "group" && app.state.of === node.group)) {
+      actionButton(actions, "group", "Show in " + groupLabel(node.group), function () { go({ view: "group", of: node.group, node: id }); });
+    }
+
+    renderStatement(node.summary, section(panel, "Summary", undefined, "summary"), "lead");
+    if (details.pkg && details.pkg.doc) {
+      html("p", { class: "package-doc" }, section(panel, "Package doc", undefined, "doc"), details.pkg.doc);
+    }
+    renderStatements(panel, "does", "What it does", node.does);
+    renderStatements(panel, "owns", "Data it owns", node.owns);
+    renderStatements(panel, "interfaces", "Interfaces", node.interfaces);
+    if (details.path || details.callers.length || details.dependencies.length) {
+      renderRelations(panel, "Who calls it", details.callers, "Nothing in the module imports it.", "callers");
+      renderRelations(panel, "Depends on", details.dependencies, "It imports no other package of the module.", "dependencies");
+    }
+    if (details.incoming.length) renderRelations(panel, "Reached by", details.incoming, "", "incoming");
+    if (details.outgoing.length) renderRelations(panel, "Reaches", details.outgoing, "", "outgoing");
+    if (details.contains.length) renderRelations(panel, "Contains", details.contains.map(function (c) { return { id: c.id, title: c.title }; }), "", "contains");
+    if (details.containedBy.length) renderRelations(panel, "Part of", details.containedBy.map(function (c) { return { id: c.id, title: c.title }; }), "", "contained-by");
+
+    var termSection = section(panel, "Glossary terms", details.terms.length || undefined, "terms");
+    if (!details.terms.length) {
+      html("p", { class: "empty" }, termSection, "None named yet.");
+    } else {
+      var dl = html("dl", { class: "terms" }, termSection);
+      details.terms.forEach(function (t) {
+        var dt = html("dt", {}, dl);
+        var tb = html("button", { type: "button", class: "linklike term-name" }, dt, t.term);
+        tb.addEventListener("click", function () {
+          select(undefined, { term: t.term });
+        });
+        html("dd", {}, dl, t.definition || "Not in GLOSSARY.md.");
+        if (t.avoid.length) html("dd", { class: "avoid" }, dl, "Avoid: " + t.avoid.join(", "));
+      });
+    }
+    renderStatements(panel, "gotchas", "Gotchas", node.gotchas);
+
+    if (details.facts.length) {
+      details.facts.forEach(function (group) {
+        var fs = section(panel, group.title, group.items.length, "facts-" + group.key);
+        var ul = html("ul", { class: "facts" }, fs);
+        group.items.forEach(function (item) {
+          var hit = app.flash && factMatches(app.flash, group.key, item.title);
+          var li = html("li", { class: hit ? "flash" : null }, ul);
+          html("code", {}, li, item.title);
+          item.detail.forEach(function (line) {
+            html("div", { class: "fact-detail" }, li, line);
+          });
+        });
+      });
+    } else if (details.path) {
+      html("p", { class: "empty" }, section(panel, "Routes, commands, and tables", undefined, "facts"), "None extracted for this package.");
+    }
+
+    var flowSection = section(panel, "Flows it takes part in", details.flows.length || undefined, "flows");
+    if (!details.flows.length) {
+      html("p", { class: "empty" }, flowSection, "None yet.");
+    } else {
+      var fl = html("ul", { class: "flow-list" }, flowSection);
+      details.flows.forEach(function (f) {
+        var li = html("li", {}, fl);
+        var b = html("button", { type: "button", class: "flow-link" }, li);
+        htmlIcon("flow", b);
+        html("span", {}, b, f.title);
+        b.addEventListener("click", function () {
+          go({ view: "flow", of: f.id, step: f.steps[0] || 1 });
+        });
+        var steps = html("span", { class: "step-chips" }, li);
+        f.steps.slice(0, 12).forEach(function (n) {
+          var sb = html("button", { type: "button", class: "step-chip", "aria-label": "Step " + n + " of " + f.title }, steps, String(n));
+          sb.addEventListener("click", function () {
+            go({ view: "flow", of: f.id, step: n });
+          });
+        });
+        if (f.steps.length > 12) html("span", { class: "more" }, steps, "+" + (f.steps.length - 12));
+      });
+    }
+    if (details.diagrams.length) {
+      var ds = section(panel, "Diagrams", details.diagrams.length, "diagrams");
+      var dlist = html("ul", { class: "flow-list" }, ds);
+      details.diagrams.forEach(function (g) {
+        var li = html("li", {}, dlist);
+        var b = html("button", { type: "button", class: "flow-link" }, li);
+        htmlIcon(g.kind === "er" ? "table" : g.kind === "state" ? "state" : g.kind === "sequence" ? "flow" : "diagram", b);
+        html("span", {}, b, g.title);
+        html("span", { class: "diagram-kind" }, li, { graph: "graph", sequence: "sequence", state: "state", er: "tables" }[g.kind] || g.kind);
+        b.addEventListener("click", function () {
+          go({ view: "diagram", of: g.id, node: id });
+        });
+      });
+    }
+    if (node.links.length) {
+      var ls = section(panel, "Links", node.links.length, "links");
+      var ul = html("ul", { class: "sources block" }, ls);
+      node.links.forEach(function (ref) {
+        renderRef(ref, ul, ls);
+      });
+    }
+  }
+
+  function factMatches(flash, key, title) {
+    if (flash.type === "table") return key === "databases" && title === flash.value;
+    if (flash.type === "route") return key === "routes" && (title === flash.value || title.split(" ").pop() === flash.value);
+    if (flash.type === "command") return key === "commands" && title.indexOf(flash.value) === 0;
+    return false;
+  }
+
+  function renderTermPanel(panel, term) {
+    var entry = app.data.termByName[term];
+    panelHeader(panel, "term", term, "Glossary term", function () {
+      select(app.state.node, { term: undefined });
+    });
+    var s = section(panel, "Definition", undefined, "definition");
+    html("p", { class: "definition" }, s, entry ? entry.definition : "");
+    if (entry && list(entry.avoid).length) html("p", { class: "avoid" }, s, "Avoid: " + entry.avoid.join(", "));
+    var a = html("p", { class: "sources" }, s);
+    var link = resolveRef("doc:GLOSSARY.md", app.data);
+    var anchor = html("a", { href: link.href, target: "_blank", rel: "noopener" }, a);
+    htmlIcon("doc", anchor, "ref-icon");
+    html("span", {}, anchor, "GLOSSARY.md");
+    var users = termUsers(app.data, term);
+    renderRelations(panel, "Used by", users.map(function (u) { return { id: u.id, title: u.title }; }), "No node names this term yet.", "users");
+  }
+
+  function renderFlowPanel(panel) {
+    var flow = null;
+    if (app.state.view === "flow") {
+      app.data.flows.forEach(function (f) {
+        if (f.id === app.state.of) flow = f;
+      });
+    } else {
+      var found = findDiagram(app.data, app.state.of);
+      flow = found && found.diagram;
+    }
+    if (!flow) return;
+    var style = changeStyle(flow.change);
+    panelHeader(panel, "flow", flow.title || flow.id, app.state.view === "flow" ? "Flow · " + flow.steps.length + " steps" : "Sequence diagram", function () {
+      go({ view: app.state.view === "flow" ? "flows" : "components" });
+    });
+    if (style) {
+      var banner = html("div", { class: "change-banner " + style.className }, panel);
+      html("strong", {}, banner, style.label);
+      html("span", {}, banner, " by a design proposal.");
+    }
+    var current = app.state.step || 1;
+    var step = app.layout.steps[current - 1];
+    if (step) {
+      var card = html("section", { class: "step-card" }, panel);
+      var head = html("div", { class: "step-card-head" }, card);
+      html("span", { class: "step-badge" }, head, String(step.number));
+      html("span", { class: "step-of" }, head, "Step " + step.number + " of " + app.layout.steps.length);
+      html("span", { class: "tag" }, head, step.kind + (step.via ? " · " + step.via : ""));
+      var route = html("p", { class: "step-route" }, card);
+      var fromB = html("button", { type: "button", class: "linklike" }, route, titleOf(app.data, step.from));
+      fromB.addEventListener("click", function () { jumpToNode(step.from); });
+      html("span", { class: "arrow", "aria-hidden": "true" }, route, step.kind === "note" ? " · " : step.kind === "return" ? " ⇠ " : " → ");
+      if (step.to !== step.from || step.kind === "note") {
+        var toB = html("button", { type: "button", class: "linklike" }, route, titleOf(app.data, step.to));
+        toB.addEventListener("click", function () { jumpToNode(step.to); });
+      } else {
+        html("span", {}, route, "itself");
+      }
+      renderStatement({ text: step.label, refs: step.refs }, card, "lead");
+      var nav = html("div", { class: "step-nav" }, card);
+      var prev = actionButton(nav, "prev", "Previous", function () { setStep(current - 1); });
+      prev.disabled = current <= 1;
+      var next = actionButton(nav, "next", "Next", function () { setStep(current + 1); }, true);
+      next.disabled = current >= app.layout.steps.length;
+    }
+    if (flow.summary) renderStatement(flow.summary, section(panel, "Summary", undefined, "summary"));
+    if (flow.trigger) renderStatement(flow.trigger, section(panel, "Starts when", undefined, "trigger"));
+    renderRelations(panel, "Participants", list(flow.participants).map(function (pid) {
+      return { id: pid, title: titleOf(app.data, pid) };
+    }), "", "participants");
+    var all = section(panel, "Steps", app.layout.steps.length, "steps");
+    var ol = html("ol", { class: "step-list" }, all);
+    app.layout.steps.forEach(function (s) {
+      var li = html("li", { class: s.number === current ? "current" : null }, ol);
+      var b = html("button", { type: "button", "aria-current": s.number === current ? "step" : null }, li);
+      html("span", { class: "n" }, b, String(s.number));
+      html("span", { class: "who" }, b, titleOf(app.data, s.from) + (s.kind === "note" ? " · " : " → ") + titleOf(app.data, s.to));
+      html("span", { class: "what" }, b, s.label);
+      b.addEventListener("click", function () {
+        setStep(s.number);
+      });
+    });
+  }
+
+  function renderProposalPanel(panel) {
+    panelHeader(panel, "diagram", "Design proposals", list(app.state.proposals).length + " on", closePanel);
+    list(app.state.proposals).forEach(function (pid) {
+      var p = proposalDetails(app.data, pid);
+      if (!p) return;
+      var box = html("section", { class: "proposal-card" }, panel);
+      var head = html("div", { class: "proposal-head" }, box);
+      html("h3", {}, head, p.title);
+      html("span", { class: "status status-" + p.status }, head, p.status);
+      if (p.spec) {
+        var specList = html("ul", { class: "sources" }, box);
+        renderRef(p.spec, specList, box);
+      }
+      renderStatement(p.summary, box, "lead");
+      var counts = { add: 0, change: 0, remove: 0 };
+      p.operations.forEach(function (o) {
+        counts[o.op] = (counts[o.op] || 0) + 1;
+      });
+      var summary = html("p", { class: "op-counts" }, box);
+      [["add", "added"], ["change", "changed"], ["remove", "removed"]].forEach(function (pair) {
+        html("span", { class: "change-pill change-" + pair[1] }, summary, counts[pair[0]] + " " + pair[1]);
+      });
+      renderStatements(box, "requirements-" + pid, "Requirements", p.requirements);
+      renderStatements(box, "decisions-" + pid, "Decisions", p.decisions);
+      var ops = section(box, "What it changes", p.operations.length, "operations");
+      var ul = html("ul", { class: "op-list" }, ops);
+      p.operations.forEach(function (o) {
+        var change = o.op === "add" ? "added" : o.op === "change" ? "changed" : "removed";
+        var li = html("li", { class: "change-" + change }, ul);
+        var b = html("button", { type: "button", class: "op" }, li);
+        html("span", { class: "change-pill change-" + change }, b, o.op);
+        html("span", { class: "op-what" }, b, o.what);
+        html("span", { class: "op-label" }, b, o.label);
+        b.addEventListener("click", function () {
+          if (o.target.indexOf("flow:") === 0) go({ view: "flow", of: o.target.slice(5), step: 1 });
+          else jumpToNode(o.target);
+        });
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------ boot
+
+  function wireChrome() {
+    var zin = byId("zoom-in");
+    var zout = byId("zoom-out");
+    var zfit = byId("zoom-fit");
+    htmlIcon("zoom-in", zin);
+    htmlIcon("zoom-out", zout);
+    htmlIcon("fit", zfit);
+    zin.addEventListener("click", function () {
+      zoomBy(1.3);
+    });
+    zout.addEventListener("click", function () {
+      zoomBy(1 / 1.3);
+    });
+    zfit.addEventListener("click", fit);
+    wireSearch();
     document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape" && app.state.node) select("");
+      var typing = event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName);
+      if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === "/") {
+        event.preventDefault();
+        byId("search-input").focus();
+      } else if (event.key === "Escape") {
+        if (app.state.node || app.state.term || app.state.panel) closePanel();
+      } else if ((event.key === "ArrowRight" || event.key === "ArrowDown") && stepCount()) {
+        event.preventDefault();
+        setStep((app.state.step || 1) + 1);
+      } else if ((event.key === "ArrowLeft" || event.key === "ArrowUp") && stepCount()) {
+        event.preventDefault();
+        setStep((app.state.step || 1) - 1);
+      } else if (event.key === "+" || event.key === "=") {
+        zoomBy(1.3);
+      } else if (event.key === "-" || event.key === "_") {
+        zoomBy(1 / 1.3);
+      } else if (event.key === "0") {
+        fit();
+      }
     });
+    window.addEventListener("popstate", function () {
+      apply(parseHash(location.hash), {});
+    });
+    window.addEventListener("hashchange", function () {
+      var raw = parseHash(location.hash);
+      if (formatHash(raw) !== formatHash(app.raw)) apply(raw, {});
+    });
+    // When the canvas changes size (the window, or the panel opening or
+    // closing), keep the drawing's scale and its top-left corner.
+    function keepScale() {
+      if (!app.box || !app.svg || !app.size) return;
+      var size = canvasSize();
+      if (size.w === app.size.w && size.h === app.size.h) return;
+      var scale = app.size.w / app.box.width;
+      setBox({ x: app.box.x, y: app.box.y, width: size.w / scale, height: size.h / scale });
+    }
+    if (typeof ResizeObserver === "function") new ResizeObserver(keepScale).observe(byId("canvas"));
+    else window.addEventListener("resize", keepScale);
+  }
+
+  function boot(objects) {
+    app.base = mergeData(objects);
+    app.overlays = {};
+    renderProblems();
+    wireChrome();
+    var canvas = byId("canvas");
+    Array.prototype.slice.call(canvas.querySelectorAll(".loading")).forEach(function (el) {
+      el.parentNode.removeChild(el);
+    });
+    apply(parseHash(location.hash), { instant: true });
   }
 
   // The loader. The manifest lists data files relative to data/; each is
-  // loaded in order as a classic script, which registers one object.
+  // loaded in order as a classic script, which registers one object. Then
+  // the proposal query parameter may name one more script inside the
+  // explorer directory, which may register design proposals only.
   var registered = [];
+  var booted = false;
   global.evieExplorer = {
     register: function (object) {
       registered.push(object);
     },
     manifest: function (files) {
-      var missing = [];
+      if (booted) return;
+      booted = true;
       var i = 0;
+      function load(src, done) {
+        var script = document.createElement("script");
+        script.src = src;
+        script.onload = function () {
+          done(true);
+        };
+        script.onerror = function () {
+          done(false);
+        };
+        document.head.appendChild(script);
+      }
       function next() {
         if (i >= files.length) {
-          boot(registered, missing);
+          extra();
           return;
         }
         var file = files[i++];
-        var script = document.createElement("script");
-        script.src = "data/" + file;
-        script.onload = next;
-        script.onerror = function () {
-          missing.push(file);
+        load("data/" + file, function (ok) {
+          if (!ok) app.problems.push("This data file did not load: data/" + file + ".");
           next();
-        };
-        document.head.appendChild(script);
+        });
+      }
+      function extra() {
+        var wanted = proposalPath(location.search);
+        if (!wanted) {
+          boot(registered);
+          return;
+        }
+        if (wanted.error) {
+          app.problems.push(wanted.error);
+          boot(registered);
+          return;
+        }
+        var before = registered.length;
+        load(wanted.path, function (ok) {
+          var added = registered.splice(before);
+          if (!ok) app.problems.push("The proposal file " + wanted.path + " did not load.");
+          var known = {};
+          registered.forEach(function (o) {
+            if (o && o.kind === "proposal") known[o.id] = true;
+          });
+          added.forEach(function (o) {
+            if (!o || o.kind !== "proposal") {
+              app.problems.push(wanted.path + " registered something other than a design proposal; it was ignored.");
+            } else if (known[o.id]) {
+              app.problems.push("The proposal " + o.id + " in " + wanted.path + " is already loaded; the copy was ignored.");
+            } else {
+              known[o.id] = true;
+              registered.push(o);
+            }
+          });
+          boot(registered);
+        });
       }
       next();
     },

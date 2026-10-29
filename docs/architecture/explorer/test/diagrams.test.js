@@ -146,3 +146,21 @@ test("findDiagram finds a diagram and the node that carries it", () => {
   assert.equal(found.diagram.title, "Job lifecycle");
   assert.equal(model.findDiagram(data(), "nope"), null);
 });
+
+test("transition labels never cover one another", () => {
+  const { labelBoxes } = require("./geometry.js");
+  const objects = require("./fixture.js").fixtureObjects();
+  const delta = objects[2].nodes.find((n) => n.id === "pkg:internal/delta");
+  const states = delta.diagrams.find((g) => g.id === "delta-states");
+  // Four transitions leave "running" for nearby states, all labelled.
+  states.states.push({ id: "paused", label: "Paused", refs: ["code:internal/delta"] }, { id: "lost", label: "Lost", refs: ["code:internal/delta"] });
+  states.transitions.push(
+    { from: "running", to: "paused", label: "pause requested by the owner", refs: ["code:internal/delta"] },
+    { from: "running", to: "lost", label: "heartbeat expired", refs: ["code:internal/delta"] },
+    { from: "paused", to: "running", label: "resume", refs: ["code:internal/delta"] }
+  );
+  const d = model.mergeData(objects);
+  const layout = model.layoutDiagram(d, model.findDiagram(d, "delta-states").diagram);
+  assert.ok(labelBoxes(layout).length >= 7);
+  assertNoOverlap(labelBoxes(layout), "transition labels");
+});

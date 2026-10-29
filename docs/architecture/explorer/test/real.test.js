@@ -58,3 +58,15 @@ test("every real flow draws as a sequence diagram with every step", () => {
     assertNoOverlap(layout.participants, flow.id);
   }
 });
+
+test("edge labels never cover one another in any real view", () => {
+  const { labelBoxes } = require("./geometry.js");
+  const data = model.mergeData(loadRealData());
+  const layouts = [model.layoutContext(data), model.layoutContainers(data)];
+  for (const g of model.GROUPS) layouts.push(model.layoutGroup(data, g.id));
+  for (const node of data.nodes) {
+    layouts.push(model.layoutFocus(data, node.id));
+    for (const diagram of node.diagrams) layouts.push(model.layoutDiagram(data, diagram));
+  }
+  for (const layout of layouts) assertNoOverlap(labelBoxes(layout), `${layout.kind} ${layout.title || ""} labels`);
+});

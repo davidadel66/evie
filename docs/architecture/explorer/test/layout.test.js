@@ -32,7 +32,7 @@ function nodeAt(layout, id) {
   return node;
 }
 
-test("context: the owner, the system, and outside systems sit in role columns, connected side to side", () => {
+test("context: people sit above the system and outside systems in columns beside it", () => {
   const layout = model.layoutContext(data());
 
   assert.equal(layout.kind, "context");
@@ -40,15 +40,51 @@ test("context: the owner, the system, and outside systems sit in role columns, c
   assertNoOverlap(layout.nodes, "context");
   assertWithinLayout(layout);
   assertEdgesOnNodes(layout);
+  assertEdgesAvoidNodes(layout);
   assert.equal(layout.edges.length, 3);
-  const owner = center(nodeAt(layout, "person:owner"));
-  const main = center(nodeAt(layout, "system:main"));
-  assert.ok(owner.x < main.x, "people sit left of the system");
+  const owner = nodeAt(layout, "person:owner");
+  const main = nodeAt(layout, "system:main");
+  assert.ok(owner.y + owner.height < main.y, "people sit above the system");
   for (const id of ["external:api", "external:bank"]) {
-    assert.ok(center(nodeAt(layout, id)).x > main.x, `${id} sits right of the system`);
+    const n = nodeAt(layout, id);
+    assert.ok(n.x + n.width < main.x || n.x > main.x + main.width, `${id} sits beside the system`);
   }
-  assert.equal(nodeAt(layout, "person:owner").ref, "person:owner", "a drawn node names the explorer node it stands for");
+  assert.equal(owner.ref, "person:owner", "a drawn node names the explorer node it stands for");
   assert.equal(layout.empty, null);
+});
+
+test("context: outside systems split by how the system reaches them, and parallel edges keep their labels apart", () => {
+  const objects = fixtureObjects();
+  const system = objects[1];
+  system.nodes.push(
+    { id: "external:shell", level: "context", kind: "external-system", title: "Shell", summary: { text: "s", refs: ["code:x"] } },
+    { id: "external:timer", level: "context", kind: "external-system", title: "Timer", summary: { text: "t", refs: ["code:x"] } }
+  );
+  system.edges.push(
+    { from: "system:main", to: "external:shell", label: "runs commands in a terminal on the owner's machine", via: "process", refs: ["code:x"] },
+    { from: "system:main", to: "external:timer", label: "installs jobs", via: "process", refs: ["code:x"] },
+    { from: "external:timer", to: "system:main", label: "starts the job runner", via: "process", refs: ["code:x"] },
+    { from: "person:owner", to: "system:main", label: "runs commands", via: "process", refs: ["code:x"] }
+  );
+  const layout = model.layoutContext(data(objects));
+  const main = nodeAt(layout, "system:main");
+  const side = (id) => (nodeAt(layout, id).x > main.x ? "right" : "left");
+  assert.equal(side("external:api"), side("external:bank"), "services reached over the network share a side");
+  assert.equal(side("external:shell"), side("external:timer"), "local programs share a side");
+  assert.notEqual(side("external:api"), side("external:shell"));
+  assertNoOverlap(layout.nodes, "context");
+  assertEdgesOnNodes(layout);
+  for (const e of layout.edges) {
+    for (const line of e.labelLines) assert.ok(model.textWidth(line, 11) <= 200, `"${line}" wraps`);
+  }
+  const boxes = layout.edges.map((e) => ({
+    id: e.from + ">" + e.to + ":" + e.label,
+    x: e.labelX - e.labelWidth / 2,
+    y: e.labelY - (e.labelLines.length * 13) / 2,
+    width: e.labelWidth,
+    height: e.labelLines.length * 13,
+  }));
+  assertNoOverlap(boxes, "edge labels");
 });
 
 test("context: the layout is deterministic and independent of input order", () => {
