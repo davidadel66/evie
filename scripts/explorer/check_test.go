@@ -302,9 +302,12 @@ func TestCheckReportsDeadReferences(t *testing.T) {
 		{"doc that is a directory", "doc:docs", "not a file"},
 		{"ADR", "adr:0099", "no ADR 0099"},
 		{"glossary term", "term:Gadget", "no glossary term"},
-		{"table", "table:fixture.widgets", "no table"},
-		{"route", "route:GET /widgets", "no route"},
-		{"command", "command:tool run", "no command"},
+		{"table", "table:fixture.gadgets", "no table"},
+		{"table in another database", "table:ghost.widgets", "no table"},
+		{"route", "route:GET /gadgets", "no route"},
+		{"route with the wrong method", "route:POST /widgets", "no route"},
+		{"command", "command:tool fly", "no command"},
+		{"command with an extra word", "command:tool run fast", "no command"},
 		{"command without a binary", "command: ", "names no binary"},
 		{"package", "pkg:internal/ghost", "no package"},
 		{"node", "node:missing-node", "no node"},
@@ -545,15 +548,26 @@ func TestCheckReportsDiagramProblems(t *testing.T) {
 			want: []string{at + "alpha-states transition 1", "no state gone"},
 		},
 		{
-			name: "er diagram over a database and table the facts lack",
+			name: "er diagram over a database the facts lack",
 			break_: editCore(func(core map[string]any) {
 				appendTo(node(t, core, "pkg:internal/alpha"), "diagrams", map[string]any{
 					"id": "alpha-er", "title": "Tables", "kind": "er",
 					"summary":  statement("Alpha's tables.", "code:internal/alpha"),
-					"database": "fixture", "tables": []any{"widgets"},
+					"database": "ghost", "tables": []any{"widgets"},
 				})
 			}),
-			want: []string{at + "alpha-er", "no database fixture", "table:fixture.widgets"},
+			want: []string{at + "alpha-er", "no database ghost", "table:ghost.widgets"},
+		},
+		{
+			name: "er diagram over a table the facts lack",
+			break_: editCore(func(core map[string]any) {
+				appendTo(node(t, core, "pkg:internal/alpha"), "diagrams", map[string]any{
+					"id": "alpha-er", "title": "Tables", "kind": "er",
+					"summary":  statement("Alpha's tables.", "code:internal/alpha"),
+					"database": "fixture", "tables": []any{"widgets", "gadgets"},
+				})
+			}),
+			want: []string{at + "alpha-er", "table:fixture.gadgets"},
 		},
 		{
 			name: "diagram kind outside its enumeration",
