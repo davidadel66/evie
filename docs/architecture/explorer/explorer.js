@@ -348,7 +348,7 @@
         sub = { label: node.subgroup, nodes: [] };
         subgroups.push(sub);
       }
-      sub.nodes.push({ id: node.id, title: node.title || node.id, path: path });
+      sub.nodes.push({ id: node.id, title: node.title || node.id, path: path, change: node.change || "" });
     });
     groups.forEach(function (g) {
       g.subgroups.sort(function (a, b) {
@@ -359,9 +359,10 @@
       });
     });
     var counts = {};
-    data.facts.imports.forEach(function (imp) {
-      var from = groupOf[imp.from];
-      var to = groupOf[imp.to];
+    data.links.forEach(function (link) {
+      if (link.via !== "import" || link.change === "removed") return;
+      var from = groupOf[packagePath(link.from)];
+      var to = groupOf[packagePath(link.to)];
       if (!from || !to || from === to) return;
       var key = from + ">" + to;
       counts[key] = (counts[key] || 0) + 1;
@@ -449,9 +450,11 @@
           var row = Math.floor(k / o.columns);
           nodes.push({
             id: n.id,
+            ref: n.id,
             title: n.title,
             group: g.id,
             subgroup: sub.label,
+            change: n.change || "",
             x: panel.x + o.pad + col * (o.chipWidth + o.chipGap),
             y: cursor + row * (o.chipHeight + o.chipGap),
             width: o.chipWidth,
@@ -473,11 +476,14 @@
       return groupArrow(link, panelById[link.from], panelById[link.to]);
     });
     return {
+      kind: "overview",
       width: 2 * o.margin + 2 * panelWidth + o.panelGap,
       height: 2 * o.margin + rowHeights[0] + o.panelGap + rowHeights[1],
       panels: panels,
       nodes: nodes,
       edges: edges,
+      lanes: [],
+      empty: nodes.length ? null : { title: "No packages yet", text: "Packages appear once content files give their nodes a group." },
     };
   }
 
@@ -2455,44 +2461,511 @@
     return emptyLayout("diagram", "Cannot draw this diagram", "Its kind is not one the explorer knows.");
   }
 
-  function describePackage(data, path) {
-    var id = "pkg:" + path;
+  function titleOf(data, id) {
     var node = data.nodeById[id];
-    return { id: id, path: path, title: node && node.title ? node.title : path };
+    return node && node.title ? node.title : packagePath(id) || id;
   }
 
-  function sortedPaths(paths) {
-    return paths.slice().sort(byString);
+  function relation(data, id, link) {
+    return {
+      id: id,
+      path: packagePath(id),
+      title: titleOf(data, id),
+      label: link.label || "",
+      via: link.via || "",
+      refs: list(link.refs),
+      change: link.change || "",
+    };
   }
 
-  // packageDetails gathers what the panel shows for one node: its package
-  // facts, callers and dependencies from the import graph, glossary terms
-  // with definitions, and every extracted fact that names its package.
-  function packageDetails(data, id) {
+  function byRelation(a, b) {
+    return byString(a.id, b.id) || byString(a.via, b.via);
+  }
+
+  // involvedFlows lists the flows a node takes part in, with the numbers of
+  // the steps it sends or receives.
+  function involvedFlows(data, id) {
+    return data.flows
+      .filter(function (f) {
+        return list(f.participants).indexOf(id) >= 0;
+      })
+      .map(function (f) {
+        var steps = [];
+        list(f.steps).forEach(function (s, i) {
+          if (s.from === id || s.to === id) steps.push(i + 1);
+        });
+        return { id: f.id, title: f.title || f.id, steps: steps, change: f.change || "" };
+      })
+      .sort(byTitleThenId);
+  }
+
+  function proposalById(data, id) {
+    for (var i = 0; i < data.proposals.length; i++) {
+      if (data.proposals[i].id === id) return data.proposals[i];
+    }
+    return null;
+  }
+
+  // nodeDetails gathers what the panel shows for one node: its package
+  // facts, callers and dependencies from the import graph, its other
+  // connections, glossary terms with definitions, the flows it takes part
+  // in, its diagrams, what it contains and what contains it, every extracted
+  // fact that names its package, and what an active proposal changes.
+  function nodeDetails(data, id) {
     var node = data.nodeById[id] || null;
     var path = packagePath(id);
     var callers = [];
     var dependencies = [];
-    if (path) {
-      data.facts.imports.forEach(function (imp) {
-        if (imp.to === path) callers.push(imp.from);
-        if (imp.from === path) dependencies.push(imp.to);
-      });
-    }
+    var incoming = [];
+    var outgoing = [];
+    data.links.forEach(function (l) {
+      if (l.from === l.to) return;
+      var imports = l.via === "import";
+      if (l.to === id) (imports ? callers : incoming).push(relation(data, l.from, l));
+      if (l.from === id) (imports ? dependencies : outgoing).push(relation(data, l.to, l));
+    });
+    [callers, dependencies, incoming, outgoing].forEach(function (rs) {
+      rs.sort(byRelation);
+    });
+    var proposal = node && node.proposal ? proposalById(data, node.proposal) : null;
     return {
       node: node,
       path: path,
       pkg: path ? data.packageByPath[path] || null : null,
-      callers: sortedPaths(callers).map(function (p) {
-        return describePackage(data, p);
-      }),
-      dependencies: sortedPaths(dependencies).map(function (p) {
-        return describePackage(data, p);
-      }),
+      callers: callers,
+      dependencies: dependencies,
+      incoming: incoming,
+      outgoing: outgoing,
       terms: node ? nodeTerms(data, node) : [],
       facts: path ? factsForPackage(data.facts, path) : [],
+      flows: involvedFlows(data, id),
+      diagrams: node
+        ? node.diagrams.map(function (g) {
+            return { id: g.id, title: g.title || g.id, kind: g.kind, summary: g.summary || null };
+          })
+        : [],
+      contains: node
+        ? node.contains
+            .filter(function (c) {
+              return !!data.nodeById[c];
+            })
+            .map(function (c) {
+              return { id: c, title: titleOf(data, c) };
+            })
+        : [],
+      containedBy: data.nodes
+        .filter(function (n) {
+          return n.contains.indexOf(id) >= 0;
+        })
+        .map(function (n) {
+          return { id: n.id, title: n.title || n.id };
+        }),
+      change: node ? node.change || "" : "",
+      changed: node ? list(node.changed) : [],
+      proposal: proposal ? { id: proposal.id, title: proposal.title || proposal.id } : null,
     };
   }
+
+  // proposalDetails gathers what the panel shows for a design proposal: its
+  // statements and one line per operation, each with the node or flow to
+  // jump to.
+  function proposalDetails(data, id) {
+    var p = proposalById(data, id);
+    if (!p) return null;
+    var titles = {};
+    Object.keys(data.nodeById).forEach(function (k) {
+      titles[k] = titleOf(data, k);
+    });
+    list(p.nodes).forEach(function (op) {
+      if (op.op === "add" && op.id) titles[op.id] = op.title || op.id;
+    });
+    var flowTitles = {};
+    data.flows.forEach(function (f) {
+      flowTitles[f.id] = f.title || f.id;
+    });
+    var operations = [];
+    list(p.nodes).forEach(function (op) {
+      operations.push({ what: "node", op: op.op, label: titles[op.id] || op.id, target: op.id });
+    });
+    list(p.edges).forEach(function (op) {
+      operations.push({
+        what: "edge",
+        op: op.op,
+        label: (titles[op.from] || op.from) + " → " + (titles[op.to] || op.to),
+        via: op.via || "",
+        target: op.from,
+      });
+    });
+    list(p.flows).forEach(function (op) {
+      var label = op.op === "add" ? op.title || op.id : flowTitles[op.id] || op.id;
+      operations.push({ what: "flow", op: op.op, label: label, target: "flow:" + op.id });
+    });
+    return {
+      id: p.id,
+      title: p.title || p.id,
+      feature: p.feature || "",
+      status: p.status || "",
+      spec: p.spec || "",
+      summary: p.summary || null,
+      requirements: list(p.requirements),
+      decisions: list(p.decisions),
+      operations: operations,
+    };
+  }
+
+  // nodeHome is where a node is drawn: a component in its focus view, a
+  // context or container node in its level's view.
+  function nodeHome(node) {
+    if (node.level === "context") return { view: "context", node: node.id };
+    if (node.level === "container") return { view: "containers", node: node.id };
+    return { view: "focus", of: node.id, node: node.id };
+  }
+
+  function matchScore(text, q) {
+    var s = String(text || "").toLowerCase();
+    if (!s) return 0;
+    if (s === q) return 100;
+    if (s.indexOf(q) === 0) return 80;
+    var at = s.indexOf(q);
+    if (at < 0) return 0;
+    return /[\s\/._:-]/.test(s.charAt(at - 1)) ? 60 : 40;
+  }
+
+  var SEARCH_ORDER = { node: 0, term: 1, flow: 2, diagram: 3 };
+
+  // search finds nodes by title or package path, glossary terms by term or
+  // avoided synonym, flows, and diagrams by title; best matches first, each
+  // with the address state that shows it.
+  function search(data, query, limit) {
+    var q = String(query || "").trim().toLowerCase();
+    if (!q) return [];
+    var results = [];
+    function add(score, result) {
+      if (score > 0) {
+        result.score = score;
+        results.push(result);
+      }
+    }
+    data.nodes.forEach(function (node) {
+      var path = packagePath(node.id);
+      var score = Math.max(matchScore(node.title, q), 0.9 * matchScore(path || node.id, q), 0.9 * matchScore(node.id, q));
+      add(score, { type: "node", id: node.id, label: node.title || node.id, detail: path || kindLabel(node.kind), state: nodeHome(node), change: node.change || "" });
+    });
+    data.facts.glossary.forEach(function (t) {
+      var avoid = list(t.avoid);
+      var bySynonym = 0;
+      avoid.forEach(function (a) {
+        bySynonym = Math.max(bySynonym, 0.6 * matchScore(a, q));
+      });
+      var direct = 0.95 * matchScore(t.term, q);
+      var label = direct >= bySynonym || !avoid.length ? t.term : t.term + " (not " + avoid.join(", ") + ")";
+      add(Math.max(direct, bySynonym), { type: "term", id: t.term, label: label, detail: t.definition || "", state: { term: t.term } });
+    });
+    data.flows.forEach(function (f) {
+      add(0.9 * matchScore(f.title || f.id, q), { type: "flow", id: f.id, label: f.title || f.id, detail: "Flow", state: { view: "flow", of: f.id }, change: f.change || "" });
+    });
+    data.nodes.forEach(function (node) {
+      node.diagrams.forEach(function (g) {
+        add(0.85 * matchScore(g.title || g.id, q), {
+          type: "diagram",
+          id: g.id,
+          label: g.title || g.id,
+          detail: (node.title || node.id) + " diagram",
+          state: { view: "diagram", of: g.id, node: node.id },
+        });
+      });
+    });
+    results.sort(function (a, b) {
+      return b.score - a.score || SEARCH_ORDER[a.type] - SEARCH_ORDER[b.type] || byString(a.label.toLowerCase(), b.label.toLowerCase()) || byString(a.id, b.id);
+    });
+    return results.slice(0, limit || 12).map(function (r) {
+      delete r.score;
+      return r;
+    });
+  }
+
+  // ------------------------------------------------------------ navigation
+
+  var LEVELS = [
+    { id: "context", label: "Context" },
+    { id: "containers", label: "Containers" },
+    { id: "components", label: "Components" },
+    { id: "flows", label: "Flows" },
+  ];
+
+  var VIEW_LEVEL = {
+    context: "context",
+    containers: "containers",
+    inside: "containers",
+    components: "components",
+    group: "components",
+    focus: "components",
+    flows: "flows",
+    flow: "flows",
+    diagram: "components",
+  };
+
+  function levelOf(view) {
+    return VIEW_LEVEL[view] || "context";
+  }
+
+  function flowById(data, id) {
+    for (var i = 0; i < data.flows.length; i++) {
+      if (data.flows[i].id === id) return data.flows[i];
+    }
+    return null;
+  }
+
+  function clampStep(step, steps) {
+    var n = list(steps).length;
+    if (!n) return undefined;
+    return Math.min(Math.max(step || 1, 1), n);
+  }
+
+  // resolveState turns an address into a state the data can show: a view
+  // whose subject exists, a selection that exists, a step inside its flow,
+  // and only known proposals. Anything that cannot be shown falls back to
+  // the view above it with a notice saying why.
+  function resolveState(data, raw) {
+    raw = raw || {};
+    var state = {};
+    var notice = "";
+    var of = raw.of;
+    switch (raw.view) {
+      case undefined:
+      case "":
+      case "context":
+      case "containers":
+      case "components":
+      case "flows":
+        state.view = raw.view || "context";
+        break;
+      case "group":
+        if (groupIndex(of) >= 0) {
+          state.view = "group";
+          state.of = of;
+        } else {
+          state.view = "components";
+          notice = "There is no component group called " + of + ".";
+        }
+        break;
+      case "focus":
+        if (data.nodeById[of]) {
+          state.view = "focus";
+          state.of = of;
+        } else {
+          state.view = "components";
+          notice = "There is no node " + of + " in the data.";
+        }
+        break;
+      case "inside":
+        if (data.nodeById[of] && data.nodeById[of].contains.length) {
+          state.view = "inside";
+          state.of = of;
+        } else {
+          state.view = "containers";
+          notice = data.nodeById[of] ? data.nodeById[of].title + " does not list what it contains yet." : "There is no container " + of + " in the data.";
+        }
+        break;
+      case "flow":
+        var flow = flowById(data, of);
+        if (flow) {
+          state.view = "flow";
+          state.of = of;
+          state.step = clampStep(raw.step, flow.steps);
+        } else {
+          state.view = "flows";
+          notice = "There is no flow " + of + " in the data.";
+        }
+        break;
+      case "diagram":
+        var found = findDiagram(data, of);
+        if (found) {
+          state.view = "diagram";
+          state.of = of;
+          if (found.diagram.kind === "sequence") state.step = clampStep(raw.step, found.diagram.steps);
+        } else {
+          state.view = "components";
+          notice = "There is no diagram " + of + " in the data.";
+        }
+        break;
+      default:
+        state.view = "context";
+        notice = "The explorer has no view called " + raw.view + ".";
+    }
+    if (state.step === undefined) delete state.step;
+    if (raw.node && data.nodeById[raw.node]) state.node = raw.node;
+    if (raw.term && data.termByName[raw.term]) state.term = raw.term;
+    state.proposals = list(raw.proposals).filter(function (id) {
+      return !!proposalById(data, id);
+    });
+    if (raw.panel === "proposals" && state.proposals.length) state.panel = "proposals";
+    if (notice) state.notice = notice;
+    return state;
+  }
+
+  function homeCrumbs(data, node) {
+    if (node.level === "context") return [{ label: "Context", state: { view: "context" } }];
+    if (node.level === "container") {
+      return [
+        { label: "Context", state: { view: "context" } },
+        { label: "Containers", state: { view: "containers" } },
+      ];
+    }
+    var crumbs = [{ label: "Components", state: { view: "components" } }];
+    if (groupIndex(node.group) >= 0) crumbs.push({ label: groupLabel(node.group), state: { view: "group", of: node.group } });
+    return crumbs;
+  }
+
+  // breadcrumb lists the way back up from a state, each step with the state
+  // it leads to; the last crumb is where the page is.
+  function breadcrumb(data, state) {
+    var crumbs;
+    var node;
+    switch (state.view) {
+      case "containers":
+        crumbs = [{ label: "Context", state: { view: "context" } }, { label: "Containers" }];
+        break;
+      case "inside":
+        crumbs = [
+          { label: "Context", state: { view: "context" } },
+          { label: "Containers", state: { view: "containers" } },
+          { label: titleOf(data, state.of) },
+        ];
+        break;
+      case "components":
+        crumbs = [{ label: "Components" }];
+        break;
+      case "group":
+        crumbs = [{ label: "Components", state: { view: "components" } }, { label: groupLabel(state.of) }];
+        break;
+      case "focus":
+        node = data.nodeById[state.of];
+        crumbs = homeCrumbs(data, node).concat([{ label: node.title || node.id }]);
+        break;
+      case "flows":
+        crumbs = [{ label: "Flows" }];
+        break;
+      case "flow":
+        crumbs = [{ label: "Flows", state: { view: "flows" } }, { label: flowById(data, state.of).title || state.of }];
+        break;
+      case "diagram":
+        var found = findDiagram(data, state.of);
+        node = found.node;
+        crumbs = homeCrumbs(data, node).concat([
+          { label: node.title || node.id, state: { view: "focus", of: node.id } },
+          { label: found.diagram.title || found.diagram.id },
+        ]);
+        break;
+      default:
+        crumbs = [{ label: "Context" }];
+    }
+    return crumbs;
+  }
+
+  // layoutView draws whatever view a resolved state names.
+  function layoutView(data, state) {
+    switch (state.view) {
+      case "containers":
+        return layoutContainers(data);
+      case "inside":
+        return layoutInside(data, state.of);
+      case "components":
+        return layoutGroupOverview(groupOverview(data));
+      case "group":
+        return layoutGroup(data, state.of);
+      case "focus":
+        return layoutFocus(data, state.of);
+      case "flows":
+        var items = flowIndex(data);
+        return {
+          kind: "flows",
+          items: items,
+          width: 0,
+          height: 0,
+          nodes: [],
+          edges: [],
+          lanes: [],
+          empty: items.length ? null : { title: "No flows yet", text: "Key runtime flows appear here as content files describe them, each as a sequence diagram you can step through." },
+        };
+      case "flow":
+        return layoutSequence(data, flowById(data, state.of));
+      case "diagram":
+        return layoutDiagram(data, findDiagram(data, state.of).diagram);
+    }
+    return layoutContext(data);
+  }
+
+  // -------------------------------------------------------------- viewport
+  //
+  // The canvas shows a box of the drawing (an SVG viewBox) with the
+  // canvas's own aspect, so zooming and panning are box arithmetic.
+
+  // fitBox returns the view that shows rect whole, centred, with padding,
+  // no larger than maxScale.
+  function fitBox(rect, vw, vh, opts) {
+    opts = opts || {};
+    var pad = opts.pad || 0;
+    var maxScale = opts.maxScale || 1.5;
+    var w = Math.max(rect.width, 1) + 2 * pad;
+    var h = Math.max(rect.height, 1) + 2 * pad;
+    var scale = Math.min(vw / w, vh / h, maxScale);
+    if (!(scale > 0)) scale = 1;
+    var bw = vw / scale;
+    var bh = vh / scale;
+    return { x: rect.x + rect.width / 2 - bw / 2, y: rect.y + rect.height / 2 - bh / 2, width: bw, height: bh };
+  }
+
+  // zoomBox zooms the view by factor about the drawing point (fx, fy), so
+  // that point stays where it is on the canvas; the scale (canvas width over
+  // view width) stays within the limits.
+  function zoomBox(box, factor, fx, fy, vw, limits) {
+    limits = limits || {};
+    var scale = vw / box.width;
+    var next = Math.min(Math.max(scale * factor, limits.minScale || 0.05), limits.maxScale || 8);
+    var k = scale / next;
+    return {
+      x: fx - (fx - box.x) * k,
+      y: fy - (fy - box.y) * k,
+      width: box.width * k,
+      height: box.height * k,
+    };
+  }
+
+  function lerpBox(a, b, t) {
+    return {
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+      width: a.width + (b.width - a.width) * t,
+      height: a.height + (b.height - a.height) * t,
+    };
+  }
+
+  // ease is a smooth start and finish for view transitions.
+  function ease(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  // neighbours lists what hovering a drawn node lights: the node, the nodes
+  // it shares an edge with, and those edges (by index).
+  function neighbours(layout, id) {
+    var nodes = {};
+    var edges = [];
+    list(layout.edges).forEach(function (e, i) {
+      if (e.from !== id && e.to !== id) return;
+      nodes[e.from] = true;
+      nodes[e.to] = true;
+      edges.push(i);
+    });
+    var known = list(layout.nodes).some(function (n) {
+      return n.id === id;
+    });
+    if (known) nodes[id] = true;
+    return { nodes: Object.keys(nodes).sort(byString), edges: edges };
+  }
+
+  // packageDetails is the name the panel first used for nodeDetails.
+  var packageDetails = nodeDetails;
 
   function nodeStatements(node) {
     var statements = node.summary ? [node.summary] : [];
@@ -2608,6 +3081,42 @@
     return i < 0 ? { path: target, anchor: "" } : { path: target.slice(0, i), anchor: target.slice(i + 1) };
   }
 
+  // factOwner finds the node of the package that defines a table, route, or
+  // command named by a reference.
+  function factOwner(data, kind, target) {
+    var pkg = null;
+    if (kind === "table") {
+      var dot = target.indexOf(".");
+      var dbId = dot < 0 ? target : target.slice(0, dot);
+      var table = dot < 0 ? "" : target.slice(dot + 1);
+      data.facts.databases.forEach(function (db) {
+        if (db.id !== dbId) return;
+        list(db.tables).forEach(function (t) {
+          if (t.name === table) pkg = db.package;
+        });
+      });
+    } else if (kind === "route") {
+      var space = target.indexOf(" ");
+      var method = space > 0 && /^[A-Z]+$/.test(target.slice(0, space)) ? target.slice(0, space) : "";
+      var pattern = method ? target.slice(space + 1) : target;
+      data.facts.routes.forEach(function (r) {
+        if (!pkg && r.pattern === pattern && (!method || r.method === method)) pkg = r.package;
+      });
+    } else if (kind === "command") {
+      var words = target.split(" ").filter(Boolean);
+      data.facts.commands.forEach(function (c) {
+        if (pkg || c.binary !== words[0]) return;
+        var have = list(c.words);
+        var match = words.slice(1).every(function (w, i) {
+          return have[i] === w;
+        });
+        if (match && (words.length === 1 || have.length === words.length - 1)) pkg = c.package;
+      });
+    }
+    var id = pkg ? "pkg:" + pkg : null;
+    return id && data.nodeById[id] ? id : null;
+  }
+
   // resolveRef turns a typed reference into what the page shows: text, a
   // relative link into the checkout for code and doc references, a title
   // for ADRs and glossary terms, or an in-page target.
@@ -2639,7 +3148,10 @@
         return out;
       case "term":
         var entry = data.termByName[target];
-        if (entry) out.title = entry.definition;
+        if (entry) {
+          out.title = entry.definition;
+          out.definition = entry.definition;
+        }
         out.target = { type: "term", value: target };
         return out;
       case "pkg":
@@ -2654,6 +3166,8 @@
       case "route":
       case "command":
         out.target = { type: kind, value: target };
+        var owner = factOwner(data, kind, target);
+        if (owner) out.target.node = owner;
         return out;
     }
     return { kind: "unknown", text: ref };
@@ -2766,6 +3280,21 @@
     textWidth: textWidth,
     wrapText: wrapText,
     packageDetails: packageDetails,
+    nodeDetails: nodeDetails,
+    proposalDetails: proposalDetails,
+    involvedFlows: involvedFlows,
+    search: search,
+    nodeHome: nodeHome,
+    LEVELS: LEVELS,
+    levelOf: levelOf,
+    resolveState: resolveState,
+    breadcrumb: breadcrumb,
+    layoutView: layoutView,
+    fitBox: fitBox,
+    zoomBox: zoomBox,
+    lerpBox: lerpBox,
+    ease: ease,
+    neighbours: neighbours,
     factsForPackage: factsForPackage,
     resolveRef: resolveRef,
     formatHash: formatHash,
