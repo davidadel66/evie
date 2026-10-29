@@ -358,3 +358,234 @@ func TestCheckReportsDeadReferences(t *testing.T) {
 	)
 	runCheckCases(t, cases)
 }
+
+func editSystem(edit func(system map[string]any)) func(*testing.T, string) {
+	return func(t *testing.T, root string) {
+		editData(t, root, fixtureData+"system.js", edit)
+	}
+}
+
+func runFlow(t *testing.T, system map[string]any) map[string]any {
+	t.Helper()
+	return system["flows"].([]any)[0].(map[string]any)
+}
+
+func TestCheckReportsEdgeAndFlowProblems(t *testing.T) {
+	runCheckCases(t, []checkCase{
+		{
+			name: "import edge the import graph does not contain",
+			break_: editCore(func(core map[string]any) {
+				appendTo(core, "edges", map[string]any{"from": "pkg:internal/beta", "to": "pkg:internal/alpha", "label": "backwards", "via": "import"})
+			}),
+			want: []string{fixtureData + "core.js", "edge pkg:internal/beta -> pkg:internal/alpha (import)", "internal/beta does not import internal/alpha"},
+		},
+		{
+			name: "import edge between nodes that are not packages",
+			break_: editSystem(func(system map[string]any) {
+				appendTo(system, "edges", map[string]any{"from": "owner", "to": "tool-cli", "label": "imports?", "via": "import"})
+			}),
+			want: []string{fixtureData + "system.js", "edge owner -> tool-cli (import)", "two package nodes"},
+		},
+		{
+			name: "edge with no source",
+			break_: editCore(func(core map[string]any) {
+				core["edges"].([]any)[1].(map[string]any)["refs"] = []any{}
+			}),
+			want: []string{"edge pkg:internal/alpha -> pkg:internal/gamma (call)", "no source"},
+		},
+		{
+			name: "edge to a missing node",
+			break_: editCore(func(core map[string]any) {
+				appendTo(core, "edges", map[string]any{"from": "pkg:internal/alpha", "to": "nowhere", "label": "x", "via": "call", "refs": []any{"code:internal/alpha"}})
+			}),
+			want: []string{"edge pkg:internal/alpha -> nowhere (call)", "node:nowhere"},
+		},
+		{
+			name: "edge via outside its enumeration",
+			break_: editCore(func(core map[string]any) {
+				core["edges"].([]any)[1].(map[string]any)["via"] = "telepathy"
+			}),
+			want: []string{"edge pkg:internal/alpha -> pkg:internal/gamma (telepathy)", `via "telepathy"`},
+		},
+		{
+			name: "flow step the import graph does not contain",
+			break_: editSystem(func(system map[string]any) {
+				appendTo(runFlow(t, system), "steps", map[string]any{"from": "pkg:internal/alpha", "to": "pkg:cmd/tool", "label": "calls back", "kind": "call", "via": "import", "refs": []any{"code:internal/alpha/alpha.go"}})
+			}),
+			want: []string{fixtureData + "system.js", "flow run step 4", "internal/alpha does not import cmd/tool"},
+		},
+		{
+			name: "flow step with no source",
+			break_: editSystem(func(system map[string]any) {
+				runFlow(t, system)["steps"].([]any)[2].(map[string]any)["refs"] = []any{}
+			}),
+			want: []string{"flow run step 3", "no source"},
+		},
+		{
+			name: "flow step between non-participants",
+			break_: editSystem(func(system map[string]any) {
+				appendTo(runFlow(t, system), "steps", map[string]any{"from": "pkg:cmd/tool", "to": "owner", "label": "reports", "kind": "async", "refs": []any{"code:cmd/tool/main.go"}})
+			}),
+			want: []string{"flow run step 4", "owner is not a participant"},
+		},
+		{
+			name: "flow participant that is not a node",
+			break_: editSystem(func(system map[string]any) {
+				appendTo(runFlow(t, system), "participants", "ghost-node")
+			}),
+			want: []string{"flow run participants", "node:ghost-node"},
+		},
+		{
+			name: "flow without a trigger",
+			break_: editSystem(func(system map[string]any) {
+				delete(runFlow(t, system), "trigger")
+			}),
+			want: []string{"flow run", "missing trigger"},
+		},
+		{
+			name: "flow step kind outside its enumeration",
+			break_: editSystem(func(system map[string]any) {
+				runFlow(t, system)["steps"].([]any)[0].(map[string]any)["kind"] = "shout"
+			}),
+			want: []string{"flow run step 1", `kind "shout"`},
+		},
+		{
+			name: "duplicate flow id",
+			break_: editCore(func(core map[string]any) {
+				appendTo(core, "flows", map[string]any{
+					"id": "run", "title": "Again",
+					"summary":      statement("Again.", "code:cmd/tool/main.go"),
+					"trigger":      statement("Again.", "code:cmd/tool/main.go"),
+					"participants": []any{"pkg:cmd/tool"},
+					"steps":        []any{map[string]any{"from": "pkg:cmd/tool", "to": "pkg:cmd/tool", "label": "x", "kind": "note", "refs": []any{"code:cmd/tool/main.go"}}},
+				})
+			}),
+			want: []string{fixtureData + "core.js", "flow run", "duplicate flow id"},
+		},
+	})
+}
+
+// alphaDiagram returns one of alpha's diagrams by id.
+func alphaDiagram(t *testing.T, core map[string]any, id string) map[string]any {
+	t.Helper()
+	for _, d := range node(t, core, "pkg:internal/alpha")["diagrams"].([]any) {
+		if m := d.(map[string]any); m["id"] == id {
+			return m
+		}
+	}
+	t.Fatalf("no diagram %s", id)
+	return nil
+}
+
+func TestCheckReportsDiagramProblems(t *testing.T) {
+	const at = "node pkg:internal/alpha diagram "
+	runCheckCases(t, []checkCase{
+		{
+			name: "graph node pointing at a missing explorer node",
+			break_: editCore(func(core map[string]any) {
+				appendTo(alphaDiagram(t, core, "alpha-graph"), "nodes", map[string]any{"id": "g", "label": "ghost", "node": "pkg:internal/ghost"})
+			}),
+			want: []string{fixtureData + "core.js", at + "alpha-graph node g", "node:pkg:internal/ghost"},
+		},
+		{
+			name: "graph edge to an unknown local node",
+			break_: editCore(func(core map[string]any) {
+				appendTo(alphaDiagram(t, core, "alpha-graph"), "edges", map[string]any{"from": "a", "to": "zz", "label": "x"})
+			}),
+			want: []string{at + "alpha-graph edge 2", "no local node zz"},
+		},
+		{
+			name: "graph node in an unknown lane",
+			break_: editCore(func(core map[string]any) {
+				appendTo(alphaDiagram(t, core, "alpha-graph"), "nodes", map[string]any{"id": "c", "label": "c", "lane": "nowhere"})
+			}),
+			want: []string{at + "alpha-graph node c", "no lane nowhere"},
+		},
+		{
+			name: "graph edge with a dead reference",
+			break_: editCore(func(core map[string]any) {
+				appendTo(alphaDiagram(t, core, "alpha-graph"), "edges", map[string]any{"from": "a", "to": "b", "label": "x", "refs": []any{"adr:0077"}})
+			}),
+			want: []string{at + "alpha-graph edge 2", "adr:0077"},
+		},
+		{
+			name: "sequence step with no source",
+			break_: editCore(func(core map[string]any) {
+				alphaDiagram(t, core, "alpha-sequence")["steps"].([]any)[0].(map[string]any)["refs"] = []any{}
+			}),
+			want: []string{at + "alpha-sequence step 1", "no source"},
+		},
+		{
+			name: "state diagram initial state that is not a state",
+			break_: editCore(func(core map[string]any) {
+				alphaDiagram(t, core, "alpha-states")["initial"] = "asleep"
+			}),
+			want: []string{at + "alpha-states", "initial state asleep is not a state"},
+		},
+		{
+			name: "state with no source",
+			break_: editCore(func(core map[string]any) {
+				alphaDiagram(t, core, "alpha-states")["states"].([]any)[0].(map[string]any)["refs"] = []any{}
+			}),
+			want: []string{at + "alpha-states state idle", "no source"},
+		},
+		{
+			name: "transition with no source",
+			break_: editCore(func(core map[string]any) {
+				alphaDiagram(t, core, "alpha-states")["transitions"].([]any)[0].(map[string]any)["refs"] = []any{}
+			}),
+			want: []string{at + "alpha-states transition 1", "no source"},
+		},
+		{
+			name: "transition to an unknown state",
+			break_: editCore(func(core map[string]any) {
+				alphaDiagram(t, core, "alpha-states")["transitions"].([]any)[0].(map[string]any)["to"] = "gone"
+			}),
+			want: []string{at + "alpha-states transition 1", "no state gone"},
+		},
+		{
+			name: "er diagram over a database and table the facts lack",
+			break_: editCore(func(core map[string]any) {
+				appendTo(node(t, core, "pkg:internal/alpha"), "diagrams", map[string]any{
+					"id": "alpha-er", "title": "Tables", "kind": "er",
+					"summary":  statement("Alpha's tables.", "code:internal/alpha"),
+					"database": "fixture", "tables": []any{"widgets"},
+				})
+			}),
+			want: []string{at + "alpha-er", "no database fixture", "table:fixture.widgets"},
+		},
+		{
+			name: "diagram kind outside its enumeration",
+			break_: editCore(func(core map[string]any) {
+				alphaDiagram(t, core, "alpha-graph")["kind"] = "pie"
+			}),
+			want: []string{at + "alpha-graph", `kind "pie"`},
+		},
+		{
+			name: "field of another diagram kind",
+			break_: editCore(func(core map[string]any) {
+				alphaDiagram(t, core, "alpha-graph")["initial"] = "idle"
+			}),
+			want: []string{at + "alpha-graph", "initial does not belong to a graph diagram"},
+		},
+		{
+			name: "diagram summary with no source",
+			break_: editCore(func(core map[string]any) {
+				alphaDiagram(t, core, "alpha-states")["summary"] = statement("Unsourced.")
+			}),
+			want: []string{at + "alpha-states summary", "no source"},
+		},
+		{
+			name: "duplicate diagram id",
+			break_: editCore(func(core map[string]any) {
+				appendTo(node(t, core, "pkg:internal/beta"), "diagrams", map[string]any{
+					"id": "alpha-states", "title": "Again", "kind": "state",
+					"summary": statement("Again.", "code:internal/beta"),
+					"states":  []any{map[string]any{"id": "s", "refs": []any{"code:internal/beta"}}},
+					"initial": "s",
+				})
+			}),
+			want: []string{"node pkg:internal/beta diagram alpha-states", "duplicate diagram id"},
+		},
+	})
+}
