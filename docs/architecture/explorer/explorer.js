@@ -3602,6 +3602,12 @@
     return i < 0 ? { path: target, anchor: "" } : { path: target.slice(0, i), anchor: target.slice(i + 1) };
   }
 
+  // ROUTE_REF is a route reference's one form, the same expression the
+  // explorer tool's check accepts (routeRef in scripts/explorer/refs.go): a
+  // pattern starting with "/", optionally after an upper-case method and one
+  // space.
+  var ROUTE_REF = /^(?:([A-Z]+) )?(\/.*)$/;
+
   // factOwner finds the node of the package that defines a table, route, or
   // command named by a reference.
   function factOwner(data, kind, target) {
@@ -3617,11 +3623,10 @@
         });
       });
     } else if (kind === "route") {
-      var space = target.indexOf(" ");
-      var method = space > 0 && /^[A-Z]+$/.test(target.slice(0, space)) ? target.slice(0, space) : "";
-      var pattern = method ? target.slice(space + 1) : target;
+      var route = ROUTE_REF.exec(target);
+      var method = route ? route[1] || "" : "";
       data.facts.routes.forEach(function (r) {
-        if (!pkg && r.pattern === pattern && (!method || r.method === method)) pkg = r.package;
+        if (route && !pkg && r.pattern === route[2] && (!method || r.method === method)) pkg = r.package;
       });
     } else if (kind === "command") {
       var words = target.split(" ").filter(Boolean);

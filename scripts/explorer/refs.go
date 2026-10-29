@@ -20,7 +20,7 @@ var refFixes = map[string]string{
 	"adr":     "use the four-digit number of an ADR in docs/adr",
 	"term":    "use a term exactly as GLOSSARY.md spells it",
 	"table":   "use database.table from the facts databases",
-	"route":   "use a route from the facts as [METHOD ]pattern",
+	"route":   "use a route from the facts as /pattern or METHOD /pattern",
 	"command": "use a binary and word path from the facts commands",
 	"pkg":     "use a package path from the facts",
 	"node":    "use the id of an existing explorer node",
@@ -100,7 +100,10 @@ func (c *checker) resolve(ref string, extra map[string]bool) string {
 		}
 		return "there is no table " + target + " in the facts"
 	case "route":
-		method, pattern := splitRoute(target)
+		method, pattern, ok := splitRoute(target)
+		if !ok {
+			return "want route:/pattern or route:METHOD /pattern, with an upper-case method and one space"
+		}
 		for _, r := range c.facts.Routes {
 			if r.Pattern == pattern && (method == "" || r.Method == method) {
 				return ""
@@ -132,13 +135,20 @@ func (c *checker) resolve(ref string, extra map[string]bool) string {
 	return "unknown reference kind " + kind
 }
 
+// routeRef is a route reference's one form, which the viewer reads with the
+// same expression (ROUTE_REF in docs/architecture/explorer/explorer.js): a
+// pattern starting with "/", optionally after an upper-case method and one
+// space.
+var routeRef = regexp.MustCompile(`^(?:([A-Z]+) )?(/.*)$`)
+
 // splitRoute splits "GET /x" into its method and pattern; "/x" has none.
-func splitRoute(target string) (string, string) {
-	method, pattern, ok := strings.Cut(target, " ")
-	if !ok || method == "" || strings.ToUpper(method) != method || strings.ContainsAny(method, "/{") {
-		return "", target
+// Anything else is not a route reference.
+func splitRoute(target string) (method, pattern string, ok bool) {
+	m := routeRef.FindStringSubmatch(target)
+	if m == nil {
+		return "", "", false
 	}
-	return method, strings.TrimSpace(pattern)
+	return m[1], m[2], true
 }
 
 // repoPath reports why p is not a clean relative path inside the repository.

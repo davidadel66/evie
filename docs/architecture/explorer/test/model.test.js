@@ -390,6 +390,17 @@ test("resolveRef turns references into checkout links and in-page targets", () =
   });
 });
 
+test("resolveRef reads route references in the check's one form only", () => {
+  const data = model.mergeData(sampleObjects());
+  const owner = (ref) => model.resolveRef(ref, data).target.node;
+
+  assert.equal(owner("route:GET /api/alpha"), "pkg:internal/alpha");
+  assert.equal(owner("route:/api/alpha"), "pkg:internal/alpha", "without a method, any method matches");
+  for (const ref of ["route:GET  /api/alpha", "route:get /api/alpha", "route:GET\t/api/alpha", "route:api/alpha", "route:GET-X /api/alpha"]) {
+    assert.equal(owner(ref), undefined, `${JSON.stringify(ref)} is not the check's form`);
+  }
+});
+
 test("resolveRef encodes paths and refuses links that could leave the checkout", () => {
   const data = model.mergeData(sampleObjects());
 

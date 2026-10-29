@@ -309,7 +309,7 @@ References are typed strings. Line numbers are never a reference form.
 | `adr:0007` | `docs/adr/` has ADR 0007. |
 | `term:Agent Preset` | `GLOSSARY.md` has that term, spelled exactly. |
 | `table:evie.jobs` | The facts have database `evie` with table `jobs`. |
-| `route:GET /api/x`, `route:/api/x` | The facts have that route; without a method, any method matches. |
+| `route:GET /api/x`, `route:/api/x` | The facts have that route; without a method, any method matches. The pattern starts with `/`; a method is upper case and one space separates it from the pattern. |
 | `command:todo add`, `command:todo` | The facts have that binary and word path; a bare binary matches any of its commands. |
 | `pkg:internal/agent` | The facts have that package. |
 | `node:pkg:internal/agent` | An explorer node has that id (in a proposal, also nodes it adds). |
