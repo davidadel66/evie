@@ -677,7 +677,7 @@
     boxes.forEach(function (b) {
       var dy = b.h + 3;
       var dx = b.w / 2 + 12;
-      var tries = [[0, 0], [0, dy], [0, -dy], [dx, 0], [-dx, 0], [0, 2 * dy], [0, -2 * dy], [dx, dy], [-dx, dy], [dx, -dy], [-dx, -dy]];
+      var tries = [[0, 0], [0, dy], [0, -dy], [dx, 0], [-dx, 0], [0, 2 * dy], [0, -2 * dy], [dx, dy], [-dx, dy], [dx, -dy], [-dx, -dy], [0, 3 * dy], [0, -3 * dy], [2 * dx, 0], [-2 * dx, 0]];
       var spot = null;
       for (var t = 0; t < tries.length && !spot; t++) {
         var x = b.x + tries[t][0];
@@ -2164,7 +2164,8 @@
         change: node ? node.change || "" : "",
         x: 0,
         y: q.margin,
-        width: round(Math.max(q.minHead, textWidth(title, 13.5) + 32, textWidth(subtitle, 11) + 32)),
+        // Even whole widths keep each lifeline exactly in its head's middle.
+        width: 2 * Math.ceil(Math.max(q.minHead, textWidth(title, 13.5) + 58, textWidth(subtitle, 11) + 58) / 2),
         height: q.headHeight,
       };
     });
@@ -4094,7 +4095,7 @@
       default:
         drawGraph(layout, content, result);
     }
-    wireCanvas(root, layout);
+    wireCanvas(root);
     return result;
   }
 
@@ -4579,7 +4580,7 @@
     }
   }
 
-  function wireCanvas(root, layout) {
+  function wireCanvas(root) {
     var drag = null;
     root.addEventListener("click", function (event) {
       if (app.dragged) {
@@ -4670,7 +4671,6 @@
       },
       { passive: false }
     );
-    void layout;
   }
 
   // light highlights a node, its neighbours, and the edges between them,
