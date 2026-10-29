@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Evie system explorer</title>
+    <link rel="stylesheet" href="explorer.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Evie system explorer</h1>
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <span>Components</span>
+        <span aria-current="page">Group overview</span>
+      </nav>
+    </header>
+    <div id="problems" class="problems" role="alert" hidden></div>
+    <div class="frame">
+      <aside id="rail" class="rail" aria-label="Groups and legend">
+        <h2>Groups</h2>
+        <ul id="group-list" class="group-list"></ul>
+        <h2>Legend</h2>
+        <ul class="legend">
+          <li><span class="legend-chip" aria-hidden="true"></span>Package</li>
+          <li><span class="legend-chip command" aria-hidden="true"></span>Command (bold)</li>
+          <li><span class="legend-chip test-support" aria-hidden="true"></span>Test support (dashed)</li>
+          <li><span class="legend-arrow" aria-hidden="true"></span>Imports between groups (edge count)</li>
+        </ul>
+        <p class="hint">Select a package to see what it does, who calls it, and what it depends on.</p>
+      </aside>
+      <main id="canvas" class="canvas" aria-label="Diagram">
+        <p class="loading">Loading explorer data…</p>
+      </main>
+      <aside id="panel" class="panel" aria-label="Selected package" aria-live="polite" hidden></aside>
+    </div>
+    <noscript><p class="problems">The explorer draws its diagrams with JavaScript; enable it to see them.</p></noscript>
+    <script src="explorer.js"></script>
+    <script src="data/manifest.js"></script>
+  </body>
+</html>
