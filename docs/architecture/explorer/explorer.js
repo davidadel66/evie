@@ -2042,7 +2042,7 @@
         .map(function (other) {
           var n = data.nodeById[other];
           var subtitle = n.group ? groupLabel(n.group) : kindLabel(n.kind);
-          return drawnNode(n, Math.max(f.minChip, textWidth(n.title, 13) + 40, textWidth(subtitle, 11) + 40), f.chipHeight, {
+          return drawnNode(n, Math.max(f.minChip, textWidth(n.title, 13.5) + 62, textWidth(subtitle, 11) + 62), f.chipHeight, {
             side: side,
             subtitle: subtitle,
           });
