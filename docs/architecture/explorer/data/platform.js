@@ -1377,7 +1377,7 @@ evieExplorer.register(
       },
       "does": [
         {
-          "text": "ParsePeriod accepts an inclusive from date, an exclusive to date and a named IANA time zone, from 1 to 90 calendar days, and refuses a date that the zone would shift.",
+          "text": "ParsePeriod accepts an inclusive from date, an exclusive to date and a non-empty time zone that time.LoadLocation knows (an IANA name, UTC, or Local for the server's own zone), from 1 to 90 calendar days, and refuses a date that the zone would shift.",
           "refs": [
             "code:internal/usage/usage.go#ParsePeriod",
             "code:internal/usage/usage.go#ErrRange"
@@ -1565,7 +1565,8 @@ evieExplorer.register(
           "kind": "call",
           "via": "process",
           "refs": [
-            "command:evie serve"
+            "command:evie serve",
+            "code:cmd/evie/main.go#main"
           ]
         },
         {

@@ -1259,7 +1259,7 @@ evieExplorer.register(
           ]
         },
         {
-          "text": "`connections` and `workspaces mcp-tools` fail with 'evie serve is not running' when serve is down, because only serve holds MCP tokens.",
+          "text": "`connections` and `workspaces mcp-tools` are clients of serve's routes, because only serve holds MCP tokens: when the connection to serve is refused they fail with 'evie serve is not running at <addr>', and any other failure to reach it is returned as it is.",
           "refs": [
             "code:cmd/evie/connections.go#connectionCommands.post"
           ]

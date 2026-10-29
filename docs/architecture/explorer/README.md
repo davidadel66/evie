@@ -216,7 +216,9 @@ Every other edge cites at least one source.
 **Flow**: `id`, `title`, `summary` and `trigger` statements, `participants`
 (node ids), and ordered `steps`. A step has `from` and `to` (participants),
 `label`, `kind` (`call`, `return`, `async`, `note`), an optional `via`, and
-at least one reference. A step with via `import` must follow an import edge:
+at least one reference, including a `code:` reference to the code that
+carries it (a design proposal's steps describe code that does not exist
+yet, so they may cite its spec instead). A step with via `import` must follow an import edge:
 the caller imports the callee, or the reverse for a `return`.
 
 **Diagram**: `id` (unique), `title`, `kind`, `summary`, and the fields of its
@@ -327,7 +329,8 @@ defines them with the fact highlighted.
 - a dead reference of any form above, including node `terms`, `links`,
   `contains`, flow participants, and diagram nodes;
 - a statement, non-import edge, flow step, state, or transition with no
-  source;
+  source, and a flow or sequence diagram step outside a design proposal that
+  cites no code;
 - an import edge or `via: import` flow step the import graph lacks;
 - a design proposal that changes or removes a missing item, or adds one that
   exists; a design proposal node operation on a part, or one that carries

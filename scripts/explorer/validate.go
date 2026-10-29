@@ -310,7 +310,10 @@ func (c *checker) validateFlow(file, item string, f Flow, sequence bool, sc scop
 	}
 }
 
-// validateStep checks one message between two participants.
+func isCodeRef(ref string) bool { return strings.HasPrefix(ref, "code:") }
+
+// validateStep checks one message between two participants. A built
+// system's step cites the code that carries it.
 func (c *checker) validateStep(file, item string, step Step, participants map[string]bool, sc scope) {
 	for _, end := range []string{step.From, step.To} {
 		if end == "" {
@@ -324,8 +327,12 @@ func (c *checker) validateStep(file, item string, step Step, participants map[st
 	}
 	c.oneOf(file, item, "kind", step.Kind, stepKinds, true)
 	c.oneOf(file, item, "via", step.Via, vias, false)
-	if len(step.Refs) == 0 {
+	switch {
+	case len(step.Refs) == 0:
 		c.add(file, item, "the step has no source", "cite at least one reference in refs")
+	case !sc.proposal && !slices.ContainsFunc(step.Refs, isCodeRef):
+		// A design proposal's steps describe code that does not exist yet.
+		c.add(file, item, "the step cites no code", "add a code: reference to the code that carries the step")
 	}
 	c.refs(file, item, step.Refs, sc.added)
 	if step.Via == "import" {

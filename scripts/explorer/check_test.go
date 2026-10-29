@@ -435,6 +435,13 @@ func TestCheckReportsEdgeAndFlowProblems(t *testing.T) {
 			want: []string{"flow run step 3", "no source"},
 		},
 		{
+			name: "flow step that cites no code",
+			break_: editSystem(func(system map[string]any) {
+				runFlow(t, system)["steps"].([]any)[2].(map[string]any)["refs"] = []any{"command:tool run"}
+			}),
+			want: []string{fixtureData + "system.js", "flow run step 3", "the step cites no code", "code:"},
+		},
+		{
 			name: "flow step between non-participants",
 			break_: editSystem(func(system map[string]any) {
 				appendTo(runFlow(t, system), "steps", map[string]any{"from": "pkg:cmd/tool", "to": "owner", "label": "reports", "kind": "async", "refs": []any{"code:cmd/tool/main.go"}})
@@ -527,6 +534,13 @@ func TestCheckReportsDiagramProblems(t *testing.T) {
 				alphaDiagram(t, core, "alpha-sequence")["steps"].([]any)[0].(map[string]any)["refs"] = []any{}
 			}),
 			want: []string{at + "alpha-sequence step 1", "no source"},
+		},
+		{
+			name: "sequence step that cites no code",
+			break_: editCore(func(core map[string]any) {
+				alphaDiagram(t, core, "alpha-sequence")["steps"].([]any)[0].(map[string]any)["refs"] = []any{"pkg:internal/alpha"}
+			}),
+			want: []string{at + "alpha-sequence step 1", "the step cites no code"},
 		},
 		{
 			name: "state diagram initial state that is not a state",
@@ -872,5 +886,22 @@ func TestCheckReportsCRLFLineEndingsClearly(t *testing.T) {
 	}
 	if !strings.Contains(out, "3 problem(s)") {
 		t.Errorf("want only the three line-ending problems:\n%s", out)
+	}
+}
+
+func TestCheckAcceptsDesignProposalFlowStepsThatCiteTheSpecOnly(t *testing.T) {
+	// A design proposal's flow describes code that does not exist yet, so
+	// its steps cite the feature's spec rather than code.
+	root := newFixture(t)
+	extractFixture(t, root)
+	editSample(func(p map[string]any) {
+		appendTo(p, "flows", map[string]any{"op": "add", "id": "epsilon-run", "title": "Run epsilon",
+			"summary": statement("Alpha will ask epsilon.", "doc:docs/guide.md"), "trigger": statement("A request.", "doc:docs/guide.md"),
+			"participants": []any{"pkg:internal/alpha", "pkg:internal/epsilon"},
+			"steps":        []any{map[string]any{"from": "pkg:internal/alpha", "to": "pkg:internal/epsilon", "label": "asks", "kind": "call", "refs": []any{"doc:docs/guide.md"}}}})
+	})(t, root)
+
+	if code, out := checkFixture(t, root); code != 0 {
+		t.Fatalf("check exit %d, want 0:\n%s", code, out)
 	}
 }
