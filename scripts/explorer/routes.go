@@ -185,16 +185,20 @@ func (r routeReader) guard(handler ast.Expr) string {
 	return r.guardOf(handler, map[string]bool{})
 }
 
-func (r routeReader) guardOf(handler ast.Expr, seen map[string]bool) string {
+// guardOf reads one handler expression. visiting holds the locals on the
+// path from the route to here, so a local that refers back to itself stops
+// the reading while the same local reached on two branches is read twice.
+func (r routeReader) guardOf(handler ast.Expr, visiting map[string]bool) string {
 	switch h := handler.(type) {
 	case *ast.ParenExpr:
-		return r.guardOf(h.X, seen)
+		return r.guardOf(h.X, visiting)
 	case *ast.Ident:
-		if seen[h.Name] {
+		if visiting[h.Name] {
 			return ""
 		}
-		seen[h.Name] = true
-		return r.sameGuard(r.locals[h.Name], seen)
+		visiting[h.Name] = true
+		defer delete(visiting, h.Name)
+		return r.sameGuard(r.locals[h.Name], visiting)
 	case *ast.FuncLit:
 		var delegates []ast.Expr
 		ast.Inspect(h.Body, func(n ast.Node) bool {
@@ -205,7 +209,7 @@ func (r routeReader) guardOf(handler ast.Expr, seen map[string]bool) string {
 			}
 			return true
 		})
-		return r.sameGuard(delegates, seen)
+		return r.sameGuard(delegates, visiting)
 	case *ast.CallExpr:
 		sel, ok := h.Fun.(*ast.SelectorExpr)
 		if !ok {
@@ -219,7 +223,7 @@ func (r routeReader) guardOf(handler ast.Expr, seen map[string]bool) string {
 		case x.Name == r.receiver && r.receiver != "" && len(h.Args) > 0:
 			return sel.Sel.Name
 		case x.Name == r.http && (sel.Sel.Name == "HandlerFunc" || sel.Sel.Name == "Handler") && len(h.Args) == 1:
-			return r.guardOf(h.Args[0], seen)
+			return r.guardOf(h.Args[0], visiting)
 		}
 	}
 	return ""
@@ -227,10 +231,10 @@ func (r routeReader) guardOf(handler ast.Expr, seen map[string]bool) string {
 
 // sameGuard returns the guard every handler shares, or "" when they differ
 // or there are none.
-func (r routeReader) sameGuard(handlers []ast.Expr, seen map[string]bool) string {
+func (r routeReader) sameGuard(handlers []ast.Expr, visiting map[string]bool) string {
 	guard := ""
 	for i, h := range handlers {
-		g := r.guardOf(h, seen)
+		g := r.guardOf(h, visiting)
 		if g == "" || (i > 0 && g != guard) {
 			return ""
 		}

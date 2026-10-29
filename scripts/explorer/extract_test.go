@@ -110,6 +110,27 @@ func TestExtractWritesPackageFacts(t *testing.T) {
 	}
 }
 
+func TestExtractMarksTestSupportOnlyForAPackagesOwnHelpers(t *testing.T) {
+	root := newFixture(t)
+	// A name ending in "test" is test support only where it sits directly
+	// inside the package it helps, as internal/alpha/alphatest does.
+	writeFile(t, root, "internal/latest/latest.go", "// Package latest picks the newest.\npackage latest\n")
+	writeFile(t, root, "internal/contest/contest.go", "// Package contest runs contests.\npackage contest\n")
+	facts := decodeFacts(t, extractFixture(t, root))
+
+	got := map[string]bool{}
+	for _, p := range facts["packages"].([]any) {
+		pkg := p.(map[string]any)
+		got[pkg["path"].(string)] = pkg["testSupport"].(bool)
+	}
+	want := map[string]bool{"internal/alpha/alphatest": true, "internal/latest": false, "internal/contest": false, "internal/alpha": false}
+	for path, support := range want {
+		if got[path] != support {
+			t.Errorf("%s testSupport = %v, want %v", path, got[path], support)
+		}
+	}
+}
+
 func TestExtractImportEdgesAreTheUnionOfNonTestFiles(t *testing.T) {
 	root := newFixture(t)
 	facts := decodeFacts(t, extractFixture(t, root))
@@ -256,12 +277,14 @@ func TestExtractRouteGuardsThroughLocalsAndDelegatingClosures(t *testing.T) {
 	routes := routeFacts(t, decodeFacts(t, extractFixture(t, root)))
 
 	// The guard wraps the handler through a local variable, or inside a
-	// closure that delegates to a guarded handler with ServeHTTP; a closure
+	// closure that delegates to a guarded handler with ServeHTTP, even when
+	// the closure delegates to the same local on two branches; a closure
 	// that delegates to nothing has no guard.
 	source := `"source":{"file":"internal/alpha/routes.go","function":"Server.routes"}`
 	wantRoutes(t, routes, map[string]string{
 		"/local":     `{"guard":"requireOwner","package":"internal/alpha","pattern":"/local",` + source + `}`,
 		"/delegated": `{"guard":"requireOwner","package":"internal/alpha","pattern":"/delegated",` + source + `}`,
+		"/twice":     `{"guard":"requireOwner","package":"internal/alpha","pattern":"/twice",` + source + `}`,
 		"/open":      `{"package":"internal/alpha","pattern":"/open",` + source + `}`,
 	})
 }

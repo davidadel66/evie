@@ -165,6 +165,7 @@ func extractFacts(root string, databases []databaseSource) (Facts, error) {
 		if err != nil {
 			return facts, err
 		}
+		pkg.TestSupport = isTestSupport(pkg.Package, isPackage)
 		facts.Packages = append(facts.Packages, pkg.Package)
 		facts.Imports = append(facts.Imports, moduleImports(module, pkg, isPackage)...)
 		routes, err := packageRoutes(pkg)
@@ -419,6 +420,13 @@ func readPackage(root, dir string) (packageInfo, error) {
 		info.files = append(info.files, file)
 	}
 	info.Command = info.Name == "main"
-	info.TestSupport = strings.HasSuffix(info.Name, "test")
 	return info, nil
+}
+
+// isTestSupport reports whether a package holds another package's test
+// helpers: its name ends in "test" and its directory sits directly inside
+// that package's directory, the layout of net/http/httptest. A package such
+// as internal/latest is not test support.
+func isTestSupport(pkg Package, isPackage map[string]bool) bool {
+	return strings.HasSuffix(pkg.Name, "test") && isPackage[path.Dir(pkg.Path)]
 }

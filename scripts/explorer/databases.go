@@ -21,9 +21,9 @@ type databaseSource struct {
 }
 
 // extractDatabases creates every database on a throwaway file and reads its
-// schema, sorted by id. Each source runs with HOME pointed at its own
-// temporary directory, so no entry point can reach the owner's databases,
-// and a database opened outside that directory fails extraction.
+// schema, sorted by id. Each source runs with the home directory pointed at
+// its own temporary directory, so no entry point can reach the owner's
+// databases, and a database opened outside that directory fails extraction.
 func extractDatabases(sources []databaseSource, isPackage map[string]bool) ([]Database, error) {
 	databases := []Database{}
 	for _, src := range sources {
@@ -61,20 +61,26 @@ func readDatabase(src databaseSource) (Database, error) {
 	return Database{ID: src.ID, Package: src.Package, Tables: tables}, nil
 }
 
-// openWithHome runs the source's entry point with HOME set to dir, and puts
-// HOME back afterwards.
+// homeVars are the variables os.UserHomeDir reads the home directory from:
+// HOME on Unix, USERPROFILE on Windows, and home on Plan 9.
+var homeVars = []string{"HOME", "USERPROFILE", "home"}
+
+// openWithHome runs the source's entry point with every home variable set
+// to dir, and puts each back afterwards.
 func openWithHome(src databaseSource, dir string) (*sql.DB, error) {
-	home, hadHome := os.LookupEnv("HOME")
-	if err := os.Setenv("HOME", dir); err != nil {
-		return nil, err
-	}
-	defer func() {
-		if hadHome {
-			os.Setenv("HOME", home)
-		} else {
-			os.Unsetenv("HOME")
+	for _, name := range homeVars {
+		old, had := os.LookupEnv(name)
+		defer func() {
+			if had {
+				os.Setenv(name, old)
+			} else {
+				os.Unsetenv(name)
+			}
+		}()
+		if err := os.Setenv(name, dir); err != nil {
+			return nil, err
 		}
-	}()
+	}
 	return src.Open(dir)
 }
 

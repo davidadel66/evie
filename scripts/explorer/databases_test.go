@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -159,25 +160,47 @@ func snapshot(t *testing.T, dir string) map[string]string {
 }
 
 func TestExtractNeverOpensTheOwnersDatabases(t *testing.T) {
-	// The owner's databases live under HOME. Each is a file that is not a
+	// The owner's databases live under the home directory, whichever
+	// variable the platform reads it from. Each is a file that is not a
 	// database, so opening and migrating it would fail extraction, and any
 	// write, journal, or new file would change the snapshot.
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	// The variables os.UserHomeDir reads: HOME on Unix, USERPROFILE on
+	// Windows, and home on Plan 9.
+	homeVars := []string{"HOME", "USERPROFILE", "home"}
+	for _, name := range homeVars {
+		t.Setenv(name, home)
+	}
 	for _, owned := range []string{".evie/evie.db", ".finance/finance.db", ".evie/transcripts/transcripts.db"} {
 		writeFile(t, home, owned, "the owner's data, not a database\n")
 	}
 	before := snapshot(t, home)
 
-	if _, err := extractFacts(realRoot, evieDatabases); err != nil {
+	// A probe beside the real databases records the home directory every
+	// variable names while an entry point runs.
+	seen := map[string]string{}
+	var dirUsed string
+	probe := databaseSource{ID: "probe", Package: "internal/eviedb", Open: func(dir string) (*sql.DB, error) {
+		dirUsed = dir
+		for _, name := range homeVars {
+			seen[name] = os.Getenv(name)
+		}
+		return sql.Open("sqlite", filepath.Join(dir, "probe.db"))
+	}}
+	if _, err := extractFacts(realRoot, append(slices.Clone(evieDatabases), probe)); err != nil {
 		t.Fatalf("extract: %v", err)
 	}
 
 	if after := snapshot(t, home); !reflect.DeepEqual(after, before) {
 		t.Errorf("extraction touched the owner's home:\nbefore %v\nafter  %v", before, after)
 	}
-	if got := os.Getenv("HOME"); got != home {
-		t.Errorf("HOME = %q after extraction, want it restored to %q", got, home)
+	for _, name := range homeVars {
+		if seen[name] != dirUsed {
+			t.Errorf("%s = %q while the entry point ran, want its temporary directory %q", name, seen[name], dirUsed)
+		}
+		if got := os.Getenv(name); got != home {
+			t.Errorf("%s = %q after extraction, want it restored to %q", name, got, home)
+		}
 	}
 }
 

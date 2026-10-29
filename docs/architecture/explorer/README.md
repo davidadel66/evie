@@ -119,7 +119,10 @@ is malformed data. Optional lists may be left out.
   Go file, excluding `testdata` and `node_modules`. `doc` is the first
   sentence of the package comment in the first file, by name, that has one.
   `command` means package `main`; `testSupport` means the package name ends
-  in `test`, Go's convention for test helpers.
+  in `test` and its directory sits directly inside another package's
+  directory, Go's layout for a package's test helpers (as `net/http/httptest`
+  sits in `net/http`), so `internal/mcpconn/mcptest` is test support and a
+  package such as `internal/latest` is not.
 - **imports**: in-module imports between those packages from every non-test
   file, ignoring build constraints, so every platform extracts the same edges.
 - **commands**: the word paths of each command package's binary (named after
@@ -151,8 +154,10 @@ is malformed data. Optional lists may be left out.
   delegates with `ServeHTTP`; a route without one has no `guard`.
 - **databases**: Evie's databases (`evie`, `finance`, `youtube`), each
   created by its package's real open-and-migrate entry point on a fresh
-  temporary file, with `HOME` pointed at that file's temporary directory
-  while it runs (finance takes its path from `HOME`). A database opened
+  temporary file, with the home directory pointed at that file's temporary
+  directory while it runs (finance takes its path from the home directory).
+  The tool sets every variable `os.UserHomeDir` reads (`HOME`,
+  `USERPROFILE` on Windows, `home` on Plan 9) and restores each afterwards. A database opened
   outside its temporary directory fails extraction, so the owner's databases
   are never opened. Tables are read from SQLite, sorted by name, leaving out
   SQLite's internal `sqlite_` tables, the shadow tables of virtual tables,

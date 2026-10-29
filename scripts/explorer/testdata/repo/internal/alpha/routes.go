@@ -19,6 +19,14 @@ func (s *Server) routes(mux *http.ServeMux) {
 		guarded.ServeHTTP(w, r)
 	}))
 	mux.HandleFunc("/open", func(w http.ResponseWriter, r *http.Request) {})
+	twice := s.requireOwner(s.health)
+	mux.HandleFunc("/twice", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			twice.ServeHTTP(w, r)
+			return
+		}
+		twice.ServeHTTP(w, r)
+	})
 }
 
 // requireOwner guards a handler.
