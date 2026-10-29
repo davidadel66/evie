@@ -138,3 +138,20 @@ verification and results, known risks and deferred work, manual demonstration
 steps for user-visible behavior, and the best review entry points. Do not call
 work complete while a required check is failing or skipped without an explicit
 reason.
+
+## Agent skills
+
+### Issue tracker
+
+Tickets are GitHub issues; specs are repository docs (see Sources of truth).
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles, each label string equal to its name. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See
+`docs/agents/domain.md`.

@@ -2,7 +2,7 @@
 
 Decided 2026-10-09 with the owner in a grilling session; binding record in
 [changes.decisions.md](changes.decisions.md). **Repository** and **Change**
-are defined in the root `CONTEXT.md`. The UI follows the claude.ai/design
+are defined in the root `GLOSSARY.md`. The UI follows the claude.ai/design
 template `templates/workspace-activity/WorkspaceActivity.dc.html` (Changes
 tab and review page only; see Out of Scope).
 

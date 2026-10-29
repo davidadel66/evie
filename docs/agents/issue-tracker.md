@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Tickets for this repo live as GitHub issues. Use the `gh` CLI for all operations. Specs are repository docs, not issues: see `AGENTS.md`, Sources of truth.
 
 ## Conventions
 
@@ -27,7 +27,7 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue.
+Create a GitHub issue for a ticket. A spec goes to its repository doc instead.
 
 ## When a skill says "fetch the relevant ticket"
 

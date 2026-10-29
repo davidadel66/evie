@@ -21,7 +21,7 @@ Spec: [workspace-activity.spec.md](workspace-activity.spec.md). Decided
   banner in the Runs tab, and rejected placing the icon inside the
   Workspace header. Notifications will carry more than Workspace notices
   later. So the icon belongs to the app, the list spans all Workspaces,
-  and the notice shape is general. CONTEXT.md's Durable Notification was
+  and the notice shape is general. GLOSSARY.md's Durable Notification was
   widened to cover notices from any part of Evie.
 - **The top bar stays on every view, with the Workspace header under it**
   (W11). This follows from the icon's placement. The breadcrumb names the

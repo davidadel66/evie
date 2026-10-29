@@ -20,7 +20,7 @@ server process.
 
 ## Terms
 
-- **MCP Connection**: an Account Connection (CONTEXT.md) to one hosted MCP
+- **MCP Connection**: an Account Connection (GLOSSARY.md) to one hosted MCP
   server. The owner gives it a name such as `square`. Its Connection ID is
   `mcp-<name>`, for example `mcp-square`. The prefix keeps it apart from
   built-in Connection IDs such as `github` and `finance-local`. The Kernel

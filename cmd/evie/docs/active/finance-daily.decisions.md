@@ -47,7 +47,7 @@ in a grilling session with the owner; every item below is his answer.
   Plaid's spelling, reviewed by the owner, not prefix matching
   (categorize.decisions.md). Dead rules stay.
 - **Glossary.** Budget Entry, Awaiting Review (posted only) and Pending
-  Fence were added to CONTEXT.md.
+  Fence were added to GLOSSARY.md.
 - **Cutover 2026-10-07.** The first scheduled run (09:00 America/Detroit,
   run 9cbf8363) succeeded on the launchd-managed serve: three banks synced,
   six transactions categorized, check passed, two effect receipts
