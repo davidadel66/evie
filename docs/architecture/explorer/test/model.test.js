@@ -370,6 +370,7 @@ test("resolveRef turns references into checkout links and in-page targets", () =
     kind: "term",
     text: "Widget",
     title: "A thing the fixture makes.",
+    definition: "A thing the fixture makes.",
     target: { type: "term", value: "Widget" },
   });
   assert.deepEqual(model.resolveRef("pkg:internal/alpha", data), {
@@ -385,7 +386,7 @@ test("resolveRef turns references into checkout links and in-page targets", () =
   assert.deepEqual(model.resolveRef("route:GET /api/alpha", data), {
     kind: "route",
     text: "GET /api/alpha",
-    target: { type: "route", value: "GET /api/alpha" },
+    target: { type: "route", value: "GET /api/alpha", node: "pkg:internal/alpha" },
   });
 });
 

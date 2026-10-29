@@ -19,8 +19,8 @@ it fails when the data and the code disagree.
 | `data/facts.js` | Generated facts. Never edit by hand; run `extract`. |
 | `data/<owner>.js` | Written content, one file per subsystem owner (below). |
 | `data/proposals/<id>.js` | One file per design proposal. |
-| `examples/<id>.js` | Example design proposals. Checked, but not listed in the manifest; the page will load one through its proposal parameter (ticket #188). |
-| `test/*.test.js` | Viewer model tests for Node's built-in runner. |
+| `examples/<id>.js` | Example design proposals. Checked, but not listed in the manifest; the page loads one through its proposal parameter (below). `examples/design-proposal.js` ships as the example. |
+| `test/*.test.js` | Viewer model tests for Node's built-in runner; `test/fixture.js` and the other non-test files are their shared fixture and helpers. |
 
 Content files and the packages whose component nodes they hold:
 
@@ -271,6 +271,21 @@ To add a design proposal:
    directory from `file://`, so the manifest is how it finds the file.
 3. Run `go run ./scripts/explorer check` and fix what it reports.
 
+To look at a proposal without listing it, open the page with the proposal
+parameter naming its script, relative to this directory:
+
+```text
+index.html?proposal=examples/design-proposal.js
+```
+
+The page loads that one extra script after the manifest and accepts only
+design proposals from it. It refuses absolute paths, schemes, `.` and `..`
+segments, escapes, and anything that is not a plain path to a `.js` file
+inside this directory, and says so in a banner. A loaded proposal shows a
+toggle in the left rail; turning it on draws added parts dashed in the added
+colour, changed parts in the changed colour with a Δ badge, and removed parts
+struck through and faded, and opens its requirements and decisions.
+
 ## Reference forms
 
 References are typed strings. Line numbers are never a reference form.
@@ -292,7 +307,9 @@ References are typed strings. Line numbers are never a reference form.
 
 Paths are clean and relative to the repository root. In the page, `code:` and
 `doc:` references link into your own checkout, ADRs show their title, terms
-show their definition, and `pkg:` and `node:` references select the node.
+show their definition inline, `pkg:` and `node:` references select the node,
+and `table:`, `route:`, and `command:` references open the package that
+defines them with the fact highlighted.
 
 ## What the check reports
 
@@ -325,6 +342,43 @@ DOM, and exports the model under Node. The tests load it there:
 node --test 'docs/architecture/explorer/test/*.test.js'
 ```
 
-Pass the glob in quotes; a bare directory does not run. The page's address
-fragment holds the view and the selected node, for example
-`index.html#node=pkg:internal/agent`.
+Pass the glob in quotes; a bare directory does not run. The tests run every
+layout on `test/fixture.js`, which has every diagram kind and two design
+proposals, and on the real data: nodes never overlap, every edge starts and
+ends on its nodes, positions do not depend on input order, edge labels never
+cover one another, and group and focus views keep edges clear of other nodes.
+They also cover the proposal overlay and its styling, address round trips,
+proposal-path refusal, reference resolution, search, and that labels pass
+through as text and the page never parses data as markup.
+
+## The page
+
+Each view has its own layout rather than one general graph engine:
+
+| View | Address | Layout |
+| --- | --- | --- |
+| Context | `#view=context` | People above Evie; outside systems reached over the network on its right, local programs on its left. |
+| Containers | `#view=containers` | Lanes by kind (people, interfaces and CLIs, processes, stores, outside services), Evie's lanes inside a system boundary; edges crossing a lane pass between its nodes. |
+| Inside a container | `#view=inside&of=container:serve` | What the container's `contains` list names, layered like a group. |
+| Group overview | `#view=components` | One panel per group with its subgroups and packages; arrows between groups labelled with import counts. |
+| Group | `#view=group&of=runtime` | Packages layered by import depth (importers above), wide layers wrapped, crossings reduced; out-of-group dependencies as faded chips below, their edges shown on hover. |
+| Focus | `#view=focus&of=pkg:internal/agent` | Callers, the node, its dependencies, from imports and content edges. |
+| Flows | `#view=flows` | A card per flow. |
+| Flow | `#view=flow&of=chat-turn&step=3` | A sequence diagram with lifelines and numbered steps; the current step is highlighted, its statement and sources are in the panel, and the view follows it. |
+| Diagram | `#view=diagram&of=<diagram id>` | Graphs layered top to bottom (lanes as bands flowing left to right), state diagrams from an initial marker, er diagrams as table cards from the facts with foreign keys joined column to column. |
+
+The address fragment holds the view and its subject (`of`), the selected node
+(`node`) or glossary term (`term`), the flow step (`step`), the open panel
+(`panel=proposals`), and the active proposals (`proposals=a,b`), so a reload
+or a bookmark lands in the same place. A view whose subject no longer exists
+falls back to the view above it with a notice.
+
+Click selects and opens the panel; double click, Enter on a selected node, or
+the panel's buttons open the level below (Evie to its containers, a container
+to what it contains, a package to its focus view); the breadcrumb leads back,
+and level changes zoom in or out of the part opened. Hover lights a node's
+neighbours and dims the rest. The wheel zooms, dragging pans, and the fit
+button (or `0`) fits the view. `/` searches packages by name or path, glossary
+terms by term or avoided synonym, flows, and diagrams; the arrow keys step a
+flow; Esc closes the panel. Colours follow the system's light or dark
+preference.
