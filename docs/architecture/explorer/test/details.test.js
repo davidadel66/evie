@@ -114,3 +114,25 @@ test("glossary references carry their definition and ADR references their title"
   const adr = model.resolveRef("adr:0001", d);
   assert.equal(adr.text, "ADR 0001: Make the first decision");
 });
+
+test("a glossary term lists the nodes that use it", () => {
+  const d = data();
+  assert.deepEqual(model.termUsers(d, "Widget").map((n) => n.id), ["pkg:internal/alpha"]);
+  assert.deepEqual(model.termUsers(d, "Ledger Entry").map((n) => n.id), ["pkg:internal/alpha"]);
+  assert.deepEqual(model.termUsers(d, "Plugin"), []);
+});
+
+test("every drawn node has an accessible name that says what it is", () => {
+  const d = model.applyProposals(data(), ["sample"]);
+  const group = model.layoutGroup(d, "runtime");
+  const name = (layout, id) => model.accessibleName(layout.nodes.find((n) => n.id === id));
+  assert.equal(name(group, "pkg:internal/alpha"), "alpha, package internal/alpha, changed by a proposal");
+  assert.equal(name(group, "pkg:internal/theta"), "theta, package internal/theta, added by a proposal");
+  assert.equal(name(group, "pkg:internal/gamma"), "gamma, Intelligence, outside this view");
+  const containers = model.layoutContainers(d);
+  assert.equal(name(containers, "container:db"), "Database, Data store");
+  const er = model.layoutDiagram(d, model.findDiagram(d, "delta-er").diagram);
+  assert.equal(name(er, "widgets"), "widgets, table in fixture, 4 columns");
+  const states = model.layoutDiagram(d, model.findDiagram(d, "delta-states").diagram);
+  assert.equal(name(states, "~initial"), "Initial state");
+});

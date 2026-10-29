@@ -2964,6 +2964,48 @@
     return { nodes: Object.keys(nodes).sort(byString), edges: edges };
   }
 
+  // termUsers lists the nodes that name a glossary term or cite it.
+  function termUsers(data, term) {
+    return data.nodes
+      .filter(function (node) {
+        return nodeTerms(data, node).some(function (t) {
+          return t.term === term;
+        });
+      })
+      .map(function (node) {
+        return { id: node.id, title: node.title || node.id, kind: node.kind || "" };
+      })
+      .sort(byTitleThenId);
+  }
+
+  var CHANGE_WORDS = { added: "added", changed: "changed", removed: "removed" };
+
+  // accessibleName says what a drawn node is, for screen readers and
+  // keyboard users: its title, what kind of thing it is, and any change a
+  // proposal makes to it.
+  function accessibleName(n) {
+    if (!n) return "";
+    if (n.shape === "initial") return "Initial state";
+    var parts = [n.title || n.id];
+    var path = packagePath(n.ref || "");
+    if (n.kind === "table") {
+      parts.push("table in " + n.subtitle);
+      if (n.stub) parts.push("not listed in this diagram");
+      else if (n.missing) parts.push("not in the facts yet");
+      else parts.push(n.columns.length + (n.columns.length === 1 ? " column" : " columns"));
+    } else if (n.boundary) {
+      parts.push(n.subtitle, "outside this view");
+    } else if (n.shape === "state") {
+      parts.push("state");
+    } else if (path) {
+      parts.push("package " + path);
+    } else if (n.kind) {
+      parts.push(kindLabel(n.kind));
+    }
+    if (CHANGE_WORDS[n.change]) parts.push(CHANGE_WORDS[n.change] + " by a proposal");
+    return parts.filter(Boolean).join(", ");
+  }
+
   // packageDetails is the name the panel first used for nodeDetails.
   var packageDetails = nodeDetails;
 
@@ -3285,6 +3327,9 @@
     involvedFlows: involvedFlows,
     search: search,
     nodeHome: nodeHome,
+    termUsers: termUsers,
+    accessibleName: accessibleName,
+    kindLabel: kindLabel,
     LEVELS: LEVELS,
     levelOf: levelOf,
     resolveState: resolveState,
