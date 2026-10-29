@@ -122,8 +122,44 @@ is malformed data. Optional lists may be left out.
   in `test`, Go's convention for test helpers.
 - **imports**: in-module imports between those packages from every non-test
   file, ignoring build constraints, so every platform extracts the same edges.
-- **commands**, **routes**, **databases**: empty until their extraction lands
-  (ticket #187). The shapes above are what the check and viewer already read.
+- **commands**: the word paths of each command package's binary (named after
+  its directory). A string literal compared by `==`, `!=`, or a `switch`
+  case with an element of the argument slice is the word at that element's
+  position, counted from the first argument after the binary name. Earlier
+  words come from the conditions around the comparison: enclosing `if` and
+  `switch` branches, the left side of `&&` and `||`, and the rest of a block
+  after an `if` that returns. The reading starts at `main` and follows calls
+  into the package's own functions and methods that receive the arguments, a
+  slice of them, or one of them. Literals starting with `-` are flags and
+  `""` is no word; both are skipped. Any other comparison whose position or
+  earlier words cannot be known fails extraction, naming the file and
+  function. `source` is the function nearest `main` that compares the last
+  word. A comparison with a copy of the arguments built another way (such as
+  a filtered `append`) is not an argument comparison and is not seen; the
+  golden test in `scripts/explorer/commands_test.go` reconciles every path
+  with the binaries' usage strings and lists the known gaps.
+- **routes**: every `Handle` and `HandleFunc` call in a non-test file on a
+  ServeMux (a `*http.ServeMux` parameter or variable, a variable set from
+  `http.NewServeMux()`, or the `http` package's default mux). The pattern is
+  a string literal, or a literal prefix joined to the key of a range over a
+  map literal with literal keys, or to the element of a range over a slice
+  literal of strings, expanded once per key or element; any other pattern
+  fails extraction, naming the file and function. A leading method such as
+  `GET ` becomes `method`. `guard` is the method called on the enclosing
+  method's receiver with the handler as an argument, seen through
+  conversions such as `http.HandlerFunc`, local variables, and a closure that
+  delegates with `ServeHTTP`; a route without one has no `guard`.
+- **databases**: Evie's databases (`evie`, `finance`, `youtube`), each
+  created by its package's real open-and-migrate entry point on a fresh
+  temporary file, with `HOME` pointed at that file's temporary directory
+  while it runs (finance takes its path from `HOME`). A database opened
+  outside its temporary directory fails extraction, so the owner's databases
+  are never opened. Tables are read from SQLite, sorted by name, leaving out
+  SQLite's internal `sqlite_` tables, the shadow tables of virtual tables,
+  and views; virtual tables themselves are listed. Columns keep their
+  declared order; `primaryKey` is the column's 1-based position in the
+  primary key, or 0. A foreign key that names no parent columns references
+  the parent's primary key.
 - **glossary**: the bold `**Term**:` entries of `GLOSSARY.md`, the paragraph
   after each as the definition, and its `_Avoid_:` line.
 - **adrs**: the numbered files in `docs/adr/` with their first heading.

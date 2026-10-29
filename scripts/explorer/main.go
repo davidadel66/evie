@@ -16,27 +16,27 @@ import (
 const usage = "usage: go run ./scripts/explorer extract|check"
 
 func main() {
-	os.Exit(run(os.Args[1:], ".", os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], ".", evieDatabases, os.Stdout, os.Stderr))
 }
 
-// run executes one subcommand against the repository at root and returns the
-// process exit code: 0 on success, 1 when check finds problems, 2 when the
-// command cannot run.
-func run(args []string, root string, stdout, stderr io.Writer) int {
+// run executes one subcommand against the repository at root, whose
+// databases are created from databases, and returns the process exit code:
+// 0 on success, 1 when check finds problems, 2 when the command cannot run.
+func run(args []string, root string, databases []databaseSource, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
 		fmt.Fprintln(stderr, usage)
 		return 2
 	}
 	switch args[0] {
 	case "extract":
-		if err := writeFacts(root); err != nil {
+		if err := writeFacts(root, databases); err != nil {
 			fmt.Fprintf(stderr, "explorer extract: %v\n", err)
 			return 2
 		}
 		fmt.Fprintf(stdout, "wrote %s\n", factsPath)
 		return 0
 	case "check":
-		return runCheck(root, stdout, stderr)
+		return runCheck(root, databases, stdout, stderr)
 	default:
 		fmt.Fprintln(stderr, usage)
 		return 2

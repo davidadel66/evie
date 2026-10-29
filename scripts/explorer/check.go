@@ -22,8 +22,8 @@ func (p problem) String() string {
 }
 
 // runCheck prints every problem and returns the exit code.
-func runCheck(root string, stdout, stderr io.Writer) int {
-	problems, err := checkRepo(root)
+func runCheck(root string, databases []databaseSource, stdout, stderr io.Writer) int {
+	problems, err := checkRepo(root, databases)
 	if err != nil {
 		fmt.Fprintf(stderr, "explorer check: %v\n", err)
 		return 2
@@ -42,8 +42,8 @@ func runCheck(root string, stdout, stderr io.Writer) int {
 // checkRepo re-extracts the facts, compares them with the facts file, and
 // validates every data file against them. It returns every problem found; an
 // error means the check itself could not run.
-func checkRepo(root string) ([]problem, error) {
-	facts, err := extractFacts(root)
+func checkRepo(root string, databases []databaseSource) ([]problem, error) {
+	facts, err := extractFacts(root, databases)
 	if err != nil {
 		return nil, err
 	}
