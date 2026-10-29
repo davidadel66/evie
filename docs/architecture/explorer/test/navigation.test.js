@@ -140,3 +140,49 @@ test("the group overview shows a proposal's added and removed packages and count
   // zeta -> eta (runtime -> memory) is removed with zeta.
   assert.equal(view.links.find((l) => l.from === "runtime" && l.to === "memory"), undefined);
 });
+
+test("an address naming an inherited object key resolves to nothing, without crashing", () => {
+  const d = data();
+  for (const name of ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"]) {
+    for (const hash of [`#view=inside&of=${name}`, `#view=focus&of=${name}`, `#view=group&of=${name}`, `#view=flow&of=${name}`, `#view=diagram&of=${name}`, `#view=${name}`]) {
+      const state = model.resolveState(d, model.parseHash(hash));
+      assert.equal(state.of, undefined, hash);
+      assert.ok(state.notice, `${hash} explains the fallback`);
+      model.layoutView(d, state);
+      model.breadcrumb(d, state);
+    }
+    const quiet = model.resolveState(d, model.parseHash(`#node=${name}&term=${name}&proposals=${name}`));
+    assert.deepEqual(quiet, { view: "context", proposals: [] }, name);
+    const details = model.nodeDetails(d, name);
+    assert.equal(details.node, null, name);
+    assert.equal(details.pkg, null, name);
+    for (const kind of ["node", "term", "adr", "table", "route", "command", "pkg"]) {
+      const link = model.resolveRef(kind + ":" + name, d);
+      assert.equal(link.title, undefined, `${kind}:${name} has no title`);
+      assert.equal(link.definition, undefined, `${kind}:${name} has no definition`);
+      assert.equal(link.href, undefined, `${kind}:${name} has no link`);
+      if (link.target) assert.equal(link.target.node, undefined, `${kind}:${name} has no owner`);
+    }
+    assert.equal(model.resolveRef("node:" + name, d).text, name);
+    assert.equal(model.resolveRef("adr:" + name, d).text, "ADR " + name);
+    assert.equal(model.levelOf(name), "context");
+    assert.deepEqual(model.search(d, name).filter((r) => r.id === name), []);
+  }
+  const prefixed = model.nodeDetails(d, "pkg:constructor");
+  assert.equal(prefixed.pkg, null, "a package path is looked up as an own key too");
+});
+
+test("a node or term whose id is an inherited object key is found like any other", () => {
+  const objects = require("./fixture.js").fixtureObjects();
+  const facts = objects.find((o) => o.kind === "facts");
+  facts.glossary.push({ term: "constructor", definition: "Builds things.", avoid: [] });
+  const content = objects.find((o) => o.kind === "content");
+  content.nodes.push({ id: "toString", level: "container", kind: "process", title: "Stringer", summary: { text: "Turns things into text.", refs: ["code:internal/alpha"] }, contains: ["pkg:internal/alpha"] });
+  const d = model.mergeData(objects);
+
+  assert.equal(model.resolveState(d, model.parseHash("#view=inside&of=toString")).of, "toString");
+  assert.equal(model.resolveState(d, model.parseHash("#term=constructor")).term, "constructor");
+  assert.equal(model.nodeDetails(d, "toString").node.title, "Stringer");
+  assert.equal(model.resolveRef("term:constructor", d).definition, "Builds things.");
+  assert.equal(model.layoutView(d, { view: "inside", of: "toString" }).kind, "inside");
+});

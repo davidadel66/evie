@@ -37,6 +37,29 @@
     return a < b ? -1 : a > b ? 1 : 0;
   }
 
+  // dict returns a map with no prototype. Every map keyed by data (node ids,
+  // terms, paths, proposal ids) is one, so a key such as "constructor" or
+  // "__proto__" finds only what the data put there.
+  function dict() {
+    return Object.create(null);
+  }
+
+  // own reads a fixed lookup table by a key that came from data, ignoring
+  // what the table inherits.
+  function own(table, key) {
+    return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined;
+  }
+
+  // copy shallow-copies object's own keys into into, or into a new plain
+  // object, and returns the result.
+  function copy(object, into) {
+    var out = into || {};
+    Object.keys(object || {}).forEach(function (key) {
+      out[key] = object[key];
+    });
+    return out;
+  }
+
   function groupIndex(id) {
     for (var i = 0; i < GROUPS.length; i++) {
       if (GROUPS[i].id === id) return i;
@@ -50,10 +73,7 @@
   }
 
   function normalizeNode(node, owner) {
-    var out = {};
-    Object.keys(node).forEach(function (key) {
-      out[key] = node[key];
-    });
+    var out = copy(node);
     NODE_LISTS.forEach(function (key) {
       out[key] = list(node[key]);
     });
@@ -67,10 +87,7 @@
   }
 
   function normalizeFacts(facts) {
-    var out = {};
-    Object.keys(facts || {}).forEach(function (key) {
-      out[key] = facts[key];
-    });
+    var out = copy(facts);
     FACT_LISTS.forEach(function (key) {
       out[key] = list(out[key]);
     });
@@ -82,7 +99,7 @@
   // design proposals. It normalises missing lists and never validates; the
   // explorer tool's check does that.
   function mergeData(objects) {
-    var data = { facts: normalizeFacts(null), nodes: [], nodeById: {}, edges: [], flows: [], proposals: [] };
+    var data = { facts: normalizeFacts(null), nodes: [], nodeById: dict(), edges: [], flows: [], proposals: [] };
     function index(node) {
       if (node.id && !data.nodeById[node.id]) data.nodeById[node.id] = node;
       node.children.forEach(index);
@@ -103,15 +120,15 @@
         data.proposals.push(object);
       }
     });
-    data.packageByPath = {};
+    data.packageByPath = dict();
     data.facts.packages.forEach(function (p) {
       data.packageByPath[p.path] = p;
     });
-    data.termByName = {};
+    data.termByName = dict();
     data.facts.glossary.forEach(function (t) {
       data.termByName[t.term] = t;
     });
-    data.adrByNumber = {};
+    data.adrByNumber = dict();
     data.facts.adrs.forEach(function (a) {
       data.adrByNumber[a.number] = a;
     });
@@ -128,7 +145,7 @@
   // via import labels the facts edge it matches instead of repeating it.
   function buildLinks(data) {
     var links = [];
-    var byKey = {};
+    var byKey = dict();
     data.facts.imports.forEach(function (imp) {
       var link = { from: "pkg:" + imp.from, to: "pkg:" + imp.to, via: "import", label: "", refs: [] };
       if (byKey[linkKey(link)]) return;
@@ -147,14 +164,6 @@
       links.push(link);
     });
     return links;
-  }
-
-  function copy(object) {
-    var out = {};
-    Object.keys(object).forEach(function (key) {
-      out[key] = object[key];
-    });
-    return out;
   }
 
   // Proposal operations name the item beside "op"; these keys identify the
@@ -274,7 +283,7 @@
       });
     });
     out.nodes = nodes;
-    out.nodeById = copy(data.nodeById);
+    out.nodeById = copy(data.nodeById, dict());
     nodes.forEach(function (node) {
       out.nodeById[node.id] = node;
     });
@@ -300,7 +309,7 @@
   var CHANGES = ["added", "changed", "removed"];
 
   function changeStyle(change) {
-    var style = Object.prototype.hasOwnProperty.call(CHANGE_STYLES, change) ? CHANGE_STYLES[change] : null;
+    var style = own(CHANGE_STYLES, change);
     if (!style) return null;
     return {
       className: "change-" + change,
@@ -333,7 +342,7 @@
     var groups = GROUPS.map(function (g) {
       return { id: g.id, label: g.label, subgroups: [] };
     });
-    var groupOf = {};
+    var groupOf = dict();
     data.nodes.forEach(function (node) {
       var gi = groupIndex(node.group);
       if (node.level !== "component" || gi < 0) return;
@@ -358,7 +367,7 @@
         s.nodes.sort(byTitle);
       });
     });
-    var counts = {};
+    var counts = dict();
     data.links.forEach(function (link) {
       if (link.via !== "import" || link.change === "removed") return;
       var from = groupOf[packagePath(link.from)];
@@ -468,7 +477,7 @@
       });
       panels.push(panel);
     });
-    var panelById = {};
+    var panelById = dict();
     panels.forEach(function (p) {
       panelById[p.id] = p;
     });
@@ -621,7 +630,7 @@
   };
 
   function kindLabel(kind) {
-    return KIND_LABELS[kind] || kind || "";
+    return own(KIND_LABELS, kind) || kind || "";
   }
 
   // drawnNode makes a layout node for an explorer node.
@@ -639,10 +648,7 @@
       width: round(width),
       height: round(height),
     };
-    Object.keys(extra || {}).forEach(function (key) {
-      out[key] = extra[key];
-    });
-    return out;
+    return copy(extra, out);
   }
 
   function emptyLayout(kind, title, text) {
@@ -819,12 +825,12 @@
   // returns the points an edge must pass through.
   function routeLinks(nodes, links, opts) {
     opts = opts || {};
-    var byId = {};
+    var byId = dict();
     nodes.forEach(function (n) {
       byId[n.id] = n;
     });
     var routes = [];
-    var slots = {};
+    var slots = dict();
     function slot(node, side, entry) {
       var key = node.id + "|" + side;
       (slots[key] = slots[key] || { node: node, side: side, entries: [] }).entries.push(entry);
@@ -904,7 +910,7 @@
   // nodes apart: stacked across the edges' direction around their shared
   // middle.
   function stackParallelLabels(edges) {
-    var groups = {};
+    var groups = dict();
     edges.forEach(function (e) {
       if (!e.labelLines.length || e.from === e.to) return;
       var key = e.from < e.to ? e.from + "\u0000" + e.to : e.to + "\u0000" + e.from;
@@ -947,7 +953,7 @@
   // linksAmong lists the links whose two ends both have drawn nodes, in a
   // fixed order whatever order the data gave them in.
   function linksAmong(data, ids) {
-    var set = {};
+    var set = dict();
     ids.forEach(function (id) {
       set[id] = true;
     });
@@ -1018,7 +1024,7 @@
     nodes.forEach(function (node) {
       (node.kind === "person" ? people : node.kind === "system" ? systems : others).push(node);
     });
-    var systemIds = {};
+    var systemIds = dict();
     systems.forEach(function (n) {
       systemIds[n.id] = true;
     });
@@ -1140,14 +1146,14 @@
   // links to in the other columns: a few sweeps of the barycentre heuristic,
   // ties kept in their current order.
   function orderByNeighbours(columns, links, sweeps) {
-    var neighbours = {};
+    var neighbours = dict();
     links.forEach(function (l) {
       if (l.from === l.to) return;
       (neighbours[l.from] = neighbours[l.from] || []).push(l.to);
       (neighbours[l.to] = neighbours[l.to] || []).push(l.from);
     });
     function positions() {
-      var pos = {};
+      var pos = dict();
       columns.forEach(function (col) {
         col.forEach(function (n, i) {
           pos[n.id] = col.length > 1 ? i / (col.length - 1) : 0.5;
@@ -1384,8 +1390,8 @@
   }
 
   function crossingCount(upper, lower, segments) {
-    var pu = {};
-    var pl = {};
+    var pu = dict();
+    var pl = dict();
     upper.forEach(function (n, i) {
       pu[n.id] = i;
     });
@@ -1413,8 +1419,8 @@
   // an id on its stack, so cycles rank too; each edge gets
   // reversed, top, and bottom. Self edges are left out of the ranking.
   function rankEdges(ids, edges) {
-    var out = {};
-    var inn = {};
+    var out = dict();
+    var inn = dict();
     ids.forEach(function (id) {
       out[id] = [];
       inn[id] = [];
@@ -1422,7 +1428,7 @@
     edges.forEach(function (e) {
       if (!e.self) out[e.from].push(e);
     });
-    var state = {};
+    var state = dict();
     function visit(id) {
       state[id] = 1;
       out[id]
@@ -1438,7 +1444,7 @@
     }
     // Sources first, so a cycle is broken where the walk from a source
     // closes it, not at an arbitrary id.
-    var indegree = {};
+    var indegree = dict();
     edges.forEach(function (e) {
       if (!e.self) indegree[e.to] = (indegree[e.to] || 0) + 1;
     });
@@ -1461,8 +1467,8 @@
       out[e.top].push(e);
       inn[e.bottom].push(e);
     });
-    var rank = {};
-    var pending = {};
+    var rank = dict();
+    var pending = dict();
     ids.forEach(function (id) {
       pending[id] = inn[id].length;
     });
@@ -1494,7 +1500,7 @@
     opts = opts || {};
     var rankGap = opts.rankGap || LAYERED.rankGap;
     var nodeGap = opts.nodeGap || LAYERED.nodeGap;
-    var byId = {};
+    var byId = dict();
     var ids = boxes
       .map(function (b) {
         byId[b.id] = b;
@@ -1526,13 +1532,13 @@
     // stay short.
     var perRow = opts.maxPerRow || 0;
     if (perRow) {
-      var balance = {};
+      var balance = dict();
       dag.forEach(function (e) {
         balance[e.top] = (balance[e.top] || 0) + 1;
         balance[e.bottom] = (balance[e.bottom] || 0) - 1;
       });
       var next = 0;
-      var remap = {};
+      var remap = dict();
       for (var lr = 0; lr <= maxRank; lr++) {
         var members = ids
           .filter(function (id) {
@@ -1573,8 +1579,8 @@
       e.chain = chain;
       for (var i = 0; i + 1 < chain.length; i++) segments.push([chain[i], chain[i + 1]]);
     });
-    var up = {};
-    var down = {};
+    var up = dict();
+    var down = dict();
     segments.forEach(function (s) {
       (down[s[0]] = down[s[0]] || []).push(s[1]);
       (up[s[1]] = up[s[1]] || []).push(s[0]);
@@ -1582,7 +1588,7 @@
     // Start each row with its boxes in name order and its dummies spread
     // evenly between them, so edges passing a wrapped layer go between its
     // boxes rather than around one end.
-    var relative = {};
+    var relative = dict();
     rows.forEach(function (row) {
       var real = row
         .filter(function (n) {
@@ -1624,7 +1630,7 @@
       return c;
     }
     function reorder(rs, i, neighbours, ref) {
-      var pos = {};
+      var pos = dict();
       ref.forEach(function (n, k) {
         pos[n.id] = k;
       });
@@ -1742,8 +1748,8 @@
     });
     // Ports: the edges leaving a box's bottom spread along it in the order
     // of where they go next; likewise those arriving at its top.
-    var bottomPorts = {};
-    var topPorts = {};
+    var bottomPorts = dict();
+    var topPorts = dict();
     dag.forEach(function (e) {
       var first = e.chain[0];
       var second = e.chain[1];
@@ -1836,9 +1842,7 @@
       labelX: round(path.mid.x + (route.self ? 14 : 0)),
       labelY: round(path.mid.y),
     };
-    Object.keys(extra || {}).forEach(function (key) {
-      out[key] = extra[key];
-    });
+    copy(extra, out);
     if (route.self) out.extent = [{ x: a.x + 60, y: b.y }];
     return out;
   }
@@ -1871,7 +1875,7 @@
   // member is hovered or selected.
   function layoutMembers(data, kind, memberIds, title) {
     var g = GROUP_VIEW;
-    var member = {};
+    var member = dict();
     memberIds.forEach(function (id) {
       member[id] = true;
     });
@@ -1882,7 +1886,7 @@
       .forEach(function (id) {
         if (data.nodeById[id]) boxes.push(packageBox(data.nodeById[id], data, false));
       });
-    var outside = {};
+    var outside = dict();
     var links = [];
     var chipLinks = [];
     data.links.forEach(function (l) {
@@ -1907,7 +1911,7 @@
       return Math.max(3, Math.floor(g.rowBudget / (average + g.nodeGap)));
     }
     var result = layered(boxes, links, { rankGap: g.rankGap, nodeGap: g.nodeGap, maxPerRow: perRow(boxes) });
-    var byId = {};
+    var byId = dict();
     boxes.forEach(function (b) {
       byId[b.id] = b;
     });
@@ -2025,7 +2029,7 @@
     var f = FOCUS;
     var node = data.nodeById[id];
     if (!node) return emptyLayout("focus", "No such node", "The address names a node the data does not have.");
-    var seen = { callers: {}, dependencies: {} };
+    var seen = { callers: dict(), dependencies: dict() };
     var links = [];
     data.links.forEach(function (l) {
       if (l.from === l.to) return;
@@ -2155,7 +2159,7 @@
     var q = SEQUENCE;
     var ids = list(flow && flow.participants);
     if (!ids.length) return emptyLayout("sequence", "No participants yet", "A flow needs participants and steps to draw.");
-    var index = {};
+    var index = dict();
     var participants = ids.map(function (id, i) {
       index[id] = i;
       var node = data.nodeById[id];
@@ -2363,7 +2367,7 @@
   // bottom with the layered engine.
   function layoutLayeredDiagram(kind, boxes, links, title) {
     var d = DIAGRAM;
-    var selfLoops = {};
+    var selfLoops = dict();
     links.forEach(function (l) {
       if (l.from === l.to) selfLoops[l.from] = Math.max(selfLoops[l.from] || 0, textWidth(l.label, 11) + d.loopRoom);
     });
@@ -2396,7 +2400,7 @@
   }
 
   function layoutGraphDiagram(data, diagram) {
-    var known = {};
+    var known = dict();
     var boxes = list(diagram.nodes).map(function (n) {
       known[n.id] = true;
       return diagramBox(n.id, n.label || n.id, n.node, data);
@@ -2447,18 +2451,18 @@
   // the streets, and enters its target's band straight.
   function layoutLaneGraph(data, diagram, boxes, links) {
     var g = LANES;
-    var byId = {};
+    var byId = dict();
     boxes.forEach(function (b) {
       byId[b.id] = b;
     });
     var laneDefs = list(diagram.lanes).map(function (l) {
       return { id: l.id, title: l.title || l.id };
     });
-    var laneIndex = {};
+    var laneIndex = dict();
     laneDefs.forEach(function (l, i) {
       laneIndex[l.id] = i;
     });
-    var laneOfNode = {};
+    var laneOfNode = dict();
     list(diagram.nodes).forEach(function (n) {
       laneOfNode[n.id] = laneIndex[n.lane];
     });
@@ -2470,7 +2474,7 @@
     }
     // Ranks within each lane, from the edges inside it. A cycle is broken
     // where the author's order of nodes starts it.
-    var rank = {};
+    var rank = dict();
     laneDefs.forEach(function (def, li) {
       var ids = boxes
         .filter(function (b) {
@@ -2595,7 +2599,7 @@
         }
         routes.push({ link: link, a: a, b: b, kind: kind, sides: sides });
       });
-    var slots = {};
+    var slots = dict();
     routes.forEach(function (r, i) {
       if (r.kind === "self") return;
       [[r.a, r.sides[0], r.b], [r.b, r.sides[1], r.a]].forEach(function (end, k) {
@@ -2706,7 +2710,7 @@
   // layoutStateDiagram draws states top to bottom from the initial marker,
   // with every transition, loops and returns included.
   function layoutStateDiagram(data, diagram) {
-    var known = {};
+    var known = dict();
     var boxes = list(diagram.states).map(function (st) {
       known[st.id] = true;
       var box = diagramBox(st.id, st.label || st.id, null, data);
@@ -2744,17 +2748,17 @@
     if (!db) {
       return emptyLayout("er", "No tables for " + (diagram.database || "this database") + " yet", "Columns and keys come from the extracted facts, which do not list this database yet.");
     }
-    var tables = {};
+    var tables = dict();
     list(db.tables).forEach(function (t) {
       tables[t.name] = t;
     });
     var owner = db.package && data.nodeById["pkg:" + db.package] ? "pkg:" + db.package : null;
-    var cards = {};
+    var cards = dict();
     var names = [];
     function card(name, stub) {
       if (cards[name]) return cards[name];
       var table = tables[name];
-      var fkCols = {};
+      var fkCols = dict();
       list(table && table.foreignKeys).forEach(function (fk) {
         list(fk.columns).forEach(function (c) {
           fkCols[c] = true;
@@ -3047,14 +3051,14 @@
   function proposalDetails(data, id) {
     var p = proposalById(data, id);
     if (!p) return null;
-    var titles = {};
+    var titles = dict();
     Object.keys(data.nodeById).forEach(function (k) {
       titles[k] = titleOf(data, k);
     });
     list(p.nodes).forEach(function (op) {
       if (op.op === "add" && op.id) titles[op.id] = op.title || op.id;
     });
-    var flowTitles = {};
+    var flowTitles = dict();
     data.flows.forEach(function (f) {
       flowTitles[f.id] = f.title || f.id;
     });
@@ -3181,7 +3185,7 @@
   };
 
   function levelOf(view) {
-    return VIEW_LEVEL[view] || "context";
+    return own(VIEW_LEVEL, view) || "context";
   }
 
   function flowById(data, id) {
@@ -3424,7 +3428,7 @@
   // neighbours lists what hovering a drawn node lights: the node, the nodes
   // it shares an edge with, and those edges (by index).
   function neighbours(layout, id) {
-    var nodes = {};
+    var nodes = dict();
     var edges = [];
     list(layout.edges).forEach(function (e, i) {
       if (e.from !== id && e.to !== id) return;
@@ -3477,7 +3481,7 @@
     } else if (n.kind) {
       parts.push(kindLabel(n.kind));
     }
-    if (CHANGE_WORDS[n.change]) parts.push(CHANGE_WORDS[n.change] + " by a proposal");
+    if (own(CHANGE_WORDS, n.change)) parts.push(CHANGE_WORDS[n.change] + " by a proposal");
     return parts.filter(Boolean).join(", ");
   }
 
@@ -3571,7 +3575,7 @@
     });
     var sections = [];
     keys.forEach(function (key) {
-      var format = FACT_FORMATS[key] || genericFact;
+      var format = own(FACT_FORMATS, key) || genericFact;
       var items = [];
       facts[key].forEach(function (item) {
         if (item && item.package === path) items = items.concat(format(item));
@@ -3919,12 +3923,12 @@
     box: null,
     svg: null,
     content: null,
-    nodeEls: {},
+    nodeEls: dict(),
     edgeEls: [],
     problems: [],
     flash: null,
-    expanded: {},
-    overlays: {},
+    expanded: dict(),
+    overlays: dict(),
     animating: null,
   };
 
@@ -3970,10 +3974,7 @@
   // select changes only the selection, keeping the view.
   function select(id, extra) {
     var next = { view: app.state.view, of: app.state.of, step: app.state.step, node: id || undefined, proposals: app.state.proposals };
-    Object.keys(extra || {}).forEach(function (k) {
-      next[k] = extra[k];
-    });
-    go(next, { replace: true });
+    go(copy(extra, next), { replace: true });
   }
 
   function apply(raw, opts) {
@@ -4208,7 +4209,7 @@
   // drawLayout draws one view: an SVG for diagrams, HTML for the flows
   // index, and an empty-state card when a view has nothing yet.
   function drawLayout(layout) {
-    var result = { svg: null, content: null, overlay: null, nodeEls: {}, edgeEls: [] };
+    var result = { svg: null, content: null, overlay: null, nodeEls: dict(), edgeEls: [] };
     if (layout.kind === "flows") {
       result.overlay = drawFlowIndex(layout);
       return result;
@@ -4344,7 +4345,7 @@
     if ((!n.shape || n.shape === "part") && !n.boundary && n.kind !== "system" && !n.focus) {
       svg("rect", { class: "accent", x: 0, y: 10, width: 3, height: h - 20, rx: 1.5 }, g);
     }
-    var iconName = n.shape ? null : KIND_ICON[n.kind] || (n.kind === "package" && !n.boundary ? "package" : null);
+    var iconName = n.shape ? null : own(KIND_ICON, n.kind) || (n.kind === "package" && !n.boundary ? "package" : null);
     var tx = 14;
     if (iconName && !n.focus && !list(n.summaryLines).length && h >= 40) {
       svgIcon(iconName, g, 13, h / 2 - 9, 18);
@@ -4353,7 +4354,7 @@
     var anchor = n.shape === "state" ? "middle" : "start";
     if (anchor === "middle") tx = w / 2;
     if (n.focus || list(n.summaryLines).length) {
-      svgIcon(KIND_ICON[n.kind] || "package", g, 16, 16, 20);
+      svgIcon(own(KIND_ICON, n.kind) || "package", g, 16, 16, 20);
       svg("text", { class: "title focus-title", x: 46, y: 32 }, g).textContent = n.title;
       svg("text", { class: "subtitle", x: 46, y: 50 }, g).textContent = n.subtitle || "";
       svg("line", { class: "divider", x1: 16, x2: w - 16, y1: 66, y2: 66 }, g);
@@ -4542,7 +4543,7 @@
       svg("line", { class: "lifeline", x1: p.lifeline, x2: p.lifeline, y1: p.lifelineTop, y2: p.lifelineBottom }, lifelines);
     });
     var steps = svg("g", { class: "steps" }, content);
-    app.stepEls = {};
+    app.stepEls = dict();
     layout.steps.forEach(function (s) {
       var top = s.box ? s.box.y - 8 : s.y - s.lines.length * 15 - 12;
       var bottom = s.box ? s.box.y + s.box.height + 8 : s.self ? s.y2 + 10 : s.y + 12;
@@ -4589,7 +4590,7 @@
         feet.y = p.lifelineBottom + 6;
         feet.height = 30;
         feet.subtitle = "";
-        var g = drawBox(footer, feet, { nodeEls: {} });
+        var g = drawBox(footer, feet, { nodeEls: dict() });
         g.setAttribute("tabindex", "-1");
         g.setAttribute("aria-hidden", "true");
         g.setAttribute("data-id", p.id);
@@ -5179,7 +5180,7 @@
     results.forEach(function (r, i) {
       var li = html("li", { id: "search-result-" + i, role: "option", class: "search-result" + (i === searchState.active ? " active" : ""), "aria-selected": i === searchState.active ? "true" : "false" }, ul);
       var node = r.type === "node" ? app.data.nodeById[r.id] : null;
-      htmlIcon(node ? KIND_ICON[node.kind] || "package" : typeIcon[r.type], li, "result-icon" + (node && node.group ? " group-" + node.group : ""));
+      htmlIcon(node ? own(KIND_ICON, node.kind) || "package" : typeIcon[r.type], li, "result-icon" + (node && node.group ? " group-" + node.group : ""));
       var text = html("span", { class: "result-text" }, li);
       html("span", { class: "result-label" }, text, r.label);
       html("span", { class: "result-detail" }, text, r.detail);
@@ -5434,7 +5435,7 @@
     var details = nodeDetails(app.data, id);
     var node = details.node;
     var sub = details.path || kindLabel(node.kind);
-    panelHeader(panel, KIND_ICON[node.kind] || "package", node.title || node.id, sub, closePanel, node.group ? "group-" + node.group : "kind-" + node.kind);
+    panelHeader(panel, own(KIND_ICON, node.kind) || "package", node.title || node.id, sub, closePanel, node.group ? "group-" + node.group : "kind-" + node.kind);
     var tags = html("p", { class: "tags" }, panel);
     if (node.group) html("span", { class: "tag group-tag group-" + node.group }, tags, groupLabel(node.group) + (node.subgroup ? " · " + node.subgroup : ""));
     if (details.pkg) html("span", { class: "tag" }, tags, details.pkg.command ? "command" : "library");
@@ -5753,7 +5754,7 @@
 
   function boot(objects) {
     app.base = mergeData(objects);
-    app.overlays = {};
+    app.overlays = dict();
     renderProblems();
     wireChrome();
     var canvas = byId("canvas");
@@ -5814,7 +5815,7 @@
         load(wanted.path, function (ok) {
           var added = registered.splice(before);
           if (!ok) app.problems.push("The proposal file " + wanted.path + " did not load.");
-          var known = {};
+          var known = dict();
           registered.forEach(function (o) {
             if (o && o.kind === "proposal") known[o.id] = true;
           });
