@@ -56,3 +56,11 @@ Spec: [system-page.spec.md](system-page.spec.md).
   remembers no workbench view across reloads. Claude corrected the spec to
   match Data rather than adding view persistence, which would change Data's
   behaviour and was never asked for.
+- **2026-10-31 — Changelog `Touches:` accepts any clean repository path, and
+  `Commits: a..b` includes both ends.** Decided while building ticket #196.
+  `Touches:` was approved as package paths, but a merge can touch no package
+  (the system explorer touched only `scripts/` and `docs/`), so any clean
+  relative path is accepted and non-package paths show as plain text; every
+  entry valid under the approved format stays valid. An inclusive range lets
+  the root commit start a range and one commit stand alone; the check
+  requires the first commit to be the last or its ancestor.
