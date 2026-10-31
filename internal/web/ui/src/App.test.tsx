@@ -22,10 +22,11 @@ describe("WorkbenchBar", () => {
     expect(html).toMatch(/<button[^>]*title="Back to Dinner prep"[^>]*>Dinner prep<\/button>/);
     expect(html).toMatch(/aria-current="page"[^>]*>Cairo&#x27;s Kitchen</);
     expect(renderToStaticMarkup(<WorkbenchBar {...base} view={{id: "data", kind: "data"}} />)).toMatch(/aria-current="page"[^>]*>Data</);
+    expect(renderToStaticMarkup(<WorkbenchBar {...base} view={{id: "system", kind: "system"}} />)).toMatch(/<button[^>]*title="Back to Dinner prep"[^>]*>Dinner prep<\/button>[\s\S]*aria-current="page"[^>]*>System</);
   });
 
   it("offers the Inspector toggle only in chat, and the notifications icon on every view", () => {
-    const views: WorkbenchView[] = [{id: "chat", kind: "chat"}, {id: "data", kind: "data"}, {id: "workspaces", kind: "workspaces"},
+    const views: WorkbenchView[] = [{id: "chat", kind: "chat"}, {id: "data", kind: "data"}, {id: "system", kind: "system"}, {id: "workspaces", kind: "workspaces"},
       {id: "workspace:one", kind: "workspace", workspaceId: "one", label: "Cairo's Kitchen", tab: "settings"}];
     for (const view of views) {
       const html = renderToStaticMarkup(<WorkbenchBar {...base} view={view} notifications={<button type="button" aria-label="Notifications" />} />);

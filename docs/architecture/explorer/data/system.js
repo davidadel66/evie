@@ -1034,6 +1034,7 @@ evieExplorer.register(
       "contains": [
         "pkg:cmd/evie",
         "pkg:internal/web",
+        "pkg:docs/architecture/explorer",
         "pkg:internal/agent",
         "pkg:internal/openrouter",
         "pkg:internal/plugins",

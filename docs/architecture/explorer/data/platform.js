@@ -946,6 +946,74 @@ evieExplorer.register(
       ]
     },
     {
+      "id": "pkg:docs/architecture/explorer",
+      "level": "component",
+      "kind": "package",
+      "title": "explorer",
+      "group": "infrastructure",
+      "subgroup": "Surfaces",
+      "summary": {
+        "text": "The explorer snapshot: a tiny package beside the system explorer's files that builds the page, its viewer and stylesheet, its data and its examples into the evie binary, so the System view shows the explorer of the build that is running.",
+        "refs": [
+          "code:docs/architecture/explorer/snapshot.go#Files",
+          "doc:cmd/evie/docs/active/system-page.spec.md#modules"
+        ]
+      },
+      "does": [
+        {
+          "text": "Files returns the snapshot rooted at the explorer directory: index.html, explorer.js, explorer.css, data/ and examples/, fixed when the binary is built.",
+          "refs": [
+            "code:docs/architecture/explorer/snapshot.go#Files",
+            "code:docs/architecture/explorer/snapshot.go#files"
+          ]
+        },
+        {
+          "text": "internal/web serves it under /explorer/, GET and HEAD only, with a 404 for anything else, beside a generated build.js naming the repository, the commit and whether the build had uncommitted changes.",
+          "refs": [
+            "route:/explorer/",
+            "code:internal/web/explorer.go#Server.registerExplorerRoutes",
+            "code:internal/web/explorer.go#readExplorerBuild"
+          ]
+        }
+      ],
+      "owns": [
+        {
+          "text": "No data of its own: only the explorer's files as they were in the commit the binary was built from.",
+          "refs": [
+            "code:docs/architecture/explorer/snapshot.go#files"
+          ]
+        }
+      ],
+      "interfaces": [
+        {
+          "text": "One function, Files, returning an fs.FS; internal/web is its only importer.",
+          "refs": [
+            "code:docs/architecture/explorer/snapshot.go#Files",
+            "code:internal/web/explorer.go#Server.registerExplorerRoutes"
+          ]
+        }
+      ],
+      "gotchas": [
+        {
+          "text": "go:embed reaches only its own directory, so this one package lives under docs/ rather than internal/, and the explorer tool's package extraction names its directory explicitly.",
+          "refs": [
+            "code:scripts/explorer/extract.go#snapshotDir",
+            "doc:cmd/evie/docs/active/system-page.decisions.md"
+          ]
+        },
+        {
+          "text": "Edits to the explorer's files reach evie serve only after a rebuild; the tests, README.md and the Go file itself stay out of the snapshot.",
+          "refs": [
+            "code:docs/architecture/explorer/snapshot.go#files"
+          ]
+        }
+      ],
+      "links": [
+        "doc:docs/architecture/explorer/README.md",
+        "node:pkg:internal/web"
+      ]
+    },
+    {
       "id": "pkg:cmd/evie",
       "level": "component",
       "kind": "package",

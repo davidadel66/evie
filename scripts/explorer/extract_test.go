@@ -149,6 +149,31 @@ func TestExtractImportEdgesAreTheUnionOfNonTestFiles(t *testing.T) {
 	}
 }
 
+func TestExtractIncludesTheExplorerSnapshotPackage(t *testing.T) {
+	root := newFixture(t)
+	// The package that embeds the explorer page sits beside its files, the
+	// one package outside cmd/ and internal/ (system-page.spec.md). Other
+	// Go files under docs/, and below the explorer directory, are not
+	// packages of the system.
+	writeFile(t, root, "docs/architecture/explorer/snapshot.go", "// Package explorer carries the explorer page.\npackage explorer\n")
+	writeFile(t, root, "docs/architecture/explorer/test/helper.go", "// Package helper is not part of the system.\npackage helper\n")
+	writeFile(t, root, "docs/other/other.go", "// Package other is not part of the system.\npackage other\n")
+	writeFile(t, root, "internal/beta/snapshot.go", "package beta\n\nimport _ \"example.com/fixture/docs/architecture/explorer\"\n")
+	facts := decodeFacts(t, extractFixture(t, root))
+
+	var paths []string
+	for _, p := range facts["packages"].([]any) {
+		paths = append(paths, p.(map[string]any)["path"].(string))
+	}
+	want := "cmd/tool docs/architecture/explorer internal/alpha internal/alpha/alphatest internal/beta internal/delta internal/gamma"
+	if got := strings.Join(paths, " "); got != want {
+		t.Fatalf("package paths =\n%s\nwant\n%s", got, want)
+	}
+	if got := asJSON(t, facts["imports"]); !strings.Contains(got, `{"from":"internal/beta","to":"docs/architecture/explorer"}`) {
+		t.Fatalf("imports lack internal/beta -> docs/architecture/explorer:\n%s", got)
+	}
+}
+
 func TestExtractGlossaryEntries(t *testing.T) {
 	root := newFixture(t)
 	facts := decodeFacts(t, extractFixture(t, root))

@@ -5,7 +5,7 @@ import type { StoredSession, Workspace } from "../api/contextSessions";
 
 const workspace: Workspace = {id: "one", displayName: "Cairo", state: "active", currentRevisionId: "revision-2", createdAt: "", updatedAt: ""};
 function render(workspaces: Workspace[], busy = false, collapsed = false, waiting: Record<string, number> = {}, onDeleteWorkspace?: (workspace: Workspace) => void) {
-  return renderToStaticMarkup(<Sidebar snapshot={{workspaces, projects: [], sessions: [], archivedSessions: []}} destination="chat" busy={busy} collapsed={collapsed} waiting={waiting} mobileOpen={false} onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onDeleteWorkspace={onDeleteWorkspace} onCloseMobile={() => {}} onData={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+  return renderToStaticMarkup(<Sidebar snapshot={{workspaces, projects: [], sessions: [], archivedSessions: []}} destination="chat" busy={busy} collapsed={collapsed} waiting={waiting} mobileOpen={false} onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onDeleteWorkspace={onDeleteWorkspace} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
 }
 
 describe("workspace session shortcuts", () => {
@@ -60,12 +60,32 @@ describe("workspace session shortcuts", () => {
   });
 });
 
+describe("destination views", () => {
+  const renderAt = (destination: "chat" | "system") => renderToStaticMarkup(<Sidebar snapshot={{workspaces: [workspace], projects: [], sessions: [], archivedSessions: []}} destination={destination} busy={false} mobileOpen={false}
+    onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+
+  it("lists System directly under Data, above the Workspaces", () => {
+    const html = renderAt("chat");
+    const data = html.indexOf(">Data<"), system = html.indexOf(">System<"), workspaces = html.indexOf(">Workspaces<");
+    expect(data).toBeGreaterThan(-1);
+    expect(system).toBeGreaterThan(data);
+    expect(workspaces).toBeGreaterThan(system);
+    expect(html.slice(data, system).match(/<button/g)).toHaveLength(1);
+  });
+
+  it("marks System as the current page only while it is open", () => {
+    const current = /<button[^>]*aria-current="page"[^>]*>(?:(?!<\/button>)[\s\S])*>System</;
+    expect(renderAt("system")).toMatch(current);
+    expect(renderAt("chat")).not.toMatch(current);
+  });
+});
+
 describe("collapsible workspaces", () => {
   const personal: Workspace = {...workspace, id: "two", displayName: "Personal"};
   const chat = (id: string, workspaceId: string, title: string): StoredSession => ({id, workspaceId, title, status: "active", createdAt: "", updatedAt: ""});
   const sessions = [chat("a", "one", "Cairo menu"), chat("b", "two", "Personal budget")];
   const renderWithChats = (waiting: Record<string, number> = {}) => renderToStaticMarkup(<Sidebar snapshot={{workspaces: [workspace, personal], projects: [], sessions, archivedSessions: []}} destination="chat" busy={false} waiting={waiting} mobileOpen={false}
-    onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+    onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
   afterEach(() => { vi.unstubAllGlobals(); });
 
   it("starts every workspace expanded with its chats under a labelled toggle", () => {

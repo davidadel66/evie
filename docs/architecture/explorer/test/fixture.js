@@ -2,8 +2,9 @@
 
 // A small explorer data set shaped like Evie's: context and container nodes,
 // packages in every group, content edges, flows, a node carrying one diagram
-// of every kind, facts with commands, routes, and tables, and two design
-// proposals that add, change, and remove nodes, edges, and flows.
+// of every kind, facts with commands, routes, tables, and History entries
+// (one touching a removed package), and two design proposals that add,
+// change, and remove nodes, edges, and flows.
 //
 // Not a test file: the *.test.js glob does not pick it up.
 
@@ -123,6 +124,34 @@ function facts() {
       { term: "Plugin", definition: "An installable bundle of capabilities.", avoid: ["skill pack"] },
     ],
     adrs: [{ number: "0001", title: "Make the first decision", path: "docs/adr/0001-first-decision.md" }],
+    history: [
+      {
+        date: "2026-10-20",
+        title: "Teach the tool to export",
+        branch: "feat/export",
+        merge: "abc1234",
+        touches: ["cmd/tool", "internal/beta"],
+        sources: ["doc:docs/export.spec.md", "#12"],
+        text: ["The tool writes its widgets as files.", "Owners asked to keep copies."],
+      },
+      {
+        date: "2026-10-20",
+        title: "Retire the old store",
+        branch: "chore/retire-store",
+        touches: ["internal/gone", "internal/beta"],
+        sources: ["#11"],
+        text: ["The old store is removed."],
+      },
+      {
+        date: "2026-09-30",
+        title: "Start the fixture",
+        branch: "master",
+        commits: { from: "1111111", to: "2222222" },
+        touches: ["internal/alpha", "scripts/build"],
+        sources: ["code:internal/alpha", "#1"],
+        text: ["The first commits."],
+      },
+    ],
   };
 }
 

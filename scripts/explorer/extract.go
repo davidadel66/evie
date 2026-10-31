@@ -19,15 +19,16 @@ import (
 // timestamps or line numbers, so a fresh extraction is byte-identical on every
 // platform.
 type Facts struct {
-	Format    int        `json:"format"`
-	Kind      string     `json:"kind"`
-	Packages  []Package  `json:"packages"`
-	Imports   []Import   `json:"imports"`
-	Commands  []Command  `json:"commands"`
-	Routes    []Route    `json:"routes"`
-	Databases []Database `json:"databases"`
-	Glossary  []Term     `json:"glossary"`
-	ADRs      []ADR      `json:"adrs"`
+	Format    int            `json:"format"`
+	Kind      string         `json:"kind"`
+	Packages  []Package      `json:"packages"`
+	Imports   []Import       `json:"imports"`
+	Commands  []Command      `json:"commands"`
+	Routes    []Route        `json:"routes"`
+	Databases []Database     `json:"databases"`
+	Glossary  []Term         `json:"glossary"`
+	ADRs      []ADR          `json:"adrs"`
+	History   []HistoryEntry `json:"history"`
 }
 
 // Package is one directory under cmd/ or internal/ with a non-test Go file.
@@ -137,6 +138,16 @@ func renderFacts(root string, databases []databaseSource) ([]byte, error) {
 // extractFacts reads the facts from the repository at root, creating its
 // databases from databases.
 func extractFacts(root string, databases []databaseSource) (Facts, error) {
+	log, err := readChangelog(root)
+	if err != nil {
+		return Facts{}, err
+	}
+	return factsWith(root, databases, log)
+}
+
+// factsWith reads the facts from the repository at root, creating its
+// databases from databases; the history is the already parsed changelog's.
+func factsWith(root string, databases []databaseSource, log changelogFile) (Facts, error) {
 	facts := Facts{
 		Format:    formatVersion,
 		Kind:      "facts",
@@ -147,6 +158,7 @@ func extractFacts(root string, databases []databaseSource) (Facts, error) {
 		Databases: []Database{},
 		Glossary:  []Term{},
 		ADRs:      []ADR{},
+		History:   []HistoryEntry{},
 	}
 	module, err := modulePath(root)
 	if err != nil {
@@ -190,6 +202,7 @@ func extractFacts(root string, databases []databaseSource) (Facts, error) {
 	if facts.ADRs, err = readADRs(root); err != nil {
 		return facts, err
 	}
+	facts.History = log.history()
 	return facts, nil
 }
 
@@ -333,11 +346,25 @@ func modulePath(root string) (string, error) {
 	return "", fmt.Errorf("go.mod has no module line")
 }
 
+// snapshotDir is the explorer's own directory. The package there embeds the
+// page for evie serve (system-page.spec.md), the one package outside cmd/
+// and internal/; directories below it are not packages of the system.
+const snapshotDir = "docs/architecture/explorer"
+
 // packageDirs lists every directory under cmd/ and internal/ with at least one
-// non-test Go file, excluding testdata and node_modules, as sorted
-// slash-separated paths relative to root.
+// non-test Go file, excluding testdata and node_modules, and snapshotDir when
+// it has one, as sorted slash-separated paths relative to root.
 func packageDirs(root string) ([]string, error) {
 	seen := map[string]bool{}
+	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(snapshotDir)))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && isSourceFile(entry.Name()) {
+			seen[snapshotDir] = true
+		}
+	}
 	for _, top := range []string{"cmd", "internal"} {
 		base := filepath.Join(root, top)
 		if _, err := os.Stat(base); os.IsNotExist(err) {

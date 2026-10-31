@@ -48,7 +48,7 @@ describe("chat markers", () => {
     const render = (collapsed: string[]) => {
       localStorage.setItem("evie.sidebarCollapsedWorkspaces", JSON.stringify(collapsed));
       return renderToStaticMarkup(<Sidebar snapshot={{ workspaces: [workspace], projects: [], sessions, archivedSessions: [], activeSession: sessions[3] }} destination="chat" busy={false} marks={marks} mobileOpen={false}
-        onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+        onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
     };
     const store = new Map<string, string>();
     vi.stubGlobal("localStorage", { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => store.set(key, value) });
