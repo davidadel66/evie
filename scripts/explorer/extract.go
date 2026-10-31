@@ -19,15 +19,16 @@ import (
 // timestamps or line numbers, so a fresh extraction is byte-identical on every
 // platform.
 type Facts struct {
-	Format    int        `json:"format"`
-	Kind      string     `json:"kind"`
-	Packages  []Package  `json:"packages"`
-	Imports   []Import   `json:"imports"`
-	Commands  []Command  `json:"commands"`
-	Routes    []Route    `json:"routes"`
-	Databases []Database `json:"databases"`
-	Glossary  []Term     `json:"glossary"`
-	ADRs      []ADR      `json:"adrs"`
+	Format    int            `json:"format"`
+	Kind      string         `json:"kind"`
+	Packages  []Package      `json:"packages"`
+	Imports   []Import       `json:"imports"`
+	Commands  []Command      `json:"commands"`
+	Routes    []Route        `json:"routes"`
+	Databases []Database     `json:"databases"`
+	Glossary  []Term         `json:"glossary"`
+	ADRs      []ADR          `json:"adrs"`
+	History   []HistoryEntry `json:"history"`
 }
 
 // Package is one directory under cmd/ or internal/ with a non-test Go file.
@@ -147,6 +148,7 @@ func extractFacts(root string, databases []databaseSource) (Facts, error) {
 		Databases: []Database{},
 		Glossary:  []Term{},
 		ADRs:      []ADR{},
+		History:   []HistoryEntry{},
 	}
 	module, err := modulePath(root)
 	if err != nil {
@@ -188,6 +190,9 @@ func extractFacts(root string, databases []databaseSource) (Facts, error) {
 		return facts, err
 	}
 	if facts.ADRs, err = readADRs(root); err != nil {
+		return facts, err
+	}
+	if facts.History, err = readHistory(root); err != nil {
 		return facts, err
 	}
 	return facts, nil
