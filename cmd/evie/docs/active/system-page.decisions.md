@@ -32,11 +32,11 @@ Spec: [system-page.spec.md](system-page.spec.md).
 - **2026-10-31 — `/explorer/` is served outside the API guard, like Evie's
   own static files.** David approved ("yes to both"). The route serves only
   embedded files of the public repository and reads no data.
-- **2026-10-31 — Commit links for unpushed builds (pending).** Asked again
-  because the reply named two answers for three questions: accept that a
-  build from a commit not yet on GitHub links to a commit GitHub doesn't
-  have, with master as the fallback only when there is no commit stamp or
-  the build had uncommitted changes.
+- **2026-10-31 — Served code links use the build's commit, falling back to
+  master only when there is no commit stamp or the build had uncommitted
+  changes.** David agreed ("i agree w your recommendation for q3 as well"),
+  accepting that a build from a commit not yet on GitHub (for example a local
+  feature branch) links to a commit GitHub doesn't have, so those links 404.
 - **2026-10-31 — Two-way doors from the brief.** Claude decided, and the
   brief showed: a Go embed package beside the explorer files (rejected:
   copying into the UI build, which could ship a stale explorer), with the
@@ -51,3 +51,8 @@ Spec: [system-page.spec.md](system-page.spec.md).
 - **2026-10-31 — Merge into master when done.** David asked: "merge into
   master after you are done". Both `feat/system-explorer` and this branch
   merge into master after Finish. Pushing stays with David.
+- **2026-10-31 — System is not remembered across reloads, like Data.** The
+  spec first said System would be remembered "as it does for Data", but Evie
+  remembers no workbench view across reloads. Claude corrected the spec to
+  match Data rather than adding view persistence, which would change Data's
+  behaviour and was never asked for.
