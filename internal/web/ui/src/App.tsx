@@ -19,6 +19,7 @@ import { selectedToolInspection, selectedMemoryTools, type ToolSelection } from 
 import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
 import { DataHub, type DataSource } from "./data/DataHub";
+import { SystemView } from "./system/SystemView";
 import { usePendingMemoryProposals } from "./candidateInbox/pendingProposals";
 import { Sidebar, type SidebarDestination } from "./shell/Sidebar";
 import { useContextSessions } from "./store/useContextSessions";
@@ -48,6 +49,7 @@ import { chatMark, loadReadState, markRead } from "./chats/chatMarks";
 export type WorkbenchView =
   | { id: "chat"; kind: "chat" }
   | { id: "data"; kind: "data" }
+  | { id: "system"; kind: "system" }
   | { id: "workspaces"; kind: "workspaces" }
   | { id: `workspace:${string}`; kind: "workspace"; workspaceId: string; label: string } & WorkspaceViewState;
 
@@ -329,6 +331,7 @@ export default function App() {
         onDeleteWorkspace={setDeletingWorkspace}
         onCloseMobile={closeNavigation}
         onData={() => openView({ id: "data", kind: "data" })}
+        onSystem={() => openView({ id: "system", kind: "system" })}
         onWorkspace={(workspace) => openWorkspace(workspace)}
         onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
         onSession={(session) => {
@@ -435,6 +438,7 @@ export default function App() {
                 snapshot={contextSessions.snapshot}
               />
             )}
+            {activeView.kind === "system" && <SystemView />}
             {activeView.kind === "workspaces" && (
               <Workspaces
                 snapshot={contextSessions.snapshot}
@@ -528,7 +532,7 @@ export function WorkbenchBar({
   notifications?: React.ReactNode;
   onToggleInspector: () => void;
 }) {
-  const label = view.kind === "data" ? "Data" : view.kind === "workspaces" ? "Workspaces" : view.kind === "workspace" ? view.label : undefined;
+  const label = view.kind === "data" ? "Data" : view.kind === "system" ? "System" : view.kind === "workspaces" ? "Workspaces" : view.kind === "workspace" ? view.label : undefined;
   return (
     <header className="border-hair bg-topbar flex h-11 flex-none items-center gap-1 border-b px-2">
       <button type="button" aria-label="Open navigation" aria-controls="evie-navigation" onClick={onOpenNavigation} className={`text-muted-text hover:bg-hover hover:text-body focus-visible:ring-teal flex-none rounded-lg p-2 focus-visible:ring-1 focus-visible:outline-none ${navigationCollapsed ? "" : "md:hidden"}`}><SidebarIcon size={16} /></button>

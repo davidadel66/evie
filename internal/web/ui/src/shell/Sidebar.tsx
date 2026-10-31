@@ -4,7 +4,7 @@ import type {
   Workspace,
 } from "../api/contextSessions";
 import { useEffect, useState } from "react";
-import { Archive, ChevronDown, ChevronRight, Database, MessageSquare, Plus, Settings, Sidebar as SidebarIcon, Spinner } from "../ui/Icon";
+import { Archive, ChevronDown, ChevronRight, Database, Layers, MessageSquare, Plus, Settings, Sidebar as SidebarIcon, Spinner } from "../ui/Icon";
 import { combineMarks, markText, type ChatMark } from "../chats/chatMarks";
 
 // Desktop width is the person's to set: drag or arrow keys on the edge,
@@ -26,7 +26,7 @@ function readCollapsed(): string[] {
 import { ReviewBadge } from "../candidateInbox/MemoryReviewTabs";
 import { waitingText } from "../workspaces/workspaceActivity";
 
-export type SidebarDestination = "chat" | "data" | "workspaces" | `workspace:${string}`;
+export type SidebarDestination = "chat" | "data" | "system" | "workspaces" | `workspace:${string}`;
 
 type Props = {
   snapshot?: ContextSessionSnapshot;
@@ -48,6 +48,8 @@ type Props = {
   onDeleteWorkspace?: (workspace: Workspace) => void;
   onCloseMobile: () => void;
   onData: () => void;
+  /** Opens the System view: the system explorer. */
+  onSystem: () => void;
   onWorkspace: (workspace: Workspace) => void;
   onNewWorkspaceChat: (workspace: Workspace) => void;
   onSession: (session: StoredSession) => void;
@@ -69,6 +71,7 @@ export function Sidebar({
   onDeleteWorkspace,
   onCloseMobile,
   onData,
+  onSystem,
   onWorkspace,
   onNewWorkspaceChat,
   onSession,
@@ -155,6 +158,12 @@ export function Sidebar({
           label="Data"
           badge={<ReviewBadge pending={memoryReviewPending} />}
           onClick={onData}
+        />
+        <SidebarButton
+          active={destination === "system"}
+          icon={<Layers size={15} />}
+          label="System"
+          onClick={onSystem}
         />
 
         <div className="mt-7 mb-2 flex items-center px-2">
