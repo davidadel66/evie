@@ -333,8 +333,9 @@ References are typed strings. Line numbers are never a reference form.
 Paths are clean and relative to the repository root. In the page, `code:` and
 `doc:` references link into your own checkout when it is opened from disk;
 served by `evie serve`, they open GitHub at the build's commit, or at master
-when the binary has no commit stamp or was built with uncommitted changes
-(`build.js`, below). A `code:` reference to a declaration links its file.
+when the binary has no commit stamp or was built with uncommitted changes,
+or the public repository's master when `build.js` does not load or names no
+usable repository (`build.js`, below). A `code:` reference to a declaration links its file.
 ADRs show their title, terms
 show their definition inline, `pkg:` and `node:` references select the node,
 and `table:`, `route:`, and `command:` references open the package that
@@ -442,9 +443,11 @@ unstamped. The page loads `build.js` only when it is not opened from disk.
 Served, `code:` and `doc:` links, History's sources among them, open GitHub
 at the build's commit or master ([Reference forms](#reference-forms)), and
 History's commits, tickets, and pull requests open in the repository
-`build.js` names. From disk, or when `build.js` names no usable repository,
-those History links open the public repository,
-`https://github.com/davidadel66/evie`.
+`build.js` names. When `build.js` does not load or names no usable
+repository, served links open the public repository,
+`https://github.com/davidadel66/evie`, with `code:` and `doc:` links at
+master; only a page opened from disk links into the checkout. From disk,
+History's GitHub links open the public repository too.
 
 Evie's System view frames `/explorer/?embedded=1`; the embedded flag hides
 the brand and keeps the light colours, like Evie. The frame is sandboxed

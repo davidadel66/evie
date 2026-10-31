@@ -27,14 +27,19 @@
 
   // Served by evie serve, the page links to GitHub instead
   // (system-page.spec.md). build.js names the repository as an https URL of
-  // plain path segments and the commit as a hex object name.
+  // plain path segments. COMMIT is a commit SHA, the build's or one a
+  // History entry names.
   var REPOSITORY_URL = /^https:\/\/[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(\/[A-Za-z0-9_][A-Za-z0-9._-]*)+$/;
-  var COMMIT = /^[0-9a-f]{7,64}$/;
+  var COMMIT = /^[0-9a-f]{7,40}$/;
 
   // DEFAULT_REPOSITORY is the public repository. History's commits, tickets,
   // and pull requests live only on GitHub, so they link there from disk too,
-  // and when build.js names no usable repository.
+  // and served pages link there when build.js names no usable repository.
   var DEFAULT_REPOSITORY = "https://github.com/davidadel66/evie";
+
+  // DISK_LINKS are where a page opened from disk links (pageLinks), and
+  // where links go when a caller gives none.
+  var DISK_LINKS = { root: CHECKOUT_ROOT, repository: DEFAULT_REPOSITORY };
 
   var FACT_LISTS = ["packages", "imports", "commands", "routes", "databases", "glossary", "adrs", "history"];
   var NODE_LISTS = ["does", "owns", "interfaces", "gotchas", "terms", "diagrams", "links", "contains", "alsoIn", "children"];
@@ -2995,9 +3000,9 @@
   // connections, glossary terms with definitions, the flows it takes part
   // in, its diagrams, what it contains and what contains it, every extracted
   // fact that names its package, what an active proposal changes, and the
-  // History entries that touched its package, their commits linked into
-  // repository (githubHref).
-  function nodeDetails(data, id, repository) {
+  // History entries that touched its package, their commits linked by links
+  // (pageLinks).
+  function nodeDetails(data, id, links) {
     var node = data.nodeById[id] || null;
     var path = packagePath(id);
     var callers = [];
@@ -3049,7 +3054,7 @@
       change: node ? node.change || "" : "",
       changed: node ? list(node.changed) : [],
       proposal: proposal ? { id: proposal.id, title: proposal.title || proposal.id } : null,
-      history: path ? packageHistory(data, path, repository) : [],
+      history: path ? packageHistory(data, path, links) : [],
     };
   }
 
@@ -3184,33 +3189,31 @@
   // too, since they live nowhere else.
 
   // githubHref is the one place that builds links into the repository on
-  // GitHub: repository is linkRepository's answer, the public repository
-  // by default.
-  function githubHref(path, repository) {
-    return (repository || DEFAULT_REPOSITORY) + "/" + path;
+  // GitHub, the one links (pageLinks) names.
+  function githubHref(path, links) {
+    return (links || DISK_LINKS).repository + "/" + path;
   }
 
   var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   var ISO_DATE = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
-  var COMMIT_SHA = /^[0-9a-f]{7,40}$/;
 
   // commitLink is a commit SHA and its page on GitHub; a value that is not
   // a SHA gets no link.
-  function commitLink(sha, repository) {
+  function commitLink(sha, links) {
     if (!sha) return null;
-    return { sha: sha, href: COMMIT_SHA.test(sha) ? githubHref("commit/" + sha, repository) : null };
+    return { sha: sha, href: COMMIT.test(sha) ? githubHref("commit/" + sha, links) : null };
   }
 
   var ISSUE_NUMBER = /^#([1-9][0-9]*)$/;
 
   // resolveSource turns a History source into what the page shows: a ticket
   // or pull-request number opens on GitHub (whose issue page forwards to a
-  // pull request), and anything else resolves as a reference, its code and
-  // doc links under root (linkRoot).
-  function resolveSource(source, data, root, repository) {
+  // pull request), and anything else resolves as a reference; links
+  // (pageLinks) says where both point.
+  function resolveSource(source, data, links) {
     var issue = ISSUE_NUMBER.exec(source);
-    if (issue) return { kind: "issue", text: source, href: githubHref("issues/" + issue[1], repository) };
-    return resolveRef(source, data, root);
+    if (issue) return { kind: "issue", text: source, href: githubHref("issues/" + issue[1], links) };
+    return resolveRef(source, data, links);
   }
 
   function historySlug(text) {
@@ -3227,10 +3230,9 @@
 
   // historyEntries lists the History entries newest first, entries of one
   // day in their written order, each with an id for the address (its date
-  // and title), its commit links into repository (githubHref), and its
-  // touched paths with the package node each still has, or null once the
-  // package is gone.
-  function historyEntries(data, repository) {
+  // and title), its commit links (githubHref), and its touched paths with
+  // the package node each still has, or null once the package is gone.
+  function historyEntries(data, links) {
     var used = dict();
     var entries = data.facts.history.map(function (raw, index) {
       var date = typeof raw.date === "string" ? raw.date : "";
@@ -3240,7 +3242,7 @@
       var id = base;
       for (var n = 2; used[id]; n++) id = base + "-" + n;
       used[id] = true;
-      var range = raw.commits && raw.commits.from ? { from: commitLink(raw.commits.from, repository), to: commitLink(raw.commits.to, repository) } : null;
+      var range = raw.commits && raw.commits.from ? { from: commitLink(raw.commits.from, links), to: commitLink(raw.commits.to, links) } : null;
       return {
         order: index,
         sortKey: month === "undated" ? "" : date,
@@ -3251,7 +3253,7 @@
           month: month,
           title: raw.title || id,
           branch: raw.branch || "",
-          merge: commitLink(raw.merge, repository),
+          merge: commitLink(raw.merge, links),
           commits: range,
           text: list(raw.text),
           sources: list(raw.sources),
@@ -3272,8 +3274,8 @@
 
   // packageHistory lists the History entries whose touched paths include
   // the package's path exactly, newest first.
-  function packageHistory(data, path, repository) {
-    return historyEntries(data, repository).filter(function (e) {
+  function packageHistory(data, path, links) {
+    return historyEntries(data, links).filter(function (e) {
       return e.touches.some(function (t) {
         return t.path === path;
       });
@@ -3289,9 +3291,9 @@
   }
 
   // historyTimeline groups the History entries by month, newest first.
-  function historyTimeline(data, repository) {
+  function historyTimeline(data, links) {
     var months = [];
-    historyEntries(data, repository).forEach(function (e) {
+    historyEntries(data, links).forEach(function (e) {
       var last = months[months.length - 1];
       if (!last || last.key !== e.month) {
         last = { key: e.month, label: historyMonthLabel(e.month), entries: [] };
@@ -3492,8 +3494,8 @@
   }
 
   // layoutView draws whatever view a resolved state names; History's commits
-  // link into repository (githubHref).
-  function layoutView(data, state, repository) {
+  // link as links (pageLinks) says.
+  function layoutView(data, state, links) {
     switch (state.view) {
       case "containers":
         return layoutContainers(data);
@@ -3520,7 +3522,7 @@
       case "flow":
         return layoutSequence(data, flowById(data, state.of));
       case "history":
-        var months = historyTimeline(data, repository);
+        var months = historyTimeline(data, links);
         return {
           kind: "history",
           months: months,
@@ -3753,23 +3755,20 @@
     return build && typeof build.repository === "string" && REPOSITORY_URL.test(build.repository) ? build.repository : null;
   }
 
-  // linkRoot is where code and doc links point, given what build.js said
-  // about the running binary: the build's commit on GitHub, or master when
-  // the build has no commit stamp or had uncommitted changes. Without usable
-  // build information, as when the page is opened from disk, they point
-  // into the owner's checkout.
-  function linkRoot(build) {
+  // pageLinks is where the page's links point, given its protocol and what
+  // build.js said about the running binary: root for code and doc links
+  // (checkoutHref), repository for History's commits, tickets, and pull
+  // requests (githubHref). From disk, code and doc links point into the
+  // owner's checkout. Served, they open GitHub: the build's repository at
+  // its commit, or at master when the build has no commit stamp or had
+  // uncommitted changes; the public repository at master when build.js did
+  // not load or names no usable repository.
+  function pageLinks(protocol, build) {
+    if (protocol === "file:") return DISK_LINKS;
     var repository = servedRepository(build);
-    if (!repository) return CHECKOUT_ROOT;
+    if (!repository) return { root: DEFAULT_REPOSITORY + "/blob/master/", repository: DEFAULT_REPOSITORY };
     var clean = typeof build.commit === "string" && COMMIT.test(build.commit) && build.modified !== true;
-    return repository + "/blob/" + (clean ? build.commit : "master") + "/";
-  }
-
-  // linkRepository is the repository History's commits, tickets, and pull
-  // requests link into (githubHref), given what build.js said: the build's
-  // repository, or the public repository without usable build information.
-  function linkRepository(build) {
-    return servedRepository(build) || DEFAULT_REPOSITORY;
+    return { root: repository + "/blob/" + (clean ? build.commit : "master") + "/", repository: repository };
   }
 
   // buildScript is the script that tells a served page about the running
@@ -3786,16 +3785,16 @@
       .indexOf("embedded=1") >= 0;
   }
 
-  // checkoutHref links a repository path under root (linkRoot; the owner's
-  // checkout by default), encoding each segment. A path that could leave the
-  // repository or name a scheme gets no link.
-  function checkoutHref(path, root) {
+  // checkoutHref links a repository path under the root links (pageLinks)
+  // names, encoding each segment. A path that could leave the repository or
+  // name a scheme gets no link.
+  function checkoutHref(path, links) {
     if (!path || path.charAt(0) === "/" || path.indexOf(":") >= 0 || path.indexOf("\\") >= 0) return null;
     var segments = path.split("/");
     for (var i = 0; i < segments.length; i++) {
       if (segments[i] === "" || segments[i] === "." || segments[i] === "..") return null;
     }
-    return (root || CHECKOUT_ROOT) + segments.map(encodeURIComponent).join("/");
+    return (links || DISK_LINKS).root + segments.map(encodeURIComponent).join("/");
   }
 
   function splitAnchor(target) {
@@ -3845,9 +3844,9 @@
   }
 
   // resolveRef turns a typed reference into what the page shows: text, a
-  // link under root (linkRoot) for code and doc references, a title for
-  // ADRs and glossary terms, or an in-page target.
-  function resolveRef(ref, data, root) {
+  // link (checkoutHref) for code and doc references, a title for ADRs and
+  // glossary terms, or an in-page target.
+  function resolveRef(ref, data, links) {
     var i = typeof ref === "string" ? ref.indexOf(":") : -1;
     if (i <= 0) return { kind: "unknown", text: String(ref) };
     var kind = ref.slice(0, i);
@@ -3856,19 +3855,19 @@
     var href;
     switch (kind) {
       case "code":
-        href = checkoutHref(splitAnchor(target).path, root);
+        href = checkoutHref(splitAnchor(target).path, links);
         if (href) out.href = href;
         return out;
       case "doc":
         var parts = splitAnchor(target);
-        href = checkoutHref(parts.path, root);
+        href = checkoutHref(parts.path, links);
         if (href) out.href = href + (parts.anchor ? "#" + encodeURIComponent(parts.anchor) : "");
         return out;
       case "adr":
         var adr = data.adrByNumber[target];
         out.text = "ADR " + target + (adr ? ": " + adr.title : "");
         if (adr) {
-          href = checkoutHref(adr.path, root);
+          href = checkoutHref(adr.path, links);
           if (href) out.href = href;
           out.title = adr.title;
         }
@@ -4030,8 +4029,7 @@
     neighbours: neighbours,
     factsForPackage: factsForPackage,
     resolveRef: resolveRef,
-    linkRoot: linkRoot,
-    linkRepository: linkRepository,
+    pageLinks: pageLinks,
     buildScript: buildScript,
     isEmbedded: isEmbedded,
     formatHash: formatHash,
@@ -4133,10 +4131,8 @@
   var app = {
     base: null,
     data: null,
-    // Where code and doc links point; build.js moves them to GitHub.
-    links: linkRoot(null),
-    // The repository History's GitHub links open; build.js may name another.
-    repository: linkRepository(null),
+    // Where links point (pageLinks); build.js names the build they open.
+    links: pageLinks(location.protocol, null),
     raw: {},
     state: {},
     layout: null,
@@ -4216,7 +4212,7 @@
     var changed = key !== app.viewKey;
     if (changed) {
       app.viewKey = key;
-      app.layout = layoutView(app.data, state, app.repository);
+      app.layout = layoutView(app.data, state, app.links);
     }
     // The panel and bars first: they decide the canvas's size, which the
     // new view is fitted to.
@@ -5626,7 +5622,7 @@
   }
 
   function renderRef(ref, parent, statementEl) {
-    var link = resolveSource(ref, app.data, app.links, app.repository);
+    var link = resolveSource(ref, app.data, app.links);
     var li = html("li", { class: "source source-" + link.kind }, parent);
     var iconName = { code: "code", doc: "doc", adr: "adr", term: "term", pkg: "package", node: "node", table: "table", route: "route", command: "command", issue: "issue" }[link.kind] || "doc";
     var el;
@@ -5790,7 +5786,7 @@
   }
 
   function renderNodePanel(panel, id) {
-    var details = nodeDetails(app.data, id, app.repository);
+    var details = nodeDetails(app.data, id, app.links);
     var node = details.node;
     var sub = details.path || kindLabel(node.kind);
     panelHeader(panel, own(KIND_ICON, node.kind) || "package", node.title || node.id, sub, closePanel, node.group ? "group-" + node.group : "kind-" + node.kind);
@@ -6144,7 +6140,7 @@
   }
 
   // The loader. A served page first loads build.js, which names the running
-  // binary's build; if it does not load, links stay relative. The manifest
+  // binary's build; if it does not load, links open the public repository. The manifest
   // lists data files relative to data/; each is loaded in order as a classic
   // script, which registers one object. Then the proposal query parameter
   // may name one more script inside the explorer directory, which may
@@ -6158,8 +6154,7 @@
     // build.js calls this before the data loads; later calls change nothing.
     build: function (info) {
       if (app.base) return;
-      app.links = linkRoot(info);
-      app.repository = linkRepository(info);
+      app.links = pageLinks(location.protocol, info);
     },
     manifest: function (files) {
       if (booted) return;
