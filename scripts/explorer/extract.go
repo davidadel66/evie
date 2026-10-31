@@ -333,11 +333,25 @@ func modulePath(root string) (string, error) {
 	return "", fmt.Errorf("go.mod has no module line")
 }
 
+// snapshotDir is the explorer's own directory. The package there embeds the
+// page for evie serve (system-page.spec.md), the one package outside cmd/
+// and internal/; directories below it are not packages of the system.
+const snapshotDir = "docs/architecture/explorer"
+
 // packageDirs lists every directory under cmd/ and internal/ with at least one
-// non-test Go file, excluding testdata and node_modules, as sorted
-// slash-separated paths relative to root.
+// non-test Go file, excluding testdata and node_modules, and snapshotDir when
+// it has one, as sorted slash-separated paths relative to root.
 func packageDirs(root string) ([]string, error) {
 	seen := map[string]bool{}
+	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(snapshotDir)))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && isSourceFile(entry.Name()) {
+			seen[snapshotDir] = true
+		}
+	}
 	for _, top := range []string{"cmd", "internal"} {
 		base := filepath.Join(root, top)
 		if _, err := os.Stat(base); os.IsNotExist(err) {

@@ -25,6 +25,12 @@
   // root is three directories up.
   var CHECKOUT_ROOT = "../../../";
 
+  // Served by evie serve, the page links to GitHub instead
+  // (system-page.spec.md). build.js names the repository as an https URL of
+  // plain path segments and the commit as a hex object name.
+  var REPOSITORY_URL = /^https:\/\/[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(\/[A-Za-z0-9_][A-Za-z0-9._-]*)+$/;
+  var COMMIT = /^[0-9a-f]{7,64}$/;
+
   var FACT_LISTS = ["packages", "imports", "commands", "routes", "databases", "glossary", "adrs"];
   var NODE_LISTS = ["does", "owns", "interfaces", "gotchas", "terms", "diagrams", "links", "contains", "alsoIn", "children"];
   var STATEMENT_LISTS = ["does", "owns", "interfaces", "gotchas"];
@@ -3579,16 +3585,41 @@
     return sections;
   }
 
-  // checkoutHref links a repository path into the owner's own checkout,
-  // encoding each segment. A path that could leave the checkout or name a
-  // scheme gets no link.
-  function checkoutHref(path) {
+  // linkRoot is where code and doc links point, given what build.js said
+  // about the running binary: the build's commit on GitHub, or master when
+  // the build has no commit stamp or had uncommitted changes. Without usable
+  // build information, as when the page is opened from disk, they point
+  // into the owner's checkout.
+  function linkRoot(build) {
+    if (!build || typeof build.repository !== "string" || !REPOSITORY_URL.test(build.repository)) return CHECKOUT_ROOT;
+    var clean = typeof build.commit === "string" && COMMIT.test(build.commit) && build.modified !== true;
+    return build.repository + "/blob/" + (clean ? build.commit : "master") + "/";
+  }
+
+  // buildScript is the script that tells a served page about the running
+  // binary; a page opened from disk has none.
+  function buildScript(protocol) {
+    return protocol === "file:" ? null : "build.js";
+  }
+
+  // isEmbedded reads the embedded flag Evie's frame puts in the address.
+  function isEmbedded(search) {
+    return String(search || "")
+      .replace(/^\?/, "")
+      .split("&")
+      .indexOf("embedded=1") >= 0;
+  }
+
+  // checkoutHref links a repository path under root (linkRoot; the owner's
+  // checkout by default), encoding each segment. A path that could leave the
+  // repository or name a scheme gets no link.
+  function checkoutHref(path, root) {
     if (!path || path.charAt(0) === "/" || path.indexOf(":") >= 0 || path.indexOf("\\") >= 0) return null;
     var segments = path.split("/");
     for (var i = 0; i < segments.length; i++) {
       if (segments[i] === "" || segments[i] === "." || segments[i] === "..") return null;
     }
-    return CHECKOUT_ROOT + segments.map(encodeURIComponent).join("/");
+    return (root || CHECKOUT_ROOT) + segments.map(encodeURIComponent).join("/");
   }
 
   function splitAnchor(target) {
@@ -3638,9 +3669,9 @@
   }
 
   // resolveRef turns a typed reference into what the page shows: text, a
-  // relative link into the checkout for code and doc references, a title
-  // for ADRs and glossary terms, or an in-page target.
-  function resolveRef(ref, data) {
+  // link under root (linkRoot) for code and doc references, a title for
+  // ADRs and glossary terms, or an in-page target.
+  function resolveRef(ref, data, root) {
     var i = typeof ref === "string" ? ref.indexOf(":") : -1;
     if (i <= 0) return { kind: "unknown", text: String(ref) };
     var kind = ref.slice(0, i);
@@ -3649,19 +3680,19 @@
     var href;
     switch (kind) {
       case "code":
-        href = checkoutHref(splitAnchor(target).path);
+        href = checkoutHref(splitAnchor(target).path, root);
         if (href) out.href = href;
         return out;
       case "doc":
         var parts = splitAnchor(target);
-        href = checkoutHref(parts.path);
+        href = checkoutHref(parts.path, root);
         if (href) out.href = href + (parts.anchor ? "#" + encodeURIComponent(parts.anchor) : "");
         return out;
       case "adr":
         var adr = data.adrByNumber[target];
         out.text = "ADR " + target + (adr ? ": " + adr.title : "");
         if (adr) {
-          href = checkoutHref(adr.path);
+          href = checkoutHref(adr.path, root);
           if (href) out.href = href;
           out.title = adr.title;
         }
@@ -3820,6 +3851,9 @@
     neighbours: neighbours,
     factsForPackage: factsForPackage,
     resolveRef: resolveRef,
+    linkRoot: linkRoot,
+    buildScript: buildScript,
+    isEmbedded: isEmbedded,
     formatHash: formatHash,
     parseHash: parseHash,
     proposalPath: proposalPath,
@@ -3915,6 +3949,8 @@
   var app = {
     base: null,
     data: null,
+    // Where code and doc links point; build.js moves them to GitHub.
+    links: linkRoot(null),
     raw: {},
     state: {},
     layout: null,
@@ -3932,6 +3968,10 @@
   };
 
   var reduceMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Inside Evie's frame the page drops its brand and keeps the light theme;
+  // explorer.css reads the attribute.
+  if (isEmbedded(location.search)) document.documentElement.setAttribute("data-embedded", "");
 
   // -------------------------------------------------------- state changes
 
@@ -5270,7 +5310,7 @@
   }
 
   function renderRef(ref, parent, statementEl) {
-    var link = resolveRef(ref, app.data);
+    var link = resolveRef(ref, app.data, app.links);
     var li = html("li", { class: "source source-" + link.kind }, parent);
     var iconName = { code: "code", doc: "doc", adr: "adr", term: "term", pkg: "package", node: "node", table: "table", route: "route", command: "command" }[link.kind] || "doc";
     var el;
@@ -5582,7 +5622,7 @@
     html("p", { class: "definition" }, s, entry ? entry.definition : "");
     if (entry && list(entry.avoid).length) html("p", { class: "avoid" }, s, "Avoid: " + entry.avoid.join(", "));
     var a = html("p", { class: "sources" }, s);
-    var link = resolveRef("doc:GLOSSARY.md", app.data);
+    var link = resolveRef("doc:GLOSSARY.md", app.data, app.links);
     var anchor = html("a", { href: link.href, target: "_blank", rel: "noopener" }, a);
     htmlIcon("doc", anchor, "ref-icon");
     html("span", {}, anchor, "GLOSSARY.md");
@@ -5766,15 +5806,21 @@
     apply(parseHash(location.hash), { instant: true });
   }
 
-  // The loader. The manifest lists data files relative to data/; each is
-  // loaded in order as a classic script, which registers one object. Then
-  // the proposal query parameter may name one more script inside the
-  // explorer directory, which may register design proposals only.
+  // The loader. A served page first loads build.js, which names the running
+  // binary's build; if it does not load, links stay relative. The manifest
+  // lists data files relative to data/; each is loaded in order as a classic
+  // script, which registers one object. Then the proposal query parameter
+  // may name one more script inside the explorer directory, which may
+  // register design proposals only.
   var registered = [];
   var booted = false;
   global.evieExplorer = {
     register: function (object) {
       registered.push(object);
+    },
+    // build.js calls this before the data loads; later calls change nothing.
+    build: function (info) {
+      if (!app.base) app.links = linkRoot(info);
     },
     manifest: function (files) {
       if (booted) return;
@@ -5834,7 +5880,9 @@
           boot(registered);
         });
       }
-      next();
+      var build = buildScript(location.protocol);
+      if (build) load(build, next);
+      else next();
     },
   };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -32,6 +32,13 @@ evieExplorer.register(
       "testSupport": false
     },
     {
+      "path": "docs/architecture/explorer",
+      "name": "explorer",
+      "command": false,
+      "doc": "Package explorer carries the system explorer into the evie binary: the page, its viewer and stylesheet, its data, and its examples, exactly as they were when the binary was built (system-page.spec.md).",
+      "testSupport": false
+    },
+    {
       "path": "internal/agent",
       "name": "agent",
       "command": false,
@@ -655,6 +662,10 @@ evieExplorer.register(
     {
       "from": "internal/tools",
       "to": "internal/youtube"
+    },
+    {
+      "from": "internal/web",
+      "to": "docs/architecture/explorer"
     },
     {
       "from": "internal/web",
@@ -3537,6 +3548,22 @@ evieExplorer.register(
       "source": {
         "file": "internal/web/serve.go",
         "function": "Server.Handler"
+      }
+    },
+    {
+      "pattern": "/explorer",
+      "package": "internal/web",
+      "source": {
+        "file": "internal/web/explorer.go",
+        "function": "Server.registerExplorerRoutes"
+      }
+    },
+    {
+      "pattern": "/explorer/",
+      "package": "internal/web",
+      "source": {
+        "file": "internal/web/explorer.go",
+        "function": "Server.registerExplorerRoutes"
       }
     },
     {

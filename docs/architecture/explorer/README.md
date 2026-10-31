@@ -4,8 +4,10 @@ The explorer page shows what Evie does: every package under `cmd/` and
 `internal/` as a component, grouped under the architecture map in
 `AGENTS.md`, with written content on top of facts extracted from the code.
 Open [`index.html`](index.html) straight from disk; it needs no server, build,
-or network. Specification:
-[`system-explorer.spec.md`](../../../cmd/evie/docs/active/system-explorer.spec.md).
+or network. `evie serve` also carries it, built into the binary, as the
+System view in Evie's sidebar. Specifications:
+[`system-explorer.spec.md`](../../../cmd/evie/docs/active/system-explorer.spec.md)
+and [`system-page.spec.md`](../../../cmd/evie/docs/active/system-page.spec.md).
 
 Agents edit the data, never the page. The drift check keeps the data honest:
 it fails when the data and the code disagree.
@@ -15,6 +17,7 @@ it fails when the data and the code disagree.
 | Path | What it is |
 | --- | --- |
 | `index.html`, `explorer.js`, `explorer.css` | The page, its one classic-script viewer, and its stylesheet. No modules, no build, no third-party code. |
+| `snapshot.go` | Package `explorer`: embeds the page, viewer, stylesheet, `data/`, and `examples/` (not the tests or this README) so `evie serve` can serve them under `/explorer/`. |
 | `data/manifest.js` | The ordered list of data files the page loads. |
 | `data/facts.js` | Generated facts. Never edit by hand; run `extract`. |
 | `data/<owner>.js` | Written content, one file per subsystem owner (below). |
@@ -31,7 +34,7 @@ Content files and the packages whose component nodes they hold:
 | `memory.js` | memory, memorybackground, memoryeval |
 | `runtime.js` | agent, tools, plugins, composition, subagents, delegation, task, taskeval, untrusted, repoinstructions |
 | `workflows.js` | workflow, workflowruntime, procedural |
-| `platform.js` | eviedb, web, usage, cmd/evie, cmd/todo |
+| `platform.js` | eviedb, web, docs/architecture/explorer, usage, cmd/evie, cmd/todo |
 | `integrations.js` | mcpconn, mcpconn/mcptest, mcpchat, github, finance, youtube, changes, worktree, localfiles, localterminal, workspacetabs, cmd/finance, cmd/ytscribe |
 
 A file owns nodes; it does not decide their group. Each node's `group` and
@@ -116,7 +119,10 @@ is malformed data. Optional lists may be left out.
 ```
 
 - **packages**: every directory under `cmd/` and `internal/` with a non-test
-  Go file, excluding `testdata` and `node_modules`. `doc` is the first
+  Go file, excluding `testdata` and `node_modules`, and this directory itself
+  (not the directories below it) once `snapshot.go` is there: the one package
+  outside `cmd/` and `internal/`, because `go:embed` reaches only its own
+  directory. `doc` is the first
   sentence of the package comment in the first file, by name, that has one.
   `command` means package `main`; `testSupport` means the package name ends
   in `test` and its directory sits directly inside another package's
@@ -317,7 +323,11 @@ References are typed strings. Line numbers are never a reference form.
 | `node:pkg:internal/agent` | An explorer node has that id (in a proposal, also nodes it adds). |
 
 Paths are clean and relative to the repository root. In the page, `code:` and
-`doc:` references link into your own checkout, ADRs show their title, terms
+`doc:` references link into your own checkout when it is opened from disk;
+served by `evie serve`, they open GitHub at the build's commit, or at master
+when the binary has no commit stamp or was built with uncommitted changes
+(`build.js`, below). A `code:` reference to a declaration links its file.
+ADRs show their title, terms
 show their definition inline, `pkg:` and `node:` references select the node,
 and `table:`, `route:`, and `command:` references open the package that
 defines them with the fact highlighted.
@@ -397,3 +407,20 @@ button (or `0`) fits the view. `/` searches packages by name or path, glossary
 terms by term or avoided synonym, flows, and diagrams; the arrow keys step a
 flow; Esc closes the panel. Colours follow the system's light or dark
 preference.
+
+### Served by `evie serve`
+
+`evie serve` serves the snapshot under `/explorer/`, GET and HEAD only, with a
+404 for anything not in it, and adds a generated `/explorer/build.js`:
+
+```text
+evieExplorer.build({"repository":"https://github.com/davidadel66/evie","commit":"<vcs.revision>","modified":false});
+```
+
+The repository comes from the main module path and the commit and modified
+flag from Go's build stamp; the commit is empty when the binary is
+unstamped. The page loads `build.js` only when it is not opened from disk.
+Evie's System view frames `/explorer/?embedded=1`; the embedded flag hides
+the brand and keeps the light colours, like Evie. The frame is sandboxed
+without same-origin access, and the page's content-security policy sandboxes
+it the same way when opened on its own.
