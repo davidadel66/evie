@@ -109,6 +109,10 @@ type Server struct {
 	// turns holds the stop control of each running web turn, keyed by its
 	// conversation. Guarded by sessionMu.
 	turns map[memory.SessionID]*webTurn
+
+	// buildInfo reads the binary's build stamp for the explorer's build.js
+	// (explorer.go); tests replace it.
+	buildInfo func() (*debug.BuildInfo, bool)
 }
 
 // ReceiptInspector is the read-only, Kernel-owned session audit boundary.
@@ -136,6 +140,7 @@ func NewServer(session *agent.Session) *Server {
 		aloneSince:      time.Now(),
 		approvalGrace:   approvalGrace,
 		presenceCheck:   time.Second,
+		buildInfo:       debug.ReadBuildInfo,
 	}
 }
 
@@ -281,6 +286,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerSubagentRoutes(mux)
 	s.registerConnectionRoutes(mux)
 	s.registerConnectionToolRoutes(mux)
+	s.registerExplorerRoutes(mux)
 	mux.Handle("/", s.staticHandler())
 	return mux
 }
