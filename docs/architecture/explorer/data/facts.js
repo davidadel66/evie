@@ -18178,9 +18178,13 @@ evieExplorer.register(
         "doc:cmd/evie/docs/done/agent-extract.spec.md",
         "doc:cmd/evie/docs/done/serve-core.spec.md",
         "doc:cmd/evie/docs/done/reasoning.spec.md",
+        "doc:cmd/evie/docs/done/reasoning.decisions.md",
         "doc:cmd/evie/docs/done/cron.spec.md",
+        "doc:cmd/evie/docs/done/cron.decisions.md",
         "doc:cmd/evie/docs/done/web-fetch.spec.md",
+        "doc:cmd/evie/docs/done/web-fetch.decisions.md",
         "doc:cmd/evie/docs/done/web-search.spec.md",
+        "doc:cmd/evie/docs/done/web-search.decisions.md",
         "doc:cmd/evie/docs/active/ui-chat.spec.md"
       ],
       "text": [
@@ -18204,6 +18208,7 @@ evieExplorer.register(
       "sources": [
         "doc:cmd/evie/docs/done/file-tools.spec.md",
         "doc:cmd/evie/docs/done/file-tools.decisions.md",
+        "doc:cmd/evie/docs/done/file-tools.build.md",
         "doc:cmd/evie/docs/done/bash.decisions.md"
       ],
       "text": [
@@ -18293,6 +18298,7 @@ evieExplorer.register(
       ],
       "sources": [
         "doc:cmd/finance/docs/done/sync.spec.md",
+        "doc:cmd/finance/docs/done/sync.decisions.md",
         "doc:cmd/finance/docs/active/categorize.spec.md"
       ],
       "text": [

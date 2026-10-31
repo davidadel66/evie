@@ -1172,7 +1172,7 @@ Letta-inspired memory spec with its decisions.
 Branch: master
 Commits: 19f5904..07344e3
 Touches: internal/agent, internal/web, internal/web/ui, internal/tools, internal/eviedb, internal/openrouter, internal/finance, cmd/evie, cmd/moussa
-Sources: doc:cmd/evie/docs/active/serve.spec.md, doc:cmd/evie/docs/done/agent-extract.spec.md, doc:cmd/evie/docs/done/serve-core.spec.md, doc:cmd/evie/docs/done/reasoning.spec.md, doc:cmd/evie/docs/done/cron.spec.md, doc:cmd/evie/docs/done/web-fetch.spec.md, doc:cmd/evie/docs/done/web-search.spec.md, doc:cmd/evie/docs/active/ui-chat.spec.md
+Sources: doc:cmd/evie/docs/active/serve.spec.md, doc:cmd/evie/docs/done/agent-extract.spec.md, doc:cmd/evie/docs/done/serve-core.spec.md, doc:cmd/evie/docs/done/reasoning.spec.md, doc:cmd/evie/docs/done/reasoning.decisions.md, doc:cmd/evie/docs/done/cron.spec.md, doc:cmd/evie/docs/done/cron.decisions.md, doc:cmd/evie/docs/done/web-fetch.spec.md, doc:cmd/evie/docs/done/web-fetch.decisions.md, doc:cmd/evie/docs/done/web-search.spec.md, doc:cmd/evie/docs/done/web-search.decisions.md, doc:cmd/evie/docs/active/ui-chat.spec.md
 
 The harness becomes Evie: `cmd/moussa` becomes `cmd/evie`, in the module
 `github.com/davidadel66/evie`. The agent loop moves into `internal/agent`
@@ -1191,7 +1191,7 @@ file approvals show full diffs.
 Branch: master
 Commits: 252cb4d..b29b53c
 Touches: internal/tools, cmd/moussa, docs
-Sources: doc:cmd/evie/docs/done/file-tools.spec.md, doc:cmd/evie/docs/done/file-tools.decisions.md, doc:cmd/evie/docs/done/bash.decisions.md
+Sources: doc:cmd/evie/docs/done/file-tools.spec.md, doc:cmd/evie/docs/done/file-tools.decisions.md, doc:cmd/evie/docs/done/file-tools.build.md, doc:cmd/evie/docs/done/bash.decisions.md
 
 `read_file` returns numbered lines capped at 100 KB, fenced by a path
 denylist inside path resolution, and `edit_file` makes exact-string
@@ -1244,7 +1244,7 @@ move into `internal/tools` and gain `finance_sync`, `finance_rules` and
 Branch: master
 Commits: ef694f5..ef694f5
 Touches: cmd/todo, cmd/finance, cmd/agent, internal/openrouter
-Sources: doc:cmd/finance/docs/done/sync.spec.md, doc:cmd/finance/docs/active/categorize.spec.md
+Sources: doc:cmd/finance/docs/done/sync.spec.md, doc:cmd/finance/docs/done/sync.decisions.md, doc:cmd/finance/docs/active/categorize.spec.md
 
 The repository starts as a personal collection of Go command-line tools,
 built partly to learn Go: `todo`, a task manager with JSON persistence;
