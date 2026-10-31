@@ -94,17 +94,18 @@ test("the breadcrumb leads back up through the levels", () => {
   ]);
 });
 
-test("each view belongs to one of the four level tabs", () => {
+test("each view belongs to one of the five level tabs", () => {
   const level = (view) => model.levelOf(view);
   assert.deepEqual(
-    ["context", "containers", "inside", "components", "group", "focus", "flows", "flow", "diagram"].map(level),
-    ["context", "containers", "containers", "components", "components", "components", "flows", "flows", "components"]
+    ["context", "containers", "inside", "components", "group", "focus", "flows", "flow", "diagram", "history"].map(level),
+    ["context", "containers", "containers", "components", "components", "components", "flows", "flows", "components", "history"]
   );
   assert.deepEqual(model.LEVELS.map((l) => [l.id, l.label]), [
     ["context", "Context"],
     ["containers", "Containers"],
     ["components", "Components"],
     ["flows", "Flows"],
+    ["history", "History"],
   ]);
 });
 
