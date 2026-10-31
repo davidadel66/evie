@@ -3,7 +3,9 @@
 // The explorer served by evie serve (system-page.spec.md): code and doc
 // links open GitHub at the build's commit, or master when the build has no
 // commit stamp or had uncommitted changes; opened from disk they stay
-// relative file links. Inside Evie's frame the page runs embedded.
+// relative file links. History's commits, tickets, and pull requests open
+// the build's repository, or the public one from disk. Inside Evie's frame
+// the page runs embedded.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -83,4 +85,37 @@ test("the embedded flag in the address puts the page in embedded mode", () => {
   assert.equal(model.isEmbedded("?embedded=0"), false);
   assert.equal(model.isEmbedded("?embedded"), false);
   assert.equal(model.isEmbedded("?notembedded=1"), false);
+});
+
+test("served, History's sources open GitHub at the build's commit, and its commits, tickets, and pull requests open the build's repository", () => {
+  const d = model.mergeData(fixtureObjects());
+  const fork = "https://github.com/example/fork";
+  const build = { repository: fork, commit: COMMIT, modified: false };
+  const root = model.linkRoot(build);
+  const repository = model.linkRepository(build);
+
+  assert.equal(repository, fork);
+  assert.equal(model.resolveSource("doc:docs/export.spec.md", d, root, repository).href, fork + "/blob/" + COMMIT + "/docs/export.spec.md");
+  assert.equal(model.resolveSource("code:internal/alpha", d, root, repository).href, fork + "/blob/" + COMMIT + "/internal/alpha");
+  assert.equal(model.resolveSource("#12", d, root, repository).href, fork + "/issues/12");
+
+  const [october, september] = model.historyTimeline(d, repository);
+  assert.equal(october.entries[0].merge.href, fork + "/commit/abc1234");
+  assert.deepEqual(
+    [september.entries[0].commits.from.href, september.entries[0].commits.to.href],
+    [fork + "/commit/1111111", fork + "/commit/2222222"]
+  );
+  assert.equal(model.nodeDetails(d, "pkg:internal/beta", repository).history[0].merge.href, fork + "/commit/abc1234");
+});
+
+test("opened from disk, or without a usable repository, History's GitHub links open the public repository and its sources stay relative", () => {
+  const d = model.mergeData(fixtureObjects());
+  for (const build of [null, undefined, { repository: "javascript:alert(1)", commit: COMMIT, modified: false }]) {
+    const root = model.linkRoot(build);
+    const repository = model.linkRepository(build);
+    assert.equal(repository, REPO, `${JSON.stringify(build)} names no repository`);
+    assert.equal(model.resolveSource("doc:docs/export.spec.md", d, root, repository).href, "../../../docs/export.spec.md");
+    assert.equal(model.resolveSource("#12", d, root, repository).href, REPO + "/issues/12");
+    assert.equal(model.historyTimeline(d, repository)[0].entries[0].merge.href, REPO + "/commit/abc1234");
+  }
 });
