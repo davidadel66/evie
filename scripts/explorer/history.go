@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,57 +38,70 @@ type CommitRange struct {
 	To   string `json:"to"`
 }
 
-// changelogEntry is a parsed entry with what the check needs beyond the
-// facts: its heading as written and what is malformed in it.
-type changelogEntry struct {
-	HistoryEntry
-	heading string
-	issues  []issue
+// changelogFile is CHANGELOG.md parsed: its entries, and what is wrong with
+// the file outside any entry.
+type changelogFile struct {
+	entries  []changelogEntry
+	problems []problem
 }
 
-// issue is one thing wrong with an entry and how to fix it.
-type issue struct {
-	message, fix string
+// changelogEntry is a parsed entry with what the check needs beyond the
+// facts: its heading as written, the metadata fields it gives, and what is
+// malformed in it.
+type changelogEntry struct {
+	HistoryEntry
+	heading  string
+	seen     map[string]bool
+	problems []problem
+}
+
+// item names the entry in a check problem.
+func (e *changelogEntry) item() string {
+	return fmt.Sprintf("entry %q", e.heading)
 }
 
 func (e *changelogEntry) add(message, fix string) {
-	e.issues = append(e.issues, issue{message, fix})
+	e.problems = append(e.problems, problem{File: changelogPath, Item: e.item(), Message: message, Fix: fix})
 }
 
 // metadataFields are the metadata lines an entry may have, in the order
 // the README lists them.
 var metadataFields = []string{"Branch", "Merge", "Commits", "Touches", "Sources"}
 
-// readHistory parses CHANGELOG.md into the history facts.
-func readHistory(root string) ([]HistoryEntry, error) {
-	entries, err := readChangelog(root)
-	if err != nil {
-		return nil, err
-	}
-	history := make([]HistoryEntry, 0, len(entries))
-	for _, e := range entries {
-		history = append(history, e.HistoryEntry)
-	}
-	return history, nil
-}
+// changelogFix is how to write a missing changelog.
+const changelogFix = "create it in the format in docs/architecture/explorer/README.md"
 
-func readChangelog(root string) ([]changelogEntry, error) {
+// readChangelog reads and parses CHANGELOG.md. A missing file is an error
+// that says how to create it and matches fs.ErrNotExist.
+func readChangelog(root string) (changelogFile, error) {
 	data, err := os.ReadFile(filepath.Join(root, changelogPath))
+	if errors.Is(err, fs.ErrNotExist) {
+		return changelogFile{}, fmt.Errorf("read %s: %w. Fix: %s", changelogPath, err, changelogFix)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", changelogPath, err)
+		return changelogFile{}, fmt.Errorf("read %s: %w", changelogPath, err)
 	}
 	return parseChangelog(string(data)), nil
+}
+
+// history is the history facts: every entry as written.
+func (l changelogFile) history() []HistoryEntry {
+	history := make([]HistoryEntry, 0, len(l.entries))
+	for _, e := range l.entries {
+		history = append(history, e.HistoryEntry)
+	}
+	return history
 }
 
 // parseChangelog reads every entry of a changelog: a level-two heading
 // "YYYY-MM-DD — Title" outside a code fence, the metadata block (the first
 // block after the heading), then paragraphs. Text before the first entry is
-// a preamble. It never fails; each entry records what is malformed in it.
-func parseChangelog(text string) []changelogEntry {
-	var entries []changelogEntry
+// a preamble. It never fails; each entry records what is malformed in it,
+// and the changelog what is wrong outside any entry.
+func parseChangelog(text string) changelogFile {
+	var log changelogFile
 	var current *changelogEntry
 	var paragraph []string
-	var seen map[string]bool
 	const (
 		afterHeading = iota
 		inMetadata
@@ -102,8 +117,8 @@ func parseChangelog(text string) []changelogEntry {
 	finish := func() {
 		flush()
 		if current != nil {
-			validateEntry(current, seen)
-			entries = append(entries, *current)
+			validateEntry(current)
+			log.entries = append(log.entries, *current)
 		}
 	}
 	var open codeFence
@@ -121,9 +136,8 @@ func parseChangelog(text string) []changelogEntry {
 		}
 		if heading, ok := strings.CutPrefix(line, "## "); ok {
 			finish()
-			current = &changelogEntry{heading: strings.TrimSpace(heading)}
+			current = &changelogEntry{heading: strings.TrimSpace(heading), seen: map[string]bool{}}
 			current.Touches, current.Sources, current.Text = []string{}, []string{}, []string{}
-			seen = map[string]bool{}
 			state = afterHeading
 			continue
 		}
@@ -142,26 +156,37 @@ func parseChangelog(text string) []changelogEntry {
 			paragraph = append(paragraph, trimmed)
 		default:
 			state = inMetadata
-			metadataLine(current, seen, trimmed)
+			metadataLine(current, trimmed)
+		}
+	}
+	// An unclosed fence reads every later heading as text, so the entries
+	// below it would vanish silently.
+	if open.size > 0 {
+		const fix = "close the fence with a line of at least as many of the same fence characters"
+		if current != nil {
+			current.add("a code fence opened in the entry is never closed, so any entry below it is read as its text", fix)
+		} else {
+			log.problems = append(log.problems, problem{File: changelogPath, Item: "preamble",
+				Message: "a code fence opened before the first entry is never closed, so no entry after it is read", Fix: fix})
 		}
 	}
 	finish()
-	return entries
+	return log
 }
 
 // metadataLine records one line of an entry's metadata block.
-func metadataLine(e *changelogEntry, seen map[string]bool, line string) {
+func metadataLine(e *changelogEntry, line string) {
 	key, value, ok := strings.Cut(line, ":")
 	if !ok || !slices.Contains(metadataFields, key) {
 		e.add(fmt.Sprintf("metadata line %q is not a Branch, Merge, Commits, Touches, or Sources line", line),
 			"put a blank line between the metadata and the text, or correct the field name")
 		return
 	}
-	if seen[key] {
+	if e.seen[key] {
 		e.add(key+" is given twice", "give each metadata field once")
 		return
 	}
-	seen[key] = true
+	e.seen[key] = true
 	value = strings.TrimSpace(value)
 	switch key {
 	case "Branch":
@@ -185,7 +210,7 @@ func metadataLine(e *changelogEntry, seen map[string]bool, line string) {
 
 // validateEntry records what is missing or malformed in a finished entry,
 // beyond its metadata lines.
-func validateEntry(e *changelogEntry, seen map[string]bool) {
+func validateEntry(e *changelogEntry) {
 	date, title, ok := strings.Cut(e.heading, " —")
 	if !ok {
 		e.Title = e.heading
@@ -205,7 +230,7 @@ func validateEntry(e *changelogEntry, seen map[string]bool) {
 	if e.Merge != "" && !isSHA(e.Merge) {
 		e.add(fmt.Sprintf("Merge %q is not a commit SHA", e.Merge), "use the merge commit's SHA, full or at least 7 lowercase hex digits")
 	}
-	if seen["Merge"] && seen["Commits"] {
+	if e.seen["Merge"] && e.seen["Commits"] {
 		e.add("the entry has both Merge and Commits", "give Merge for a merged branch or Commits for direct-to-master work, not both")
 	}
 	if len(e.Touches) == 0 {
@@ -265,22 +290,16 @@ func splitList(e *changelogEntry, key, value string) []string {
 	return items
 }
 
-// validateHistory checks the changelog and reports each problem against the
-// entry it is in.
-func (c *checker) validateHistory() {
-	entries, err := readChangelog(c.root)
-	if err != nil {
-		c.add(changelogPath, "file", err.Error(), "create it in the format in docs/architecture/explorer/README.md")
-		return
-	}
-	repo := &gitRepo{root: c.root}
+// validateHistory checks the parsed changelog and reports each problem
+// against the entry it is in.
+func (c *checker) validateHistory(log changelogFile) {
+	c.problems = append(c.problems, log.problems...)
+	repo := c.askGit(log.entries)
 	var above *changelogEntry // the nearest entry above with a real date
-	for i := range entries {
-		e := &entries[i]
-		item := fmt.Sprintf("entry %q", e.heading)
-		for _, is := range e.issues {
-			c.add(changelogPath, item, is.message, is.fix)
-		}
+	for i := range log.entries {
+		e := &log.entries[i]
+		item := e.item()
+		c.problems = append(c.problems, e.problems...)
 		for _, source := range e.Sources {
 			if !strings.HasPrefix(source, "#") {
 				c.ref(changelogPath, item, source, nil)
@@ -299,38 +318,59 @@ func (c *checker) validateHistory() {
 	}
 }
 
-// verifyCommits checks an entry's merge commit or commit range with git.
-// When git cannot read the repository, that is reported once and no entry's
-// commits are verified.
-func (c *checker) verifyCommits(repo *gitRepo, item string, e *changelogEntry) {
+// commitSHAs are the well-formed commits an entry names: its merge commit
+// and the ends of its commit range. Only these reach git.
+func (e *changelogEntry) commitSHAs() []string {
 	var shas []string
 	if isSHA(e.Merge) {
 		shas = append(shas, e.Merge)
 	}
-	r := e.Commits
-	inRange := r != nil && isSHA(r.From) && isSHA(r.To)
-	if inRange {
+	if r := e.Commits; r != nil && isSHA(r.From) && isSHA(r.To) {
 		shas = append(shas, r.From, r.To)
 	}
-	if len(shas) == 0 || repo.reported {
-		return
+	return shas
+}
+
+// askGit asks git, in one process, which of the changelog's commits it
+// knows. When git cannot read the repository, that is reported once and it
+// returns nil, so no entry's commits are verified; it also returns nil, and
+// runs no git, when the changelog names no commit.
+func (c *checker) askGit(entries []changelogEntry) *gitRepo {
+	var shas []string
+	for i := range entries {
+		shas = append(shas, entries[i].commitSHAs()...)
 	}
-	if err := repo.usable(); err != nil {
-		repo.reported = true
+	if len(shas) == 0 {
+		return nil
+	}
+	repo := &gitRepo{root: c.root}
+	known, err := repo.knownCommits(shas)
+	if err != nil {
 		c.add(changelogPath, "commits", "git cannot verify the changelog's commits: "+err.Error(),
 			"run the check from a git checkout, with git on PATH and the full history (CI checks out with fetch-depth 0)")
+		return nil
+	}
+	repo.known = known
+	return repo
+}
+
+// verifyCommits checks an entry's merge commit or commit range against what
+// git knows (askGit); a nil repo verifies nothing.
+func (c *checker) verifyCommits(repo *gitRepo, item string, e *changelogEntry) {
+	if repo == nil {
 		return
 	}
 	const fix = "use a commit SHA from this repository's history, long enough to be unambiguous; a shallow clone needs its full history"
-	if !inRange {
-		if !repo.hasCommit(e.Merge) {
+	r := e.Commits
+	if r == nil || !isSHA(r.From) || !isSHA(r.To) {
+		if isSHA(e.Merge) && !repo.known[e.Merge] {
 			c.add(changelogPath, item, "git does not know the merge commit "+e.Merge, fix)
 		}
 		return
 	}
 	known := true
 	for _, sha := range []string{r.From, r.To} {
-		if !repo.hasCommit(sha) {
+		if !repo.known[sha] {
 			c.add(changelogPath, item, fmt.Sprintf("git does not know commit %s in Commits %s..%s", sha, r.From, r.To), fix)
 			known = false
 		}
@@ -350,45 +390,50 @@ func (c *checker) verifyCommits(repo *gitRepo, item string, e *changelogEntry) {
 
 // gitRepo asks git about the repository at root.
 type gitRepo struct {
-	root     string
-	checked  bool
-	err      error // why git cannot read the repository
-	reported bool  // err has been reported
+	root  string
+	known map[string]bool // the changelog's commits git knows (knownCommits)
 }
 
-// usable returns why git cannot read the repository, or nil; it asks once.
-func (g *gitRepo) usable() error {
-	if !g.checked {
-		g.checked = true
-		if _, err := exec.LookPath("git"); err != nil {
-			g.err = fmt.Errorf("git is not on PATH: %w", err)
-		} else if out, err := g.run("rev-parse", "--git-dir"); err != nil {
-			g.err = fmt.Errorf("%s (%v)", out, err)
-		}
+// knownCommits asks one git process which of shas each name exactly one
+// commit. It fails when git is missing or cannot read the repository.
+func (g *gitRepo) knownCommits(shas []string) (map[string]bool, error) {
+	if _, err := exec.LookPath("git"); err != nil {
+		return nil, fmt.Errorf("git is not on PATH: %w", err)
 	}
-	return g.err
-}
-
-func (g *gitRepo) run(args ...string) (string, error) {
-	out, err := exec.Command("git", append([]string{"-C", g.root}, args...)...).CombinedOutput()
-	return strings.TrimSpace(string(out)), err
-}
-
-// hasCommit reports whether sha names exactly one commit git knows.
-func (g *gitRepo) hasCommit(sha string) bool {
-	_, err := g.run("cat-file", "-e", sha+"^{commit}")
-	return err == nil
+	var names strings.Builder
+	for _, sha := range shas {
+		names.WriteString(sha + "^{commit}\n")
+	}
+	cmd := exec.Command("git", "-C", g.root, "cat-file", "--batch-check=%(objecttype)")
+	cmd.Stdin = strings.NewReader(names.String())
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("%s (%v)", strings.TrimSpace(stderr.String()), err)
+	}
+	// One answer per name, in order: "commit", or the name followed by
+	// "missing" or "ambiguous".
+	answers := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
+	if len(answers) != len(shas) {
+		return nil, fmt.Errorf("git cat-file answered %d of %d commits", len(answers), len(shas))
+	}
+	known := make(map[string]bool, len(shas))
+	for i, sha := range shas {
+		known[sha] = answers[i] == "commit"
+	}
+	return known, nil
 }
 
 // isAncestor reports whether from is to or an ancestor of it.
 func (g *gitRepo) isAncestor(from, to string) (bool, error) {
-	out, err := g.run("merge-base", "--is-ancestor", from, to)
+	out, err := exec.Command("git", "-C", g.root, "merge-base", "--is-ancestor", from, to).CombinedOutput()
 	var exit *exec.ExitError
 	if errors.As(err, &exit) && exit.ExitCode() == 1 {
 		return false, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("%s (%v)", out, err)
+		return false, fmt.Errorf("%s (%v)", strings.TrimSpace(string(out)), err)
 	}
 	return true, nil
 }

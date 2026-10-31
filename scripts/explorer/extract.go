@@ -138,6 +138,16 @@ func renderFacts(root string, databases []databaseSource) ([]byte, error) {
 // extractFacts reads the facts from the repository at root, creating its
 // databases from databases.
 func extractFacts(root string, databases []databaseSource) (Facts, error) {
+	log, err := readChangelog(root)
+	if err != nil {
+		return Facts{}, err
+	}
+	return factsWith(root, databases, log)
+}
+
+// factsWith reads the facts from the repository at root, creating its
+// databases from databases; the history is the already parsed changelog's.
+func factsWith(root string, databases []databaseSource, log changelogFile) (Facts, error) {
 	facts := Facts{
 		Format:    formatVersion,
 		Kind:      "facts",
@@ -192,9 +202,7 @@ func extractFacts(root string, databases []databaseSource) (Facts, error) {
 	if facts.ADRs, err = readADRs(root); err != nil {
 		return facts, err
 	}
-	if facts.History, err = readHistory(root); err != nil {
-		return facts, err
-	}
+	facts.History = log.history()
 	return facts, nil
 }
 

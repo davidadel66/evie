@@ -64,9 +64,24 @@ func TestExtractFailsClearlyWithoutAChangelog(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, _, stderr := runTool(t, root, "extract")
-	if code != 2 || !strings.Contains(stderr, "read CHANGELOG.md") {
-		t.Fatalf("extract exit %d, stderr %q; want 2 naming CHANGELOG.md", code, stderr)
+	if code != 2 || !strings.Contains(stderr, "read CHANGELOG.md") || !strings.Contains(stderr, changelogFormatFix) {
+		t.Fatalf("extract exit %d, stderr %q; want 2 naming CHANGELOG.md and the format to create it in", code, stderr)
 	}
+}
+
+// changelogFormatFix is how check says to write a missing changelog.
+const changelogFormatFix = "create it in the format in docs/architecture/explorer/README.md"
+
+func TestCheckReportsAMissingChangelog(t *testing.T) {
+	runCheckCases(t, []checkCase{{
+		name: "deleted after extracting",
+		break_: func(t *testing.T, root string) {
+			if err := os.Remove(filepath.Join(root, changelogPath)); err != nil {
+				t.Fatal(err)
+			}
+		},
+		want: []string{changelogPath + ": file: the file does not exist. Fix: " + changelogFormatFix + ".", "1 problem(s)"},
+	}})
 }
 
 func TestCheckReportsMalformedChangelogEntries(t *testing.T) {
@@ -142,6 +157,33 @@ func TestCheckReportsMalformedChangelogEntries(t *testing.T) {
 			name:   "commits that are not a range",
 			break_: withChangelog(changelog(strings.Replace(validEntry, "Branch: feat/run\n", "Branch: feat/run\nCommits: abc1234\n", 1))),
 			want:   []string{entryProblem(heading, `Commits "abc1234" is not <from>..<to>`)},
+		},
+	})
+}
+
+func TestCheckReportsACodeFenceThatIsNeverClosed(t *testing.T) {
+	// An unclosed fence reads every later heading as text, so the entries
+	// below it vanish from History; check names where the fence opened.
+	const heading = "2026-10-20 — Add the run command"
+	opened := strings.Replace(validEntry, "The tool gains a run command.\n", "The tool gains a run command.\n\n```go\nrun()\n", 1)
+	runCheckCases(t, []checkCase{
+		{
+			name:   "opened in an entry",
+			break_: withChangelog(changelog(opened, entryOn("2026-10-02", "Swallowed by the fence"))),
+			want: []string{
+				entryProblem(heading, "a code fence opened in the entry is never closed, so any entry below it is read as its text"),
+				"close the fence with a line of at least as many of the same fence characters",
+				"1 problem(s)",
+			},
+		},
+		{
+			name:   "opened before the first entry",
+			break_: withChangelog("# Changelog\n\n~~~text\n" + validEntry),
+			want: []string{
+				changelogPath + ": preamble: a code fence opened before the first entry is never closed, so no entry after it is read",
+				"close the fence with a line of at least as many of the same fence characters",
+				"1 problem(s)",
+			},
 		},
 	})
 }

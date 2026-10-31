@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -43,7 +45,15 @@ func runCheck(root string, databases []databaseSource, stdout, stderr io.Writer)
 // validates every data file against them. It returns every problem found; an
 // error means the check itself could not run.
 func checkRepo(root string, databases []databaseSource) ([]problem, error) {
-	facts, err := extractFacts(root, databases)
+	log, err := readChangelog(root)
+	if errors.Is(err, fs.ErrNotExist) {
+		// Without the changelog there is no fresh extraction to compare.
+		return []problem{{File: changelogPath, Item: "file", Message: "the file does not exist", Fix: changelogFix}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	facts, err := factsWith(root, databases, log)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +72,6 @@ func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 			"run "+extractCommand+" and commit the result")
 	}
 	c.validate(c.loadData())
-	c.validateHistory()
+	c.validateHistory(log)
 	return c.problems, nil
 }
