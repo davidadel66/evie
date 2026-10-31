@@ -3223,21 +3223,42 @@
       .replace(/^-+|-+$/g, "");
   }
 
+  // monthName names a two-digit month, or is "" for anything else.
+  function monthName(mm) {
+    return MONTHS[Number(mm) - 1] || "";
+  }
+
   function historyMonthLabel(key) {
     var m = /^([0-9]{4})-([0-9]{2})$/.exec(key);
-    return m && MONTHS[Number(m[2]) - 1] ? MONTHS[Number(m[2]) - 1] + " " + m[1] : "Undated";
+    var name = m ? monthName(m[2]) : "";
+    return name ? name + " " + m[1] : "Undated";
   }
+
+  // historyCache keeps each data object's History entries for each
+  // repository their commits link into, since search reads them on every
+  // keystroke, the address on every change, and the panel on every render.
+  var historyCache = new WeakMap();
 
   // historyEntries lists the History entries newest first, entries of one
   // day in their written order, each with an id for the address (its date
   // and title), its commit links (githubHref), and its touched paths with
-  // the package node each still has, or null once the package is gone.
+  // the package node each still has, or null once the package is gone. The
+  // list is worked out once per data object and repository (historyCache);
+  // callers must not change it.
   function historyEntries(data, links) {
+    var byRepository = historyCache.get(data);
+    if (!byRepository) historyCache.set(data, (byRepository = dict()));
+    var key = links ? links.repository : "";
+    return byRepository[key] || (byRepository[key] = readHistoryEntries(data, links));
+  }
+
+  function readHistoryEntries(data, links) {
     var used = dict();
     var entries = data.facts.history.map(function (raw, index) {
       var date = typeof raw.date === "string" ? raw.date : "";
       var parts = ISO_DATE.exec(date);
-      var month = parts && MONTHS[Number(parts[2]) - 1] ? parts[1] + "-" + parts[2] : "undated";
+      var name = parts ? monthName(parts[2]) : "";
+      var month = name ? parts[1] + "-" + parts[2] : "undated";
       var base = historySlug((parts ? date + " " : "") + (raw.title || "")) || "entry";
       var id = base;
       for (var n = 2; used[id]; n++) id = base + "-" + n;
@@ -3249,7 +3270,7 @@
         entry: {
           id: id,
           date: date,
-          dateLabel: month === "undated" ? date || "Undated" : MONTHS[Number(parts[2]) - 1].slice(0, 3) + " " + Number(parts[3]) + ", " + parts[1],
+          dateLabel: name ? name.slice(0, 3) + " " + Number(parts[3]) + ", " + parts[1] : date || "Undated",
           month: month,
           title: raw.title || id,
           branch: raw.branch || "",
