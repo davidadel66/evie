@@ -9,6 +9,7 @@ editing this file, run `go run ./scripts/explorer extract` and
 
 ## 2026-10-31 — System page and History
 Branch: feat/system-page
+Merge: 38c7f63
 Touches: internal/web, docs/architecture/explorer, scripts/explorer, internal/web/ui
 Sources: doc:cmd/evie/docs/active/system-page.spec.md, #195, #196, #197
 
@@ -27,8 +28,9 @@ parses `CHANGELOG.md` into the facts, and the drift check validates each
 entry's format, date, order, sources, and commits. The changelog is backfilled
 for master's whole first-parent history.
 
-## 2026-10-29 — System explorer
+## 2026-10-31 — System explorer
 Branch: feat/system-explorer
+Merge: 394b77f
 Touches: scripts/explorer, docs/architecture/explorer
 Sources: doc:cmd/evie/docs/active/system-explorer.spec.md, doc:cmd/evie/docs/active/system-explorer.decisions.md, doc:docs/architecture/explorer/README.md, #186, #187, #188, #189, #190, #191, #192, #193, #194
 

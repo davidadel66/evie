@@ -16221,6 +16221,7 @@ evieExplorer.register(
       "date": "2026-10-31",
       "title": "System page and History",
       "branch": "feat/system-page",
+      "merge": "38c7f63",
       "touches": [
         "internal/web",
         "docs/architecture/explorer",
@@ -16239,9 +16240,10 @@ evieExplorer.register(
       ]
     },
     {
-      "date": "2026-10-29",
+      "date": "2026-10-31",
       "title": "System explorer",
       "branch": "feat/system-explorer",
+      "merge": "394b77f",
       "touches": [
         "scripts/explorer",
         "docs/architecture/explorer"
