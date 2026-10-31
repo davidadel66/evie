@@ -79,3 +79,15 @@ test("the proposal parameter refuses absolute paths, schemes, parent directories
   assert.ok(raw && raw.error, "a malformed escape is refused");
   assert.match(raw.error, /design proposal/);
 });
+
+test("loading a proposal sets only the proposal parameter, keeping the rest of the query, Evie's embedded flag included", () => {
+  const example = "examples/design-proposal.js";
+  assert.equal(model.withProposal("", example), "?proposal=examples/design-proposal.js");
+  assert.equal(model.withProposal("?embedded=1", example), "?embedded=1&proposal=examples/design-proposal.js");
+  assert.equal(model.withProposal("?proposal=data/proposals/old.js&embedded=1", example), "?proposal=examples/design-proposal.js&embedded=1", "an existing proposal is replaced in place");
+  assert.equal(model.withProposal("?a=1&proposal=x.js&proposal=y.js", example), "?a=1&proposal=examples/design-proposal.js", "one proposal parameter remains");
+
+  const search = model.withProposal("?embedded=1", example);
+  assert.deepEqual(model.proposalPath(search), { path: example });
+  assert.equal(model.isEmbedded(search), true);
+});

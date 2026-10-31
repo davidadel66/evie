@@ -137,6 +137,20 @@ test("the address holds the History view and its selected entry, and drops an en
   assert.equal(model.resolveState(d, { view: "flows", entry: "2026-10-20-retire-the-old-store" }).entry, undefined, "an entry belongs to the History view");
 });
 
+test("changing the selection or closing the panel keeps the view part of the address, the selected History entry included", () => {
+  const entry = "2026-10-20-retire-the-old-store";
+  const history = { view: "history", entry, node: "pkg:internal/beta", term: "Widget", panel: "proposals", proposals: ["sample"] };
+
+  assert.equal(model.formatHash(model.viewState(history)), "#view=history&entry=" + entry + "&proposals=sample", "closing the panel");
+  assert.equal(
+    model.formatHash(Object.assign(model.viewState(history), { node: "pkg:internal/alpha" })),
+    "#view=history&node=pkg:internal/alpha&entry=" + entry + "&proposals=sample",
+    "selecting another node"
+  );
+  assert.deepEqual(model.viewState({ view: "flow", of: "chat", step: 2, node: "pkg:internal/alpha", proposals: [] }), { view: "flow", of: "chat", step: 2, proposals: [] });
+  assert.deepEqual(model.viewState({ view: "context" }), { view: "context" });
+});
+
 test("a History source that is a ticket or pull-request number opens it on GitHub; any other source resolves as a reference", () => {
   const d = data();
   assert.deepEqual(model.resolveSource("#12", d), { kind: "issue", text: "#12", href: "https://github.com/davidadel66/evie/issues/12" });

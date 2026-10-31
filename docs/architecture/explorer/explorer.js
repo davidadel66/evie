@@ -3905,6 +3905,18 @@
   // proposals.
   var HASH_KEYS = ["view", "of", "node", "term", "step", "entry", "panel", "proposals"];
 
+  // viewState is the part of a state that names what is shown: the view,
+  // its subject, the flow step, the selected History entry, and the active
+  // proposals. A change of selection or panel rebuilds the address from it,
+  // so it keeps all of them.
+  function viewState(state) {
+    var out = {};
+    ["view", "of", "step", "entry", "proposals"].forEach(function (key) {
+      if (state && state[key] !== undefined) out[key] = state[key];
+    });
+    return out;
+  }
+
   function encodeValue(value) {
     return encodeURIComponent(value).replace(/%3A/gi, ":").replace(/%2F/gi, "/");
   }
@@ -3987,6 +3999,30 @@
     return null;
   }
 
+  // withProposal is a location's search string with the proposal parameter
+  // set to path: an existing one is replaced where it stands, and every
+  // other parameter, such as Evie's embedded flag, is kept.
+  function withProposal(search, path) {
+    var value = "proposal=" + encodeValue(path);
+    var placed = false;
+    var pairs = [];
+    String(search || "")
+      .replace(/^\?/, "")
+      .split("&")
+      .forEach(function (pair) {
+        if (!pair) return;
+        var eq = pair.indexOf("=");
+        if ((eq < 0 ? pair : pair.slice(0, eq)) !== "proposal") {
+          pairs.push(pair);
+        } else if (!placed) {
+          pairs.push(value);
+          placed = true;
+        }
+      });
+    if (!placed) pairs.push(value);
+    return "?" + pairs.join("&");
+  }
+
   var model = {
     GROUPS: GROUPS,
     mergeData: mergeData,
@@ -4033,8 +4069,10 @@
     buildScript: buildScript,
     isEmbedded: isEmbedded,
     formatHash: formatHash,
+    viewState: viewState,
     parseHash: parseHash,
     proposalPath: proposalPath,
+    withProposal: withProposal,
   };
 
   if (typeof module !== "undefined" && module.exports) {
@@ -4194,7 +4232,8 @@
 
   // select changes only the selection, keeping the view.
   function select(id, extra) {
-    var next = { view: app.state.view, of: app.state.of, step: app.state.step, node: id || undefined, proposals: app.state.proposals };
+    var next = viewState(app.state);
+    next.node = id || undefined;
     go(copy(extra, next), { replace: true });
   }
 
@@ -5482,7 +5521,7 @@
     if (!app.base.proposals.length) {
       var li = html("li", { class: "hint" }, ul);
       html("span", {}, li, "No design proposals yet. ");
-      html("a", { href: "?proposal=examples/design-proposal.js" + location.hash }, li, "Load the example");
+      html("a", { href: withProposal(location.search, "examples/design-proposal.js") + location.hash }, li, "Load the example");
       return;
     }
     app.base.proposals.forEach(function (p) {
@@ -5500,14 +5539,15 @@
           return id !== p.id;
         });
         if (box.checked) ids.push(p.id);
-        var next = { view: app.state.view, of: app.state.of, step: app.state.step, proposals: ids };
+        var next = viewState(app.state);
+        next.proposals = ids;
         if (box.checked) next.panel = "proposals";
         go(next);
       });
       if (active) {
         var more = html("button", { type: "button", class: "linklike proposal-more" }, item, "Requirements and decisions");
         more.addEventListener("click", function () {
-          go({ view: app.state.view, of: app.state.of, step: app.state.step, proposals: app.state.proposals, panel: "proposals" }, { replace: true });
+          go(copy({ panel: "proposals" }, viewState(app.state)), { replace: true });
         });
       }
     });
@@ -5557,7 +5597,7 @@
     renderSearch();
     input.blur();
     if (r.type === "term") {
-      go({ view: app.state.view, of: app.state.of, step: app.state.step, term: r.id, proposals: app.state.proposals }, { replace: true });
+      go(copy({ term: r.id }, viewState(app.state)), { replace: true });
     } else {
       go(r.state);
     }
@@ -5782,7 +5822,7 @@
   }
 
   function closePanel() {
-    go({ view: app.state.view, of: app.state.of, step: app.state.step, proposals: app.state.proposals }, { replace: true });
+    go(viewState(app.state), { replace: true });
   }
 
   function renderNodePanel(panel, id) {
