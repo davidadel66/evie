@@ -1,0 +1,12 @@
+evieExplorer.manifest(
+[
+  "facts.js",
+  "system.js",
+  "intelligence.js",
+  "memory.js",
+  "runtime.js",
+  "workflows.js",
+  "platform.js",
+  "integrations.js"
+]
+);

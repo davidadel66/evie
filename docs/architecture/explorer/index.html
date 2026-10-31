@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Evie system explorer</title>
+    <link rel="stylesheet" href="explorer.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#view=context" aria-label="Evie system explorer, system context">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Evie</span>
+        <span class="brand-sub">System explorer</span>
+      </a>
+      <nav id="levels" class="levels" aria-label="Levels"></nav>
+      <div class="search" role="search">
+        <label class="visually-hidden" for="search-input">Search packages, glossary terms, flows, and diagrams</label>
+        <input
+          id="search-input"
+          type="search"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Search packages, terms, flows…"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded="false"
+          aria-controls="search-results"
+        />
+        <kbd class="search-key" aria-hidden="true">/</kbd>
+        <ul id="search-results" class="search-results" role="listbox" aria-label="Search results" hidden></ul>
+      </div>
+    </header>
+    <div id="problems" class="problems" role="alert" hidden></div>
+    <div class="frame">
+      <aside id="rail" class="rail" aria-label="Groups, legend, and design proposals">
+        <section>
+          <h2>Groups</h2>
+          <ul id="group-list" class="group-list"></ul>
+        </section>
+        <section>
+          <h2>Legend</h2>
+          <ul id="legend" class="legend"></ul>
+        </section>
+        <section>
+          <h2>Design proposals</h2>
+          <ul id="proposal-list" class="proposal-list"></ul>
+        </section>
+        <section class="keys">
+          <h2>Keys</h2>
+          <dl>
+            <dt><kbd>/</kbd></dt><dd>Search</dd>
+            <dt><kbd>Enter</kbd></dt><dd>Select, then open</dd>
+            <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Step a flow</dd>
+            <dt><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></dt><dd>Zoom, fit</dd>
+            <dt><kbd>Esc</kbd></dt><dd>Close</dd>
+          </dl>
+        </section>
+      </aside>
+      <main class="stage" aria-label="Diagram">
+        <div class="stagebar">
+          <nav id="crumbs" class="crumbs" aria-label="Breadcrumb"></nav>
+          <div id="stepper" class="stepper" hidden></div>
+          <div class="tools" role="toolbar" aria-label="Zoom">
+            <button type="button" id="zoom-out" class="tool" aria-label="Zoom out" title="Zoom out (−)"></button>
+            <button type="button" id="zoom-in" class="tool" aria-label="Zoom in" title="Zoom in (+)"></button>
+            <button type="button" id="zoom-fit" class="tool" aria-label="Fit to screen" title="Fit to screen (0)"></button>
+          </div>
+        </div>
+        <div id="notice" class="notice" role="status" hidden></div>
+        <div id="canvas" class="canvas">
+          <p class="loading">Loading explorer data…</p>
+        </div>
+      </main>
+      <aside id="panel" class="panel" aria-label="Details" aria-live="polite" hidden></aside>
+    </div>
+    <noscript><p class="problems">The explorer draws its diagrams with JavaScript; enable it to see them.</p></noscript>
+    <script src="explorer.js"></script>
+    <script src="data/manifest.js"></script>
+  </body>
+</html>
