@@ -62,5 +62,6 @@ func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 			"run "+extractCommand+" and commit the result")
 	}
 	c.validate(c.loadData())
+	c.validateHistory()
 	return c.problems, nil
 }

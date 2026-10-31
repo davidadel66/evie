@@ -10,7 +10,8 @@ System view in Evie's sidebar. Specifications:
 and [`system-page.spec.md`](../../../cmd/evie/docs/active/system-page.spec.md).
 
 Agents edit the data, never the page. The drift check keeps the data honest:
-it fails when the data and the code disagree.
+it fails when the data and the code disagree. The History tab reads the
+repository's [`CHANGELOG.md`](../../../CHANGELOG.md) (see [History](#history)).
 
 ## Files
 
@@ -19,7 +20,7 @@ it fails when the data and the code disagree.
 | `index.html`, `explorer.js`, `explorer.css` | The page, its one classic-script viewer, and its stylesheet. No modules, no build, no third-party code. |
 | `snapshot.go` | Package `explorer`: embeds the page, viewer, stylesheet, `data/`, and `examples/` (not the tests or this README) so `evie serve` can serve them under `/explorer/`. |
 | `data/manifest.js` | The ordered list of data files the page loads. |
-| `data/facts.js` | Generated facts. Never edit by hand; run `extract`. |
+| `data/facts.js` | Generated facts, History included. Never edit by hand; run `extract`. |
 | `data/<owner>.js` | Written content, one file per subsystem owner (below). |
 | `data/proposals/<id>.js` | One file per design proposal. |
 | `examples/<id>.js` | Example design proposals. Checked, but not listed in the manifest; the page loads one through its proposal parameter (below). `examples/design-proposal.js` ships as the example. |
@@ -49,19 +50,19 @@ Run both from the repository root.
 go run ./scripts/explorer extract
 ```
 
-Rewrites `data/facts.js` from the code. Output is sorted and has no
-timestamps or line numbers, so running it twice leaves the file
+Rewrites `data/facts.js` from the code and `CHANGELOG.md`. Output is sorted
+and has no timestamps or line numbers, so running it twice leaves the file
 byte-identical on every platform. Run it whenever a package, import, command,
-route, table, glossary term, or ADR is added, removed, or renamed, and commit
-the result.
+route, table, glossary term, or ADR is added, removed, or renamed, or
+`CHANGELOG.md` changes, and commit the result.
 
 ```sh
 go run ./scripts/explorer check
 ```
 
 Re-extracts the facts in memory, compares them byte for byte with
-`data/facts.js`, then validates every manifest-listed data file and every
-example against them. It prints every problem, one per line, as
+`data/facts.js`, then validates every manifest-listed data file, every
+example, and `CHANGELOG.md` against them. It prints every problem, one per line, as
 
 ```text
 <data file>: <item>: <what is wrong>. Fix: <how to fix it>.
@@ -114,7 +115,8 @@ is malformed data. Optional lists may be left out.
   "routes": [{"method": "GET", "pattern": "/api/x", "package": "internal/web", "guard": "requireOwner", "source": {"file": "...", "function": "..."}}],
   "databases": [{"id": "evie", "package": "internal/eviedb", "tables": [{"name": "jobs", "columns": [{"name": "id", "type": "INTEGER", "notNull": false, "primaryKey": 1}], "foreignKeys": [{"columns": ["job_id"], "table": "jobs", "references": ["id"]}]}]}],
   "glossary": [{"term": "Plugin", "definition": "...", "avoid": ["Tool", "skill"]}],
-  "adrs": [{"number": "0001", "title": "...", "path": "docs/adr/0001-....md"}]
+  "adrs": [{"number": "0001", "title": "...", "path": "docs/adr/0001-....md"}],
+  "history": [{"date": "2026-10-26", "title": "...", "branch": "cache/batched-projection", "merge": "cc69b4d", "touches": ["internal/agent"], "sources": ["doc:...", "#179"], "text": ["..."]}]
 }
 ```
 
@@ -174,6 +176,12 @@ is malformed data. Optional lists may be left out.
 - **glossary**: the bold `**Term**:` entries of `GLOSSARY.md`, the paragraph
   after each as the definition, and its `_Avoid_:` line.
 - **adrs**: the numbered files in `docs/adr/` with their first heading.
+- **history**: the entries of `CHANGELOG.md` in the order written, each
+  with its date, title, branch, `merge` or `commits` (`{"from", "to"}`)
+  when given, touched paths, sources, and text paragraphs (see
+  [History](#history)). It is a pure function of the file: git is never
+  asked, so a short SHA stays as written. `extract` fails when
+  `CHANGELOG.md` is missing, as it does without `GLOSSARY.md`.
 
 ### Content
 
@@ -330,7 +338,9 @@ when the binary has no commit stamp or was built with uncommitted changes
 ADRs show their title, terms
 show their definition inline, `pkg:` and `node:` references select the node,
 and `table:`, `route:`, and `command:` references open the package that
-defines them with the fact highlighted.
+defines them with the fact highlighted. History's ticket and pull-request
+numbers and commits open on GitHub, from disk too ([Served by `evie
+serve`](#served-by-evie-serve)).
 
 ## What the check reports
 
@@ -352,7 +362,9 @@ defines them with the fact highlighted.
   required fields, values outside their vocabulary, a diagram field of another
   kind, unsupported format versions;
 - duplicate node, flow, diagram, or design proposal ids, and component nodes
-  without a group.
+  without a group;
+- every `CHANGELOG.md` problem listed under [History](#history), naming the
+  entry by its heading.
 
 The check proves a source exists, not that a sentence is true. Re-read every
 source you cite.
@@ -374,7 +386,9 @@ ends on its nodes, positions do not depend on input order, edge labels never
 cover one another, and group and focus views keep edges clear of other nodes.
 They also cover the proposal overlay and its styling, address round trips,
 proposal-path refusal, reference resolution, search, and that labels pass
-through as text and the page never parses data as markup.
+through as text and the page never parses data as markup. `test/history.test.js`
+covers the History timeline's month grouping and order, each card's links,
+each package's History, removed packages, search, and the address.
 
 ## The page
 
@@ -390,10 +404,14 @@ Each view has its own layout rather than one general graph engine:
 | Focus | `#view=focus&of=pkg:internal/agent` | Callers, the node, its dependencies, from imports and content edges. |
 | Flows | `#view=flows` | A card per flow. |
 | Flow | `#view=flow&of=chat-turn&step=3` | A sequence diagram with lifelines and numbered steps; the current step is highlighted, its statement and sources are in the panel, and the view follows it. |
+| History | `#view=history&entry=<entry id>` | A timeline grouped by month, newest first: a card per entry with its date, title, branch, merge commit or commit range, text, sources, and touched packages. Selecting an entry's title puts it in the address. |
 | Diagram | `#view=diagram&of=<diagram id>` | Graphs layered top to bottom (lanes as bands flowing left to right), state diagrams from an initial marker, er diagrams as table cards from the facts with foreign keys joined column to column. |
 
 The address fragment holds the view and its subject (`of`), the selected node
-(`node`) or glossary term (`term`), the flow step (`step`), the open panel
+(`node`) or glossary term (`term`), the flow step (`step`), the selected
+History entry (`entry`, its date and title as one slug, such as
+`2026-10-26-tool-results-projected-in-batches-and-lighter-turns`; a second
+entry with the same date and title gets `-2`), the open panel
 (`panel=proposals`), and the active proposals (`proposals=a,b`), so a reload
 or a bookmark lands in the same place. A view whose subject no longer exists
 falls back to the view above it with a notice.
@@ -404,9 +422,10 @@ to what it contains, a package to its focus view); the breadcrumb leads back,
 and level changes zoom in or out of the part opened. Hover lights a node's
 neighbours and dims the rest. The wheel zooms, dragging pans, and the fit
 button (or `0`) fits the view. `/` searches packages by name or path, glossary
-terms by term or avoided synonym, flows, and diagrams; the arrow keys step a
-flow; Esc closes the panel. Colours follow the system's light or dark
-preference.
+terms by term or avoided synonym, flows, diagrams, and History entries by
+title, branch, or text; the arrow keys step a flow; Esc closes the panel. A
+package's panel lists the History entries that touched it, each opening in
+the History view. Colours follow the system's light or dark preference.
 
 ### Served by `evie serve`
 
@@ -420,7 +439,87 @@ evieExplorer.build({"repository":"https://github.com/davidadel66/evie","commit":
 The repository comes from the main module path and the commit and modified
 flag from Go's build stamp; the commit is empty when the binary is
 unstamped. The page loads `build.js` only when it is not opened from disk.
+Served, `code:` and `doc:` links, History's sources among them, open GitHub
+at the build's commit or master ([Reference forms](#reference-forms)), and
+History's commits, tickets, and pull requests open in the repository
+`build.js` names. From disk, or when `build.js` names no usable repository,
+those History links open the public repository,
+`https://github.com/davidadel66/evie`.
+
 Evie's System view frames `/explorer/?embedded=1`; the embedded flag hides
 the brand and keeps the light colours, like Evie. The frame is sandboxed
 without same-origin access, and the page's content-security policy sandboxes
 it the same way when opened on its own.
+
+## History
+
+[`CHANGELOG.md`](../../../CHANGELOG.md) at the repository root records every
+merge to master, newest first: what changed and why. `extract` copies it into
+the facts' `history` list, the History tab draws it, and `check` validates it.
+It is written by hand. Specification: the "Changelog format" section of
+[`system-page.spec.md`](../../../cmd/evie/docs/active/system-page.spec.md).
+
+An entry looks like this:
+
+```markdown
+## 2026-11-02 — Name the change
+Branch: feat/my-feature
+Merge: 1a2b3c4
+Touches: internal/agent, internal/web
+Sources: doc:cmd/evie/docs/active/my-feature.spec.md, #201
+
+What changed and why, in one or more paragraphs. `Backticks` mark code.
+
+A second paragraph.
+```
+
+| Part | Rule |
+| --- | --- |
+| Heading | `## YYYY-MM-DD — Title`: level two, a real calendar date, an em dash with a space on each side, then the title. The date is the merge's; an entry written on its branch before the merge takes the day it is written. A `##` line inside a code fence is not an entry, and everything before the first entry is a preamble. |
+| Metadata | The first block after the heading: one `Field: value` line per field, each field at most once, ended by a blank line. |
+| `Branch:` | Required. The merged branch; `master` for direct-to-master work. |
+| `Merge:` | Optional. The merge commit: a SHA, full or at least 7 lowercase hex digits, long enough to be unambiguous. Leave it out while the entry is written on its branch, and add it once the merge exists. |
+| `Commits:` | Instead of `Merge:`, for direct-to-master work: `<first>..<last>`, the first and last commit of the work, both included. Unlike `git log A..B`, which leaves out A, the first commit belongs to the entry, so the root commit can start a range and one commit is `abc1234..abc1234`. The first commit is the last one or an ancestor of it. |
+| `Touches:` | Required. Comma-separated repository paths the change touched, normally package paths as the explorer names them (`internal/agent`, `cmd/evie`). Each is a clean relative path. They are not link-checked, so history stays readable after a package is removed. A path that is a package node now shows as a chip that opens it; any other path, a removed package or a directory outside `cmd/` and `internal/` such as `scripts/explorer`, shows as plain text. A package's panel lists the entries whose Touches name its path exactly. |
+| `Sources:` | Required, at least one. Comma-separated explorer references in the [reference forms](#reference-forms), checked the same way, and ticket or pull-request numbers such as `#179`: `#` and a number with no leading zero, checked for form only because GitHub cannot be asked offline. |
+| Text | One or more paragraphs after the blank line. The lines of a paragraph join with spaces; text between backticks shows as code. |
+
+Entries are newest first by date. Entries on the same day may stand in
+either order; put the later merge first.
+
+`check` reports each problem against the entry, by its heading:
+
+```text
+CHANGELOG.md: entry "2026-11-02 — Name the change": missing Branch. Fix: add a Branch: line naming the merged branch.
+```
+
+It reports:
+
+- a heading that is not `YYYY-MM-DD — Title`, or has no title;
+- a missing `Branch:`, `Touches:`, or `Sources:` line, or no text;
+- a metadata line that is not one of the fields above (often prose with no
+  blank line before it), a field given twice, and an empty list item;
+- a touched path that is not a clean relative path;
+- a date that is not a real calendar date, such as `2026-02-30`;
+- an entry newer than the entry above it;
+- a source reference that does not resolve, and a malformed `#n` number;
+- a `Merge:` or `Commits:` value that is not a SHA or a `<first>..<last>`
+  range, an entry with both, a commit git does not know
+  (`git cat-file -e <sha>^{commit}`, run from the repository root), and a
+  range whose first commit is neither its last commit nor an ancestor of it
+  (`git merge-base --is-ancestor`).
+
+Verifying commits needs git and the full history: run the check in a git
+checkout (CI checks out with `fetch-depth: 0`). When git is not on `PATH` or
+the directory is not a repository, the check reports
+`CHANGELOG.md: commits: git cannot verify the changelog's commits` once and
+fails. An entry with neither `Merge:` nor `Commits:` needs no git.
+
+To add an entry:
+
+1. Write it above every older entry in `CHANGELOG.md`, in the format above.
+   On the branch, before the merge exists, leave out `Merge:`.
+2. Run `go run ./scripts/explorer extract`, then `go run ./scripts/explorer
+   check`, and fix what it reports. Commit `CHANGELOG.md` with
+   `data/facts.js`.
+3. Once the merge exists, add its `Merge:` line and run both again.

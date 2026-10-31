@@ -31,7 +31,12 @@
   var REPOSITORY_URL = /^https:\/\/[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(\/[A-Za-z0-9_][A-Za-z0-9._-]*)+$/;
   var COMMIT = /^[0-9a-f]{7,64}$/;
 
-  var FACT_LISTS = ["packages", "imports", "commands", "routes", "databases", "glossary", "adrs"];
+  // DEFAULT_REPOSITORY is the public repository. History's commits, tickets,
+  // and pull requests live only on GitHub, so they link there from disk too,
+  // and when build.js names no usable repository.
+  var DEFAULT_REPOSITORY = "https://github.com/davidadel66/evie";
+
+  var FACT_LISTS = ["packages", "imports", "commands", "routes", "databases", "glossary", "adrs", "history"];
   var NODE_LISTS = ["does", "owns", "interfaces", "gotchas", "terms", "diagrams", "links", "contains", "alsoIn", "children"];
   var STATEMENT_LISTS = ["does", "owns", "interfaces", "gotchas"];
 
@@ -2989,8 +2994,10 @@
   // facts, callers and dependencies from the import graph, its other
   // connections, glossary terms with definitions, the flows it takes part
   // in, its diagrams, what it contains and what contains it, every extracted
-  // fact that names its package, and what an active proposal changes.
-  function nodeDetails(data, id) {
+  // fact that names its package, what an active proposal changes, and the
+  // History entries that touched its package, their commits linked into
+  // repository (githubHref).
+  function nodeDetails(data, id, repository) {
     var node = data.nodeById[id] || null;
     var path = packagePath(id);
     var callers = [];
@@ -3042,6 +3049,7 @@
       change: node ? node.change || "" : "",
       changed: node ? list(node.changed) : [],
       proposal: proposal ? { id: proposal.id, title: proposal.title || proposal.id } : null,
+      history: path ? packageHistory(data, path, repository) : [],
     };
   }
 
@@ -3110,11 +3118,12 @@
     return /[\s\/._:-]/.test(s.charAt(at - 1)) ? 60 : 40;
   }
 
-  var SEARCH_ORDER = { node: 0, term: 1, flow: 2, diagram: 3 };
+  var SEARCH_ORDER = { node: 0, term: 1, flow: 2, diagram: 3, history: 4 };
 
   // search finds nodes by title or package path, glossary terms by term or
-  // avoided synonym, flows, and diagrams by title; best matches first, each
-  // with the address state that shows it.
+  // avoided synonym, flows, and diagrams by title, and History entries by
+  // title, branch, or text; best matches first, each with the address state
+  // that shows it.
   function search(data, query, limit) {
     var q = String(query || "").trim().toLowerCase();
     if (!q) return [];
@@ -3154,6 +3163,10 @@
         });
       });
     });
+    historyEntries(data).forEach(function (e) {
+      var score = Math.max(0.85 * matchScore(e.title, q), 0.7 * matchScore(e.branch, q), 0.5 * matchScore(e.text.join(" "), q));
+      add(score, { type: "history", id: e.id, label: e.title, detail: e.dateLabel + " · " + e.branch, state: { view: "history", entry: e.id } });
+    });
     results.sort(function (a, b) {
       return b.score - a.score || SEARCH_ORDER[a.type] - SEARCH_ORDER[b.type] || byString(a.label.toLowerCase(), b.label.toLowerCase()) || byString(a.id, b.id);
     });
@@ -3163,6 +3176,132 @@
     });
   }
 
+  // --------------------------------------------------------------- history
+  //
+  // History is CHANGELOG.md's entries, extracted into the facts: one per
+  // merge to master, or per run of direct-to-master commits. Commits,
+  // tickets, and pull requests link to the repository on GitHub, from disk
+  // too, since they live nowhere else.
+
+  // githubHref is the one place that builds links into the repository on
+  // GitHub: repository is linkRepository's answer, the public repository
+  // by default.
+  function githubHref(path, repository) {
+    return (repository || DEFAULT_REPOSITORY) + "/" + path;
+  }
+
+  var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  var ISO_DATE = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
+  var COMMIT_SHA = /^[0-9a-f]{7,40}$/;
+
+  // commitLink is a commit SHA and its page on GitHub; a value that is not
+  // a SHA gets no link.
+  function commitLink(sha, repository) {
+    if (!sha) return null;
+    return { sha: sha, href: COMMIT_SHA.test(sha) ? githubHref("commit/" + sha, repository) : null };
+  }
+
+  var ISSUE_NUMBER = /^#([1-9][0-9]*)$/;
+
+  // resolveSource turns a History source into what the page shows: a ticket
+  // or pull-request number opens on GitHub (whose issue page forwards to a
+  // pull request), and anything else resolves as a reference, its code and
+  // doc links under root (linkRoot).
+  function resolveSource(source, data, root, repository) {
+    var issue = ISSUE_NUMBER.exec(source);
+    if (issue) return { kind: "issue", text: source, href: githubHref("issues/" + issue[1], repository) };
+    return resolveRef(source, data, root);
+  }
+
+  function historySlug(text) {
+    return String(text || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function historyMonthLabel(key) {
+    var m = /^([0-9]{4})-([0-9]{2})$/.exec(key);
+    return m && MONTHS[Number(m[2]) - 1] ? MONTHS[Number(m[2]) - 1] + " " + m[1] : "Undated";
+  }
+
+  // historyEntries lists the History entries newest first, entries of one
+  // day in their written order, each with an id for the address (its date
+  // and title), its commit links into repository (githubHref), and its
+  // touched paths with the package node each still has, or null once the
+  // package is gone.
+  function historyEntries(data, repository) {
+    var used = dict();
+    var entries = data.facts.history.map(function (raw, index) {
+      var date = typeof raw.date === "string" ? raw.date : "";
+      var parts = ISO_DATE.exec(date);
+      var month = parts && MONTHS[Number(parts[2]) - 1] ? parts[1] + "-" + parts[2] : "undated";
+      var base = historySlug((parts ? date + " " : "") + (raw.title || "")) || "entry";
+      var id = base;
+      for (var n = 2; used[id]; n++) id = base + "-" + n;
+      used[id] = true;
+      var range = raw.commits && raw.commits.from ? { from: commitLink(raw.commits.from, repository), to: commitLink(raw.commits.to, repository) } : null;
+      return {
+        order: index,
+        sortKey: month === "undated" ? "" : date,
+        entry: {
+          id: id,
+          date: date,
+          dateLabel: month === "undated" ? date || "Undated" : MONTHS[Number(parts[2]) - 1].slice(0, 3) + " " + Number(parts[3]) + ", " + parts[1],
+          month: month,
+          title: raw.title || id,
+          branch: raw.branch || "",
+          merge: commitLink(raw.merge, repository),
+          commits: range,
+          text: list(raw.text),
+          sources: list(raw.sources),
+          touches: list(raw.touches).map(function (path) {
+            var node = "pkg:" + path;
+            return { path: path, node: data.nodeById[node] ? node : null };
+          }),
+        },
+      };
+    });
+    entries.sort(function (a, b) {
+      return byString(b.sortKey, a.sortKey) || a.order - b.order;
+    });
+    return entries.map(function (e) {
+      return e.entry;
+    });
+  }
+
+  // packageHistory lists the History entries whose touched paths include
+  // the package's path exactly, newest first.
+  function packageHistory(data, path, repository) {
+    return historyEntries(data, repository).filter(function (e) {
+      return e.touches.some(function (t) {
+        return t.path === path;
+      });
+    });
+  }
+
+  function historyEntryById(data, id) {
+    var found = null;
+    historyEntries(data).forEach(function (e) {
+      if (e.id === id) found = e;
+    });
+    return found;
+  }
+
+  // historyTimeline groups the History entries by month, newest first.
+  function historyTimeline(data, repository) {
+    var months = [];
+    historyEntries(data, repository).forEach(function (e) {
+      var last = months[months.length - 1];
+      if (!last || last.key !== e.month) {
+        last = { key: e.month, label: historyMonthLabel(e.month), entries: [] };
+        months.push(last);
+      }
+      last.entries.push(e);
+    });
+    return months;
+  }
+
   // ------------------------------------------------------------ navigation
 
   var LEVELS = [
@@ -3170,6 +3309,7 @@
     { id: "containers", label: "Containers" },
     { id: "components", label: "Components" },
     { id: "flows", label: "Flows" },
+    { id: "history", label: "History" },
   ];
 
   var VIEW_LEVEL = {
@@ -3182,6 +3322,7 @@
     flows: "flows",
     flow: "flows",
     diagram: "components",
+    history: "history",
   };
 
   function levelOf(view) {
@@ -3218,6 +3359,11 @@
       case "components":
       case "flows":
         state.view = raw.view || "context";
+        break;
+      case "history":
+        state.view = "history";
+        if (raw.entry && historyEntryById(data, raw.entry)) state.entry = raw.entry;
+        else if (raw.entry) notice = "There is no History entry " + raw.entry + ".";
         break;
       case "group":
         if (groupIndex(of) >= 0) {
@@ -3328,6 +3474,9 @@
       case "flow":
         crumbs = [{ label: "Flows", state: { view: "flows" } }, { label: flowById(data, state.of).title || state.of }];
         break;
+      case "history":
+        crumbs = [{ label: "History" }];
+        break;
       case "diagram":
         var found = findDiagram(data, state.of);
         node = found.node;
@@ -3342,8 +3491,9 @@
     return crumbs;
   }
 
-  // layoutView draws whatever view a resolved state names.
-  function layoutView(data, state) {
+  // layoutView draws whatever view a resolved state names; History's commits
+  // link into repository (githubHref).
+  function layoutView(data, state, repository) {
     switch (state.view) {
       case "containers":
         return layoutContainers(data);
@@ -3369,6 +3519,18 @@
         };
       case "flow":
         return layoutSequence(data, flowById(data, state.of));
+      case "history":
+        var months = historyTimeline(data, repository);
+        return {
+          kind: "history",
+          months: months,
+          width: 0,
+          height: 0,
+          nodes: [],
+          edges: [],
+          lanes: [],
+          empty: months.length ? null : { title: "No History yet", text: "Each merge to master appears here once CHANGELOG.md records it." },
+        };
       case "diagram":
         return layoutDiagram(data, findDiagram(data, state.of).diagram);
     }
@@ -3513,7 +3675,7 @@
   }
 
   var FACT_ORDER = ["commands", "routes", "databases"];
-  var NOT_PACKAGE_FACTS = ["format", "kind", "packages", "imports", "glossary", "adrs"];
+  var NOT_PACKAGE_FACTS = ["format", "kind", "packages", "imports", "glossary", "adrs", "history"];
 
   function capitalize(word) {
     return word.charAt(0).toUpperCase() + word.slice(1);
@@ -3585,15 +3747,29 @@
     return sections;
   }
 
+  // servedRepository is the repository build.js names, or null without
+  // usable build information.
+  function servedRepository(build) {
+    return build && typeof build.repository === "string" && REPOSITORY_URL.test(build.repository) ? build.repository : null;
+  }
+
   // linkRoot is where code and doc links point, given what build.js said
   // about the running binary: the build's commit on GitHub, or master when
   // the build has no commit stamp or had uncommitted changes. Without usable
   // build information, as when the page is opened from disk, they point
   // into the owner's checkout.
   function linkRoot(build) {
-    if (!build || typeof build.repository !== "string" || !REPOSITORY_URL.test(build.repository)) return CHECKOUT_ROOT;
+    var repository = servedRepository(build);
+    if (!repository) return CHECKOUT_ROOT;
     var clean = typeof build.commit === "string" && COMMIT.test(build.commit) && build.modified !== true;
-    return build.repository + "/blob/" + (clean ? build.commit : "master") + "/";
+    return repository + "/blob/" + (clean ? build.commit : "master") + "/";
+  }
+
+  // linkRepository is the repository History's commits, tickets, and pull
+  // requests link into (githubHref), given what build.js said: the build's
+  // repository, or the public repository without usable build information.
+  function linkRepository(build) {
+    return servedRepository(build) || DEFAULT_REPOSITORY;
   }
 
   // buildScript is the script that tells a served page about the running
@@ -3726,8 +3902,9 @@
 
   // The address fragment holds the view and its subject ("of": a group, a
   // node, a flow, or a diagram), the selected node or glossary term, the
-  // flow step, the panel, and the active proposals.
-  var HASH_KEYS = ["view", "of", "node", "term", "step", "panel", "proposals"];
+  // flow step, the selected History entry, the panel, and the active
+  // proposals.
+  var HASH_KEYS = ["view", "of", "node", "term", "step", "entry", "panel", "proposals"];
 
   function encodeValue(value) {
     return encodeURIComponent(value).replace(/%3A/gi, ":").replace(/%2F/gi, "/");
@@ -3835,6 +4012,8 @@
     proposalDetails: proposalDetails,
     involvedFlows: involvedFlows,
     search: search,
+    historyTimeline: historyTimeline,
+    resolveSource: resolveSource,
     nodeHome: nodeHome,
     termUsers: termUsers,
     accessibleName: accessibleName,
@@ -3852,6 +4031,7 @@
     factsForPackage: factsForPackage,
     resolveRef: resolveRef,
     linkRoot: linkRoot,
+    linkRepository: linkRepository,
     buildScript: buildScript,
     isEmbedded: isEmbedded,
     formatHash: formatHash,
@@ -3932,6 +4112,10 @@
     focus: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM1.5 8h3M11.5 8h3",
     inside: "M2.5 2.5h11v11h-11zM5.5 5.5h5v5h-5z",
     group: "M2 2.5h5v5H2zM9 2.5h5v5H9zM2 9.5h5v4H2zM9 9.5h5v4H9z",
+    history: "M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8zM8 4.6V8l2.4 1.6",
+    branch: "M4.5 2.5v11M4.5 5.5a3.5 3.5 0 0 0 3.5 3.5h1.5M11.5 6.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
+    commit: "M8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8zM1.5 8h4.1M10.4 8h4.1",
+    issue: "M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8zM8 7.2a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6z",
   };
 
   function htmlIcon(name, parent, cls) {
@@ -3951,6 +4135,8 @@
     data: null,
     // Where code and doc links point; build.js moves them to GitHub.
     links: linkRoot(null),
+    // The repository History's GitHub links open; build.js may name another.
+    repository: linkRepository(null),
     raw: {},
     state: {},
     layout: null,
@@ -4030,7 +4216,7 @@
     var changed = key !== app.viewKey;
     if (changed) {
       app.viewKey = key;
-      app.layout = layoutView(app.data, state);
+      app.layout = layoutView(app.data, state, app.repository);
     }
     // The panel and bars first: they decide the canvas's size, which the
     // new view is fitted to.
@@ -4157,7 +4343,7 @@
     var oldBox = app.box;
     var oldLayout = app.drawnLayout;
     app.drawnLayout = layout;
-    Array.prototype.slice.call(canvas.querySelectorAll(".loading, .empty-state, .flow-index")).forEach(function (el) {
+    Array.prototype.slice.call(canvas.querySelectorAll(".loading, .empty-state, .flow-index, .history-view")).forEach(function (el) {
       el.parentNode.removeChild(el);
     });
     var drawn = drawLayout(layout);
@@ -4254,6 +4440,10 @@
     var result = { svg: null, content: null, overlay: null, nodeEls: dict(), edgeEls: [] };
     if (layout.kind === "flows") {
       result.overlay = drawFlowIndex(layout);
+      return result;
+    }
+    if (layout.kind === "history") {
+      result.overlay = drawHistory(layout);
       return result;
     }
     if (layout.empty) {
@@ -4719,6 +4909,131 @@
     return wrap;
   }
 
+  // drawHistory draws the History timeline: a section per month, newest
+  // first, and a card per entry.
+  function drawHistory(layout) {
+    var wrap = html("div", { class: "history-view" });
+    app.shownEntry = null; // a fresh timeline brings the selected entry into view
+    if (layout.empty) {
+      wrap.appendChild(emptyCard(layout.empty));
+      return wrap;
+    }
+    var inner = html("div", { class: "history-inner" }, wrap);
+    var count = 0;
+    layout.months.forEach(function (m) {
+      count += m.entries.length;
+    });
+    html("h2", { class: "history-title" }, inner, "History");
+    html("p", { class: "history-lead" }, inner, "Every merge to master, newest first, from CHANGELOG.md · " + count + (count === 1 ? " entry" : " entries"));
+    layout.months.forEach(function (m) {
+      var section = html("section", { class: "history-month", "aria-label": m.label }, inner);
+      var h = html("h3", { class: "history-month-title" }, section);
+      html("span", {}, h, m.label);
+      html("span", { class: "history-count" }, h, String(m.entries.length));
+      var ol = html("ol", { class: "history-list" }, section);
+      m.entries.forEach(function (e) {
+        drawHistoryCard(e, html("li", { class: "history-entry", "data-entry": e.id }, ol));
+      });
+    });
+    return wrap;
+  }
+
+  function drawHistoryCard(e, li) {
+    html("span", { class: "history-dot", "aria-hidden": "true" }, li);
+    var card = html("article", { class: "history-card", "aria-label": e.title }, li);
+    var head = html("header", { class: "history-card-head" }, card);
+    html("time", { class: "history-date", datetime: e.date }, head, e.dateLabel);
+    var title = html("h4", { class: "history-card-title" }, head);
+    var pick = html("button", { type: "button", class: "history-pick", title: "Link to this entry" }, title, e.title);
+    pick.addEventListener("click", function () {
+      go({ view: "history", entry: e.id }, { replace: true });
+    });
+    var meta = html("p", { class: "history-meta" }, card);
+    var branch = html("span", { class: "history-branch", title: "Branch" }, meta);
+    htmlIcon("branch", branch);
+    html("code", {}, branch, e.branch);
+    if (e.merge) {
+      var merge = html("span", { class: "history-commit" }, meta);
+      htmlIcon("commit", merge);
+      html("span", {}, merge, "Merge ");
+      commitAnchor(e.merge, merge);
+    } else if (e.commits) {
+      var range = html("span", { class: "history-commit" }, meta);
+      htmlIcon("commit", range);
+      html("span", {}, range, "Commits ");
+      commitAnchor(e.commits.from, range);
+      html("span", { class: "history-range-dots", "aria-label": "to" }, range, "…");
+      commitAnchor(e.commits.to, range);
+    } else {
+      html("span", { class: "history-pending" }, meta, "No merge commit yet");
+    }
+    var text = html("div", { class: "history-text" }, card);
+    e.text.forEach(function (paragraph) {
+      renderInlineCode(paragraph, html("p", {}, text));
+    });
+    var foot = html("dl", { class: "history-facts" }, card);
+    html("dt", {}, foot, "Touches");
+    var touches = html("ul", { class: "touch-list" }, html("dd", {}, foot));
+    e.touches.forEach(function (t) {
+      var tli = html("li", {}, touches);
+      var node = t.node ? app.data.nodeById[t.node] : null;
+      if (node) {
+        var b = html("button", { type: "button", class: "touch" + (node.group ? " group-" + node.group : ""), title: "Open " + (node.title || t.path) }, tli);
+        html("span", { class: "dot", "aria-hidden": "true" }, b);
+        html("code", {}, b, t.path);
+        b.addEventListener("click", function () {
+          jumpToNode(t.node);
+        });
+      } else {
+        var gone = html("span", { class: "touch gone", title: "Not a package the explorer shows now" }, tli);
+        html("code", {}, gone, t.path);
+      }
+    });
+    if (e.sources.length) {
+      html("dt", {}, foot, "Sources");
+      var sources = html("ul", { class: "sources", "aria-label": "Sources" }, html("dd", {}, foot));
+      e.sources.forEach(function (source) {
+        renderRef(source, sources, card);
+      });
+    }
+  }
+
+  function commitAnchor(link, parent) {
+    var el = link.href ? html("a", { href: link.href, target: "_blank", rel: "noopener", title: "Open on GitHub" }, parent) : html("span", {}, parent);
+    html("code", {}, el, link.sha);
+  }
+
+  // renderInlineCode sets a paragraph's text, with spans between backticks
+  // as code. Unbalanced backticks stay as written.
+  function renderInlineCode(text, parent) {
+    var parts = String(text).split("`");
+    if (parts.length % 2 === 0) {
+      parent.textContent = text;
+      return;
+    }
+    parts.forEach(function (part, i) {
+      if (i % 2) html("code", {}, parent, part);
+      else if (part) parent.appendChild(document.createTextNode(part));
+    });
+  }
+
+  // markHistoryEntry marks the entry the address selects and brings it into
+  // view when the selection changes.
+  function markHistoryEntry() {
+    var view = byId("canvas").querySelector(".history-view");
+    if (!view) return;
+    var selected = null;
+    Array.prototype.forEach.call(view.querySelectorAll(".history-entry"), function (li) {
+      var on = li.getAttribute("data-entry") === app.state.entry;
+      li.classList.toggle("selected", on);
+      if (on) selected = li;
+    });
+    if (selected && app.shownEntry !== app.state.entry) {
+      selected.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+    }
+    app.shownEntry = app.state.entry;
+  }
+
   // ------------------------------------------------------- canvas events
 
   function nodeTarget(event) {
@@ -4892,6 +5207,7 @@
   // refreshCanvasState marks the selected node and the current flow step
   // without redrawing.
   function refreshCanvasState() {
+    if (app.layout && app.layout.kind === "history") markHistoryEntry();
     if (!app.svg) return;
     var selected = app.state.node;
     Object.keys(app.nodeEls).forEach(function (key) {
@@ -5217,8 +5533,8 @@
       input.removeAttribute("aria-activedescendant");
       return;
     }
-    var typeIcon = { node: "package", term: "term", flow: "flow", diagram: "diagram" };
-    var typeName = { node: "", term: "Glossary", flow: "Flow", diagram: "Diagram" };
+    var typeIcon = { node: "package", term: "term", flow: "flow", diagram: "diagram", history: "history" };
+    var typeName = { node: "", term: "Glossary", flow: "Flow", diagram: "Diagram", history: "History" };
     results.forEach(function (r, i) {
       var li = html("li", { id: "search-result-" + i, role: "option", class: "search-result" + (i === searchState.active ? " active" : ""), "aria-selected": i === searchState.active ? "true" : "false" }, ul);
       var node = r.type === "node" ? app.data.nodeById[r.id] : null;
@@ -5310,9 +5626,9 @@
   }
 
   function renderRef(ref, parent, statementEl) {
-    var link = resolveRef(ref, app.data, app.links);
+    var link = resolveSource(ref, app.data, app.links, app.repository);
     var li = html("li", { class: "source source-" + link.kind }, parent);
-    var iconName = { code: "code", doc: "doc", adr: "adr", term: "term", pkg: "package", node: "node", table: "table", route: "route", command: "command" }[link.kind] || "doc";
+    var iconName = { code: "code", doc: "doc", adr: "adr", term: "term", pkg: "package", node: "node", table: "table", route: "route", command: "command", issue: "issue" }[link.kind] || "doc";
     var el;
     if (link.href) {
       el = html("a", { href: link.href, target: "_blank", rel: "noopener" }, li);
@@ -5474,7 +5790,7 @@
   }
 
   function renderNodePanel(panel, id) {
-    var details = nodeDetails(app.data, id);
+    var details = nodeDetails(app.data, id, app.repository);
     var node = details.node;
     var sub = details.path || kindLabel(node.kind);
     panelHeader(panel, own(KIND_ICON, node.kind) || "package", node.title || node.id, sub, closePanel, node.group ? "group-" + node.group : "kind-" + node.kind);
@@ -5583,6 +5899,7 @@
         if (f.steps.length > 12) html("span", { class: "more" }, steps, "+" + (f.steps.length - 12));
       });
     }
+    if (details.path) renderPackageHistory(panel, details.history);
     if (details.diagrams.length) {
       var ds = section(panel, "Diagrams", details.diagrams.length, "diagrams");
       var dlist = html("ul", { class: "flow-list" }, ds);
@@ -5604,6 +5921,26 @@
         renderRef(ref, ul, ls);
       });
     }
+  }
+
+  // renderPackageHistory lists the History entries that touched a package;
+  // each opens in the History view.
+  function renderPackageHistory(panel, entries) {
+    var hs = section(panel, "History", entries.length || undefined, "history");
+    if (!entries.length) {
+      html("p", { class: "empty" }, hs, "No History entry touches it yet.");
+      return;
+    }
+    var ul = html("ul", { class: "history-links" }, hs);
+    entries.forEach(function (e) {
+      var b = html("button", { type: "button", class: "history-link" }, html("li", {}, ul));
+      htmlIcon("history", b);
+      html("span", { class: "history-link-title" }, b, e.title);
+      html("time", { class: "history-link-date", datetime: e.date }, b, e.dateLabel);
+      b.addEventListener("click", function () {
+        go({ view: "history", entry: e.id });
+      });
+    });
   }
 
   function factMatches(flash, key, title) {
@@ -5820,7 +6157,9 @@
     },
     // build.js calls this before the data loads; later calls change nothing.
     build: function (info) {
-      if (!app.base) app.links = linkRoot(info);
+      if (app.base) return;
+      app.links = linkRoot(info);
+      app.repository = linkRepository(info);
     },
     manifest: function (files) {
       if (booted) return;
