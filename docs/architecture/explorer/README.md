@@ -442,7 +442,7 @@ A second paragraph.
 | --- | --- |
 | Heading | `## YYYY-MM-DD — Title`: level two, a real calendar date, an em dash with a space on each side, then the title. The date is the merge's; an entry written on its branch before the merge takes the day it is written. A `##` line inside a code fence is not an entry, and everything before the first entry is a preamble. |
 | Metadata | The first block after the heading: one `Field: value` line per field, each field at most once, ended by a blank line. |
-| `Branch:` | Required. The merged branch. |
+| `Branch:` | Required. The merged branch; `master` for direct-to-master work. |
 | `Merge:` | Optional. The merge commit: a SHA, full or at least 7 lowercase hex digits, long enough to be unambiguous. Leave it out while the entry is written on its branch, and add it once the merge exists. |
 | `Commits:` | Instead of `Merge:`, for direct-to-master work: `<first>..<last>`, the first and last commit of the work, both included. Unlike `git log A..B`, which leaves out A, the first commit belongs to the entry, so the root commit can start a range and one commit is `abc1234..abc1234`. The first commit is the last one or an ancestor of it. |
 | `Touches:` | Required. Comma-separated repository paths the change touched, normally package paths as the explorer names them (`internal/agent`, `cmd/evie`). Each is a clean relative path. They are not link-checked, so history stays readable after a package is removed. A path that is a package node now shows as a chip that opens it; any other path, a removed package or a directory outside `cmd/` and `internal/` such as `scripts/explorer`, shows as plain text. A package's panel lists the entries whose Touches name its path exactly. |
