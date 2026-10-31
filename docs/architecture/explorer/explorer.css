@@ -1,5 +1,6 @@
 /* Evie system explorer. Colours are tokens with light and dark values that
-   follow the system preference. */
+   follow the system preference, except inside Evie's frame (data-embedded),
+   which keeps the light values like Evie itself. */
 
 :root {
   color-scheme: light dark;
@@ -52,8 +53,12 @@
   --problem-text: #8a1c13;
 }
 
+:root[data-embedded] {
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-embedded]) {
     --bg: #0e1117;
     --canvas: #11151c;
     --dot: #222834;
@@ -213,6 +218,11 @@ kbd {
 
 .brand:hover {
   text-decoration: none;
+}
+
+/* Inside Evie's frame, Evie's own bar carries the brand. */
+:root[data-embedded] .brand {
+  display: none;
 }
 
 .brand-mark {
