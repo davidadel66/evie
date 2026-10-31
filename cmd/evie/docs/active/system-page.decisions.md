@@ -51,3 +51,8 @@ Spec: [system-page.spec.md](system-page.spec.md).
 - **2026-10-31 — Merge into master when done.** David asked: "merge into
   master after you are done". Both `feat/system-explorer` and this branch
   merge into master after Finish. Pushing stays with David.
+- **2026-10-31 — System is not remembered across reloads, like Data.** The
+  spec first said System would be remembered "as it does for Data", but Evie
+  remembers no workbench view across reloads. Claude corrected the spec to
+  match Data rather than adding view persistence, which would change Data's
+  behaviour and was never asked for.
