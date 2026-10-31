@@ -132,3 +132,9 @@ One entry per merge on master's first-parent history; the 190 direct-to-master c
 
 - "History" avoids the glossary's **Change** (the Changes feature) and runtime "logs".
 - This amends `system-explorer.spec.md`; see the decision record.
+
+## Tickets
+
+- #195 System page: the explorer inside Evie (blocked by: none)
+- #196 System page: History tab fed by CHANGELOG.md (blocked by: none)
+- #197 System page: backfill CHANGELOG.md from master's history (blocked by: #196)
