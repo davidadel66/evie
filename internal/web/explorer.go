@@ -39,12 +39,12 @@ type explorerBuild struct {
 	Modified   bool   `json:"modified"`
 }
 
-func readExplorerBuild(read func() (*debug.BuildInfo, bool)) explorerBuild {
-	info, ok := read()
-	if !ok || info == nil {
-		return explorerBuild{}
-	}
+// readExplorerBuild reads the build stamp; nil means the binary has none.
+func readExplorerBuild(info *debug.BuildInfo) explorerBuild {
 	var build explorerBuild
+	if info == nil {
+		return build
+	}
 	if info.Main.Path != "" {
 		build.Repository = "https://" + info.Main.Path
 	}
@@ -59,8 +59,23 @@ func readExplorerBuild(read func() (*debug.BuildInfo, bool)) explorerBuild {
 	return build
 }
 
+// explorerBuildJS is build.js: one call telling the page about the
+// build.
+func explorerBuildJS(build explorerBuild) []byte {
+	// Marshalling two strings and a bool cannot fail.
+	data, _ := json.Marshal(build)
+	return append(append([]byte("evieExplorer.build("), data...), ");\n"...)
+}
+
 func (s *Server) registerExplorerRoutes(mux *http.ServeMux) {
 	files := explorer.Files()
+	// The build stamp is fixed for the life of the binary, so build.js is
+	// written once.
+	info, ok := s.buildInfo()
+	if !ok {
+		info = nil
+	}
+	buildScript := explorerBuildJS(readExplorerBuild(info))
 	// The page's files are relative to its directory, so the bare address
 	// moves to the directory, keeping the query (the embedded flag).
 	mux.HandleFunc("/explorer", func(w http.ResponseWriter, r *http.Request) {
@@ -73,36 +88,27 @@ func (s *Server) registerExplorerRoutes(mux *http.ServeMux) {
 		}
 		http.Redirect(w, r, target, http.StatusMovedPermanently)
 	})
+	// Files are read by hand rather than through http.FileServerFS, which
+	// would redirect index.html to the directory, list directories, and
+	// type files by the platform's MIME table.
 	mux.HandleFunc("/explorer/", func(w http.ResponseWriter, r *http.Request) {
 		if !explorerRequest(w, r) {
 			return
 		}
 		name := strings.TrimPrefix(r.URL.Path, "/explorer/")
 		if name == "build.js" {
-			script, err := json.Marshal(readExplorerBuild(s.buildInfo))
-			if err != nil {
-				http.Error(w, "The build information could not be written.", http.StatusInternalServerError)
-				return
-			}
 			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-			body := append(append([]byte("evieExplorer.build("), script...), ");\n"...)
-			http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(body))
+			http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(buildScript))
 			return
 		}
 		if name == "" {
 			name = "index.html"
 		}
-		if !fs.ValidPath(name) {
-			http.Error(w, "This file is not part of the explorer.", http.StatusNotFound)
-			return
-		}
-		if info, err := fs.Stat(files, name); err != nil || info.IsDir() {
-			http.Error(w, "This file is not part of the explorer.", http.StatusNotFound)
-			return
-		}
+		// The snapshot is in memory, so a read fails only for a name it does
+		// not hold, an invalid path, or a directory.
 		data, err := fs.ReadFile(files, name)
 		if err != nil {
-			http.Error(w, "The explorer could not be read.", http.StatusInternalServerError)
+			http.Error(w, "This file is not part of the explorer.", http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", explorerContentType(name))
@@ -122,7 +128,7 @@ func explorerRequest(w http.ResponseWriter, r *http.Request) bool {
 	header.Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		header.Set("Allow", "GET, HEAD")
-		http.Error(w, "The explorer is GET only.", http.StatusMethodNotAllowed)
+		jsonError(w, http.StatusMethodNotAllowed, "the explorer is GET only")
 		return false
 	}
 	return true

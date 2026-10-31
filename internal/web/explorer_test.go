@@ -85,6 +85,13 @@ func TestExplorerAnswersGetAndHeadOnly(t *testing.T) {
 			if got := rec.Header().Get("Allow"); got != "GET, HEAD" {
 				t.Fatalf("%s %s: Allow = %q, want GET, HEAD", method, target, got)
 			}
+			// Like Evie's static files, the refusal is a JSON error.
+			if got := rec.Header().Get("Content-Type"); got != "application/json" {
+				t.Fatalf("%s %s: Content-Type = %q, want application/json", method, target, got)
+			}
+			if got := rec.Body.String(); got != `{"error":"the explorer is GET only"}`+"\n" {
+				t.Fatalf("%s %s: body = %q", method, target, got)
+			}
 		}
 	}
 	for _, target := range []string{"/explorer/", "/explorer/explorer.css", "/explorer/build.js"} {
