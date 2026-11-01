@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -287,6 +288,20 @@ func TestCommitAndReportUseTheHarnessGitDir(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatal("a nested repository's fsmonitor ran")
+	}
+
+	// Nor is a .git under another case, which Linux's sandbox cannot stop a
+	// worker creating: checked out on a case-insensitive filesystem it would
+	// be a git directory.
+	if err := os.RemoveAll(filepath.Join(w.Path, "vendor")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(w.Path, "docs", ".GIT"), "gitdir: /tmp/elsewhere\n")
+	if sha, err := Commit(ctx, w, "Sneak"); !errors.Is(err, ErrNestedRepository) {
+		t.Fatalf(".GIT committed: %q %v", sha, err)
+	}
+	if got := run(t, repo, "rev-parse", "refs/heads/"+w.Branch); got != report.Head {
+		t.Fatal("the refused .GIT commit moved the branch")
 	}
 }
 
