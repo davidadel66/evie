@@ -7,6 +7,16 @@ The entry format, the check's rules, and how to add an entry are in the
 editing this file, run `go run ./scripts/explorer extract` and
 `go run ./scripts/explorer check`.
 
+## 2026-11-01 — Dark explorer inside Evie
+Branch: feat/explorer-dark
+Touches: docs/architecture/explorer
+Sources: doc:cmd/evie/docs/active/system-page.decisions.md, doc:docs/architecture/explorer/README.md
+
+The explorer in Evie's System view is now always dark, whatever the system
+preference; opened from disk it still follows the system. Each colour token
+now holds its light and dark values in `light-dark()`, so the frame forces
+dark through `color-scheme` without a second copy of the palette.
+
 ## 2026-10-31 — System page and History
 Branch: feat/system-page
 Merge: 38c7f63

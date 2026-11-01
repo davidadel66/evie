@@ -16218,6 +16218,21 @@ evieExplorer.register(
   ],
   "history": [
     {
+      "date": "2026-11-01",
+      "title": "Dark explorer inside Evie",
+      "branch": "feat/explorer-dark",
+      "touches": [
+        "docs/architecture/explorer"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/system-page.decisions.md",
+        "doc:docs/architecture/explorer/README.md"
+      ],
+      "text": [
+        "The explorer in Evie's System view is now always dark, whatever the system preference; opened from disk it still follows the system. Each colour token now holds its light and dark values in `light-dark()`, so the frame forces dark through `color-scheme` without a second copy of the palette."
+      ]
+    },
+    {
       "date": "2026-10-31",
       "title": "System page and History",
       "branch": "feat/system-page",

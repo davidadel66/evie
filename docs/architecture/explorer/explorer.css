@@ -1,112 +1,61 @@
-/* Evie system explorer. Colours are tokens with light and dark values that
-   follow the system preference, except inside Evie's frame (data-embedded),
-   which keeps the light values like Evie itself. */
+/* Evie system explorer. Each colour token holds its light and dark values
+   in light-dark(), and color-scheme picks one: the system preference from
+   disk, always dark inside Evie's frame (data-embedded). */
 
 :root {
   color-scheme: light dark;
-  --bg: #f3f4f7;
-  --canvas: #f7f8fa;
-  --dot: #d9dde5;
-  --surface: #ffffff;
-  --surface-2: #f6f7f9;
-  --surface-3: #eceef3;
-  --text: #161d2b;
-  --text-2: #424b5c;
-  --muted: #687184;
-  --faint: #98a0ae;
-  --border: #e0e3e9;
-  --border-2: #c9ced8;
-  --accent: #4655d4;
-  --accent-strong: #3442bf;
-  --accent-tint: #eceefd;
-  --accent-ink: #ffffff;
-  --link: #3646c4;
-  --edge: #a2aabb;
-  --edge-strong: #4d5668;
-  --label-bg: #ffffff;
-  --shadow: 0 1px 2px rgba(22, 29, 43, 0.06), 0 2px 8px rgba(22, 29, 43, 0.05);
-  --shadow-lift: 0 2px 4px rgba(22, 29, 43, 0.08), 0 8px 24px rgba(22, 29, 43, 0.1);
-  --memory: #7c55e6;
-  --runtime: #2f74d8;
-  --intelligence: #c77506;
-  --infrastructure: #0d8a7f;
-  --memory-tint: #f3effd;
-  --runtime-tint: #ebf2fc;
-  --intelligence-tint: #fcf3e5;
-  --infrastructure-tint: #e6f5f3;
-  --person: #4655d4;
-  --external: #6b7486;
-  --process: #0d8a7f;
-  --ui: #7c55e6;
-  --cli: #c77506;
-  --store: #2b8a3e;
-  --added: #1e8a4c;
-  --added-tint: #e7f6ed;
-  --changed: #c26a00;
-  --changed-tint: #fff3df;
-  --removed: #cf3040;
-  --removed-tint: #fdecee;
-  --note: #fff8db;
-  --note-border: #e9d27d;
-  --step: #fff2c4;
-  --problem-bg: #fdecea;
-  --problem-text: #8a1c13;
+  --bg: light-dark(#f3f4f7, #0e1117);
+  --canvas: light-dark(#f7f8fa, #11151c);
+  --dot: light-dark(#d9dde5, #222834);
+  --surface: light-dark(#ffffff, #171b23);
+  --surface-2: light-dark(#f6f7f9, #1c212b);
+  --surface-3: light-dark(#eceef3, #252b37);
+  --text: light-dark(#161d2b, #e7eaf0);
+  --text-2: light-dark(#424b5c, #c0c6d1);
+  --muted: light-dark(#687184, #8e97a8);
+  --faint: light-dark(#98a0ae, #687083);
+  --border: light-dark(#e0e3e9, #2a303c);
+  --border-2: light-dark(#c9ced8, #3b4252);
+  --accent: light-dark(#4655d4, #8e9bff);
+  --accent-strong: light-dark(#3442bf, #a9b3ff);
+  --accent-tint: light-dark(#eceefd, #1f2442);
+  --accent-ink: light-dark(#ffffff, #11151c);
+  --link: light-dark(#3646c4, #9fabff);
+  --edge: light-dark(#a2aabb, #586174);
+  --edge-strong: light-dark(#4d5668, #b3bccd);
+  --label-bg: light-dark(#ffffff, #1b2029);
+  --shadow: 0 1px 2px light-dark(rgba(22, 29, 43, 0.06), rgba(0, 0, 0, 0.4)), 0 2px 8px light-dark(rgba(22, 29, 43, 0.05), rgba(0, 0, 0, 0.25));
+  --shadow-lift: 0 2px 4px light-dark(rgba(22, 29, 43, 0.08), rgba(0, 0, 0, 0.45)), 0 8px 24px light-dark(rgba(22, 29, 43, 0.1), rgba(0, 0, 0, 0.4));
+  --memory: light-dark(#7c55e6, #b49cff);
+  --runtime: light-dark(#2f74d8, #74a9ff);
+  --intelligence: light-dark(#c77506, #f1b157);
+  --infrastructure: light-dark(#0d8a7f, #4fd0c2);
+  --memory-tint: light-dark(#f3effd, #231c38);
+  --runtime-tint: light-dark(#ebf2fc, #14223a);
+  --intelligence-tint: light-dark(#fcf3e5, #2b2214);
+  --infrastructure-tint: light-dark(#e6f5f3, #102c2a);
+  --person: light-dark(#4655d4, #8e9bff);
+  --external: light-dark(#6b7486, #97a0b1);
+  --process: light-dark(#0d8a7f, #4fd0c2);
+  --ui: light-dark(#7c55e6, #b49cff);
+  --cli: light-dark(#c77506, #f1b157);
+  --store: light-dark(#2b8a3e, #6fd38a);
+  --added: light-dark(#1e8a4c, #5fd68d);
+  --added-tint: light-dark(#e7f6ed, #12291c);
+  --changed: light-dark(#c26a00, #f5b84a);
+  --changed-tint: light-dark(#fff3df, #2d2310);
+  --removed: light-dark(#cf3040, #ff7a85);
+  --removed-tint: light-dark(#fdecee, #33161b);
+  --note: light-dark(#fff8db, #2b2716);
+  --note-border: light-dark(#e9d27d, #6b5d26);
+  --step: light-dark(#fff2c4, #2e2a17);
+  --problem-bg: light-dark(#fdecea, #3a1714);
+  --problem-text: light-dark(#8a1c13, #ffb4a8);
 }
 
+/* Inside Evie's frame the explorer is always dark. */
 :root[data-embedded] {
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-embedded]) {
-    --bg: #0e1117;
-    --canvas: #11151c;
-    --dot: #222834;
-    --surface: #171b23;
-    --surface-2: #1c212b;
-    --surface-3: #252b37;
-    --text: #e7eaf0;
-    --text-2: #c0c6d1;
-    --muted: #8e97a8;
-    --faint: #687083;
-    --border: #2a303c;
-    --border-2: #3b4252;
-    --accent: #8e9bff;
-    --accent-strong: #a9b3ff;
-    --accent-tint: #1f2442;
-    --accent-ink: #11151c;
-    --link: #9fabff;
-    --edge: #586174;
-    --edge-strong: #b3bccd;
-    --label-bg: #1b2029;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.25);
-    --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.45), 0 10px 28px rgba(0, 0, 0, 0.4);
-    --memory: #b49cff;
-    --runtime: #74a9ff;
-    --intelligence: #f1b157;
-    --infrastructure: #4fd0c2;
-    --memory-tint: #231c38;
-    --runtime-tint: #14223a;
-    --intelligence-tint: #2b2214;
-    --infrastructure-tint: #102c2a;
-    --person: #8e9bff;
-    --external: #97a0b1;
-    --process: #4fd0c2;
-    --ui: #b49cff;
-    --cli: #f1b157;
-    --store: #6fd38a;
-    --added: #5fd68d;
-    --added-tint: #12291c;
-    --changed: #f5b84a;
-    --changed-tint: #2d2310;
-    --removed: #ff7a85;
-    --removed-tint: #33161b;
-    --note: #2b2716;
-    --note-border: #6b5d26;
-    --step: #2e2a17;
-    --problem-bg: #3a1714;
-    --problem-text: #ffb4a8;
-  }
+  color-scheme: dark;
 }
 
 * {

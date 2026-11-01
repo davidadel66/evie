@@ -64,3 +64,9 @@ Spec: [system-page.spec.md](system-page.spec.md).
   entry valid under the approved format stays valid. An inclusive range lets
   the root commit start a range and one commit stand alone; the check
   requires the first commit to be the last or its ancestor.
+- **2026-11-01 — The explorer inside Evie is always dark.** David asked,
+  after seeing the System view: "now just make it darkmode". This overturns
+  the brief's two-way door that matched Evie's light theme. Opened from disk,
+  the explorer still follows the system preference. Claude kept one colour
+  table using `light-dark()` so the frame forces dark through
+  `color-scheme` instead of duplicating the dark palette.
