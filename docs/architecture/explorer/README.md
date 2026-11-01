@@ -450,7 +450,8 @@ master; only a page opened from disk links into the checkout. From disk,
 History's GitHub links open the public repository too.
 
 Evie's System view frames `/explorer/?embedded=1`; the embedded flag hides
-the brand and keeps the light colours, like Evie. The frame is sandboxed
+the brand and keeps the dark colours whatever the system preference
+(each colour token holds both values in `light-dark()`). The frame is sandboxed
 without same-origin access, and the page's content-security policy sandboxes
 it the same way when opened on its own.
 

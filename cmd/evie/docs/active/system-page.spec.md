@@ -30,7 +30,7 @@ until `/implement` drafts entries itself.
 3. As the owner, I want System to open the explorer full-height inside Evie's window, so that it feels part of Evie rather than a separate site.
 4. As the owner, I want the breadcrumb to say System while it is open, so that I know where I am and can go back to my chat.
 5. As the owner, I want System to behave like Data as a workbench view (opened from the sidebar, left through the breadcrumb), so that it works the way Evie's other views do.
-6. As the owner, I want the explorer inside Evie to match Evie's light look and drop its own brand bar, so that it doesn't look like a page within a page.
+6. As the owner, I want the explorer inside Evie to be dark and drop its own brand bar, so that it reads comfortably and doesn't look like a page within a page.
 7. As the owner, I want the explorer served by `evie serve` from inside the binary, so that it needs no files on disk and can't drift from the build.
 8. As the owner, I want the served explorer to describe exactly the build I am running, so that I can trust it while debugging that build.
 9. As the owner, I want code links in the served explorer to open on GitHub at the build's commit, so that I read the code that is actually running.
@@ -71,7 +71,7 @@ until `/implement` drafts entries itself.
 
 - **Explorer snapshot package**: a tiny Go package beside the explorer files that embeds the page, the viewer, the stylesheet, the data, and the examples. `go:embed` cannot reach `docs/` from `internal/web`, so the embedding lives with the files. The explorer tool's package extraction grows to include this one package outside `cmd/` and `internal/`, and it gets a component node (Infrastructure, Surfaces).
 - **Web server**: serves the snapshot under `/explorer/`, GET and HEAD only, with a content-security policy allowing framing only by Evie, and a generated `build.js` carrying the repository URL (from the main module path), the commit, and the modified flag (from Go's build stamp). The route sits outside the API guard, like Evie's own static files: it carries only the public repository's architecture.
-- **Explorer page**: when it is not opened from disk, it loads `build.js` and resolves code links to GitHub (`blob/<commit>/<path>`, or `blob/master/<path>` when there is no commit or the build was modified). From disk, links stay relative. An embedded flag in the address hides the brand bar and forces the light theme.
+- **Explorer page**: when it is not opened from disk, it loads `build.js` and resolves code links to GitHub (`blob/<commit>/<path>`, or `blob/master/<path>` when there is no commit or the build was modified). From disk, links stay relative. An embedded flag in the address hides the brand bar and forces the dark theme.
 - **Web UI**: a System sidebar entry directly under Data; a `system` workbench view that behaves like Data (like Data, it is not remembered across reloads), whose body is the explorer in a frame sandboxed to allow scripts and popups (popups escape the sandbox so GitHub links open normally); the breadcrumb label System.
 - **Explorer tool, History**: `extract` parses `CHANGELOG.md` into a `history` list in the facts; `check` validates it as below.
 - **Explorer page, History**: a fifth level tab, History, with a month-grouped timeline; a History section on each package's panel; history entries included in search.
