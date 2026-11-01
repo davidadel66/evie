@@ -16219,6 +16219,28 @@ evieExplorer.register(
   "history": [
     {
       "date": "2026-11-01",
+      "title": "Test suite passes on CI's Linux runners",
+      "branch": "fix/ci-linux-failures",
+      "merge": "b262252",
+      "touches": [
+        "cmd/evie",
+        "internal/eviedb",
+        "internal/localterminal",
+        "internal/subagents",
+        "internal/tools",
+        "internal/worktree"
+      ],
+      "sources": [
+        "code:internal/worktree/worktree_test.go",
+        "code:internal/localterminal/session_test.go",
+        "code:internal/subagents/build_test.go"
+      ],
+      "text": [
+        "Tests that assumed macOS behaviour now also pass on CI's Linux runners: the change-push, retrieval relevance-scale, local terminal, subagent build, tool build and worktree tests. The fix was made on 2026-10-26 on the remote and reached local master in this merge."
+      ]
+    },
+    {
+      "date": "2026-11-01",
       "title": "Dark explorer inside Evie",
       "branch": "feat/explorer-dark",
       "touches": [

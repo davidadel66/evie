@@ -7,6 +7,17 @@ The entry format, the check's rules, and how to add an entry are in the
 editing this file, run `go run ./scripts/explorer extract` and
 `go run ./scripts/explorer check`.
 
+## 2026-11-01 — Test suite passes on CI's Linux runners
+Branch: fix/ci-linux-failures
+Merge: b262252
+Touches: cmd/evie, internal/eviedb, internal/localterminal, internal/subagents, internal/tools, internal/worktree
+Sources: code:internal/worktree/worktree_test.go, code:internal/localterminal/session_test.go, code:internal/subagents/build_test.go
+
+Tests that assumed macOS behaviour now also pass on CI's Linux runners: the
+change-push, retrieval relevance-scale, local terminal, subagent build, tool
+build and worktree tests. The fix was made on 2026-10-26 on the remote and
+reached local master in this merge.
+
 ## 2026-11-01 — Dark explorer inside Evie
 Branch: feat/explorer-dark
 Touches: docs/architecture/explorer
