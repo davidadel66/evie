@@ -16236,7 +16236,7 @@ evieExplorer.register(
         "code:internal/subagents/build_test.go"
       ],
       "text": [
-        "Tests that assumed macOS behaviour now also pass on CI's Linux runners: the change-push, retrieval relevance-scale, local terminal, subagent build, tool build and worktree tests. The fix was made on 2026-10-26 on the remote and reached local master in this merge."
+        "CI's Ubuntu runner gained bubblewrap, so the sandbox tests ran on Linux for the first time, and its bash differs from macOS's. The worktree, build worker, terminal, relevance-scale and verify-before-push tests now expect Linux's sandbox and bash behaviour, and the worktree commit test checks that a `.GIT` is refused at commit. The fix was made on 2026-10-26 on the remote and reached local master in this merge."
       ]
     },
     {

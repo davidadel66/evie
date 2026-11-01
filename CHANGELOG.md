@@ -13,10 +13,12 @@ Merge: b262252
 Touches: cmd/evie, internal/eviedb, internal/localterminal, internal/subagents, internal/tools, internal/worktree
 Sources: code:internal/worktree/worktree_test.go, code:internal/localterminal/session_test.go, code:internal/subagents/build_test.go
 
-Tests that assumed macOS behaviour now also pass on CI's Linux runners: the
-change-push, retrieval relevance-scale, local terminal, subagent build, tool
-build and worktree tests. The fix was made on 2026-10-26 on the remote and
-reached local master in this merge.
+CI's Ubuntu runner gained bubblewrap, so the sandbox tests ran on Linux for
+the first time, and its bash differs from macOS's. The worktree, build worker,
+terminal, relevance-scale and verify-before-push tests now expect Linux's
+sandbox and bash behaviour, and the worktree commit test checks that a `.GIT`
+is refused at commit. The fix was made on 2026-10-26 on the remote and reached
+local master in this merge.
 
 ## 2026-11-01 — Dark explorer inside Evie
 Branch: feat/explorer-dark
