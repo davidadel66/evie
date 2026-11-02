@@ -16,7 +16,7 @@ const base: WorkflowRun = {id: "8f21aaaa-0000", workspace_id: "code", workflow: 
   checkpoint: 2, created_at: "2026-10-09T09:30:00Z", started_at: "2026-10-09T09:30:00Z"};
 const waiting: WorkflowRun = {...base, state: "waiting_for_human", next_step: "decide", step_states: {scan: "succeeded"}};
 const failed: WorkflowRun = {...base, id: "5a11bbbb", workflow: "release-notes", version: 2, state: "failed", surface: "cli", error: "steps.scan failed: GitHub API rate limited (resets 18:10 UTC).",
-  step_states: {scan: "failed"}, created_at: "2026-10-08T12:00:00Z", finished_at: "2026-10-08T12:00:41Z"};
+  step_states: {scan: "failed"}, created_at: "2026-10-08T12:00:00Z", started_at: "2026-10-08T12:00:00Z", finished_at: "2026-10-08T12:00:41Z"};
 const succeeded: WorkflowRun = {...base, id: "4d20cccc", state: "succeeded", outputs: {upgraded: 14}, step_states: {scan: "succeeded", decide: "succeeded", bump: "succeeded"},
   created_at: "2026-10-05T09:00:00Z", finished_at: "2026-10-05T09:14:00Z"};
 
@@ -25,7 +25,8 @@ const ask = (schema: Record<string, unknown>): WorkflowInterruption => ({run_id:
 
 function row(run: WorkflowRun): RunRow {
   const steps = runSteps(run, outline);
-  return {run, steps, note: runNote(run, steps)};
+  const question = run.state === "waiting_for_human" ? ask({}) : undefined;
+  return {run, steps, note: runNote(run, steps, question), question};
 }
 
 function panel(run: WorkflowRun, extra: Partial<WorkflowRunDetail> = {}, sessionTitle?: string) {
@@ -35,36 +36,47 @@ function panel(run: WorkflowRun, extra: Partial<WorkflowRunDetail> = {}, session
 }
 
 describe("Runs tab list", () => {
+  // The runs list amendment (2026-11-02): one line per run, waiting runs as
+  // tasks with Answer, finished runs under their workflow with a dot each.
   const html = renderToStaticMarkup(<RunList rows={[row(succeeded), row(failed), row(waiting)]} workflows={["deps-weekly", "release-notes"]} filter=""
     selectedId={failed.id} now={now} onFilter={()=>{}} onSelect={()=>{}} />);
 
-  it("groups runs with their counts, waiting ones first", () => {
-    expect([...html.matchAll(/<section aria-label="([^"]+)"/g)].map((m) => m[1])).toEqual(["Waiting for you", "Earlier"]);
+  it("puts waiting runs first and finished runs under History by workflow", () => {
+    expect([...html.matchAll(/<section aria-label="([^"]+)"/g)].map((m) => m[1])).toEqual(["Waiting for you", "History"]);
     expect(html).toMatch(/Waiting for you<span[^>]*>1<\/span>/);
-    expect(html).toMatch(/Earlier<span[^>]*>2<\/span>/);
+    expect(html).toMatch(/History<span[^>]*>2 runs<\/span>/);
+    expect([...html.matchAll(/aria-expanded="(true|false)"[^>]*>.*?font-mono[^>]*>([a-z-]+)</g)].map((m) => [m[2], m[1]])).toEqual([["release-notes", "true"], ["deps-weekly", "false"]]);
   });
 
-  it("filters by workflow with chips, all workflows first", () => {
+  it("filters by workflow with chips, all first", () => {
     expect([...html.matchAll(/aria-pressed="(true|false)"[^>]*>([^<]+)</g)].map((m) => [m[2], m[1]]))
-      .toEqual([["All workflows", "true"], ["deps-weekly", "false"], ["release-notes", "false"]]);
+      .toEqual([["All", "true"], ["deps-weekly", "false"], ["release-notes", "false"]]);
     const filtered = renderToStaticMarkup(<RunList rows={[row(succeeded), row(failed), row(waiting)]} workflows={["deps-weekly", "release-notes"]} filter="release-notes"
       now={now} onFilter={()=>{}} onSelect={()=>{}} />);
     expect(filtered).not.toContain("Waiting for you<");
     expect(filtered.match(/<li>/g)).toHaveLength(1);
   });
 
-  it("shows each run's workflow, version, note, step bar, trigger and start, with no Change column yet", () => {
-    expect([...html.matchAll(/text-\[11px\]"><span>(\w+)<\/span><span>(\w+)<\/span><span>(\w+)<\/span><span[^>]*>(\w+)</g)][0].slice(1)).toEqual(["Workflow", "Steps", "Trigger", "Started"]);
-    expect(html).toContain("Waiting for you at decide: Ask about major upgrades.");
+  it("reads a waiting run as a task with an Answer control, its step bar and when it started, and nothing that every row would repeat", () => {
+    expect(html).toContain(">Decide: Two major upgrades need a call.<");
     expect(html).toContain('aria-label="scan done, decide waiting for you, bump not reached"');
-    expect(html).toContain("steps.scan failed: GitHub API rate limited");
-    expect(html).toContain("upgraded 14");
-    expect(html).toContain(">v4<");
-    expect(html).toContain(">CLI<");
+    expect(html).toContain(">Answer<");
     expect(html).toContain(">3h ago<");
-    expect(html).toContain(">Oct 5<");
-    expect(html).not.toContain(">Change<");
+    expect(html).not.toContain(">v4<");
+    expect(html).not.toContain(">CLI<");
+    expect(html).not.toContain(">Schedule<");
+    expect(html).not.toContain(">Trigger<");
+  });
+
+  it("opens a workflow's history to its dated runs when one is selected, failed ones leading with their error", () => {
+    expect(html).toMatch(/failed Oct 8<\/span>, steps\.scan failed: GitHub API rate limited/);
+    expect(html).toContain(">Oct 8<");
+    expect(html).toContain(">41s<");
     expect(html.match(/aria-current="true"/g)).toHaveLength(1);
+    // deps-weekly is closed: its succeeded run shows as a dot and a summary, not a row.
+    expect(html).toContain("1 succeeded");
+    expect(html).not.toContain(">upgraded 14<");
+    expect(html).toMatch(/aria-label="Last 1 runs, oldest first: Oct 5 succeeded"/);
   });
 
   it("says when there are no runs", () => {
@@ -82,11 +94,23 @@ describe("Run panel", () => {
     expect(html).not.toContain("Your answer (a JSON object)");
   });
 
-  it("falls back to the answer form for any other question, and hides answered ones", () => {
-    const html = panel(waiting, {interruptions: [ask({type: "object", properties: {reject: {type: "array"}}})]});
-    expect(html).toContain("Your answer (a JSON object)");
+  it("leads with the task, offers Accept as proposed when {} is a valid answer, and keeps the JSON form behind Write an answer", () => {
+    // Run detail amendment (2026-11-02).
+    const html = panel(waiting, {interruptions: [{...ask({type: "object", properties: {reject: {type: "array"}}}), request: {input: {lines: [1, 2, 3]}}}]});
+    expect(html).toMatch(/<h3[^>]*>Decide 3 lines<\/h3>/);
+    expect(html).toContain(">Accept as proposed<");
+    expect(html).toContain(">Open the 3 lines<");
+    expect(html).toContain(">Write an answer<");
+    expect(html).not.toContain("Your answer (a JSON object)");
+    expect(html).toContain("Waiting since");
     const answered = panel(waiting, {interruptions: [{...ask({}), resolution: {kind: "answered", actor: "owner", recorded_at: ""}}]});
     expect(answered).not.toContain("needs your answer");
+  });
+
+  it("shows the answer form at once when the schema requires fields", () => {
+    const html = panel(waiting, {interruptions: [ask({type: "object", required: ["decision"], properties: {decision: {type: "string"}}})]});
+    expect(html).toContain("Your answer (a JSON object)");
+    expect(html).not.toContain(">Accept as proposed<");
   });
 
   it("shows where it came from, its steps in order and its progress", () => {
@@ -95,7 +119,11 @@ describe("Run panel", () => {
     expect(html).toContain("Started by its schedule");
     expect(html).toMatch(/step 2 of 3/);
     expect([...html.matchAll(/font-mono text-\[12\.5px\]">(\w+)</g)].map((m) => m[1])).toEqual(["scan", "decide", "bump"]);
-    expect(html).toContain(">waiting for you<");
+    // Steps are one line each; only the live step shows its description (run detail amendment, 2026-11-02).
+    expect(html).toContain("waiting for you<");
+    expect(html).toContain("Ask about major upgrades.");
+    expect(html).not.toContain("List outdated packages.");
+    expect(html).not.toContain("Upgrade and run the suite.");
     const chat = panel({...waiting, surface: "chat", session_id: "s1"}, {}, "Flaky archive test");
     expect(chat).toMatch(/Started by Evie in<\/span><button[^>]*>Flaky archive test<\/button>/);
   });

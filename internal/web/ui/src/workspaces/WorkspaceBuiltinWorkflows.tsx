@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Workspace } from "../api/contextSessions";
 import { workflowBuiltinAPI, type WorkflowBuiltin, type WorkflowBuiltinAPI } from "../api/workflowBuiltins";
+import { workflowColumns } from "./workflowView";
 
 // Built-in workflows (owner decision 2026-10-04). They are available in
 // every Workspace without a proposal or approval: they hold no Standing
@@ -26,32 +27,46 @@ export function BuiltinWorkflowList({builtins, workspaceId, busy, onToggle}: {
   onToggle: (builtin: WorkflowBuiltin, enabled: boolean) => void;
 }) {
   if (builtins.length === 0) {
-    return <p className="text-muted-text text-xs">No workflows are built into this Evie.</p>;
+    return <p className="text-muted-text px-2.5 py-3 text-xs">No workflows are built into this Evie.</p>;
   }
-  return <ul className="border-hair border-t">
+  // Rows of the Workflows table (Workflows amendment, 2026-11-02): name with
+  // a Built in tag and a one-line description, "From chat" for when it
+  // runs, and the On switch for its status; bounds, where this Workspace
+  // runs it, problems and the customize command sit under Details.
+  return <ul>
     {builtins.map((b) => {
       const blocked = b.enabled ? (b.workspace?.blocked ?? []) : [];
-      return <li key={b.name} className="border-hair border-b py-3 text-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-body font-mono">{b.name}</span>
-          <span className="text-fainter">Built in</span>
-          <label className="text-body ml-auto flex items-center gap-2">
-            <input type="checkbox" role="switch" className="accent-teal" aria-label={`${b.name} on for every Workspace`} checked={b.enabled} disabled={busy}
-              onChange={(event) => onToggle(b, event.target.checked)} />
-            {b.enabled ? "On" : "Off"}
-          </label>
-        </div>
-        <p className="text-muted-text mt-1 max-w-[620px] leading-5">{b.description}</p>
-        <p className="text-fainter mt-1">
-          {b.enabled ? "On for every Workspace" : "Off for every Workspace"}
-          {!b.enabled && b.control?.reason ? ` (${b.control.reason})` : ""}
-          {" · "}runs {b.workers.length > 0 ? `${b.workers.join(", ")} workers` : "no workers"}, at most {b.max_tokens.toLocaleString("en-US")} tokens a run
-          {b.version ? ` · version ${b.version}` : ""}
-        </p>
-        {b.workspace && <p className="text-muted-text mt-1">{where(b)}</p>}
-        {blocked.map((reason) => <p key={reason} className="text-danger mt-1 leading-5">Cannot start here yet: {reason}</p>)}
-        {b.problem && <p className="text-danger mt-1 leading-5">{b.problem}</p>}
-        <p className="text-fainter mt-1">Customize it with <code className="font-mono">evie workflows customize {b.name} --workspace {workspaceId}</code> (or <code className="font-mono">--global</code>), then approve the copy.</p>
+      return <li key={b.name} className={`${workflowColumns} border-hair items-start border-b px-2.5 py-3`}>
+        <span className="min-w-0">
+          <span className="flex items-baseline gap-2">
+            <span className="text-ink font-mono text-[12.5px]">{b.name}</span>
+            <span className="border-hair-strong text-muted-text rounded-full border px-1.5 text-[10px] leading-4">Built in</span>
+          </span>
+          <span className="text-muted-text mt-[3px] block truncate text-xs">{b.description}</span>
+          <details className="mt-1 text-xs">
+            <summary className="text-faint hover:text-body cursor-pointer">Details</summary>
+            <div className="text-muted-text mt-1 max-w-[560px] space-y-1 leading-5">
+              <p>{b.description}</p>
+              <p className="text-fainter">
+                {b.enabled ? "On for every Workspace" : "Off for every Workspace"}
+                {!b.enabled && b.control?.reason ? ` (${b.control.reason})` : ""}
+                {" · "}runs {b.workers.length > 0 ? `${b.workers.join(", ")} workers` : "no workers"}, at most {b.max_tokens.toLocaleString("en-US")} tokens a run
+                {b.version ? ` · version ${b.version}` : ""}
+              </p>
+              {b.workspace && <p>{where(b)}</p>}
+              {blocked.map((reason) => <p key={reason} className="text-danger">Cannot start here yet: {reason}</p>)}
+              {b.problem && <p className="text-danger">{b.problem}</p>}
+              <p className="text-fainter">Customize it with <code className="font-mono">evie workflows customize {b.name} --workspace {workspaceId}</code> (or <code className="font-mono">--global</code>), then approve the copy.</p>
+            </div>
+          </details>
+        </span>
+        <span className="text-muted-text text-xs">From chat</span>
+        <span className="text-fainter hidden text-[11.5px] sm:block">See Runs</span>
+        <label className="text-body flex items-center justify-end gap-2 text-xs">
+          <input type="checkbox" role="switch" className="accent-teal" aria-label={`${b.name} on for every Workspace`} checked={b.enabled} disabled={busy}
+            onChange={(event) => onToggle(b, event.target.checked)} />
+          {b.enabled ? "On" : "Off"}
+        </label>
       </li>;
     })}
   </ul>;
@@ -81,12 +96,10 @@ export function WorkspaceBuiltinWorkflows({workspace, api = workflowBuiltinAPI}:
       setProblem(error instanceof Error ? error.message : "The built-in workflow could not be changed. Refresh before trying again.");
     } finally { setBusy(false); }
   };
-  return <section aria-label="Built-in workflows" className="mt-4">
-    <h3 className="text-body mb-2 text-xs font-medium">Built-in workflows</h3>
-    <p className="text-muted-text mb-2 max-w-[620px] text-xs leading-5">Built into Evie and available in every Workspace without a proposal or approval: they hold no Standing Authority and run only read-only workers this Workspace must allow. A chat can start one with workflow_start; it runs in the background within its token limit.</p>
-    {builtins === null ? <p className="text-muted-text text-xs">Loading built-in workflows…</p>
+  return <section aria-label="Built-in workflows">
+    {builtins === null ? <p className="text-muted-text px-2.5 py-3 text-xs">Loading built-in workflows…</p>
       : <BuiltinWorkflowList builtins={builtins} workspaceId={workspace.id} busy={busy || workspace.state !== "active"} onToggle={(b, enabled) => void toggle(b, enabled)} />}
-    <p role="status" className="text-muted-text mt-2 text-xs">{busy ? "Working…" : message}</p>
-    {problem && <p role="alert" className="text-danger mt-2 text-xs">{problem}</p>}
+    <p role="status" className="text-muted-text mt-2 px-2.5 text-xs">{busy ? "Working…" : message}</p>
+    {problem && <p role="alert" className="text-danger mt-2 px-2.5 text-xs">{problem}</p>}
   </section>;
 }

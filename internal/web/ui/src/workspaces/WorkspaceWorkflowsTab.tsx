@@ -11,13 +11,15 @@ import { WorkflowRunStart } from "./WorkspaceWorkflowRuns";
 import { WorkspaceBuiltinWorkflows } from "./WorkspaceBuiltinWorkflows";
 import { runStateLabel, runTone, runTrigger, type RunTone } from "./runView";
 import {
-  lineRange, needsReview, recentRuns, runDots, scheduleText, stepNotes, workflowStatus, yamlLine, type WorkflowStatusView,
+  lineRange, needsReview, recentRuns, runDots, scheduleText, stepNotes, workflowColumns, workflowStatus, yamlLine, type WorkflowStatusView,
 } from "./workflowView";
 
 // The Workflows tab (workspace-activity.spec.md story 3): every workflow of
 // the Workspace with when it runs, its last runs and its status; one opens
 // in a pop-up with its steps, its YAML, its approval, Start run, its
-// schedule and its recent runs. Built-in workflows keep their own list.
+// schedule and its recent runs. Built-in workflows are rows of the same
+// table, and the CLI how-to folds away under it (Workflows amendment,
+// 2026-11-02).
 
 const dot: Record<RunTone, string> = {amber: "bg-amber", teal: "bg-teal", ok: "bg-ok-gutter", danger: "bg-danger", ghost: "bg-ghost", faint: "bg-faint"};
 const statusText: Record<WorkflowStatusView["tone"], string> = {amber: "text-amber", muted: "text-muted-text", danger: "text-danger", faint: "text-faint"};
@@ -27,7 +29,7 @@ const kindBorder: Record<string, string> = {agent: "border-ok", ai: "border-teal
 /** One workflow in the table. */
 export type WorkflowRow = { definition: WorkflowDefinition; description?: string; status: WorkflowStatusView; runs: WorkflowRun[] };
 
-const columns = "grid grid-cols-[minmax(0,1fr)_110px_90px] gap-4 sm:grid-cols-[minmax(0,1fr)_150px_110px_120px]";
+const columns = workflowColumns;
 
 export function WorkflowTable({rows, onOpen}: {rows: WorkflowRow[]; onOpen: (name: string) => void}) {
   if (rows.length === 0) return <p className="border-hair text-muted-text border-t px-2.5 py-4 text-[12.5px]">No workflows have been proposed for this Workspace.</p>;
@@ -283,8 +285,15 @@ export function WorkspaceWorkflowsTab({workspace, onOpenRun, onAllRuns, api = wo
   return <section aria-label="Workflows" className="min-h-0 flex-1 overflow-y-auto">
     <div className="mx-auto max-w-[1000px] px-6 pt-6 pb-16 sm:px-7">
       {definitions === null ? <p className="text-muted-text text-xs">{problem || "Loading workflows…"}</p> : <WorkflowTable rows={rows} onOpen={show} />}
-      <p className="text-fainter mt-4 max-w-[640px] px-2.5 text-xs leading-5">Propose a workflow with <code className="font-mono">evie workflows propose {workspace.id} &lt;folder&gt; --fixtures &lt;file&gt;</code>. Approving a version grants exactly the Standing Authority it shows and starts no run.</p>
-      <div className="px-2.5"><WorkspaceBuiltinWorkflows workspace={workspace} /></div>
+      <WorkspaceBuiltinWorkflows workspace={workspace} />
+      <details className="mt-6 px-2.5">
+        <summary className="text-muted-text hover:text-body cursor-pointer text-xs">How to add or customize a workflow</summary>
+        <div className="text-fainter mt-2 max-w-[640px] space-y-2 text-xs leading-5">
+          <p>Propose a workflow with <code className="font-mono">evie workflows propose {workspace.id} &lt;folder&gt; --fixtures &lt;file&gt;</code>. Approving a version grants exactly the Standing Authority it shows and starts no run.</p>
+          <p>Built-in workflows are built into Evie and available in every Workspace without a proposal or approval: they hold no Standing Authority and run only read-only workers this Workspace must allow. A chat can start one with workflow_start; it runs in the background within its token limit.</p>
+          <p>Customize a built-in with <code className="font-mono">evie workflows customize &lt;name&gt; --workspace {workspace.id}</code> (or <code className="font-mono">--global</code>), then approve the copy.</p>
+        </div>
+      </details>
     </div>
     {open && definition && <WorkflowDialog definition={definition} view={views[open]} runs={recentRuns(runs, open)} schedule={schedules.find((s) => s.workflow === open)}
       card={card} mode={mode} highlight={highlight} busy={busy || workspace.state !== "active"} problem={problem || undefined} now={now}

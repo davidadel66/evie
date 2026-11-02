@@ -227,7 +227,7 @@ export function WorkspaceHome({
   const ownTab = ownTabs.shown.find(({id}) => id === ownTabID);
   return (
     <main className="flex min-h-0 flex-1 flex-col">
-      <WorkspaceHeader tab={tab} waiting={waiting} caps={caps} showChanges={hasRepository || tab === "changes"}
+      <WorkspaceHeader tab={tab} waiting={waiting} showChanges={hasRepository || tab === "changes"}
         review={listing ? reviewCount(listing.changes, listing.repository.kind, new Date()) : 0} onTab={(next) => onView?.({tab: next})}
         customTabs={ownTabs.shown.map(({id, title}) => ({id: customTabKey(id), label: title}))}
         onReload={() => { setTabReloads((count) => count + 1); ownTabs.reload(); }} />
@@ -242,7 +242,7 @@ export function WorkspaceHome({
           onSelect={(change) => onView?.({change})} onChanged={reload}
           onOpenRun={(run) => onView?.({tab: "runs", run, runFilter: ""})} onOpenSession={onOpenSession} />
       </div> : tab === "runs" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-runs" className="flex min-h-0 flex-1">
-        <WorkspaceRuns key={`workflow-runs:${workspace.id}`} workspace={workspace} selectedId={selectedRun} filter={runFilter} sessionTitles={sessionTitles}
+        <WorkspaceRuns key={`workflow-runs:${workspace.id}`} workspace={workspace} selectedId={selectedRun} filter={runFilter} sessionTitles={sessionTitles} caps={caps}
           onSelect={(run) => onView?.({run})} onFilter={(filter) => onView?.({runFilter: filter})} onOpenSession={onOpenSession} onChanged={onRunsChanged} />
       </div> : tab === "workflows" ? <div id="workspace-tab-panel" role="tabpanel" aria-labelledby="workspace-tab-workflows" className="flex min-h-0 flex-1">
         <WorkspaceWorkflowsTab key={`workflows:${workspace.id}`} workspace={workspace}

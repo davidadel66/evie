@@ -36,6 +36,11 @@ describe("the Workspace header with its own tabs", () => {
     const order = [...html.matchAll(/role="tab" id="workspace-tab-([^"]+)"/g)].map((match) => match[1]);
     expect(order).toEqual(["runs", "workflows", "tab:reports", "tab:budget", "settings"]);
     expect(html).not.toContain(">Reload<");
+    // The Workspace's own tabs sit past a divider and carry a page icon, so
+    // they read as pages Evie built for it (strip amendment, 2026-11-02).
+    expect(html).toMatch(/workspace-tab-workflows.*?aria-hidden="true" data-fixed-tab.*?workspace-tab-tab:reports/);
+    expect(html).toMatch(/id="workspace-tab-tab:reports"[^>]*title="A page Evie built for this Workspace"[^>]*>.*?<svg/);
+    expect(renderToStaticMarkup(<WorkspaceHeader tab="runs" waiting={0} onTab={() => {}} />)).not.toContain('data-fixed-tab class="bg-hair-input');
   });
   it("offers Reload while one of its own tabs is selected", () => {
     const html = renderToStaticMarkup(<WorkspaceHeader tab={customTabKey("reports")} waiting={0} customTabs={custom} onTab={() => {}} onReload={() => {}} />);
