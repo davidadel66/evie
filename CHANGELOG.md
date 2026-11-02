@@ -7,6 +7,22 @@ The entry format, the check's rules, and how to add an entry are in the
 editing this file, run `go run ./scripts/explorer extract` and
 `go run ./scripts/explorer check`.
 
+## 2026-11-02 — Steadier chat status, and General leaves the prompt
+Branch: fix/general-followups
+Merge: 2e4e792
+Touches: internal/web, internal/agent
+Sources: doc:cmd/evie/docs/active/multi-chat.spec.md, doc:cmd/evie/docs/active/session-history-and-memory-scope.spec.md, term:Global Conversation
+
+Follow-ups to retiring the General workspace. The chat status stream sent
+an unchanged status again when two changes woke it at once; computed just
+before an approval and delivered after it, that repeat showed the chat as
+still waiting and made a status test fail about once in 200 to 600 runs.
+The stream now skips a status equal to the last one it sent. The chat
+prompt no longer tells the model that "The General workspace is a
+workspace"; the memory compiler's frozen copy of that line stays under its
+versioned policy. The glossary names a chat outside any workspace a Global
+Conversation.
+
 ## 2026-11-02 — Chats start without a workspace
 Branch: feat/plain-chats
 Merge: 8eae958

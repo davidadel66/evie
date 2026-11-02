@@ -16227,6 +16227,24 @@ evieExplorer.register(
   "history": [
     {
       "date": "2026-11-02",
+      "title": "Steadier chat status, and General leaves the prompt",
+      "branch": "fix/general-followups",
+      "merge": "2e4e792",
+      "touches": [
+        "internal/web",
+        "internal/agent"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/multi-chat.spec.md",
+        "doc:cmd/evie/docs/active/session-history-and-memory-scope.spec.md",
+        "term:Global Conversation"
+      ],
+      "text": [
+        "Follow-ups to retiring the General workspace. The chat status stream sent an unchanged status again when two changes woke it at once; computed just before an approval and delivered after it, that repeat showed the chat as still waiting and made a status test fail about once in 200 to 600 runs. The stream now skips a status equal to the last one it sent. The chat prompt no longer tells the model that \"The General workspace is a workspace\"; the memory compiler's frozen copy of that line stays under its versioned policy. The glossary names a chat outside any workspace a Global Conversation."
+      ]
+    },
+    {
+      "date": "2026-11-02",
       "title": "Chats start without a workspace",
       "branch": "feat/plain-chats",
       "merge": "8eae958",
