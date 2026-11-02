@@ -42,3 +42,11 @@ export function closePaneTab(tabs:PaneTab[],active:string,id:string):{tabs:PaneT
  const index=tabs.findIndex(tab=>tab.id===id);const next=tabs.filter(tab=>tab.id!==id);
  return {tabs:next,active:active===id?next[Math.max(0,index-1)]?.id??"":active,closeInspector:next.length===0};
 }
+/** The views the strip's plus menu offers: Files always; Working tree and
+ *  Terminal only once a folder is attached (ui-chat.spec.md, one-strip
+ *  inspector amendment, 2026-11-02). */
+export function paneViews(hasFolder:boolean):{tab:PaneTab;label:string;action:string}[] {
+ const views:{tab:PaneTab;label:string;action:string}[]=[{tab:{id:"files",kind:"files"},label:"Files",action:"Open files"}];
+ if(hasFolder)views.push({tab:{id:"changes",kind:"changes"},label:"Working tree",action:"Open working tree"},{tab:{id:"terminal",kind:"terminal"},label:"Terminal",action:"Open terminal"});
+ return views;
+}
