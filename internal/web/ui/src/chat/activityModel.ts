@@ -209,8 +209,13 @@ export function thoughtTitle(text: string, streaming: boolean): string | null {
   const plain = sentences.map(plainThought).filter(Boolean);
   if (streaming && plain.length > 0 && !endsSentence(plain[plain.length - 1])) plain.pop();
   for (let i = plain.length - 1; i >= 0; i--) {
-    const action = asAction(plain[i]);
-    if (action) return action;
+    // An initial such as "Parcel B." can join two sentences; an intent
+    // opener after any full stop still starts one.
+    const parts = plain[i].split(/(?<=[.!?…]["'”)]?)\s+/);
+    for (let j = parts.length - 1; j >= 0; j--) {
+      const action = asAction(parts[j]);
+      if (action) return action;
+    }
   }
   return plain[plain.length - 1] ?? null;
 }

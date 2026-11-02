@@ -303,6 +303,8 @@ describe("activity transcript", () => {
     expect(thoughtTitle("Let me check the fee schedule, since the user asked about permits.", false)).toBe("Checking the fee schedule");
     expect(thoughtTitle("Let me compare A, B, and C.", false)).toBe("Comparing A, B, and C");
     expect(thoughtTitle("**Weighing lender rules**\n\nLet me check the bank.", false)).toBe("Weighing lender rules");
+    // "Parcel B." reads as an initial, so the sentences join; the intent after it still counts.
+    expect(thoughtTitle("The user wants costs for Parcel B. Let me check the Michigan rules. It might be", true)).toBe("Checking the Michigan rules");
   });
 
   it("has no per-turn repository instructions control", () => {
