@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { appendUser, reduce, type Item } from "../store/reducer";
 import { Activity, ActivityItems } from "./Activity";
-import { activityTurns, currentThought, toolLabel } from "./activityModel";
+import { actionSummary, activityTurns, thoughtTitle, toolLabel } from "./activityModel";
 
 describe("activity transcript", () => {
   it.each([
@@ -177,48 +177,132 @@ describe("activity transcript", () => {
     items = reduce(items, {type: "delta", text: "Two things are stored."});
     html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
     expect(html).toContain("Two things are stored.");
+    expect(html).toContain("Writing…");
     expect(html).not.toContain("Thinking…");
   });
 
-  it("shows the latest reasoning sentence as the live line until a tool takes over", () => {
+  it("makes the header the live line: the current title, shimmering, then the running clock", () => {
+    const header = (items: Item[]) => {
+      const html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+      return html.slice(0, html.indexOf("</button>"));
+    };
     let items = appendUser([], "think about it");
-    items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: 1000});
+    items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: Date.now() - 12_000});
     items = reduce(items, {type: "reasoning", text: "I need to think about what David is asking. Let me check memory for prior con"});
-    let html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
-    expect(html).toContain('role="status"');
-    expect(html).toContain("I need to think about what David is asking.");
-    expect(html).not.toContain("prior con");
-    expect(html).not.toContain("Thinking…");
+    let line = header(items);
+    expect(line).toContain('role="status"');
+    expect(line).toContain("evie-shimmer");
+    expect(line).toContain("Thinking about what David is asking");
+    expect(line).toContain("· 12s");
+    expect(line).not.toContain("prior con");
+    expect(line).not.toContain("Working…");
 
     items = reduce(items, {type: "reasoning", text: "text."});
     items = reduce(items, {type: "reasoning_done"});
-    html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
-    expect(html).toContain("Let me check memory for prior context.");
+    expect(header(items)).toContain("Checking memory for prior context");
 
     items = reduce(items, {type: "tool_call", id: "m", name: "memory_search", args: '{"query":"superintelligence"}'});
-    html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
-    expect(html).toContain("Search memory requested");
-    expect(html).not.toContain("Let me check memory");
+    line = header(items);
+    expect(line).toContain("Search memory requested · superintelligence");
+    expect(line).not.toContain("Checking memory");
 
     items = reduce(items, {type: "tool_result", id: "m", content: "none", isError: false});
-    html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
-    expect(html).toContain("Thinking…");
+    expect(header(items)).toContain("Thinking…");
+
+    items = reduce(items, {type: "delta", text: "Nothing is saved about it."});
+    line = header(items);
+    expect(line).toContain("Writing…");
+    expect(renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} />)).toContain("Nothing is saved about it.");
   });
 
-  it("picks the current thought from reasoning text", () => {
-    expect(currentThought("Let me look", true)).toBeNull();
-    expect(currentThought("Let me look", false)).toBe("Let me look");
-    expect(currentThought("First idea. Then the second", true)).toBe("First idea.");
-    expect(currentThought("Compare tools, e.g. search and fetch. Done", true)).toBe("Compare tools, e.g. search and fetch.");
-    expect(currentThought("**Planning the answer**\n\nI should outline the cruxes. Then", true)).toBe("Planning the answer");
-    expect(currentThought("- Check the `transcripts` table.\n", true)).toBe("Check the transcripts table.");
-    expect(currentThought("First idea. Compare tools, e.g.", true)).toBe("First idea.");
-    expect(currentThought("First idea. Check the U.S. Census", true)).toBe("First idea.");
-    expect(currentThought("First idea. Ask Dr. Smith about it", true)).toBe("First idea.");
-    expect(currentThought("First idea. Try version 3.", true)).toBe("First idea.");
-    expect(currentThought("First idea. Try version 3.", false)).toBe("Try version 3.");
-    expect(currentThought("Scaling slowed in 2026. Then RL took over.", false)).toBe("Then RL took over.");
-    expect(currentThought("Ask Dr. Smith about the U.S. data. Done", true)).toBe("Ask Dr. Smith about the U.S. data.");
+  it("heads a completed turn with its successful actions, then its time, without the shimmer", () => {
+    const turn = {id: "u", status: "complete", startedAt: 1000, finishedAt: 5000} as const;
+    const items: Item[] = [
+      {kind: "user", key: "u", text: "septic costs", turn},
+      {kind: "tool", key: "s", id: "s", name: "web_search", args: '{"query":"septic permit fee"}', result: "results", startedAt: 1000, turn},
+      {kind: "tool", key: "f", id: "f", name: "web_fetch", args: '{"url":"https://example.org"}', result: "page", startedAt: 1000, turn},
+      {kind: "tool", key: "c", id: "c", name: "bash", args: '{"command":"false"}', result: "exit 1", isErr: true, startedAt: 1000, turn},
+      {kind: "assistant", key: "a", text: "Done", streaming: false, phase: "final_answer", turn},
+    ];
+    const html = renderToStaticMarkup(<Activity group={activityTurns(items, false)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    const line = html.slice(0, html.indexOf("</button>"));
+    expect(line).toContain("Searched the web, read a page");
+    expect(line).toContain("· 4s");
+    expect(line).not.toContain("Worked");
+    expect(line).not.toContain("evie-shimmer");
+    expect(line).not.toContain('role="status"');
+  });
+
+  it("names each kind of successful action once, in order of first use", () => {
+    const tool = (key: string, name: string, extra: Partial<Extract<Item, {kind: "tool"}>> = {}): Item =>
+      ({kind: "tool", key, id: key, name, args: "{}", result: "ok", startedAt: 0, ...extra});
+    expect(actionSummary([
+      tool("a", "web_search"), tool("b", "web_fetch"), tool("c", "web_search"), tool("d", "web_fetch"),
+      tool("e", "read_file"), tool("f", "edit_file"), tool("g", "edit_file"), tool("h", "edit_file"),
+      tool("i", "bash"), tool("j", "query_db"), tool("k", "edit_db"), tool("l", "memory_search"), tool("m", "memory_traverse"),
+      tool("n", "delegate_research"), tool("o", "mystery_tool"),
+      tool("p", "bash", {isErr: true}), tool("q", "edit_file", {isErr: true, approval: {reqId: "q", state: "declined"}}),
+      tool("r", "read_file", {result: undefined}),
+    ])).toBe("Searched the web, read 2 pages, read a file, edited 3 files, ran a command, queried data, edited data, checked memory, used subagents, used a tool");
+    expect(actionSummary([tool("a", "bash"), tool("b", "bash"), tool("c", "x_tool"), tool("d", "y_tool")])).toBe("Ran 2 commands, used 2 tools");
+    expect(actionSummary([tool("a", "bash", {isErr: true})])).toBeNull();
+    expect(actionSummary([])).toBeNull();
+  });
+
+  it("lists each thought by its title, opening to its full text only when there is more", () => {
+    const trace = (text: string, streaming = false) => renderToStaticMarkup(<ActivityItems
+      items={[{kind: "reasoning", key: "r", text, streaming, startedAt: 0}]} active={streaming} onAnswer={() => {}} />);
+    const many = trace("The user wants permit costs. Let me check the county fee schedule.");
+    expect(many).toContain("<details");
+    expect(many.slice(0, many.indexOf("</summary>"))).toContain("Checking the county fee schedule");
+    expect(many.slice(many.indexOf("</summary>"))).toContain("The user wants permit costs. Let me check the county fee schedule.");
+    expect(many).not.toContain("Reasoning summary");
+
+    const one = trace("Judging which cost sources are reliable.");
+    expect(one).not.toContain("<details");
+    expect(one).not.toContain("<svg");
+    expect(one.match(/Judging which cost sources are reliable\./g)).toHaveLength(1);
+
+    expect(trace("Weighing a shared we", true)).toContain("Thinking…");
+  });
+
+  it("titles a thought from its heading, else its latest complete sentence", () => {
+    expect(thoughtTitle("Scaling slowed", true)).toBeNull();
+    expect(thoughtTitle("Scaling slowed", false)).toBe("Scaling slowed");
+    expect(thoughtTitle("First idea. Then the second", true)).toBe("First idea.");
+    expect(thoughtTitle("Compare tools, e.g. search and fetch. Done", true)).toBe("Compare tools, e.g. search and fetch.");
+    expect(thoughtTitle("**Planning the answer**\n\nLet me outline the cruxes. Then", true)).toBe("Planning the answer");
+    expect(thoughtTitle("- Check the `transcripts` table.\n", true)).toBe("Check the transcripts table.");
+    expect(thoughtTitle("First idea. Compare tools, e.g.", true)).toBe("First idea.");
+    expect(thoughtTitle("First idea. Check the U.S. Census", true)).toBe("First idea.");
+    expect(thoughtTitle("First idea. Ask Dr. Smith about it", true)).toBe("First idea.");
+    expect(thoughtTitle("First idea. Try version 3.", true)).toBe("First idea.");
+    expect(thoughtTitle("First idea. Try version 3.", false)).toBe("Try version 3.");
+    expect(thoughtTitle("Scaling slowed in 2026. Then RL took over.", false)).toBe("Then RL took over.");
+    expect(thoughtTitle("Ask Dr. Smith about the U.S. data. Done", true)).toBe("Ask Dr. Smith about the U.S. data.");
+  });
+
+  it("titles a thought with its latest intent, written as an action", () => {
+    expect(thoughtTitle("The user wants permit costs. Let me check the county fee schedule. It may be a PDF.", false)).toBe("Checking the county fee schedule");
+    expect(thoughtTitle("Let me look", false)).toBe("Looking");
+    expect(thoughtTitle("Let me look", true)).toBeNull();
+    expect(thoughtTitle("Scaling slowed. Let me check the dat", true)).toBe("Scaling slowed.");
+    expect(thoughtTitle("Let me look up county septic costs.", false)).toBe("Looking up county septic costs");
+    expect(thoughtTitle("I need to compare the two quotes.", false)).toBe("Comparing the two quotes");
+    expect(thoughtTitle("I'll run the tests again.", false)).toBe("Running the tests again");
+    expect(thoughtTitle("I’ll plan the reply.", false)).toBe("Planning the reply");
+    expect(thoughtTitle("Now I should write the summary.", false)).toBe("Writing the summary");
+    expect(thoughtTitle("Okay, let me quickly verify the totals.", false)).toBe("Verifying the totals");
+    expect(thoughtTitle("I'm going to search for local well drillers.", false)).toBe("Searching for local well drillers");
+    expect(thoughtTitle("I want to edit the config.", false)).toBe("Editing the config");
+    expect(thoughtTitle("I'm checking the lender rules.", false)).toBe("Checking the lender rules");
+    expect(thoughtTitle("Let me see if the file exists.", false)).toBe("Checking if the file exists");
+    expect(thoughtTitle("I should tie this together.", false)).toBe("Tying this together");
+    expect(thoughtTitle("Let me submit the form.", false)).toBe("Submitting the form");
+    expect(thoughtTitle("Let me continue the list.", false)).toBe("Continuing the list");
+    expect(thoughtTitle("Let me check the fee schedule, since the user asked about permits.", false)).toBe("Checking the fee schedule");
+    expect(thoughtTitle("Let me compare A, B, and C.", false)).toBe("Comparing A, B, and C");
+    expect(thoughtTitle("**Weighing lender rules**\n\nLet me check the bank.", false)).toBe("Weighing lender rules");
   });
 
   it("has no per-turn repository instructions control", () => {

@@ -142,6 +142,43 @@ export function toolBatchLabel(tools: ToolItem[]): string {
   return [...labels].map((label, i) => i === 0 ? label : label.toLowerCase()).join(", ");
 }
 
+// A completed turn's heading: each kind of successful action once, in order
+// of first use, such as "Searched the web, read 2 pages". Actions that need
+// attention are left to the problem summary. Null when none succeeded.
+export function actionSummary(items: Item[]): string | null {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (item.kind !== "tool" || item.result === undefined || needsAttention(item)) continue;
+    const kind = summaryKind(item.name);
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+  const text = [...counts].map(([kind, count]) => summaryPhrase(kind, count)).join(", ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function summaryKind(name: string): string {
+  if (name.startsWith("memory_")) return "memory";
+  if (name.startsWith("delegate_") || name === "continue_research") return "subagents";
+  return ["web_search", "web_fetch", "read_file", "edit_file", "bash", "query_db", "edit_db"].includes(name) ? name : "tool";
+}
+
+function summaryPhrase(kind: string, count: number): string {
+  const counted = (one: string, many: string) => count === 1 ? one : many.replace("#", String(count));
+  switch (kind) {
+    case "web_search": return "searched the web";
+    case "web_fetch": return counted("read a page", "read # pages");
+    case "read_file": return counted("read a file", "read # files");
+    case "edit_file": return counted("edited a file", "edited # files");
+    case "bash": return counted("ran a command", "ran # commands");
+    case "query_db": return "queried data";
+    case "edit_db": return "edited data";
+    case "memory": return "checked memory";
+    case "subagents": return "used subagents";
+    default: return counted("used a tool", "used # tools");
+  }
+}
+
 export function elapsedLabel(start?: number, end?: number): string | null {
   if (!start || !end || end < start) return null;
   const seconds = Math.round((end - start) / 1000);
@@ -149,10 +186,11 @@ export function elapsedLabel(start?: number, end?: number): string | null {
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
-// The live line's view of reasoning: the latest bold heading when the model
-// writes them, else its latest complete sentence. Null until one completes,
-// so a half-written sentence never shows.
-export function currentThought(text: string, streaming: boolean): string | null {
+// A thought's title: its latest bold heading when the model writes them,
+// else its latest intent sentence written as an action ("Let me check the
+// fees." becomes "Checking the fees"), else its latest complete sentence.
+// Null until one completes, so a half-written sentence never shows.
+export function thoughtTitle(text: string, streaming: boolean): string | null {
   const headings = [...text.matchAll(/^\s*\*\*(.+?)\*\*\s*$/gm)];
   if (headings.length > 0) return plainThought(headings[headings.length - 1][1]);
   const sentences: string[] = [];
@@ -170,7 +208,42 @@ export function currentThought(text: string, streaming: boolean): string | null 
   }
   const plain = sentences.map(plainThought).filter(Boolean);
   if (streaming && plain.length > 0 && !endsSentence(plain[plain.length - 1])) plain.pop();
+  for (let i = plain.length - 1; i >= 0; i--) {
+    const action = asAction(plain[i]);
+    if (action) return action;
+  }
   return plain[plain.length - 1] ?? null;
+}
+
+// Openers such as "Okay," before the intent, and adverbs before its verb,
+// carry nothing a title needs.
+const intent = new RegExp(
+  "^(?:(?:now|okay|ok|so|alright|first|next|then|actually|wait|right|great)[,.!]?\\s+)*" +
+  "(?:(?:let me|let's|let us|i need to|i[’']ll|i will|i should|i[’']m going to|i am going to|i want to|i have to|i must)\\s+(?:also\\s+|just\\s+|quickly\\s+|now\\s+|first\\s+|carefully\\s+)*([a-z]+)|" +
+  "(?:i[’']m|i am)\\s+(?:now\\s+|also\\s+)*([a-z]+ing))\\b(.*)$", "i");
+
+// A trailing reason or aside is cut: the title says what, not why.
+const aside = /\s*(?:[;—–]|\s-{1,2}\s|,\s*(?:since|because|as|so that|so|which|but|then|and then|to see|to make sure|to confirm|in case|before|after|while|given)\b)/i;
+
+function asAction(sentence: string): string | null {
+  const match = intent.exec(sentence);
+  if (!match) return null;
+  const verb = match[1] ? gerund(match[1].toLowerCase()) : match[2].toLowerCase();
+  const rest = match[3].split(aside)[0].replace(/[.!?…:]+["'”)]?$/, "");
+  const action = `${verb}${rest}`.trim();
+  return action.charAt(0).toUpperCase() + action.slice(1);
+}
+
+const irregularGerunds: Record<string, string> = {see: "checking", be: "being", lie: "lying", die: "dying", tie: "tying"};
+// Stressed final syllables double their consonant; one-syllable words are
+// caught by the pattern below.
+const doubledGerunds = new Set(["begin", "commit", "submit", "admit", "permit", "omit", "refer", "prefer", "occur", "recur", "regret", "forget", "upset", "control", "patrol", "compel", "propel", "expel", "equip", "quit", "transfer", "rebut"]);
+
+function gerund(verb: string): string {
+  if (irregularGerunds[verb]) return irregularGerunds[verb];
+  if (doubledGerunds.has(verb) || /^[^aeiou]*[aeiou][^aeiouwxy]$/.test(verb)) return `${verb}${verb.slice(-1)}ing`;
+  if (/(?:[^aeiouy]|u)e$/.test(verb) && verb.length > 2) return `${verb.slice(0, -1)}ing`;
+  return `${verb}ing`;
 }
 
 // A period after these is not a sentence end: common abbreviations and
