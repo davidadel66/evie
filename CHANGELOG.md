@@ -7,6 +7,25 @@ The entry format, the check's rules, and how to add an entry are in the
 editing this file, run `go run ./scripts/explorer extract` and
 `go run ./scripts/explorer check`.
 
+## 2026-11-02 — Workspace tabs read at a glance
+Branch: feat/workspace-tabs-ui
+Merge: 206c61e
+Touches: internal/web/ui, cmd/evie
+Sources: doc:cmd/evie/docs/active/workspace-activity.spec.md, doc:cmd/evie/docs/active/workspace-tabs.spec.md
+
+David found the Runs and Workflows tabs cluttered and a Workspace's own
+tabs indistinguishable from the built-in ones. After an approved canvas
+prototype: the strip puts a divider and a page icon before the Workspace's
+own tabs, pins Settings right as an icon, and moves the spend line into
+Runs. Runs reads one line per run: a waiting run is a task with an Answer
+control, such as "Review 12 lines", and finished runs sit under their
+workflow with a summary, a dot per run and dated rows on demand, so thirty
+days of finance-daily is one row. The run panel leads with the task and its
+answer, "Accept as proposed" when an empty answer is valid, with the input
+and the JSON form on demand, and steps are one line each. Built-in
+workflows are rows of the Workflows table, and the CLI how-to folds into
+one disclosure.
+
 ## 2026-11-02 — Steadier chat status, and General leaves the prompt
 Branch: fix/general-followups
 Merge: 2e4e792
