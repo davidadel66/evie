@@ -446,15 +446,22 @@ October 12 live reasoning line amendment.
   thought's title when reasoning is the latest activity; the latest
   requested tool without a result, as its label and subject (a delegate
   reports its children, as before, while the trace is collapsed; expanded,
-  its trace row does); "Writing…" while text streams; else "Thinking…". Each
+  its trace row does); the title of a progress message (see below); else
+  "Thinking…". Each
   title stays at least two seconds before the next, and fades in. The
   approval wait shows at once, and an answered approval does not linger.
   Apart from the approval wait, the title shimmers: a soft light sweeps
   across it on a loop. With reduced motion requested, it neither shimmers
   nor fades.
-- Streamed text still appears below the line. Pending approvals, memory
-  receipts, notices and the problem summary keep their rows below it. The
-  running tool's Inspect action is in the expanded trace, one click away.
+- Streamed text appears below the line once it passes 240 characters or
+  breaks a line. Until then it may be a progress message ("I'll look at the
+  card's recent transactions."), so it stays off the page and the line shows
+  its title instead, or "Writing…" until its first sentence completes. A
+  committed progress message keeps its title on the line until something
+  newer replaces it. The expanded trace shows streamed text as before.
+  Pending approvals, memory receipts, notices and the problem summary keep
+  their rows below the line. The running tool's Inspect action is in the
+  expanded trace, one click away.
 - When the turn completes, the header summarizes the successful actions in
   order of first use, then the time, such as "Searched the web, read a page ·
   1m 12s". A turn with no successful action reads "Worked for 4s". Incomplete

@@ -96,3 +96,11 @@
   stage 2 saves it with its titles: for display only, never indexed by
   memory, never sent back to the model, and capped in size per turn. That
   stage needs its own decision entry for the new saved data.
+
+- In David's November 2 Finance chat, DeepSeek wrote short progress
+  messages aloud before its tool calls (55–193 characters), and each one
+  flashed full size below the line, then vanished into the trace. He chose
+  to treat short streamed text as progress: under 240 characters with no
+  line break, it stays off the page and the line shows its title. He
+  accepted that an answer's first line appears a moment later, at its first
+  line break or 240 characters.
