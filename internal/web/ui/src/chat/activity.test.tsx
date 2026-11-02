@@ -178,7 +178,7 @@ describe("activity transcript", () => {
     expect(html).toContain("Thinking…");
     expect(html).not.toContain("SELECT * FROM claims");
 
-    items = reduce(items, {type: "delta", text: "Two things are stored."});
+    items = reduce(items, {type: "delta", text: "Two things are stored.\n\n1. claims"});
     html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
     expect(html).toContain("Two things are stored.");
     expect(html).toContain("Writing…");
@@ -212,10 +212,35 @@ describe("activity transcript", () => {
     items = reduce(items, {type: "tool_result", id: "m", content: "none", isError: false});
     expect(header(items)).toContain("Thinking…");
 
-    items = reduce(items, {type: "delta", text: "Nothing is saved about it."});
+    items = reduce(items, {type: "delta", text: "Nothing is saved about it.\n\n- No memory records"});
     line = header(items);
     expect(line).toContain("Writing…");
-    expect(renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} />)).toContain("Nothing is saved about it.");
+    expect(renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} />)).toContain("No memory records");
+  });
+
+  it("keeps a short progress message off the page and shows its title on the line", () => {
+    const render = (items: Item[]) => renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    const body = (html: string) => html.slice(html.indexOf("</button>"));
+    let items = appendUser([], "last 10 charges on my citi card");
+    items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: 1000});
+    items = reduce(items, {type: "delta", text: "I'll look at the recent Citi card tran"});
+    let html = render(items);
+    expect(headerOf(html)).toContain("Writing…");
+    expect(body(html)).not.toContain("Citi card tran");
+
+    items = reduce(items, {type: "delta", text: "sactions.\n\n"});
+    html = render(items);
+    expect(headerOf(html)).toContain("Looking at the recent Citi card transactions");
+    expect(body(html)).not.toContain("Citi card transactions");
+
+    items = reduce(items, {type: "assistant_done", content: "I'll look at the recent Citi card transactions.", parts: [{text: "I'll look at the recent Citi card transactions.", phase: "commentary"}], terminal: false});
+    expect(headerOf(render(items))).toContain("Looking at the recent Citi card transactions");
+
+    const long = "These are all payments to Citi made from a bank account, not charges on the card itself. ".repeat(3);
+    items = reduce(items, {type: "delta", text: long});
+    html = render(items);
+    expect(headerOf(html)).toContain("Writing…");
+    expect(body(html)).toContain("not charges on the card itself");
   });
 
   it("titles the live line with a requested delegate's own label", () => {

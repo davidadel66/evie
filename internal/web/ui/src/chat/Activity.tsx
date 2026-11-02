@@ -8,7 +8,7 @@ import { AssistantMessage, DiscardWarning } from "./Message";
 import { MemoryActivity, type MemoryOpener } from "./MemoryActivity";
 import { startsSubagents, subagentProgressLabel } from "../subagents/subagentView";
 import { useSubagentList, useSubagentSession } from "../subagents/useSubagents";
-import { actionSummary, awaitingApproval, describeThought, thoughtTitle, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
+import { actionSummary, awaitingApproval, describeThought, mayBeProgress, thoughtTitle, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
 
 type FileOpener = (key: string, trigger: HTMLButtonElement) => void;
 type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener };
@@ -67,8 +67,9 @@ const elapsedHint = "Elapsed wall time for this turn, including tools, provider 
 
 // While working the header is the live line. Its title: the approval wait;
 // else, when reasoning is the latest thing, that thought's title; else the
-// latest requested tool; else Writing while text streams; else Thinking,
-// which is all a model that hides its reasoning ever shows here.
+// latest requested tool; else a progress message's title (Writing while
+// longer text streams below); else Thinking, which is all a model that
+// hides its reasoning ever shows here.
 function LiveTitle({activity, pending, collapsed}: {activity: Item[]; pending: boolean; collapsed: boolean}) {
   const last = activity[activity.length - 1];
   const tool = [...activity].reverse().find((item): item is ToolItem => item.kind === "tool" && item.result === undefined);
@@ -76,15 +77,19 @@ function LiveTitle({activity, pending, collapsed}: {activity: Item[]; pending: b
   // expanded trace's row reports them itself, so only one of them polls.
   const waiting = !!tool && startsSubagents(tool) && collapsed;
   const {list: children} = useSubagentList(useSubagentSession(), waiting ? tool : undefined, waiting);
-  // The clock re-renders every second; the reasoning only changes per delta.
-  const thought = useMemo(() => last?.kind === "reasoning" ? thoughtTitle(last.text, last.streaming) : null, [last]);
+  // The clock re-renders every second; the text only changes per delta.
+  const lastTitle = useMemo(() => {
+    if (last?.kind === "reasoning") return thoughtTitle(last.text, last.streaming);
+    if (last?.kind === "assistant" && !last.discarded && (!last.streaming || mayBeProgress(last.text))) return thoughtTitle(last.text, last.streaming);
+    return null;
+  }, [last]);
   let title = "Thinking…";
-  if (thought) title = thought;
+  if (last?.kind === "reasoning" && lastTitle) title = lastTitle;
   else if (tool) {
     const {label, subject} = toolLabel(tool);
     const progress = (waiting && children ? subagentProgressLabel(children) : null) ?? label;
     title = subject ? `${progress} · ${subject}` : progress;
-  } else if (last?.kind === "assistant" && last.streaming && !last.discarded) title = "Writing…";
+  } else if (last?.kind === "assistant" && !last.discarded) title = lastTitle ?? (last.streaming ? "Writing…" : "Thinking…");
   // The approval wait shows at once and is never held, so an answered
   // approval does not linger on the line.
   const held = useHeld(pending ? null : title);
@@ -97,7 +102,7 @@ function LiveTitle({activity, pending, collapsed}: {activity: Item[]; pending: b
 
 function StreamingText({activity}: {activity: Item[]}) {
   const last = activity[activity.length - 1];
-  if (last?.kind !== "assistant" || !last.streaming || last.discarded) return null;
+  if (last?.kind !== "assistant" || !last.streaming || last.discarded || mayBeProgress(last.text)) return null;
   return <AssistantMessage text={last.text} streaming />;
 }
 

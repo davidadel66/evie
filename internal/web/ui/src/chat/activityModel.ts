@@ -168,6 +168,14 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+// Streamed text can't be told from the answer until it commits. Short text
+// with no line break is often a progress message ("I'll look at the card's
+// transactions."), so the live line titles it instead of showing it.
+export function mayBeProgress(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.length <= 240 && !trimmed.includes("\n");
+}
+
 export function elapsedLabel(start?: number, end?: number): string | null {
   if (!start || !end || end < start) return null;
   const seconds = Math.round((end - start) / 1000);
