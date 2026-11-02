@@ -72,14 +72,15 @@ export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOp
       }}
       className="flex flex-1 flex-col overflow-y-auto px-4 pt-5 pb-2 sm:px-7"
     >
-      {/* One centered reading column, shared with the composer's width. */}
-      <div className="mx-auto flex w-full max-w-[768px] flex-1 flex-col gap-4">
+      {/* One centered reading column, shared with the composer's width:
+          680px at the default 16px is about 80 characters a line. */}
+      <div className="mx-auto flex w-full max-w-[680px] flex-1 flex-col gap-4">
         {historyProblem && <div role="alert" className="text-amber-ink text-sm">{historyProblem} <button type="button" onClick={onRetry} className="underline">Retry</button></div>}
         {historyLoading && <p className="text-muted-text text-sm">Loading conversation…</p>}
         {hasOlder && <button type="button" disabled={historyLoading || streaming} onClick={() => { pinned.current = false; prependHeight.current = scroller.current?.scrollHeight ?? null; onOlder?.(); }} className="text-teal self-center py-2 text-sm">Earlier messages</button>}
         {items.length === 0 && !historyLoading && !historyProblem && <Empty />}
-        {activityTurns(items, streaming).map((group) => <Fragment key={group.key}>
-          {group.user && <UserMessage text={group.user.text} />}
+        {activityTurns(items, streaming).map((group, index) => <Fragment key={group.key}>
+          {group.user && <UserMessage text={group.user.text} sentAt={group.turn?.startedAt} first={index === 0} />}
           <Activity group={group} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />
           {group.answer.map((item) => <AssistantMessage key={item.key} text={item.text} streaming={false} discarded={item.discarded} />)}
           {runStarts(group.activity).map((start) => {

@@ -15,7 +15,7 @@ describe("isChatTextSize", () => {
     expect(isChatTextSize("medium")).toBe(false);
   });
 
-  it("defaults missing and unknown persisted values to 15px", () => {
+  it("defaults missing and unknown persisted values to the default size", () => {
     expect(defaultChatTextSize).toBe("default");
     expect(resolveChatTextSize(null)).toBe("default");
     expect(resolveChatTextSize("medium")).toBe("default");
