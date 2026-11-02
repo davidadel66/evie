@@ -135,7 +135,7 @@ func TestWorkspaceREPLRegistersConversesAndResumesAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	boundStore := &receiptBoundREPLStore{Store: store, composition: standard}
+	boundStore := &receiptBoundREPLStore{Store: store, composition: standard, resolvePreset: manager.ResolvePresetContext}
 	launchDir := t.TempDir()
 	var entered bytes.Buffer
 	selected, err := selectREPLSession(

@@ -41,10 +41,9 @@
 - DataHubView, DatabaseView and UsageView are `flex-1 min-h-0` panes: give
   them a fixed-height flex column (about 640px) or the table drawer collapses.
 - Components that fetch on mount are previewed with a guarded `window.fetch`
-  wrapper inside the preview module (CreateWorkspaceDialog answers
-  `/api/presets/list`; SpendingView answers the two `/api/data/spending/*`
-  calls of the containers it embeds). Each card is its own page, so the
-  wrapper never leaks. A source change lifting those fetches out would make
+  wrapper inside the preview module (SpendingView answers the two
+  `/api/data/spending/*` calls of the containers it embeds). Each card is its
+  own page, so the wrapper never leaks. A source change lifting those fetches out would make
   the wrappers unnecessary.
 - Internal-state views (TextSizeMenu open, SettingsDialog archived view,
   expanded `<details>`) are opened by a post-mount effect in the preview;

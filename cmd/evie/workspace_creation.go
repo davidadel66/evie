@@ -12,19 +12,34 @@ import (
 )
 
 func (c *webContextSessionController) RegisterWorkspaceWithOptions(ctx context.Context, options eviedb.WorkspaceRegistration) (memory.Workspace, error) {
-	options.PresetID = strings.TrimSpace(options.PresetID)
-	if options.PresetID == "" {
-		options.PresetID = string(plugins.StandardPresetID)
+	options.PresetID = workspacePreset(options)
+	if err := c.ValidateWorkspaceRegistration(ctx, options); err != nil {
+		return memory.Workspace{}, err
 	}
-	if _, err := c.manager.ResolvePresetContext(ctx, plugins.PresetID(options.PresetID)); err != nil {
-		return memory.Workspace{}, fmt.Errorf("validate Workspace Agent Preset: %w", err)
+	return c.store.RegisterWorkspaceWithOptions(ctx, options)
+}
+
+// ValidateWorkspaceRegistration resolves the Agent Presets a registration
+// needs, creating nothing. The web handler calls it before setting up a
+// Repository, so a refused Workspace leaves no repository behind.
+func (c *webContextSessionController) ValidateWorkspaceRegistration(ctx context.Context, options eviedb.WorkspaceRegistration) error {
+	if _, err := c.manager.ResolvePresetContext(ctx, plugins.PresetID(workspacePreset(options))); err != nil {
+		return fmt.Errorf("validate Workspace Agent Preset: %w", err)
 	}
 	if options.AllowResearchDelegation {
 		if _, err := c.manager.ResolvePresetContext(ctx, plugins.ResearchPresetID); err != nil {
-			return memory.Workspace{}, fmt.Errorf("validate research allowance: %w", err)
+			return fmt.Errorf("validate research allowance: %w", err)
 		}
 	}
-	return c.store.RegisterWorkspaceWithOptions(ctx, options)
+	return nil
+}
+
+// workspacePreset is the registration's preset, Standard when none is named.
+func workspacePreset(options eviedb.WorkspaceRegistration) string {
+	if preset := strings.TrimSpace(options.PresetID); preset != "" {
+		return preset
+	}
+	return string(plugins.StandardPresetID)
 }
 
 func (c *webContextSessionController) SetWorkspaceResearch(ctx context.Context, id memory.WorkspaceID, revision memory.WorkspaceRevisionID, enabled bool) (memory.Workspace, error) {

@@ -8,7 +8,7 @@ export { Dialog } from "./ui/Dialog";
 export { TextSizeMenu } from "./ui/TextSizeMenu";
 export { Sidebar } from "./shell/Sidebar";
 export { SettingsDialog, ArchivedSessions } from "./shell/SettingsDialog";
-export { CreateWorkspaceDialog, PresetDiagnostics } from "./workspaces/CreateWorkspaceDialog";
+export { CreateWorkspaceDialog } from "./workspaces/CreateWorkspaceDialog";
 export { SpendingView } from "./data/Spending";
 export { CashFlowView } from "./data/CashFlow";
 export { SpendingTransactionsView } from "./data/SpendingTransactions";

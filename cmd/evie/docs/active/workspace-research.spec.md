@@ -10,9 +10,11 @@ concise sourced findings to Evie.
   operator overrides remain valid. A worker uses the invoking chat's resolved
   model profile, with its own working budget bounded by the model's route-safe
   window, output reserve, and estimation margin. Parent budgets do not change.
-- Standard Workspaces expose an explicit, initially off research-delegation
-  setting at creation and in Workspace settings. Enabling adds the reviewed
-  Research preset for new chats. Existing session snapshots are immutable.
+- New Standard Workspaces, from the app or the REPL, allow research delegation
+  from creation, which no longer asks; Workspace settings keep the switch to
+  turn it off and on again. An API request may still send
+  `allowResearchDelegation: false`. Enabling adds the reviewed Research preset
+  for new chats. Existing session snapshots are immutable.
   Disabling revokes existing research immediately; re-enabling never restores
   a revoked older session's permission. Changes use expected-revision checks.
 - Admission, execution, and child final acceptance enforce active Workspace,
@@ -49,6 +51,12 @@ Amended 2026-10-01: harness review Stage 8 later replaced the worker result
 contract and raised the inline result cap; see the 2026-10-01 entry in
 [subagents.decisions.md](subagents.decisions.md). The Workspace allowance,
 revocation, and excerpt contracts above are unchanged.
+
+Amended 2026-11-02: research delegation is on by default for new Standard
+Workspaces, and the creation dialog no longer offers the setting or an Agent
+Preset; see the 2026-11-02 entry in
+[workspaces.decisions.md](workspaces.decisions.md). Existing Workspaces keep
+their settings, and the revocation contract above is unchanged.
 
 ## Verification
 

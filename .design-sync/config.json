@@ -16,7 +16,6 @@
     "SettingsDialog": "src/shell/SettingsDialog.tsx",
     "ArchivedSessions": "src/shell/SettingsDialog.tsx",
     "CreateWorkspaceDialog": "src/workspaces/CreateWorkspaceDialog.tsx",
-    "PresetDiagnostics": "src/workspaces/CreateWorkspaceDialog.tsx",
     "SpendingView": "src/data/Spending.tsx",
     "CashFlowView": "src/data/CashFlow.tsx",
     "SpendingTransactionsView": "src/data/SpendingTransactions.tsx",

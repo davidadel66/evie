@@ -17,6 +17,12 @@ type workspaceCreationController interface {
 	RegisterWorkspaceWithOptions(context.Context, eviedb.WorkspaceRegistration) (memory.Workspace, error)
 }
 
+// workspaceCreationValidator checks that a registration's Agent Presets
+// resolve, without creating anything.
+type workspaceCreationValidator interface {
+	ValidateWorkspaceRegistration(context.Context, eviedb.WorkspaceRegistration) error
+}
+
 // repositoryChoice is the Repository a new Workspace starts with
 // (changes.spec.md story 2b); absent or "none" keeps the folder as given.
 type repositoryChoice struct {
@@ -29,7 +35,12 @@ type repositoryChoice struct {
 func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		eviedb.WorkspaceRegistration
-		Repository *repositoryChoice `json:"repository,omitempty"`
+		// AllowResearchDelegation shadows the embedded field, so an absent
+		// value can be told apart from false: research is on for a new
+		// Standard Workspace unless the request turns it off
+		// (workspace-research.spec.md, amended 2026-11-02).
+		AllowResearchDelegation *bool             `json:"allowResearchDelegation,omitempty"`
+		Repository              *repositoryChoice `json:"repository,omitempty"`
 	}
 	if status, err := decodeManagementJSON(w, r, &body); err != nil || strings.TrimSpace(body.DisplayName) == "" {
 		if err == nil {
@@ -40,6 +51,12 @@ func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request)
 	}
 	request := body.WorkspaceRegistration
 	request.FolderPath = expandHome(strings.TrimSpace(request.FolderPath))
+	if explicit := body.AllowResearchDelegation; explicit != nil {
+		request.AllowResearchDelegation = *explicit
+	} else {
+		preset := strings.TrimSpace(request.PresetID)
+		request.AllowResearchDelegation = preset == "" || preset == "standard"
+	}
 	// The Repository is set up first and the Workspace registered at its
 	// folder after, so a failure never leaves a Workspace pointing at a
 	// half-made folder.
@@ -56,6 +73,14 @@ func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request)
 			managementJSONError(w, http.StatusUnprocessableEntity, "repositories_unavailable", "repository choices are unavailable")
 			return
 		}
+		// A Workspace refused for its presets must not leave a Repository
+		// behind, so the presets are checked before the Repository is made.
+		if validator, ok := s.contextSessions.(workspaceCreationValidator); ok {
+			if err := validator.ValidateWorkspaceRegistration(r.Context(), request); err != nil {
+				managementJSONError(w, http.StatusUnprocessableEntity, "workspace_registration_failed", "Workspace could not be created; check plugin settings")
+				return
+			}
+		}
 		repository, err := s.repositories.Prepare(r.Context(), changes.Prepare{Choice: choice.Kind, Folder: request.FolderPath, Owner: choice.Owner, Name: choice.Name, Private: choice.Private})
 		if err != nil {
 			status, code := repositoryError(err)
@@ -68,14 +93,16 @@ func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request)
 	var err error
 	if controller, ok := s.contextSessions.(workspaceCreationController); ok {
 		workspace, err = controller.RegisterWorkspaceWithOptions(r.Context(), request)
-	} else if request.PresetID == "" && request.FolderPath == "" && !request.CreateFolder && !request.AllowResearchDelegation {
+	} else if request.PresetID == "" && request.FolderPath == "" && !request.CreateFolder && (body.AllowResearchDelegation == nil || !*body.AllowResearchDelegation) {
+		// A controller without options creates a plain Workspace; only an
+		// explicit research request is an option it cannot honor.
 		workspace, err = s.contextSessions.RegisterWorkspace(r.Context(), request.DisplayName)
 	} else {
 		managementJSONError(w, http.StatusUnprocessableEntity, "workspace_options_unavailable", "Workspace creation options are unavailable")
 		return
 	}
 	if err != nil {
-		message := "Workspace could not be created; check the Agent Preset and folder"
+		message := "Workspace could not be created; check the folder and plugin settings"
 		if errors.Is(err, eviedb.ErrWorkspaceFolderInvalid) {
 			message = eviedb.ErrWorkspaceFolderInvalid.Error()
 		} else if errors.Is(err, eviedb.ErrWorkspaceCreationUncertain) {

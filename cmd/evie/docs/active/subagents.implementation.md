@@ -112,8 +112,9 @@ Cancel an in-progress parent turn or disable the Plugin to stop unfinished work:
 go run ./cmd/evie plugins disable subagents
 ```
 
-For a Standard Workspace, also enable **Allow research delegation** in its
-settings (or during creation), then start a new chat. Disabling this permission
+A Standard Workspace created since 2026-11-02 allows research delegation from
+creation; for an older one, enable **Allow research delegation** in its
+settings, then start a new chat. Disabling this permission
 stops active research; enabling it again applies only to new chats. See
 [Workspace research](workspace-research.spec.md) for the reviewed allowance,
 revocation, model-budget, and excerpt contracts.

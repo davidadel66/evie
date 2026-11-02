@@ -74,6 +74,18 @@ func (s *receiptBoundREPLStore) CreateGlobalSessionForChooser(
 	return session, err
 }
 
+// RegisterWorkspace creates a Standard Workspace with research delegation
+// on, as the app does (workspaces.decisions.md, 2026-11-02).
+func (s *receiptBoundREPLStore) RegisterWorkspace(ctx context.Context, displayName string) (memory.Workspace, error) {
+	if s.resolvePreset == nil {
+		return memory.Workspace{}, fmt.Errorf("Agent Preset %q is unavailable", plugins.ResearchPresetID)
+	}
+	if _, err := s.resolvePreset(ctx, plugins.ResearchPresetID); err != nil {
+		return memory.Workspace{}, fmt.Errorf("validate research allowance: %w", err)
+	}
+	return s.Store.RegisterWorkspaceWithOptions(ctx, eviedb.WorkspaceRegistration{DisplayName: displayName, AllowResearchDelegation: true})
+}
+
 func (s *receiptBoundREPLStore) CreateWorkspaceSessionForChooser(
 	ctx context.Context,
 	workspaceID memory.WorkspaceID,

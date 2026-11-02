@@ -23,3 +23,24 @@
   new proposal for an archived Workspace is refused, so a pass or turn already
   running when the Workspace is archived queues nothing and the pass keeps
   its cursor.
+
+- **2026-11-02 — New Workspaces are Standard with research delegation on;
+  creation asks for neither.** David found the Agent Preset choice
+  over-engineered and wanted research delegation always on. Creating a
+  Workspace now asks only for a name, a repository and a folder. The server
+  creates it on the Standard preset with research delegation on, unless the
+  request sends `allowResearchDelegation: false`; a request that names another
+  preset gets no research, as before. The REPL creates Workspaces the same
+  way. Workspace settings keep the research switch (David: "sure you can keep
+  it"). Reasons: a Standard chat already has
+  web search and page reading itself, so handing that work to a worker reaches
+  nothing new, and workers have fewer tools than their parent; every real
+  Workspace had chosen Standard with research on; chats outside a Workspace
+  never had the gate. Existing Workspaces keep their settings. The same
+  allowance lets a Workspace chat start the built-in deep-research workflow
+  without approval when remote workflow models are on
+  (workflow-runtime.decisions.md, "Out of the box"), so a new Workspace can
+  start it too. Presets stay as
+  the record of each chat's tools and each worker's fence. Whether to offer
+  them to the owner again is issue #198, for when subagent and research work
+  resumes.

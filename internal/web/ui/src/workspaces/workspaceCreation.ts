@@ -1,12 +1,12 @@
 import type { RepositoryChoice, WorkspaceCreation } from "../api/contextSessions";
-import type { PresetInspection } from "../api/management";
 
 export type RepositoryKind = "none" | RepositoryChoice["kind"];
 
+/** The draft names no preset and no research setting: the server creates the
+ * Workspace on the Standard preset with research delegation on
+ * (workspace-research.spec.md, amended 2026-11-02). */
 export type WorkspaceDraft = {
-	allowResearchDelegation?: boolean;
   name: string;
-  presetId: string;
   folderPath: string;
   /** The Repository the folder starts with (changes.spec.md story 2b). */
   repository?: RepositoryKind;
@@ -26,18 +26,10 @@ export function defaultFolder(name: string): string {
   return slug ? `~/code/${slug}` : "";
 }
 
-export function workspaceCreation(draft: WorkspaceDraft, presets: PresetInspection[]): WorkspaceCreation {
+export function workspaceCreation(draft: WorkspaceDraft): WorkspaceCreation {
   const displayName = draft.name.trim();
   if (!displayName) throw new Error("Enter a workspace name.");
-  if (!presets.some((preset) => preset.id === draft.presetId && preset.valid)) {
-    throw new Error("Choose an available agent preset.");
-  }
-  const options: WorkspaceCreation = { displayName, presetId: draft.presetId };
-  if (draft.allowResearchDelegation) {
-    if (draft.presetId !== "standard") throw new Error("Research delegation requires the Standard preset.");
-    if (!presets.some(preset => preset.id === "research" && preset.valid)) throw new Error("The Research preset must be available to allow delegation.");
-    options.allowResearchDelegation = true;
-  }
+  const options: WorkspaceCreation = { displayName };
   // The folder is sent exactly as chosen: a folder's name may end in a space.
   const folderPath = draft.folderPath;
   if (folderPath) {
@@ -61,17 +53,4 @@ export function workspaceCreation(draft: WorkspaceDraft, presets: PresetInspecti
     options.repository = { kind, owner, name };
   }
   return options;
-}
-
-export function presetLabel(id: string): string {
-  if (id === "standard") return "Standard";
-  if (id === "research") return "Research";
-  return id;
-}
-
-export function presetDescription(preset: PresetInspection): string {
-  if (preset.id === "standard") return "Evie’s full default toolset, using enabled plugins and normal approval rules.";
-  if (preset.id === "research") return "Web search and page reading only. No memory, local files, shell, or other plugins.";
-  const count = (preset.requiredCapabilities?.length ?? 0) + (preset.optionalCapabilities?.length ?? 0);
-  return `${count} ${count === 1 ? "capability" : "capabilities"} configured in this preset. Actions still follow their normal approval rules.`;
 }
