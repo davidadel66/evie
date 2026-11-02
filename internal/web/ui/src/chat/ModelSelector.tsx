@@ -42,6 +42,7 @@ export function ModelPicker({ models, value, disabled, loading, onChange, onClos
   const search = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const returnTo = useRef<Element | null>(null);
+  const scrolled = useRef(false);
   useEffect(() => {
     returnTo.current = document.activeElement;
     search.current?.focus();
@@ -57,7 +58,20 @@ export function ModelPicker({ models, value, disabled, loading, onChange, onClos
     onClose();
     if (returnTo.current instanceof HTMLElement) returnTo.current.focus();
   };
+  const current = value ? models.find(model => model.id === value)?.name || value : undefined;
   const terms = query.trim().toLowerCase();
+  // The current model sits far down a long list, so the full list opens on
+  // it, once: the catalog may still be loading or a search may be typed,
+  // and scrolling after that is David's. It moves only this list, not the
+  // page behind it.
+  useEffect(() => {
+    if (scrolled.current || terms !== "" || models.length === 0 || !list.current) return;
+    const row = list.current.querySelector<HTMLElement>('[aria-current="true"]');
+    if (!row) return;
+    scrolled.current = true;
+    const box = list.current.getBoundingClientRect(), at = row.getBoundingClientRect();
+    list.current.scrollTop += at.top - box.top - (box.height - at.height) / 2;
+  }, [models, value, terms]);
   const groups = groupModels(models, value)
     .map(group => ({...group, models: group.models.filter(model => `${group.provider} ${model.name} ${model.id}`.toLowerCase().includes(terms))}))
     .filter(group => group.models.length > 0);
@@ -66,7 +80,9 @@ export function ModelPicker({ models, value, disabled, loading, onChange, onClos
     const all = options();
     if (all.length === 0) return;
     const at = all.indexOf(from as HTMLButtonElement);
-    all[at < 0 ? (step > 0 ? 0 : all.length - 1) : Math.min(all.length - 1, Math.max(0, at + step))].focus();
+    // From the search field, down starts at the current model, where the list opened.
+    const current = Math.max(0, all.findIndex(option => option.getAttribute("aria-current") === "true"));
+    all[at < 0 ? (step > 0 ? current : all.length - 1) : Math.min(all.length - 1, Math.max(0, at + step))].focus();
   };
 
   return <div ref={root} id={id} role="dialog" aria-label="Choose model"
@@ -78,6 +94,7 @@ export function ModelPicker({ models, value, disabled, loading, onChange, onClos
     <input ref={search} value={query} onChange={event => setQuery(event.target.value)} aria-label="Search models" placeholder="Search models"
       onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); options()[0]?.click(); } }}
       className="border-hair text-ink placeholder:text-fainter border-b bg-transparent px-3 py-2.5 text-[13px] outline-none" />
+    {current && <p className="border-hair text-muted-text truncate border-b px-3 py-2 text-xs" title={value}>Current: <span className="text-teal">{current}</span></p>}
     {disabled && <p className="text-amber-ink px-3 pt-2 text-xs">The model can change once the current reply finishes.</p>}
     <div ref={list} className="max-h-[300px] overflow-y-auto p-1.5">
       {groups.map(group => <div key={group.provider} role="group" aria-label={group.provider}>

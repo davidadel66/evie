@@ -140,3 +140,19 @@ the catalog list: on October 11, 2026, 2 of 255 listed models failed
 consistently and up to 4 more failed while their providers were down. Such a
 selection fails as before and leaves the current model unchanged. Catalog fixture tests cover each exclusion and a
 kept model.
+
+## Current model amendment — November 2, 2026
+
+David couldn't tell which model a chat uses. `/model` marks it, but the list
+opens at the top of about 250 models sorted by provider, so the mark is out of
+sight.
+
+- Above the list, the picker names the current model: "Current:" and its
+  name, or its ID when the catalog doesn't name it.
+- When the list first fills, it scrolls the current model's row to its
+  middle. Searching or scrolling afterwards is unaffected.
+
+No backend, persistence or dependency changes. Verification covers the
+current-model line with and without a current model. The scroll runs in an
+effect, which the UI suite (no DOM environment) does not exercise, so it is
+checked in a browser.
