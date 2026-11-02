@@ -36,7 +36,11 @@
   web search and page reading itself, so handing that work to a worker reaches
   nothing new, and workers have fewer tools than their parent; every real
   Workspace had chosen Standard with research on; chats outside a Workspace
-  never had the gate. Existing Workspaces keep their settings. Presets stay as
+  never had the gate. Existing Workspaces keep their settings. The same
+  allowance lets a Workspace chat start the built-in deep-research workflow
+  without approval when remote workflow models are on
+  (workflow-runtime.decisions.md, "Out of the box"), so a new Workspace can
+  start it too. Presets stay as
   the record of each chat's tools and each worker's fence. Whether to offer
   them to the owner again is issue #198, for when subagent and research work
   resumes.

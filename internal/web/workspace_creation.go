@@ -17,6 +17,12 @@ type workspaceCreationController interface {
 	RegisterWorkspaceWithOptions(context.Context, eviedb.WorkspaceRegistration) (memory.Workspace, error)
 }
 
+// workspaceCreationValidator checks that a registration's Agent Presets
+// resolve, without creating anything.
+type workspaceCreationValidator interface {
+	ValidateWorkspaceRegistration(context.Context, eviedb.WorkspaceRegistration) error
+}
+
 // repositoryChoice is the Repository a new Workspace starts with
 // (changes.spec.md story 2b); absent or "none" keeps the folder as given.
 type repositoryChoice struct {
@@ -66,6 +72,14 @@ func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request)
 		case s.repositories == nil:
 			managementJSONError(w, http.StatusUnprocessableEntity, "repositories_unavailable", "repository choices are unavailable")
 			return
+		}
+		// A Workspace refused for its presets must not leave a Repository
+		// behind, so the presets are checked before the Repository is made.
+		if validator, ok := s.contextSessions.(workspaceCreationValidator); ok {
+			if err := validator.ValidateWorkspaceRegistration(r.Context(), request); err != nil {
+				managementJSONError(w, http.StatusUnprocessableEntity, "workspace_registration_failed", "Workspace could not be created; check plugin settings")
+				return
+			}
 		}
 		repository, err := s.repositories.Prepare(r.Context(), changes.Prepare{Choice: choice.Kind, Folder: request.FolderPath, Owner: choice.Owner, Name: choice.Name, Private: choice.Private})
 		if err != nil {

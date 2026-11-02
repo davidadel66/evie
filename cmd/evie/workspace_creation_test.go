@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/davidadel66/evie/internal/agent"
+	"github.com/davidadel66/evie/internal/changes"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -218,4 +220,40 @@ func storedWorkspace(store *eviedb.Store, id memory.WorkspaceID) (memory.Workspa
 		}
 	}
 	return memory.Workspace{}, fmt.Errorf("Workspace %s not listed: %v", id, err)
+}
+
+// countingRepositories counts Repository setups; nothing else is reached.
+type countingRepositories struct {
+	web.Repositories
+	prepared int
+}
+
+func (r *countingRepositories) Prepare(context.Context, changes.Prepare) (changes.Repository, error) {
+	r.prepared++
+	return changes.Repository{}, errors.New("a refused Workspace must not set up a Repository")
+}
+
+// The real controller's preset check runs before the handler sets up a
+// Repository, so a refused Workspace leaves no GitHub repository behind.
+func TestWorkspaceCreationHTTPRefusesUnresolvablePresetsBeforeTheRepository(t *testing.T) {
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	manager := sessionCompositionManager(t)
+	if err := manager.SetEnabled(plugins.WebPluginID, false); err != nil {
+		t.Fatal(err)
+	}
+	repositories := &countingRepositories{}
+	handler := web.WithRepositories(web.NewContextServer(nil, nil, nil, newWebContextSessionController(store, manager, nil)), repositories).Handler()
+	request := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:6687/api/workspaces/register",
+		strings.NewReader(`{"displayName":"notes","folderPath":"/tmp/notes","repository":{"kind":"github_new","name":"notes","private":true}}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnprocessableEntity || repositories.prepared != 0 {
+		t.Fatalf("register = %d %s, repositories set up %d", response.Code, response.Body, repositories.prepared)
+	}
 }

@@ -19,8 +19,13 @@ import (
 
 type optionsWorkspaceController struct {
 	fakeContextSessionController
-	options eviedb.WorkspaceRegistration
-	err     error
+	options     eviedb.WorkspaceRegistration
+	err         error
+	validateErr error
+}
+
+func (c *optionsWorkspaceController) ValidateWorkspaceRegistration(context.Context, eviedb.WorkspaceRegistration) error {
+	return c.validateErr
 }
 
 func (c *optionsWorkspaceController) RegisterWorkspaceWithOptions(_ context.Context, options eviedb.WorkspaceRegistration) (memory.Workspace, error) {
@@ -60,6 +65,8 @@ func TestWorkspaceCreationHTTPAllowsResearchByDefault(t *testing.T) {
 		{`{"displayName":"On","allowResearchDelegation":true}`, true},
 		{`{"displayName":"Off","allowResearchDelegation":false}`, false},
 		{`{"displayName":"Worker","presetId":"research"}`, false},
+		{`{"displayName":"Explore","presetId":"explore"}`, false},
+		{`{"displayName":"Padded","presetId":" standard "}`, true},
 	} {
 		controller.options = eviedb.WorkspaceRegistration{}
 		response := httptest.NewRecorder()
@@ -73,10 +80,28 @@ func TestWorkspaceCreationHTTPAllowsResearchByDefault(t *testing.T) {
 func TestWorkspaceCreationHTTPLegacyControllerRejectsUnsupportedOptions(t *testing.T) {
 	controller := &fakeContextSessionController{}
 	handler := NewContextServer(nil, nil, nil, controller).Handler()
+	for _, body := range []string{`{"displayName":"Research","presetId":"research"}`, `{"displayName":"Asked","allowResearchDelegation":true}`} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, managementRequest("/api/workspaces/register", body))
+		if response.Code != http.StatusUnprocessableEntity || len(controller.registered) != 0 {
+			t.Fatalf("%s ignored options = %d %s", body, response.Code, response.Body.String())
+		}
+	}
+}
+
+// A Workspace whose presets cannot resolve is refused before any Repository
+// is set up, so a refusal never leaves a GitHub repository behind.
+func TestWorkspaceCreationValidatesPresetsBeforeSettingUpTheRepository(t *testing.T) {
+	controller := &optionsWorkspaceController{validateErr: errors.New("required Capability \"web.search\" is unavailable")}
+	repositories := &prepareRepositories{folder: "/Users/me/code/notes"}
+	handler := WithRepositories(NewContextServer(nil, nil, nil, controller), repositories).Handler()
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, managementRequest("/api/workspaces/register", `{"displayName":"Research","presetId":"research"}`))
-	if response.Code != http.StatusUnprocessableEntity || len(controller.registered) != 0 {
-		t.Fatalf("ignored options = %d %s", response.Code, response.Body.String())
+	handler.ServeHTTP(response, managementRequest("/api/workspaces/register", `{"displayName":"notes","folderPath":"~/code/notes","repository":{"kind":"github_new","name":"notes","private":true}}`))
+	if response.Code != http.StatusUnprocessableEntity || len(repositories.prepared) != 0 || controller.options.DisplayName != "" {
+		t.Fatalf("register = %d %s, prepared %v, registered %+v", response.Code, response.Body, repositories.prepared, controller.options)
+	}
+	if !strings.Contains(response.Body.String(), "plugin settings") || strings.Contains(response.Body.String(), "web.search") {
+		t.Fatalf("refusal = %s", response.Body)
 	}
 }
 
