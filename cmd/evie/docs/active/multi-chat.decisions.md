@@ -19,3 +19,12 @@
   request that started it, so a panic inside it is recovered there: the turn
   ends with an error, its chat closes, and the server and other chats keep
   running, as they did when each turn was its own request.
+- **2026-11-02 — Chats need no Workspace.** David kept a "General" Workspace
+  only because a chat without one was hard to start. He asked for "the option
+  to start a chat or a workspace. a chat without a workspace is just a
+  general." The sidebar now starts with New chat and lists chats with no
+  Workspace under Chats; the scope chooser is replaced by New chat and New
+  workspace (ui-chat.spec.md, plain chats amendment). "Unscoped" reads "No
+  workspace" in the app. Chats sit below the Workspaces section, whose rows
+  collapse, and are all listed rather than the latest five. Archiving General
+  is separate, and David chose to archive it as it is.

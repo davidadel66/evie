@@ -136,7 +136,7 @@ export function ArchivedSessions({ snapshot, problem, refreshing, onRefresh, bus
   if (!sessions.length) return <p className="text-muted-text border-hair rounded-lg border border-dashed px-5 py-8 text-center text-sm">No archived sessions.</p>;
   return <ul className="divide-hair divide-y">
     {sessions.map(session => {
-      const scope = session.workspaceId ? snapshot.workspaces.find(workspace => workspace.id === session.workspaceId)?.displayName ?? "Workspace" : session.projectId ? snapshot.projects.find(project => project.id === session.projectId)?.displayName ?? "Project" : "Unscoped";
+      const scope = session.workspaceId ? snapshot.workspaces.find(workspace => workspace.id === session.workspaceId)?.displayName ?? "Workspace" : session.projectId ? snapshot.projects.find(project => project.id === session.projectId)?.displayName ?? "Project" : "No workspace";
       return <li key={session.id} className="flex items-center gap-3 py-3">
         <MessageSquare size={14} className="text-faint" />
         <div className="min-w-0 flex-1"><p className="text-body truncate text-xs" title={session.title}>{session.title.trim() || "Untitled session"}</p><p className="text-muted-text mt-1 truncate text-[11px]">{scope}</p></div>

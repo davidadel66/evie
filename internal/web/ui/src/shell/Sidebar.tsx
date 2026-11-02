@@ -52,6 +52,8 @@ type Props = {
   onSystem: () => void;
   onWorkspace: (workspace: Workspace) => void;
   onNewWorkspaceChat: (workspace: Workspace) => void;
+  /** Starts a chat with no Workspace. */
+  onNewChat: () => void;
   onSession: (session: StoredSession) => void;
 };
 
@@ -74,10 +76,14 @@ export function Sidebar({
   onSystem,
   onWorkspace,
   onNewWorkspaceChat,
+  onNewChat,
   onSession,
 }: Props) {
   // An archived ("deleted") Workspace leaves the sidebar; Settings restores it.
   const activeWorkspaces = snapshot?.workspaces.filter((workspace) => workspace.state === "active") ?? [];
+  // Chats with no Workspace or filesystem project (ui-chat.spec.md, plain
+  // chats amendment, 2026-11-02).
+  const plainChats = snapshot?.sessions.filter((session) => !session.workspaceId && !session.projectId && session.status === "active") ?? [];
   const [width, setWidth] = useState(() => {
     try {
       const stored = Number(localStorage.getItem(widthKey));
@@ -152,6 +158,7 @@ export function Sidebar({
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-5">
+        <SidebarButton active={false} icon={<Plus size={15} />} label="New chat" disabled={busy} onClick={onNewChat} />
         <SidebarButton
           active={destination === "data"}
           icon={<Database size={15} />}
@@ -210,6 +217,15 @@ export function Sidebar({
             onDelete={onDeleteWorkspace}
           />
         ))}
+
+        {plainChats.length > 0 && <>
+          <div className="mt-7 mb-2 px-2">
+            <span className="text-faint text-[11px] font-medium">Chats</span>
+          </div>
+          {plainChats.map((session) => (
+            <SessionRow key={session.id} session={session} mark={marks[session.id]} activeSessionId={snapshot?.activeSession?.id} busy={busy} onSession={onSession} onArchive={onArchive} />
+          ))}
+        </>}
       </nav>
 
       <div className="border-hair flex-none border-t px-2 py-2">
@@ -293,37 +309,49 @@ function WorkspaceNav({
       </button>
       </div>
       {expanded && <div id={sessionsId}>
-      {shown.map((session) => {
-        const mark = marks[session.id];
-        const unread = mark?.unread && activeSessionId !== session.id;
-        const text = mark ? markText({...mark, unread: !!unread}) : "";
-        return <div key={session.id} className="group flex items-center rounded-[6px] hover:bg-hover focus-within:bg-hover">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onSession(session)}
-            className={`${activeSessionId === session.id ? "text-teal" : unread ? "text-ink" : "text-muted-text hover:text-body"} focus-visible:ring-teal flex min-w-0 flex-1 items-center gap-2 rounded-[6px] py-[7px] pr-1 pl-7 text-left focus-visible:ring-1 focus-visible:outline-none disabled:opacity-50`}
-          >
-            {mark?.running ? <Spinner size={12} className="text-teal animate-spin motion-reduce:animate-none" /> : <MessageSquare size={12} />}
-            <span className={`min-w-0 flex-1 truncate text-[11.5px] ${unread ? "font-semibold" : ""}`}>{session.title.trim() || "Untitled session"}</span>
-            {mark?.waiting && <span aria-hidden="true" title="Waiting for your approval" className="bg-amber-ink size-1.5 flex-none rounded-full" />}
-            {text && <span className="sr-only">, {text}</span>}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onArchive(session)}
-            aria-label={`Archive ${session.title.trim() || "Untitled session"}`}
-            title="Archive session"
-            className="text-faint hover:text-body focus-visible:ring-teal mr-1 rounded p-1.5 opacity-100 focus-visible:ring-1 focus-visible:outline-none disabled:opacity-30 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-          >
-            <Archive size={13} />
-          </button>
-        </div>;
-      })}
+      {shown.map((session) => (
+        <SessionRow key={session.id} session={session} mark={marks[session.id]} activeSessionId={activeSessionId} busy={busy} nested onSession={onSession} onArchive={onArchive} />
+      ))}
       </div>}
     </div>
   );
+}
+
+// One chat in the sidebar: nested under its Workspace, or in Chats.
+function SessionRow({session, mark, activeSessionId, busy, nested = false, onSession, onArchive}: {
+  session: StoredSession;
+  mark?: ChatMark;
+  activeSessionId?: string;
+  busy: boolean;
+  nested?: boolean;
+  onSession: (session: StoredSession) => void;
+  onArchive: (session: StoredSession) => void;
+}) {
+  const unread = mark?.unread && activeSessionId !== session.id;
+  const text = mark ? markText({...mark, unread: !!unread}) : "";
+  return <div className="group flex items-center rounded-[6px] hover:bg-hover focus-within:bg-hover">
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => onSession(session)}
+      className={`${activeSessionId === session.id ? "text-teal" : unread ? "text-ink" : "text-muted-text hover:text-body"} ${nested ? "pl-7" : "pl-3"} focus-visible:ring-teal flex min-w-0 flex-1 items-center gap-2 rounded-[6px] py-[7px] pr-1 text-left focus-visible:ring-1 focus-visible:outline-none disabled:opacity-50`}
+    >
+      {mark?.running ? <Spinner size={12} className="text-teal animate-spin motion-reduce:animate-none" /> : <MessageSquare size={12} />}
+      <span className={`min-w-0 flex-1 truncate text-[11.5px] ${unread ? "font-semibold" : ""}`}>{session.title.trim() || "Untitled session"}</span>
+      {mark?.waiting && <span aria-hidden="true" title="Waiting for your approval" className="bg-amber-ink size-1.5 flex-none rounded-full" />}
+      {text && <span className="sr-only">, {text}</span>}
+    </button>
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => onArchive(session)}
+      aria-label={`Archive ${session.title.trim() || "Untitled session"}`}
+      title="Archive session"
+      className="text-faint hover:text-body focus-visible:ring-teal mr-1 rounded p-1.5 opacity-100 focus-visible:ring-1 focus-visible:outline-none disabled:opacity-30 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+    >
+      <Archive size={13} />
+    </button>
+  </div>;
 }
 
 // A Workspace row's summary of its hidden chats: a spinner while one runs a

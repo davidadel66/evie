@@ -23,6 +23,12 @@ describe("Settings", () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Restore Practice questions"/);
   });
 
+  it("says an archived chat had no workspace", () => {
+    const html = renderToStaticMarkup(<ArchivedSessions busy={false} snapshot={{ workspaces: [], projects: [], sessions: [], archivedSessions: [{ id: "s", title: "Weekend plans", status: "closed", createdAt: "", updatedAt: "" }] }} onRestore={() => {}} />);
+    expect(html).toContain("No workspace");
+    expect(html).not.toContain("Unscoped");
+  });
+
   it("lists archived workspaces with the conversations they keep and a restore action", () => {
     const workspace = { currentRevisionId: "r", createdAt: "", updatedAt: "" };
     const snapshot = {

@@ -110,7 +110,7 @@ export function Workspaces({
         {snapshot && (snapshot.projects.length > 0 || snapshot.sessions.some((session) => !session.workspaceId && !session.projectId)) && (
           <section className="mt-10">
             <h2 className="text-body text-sm font-semibold">Other contexts</h2>
-            <p className="text-fainter mt-1 text-xs">Filesystem projects and unscoped conversations remain separate from Workspaces.</p>
+            <p className="text-fainter mt-1 text-xs">Filesystem projects and chats with no workspace remain separate from Workspaces.</p>
             <div className="border-hair mt-4 border-t">
               {snapshot.projects.map((project) => (
                 <ContextRow
@@ -121,7 +121,7 @@ export function Workspaces({
                   onNew={() => onNewProjectChat(project)}
                 />
               ))}
-              <ContextRow name="Unscoped" detail="Global and session memory only" disabled={busy} onNew={onNewUnscopedChat} />
+              <ContextRow name="No workspace" detail="Global and chat memory only" disabled={busy} onNew={onNewUnscopedChat} />
             </div>
           </section>
         )}
@@ -311,5 +311,5 @@ function shortId(value: string) {
 function sessionScope(session: StoredSession, snapshot: ContextSessionSnapshot) {
   if (session.workspaceId) return snapshot.workspaces.find((workspace) => workspace.id === session.workspaceId)?.displayName ?? "Workspace";
   if (session.projectId) return snapshot.projects.find((project) => project.id === session.projectId)?.displayName ?? "Project";
-  return "Unscoped";
+  return "No workspace";
 }

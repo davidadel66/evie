@@ -5,7 +5,7 @@ import type { StoredSession, Workspace } from "../api/contextSessions";
 
 const workspace: Workspace = {id: "one", displayName: "Cairo", state: "active", currentRevisionId: "revision-2", createdAt: "", updatedAt: ""};
 function render(workspaces: Workspace[], busy = false, collapsed = false, waiting: Record<string, number> = {}, onDeleteWorkspace?: (workspace: Workspace) => void) {
-  return renderToStaticMarkup(<Sidebar snapshot={{workspaces, projects: [], sessions: [], archivedSessions: []}} destination="chat" busy={busy} collapsed={collapsed} waiting={waiting} mobileOpen={false} onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onDeleteWorkspace={onDeleteWorkspace} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+  return renderToStaticMarkup(<Sidebar snapshot={{workspaces, projects: [], sessions: [], archivedSessions: []}} destination="chat" busy={busy} collapsed={collapsed} waiting={waiting} mobileOpen={false} onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onDeleteWorkspace={onDeleteWorkspace} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onNewChat={() => {}} onSession={() => {}} />);
 }
 
 describe("workspace session shortcuts", () => {
@@ -16,7 +16,6 @@ describe("workspace session shortcuts", () => {
     expect(html).toContain('aria-label="Create workspace"');
     expect(html).toContain("Settings");
     expect(html).toContain("Data");
-    expect(html).not.toContain("New chat");
     expect(html.match(/>Workspaces</g)).toHaveLength(1);
     expect(html).not.toContain("No scope selected");
     expect(html).not.toContain("Choose a workspace to begin");
@@ -62,7 +61,7 @@ describe("workspace session shortcuts", () => {
 
 describe("destination views", () => {
   const renderAt = (destination: "chat" | "system") => renderToStaticMarkup(<Sidebar snapshot={{workspaces: [workspace], projects: [], sessions: [], archivedSessions: []}} destination={destination} busy={false} mobileOpen={false}
-    onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+    onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onNewChat={() => {}} onSession={() => {}} />);
 
   it("lists System directly under Data, above the Workspaces", () => {
     const html = renderAt("chat");
@@ -85,7 +84,7 @@ describe("collapsible workspaces", () => {
   const chat = (id: string, workspaceId: string, title: string): StoredSession => ({id, workspaceId, title, status: "active", createdAt: "", updatedAt: ""});
   const sessions = [chat("a", "one", "Cairo menu"), chat("b", "two", "Personal budget")];
   const renderWithChats = (waiting: Record<string, number> = {}) => renderToStaticMarkup(<Sidebar snapshot={{workspaces: [workspace, personal], projects: [], sessions, archivedSessions: []}} destination="chat" busy={false} waiting={waiting} mobileOpen={false}
-    onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+    onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onNewChat={() => {}} onSession={() => {}} />);
   afterEach(() => { vi.unstubAllGlobals(); });
 
   it("starts every workspace expanded with its chats under a labelled toggle", () => {
@@ -112,5 +111,44 @@ describe("collapsible workspaces", () => {
     expect(renderWithChats()).toContain("Cairo menu");
     vi.stubGlobal("localStorage", { getItem: () => "{not json", setItem: () => {} });
     expect(renderWithChats()).toContain("Cairo menu");
+  });
+});
+
+// ui-chat.spec.md, plain chats amendment (2026-11-02): a chat needs no
+// Workspace, and chats without one are listed apart from Workspace chats.
+describe("chats without a workspace", () => {
+  const chat = (id: string, title: string, scope: Partial<StoredSession> = {}): StoredSession => ({id, title, status: "active", createdAt: "", updatedAt: "", ...scope});
+  const renderChats = (sessions: StoredSession[], busy = false) => renderToStaticMarkup(<Sidebar snapshot={{workspaces: [workspace], projects: [], sessions, archivedSessions: []}} destination="chat" busy={busy} mobileOpen={false}
+    onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onNewChat={() => {}} onSession={() => {}} />);
+
+  it("starts a chat with no workspace from the top of the navigation", () => {
+    const html = renderChats([]);
+    const newChat = html.indexOf(">New chat<");
+    expect(newChat).toBeGreaterThan(-1);
+    expect(newChat).toBeLessThan(html.indexOf(">Data<"));
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>)[\s\S])*>New chat</);
+    expect(renderChats([], true)).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>)[\s\S])*>New chat</);
+  });
+
+  it("lists chats without a workspace under Chats, below the Workspaces", () => {
+    const html = renderChats([
+      chat("w", "Cairo menu", {workspaceId: "one"}),
+      chat("p", "Weekend plans"),
+      chat("q", "", {}),
+      chat("f", "Repo notes", {projectId: "project-1"}),
+      chat("c", "Closed chat", {status: "closed"}),
+    ]);
+    const chats = html.indexOf(">Chats<");
+    expect(chats).toBeGreaterThan(html.indexOf(">Workspaces<"));
+    expect(html.indexOf("Cairo menu")).toBeLessThan(chats);
+    expect(html.indexOf("Weekend plans")).toBeGreaterThan(chats);
+    expect(html.indexOf("Untitled session")).toBeGreaterThan(chats);
+    expect(html).toContain('aria-label="Archive Weekend plans"');
+    expect(html).not.toContain("Repo notes");
+    expect(html).not.toContain("Closed chat");
+  });
+
+  it("leaves Chats out until there is one", () => {
+    expect(renderChats([chat("w", "Cairo menu", {workspaceId: "one"})])).not.toContain(">Chats<");
   });
 });
