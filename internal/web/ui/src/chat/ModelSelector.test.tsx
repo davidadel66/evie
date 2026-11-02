@@ -19,6 +19,14 @@ describe("chat model picker", () => {
     expect(html).not.toContain("once the current reply finishes");
   });
 
+  it("names the current model above the list", () => {
+    const html = renderToStaticMarkup(<ModelPicker {...base} value="openai/gpt-test" />);
+    expect(html).toContain("Current:");
+    expect(html.indexOf("GPT Test")).toBeLessThan(html.indexOf('aria-label="Anthropic"'));
+    expect(renderToStaticMarkup(<ModelPicker {...base} value="deepseek/custom" />)).toMatch(/Current:.*deepseek\/custom.*aria-label="Anthropic"/);
+    expect(renderToStaticMarkup(<ModelPicker {...base} />)).not.toContain("Current:");
+  });
+
   it("explains and disables switching during a turn", () => {
     const html = renderToStaticMarkup(<ModelPicker {...base} value="openai/gpt-test" disabled />);
     expect(html).toContain("The model can change once the current reply finishes.");

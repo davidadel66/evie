@@ -42,10 +42,19 @@ export function ModelPicker({ models, value, disabled, loading, onChange, onClos
   const search = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const returnTo = useRef<Element | null>(null);
+  const scrolled = useRef(false);
   useEffect(() => {
     returnTo.current = document.activeElement;
     search.current?.focus();
   }, []);
+  // The current model sits far down a long list, so the list opens on it,
+  // once: the catalog may still be loading, and later scrolling is David's.
+  useEffect(() => {
+    const row = list.current?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (scrolled.current || !row || !list.current) return;
+    scrolled.current = true;
+    list.current.scrollTop = row.offsetTop - (list.current.clientHeight - row.offsetHeight) / 2;
+  }, [models, value]);
   useEffect(() => {
     const dismiss = (event: PointerEvent) => {
       if (!(event.target instanceof Node) || !root.current?.contains(event.target)) onClose();
@@ -57,6 +66,7 @@ export function ModelPicker({ models, value, disabled, loading, onChange, onClos
     onClose();
     if (returnTo.current instanceof HTMLElement) returnTo.current.focus();
   };
+  const current = value ? models.find(model => model.id === value)?.name ?? value : undefined;
   const terms = query.trim().toLowerCase();
   const groups = groupModels(models, value)
     .map(group => ({...group, models: group.models.filter(model => `${group.provider} ${model.name} ${model.id}`.toLowerCase().includes(terms))}))
@@ -78,8 +88,9 @@ export function ModelPicker({ models, value, disabled, loading, onChange, onClos
     <input ref={search} value={query} onChange={event => setQuery(event.target.value)} aria-label="Search models" placeholder="Search models"
       onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); options()[0]?.click(); } }}
       className="border-hair text-ink placeholder:text-fainter border-b bg-transparent px-3 py-2.5 text-[13px] outline-none" />
+    {current && <p className="border-hair text-muted-text truncate border-b px-3 py-2 text-xs" title={value}>Current: <span className="text-teal">{current}</span></p>}
     {disabled && <p className="text-amber-ink px-3 pt-2 text-xs">The model can change once the current reply finishes.</p>}
-    <div ref={list} className="max-h-[300px] overflow-y-auto p-1.5">
+    <div ref={list} className="relative max-h-[300px] overflow-y-auto p-1.5">
       {groups.map(group => <div key={group.provider} role="group" aria-label={group.provider}>
         <div className="text-faint px-2 pt-2 pb-1 text-[11px] font-medium">{group.provider}</div>
         {group.models.map(model => <button key={model.id} type="button" data-model disabled={disabled} title={model.id}
