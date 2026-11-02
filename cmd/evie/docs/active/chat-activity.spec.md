@@ -492,3 +492,12 @@ unfinished sentences), the live header for each title source with its clock
 and shimmer, the completed summary, and thought rows with and without more
 text. The two-second hold and delegate polling run in effects, which the UI
 suite (no DOM environment) does not exercise.
+
+## Inspector tab naming amendment — November 2, 2026
+
+A tool inspection's tab in the shared Inspector is titled by the action's
+label and subject (`Searched web · Utku Pamuksuz`), a memory inspection's by
+`Memory`, and a delegate's by `Subagents`. The pane no longer repeats the
+title in a line under the tabs. The chat's rows, their Inspect actions and the
+inspected content are unchanged. See the one-strip Inspector amendment in
+[ui-chat.spec.md](ui-chat.spec.md).

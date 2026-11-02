@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { ChatTextSize } from "./textSize";
 
 const options: { value: ChatTextSize; label: string; pixels: number }[] = [
-  { value: "compact", label: "Compact", pixels: 13 },
-  { value: "default", label: "Default", pixels: 15 },
-  { value: "large", label: "Large", pixels: 17 },
+  { value: "compact", label: "Compact", pixels: 14 },
+  { value: "default", label: "Default", pixels: 16 },
+  { value: "large", label: "Large", pixels: 18 },
 ];
 
 type Props = {

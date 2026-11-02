@@ -1,5 +1,6 @@
 import type { InspectorTarget } from "./Panel";
 import type { SemanticObjectInspection } from "../api/memory";
+import { toolLabel } from "../chat/activityModel";
 
 export function targetTitle(target: InspectorTarget) {
   if (target.kind === "repository-instructions") return target.turnId ? "Turn instructions" : "Repository instructions";
@@ -26,4 +27,16 @@ export function memoryTitle(detail: SemanticObjectInspection) {
 export function claimObject(claim: NonNullable<SemanticObjectInspection["claim"]>) {
   if (claim.object.entity_id) return claim.object.entity_id;
   return claim.object.literal?.value ?? "Unknown";
+}
+
+/** A tab's name: what was inspected, not the kind of inspection. Three tabs
+ *  all called "Tool activity" told David nothing (one-strip inspector
+ *  amendment, 2026-11-02). */
+export function tabTitle(target: InspectorTarget) {
+  if (target.kind === "tool") {
+    const {label, subject} = toolLabel(target.tool);
+    return subject ? `${label} · ${subject}` : label;
+  }
+  if (target.kind === "memory-evidence") return "Memory";
+  return targetTitle(target);
 }

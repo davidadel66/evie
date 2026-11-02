@@ -4,11 +4,20 @@
 
 import { Markdown } from "./Markdown";
 import type { DiscardReason } from "../store/events";
+import { clockTime } from "../ui/time";
 
-export function UserMessage({ text }: { text: string }) {
+/** A user turn: the bubble, with the time it was sent beneath when known.
+ *  The bubble's text is body color, not brighter than Evie's answer, so the
+ *  question does not outrank the reply. A turn after the first sits well
+ *  clear of the answer above it, which is where a long session lost its
+ *  landmarks (ui-chat.spec.md readability amendment). */
+export function UserMessage({ text, sentAt, first = true }: { text: string; sentAt?: number; first?: boolean }) {
   return (
-    <div className="evie-user-message bg-bubble border-hair-bubble text-[#d7dcd9] max-w-[62%] flex-none self-end rounded-[10px_10px_3px_10px] border px-[14px] py-[10px] text-[length:var(--chat-text-size)] leading-[1.55] whitespace-pre-wrap">
-      {text}
+    <div className={`${first ? "" : "mt-9 "}flex flex-none flex-col items-end gap-[5px]`}>
+      <div className="evie-user-message bg-bubble border-hair-bubble text-body max-w-[76%] rounded-[12px_12px_4px_12px] border px-[14px] py-[10px] text-[length:var(--chat-text-size)] leading-[1.55] whitespace-pre-wrap">
+        {text}
+      </div>
+      {sentAt !== undefined && <span className="text-ghost pr-1 text-[11px] tabular-nums">{clockTime(sentAt)}</span>}
     </div>
   );
 }

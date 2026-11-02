@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
-import { closePaneTab, inspectionKey, openPaneTab, refreshInspection, type PaneTab } from "./paneTabs";
+import { closePaneTab, inspectionKey, openPaneTab, paneViews, refreshInspection, type PaneTab } from "./paneTabs";
+import { tabTitle } from "./inspectorTitle";
 import type { ToolItem } from "../chat/activityModel";
 import { InspectorPane } from "./InspectorPane";
 
@@ -58,14 +59,25 @@ describe("shared inspector tabs", () => {
  it("exposes the shared pane and folder setup without a second inspector",()=>{
   const html=renderToStaticMarkup(createElement(InspectorPane,{visible:true,focused:false,onClose:()=>{},onManageFolder:()=>{}}));
   expect(html.match(/aria-label="Inspector"/g)).toHaveLength(1);
-  expect(html).toContain("Open files");expect(html).toContain("Open Workspaces");
+  expect(html).toContain('aria-label="Open a view"');expect(html).toContain("Open Workspaces");
   expect(html).not.toContain("Open working tree");expect(html).not.toContain("Open terminal");
+  expect(paneViews(false).map(view=>view.label)).toEqual(["Files"]);
  });
  it("labels every folder view once a folder is attached",()=>{
   const workspace={id:"w",displayName:"Evie",state:"active",currentRevisionId:"r",createdAt:"",updatedAt:"",folder:{path:"/code/evie",revision:1}} as const;
   const html=renderToStaticMarkup(createElement(InspectorPane,{visible:true,focused:false,workspace,onClose:()=>{},onManageFolder:()=>{}}));
-  for(const label of ["Files","Working tree","Terminal"])expect(html).toMatch(new RegExp(`aria-label="Open ${label.toLowerCase()}"[^>]*>.*?${label}</button>`));
-  expect(html).toMatch(/aria-label="Open files" aria-pressed="true"/);
-  expect(html).toContain(">evie</span>");
+  // One strip: the Files tab is open and selected, the plus offers the other
+  // views, and no second row names them or repeats the folder.
+  expect(html).toMatch(/role="tab" aria-selected="true"[^>]*>.*?Files<\/span>/);
+  expect(html.match(/role="tablist"/g)).toHaveLength(1);
+  expect(html).not.toContain('role="group" aria-label="Inspector views"');
+  expect(html).not.toContain(">evie</span>");
+  expect(paneViews(true).map(view=>view.action)).toEqual(["Open files","Open working tree","Open terminal"]);
+ });
+ it("names a tool tab by its action and subject, not its kind",()=>{
+  const tool={kind:"tool",key:"t1",id:"t1",name:"web_search",args:JSON.stringify({query:"Utku Pamuksuz"}),result:"ok",startedAt:0} as ToolItem;
+  expect(tabTitle({kind:"tool",tool})).toBe("Searched web · Utku Pamuksuz");
+  expect(tabTitle({kind:"memory-evidence",sessionId:"s",snapshotId:"m"})).toBe("Memory");
+  expect(tabTitle({kind:"subagents",sessionId:"s",tool})).toBe("Subagents");
  });
 });

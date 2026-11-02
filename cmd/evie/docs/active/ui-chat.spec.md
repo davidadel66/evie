@@ -508,3 +508,47 @@ chooser; a Workspace's chats start from its row, and a project's from the
 Workspaces page. Wherever a chat's
 scope is named, a chat with no Workspace reads **No workspace**, not
 "Unscoped". No endpoints, scope rules or stored data change.
+
+**Readability amendment (2026-11-02):** David found long answers hard to read.
+Playwright screenshots of the live app showed four causes: the 768px column at
+15px ran about 100 characters a line; an answer ran straight into the next
+user bubble with only a paragraph's gap; every bold phrase rendered bright
+white so the eye jumped between fragments; and the user bubble's text was
+brighter than Evie's reply. A Claude Design canvas prototype was approved
+before any code changed. This supersedes the centered column amendment's
+`768px` and the polish amendment's `13px / 15px / 17px` sizes:
+
+- The transcript and composer share a `680px` column. Chat text sizes are
+  `14px` / `16px` default / `18px`; the default gives about 80 characters a
+  line. The `Aa` control and its persisted names are unchanged.
+- A user turn after the first sits `36px` clear of the answer above it, and
+  the time its turn started shows beneath the bubble in the browser's locale
+  when the turn is known. The bubble's text is the body color and it may span
+  `76%` of the column.
+- Markdown emphasis keeps the body color at weight 600; headings keep the
+  primary text color. Inline code is slightly tighter.
+
+Teal and the IBM Plex faces stay: David reviewed serif-display and warm
+palette directions on the same canvas and declined them.
+
+**One-strip Inspector amendment (2026-11-02):** David found the Inspector's
+header wasteful: a row of Files, Changes and Terminal buttons, a second row of
+tabs, and a third line repeating the active tab's name. This supersedes the
+header described in the Inspector and sidebar amendment and the per-tab title
+line:
+
+- The Inspector has one 44px strip. It holds the open tabs, then a `+`
+  button, then the focus and close controls. Nothing else sits above or below
+  it; each view's own content starts directly under the strip.
+- The `+` opens a menu naming the folder views: Files always; Working tree
+  and Terminal only once a folder is attached. Choosing one opens or selects
+  that tab. Escape closes the menu and returns focus to the `+`; it does not
+  close the Inspector. Arrow keys move between the menu's items.
+- Tabs name what they hold, not the kind of inspection: a tool tab is its
+  action and subject (`Searched web · Utku Pamuksuz`), a memory inspection is
+  `Memory`, a file its name, and the rest keep their titles. The selected tab
+  carries a teal underline. Keyboard behavior between tabs is unchanged.
+- The Inspector uses the app's own surfaces: the `inspector` background and
+  `hair` borders in place of the neutral editor gray, so the pane reads as
+  part of the workbench. File contents keep the editor surface.
+- The folder name no longer sits in the header; the Files view shows it.

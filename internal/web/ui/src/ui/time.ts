@@ -18,3 +18,11 @@ export function duration(ms: number): string {
   const hours = Math.floor(minutes / 60);
   return minutes % 60 === 0 ? `${hours}h` : `${hours}h ${minutes % 60}m`;
 }
+
+/** "2:14 PM" for today, "Oct 6, 2:14 PM" for any other day, in the browser's locale. */
+export function clockTime(at: number, now: Date = new Date()): string {
+  const then = new Date(at);
+  const time = then.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const sameDay = then.getFullYear() === now.getFullYear() && then.getMonth() === now.getMonth() && then.getDate() === now.getDate();
+  return sameDay ? time : `${then.toLocaleDateString([], { month: "short", day: "numeric" })}, ${time}`;
+}

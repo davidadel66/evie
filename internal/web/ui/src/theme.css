@@ -114,14 +114,17 @@ body {
   font-size: 13px;
 }
 
+/* Readability amendment (ui-chat.spec.md, 2026-11-02): the column is 680px, so
+   16px gives about 80 characters a line instead of the 100 the old 768px/15px
+   pairing produced. */
 [data-chat-size="compact"] {
-  --chat-text-size: 13px;
+  --chat-text-size: 14px;
 }
 [data-chat-size="default"] {
-  --chat-text-size: 15px;
+  --chat-text-size: 16px;
 }
 [data-chat-size="large"] {
-  --chat-text-size: 17px;
+  --chat-text-size: 18px;
 }
 
 [data-chat-font="default"] { --chat-font: var(--font-sans); }
@@ -135,7 +138,7 @@ body {
 .evie-markdown {
   color: var(--color-body);
   font-size: var(--chat-text-size);
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
 /* Progress text folded into the activity trace reads as a log, not an answer.
@@ -173,8 +176,11 @@ body {
   font-size: 1em;
 }
 
+/* Emphasis keeps the body color: bright white on every bold phrase made the
+   eye jump between fragments instead of reading lines. Headings stay ink. */
 .evie-markdown [data-streamdown="strong"] {
-  color: var(--color-ink);
+  color: var(--color-body);
+  font-weight: 600;
 }
 
 .evie-markdown [data-streamdown="link"] {
@@ -214,8 +220,8 @@ body {
   border: 1px solid var(--color-hair-strong);
   border-radius: 4px;
   color: var(--color-amber-ink);
-  font-size: 0.9em;
-  padding: 0.08em 0.38em;
+  font-size: 0.88em;
+  padding: 0.05em 0.3em;
 }
 
 .evie-markdown [data-streamdown="code-block"] {

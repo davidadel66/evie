@@ -53,7 +53,7 @@ export function Composer({ value, onChange, onSend, onCommand, streaming, disabl
 
   return (
     <div className="flex-none px-4 pt-3 pb-4 sm:px-7">
-      <div className="mx-auto w-full max-w-[768px]">
+      <div className="mx-auto w-full max-w-[680px]">
         <div className="relative">
           {overlay}
           {menuOpen && (
