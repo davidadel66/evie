@@ -307,3 +307,36 @@ textarea {
 .activity-summary { list-style: none; }
 .activity-summary::-webkit-details-marker { display: none; }
 .activity-summary:focus-visible { outline: 2px solid var(--color-teal); outline-offset: 4px; border-radius: 2px; }
+
+/* The live activity line: a soft light sweeps across the title while Evie
+   works, and each new title fades in. Both stop when motion is reduced. */
+.evie-shimmer {
+  color: transparent;
+  background: linear-gradient(90deg, var(--color-muted-text) 0%, var(--color-muted-text) 40%, var(--color-body) 50%, var(--color-muted-text) 60%, var(--color-muted-text) 100%) 0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: evie-shimmer 2.4s linear infinite;
+}
+.evie-shimmer.evie-fade-in {
+  animation: evie-fade-in 240ms ease-out, evie-shimmer 2.4s linear infinite;
+}
+.evie-fade-in {
+  animation: evie-fade-in 240ms ease-out;
+}
+@keyframes evie-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+@keyframes evie-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .evie-fade-in, .evie-shimmer, .evie-shimmer.evie-fade-in {
+    animation: none;
+  }
+  .evie-shimmer {
+    background: none;
+    color: inherit;
+  }
+}

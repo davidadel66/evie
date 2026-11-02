@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toolFilePath } from "../artifacts/fileInspection";
 import { readMemoryToolResult } from "../artifacts/memoryToolResult";
 import type { Item } from "../store/reducer";
@@ -8,7 +8,7 @@ import { AssistantMessage, DiscardWarning } from "./Message";
 import { MemoryActivity, type MemoryOpener } from "./MemoryActivity";
 import { startsSubagents, subagentProgressLabel } from "../subagents/subagentView";
 import { useSubagentList, useSubagentSession } from "../subagents/useSubagents";
-import { awaitingApproval, currentThought, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
+import { actionSummary, awaitingApproval, describeThought, mayBeProgress, thoughtTitle, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
 
 type FileOpener = (key: string, trigger: HTMLButtonElement) => void;
 type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener };
@@ -31,20 +31,29 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
   const problems = problemSummary(group.activity);
   const elapsed = elapsedLabel(group.turn?.startedAt, group.active ? now : group.turn?.finishedAt);
   const complete = group.turn?.status === "complete" || (!group.turn && group.answer.length > 0);
-  const label = pending ? "Waiting for approval" : group.active ? "Working…" : complete ? "Worked" : "Work incomplete";
+  const summary = complete && !pending ? actionSummary(group.activity) : null;
+  // "Searched the web, read a page · 1m 12s", or "Worked for 4s" with no action.
+  const label = pending ? "Waiting for approval" : complete ? summary ?? "Worked" : "Work incomplete";
+  const workedFor = complete && !pending && !summary;
+  const live = useLiveTitle(group.active ? group.activity : undefined, pending, !open);
   const show = group.active || group.activity.length > 0 || !!group.turn;
   if (!show) return null;
   return (
     <section aria-label="Turn activity" className="min-w-0 max-w-[min(900px,100%)] flex-none self-stretch">
-      <button type="button" aria-expanded={open} aria-controls={bodyID} onClick={() => setManual(!open)}
-        title="Elapsed wall time for this turn, including tools, provider waits and approvals."
+      <button type="button" aria-expanded={open} aria-controls={bodyID} onClick={() => setManual(!open)} title={elapsedHint}
         className="text-muted-text hover:text-body focus-visible:outline-teal flex max-w-full cursor-pointer items-center gap-2 rounded-sm py-1 text-left text-[13px] focus-visible:outline-2 focus-visible:outline-offset-4">
-        <span>{label}{elapsed && `${complete && !pending ? " for" : " ·"} ${elapsed}`}</span>
-        <span className={open ? "rotate-180" : ""}><ChevronDown size={13} /></span>
+        {group.active && !pending ? <span title={live ?? undefined} className="min-w-0 truncate">
+            <span key={live} className="evie-shimmer evie-fade-in">{live}</span>
+          </span>
+          : <span className="min-w-0 truncate">{label}{elapsed && workedFor && ` for ${elapsed}`}</span>}
+        {elapsed && !workedFor && <span className="shrink-0 tabular-nums">· {elapsed}</span>}
+        <span className={`shrink-0 ${open ? "rotate-180" : ""}`}><ChevronDown size={13} /></span>
       </button>
-      <div id={bodyID} hidden={!open} className="border-hair mt-3 space-y-4 border-t pt-4">
+      {/* Beside the button, not in it: a button's contents aren't announced. */}
+      {group.active && !pending && <span role="status" className="sr-only">{live}</span>}
+      <div id={bodyID} hidden={!open} className="border-hair-strong divide-hair mt-2 divide-y rounded-[10px] border *:px-4 *:py-2">
         {open && <ActivityItems items={visibleActivity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />}
-        {open && group.activity.length === 0 && <p className="text-muted-text text-xs">{group.active ? "Waiting for a response…" : "No additional activity to show."}</p>}
+        {open && visibleActivity.length === 0 && <p className="text-muted-text text-xs">{group.active ? "Waiting for a response…" : "No additional activity to show."}</p>}
       </div>
       {!open && <div className="space-y-3">
         <ActivityItems items={collapsedActivity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />
@@ -52,42 +61,71 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
           className="activity-summary text-amber-ink focus-visible:outline-teal flex cursor-pointer items-center gap-3 rounded-sm py-1 text-left text-[13px] focus-visible:outline-2 focus-visible:outline-offset-2">
           <span>{problems}</span><ChevronDown size={12} />
         </button>}
-        {group.active && !pending && <LiveStatus activity={group.activity} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} />}
+        {group.active && !pending && <StreamingText activity={group.activity} />}
       </div>}
       {!group.active && !complete && !group.turn?.finishedAt && <p className="text-amber-ink mt-2 text-xs">Completion wasn’t recorded here. Reload to check the saved conversation.</p>}
     </section>
   );
 }
 
-// One line while working: text as it streams; else, when reasoning is the
-// latest thing, its current sentence; else the latest requested tool; else
-// Thinking, which is all a model that hides its reasoning ever shows here.
-function LiveStatus({activity, onAnswer, onOpenFile, onOpenTool}: {activity: Item[]; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenTool?: FileOpener}) {
-  const last = activity[activity.length - 1];
-  if (last?.kind === "assistant" && last.streaming && !last.discarded) return <AssistantMessage text={last.text} streaming />;
-  const thought = last?.kind === "reasoning" ? currentThought(last.text, last.streaming) : null;
-  const tool = [...activity].reverse().find((item): item is ToolItem => item.kind === "tool" && item.result === undefined);
-  return <div role="status">
-    {thought ? <ThoughtLine thought={thought} />
-      : tool ? <ToolRow key={tool.key} tool={tool} active onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} />
-      : <p className="text-muted-text py-1 text-[13px]">Thinking…</p>}
-  </div>;
+const elapsedHint = "Elapsed wall time for this turn, including tools, provider waits and approvals.";
+
+// While working the header is the live line. Its title: the approval wait;
+// else, when reasoning is the latest thing, that thought's title; else the
+// latest requested tool; else a progress message's title (Writing while
+// longer text streams below); else Thinking, which is all a model that
+// hides its reasoning ever shows here. Undefined activity means the turn
+// isn't working, and gives null.
+function useLiveTitle(activity: Item[] | undefined, pending: boolean, collapsed: boolean): string | null {
+  const items = activity ?? [];
+  const last = items[items.length - 1];
+  const tool = [...items].reverse().find((item): item is ToolItem => item.kind === "tool" && item.result === undefined);
+  // A delegate waits on its children, so it reports how far they got. The
+  // expanded trace's row reports them itself, so only one of them polls.
+  const waiting = !!tool && startsSubagents(tool) && collapsed;
+  const {list: children} = useSubagentList(useSubagentSession(), waiting ? tool : undefined, waiting);
+  // The clock re-renders every second; the text only changes per delta.
+  const lastTitle = useMemo(() => {
+    if (last?.kind === "reasoning") return thoughtTitle(last.text, last.streaming);
+    if (last?.kind === "assistant" && !last.discarded && mayBeProgress(last.text)) return thoughtTitle(last.text, last.streaming);
+    return null;
+  }, [last]);
+  let title = "Thinking…";
+  if (last?.kind === "reasoning" && lastTitle) title = lastTitle;
+  else if (tool) {
+    const {label, subject} = toolLabel(tool);
+    const progress = (waiting && children ? subagentProgressLabel(children) : null) ?? label;
+    title = subject ? `${progress} · ${subject}` : progress;
+  } else if (last?.kind === "assistant" && !last.discarded) title = lastTitle ?? (last.streaming ? "Writing…" : "Thinking…");
+  // The approval wait pauses the line, so neither it nor the title before
+  // it lingers once the approval is answered.
+  const held = useHeld(activity && !pending ? title : null);
+  return activity && !pending ? held ?? title : null;
 }
 
-const thoughtHoldMs = 2000;
+function StreamingText({activity}: {activity: Item[]}) {
+  const last = activity[activity.length - 1];
+  if (last?.kind !== "assistant" || !last.streaming || last.discarded || mayBeProgress(last.text)) return null;
+  return <AssistantMessage text={last.text} streaming />;
+}
 
-// Reasoning completes sentences faster than they can be read, so each one
-// stays up for a moment before the line moves to the newest.
-function ThoughtLine({thought}: {thought: string}) {
-  const [shown, setShown] = useState(thought);
+const titleHoldMs = 2000;
+
+// Reasoning completes sentences faster than they can be read, so each title
+// stays up for a moment before the line moves to the newest. Null pauses
+// the line; the first title after a pause, or after a long quiet spell,
+// shows at once.
+function useHeld(value: string | null): string | null {
+  const [shown, setShown] = useState(value);
   const since = useRef(0);
   useEffect(() => {
     if (since.current === 0) since.current = Date.now();
-    if (thought === shown) return;
-    const timer = window.setTimeout(() => { since.current = Date.now(); setShown(thought); }, Math.max(0, since.current + thoughtHoldMs - Date.now()));
+    if (value === shown) return;
+    const wait = value === null || shown === null ? 0 : Math.max(0, since.current + titleHoldMs - Date.now());
+    const timer = window.setTimeout(() => { since.current = Date.now(); setShown(value); }, wait);
     return () => window.clearTimeout(timer);
-  }, [thought, shown]);
-  return <p title={shown} className="text-muted-text truncate py-1 text-[13px]">{shown}</p>;
+  }, [value, shown]);
+  return value === null ? null : shown;
 }
 
 export function ActivityItems({items, active, onAnswer, onOpenFile, onOpenTool, onOpenMemory}: {items: Item[]; active: boolean; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener}) {
@@ -107,14 +145,26 @@ export function ActivityItems({items, active, onAnswer, onOpenFile, onOpenTool, 
       case "memory": return <MemoryActivity key={row.key} activity={row.memory} onOpen={onOpenMemory} />;
       case "assistant": return <AssistantMessage key={row.key} text={row.text} streaming={active && row.streaming} discarded={row.discarded} quiet={!(active && row.streaming)} />;
       case "notice": return <DiscardWarning key={row.key} message={row.text} />;
-      case "reasoning": return <details key={row.key} className="text-muted-text text-[13px]">
-        <summary className="activity-summary flex cursor-pointer items-center gap-3 py-1"><span className="min-w-0 flex-1 truncate">{row.text.replace(/\s+/g, " ").trim()}</span><span className="shrink-0 text-xs">Reasoning summary</span><ChevronDown size={12}/></summary>
-        <p className="border-hair mt-2 max-h-80 overflow-auto border-l pl-4 leading-relaxed whitespace-pre-wrap break-words">{row.text}</p>
-      </details>;
+      case "reasoning": return <ThoughtRow key={row.key} text={row.text} streaming={active && row.streaming} />;
       case "tool": return <ToolRow key={row.key} tool={row} active={active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} />;
       default: return null;
     }
   });
+}
+
+// A thought reads as its title; only a thought with more to say than its
+// title opens, to its full text.
+function ThoughtRow({text, streaming}: {text: string; streaming: boolean}) {
+  const thought = useMemo(() => describeThought(text, streaming), [text, streaming]);
+  const title = thought.title ?? "Thinking…";
+  if (!thought.more) return <p className="text-muted-text py-1 text-[13px]">{title}</p>;
+  return <details className="group text-muted-text text-[13px]">
+    <summary className="activity-summary hover:text-body flex cursor-pointer items-center gap-2 py-1">
+      <span className="min-w-0 truncate" title={title}>{title}</span>
+      <span className="shrink-0 transition-transform duration-150 group-open:rotate-180"><ChevronDown size={12} /></span>
+    </summary>
+    <p className="mt-1 mb-1 max-h-80 overflow-auto leading-relaxed whitespace-pre-wrap break-words">{text}</p>
+  </details>;
 }
 
 // Keep an inspected action visible when a single action becomes a batch.
