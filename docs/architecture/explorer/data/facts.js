@@ -16218,6 +16218,40 @@ evieExplorer.register(
   ],
   "history": [
     {
+      "date": "2026-11-02",
+      "title": "Model picker opens on the current model",
+      "branch": "fix/model-picker-current",
+      "merge": "f654bbf",
+      "touches": [
+        "internal/web/ui",
+        "cmd/evie"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/chat-model-selection.spec.md"
+      ],
+      "text": [
+        "`/model` marked the current model, but far down a list of about 250 models sorted by provider, so David couldn't tell which model a chat used. The picker now names it above the list, such as \"Current: DeepSeek V4.1 Flash\", opens scrolled to its row once the catalog fills, and arrow-down from the search field starts there."
+      ]
+    },
+    {
+      "date": "2026-11-02",
+      "title": "One live thinking line with titled thoughts",
+      "branch": "feat/thinking-line",
+      "merge": "46a8c45",
+      "touches": [
+        "internal/web/ui",
+        "cmd/evie"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/chat-activity.spec.md",
+        "doc:cmd/evie/docs/active/chat-activity.decisions.md"
+      ],
+      "text": [
+        "While Evie works, the activity header is now the live line, after David's Claude.ai screenshot: the current title with the clock running, a soft shimmer, and a fade between titles held two seconds each. A thought's title is its heading, else its latest intent rewritten as an action (\"Let me check the fees.\" becomes \"Checking the fees\"), else its latest sentence. A short streamed progress message shows as the line's title instead of flashing below it. A finished turn names its successful actions before its time, such as \"Searched the web, read a page · 1m 12s\", and the expanded trace is a bordered card of titled thoughts that open to their text.",
+        "This is stage 1, screen only. Reasoning is still not saved, so thought rows disappear on reload; saving it (stage 2) and a small title-model call (stage 3) are agreed and deferred."
+      ]
+    },
+    {
       "date": "2026-11-01",
       "title": "Test suite passes on CI's Linux runners",
       "branch": "fix/ci-linux-failures",
