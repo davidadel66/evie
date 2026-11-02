@@ -26,6 +26,7 @@ import { workspaceTabsAPI, type CustomTab } from "../api/workspaceTabs";
 import { WorkspaceTabFrame } from "./WorkspaceTabFrame";
 import { BuiltinTab } from "./BuiltinTab";
 import { WorkspaceTabsSettings } from "./WorkspaceTabsSettings";
+import { isPlainChat, sessionScopeLabel } from "../shell/plainChats";
 
 type DirectoryProps = {
   snapshot?: ContextSessionSnapshot;
@@ -107,7 +108,7 @@ export function Workspaces({
           })}
         </section>
 
-        {snapshot && (snapshot.projects.length > 0 || snapshot.sessions.some((session) => !session.workspaceId && !session.projectId)) && (
+        {snapshot && (snapshot.projects.length > 0 || snapshot.sessions.some(isPlainChat)) && (
           <section className="mt-10">
             <h2 className="text-body text-sm font-semibold">Other contexts</h2>
             <p className="text-fainter mt-1 text-xs">Filesystem projects and chats with no workspace remain separate from Workspaces.</p>
@@ -140,7 +141,7 @@ export function Workspaces({
                 >
                   <MessageSquare size={14} />
                   <span className="min-w-0 flex-1 truncate text-xs">{session.title.trim() || "Untitled session"}</span>
-                  <span className="text-ghost text-[10px]">{sessionScope(session, snapshot)}</span>
+                  <span className="text-ghost text-[10px]">{sessionScopeLabel(session, snapshot)}</span>
                 </button>
               ))}
             </div>
@@ -306,10 +307,4 @@ function ContextRow({ name, detail, disabled, onNew }: { name: string; detail: s
 
 function shortId(value: string) {
   return value.length > 12 ? value.slice(0, 12) : value;
-}
-
-function sessionScope(session: StoredSession, snapshot: ContextSessionSnapshot) {
-  if (session.workspaceId) return snapshot.workspaces.find((workspace) => workspace.id === session.workspaceId)?.displayName ?? "Workspace";
-  if (session.projectId) return snapshot.projects.find((project) => project.id === session.projectId)?.displayName ?? "Project";
-  return "No workspace";
 }

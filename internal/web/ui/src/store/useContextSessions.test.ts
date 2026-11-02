@@ -8,7 +8,7 @@ describe("applyOpenedSession", () => {
       projects: [],
       sessions: [],
       activeSession: { id: "old", title: "", status: "active" as const, createdAt: "", updatedAt: "" },
-      activeScope: { kind: "unscoped" as const, displayName: "Unscoped" },
+      activeScope: { kind: "unscoped" as const, displayName: "No workspace" },
     };
     const opened = {
       session: {
@@ -39,7 +39,7 @@ describe("applyOpenedSession", () => {
 describe("session archive state", () => {
   const first = { id: "first", title: "Keep history", status: "active" as const, createdAt: "", updatedAt: "" };
   const second = { ...first, id: "second" };
-  const snapshot = { workspaces: [], projects: [], sessions: [first, second], activeSession: first, activeScope: { kind: "unscoped" as const, displayName: "Unscoped" } };
+  const snapshot = { workspaces: [], projects: [], sessions: [first, second], activeSession: first, activeScope: { kind: "unscoped" as const, displayName: "No workspace" } };
 
   it("moves a selected session into the archive and clears its scope together", () => {
     const closed = { ...first, status: "closed" as const };

@@ -4,6 +4,7 @@ import { Dialog } from "../ui/Dialog";
 import { Archive, ChevronLeft, ChevronRight, Folder, MessageSquare } from "../ui/Icon";
 import type { ChatTextSize } from "../ui/textSize";
 import { resolveChatFont, type ChatFont } from "../ui/chatFont";
+import { sessionScopeLabel } from "./plainChats";
 
 type Props = {
   snapshot?: ContextSessionSnapshot;
@@ -89,7 +90,7 @@ export function SettingsDialog({ snapshot, problem, onRefresh, busy, textSize, o
           onRestore={workspace => void restore(workspace.id, workspace.displayName, () => onRestoreWorkspace?.(workspace) ?? Promise.resolve(), "Workspace could not be restored.")} />
       </> : archivedOpen ? <>
         <button ref={backButton} type="button" disabled={!!restoring} onClick={() => showArchived()} className="text-muted-text hover:text-ink focus-visible:ring-teal mb-5 flex items-center gap-1 rounded text-xs focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"><ChevronLeft size={13} /> Settings</button>
-        <p className="text-muted-text mb-5 text-xs leading-5">Restore a conversation to bring it back to your workspace.</p>
+        <p className="text-muted-text mb-5 text-xs leading-5">Restore a conversation to bring it back to the sidebar.</p>
         <ArchivedSessions snapshot={snapshot} problem={refreshProblem || problem} refreshing={refreshing} onRefresh={onRefresh ? () => void refresh() : undefined} busy={busy || !!restoring} restoring={restoring} onRestore={session => void restore(session.id, session.title.trim() || "Untitled session", () => onRestore(session), "Session could not be restored.")} />
       </> : <>
         <section aria-label="Conversation appearance">
@@ -136,7 +137,7 @@ export function ArchivedSessions({ snapshot, problem, refreshing, onRefresh, bus
   if (!sessions.length) return <p className="text-muted-text border-hair rounded-lg border border-dashed px-5 py-8 text-center text-sm">No archived sessions.</p>;
   return <ul className="divide-hair divide-y">
     {sessions.map(session => {
-      const scope = session.workspaceId ? snapshot.workspaces.find(workspace => workspace.id === session.workspaceId)?.displayName ?? "Workspace" : session.projectId ? snapshot.projects.find(project => project.id === session.projectId)?.displayName ?? "Project" : "No workspace";
+      const scope = sessionScopeLabel(session, snapshot);
       return <li key={session.id} className="flex items-center gap-3 py-3">
         <MessageSquare size={14} className="text-faint" />
         <div className="min-w-0 flex-1"><p className="text-body truncate text-xs" title={session.title}>{session.title.trim() || "Untitled session"}</p><p className="text-muted-text mt-1 truncate text-[11px]">{scope}</p></div>

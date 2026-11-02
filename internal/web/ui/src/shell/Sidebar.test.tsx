@@ -158,6 +158,18 @@ describe("chats without a workspace", () => {
     expect(row).toMatch(/font-semibold">Weekend plans</);
   });
 
+  it("shows the ten latest chats and offers the rest, marked, behind Show all", () => {
+    const sessions = Array.from({length: 12}, (_, index) => chat(`c${index}`, `Chat number ${index}`));
+    const html = renderToStaticMarkup(<Sidebar snapshot={{workspaces: [], projects: [], sessions, archivedSessions: []}} destination="chat" busy={false} mobileOpen={false}
+      marks={{c11: {running: true, waiting: false, unread: false}}}
+      onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onNewChat={() => {}} onSession={() => {}} />);
+    expect(html).toContain("Chat number 9<");
+    expect(html).not.toContain("Chat number 10<");
+    expect(html).not.toContain("Chat number 11<");
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>Show all 12 chats(?:(?!<\/button>)[\s\S])*animate-spin/);
+    expect(html).toMatch(/role="group" aria-labelledby="sidebar-chats"/);
+  });
+
   it("leaves Chats out until there is one", () => {
     expect(renderChats([chat("w", "Cairo menu", {workspaceId: "one"})])).not.toContain(">Chats<");
   });

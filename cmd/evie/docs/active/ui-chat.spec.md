@@ -496,9 +496,12 @@ without the resize edge.
 starts with **New chat**, which opens a chat with no Workspace or filesystem
 project, the existing unscoped selection, so it has global and chat memory
 only. This supersedes the 2026-09-21 removal of the top-level New chat button,
-which then led to a scope chooser. Below the Workspaces section, **Chats**
-lists every active chat with no Workspace or project, with the same markers
-and archive control as a Workspace's chats; the section is absent while there
+which then led to a scope chooser. New chat reopens the open chat instead
+while it has no Workspace and nothing in it yet, so repeated clicks leave no
+empty chats behind. Below the Workspaces section, **Chats** lists the ten
+latest active chats with no Workspace or project, with the same markers and
+archive control as a Workspace's chats; **Show all** reveals the rest and
+carries their markers while they are hidden. The section is absent while there
 are none. With no chat open, Chat shows **Start a conversation** with New chat,
 New workspace and the chooser's Manage workspaces link in place of the scope
 chooser; a Workspace's chats start from its row, and a project's from the

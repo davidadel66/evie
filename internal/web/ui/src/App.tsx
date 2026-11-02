@@ -23,6 +23,7 @@ import { SystemView } from "./system/SystemView";
 import { usePendingMemoryProposals } from "./candidateInbox/pendingProposals";
 import { Sidebar, type SidebarDestination } from "./shell/Sidebar";
 import { StartChat } from "./shell/StartChat";
+import { reusableChat } from "./shell/plainChats";
 import { useContextSessions } from "./store/useContextSessions";
 import { useSession } from "./store/useSession";
 import { Banner } from "./ui/Banner";
@@ -272,8 +273,17 @@ export default function App() {
 
   const startProjectChat = (project: Project) => selectSession({ projectId: project.id });
 
-  // A chat with no Workspace or project (ui-chat.spec.md, plain chats amendment).
-  const startChat = () => selectSession({ unscoped: true });
+  // A chat with no Workspace or project (ui-chat.spec.md, plain chats
+  // amendment). An open chat with nothing in it yet is reused rather than
+  // leaving another empty chat in the sidebar.
+  const startChat = async () => {
+    if (reusableChat(contextSessions.snapshot?.activeSession, items.length, historyLoading)) {
+      openView(chatView);
+      setMobileNavOpen(false);
+      return;
+    }
+    await selectSession({ unscoped: true });
+  };
 
   const registerWorkspace = async (options: WorkspaceCreation) => {
     await contextSessions.register(options);

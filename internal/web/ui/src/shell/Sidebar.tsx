@@ -6,10 +6,13 @@ import type {
 import { useEffect, useState } from "react";
 import { Archive, ChevronDown, ChevronRight, Database, Layers, MessageSquare, Plus, Settings, Sidebar as SidebarIcon, Spinner } from "../ui/Icon";
 import { combineMarks, markText, type ChatMark } from "../chats/chatMarks";
+import { isPlainChat } from "./plainChats";
 
 // Desktop width is the person's to set: drag or arrow keys on the edge,
 // double-click to reset. Saved per browser like the Inspector's width.
 export const sidebarWidth = { initial: 240, min: 200, max: 360 } as const;
+// Chats shows this many of the latest chats with no Workspace before Show all.
+const latestChats = 10;
 const widthKey = "evie.sidebarWidth";
 const clampWidth = (value: number) => Math.max(sidebarWidth.min, Math.min(sidebarWidth.max, Math.round(value)));
 // Collapsed Workspaces are the person's choice too, saved per browser as
@@ -82,8 +85,12 @@ export function Sidebar({
   // An archived ("deleted") Workspace leaves the sidebar; Settings restores it.
   const activeWorkspaces = snapshot?.workspaces.filter((workspace) => workspace.state === "active") ?? [];
   // Chats with no Workspace or filesystem project (ui-chat.spec.md, plain
-  // chats amendment, 2026-11-02).
-  const plainChats = snapshot?.sessions.filter((session) => !session.workspaceId && !session.projectId && session.status === "active") ?? [];
+  // chats amendment, 2026-11-02), newest first; the rest wait behind Show all.
+  const plainChats = snapshot?.sessions.filter((session) => isPlainChat(session) && session.status === "active") ?? [];
+  const [allChats, setAllChats] = useState(false);
+  const shownChats = allChats ? plainChats : plainChats.slice(0, latestChats);
+  const hiddenChats = combineMarks(plainChats.slice(shownChats.length).flatMap((session) => marks[session.id] ?? []));
+  const hiddenChatsText = markText(hiddenChats);
   const [width, setWidth] = useState(() => {
     try {
       const stored = Number(localStorage.getItem(widthKey));
@@ -220,11 +227,20 @@ export function Sidebar({
 
         {plainChats.length > 0 && <>
           <div className="mt-7 mb-2 px-2">
-            <span className="text-faint text-[11px] font-medium">Chats</span>
+            <span id="sidebar-chats" className="text-faint text-[11px] font-medium">Chats</span>
           </div>
-          {plainChats.map((session) => (
-            <SessionRow key={session.id} session={session} mark={marks[session.id]} activeSessionId={snapshot?.activeSession?.id} busy={busy} onSession={onSession} onArchive={onArchive} />
-          ))}
+          <div role="group" aria-labelledby="sidebar-chats">
+            {shownChats.map((session) => (
+              <SessionRow key={session.id} session={session} mark={marks[session.id]} activeSessionId={snapshot?.activeSession?.id} busy={busy} onSession={onSession} onArchive={onArchive} />
+            ))}
+            {plainChats.length > latestChats && (
+              <button type="button" aria-expanded={allChats} onClick={() => setAllChats((value) => !value)} className="text-faint hover:text-body focus-visible:ring-teal flex w-full items-center gap-2 rounded-[6px] py-[7px] pr-2 pl-3 text-left text-[11.5px] focus-visible:ring-1 focus-visible:outline-none">
+                {allChats ? "Show fewer" : `Show all ${plainChats.length} chats`}
+                <ChatMarkers mark={hiddenChats} />
+                {hiddenChatsText && <span className="sr-only">, other chats: {hiddenChatsText}</span>}
+              </button>
+            )}
+          </div>
         </>}
       </nav>
 

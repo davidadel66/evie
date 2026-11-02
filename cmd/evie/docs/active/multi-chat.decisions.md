@@ -26,5 +26,7 @@
   Workspace under Chats; the scope chooser is replaced by New chat and New
   workspace (ui-chat.spec.md, plain chats amendment). "Unscoped" reads "No
   workspace" in the app. Chats sit below the Workspaces section, whose rows
-  collapse, and are all listed rather than the latest five. Archiving General
-  is separate, and David chose to archive it as it is.
+  collapse; the ten latest show, and Show all reveals the rest, since every
+  REPL session also has no Workspace. New chat reuses an open chat that is
+  still empty. Archiving General is separate, and David chose to archive it as
+  it is.

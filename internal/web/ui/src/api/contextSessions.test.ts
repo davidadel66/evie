@@ -48,7 +48,7 @@ describe("Context Session API", () => {
   it("lists choices and resumes only the selected session identity", async () => {
     const snapshot = { workspaces: [], projects: [], sessions: [] };
     const fetchMock = vi.fn(async (path: string) => new Response(JSON.stringify(
-      path.endsWith("/list") ? snapshot : { session: { id: "session-1" }, scope: { kind: "unscoped", displayName: "Unscoped" } },
+      path.endsWith("/list") ? snapshot : { session: { id: "session-1" }, scope: { kind: "unscoped", displayName: "No workspace" } },
     ), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
