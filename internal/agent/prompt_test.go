@@ -267,7 +267,7 @@ func TestMemoryGuidanceNamesNoOwnerWorkspace(t *testing.T) {
 	if !strings.Contains(prompt, "Use everywhere for enduring general personal preferences") {
 		t.Fatal("memory scope guidance is missing")
 	}
-	if strings.Contains(prompt, "General workspace") {
+	if strings.Contains(strings.ToLower(prompt), "general workspace") {
 		t.Fatal("the prompt still names the owner's General workspace")
 	}
 }

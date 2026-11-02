@@ -68,8 +68,10 @@ func TestChatStatusFollowsATurnThroughItsApproval(t *testing.T) {
 }
 
 // The stream sends the status after every change and only then: a wake with
-// nothing changed sends nothing, so a follower that has acted on a status
-// never receives that same status again afterwards.
+// nothing changed sends nothing, so a status a follower has already acted on
+// is not sent again afterwards. Frames stay snapshots: with several chats, one
+// read before an answer can still arrive after it when another chat changed
+// too, and the answer's own wake then sends the current status.
 func TestChatStatusSendsNothingWhenNothingChanged(t *testing.T) {
 	server := NewContextServer(nil, nil, nil, &fakeContextSessionController{})
 	ts := httptest.NewServer(server.Handler())
@@ -80,7 +82,10 @@ func TestChatStatusSendsNothingWhenNothingChanged(t *testing.T) {
 
 	server.statusChanged()
 	select {
-	case frame := <-frames:
+	case frame, ok := <-frames:
+		if !ok {
+			t.Fatal("status stream closed")
+		}
 		t.Fatalf("unchanged status sent again: %+v", frame)
 	case <-time.After(200 * time.Millisecond):
 	}

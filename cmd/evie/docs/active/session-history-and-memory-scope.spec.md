@@ -30,6 +30,11 @@ Manual scope-quality review, using a new disposable workspace and declining unwa
 | My coworker likes long explanations. | Preserve coworker attribution; do not infer David's preference |
 | An example preference is “I like concise answers.” | Abstain without endorsement |
 | What if I preferred very detailed answers? | Abstain |
+
+Amended 2026-11-02: the chat prompt no longer names the General Workspace,
+which David archived when chats without a Workspace replaced it. The General
+row above now rests on the rule to honor explicit qualifiers; the memory
+compiler's frozen `memory-applicability-v1` instructions still name it.
 | Keep this brief. | Narrow conversational scope; do not invent an enduring preference |
 | I prefer concise answers everywhere, even when we discuss Finance. | Everywhere |
 

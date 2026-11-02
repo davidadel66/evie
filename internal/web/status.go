@@ -72,7 +72,9 @@ func (s *Server) chatStatuses() []chatStatus {
 // new status after every change, with heartbeats between. Wakes can arrive
 // with nothing changed (two changes read at once leave a second wake behind),
 // and a status equal to the last one sent is not sent again: sent late, it
-// would arrive after an answer the follower has already given.
+// would arrive after an answer the follower has already given. A changed
+// status read before an answer may still arrive after it; the answer's own
+// wake follows with the current one.
 func (s *Server) handleChatStatus(w http.ResponseWriter, r *http.Request) {
 	var req struct{}
 	if status, err := decodeManagementJSON(w, r, &req); err != nil {
