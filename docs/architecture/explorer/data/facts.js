@@ -16219,6 +16219,42 @@ evieExplorer.register(
   "history": [
     {
       "date": "2026-11-02",
+      "title": "Chats start without a workspace",
+      "branch": "feat/plain-chats",
+      "merge": "8eae958",
+      "touches": [
+        "internal/web",
+        "internal/web/ui"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/ui-chat.spec.md",
+        "doc:cmd/evie/docs/active/multi-chat.decisions.md"
+      ],
+      "text": [
+        "David kept a \"General\" workspace only because a chat without one was hard to start. The sidebar now opens with New chat, which starts a chat with no workspace, and lists those chats under Chats below the Workspaces: the ten latest, with Show all for the rest. With no chat open, Start a conversation offers New chat, New workspace and Manage workspaces in place of the scope chooser. New chat reopens an open chat that is still empty, and a chat with no workspace reads \"No workspace\" instead of \"Unscoped\". General was archived the same day."
+      ]
+    },
+    {
+      "date": "2026-11-02",
+      "title": "New workspaces are Standard with research on",
+      "branch": "feat/workspace-create-simplify",
+      "merge": "e95adb1",
+      "touches": [
+        "internal/web",
+        "internal/web/ui",
+        "cmd/evie"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/workspace-research.spec.md",
+        "doc:cmd/evie/docs/active/workspaces.decisions.md",
+        "#198"
+      ],
+      "text": [
+        "David found the Agent Preset choice over-engineered and wanted research delegation always on. Creating a workspace now asks only for a name, a repository and a folder; the server creates it on the Standard preset with research delegation on, unless a request sends `allowResearchDelegation: false`, and the REPL does the same. Workspace settings keep the research switch. Presets are checked before a repository is set up, so a refused workspace leaves no GitHub repository behind. Revisiting presets as an owner choice is #198."
+      ]
+    },
+    {
+      "date": "2026-11-02",
       "title": "Model picker opens on the current model",
       "branch": "fix/model-picker-current",
       "merge": "f654bbf",

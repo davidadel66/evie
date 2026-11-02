@@ -7,6 +7,36 @@ The entry format, the check's rules, and how to add an entry are in the
 editing this file, run `go run ./scripts/explorer extract` and
 `go run ./scripts/explorer check`.
 
+## 2026-11-02 — Chats start without a workspace
+Branch: feat/plain-chats
+Merge: 8eae958
+Touches: internal/web, internal/web/ui
+Sources: doc:cmd/evie/docs/active/ui-chat.spec.md, doc:cmd/evie/docs/active/multi-chat.decisions.md
+
+David kept a "General" workspace only because a chat without one was hard to
+start. The sidebar now opens with New chat, which starts a chat with no
+workspace, and lists those chats under Chats below the Workspaces: the ten
+latest, with Show all for the rest. With no chat open, Start a conversation
+offers New chat, New workspace and Manage workspaces in place of the scope
+chooser. New chat reopens an open chat that is still empty, and a chat with
+no workspace reads "No workspace" instead of "Unscoped". General was archived
+the same day.
+
+## 2026-11-02 — New workspaces are Standard with research on
+Branch: feat/workspace-create-simplify
+Merge: e95adb1
+Touches: internal/web, internal/web/ui, cmd/evie
+Sources: doc:cmd/evie/docs/active/workspace-research.spec.md, doc:cmd/evie/docs/active/workspaces.decisions.md, #198
+
+David found the Agent Preset choice over-engineered and wanted research
+delegation always on. Creating a workspace now asks only for a name, a
+repository and a folder; the server creates it on the Standard preset with
+research delegation on, unless a request sends `allowResearchDelegation:
+false`, and the REPL does the same. Workspace settings keep the research
+switch. Presets are checked before a repository is set up, so a refused
+workspace leaves no GitHub repository behind. Revisiting presets as an owner
+choice is #198.
+
 ## 2026-11-02 — Model picker opens on the current model
 Branch: fix/model-picker-current
 Merge: f654bbf
