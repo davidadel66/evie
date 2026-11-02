@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/memory"
@@ -63,5 +64,44 @@ func TestChatStatusFollowsATurnThroughItsApproval(t *testing.T) {
 	server.detached.Wait()
 	if got, _ := os.ReadFile(path); string(got) != "hello evie" {
 		t.Fatalf("file = %q", got)
+	}
+}
+
+// The stream sends the status after every change and only then: a wake with
+// nothing changed sends nothing, so a status a follower has already acted on
+// is not sent again afterwards. Frames stay snapshots: with several chats, one
+// read before an answer can still arrive after it when another chat changed
+// too, and the answer's own wake then sends the current status.
+func TestChatStatusSendsNothingWhenNothingChanged(t *testing.T) {
+	server := NewContextServer(nil, nil, nil, &fakeContextSessionController{})
+	ts := httptest.NewServer(server.Handler())
+	defer ts.Close()
+	frames, closeStatus := followStream(t, ts.URL, "/api/chats/status", `{}`)
+	defer closeStatus()
+	until(t, frames, "chat_status")
+
+	server.statusChanged()
+	select {
+	case frame, ok := <-frames:
+		if !ok {
+			t.Fatal("status stream closed")
+		}
+		t.Fatalf("unchanged status sent again: %+v", frame)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	server.sessionMu.Lock()
+	server.finishedAt["one"] = 42
+	server.sessionMu.Unlock()
+	server.statusChanged()
+	frame := until(t, frames, "chat_status")
+	var status struct {
+		Chats []chatStatus `json:"chats"`
+	}
+	if err := json.Unmarshal([]byte(frame[len(frame)-1].data), &status); err != nil {
+		t.Fatal(err)
+	}
+	if len(status.Chats) != 1 || status.Chats[0] != (chatStatus{SessionID: "one", FinishedAt: 42}) {
+		t.Fatalf("changed status %+v", status.Chats)
 	}
 }

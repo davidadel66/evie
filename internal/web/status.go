@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"slices"
 	"sort"
 	"time"
 
@@ -68,7 +69,12 @@ func (s *Server) chatStatuses() []chatStatus {
 }
 
 // handleChatStatus streams chat_status events: the current status, then the
-// new status after every change, with heartbeats between.
+// new status after every change, with heartbeats between. Wakes can arrive
+// with nothing changed (two changes read at once leave a second wake behind),
+// and a status equal to the last one sent is not sent again: sent late, it
+// would arrive after an answer the follower has already given. A changed
+// status read before an answer may still arrive after it; the answer's own
+// wake follows with the current one.
 func (s *Server) handleChatStatus(w http.ResponseWriter, r *http.Request) {
 	var req struct{}
 	if status, err := decodeManagementJSON(w, r, &req); err != nil {
@@ -91,10 +97,17 @@ func (s *Server) handleChatStatus(w http.ResponseWriter, r *http.Request) {
 	}()
 	s.arrive()
 	defer s.leave()
+	var last []chatStatus
+	sent := false
 	send := func() {
+		chats := s.chatStatuses()
+		if sent && slices.Equal(chats, last) {
+			return
+		}
+		sent, last = true, chats
 		stream.emit("chat_status", struct {
 			Chats []chatStatus `json:"chats"`
-		}{s.chatStatuses()})
+		}{chats})
 	}
 	send()
 	heartbeat := time.NewTicker(feedHeartbeat)

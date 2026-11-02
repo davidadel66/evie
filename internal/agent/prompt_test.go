@@ -258,3 +258,16 @@ func TestWorkspaceTabsGuidanceOnlyWhenTheSessionHasTheTool(t *testing.T) {
 		t.Errorf("tabs guidance is %d bytes; keep it short, it is resident in every request", len(workspaceTabsGuidance))
 	}
 }
+
+// The memory guidance names scopes, never one of the owner's Workspaces: the
+// "General" Workspace it once singled out was archived on 2026-11-02
+// (multi-chat.decisions.md), and a chat with no Workspace is Global.
+func TestMemoryGuidanceNamesNoOwnerWorkspace(t *testing.T) {
+	prompt := primaryInstructions(delegationTools)
+	if !strings.Contains(prompt, "Use everywhere for enduring general personal preferences") {
+		t.Fatal("memory scope guidance is missing")
+	}
+	if strings.Contains(strings.ToLower(prompt), "general workspace") {
+		t.Fatal("the prompt still names the owner's General workspace")
+	}
+}
