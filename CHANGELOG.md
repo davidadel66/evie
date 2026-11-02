@@ -37,6 +37,27 @@ switch. Presets are checked before a repository is set up, so a refused
 workspace leaves no GitHub repository behind. Revisiting presets as an owner
 choice is #198.
 
+## 2026-11-02 — Readable chat column and a one-strip inspector
+Branch: feat/chat-readability
+Merge: 7723418
+Touches: internal/web/ui, cmd/evie
+Sources: doc:cmd/evie/docs/active/ui-chat.spec.md, doc:cmd/evie/docs/active/chat-activity.spec.md
+
+David found long answers hard to read. Playwright screenshots of the live app
+showed why: the 768px column at 15px ran about 100 characters a line, an
+answer ran straight into the next user bubble, and every bold phrase flashed
+white. The transcript and composer now share a 680px column at 16px, a user
+turn after the first sits clear of the answer above it with the time it was
+sent beneath the bubble, and emphasis keeps the body color. A Claude Design
+canvas prototype was approved first; David declined the serif and warm
+palette directions shown beside it, so teal and IBM Plex stay.
+
+The inspector's header stacked view buttons, tabs and a title line. It is now
+one strip: the open tabs, a plus whose menu offers Files, Working tree and
+Terminal, then focus and close. Tabs name what they hold, such as the tool's
+action and subject, and the pane uses the app's own inspector surface instead
+of the editor gray.
+
 ## 2026-11-02 — Model picker opens on the current model
 Branch: fix/model-picker-current
 Merge: f654bbf
