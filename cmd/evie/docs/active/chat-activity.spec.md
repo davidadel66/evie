@@ -444,12 +444,14 @@ October 12 live reasoning line amendment.
   then the elapsed time ticking every second, as one line. The title is,
   in order: "Waiting for approval" while an approval is pending; the current
   thought's title when reasoning is the latest activity; the latest
-  requested tool without a result, as its label and subject (a delegate row
-  reports its children, as before); "Writing…" while text streams; else
-  "Thinking…". Each title stays at least two seconds before the next, and
-  fades in. Apart from the approval wait, the title shimmers: a soft light
-  sweeps across it on a loop. With reduced motion requested, it neither
-  shimmers nor fades.
+  requested tool without a result, as its label and subject (a delegate
+  reports its children, as before, while the trace is collapsed; expanded,
+  its trace row does); "Writing…" while text streams; else "Thinking…". Each
+  title stays at least two seconds before the next, and fades in. The
+  approval wait shows at once, and an answered approval does not linger.
+  Apart from the approval wait, the title shimmers: a soft light sweeps
+  across it on a loop. With reduced motion requested, it neither shimmers
+  nor fades.
 - Streamed text still appears below the line. Pending approvals, memory
   receipts, notices and the problem summary keep their rows below it. The
   running tool's Inspect action is in the expanded trace, one click away.
@@ -458,20 +460,27 @@ October 12 live reasoning line amendment.
   1m 12s". A turn with no successful action reads "Worked for 4s". Incomplete
   turns keep "Work incomplete". There is no shimmer once the turn ends.
 - A thought's title is its latest bold heading when the model writes them;
-  otherwise its latest intent sentence ("Let me…", "I need to…", "I'll…",
-  "I should…", "I'm going to…", "I want to…", or "I'm checking…"), rewritten
-  as an action such as "Checking the county fee schedule" and cut before a
-  trailing reason (", since…", ", because…"); otherwise its latest complete
-  sentence. A sentence still being written is never shown.
+  otherwise its latest intent sentence; otherwise its latest complete
+  sentence. An intent sentence opens with "Let me", "Let's", "I need to",
+  "I'll", "I will", "I should", "I'm going to", "I want to", "I have to" or
+  "I must" (after any filler such as "Okay," and before any hedge such as
+  "probably"), or reads "I'm …ing". It is rewritten as an action such as
+  "Checking the county fee schedule", cut before a trailing reason or
+  follow-on clause (a semicolon, a dash, or ", since…", ", because…",
+  ", then…" and the like). A negated intent ("I should not…") is not
+  rewritten. A sentence still being written is never shown.
 - The expanded trace is a bordered card with a hairline between rows. Each
-  thought row shows its title. Only when the thought has more text than its
-  title does the row offer a caret; selecting it shows the full text below.
+  thought row shows its title. Only when the thought has more text than the
+  sentence or heading its title came from does the row offer a caret;
+  selecting it shows the full text below.
   Tool rows are unchanged.
 
 No backend, persistence, event or dependency changes. Reasoning is still
 live only, so thought rows still disappear on reload. Deferred: stage 2 saves
 reasoning and titles so the list survives reload; stage 3 writes titles with
 a small, cheap model call. Verification covers the title rule (headings,
-intent rewrites, reason cuts, fallbacks, unfinished sentences), the live
-header for each title source with its clock and shimmer, the completed
-summary, and thought rows with and without more text.
+intent rewrites, hedges, negation, clause cuts, abbreviations, fallbacks,
+unfinished sentences), the live header for each title source with its clock
+and shimmer, the completed summary, and thought rows with and without more
+text. The two-second hold and delegate polling run in effects, which the UI
+suite (no DOM environment) does not exercise.

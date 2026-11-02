@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toolFilePath } from "../artifacts/fileInspection";
 import { readMemoryToolResult } from "../artifacts/memoryToolResult";
 import type { Item } from "../store/reducer";
@@ -8,7 +8,7 @@ import { AssistantMessage, DiscardWarning } from "./Message";
 import { MemoryActivity, type MemoryOpener } from "./MemoryActivity";
 import { startsSubagents, subagentProgressLabel } from "../subagents/subagentView";
 import { useSubagentList, useSubagentSession } from "../subagents/useSubagents";
-import { actionSummary, awaitingApproval, thoughtTitle, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
+import { actionSummary, awaitingApproval, describeThought, thoughtTitle, elapsedLabel, needsAttention, problemSummary, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
 
 type FileOpener = (key: string, trigger: HTMLButtonElement) => void;
 type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener };
@@ -34,16 +34,16 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
   const summary = complete && !pending ? actionSummary(group.activity) : null;
   // "Searched the web, read a page · 1m 12s", or "Worked for 4s" with no action.
   const label = pending ? "Waiting for approval" : complete ? summary ?? "Worked" : "Work incomplete";
-  const timeAfter = complete && !pending && !summary ? " for" : null;
+  const workedFor = complete && !pending && !summary;
   const show = group.active || group.activity.length > 0 || !!group.turn;
   if (!show) return null;
   return (
     <section aria-label="Turn activity" className="min-w-0 max-w-[min(900px,100%)] flex-none self-stretch">
-      <button type="button" aria-expanded={open} aria-controls={bodyID} onClick={() => setManual(!open)}
+      <button type="button" aria-expanded={open} aria-controls={bodyID} onClick={() => setManual(!open)} title={elapsedHint}
         className="text-muted-text hover:text-body focus-visible:outline-teal flex max-w-full cursor-pointer items-center gap-2 rounded-sm py-1 text-left text-[13px] focus-visible:outline-2 focus-visible:outline-offset-4">
-        {group.active ? <LiveTitle activity={group.activity} pending={pending} />
-          : <span className="min-w-0 truncate">{label}{elapsed && timeAfter && `${timeAfter} ${elapsed}`}</span>}
-        {elapsed && (group.active || !timeAfter) && <span title={elapsedHint} className="shrink-0 tabular-nums">· {elapsed}</span>}
+        {group.active ? <LiveTitle activity={group.activity} pending={pending} collapsed={!open} />
+          : <span className="min-w-0 truncate">{label}{elapsed && workedFor && ` for ${elapsed}`}</span>}
+        {elapsed && !workedFor && <span className="shrink-0 tabular-nums">· {elapsed}</span>}
         <span className={`shrink-0 ${open ? "rotate-180" : ""}`}><ChevronDown size={13} /></span>
       </button>
       <div id={bodyID} hidden={!open} className="border-hair-strong divide-hair mt-2 divide-y rounded-[10px] border *:px-4 *:py-2">
@@ -69,23 +69,27 @@ const elapsedHint = "Elapsed wall time for this turn, including tools, provider 
 // else, when reasoning is the latest thing, that thought's title; else the
 // latest requested tool; else Writing while text streams; else Thinking,
 // which is all a model that hides its reasoning ever shows here.
-function LiveTitle({activity, pending}: {activity: Item[]; pending: boolean}) {
+function LiveTitle({activity, pending, collapsed}: {activity: Item[]; pending: boolean; collapsed: boolean}) {
   const last = activity[activity.length - 1];
   const tool = [...activity].reverse().find((item): item is ToolItem => item.kind === "tool" && item.result === undefined);
-  // A delegate waits on its children, so it reports how far they got.
-  const waiting = !!tool && startsSubagents(tool);
+  // A delegate waits on its children, so it reports how far they got. The
+  // expanded trace's row reports them itself, so only one of them polls.
+  const waiting = !!tool && startsSubagents(tool) && collapsed;
   const {list: children} = useSubagentList(useSubagentSession(), waiting ? tool : undefined, waiting);
-  const thought = last?.kind === "reasoning" ? thoughtTitle(last.text, last.streaming) : null;
+  // The clock re-renders every second; the reasoning only changes per delta.
+  const thought = useMemo(() => last?.kind === "reasoning" ? thoughtTitle(last.text, last.streaming) : null, [last]);
   let title = "Thinking…";
-  if (pending) title = "Waiting for approval";
-  else if (thought) title = thought;
+  if (thought) title = thought;
   else if (tool) {
     const {label, subject} = toolLabel(tool);
-    const shown = (waiting && children ? subagentProgressLabel(children) : null) ?? label;
-    title = subject ? `${shown} · ${subject}` : shown;
+    const progress = (waiting && children ? subagentProgressLabel(children) : null) ?? label;
+    title = subject ? `${progress} · ${subject}` : progress;
   } else if (last?.kind === "assistant" && last.streaming && !last.discarded) title = "Writing…";
-  const shown = useHeld(title, pending);
-  if (pending) return <span className="min-w-0 truncate">{shown}</span>;
+  // The approval wait shows at once and is never held, so an answered
+  // approval does not linger on the line.
+  const held = useHeld(pending ? null : title);
+  if (pending) return <span className="min-w-0 truncate">Waiting for approval</span>;
+  const shown = held ?? title;
   return <span role="status" title={shown} className="min-w-0 truncate">
     <span key={shown} className="evie-shimmer evie-fade-in">{shown}</span>
   </span>;
@@ -100,19 +104,19 @@ function StreamingText({activity}: {activity: Item[]}) {
 const titleHoldMs = 2000;
 
 // Reasoning completes sentences faster than they can be read, so each title
-// stays up for a moment before the line moves to the newest. An approval
-// wait shows at once.
-function useHeld(value: string, immediate: boolean): string {
+// stays up for a moment before the line moves to the newest. Null pauses
+// the line; the first title after a pause shows at once.
+function useHeld(value: string | null): string | null {
   const [shown, setShown] = useState(value);
   const since = useRef(0);
   useEffect(() => {
+    if (value === null || value === shown) return;
     if (since.current === 0) since.current = Date.now();
-    if (value === shown) return;
-    const wait = immediate ? 0 : Math.max(0, since.current + titleHoldMs - Date.now());
+    const wait = shown === null ? 0 : Math.max(0, since.current + titleHoldMs - Date.now());
     const timer = window.setTimeout(() => { since.current = Date.now(); setShown(value); }, wait);
     return () => window.clearTimeout(timer);
-  }, [value, shown, immediate]);
-  return immediate ? value : shown;
+  }, [value, shown]);
+  return shown;
 }
 
 export function ActivityItems({items, active, onAnswer, onOpenFile, onOpenTool, onOpenMemory}: {items: Item[]; active: boolean; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener}) {
@@ -142,8 +146,9 @@ export function ActivityItems({items, active, onAnswer, onOpenFile, onOpenTool, 
 // A thought reads as its title; only a thought with more to say than its
 // title opens, to its full text.
 function ThoughtRow({text, streaming}: {text: string; streaming: boolean}) {
-  const title = thoughtTitle(text, streaming) ?? "Thinking…";
-  if (text.replace(/\*\*|__|`/g, "").replace(/\s+/g, " ").trim() === title) return <p className="text-muted-text py-1 text-[13px]">{title}</p>;
+  const thought = useMemo(() => describeThought(text, streaming), [text, streaming]);
+  const title = thought.title ?? "Thinking…";
+  if (!thought.more) return <p className="text-muted-text py-1 text-[13px]">{title}</p>;
   return <details className="group text-muted-text text-[13px]">
     <summary className="activity-summary hover:text-body flex cursor-pointer items-center gap-2 py-1">
       <span className="min-w-0 truncate" title={title}>{title}</span>

@@ -78,29 +78,34 @@ export function problemSummary(items: Item[]): string | null {
 }
 
 type ActionKind ="read" | "edit" | "command" | "search" | "data" | "memory" | "tool";
-const actions: Record<string, { kind: ActionKind; action: string; done: string; subject: string[] }> = {
-  read_file: {kind: "read", action: "Read file", done: "Read file", subject: ["path"]},
-  edit_file: {kind: "edit", action: "Edit file", done: "Edited file", subject: ["path"]},
-  bash: {kind: "command", action: "Command", done: "Ran command", subject: ["command"]},
-  web_search: {kind: "search", action: "Search web", done: "Searched web", subject: ["query"]},
-  web_fetch: {kind: "read", action: "Fetch page", done: "Fetched page", subject: ["url"]},
-  query_db: {kind: "data", action: "Query data", done: "Queried data", subject: ["query", "sql"]},
-  edit_db: {kind: "edit", action: "Edit data", done: "Edited data", subject: ["query", "sql"]},
-  memory_search: {kind: "memory", action: "Search memory", done: "Searched memory", subject: ["query"]},
-  memory_list_objects: {kind: "memory", action: "List memory records", done: "Listed memory records", subject: []},
-  memory_inspect_object: {kind: "memory", action: "Read memory record", done: "Read memory record", subject: []},
-  memory_query_claims: {kind: "memory", action: "Query memory claims", done: "Queried memory claims", subject: []},
-  memory_traverse: {kind: "memory", action: "Follow memory links", done: "Followed memory links", subject: []},
-  memory_search_conversations: {kind: "memory", action: "Search conversations", done: "Searched conversations", subject: ["query"]},
-  memory_expand_conversation: {kind: "memory", action: "Read conversation context", done: "Read conversation context", subject: []},
-  delegate_research: {kind: "tool", action: "Research with subagents", done: "Research with subagents", subject: []},
-  delegate_explore: {kind: "tool", action: "Explore with subagents", done: "Explore with subagents", subject: []},
-  delegate_build: {kind: "tool", action: "Build with a subagent", done: "Build with a subagent", subject: []},
-  continue_research: {kind: "tool", action: "Continue a subagent", done: "Continue a subagent", subject: ["execution_id"]},
+// summary is the completed header's phrase, "one|many" with # for the count.
+const actions: Record<string, { kind: ActionKind; action: string; done: string; subject: string[]; summary: string }> = {
+  read_file: {kind: "read", action: "Read file", done: "Read file", subject: ["path"], summary: "read a file|read # files"},
+  edit_file: {kind: "edit", action: "Edit file", done: "Edited file", subject: ["path"], summary: "edited a file|edited # files"},
+  bash: {kind: "command", action: "Command", done: "Ran command", subject: ["command"], summary: "ran a command|ran # commands"},
+  web_search: {kind: "search", action: "Search web", done: "Searched web", subject: ["query"], summary: "searched the web"},
+  web_fetch: {kind: "read", action: "Fetch page", done: "Fetched page", subject: ["url"], summary: "read a page|read # pages"},
+  query_db: {kind: "data", action: "Query data", done: "Queried data", subject: ["query", "sql"], summary: "queried data"},
+  edit_db: {kind: "edit", action: "Edit data", done: "Edited data", subject: ["query", "sql"], summary: "edited data"},
+  memory_search: {kind: "memory", action: "Search memory", done: "Searched memory", subject: ["query"], summary: "checked memory"},
+  memory_list_objects: {kind: "memory", action: "List memory records", done: "Listed memory records", subject: [], summary: "checked memory"},
+  memory_inspect_object: {kind: "memory", action: "Read memory record", done: "Read memory record", subject: [], summary: "checked memory"},
+  memory_query_claims: {kind: "memory", action: "Query memory claims", done: "Queried memory claims", subject: [], summary: "checked memory"},
+  memory_traverse: {kind: "memory", action: "Follow memory links", done: "Followed memory links", subject: [], summary: "checked memory"},
+  memory_search_conversations: {kind: "memory", action: "Search conversations", done: "Searched conversations", subject: ["query"], summary: "checked memory"},
+  memory_expand_conversation: {kind: "memory", action: "Read conversation context", done: "Read conversation context", subject: [], summary: "checked memory"},
+  delegate_research: {kind: "tool", action: "Research with subagents", done: "Research with subagents", subject: [], summary: "used subagents"},
+  delegate_explore: {kind: "tool", action: "Explore with subagents", done: "Explore with subagents", subject: [], summary: "used subagents"},
+  delegate_build: {kind: "tool", action: "Build with a subagent", done: "Build with a subagent", subject: [], summary: "used subagents"},
+  continue_research: {kind: "tool", action: "Continue a subagent", done: "Continue a subagent", subject: ["execution_id"], summary: "used subagents"},
 };
 
+function actionOf(name: string) {
+  return actions[name] ?? {kind: "tool" as const, action: name.replace(/_/g, " "), done: name.replace(/_/g, " "), subject: [], summary: "used a tool|used # tools"};
+}
+
 export function toolLabel(tool: ToolItem) {
-  const spec = actions[tool.name] ?? {kind: "tool" as const, action: tool.name.replace(/_/g, " "), done: tool.name.replace(/_/g, " "), subject: []};
+  const spec = actionOf(tool.name);
   let subject = "";
   try {
     const args: unknown = JSON.parse(tool.args);
@@ -149,34 +154,18 @@ export function actionSummary(items: Item[]): string | null {
   const counts = new Map<string, number>();
   for (const item of items) {
     if (item.kind !== "tool" || item.result === undefined || needsAttention(item)) continue;
-    const kind = summaryKind(item.name);
-    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    const phrase = actionOf(item.name).summary;
+    counts.set(phrase, (counts.get(phrase) ?? 0) + 1);
   }
   if (counts.size === 0) return null;
-  const text = [...counts].map(([kind, count]) => summaryPhrase(kind, count)).join(", ");
+  return capitalize([...counts].map(([phrase, count]) => {
+    const [one, many = one] = phrase.split("|");
+    return count === 1 ? one : many.replace("#", String(count));
+  }).join(", "));
+}
+
+function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function summaryKind(name: string): string {
-  if (name.startsWith("memory_")) return "memory";
-  if (name.startsWith("delegate_") || name === "continue_research") return "subagents";
-  return ["web_search", "web_fetch", "read_file", "edit_file", "bash", "query_db", "edit_db"].includes(name) ? name : "tool";
-}
-
-function summaryPhrase(kind: string, count: number): string {
-  const counted = (one: string, many: string) => count === 1 ? one : many.replace("#", String(count));
-  switch (kind) {
-    case "web_search": return "searched the web";
-    case "web_fetch": return counted("read a page", "read # pages");
-    case "read_file": return counted("read a file", "read # files");
-    case "edit_file": return counted("edited a file", "edited # files");
-    case "bash": return counted("ran a command", "ran # commands");
-    case "query_db": return "queried data";
-    case "edit_db": return "edited data";
-    case "memory": return "checked memory";
-    case "subagents": return "used subagents";
-    default: return counted("used a tool", "used # tools");
-  }
 }
 
 export function elapsedLabel(start?: number, end?: number): string | null {
@@ -189,10 +178,16 @@ export function elapsedLabel(start?: number, end?: number): string | null {
 // A thought's title: its latest bold heading when the model writes them,
 // else its latest intent sentence written as an action ("Let me check the
 // fees." becomes "Checking the fees"), else its latest complete sentence.
-// Null until one completes, so a half-written sentence never shows.
-export function thoughtTitle(text: string, streaming: boolean): string | null {
+// Null until one completes, so a half-written sentence never shows. more
+// says whether the thought has text beyond the sentence its title came from.
+export function describeThought(text: string, streaming: boolean): {title: string | null; more: boolean} {
+  const whole = plainThought(text);
+  const titled = (title: string | null, source: string | null) => ({title, more: source === null ? whole !== "" : whole !== source});
   const headings = [...text.matchAll(/^\s*\*\*(.+?)\*\*\s*$/gm)];
-  if (headings.length > 0) return plainThought(headings[headings.length - 1][1]);
+  if (headings.length > 0) {
+    const heading = plainThought(headings[headings.length - 1][1]);
+    return titled(heading, heading);
+  }
   const sentences: string[] = [];
   for (const line of text.split(/\n+/)) {
     // "Dr. Smith" and "the U.S. Census" stay one sentence.
@@ -210,43 +205,54 @@ export function thoughtTitle(text: string, streaming: boolean): string | null {
   if (streaming && plain.length > 0 && !endsSentence(plain[plain.length - 1])) plain.pop();
   for (let i = plain.length - 1; i >= 0; i--) {
     // An initial such as "Parcel B." can join two sentences; an intent
-    // opener after any full stop still starts one.
-    const parts = plain[i].split(/(?<=[.!?…]["'”)]?)\s+/);
+    // opener after a full stop still starts one.
+    const parts = plain[i].split(intentStart);
     for (let j = parts.length - 1; j >= 0; j--) {
       const action = asAction(parts[j]);
-      if (action) return action;
+      if (action) return titled(action, parts.length === 1 ? plain[i] : parts[j]);
     }
   }
-  return plain[plain.length - 1] ?? null;
+  const latest = plain[plain.length - 1] ?? null;
+  return titled(latest, latest);
 }
 
-// Openers such as "Okay," before the intent, and adverbs before its verb,
-// carry nothing a title needs.
-const intent = new RegExp(
-  "^(?:(?:now|okay|ok|so|alright|first|next|then|actually|wait|right|great)[,.!]?\\s+)*" +
-  "(?:(?:let me|let's|let us|i need to|i[’']ll|i will|i should|i[’']m going to|i am going to|i want to|i have to|i must)\\s+(?:also\\s+|just\\s+|quickly\\s+|now\\s+|first\\s+|carefully\\s+)*([a-z]+)|" +
-  "(?:i[’']m|i am)\\s+(?:now\\s+|also\\s+)*([a-z]+ing))\\b(.*)$", "i");
+export function thoughtTitle(text: string, streaming: boolean): string | null {
+  return describeThought(text, streaming).title;
+}
 
-// A trailing reason or aside is cut: the title says what, not why.
-const aside = /\s*(?:[;—–]|\s-{1,2}\s|,\s*(?:since|because|as|so that|so|which|but|then|and then|to see|to make sure|to confirm|in case|before|after|while|given)\b)/i;
+// Openers such as "Okay," before the intent, and hedges before its verb,
+// carry nothing a title needs. A negated intent ("I should not…") is not an
+// action, so it is never rewritten.
+const openers = "(?:(?:now|okay|ok|so|alright|first|next|then|actually|wait|right|great)[,.!]?\\s+)*";
+const leads = "(?:let me|let[’']s|let us|i need to|i[’']ll|i will|i should|i[’']m going to|i am going to|i want to|i have to|i must)";
+const hedges = "(?:(?:also|just|now|first|then|still|again|maybe|perhaps|probably|quickly|carefully|really|actually|briefly|finally|definitely|simply|further|properly|manually)\\s+)*(?:(?:need|have|try|want) to\\s+)?";
+const intent = new RegExp(`^${openers}(?:${leads}\\s+${hedges}(?!not\\b|never\\b)([a-z]+(?:-[a-z]+)*)|(?:i[’']m|i am)\\s+(?:(?:now|also|still|just)\\s+)*([a-z]+ing))\\b(.*)$`, "i");
+const intentStart = new RegExp(`(?<=[.!?…]["'”)]?)\\s+(?=${openers}(?:${leads}|i[’']m|i am)\\b)`, "i");
+
+// A trailing reason or follow-on clause is cut: the title says what, not
+// why. En dashes cut only with spaces, so "2024–2025" stays whole.
+const aside = /\s*(?:;|\s[—–]\s|—|\s-{1,2}\s|,\s*(?:since|because|as|so that|so|which|but|then|and then|to see|to make sure|to confirm|in case|before|after|while|given)\b)/i;
 
 function asAction(sentence: string): string | null {
   const match = intent.exec(sentence);
   if (!match) return null;
   const verb = match[1] ? gerund(match[1].toLowerCase()) : match[2].toLowerCase();
   const rest = match[3].split(aside)[0].replace(/[.!?…:]+["'”)]?$/, "");
-  const action = `${verb}${rest}`.trim();
-  return action.charAt(0).toUpperCase() + action.slice(1);
+  return capitalize(`${verb}${rest}`.trim());
 }
 
-const irregularGerunds: Record<string, string> = {see: "checking", be: "being", lie: "lying", die: "dying", tie: "tying"};
-// Stressed final syllables double their consonant; one-syllable words are
-// caught by the pattern below.
-const doubledGerunds = new Set(["begin", "commit", "submit", "admit", "permit", "omit", "refer", "prefer", "occur", "recur", "regret", "forget", "upset", "control", "patrol", "compel", "propel", "expel", "equip", "quit", "transfer", "rebut"]);
+// "see" reads better as what the model does: "Let me see if…" is checking.
+const gerundOverrides: Record<string, string> = {see: "checking", be: "being", lie: "lying", die: "dying", tie: "tying"};
+// Stressed final syllables double their consonant. One-syllable words, and
+// a prefix before one ("rerun", "debug", "output"), are caught by pattern.
+const doubledGerunds = new Set(["begin", "commit", "submit", "admit", "permit", "omit", "emit", "occur", "regret", "forget", "control", "patrol", "compel", "propel", "expel", "equip", "quit", "transfer", "format", "program"]);
+const doubles = /^(?:re|un|de|out|over|up|pre|in|em)?[^aeiou]+[aeiou][^aeiouwxy]$|^[aeiou][^aeiouwxy]$/;
 
 function gerund(verb: string): string {
-  if (irregularGerunds[verb]) return irregularGerunds[verb];
-  if (doubledGerunds.has(verb) || /^[^aeiou]*[aeiou][^aeiouwxy]$/.test(verb)) return `${verb}${verb.slice(-1)}ing`;
+  const dash = verb.lastIndexOf("-");
+  if (dash >= 0) return `${verb.slice(0, dash + 1)}${gerund(verb.slice(dash + 1))}`;
+  if (gerundOverrides[verb]) return gerundOverrides[verb];
+  if (doubledGerunds.has(verb) || doubles.test(verb)) return `${verb}${verb.slice(-1)}ing`;
   if (/(?:[^aeiouy]|u)e$/.test(verb) && verb.length > 2) return `${verb.slice(0, -1)}ing`;
   return `${verb}ing`;
 }

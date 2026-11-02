@@ -1,8 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { appendUser, reduce, type Item } from "../store/reducer";
 import { Activity, ActivityItems } from "./Activity";
 import { actionSummary, activityTurns, thoughtTitle, toolLabel } from "./activityModel";
+
+// The header button: while working, the live line.
+const headerOf = (html: string) => html.slice(0, html.indexOf("</button>"));
 
 describe("activity transcript", () => {
   it.each([
@@ -50,6 +53,7 @@ describe("activity transcript", () => {
     const html = renderToStaticMarkup(<Activity group={activityTurns(items, false)[0]} onAnswer={() => {}} />);
     expect(html).toContain("Worked");
     expect(html).toContain("for 4s");
+    expect(html).toContain('title="Elapsed wall time for this turn');
     expect(html).not.toContain("Hi.");
   });
 
@@ -182,12 +186,11 @@ describe("activity transcript", () => {
   });
 
   it("makes the header the live line: the current title, shimmering, then the running clock", () => {
-    const header = (items: Item[]) => {
-      const html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
-      return html.slice(0, html.indexOf("</button>"));
-    };
+    vi.useFakeTimers({now: 100_000});
+    onTestFinished(() => { vi.useRealTimers(); });
+    const header = (items: Item[]) => headerOf(renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />));
     let items = appendUser([], "think about it");
-    items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: Date.now() - 12_000});
+    items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: 88_000});
     items = reduce(items, {type: "reasoning", text: "I need to think about what David is asking. Let me check memory for prior con"});
     let line = header(items);
     expect(line).toContain('role="status"');
@@ -215,6 +218,15 @@ describe("activity transcript", () => {
     expect(renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} />)).toContain("Nothing is saved about it.");
   });
 
+  it("titles the live line with a requested delegate's own label", () => {
+    let items = appendUser([], "research it");
+    items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: 1000});
+    items = reduce(items, {type: "tool_call", id: "d", name: "delegate_research", args: "{}"});
+    const line = headerOf(renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />));
+    expect(line).toContain("Research with subagents requested");
+    expect(line).toContain("evie-shimmer");
+  });
+
   it("heads a completed turn with its successful actions, then its time, without the shimmer", () => {
     const turn = {id: "u", status: "complete", startedAt: 1000, finishedAt: 5000} as const;
     const items: Item[] = [
@@ -224,8 +236,7 @@ describe("activity transcript", () => {
       {kind: "tool", key: "c", id: "c", name: "bash", args: '{"command":"false"}', result: "exit 1", isErr: true, startedAt: 1000, turn},
       {kind: "assistant", key: "a", text: "Done", streaming: false, phase: "final_answer", turn},
     ];
-    const html = renderToStaticMarkup(<Activity group={activityTurns(items, false)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
-    const line = html.slice(0, html.indexOf("</button>"));
+    const line = headerOf(renderToStaticMarkup(<Activity group={activityTurns(items, false)[0]} onAnswer={() => {}} onOpenTool={() => {}} />));
     expect(line).toContain("Searched the web, read a page");
     expect(line).toContain("· 4s");
     expect(line).not.toContain("Worked");
@@ -263,6 +274,8 @@ describe("activity transcript", () => {
     expect(one).not.toContain("<svg");
     expect(one.match(/Judging which cost sources are reliable\./g)).toHaveLength(1);
 
+    expect(trace("- Check the transcripts table.")).not.toContain("<details");
+    expect(trace("Let me check the fees.")).not.toContain("<details");
     expect(trace("Weighing a shared we", true)).toContain("Thinking…");
   });
 
@@ -303,6 +316,24 @@ describe("activity transcript", () => {
     expect(thoughtTitle("Let me check the fee schedule, since the user asked about permits.", false)).toBe("Checking the fee schedule");
     expect(thoughtTitle("Let me compare A, B, and C.", false)).toBe("Comparing A, B, and C");
     expect(thoughtTitle("**Weighing lender rules**\n\nLet me check the bank.", false)).toBe("Weighing lender rules");
+    expect(thoughtTitle("Let me ask Dr. Smith about the fees.", false)).toBe("Asking Dr. Smith about the fees");
+    expect(thoughtTitle("Let me check the U.S. Census data.", false)).toBe("Checking the U.S. Census data");
+    expect(thoughtTitle("Let me compare tools, e.g. search and fetch.", false)).toBe("Comparing tools, e.g. search and fetch");
+    expect(thoughtTitle("I should not assume the totals.", false)).toBe("I should not assume the totals.");
+    expect(thoughtTitle("I should probably search the county site.", false)).toBe("Searching the county site");
+    expect(thoughtTitle("Let me check the 2024–2025 fee table.", false)).toBe("Checking the 2024–2025 fee table");
+    expect(thoughtTitle("Let me check the fees—they changed.", false)).toBe("Checking the fees");
+    expect(thoughtTitle("Let me re-check the totals.", false)).toBe("Re-checking the totals");
+    expect(thoughtTitle("Let’s check the fees.", false)).toBe("Checking the fees");
+    expect(thoughtTitle("Let me debug the test.", false)).toBe("Debugging the test");
+    expect(thoughtTitle("I'll rerun the suite.", false)).toBe("Rerunning the suite");
+    expect(thoughtTitle("Let me format the table.", false)).toBe("Formatting the table");
+    expect(thoughtTitle("Let me reopen the file.", false)).toBe("Reopening the file");
+    expect(thoughtTitle("I'll still need to verify this.", false)).toBe("Verifying this");
+    expect(thoughtTitle("I should double-check the totals.", false)).toBe("Double-checking the totals");
+    expect(thoughtTitle("Let me apply the patch.", false)).toBe("Applying the patch");
+    expect(thoughtTitle("Let me deal with the lender.", false)).toBe("Dealing with the lender");
+    expect(thoughtTitle("Let me check the fees, because they changed.", false)).toBe("Checking the fees");
     // "Parcel B." reads as an initial, so the sentences join; the intent after it still counts.
     expect(thoughtTitle("The user wants costs for Parcel B. Let me check the Michigan rules. It might be", true)).toBe("Checking the Michigan rules");
   });
