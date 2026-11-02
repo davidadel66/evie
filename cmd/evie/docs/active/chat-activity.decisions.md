@@ -80,3 +80,19 @@
   latest heading or complete sentence, held two seconds. This reverses the
   October 3 events-only choice; models without exposed reasoning still show
   the event-derived line. A cheap headline model is deferred, not rejected.
+
+- David's November 2 request, from his Claude.ai screenshot, merges the
+  header and live line into one shimmering line with a running clock, titles
+  each thought, and lists them in a bordered card. He chose to keep the
+  elapsed time in the completed header ("Searched the web, read a page ·
+  1m 12s"). Stage 1 is screen only, so he can judge it before any backend
+  work.
+- The plain latest-sentence title "doesn't feel great" to David. Stage 1
+  uses a free rule instead (headings, then intent sentences rewritten as
+  actions, then the latest sentence). A small, cheap title-model call is
+  agreed for stage 3, recorded in usage and capped per turn. David waived
+  measuring its cost first.
+- David wants titles to survive a reload. Reasoning is not saved today, so
+  stage 2 saves it with its titles: for display only, never indexed by
+  memory, never sent back to the model, and capped in size per turn. That
+  stage needs its own decision entry for the new saved data.

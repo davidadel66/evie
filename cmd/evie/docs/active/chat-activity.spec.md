@@ -430,3 +430,48 @@ stopping or continuing a child from the UI, or showing children in Runs.
   row label, the reasoning line) were not exercised in a browser: they need a
   live turn, and the copy's recovery correctly settled a simulated running
   child at once.
+
+## Thinking line amendment — November 2, 2026
+
+David asked for the thinking presentation in his Claude.ai screenshot: one
+line that changes with each new thought while a clock runs, and a list of
+titled thoughts that each open to their full text. This is stage 1, the
+screen only. It supersedes the separate header and live line of the October 3
+amendment, and the latest-sentence rule and "Reasoning summary" rows of the
+October 12 live reasoning line amendment.
+
+- While working, the activity header is the live line: the current title,
+  then the elapsed time ticking every second, as one line. The title is,
+  in order: "Waiting for approval" while an approval is pending; the current
+  thought's title when reasoning is the latest activity; the latest
+  requested tool without a result, as its label and subject (a delegate row
+  reports its children, as before); "Writing…" while text streams; else
+  "Thinking…". Each title stays at least two seconds before the next, and
+  fades in. Apart from the approval wait, the title shimmers: a soft light
+  sweeps across it on a loop. With reduced motion requested, it neither
+  shimmers nor fades.
+- Streamed text still appears below the line. Pending approvals, memory
+  receipts, notices and the problem summary keep their rows below it. The
+  running tool's Inspect action is in the expanded trace, one click away.
+- When the turn completes, the header summarizes the successful actions in
+  order of first use, then the time, such as "Searched the web, read a page ·
+  1m 12s". A turn with no successful action reads "Worked for 4s". Incomplete
+  turns keep "Work incomplete". There is no shimmer once the turn ends.
+- A thought's title is its latest bold heading when the model writes them;
+  otherwise its latest intent sentence ("Let me…", "I need to…", "I'll…",
+  "I should…", "I'm going to…", "I want to…", or "I'm checking…"), rewritten
+  as an action such as "Checking the county fee schedule" and cut before a
+  trailing reason (", since…", ", because…"); otherwise its latest complete
+  sentence. A sentence still being written is never shown.
+- The expanded trace is a bordered card with a hairline between rows. Each
+  thought row shows its title. Only when the thought has more text than its
+  title does the row offer a caret; selecting it shows the full text below.
+  Tool rows are unchanged.
+
+No backend, persistence, event or dependency changes. Reasoning is still
+live only, so thought rows still disappear on reload. Deferred: stage 2 saves
+reasoning and titles so the list survives reload; stage 3 writes titles with
+a small, cheap model call. Verification covers the title rule (headings,
+intent rewrites, reason cuts, fallbacks, unfinished sentences), the live
+header for each title source with its clock and shimmer, the completed
+summary, and thought rows with and without more text.
