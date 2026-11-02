@@ -21,8 +21,8 @@ describe("chat model picker", () => {
 
   it("names the current model above the list", () => {
     const html = renderToStaticMarkup(<ModelPicker {...base} value="openai/gpt-test" />);
-    expect(html).toContain("Current:");
-    expect(html.indexOf("GPT Test")).toBeLessThan(html.indexOf('aria-label="Anthropic"'));
+    expect(html).toMatch(/Current: <span[^>]*>GPT Test<\/span>.*aria-label="Anthropic"/);
+    expect(renderToStaticMarkup(<ModelPicker {...base} models={[{id: "x/unnamed", name: "", provider: "x"}]} value="x/unnamed" />)).toMatch(/Current: <span[^>]*>x\/unnamed<\/span>/);
     expect(renderToStaticMarkup(<ModelPicker {...base} value="deepseek/custom" />)).toMatch(/Current:.*deepseek\/custom.*aria-label="Anthropic"/);
     expect(renderToStaticMarkup(<ModelPicker {...base} />)).not.toContain("Current:");
   });
