@@ -20,7 +20,8 @@ const sessions = [
   { id: "s-fin-old", workspaceId: "finance", title: "Set up Chase sync", status: "closed", createdAt: "2026-07-01T10:00:00Z", updatedAt: "2026-07-01T11:00:00Z" },
   { id: "s-rl-1", workspaceId: "intro-rl", title: "Bellman equation walkthrough", status: "active", createdAt: "2026-10-05T17:00:00Z", updatedAt: "2026-10-05T18:00:00Z" },
 ];
-const snapshot = { workspaces, projects: [], sessions, archivedSessions: [sessions[4]], activeSession: sessions[1] };
+const session = (id: string) => sessions.find((entry) => entry.id === id)!;
+const snapshot = { workspaces, projects: [], sessions, archivedSessions: [session("s-fin-old")], activeSession: session("s-fin-1") };
 
 const callbacks = { onSettings: noop, onCreateWorkspace: noop, onArchive: noop, onCloseMobile: noop, onData: noop, onWorkspace: noop, onNewWorkspaceChat: noop, onNewChat: noop, onSession: noop };
 
@@ -52,7 +53,7 @@ export const Busy = () => (
 export const ArchivedWorkspace = () => (
   <AppFrame><Shell>
     <Sidebar
-      snapshot={{ ...snapshot, workspaces: [workspaces[0], { ...workspaces[1], state: "archived" }], activeSession: sessions[1] } as any}
+      snapshot={{ ...snapshot, workspaces: [workspaces[0], { ...workspaces[1], state: "archived" }], activeSession: session("s-fin-1") } as any}
       destination="workspace:finance" busy={false} mobileOpen {...callbacks}
       instructions={<p className="text-fainter px-3 pt-2 text-[11px]">Instructions enabled · revision 4</p>}
     />

@@ -1,9 +1,10 @@
-import { Layers, MessageSquare } from "../ui/Icon";
+import { MessageSquare, Plus } from "../ui/Icon";
 
 /** What Chat shows with no chat open: start a chat with no Workspace, or a
  * new Workspace (ui-chat.spec.md, plain chats amendment, 2026-11-02). A
- * Workspace's own chats start from its row in the sidebar. */
-export function StartChat({ busy, onNewChat, onNewWorkspace }: { busy: boolean; onNewChat: () => void; onNewWorkspace: () => void }) {
+ * Workspace's own chats start from its row in the sidebar, and a project's
+ * from the Workspaces page. */
+export function StartChat({ busy, onNewChat, onNewWorkspace, onManage }: { busy: boolean; onNewChat: () => void; onNewWorkspace: () => void; onManage: () => void }) {
   return (
     <main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-7">
       <div className="w-full max-w-[560px]">
@@ -14,9 +15,10 @@ export function StartChat({ busy, onNewChat, onNewWorkspace }: { busy: boolean; 
             <MessageSquare size={14} /> New chat
           </button>
           <button type="button" disabled={busy} onClick={onNewWorkspace} className="border-hair-input text-body hover:bg-hover hover:text-ink focus-visible:ring-teal flex items-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40">
-            <Layers size={14} /> New workspace
+            <Plus size={14} /> New workspace
           </button>
         </div>
+        <button type="button" onClick={onManage} className="text-teal hover:text-teal-hover mt-5 text-xs">Manage workspaces</button>
       </div>
     </main>
   );

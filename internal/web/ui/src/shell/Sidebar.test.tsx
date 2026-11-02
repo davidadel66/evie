@@ -148,6 +148,16 @@ describe("chats without a workspace", () => {
     expect(html).not.toContain("Closed chat");
   });
 
+  it("marks a chat under Chats as running, waiting or unread, as in a Workspace", () => {
+    const html = renderToStaticMarkup(<Sidebar snapshot={{workspaces: [], projects: [], sessions: [chat("p", "Weekend plans")], archivedSessions: []}} destination="chat" busy={false} mobileOpen={false}
+      marks={{p: {running: true, waiting: true, unread: true}}}
+      onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onData={() => {}} onSystem={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onNewChat={() => {}} onSession={() => {}} />);
+    const row = html.slice(html.indexOf(">Chats<"));
+    expect(row).toContain("animate-spin");
+    expect(row).toContain('title="Waiting for your approval"');
+    expect(row).toMatch(/font-semibold">Weekend plans</);
+  });
+
   it("leaves Chats out until there is one", () => {
     expect(renderChats([chat("w", "Cairo menu", {workspaceId: "one"})])).not.toContain(">Chats<");
   });

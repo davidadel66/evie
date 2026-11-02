@@ -272,6 +272,9 @@ export default function App() {
 
   const startProjectChat = (project: Project) => selectSession({ projectId: project.id });
 
+  // A chat with no Workspace or project (ui-chat.spec.md, plain chats amendment).
+  const startChat = () => selectSession({ unscoped: true });
+
   const registerWorkspace = async (options: WorkspaceCreation) => {
     await contextSessions.register(options);
     setCreateWorkspaceOpen(false);
@@ -335,7 +338,7 @@ export default function App() {
         onSystem={() => openView({ id: "system", kind: "system" })}
         onWorkspace={(workspace) => openWorkspace(workspace)}
         onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
-        onNewChat={() => void selectSession({ unscoped: true })}
+        onNewChat={() => void startChat()}
         onSession={(session) => {
           // Returning to the open chat from another view keeps its draft.
           if (session.id === contextSessions.snapshot?.activeSession?.id) openView(chatView);
@@ -421,8 +424,9 @@ export default function App() {
               ) : (
                 <StartChat
                   busy={contextSessions.busy}
-                  onNewChat={() => void selectSession({ unscoped: true })}
+                  onNewChat={() => void startChat()}
                   onNewWorkspace={() => setCreateWorkspaceOpen(true)}
+                  onManage={() => openView({ id: "workspaces", kind: "workspaces" })}
                 />
               )
             )}
@@ -448,7 +452,7 @@ export default function App() {
                 onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
                 onNewProjectChat={(project) => void startProjectChat(project)}
                 onResume={(session) => void selectSession({ sessionId: session.id })}
-                onNewUnscopedChat={() => void selectSession({ unscoped: true })}
+                onNewUnscopedChat={() => void startChat()}
               />
             )}
             {activeView.kind === "workspace" && activeWorkspace && (

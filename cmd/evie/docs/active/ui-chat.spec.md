@@ -499,8 +499,9 @@ only. This supersedes the 2026-09-21 removal of the top-level New chat button,
 which then led to a scope chooser. Below the Workspaces section, **Chats**
 lists every active chat with no Workspace or project, with the same markers
 and archive control as a Workspace's chats; the section is absent while there
-are none. With no chat open, Chat shows **Start a conversation** with New chat
-and New workspace in place of the scope chooser; a Workspace's chats start
-from its row, and a project's from the Workspaces page. Wherever a chat's
+are none. With no chat open, Chat shows **Start a conversation** with New chat,
+New workspace and the chooser's Manage workspaces link in place of the scope
+chooser; a Workspace's chats start from its row, and a project's from the
+Workspaces page. Wherever a chat's
 scope is named, a chat with no Workspace reads **No workspace**, not
 "Unscoped". No endpoints, scope rules or stored data change.
