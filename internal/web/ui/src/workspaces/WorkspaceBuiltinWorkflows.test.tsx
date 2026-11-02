@@ -30,6 +30,11 @@ describe("Built-in workflows", () => {
     expect(html).toContain("This Workspace runs the built-in.");
     expect(html).toContain("evie workflows customize deep-research --workspace w");
     expect(html).not.toContain("--template");
+    // A row of the Workflows table (Workflows amendment, 2026-11-02): the
+    // bounds and the command sit under Details, not in front of the list.
+    expect(html).toMatch(/<li class="grid grid-cols-\[minmax\(0,1fr\)_110px_90px\]/);
+    expect(html).toContain(">From chat<");
+    expect(html).toMatch(/<summary[^>]*>Details<\/summary>/);
   });
 
   it("says why it cannot start here, and when it is off or overridden", () => {

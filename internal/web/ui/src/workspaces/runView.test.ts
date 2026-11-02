@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowInterruption, WorkflowRun, WorkflowRunDetail, WorkflowStepOutline } from "../api/workflows";
 import { duration } from "../ui/time";
-import { enumChoices, groupRuns, latestStates, mapProgress, runNote, runSteps, runSummary, stepProgress, summarizeOutputs } from "./runView";
+import { acceptsEmptyAnswer, enumChoices, firstSentence, groupRuns, historyByWorkflow, questionList, latestStates, mapProgress, runNote, runSteps, runSummary, runTask, stepProgress, summarizeOutputs } from "./runView";
 
 // finance-review's shape: a branch either ends the run or asks the owner.
 const outline: WorkflowStepOutline[] = [
@@ -124,5 +124,51 @@ describe("map steps", () => {
     ]} as WorkflowRunDetail;
     expect(mapProgress(detail)).toEqual({research: "4 of 6 items done, 1 failed, 1 running"});
     expect(mapProgress({...detail, attempts: []})).toEqual({});
+  });
+});
+
+describe("runs as one line each (runs list amendment, 2026-11-02)", () => {
+  const base = {id: "r", workspace_id: "w", workflow: "finance-review", version: 1, commit: "c", executable_hash: "", authority_hash: "", workspace_revision: "",
+    access_revision: 1, run_key: "k", inputs: {}, surface: "schedule", checkpoint: 1, created_at: "2026-11-02T09:30:00Z"} as const;
+  const question = {run_id: "r", seq: 1, workspace_id: "w", workflow: "finance-review", kind: "question", step: "review", checkpoint: 3,
+    message: "Review the proposed classifications. Answer {} to accept.", request: {input: {lines: [1, 2, 3], rules: [1]}}, response_schema: {}, opened_at: ""} as const;
+
+  it("names a waiting run's task by its step and the largest list it asks about", () => {
+    expect(runTask({...base, state: "waiting_for_human", next_step: "review"}, [], question)).toBe("Review 3 lines");
+    expect(runTask({...base, state: "waiting_for_human", next_step: "review"}, [], {...question, request: {}})).toBe("Review: Review the proposed classifications.");
+    expect(runTask({...base, state: "waiting_for_human", next_step: "pick_one"}, [])).toBe("Pick one");
+    expect(runTask({...base, state: "needs_reconciliation", next_step: "apply"}, [])).toBe("Settle apply's effect");
+  });
+
+  it("groups finished runs under their workflow, newest workflow first, with a summary and a dot per run", () => {
+    const runs = [
+      {...base, id: "a", workflow: "finance-daily", state: "succeeded", created_at: "2026-10-30T09:00:00Z", outputs: {synced: 4}},
+      {...base, id: "b", workflow: "finance-daily", state: "failed", created_at: "2026-11-01T09:00:00Z", error: "1 bank did not sync"},
+      {...base, id: "c", workflow: "finance-daily", state: "succeeded", created_at: "2026-11-02T09:00:00Z"},
+      {...base, id: "d", workflow: "finance-review", state: "succeeded", created_at: "2026-10-12T09:30:00Z"},
+      {...base, id: "e", workflow: "finance-review", state: "waiting_for_human", created_at: "2026-11-02T09:30:00Z"},
+    ] as const;
+    const history = historyByWorkflow([...runs]);
+    expect(history.map((h) => h.workflow)).toEqual(["finance-daily", "finance-review"]);
+    expect(history[0].runs.map((r) => r.id)).toEqual(["c", "b", "a"]);
+    expect(history[0].summary).toBe("2 succeeded, 1 failed · last failed Nov 1");
+    expect(history[0].dots.map((d) => d.label)).toEqual(["Oct 30 succeeded", "Nov 1 failed", "Nov 2 succeeded"]);
+    expect(history[1].runs.map((r) => r.id)).toEqual(["d"]);
+  });
+});
+
+describe("a question's answer shape (run detail amendment, 2026-11-02)", () => {
+  it("accepts {} for an object schema with nothing required", () => {
+    expect(acceptsEmptyAnswer({})).toBe(true);
+    expect(acceptsEmptyAnswer({type: "object", properties: {reject: {type: "array"}}})).toBe(true);
+    expect(acceptsEmptyAnswer({type: "object", required: ["decision"]})).toBe(false);
+    expect(acceptsEmptyAnswer({type: "object", minProperties: 1})).toBe(false);
+    expect(acceptsEmptyAnswer({type: "string"})).toBe(false);
+  });
+  it("names the largest list a question carries and keeps a message's first sentence", () => {
+    const q = {run_id: "r", seq: 1, workspace_id: "w", workflow: "f", kind: "question", step: "review", checkpoint: 1, message: "Review these. Then answer.", request: {input: {lines: [1, 2], rules: [1, 2, 3]}}, response_schema: {}, opened_at: ""} as const;
+    expect(questionList(q)).toEqual({key: "rules", count: 3});
+    expect(questionList({...q, request: {}})).toBeUndefined();
+    expect(firstSentence(q.message)).toBe("Review these.");
   });
 });

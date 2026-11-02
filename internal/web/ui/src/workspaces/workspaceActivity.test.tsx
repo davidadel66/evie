@@ -44,7 +44,9 @@ describe("today's workflow spend", () => {
 describe("Workspace header", () => {
   it("has Runs, Workflows and Settings tabs, the selected one marked", () => {
     const html = renderToStaticMarkup(<WorkspaceHeader tab="workflows" waiting={0} onTab={()=>{}} />);
-    expect([...html.matchAll(/role="tab"[^>]*>([A-Za-z]+)/g)].map((m) => m[1])).toEqual(["Runs", "Workflows", "Settings"]);
+    expect([...html.matchAll(/role="tab" id="workspace-tab-([a-z]+)"/g)].map((m) => m[1])).toEqual(["runs", "workflows", "settings"]);
+    // Settings is a gear pinned right: an icon with its name as the label (strip amendment, 2026-11-02).
+    expect(html).toMatch(/id="workspace-tab-settings"[^>]*aria-label="Settings"/);
     expect(html).toMatch(/aria-selected="true"[^>]*>Workflows/);
     expect(html.match(/aria-selected="true"/g)).toHaveLength(1);
     // The top bar's breadcrumb names the Workspace; the header does not repeat it.
@@ -57,10 +59,8 @@ describe("Workspace header", () => {
     expect(renderToStaticMarkup(<WorkspaceHeader tab="runs" waiting={0} onTab={()=>{}} />)).not.toContain("wait on you");
   });
 
-  it("shows today's workflow spend once it is known, in red when the cap is reached", () => {
+  it("no longer carries today's workflow spend; the Runs tab does", () => {
     expect(renderToStaticMarkup(<WorkspaceHeader tab="runs" waiting={0} onTab={()=>{}} />)).not.toContain("Workflows today");
-    expect(renderToStaticMarkup(<WorkspaceHeader tab="runs" waiting={0} caps={caps} onTab={()=>{}} />)).toContain("Workflows today: 412k of 2M tokens · $3.18");
-    expect(renderToStaticMarkup(<WorkspaceHeader tab="runs" waiting={0} caps={{...caps, reached: true}} onTab={()=>{}} />)).toMatch(/text-danger[^>]*>Workflows today/);
   });
 });
 
@@ -93,9 +93,9 @@ describe("Workspace tabs", () => {
     for (const tab of ["runs", "workflows", "settings"] as const) expect(home(tab)).not.toContain('aria-label="Workflow notifications"');
   });
 
-  it("carries the waiting badge and the spend line into the header", () => {
-    const html = home("settings", 3);
-    expect(html).toContain("3 runs wait on you");
-    expect(html).toContain("Workflows today: 412k of 2M tokens");
+  it("carries the waiting badge into the header and the spend line into Runs", () => {
+    expect(home("settings", 3)).toContain("3 runs wait on you");
+    expect(home("settings", 3)).not.toContain("Workflows today");
+    expect(home("runs", 3)).toContain("Workflows today: 412k of 2M tokens");
   });
 });

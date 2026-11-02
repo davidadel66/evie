@@ -181,3 +181,100 @@ export function mapProgress(detail: WorkflowRunDetail): Record<string, string> {
 export function versionKey(run: WorkflowRun): string {
   return `${run.workflow}@${run.version}@${run.commit}`;
 }
+
+// The Runs list as one line per run (runs list amendment, 2026-11-02): a
+// waiting run reads as a task, and finished runs sit under their workflow
+// with a dot per run, so thirty days of a daily workflow is one row.
+
+function capitalize(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/**
+ * A waiting run's row as a task: the step as a verb, then the largest list
+ * its question carries ("Review 12 lines"); without a list, the question's
+ * first sentence; without a question, the step alone.
+ */
+export function runTask(run: WorkflowRun, steps: RunStep[], question?: WorkflowInterruption): string {
+  const step = question?.step ?? steps.find((s) => s.state === "waiting")?.id ?? run.next_step ?? "";
+  if (run.state === "needs_reconciliation") return `Settle ${step || "a step"}'s effect`;
+  const verb = step ? capitalize(step.replace(/[_-]+/g, " ")) : "Answer";
+  const input = question?.request.input;
+  const source = input && typeof input === "object" ? (input as Record<string, unknown>) : question?.request ?? {};
+  let best: [string, number] | undefined;
+  for (const [key, value] of Object.entries(source)) {
+    if (Array.isArray(value) && (!best || value.length > best[1])) best = [key, value.length];
+  }
+  if (best) return `${verb} ${best[1]} ${best[0].replace(/[_-]+/g, " ")}`;
+  const sentence = question?.message.split(/(?<=[.!?])\s/)[0].trim() ?? "";
+  return sentence ? `${verb}: ${sentence.length > 80 ? `${sentence.slice(0, 77)}…` : sentence}` : verb;
+}
+
+/** How long a run took, once it has started: "41s", "2m 06s". */
+export function runDuration(run: WorkflowRun): string {
+  if (!run.started_at || !run.finished_at) return "";
+  return duration(new Date(run.finished_at).getTime() - new Date(run.started_at).getTime());
+}
+
+export type WorkflowHistory = {
+  workflow: string;
+  /** Newest first. */
+  runs: WorkflowRun[];
+  /** The workflow's recent outcomes in a phrase: "28 succeeded, 5 failed · last failed Nov 1". */
+  summary: string;
+  /** Oldest left, at most thirty, with the state each dot shows. */
+  dots: { run: WorkflowRun; tone: RunTone; label: string }[];
+};
+
+const shortDate = (at: string) => new Date(at).toLocaleDateString("en-US", {month: "short", day: "numeric"});
+
+/** Finished runs under their workflow, the workflow with the newest run first. */
+export function historyByWorkflow(runs: WorkflowRun[]): WorkflowHistory[] {
+  const byWorkflow = new Map<string, WorkflowRun[]>();
+  for (const run of runs) {
+    if (!isFinished(run)) continue;
+    byWorkflow.set(run.workflow, [...(byWorkflow.get(run.workflow) ?? []), run]);
+  }
+  const histories = [...byWorkflow.entries()].map(([workflow, list]) => {
+    const sorted = [...list].sort((a, b) => b.created_at.localeCompare(a.created_at));
+    const count = (state: WorkflowRunState) => sorted.filter((run) => run.state === state).length;
+    const parts: string[] = [];
+    if (count("succeeded")) parts.push(`${count("succeeded")} succeeded`);
+    if (count("failed")) parts.push(`${count("failed")} failed`);
+    if (count("cancelled")) parts.push(`${count("cancelled")} cancelled`);
+    const lastFailed = sorted.find((run) => run.state === "failed");
+    const summary = parts.join(", ") + (lastFailed && sorted[0].state !== "failed" ? ` · last failed ${shortDate(lastFailed.created_at)}` : "");
+    const dots = sorted.slice(0, 30).reverse().map((run) => ({run, tone: runTone(run), label: `${shortDate(run.created_at)} ${runStateLabel[run.state].toLowerCase()}`}));
+    return {workflow, runs: sorted, summary, dots};
+  });
+  return histories.sort((a, b) => b.runs[0].created_at.localeCompare(a.runs[0].created_at));
+}
+
+/**
+ * Whether a question accepts `{}` as its answer: an object schema with no
+ * required properties and no minimum, which is how a review step says
+ * "accept everything as proposed" (run detail amendment, 2026-11-02).
+ */
+export function acceptsEmptyAnswer(schema: Record<string, unknown>): boolean {
+  if (schema.type !== undefined && schema.type !== "object") return false;
+  if (Array.isArray(schema.required) && schema.required.length > 0) return false;
+  if (typeof schema.minProperties === "number" && schema.minProperties > 0) return false;
+  return true;
+}
+
+/** The largest list a question carries and its name, for "Open the 12 lines". */
+export function questionList(question: WorkflowInterruption): { key: string; count: number } | undefined {
+  const input = question.request.input;
+  const source = input && typeof input === "object" ? (input as Record<string, unknown>) : question.request;
+  let best: { key: string; count: number } | undefined;
+  for (const [key, value] of Object.entries(source)) {
+    if (Array.isArray(value) && (!best || value.length > best.count)) best = {key: key.replace(/[_-]+/g, " "), count: value.length};
+  }
+  return best;
+}
+
+/** A message's first sentence, for a question's one-line summary. */
+export function firstSentence(text: string, limit = 160): string {
+  const sentence = text.split(/(?<=[.!?])\s/)[0].trim();
+  return sentence.length > limit ? `${sentence.slice(0, limit - 1)}…` : sentence;
+}

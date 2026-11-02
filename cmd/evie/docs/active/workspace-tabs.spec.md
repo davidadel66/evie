@@ -105,6 +105,14 @@ sealed off from the rest of Evie:
   Custom tabs that do not fit move, from the right, into a More menu after
   Settings; the selected tab always stays visible.
 - A custom tab reloads when it is selected again, and has a Reload control.
+- Strip amendment (2026-11-02): David found a Workspace's own tabs
+  indistinguishable from Runs and Workflows. A thin divider now follows the
+  built-in tabs, and each custom tab carries a small page icon with the
+  title "A page Evie built for this Workspace". Settings is a gear icon
+  pinned to the strip's right edge, labelled Settings for assistive
+  technology; Reload sits beside it while a custom tab is selected. The More
+  menu follows the custom tabs that fit, before the gear. Today's workflow
+  spend line leaves the strip for the Runs tab (workspace-activity.spec.md).
 
 ### Known residual risk
 

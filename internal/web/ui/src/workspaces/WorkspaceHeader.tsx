@@ -1,14 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { WorkflowCapStatus } from "../api/workflows";
-import { ChevronDown } from "../ui/Icon";
-import { reviewText, waitingText, workflowSpendLine, workspaceTabs, type WorkspaceTab } from "./workspaceActivity";
+import { ChevronDown, FileIcon, Settings as SettingsIcon } from "../ui/Icon";
+import { reviewText, waitingText, workspaceTabs, type WorkspaceTab } from "./workspaceActivity";
 import { fitCustomTabs } from "./workspaceTabs";
 
 // The Workspace header under the top bar (workspace-activity.spec.md): the
-// tabs, badges for runs and Changes waiting on the owner, and today's
-// workflow spend. The Workspace's own tabs (workspace-tabs.spec.md) follow
-// the built-in ones; those that do not fit go in More, so the strip never
-// scrolls.
+// tabs and badges for runs and Changes waiting on the owner. The Workspace's
+// own tabs (workspace-tabs.spec.md) follow the built-in ones after a divider,
+// each with a page icon, so they read as pages Evie built for this Workspace;
+// those that do not fit go in More, so the strip never scrolls. Settings is a
+// gear pinned right. Today's workflow spend lives on Runs, the tab it
+// concerns (strip amendment, 2026-11-02).
 // The top bar's breadcrumb already names the Workspace.
 
 const tabGap = 22;
@@ -19,14 +20,13 @@ function tabClass(selected: boolean) {
 
 type HeaderTab = { id: WorkspaceTab; label: string };
 
-export function WorkspaceHeader({tab, waiting, review = 0, showChanges = false, caps, customTabs = [], onTab, onReload}: {
+export function WorkspaceHeader({tab, waiting, review = 0, showChanges = false, customTabs = [], onTab, onReload}: {
   tab: WorkspaceTab;
   waiting: number;
   /** Changes waiting on the owner (changes.spec.md story 6a). */
   review?: number;
   /** The Changes tab shows only for a Workspace with a Repository. */
   showChanges?: boolean;
-  caps?: WorkflowCapStatus;
   /** The Workspace's own tabs that show, in order (workspace-tabs.spec.md). */
   customTabs?: HeaderTab[];
   onTab: (tab: WorkspaceTab) => void;
@@ -43,11 +43,13 @@ export function WorkspaceHeader({tab, waiting, review = 0, showChanges = false, 
   const renderTab = ({id, label}: HeaderTab, fixed: boolean) => {
     const selected = tab === id;
     const badge = id === "runs" ? waiting : id === "changes" ? review : 0;
+    const gear = id === "settings";
     return <button key={id} type="button" role="tab" id={`workspace-tab-${id}`} aria-selected={selected} aria-controls="workspace-tab-panel"
       data-fixed-tab={fixed || undefined}
+      aria-label={gear ? label : undefined} title={gear ? label : !fixed ? "A page Evie built for this Workspace" : undefined}
       onClick={() => (selected && !fixed && onReload ? onReload() : onTab(id))}
-      className={tabClass(selected)}>
-      {label}
+      className={`${tabClass(selected)}${gear ? " ml-auto" : ""}`}>
+      {gear ? <SettingsIcon size={15} /> : <>{!fixed && <span className="text-fainter" aria-hidden="true"><FileIcon size={12} /></span>}{label}</>}
       {badge > 0 && <>
         <span aria-hidden="true" title="Waiting on you"
           className="border-amber-hair-strong bg-amber-bg text-amber-ink min-w-4 rounded-full border px-[5px] text-center text-[10.5px] leading-[14px]">{badge}</span>
@@ -57,17 +59,17 @@ export function WorkspaceHeader({tab, waiting, review = 0, showChanges = false, 
   };
   return <div className="border-hair bg-topbar relative flex h-[42px] flex-none items-stretch gap-6 border-b px-6 sm:px-10">
     <div ref={rowRef} className="flex min-w-0 flex-1 items-stretch gap-[22px]">
-      <div role="tablist" aria-label="Workspace sections" className="flex min-w-0 items-stretch gap-[22px]">
+      <div role="tablist" aria-label="Workspace sections" className="flex min-w-0 flex-1 items-stretch gap-[22px]">
         {leading.map((item) => renderTab(item, true))}
+        {customTabs.length > 0 && <span aria-hidden="true" data-fixed-tab className="bg-hair-input my-auto h-4 w-px flex-none" />}
         {shown.map((item) => renderTab(item, false))}
+        {overflow.length > 0 && <MoreTabs tabs={overflow} onTab={onTab} />}
+        {selectedCustom >= 0 && onReload && <button type="button" onClick={onReload} className="text-faint hover:text-body ml-auto flex flex-none items-center text-[11.5px]">Reload</button>}
         {settings.map((item) => renderTab(item, true))}
       </div>
-      {overflow.length > 0 && <MoreTabs tabs={overflow} onTab={onTab} />}
     </div>
-    {selectedCustom >= 0 && onReload && <button type="button" onClick={onReload} className="text-faint hover:text-body flex flex-none items-center text-[11.5px]">Reload</button>}
-    {caps && <div className={`${caps.reached ? "text-danger" : "text-faint"} hidden items-center text-[11.5px] sm:flex`}>{workflowSpendLine(caps)}</div>}
     {customTabs.length > 0 && <div ref={measureRef} aria-hidden="true" className="invisible absolute top-0 left-0 flex h-0 gap-[22px] overflow-hidden">
-      {customTabs.map(({id, label}) => <span key={id} data-custom-tab className={tabClass(false)}>{label}</span>)}
+      {customTabs.map(({id, label}) => <span key={id} data-custom-tab className={tabClass(false)}><span className="text-fainter"><FileIcon size={12} /></span>{label}</span>)}
       <span data-more-tab className={tabClass(false)}>More <ChevronDown size={12} /></span>
     </div>}
   </div>;

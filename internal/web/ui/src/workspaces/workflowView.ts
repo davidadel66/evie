@@ -73,3 +73,6 @@ export function yamlLine(raw: string): YamlLine {
   if (!match) return {indent: "", dash: "", key: "", rest, comment, depth: 0};
   return {indent: match[1], dash: match[2] ?? "", key: match[3], rest, comment, depth: match[1].length + (match[2] ? 2 : 0)};
 }
+
+/** The Workflows table's grid, shared with the built-in rows so they sit in the same columns (Workflows amendment, 2026-11-02). */
+export const workflowColumns = "grid grid-cols-[minmax(0,1fr)_110px_90px] gap-4 sm:grid-cols-[minmax(0,1fr)_150px_110px_120px]";

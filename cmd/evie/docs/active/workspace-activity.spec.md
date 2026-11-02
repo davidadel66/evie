@@ -27,9 +27,10 @@ Each Workspace gets a header under the app's top bar with tabs: **Runs**,
 badges for what needs the owner now and a line showing today's workflow
 spend.
 
-- **Runs** groups runs as Waiting for you, Running and Earlier. A run opens
+- **Runs** groups runs as Waiting for you, Running and History. A run opens
   in a side panel showing its question, its steps, its outputs, what it
-  spent and where it came from.
+  spent and where it came from. (Runs list amendment, 2026-11-02: see
+  story 17 and 19.)
 - **Workflows** lists each workflow with when it runs, its recent runs and
   its status. A workflow opens in a pop-up with a Steps view, its YAML, its
   approval and a way to start a run.
@@ -50,7 +51,7 @@ spend.
 4. As the owner, I want badges on the tabs for runs waiting on me and Changes needing review, so that I see at a glance what needs me.
 5. As the owner, I want the sidebar to show the same waiting count beside each Workspace, so that I know which Workspace needs me without opening it.
 6. As the owner, I want a badge to clear when I act on the item, so that the badge always means "needs you now".
-7. As the owner, I want the header to show "Workflows today: X of Y tokens · $Z", or the spend alone when there is no cap, so that I know how close workflow runs are to the daily cap.
+7. As the owner, I want the header to show "Workflows today: X of Y tokens · $Z", or the spend alone when there is no cap, so that I know how close workflow runs are to the daily cap. (Strip amendment, 2026-11-02: the line concerns runs, so it now sits on the Runs tab, right of the workflow filters, with the same text and the same red when the cap is reached, instead of on every tab's strip.)
 8. As the owner, I want the app's top bar kept on every view with its breadcrumb, and the Workspace header under it without repeating the Workspace name, so that navigation is the same everywhere.
 9. As the owner, I want the Inspector toggle shown only in chat, so that the Inspector stays a chat tool.
 10. As the owner, I want the Settings tab to hold the research, explore, build, verify, folder and conversation sections unchanged, so that nothing I configure today is lost.
@@ -66,10 +67,10 @@ spend.
 
 ### Runs tab
 
-17. As the owner, I want runs grouped as Waiting for you, Running and Earlier, so that runs needing me are on top.
+17. As the owner, I want runs grouped as Waiting for you, Running and History, so that runs needing me are on top. (Runs list amendment, 2026-11-02, after David found thirty near-identical rows unreadable: History holds one row per workflow, newest first, with a summary such as "28 succeeded, 5 failed · last failed Nov 1" or the latest failure's error, a dot per run for its last thirty runs oldest left, and when it last ran. It opens to its dated runs, five at a time with Show more, each with a dot, the date, the error or output summary, its step bar and its duration. A workflow opens by itself when it is the filter, the only workflow, or holds the selected run.)
 18. As the owner, I want to filter runs by workflow with chips, so that I can follow one workflow's history.
-19. As the owner, I want each run row to show the workflow and version, a one-line note (the question, the current step, the error or the result), a bar of its steps' states, how it started (schedule, chat, CLI or web), and when it started, so that I can triage without opening it.
-20. As the owner, I want a run to open in a 440px panel beside the list, so that I keep my place in the list.
+19. As the owner, I want each run row to show the workflow and version, a one-line note (the question, the current step, the error or the result), a bar of its steps' states, how it started (schedule, chat, CLI or web), and when it started, so that I can triage without opening it. (Runs list amendment, 2026-11-02: a waiting or running row is one line: dot, workflow, text, step bar, when it started. A waiting run's text is its task, the step as a verb plus the largest list its question carries, such as "Review 12 lines", else the question's first sentence; the row ends in an Answer control that opens the run. The version, the trigger and a "Succeeded" word no longer print on every row; the panel keeps the version and origin.)
+20. As the owner, I want a run to open in a 440px panel beside the list, so that I keep my place in the list. (Run detail amendment, 2026-11-02: the panel leads with the name and state, one muted line of facts (origin, version, elapsed, step, spend), then the open question as its task, such as "Review 12 lines", with the message's first sentence. When the question's schema accepts `{}`, an "Accept as proposed" button answers with it, "Open the N lines" shows the step's input, and "Write an answer" reveals the JSON form; a schema that requires fields shows the form at once, and fixed choices stay buttons. Steps are one line each, dot, id, kind and a short fact; only the waiting, running or failed step shows its description until another is clicked.)
 21. As the owner, I want Escape or the close button to close the panel, so that it gets out of the way quickly.
 22. As the owner, I want "No runs yet" when a Workspace has none, so that an empty tab is not mistaken for a loading failure.
 
@@ -92,7 +93,7 @@ spend.
 
 ### Workflows tab
 
-37. As the owner, I want each workflow listed with its name, version, description, when it runs, dots for its recent runs, and its status, so that I see the whole set at once.
+37. As the owner, I want each workflow listed with its name, version, description, when it runs, dots for its recent runs, and its status, so that I see the whole set at once. (Workflows amendment, 2026-11-02: built-in workflows are rows of the same table, tagged "Built in", with "From chat" for when they run, "See Runs" for their runs and the On switch as their status; their bounds, where this Workspace runs them, any problem and the customize command sit under a Details disclosure in the row. The propose command and the explanation of built-ins fold into one "How to add or customize a workflow" disclosure under the table, so the page is the list.)
 38. As the owner, I want "Needs approval" shown for a workflow with a pending proposal, so that I know it will not run yet.
 39. As the owner, I want a workflow to open in a wide pop-up, so that its YAML is readable.
 40. As the owner, I want a Steps view listing each step with its kind, description, and notes such as what it runs after, its conditions and its retries, so that I understand what the workflow does without reading YAML.

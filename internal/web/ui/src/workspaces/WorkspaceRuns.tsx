@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Workspace } from "../api/contextSessions";
-import { workflowRunAPI, type WorkflowInterruption, type WorkflowRun, type WorkflowRunAPI, type WorkflowRunDetail, type WorkflowStepOutline } from "../api/workflows";
+import { workflowRunAPI, type WorkflowCapStatus, type WorkflowInterruption, type WorkflowRun, type WorkflowRunAPI, type WorkflowRunDetail, type WorkflowStepOutline } from "../api/workflows";
 import { ago } from "../ui/time";
+import { workflowSpendLine } from "./workspaceActivity";
 import { WorkflowInterruptionAnswer } from "./WorkflowInterruptionAnswer";
+import { ChevronDown } from "../ui/Icon";
 import {
-  enumChoices, groupRuns, isFinished, latestStates, mapProgress, outputValue, versionKey, runNote, runOrigin, runStateLabel, runSteps, runSummary, runTone, runTrigger,
-  type RunStep, type RunTone, type StepState,
+  acceptsEmptyAnswer, enumChoices, firstSentence, groupRuns, historyByWorkflow, isFinished, questionList, latestStates, mapProgress, outputValue, versionKey, runDuration, runNote, runOrigin, runStateLabel, runSteps, runSummary, runTask, runTone, summarizeOutputs,
+  type RunStep, type RunTone, type StepState, type WorkflowHistory,
 } from "./runView";
 
 // The Runs tab (workspace-activity.spec.md story 2): runs grouped by what
@@ -21,7 +23,7 @@ const segment: Record<StepState, string> = {
 const stepWord: Record<StepState, string> = {done: "done", running: "running", waiting: "waiting for you", failed: "failed", cancelled: "cancelled", pending: "not reached", skipped: "skipped"};
 
 /** One run in the list: the run, its steps and its one-line note. */
-export type RunRow = { run: WorkflowRun; steps: RunStep[]; note: string };
+export type RunRow = { run: WorkflowRun; steps: RunStep[]; note: string; question?: WorkflowInterruption };
 
 export function RunStepBar({steps}: {steps: RunStep[]}) {
   return <div role="img" aria-label={steps.map((step) => `${step.id} ${stepWord[step.state]}`).join(", ")} className="flex gap-0.5">
@@ -29,56 +31,121 @@ export function RunStepBar({steps}: {steps: RunStep[]}) {
   </div>;
 }
 
-export function RunList({rows, workflows, filter, selectedId, now, onFilter, onSelect}: {
+/** Today's workflow spend, right-aligned beside the filters: it concerns runs, so it lives here rather than on every tab (strip amendment, 2026-11-02). */
+function SpendLine({caps}: {caps: WorkflowCapStatus}) {
+  return <span className={`${caps.reached ? "text-danger" : "text-faint"} ml-auto text-[11.5px]`}>{workflowSpendLine(caps)}</span>;
+}
+
+export function RunList({rows, workflows, filter, selectedId, now, caps, onFilter, onSelect}: {
   rows: RunRow[];
   workflows: string[];
   filter: string;
   selectedId?: string;
   now: Date;
+  /** Today's workflow spend, shown here since it concerns runs (strip amendment, 2026-11-02). */
+  caps?: WorkflowCapStatus;
   onFilter: (workflow: string) => void;
   onSelect: (run: WorkflowRun) => void;
 }) {
   const byRun = new Map(rows.map((row) => [row.run.id, row]));
-  const groups = groupRuns(rows.map((row) => row.run).filter((run) => filter === "" || run.workflow === filter));
+  const shown = rows.map((row) => row.run).filter((run) => filter === "" || run.workflow === filter);
+  const groups = groupRuns(shown).filter((group) => group.label !== "Earlier");
+  const histories = historyByWorkflow(shown);
   const chip = (value: string, label: string, mono: boolean) => {
     const on = filter === value;
     return <button key={value || "all"} type="button" aria-pressed={on} onClick={() => onFilter(value)}
-      className={`${on ? "bg-selected border-hair-input text-ink" : "border-hair text-muted-text hover:text-body"} ${mono ? "font-mono" : ""} rounded-[6px] border px-2.5 py-1 text-xs`}>{label}</button>;
+      className={`${on ? "bg-selected border-hair-input text-ink" : "border-hair text-muted-text hover:text-body"} ${mono ? "font-mono" : ""} rounded-full border px-3 py-1 text-xs`}>{label}</button>;
   };
-  const columns = "grid grid-cols-[minmax(0,1fr)_72px_80px_64px] gap-4 sm:grid-cols-[minmax(0,1fr)_72px_96px_72px]";
   return <>
-    {workflows.length > 1 && <div className="mb-5 flex flex-wrap gap-1.5">{[chip("", "All workflows", false), ...workflows.map((name) => chip(name, name, true))]}</div>}
-    <div className={`${columns} text-fainter px-2.5 pb-2 text-[11px]`}><span>Workflow</span><span>Steps</span><span>Trigger</span><span className="text-right">Started</span></div>
-    {groups.length === 0 && <p className="border-hair text-muted-text border-t px-2.5 py-4 text-[12.5px]">No runs yet.</p>}
-    {groups.map((group) => <section key={group.label} aria-label={group.label} className="mb-6">
-      <h3 className={`${group.tone === "amber" ? "text-amber" : group.tone === "muted" ? "text-muted-text" : "text-faint"} flex items-baseline gap-2 px-2.5 pb-2 text-[11px] font-medium`}>
-        {group.label}<span className="text-fainter font-normal">{group.runs.length}</span>
+    {(workflows.length > 1 || caps) && <div className="mb-5 flex flex-wrap items-center gap-1.5">
+      {workflows.length > 1 && [chip("", "All", false), ...workflows.map((name) => chip(name, name, true))]}
+      {caps && <SpendLine caps={caps} />}
+    </div>}
+    {groups.length === 0 && histories.length === 0 && <p className="border-hair text-muted-text border-t px-2.5 py-4 text-[12.5px]">No runs yet.</p>}
+    {groups.map((group) => <section key={group.label} aria-label={group.label} className="mb-7">
+      <h3 className={`${group.tone === "amber" ? "text-amber-ink" : "text-muted-text"} flex items-baseline gap-2 px-2.5 pb-1.5 text-xs font-semibold`}>
+        {group.label}<span className="text-muted-text font-normal">{group.runs.length}</span>
       </h3>
       <ul className="border-hair border-t">
-        {group.runs.map((run) => {
-          const row = byRun.get(run.id)!;
-          const tone = runTone(run);
-          return <li key={run.id}>
-            <button type="button" onClick={() => onSelect(run)} aria-current={selectedId === run.id ? "true" : undefined}
-              className={`${columns} ${selectedId === run.id ? "bg-hover" : ""} border-hair hover:bg-hover w-full items-center border-b px-2.5 py-[11px] text-left`}>
-              <span className="flex min-w-0 flex-col gap-[3px]">
-                <span className="flex items-center gap-2">
-                  <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full ${dot[tone]}`} />
-                  <span className="text-ink font-mono text-[12.5px]">{run.workflow}</span>
-                  <span className="text-fainter text-[11px]">v{run.version}</span>
-                  <span className="sr-only">{runStateLabel[run.state]}</span>
-                </span>
-                <span className={`${tone === "amber" || tone === "danger" ? text[tone] : "text-muted-text"} truncate pl-4 text-xs`}>{row.note}</span>
-              </span>
-              <RunStepBar steps={row.steps} />
-              <span className="text-muted-text truncate text-xs">{runTrigger(run)}</span>
-              <span className="text-faint text-right text-[11.5px]">{ago(run.created_at, now)}</span>
-            </button>
-          </li>;
-        })}
+        {group.runs.map((run) => <RunLine key={run.id} row={byRun.get(run.id)!} now={now} selected={selectedId === run.id} onSelect={onSelect} />)}
       </ul>
     </section>)}
+    {histories.length > 0 && <section aria-label="History">
+      <h3 className="text-muted-text flex items-baseline gap-2 px-2.5 pb-1.5 text-xs font-semibold">History<span className="text-fainter font-normal">{histories.reduce((sum, h) => sum + h.runs.length, 0)} runs</span></h3>
+      <div className="border-hair border-t">
+        {histories.map((history) => <WorkflowHistoryRows key={history.workflow} history={history} rows={byRun} now={now} selectedId={selectedId}
+          open={filter === history.workflow || histories.length === 1 || history.runs.some((run) => run.id === selectedId)} onSelect={onSelect} />)}
+      </div>
+    </section>}
   </>;
+}
+
+/** A waiting or running run on one line: dot, workflow, its task or note, its step bar, when, and Answer when it waits. */
+function RunLine({row, now, selected, onSelect}: {row: RunRow; now: Date; selected: boolean; onSelect: (run: WorkflowRun) => void}) {
+  const {run, steps, question} = row;
+  const tone = runTone(run);
+  const waits = tone === "amber";
+  return <li>
+    <button type="button" onClick={() => onSelect(run)} aria-current={selected ? "true" : undefined}
+      className={`${selected ? "bg-hover" : "hover:bg-hover"} border-hair flex w-full items-center gap-3.5 border-b px-2.5 py-[11px] text-left`}>
+      <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full ${dot[tone]}`} />
+      <span className="text-ink w-[150px] flex-none truncate font-mono text-[13px]">{run.workflow}</span>
+      <span className="sr-only">{runStateLabel[run.state]}</span>
+      <span className={`${waits ? "text-body" : "text-muted-text"} min-w-0 flex-1 truncate text-[13px]`}>{waits ? runTask(run, steps, question) : row.note}</span>
+      <span className="hidden w-[100px] flex-none sm:block"><RunStepBar steps={steps} /></span>
+      <span className="text-muted-text w-[64px] flex-none text-right text-xs">{ago(run.created_at, now)}</span>
+      {waits && <span className="border-amber-hair-strong bg-amber-bg text-amber-ink flex-none rounded-[6px] border px-2.5 py-1 text-xs font-semibold">Answer</span>}
+    </button>
+  </li>;
+}
+
+const historyPage = 5;
+
+/** One workflow's finished runs: a summary row with a dot per run that opens to the dated runs, a page at a time. */
+function WorkflowHistoryRows({history, rows, now, selectedId, open, onSelect}: {
+  history: WorkflowHistory; rows: Map<string, RunRow>; now: Date; selectedId?: string; open: boolean; onSelect: (run: WorkflowRun) => void;
+}) {
+  const [manual, setManual] = useState<boolean>();
+  const [all, setAll] = useState(false);
+  const expanded = manual ?? open;
+  const latest = history.runs[0];
+  const latestTone = runTone(latest);
+  const listed = all ? history.runs : history.runs.slice(0, historyPage);
+  return <div className="border-hair border-b">
+    <button type="button" aria-expanded={expanded} onClick={() => setManual(!expanded)}
+      className="hover:bg-hover flex w-full items-center gap-3.5 px-2.5 py-3 text-left">
+      <span className={`${expanded ? "rotate-180" : ""} text-faint flex-none transition-transform`}><ChevronDown size={12} /></span>
+      <span className="text-ink w-[150px] flex-none truncate font-mono text-[13px]">{history.workflow}</span>
+      <span className="text-muted-text min-w-0 flex-1 truncate text-[13px]">
+        {latest.state === "failed" ? <><span className="text-danger-ink">failed {ago(latest.created_at, now)}</span>{latest.error ? `, ${latest.error}` : ""}</> : history.summary}
+      </span>
+      <span role="img" aria-label={`Last ${history.dots.length} runs, oldest first: ${history.dots.map((d) => d.label).join(", ")}`} className="hidden flex-none gap-[3px] sm:flex">
+        {history.dots.map((d) => <span key={d.run.id} title={d.label} className={`h-2 w-2 rounded-[2px] ${dot[d.tone]}`} />)}
+      </span>
+      <span className="text-muted-text w-[64px] flex-none text-right text-xs">{ago(latest.created_at, now)}</span>
+      <span className="sr-only">{runStateLabel[latest.state]}</span>
+      <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full ${dot[latestTone]} invisible`} />
+    </button>
+    {expanded && <ul className="border-hair border-t pb-2 pl-9">
+      {listed.map((run) => {
+        const tone = runTone(run);
+        const row = rows.get(run.id);
+        const note = run.state === "failed" ? run.error ?? "Failed" : run.state === "cancelled" ? "Cancelled" : summarizeOutputs(run.outputs);
+        return <li key={run.id}>
+          <button type="button" onClick={() => onSelect(run)} aria-current={selectedId === run.id ? "true" : undefined}
+            className={`${selectedId === run.id ? "bg-hover" : "hover:bg-hover"} ${tone === "danger" ? "bg-danger-bg" : ""} flex w-full items-center gap-3.5 rounded-[6px] px-2.5 py-[7px] text-left`}>
+            <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full ${dot[tone]}`} />
+            <span className="text-body w-[64px] flex-none text-[12.5px]">{new Date(run.created_at).toLocaleDateString("en-US", {month: "short", day: "numeric"})}</span>
+            <span className="sr-only">{runStateLabel[run.state]}</span>
+            <span className={`${tone === "danger" ? "text-danger-ink" : "text-faint"} min-w-0 flex-1 truncate text-[12.5px]`}>{note}</span>
+            {row && <span className="hidden w-[100px] flex-none sm:block"><RunStepBar steps={row.steps} /></span>}
+            <span className="text-fainter w-[64px] flex-none text-right text-xs">{runDuration(run)}</span>
+          </button>
+        </li>;
+      })}
+      {history.runs.length > historyPage && !all && <li><button type="button" onClick={() => setAll(true)} className="text-teal px-2.5 py-[7px] text-xs">Show {history.runs.length - historyPage} more</button></li>}
+    </ul>}
+  </div>;
 }
 
 const timelineDot: Record<StepState, string> = {
@@ -132,6 +199,8 @@ export function RunDetail({detail, steps, sessionTitle, now, busy, problem, onOp
   const open = (detail.interruptions ?? []).filter((interruption) => !interruption.resolution);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
+  // Which step shows its description: undefined means the live one, null none.
+  const [openStep, setOpenStep] = useState<string | null | undefined>(undefined);
   const unfinished = !isFinished(run);
   const outputs = run.state === "succeeded" ? Object.entries(run.outputs ?? {}) : [];
   const maps = mapProgress(detail);
@@ -154,39 +223,38 @@ export function RunDetail({detail, steps, sessionTitle, now, busy, problem, onOp
     </div>;
   return <div className="flex min-h-0 flex-1 flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto px-[22px] pt-5 pb-8">
+      {/* Run detail amendment (2026-11-02): the name and state, one muted line
+          of facts, then the question with its answer before anything else. */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-ink font-mono text-base font-medium">{run.workflow}</span>
-        <span className="text-fainter text-xs">v{run.version}</span>
+        <span className="text-ink font-mono text-[15px] font-medium">{run.workflow}</span>
         <span className={`${text[tone]} inline-flex items-center gap-1.5 text-xs`}><span aria-hidden="true" className={`h-[7px] w-[7px] rounded-full ${dot[tone]}`} />{runStateLabel[run.state]}</span>
       </div>
-      <p className="text-muted-text mt-2 flex flex-wrap gap-1.5 text-[12.5px]">
+      <p className="text-faint mt-1.5 flex flex-wrap gap-x-1.5 text-xs">
         <span>{runOrigin(run)}</span>
         {run.surface === "chat" && (run.session_id && onOpenSession
           ? <button type="button" onClick={() => onOpenSession(run.session_id!)} className="text-teal underline underline-offset-2">{sessionTitle || "its chat"}</button>
           : <span>a chat</span>)}
+        <span>· v{run.version} · {runSummary(detail, steps, now)}</span>
       </p>
-      <p className="text-fainter mt-[3px] text-xs">{runSummary(detail, steps, now)}</p>
-
-      {open.map((interruption) => <WaitingBox key={interruption.seq} interruption={interruption} busy={busy} onAnswer={onAnswer} />)}
+      {open.map((interruption) => <WaitingBox key={interruption.seq} run={run} steps={steps} interruption={interruption} busy={busy} onAnswer={onAnswer} />)}
       {run.state === "failed" && run.error && <p role="alert" className="border-danger-hair bg-danger-bg text-danger-ink-soft mt-[18px] rounded-[8px] border px-3.5 py-3 text-[12.5px] leading-[1.55]">{run.error}</p>}
 
-      <h3 className="text-faint mt-6 mb-3 text-[11px] font-medium">Steps</h3>
+      <h3 className="text-faint mt-7 mb-2 text-[11px] font-medium tracking-wide uppercase">Steps</h3>
       <ol>
-        {steps.map((step, index) => <li key={step.id} className="grid grid-cols-[12px_minmax(0,1fr)] gap-x-3">
-          <span className="flex flex-col items-center">
-            <span aria-hidden="true" className={`mt-1 h-2.5 w-2.5 flex-none rounded-full border-2 ${timelineDot[step.state]}`} />
-            {index < steps.length - 1 && <span className="bg-hair-strong my-1 w-px flex-1" />}
-          </span>
-          <span className="min-w-0 pb-4">
-            <span className="flex flex-wrap items-baseline gap-2">
-              <span className={`${step.state === "pending" || step.state === "skipped" ? "text-faint" : "text-ink"} font-mono text-[12.5px]`}>{step.id}</span>
-              <span className="text-fainter text-[11px]">{step.kind}</span>
-              <span className={`${step.state === "waiting" ? "text-amber" : step.state === "failed" ? "text-danger" : "text-fainter"} text-[11px]`}>{stepWord[step.state]}</span>
-            </span>
-            {step.description && <span className="text-muted-text mt-0.5 block text-xs leading-normal">{step.description}</span>}
-            {maps[step.id] && <span className="text-body mt-0.5 block text-xs">{maps[step.id]}</span>}
-          </span>
-        </li>)}
+        {steps.map((step) => {
+          const live = step.state === "waiting" || step.state === "running" || step.state === "failed";
+          const shown = openStep === step.id || (openStep === undefined && live);
+          const fact = maps[step.id] ?? (step.state === "done" ? "" : stepWord[step.state]);
+          return <li key={step.id}>
+            <button type="button" aria-expanded={shown} onClick={() => setOpenStep(shown ? null : step.id)} className="hover:bg-hover -mx-2 flex w-[calc(100%_+_16px)] items-center gap-3 rounded-[6px] px-2 py-[6px] text-left">
+              <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full border-2 ${timelineDot[step.state]}`} />
+              <span className={`${step.state === "pending" || step.state === "skipped" ? "text-faint" : "text-ink"} w-[88px] flex-none truncate font-mono text-[12.5px]`}>{step.id}</span>
+              <span className="text-fainter min-w-0 flex-1 truncate text-[11.5px]">{step.kind}{fact ? <span className={step.state === "waiting" ? "text-amber-ink" : step.state === "failed" ? "text-danger-ink" : ""}> · {fact}</span> : null}</span>
+              {step.state === "done" && <span className="sr-only">{stepWord[step.state]}</span>}
+            </button>
+            {shown && step.description && <p className="text-muted-text mt-0.5 mb-1.5 pl-5 text-xs leading-normal">{step.description}</p>}
+          </li>;
+        })}
       </ol>
 
       {outputs.length > 0 && <>
@@ -209,24 +277,37 @@ export function RunDetail({detail, steps, sessionTitle, now, busy, problem, onOp
   </div>;
 }
 
-function WaitingBox({interruption, busy, onAnswer}: {interruption: WorkflowInterruption; busy: boolean; onAnswer: (step: string, answer: Record<string, unknown>) => void}) {
-  const choices = interruption.kind === "question" ? enumChoices(interruption.response_schema) : undefined;
-  return <section aria-label={`steps.${interruption.step} needs your answer`} className="border-amber-hair-strong bg-amber-bg mt-[18px] rounded-[8px] border p-3.5">
-    <h3 className="text-amber text-[11px] font-medium">{interruption.kind === "question" ? `steps.${interruption.step} needs your answer` : `steps.${interruption.step}'s effect needs settling`}</h3>
-    {choices ? <>
-      <p className="text-amber-ink mt-1.5 mb-3 text-[13px] leading-[1.55]">{interruption.message}</p>
-      <div className="flex flex-wrap gap-2">{choices.values.map((value) => <button key={value} type="button" disabled={busy}
-        onClick={() => onAnswer(interruption.step, {[choices.property]: value})}
-        className="border-amber-hair-strong text-amber-ink hover:bg-amber-hair rounded-[6px] border px-3 py-[5px] text-[12.5px] font-medium disabled:opacity-40">{value}</button>)}</div>
-    </> : <div className="text-xs"><WorkflowInterruptionAnswer interruption={interruption} busy={busy} onAnswer={onAnswer} /></div>}
-    <p className="text-muted-text mt-2.5 text-[11.5px]">You can also answer in any chat in this workspace.</p>
+function WaitingBox({run, steps, interruption, busy, onAnswer}: {run: WorkflowRun; steps: RunStep[]; interruption: WorkflowInterruption; busy: boolean; onAnswer: (step: string, answer: Record<string, unknown>) => void}) {
+  const question = interruption.kind === "question";
+  const choices = question ? enumChoices(interruption.response_schema) : undefined;
+  const acceptsEmpty = question && !choices && acceptsEmptyAnswer(interruption.response_schema);
+  const list = question ? questionList(interruption) : undefined;
+  const [showInput, setShowInput] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const sinceText = new Date(interruption.opened_at).toLocaleTimeString("en-US", {hour: "numeric", minute: "2-digit"});
+  return <section aria-label={question ? `steps.${interruption.step} needs your answer` : `steps.${interruption.step}'s effect needs settling`} className="border-amber-hair-strong bg-amber-bg mt-[18px] rounded-[10px] border px-4 py-3.5">
+    <h3 className="text-ink text-[15px] leading-[1.35] font-semibold">{question ? runTask(run, steps, interruption) : `Did steps.${interruption.step}'s effect happen?`}</h3>
+    {question && !writing && <p className="text-body-dim mt-1.5 text-[12.5px] leading-[1.5]">{firstSentence(interruption.message)}</p>}
+    {choices ? <div className="mt-3 flex flex-wrap gap-2">{choices.values.map((value) => <button key={value} type="button" disabled={busy}
+      onClick={() => onAnswer(interruption.step, {[choices.property]: value})}
+      className="border-amber-hair-strong text-amber-ink hover:bg-amber-hair rounded-[6px] border px-3 py-[5px] text-[12.5px] font-medium disabled:opacity-40">{value}</button>)}</div>
+    : acceptsEmpty && !writing ? <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
+      <button type="button" disabled={busy} onClick={() => onAnswer(interruption.step, {})} className="bg-teal text-primary-foreground rounded-[7px] px-3.5 py-2 text-[13px] font-semibold disabled:opacity-40">Accept as proposed</button>
+      {list && <button type="button" aria-expanded={showInput} onClick={() => setShowInput(!showInput)} className="border-hair-input text-body hover:bg-hover rounded-[7px] border px-3 py-[7px] text-[12.5px]">{showInput ? "Hide" : "Open"} the {list.count} {list.key}</button>}
+      <button type="button" onClick={() => setWriting(true)} className="text-muted-text hover:text-body ml-auto text-xs">Write an answer</button>
+    </div>
+    : <div className="text-xs"><WorkflowInterruptionAnswer interruption={interruption} busy={busy} onAnswer={onAnswer} /></div>}
+    {acceptsEmpty && !writing && showInput && <pre className="bg-code text-body mt-3 max-h-80 overflow-auto rounded-[6px] p-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap">{JSON.stringify(interruption.request.input ?? interruption.request, null, 2)}</pre>}
+    <p className="text-muted-text mt-3 text-[11.5px]">Waiting since {sinceText} · You can also answer in any chat in this workspace.</p>
   </section>;
 }
 
 /** The Runs tab: loads the Workspace's runs, its open questions and each run version's steps, and keeps them current. */
-export function WorkspaceRuns({workspace, selectedId, filter = "", sessionTitles = {}, onSelect, onFilter, onOpenSession, onChanged, api = workflowRunAPI}: {
+export function WorkspaceRuns({workspace, selectedId, filter = "", sessionTitles = {}, caps, onSelect, onFilter, onOpenSession, onChanged, api = workflowRunAPI}: {
   workspace: Workspace;
   selectedId?: string;
+  /** Today's workflow spend for the line beside the filters. */
+  caps?: WorkflowCapStatus;
   /** The workflow the list is narrowed to; "" for all. */
   filter?: string;
   sessionTitles?: Record<string, string>;
@@ -290,7 +371,8 @@ export function WorkspaceRuns({workspace, selectedId, filter = "", sessionTitles
 
   const rows = useMemo(() => (runs ?? []).map((run) => {
     const steps = runSteps(run, outlines[versionKey(run)] ?? []);
-    return {run, steps, note: runNote(run, steps, questions.find((q) => q.run_id === run.id))};
+    const question = questions.find((q) => q.run_id === run.id);
+    return {run, steps, note: runNote(run, steps, question), question};
   }), [runs, outlines, questions]);
   const workflows = useMemo(() => [...new Set((runs ?? []).map((run) => run.workflow))].sort(), [runs]);
 
@@ -302,11 +384,11 @@ export function WorkspaceRuns({workspace, selectedId, filter = "", sessionTitles
   };
   const selectedSteps = detail ? runSteps(detail.run, outlines[versionKey(detail.run)] ?? [], latestStates(detail)) : [];
 
-  return <div className="relative flex min-h-0 flex-1">
+  return <div className="relative flex min-h-0 min-w-0 flex-1">
     <section aria-label="Workflow runs" className="min-w-0 flex-1 overflow-y-auto">
       <div className="mx-auto max-w-[1000px] px-6 pt-6 pb-16 sm:px-7">
-        {runs === null ? <p className="text-muted-text text-xs">{problem || "Loading runs…"}</p>
-          : <RunList rows={rows} workflows={workflows} filter={filter} selectedId={selectedId} now={now} onFilter={(workflow) => onFilter?.(workflow)} onSelect={(run) => { setProblem(""); onSelect(run.id); }} />}
+        {runs === null ? <><div className="mb-5 flex items-center">{caps && <SpendLine caps={caps} />}</div><p className="text-muted-text text-xs">{problem || "Loading runs…"}</p></>
+          : <RunList rows={rows} workflows={workflows} filter={filter} selectedId={selectedId} now={now} caps={caps} onFilter={(workflow) => onFilter?.(workflow)} onSelect={(run) => { setProblem(""); onSelect(run.id); }} />}
         {problem && runs !== null && !detail && <p role="alert" className="text-danger mt-2 text-xs">{problem}</p>}
       </div>
     </section>
