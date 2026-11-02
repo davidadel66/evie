@@ -15443,6 +15443,15 @@ evieExplorer.register(
       ]
     },
     {
+      "term": "Global Conversation",
+      "definition": "A conversation started outside any Context Scope, so it uses only global memory and its own session memory.",
+      "avoid": [
+        "Unscoped session",
+        "plain chat",
+        "General workspace"
+      ]
+    },
+    {
       "term": "Graph Link",
       "definition": "An explicitly accepted typed relationship between semantic objects for structure or provenance when the relationship is not an ordinary Claim.",
       "avoid": [

@@ -111,6 +111,11 @@ memory and configuration a session may use in addition to global and session
 memory.
 _Avoid_: Agent preset, account connection
 
+**Global Conversation**:
+A conversation started outside any Context Scope, so it uses only global memory
+and its own session memory.
+_Avoid_: Unscoped session, plain chat, General workspace
+
 **Repository**:
 The one version-controlled codebase a Workspace may own, kept only on the
 owner's machine or also on GitHub. A Workspace has no Repository or exactly one.
