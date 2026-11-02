@@ -112,9 +112,9 @@ memory.
 _Avoid_: Agent preset, account connection
 
 **Global Conversation**:
-A conversation started outside any Context Scope, so it uses only global memory
-and its own session memory.
-_Avoid_: Unscoped session, plain chat, General workspace
+A conversation started outside any Context Scope, with global memory, its own
+session memory, and the earlier Global Conversations it may recall.
+_Avoid_: Unscoped session, plain chat
 
 **Repository**:
 The one version-controlled codebase a Workspace may own, kept only on the

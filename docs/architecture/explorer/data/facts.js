@@ -15444,11 +15444,10 @@ evieExplorer.register(
     },
     {
       "term": "Global Conversation",
-      "definition": "A conversation started outside any Context Scope, so it uses only global memory and its own session memory.",
+      "definition": "A conversation started outside any Context Scope, with global memory, its own session memory, and the earlier Global Conversations it may recall.",
       "avoid": [
         "Unscoped session",
-        "plain chat",
-        "General workspace"
+        "plain chat"
       ]
     },
     {
