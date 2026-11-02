@@ -491,3 +491,20 @@ resizable from its right edge between 200px and 360px by drag or arrow keys
 (Home/End for the limits); double-click resets it and the width persists per
 browser. Narrow screens keep the overlay, capped at 85% of the viewport,
 without the resize edge.
+
+**Plain chats amendment (2026-11-02):** a chat needs no Workspace. The sidebar
+starts with **New chat**, which opens a chat with no Workspace or filesystem
+project, the existing unscoped selection, so it has global and chat memory
+only. This supersedes the 2026-09-21 removal of the top-level New chat button,
+which then led to a scope chooser. New chat reopens the open chat instead
+while it has no Workspace and nothing in it yet, so repeated clicks leave no
+empty chats behind. Below the Workspaces section, **Chats** lists the ten
+latest active chats with no Workspace or project, with the same markers and
+archive control as a Workspace's chats; **Show all** reveals the rest and
+carries their markers while they are hidden. The section is absent while there
+are none. With no chat open, Chat shows **Start a conversation** with New chat,
+New workspace and the chooser's Manage workspaces link in place of the scope
+chooser; a Workspace's chats start from its row, and a project's from the
+Workspaces page. Wherever a chat's
+scope is named, a chat with no Workspace reads **No workspace**, not
+"Unscoped". No endpoints, scope rules or stored data change.

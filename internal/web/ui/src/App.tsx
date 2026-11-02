@@ -22,10 +22,12 @@ import { DataHub, type DataSource } from "./data/DataHub";
 import { SystemView } from "./system/SystemView";
 import { usePendingMemoryProposals } from "./candidateInbox/pendingProposals";
 import { Sidebar, type SidebarDestination } from "./shell/Sidebar";
+import { StartChat } from "./shell/StartChat";
+import { reusableChat } from "./shell/plainChats";
 import { useContextSessions } from "./store/useContextSessions";
 import { useSession } from "./store/useSession";
 import { Banner } from "./ui/Banner";
-import { Folder, MessageSquare, PanelRight, Sidebar as SidebarIcon } from "./ui/Icon";
+import { PanelRight, Sidebar as SidebarIcon } from "./ui/Icon";
 import {
   defaultChatTextSize,
   resolveChatTextSize,
@@ -271,6 +273,18 @@ export default function App() {
 
   const startProjectChat = (project: Project) => selectSession({ projectId: project.id });
 
+  // A chat with no Workspace or project (ui-chat.spec.md, plain chats
+  // amendment). An open chat with nothing in it yet is reused rather than
+  // leaving another empty chat in the sidebar.
+  const startChat = async () => {
+    if (reusableChat(contextSessions.snapshot?.activeSession, items.length, historyLoading)) {
+      openView(chatView);
+      setMobileNavOpen(false);
+      return;
+    }
+    await selectSession({ unscoped: true });
+  };
+
   const registerWorkspace = async (options: WorkspaceCreation) => {
     await contextSessions.register(options);
     setCreateWorkspaceOpen(false);
@@ -334,6 +348,7 @@ export default function App() {
         onSystem={() => openView({ id: "system", kind: "system" })}
         onWorkspace={(workspace) => openWorkspace(workspace)}
         onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
+        onNewChat={() => void startChat()}
         onSession={(session) => {
           // Returning to the open chat from another view keeps its draft.
           if (session.id === contextSessions.snapshot?.activeSession?.id) openView(chatView);
@@ -417,12 +432,10 @@ export default function App() {
                   />
                 </>
               ) : (
-                <ChooseScope
-                  snapshot={contextSessions.snapshot}
+                <StartChat
                   busy={contextSessions.busy}
-                  onWorkspace={(workspace) => void startWorkspaceChat(workspace)}
-                  onProject={(project) => void startProjectChat(project)}
-                  onUnscoped={() => void selectSession({ unscoped: true })}
+                  onNewChat={() => void startChat()}
+                  onNewWorkspace={() => setCreateWorkspaceOpen(true)}
                   onManage={() => openView({ id: "workspaces", kind: "workspaces" })}
                 />
               )
@@ -449,7 +462,7 @@ export default function App() {
                 onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
                 onNewProjectChat={(project) => void startProjectChat(project)}
                 onResume={(session) => void selectSession({ sessionId: session.id })}
-                onNewUnscopedChat={() => void selectSession({ unscoped: true })}
+                onNewUnscopedChat={() => void startChat()}
               />
             )}
             {activeView.kind === "workspace" && activeWorkspace && (
@@ -547,51 +560,6 @@ export function WorkbenchBar({
       {/* The Inspector belongs to chat; other views open it only from their own controls. */}
       {view.kind === "chat" && <button type="button" title="Toggle inspector" aria-label="Toggle inspector" aria-pressed={inspectorOpen} onClick={onToggleInspector} className={`${inspectorOpen ? "text-teal" : "text-faint hover:text-body"} focus-visible:ring-teal flex-none rounded p-2 focus-visible:ring-1 focus-visible:outline-none`}><PanelRight size={15} /></button>}
     </header>
-  );
-}
-
-function ChooseScope({
-  snapshot,
-  busy,
-  onWorkspace,
-  onProject,
-  onUnscoped,
-  onManage,
-}: {
-  snapshot: ReturnType<typeof useContextSessions>["snapshot"];
-  busy: boolean;
-  onWorkspace: (workspace: Workspace) => void;
-  onProject: (project: Project) => void;
-  onUnscoped: () => void;
-  onManage: () => void;
-}) {
-  return (
-    <main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-7">
-      <div className="w-full max-w-[560px]">
-        <div className="text-teal mb-3 flex items-center gap-2 text-xs"><MessageSquare size={14} /> New conversation</div>
-        <h1 className="text-ink text-[22px] font-semibold tracking-[-0.02em]">Choose where this conversation belongs</h1>
-        <p className="text-muted-text mt-2 max-w-[520px] text-[13px] leading-6">The selected context fixes which memory and resources are available for the life of the session.</p>
-        <div className="border-hair mt-7 border-t">
-          {snapshot?.workspaces.filter((workspace) => workspace.state === "active").map((workspace) => (
-            <ScopeChoice key={workspace.id} label={workspace.displayName} detail="Workspace" disabled={busy} onClick={() => onWorkspace(workspace)} />
-          ))}
-          {snapshot?.projects.filter((project) => !project.archived).map((project) => (
-            <ScopeChoice key={project.id} label={project.displayName} detail="Filesystem project" disabled={busy} onClick={() => onProject(project)} />
-          ))}
-          <ScopeChoice label="Unscoped" detail="Global and session memory only" disabled={busy} onClick={onUnscoped} />
-        </div>
-        <button type="button" onClick={onManage} className="text-teal hover:text-teal-hover mt-5 text-xs">Manage workspaces</button>
-      </div>
-    </main>
-  );
-}
-
-function ScopeChoice({ label, detail, disabled, onClick }: { label: string; detail: string; disabled: boolean; onClick: () => void }) {
-  return (
-    <button type="button" disabled={disabled} onClick={onClick} className="border-hair hover:bg-hover flex w-full items-center gap-3 border-b px-2 py-4 text-left disabled:opacity-40">
-      <span className="border-hair-strong text-faint flex h-8 w-8 items-center justify-center rounded-[7px] border"><Folder size={14} /></span>
-      <span className="min-w-0 flex-1"><span className="text-body block truncate text-[13px] font-medium">{label}</span><span className="text-fainter mt-1 block text-[10.5px]">{detail}</span></span>
-    </button>
   );
 }
 

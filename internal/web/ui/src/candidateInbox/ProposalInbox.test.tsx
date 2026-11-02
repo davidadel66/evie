@@ -120,7 +120,7 @@ describe("memory proposal inbox", () => {
     expect(renderToStaticMarkup(<ReviewBadge pending={3} />)).toContain(`aria-label="${pendingLabel(3)}"`);
     const sidebar = renderToStaticMarkup(<Sidebar destination="chat" busy={false} mobileOpen={false} memoryReviewPending={2} onSettings={() => undefined}
       onCreateWorkspace={() => undefined} onArchive={() => undefined} onCloseMobile={() => undefined} onData={() => undefined} onSystem={() => undefined}
-      onWorkspace={() => undefined} onNewWorkspaceChat={() => undefined} onSession={() => undefined} />);
+      onWorkspace={() => undefined} onNewWorkspaceChat={() => undefined} onNewChat={() => undefined} onSession={() => undefined} />);
     expect(sidebar).toContain("2 memory proposals await review");
   });
 });

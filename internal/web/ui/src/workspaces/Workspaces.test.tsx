@@ -43,6 +43,24 @@ describe("Workspaces", () => {
     expect(html).not.toContain("Workspace name");
   });
 
+  it("lists chats without a workspace under that name", () => {
+    const html = renderToStaticMarkup(
+      <Workspaces
+        snapshot={{ workspaces: [workspace], projects: [], sessions: [session, { ...session, id: "plain", workspaceId: undefined, title: "Weekend plans" }] }}
+        busy={false}
+        problem={null}
+        onCreateWorkspace={() => undefined}
+        onOpenWorkspace={() => undefined}
+        onNewWorkspaceChat={() => undefined}
+        onNewProjectChat={() => undefined}
+        onResume={() => undefined}
+        onNewUnscopedChat={() => undefined}
+      />,
+    );
+    expect(html).toContain("No workspace");
+    expect(html).not.toMatch(/unscoped/i);
+  });
+
   it("shows a workspace home with its own chat list", () => {
     const html = renderToStaticMarkup(
       <WorkspaceHome tab="settings" workspace={workspace} sessions={[session]} busy={false} onNewChat={() => undefined} onResume={() => undefined} />,

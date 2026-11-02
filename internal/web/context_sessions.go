@@ -217,5 +217,5 @@ func describeContextScope(session memory.Session, snapshot ContextSessionSnapsho
 		}
 		return descriptor
 	}
-	return ContextScopeDescriptor{Kind: ContextScopeUnscoped, DisplayName: "Unscoped"}
+	return ContextScopeDescriptor{Kind: ContextScopeUnscoped, DisplayName: "No workspace"}
 }

@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -208,5 +209,23 @@ func TestContextSessionHTTPDefaultsOwnerDisplayName(t *testing.T) {
 	handler.ServeHTTP(listed, managementRequest("/api/context-sessions/list", `{}`))
 	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"ownerDisplayName":"You"`) {
 		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
+	}
+}
+
+// ui-chat.spec.md, plain chats amendment (2026-11-02): a chat with no
+// Workspace or project is described as having no workspace.
+func TestContextSessionHTTPNamesAChatWithoutAWorkspace(t *testing.T) {
+	controller := &openingController{fakeContextSessionController: &fakeContextSessionController{}}
+	handler := NewContextServer(nil, nil, nil, controller).Handler()
+	selected := httptest.NewRecorder()
+	handler.ServeHTTP(selected, managementRequest("/api/context-sessions/select", `{"unscoped":true}`))
+	var opened struct {
+		Scope ContextScopeDescriptor `json:"scope"`
+	}
+	if err := json.Unmarshal(selected.Body.Bytes(), &opened); err != nil || selected.Code != http.StatusOK {
+		t.Fatalf("select = %d %s, %v", selected.Code, selected.Body, err)
+	}
+	if opened.Scope.Kind != ContextScopeUnscoped || opened.Scope.DisplayName != "No workspace" {
+		t.Fatalf("scope = %+v", opened.Scope)
 	}
 }

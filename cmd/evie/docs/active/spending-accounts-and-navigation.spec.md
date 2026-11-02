@@ -8,7 +8,9 @@ The sidebar removes its top-level New chat and Workspaces buttons. Data remains,
 followed by one Workspaces heading, its creation plus, each workspace's session
 plus, saved conversations, and Settings. Existing workspace pages and session
 creation remain available through the workspace list and existing empty-state
-flows; no saved conversations are removed.
+flows; no saved conversations are removed. (Amended 2026-11-02: a top-level New
+chat returns, now for a chat with no Workspace; see the plain chats amendment in
+[ui-chat.spec.md](ui-chat.spec.md).)
 
 Data > Spending shows connected banks and their authorized accounts above the
 Overview/Transactions controls. Institution groups show account names, optional

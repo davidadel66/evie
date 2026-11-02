@@ -181,7 +181,7 @@ function ScopeInspection({ scope }: { scope: ContextScope }) {
       <InspectorLabel>Conversation scope</InspectorLabel>
       <h2 className="text-ink mt-2 text-[16px] font-semibold">{scope.displayName}</h2>
       <p className="text-muted-text mt-3 text-xs leading-5">This scope was selected when the session was created and cannot change during the conversation.</p>
-      <Definition label="Context" value={scope.kind === "workspace" ? "Workspace" : scope.kind === "project" ? "Filesystem project" : "Unscoped"} />
+      <Definition label="Context" value={scope.kind === "workspace" ? "Workspace" : scope.kind === "project" ? "Filesystem project" : "No workspace"} />
       {scope.workspaceRevision && <Definition label="Pinned revision" value={scope.workspaceRevision} mono />}
       {scope.projectRoot && <Definition label="Root snapshot" value={scope.projectRoot} mono />}
     </div>
