@@ -229,12 +229,14 @@ export function thoughtTitle(text: string, streaming: boolean): string | null {
 }
 
 // Openers such as "Okay," before the intent, and hedges before its verb,
-// carry nothing a title needs. A negated intent ("I should not…") is not an
-// action, so it is never rewritten.
+// carry nothing a title needs. A negated intent ("I should just not…") is
+// not an action, nor is "Let me know", which asks David; neither is
+// rewritten.
 const openers = "(?:(?:now|okay|ok|so|alright|first|next|then|actually|wait|right|great)[,.!]?\\s+)*";
 const leads = "(?:let me|let[’']s|let us|i need to|i[’']ll|i will|i should|i[’']m going to|i am going to|i want to|i have to|i must)";
 const hedges = "(?:(?:also|just|now|first|then|still|again|maybe|perhaps|probably|quickly|carefully|really|actually|briefly|finally|definitely|simply|further|properly|manually)\\s+)*(?:(?:need|have|try|want) to\\s+)?";
-const intent = new RegExp(`^${openers}(?:${leads}\\s+${hedges}(?!not\\b|never\\b)([a-z]+(?:-[a-z]+)*)|(?:i[’']m|i am)\\s+(?:(?:now|also|still|just)\\s+)*([a-z]+ing))\\b(.*)$`, "i");
+const refused = new RegExp(`^${openers}(?:${leads}\\s+(?:\\S+\\s+){0,3}?(?:not|never)\\b|let me know\\b)`, "i");
+const intent = new RegExp(`^${openers}(?:${leads}\\s+${hedges}([a-z]+(?:-[a-z]+)*)|(?:i[’']m|i am)\\s+(?:(?:now|also|still|just)\\s+)*([a-z]+ing))\\b(.*)$`, "i");
 const intentStart = new RegExp(`(?<=[.!?…]["'”)]?)\\s+(?=${openers}(?:${leads}|i[’']m|i am)\\b)`, "i");
 
 // A trailing reason or follow-on clause is cut: the title says what, not
@@ -242,7 +244,7 @@ const intentStart = new RegExp(`(?<=[.!?…]["'”)]?)\\s+(?=${openers}(?:${lead
 const aside = /\s*(?:;|\s[—–]\s|—|\s-{1,2}\s|,\s*(?:since|because|as|so that|so|which|but|then|and then|to see|to make sure|to confirm|in case|before|after|while|given)\b)/i;
 
 function asAction(sentence: string): string | null {
-  const match = intent.exec(sentence);
+  const match = refused.test(sentence) ? null : intent.exec(sentence);
   if (!match) return null;
   const verb = match[1] ? gerund(match[1].toLowerCase()) : match[2].toLowerCase();
   const rest = match[3].split(aside)[0].replace(/[.!?…:]+["'”)]?$/, "");
@@ -251,10 +253,11 @@ function asAction(sentence: string): string | null {
 
 // "see" reads better as what the model does: "Let me see if…" is checking.
 const gerundOverrides: Record<string, string> = {see: "checking", be: "being", lie: "lying", die: "dying", tie: "tying"};
-// Stressed final syllables double their consonant. One-syllable words, and
-// a prefix before one ("rerun", "debug", "output"), are caught by pattern.
-const doubledGerunds = new Set(["begin", "commit", "submit", "admit", "permit", "omit", "emit", "occur", "regret", "forget", "control", "patrol", "compel", "propel", "expel", "equip", "quit", "transfer", "format", "program"]);
-const doubles = /^(?:re|un|de|out|over|up|pre|in|em)?[^aeiou]+[aeiou][^aeiouwxy]$|^[aeiou][^aeiouwxy]$/;
+// Stressed final syllables double their consonant; one-syllable words are
+// caught by the pattern below. A prefix alone can't tell "rerun" from
+// "render", so longer words are listed.
+const doubledGerunds = new Set(["begin", "commit", "submit", "admit", "permit", "omit", "emit", "remit", "occur", "recur", "refer", "prefer", "defer", "deter", "infer", "regret", "forget", "upset", "reset", "control", "patrol", "compel", "propel", "expel", "repel", "rebel", "equip", "quit", "transfer", "rebut", "format", "program", "debug", "rerun", "refit", "remap", "replan", "recap", "unwrap", "unzip", "unpin", "uncap", "output", "input", "embed", "overlap"]);
+const doubles = /^[^aeiou]*[aeiou][^aeiouwxy]$/;
 
 function gerund(verb: string): string {
   const dash = verb.lastIndexOf("-");

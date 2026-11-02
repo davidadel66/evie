@@ -475,7 +475,8 @@ October 12 live reasoning line amendment.
   "Checking the county fee schedule", cut before a trailing reason or
   follow-on clause (a semicolon, a dash, or ", since…", ", because…",
   ", then…" and the like). A negated intent ("I should not…") is not
-  rewritten. A sentence still being written is never shown.
+  rewritten, nor is "Let me know…", which asks David. A sentence still
+  being written is never shown.
 - The expanded trace is a bordered card with a hairline between rows. Each
   thought row shows its title. Only when the thought has more text than the
   sentence or heading its title came from does the row offer a caret;

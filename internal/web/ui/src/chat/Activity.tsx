@@ -35,20 +35,25 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
   // "Searched the web, read a page · 1m 12s", or "Worked for 4s" with no action.
   const label = pending ? "Waiting for approval" : complete ? summary ?? "Worked" : "Work incomplete";
   const workedFor = complete && !pending && !summary;
+  const live = useLiveTitle(group.active ? group.activity : undefined, pending, !open);
   const show = group.active || group.activity.length > 0 || !!group.turn;
   if (!show) return null;
   return (
     <section aria-label="Turn activity" className="min-w-0 max-w-[min(900px,100%)] flex-none self-stretch">
       <button type="button" aria-expanded={open} aria-controls={bodyID} onClick={() => setManual(!open)} title={elapsedHint}
         className="text-muted-text hover:text-body focus-visible:outline-teal flex max-w-full cursor-pointer items-center gap-2 rounded-sm py-1 text-left text-[13px] focus-visible:outline-2 focus-visible:outline-offset-4">
-        {group.active ? <LiveTitle activity={group.activity} pending={pending} collapsed={!open} />
+        {group.active && !pending ? <span title={live ?? undefined} className="min-w-0 truncate">
+            <span key={live} className="evie-shimmer evie-fade-in">{live}</span>
+          </span>
           : <span className="min-w-0 truncate">{label}{elapsed && workedFor && ` for ${elapsed}`}</span>}
         {elapsed && !workedFor && <span className="shrink-0 tabular-nums">· {elapsed}</span>}
         <span className={`shrink-0 ${open ? "rotate-180" : ""}`}><ChevronDown size={13} /></span>
       </button>
+      {/* Beside the button, not in it: a button's contents aren't announced. */}
+      {group.active && !pending && <span role="status" className="sr-only">{live}</span>}
       <div id={bodyID} hidden={!open} className="border-hair-strong divide-hair mt-2 divide-y rounded-[10px] border *:px-4 *:py-2">
         {open && <ActivityItems items={visibleActivity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />}
-        {open && group.activity.length === 0 && <p className="text-muted-text text-xs">{group.active ? "Waiting for a response…" : "No additional activity to show."}</p>}
+        {open && visibleActivity.length === 0 && <p className="text-muted-text text-xs">{group.active ? "Waiting for a response…" : "No additional activity to show."}</p>}
       </div>
       {!open && <div className="space-y-3">
         <ActivityItems items={collapsedActivity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />
@@ -69,10 +74,12 @@ const elapsedHint = "Elapsed wall time for this turn, including tools, provider 
 // else, when reasoning is the latest thing, that thought's title; else the
 // latest requested tool; else a progress message's title (Writing while
 // longer text streams below); else Thinking, which is all a model that
-// hides its reasoning ever shows here.
-function LiveTitle({activity, pending, collapsed}: {activity: Item[]; pending: boolean; collapsed: boolean}) {
-  const last = activity[activity.length - 1];
-  const tool = [...activity].reverse().find((item): item is ToolItem => item.kind === "tool" && item.result === undefined);
+// hides its reasoning ever shows here. Undefined activity means the turn
+// isn't working, and gives null.
+function useLiveTitle(activity: Item[] | undefined, pending: boolean, collapsed: boolean): string | null {
+  const items = activity ?? [];
+  const last = items[items.length - 1];
+  const tool = [...items].reverse().find((item): item is ToolItem => item.kind === "tool" && item.result === undefined);
   // A delegate waits on its children, so it reports how far they got. The
   // expanded trace's row reports them itself, so only one of them polls.
   const waiting = !!tool && startsSubagents(tool) && collapsed;
@@ -80,7 +87,7 @@ function LiveTitle({activity, pending, collapsed}: {activity: Item[]; pending: b
   // The clock re-renders every second; the text only changes per delta.
   const lastTitle = useMemo(() => {
     if (last?.kind === "reasoning") return thoughtTitle(last.text, last.streaming);
-    if (last?.kind === "assistant" && !last.discarded && (!last.streaming || mayBeProgress(last.text))) return thoughtTitle(last.text, last.streaming);
+    if (last?.kind === "assistant" && !last.discarded && mayBeProgress(last.text)) return thoughtTitle(last.text, last.streaming);
     return null;
   }, [last]);
   let title = "Thinking…";
@@ -90,14 +97,10 @@ function LiveTitle({activity, pending, collapsed}: {activity: Item[]; pending: b
     const progress = (waiting && children ? subagentProgressLabel(children) : null) ?? label;
     title = subject ? `${progress} · ${subject}` : progress;
   } else if (last?.kind === "assistant" && !last.discarded) title = lastTitle ?? (last.streaming ? "Writing…" : "Thinking…");
-  // The approval wait shows at once and is never held, so an answered
-  // approval does not linger on the line.
-  const held = useHeld(pending ? null : title);
-  if (pending) return <span className="min-w-0 truncate">Waiting for approval</span>;
-  const shown = held ?? title;
-  return <span role="status" title={shown} className="min-w-0 truncate">
-    <span key={shown} className="evie-shimmer evie-fade-in">{shown}</span>
-  </span>;
+  // The approval wait pauses the line, so neither it nor the title before
+  // it lingers once the approval is answered.
+  const held = useHeld(activity && !pending ? title : null);
+  return activity && !pending ? held ?? title : null;
 }
 
 function StreamingText({activity}: {activity: Item[]}) {
@@ -110,18 +113,19 @@ const titleHoldMs = 2000;
 
 // Reasoning completes sentences faster than they can be read, so each title
 // stays up for a moment before the line moves to the newest. Null pauses
-// the line; the first title after a pause shows at once.
+// the line; the first title after a pause, or after a long quiet spell,
+// shows at once.
 function useHeld(value: string | null): string | null {
   const [shown, setShown] = useState(value);
   const since = useRef(0);
   useEffect(() => {
-    if (value === null || value === shown) return;
     if (since.current === 0) since.current = Date.now();
-    const wait = shown === null ? 0 : Math.max(0, since.current + titleHoldMs - Date.now());
+    if (value === shown) return;
+    const wait = value === null || shown === null ? 0 : Math.max(0, since.current + titleHoldMs - Date.now());
     const timer = window.setTimeout(() => { since.current = Date.now(); setShown(value); }, wait);
     return () => window.clearTimeout(timer);
   }, [value, shown]);
-  return shown;
+  return value === null ? null : shown;
 }
 
 export function ActivityItems({items, active, onAnswer, onOpenFile, onOpenTool, onOpenMemory}: {items: Item[]; active: boolean; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener}) {

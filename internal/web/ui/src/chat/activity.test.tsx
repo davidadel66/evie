@@ -193,7 +193,8 @@ describe("activity transcript", () => {
     items = reduce(items, {type: "turn_started", id: "u", status: "working", startedAt: 88_000});
     items = reduce(items, {type: "reasoning", text: "I need to think about what David is asking. Let me check memory for prior con"});
     let line = header(items);
-    expect(line).toContain('role="status"');
+    expect(line).not.toContain('role="status"');
+    expect(renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} />)).toMatch(/<\/button><span role="status" class="sr-only">Thinking about what David is asking<\/span>/);
     expect(line).toContain("evie-shimmer");
     expect(line).toContain("Thinking about what David is asking");
     expect(line).toContain("· 12s");
@@ -226,12 +227,12 @@ describe("activity transcript", () => {
     items = reduce(items, {type: "delta", text: "I'll look at the recent Citi card tran"});
     let html = render(items);
     expect(headerOf(html)).toContain("Writing…");
-    expect(body(html)).not.toContain("Citi card tran");
+    expect(body(html)).not.toContain("look at the recent Citi card tran");
 
     items = reduce(items, {type: "delta", text: "sactions.\n\n"});
     html = render(items);
     expect(headerOf(html)).toContain("Looking at the recent Citi card transactions");
-    expect(body(html)).not.toContain("Citi card transactions");
+    expect(body(html)).not.toContain("look at the recent Citi card transactions");
 
     items = reduce(items, {type: "assistant_done", content: "I'll look at the recent Citi card transactions.", parts: [{text: "I'll look at the recent Citi card transactions.", phase: "commentary"}], terminal: false});
     expect(headerOf(render(items))).toContain("Looking at the recent Citi card transactions");
@@ -241,6 +242,9 @@ describe("activity transcript", () => {
     html = render(items);
     expect(headerOf(html)).toContain("Writing…");
     expect(body(html)).toContain("not charges on the card itself");
+
+    items = reduce(items, {type: "assistant_done", content: `${long}Let me know if you want the breakdown.`, parts: [{text: `${long}Let me know if you want the breakdown.`, phase: "commentary"}], terminal: false});
+    expect(headerOf(render(items))).toContain("Thinking…");
   });
 
   it("titles the live line with a requested delegate's own label", () => {
@@ -359,6 +363,11 @@ describe("activity transcript", () => {
     expect(thoughtTitle("Let me apply the patch.", false)).toBe("Applying the patch");
     expect(thoughtTitle("Let me deal with the lender.", false)).toBe("Dealing with the lender");
     expect(thoughtTitle("Let me check the fees, because they changed.", false)).toBe("Checking the fees");
+    expect(thoughtTitle("I should just not touch the ledger.", false)).toBe("I should just not touch the ledger.");
+    expect(thoughtTitle("I'll probably not need that.", false)).toBe("I'll probably not need that.");
+    expect(thoughtTitle("Let me render the chart.", false)).toBe("Rendering the chart");
+    expect(thoughtTitle("Let me debit the account.", false)).toBe("Debiting the account");
+    expect(thoughtTitle("Let me know if you want the breakdown.", false)).toBe("Let me know if you want the breakdown.");
     // "Parcel B." reads as an initial, so the sentences join; the intent after it still counts.
     expect(thoughtTitle("The user wants costs for Parcel B. Let me check the Michigan rules. It might be", true)).toBe("Checking the Michigan rules");
   });
