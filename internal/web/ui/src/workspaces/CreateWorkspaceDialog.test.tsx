@@ -7,8 +7,9 @@ import { defaultFolder, workspaceCreation, type WorkspaceDraft } from "./workspa
 const draft: WorkspaceDraft = { name: "  Interview prep  ", folderPath: "" };
 
 describe("workspace creation", () => {
-  // The server creates every Workspace on the Standard preset with research
-  // delegation on (workspace-research.spec.md, amended 2026-11-02).
+  // Sending neither lets the server create the Workspace on the Standard
+  // preset with research delegation on (workspace-research.spec.md, amended
+  // 2026-11-02).
   it("leaves the preset and research delegation to the server", () => {
     expect(workspaceCreation(draft)).toEqual({ displayName: "Interview prep" });
   });

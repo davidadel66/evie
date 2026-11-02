@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -145,4 +149,73 @@ func TestWorkspaceCreationREPLUsesWorkspaceDefaultPreset(t *testing.T) {
 	if err != nil || selection.createdComposition == nil || selection.createdComposition.Receipt.Preset.ID != "research" || !reflect.DeepEqual(receipt, selection.createdComposition.Receipt) {
 		t.Fatalf("CLI composition = %+v, %v", selection, err)
 	}
+}
+
+// workspaces.decisions.md, 2026-11-02: a Workspace created in the app is
+// Standard with research delegation on, through the real controller and store.
+func TestWorkspaceCreationHTTPStoresResearchByDefault(t *testing.T) {
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	controller := newWebContextSessionController(store, sessionCompositionManager(t), nil)
+	handler := web.NewContextServer(nil, nil, nil, controller).Handler()
+	register := func(body string) memory.Workspace {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:6687/api/workspaces/register", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("%s = %d %s", body, response.Code, response.Body)
+		}
+		var created memory.Workspace
+		if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+			t.Fatal(err)
+		}
+		return created
+	}
+	for body, want := range map[string][]string{
+		`{"displayName":"Plain"}`:                               {"standard", "research"},
+		`{"displayName":"Off","allowResearchDelegation":false}`: {"standard"},
+	} {
+		created := register(body)
+		stored, err := storedWorkspace(store, created.ID)
+		if err != nil || stored.DefaultPresetID != "standard" || !reflect.DeepEqual(stored.AllowedPresetIDs, want) {
+			t.Fatalf("%s stored %+v, %v; want allowed %v", body, stored, err, want)
+		}
+	}
+}
+
+// The REPL creates Workspaces as the app does (workspaces.decisions.md,
+// 2026-11-02).
+func TestWorkspaceCreationREPLAllowsResearch(t *testing.T) {
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	manager := sessionCompositionManager(t)
+	repl := &receiptBoundREPLStore{Store: store, resolvePreset: manager.ResolvePresetContext}
+	created, err := repl.RegisterWorkspace(context.Background(), "From the REPL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := storedWorkspace(store, created.ID)
+	if err != nil || stored.DefaultPresetID != "standard" || !reflect.DeepEqual(stored.AllowedPresetIDs, []string{"standard", "research"}) {
+		t.Fatalf("REPL Workspace %+v, %v", stored, err)
+	}
+}
+
+func storedWorkspace(store *eviedb.Store, id memory.WorkspaceID) (memory.Workspace, error) {
+	listed, err := store.ListWorkspaces(context.Background(), false)
+	for _, workspace := range listed {
+		if workspace.ID == id {
+			return workspace, err
+		}
+	}
+	return memory.Workspace{}, fmt.Errorf("Workspace %s not listed: %v", id, err)
 }

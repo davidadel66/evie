@@ -10,10 +10,11 @@ concise sourced findings to Evie.
   operator overrides remain valid. A worker uses the invoking chat's resolved
   model profile, with its own working budget bounded by the model's route-safe
   window, output reserve, and estimation margin. Parent budgets do not change.
-- New Standard Workspaces allow research delegation from creation, which no
-  longer asks; Workspace settings keep the switch to turn it off and on again.
-  An API request may still send `allowResearchDelegation: false`. Enabling adds
-  the reviewed Research preset for new chats. Existing session snapshots are immutable.
+- New Standard Workspaces, from the app or the REPL, allow research delegation
+  from creation, which no longer asks; Workspace settings keep the switch to
+  turn it off and on again. An API request may still send
+  `allowResearchDelegation: false`. Enabling adds the reviewed Research preset
+  for new chats. Existing session snapshots are immutable.
   Disabling revokes existing research immediately; re-enabling never restores
   a revoked older session's permission. Changes use expected-revision checks.
 - Admission, execution, and child final acceptance enforce active Workspace,

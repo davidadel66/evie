@@ -45,9 +45,8 @@ func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request)
 	}
 	request := body.WorkspaceRegistration
 	request.FolderPath = expandHome(strings.TrimSpace(request.FolderPath))
-	askedResearch := body.AllowResearchDelegation != nil && *body.AllowResearchDelegation
-	if body.AllowResearchDelegation != nil {
-		request.AllowResearchDelegation = askedResearch
+	if explicit := body.AllowResearchDelegation; explicit != nil {
+		request.AllowResearchDelegation = *explicit
 	} else {
 		preset := strings.TrimSpace(request.PresetID)
 		request.AllowResearchDelegation = preset == "" || preset == "standard"
@@ -80,7 +79,7 @@ func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request)
 	var err error
 	if controller, ok := s.contextSessions.(workspaceCreationController); ok {
 		workspace, err = controller.RegisterWorkspaceWithOptions(r.Context(), request)
-	} else if request.PresetID == "" && request.FolderPath == "" && !request.CreateFolder && !askedResearch {
+	} else if request.PresetID == "" && request.FolderPath == "" && !request.CreateFolder && (body.AllowResearchDelegation == nil || !*body.AllowResearchDelegation) {
 		// A controller without options creates a plain Workspace; only an
 		// explicit research request is an option it cannot honor.
 		workspace, err = s.contextSessions.RegisterWorkspace(r.Context(), request.DisplayName)
@@ -89,7 +88,7 @@ func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err != nil {
-		message := "Workspace could not be created; check the Agent Preset and folder"
+		message := "Workspace could not be created; check the folder and plugin settings"
 		if errors.Is(err, eviedb.ErrWorkspaceFolderInvalid) {
 			message = eviedb.ErrWorkspaceFolderInvalid.Error()
 		} else if errors.Is(err, eviedb.ErrWorkspaceCreationUncertain) {

@@ -2,8 +2,9 @@ import type { RepositoryChoice, WorkspaceCreation } from "../api/contextSessions
 
 export type RepositoryKind = "none" | RepositoryChoice["kind"];
 
-/** The server creates every Workspace on the Standard preset with research
- * delegation on (workspace-research.spec.md, amended 2026-11-02). */
+/** The draft names no preset and no research setting: the server creates the
+ * Workspace on the Standard preset with research delegation on
+ * (workspace-research.spec.md, amended 2026-11-02). */
 export type WorkspaceDraft = {
   name: string;
   folderPath: string;

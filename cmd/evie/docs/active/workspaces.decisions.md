@@ -30,8 +30,9 @@
   Workspace now asks only for a name, a repository and a folder. The server
   creates it on the Standard preset with research delegation on, unless the
   request sends `allowResearchDelegation: false`; a request that names another
-  preset gets no research, as before. Workspace settings keep the research
-  switch (David: "sure you can keep it"). Reasons: a Standard chat already has
+  preset gets no research, as before. The REPL creates Workspaces the same
+  way. Workspace settings keep the research switch (David: "sure you can keep
+  it"). Reasons: a Standard chat already has
   web search and page reading itself, so handing that work to a worker reaches
   nothing new, and workers have fewer tools than their parent; every real
   Workspace had chosen Standard with research on; chats outside a Workspace
