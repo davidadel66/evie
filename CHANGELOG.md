@@ -401,7 +401,9 @@ side-by-side or unified diff read through `localfiles.Compare`. A chat's
 build rows open the Inspector on the Change they made, and in a Workspace
 chat `propose_build_merge` shows no merge card: the Change waits in the
 Changes tab, where the owner merges it. The Inspector's folder "Changes" tab
-is renamed "Working tree".
+is renamed "Working tree". Still open under #177: when the owner's checkout
+can't be fast-forwarded, the "N commits behind" count is computed but not yet
+shown.
 
 ## 2026-10-10 — Changes: merge, close, and "Merge when checks pass"
 Branch: master
@@ -512,7 +514,9 @@ Running and Earlier, each with a bar of its steps, and opens a run in a panel
 with its question, error, steps, outputs, and Cancel or Rerun. The Workflows
 tab opens each workflow in a pop-up with its Steps and YAML views, approval
 and recent runs, and a chat's `workflow_start` call shows a live run card
-that opens the run in the Inspector.
+that opens the run in the Inspector. Still open under #178: opening on the
+Changes tab when something needs review, and counting Changes that need
+review in the sidebar badge.
 
 ## 2026-10-07 — Finance: a scheduled daily workflow, name rules, and transfers out of spending
 Branch: master
@@ -929,9 +933,9 @@ Sources: doc:cmd/evie/docs/active/semantic-memory-stage-4.spec.md, doc:cmd/evie/
 
 Adds the durable memory compiler. After defining Stage 4's evidence, durable
 work and owner review contracts, the branch persists bounded owner-assertion
-candidates, recovers fenced compiler work across processes, and activates
-background compilation at explicit frontiers, with bounded historical
-backfill and coverage inspection.
+candidates, recovers fenced compiler work across processes, and lets
+background compilation be activated at explicit frontiers, with bounded
+historical backfill and coverage inspection.
 
 The owner reviews candidates in a web inbox independently of their source
 sessions: simple candidates, sourced identities and Predicate definitions,
@@ -940,6 +944,11 @@ dependent batches, and review decisions are preserved across compiler
 generations. Compiler health and measured progress are exposed, and tooling
 measures the local extractor, proves deterministic conformance, measures the
 workload, and assesses release evidence.
+
+Experimental acceptance stayed open (#135, #136, #150, #151 and the parent
+#131): no adequate extractor was selected, and model-output adjudication, the
+owner pilot and the numerical release gates are still pending, so the merge
+did not activate compilation (#152).
 
 ## 2026-09-04 — Todo and YouTube plugins, and durable Task Trees
 Branch: codex/todo-youtube-task-trees

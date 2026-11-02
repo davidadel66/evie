@@ -16748,7 +16748,7 @@ evieExplorer.register(
         "#177"
       ],
       "text": [
-        "A Workspace with a Repository gets a Changes tab that groups Changes into \"Needs your review\", \"In progress\" and \"Merged and closed\". A Change opens on a review page with the action its state calls for and Close, a rail of files with \"Viewed\" marks, checks and origin, and Evie's notes beside a side-by-side or unified diff read through `localfiles.Compare`. A chat's build rows open the Inspector on the Change they made, and in a Workspace chat `propose_build_merge` shows no merge card: the Change waits in the Changes tab, where the owner merges it. The Inspector's folder \"Changes\" tab is renamed \"Working tree\"."
+        "A Workspace with a Repository gets a Changes tab that groups Changes into \"Needs your review\", \"In progress\" and \"Merged and closed\". A Change opens on a review page with the action its state calls for and Close, a rail of files with \"Viewed\" marks, checks and origin, and Evie's notes beside a side-by-side or unified diff read through `localfiles.Compare`. A chat's build rows open the Inspector on the Change they made, and in a Workspace chat `propose_build_merge` shows no merge card: the Change waits in the Changes tab, where the owner merges it. The Inspector's folder \"Changes\" tab is renamed \"Working tree\". Still open under #177: when the owner's checkout can't be fast-forwarded, the \"N commits behind\" count is computed but not yet shown."
       ]
     },
     {
@@ -16915,7 +16915,7 @@ evieExplorer.register(
         "#178"
       ],
       "text": [
-        "Specifies Changes (#177) and Workspace activity (#178), then builds the activity side. A Workspace opens on a header with Runs, Workflows and Settings tabs, a badge for runs waiting on the owner, and today's workflow spend against the daily cap, and a notifications icon on every view lists notices from every Workspace. The Runs tab groups runs as Waiting for you, Running and Earlier, each with a bar of its steps, and opens a run in a panel with its question, error, steps, outputs, and Cancel or Rerun. The Workflows tab opens each workflow in a pop-up with its Steps and YAML views, approval and recent runs, and a chat's `workflow_start` call shows a live run card that opens the run in the Inspector."
+        "Specifies Changes (#177) and Workspace activity (#178), then builds the activity side. A Workspace opens on a header with Runs, Workflows and Settings tabs, a badge for runs waiting on the owner, and today's workflow spend against the daily cap, and a notifications icon on every view lists notices from every Workspace. The Runs tab groups runs as Waiting for you, Running and Earlier, each with a bar of its steps, and opens a run in a panel with its question, error, steps, outputs, and Cancel or Rerun. The Workflows tab opens each workflow in a pop-up with its Steps and YAML views, approval and recent runs, and a chat's `workflow_start` call shows a live run card that opens the run in the Inspector. Still open under #178: opening on the Changes tab when something needs review, and counting Changes that need review in the sidebar badge."
       ]
     },
     {
@@ -17670,8 +17670,9 @@ evieExplorer.register(
         "#151"
       ],
       "text": [
-        "Adds the durable memory compiler. After defining Stage 4's evidence, durable work and owner review contracts, the branch persists bounded owner-assertion candidates, recovers fenced compiler work across processes, and activates background compilation at explicit frontiers, with bounded historical backfill and coverage inspection.",
-        "The owner reviews candidates in a web inbox independently of their source sessions: simple candidates, sourced identities and Predicate definitions, temporal changes, local clock observations, and edited interpretations with dependent batches, and review decisions are preserved across compiler generations. Compiler health and measured progress are exposed, and tooling measures the local extractor, proves deterministic conformance, measures the workload, and assesses release evidence."
+        "Adds the durable memory compiler. After defining Stage 4's evidence, durable work and owner review contracts, the branch persists bounded owner-assertion candidates, recovers fenced compiler work across processes, and lets background compilation be activated at explicit frontiers, with bounded historical backfill and coverage inspection.",
+        "The owner reviews candidates in a web inbox independently of their source sessions: simple candidates, sourced identities and Predicate definitions, temporal changes, local clock observations, and edited interpretations with dependent batches, and review decisions are preserved across compiler generations. Compiler health and measured progress are exposed, and tooling measures the local extractor, proves deterministic conformance, measures the workload, and assesses release evidence.",
+        "Experimental acceptance stayed open (#135, #136, #150, #151 and the parent #131): no adequate extractor was selected, and model-output adjudication, the owner pilot and the numerical release gates are still pending, so the merge did not activate compilation (#152)."
       ]
     },
     {
