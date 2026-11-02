@@ -29,7 +29,12 @@ type repositoryChoice struct {
 func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		eviedb.WorkspaceRegistration
-		Repository *repositoryChoice `json:"repository,omitempty"`
+		// AllowResearchDelegation shadows the embedded field, so an absent
+		// value can be told apart from false: research is on for a new
+		// Standard Workspace unless the request turns it off
+		// (workspace-research.spec.md, amended 2026-11-02).
+		AllowResearchDelegation *bool             `json:"allowResearchDelegation,omitempty"`
+		Repository              *repositoryChoice `json:"repository,omitempty"`
 	}
 	if status, err := decodeManagementJSON(w, r, &body); err != nil || strings.TrimSpace(body.DisplayName) == "" {
 		if err == nil {
@@ -40,6 +45,13 @@ func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request)
 	}
 	request := body.WorkspaceRegistration
 	request.FolderPath = expandHome(strings.TrimSpace(request.FolderPath))
+	askedResearch := body.AllowResearchDelegation != nil && *body.AllowResearchDelegation
+	if body.AllowResearchDelegation != nil {
+		request.AllowResearchDelegation = askedResearch
+	} else {
+		preset := strings.TrimSpace(request.PresetID)
+		request.AllowResearchDelegation = preset == "" || preset == "standard"
+	}
 	// The Repository is set up first and the Workspace registered at its
 	// folder after, so a failure never leaves a Workspace pointing at a
 	// half-made folder.
@@ -68,7 +80,9 @@ func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request)
 	var err error
 	if controller, ok := s.contextSessions.(workspaceCreationController); ok {
 		workspace, err = controller.RegisterWorkspaceWithOptions(r.Context(), request)
-	} else if request.PresetID == "" && request.FolderPath == "" && !request.CreateFolder && !request.AllowResearchDelegation {
+	} else if request.PresetID == "" && request.FolderPath == "" && !request.CreateFolder && !askedResearch {
+		// A controller without options creates a plain Workspace; only an
+		// explicit research request is an option it cannot honor.
 		workspace, err = s.contextSessions.RegisterWorkspace(r.Context(), request.DisplayName)
 	} else {
 		managementJSONError(w, http.StatusUnprocessableEntity, "workspace_options_unavailable", "Workspace creation options are unavailable")

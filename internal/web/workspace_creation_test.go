@@ -46,6 +46,30 @@ func TestWorkspaceCreationHTTPPassesExplicitOptionsAndSanitizesErrors(t *testing
 	}
 }
 
+// workspace-research.spec.md, amended 2026-11-02: a new Standard Workspace
+// allows research delegation unless the request turns it off.
+func TestWorkspaceCreationHTTPAllowsResearchByDefault(t *testing.T) {
+	controller := &optionsWorkspaceController{}
+	handler := NewContextServer(nil, nil, nil, controller).Handler()
+	for _, tc := range []struct {
+		body string
+		want bool
+	}{
+		{`{"displayName":"Plain"}`, true},
+		{`{"displayName":"Standard","presetId":"standard"}`, true},
+		{`{"displayName":"On","allowResearchDelegation":true}`, true},
+		{`{"displayName":"Off","allowResearchDelegation":false}`, false},
+		{`{"displayName":"Worker","presetId":"research"}`, false},
+	} {
+		controller.options = eviedb.WorkspaceRegistration{}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, managementRequest("/api/workspaces/register", tc.body))
+		if response.Code != http.StatusCreated || controller.options.AllowResearchDelegation != tc.want {
+			t.Fatalf("%s = %d %s, research %v; want %v", tc.body, response.Code, response.Body, controller.options.AllowResearchDelegation, tc.want)
+		}
+	}
+}
+
 func TestWorkspaceCreationHTTPLegacyControllerRejectsUnsupportedOptions(t *testing.T) {
 	controller := &fakeContextSessionController{}
 	handler := NewContextServer(nil, nil, nil, controller).Handler()
