@@ -55,3 +55,54 @@ Spec: [artifacts.spec.md](artifacts.spec.md).
 - **2026-11-02 — Test seams approved.** David approved the three seams in the
   spec's Testing Decisions: the store read on real SQLite, the HTTP route with
   the existing fakes, and the UI render with a hostile report.
+
+- **2026-11-02 — Usage counts the worker's model responses beside its
+  tokens.** Story 14 asks for tokens and requests, but the stored usage holds
+  tokens only. David accepted the recommendation ("yes"): the owner report
+  read also counts the worker's committed model responses in that attempt,
+  shown as model responses beside the tokens. It is counted at read time from
+  the attempt's own events, with no schema change.
+
+- **2026-11-02 — The Activity view keeps the chat renderer for now.** The
+  worker's final message in the Activity trace still renders through the chat
+  renderer, which sanitizes HTML and loads images. That is the exposure the
+  inert mode avoids, but this stage leaves Activity unchanged, as the spec
+  says. David accepted the recommendation ("yes") to record it as a
+  follow-up rather than widen this stage.
+
+- **2026-11-02 — Built as two tickets on `feat/artifacts-report-view`.**
+  David approved the split ("yes"): first, opening a worker's report in the
+  Inspector (store read of the text, route, Report and Activity switch, inert
+  Markdown, no-report and partial states); then, blocked by it, Evie's facts
+  above the report (sources and their verification, unverified URLs, notes,
+  limitations labelled as the worker's, usage, and legacy records).
+
+- **2026-11-02 — Build choices (two-way doors).** Decided under the flow
+  brief David approved ("yes"); each is cheap to reverse.
+  - The read is `Store.SubagentReport` in `eviedb`, beside `SubagentEvents`.
+    A missing worker or another chat's answers `sql.ErrNoRows`, as
+    `SubagentEvents` does.
+  - Run-owned workers read as not found by an explicit check, not only
+    through the parent filter.
+  - The route is `POST /api/subagents/report` with `sessionId` and
+    `executionId`. It reuses the trace route's `subagents_session_changed`
+    (409) and `subagent_not_found` (404) codes.
+  - `delegation.Source` gains a `Legacy()` accessor, because its legacy flag
+    is unexported.
+  - The inert mode is Streamdown with its `sanitize` and `harden` rehype
+    plugins but without `raw`, plus its own link and image components. Code
+    highlighting stays. A local render against streamdown 2.5.0 showed
+    that dropping `raw` turns HTML into text. It also showed that default
+    links render as buttons without `href`, and that React adds an image
+    preload for any `<img>`, so an inert image is never an `<img>`.
+  - Each attempt of a continued worker shows its own final report, the one
+    `read_subagent_report` pages for that execution.
+  - The Report and Activity switch follows its default until David picks a
+    tab, so a worker that finishes while he watches moves to Report.
+  - The report is read once after the worker finishes and is not polled.
+    While the worker runs, Report says the report appears when it finishes.
+  - Source URLs in Evie's facts are clickable. They already passed the
+    harness's http(s) filter, and they open outside Evie as report links do.
+  - A pre-Stage 8 record without a final event shows no report; its inline
+    `findings` are not shown. Every finished attempt has had a final event
+    since 2026-09-11.
