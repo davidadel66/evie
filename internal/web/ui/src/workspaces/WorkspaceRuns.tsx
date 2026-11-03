@@ -4,6 +4,8 @@ import { workflowRunAPI, type WorkflowCapStatus, type WorkflowInterruption, type
 import { ago } from "../ui/time";
 import { workflowSpendLine } from "./workspaceActivity";
 import { WorkflowInterruptionAnswer } from "./WorkflowInterruptionAnswer";
+import { ReviewDeck } from "./ReviewDeck";
+import { reviewable } from "./reviewLines";
 import { ChevronDown } from "../ui/Icon";
 import {
   acceptsEmptyAnswer, enumChoices, firstSentence, groupRuns, historyByWorkflow, isFinished, questionList, latestStates, mapProgress, outputValue, versionKey, runDuration, runNote, runOrigin, runStateLabel, runSteps, runSummary, runTask, runTone, summarizeOutputs,
@@ -282,6 +284,8 @@ function WaitingBox({run, steps, interruption, busy, onAnswer}: {run: WorkflowRu
   const choices = question ? enumChoices(interruption.response_schema) : undefined;
   const acceptsEmpty = question && !choices && acceptsEmptyAnswer(interruption.response_schema);
   const list = question ? questionList(interruption) : undefined;
+  // A review question's lines come as a deck of cards; any other list shows as its input.
+  const review = acceptsEmpty ? reviewable(interruption) : undefined;
   const [showInput, setShowInput] = useState(false);
   const [writing, setWriting] = useState(false);
   const sinceText = new Date(interruption.opened_at).toLocaleTimeString("en-US", {hour: "numeric", minute: "2-digit"});
@@ -293,11 +297,13 @@ function WaitingBox({run, steps, interruption, busy, onAnswer}: {run: WorkflowRu
       className="border-amber-hair-strong text-amber-ink hover:bg-amber-hair rounded-[6px] border px-3 py-[5px] text-[12.5px] font-medium disabled:opacity-40">{value}</button>)}</div>
     : acceptsEmpty && !writing ? <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
       <button type="button" disabled={busy} onClick={() => onAnswer(interruption.step, {})} className="bg-teal text-primary-foreground rounded-[7px] px-3.5 py-2 text-[13px] font-semibold disabled:opacity-40">Accept as proposed</button>
-      {list && <button type="button" aria-expanded={showInput} onClick={() => setShowInput(!showInput)} className="border-hair-input text-body hover:bg-hover rounded-[7px] border px-3 py-[7px] text-[12.5px]">{showInput ? "Hide" : "Open"} the {list.count} {list.key}</button>}
+      {list && <button type="button" aria-expanded={showInput} onClick={() => setShowInput(!showInput)} className="border-hair-input text-body hover:bg-hover rounded-[7px] border px-3 py-[7px] text-[12.5px]">{review ? (showInput ? "Hide" : "Review") : (showInput ? "Hide" : "Open")} the {list.count} {list.key}</button>}
       <button type="button" onClick={() => setWriting(true)} className="text-muted-text hover:text-body ml-auto text-xs">Write an answer</button>
     </div>
     : <div className="text-xs"><WorkflowInterruptionAnswer interruption={interruption} busy={busy} onAnswer={onAnswer} /></div>}
-    {acceptsEmpty && !writing && showInput && <pre className="bg-code text-body mt-3 max-h-80 overflow-auto rounded-[6px] p-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap">{JSON.stringify(interruption.request.input ?? interruption.request, null, 2)}</pre>}
+    {acceptsEmpty && !writing && showInput && (review
+      ? <ReviewDeck key={interruption.seq} lines={review.lines} busy={busy} onAnswer={(answer) => onAnswer(interruption.step, answer)} onClose={() => setShowInput(false)} />
+      : <pre className="bg-code text-body mt-3 max-h-80 overflow-auto rounded-[6px] p-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap">{JSON.stringify(interruption.request.input ?? interruption.request, null, 2)}</pre>)}
     <p className="text-muted-text mt-3 text-[11.5px]">Waiting since {sinceText} · You can also answer in any chat in this workspace.</p>
   </section>;
 }
