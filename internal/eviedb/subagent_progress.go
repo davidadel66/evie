@@ -223,7 +223,7 @@ const subagentReportViewBytes = 1 << 20
 // one (sql.ErrNoRows). It applies the open-chat rule only, not the model-side
 // checks ReadSubagentReport adds (artifacts.decisions.md, 2026-11-02).
 func (s *Store) SubagentReport(ctx context.Context, session memory.SessionID, executionID string) (SubagentReport, error) {
-	var doc SubagentReport
+	var report SubagentReport
 	err := s.withSubagentReadTransaction(ctx, func(conn *sql.Conn) error {
 		a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE id=? AND parent_session_id=?`, executionID, session))
 		if err != nil {
@@ -234,11 +234,11 @@ func (s *Store) SubagentReport(ctx context.Context, session memory.SessionID, ex
 		if a.Run != nil {
 			return sql.ErrNoRows
 		}
-		doc = SubagentReport{ExecutionID: a.ID, Worker: a.Worker(), Status: a.State}
+		report = SubagentReport{ExecutionID: a.ID, Worker: a.Worker(), Status: a.State}
 		if r := a.Result; r != nil {
-			doc.Reason, doc.UnverifiedURLs, doc.Limitations, doc.Notes, doc.Usage = r.Reason, r.UnverifiedURLs, r.Limitations, r.Notes, r.Usage
+			report.Reason, report.UnverifiedURLs, report.Limitations, report.Notes, report.Usage = r.Reason, r.UnverifiedURLs, r.Limitations, r.Notes, r.Usage
 			for _, source := range r.Sources {
-				doc.Sources = append(doc.Sources, SubagentReportSource{URL: source.URL, Fetched: source.Fetched, Cited: source.Cited, Legacy: source.Legacy()})
+				report.Sources = append(report.Sources, SubagentReportSource{URL: source.URL, Fetched: source.Fetched, Cited: source.Cited, Legacy: source.Legacy()})
 			}
 			after, until, err := attemptRange(ctx, conn, a)
 			if err != nil {
@@ -248,20 +248,20 @@ func (s *Store) SubagentReport(ctx context.Context, session memory.SessionID, ex
 			if err = conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE session_id=? AND sequence>? AND sequence<=? AND event_type='assistant_message'`, a.Child.ID, after, until).Scan(&responses); err != nil {
 				return fmt.Errorf("count child responses: %w", err)
 			}
-			doc.ModelResponses = &responses
+			report.ModelResponses = &responses
 		}
 		if a.FinalEventID == "" {
 			return nil
 		}
-		var report string
-		if err = conn.QueryRowContext(ctx, `SELECT content FROM events WHERE id=? AND session_id=? AND event_type='assistant_message'`, a.FinalEventID, a.Child.ID).Scan(&report); err != nil {
-			return fmt.Errorf("load stored report: %w", err)
+		text, err := loadFinalReport(ctx, conn, a)
+		if err != nil {
+			return err
 		}
-		text := utf8Prefix(report, subagentReportViewBytes)
-		doc.Text, doc.TotalBytes, doc.OmittedBytes = &text, len(report), len(report)-len(text)
+		shown := utf8Prefix(text, subagentReportViewBytes)
+		report.Text, report.TotalBytes, report.OmittedBytes = &shown, len(text), len(text)-len(shown)
 		return nil
 	})
-	return doc, err
+	return report, err
 }
 
 // attemptRange is the child sequences an attempt's events occupy, (after,

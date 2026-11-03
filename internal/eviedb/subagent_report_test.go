@@ -120,6 +120,25 @@ func TestSubagentReportWithoutAFinalReportStatesHowTheChildEnded(t *testing.T) {
 	}
 }
 
+// A record that names a final report its child does not have is broken, not
+// missing: the owner's read fails as a store failure, never as "no such
+// child", and the parent model's read fails as it always has.
+func TestSubagentReportWhoseFinalEventIsMissingIsAFailureNotAMissingChild(t *testing.T) {
+	ctx := context.Background()
+	store, db, _, parent, receipt := newSubagentAdmission(t)
+	a, _ := finishedChild(t, store, parent, receipt, "## Summary\norphaned")
+	if _, err := db.Exec(`UPDATE subagent_executions SET record_json=json_set(record_json,'$.final_event_id','no-such-event') WHERE id=?`, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.SubagentReport(ctx, parent.Scope.SessionID, a.ID)
+	if err == nil || errors.Is(err, sql.ErrNoRows) || got.Text != nil {
+		t.Fatalf("owner read of a broken record: %+v %v", got, err)
+	}
+	if _, err = store.ReadSubagentReport(ctx, parent, a.ID, 0, 0); err == nil || err.Error() != "load stored report: sql: no rows in result set" {
+		t.Fatalf("parent read of a broken record: %v", err)
+	}
+}
+
 // A partial report opens with the reason its child stopped early.
 func TestSubagentReportOfAPartialReportCarriesItsReason(t *testing.T) {
 	ctx := context.Background()
