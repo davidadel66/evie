@@ -11,13 +11,15 @@ import { clockTime } from "../ui/time";
  *  question does not outrank the reply. A turn after the first sits well
  *  clear of the answer above it, which is where a long session lost its
  *  landmarks (ui-chat.spec.md readability amendment). A message sent with a
- *  skill shows its /name above the text (skills.decisions.md, 2026-11-03). */
+ *  skill shows its /name above the text (skills.decisions.md, 2026-11-03);
+ *  a bare /name shows only the label. */
 export function UserMessage({ text, sentAt, first = true, skill }: { text: string; sentAt?: number; first?: boolean; skill?: string }) {
+  const bare = !!skill && text === `/${skill}`;
   return (
     <div className={`${first ? "" : "mt-9 "}flex flex-none flex-col items-end gap-[5px]`}>
       <div className="evie-user-message bg-bubble border-hair-bubble text-body max-w-[76%] rounded-[12px_12px_4px_12px] border px-[14px] py-[10px] text-[length:var(--chat-text-size)] leading-[1.55] whitespace-pre-wrap">
-        {skill && <div className="text-teal mb-1 font-mono text-[12px]">{`/${skill}`}</div>}
-        {text}
+        {skill && <div className={`text-teal font-mono text-[12px]${bare ? "" : " mb-1"}`}>{`/${skill}`}</div>}
+        {!bare && text}
       </div>
       {sentAt !== undefined && <span className="text-ghost pr-1 text-[11px] tabular-nums">{clockTime(sentAt)}</span>}
     </div>

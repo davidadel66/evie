@@ -71,6 +71,14 @@ describe("user message sent with a skill", () => {
     expect(html.indexOf("/grilling")).toBeLessThan(html.indexOf("my plan to open a bakery"));
   });
 
+  it("shows only the label for a bare /name", () => {
+    const html = renderToStaticMarkup(<UserMessage text="/grilling" skill="grilling" />);
+    expect(html.match(/\/grilling/g)).toHaveLength(1);
+    expect(html).toMatch(/<div class="[^"]*font-mono[^"]*">\/grilling<\/div>/);
+    // Text that only starts with the name is still shown.
+    expect(renderToStaticMarkup(<UserMessage text="/grilling now" skill="grilling" />)).toContain("/grilling now");
+  });
+
   it("has no label without a skill", () => {
     expect(renderToStaticMarkup(<UserMessage text="hello" />)).not.toContain("font-mono");
   });

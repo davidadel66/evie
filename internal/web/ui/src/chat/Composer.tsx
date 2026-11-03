@@ -58,7 +58,8 @@ export function Composer({ value, onChange, onSend, onCommand, streaming, disabl
     if ("run" in choice) run(choice.run);
     else onChange(choice.draft);
   };
-  const invoked = menuOpen ? undefined : outgoingMessage(value, skills);
+  // The skills listed here are a chat's that can use them.
+  const invoked = menuOpen ? undefined : outgoingMessage(value, { available: true, skills });
   const invokedSkill = invoked && "skill" in invoked ? invoked.skill : undefined;
   const option = (row: MenuRow, i: number) => (
     <div

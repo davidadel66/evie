@@ -7,8 +7,8 @@ import { readHistory } from "../api/history";
 import { answerApproval } from "../api/approve";
 import { ApiError, StreamTruncated, followChat, sendDetached } from "../api/stream";
 import { cancelTurn, compactSession, compactionNotice, type ComposerNotice } from "../api/turnControls";
-import type { ChatSkill } from "../api/skills";
-import { composerCommand, outgoingMessage, type Outgoing } from "../chat/composerCommand";
+import type { ChatSkills } from "../api/skills";
+import { composerCommand, outgoingMessage, unknownSkillNotice, type Outgoing } from "../chat/composerCommand";
 import { approvalAlternative } from "../chat/approvalArgs";
 import { isOwnerStop, type ServerEvent } from "./events";
 import { appendUser, reduce, setApprovalAlwaysApplies, setApprovalState, type Item } from "./reducer";
@@ -96,8 +96,9 @@ export type Session = {
 };
 
 /** skills are the open chat's skills, which a draft starting with /name
- *  invokes (skills.spec.md, Owner invocation); undefined until loaded. */
-export function useSession(sessionId?: string, model?: string, skills?: readonly ChatSkill[]): Session {
+ *  invokes (skills.spec.md, Owner invocation): undefined until loaded, and
+ *  skillsProblem says why loading them is failing. */
+export function useSession(sessionId?: string, model?: string, skills?: ChatSkills, skillsProblem?: string): Session {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyProblem, setHistoryProblem] = useState<string | null>(null);
   const [before, setBefore] = useState<string>();
@@ -253,12 +254,12 @@ export function useSession(sessionId?: string, model?: string, skills?: readonly
       // here rather than sent as text.
       const outgoing = outgoingMessage(message, skills);
       if ("unknownSkill" in outgoing) {
-        setNotice({ tone: "warning", text: skills ? `This chat has no skill /${outgoing.unknownSkill}.` : "This chat's skills haven't loaded yet. Try again in a moment." });
+        setNotice({ tone: "warning", text: unknownSkillNotice(outgoing.unknownSkill, skills, skillsProblem) });
         return false;
       }
       return start(outgoing);
     },
-    [compact, start, skills, historyLoading, historyProblem, sessionId],
+    [compact, start, skills, skillsProblem, historyLoading, historyProblem, sessionId],
   );
 
   // Stopping is a request: the turn keeps streaming until the server records

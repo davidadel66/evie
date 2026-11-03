@@ -64,7 +64,7 @@ export default function App() {
   const contextSessions = useContextSessions();
   const chatModels = useChatModels(contextSessions.snapshot?.activeSession?.id);
   const chatSkills = useChatSkills(contextSessions.snapshot?.activeSession?.id);
-  const { items, status, queue, clearQueue, problem, send, answer, setAlwaysApplies, stop, stopping, compacting, notice, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id, chatModels.catalog?.model, chatSkills.skills);
+  const { items, status, queue, clearQueue, problem, send, answer, setAlwaysApplies, stop, stopping, compacting, notice, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id, chatModels.catalog?.model, chatSkills.skills, chatSkills.problem);
   // A running compaction holds the conversation like a turn: the server
   // refuses session and model changes until it finishes.
   const working = status === "streaming" || compacting;
@@ -431,7 +431,7 @@ export default function App() {
                     }}
                     stopping={stopping}
                     notice={notice}
-                    skills={chatSkills.skills}
+                    skills={chatSkills.skills?.available ? chatSkills.skills.skills : undefined}
                   />
                 </>
               ) : (

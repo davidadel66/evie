@@ -1,11 +1,13 @@
 // Composer commands: the few REPL slash commands the web composer runs
-// instead of sending as a message. Matching follows the REPL on the trimmed
-// text the composer would send, so `//compact` and `/compactor` stay ordinary
-// message text. A draft that starts with /name for one of the chat's skills
-// sends the rest of its text with that skill (skills.spec.md, Owner
-// invocation).
+// instead of sending as a message, matched like the REPL on the trimmed text
+// the composer would send, so `/compactor` is not /compact. Everything else
+// is sent (outgoingMessage): in a chat with skills a draft that starts with
+// /name sends the rest of its text with that skill, and an unknown /name is
+// refused (skills.spec.md, Owner invocation); in a chat without skills slash
+// text is an ordinary message; in any chat a leading `//` sends the text
+// from its second slash literally.
 
-import type { ChatSkill } from "../api/skills";
+import type { ChatSkill, ChatSkills } from "../api/skills";
 
 export type ComposerCommand = { kind: "compact" } | { kind: "model" } | { kind: "usage"; message: string };
 
@@ -51,22 +53,37 @@ export function menuChoice(option: MenuOption): { run: string } | { draft: strin
 /** A message as it is sent: its text, and the skill it invokes. */
 export type Outgoing = { message: string; skill?: string };
 
-/** outgoingMessage reads a draft the composer sends. `/name rest` for one of
- *  the chat's skills sends rest with that skill, and a bare `/name` sends
- *  itself. `/name` for a skill the chat doesn't have (or before its skills
- *  have loaded) is refused rather than sent as text. Anything else is an
- *  ordinary message. */
-export function outgoingMessage(text: string, skills: readonly ChatSkill[] | undefined): Outgoing | { unknownSkill: string } {
+/** outgoingMessage reads a draft the composer sends, given the chat's
+ *  skills (undefined until they have loaded). A leading `//` sends the text
+ *  from its second slash as an ordinary message in any chat. In a chat
+ *  without skills anything else is an ordinary message too. In a chat with
+ *  skills, `/name rest` for one of them sends rest with that skill, and a
+ *  bare `/name` sends itself; `/name` for a skill the chat doesn't have (or
+ *  before its skills have loaded) is refused rather than sent as text. */
+export function outgoingMessage(text: string, chat: ChatSkills | undefined): Outgoing | { unknownSkill: string } {
   const trimmed = text.trim();
+  if (trimmed.startsWith("//")) return { message: trimmed.slice(1) };
+  if (chat?.available === false) return { message: trimmed };
   const match = /^\/([a-z][a-z0-9-]{0,63})(?:\s+([\s\S]*))?$/.exec(trimmed);
   if (!match || builtIn(match[1])) return { message: trimmed };
   const [, name, rest = ""] = match;
-  if (!skills?.some((skill) => skill.name === name)) return { unknownSkill: name };
+  if (!chat?.skills.some((skill) => skill.name === name)) return { unknownSkill: name };
   return { message: rest.trim() || trimmed, skill: name };
 }
 
-/** draftText is a sent or queued message as David typed it. */
+/** unknownSkillNotice says why a `/name` draft was not sent: the chat has
+ *  no such skill, or its skills haven't loaded yet, or loading them failed
+ *  (problem) and is being retried. */
+export function unknownSkillNotice(name: string, chat: ChatSkills | undefined, problem?: string): string {
+  if (chat) return `This chat has no skill /${name}.`;
+  if (problem) return `This chat's skills couldn't be loaded, so /${name} wasn't sent. Try again in a moment.`;
+  return "This chat's skills haven't loaded yet. Try again in a moment.";
+}
+
+/** draftText is a sent or queued message as a draft that sends it again:
+ *  `/name` and the text for one sent with a skill, and slash text sent as
+ *  text escaped with `//` so it stays text. */
 export function draftText(outgoing: Outgoing): string {
-  if (!outgoing.skill || outgoing.message === `/${outgoing.skill}`) return outgoing.message;
-  return `/${outgoing.skill} ${outgoing.message}`;
+  if (outgoing.skill) return outgoing.message === `/${outgoing.skill}` ? outgoing.message : `/${outgoing.skill} ${outgoing.message}`;
+  return outgoing.message.startsWith("/") ? `/${outgoing.message}` : outgoing.message;
 }
