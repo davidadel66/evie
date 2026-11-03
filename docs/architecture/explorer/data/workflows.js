@@ -1231,11 +1231,12 @@ evieExplorer.register(
           ]
         },
         {
-          "text": "The tree its callers lay out: workspaces/<id>/workflows/<name> for Workspace definitions, global/workflows/<name> for Global ones and builtin/workflows/<name> for recorded built-in versions.",
+          "text": "The tree its callers lay out: workspaces/<id>/workflows/<name> for Workspace definitions, global/workflows/<name> for Global ones, builtin/workflows/<name> for recorded built-in versions and global/skills/<name> for proposed and approved skills.",
           "refs": [
             "code:internal/eviedb/workflows.go#WorkflowDefinitionPath",
             "code:internal/eviedb/workflow_builtins.go#GlobalWorkflowDefinitionPath",
-            "code:internal/eviedb/workflow_builtins.go#BuiltinWorkflowDefinitionPath"
+            "code:internal/eviedb/workflow_builtins.go#BuiltinWorkflowDefinitionPath",
+            "code:internal/eviedb/skills.go#GlobalSkillPath"
           ]
         },
         {
@@ -1306,6 +1307,74 @@ evieExplorer.register(
         "adr:0007",
         "adr:0012",
         "adr:0018"
+      ]
+    },
+    {
+      "id": "pkg:internal/skill",
+      "level": "component",
+      "kind": "package",
+      "title": "skill",
+      "group": "runtime",
+      "summary": {
+        "text": "Checks one skill in the Agent Skills format against Evie's rules (no scripts, executables or links; only UTF-8 text within the size limits; a valid name and description) and identifies each version by the SHA-256 of its canonical manifest.",
+        "refs": [
+          "code:internal/skill/skill.go#Parse",
+          "code:internal/skill/skill.go#Manifest.Hash",
+          "doc:cmd/evie/docs/active/skills.spec.md#implementation-decisions"
+        ]
+      },
+      "does": [
+        {
+          "text": "ReadFolder checks every entry of a skill folder with Lstat through an os.Root before anything is read or committed, refusing links inside the folder, a scripts/ folder at any depth, executable and non-regular files, skipping operating-system and version-control clutter (.DS_Store, ._ files, Icon\\r, .git) with a warning, and stopping at 64 files or 1 MiB; only a folder that is itself a link is followed.",
+          "refs": [
+            "code:internal/skill/folder.go#ReadFolder",
+            "doc:cmd/evie/docs/active/skills.decisions.md"
+          ]
+        },
+        {
+          "text": "Parse refuses a missing or invalid name or description, a name unlike its folder or clashing with /compact or /model, and files that are not UTF-8, hold a NUL byte or exceed 32 KiB; it reads Claude Code's unquoted argument-hint as its raw text, and warns about frontmatter Evie ignores, shell commands and blocks, argument placeholders and mentions of Claude Code tools, never running or substituting any of them.",
+          "refs": [
+            "code:internal/skill/skill.go#Parse",
+            "code:internal/skill/skill.go#Warning"
+          ]
+        },
+        {
+          "text": "ReadVersion reads a version back from where it was stored, such as one procedural commit, and requires it to check and hash exactly as recorded.",
+          "refs": [
+            "code:internal/skill/skill.go#ReadVersion",
+            "code:cmd/evie/skills.go#skillCommands.propose"
+          ]
+        },
+        {
+          "text": "Pinned is an approved version a chat pins in its Composition Receipt as skill.global.<name> with its version hash; its Source reads the version's folder at the procedural commit it was approved at.",
+          "refs": [
+            "code:internal/skill/pinned.go#Pinned",
+            "code:internal/skill/pinned.go#GlobalReference",
+            "code:internal/skill/pinned.go#Pinned.Source"
+          ]
+        },
+        {
+          "text": "Catalog renders the framed catalog message of a chat's model-invocable skills, each name with its description, keeping every name and shortening the longest descriptions evenly to fit 8 KiB.",
+          "refs": [
+            "code:internal/skill/catalog.go#Catalog",
+            "code:internal/skill/catalog.go#CatalogBudget"
+          ]
+        },
+        {
+          "text": "Body and File render a pinned version's instructions and resource list, or one of its files, in the owner-approved-guidance frame, reading only files its manifest lists and checking each against its hash; MaxLoadBytes bounds what they return, so a loaded skill is always shown whole.",
+          "refs": [
+            "code:internal/skill/frame.go#Body",
+            "code:internal/skill/frame.go#File",
+            "code:internal/skill/frame.go#MaxLoadBytes"
+          ]
+        }
+      ],
+      "terms": [
+        "Skill"
+      ],
+      "links": [
+        "doc:cmd/evie/docs/active/skills.spec.md",
+        "doc:cmd/evie/docs/active/skills.decisions.md"
       ]
     }
   ],

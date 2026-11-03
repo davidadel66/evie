@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { ChatSkill } from "../api/skills";
 import { Composer } from "./Composer";
 
 const base = { value: "", onChange: () => {}, onSend: () => {} };
@@ -52,6 +53,53 @@ describe("Composer command menu", () => {
     ]) {
       expect(html).not.toContain('role="listbox"');
       expect(html).not.toContain("aria-activedescendant");
+    }
+  });
+});
+
+// skills.spec.md, Owner invocation, as the approved canvas mock shows it:
+// commands first, then the chat's skills with an argument hint in place of
+// the description and "you only" on owner-only skills.
+describe("Composer skill menu", () => {
+  const skills: ChatSkill[] = [
+    { name: "grilling", description: "Grill the owner about a plan.", ownerOnly: false },
+    { name: "handoff", description: "Write a handoff prompt.", argumentHint: "[next phase]", ownerOnly: false },
+    { name: "owl", description: "Night shift checklist.", ownerOnly: true },
+    { name: "compact", description: "A skill that clashes with /compact.", ownerOnly: false },
+  ];
+  const names = (html: string) => [...html.matchAll(/role="option" aria-selected="(?:true|false)"[^>]*><span[^>]*>([^<]+)<\/span>/g)].map((m) => m[1]);
+  const row = (html: string, name: string) => html.match(new RegExp(`role="option"[^>]*><span[^>]*>${name}</span>.*?</div>`))?.[0] ?? "";
+
+  it("lists the skills after the commands under their own headings", () => {
+    const html = renderToStaticMarkup(<Composer {...base} value="/" streaming={false} skills={skills} />);
+    expect(names(html)).toEqual(["/model", "/compact", "/grilling", "/handoff", "/owl"]);
+    expect(html.indexOf(">Commands<")).toBeLessThan(html.indexOf(">/model<"));
+    expect(html.indexOf(">Skills<")).toBeGreaterThan(html.indexOf(">/compact<"));
+    expect(html.indexOf(">Skills<")).toBeLessThan(html.indexOf(">/grilling<"));
+    expect(html).not.toContain("clashes with /compact");
+  });
+
+  it("shows an argument hint in place of the description, and marks owner-only skills", () => {
+    const html = renderToStaticMarkup(<Composer {...base} value="/" streaming={false} skills={skills} />);
+    expect(row(html, "/grilling")).toContain("Grill the owner about a plan.");
+    expect(row(html, "/handoff")).toContain("[next phase]");
+    expect(row(html, "/handoff")).not.toContain("Write a handoff prompt.");
+    expect(row(html, "/owl")).toContain("you only");
+    expect(row(html, "/grilling")).not.toContain("you only");
+  });
+
+  it("filters skills as the name is typed", () => {
+    const html = renderToStaticMarkup(<Composer {...base} value="/gr" streaming={false} skills={skills} />);
+    expect(names(html)).toEqual(["/grilling"]);
+    expect(html).not.toContain(">Commands<");
+  });
+
+  it("says a draft starting with a skill sends the request with it", () => {
+    const html = renderToStaticMarkup(<Composer {...base} value="/grilling my plan" streaming={false} skills={skills} />);
+    expect(html).toContain("Enter sends your request with the grilling skill.");
+    expect(html).not.toContain('role="listbox"');
+    for (const value of ["/wrap my plan", "my plan", "/grilling"]) {
+      expect(renderToStaticMarkup(<Composer {...base} value={value} streaming={false} skills={skills} />)).not.toContain("Enter sends your request");
     }
   });
 });

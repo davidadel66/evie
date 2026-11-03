@@ -29,6 +29,8 @@ type historyItem struct {
 	StartedAt int64            `json:"startedAt"`
 	Tone      string           `json:"tone,omitempty"`
 	Memory    *memoryActivity  `json:"memory,omitempty"`
+	// Skill is the skill the owner invoked for his message with /name.
+	Skill string `json:"skill,omitempty"`
 }
 
 func (s *Server) handleContextSessionHistory(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +131,17 @@ func projectEvents(events []memory.Event, settled bool) ([]historyItem, error) {
 				items = append(items, historyItem{Kind: "memory", Key: string(e.ID), Memory: activity})
 			}
 		case memory.EventUserMessage:
-			items = append(items, historyItem{Kind: "user", Key: string(e.ID), Text: e.Content})
+			item := historyItem{Kind: "user", Key: string(e.ID), Text: e.Content}
+			if len(e.Payload) > 0 {
+				var p memory.UserMessagePayload
+				if err := json.Unmarshal(e.Payload, &p); err != nil {
+					return nil, err
+				}
+				if p.Skill != nil {
+					item.Skill = p.Skill.Name
+				}
+			}
+			items = append(items, item)
 		case memory.EventAssistantMessage:
 			parts, terminal, err := assistantActivity(e)
 			if err != nil {

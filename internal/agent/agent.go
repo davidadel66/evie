@@ -57,6 +57,9 @@ type Session struct {
 	owner                TurnOwnership
 	composer             *ContextComposer
 	timing               turnTiming
+	// skillFiles reads the skills the owner invokes with /name from the
+	// procedural repository (skills.spec.md, Owner invocation).
+	skillFiles SkillFiles
 	// stepLimit is the most model responses one turn may request; the last
 	// one is sent without tools.
 	stepLimit int
@@ -103,6 +106,19 @@ type ActivityEvents interface {
 func (s *Session) Send(
 	ctx context.Context,
 	input string,
+	ev Events,
+	approve tools.Approver,
+	extra ...tools.Tool,
+) error {
+	return s.send(ctx, input, nil, ev, approve, extra...)
+}
+
+// send runs one turn for input; invoked, when set, is the skill the owner
+// invoked for it, recorded in the root message's payload.
+func (s *Session) send(
+	ctx context.Context,
+	input string,
+	invoked *memory.SkillInvocation,
 	ev Events,
 	approve tools.Approver,
 	extra ...tools.Tool,
@@ -164,6 +180,12 @@ func (s *Session) Send(
 	var origin json.RawMessage
 	if s.workerInstructions != "" {
 		origin, err = json.Marshal(map[string]string{"origin": "delegated_assignment", "parent_session_id": string(s.scope.ParentSessionID)})
+		if err != nil {
+			return err
+		}
+	}
+	if invoked != nil {
+		origin, err = json.Marshal(memory.UserMessagePayload{Skill: invoked})
 		if err != nil {
 			return err
 		}

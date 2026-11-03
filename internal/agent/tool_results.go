@@ -12,6 +12,7 @@ import (
 	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/skill"
 )
 
 const (
@@ -61,11 +62,11 @@ const (
 )
 
 // Protected tool results carry small, high-value state: memory, Task Tree,
-// sub-agent results and reports, and pages already read back with
-// read_tool_result. Conversation projection never shortens them, the
-// equivalent of exclude_tools in Claude's tool-result clearing, unless they
-// alone exceed a group's budget or the request cannot fit without them; then
-// the normal rules apply and the projection says so.
+// sub-agent results and reports, pages already read back with
+// read_tool_result, and loaded skills. Conversation projection never
+// shortens them, the equivalent of exclude_tools in Claude's tool-result
+// clearing, unless they alone exceed a group's budget or the request cannot
+// fit without them; then the normal rules apply and the projection says so.
 var (
 	protectedToolResultPrefixes = []string{"memory_", "todo_", "delegate_"}
 	protectedToolResultNames    = map[string]bool{
@@ -74,8 +75,30 @@ var (
 		delegation.ExploreToolName:  true,
 		delegation.ReportToolName:   true,
 		delegation.ContinueToolName: true,
+		skillTool:                   true,
 	}
 )
+
+// shownWhole reports whether a request always shows the named tool's
+// results whole: the skill tool's, a skill's framed text, which would be
+// followed wrongly if cut and is at most skill.MaxLoadBytes for any version
+// within the skill limits. Such a result is admitted within that bound and
+// left out of the result and group limits of requests; being protected, it
+// is projected only when a request cannot fit without it. The compactor's
+// transcript bounds it like any other result.
+func shownWhole(name string) bool { return name == skillTool }
+
+// withoutWholeResults is group without the results a request shows whole.
+func (group completeToolResultGroup) withoutWholeResults() completeToolResultGroup {
+	var out completeToolResultGroup
+	for i, name := range group.names {
+		if !shownWhole(name) {
+			out.resultIndexes = append(out.resultIndexes, group.resultIndexes[i])
+			out.names = append(out.names, name)
+		}
+	}
+	return out
+}
 
 func isProtectedToolResult(name string) bool {
 	if protectedToolResultNames[name] {
@@ -90,7 +113,21 @@ func isProtectedToolResult(name string) bool {
 }
 
 func admitToolResult(content string) string {
-	if len(content) <= toolResultAdmissionBytes {
+	return admitToolResultWithin(content, toolResultAdmissionBytes)
+}
+
+// admitNamedToolResult admits a result of the named tool: within the
+// admission bound, or for a result shown whole, within the larger bound of
+// what its tool returns.
+func admitNamedToolResult(name, content string) string {
+	if shownWhole(name) {
+		return admitToolResultWithin(content, max(toolResultAdmissionBytes, skill.MaxLoadBytes))
+	}
+	return admitToolResult(content)
+}
+
+func admitToolResultWithin(content string, limit int) string {
+	if len(content) <= limit {
 		return content
 	}
 	digest := sha256.Sum256([]byte(content))
@@ -99,7 +136,7 @@ func admitToolResult(content string) string {
 		len(content),
 		digest,
 	)
-	return headTailPreview(content, toolResultAdmissionBytes, label)
+	return headTailPreview(content, limit, label)
 }
 
 func headTailPreview(content string, limit int, label string) string {
@@ -149,12 +186,25 @@ func validUTF8Suffix(value string, limit int) string {
 }
 
 func applyToolResultGroupLimits(events []memory.Event) ([]memory.Event, error) {
+	return boundToolResultGroups(events, false)
+}
+
+// applyRequestToolResultGroupLimits is applyToolResultGroupLimits for a
+// request, which shows some results whole (shownWhole).
+func applyRequestToolResultGroupLimits(events []memory.Event) ([]memory.Event, error) {
+	return boundToolResultGroups(events, true)
+}
+
+func boundToolResultGroups(events []memory.Event, request bool) ([]memory.Event, error) {
 	groups, err := completeToolResultGroups(events)
 	if err != nil {
 		return nil, err
 	}
 	projected := append([]memory.Event(nil), events...)
 	for _, group := range groups {
+		if request {
+			group = group.withoutWholeResults()
+		}
 		sizes := make([]int, len(group.resultIndexes))
 		ordinaryFloors := make([]int, len(group.resultIndexes))
 		metadataFloors := make([]int, len(group.resultIndexes))
@@ -202,7 +252,8 @@ func offersToolResultPaging(tools []openrouter.Tool) bool {
 // applyModelToolResultLimits bounds the tool results a request that offers
 // read_tool_result shows. Each unprotected result shows at most modelToolResultBytes
 // and each complete group at most modelToolResultGroupBytes, largest results
-// reduced first. Protected results keep their full durable content while the
+// reduced first; results shown whole are left out. Protected results keep
+// their full durable content while the
 // group's other results can share what remains; when protected results alone
 // leave no room, every result of the group follows the normal allocation and
 // the excerpt names that reason. Every bound is a pure function of the
@@ -214,6 +265,7 @@ func applyModelToolResultLimits(events []memory.Event) ([]memory.Event, error) {
 	}
 	projected := append([]memory.Event(nil), events...)
 	for _, group := range groups {
+		group = group.withoutWholeResults()
 		count := len(group.resultIndexes)
 		sizes := make([]int, count)
 		protected := make([]bool, count)

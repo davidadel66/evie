@@ -29,6 +29,8 @@ type sseEvents struct {
 	feed       *chatFeed
 	generation uint64
 	message    string
+	// skill is the skill the owner invoked for message, or "".
+	skill string
 	// session is the chat the turn runs in, for chat status.
 	session memory.SessionID
 	// err keeps the first failed write/flush through TurnDone. A later successful

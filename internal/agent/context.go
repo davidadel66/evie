@@ -76,6 +76,7 @@ type ContextComposeInput struct {
 	EnvironmentNote              string
 	RepositoryInstructions       string
 	RepositoryInstructionsTurnID memory.EventID
+	SkillCatalog                 string // the chat's skill list (skills.spec.md): fixed for its life, after the repository instructions
 	WorkerInstructions           string
 	MemoryData                   string
 	MemoryReceipt                *memory.RetrievalReceipt
@@ -106,6 +107,12 @@ type ContextComposeInput struct {
 	// history, so it stays in the stable cached prefix of every request.
 	StandingMemory        string
 	StandingMemoryReceipt *memory.StandingMemoryReceipt
+
+	// InvokedSkills are the framed bodies of the skills the owner invoked
+	// with /name, by the root message that invoked each. A body sits right
+	// before its message whenever that turn is in the window, after the
+	// active turn's memory evidence.
+	InvokedSkills map[memory.EventID]string
 
 	// plannedTurnSummary, set only while planning an in-turn compaction,
 	// replaces the active turn's durable in-turn summary with a candidate.
@@ -340,7 +347,7 @@ func (c *ContextComposer) projectAtStart(
 		return contextProjection{}, err
 	}
 	projection.selectedOriginal = withToolResultReductions(projection.selectedOriginal, input.toolResultReductions)
-	limitToolResults := applyToolResultGroupLimits
+	limitToolResults := applyRequestToolResultGroupLimits
 	if offersToolResultPaging(input.Tools) {
 		limitToolResults = applyModelToolResultLimits
 	}
@@ -364,15 +371,16 @@ func (c *ContextComposer) projectAtStart(
 	// Stable content leads and volatile content trails, so provider prefix
 	// caches survive iterations and turns: instructions, the environment note,
 	// repository guidance, and the summary change rarely; history only grows;
-	// memory evidence sits immediately before the active root as specified;
+	// memory evidence sits immediately before the active root as specified,
+	// and before the skill body the owner invoked for it;
 	// Task Focus and the final-step note follow the conversation.
 	composeProjected := func(projected []memory.Event) error {
-		conversation, err := messagesFromEventsWithContinuation(projected, input.Continuation)
+		conversation, err := messagesFromEventsWithContinuation(withInvokedSkills(projected, input.InvokedSkills), input.Continuation)
 		if err != nil {
 			return fmt.Errorf("project durable history: %w", err)
 		}
 		if activeMessages < 0 {
-			tail, tailErr := messagesFromEventsWithContinuation(projected[rootIndex:], input.Continuation)
+			tail, tailErr := messagesFromEventsWithContinuation(withInvokedSkills(projected[rootIndex:], input.InvokedSkills), input.Continuation)
 			if tailErr != nil {
 				return tailErr
 			}
@@ -395,6 +403,9 @@ func (c *ContextComposer) projectAtStart(
 		}
 		if input.RepositoryInstructions != "" {
 			messages = append(messages, openrouter.Message{Role: "user", Content: input.RepositoryInstructions})
+		}
+		if input.SkillCatalog != "" {
+			messages = append(messages, openrouter.Message{Role: "user", Content: input.SkillCatalog})
 		}
 		standingIndex := -1
 		if input.StandingMemory != "" {
@@ -764,8 +775,16 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	if err != nil {
 		return ContextDiagnostics{}, fmt.Errorf("load standing memory: %w", err)
 	}
+	skillCatalog, err := s.skillCatalog(ctx)
+	if err != nil {
+		return ContextDiagnostics{}, fmt.Errorf("load skill catalog: %w", err)
+	}
+	invokedSkills, err := s.invokedSkillBodies(ctx, events, summary, map[string]string{})
+	if err != nil {
+		return ContextDiagnostics{}, fmt.Errorf("load invoked skills: %w", err)
+	}
 	projection, compaction, planWarnings, err := s.composer.inspectNextRequest(ContextComposeInput{
-		EnvironmentNote: workingFolderNote(folder), RepositoryInstructions: repository,
+		EnvironmentNote: workingFolderNote(folder), RepositoryInstructions: repository, SkillCatalog: skillCatalog, InvokedSkills: invokedSkills,
 		StandingMemory: standing, StandingMemoryReceipt: standingReceipt,
 		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,

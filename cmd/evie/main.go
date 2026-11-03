@@ -28,6 +28,7 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/procedural"
 	"github.com/davidadel66/evie/internal/subagents"
 	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
@@ -53,7 +54,7 @@ var defaultPluginEnabled = map[plugins.PluginID]bool{
 	plugins.WebPluginID: true, plugins.FinancePluginID: true,
 	plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
 	plugins.SubagentsPluginID: true, plugins.WorkflowsPluginID: true, plugins.GitHubPluginID: true,
-	plugins.MCPPluginID: true, plugins.WorkspaceTabsPluginID: true,
+	plugins.MCPPluginID: true, plugins.WorkspaceTabsPluginID: true, plugins.SkillsPluginID: true,
 }
 
 func main() {
@@ -170,6 +171,21 @@ func main() {
 		}
 		return
 	}
+	// Skills (skills.spec.md) need the database and the procedural
+	// repository, where their reviewed files live beside the workflows'.
+	if cmd == "skills" {
+		root, err := procedural.DefaultRoot()
+		if err != nil {
+			log.Fatalf("skills: %v", err)
+		}
+		home, _ := os.UserHomeDir() // HOME; import-claude refuses an empty one
+		if handled, err := runSkillManagement(context.Background(), os.Args[1:], os.Stdout, skillCommands{store: kernelStore, repo: procedural.New(root), home: home}); handled {
+			if err != nil {
+				log.Fatalf("skills: %v", err)
+			}
+			return
+		}
+	}
 	// Workflow activation (Stage 14 sub-stage 2) needs the database and the
 	// procedural repository, and runs (sub-stage 5) the workflow capability
 	// plugins under the owner's enabled choices.
@@ -240,6 +256,13 @@ func main() {
 	// The chat's MCP tools reach serve's connections; anywhere else they
 	// say they need evie serve (workspace-mcp-connections.spec.md).
 	mcpLink := &plugins.MCPLink{}
+	// The skill tool reads a chat's pinned skills from the procedural
+	// repository, where the owner's approved versions live (skills.spec.md).
+	proceduralRoot, err := procedural.DefaultRoot()
+	if err != nil {
+		log.Fatalf("procedural repository: %v", err)
+	}
+	skillRepo := procedural.New(proceduralRoot)
 	pluginManager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		plugins.NewWeb(),
@@ -255,6 +278,7 @@ func main() {
 		plugins.NewMCP(mcpLink),
 		// workspace_tabs shows a Workspace chat its own tabs (workspace-tabs.spec.md).
 		plugins.NewWorkspaceTabs(kernelStore),
+		plugins.NewSkills(kernelStore, skillRepo),
 	)
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)
@@ -340,6 +364,9 @@ func main() {
 			store.BindTurnOwner(selection.ID, holderID),
 			resolvedComposition.Resolved.Toolset,
 			agent.WithCompactionMemoryFlush(memoryBackground.runner),
+			// A chat opened here may hold turns the owner sent with a skill
+			// on the web; their requests carry its body.
+			agent.WithSkillFiles(skillRepo),
 		)
 	}
 	startMemoryForRuntime := func(ctx context.Context) func() {
@@ -491,7 +518,7 @@ func main() {
 			}
 			holderID := memory.LeaseHolderID(holderUUID.String())
 			return agent.NewWithToolset(client, selectedProfile, kernelStore.BindHistory(session.ID, holderID), session.ScopeContext(), kernelStore.BindTurnOwnerWithModelRevision(session.ID, holderID, revision), composition.Toolset,
-				agent.WithCompactionMemoryFlush(memoryBackground.runner)), nil
+				agent.WithCompactionMemoryFlush(memoryBackground.runner), agent.WithSkillFiles(skillRepo)), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
 		serveErr := web.ServeWithContext(runtimeCtx, web.WithMCPToolReview(web.WithMCPConnections(web.WithSubagents(web.WithChangeMerger(web.WithChangePusher(web.WithChangeSync(web.WithChanges(web.WithRepositories(web.WithWorkflows(web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService), workflowRuntime), repositories), changeLister(repositories, kernelStore)), changeSync), changePusher(kernelStore, repositories, strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), changeSync)), merger.Load()), kernelStore), mcpConnections), mcpChat))

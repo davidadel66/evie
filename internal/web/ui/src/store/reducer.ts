@@ -23,7 +23,7 @@ export type Approval = {
 
 export type Item = { turn?: ActivityTurn } & (
   | { kind: "memory"; key: string; memory: MemoryActivityData }
-  | { kind: "user"; key: string; text: string }
+  | { kind: "user"; key: string; text: string; skill?: string }
   | {
       kind: "assistant";
       key: string;
@@ -74,10 +74,11 @@ function nextKey(prefix: string): string {
   return `${prefix}-${seq}`;
 }
 
-/** appendUser records what David sent. Not a server event — the UI knows the
- *  message before the stream exists, and shows it immediately. */
-export function appendUser(items: Item[], text: string): Item[] {
-  return [...items, { kind: "user", key: nextKey("u"), text }];
+/** appendUser records what David sent, with the skill he invoked for it.
+ *  Not a server event — the UI knows the message before the stream exists,
+ *  and shows it immediately. */
+export function appendUser(items: Item[], text: string, skill?: string): Item[] {
+  return [...items, { kind: "user", key: nextKey("u"), text, ...(skill ? { skill } : {}) }];
 }
 
 /** reduce folds one server event into the transcript. Pure: same inputs, same
@@ -95,7 +96,7 @@ export function reduce(
     if (items.some((item) => item.kind === "user" && item.turn?.id === ev.turnId)) return items;
     const last = items.findLast((item) => item.kind === "user");
     if (last?.kind === "user" && !last.turn && last.text === ev.text) return items;
-    return appendUser(items, ev.text);
+    return appendUser(items, ev.text, ev.skill);
   }
   if (ev.type === "turn_started") {
     const idx = items.findLastIndex((item) => item.kind === "user");

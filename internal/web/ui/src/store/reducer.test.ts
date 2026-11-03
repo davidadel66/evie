@@ -444,6 +444,14 @@ describe("user_message", () => {
     expect(reduce(history, { type: "feed_state", running: true })).toBe(history);
   });
 
+  it("keeps the skill the message invoked, from the feed or the sender", () => {
+    const invoked: ServerEvent = { type: "user_message", turnId: "root", text: "my plan", skill: "grilling" };
+    expect(reduce([], invoked)).toMatchObject([{ kind: "user", text: "my plan", skill: "grilling" }]);
+    expect(appendUser([], "my plan", "grilling")).toMatchObject([{ kind: "user", text: "my plan", skill: "grilling" }]);
+    expect(appendUser([], "hello")[0]).not.toHaveProperty("skill");
+    expect(parseEvent("user_message", '{"turnId":"root","text":"my plan","skill":"grilling"}')).toEqual(invoked);
+  });
+
   it("parses the feed's own events", () => {
     expect(parseEvent("feed_state", '{"running":true}')).toEqual({ type: "feed_state", running: true });
     expect(parseEvent("user_message", '{"turnId":"root","text":"hi"}')).toEqual({ type: "user_message", turnId: "root", text: "hi" });

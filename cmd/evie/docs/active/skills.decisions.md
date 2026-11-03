@@ -81,3 +81,119 @@ Spec: [skills.spec.md](skills.spec.md).
 - **2026-11-02 — Test seams approved.** David approved the three seams in the
   spec's Testing Decisions: the CLI approval harness, one composed chat test in
   `cmd/evie`, and the UI composer tests.
+
+- **2026-11-03 — Stored formats.** David accepted the recommendation ("yes"):
+  four immutable tables, `skill_imports`, `skill_proposals`,
+  `skill_activations` and `skill_deactivations`, with no-update and
+  no-delete triggers and a surface fixed to `cli`. Skill files live under
+  `global/skills/<name>/` in the procedural repository. A chat's receipt pins
+  `skill.global.<name>` with the version hash as an instruction reference.
+
+- **2026-11-03 — An owner invocation is recorded on the turn's root message.**
+  David accepted the recommendation ("yes"): `/name` stores
+  `skill: {name, version}` in the root `user_message` payload, written
+  atomically with the turn. A side table was rejected because it would be
+  written after the event and could miss it on a crash.
+
+- **2026-11-03 — Choosing a skill in the `/` menu fills the draft.** David
+  accepted the recommendation ("yes"): picking a skill puts `/name ` in the
+  draft so he can type the request, and Enter sends it. The built-in commands
+  `/model` and `/compact` keep acting at once.
+
+- **2026-11-03 — The composer UI waits for a canvas verdict.** David accepted
+  the recommendation ("yes"): the `/` menu's skill list is shown on the design
+  canvas, today's screenshot beside the proposal, before that UI is built. The
+  server side of owner invocation and the other tickets don't wait.
+
+- **2026-11-03 — Built as four tickets on `feat/skills`.** David approved the
+  split ("yes"): propose, approve and deactivate from a folder; migrate Claude
+  Code skills (blocked by the first); Evie loads approved skills in new chats
+  (blocked by the first); invoke a skill with `/name` (blocked by the third).
+
+- **2026-11-03 — Build choices (two-way doors).** Decided under the flow brief
+  David approved ("yes"); each is cheap to reverse.
+  - A version hash is the bare 64-character hex SHA-256 of a canonical
+    manifest with a format tag, the form receipt references require.
+  - `approve <name> --hash` resolves to the newest pending proposal with that
+    name and hash. `--expect-version` is the integer active version, 0 when
+    none, as for workflows. `deactivate <name>` deactivates the active
+    version.
+  - A new folder walker checks a skill with `Lstat` before anything is
+    committed, because the procedural `Commit` drops the executable bit.
+    Only a top-level skill folder that is a symlink is followed; symlinks
+    inside a skill are refused.
+  - The no-model-tool test asserts that the skills plugin exposes exactly
+    `skill` with `name` and `path`, and that no tool proposes, approves,
+    activates or deactivates.
+  - Skill references are added in `cmd/evie` just before the chat's creation
+    transaction: the write is in the transaction, the activation read just
+    before it. A chat whose skills plugin is disabled gets no references, and
+    a pre-receipt chat gets none when first bound.
+  - Resume accepts the preset's instructions followed by `skill.` references
+    only when the `skill` capability is pinned. `cmd/evie` checks each one
+    against the activation records and fails visibly when one is missing.
+  - The `skill` tool reads the receipt by session ID, then the commit and
+    manifest from the activation record.
+  - The catalog is frozen for the chat's life and placed right after the
+    repository instructions. The system prompt's guidance line appears only
+    with the tool.
+  - On the active turn the order is memory evidence, skill body, owner
+    message. The body is inserted while the request is composed, so the
+    compaction transcript never sees it, and a turn removed by compaction or
+    trimming takes its body with it.
+  - A bare `/name` is stored as the message text, as the spec says.
+
+- **2026-11-03 — Canvas verdict on the composer, and the skill label.** David
+  approved the canvas mock ("yes that looks good"): typing `/` lists the
+  commands, then the chat's skills with one-line descriptions, an argument
+  hint in place of the description when a skill has one, and "you only" on
+  owner-only skills; choosing a skill fills the draft with `/name`. He also
+  accepted a label the mock added ("i like the label"): an owner message sent
+  with a skill shows `/name` above its text, read from the turn's recorded
+  `skill` field.
+
+- **2026-11-03 — Plugin skills are read from the plugin's own list too.**
+  David approved the fix ("yes") after the migration missed
+  `mattpocock-skills`, which lists its skills in `.claude-plugin/plugin.json`
+  under `skills/<group>/<name>`. With `--plugins`, the migration reads both
+  `skills/<name>/` and the folders the plugin's `skills` field lists, once
+  each. A listed path that leaves the plugin's folder, or holds no
+  `SKILL.md`, is reported in the notes and not read. Checked against the
+  real installed plugins with a throwaway home: 61 proposed, 4 refused, no
+  notes.
+
+- **2026-11-03 — Review fixes (two-way doors).** Decided while fixing the
+  stage's review findings; each is cheap to reverse.
+  - An unquoted `argument-hint` that is not YAML on its own, such as Claude
+    Code's documented `argument-hint: [pr-number] [priority]`, is read as
+    its raw text. A YAML list is read as its items, each in brackets and
+    joined by spaces, so `[message]` is the hint `[message]`.
+  - Operating-system and version-control clutter anywhere in a skill
+    folder (`.DS_Store`, AppleDouble `._*` files, `Icon\r`, and `.git`
+    folders and files) is skipped: never committed or in the manifest, and
+    reported as a warning naming what was skipped.
+  - The `skill` tool still never loads an owner-only skill's instructions.
+    It reads one of its files by `path` once David has invoked that skill
+    in the chat: a root user message of the session records the same name
+    and version.
+  - With `--plugins`, a path a plugin lists that holds no `SKILL.md` but
+    whose folders do is read as a folder of skills. Every plugin skill
+    folder, from `skills/<name>` or the plugin's list, must resolve, links
+    followed, inside the plugin's install folder; one that resolves outside
+    is noted and not read. Personal skill folders that are links are still
+    followed, as before.
+  - `evie skills propose` of a folder whose version hash equals the name's
+    pending proposal or active version records nothing and says so, as the
+    migration's skip does, so a pending import stays approvable as a whole.
+  - A `scripts` folder is refused at any depth, named by its path.
+  - In a chat without the `skill` capability, the skill list says so, and
+    slash text such as `/tmp is full` is sent as ordinary text, as before
+    skills. In a chat with skills an unknown `/name` is refused (story 34).
+    In any chat, `//text` sends `/text` literally.
+  - The catalog keeps every name even past 8 KiB: the spec's "names are
+    always listed" wins over the budget. Only past roughly 230 skills do
+    the names alone exceed it.
+  - Returning queued messages to the draft keeps each message's `/name`
+    visible, and only a leading `/name` invokes when the draft is sent
+    again. A queued message that was slash text sent as text goes back
+    escaped as `//text`, so it stays text.

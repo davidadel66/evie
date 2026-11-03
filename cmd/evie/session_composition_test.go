@@ -19,6 +19,7 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/skill"
 	"github.com/davidadel66/evie/internal/tools"
 )
 
@@ -714,6 +715,10 @@ func (panicCompositionStore) SaveCompositionReceipt(context.Context, memory.Sess
 
 func (panicCompositionStore) GetCompositionReceipt(context.Context, memory.SessionID) (composition.Receipt, error) {
 	panic("unexpected receipt read")
+}
+
+func (panicCompositionStore) PinnedSkills(context.Context, composition.Receipt) ([]skill.Pinned, error) {
+	panic("unexpected skill resolution")
 }
 
 func (panicCompositionStore) AppendCompatibilityResolutions(

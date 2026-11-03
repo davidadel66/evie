@@ -63,7 +63,8 @@ func (e *sseEvents) TurnStarted(id memory.EventID, at time.Time) {
 	e.publishOnly("user_message", struct {
 		TurnID string `json:"turnId"`
 		Text   string `json:"text"`
-	}{string(id), e.message})
+		Skill  string `json:"skill,omitempty"`
+	}{string(id), e.message, e.skill})
 	e.emit("turn_started", activityTurn{ID: string(id), StartedAt: activityTimestamp(at), Status: "working"})
 }
 
