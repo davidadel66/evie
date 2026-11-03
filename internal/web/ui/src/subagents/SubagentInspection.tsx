@@ -67,22 +67,31 @@ function SubagentDetail({child, sessionId, api, now, onBack}: {child: Subagent; 
   return <SubagentDetailView child={child} trace={trace.value} problem={trace.problem} report={report.value} reportProblem={report.problem} view={view} now={now} onBack={onBack} onSelect={setSelected} onView={setView} />;
 }
 
-export function SubagentDetailView({child, trace, problem, report, reportProblem, view: picked, now, onBack, onSelect, onView = () => undefined}: {
+export function SubagentDetailView({child, trace, problem, report, reportProblem, view: picked, now, onBack, onSelect, onView}: {
   child: Subagent; trace?: SubagentTrace; problem?: string; report?: SubagentReport; reportProblem?: string;
   /** The view David picked; unset follows the default. */
   view?: SubagentView;
-  now: number; onBack: () => void; onSelect: (key: string) => void; onView?: (view: SubagentView) => void;
+  now: number; onBack: () => void; onSelect: (key: string) => void; onView: (view: SubagentView) => void;
 }) {
   const live = !subagentFinished(child.state);
-  const view = picked ?? subagentDefaultView(child, report);
   const id = useId();
-  const tabs: SubagentView[] = ["report", "activity"];
+  const tabs: {view: SubagentView; label: string; panel: () => ReactNode}[] = [
+    {view: "report", label: "Report", panel: () => <SubagentReportView child={child} report={report} problem={reportProblem} />},
+    {view: "activity", label: "Activity", panel: () => <>
+      {problem && <p role="alert" className="text-amber-ink text-xs">{problem}</p>}
+      {!trace ? !problem && <p role="status" className="text-muted-text text-xs">Loading its activity…</p>
+        : <ActivityItems items={trace.items} active={live} onAnswer={() => undefined} onOpenTool={(key) => onSelect(key)} onOpenFile={(key) => onSelect(key)} />}
+      {trace && trace.items.length <= 1 && <p className="text-muted-text text-xs">{live ? "Starting…" : "No activity was recorded."}</p>}
+    </>},
+  ];
+  const view = picked ?? subagentDefaultView(child, report);
+  const at = tabs.findIndex((tab) => tab.view === view);
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
-    const next = view === "report" ? "activity" : "report";
-    onView(next);
-    (event.currentTarget.parentElement?.children[tabs.indexOf(next)] as HTMLButtonElement | undefined)?.focus();
+    const next = (at + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+    onView(tabs[next].view);
+    (event.currentTarget.parentElement?.children[next] as HTMLButtonElement | undefined)?.focus();
   };
   return <div>
     <BackButton label="All subagents" onClick={onBack} />
@@ -99,19 +108,14 @@ export function SubagentDetailView({child, trace, problem, report, reportProblem
     </div>
     <div className="border-hair border-t">
       <div role="tablist" aria-label="Subagent view" className="border-hair flex gap-4 border-b">
-        {tabs.map((tab) => <button key={tab} id={`${id}-${tab}`} type="button" role="tab" aria-selected={view === tab} aria-controls={`${id}-panel`} tabIndex={view === tab ? 0 : -1}
-          onClick={() => onView(tab)} onKeyDown={onKeyDown}
-          className={`focus-visible:outline-teal -mb-px cursor-pointer border-b-2 py-2 text-xs focus-visible:outline-2 ${view === tab ? "border-teal text-body" : "text-muted-text hover:text-body border-transparent"}`}>
-          {tab === "report" ? "Report" : "Activity"}
+        {tabs.map((tab, i) => <button key={tab.view} id={`${id}-${tab.view}`} type="button" role="tab" aria-selected={i === at} aria-controls={`${id}-panel`} tabIndex={i === at ? 0 : -1}
+          onClick={() => onView(tab.view)} onKeyDown={onKeyDown}
+          className={`focus-visible:outline-teal -mb-px cursor-pointer border-b-2 py-2 text-xs focus-visible:outline-2 ${i === at ? "border-teal text-body" : "text-muted-text hover:text-body border-transparent"}`}>
+          {tab.label}
         </button>)}
       </div>
-      <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${view}`} className="space-y-3 pt-4">
-      {view === "report" ? <SubagentReportView child={child} report={report} problem={reportProblem} /> : <>
-      {problem && <p role="alert" className="text-amber-ink text-xs">{problem}</p>}
-      {!trace ? !problem && <p role="status" className="text-muted-text text-xs">Loading its activity…</p>
-        : <ActivityItems items={trace.items} active={live} onAnswer={() => undefined} onOpenTool={(key) => onSelect(key)} onOpenFile={(key) => onSelect(key)} />}
-      {trace && trace.items.length <= 1 && <p className="text-muted-text text-xs">{live ? "Starting…" : "No activity was recorded."}</p>}
-      </>}
+      <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${tabs[at].view}`} className="space-y-3 pt-4">
+        {tabs[at].panel()}
       </div>
     </div>
     </div>
@@ -217,21 +221,26 @@ function useSubagentTrace(sessionId: string, child: Subagent, api: SubagentAPI) 
 }
 
 // A child's stored report, read once after it finishes: a finished attempt's
-// report never changes, so it is not polled.
+// report never changes, so it is not polled. A failed read is tried again,
+// as the trace is, until one succeeds.
 function useSubagentReport(sessionId: string, child: Subagent, api: SubagentAPI): {value?: SubagentReport; problem?: string} {
-  const [read, setRead] = useState<{executionId: string; value?: SubagentReport; problem?: string}>();
+  const [loaded, setLoaded] = useState<{executionId: string; value?: SubagentReport; problem?: string}>();
   const finished = subagentFinished(child.state);
   useEffect(() => {
     if (!finished) return;
     const controller = new AbortController();
-    api.report(sessionId, child.executionId, controller.signal).then((value) => {
-      if (!controller.signal.aborted) setRead({executionId: child.executionId, value});
+    let timer: number | undefined;
+    const read = () => api.report(sessionId, child.executionId, controller.signal).then((value) => {
+      if (!controller.signal.aborted) setLoaded({executionId: child.executionId, value});
     }, (error: unknown) => {
-      if (!controller.signal.aborted) setRead({executionId: child.executionId, problem: error instanceof Error ? error.message : "The report could not be read."});
+      if (controller.signal.aborted) return;
+      setLoaded({executionId: child.executionId, problem: error instanceof Error ? error.message : "The report could not be read."});
+      timer = window.setTimeout(read, 6000);
     });
-    return () => controller.abort();
+    void read();
+    return () => { controller.abort(); window.clearTimeout(timer); };
   }, [api, sessionId, child.executionId, finished]);
-  return read?.executionId === child.executionId ? read : {};
+  return loaded?.executionId === child.executionId ? loaded : {};
 }
 
 function useNow(ticking: boolean): number {

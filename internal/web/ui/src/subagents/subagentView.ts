@@ -68,13 +68,17 @@ export function subagentDefaultView(child: Subagent, report?: SubagentReport): S
 
 const workerLabels: Record<string, string> = {research: "Research worker", explore: "Explore worker", build: "Build worker"};
 
-/** What the attempt cost: "At least 550 tokens · 3 model responses". Usage
- *  that some response did not report is a lower bound. */
+/** What the attempt cost: "At least 550 tokens · 3 model responses". The
+ *  total, else the input and output counts it has; usage that some response
+ *  did not report, or missing one of those counts, is a lower bound. */
 export function subagentUsageText(report: SubagentReport): string | null {
   const usage = report.usage;
-  const total = usage?.total_tokens ?? (usage?.input_tokens !== undefined && usage.output_tokens !== undefined ? usage.input_tokens + usage.output_tokens : undefined);
+  const parts = [usage?.input_tokens, usage?.output_tokens];
+  const counted = parts.filter((count) => count !== undefined);
+  const total = usage?.total_tokens ?? (counted.length > 0 ? counted.reduce((sum, count) => sum + count, 0) : undefined);
+  const lowerBound = usage?.incomplete || (usage?.total_tokens === undefined && counted.length < parts.length);
   const tokens = total === undefined ? "Tokens not reported"
-    : `${usage?.incomplete ? "At least " : ""}${total.toLocaleString("en-US")} ${total === 1 ? "token" : "tokens"}`;
+    : `${lowerBound ? "At least " : ""}${total.toLocaleString("en-US")} ${total === 1 ? "token" : "tokens"}`;
   const responses = report.modelResponses === undefined ? "" : `${report.modelResponses} ${report.modelResponses === 1 ? "model response" : "model responses"}`;
   if (!usage && !responses) return null;
   return [tokens, responses].filter(Boolean).join(" · ");

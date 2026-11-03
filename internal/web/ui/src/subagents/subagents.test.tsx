@@ -4,7 +4,7 @@ import { subagentAPI, type Subagent, type SubagentReport } from "../api/subagent
 import { Activity } from "../chat/Activity";
 import { activityTurns, type ToolItem } from "../chat/activityModel";
 import { appendUser, reduce, type Item } from "../store/reducer";
-import { SubagentDetailView, SubagentList } from "./SubagentInspection";
+import { SubagentDetailView, SubagentList, SubagentReportView } from "./SubagentInspection";
 import { startsSubagents, subagentActionText, subagentElapsed, subagentProgressLabel } from "./subagentView";
 
 const child = (overrides: Partial<Subagent>): Subagent => ({
@@ -64,7 +64,7 @@ describe("subagent presentation", () => {
       {kind: "tool", key: "t2", id: "t2", name: "web_fetch", args: '{"url":"https://metr.org"}', startedAt: 0},
       {kind: "assistant", key: "a", text: "Findings: horizons double every seven months.", streaming: false},
     ];
-    const html = renderToStaticMarkup(<SubagentDetailView child={child({objective: "Measure agent horizons", context: "Owner builds an agent harness.", actions: 2})} trace={{subagent: child({}), items}} now={Date.parse("2026-10-12T13:10:10Z")} onBack={() => undefined} onSelect={() => undefined} />);
+    const html = renderToStaticMarkup(<SubagentDetailView child={child({objective: "Measure agent horizons", context: "Owner builds an agent harness.", actions: 2})} trace={{subagent: child({}), items}} now={Date.parse("2026-10-12T13:10:10Z")} onBack={() => undefined} onSelect={() => undefined} onView={() => undefined} />);
     for (const text of ["All subagents", "Working", "Measure agent horizons", "Context Evie gave it", "Owner builds an agent harness.", "10s", "2 actions", "Findings: horizons double every seven months."]) expect(html).toContain(text);
     expect(html).not.toContain("framed assignment");
   });
@@ -81,7 +81,7 @@ describe("subagent presentation", () => {
       "![tracking pixel](https://evil.example/pixel.png) ![local picture](/logo.png)",
     ].join("\n");
     const report = {executionId: "child", worker: "research", status: "succeeded" as const, text, totalBytes: text.length, omittedBytes: 0};
-    const html = renderToStaticMarkup(<SubagentDetailView child={child({state: "succeeded", endedAt: "2026-10-12T13:10:42Z"})} report={report} now={0} onBack={() => undefined} onSelect={() => undefined} />);
+    const html = renderToStaticMarkup(<SubagentDetailView child={child({state: "succeeded", endedAt: "2026-10-12T13:10:42Z"})} report={report} now={0} onBack={() => undefined} onSelect={() => undefined} onView={() => undefined} />);
     for (const visible of ["&lt;script&gt;alert(1)&lt;/script&gt;", "onerror=alert(2)", "&lt;iframe", "bad", "local", "local picture"]) expect(html).toContain(visible);
     for (const element of ["<script", "<img", "<iframe", '<link rel="preload"']) expect(html).not.toContain(element);
     expect(html).not.toMatch(/<[^>]*\son[a-z]+=/i);
@@ -91,11 +91,24 @@ describe("subagent presentation", () => {
     expect(html).toMatch(/<a [^>]*href="https:\/\/evil\.example\/pixel\.png"[^>]*>tracking pixel<\/a>/);
   });
 
+  it("shows a linked image in a report as its link's text, never an anchor inside an anchor", () => {
+    const text = "Status: [![build](https://img.shields.io/x.svg)](https://github.com/o/r).";
+    const report = {executionId: "child", worker: "research", status: "succeeded" as const, text, totalBytes: text.length, omittedBytes: 0};
+    const html = renderToStaticMarkup(<SubagentDetailView child={child({state: "succeeded", endedAt: "2026-10-12T13:10:42Z"})} report={report} view="report" now={0} onBack={() => undefined} onSelect={() => undefined} onView={() => undefined} />);
+    let depth = 0;
+    for (const tag of html.match(/<\/?a\b/g) ?? []) {
+      depth += tag === "<a" ? 1 : -1;
+      expect(depth).toBeLessThanOrEqual(1);
+    }
+    expect([...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1])).toEqual(["https://github.com/o/r"]);
+    expect(html).toMatch(/<a [^>]*href="https:\/\/github\.com\/o\/r"[^>]*><span>build<\/span><\/a>/);
+  });
+
   it("opens on Report once a child ended with a report, and on Activity while it runs or without one", () => {
     const items: Item[] = [{kind: "user", key: "u", text: "framed"}, {kind: "assistant", key: "a", text: "Activity sentinel.", streaming: false}];
     const done = child({state: "succeeded", endedAt: "2026-10-12T13:10:42Z"});
     const render = (props: Partial<Parameters<typeof SubagentDetailView>[0]>) =>
-      renderToStaticMarkup(<SubagentDetailView child={done} trace={{subagent: done, items}} now={0} onBack={() => undefined} onSelect={() => undefined} {...props} />);
+      renderToStaticMarkup(<SubagentDetailView child={done} trace={{subagent: done, items}} now={0} onBack={() => undefined} onSelect={() => undefined} onView={() => undefined} {...props} />);
     const selected = (html: string) => html.match(/aria-selected="true"[^>]*>([^<]+)</)?.[1];
 
     const withReport = render({report: {executionId: "child", worker: "research", status: "succeeded", text: "Report sentinel.", totalBytes: 16, omittedBytes: 0}});
@@ -121,7 +134,7 @@ describe("subagent presentation", () => {
 
   it("says when a child produced no report, stopped partway, is still running, or was cut", () => {
     const render = (state: Subagent["state"], report?: SubagentReport) =>
-      renderToStaticMarkup(<SubagentDetailView child={child({state, endedAt: state === "running" ? undefined : "2026-10-12T13:10:42Z"})} report={report} view="report" now={0} onBack={() => undefined} onSelect={() => undefined} />);
+      renderToStaticMarkup(<SubagentDetailView child={child({state, endedAt: state === "running" ? undefined : "2026-10-12T13:10:42Z"})} report={report} view="report" now={0} onBack={() => undefined} onSelect={() => undefined} onView={() => undefined} />);
 
     const none = render("interrupted", {executionId: "child", worker: "explore", status: "interrupted", reason: "no_accepted_final_answer", totalBytes: 0, omittedBytes: 0});
     expect(none).toContain("This worker produced no report.");
@@ -156,7 +169,7 @@ describe("subagent presentation", () => {
       usage: {input_tokens: 500, output_tokens: 50, total_tokens: 550, incomplete: true},
       modelResponses: 3,
     };
-    const render = (value: SubagentReport) => renderToStaticMarkup(<SubagentDetailView child={child({state: value.status, endedAt: "2026-10-12T13:10:42Z"})} report={value} view="report" now={0} onBack={() => undefined} onSelect={() => undefined} />);
+    const render = (value: SubagentReport) => renderToStaticMarkup(<SubagentDetailView child={child({state: value.status, endedAt: "2026-10-12T13:10:42Z"})} report={value} view="report" now={0} onBack={() => undefined} onSelect={() => undefined} onView={() => undefined} />);
     const html = render(report);
 
     // Evie's facts, in order, then the worker's text, then its limitations.
@@ -196,6 +209,16 @@ describe("subagent presentation", () => {
     expect(render({...report, usage: {total_tokens: 1200}, modelResponses: 1})).toContain("1,200 tokens · 1 model response");
   });
 
+  it("keeps the token counts a report's usage has, as a lower bound when any is missing", () => {
+    const usage = (value: SubagentReport["usage"]) => renderToStaticMarkup(<SubagentReportView child={child({state: "succeeded", endedAt: "2026-10-12T13:10:42Z"})}
+      report={{executionId: "child", worker: "research", status: "succeeded", text: "x", totalBytes: 1, omittedBytes: 0, usage: value, modelResponses: 2}} />);
+    expect(usage({input_tokens: 5000, incomplete: true})).toContain("At least 5,000 tokens · 2 model responses");
+    expect(usage({output_tokens: 70})).toContain("At least 70 tokens · 2 model responses");
+    expect(usage({input_tokens: 5000, output_tokens: 70})).toContain(">5,070 tokens · 2 model responses");
+    expect(usage({total_tokens: 1, input_tokens: 1})).toContain(">1 token · 2 model responses");
+    expect(usage({incomplete: true})).toContain("Tokens not reported · 2 model responses");
+  });
+
   it("marks sources recorded before Evie checked them, and shows hostile text as text", () => {
     const report: SubagentReport = {
       executionId: "child", worker: "research", status: "succeeded", text: "Old report.", totalBytes: 11, omittedBytes: 0,
@@ -208,7 +231,7 @@ describe("subagent presentation", () => {
       usage: {total_tokens: 40},
       modelResponses: 1,
     };
-    const html = renderToStaticMarkup(<SubagentDetailView child={child({state: "succeeded", endedAt: "2026-10-12T13:10:42Z"})} report={report} view="report" now={0} onBack={() => undefined} onSelect={() => undefined} />);
+    const html = renderToStaticMarkup(<SubagentDetailView child={child({state: "succeeded", endedAt: "2026-10-12T13:10:42Z"})} report={report} view="report" now={0} onBack={() => undefined} onSelect={() => undefined} onView={() => undefined} />);
     expect(html).toContain("Recorded before Evie checked sources");
     expect(html).not.toContain("Sources Evie verified");
     expect(html).not.toContain("cited in the report");
