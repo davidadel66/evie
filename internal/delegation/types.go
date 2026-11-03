@@ -684,6 +684,12 @@ func (s *Source) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Legacy reports a source recorded before 2026-10-01, which was never checked
+// against the child's tool events, so its Fetched and Cited mean nothing.
+func (s Source) Legacy() bool {
+	return s.legacy
+}
+
 // Usage sums the provider-reported usage of the child's committed responses.
 // Incomplete marks a lower bound: some response or provider call that the
 // child made has no reported usage.

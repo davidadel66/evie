@@ -176,6 +176,10 @@ func (s *Store) SubagentEvents(ctx context.Context, session memory.SessionID, ex
 // event read_subagent_report pages for the parent model, with how the
 // attempt ended. Text is nil when the attempt has no final report, and cut
 // to subagentReportViewBytes with OmittedBytes left out when it is longer.
+//
+// The rest is Evie's record of the attempt, from its stored result, except
+// ModelResponses, counted from the attempt's own events when it is read. A
+// child still running has no result, so it has none of them.
 type SubagentReport struct {
 	ExecutionID  string  `json:"executionId"`
 	Worker       string  `json:"worker"`
@@ -184,6 +188,29 @@ type SubagentReport struct {
 	Text         *string `json:"text,omitempty"`
 	TotalBytes   int     `json:"totalBytes"`
 	OmittedBytes int     `json:"omittedBytes"`
+	// Sources are the URLs the child's Web tools returned, checked against
+	// its tool events, or legacy ones recorded before that check existed.
+	Sources []SubagentReportSource `json:"sources,omitempty"`
+	// UnverifiedURLs are cited in the report but no Web tool returned them.
+	UnverifiedURLs []string `json:"unverifiedUrls,omitempty"`
+	// Limitations are child-written; Notes are harness-written.
+	Limitations []string `json:"limitations,omitempty"`
+	Notes       []string `json:"notes,omitempty"`
+	// Usage is the stored token usage, a lower bound when Incomplete.
+	Usage *delegation.Usage `json:"usage,omitempty"`
+	// ModelResponses counts the child's committed model responses in this
+	// attempt, with or without tool calls.
+	ModelResponses *int `json:"modelResponses,omitempty"`
+}
+
+// SubagentReportSource is one source as the owner reads it. Legacy marks one
+// recorded before 2026-10-01, never checked against the child's tool events,
+// whose Fetched and Cited are therefore unknown.
+type SubagentReportSource struct {
+	URL     string `json:"url"`
+	Fetched bool   `json:"fetched"`
+	Cited   bool   `json:"cited"`
+	Legacy  bool   `json:"legacy,omitempty"`
 }
 
 // subagentReportViewBytes bounds the report text the owner view returns. No
@@ -208,8 +235,20 @@ func (s *Store) SubagentReport(ctx context.Context, session memory.SessionID, ex
 			return sql.ErrNoRows
 		}
 		doc = SubagentReport{ExecutionID: a.ID, Worker: a.Worker(), Status: a.State}
-		if a.Result != nil {
-			doc.Reason = a.Result.Reason
+		if r := a.Result; r != nil {
+			doc.Reason, doc.UnverifiedURLs, doc.Limitations, doc.Notes, doc.Usage = r.Reason, r.UnverifiedURLs, r.Limitations, r.Notes, r.Usage
+			for _, source := range r.Sources {
+				doc.Sources = append(doc.Sources, SubagentReportSource{URL: source.URL, Fetched: source.Fetched, Cited: source.Cited, Legacy: source.Legacy()})
+			}
+			after, until, err := attemptRange(ctx, conn, a)
+			if err != nil {
+				return err
+			}
+			var responses int
+			if err = conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE session_id=? AND sequence>? AND sequence<=? AND event_type='assistant_message'`, a.Child.ID, after, until).Scan(&responses); err != nil {
+				return fmt.Errorf("count child responses: %w", err)
+			}
+			doc.ModelResponses = &responses
 		}
 		if a.FinalEventID == "" {
 			return nil
