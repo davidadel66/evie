@@ -16235,6 +16235,28 @@ evieExplorer.register(
   ],
   "history": [
     {
+      "date": "2026-11-03",
+      "title": "Read a worker's report in the Inspector",
+      "branch": "feat/artifacts-report-view",
+      "merge": "7fe6b17",
+      "touches": [
+        "internal/eviedb",
+        "internal/web",
+        "internal/web/ui",
+        "internal/delegation",
+        "cmd/evie"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/artifacts.spec.md",
+        "#199",
+        "#200"
+      ],
+      "text": [
+        "When a chat delegated research, exploration or a build, the worker's full report was stored and the parent model could page it, but David could only see the worker's activity. Opening a worker in the Inspector now offers Report and Activity tabs, with Report first once the worker has finished. Report shows the exact stored report, the same bytes `read_subagent_report` pages, as an inert document: raw HTML stays text, only http(s) links are links and open outside Evie, and images never load.",
+        "Evie's own facts sit above the worker's text: kind, status and reason, tokens and model responses, the sources Evie verified and the cited URLs it couldn't, and its notes. The worker's text and limitations are labelled as the worker's. The report answers only for the open chat and the workers it delegated. Older records still open, and a report over 1 MiB says how much is cut. This is artifacts stage 1: the first stored output with a view of its own, before any artifact store."
+      ]
+    },
+    {
       "date": "2026-11-02",
       "title": "Review proposed lines as a deck of cards",
       "branch": "feat/proposal-deck",
