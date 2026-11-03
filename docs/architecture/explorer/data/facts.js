@@ -420,6 +420,10 @@ evieExplorer.register(
     },
     {
       "from": "internal/agent",
+      "to": "internal/skill"
+    },
+    {
+      "from": "internal/agent",
       "to": "internal/task"
     },
     {
@@ -581,6 +585,10 @@ evieExplorer.register(
     {
       "from": "internal/plugins",
       "to": "internal/openrouter"
+    },
+    {
+      "from": "internal/plugins",
+      "to": "internal/skill"
     },
     {
       "from": "internal/plugins",

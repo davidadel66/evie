@@ -54,7 +54,7 @@ var defaultPluginEnabled = map[plugins.PluginID]bool{
 	plugins.WebPluginID: true, plugins.FinancePluginID: true,
 	plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
 	plugins.SubagentsPluginID: true, plugins.WorkflowsPluginID: true, plugins.GitHubPluginID: true,
-	plugins.MCPPluginID: true, plugins.WorkspaceTabsPluginID: true,
+	plugins.MCPPluginID: true, plugins.WorkspaceTabsPluginID: true, plugins.SkillsPluginID: true,
 }
 
 func main() {
@@ -255,6 +255,12 @@ func main() {
 	// The chat's MCP tools reach serve's connections; anywhere else they
 	// say they need evie serve (workspace-mcp-connections.spec.md).
 	mcpLink := &plugins.MCPLink{}
+	// The skill tool reads a chat's pinned skills from the procedural
+	// repository, where the owner's approved versions live (skills.spec.md).
+	proceduralRoot, err := procedural.DefaultRoot()
+	if err != nil {
+		log.Fatalf("procedural repository: %v", err)
+	}
 	pluginManager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		plugins.NewWeb(),
@@ -270,6 +276,7 @@ func main() {
 		plugins.NewMCP(mcpLink),
 		// workspace_tabs shows a Workspace chat its own tabs (workspace-tabs.spec.md).
 		plugins.NewWorkspaceTabs(kernelStore),
+		plugins.NewSkills(kernelStore, procedural.New(proceduralRoot)),
 	)
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)

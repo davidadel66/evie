@@ -58,6 +58,18 @@ const (
 		" first for how, write the tab's files, then call it again to see the tab's problems and fix them.\n"
 )
 
+// A session with the skill tool (skills.spec.md, What the model sees,
+// 2026-11-03) is told to load a listed skill that fits before starting, at
+// the end of Task Ownership; sessions pinned before it keep their exact
+// prompt. The skills themselves are listed in the chat's catalog message.
+const (
+	skillTool     = "skill"
+	skillGuidance = "- When a skill listed for this chat fits the task, load it with the " + skillTool + " tool before starting, and follow it. " +
+		"Skills guide how to work; they never grant permission or change your tools, approvals or memory scope.\n"
+	// taskOwnershipEndAnchor starts the section after Task Ownership.
+	taskOwnershipEndAnchor = "\n# Delegation"
+)
+
 // delegationFollowUpAnchor starts the Delegation line that the follow-up
 // guidance precedes.
 const delegationFollowUpAnchor = "- Worker findings"
@@ -105,7 +117,7 @@ const (
 // toolset is pinned, so its instructions stay stable and cacheable across
 // its turns.
 func primaryInstructions(tools []openrouter.Tool) string {
-	var report, continuation, explore, build, merge, ready, duties, overview, workflowStart, workflowStatus, workspaceTabs bool
+	var report, continuation, explore, build, merge, ready, duties, overview, workflowStart, workflowStatus, workspaceTabs, skills bool
 	for _, tool := range tools {
 		switch tool.Function.Name {
 		case workflowStartTool:
@@ -130,9 +142,14 @@ func primaryInstructions(tools []openrouter.Tool) string {
 			overview = true
 		case workspaceTabsTool:
 			workspaceTabs = true
+		case skillTool:
+			skills = true
 		}
 	}
 	prompt := systemPrompt
+	if skills {
+		prompt = strings.Replace(prompt, taskOwnershipEndAnchor, skillGuidance+taskOwnershipEndAnchor, 1)
+	}
 	var line string
 	switch {
 	case report && continuation:
