@@ -122,3 +122,19 @@ Spec: [artifacts.spec.md](artifacts.spec.md).
   - The owner report read and `read_subagent_report` load the report through
     one shared loader, and the trace and report routes share one open-chat
     guard, so neither boundary can drift between two copies.
+
+- **2026-11-03 — Older limitations stay labelled as the worker's.** Results
+  from before Stage 10 mixed harness notes into `limitations`, so some of
+  Evie's own older notes show under the worker's label. David accepted the
+  recommendation ("YES"): keep that cautious label, which matches how the
+  parent model sees those results.
+
+- **2026-11-03 — Evie's notes show word for word in stage 1.** The notes were
+  written for the parent model and can name its tools. David accepted the
+  recommendation ("YES") to show them as stored; rewording them for him is a
+  later change.
+
+- **2026-11-03 — Canvas review before merge.** The Report view was built
+  without the canvas prototype David asks for on UI work. He accepted the
+  recommendation ("YES"): before-and-after screenshots go on the design
+  canvas for his verdict, and any changes land on this branch before merge.
