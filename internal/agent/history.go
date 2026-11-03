@@ -177,9 +177,9 @@ func messagesFromEventsWithContinuation(events []memory.Event, continuation map[
 				ToolCallID: payload.ToolCallID,
 			})
 
-		case turnSummaryViewEvent:
-			// An in-turn summary, already framed, in the position the turn
-			// view placed it.
+		case turnSummaryViewEvent, skillBodyViewEvent:
+			// An in-turn summary or an invoked skill's body, already framed,
+			// in the position its view placed it.
 			messages = append(messages, openrouter.Message{Role: "user", Content: event.Content})
 
 		case memory.EventToolIntent,

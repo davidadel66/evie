@@ -108,6 +108,12 @@ type ContextComposeInput struct {
 	StandingMemory        string
 	StandingMemoryReceipt *memory.StandingMemoryReceipt
 
+	// InvokedSkills are the framed bodies of the skills the owner invoked
+	// with /name, by the root message that invoked each. A body sits right
+	// before its message whenever that turn is in the window, after the
+	// active turn's memory evidence.
+	InvokedSkills map[memory.EventID]string
+
 	// plannedTurnSummary, set only while planning an in-turn compaction,
 	// replaces the active turn's durable in-turn summary with a candidate.
 	plannedTurnSummary *contextTurnSummary
@@ -365,15 +371,16 @@ func (c *ContextComposer) projectAtStart(
 	// Stable content leads and volatile content trails, so provider prefix
 	// caches survive iterations and turns: instructions, the environment note,
 	// repository guidance, and the summary change rarely; history only grows;
-	// memory evidence sits immediately before the active root as specified;
+	// memory evidence sits immediately before the active root as specified,
+	// and before the skill body the owner invoked for it;
 	// Task Focus and the final-step note follow the conversation.
 	composeProjected := func(projected []memory.Event) error {
-		conversation, err := messagesFromEventsWithContinuation(projected, input.Continuation)
+		conversation, err := messagesFromEventsWithContinuation(withInvokedSkills(projected, input.InvokedSkills), input.Continuation)
 		if err != nil {
 			return fmt.Errorf("project durable history: %w", err)
 		}
 		if activeMessages < 0 {
-			tail, tailErr := messagesFromEventsWithContinuation(projected[rootIndex:], input.Continuation)
+			tail, tailErr := messagesFromEventsWithContinuation(withInvokedSkills(projected[rootIndex:], input.InvokedSkills), input.Continuation)
 			if tailErr != nil {
 				return tailErr
 			}
@@ -772,8 +779,12 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	if err != nil {
 		return ContextDiagnostics{}, fmt.Errorf("load skill catalog: %w", err)
 	}
+	invokedSkills, err := s.invokedSkillBodies(ctx, events, summary, map[string]string{})
+	if err != nil {
+		return ContextDiagnostics{}, fmt.Errorf("load invoked skills: %w", err)
+	}
 	projection, compaction, planWarnings, err := s.composer.inspectNextRequest(ContextComposeInput{
-		EnvironmentNote: workingFolderNote(folder), RepositoryInstructions: repository, SkillCatalog: skillCatalog,
+		EnvironmentNote: workingFolderNote(folder), RepositoryInstructions: repository, SkillCatalog: skillCatalog, InvokedSkills: invokedSkills,
 		StandingMemory: standing, StandingMemoryReceipt: standingReceipt,
 		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,

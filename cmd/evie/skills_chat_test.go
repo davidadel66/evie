@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -68,7 +71,7 @@ func (c *skillChat) open() {
 		c.clients[session.ID] = client
 		holder := memory.LeaseHolderID("web-" + session.ID)
 		return agent.NewWithToolset(client, evieTestContextProfile("skills/model"), c.store.BindHistory(session.ID, holder), session.ScopeContext(),
-			c.store.BindTurnOwner(session.ID, holder), resolved.Toolset, agent.WithAutomaticMemoryRecall(false)), nil
+			c.store.BindTurnOwner(session.ID, holder), resolved.Toolset, agent.WithAutomaticMemoryRecall(false), agent.WithSkillFiles(c.repo)), nil
 	})
 }
 
@@ -147,13 +150,22 @@ func skillRefs(receipt composition.Receipt) []string {
 }
 
 // skillChatClient captures every request and, on the first request of a
-// turn, makes the tool calls the test queued for it.
+// turn, makes the tool calls the test queued for it. It answers the
+// compactor with a valid summary and keeps its requests apart.
 type skillChatClient struct {
-	requests []openrouter.ChatRequest
-	calls    []openrouter.ToolCall
+	requests    []openrouter.ChatRequest
+	compactions []openrouter.ChatRequest
+	calls       []openrouter.ToolCall
 }
 
+const skillChatSummary = "## Goal / criteria / constraints\nPlan dinner.\n## Current state / completed actions\nAsked.\n## Decisions / discoveries\nNone.\n" +
+	"## Durable paths / IDs / artifacts / tool outcomes\nNone.\n## Unresolved questions / blockers / risks\nNone.\n## Next steps\nContinue.\n## User preferences / commitments\nNone."
+
 func (c *skillChatClient) ChatStream(_ context.Context, request openrouter.ChatRequest, _ openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	if strings.HasPrefix(request.Messages[0].Content, "You are Evie's context compactor.") {
+		c.compactions = append(c.compactions, request)
+		return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{Role: "assistant", Content: skillChatSummary}}}}, nil
+	}
 	c.requests = append(c.requests, request)
 	message := openrouter.Message{Role: "assistant", Content: "done"}
 	if len(c.calls) > 0 && request.Messages[len(request.Messages)-1].Role == "user" {
@@ -580,5 +592,234 @@ func TestTheSkillCatalogKeepsWithinItsBudget(t *testing.T) {
 	}
 	if len(entries) != len(names) || len(shortened) != 1 {
 		t.Fatalf("%d entries; shortened lengths %v", len(entries), shortened)
+	}
+}
+
+const handoffSkill = `---
+name: handoff
+description: Write a prompt that starts a fresh session on the next phase.
+argument-hint: "[next phase]"
+---
+Write the handoff.
+`
+
+// chatServer is the web server over the chat's controller, as evie serve
+// runs it, and posts JSON to it as the browser does.
+func (c *skillChat) chatServer() func(path string, body any) *httptest.ResponseRecorder {
+	c.t.Helper()
+	handler := web.NewContextServer(nil, nil, nil, c.controller).Handler()
+	return func(path string, body any) *httptest.ResponseRecorder {
+		c.t.Helper()
+		data, err := json.Marshal(body)
+		if err != nil {
+			c.t.Fatal(err)
+		}
+		request := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(data))
+		request.Host = "127.0.0.1:6687"
+		request.Header.Set("Origin", "http://127.0.0.1:6687")
+		request.Header.Set("Content-Type", "application/json")
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder
+	}
+}
+
+// ownerMessage is the index of the request's user message with exactly
+// this text.
+func ownerMessage(t *testing.T, request openrouter.ChatRequest, text string) int {
+	t.Helper()
+	for i, message := range request.Messages {
+		if message.Role == "user" && message.Content == text {
+			return i
+		}
+	}
+	t.Fatalf("the request has no owner message %q", text)
+	return -1
+}
+
+// skillBodies are the request's framed skill bodies, by skill name, with
+// their positions.
+func skillBodies(request openrouter.ChatRequest) map[string]int {
+	out := map[string]int{}
+	for i, message := range request.Messages {
+		if name, ok := strings.CutPrefix(message.Content, "Skill `"); ok && message.Role == "user" {
+			name, _, _ = strings.Cut(name, "`")
+			out[name] = i
+		}
+	}
+	return out
+}
+
+// The owner invokes a pinned skill with /name (skills.spec.md, Owner
+// invocation): the chat's skill list names its pinned skills, owner-only
+// ones included; POST /api/chat with skill records the invocation on the
+// turn's root message and puts the skill's framed body as a user-role
+// message right before his message, on that request and every later one
+// until compaction removes the turn, and the compactor never sees it.
+// History returns the skill on his message. A skill the chat didn't pin,
+// and a chat without the skill capability, are refused.
+func TestTheOwnerInvokesAPinnedSkillWithSlashName(t *testing.T) {
+	c := newSkillChat(t)
+	ctx := context.Background()
+	grilling := c.approve("grilling", map[string]string{"SKILL.md": grillingSkill, "references/questions.md": "What breaks first?\n"})
+	owl := c.approve("owl", map[string]string{"SKILL.md": owlSkill})
+	c.approve("handoff", map[string]string{"SKILL.md": handoffSkill})
+	post := c.chatServer()
+	open := func(body any) memory.SessionID {
+		t.Helper()
+		result := post("/api/context-sessions/select", body)
+		var opened struct {
+			Session memory.Session `json:"session"`
+		}
+		if result.Code != http.StatusOK || json.Unmarshal(result.Body.Bytes(), &opened) != nil {
+			t.Fatalf("open: %d %s", result.Code, result.Body)
+		}
+		return opened.Session.ID
+	}
+	chat := open(map[string]any{"unscoped": true})
+	client := c.clients[chat]
+
+	listed := post("/api/skills/list", map[string]any{"sessionId": chat})
+	var list struct {
+		Skills []struct {
+			Name         string `json:"name"`
+			Description  string `json:"description"`
+			ArgumentHint string `json:"argumentHint"`
+			OwnerOnly    bool   `json:"ownerOnly"`
+		} `json:"skills"`
+	}
+	if listed.Code != http.StatusOK || json.Unmarshal(listed.Body.Bytes(), &list) != nil {
+		t.Fatalf("skill list: %d %s", listed.Code, listed.Body)
+	}
+	if got := fmt.Sprintf("%+v", list.Skills); got != "[{Name:grilling Description:Grill the owner about a plan until every branch is resolved. ArgumentHint: OwnerOnly:false} "+
+		"{Name:handoff Description:Write a prompt that starts a fresh session on the next phase. ArgumentHint:[next phase] OwnerOnly:false} "+
+		"{Name:owl Description:Night shift checklist the owner runs himself. ArgumentHint: OwnerOnly:true}]" {
+		t.Fatalf("the chat lists skills %s", got)
+	}
+
+	chatTurn := func(body map[string]any) *httptest.ResponseRecorder {
+		t.Helper()
+		body["sessionId"] = chat
+		return post("/api/chat", body)
+	}
+	if sent := chatTurn(map[string]any{"message": "my plan to open a bakery", "skill": "grilling"}); sent.Code != http.StatusOK || !strings.Contains(sent.Body.String(), "turn_done") {
+		t.Fatalf("sending with grilling: %d %s", sent.Code, sent.Body)
+	}
+	first := client.requests[len(client.requests)-1]
+	at := ownerMessage(t, first, "my plan to open a bakery")
+	if bodies := skillBodies(first); len(bodies) != 1 || bodies["grilling"] != at-1 {
+		t.Fatalf("the grilling body is not right before the owner's message: %v, message at %d", bodies, at)
+	}
+	body := first.Messages[at-1].Content
+	frame := "Skill `grilling` " + skillFrame + "\n"
+	if !strings.HasPrefix(body, frame) {
+		t.Fatalf("the invoked body is not framed:\n%s", body)
+	}
+	var loaded struct {
+		Name, Version, Instructions string
+		Resources                   []struct{ Path string }
+	}
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(body, frame)), &loaded); err != nil || loaded.Name != "grilling" || loaded.Version != grilling ||
+		loaded.Instructions != "# Grilling\n\nAsk one hard question at a time.\n" || len(loaded.Resources) != 1 || loaded.Resources[0].Path != "references/questions.md" {
+		t.Fatalf("the invoked body is %+v, %v", loaded, err)
+	}
+
+	// An owner-only skill is invocable by him; a bare /name is the message.
+	if sent := chatTurn(map[string]any{"message": "/owl", "skill": "owl"}); sent.Code != http.StatusOK {
+		t.Fatalf("sending with owl: %d %s", sent.Code, sent.Body)
+	}
+	if sent := chatTurn(map[string]any{"message": "and then?"}); sent.Code != http.StatusOK {
+		t.Fatalf("sending without a skill: %d %s", sent.Code, sent.Body)
+	}
+	later := client.requests[len(client.requests)-1]
+	bodies := skillBodies(later)
+	if len(bodies) != 2 || bodies["grilling"] != ownerMessage(t, later, "my plan to open a bakery")-1 || bodies["owl"] != ownerMessage(t, later, "/owl")-1 ||
+		later.Messages[ownerMessage(t, later, "and then?")-1].Role != "assistant" {
+		t.Fatalf("a later request's skill bodies are at %v", bodies)
+	}
+	if !strings.Contains(later.Messages[bodies["owl"]].Content, "Check the doors.") || later.Messages[bodies["grilling"]].Content != body {
+		t.Fatal("a later request does not carry the same framed bodies")
+	}
+
+	for name, refused := range map[string]*httptest.ResponseRecorder{
+		"an unpinned skill": chatTurn(map[string]any{"message": "wrap it up", "skill": "wrap"}),
+		"a malformed name":  chatTurn(map[string]any{"message": "hello", "skill": "../owl"}),
+	} {
+		if refused.Code < 400 || refused.Code >= 500 || !strings.Contains(refused.Body.String(), "skill") {
+			t.Errorf("%s: %d %s", name, refused.Code, refused.Body)
+		}
+	}
+	if err := c.manager.SetEnabled(plugins.SkillsPluginID, false); err != nil {
+		t.Fatal(err)
+	}
+	without := open(map[string]any{"unscoped": true})
+	if refused := post("/api/chat", map[string]any{"sessionId": without, "message": "grill me", "skill": "grilling"}); refused.Code < 400 || refused.Code >= 500 ||
+		!strings.Contains(refused.Body.String(), "skill") || len(c.clients[without].requests) != 0 {
+		t.Fatalf("a chat without the skill capability: %d %s", refused.Code, refused.Body)
+	}
+	if listed := post("/api/skills/list", map[string]any{"sessionId": without}); listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"skills":[]`) {
+		t.Fatalf("a chat without the skill capability lists %d %s", listed.Code, listed.Body)
+	}
+	if closed := post("/api/skills/list", map[string]any{"sessionId": "not-open"}); closed.Code != http.StatusConflict {
+		t.Fatalf("a chat that isn't open lists skills: %d", closed.Code)
+	}
+
+	// The invocation is recorded with the turn's root message.
+	events, err := c.store.BindHistory(chat, "reader").Events(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payloads := map[string]string{}
+	for _, event := range events {
+		if event.Type == memory.EventUserMessage {
+			payloads[event.Content] = string(event.Payload)
+		}
+	}
+	if want := `{"skill":{"name":"grilling","version":"` + grilling + `"}}`; payloads["my plan to open a bakery"] != want {
+		t.Fatalf("the grilling turn's root payload is %s, want %s", payloads["my plan to open a bakery"], want)
+	}
+	if want := `{"skill":{"name":"owl","version":"` + owl + `"}}`; payloads["/owl"] != want {
+		t.Fatalf("the owl turn's root payload is %s", payloads["/owl"])
+	}
+	if strings.Contains(payloads["and then?"], "skill") || len(payloads) != 3 {
+		t.Fatalf("root payloads %v", payloads)
+	}
+
+	history := post("/api/context-sessions/history", map[string]any{"sessionId": chat})
+	var page struct {
+		Items []struct{ Kind, Text, Skill string }
+	}
+	if history.Code != http.StatusOK || json.Unmarshal(history.Body.Bytes(), &page) != nil {
+		t.Fatalf("history: %d %s", history.Code, history.Body)
+	}
+	var owners []string
+	for _, item := range page.Items {
+		if item.Kind == "user" {
+			owners = append(owners, item.Text+"|"+item.Skill)
+		}
+	}
+	if !slices.Equal(owners, []string{"my plan to open a bakery|grilling", "/owl|owl", "and then?|"}) {
+		t.Fatalf("history's owner messages are %q", owners)
+	}
+
+	// Compaction removes the first turn and its body with it; the compactor
+	// never sees a body.
+	if compacted := post("/api/compact", map[string]any{"sessionId": chat}); compacted.Code != http.StatusOK {
+		t.Fatalf("compact: %d %s", compacted.Code, compacted.Body)
+	}
+	if len(client.compactions) != 1 {
+		t.Fatalf("compactor requests = %d", len(client.compactions))
+	}
+	for _, message := range client.compactions[0].Messages {
+		if strings.Contains(message.Content, skillFrame) || !strings.Contains(fmt.Sprint(client.compactions[0].Messages), "my plan to open a bakery") {
+			t.Fatalf("the compactor saw a skill body or not the turn: %q", message.Content)
+		}
+	}
+	if sent := chatTurn(map[string]any{"message": "after compaction"}); sent.Code != http.StatusOK {
+		t.Fatalf("sending after compaction: %d %s", sent.Code, sent.Body)
+	}
+	compacted := client.requests[len(client.requests)-1]
+	if bodies := skillBodies(compacted); len(bodies) != 1 || bodies["owl"] != ownerMessage(t, compacted, "/owl")-1 {
+		t.Fatalf("after compaction the skill bodies are at %v", bodies)
 	}
 }

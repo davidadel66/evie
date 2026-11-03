@@ -473,6 +473,19 @@ type ToolCall struct {
 	Arguments string `json:"arguments"`
 }
 
+// UserMessagePayload is what an owner's root user_message records beside its
+// text: the skill he invoked for it with /name (skills.spec.md, Owner
+// invocation), written with the message in one event.
+type UserMessagePayload struct {
+	Skill *SkillInvocation `json:"skill,omitempty"`
+}
+
+// SkillInvocation names the pinned skill version an owner message invoked.
+type SkillInvocation struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 type AssistantMessagePayload struct {
 	ToolCalls []ToolCall          `json:"tool_calls,omitempty"`
 	Usage     *TokenUsage         `json:"usage,omitempty"`

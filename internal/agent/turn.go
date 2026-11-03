@@ -181,6 +181,8 @@ func (s *Session) runOwnedTurn(
 	if err != nil {
 		return s.classifyLocalError(coordinator, fmt.Errorf("load skill catalog: %w", err))
 	}
+	// Each invoked skill version is read once per turn.
+	skillBodies := map[string]string{}
 	// Opaque transport state belongs only to this live turn. Durable events
 	// remain sufficient to start a new turn after restart or cancellation.
 	continuation := make(map[memory.EventID][]json.RawMessage)
@@ -244,11 +246,15 @@ func (s *Session) runOwnedTurn(
 		if iteration == 1 && !retrying && !s.automaticRecallDisabled {
 			recall.automatic(coordinator.ctx, events, summary, rootTurnID, s.toolset.Schemas())
 		}
+		invokedSkills, err := s.invokedSkillBodies(coordinator.ctx, events, summary, skillBodies)
+		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("load invoked skills: %w", err))
+		}
 		memoryData, memoryReceipt := recall.renderProjection()
 		composeInput := ContextComposeInput{
 			MemoryData: memoryData, MemoryReceipt: memoryReceipt, EnvironmentNote: workingFolderNote(workingFolder),
 			RepositoryInstructions: repoinstructions.Render(repository), RepositoryInstructionsTurnID: repository.TurnID, SkillCatalog: skillCatalog,
-			StandingMemory: standing, StandingMemoryReceipt: standingReceipt,
+			InvokedSkills: invokedSkills, StandingMemory: standing, StandingMemoryReceipt: standingReceipt,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: modelTools.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,

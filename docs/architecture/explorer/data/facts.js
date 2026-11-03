@@ -3243,6 +3243,15 @@ evieExplorer.register(
       }
     },
     {
+      "pattern": "/api/skills/list",
+      "package": "internal/web",
+      "guard": "managementRoute",
+      "source": {
+        "file": "internal/web/serve.go",
+        "function": "Server.Handler"
+      }
+    },
+    {
       "pattern": "/api/subagents/list",
       "package": "internal/web",
       "guard": "managementRoute",

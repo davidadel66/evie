@@ -218,6 +218,7 @@ func (s *Server) Handler() http.Handler {
 			mux.Handle("/api/models/list", s.managementRoute(s.handleModelList))
 			mux.Handle("/api/models/select", s.managementRoute(s.handleModelSelect))
 		}
+		mux.Handle("/api/skills/list", s.managementRoute(s.handleSkillList))
 		mux.Handle("/api/context-sessions/list", s.managementRoute(s.handleContextSessionList))
 		mux.Handle("/api/context-sessions/history", s.managementRoute(s.handleContextSessionHistory))
 		mux.Handle("/api/context-sessions/select", s.managementRoute(s.handleContextSessionSelect))
@@ -359,6 +360,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		// Detach starts the turn and answers at once; its events reach the
 		// browser through the chat's feed (multi-chat.spec.md Stage 3).
 		Detach bool `json:"detach"`
+		// Skill is the pinned skill the owner invoked for this message with
+		// /name (skills.spec.md, Owner invocation).
+		Skill string `json:"skill"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "body must be JSON with a message field")
@@ -393,6 +397,13 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusServiceUnavailable, "chat is unavailable because the active Agent Preset is invalid; use plugin diagnostics to repair startup")
 		return
 	}
+	if req.Skill != "" {
+		if status, refusal := skillRefusal(r, session, req.Skill); refusal != "" {
+			s.sessionMu.Unlock()
+			jsonError(w, status, refusal)
+			return
+		}
+	}
 	turnCtx, stopTurn := context.WithCancelCause(turnLifecycleContext(r))
 	turn := &webTurn{stop: stopTurn}
 	if !s.beginWebTurn(turnKey, turn) {
@@ -402,9 +413,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	feed := s.feedLocked(turnKey)
-	ev := &sseEvents{feed: feed, generation: feed.begin(), message: req.Message, session: turnKey}
+	ev := &sseEvents{feed: feed, generation: feed.begin(), message: req.Message, skill: req.Skill, session: turnKey}
 	s.sessionMu.Unlock()
-	run := chatTurn{ctx: turnCtx, stop: stopTurn, key: turnKey, turn: turn, session: session, message: req.Message, ev: ev}
+	run := chatTurn{ctx: turnCtx, stop: stopTurn, key: turnKey, turn: turn, session: session, message: req.Message, skill: req.Skill, ev: ev}
 
 	if req.Detach {
 		s.detached.Add(1)
@@ -445,7 +456,9 @@ type chatTurn struct {
 	turn    *webTurn
 	session *agent.Session
 	message string
-	ev      *sseEvents
+	// skill is the pinned skill the owner invoked for message, or "".
+	skill string
+	ev    *sseEvents
 }
 
 // runTurn runs a registered turn to its end: errors, turn_done, the end of
@@ -475,7 +488,12 @@ func (s *Server) runTurn(t chatTurn, approver tools.Approver, refuse func(messag
 		}
 	}()
 	measurementCtx, finalizeMeasurement := agent.BeginResponseMeasurement(t.ctx)
-	sendErr := t.session.Send(measurementCtx, t.message, t.ev, approver)
+	var sendErr error
+	if t.skill != "" {
+		sendErr = t.session.SendSkill(measurementCtx, t.message, t.skill, t.ev, approver)
+	} else {
+		sendErr = t.session.Send(measurementCtx, t.message, t.ev, approver)
+	}
 	s.finishWebTurn(t.key, t.turn)
 
 	if errors.Is(sendErr, eviedb.ErrSessionModelChanged) && s.contextSessions != nil {
