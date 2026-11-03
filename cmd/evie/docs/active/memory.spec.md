@@ -1204,7 +1204,11 @@ unreadable, quarantined, or over-budget required file fails the request visibly
 rather than silently omitting governing instructions. Other scoped Skills and
 files are listed in the context manifest and loaded on demand. Approved
 procedural content is rendered as a trusted supplemental system-role block
-without modifying the code-owned base system prompt. Procedural changes use
+without modifying the code-owned base system prompt. (Amended 2026-11-02 for
+Skills only: skill text reaches the model as framed user-role content, a tool
+result or an owner-invoked message, as repository instructions do, and
+approved Global skills live under `global/skills/` in the procedural
+repository. See [skills.spec.md](skills.spec.md).) Procedural changes use
 dedicated tools; generic file tools reject the procedural root. Existing `bash`
 remains a privileged exception.
 

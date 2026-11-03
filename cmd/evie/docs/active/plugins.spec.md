@@ -123,7 +123,10 @@ not implement those provider roles yet.
   process-global static list.
 - An Agent Preset is a named, versioned list of required and optional
   Capability IDs plus any reviewed skill catalog entries and non-secret
-  configuration references needed to compose a session.
+  configuration references needed to compose a session. (Amended 2026-11-02:
+  a preset decides only whether the `skill` tool exists; Context Scope decides
+  which skills a session sees, pinned in its Composition Receipt. See
+  [skills.spec.md](skills.spec.md).)
 - Evie ships immutable built-in presets. `standard` is the default for a
   session with no Context Scope. Built-ins have reserved identities and cannot
   be shadowed by user presets.
