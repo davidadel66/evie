@@ -142,3 +142,12 @@ Spec: [skills.spec.md](skills.spec.md).
     compaction transcript never sees it, and a turn removed by compaction or
     trimming takes its body with it.
   - A bare `/name` is stored as the message text, as the spec says.
+
+- **2026-11-03 — Canvas verdict on the composer, and the skill label.** David
+  approved the canvas mock ("yes that looks good"): typing `/` lists the
+  commands, then the chat's skills with one-line descriptions, an argument
+  hint in place of the description when a skill has one, and "you only" on
+  owner-only skills; choosing a skill fills the draft with `/name`. He also
+  accepted a label the mock added ("i like the label"): an owner message sent
+  with a skill shows `/name` above its text, read from the turn's recorded
+  `skill` field.
