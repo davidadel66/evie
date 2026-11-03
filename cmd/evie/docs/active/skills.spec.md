@@ -261,3 +261,10 @@ They don't assert internal call sequences. The seams below were approved by Davi
   - Evie-proposed skills that wait in David's review;
   - worker presets with preloaded skills;
   - built-in skills for today's hard-coded guidance.
+
+## Tickets
+
+- #201 Propose, approve and deactivate a skill from a folder (blocked by: none)
+- #202 Migrate Claude Code skills into Evie (blocked by: #201)
+- #203 Evie loads approved skills in new chats (blocked by: #201)
+- #204 Invoke a skill with /name (blocked by: #203)
