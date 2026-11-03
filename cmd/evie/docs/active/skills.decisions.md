@@ -151,3 +151,13 @@ Spec: [skills.spec.md](skills.spec.md).
   accepted a label the mock added ("i like the label"): an owner message sent
   with a skill shows `/name` above its text, read from the turn's recorded
   `skill` field.
+
+- **2026-11-03 — Plugin skills are read from the plugin's own list too.**
+  David approved the fix ("yes") after the migration missed
+  `mattpocock-skills`, which lists its skills in `.claude-plugin/plugin.json`
+  under `skills/<group>/<name>`. With `--plugins`, the migration reads both
+  `skills/<name>/` and the folders the plugin's `skills` field lists, once
+  each. A listed path that leaves the plugin's folder, or holds no
+  `SKILL.md`, is reported in the notes and not read. Checked against the
+  real installed plugins with a throwaway home: 61 proposed, 4 refused, no
+  notes.

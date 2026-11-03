@@ -29,6 +29,8 @@ type skillCLI struct {
 	db    *sql.DB
 	store *eviedb.Store
 	repo  *procedural.Repo
+	// home is a temporary fake home folder for import-claude.
+	home string
 }
 
 func newSkillCLI(t *testing.T) *skillCLI {
@@ -38,13 +40,13 @@ func newSkillCLI(t *testing.T) *skillCLI {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	return &skillCLI{t: t, db: db, store: eviedb.NewStore(db), repo: procedural.New(filepath.Join(t.TempDir(), "procedural"))}
+	return &skillCLI{t: t, db: db, store: eviedb.NewStore(db), repo: procedural.New(filepath.Join(t.TempDir(), "procedural")), home: t.TempDir()}
 }
 
 func (c *skillCLI) run(args ...string) (string, error) {
 	c.t.Helper()
 	var out bytes.Buffer
-	handled, err := runSkillManagement(context.Background(), args, &out, skillCommands{store: c.store, repo: c.repo})
+	handled, err := runSkillManagement(context.Background(), args, &out, skillCommands{store: c.store, repo: c.repo, home: c.home})
 	if !handled {
 		c.t.Fatalf("%q was not handled", args)
 	}
@@ -497,6 +499,13 @@ func TestSkillCLIUsage(t *testing.T) {
 		{"skills", "show", "grilling", "--proposal"},
 		{"skills", "deactivate"},
 		{"skills", "deactivate", "grilling", "--version", "1"},
+		{"skills", "import-claude", "extra"},
+		{"skills", "import-claude", "--json"},
+		{"skills", "import-claude", "--plugins", "--plugins"},
+		{"skills", "approve", "--import"},
+		{"skills", "approve", "grilling", "--import", "import-1"},
+		{"skills", "approve", "--import", "import-1", "--hash", strings.Repeat("a", 64)},
+		{"skills", "approve", "--import", "import-1", "--json"},
 	} {
 		if _, err := c.run(args...); err == nil || !strings.Contains(err.Error(), "usage: evie skills") {
 			t.Fatalf("%q: %v", args, err)

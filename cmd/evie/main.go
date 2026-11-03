@@ -178,7 +178,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("skills: %v", err)
 		}
-		if handled, err := runSkillManagement(context.Background(), os.Args[1:], os.Stdout, skillCommands{store: kernelStore, repo: procedural.New(root)}); handled {
+		home, _ := os.UserHomeDir() // HOME; import-claude refuses an empty one
+		if handled, err := runSkillManagement(context.Background(), os.Args[1:], os.Stdout, skillCommands{store: kernelStore, repo: procedural.New(root), home: home}); handled {
 			if err != nil {
 				log.Fatalf("skills: %v", err)
 			}
