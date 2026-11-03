@@ -16227,6 +16227,23 @@ evieExplorer.register(
   "history": [
     {
       "date": "2026-11-02",
+      "title": "Review proposed lines as a deck of cards",
+      "branch": "feat/proposal-deck",
+      "merge": "261aa8f",
+      "touches": [
+        "internal/web/ui",
+        "cmd/evie"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/workspace-activity.spec.md",
+        "doc:cmd/evie/docs/active/finance-review.spec.md"
+      ],
+      "text": [
+        "A review question, such as finance-review's, showed its proposed lines as raw JSON. David asked for cards he can swipe through like the memory inbox. \"Review the N lines\" now opens a deck: one line at a time with its merchant, amount, date, category and confidence, reason and merchant rule. Swipe right or → keeps it, left or ← rejects it, ↑ skips it to the back, the category pill changes it, and the rule chip drops the rule. The deck ends on a summary whose Answer sends only the exceptions in the step's own schema. It applies to any question whose input lists objects with ids and whose schema names reject, change or no_rule lists."
+      ]
+    },
+    {
+      "date": "2026-11-02",
       "title": "Workspace tabs read at a glance",
       "branch": "feat/workspace-tabs-ui",
       "merge": "206c61e",

@@ -7,6 +7,22 @@ The entry format, the check's rules, and how to add an entry are in the
 editing this file, run `go run ./scripts/explorer extract` and
 `go run ./scripts/explorer check`.
 
+## 2026-11-02 — Review proposed lines as a deck of cards
+Branch: feat/proposal-deck
+Merge: 261aa8f
+Touches: internal/web/ui, cmd/evie
+Sources: doc:cmd/evie/docs/active/workspace-activity.spec.md, doc:cmd/evie/docs/active/finance-review.spec.md
+
+A review question, such as finance-review's, showed its proposed lines as
+raw JSON. David asked for cards he can swipe through like the memory inbox.
+"Review the N lines" now opens a deck: one line at a time with its merchant,
+amount, date, category and confidence, reason and merchant rule. Swipe
+right or → keeps it, left or ← rejects it, ↑ skips it to the back, the
+category pill changes it, and the rule chip drops the rule. The deck ends on
+a summary whose Answer sends only the exceptions in the step's own schema.
+It applies to any question whose input lists objects with ids and whose
+schema names reject, change or no_rule lists.
+
 ## 2026-11-02 — Workspace tabs read at a glance
 Branch: feat/workspace-tabs-ui
 Merge: 206c61e
