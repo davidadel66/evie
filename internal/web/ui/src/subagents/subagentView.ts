@@ -1,4 +1,4 @@
-import type { Subagent, SubagentAction, SubagentState } from "../api/subagents";
+import type { Subagent, SubagentAction, SubagentReport, SubagentSource, SubagentState } from "../api/subagents";
 import { elapsedLabel, toolLabel, type ToolItem } from "../chat/activityModel";
 
 // Presentation of delegated children (chat-activity.spec.md, subagent
@@ -50,4 +50,50 @@ export function subagentActionText(action: SubagentAction): string {
 export function subagentElapsed(child: Subagent, now: number): string | null {
   if (!child.startedAt) return null;
   return elapsedLabel(Date.parse(child.startedAt), child.endedAt ? Date.parse(child.endedAt) : now);
+}
+
+/** The worker detail's two views (artifacts.spec.md). */
+export type SubagentView = "report" | "activity";
+
+/**
+ * Report once the child ended with a report; Activity while it runs or when
+ * it ended without one. Before its report is read, a finished child that
+ * succeeded or stopped partway is expected to have one.
+ */
+export function subagentDefaultView(child: Subagent, report?: SubagentReport): SubagentView {
+  if (!subagentFinished(child.state)) return "activity";
+  if (report) return report.text === undefined ? "activity" : "report";
+  return child.state === "succeeded" || child.state === "partial" ? "report" : "activity";
+}
+
+const workerLabels: Record<string, string> = {research: "Research worker", explore: "Explore worker", build: "Build worker"};
+
+/** What the attempt cost: "At least 550 tokens · 3 model responses". The
+ *  total, else the input and output counts it has; usage that some response
+ *  did not report, or missing one of those counts, is a lower bound. */
+export function subagentUsageText(report: SubagentReport): string | null {
+  const usage = report.usage;
+  const parts = [usage?.input_tokens, usage?.output_tokens];
+  const counted = parts.filter((count) => count !== undefined);
+  const total = usage?.total_tokens ?? (counted.length > 0 ? counted.reduce((sum, count) => sum + count, 0) : undefined);
+  const lowerBound = usage?.incomplete || (usage?.total_tokens === undefined && counted.length < parts.length);
+  const tokens = total === undefined ? "Tokens not reported"
+    : `${lowerBound ? "At least " : ""}${total.toLocaleString("en-US")} ${total === 1 ? "token" : "tokens"}`;
+  const responses = report.modelResponses === undefined ? "" : `${report.modelResponses} ${report.modelResponses === 1 ? "model response" : "model responses"}`;
+  if (!usage && !responses) return null;
+  return [tokens, responses].filter(Boolean).join(" · ");
+}
+
+/** How Evie verified a source: "Fetched · cited in the report". */
+export function subagentSourceText(source: SubagentSource): string {
+  return `${source.fetched ? "Fetched" : "Only listed by a search"} · ${source.cited ? "cited in the report" : "not cited"}`;
+}
+
+/** Evie's line above a report: the worker kind, how it ended and why. */
+export function subagentReportFacts(report: SubagentReport): string {
+  return [
+    workerLabels[report.worker] ?? `${report.worker} worker`,
+    subagentStateLabel(report.status),
+    report.reason ? `Reason: ${report.reason.replaceAll("_", " ")}` : "",
+  ].filter(Boolean).join(" · ");
 }

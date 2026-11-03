@@ -3146,6 +3146,15 @@ evieExplorer.register(
       }
     },
     {
+      "pattern": "/api/subagents/report",
+      "package": "internal/web",
+      "guard": "managementRoute",
+      "source": {
+        "file": "internal/web/subagents.go",
+        "function": "Server.registerSubagentRoutes"
+      }
+    },
+    {
       "pattern": "/api/subagents/trace",
       "package": "internal/web",
       "guard": "managementRoute",

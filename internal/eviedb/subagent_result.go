@@ -572,6 +572,23 @@ func (s *Store) RecordSubagentWrapUp(ctx context.Context, id, reason string) err
 	})
 }
 
+// loadFinalReport reads the final report event a's record names, the one
+// read_subagent_report pages for the parent model and the owner opens
+// (artifacts.spec.md). A record that names an event its child does not have
+// is broken, not missing, so that error does not wrap sql.ErrNoRows: callers
+// read sql.ErrNoRows as "no such child".
+func loadFinalReport(ctx context.Context, conn *sql.Conn, a delegation.Attempt) (string, error) {
+	var report string
+	err := conn.QueryRowContext(ctx, `SELECT content FROM events WHERE id=? AND session_id=? AND event_type='assistant_message'`, a.FinalEventID, a.Child.ID).Scan(&report)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("load stored report: %v", err)
+	}
+	if err != nil {
+		return "", fmt.Errorf("load stored report: %w", err)
+	}
+	return report, nil
+}
+
 // ReadSubagentReport pages a child's stored final report for the parent
 // session that delegated it, under the same current access checks as
 // InspectSubagent. Pages break only at UTF-8 boundaries.
@@ -597,9 +614,9 @@ func (s *Store) ReadSubagentReport(ctx context.Context, p delegation.Parent, id 
 		if a.FinalEventID == "" {
 			return fmt.Errorf("execution %q has no stored report (status %s)", id, a.State)
 		}
-		var report string
-		if err = conn.QueryRowContext(ctx, `SELECT content FROM events WHERE id=? AND session_id=? AND event_type='assistant_message'`, a.FinalEventID, a.Child.ID).Scan(&report); err != nil {
-			return fmt.Errorf("load stored report: %w", err)
+		report, err := loadFinalReport(ctx, conn, a)
+		if err != nil {
+			return err
 		}
 		if offset > len(report) || (offset < len(report) && !utf8.RuneStart(report[offset])) {
 			return fmt.Errorf("read_subagent_report offset %s is not a UTF-8 boundary within the %s-byte report; use 0 or a next_offset", delegation.Grouped(offset), delegation.Grouped(len(report)))

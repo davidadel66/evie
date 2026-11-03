@@ -55,3 +55,91 @@ Spec: [artifacts.spec.md](artifacts.spec.md).
 - **2026-11-02 — Test seams approved.** David approved the three seams in the
   spec's Testing Decisions: the store read on real SQLite, the HTTP route with
   the existing fakes, and the UI render with a hostile report.
+
+- **2026-11-02 — Usage counts the worker's model responses beside its
+  tokens.** Story 14 asks for tokens and requests, but the stored usage holds
+  tokens only. David accepted the recommendation ("yes"): the owner report
+  read also counts the worker's committed model responses in that attempt,
+  shown as model responses beside the tokens. It is counted at read time from
+  the attempt's own events, with no schema change.
+
+- **2026-11-02 — The Activity view keeps the chat renderer for now.** The
+  worker's final message in the Activity trace still renders through the chat
+  renderer, which sanitizes HTML and loads images. That is the exposure the
+  inert mode avoids, but this stage leaves Activity unchanged, as the spec
+  says. David accepted the recommendation ("yes") to record it as a
+  follow-up rather than widen this stage.
+
+- **2026-11-02 — Built as two tickets on `feat/artifacts-report-view`.**
+  David approved the split ("yes"): first, opening a worker's report in the
+  Inspector (store read of the text, route, Report and Activity switch, inert
+  Markdown, no-report and partial states); then, blocked by it, Evie's facts
+  above the report (sources and their verification, unverified URLs, notes,
+  limitations labelled as the worker's, usage, and legacy records).
+
+- **2026-11-02 — Build choices (two-way doors).** Decided under the flow
+  brief David approved ("yes"); each is cheap to reverse.
+  - The read is `Store.SubagentReport` in `eviedb`, beside `SubagentEvents`.
+    A missing worker or another chat's answers `sql.ErrNoRows`, as
+    `SubagentEvents` does.
+  - Run-owned workers read as not found by an explicit check, not only
+    through the parent filter.
+  - The route is `POST /api/subagents/report` with `sessionId` and
+    `executionId`. It reuses the trace route's `subagents_session_changed`
+    (409) and `subagent_not_found` (404) codes.
+  - `delegation.Source` gains a `Legacy()` accessor, because its legacy flag
+    is unexported.
+  - The inert mode is Streamdown with its `sanitize` and `harden` rehype
+    plugins but without `raw`, plus its own link and image components. Code
+    highlighting stays. A local render against streamdown 2.5.0 showed
+    that dropping `raw` turns HTML into text. It also showed that default
+    links render as buttons without `href`, and that React adds an image
+    preload for any `<img>`, so an inert image is never an `<img>`.
+  - Each attempt of a continued worker shows its own final report, the one
+    `read_subagent_report` pages for that execution.
+  - The Report and Activity switch follows its default until David picks a
+    tab, so a worker that finishes while he watches moves to Report.
+  - The report is read once after the worker finishes and is not polled.
+    While the worker runs, Report says the report appears when it finishes.
+  - Source URLs in Evie's facts are clickable. They already passed the
+    harness's http(s) filter, and they open outside Evie as report links do.
+  - A pre-Stage 8 record without a final event shows no report; its inline
+    `findings` are not shown. Every finished attempt has had a final event
+    since 2026-09-11.
+
+- **2026-11-02 — Choices made while building and reviewing (two-way
+  doors).**
+  - An image inside a link shows its alt text as part of that link, which
+    opens the link's target, because a link cannot hold another link.
+    Elsewhere an image's alt text links to the image URL when it is http(s).
+  - A URL that is not http(s) shows as plain text without link styling, so
+    nothing looks clickable that isn't.
+  - A failed report read is retried three times, six seconds apart, and
+    then waits for the worker to be reopened.
+  - When a record names a final report event that no longer exists, the
+    report route answers 500, not 404. The worker exists, and its stored
+    report is the fault.
+  - The owner report read and `read_subagent_report` load the report through
+    one shared loader, and the trace and report routes share one open-chat
+    guard, so neither boundary can drift between two copies.
+
+- **2026-11-03 — Older limitations stay labelled as the worker's.** Results
+  from before Stage 10 mixed harness notes into `limitations`, so some of
+  Evie's own older notes show under the worker's label. David accepted the
+  recommendation ("YES"): keep that cautious label, which matches how the
+  parent model sees those results.
+
+- **2026-11-03 — Evie's notes show word for word in stage 1.** The notes were
+  written for the parent model and can name its tools. David accepted the
+  recommendation ("YES") to show them as stored; rewording them for him is a
+  later change.
+
+- **2026-11-03 — Canvas review before merge.** The Report view was built
+  without the canvas prototype David asks for on UI work. He accepted the
+  recommendation ("YES"): before-and-after screenshots go on the design
+  canvas for his verdict, and any changes land on this branch before merge.
+
+- **2026-11-03 — Canvas verdict: the Report view stays as built.** On the
+  canvas, a finished worker's 24 verified sources fill the first screen and
+  its own report starts below them. David kept that layout ("thats fine to
+  scroll"): sources stay listed above the report, with no folding.

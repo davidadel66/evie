@@ -36,6 +36,15 @@ func (f *fakeSubagents) SubagentEvents(_ context.Context, session memory.Session
 	return f.progress, f.events, nil
 }
 
+func (f *fakeSubagents) SubagentReport(_ context.Context, session memory.SessionID, executionID string) (eviedb.SubagentReport, error) {
+	f.sessions = append(f.sessions, session)
+	if executionID != f.progress.ExecutionID {
+		return eviedb.SubagentReport{}, sql.ErrNoRows
+	}
+	text := "## Summary\nHorizons double."
+	return eviedb.SubagentReport{ExecutionID: executionID, Worker: f.progress.Worker, Status: f.progress.State, Text: &text, TotalBytes: len(text)}, nil
+}
+
 func newSubagentServer(state string) (*Server, *fakeSubagents) {
 	reader := &fakeSubagents{
 		progress: eviedb.SubagentProgress{ExecutionID: "child-1", Worker: "research", Objective: "find evidence", State: state, Actions: 2},
@@ -119,5 +128,78 @@ func TestSubagentTraceLeavesARunningChildsActionRequestedAndBoundsResults(t *tes
 		if write := body.Items[3]; len(write.Args) > subagentTraceToolBytes || json.Unmarshal([]byte(write.Args), &args) != nil || args.Path != "docs/notes.md" {
 			t.Fatalf("bounded arguments lost their subject: %d bytes %q", len(write.Args), write.Args[:min(len(write.Args), 80)])
 		}
+	}
+}
+
+func TestSubagentReportRouteReadsOnlyTheOpenConversation(t *testing.T) {
+	server, reader := newSubagentServer("succeeded")
+	call := func(r *http.Request) *httptest.ResponseRecorder {
+		rr := httptest.NewRecorder()
+		server.Handler().ServeHTTP(rr, r)
+		return rr
+	}
+
+	rr := call(managementRequest("/api/subagents/report", `{"sessionId":"other","executionId":"child-1"}`))
+	if rr.Code != http.StatusConflict || !strings.Contains(rr.Body.String(), `"code":"subagents_session_changed"`) || len(reader.sessions) != 0 {
+		t.Fatalf("a chat that is not open: %d %s, reads %v", rr.Code, rr.Body.String(), reader.sessions)
+	}
+
+	rr = call(managementRequest("/api/subagents/report", `{"sessionId":"parent","executionId":"child-1"}`))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d: %s", rr.Code, rr.Body.String())
+	}
+	var body struct {
+		Report eviedb.SubagentReport `json:"report"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Report.ExecutionID != "child-1" || body.Report.Status != "succeeded" || body.Report.Text == nil || *body.Report.Text != "## Summary\nHorizons double." {
+		t.Fatalf("report = %s", rr.Body.String())
+	}
+
+	rr = call(managementRequest("/api/subagents/report", `{"sessionId":"parent","executionId":"elsewhere"}`))
+	if rr.Code != http.StatusNotFound || !strings.Contains(rr.Body.String(), `"code":"subagent_not_found"`) {
+		t.Fatalf("unknown subagent: %d %s", rr.Code, rr.Body.String())
+	}
+	for _, session := range reader.sessions {
+		if session != "parent" {
+			t.Fatalf("read another conversation's report: %v", reader.sessions)
+		}
+	}
+	if len(reader.sessions) != 2 {
+		t.Fatalf("reads = %v", reader.sessions)
+	}
+}
+
+func TestSubagentReportRouteKeepsTheManagementGuard(t *testing.T) {
+	server, reader := newSubagentServer("succeeded")
+	body := `{"sessionId":"parent","executionId":"child-1"}`
+	get := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:6687/api/subagents/report", nil)
+	form := managementRequest("/api/subagents/report", body)
+	form.Header.Set("Content-Type", "text/plain")
+	foreign := managementRequest("/api/subagents/report", body)
+	foreign.Header.Set("Origin", "https://attacker.example")
+	rebound := httptest.NewRequest(http.MethodPost, "http://attacker.example/api/subagents/report", strings.NewReader(body))
+	rebound.Header.Set("Content-Type", "application/json")
+	for _, tc := range []struct {
+		name   string
+		req    *http.Request
+		status int
+	}{
+		{"GET", get, http.StatusMethodNotAllowed},
+		{"not JSON", form, http.StatusForbidden},
+		{"foreign origin", foreign, http.StatusForbidden},
+		{"foreign host", rebound, http.StatusForbidden},
+		{"no subagent", managementRequest("/api/subagents/report", `{"sessionId":"parent"}`), http.StatusBadRequest},
+	} {
+		rr := httptest.NewRecorder()
+		server.Handler().ServeHTTP(rr, tc.req)
+		if rr.Code != tc.status {
+			t.Fatalf("%s: status=%d want %d: %s", tc.name, rr.Code, tc.status, rr.Body.String())
+		}
+	}
+	if len(reader.sessions) != 0 {
+		t.Fatalf("refused requests read reports: %v", reader.sessions)
 	}
 }
