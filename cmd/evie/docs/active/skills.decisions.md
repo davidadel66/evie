@@ -81,3 +81,64 @@ Spec: [skills.spec.md](skills.spec.md).
 - **2026-11-02 — Test seams approved.** David approved the three seams in the
   spec's Testing Decisions: the CLI approval harness, one composed chat test in
   `cmd/evie`, and the UI composer tests.
+
+- **2026-11-03 — Stored formats.** David accepted the recommendation ("yes"):
+  four immutable tables, `skill_imports`, `skill_proposals`,
+  `skill_activations` and `skill_deactivations`, with no-update and
+  no-delete triggers and a surface fixed to `cli`. Skill files live under
+  `global/skills/<name>/` in the procedural repository. A chat's receipt pins
+  `skill.global.<name>` with the version hash as an instruction reference.
+
+- **2026-11-03 — An owner invocation is recorded on the turn's root message.**
+  David accepted the recommendation ("yes"): `/name` stores
+  `skill: {name, version}` in the root `user_message` payload, written
+  atomically with the turn. A side table was rejected because it would be
+  written after the event and could miss it on a crash.
+
+- **2026-11-03 — Choosing a skill in the `/` menu fills the draft.** David
+  accepted the recommendation ("yes"): picking a skill puts `/name ` in the
+  draft so he can type the request, and Enter sends it. The built-in commands
+  `/model` and `/compact` keep acting at once.
+
+- **2026-11-03 — The composer UI waits for a canvas verdict.** David accepted
+  the recommendation ("yes"): the `/` menu's skill list is shown on the design
+  canvas, today's screenshot beside the proposal, before that UI is built. The
+  server side of owner invocation and the other tickets don't wait.
+
+- **2026-11-03 — Built as four tickets on `feat/skills`.** David approved the
+  split ("yes"): propose, approve and deactivate from a folder; migrate Claude
+  Code skills (blocked by the first); Evie loads approved skills in new chats
+  (blocked by the first); invoke a skill with `/name` (blocked by the third).
+
+- **2026-11-03 — Build choices (two-way doors).** Decided under the flow brief
+  David approved ("yes"); each is cheap to reverse.
+  - A version hash is the bare 64-character hex SHA-256 of a canonical
+    manifest with a format tag, the form receipt references require.
+  - `approve <name> --hash` resolves to the newest pending proposal with that
+    name and hash. `--expect-version` is the integer active version, 0 when
+    none, as for workflows. `deactivate <name>` deactivates the active
+    version.
+  - A new folder walker checks a skill with `Lstat` before anything is
+    committed, because the procedural `Commit` drops the executable bit.
+    Only a top-level skill folder that is a symlink is followed; symlinks
+    inside a skill are refused.
+  - The no-model-tool test asserts that the skills plugin exposes exactly
+    `skill` with `name` and `path`, and that no tool proposes, approves,
+    activates or deactivates.
+  - Skill references are added in `cmd/evie` just before the chat's creation
+    transaction: the write is in the transaction, the activation read just
+    before it. A chat whose skills plugin is disabled gets no references, and
+    a pre-receipt chat gets none when first bound.
+  - Resume accepts the preset's instructions followed by `skill.` references
+    only when the `skill` capability is pinned. `cmd/evie` checks each one
+    against the activation records and fails visibly when one is missing.
+  - The `skill` tool reads the receipt by session ID, then the commit and
+    manifest from the activation record.
+  - The catalog is frozen for the chat's life and placed right after the
+    repository instructions. The system prompt's guidance line appears only
+    with the tool.
+  - On the active turn the order is memory evidence, skill body, owner
+    message. The body is inserted while the request is composed, so the
+    compaction transcript never sees it, and a turn removed by compaction or
+    trimming takes its body with it.
+  - A bare `/name` is stored as the message text, as the spec says.
