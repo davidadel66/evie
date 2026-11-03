@@ -161,3 +161,39 @@ Spec: [skills.spec.md](skills.spec.md).
   `SKILL.md`, is reported in the notes and not read. Checked against the
   real installed plugins with a throwaway home: 61 proposed, 4 refused, no
   notes.
+
+- **2026-11-03 — Review fixes (two-way doors).** Decided while fixing the
+  stage's review findings; each is cheap to reverse.
+  - An unquoted `argument-hint` that is not YAML on its own, such as Claude
+    Code's documented `argument-hint: [pr-number] [priority]`, is read as
+    its raw text. A YAML list is read as its items, each in brackets and
+    joined by spaces, so `[message]` is the hint `[message]`.
+  - Operating-system and version-control clutter anywhere in a skill
+    folder (`.DS_Store`, AppleDouble `._*` files, `Icon\r`, and `.git`
+    folders and files) is skipped: never committed or in the manifest, and
+    reported as a warning naming what was skipped.
+  - The `skill` tool still never loads an owner-only skill's instructions.
+    It reads one of its files by `path` once David has invoked that skill
+    in the chat: a root user message of the session records the same name
+    and version.
+  - With `--plugins`, a path a plugin lists that holds no `SKILL.md` but
+    whose folders do is read as a folder of skills. Every plugin skill
+    folder, from `skills/<name>` or the plugin's list, must resolve, links
+    followed, inside the plugin's install folder; one that resolves outside
+    is noted and not read. Personal skill folders that are links are still
+    followed, as before.
+  - `evie skills propose` of a folder whose version hash equals the name's
+    pending proposal or active version records nothing and says so, as the
+    migration's skip does, so a pending import stays approvable as a whole.
+  - A `scripts` folder is refused at any depth, named by its path.
+  - In a chat without the `skill` capability, the skill list says so, and
+    slash text such as `/tmp is full` is sent as ordinary text, as before
+    skills. In a chat with skills an unknown `/name` is refused (story 34).
+    In any chat, `//text` sends `/text` literally.
+  - The catalog keeps every name even past 8 KiB: the spec's "names are
+    always listed" wins over the budget. Only past roughly 230 skills do
+    the names alone exceed it.
+  - Returning queued messages to the draft keeps each message's `/name`
+    visible, and only a leading `/name` invokes when the draft is sent
+    again. A queued message that was slash text sent as text goes back
+    escaped as `//text`, so it stays text.

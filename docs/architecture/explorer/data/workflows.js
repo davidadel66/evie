@@ -1325,14 +1325,14 @@ evieExplorer.register(
       },
       "does": [
         {
-          "text": "ReadFolder checks every entry of a skill folder with Lstat through an os.Root before anything is read or committed, refusing links inside the folder, a top-level scripts/ folder, executable and non-regular files, and stopping at 64 files or 1 MiB; only a folder that is itself a link is followed.",
+          "text": "ReadFolder checks every entry of a skill folder with Lstat through an os.Root before anything is read or committed, refusing links inside the folder, a scripts/ folder at any depth, executable and non-regular files, skipping operating-system and version-control clutter (.DS_Store, ._ files, Icon\\r, .git) with a warning, and stopping at 64 files or 1 MiB; only a folder that is itself a link is followed.",
           "refs": [
             "code:internal/skill/folder.go#ReadFolder",
             "doc:cmd/evie/docs/active/skills.decisions.md"
           ]
         },
         {
-          "text": "Parse refuses a missing or invalid name or description, a name unlike its folder or clashing with /compact or /model, and files that are not UTF-8, hold a NUL byte or exceed 32 KiB; it warns about frontmatter Evie ignores, inline shell commands, argument placeholders and mentions of Claude Code tools, and never runs or substitutes any of them.",
+          "text": "Parse refuses a missing or invalid name or description, a name unlike its folder or clashing with /compact or /model, and files that are not UTF-8, hold a NUL byte or exceed 32 KiB; it reads Claude Code's unquoted argument-hint as its raw text, and warns about frontmatter Evie ignores, shell commands and blocks, argument placeholders and mentions of Claude Code tools, never running or substituting any of them.",
           "refs": [
             "code:internal/skill/skill.go#Parse",
             "code:internal/skill/skill.go#Warning"
@@ -1343,6 +1343,29 @@ evieExplorer.register(
           "refs": [
             "code:internal/skill/skill.go#ReadVersion",
             "code:cmd/evie/skills.go#skillCommands.propose"
+          ]
+        },
+        {
+          "text": "Pinned is an approved version a chat pins in its Composition Receipt as skill.global.<name> with its version hash; its Source reads the version's folder at the procedural commit it was approved at.",
+          "refs": [
+            "code:internal/skill/pinned.go#Pinned",
+            "code:internal/skill/pinned.go#GlobalReference",
+            "code:internal/skill/pinned.go#Pinned.Source"
+          ]
+        },
+        {
+          "text": "Catalog renders the framed catalog message of a chat's model-invocable skills, each name with its description, keeping every name and shortening the longest descriptions evenly to fit 8 KiB.",
+          "refs": [
+            "code:internal/skill/catalog.go#Catalog",
+            "code:internal/skill/catalog.go#CatalogBudget"
+          ]
+        },
+        {
+          "text": "Body and File render a pinned version's instructions and resource list, or one of its files, in the owner-approved-guidance frame, reading only files its manifest lists and checking each against its hash; MaxLoadBytes bounds what they return, so a loaded skill is always shown whole.",
+          "refs": [
+            "code:internal/skill/frame.go#Body",
+            "code:internal/skill/frame.go#File",
+            "code:internal/skill/frame.go#MaxLoadBytes"
           ]
         }
       ],
