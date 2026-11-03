@@ -50,6 +50,9 @@ var (
 	ErrSkillOwnerOnly = errors.New("only the owner records skill proposals, approvals and deactivations, from the CLI")
 	// ErrSkillNoPending: the name has no proposal waiting for approval.
 	ErrSkillNoPending = errors.New("no pending proposal")
+	// ErrSkillSuperseded: the proposal approved is no longer the name's
+	// pending proposal; a newer one replaced it.
+	ErrSkillSuperseded = errors.New("the proposal was superseded by a newer one")
 	// ErrSkillHashMismatch: the hash is not the pending proposal's.
 	ErrSkillHashMismatch = errors.New("the version hash is not the pending proposal's")
 	// ErrSkillChanged: the active version is not the one the owner
@@ -120,10 +123,12 @@ type SkillDeactivation struct {
 
 // SkillApproval names exactly what the owner reviewed: the name, the
 // pending proposal's version hash, and the active version it was compared
-// with (0 when none).
+// with (0 when none). ProposalID, when set, is the proposal reviewed
+// (an import report's), which must still be the name's pending proposal.
 type SkillApproval struct {
 	Name            string
 	VersionHash     string
+	ProposalID      string
 	ExpectedVersion int64
 	Actor           string
 	Surface         string
@@ -213,49 +218,70 @@ func ensureSkillSchema(ctx context.Context, db *sql.DB) error {
 // version whose files are at p.Commit, at GlobalSkillPath(p.Name), in
 // procedural Git.
 func (s *Store) RecordSkillProposal(ctx context.Context, p SkillProposal) (SkillProposal, error) {
-	switch {
-	case !ownerCLI(p.Actor, p.Surface):
+	if !ownerCLI(p.Actor, p.Surface) {
 		return SkillProposal{}, ErrSkillOwnerOnly
-	case !skill.ValidName(p.Name):
-		return SkillProposal{}, fmt.Errorf("record skill proposal: invalid name %q", p.Name)
-	case p.Path != GlobalSkillPath(p.Name):
-		return SkillProposal{}, fmt.Errorf("record skill proposal: path %q is not %s", p.Path, GlobalSkillPath(p.Name))
-	case p.Manifest.Format != skill.ManifestFormat || p.Manifest.Hash() != p.VersionHash:
-		return SkillProposal{}, fmt.Errorf("record skill proposal: version hash %s is not its manifest's", p.VersionHash)
 	}
-	if p.Warnings == nil {
-		p.Warnings = []skill.Warning{}
-	}
-	manifest, metadata, err := encodeSkillVersion(p.Manifest, p.Metadata)
+	row, err := encodeSkillProposal(&p, s.now().UTC())
 	if err != nil {
 		return SkillProposal{}, err
 	}
-	source, err := json.Marshal(p.Source)
-	if err != nil {
-		return SkillProposal{}, err
-	}
-	warnings, err := json.Marshal(p.Warnings)
-	if err != nil {
-		return SkillProposal{}, err
-	}
-	var importID any
-	if p.ImportID != "" {
-		importID = p.ImportID
-	}
-	p.ID, p.ProposedAt, p.Pending, p.ApprovedVersions = uuid.NewString(), s.now().UTC(), false, nil
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-		if _, err := conn.ExecContext(ctx, `INSERT INTO skill_proposals(id,import_id,name,commit_id,tree_path,version_hash,manifest,metadata,source,warnings,actor,surface,proposed_at)
- VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, p.ID, importID, p.Name, p.Commit, p.Path, p.VersionHash, manifest, metadata, string(source), string(warnings),
-			p.Actor, p.Surface, formatTime(p.ProposedAt)); err != nil {
-			return fmt.Errorf("record skill proposal: %w", err)
-		}
-		p.Pending, err = isPendingSkillProposal(ctx, conn, p.ID)
-		return err
+		return insertSkillProposal(ctx, conn, &p, row)
 	})
 	if err != nil {
 		return SkillProposal{}, err
 	}
 	return p, nil
+}
+
+// skillProposalRow is a proposal's JSON columns.
+type skillProposalRow struct{ manifest, metadata, source, warnings string }
+
+// encodeSkillProposal checks p, gives it a new ID and proposal time, and
+// encodes its JSON columns.
+func encodeSkillProposal(p *SkillProposal, at time.Time) (skillProposalRow, error) {
+	switch {
+	case !skill.ValidName(p.Name):
+		return skillProposalRow{}, fmt.Errorf("record skill proposal: invalid name %q", p.Name)
+	case p.Path != GlobalSkillPath(p.Name):
+		return skillProposalRow{}, fmt.Errorf("record skill proposal: path %q is not %s", p.Path, GlobalSkillPath(p.Name))
+	case p.Manifest.Format != skill.ManifestFormat || p.Manifest.Hash() != p.VersionHash:
+		return skillProposalRow{}, fmt.Errorf("record skill proposal: version hash %s is not its manifest's", p.VersionHash)
+	}
+	if p.Warnings == nil {
+		p.Warnings = []skill.Warning{}
+	}
+	var row skillProposalRow
+	var err error
+	if row.manifest, row.metadata, err = encodeSkillVersion(p.Manifest, p.Metadata); err != nil {
+		return row, err
+	}
+	source, err := json.Marshal(p.Source)
+	if err != nil {
+		return row, err
+	}
+	warnings, err := json.Marshal(p.Warnings)
+	if err != nil {
+		return row, err
+	}
+	row.source, row.warnings = string(source), string(warnings)
+	p.ID, p.ProposedAt, p.Pending, p.ApprovedVersions = uuid.NewString(), at, false, nil
+	return row, nil
+}
+
+func insertSkillProposal(ctx context.Context, conn *sql.Conn, p *SkillProposal, row skillProposalRow) error {
+	var importID any
+	if p.ImportID != "" {
+		importID = p.ImportID
+	}
+	if _, err := conn.ExecContext(ctx, `INSERT INTO skill_proposals(id,import_id,name,commit_id,tree_path,version_hash,manifest,metadata,source,warnings,actor,surface,proposed_at)
+ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, p.ID, importID, p.Name, p.Commit, p.Path, p.VersionHash, row.manifest, row.metadata, row.source, row.warnings,
+		p.Actor, p.Surface, formatTime(p.ProposedAt)); err != nil {
+		return fmt.Errorf("record skill proposal: %w", err)
+	}
+	var err error
+	p.Pending, err = isPendingSkillProposal(ctx, conn, p.ID)
+	return err
 }
 
 func encodeSkillVersion(m skill.Manifest, md skill.Metadata) (string, string, error) {
@@ -318,22 +344,33 @@ func (s *Store) SkillProposal(ctx context.Context, id string) (SkillProposal, er
 	if err != nil {
 		return p, err
 	}
-	if p.Pending, err = isPendingSkillProposal(ctx, s.db, id); err != nil {
-		return p, err
+	return p, fillSkillProposalState(ctx, s.db, &p)
+}
+
+// fillSkillProposalState sets what became of p: whether it is pending and
+// the versions it was approved as.
+func fillSkillProposalState(ctx context.Context, q interface {
+	queryRower
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, p *SkillProposal) error {
+	var err error
+	if p.Pending, err = isPendingSkillProposal(ctx, q, p.ID); err != nil {
+		return err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT version FROM skill_activations WHERE proposal_id = ? ORDER BY version`, id)
+	rows, err := q.QueryContext(ctx, `SELECT version FROM skill_activations WHERE proposal_id = ? ORDER BY version`, p.ID)
 	if err != nil {
-		return p, err
+		return err
 	}
 	defer rows.Close()
+	p.ApprovedVersions = nil
 	for rows.Next() {
 		var version int64
 		if err := rows.Scan(&version); err != nil {
-			return p, err
+			return err
 		}
 		p.ApprovedVersions = append(p.ApprovedVersions, version)
 	}
-	return p, rows.Err()
+	return rows.Err()
 }
 
 // PendingSkillProposals lists each name's pending proposal, by name.
@@ -481,6 +518,9 @@ func (s *Store) ActivateSkill(ctx context.Context, approval SkillApproval) (Skil
 		}
 		if err != nil {
 			return err
+		}
+		if approval.ProposalID != "" && p.ID != approval.ProposalID {
+			return fmt.Errorf("%w: %s's pending proposal is now %s (version hash %s)", ErrSkillSuperseded, p.Name, p.ID, p.VersionHash)
 		}
 		if p.VersionHash != approval.VersionHash {
 			return fmt.Errorf("%w: %s's pending proposal is %s", ErrSkillHashMismatch, p.Name, p.ID)

@@ -14,25 +14,29 @@ import (
 	"github.com/davidadel66/evie/internal/skill"
 )
 
-const skillsUsage = "usage: evie skills propose <folder> | evie skills list | evie skills show <name> [--proposal <id>]" +
-	" | evie skills approve <name> --hash <version-hash> --expect-version <n> | evie skills deactivate <name>"
+const skillsUsage = "usage: evie skills propose <folder> | evie skills import-claude [--plugins] | evie skills list" +
+	" | evie skills show <name> [--proposal <id>] | evie skills approve <name> --hash <version-hash> --expect-version <n>" +
+	" | evie skills approve --import <id> | evie skills deactivate <name>"
 
 // skillCommands are the owner's skill commands' store and procedural
-// repository.
+// repository, and the home folder import-claude reads.
 type skillCommands struct {
 	store *eviedb.Store
 	repo  *procedural.Repo
+	home  string
 }
 
 // runSkillManagement answers the owner's skill commands
 // (cmd/evie/docs/active/skills.spec.md): propose checks a skill folder,
 // commits it to procedural Git under global/skills/<name> and records a
-// proposal; list shows active skills and pending proposals; show prints a
-// proposal's text, files, hash, warnings and diff against the active
-// version; approve activates exactly the reviewed hash against the
-// reviewed active version; deactivate ends the active version. Approval is
-// the owner's only: these records accept only the CLI surface, and no
-// model tool reaches them.
+// proposal; import-claude proposes David's Claude Code skills as one
+// recorded import; list shows active skills and pending proposals; show
+// prints a proposal's text, files, hash, warnings and diff against the
+// active version; approve activates exactly the reviewed hash against the
+// reviewed active version, or every proposal of one import at the hash its
+// report showed; deactivate ends the active version. Approval is the
+// owner's only: these records accept only the CLI surface, and no model
+// tool reaches them.
 func runSkillManagement(ctx context.Context, args []string, out io.Writer, c skillCommands) (bool, error) {
 	if len(args) == 0 || args[0] != "skills" {
 		return false, nil
@@ -48,6 +52,14 @@ func runSkillManagement(ctx context.Context, args []string, out io.Writer, c ski
 			return true, usage
 		}
 		return true, c.propose(ctx, out, a.positional[0])
+	case "import-claude":
+		switch {
+		case len(args) == 2:
+			return true, c.importClaude(ctx, out, false)
+		case len(args) == 3 && args[2] == "--plugins":
+			return true, c.importClaude(ctx, out, true)
+		}
+		return true, usage
 	case "list":
 		a, ok := parseWorkflowArgs(args[2:])
 		if !ok || a.json || len(a.positional) != 0 {
@@ -61,8 +73,14 @@ func runSkillManagement(ctx context.Context, args []string, out io.Writer, c ski
 		}
 		return true, c.show(ctx, out, a.positional[0], a.flags["proposal"])
 	case "approve":
-		a, ok := parseWorkflowArgs(args[2:], "hash", "expect-version")
-		if !ok || a.json || len(a.positional) != 1 || len(a.flags) != 2 {
+		a, ok := parseWorkflowArgs(args[2:], "hash", "expect-version", "import")
+		id, byImport := a.flags["import"]
+		switch {
+		case !ok || a.json:
+			return true, usage
+		case byImport && len(a.positional) == 0 && len(a.flags) == 1:
+			return true, c.approveImport(ctx, out, id)
+		case byImport || len(a.positional) != 1 || len(a.flags) != 2:
 			return true, usage
 		}
 		expected, err := strconv.ParseInt(a.flags["expect-version"], 10, 64)
@@ -118,17 +136,11 @@ func (c skillCommands) propose(ctx context.Context, out io.Writer, folder string
 	if err != nil {
 		return err
 	}
-	path := eviedb.GlobalSkillPath(local.Name)
-	message := fmt.Sprintf("Propose skill %s\n\nVersion-Hash: %s\nSource: %s\nProposed-By: owner (cli)\n", local.Name, local.Hash, abs)
-	commit, _, err := c.repo.Commit(ctx, path, local.Files, message)
+	committed, commit, err := c.commitSkill(ctx, local, abs)
 	if err != nil {
 		return err
 	}
-	committed, err := skill.ReadVersion(local.Name, c.repo.Source(ctx, commit, path), local.Manifest)
-	if err != nil {
-		return fmt.Errorf("the committed skill did not read back: %w", err)
-	}
-	p, err := c.store.RecordSkillProposal(ctx, eviedb.SkillProposal{Name: committed.Name, Commit: commit, Path: path,
+	p, err := c.store.RecordSkillProposal(ctx, eviedb.SkillProposal{Name: committed.Name, Commit: commit, Path: eviedb.GlobalSkillPath(committed.Name),
 		VersionHash: committed.Hash, Manifest: committed.Manifest, Metadata: committed.Metadata,
 		Source:   eviedb.SkillSource{Kind: eviedb.SkillSourceFolder, Path: abs},
 		Warnings: committed.Warnings, Actor: "owner", Surface: "cli"})
@@ -150,6 +162,23 @@ func (c skillCommands) propose(ctx context.Context, out io.Writer, folder string
 	}
 	_, err = io.WriteString(out, b.String())
 	return err
+}
+
+// commitSkill commits exactly a checked skill's files to procedural Git at
+// global/skills/<name> and reads them back from the commit, where they
+// must check and hash the same.
+func (c skillCommands) commitSkill(ctx context.Context, local skill.Version, source string) (skill.Version, string, error) {
+	path := eviedb.GlobalSkillPath(local.Name)
+	message := fmt.Sprintf("Propose skill %s\n\nVersion-Hash: %s\nSource: %s\nProposed-By: owner (cli)\n", local.Name, local.Hash, source)
+	commit, _, err := c.repo.Commit(ctx, path, local.Files, message)
+	if err != nil {
+		return skill.Version{}, "", err
+	}
+	committed, err := skill.ReadVersion(local.Name, c.repo.Source(ctx, commit, path), local.Manifest)
+	if err != nil {
+		return skill.Version{}, "", fmt.Errorf("the committed skill did not read back: %w", err)
+	}
+	return committed, commit, nil
 }
 
 func skillFilesText(b *strings.Builder, m skill.Manifest) {
