@@ -417,7 +417,7 @@ func TestSkillApprovalHasNoModelTool(t *testing.T) {
 	compiled := []plugins.Plugin{
 		plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(store), plugins.NewMemory(store),
 		plugins.NewSubagents(supervisor), plugins.NewWorkflows(&plugins.WorkflowLink{}), plugins.NewGitHub(nil),
-		plugins.NewMCP(&plugins.MCPLink{}), plugins.NewWorkspaceTabs(store),
+		plugins.NewMCP(&plugins.MCPLink{}), plugins.NewWorkspaceTabs(store), plugins.NewSkills(store, procedural.New(t.TempDir())),
 	}
 	checked := map[plugins.PluginID]plugins.Plugin{}
 	for _, p := range compiled {

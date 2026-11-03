@@ -141,6 +141,15 @@ func (c *webContextSessionController) selectSession(ctx context.Context, selecti
 		}
 		return nil
 	}
+	// A new chat also pins the skills active now (skills.spec.md); a
+	// pre-receipt chat bound to Standard below never does.
+	resolveNewChat := func() error {
+		if err := resolveStandard(); err != nil {
+			return err
+		}
+		standard, err = pinActiveSkills(ctx, c.store, standard)
+		return err
+	}
 	switch {
 	case selection.SessionID != "":
 		// A delegated child session is refused (ErrSessionDelegated).
@@ -160,18 +169,21 @@ func (c *webContextSessionController) selectSession(ctx context.Context, selecti
 			standard, err = c.manager.ResolvePresetContext(ctx, plugins.PresetID(presetID))
 		}
 		if err == nil {
+			standard, err = pinActiveSkills(ctx, c.store, standard)
+		}
+		if err == nil {
 			session, err = c.store.CreateWorkspaceSessionForChooserWithComposition(
 				ctx, selection.WorkspaceID, selection.WorkspaceRevision, standard.Receipt,
 			)
 			created = &standard
 		}
 	case selection.ProjectID != "":
-		if err = resolveStandard(); err == nil {
+		if err = resolveNewChat(); err == nil {
 			session, err = c.store.CreateProjectSessionWithComposition(ctx, selection.ProjectID, standard.Receipt)
 			created = &standard
 		}
 	case selection.Unscoped:
-		if err = resolveStandard(); err == nil {
+		if err = resolveNewChat(); err == nil {
 			session, err = c.store.CreateGlobalSessionWithComposition(ctx, standard.Receipt)
 			created = &standard
 		}

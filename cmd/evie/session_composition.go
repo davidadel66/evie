@@ -10,12 +10,16 @@ import (
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/skill"
 )
 
 type sessionCompositionStore interface {
 	SaveCompositionReceipt(context.Context, memory.SessionID, composition.Receipt) error
 	GetCompositionReceipt(context.Context, memory.SessionID) (composition.Receipt, error)
 	AppendCompatibilityResolutions(context.Context, memory.SessionID, []composition.CompatibilityResolution) error
+	// PinnedSkills resolves a receipt's skill references to their
+	// approved versions, failing on any it cannot.
+	PinnedSkills(context.Context, composition.Receipt) ([]skill.Pinned, error)
 }
 
 type sessionCompositionResolver interface {
@@ -42,6 +46,9 @@ type receiptBoundREPLStore struct {
 	composition      plugins.ResolvedComposition
 	resolvePreset    func(context.Context, plugins.PresetID) (plugins.ResolvedComposition, error)
 	createdSessionID memory.SessionID
+	// created is the created session's composition, with the skills it
+	// pinned.
+	created plugins.ResolvedComposition
 }
 
 func (s *receiptBoundREPLStore) CreateProjectSessionForChooser(
@@ -51,11 +58,15 @@ func (s *receiptBoundREPLStore) CreateProjectSessionForChooser(
 	cwdRoot string,
 	expectedCWDProjectID memory.ProjectID,
 ) (memory.Session, error) {
+	selected, err := pinActiveSkills(ctx, s.Store, s.composition)
+	if err != nil {
+		return memory.Session{}, err
+	}
 	session, err := s.Store.CreateProjectSessionForChooserWithComposition(
-		ctx, projectID, expectedProjectRoot, cwdRoot, expectedCWDProjectID, s.composition.Receipt,
+		ctx, projectID, expectedProjectRoot, cwdRoot, expectedCWDProjectID, selected.Receipt,
 	)
 	if err == nil {
-		s.createdSessionID = session.ID
+		s.createdSessionID, s.created = session.ID, selected
 	}
 	return session, err
 }
@@ -65,11 +76,15 @@ func (s *receiptBoundREPLStore) CreateGlobalSessionForChooser(
 	cwdRoot string,
 	expectedCWDProjectID memory.ProjectID,
 ) (memory.Session, error) {
+	selected, err := pinActiveSkills(ctx, s.Store, s.composition)
+	if err != nil {
+		return memory.Session{}, err
+	}
 	session, err := s.Store.CreateGlobalSessionForChooserWithComposition(
-		ctx, cwdRoot, expectedCWDProjectID, s.composition.Receipt,
+		ctx, cwdRoot, expectedCWDProjectID, selected.Receipt,
 	)
 	if err == nil {
-		s.createdSessionID = session.ID
+		s.createdSessionID, s.created = session.ID, selected
 	}
 	return session, err
 }
@@ -105,11 +120,15 @@ func (s *receiptBoundREPLStore) CreateWorkspaceSessionForChooser(
 			return memory.Session{}, err
 		}
 	}
+	pinned, err := pinActiveSkills(ctx, s.Store, selected)
+	if err != nil {
+		return memory.Session{}, err
+	}
 	session, err := s.Store.CreateWorkspaceSessionForChooserWithComposition(
-		ctx, workspaceID, revisionID, selected.Receipt,
+		ctx, workspaceID, revisionID, pinned.Receipt,
 	)
 	if err == nil {
-		s.createdSessionID = session.ID
+		s.createdSessionID, s.created = session.ID, pinned
 		s.composition = selected
 	}
 	return session, err
@@ -118,7 +137,7 @@ func (s *receiptBoundREPLStore) CreateWorkspaceSessionForChooser(
 func (s *receiptBoundREPLStore) selection(session memory.Session) storedSessionSelection {
 	selection := storedSessionSelection{Session: session}
 	if session.ID != "" && session.ID == s.createdSessionID {
-		created := s.composition
+		created := s.created
 		selection.createdComposition = &created
 	}
 	return selection
@@ -175,6 +194,11 @@ func resumeAndRecordSessionComposition(
 ) (boundSessionComposition, error) {
 	resolved, err := resolver.ResumeCompositionContext(ctx, receipt)
 	if err != nil {
+		return boundSessionComposition{}, fmt.Errorf("%s: %w", resumeContext, err)
+	}
+	// Each pinned skill must still resolve to the exact version the chat
+	// was created with; there is no fallback to another (skills.spec.md).
+	if _, err := store.PinnedSkills(ctx, receipt); err != nil {
 		return boundSessionComposition{}, fmt.Errorf("%s: %w", resumeContext, err)
 	}
 	if err := store.AppendCompatibilityResolutions(ctx, sessionID, resolved.CompatibilityResolutions); err != nil {

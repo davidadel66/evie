@@ -177,6 +177,10 @@ func (s *Session) runOwnedTurn(
 			return s.classifyRepositoryInstructionError(coordinator, fmt.Errorf("repository instructions: %s", repository.Detail))
 		}
 	}
+	skillCatalog, err := s.skillCatalog(coordinator.ctx)
+	if err != nil {
+		return s.classifyLocalError(coordinator, fmt.Errorf("load skill catalog: %w", err))
+	}
 	// Opaque transport state belongs only to this live turn. Durable events
 	// remain sufficient to start a new turn after restart or cancellation.
 	continuation := make(map[memory.EventID][]json.RawMessage)
@@ -243,7 +247,7 @@ func (s *Session) runOwnedTurn(
 		memoryData, memoryReceipt := recall.renderProjection()
 		composeInput := ContextComposeInput{
 			MemoryData: memoryData, MemoryReceipt: memoryReceipt, EnvironmentNote: workingFolderNote(workingFolder),
-			RepositoryInstructions: repoinstructions.Render(repository), RepositoryInstructionsTurnID: repository.TurnID,
+			RepositoryInstructions: repoinstructions.Render(repository), RepositoryInstructionsTurnID: repository.TurnID, SkillCatalog: skillCatalog,
 			StandingMemory: standing, StandingMemoryReceipt: standingReceipt,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,

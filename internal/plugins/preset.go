@@ -15,13 +15,15 @@ import (
 
 	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/skill"
 	"github.com/davidadel66/evie/internal/tools"
 )
 
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:695e10586716301681141b44b53e41eef1050bef971bf92655957cf65e928339"
+	StandardPresetVersion                               = "sha256:95befe5e2ae713d457cb1e199b281fda29db0c6c0ec0c1bf1ba5754ed1df2dea"
+	preSkillsStandardPresetVersion                      = "sha256:695e10586716301681141b44b53e41eef1050bef971bf92655957cf65e928339"
 	preTabsStandardPresetVersion                        = "sha256:d52283fa9f2a7ecc53add46d4abc811262da0ab3da88a9190117ce91d2f29a56"
 	preMCPStandardPresetVersion                         = "sha256:7f31ed96c814e676d51c7f9288cb0c15bca18352a2dc271d7b3894f3f20f14dd"
 	preWorkflowsStandardPresetVersion                   = "sha256:377b51c09706fba7741ad0f6f0e9ba8281921ba6b0043b8f9985a5c31966b3c0"
@@ -737,6 +739,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preTabsStandardPresetVersion {
 		return m.resumePreset(preTabsStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preSkillsStandardPresetVersion {
+		return m.resumePreset(preSkillsStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -945,8 +950,10 @@ func validateReceiptCapabilitiesForPreset(preset Preset, receipt CompositionRece
 		allowed[requirement.ID] = requirement.Compatibility
 	}
 	usedProviders := make(map[string]struct{}, len(receipt.Providers))
+	pinned := make(map[CapabilityID]struct{}, len(receipt.Capabilities))
 	for _, capability := range receipt.Capabilities {
 		id := CapabilityID(capability.ID)
+		pinned[id] = struct{}{}
 		compatibility, exists := allowed[id]
 		if !exists {
 			return fmt.Errorf("pinned Agent Preset %q contains unexpected Capability %q", preset.ID, id)
@@ -985,11 +992,34 @@ func validateReceiptCapabilitiesForPreset(preset Preset, receipt CompositionRece
 			)
 		}
 	}
-	if !reflect.DeepEqual(receipt.Instructions, preset.Instructions) ||
+	_, skills := pinned[SkillCapabilityID]
+	if !instructionsMatchPreset(receipt.Instructions, preset.Instructions, skills) ||
 		!reflect.DeepEqual(receipt.Configuration, preset.Configuration) {
 		return fmt.Errorf("pinned Agent Preset %q instructions or configuration do not match version %q", preset.ID, preset.Version)
 	}
 	return nil
+}
+
+// instructionsMatchPreset reports whether a receipt's instructions are the
+// preset's, followed only by skill references when the skill capability is
+// pinned (skills.spec.md, Visibility and pinning). Each skill reference is
+// resolved against its approval when the chat is bound, outside the
+// plugin manager.
+func instructionsMatchPreset(pinned, preset []InstructionReference, skills bool) bool {
+	if len(pinned) < len(preset) {
+		return false
+	}
+	for i, instruction := range preset {
+		if pinned[i] != instruction {
+			return false
+		}
+	}
+	for _, instruction := range pinned[len(preset):] {
+		if !skills || !strings.HasPrefix(instruction.ID, skill.ReferencePrefix) {
+			return false
+		}
+	}
+	return true
 }
 
 func validatePinnedToolSchemas(pinned, loaded []ToolSchemaReceipt) error {
@@ -1042,14 +1072,36 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 }
 
 // standardPresetContent is the current standard preset: everything before
-// Workspace tabs, then workspace_tabs (workspace-tabs.spec.md story 3,
-// 2026-10-12), optional so a disabled Workspace tabs plugin only warns.
-// Outside a Workspace it says tabs belong to one.
+// skills, then the skill tool (skills.spec.md, Capability and preset,
+// 2026-11-03), optional so a disabled skills plugin only warns. The skills
+// a chat can load are pinned in its receipt when it is created, not here.
 func standardPresetContent() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preSkillsStandardPresetContent()
+	p.OptionalCapabilities = append(p.OptionalCapabilities,
+		CapabilityRequirement{ID: SkillCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preSkillsStandardPresetContent is the content of version 695e1058…, the
+// standard preset before skills: everything before Workspace tabs, then
+// workspace_tabs (workspace-tabs.spec.md story 3, 2026-10-12), optional so a
+// disabled Workspace tabs plugin only warns. Outside a Workspace it says
+// tabs belong to one.
+func preSkillsStandardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preTabsStandardPresetContent()
 	p.OptionalCapabilities = append(p.OptionalCapabilities,
 		CapabilityRequirement{ID: WorkspaceTabsCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preSkillsStandardPreset is the standard preset before the skill tool
+// (version 695e1058…); sessions pinned to it keep their exact tools and
+// prompt, and never pin skills.
+func preSkillsStandardPreset() Preset {
+	p := preSkillsStandardPresetContent()
+	p.Version = preSkillsStandardPresetVersion
 	return p
 }
 

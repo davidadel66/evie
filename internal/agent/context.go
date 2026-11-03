@@ -76,6 +76,7 @@ type ContextComposeInput struct {
 	EnvironmentNote              string
 	RepositoryInstructions       string
 	RepositoryInstructionsTurnID memory.EventID
+	SkillCatalog                 string // the chat's skill list (skills.spec.md): fixed for its life, after the repository instructions
 	WorkerInstructions           string
 	MemoryData                   string
 	MemoryReceipt                *memory.RetrievalReceipt
@@ -395,6 +396,9 @@ func (c *ContextComposer) projectAtStart(
 		}
 		if input.RepositoryInstructions != "" {
 			messages = append(messages, openrouter.Message{Role: "user", Content: input.RepositoryInstructions})
+		}
+		if input.SkillCatalog != "" {
+			messages = append(messages, openrouter.Message{Role: "user", Content: input.SkillCatalog})
 		}
 		standingIndex := -1
 		if input.StandingMemory != "" {
@@ -764,8 +768,12 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	if err != nil {
 		return ContextDiagnostics{}, fmt.Errorf("load standing memory: %w", err)
 	}
+	skillCatalog, err := s.skillCatalog(ctx)
+	if err != nil {
+		return ContextDiagnostics{}, fmt.Errorf("load skill catalog: %w", err)
+	}
 	projection, compaction, planWarnings, err := s.composer.inspectNextRequest(ContextComposeInput{
-		EnvironmentNote: workingFolderNote(folder), RepositoryInstructions: repository,
+		EnvironmentNote: workingFolderNote(folder), RepositoryInstructions: repository, SkillCatalog: skillCatalog,
 		StandingMemory: standing, StandingMemoryReceipt: standingReceipt,
 		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
