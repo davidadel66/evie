@@ -1,11 +1,11 @@
-import { useEffect, useId, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { subagentAPI, type Subagent, type SubagentAPI, type SubagentReport, type SubagentTrace } from "../api/subagents";
 import { ToolDebugDetails, ToolInspection } from "../artifacts/ToolInspection";
 import { ActivityItems } from "../chat/Activity";
 import type { ToolItem } from "../chat/activityModel";
-import { Markdown } from "../chat/Markdown";
+import { InertLink, Markdown } from "../chat/Markdown";
 import { ChevronDown } from "../ui/Icon";
-import { subagentActionText, subagentDefaultView, subagentElapsed, subagentFinished, subagentProgressLabel, subagentReportFacts, subagentStateLabel, subagentStateTone, type SubagentView } from "./subagentView";
+import { subagentActionText, subagentDefaultView, subagentElapsed, subagentFinished, subagentProgressLabel, subagentReportFacts, subagentSourceText, subagentStateLabel, subagentStateTone, subagentUsageText, type SubagentView } from "./subagentView";
 import { useSubagentList } from "./useSubagents";
 
 // The children one chat row started (chat-activity.spec.md, subagent
@@ -118,14 +118,36 @@ export function SubagentDetailView({child, trace, problem, report, reportProblem
   </div>;
 }
 
-/** A child's stored report as an inert document, below Evie's line about how
- *  it ended; or why there is none to show. */
+/** A child's stored report as an inert document, below Evie's record of the
+ *  attempt (how it ended, what it cost, the sources Evie checked and its
+ *  notes) and above the worker's own limitations; or why there is none to
+ *  show. */
 export function SubagentReportView({child, report, problem}: {child: Subagent; report?: SubagentReport; problem?: string}) {
   if (!subagentFinished(child.state)) return <p role="status" className="text-muted-text text-xs">The report appears when the worker finishes.</p>;
   if (problem) return <p role="alert" className="text-amber-ink text-xs">{problem}</p>;
   if (!report) return <p role="status" className="text-muted-text text-xs">Loading its report…</p>;
+  const sources = report.sources ?? [];
+  const verified = sources.filter((source) => !source.legacy);
+  const legacy = sources.filter((source) => source.legacy);
+  const unverified = report.unverifiedUrls ?? [];
+  const notes = report.notes ?? [];
+  const limitations = report.limitations ?? [];
+  const usage = subagentUsageText(report);
   return <>
-    <p className="text-muted-text text-xs">{subagentReportFacts(report)}</p>
+    <section aria-label="Recorded by Evie" className="space-y-3">
+      <p className="text-muted-text text-xs">{subagentReportFacts(report)}</p>
+      {usage && <p className="text-muted-text text-xs">{usage}</p>}
+      {verified.length > 0 && <SourceList label="Sources Evie verified">
+        {verified.map((source, i) => <li key={i}><SourceLink url={source.url} /><span className="text-muted-text block text-xs">{subagentSourceText(source)}</span></li>)}
+      </SourceList>}
+      {unverified.length > 0 && <SourceList label="Cited URLs Evie couldn't verify">
+        {unverified.map((url, i) => <li key={i}><SourceLink url={url} /></li>)}
+      </SourceList>}
+      {legacy.length > 0 && <SourceList label="Recorded before Evie checked sources">
+        {legacy.map((source, i) => <li key={i}><SourceLink url={source.url} /></li>)}
+      </SourceList>}
+      {notes.length > 0 && <ListSection label="Notes from Evie" items={notes} />}
+    </section>
     {report.text === undefined ? <p className="text-body text-[13px]">This worker produced no report.</p> : <section aria-label="Written by the worker" className="space-y-2">
       <p className="text-muted-text text-xs">Written by the worker</p>
       {report.status === "partial" && <p className="text-amber-ink text-xs">This report is partial: the worker stopped before it finished.</p>}
@@ -134,7 +156,28 @@ export function SubagentReportView({child, report, problem}: {child: Subagent; r
         Cut for display: the last {report.omittedBytes.toLocaleString("en-US")} of its {report.totalBytes.toLocaleString("en-US")} bytes are not shown.
       </p>}
     </section>}
+    {limitations.length > 0 && <ListSection label="Limitations, written by the worker" items={limitations} />}
   </>;
+}
+
+function SourceList({label, children}: {label: string; children: ReactNode}) {
+  return <section aria-label={label} className="space-y-1.5">
+    <p className="text-muted-text text-xs">{label}</p>
+    <ul className="space-y-1.5 text-[13px]">{children}</ul>
+  </section>;
+}
+
+function SourceLink({url}: {url: string}) {
+  return <InertLink href={url} className="text-teal-hover break-all underline underline-offset-2">{url}</InertLink>;
+}
+
+function ListSection({label, items}: {label: string; items: string[]}) {
+  return <section aria-label={label} className="space-y-1.5">
+    <p className="text-muted-text text-xs">{label}</p>
+    <ul className="text-body list-disc space-y-1 pl-5 text-[13px] leading-relaxed break-words">
+      {items.map((item, i) => <li key={i}>{item}</li>)}
+    </ul>
+  </section>;
 }
 
 function StateLabel({child}: {child: Subagent}) {

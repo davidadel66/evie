@@ -53,6 +53,14 @@ function InertAnchor({ href, children }: { href: string; children: ReactNode }) 
   return <a href={href} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" data-streamdown="link" className="underline">{children}</a>;
 }
 
+/** A URL shown beside an inert report, such as one of its sources: a link
+ *  that opens outside Evie as the report's links do when it is http(s),
+ *  else plain text. */
+export function InertLink({ href, className, children }: { href: string; className?: string; children: ReactNode }) {
+  const url = webURL(href);
+  return url ? <a href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className={className}>{children}</a> : <span>{children}</span>;
+}
+
 // Streamdown's own link is a button behind a confirmation without an href;
 // an inert link is a plain anchor, or plain text when it is not http(s).
 const inertComponents: Components = {

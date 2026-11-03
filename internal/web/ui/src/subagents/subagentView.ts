@@ -1,4 +1,4 @@
-import type { Subagent, SubagentAction, SubagentReport, SubagentState } from "../api/subagents";
+import type { Subagent, SubagentAction, SubagentReport, SubagentSource, SubagentState } from "../api/subagents";
 import { elapsedLabel, toolLabel, type ToolItem } from "../chat/activityModel";
 
 // Presentation of delegated children (chat-activity.spec.md, subagent
@@ -67,6 +67,23 @@ export function subagentDefaultView(child: Subagent, report?: SubagentReport): S
 }
 
 const workerLabels: Record<string, string> = {research: "Research worker", explore: "Explore worker", build: "Build worker"};
+
+/** What the attempt cost: "At least 550 tokens · 3 model responses". Usage
+ *  that some response did not report is a lower bound. */
+export function subagentUsageText(report: SubagentReport): string | null {
+  const usage = report.usage;
+  const total = usage?.total_tokens ?? (usage?.input_tokens !== undefined && usage.output_tokens !== undefined ? usage.input_tokens + usage.output_tokens : undefined);
+  const tokens = total === undefined ? "Tokens not reported"
+    : `${usage?.incomplete ? "At least " : ""}${total.toLocaleString("en-US")} ${total === 1 ? "token" : "tokens"}`;
+  const responses = report.modelResponses === undefined ? "" : `${report.modelResponses} ${report.modelResponses === 1 ? "model response" : "model responses"}`;
+  if (!usage && !responses) return null;
+  return [tokens, responses].filter(Boolean).join(" · ");
+}
+
+/** How Evie verified a source: "Fetched · cited in the report". */
+export function subagentSourceText(source: SubagentSource): string {
+  return `${source.fetched ? "Fetched" : "Only listed by a search"} · ${source.cited ? "cited in the report" : "not cited"}`;
+}
 
 /** Evie's line above a report: the worker kind, how it ended and why. */
 export function subagentReportFacts(report: SubagentReport): string {

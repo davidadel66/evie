@@ -142,6 +142,84 @@ describe("subagent presentation", () => {
     expect(render("succeeded", {executionId: "child", worker: "research", status: "succeeded", text: "Whole.", totalBytes: 6, omittedBytes: 0})).not.toContain("Cut for display");
   });
 
+  it("shows Evie's record of a report above the worker's text and outside it", () => {
+    const report: SubagentReport = {
+      executionId: "child", worker: "research", status: "succeeded", text: "Worker sentinel: horizons double.", totalBytes: 33, omittedBytes: 0,
+      sources: [
+        {url: "https://epoch.ai/data", fetched: true, cited: true},
+        {url: "https://metr.org/blog", fetched: false, cited: true},
+        {url: "https://fetched.example/uncited", fetched: true, cited: false},
+      ],
+      unverifiedUrls: ["https://unverified.example/claim"],
+      limitations: ["Only two sources were read."],
+      notes: ["URLs in unverified_urls are cited in the report but were never fetched or returned by a search."],
+      usage: {input_tokens: 500, output_tokens: 50, total_tokens: 550, incomplete: true},
+      modelResponses: 3,
+    };
+    const render = (value: SubagentReport) => renderToStaticMarkup(<SubagentDetailView child={child({state: value.status, endedAt: "2026-10-12T13:10:42Z"})} report={value} view="report" now={0} onBack={() => undefined} onSelect={() => undefined} />);
+    const html = render(report);
+
+    // Evie's facts, in order, then the worker's text, then its limitations.
+    const order = [
+      "Research worker · Done",
+      "At least 550 tokens · 3 model responses",
+      "Sources Evie verified",
+      "https://epoch.ai/data", "Fetched · cited in the report",
+      "https://metr.org/blog", "Only listed by a search · cited in the report",
+      "https://fetched.example/uncited", "Fetched · not cited",
+      "Cited URLs Evie couldn&#x27;t verify", "https://unverified.example/claim",
+      "Notes from Evie", "were never fetched or returned by a search.",
+      "Written by the worker", "Worker sentinel: horizons double.",
+      "Limitations, written by the worker", "Only two sources were read.",
+    ];
+    const at = order.map((text) => html.indexOf(text));
+    expect(at).not.toContain(-1);
+    expect(at).toEqual([...at].sort((a, b) => a - b));
+    // None of Evie's facts sit inside the worker's text.
+    const start = html.indexOf('<section aria-label="Written by the worker"');
+    const worker = html.slice(start, html.indexOf("</section>", start));
+    expect(worker).toContain("Worker sentinel");
+    for (const fact of order.slice(0, order.indexOf("Written by the worker"))) expect(worker).not.toContain(fact);
+    expect(html).toMatch(/<section aria-label="Limitations, written by the worker"/);
+    expect(html).toMatch(/<section aria-label="Notes from Evie"/);
+
+    // Source URLs open outside Evie, with no opener or referrer.
+    const hrefs = [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
+    expect(hrefs).toEqual(["https://epoch.ai/data", "https://metr.org/blog", "https://fetched.example/uncited", "https://unverified.example/claim"]);
+    for (const anchor of html.match(/<a [^>]*>/g) ?? []) {
+      expect(anchor).toContain('target="_blank"');
+      expect(anchor).toContain('rel="noopener noreferrer"');
+      expect(anchor).toMatch(/referrerPolicy="no-referrer"/i);
+    }
+
+    // Complete usage is not a lower bound; one response is one.
+    expect(render({...report, usage: {total_tokens: 1200}, modelResponses: 1})).toContain("1,200 tokens · 1 model response");
+  });
+
+  it("marks sources recorded before Evie checked them, and shows hostile text as text", () => {
+    const report: SubagentReport = {
+      executionId: "child", worker: "research", status: "succeeded", text: "Old report.", totalBytes: 11, omittedBytes: 0,
+      sources: [
+        {url: "https://example.com/a", fetched: false, cited: false, legacy: true},
+        {url: "javascript:alert(1)", fetched: false, cited: false, legacy: true},
+      ],
+      limitations: ["<script>alert(2)</script>"],
+      notes: ["<img src=x onerror=alert(3)>"],
+      usage: {total_tokens: 40},
+      modelResponses: 1,
+    };
+    const html = renderToStaticMarkup(<SubagentDetailView child={child({state: "succeeded", endedAt: "2026-10-12T13:10:42Z"})} report={report} view="report" now={0} onBack={() => undefined} onSelect={() => undefined} />);
+    expect(html).toContain("Recorded before Evie checked sources");
+    expect(html).not.toContain("Sources Evie verified");
+    expect(html).not.toContain("cited in the report");
+    expect(html.indexOf("Recorded before Evie checked sources")).toBeLessThan(html.indexOf("https://example.com/a"));
+    expect(html).toContain("javascript:alert(1)");
+    for (const visible of ["&lt;script&gt;alert(2)&lt;/script&gt;", "&lt;img src=x onerror=alert(3)&gt;"]) expect(html).toContain(visible);
+    for (const element of ["<script", "<img"]) expect(html).not.toContain(element);
+    expect(html).not.toMatch(/<[^>]*\son[a-z]+=/i);
+    expect([...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1])).toEqual(["https://example.com/a"]);
+  });
+
   it("reads one call's children and one child's trace for the open conversation", async () => {
     const fetchMock = vi.fn(async () => new Response('{"subagents":[]}'));
     vi.stubGlobal("fetch", fetchMock);
