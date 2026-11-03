@@ -61,13 +61,15 @@ const InsideInertLink = createContext(false);
 
 /** A URL from text Evie did not write, such as a report's link or one of
  *  its sources: a link that opens outside Evie with no opener or referrer
- *  when it is http(s), else plain text in the same style. */
-export function InertLink({ href, className, "data-streamdown": streamdown, children }: {
-  href: unknown; className?: string; "data-streamdown"?: string; children: ReactNode;
+ *  when it is http(s), else plain text. className applies to both;
+ *  linkClassName only to a link, so plain text never looks clickable. */
+export function InertLink({ href, className, linkClassName, "data-streamdown": streamdown, children }: {
+  href: unknown; className?: string; linkClassName?: string; "data-streamdown"?: string; children: ReactNode;
 }) {
   const url = webURL(href);
   if (!url) return <span className={className}>{children}</span>;
-  return <a href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" data-streamdown={streamdown} className={className}>
+  const classes = [className, linkClassName].filter(Boolean).join(" ") || undefined;
+  return <a href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" data-streamdown={streamdown} className={classes}>
     <InsideInertLink.Provider value>{children}</InsideInertLink.Provider>
   </a>;
 }
@@ -78,13 +80,13 @@ export function InertLink({ href, className, "data-streamdown": streamdown, chil
 function InertImage({ src, alt }: { src: unknown; alt?: string }) {
   const inLink = useContext(InsideInertLink);
   const label = alt || webURL(src) || "image";
-  return inLink ? <span>{label}</span> : <InertLink href={src} data-streamdown="link" className="underline">{label}</InertLink>;
+  return inLink ? <span>{label}</span> : <InertLink href={src} data-streamdown="link" linkClassName="underline">{label}</InertLink>;
 }
 
 // Streamdown's own link is a button behind a confirmation without an href;
 // an inert link is a plain anchor, or plain text when it is not http(s).
 const inertComponents: Components = {
-  a: ({ href, children }) => <InertLink href={href} data-streamdown="link" className="underline">{children}</InertLink>,
+  a: ({ href, children }) => <InertLink href={href} data-streamdown="link" linkClassName="underline">{children}</InertLink>,
   img: ({ src, alt }) => <InertImage src={src} alt={alt} />,
 };
 

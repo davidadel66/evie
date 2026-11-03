@@ -237,6 +237,8 @@ describe("subagent presentation", () => {
     expect(html).not.toContain("cited in the report");
     expect(html.indexOf("Recorded before Evie checked sources")).toBeLessThan(html.indexOf("https://example.com/a"));
     expect(html).toContain("javascript:alert(1)");
+    // A URL that is not a link is not styled as one either.
+    expect(html).toContain('<span class="break-all">javascript:alert(1)</span>');
     for (const visible of ["&lt;script&gt;alert(2)&lt;/script&gt;", "&lt;img src=x onerror=alert(3)&gt;"]) expect(html).toContain(visible);
     for (const element of ["<script", "<img"]) expect(html).not.toContain(element);
     expect(html).not.toMatch(/<[^>]*\son[a-z]+=/i);

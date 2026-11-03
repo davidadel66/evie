@@ -172,7 +172,7 @@ function SourceList({label, children}: {label: string; children: ReactNode}) {
 }
 
 function SourceLink({url}: {url: string}) {
-  return <InertLink href={url} className="text-teal-hover break-all underline underline-offset-2">{url}</InertLink>;
+  return <InertLink href={url} className="break-all" linkClassName="text-teal-hover underline underline-offset-2">{url}</InertLink>;
 }
 
 function ListSection({label, items}: {label: string; items: string[]}) {
@@ -230,12 +230,15 @@ function useSubagentReport(sessionId: string, child: Subagent, api: SubagentAPI)
     if (!finished) return;
     const controller = new AbortController();
     let timer: number | undefined;
+    // A failed read is retried a few times, then left for a reopen: a
+    // missing or broken report does not change while the view is open.
+    let retries = 3;
     const read = () => api.report(sessionId, child.executionId, controller.signal).then((value) => {
       if (!controller.signal.aborted) setLoaded({executionId: child.executionId, value});
     }, (error: unknown) => {
       if (controller.signal.aborted) return;
       setLoaded({executionId: child.executionId, problem: error instanceof Error ? error.message : "The report could not be read."});
-      timer = window.setTimeout(read, 6000);
+      if (retries-- > 0) timer = window.setTimeout(read, 6000);
     });
     void read();
     return () => { controller.abort(); window.clearTimeout(timer); };

@@ -106,3 +106,19 @@ Spec: [artifacts.spec.md](artifacts.spec.md).
   - A pre-Stage 8 record without a final event shows no report; its inline
     `findings` are not shown. Every finished attempt has had a final event
     since 2026-09-11.
+
+- **2026-11-02 — Choices made while building and reviewing (two-way
+  doors).**
+  - An image inside a link shows its alt text as part of that link, which
+    opens the link's target, because a link cannot hold another link.
+    Elsewhere an image's alt text links to the image URL when it is http(s).
+  - A URL that is not http(s) shows as plain text without link styling, so
+    nothing looks clickable that isn't.
+  - A failed report read is retried three times, six seconds apart, and
+    then waits for the worker to be reopened.
+  - When a record names a final report event that no longer exists, the
+    report route answers 500, not 404. The worker exists, and its stored
+    report is the fault.
+  - The owner report read and `read_subagent_report` load the report through
+    one shared loader, and the trace and report routes share one open-chat
+    guard, so neither boundary can drift between two copies.
