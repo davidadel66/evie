@@ -1231,11 +1231,12 @@ evieExplorer.register(
           ]
         },
         {
-          "text": "The tree its callers lay out: workspaces/<id>/workflows/<name> for Workspace definitions, global/workflows/<name> for Global ones and builtin/workflows/<name> for recorded built-in versions.",
+          "text": "The tree its callers lay out: workspaces/<id>/workflows/<name> for Workspace definitions, global/workflows/<name> for Global ones, builtin/workflows/<name> for recorded built-in versions and global/skills/<name> for proposed and approved skills.",
           "refs": [
             "code:internal/eviedb/workflows.go#WorkflowDefinitionPath",
             "code:internal/eviedb/workflow_builtins.go#GlobalWorkflowDefinitionPath",
-            "code:internal/eviedb/workflow_builtins.go#BuiltinWorkflowDefinitionPath"
+            "code:internal/eviedb/workflow_builtins.go#BuiltinWorkflowDefinitionPath",
+            "code:internal/eviedb/skills.go#GlobalSkillPath"
           ]
         },
         {
@@ -1306,6 +1307,51 @@ evieExplorer.register(
         "adr:0007",
         "adr:0012",
         "adr:0018"
+      ]
+    },
+    {
+      "id": "pkg:internal/skill",
+      "level": "component",
+      "kind": "package",
+      "title": "skill",
+      "group": "runtime",
+      "summary": {
+        "text": "Checks one skill in the Agent Skills format against Evie's rules (no scripts, executables or links; only UTF-8 text within the size limits; a valid name and description) and identifies each version by the SHA-256 of its canonical manifest.",
+        "refs": [
+          "code:internal/skill/skill.go#Parse",
+          "code:internal/skill/skill.go#Manifest.Hash",
+          "doc:cmd/evie/docs/active/skills.spec.md#implementation-decisions"
+        ]
+      },
+      "does": [
+        {
+          "text": "ReadFolder checks every entry of a skill folder with Lstat through an os.Root before anything is read or committed, refusing links inside the folder, a top-level scripts/ folder, executable and non-regular files, and stopping at 64 files or 1 MiB; only a folder that is itself a link is followed.",
+          "refs": [
+            "code:internal/skill/folder.go#ReadFolder",
+            "doc:cmd/evie/docs/active/skills.decisions.md"
+          ]
+        },
+        {
+          "text": "Parse refuses a missing or invalid name or description, a name unlike its folder or clashing with /compact or /model, and files that are not UTF-8, hold a NUL byte or exceed 32 KiB; it warns about frontmatter Evie ignores, inline shell commands, argument placeholders and mentions of Claude Code tools, and never runs or substitutes any of them.",
+          "refs": [
+            "code:internal/skill/skill.go#Parse",
+            "code:internal/skill/skill.go#Warning"
+          ]
+        },
+        {
+          "text": "ReadVersion reads a version back from where it was stored, such as one procedural commit, and requires it to check and hash exactly as recorded.",
+          "refs": [
+            "code:internal/skill/skill.go#ReadVersion",
+            "code:cmd/evie/skills.go#skillCommands.propose"
+          ]
+        }
+      ],
+      "terms": [
+        "Skill"
+      ],
+      "links": [
+        "doc:cmd/evie/docs/active/skills.spec.md",
+        "doc:cmd/evie/docs/active/skills.decisions.md"
       ]
     }
   ],

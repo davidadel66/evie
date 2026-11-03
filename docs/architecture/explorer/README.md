@@ -34,7 +34,7 @@ Content files and the packages whose component nodes they hold:
 | `intelligence.js` | openrouter, localembedding, localextractor |
 | `memory.js` | memory, memorybackground, memoryeval |
 | `runtime.js` | agent, tools, plugins, composition, subagents, delegation, task, taskeval, untrusted, repoinstructions |
-| `workflows.js` | workflow, workflowruntime, procedural |
+| `workflows.js` | workflow, workflowruntime, procedural, skill |
 | `platform.js` | eviedb, web, docs/architecture/explorer, usage, cmd/evie, cmd/todo |
 | `integrations.js` | mcpconn, mcpconn/mcptest, mcpchat, github, finance, youtube, changes, worktree, localfiles, localterminal, workspacetabs, cmd/finance, cmd/ytscribe |
 

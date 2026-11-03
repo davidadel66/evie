@@ -186,6 +186,13 @@ evieExplorer.register(
       "testSupport": false
     },
     {
+      "path": "internal/skill",
+      "name": "skill",
+      "command": false,
+      "doc": "Package skill checks one skill in the Agent Skills format against Evie's rules (cmd/evie/docs/active/skills.spec.md): a SKILL.md with YAML frontmatter and Markdown instructions, plus optional text reference files, with no scripts, executables or links, only UTF-8 text, and within Evie's size limits.",
+      "testSupport": false
+    },
+    {
       "path": "internal/subagents",
       "name": "subagents",
       "command": false,
@@ -330,6 +337,10 @@ evieExplorer.register(
     {
       "from": "cmd/evie",
       "to": "internal/procedural"
+    },
+    {
+      "from": "cmd/evie",
+      "to": "internal/skill"
     },
     {
       "from": "cmd/evie",
@@ -478,6 +489,10 @@ evieExplorer.register(
     {
       "from": "internal/eviedb",
       "to": "internal/repoinstructions"
+    },
+    {
+      "from": "internal/eviedb",
+      "to": "internal/skill"
     },
     {
       "from": "internal/eviedb",
@@ -1504,6 +1519,77 @@ evieExplorer.register(
       "source": {
         "file": "cmd/evie/management.go",
         "function": "runManagementCommand"
+      }
+    },
+    {
+      "binary": "evie",
+      "words": [
+        "skills"
+      ],
+      "package": "cmd/evie",
+      "source": {
+        "file": "cmd/evie/main.go",
+        "function": "main"
+      }
+    },
+    {
+      "binary": "evie",
+      "words": [
+        "skills",
+        "approve"
+      ],
+      "package": "cmd/evie",
+      "source": {
+        "file": "cmd/evie/skills.go",
+        "function": "runSkillManagement"
+      }
+    },
+    {
+      "binary": "evie",
+      "words": [
+        "skills",
+        "deactivate"
+      ],
+      "package": "cmd/evie",
+      "source": {
+        "file": "cmd/evie/skills.go",
+        "function": "runSkillManagement"
+      }
+    },
+    {
+      "binary": "evie",
+      "words": [
+        "skills",
+        "list"
+      ],
+      "package": "cmd/evie",
+      "source": {
+        "file": "cmd/evie/skills.go",
+        "function": "runSkillManagement"
+      }
+    },
+    {
+      "binary": "evie",
+      "words": [
+        "skills",
+        "propose"
+      ],
+      "package": "cmd/evie",
+      "source": {
+        "file": "cmd/evie/skills.go",
+        "function": "runSkillManagement"
+      }
+    },
+    {
+      "binary": "evie",
+      "words": [
+        "skills",
+        "show"
+      ],
+      "package": "cmd/evie",
+      "source": {
+        "file": "cmd/evie/skills.go",
+        "function": "runSkillManagement"
       }
     },
     {
@@ -9384,6 +9470,266 @@ evieExplorer.register(
                 "workspace_id"
               ],
               "table": "workspaces",
+              "references": [
+                "id"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "skill_activations",
+          "columns": [
+            {
+              "name": "name",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 1
+            },
+            {
+              "name": "version",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": 2
+            },
+            {
+              "name": "proposal_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "commit_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "tree_path",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "version_hash",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "manifest",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "metadata",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "actor",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "surface",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "approved_at",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "columns": [
+                "proposal_id"
+              ],
+              "table": "skill_proposals",
+              "references": [
+                "id"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "skill_deactivations",
+          "columns": [
+            {
+              "name": "name",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 1
+            },
+            {
+              "name": "version",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": 2
+            },
+            {
+              "name": "actor",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "surface",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "deactivated_at",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "columns": [
+                "name",
+                "version"
+              ],
+              "table": "skill_activations",
+              "references": [
+                "name",
+                "version"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "skill_imports",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": 1
+            },
+            {
+              "name": "report",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "actor",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "surface",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "imported_at",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "skill_proposals",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": 1
+            },
+            {
+              "name": "import_id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": 0
+            },
+            {
+              "name": "name",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "commit_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "tree_path",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "version_hash",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "manifest",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "metadata",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "source",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "warnings",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "actor",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "surface",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            },
+            {
+              "name": "proposed_at",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "columns": [
+                "import_id"
+              ],
+              "table": "skill_imports",
               "references": [
                 "id"
               ]

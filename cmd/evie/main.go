@@ -28,6 +28,7 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/procedural"
 	"github.com/davidadel66/evie/internal/subagents"
 	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
@@ -169,6 +170,20 @@ func main() {
 			log.Fatalf("changes: %v", err)
 		}
 		return
+	}
+	// Skills (skills.spec.md) need the database and the procedural
+	// repository, where their reviewed files live beside the workflows'.
+	if cmd == "skills" {
+		root, err := procedural.DefaultRoot()
+		if err != nil {
+			log.Fatalf("skills: %v", err)
+		}
+		if handled, err := runSkillManagement(context.Background(), os.Args[1:], os.Stdout, skillCommands{store: kernelStore, repo: procedural.New(root)}); handled {
+			if err != nil {
+				log.Fatalf("skills: %v", err)
+			}
+			return
+		}
 	}
 	// Workflow activation (Stage 14 sub-stage 2) needs the database and the
 	// procedural repository, and runs (sub-stage 5) the workflow capability
