@@ -162,3 +162,8 @@ Good tests here assert what David or the parent model can observe: the bytes ret
   4. promotion of an artifact to a tab or a folder, as an explicit owner action.
 
   Tabs stay live views over data; artifacts are kept outputs.
+
+## Tickets
+
+- #199 Open a worker's report in the Inspector (blocked by: none)
+- #200 Show Evie's facts above a worker's report (blocked by: #199)
