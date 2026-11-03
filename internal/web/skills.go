@@ -18,7 +18,9 @@ type chatSkill struct {
 }
 
 // handleSkillList lists the open chat's pinned skills, owner-only ones
-// included. A chat without the skill capability lists none.
+// included, and whether the chat can use skills at all: a chat without the
+// skill capability lists none and is not available, so the composer sends
+// its slash text as an ordinary message.
 func (s *Server) handleSkillList(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		SessionID memory.SessionID `json:"sessionId"`
@@ -47,13 +49,14 @@ func (s *Server) handleSkillList(w http.ResponseWriter, r *http.Request) {
 		skills = append(skills, chatSkill{Name: p.Name, Description: p.Metadata.Description, ArgumentHint: p.Metadata.ArgumentHint, OwnerOnly: !p.ModelInvocable()})
 	}
 	writeJSON(w, http.StatusOK, struct {
-		Skills []chatSkill `json:"skills"`
-	}{skills})
+		Available bool        `json:"available"`
+		Skills    []chatSkill `json:"skills"`
+	}{session.CanUseSkills(), skills})
 }
 
-// skillRefusal is why a chat refuses to run a message with skill, or "".
-func skillRefusal(r *http.Request, session *agent.Session, skill string) (int, string) {
-	_, err := session.OwnerSkill(r.Context(), skill)
+// skillRefusal is why a chat refuses to run a message with skill, given
+// what resolving it returned, or "".
+func skillRefusal(err error, skill string) (int, string) {
 	switch {
 	case err == nil:
 		return 0, ""

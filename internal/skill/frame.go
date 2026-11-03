@@ -4,8 +4,26 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 )
+
+// maxPathBytes bounds a skill file's path: the procedural repository
+// refuses a longer one, so no committed version has one.
+const maxPathBytes = 1024
+
+// MaxLoadBytes bounds what Body and File return for any version within the
+// skill limits, so that a loaded skill can always be shown whole. JSON
+// escapes a byte of text to at most six (a control character as \u00XX)
+// and a byte of a path, which holds no control character, to at most two.
+// Body is the frame, a name, a 64-digit version hash, a description of at
+// most MaxDescriptionLength characters, instructions of at most
+// MaxFileBytes and the paths and sizes of the other MaxFiles-1 files; File,
+// with one file of at most MaxFileBytes and its path, is smaller.
+var MaxLoadBytes = len(Frame(strings.Repeat("a", MaxNameLength))) + len("\n") +
+	len(`{"name":"","version":"","description":"","instructions":"","resources":[]}`) + MaxNameLength + 64 +
+	6*(MaxDescriptionLength+MaxFileBytes) +
+	(MaxFiles-1)*(len(`{"path":"","bytes":},`)+len(strconv.Itoa(MaxFileBytes))+2*maxPathBytes)
 
 // Frame is the sentence that precedes a skill's text wherever the model
 // sees it (skills.spec.md, The skill tool): like the repository

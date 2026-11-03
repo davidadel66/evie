@@ -369,6 +369,30 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A skill is resolved from the store before the chat lock is taken, so
+	// the lock is never held across those reads; under the lock the chat
+	// must still have the agent it was resolved for.
+	var invoked agent.InvokedSkill
+	if req.Skill != "" {
+		s.sessionMu.RLock()
+		resolveIn := s.session
+		if s.contextSessions != nil {
+			resolveIn = nil
+			if chat := s.chatReadLocked(req.SessionID); chat != nil {
+				resolveIn = chat.agent
+			}
+		}
+		s.sessionMu.RUnlock()
+		if resolveIn != nil {
+			var err error
+			invoked, err = resolveIn.OwnerSkill(r.Context(), req.Skill)
+			if status, refusal := skillRefusal(err, req.Skill); refusal != "" {
+				jsonError(w, status, refusal)
+				return
+			}
+		}
+	}
+
 	s.sessionMu.Lock()
 	// A context-managed server runs the turn in the chat the request names,
 	// whichever chat is focused; the legacy server has only its one session.
@@ -397,12 +421,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusServiceUnavailable, "chat is unavailable because the active Agent Preset is invalid; use plugin diagnostics to repair startup")
 		return
 	}
-	if req.Skill != "" {
-		if status, refusal := skillRefusal(r, session, req.Skill); refusal != "" {
-			s.sessionMu.Unlock()
-			jsonError(w, status, refusal)
-			return
-		}
+	if req.Skill != "" && !invoked.For(session) {
+		s.sessionMu.Unlock()
+		jsonError(w, http.StatusConflict, "this conversation changed; reload before sending")
+		return
 	}
 	turnCtx, stopTurn := context.WithCancelCause(turnLifecycleContext(r))
 	turn := &webTurn{stop: stopTurn}
@@ -415,7 +437,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	feed := s.feedLocked(turnKey)
 	ev := &sseEvents{feed: feed, generation: feed.begin(), message: req.Message, skill: req.Skill, session: turnKey}
 	s.sessionMu.Unlock()
-	run := chatTurn{ctx: turnCtx, stop: stopTurn, key: turnKey, turn: turn, session: session, message: req.Message, skill: req.Skill, ev: ev}
+	run := chatTurn{ctx: turnCtx, stop: stopTurn, key: turnKey, turn: turn, session: session, message: req.Message, skill: req.Skill, invoked: invoked, ev: ev}
 
 	if req.Detach {
 		s.detached.Add(1)
@@ -456,9 +478,11 @@ type chatTurn struct {
 	turn    *webTurn
 	session *agent.Session
 	message string
-	// skill is the pinned skill the owner invoked for message, or "".
-	skill string
-	ev    *sseEvents
+	// skill is the pinned skill the owner invoked for message, or "", and
+	// invoked is that skill as session resolved it.
+	skill   string
+	invoked agent.InvokedSkill
+	ev      *sseEvents
 }
 
 // runTurn runs a registered turn to its end: errors, turn_done, the end of
@@ -490,7 +514,7 @@ func (s *Server) runTurn(t chatTurn, approver tools.Approver, refuse func(messag
 	measurementCtx, finalizeMeasurement := agent.BeginResponseMeasurement(t.ctx)
 	var sendErr error
 	if t.skill != "" {
-		sendErr = t.session.SendSkill(measurementCtx, t.message, t.skill, t.ev, approver)
+		sendErr = t.session.SendSkill(measurementCtx, t.message, t.invoked, t.ev, approver)
 	} else {
 		sendErr = t.session.Send(measurementCtx, t.message, t.ev, approver)
 	}

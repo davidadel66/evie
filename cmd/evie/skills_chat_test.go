@@ -25,6 +25,7 @@ import (
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/procedural"
+	"github.com/davidadel66/evie/internal/skill"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/web"
 )
@@ -44,11 +45,23 @@ type skillChat struct {
 	manager    *plugins.Manager
 	controller *webContextSessionController
 	clients    map[memory.SessionID]*skillChatClient
+	// memory enables the memory plugin too, whose read_tool_result makes
+	// requests page long tool results.
+	memory bool
 }
 
 func newSkillChat(t *testing.T) *skillChat {
 	t.Helper()
 	c := &skillChat{t: t, path: filepath.Join(t.TempDir(), "evie.db"), repo: procedural.New(filepath.Join(t.TempDir(), "procedural"))}
+	c.open()
+	t.Cleanup(func() { _ = c.db.Close() })
+	return c
+}
+
+// newSkillChatWithMemory is newSkillChat with the memory plugin enabled.
+func newSkillChatWithMemory(t *testing.T) *skillChat {
+	t.Helper()
+	c := &skillChat{t: t, path: filepath.Join(t.TempDir(), "evie.db"), repo: procedural.New(filepath.Join(t.TempDir(), "procedural")), memory: true}
 	c.open()
 	t.Cleanup(func() { _ = c.db.Close() })
 	return c
@@ -64,7 +77,11 @@ func (c *skillChat) open() {
 	}
 	c.db, c.store = db, eviedb.NewStore(db)
 	c.cli = &skillCLI{t: c.t, db: db, store: c.store, repo: c.repo}
-	c.manager = skillsCompositionManager(c.t, c.store, c.repo)
+	var extra []plugins.Plugin
+	if c.memory {
+		extra = append(extra, plugins.NewMemory(c.store))
+	}
+	c.manager = skillsCompositionManager(c.t, c.store, c.repo, extra...)
 	c.clients = map[memory.SessionID]*skillChatClient{}
 	c.controller = newWebContextSessionController(c.store, c.manager, func(session memory.Session, resolved plugins.ResolvedComposition) (*agent.Session, error) {
 		client := &skillChatClient{}
@@ -84,16 +101,17 @@ func (c *skillChat) restart() {
 }
 
 // skillsCompositionManager is sessionCompositionManager's plugins plus the
-// skills plugin, all enabled.
-func skillsCompositionManager(t *testing.T, store *eviedb.Store, repo *procedural.Repo) *plugins.Manager {
+// skills plugin and any extra ones, all enabled.
+func skillsCompositionManager(t *testing.T, store *eviedb.Store, repo *procedural.Repo, extra ...plugins.Plugin) *plugins.Manager {
 	t.Helper()
-	manager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(testTaskStore(t)),
-		plugins.NewSkills(store, repo))
+	compiled := append([]plugins.Plugin{plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(testTaskStore(t)),
+		plugins.NewSkills(store, repo)}, extra...)
+	manager, err := plugins.NewManager(tools.KernelToolset(), compiled...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.TodoPluginID, plugins.SkillsPluginID} {
-		if err := manager.SetEnabled(id, true); err != nil {
+	for _, p := range compiled {
+		if err := manager.SetEnabled(p.Manifest().ID, true); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -450,6 +468,93 @@ func TestTheSkillToolLoadsAPinnedSkillInItsFrame(t *testing.T) {
 	}
 }
 
+// openOverHTTP opens a chat through the web server, as the browser does,
+// and returns its session.
+func (c *skillChat) openOverHTTP(post func(string, any) *httptest.ResponseRecorder, body any) memory.SessionID {
+	c.t.Helper()
+	result := post("/api/context-sessions/select", body)
+	var opened struct {
+		Session memory.Session `json:"session"`
+	}
+	if result.Code != http.StatusOK || json.Unmarshal(result.Body.Bytes(), &opened) != nil {
+		c.t.Fatalf("open: %d %s", result.Code, result.Body)
+	}
+	return opened.Session.ID
+}
+
+// An owner-only skill is David's to start: the skill tool never loads its
+// instructions, but once he has invoked it in a chat, Evie may read the
+// files they point to there, at the version he invoked. A chat where he
+// has not invoked it still refuses.
+func TestTheSkillToolReadsAnInvokedOwnerOnlySkillsFiles(t *testing.T) {
+	c := newSkillChat(t)
+	c.approve("owl", map[string]string{"SKILL.md": owlSkill, "references/doors.md": "Front, back, cellar.\n"})
+	post := c.chatServer()
+	chat, other := c.openOverHTTP(post, map[string]any{"unscoped": true}), c.openOverHTTP(post, map[string]any{"unscoped": true})
+	turn := func(id memory.SessionID, body map[string]any, calls ...openrouter.ToolCall) map[string]string {
+		t.Helper()
+		c.clients[id].calls = calls
+		body["sessionId"] = id
+		if sent := post("/api/chat", body); sent.Code != http.StatusOK || !strings.Contains(sent.Body.String(), "turn_done") {
+			t.Fatalf("turn: %d %s", sent.Code, sent.Body)
+		}
+		return toolResults(c.clients[id])
+	}
+	const read = `{"name":"owl","path":"references/doors.md"}`
+	refused := func(result string) bool {
+		return strings.HasPrefix(result, "tool call came back with error ") && strings.Contains(result, `skill "owl" is invoked by David only`) &&
+			!strings.Contains(result, "Front, back") && !strings.Contains(result, "Check the doors")
+	}
+
+	if result := turn(chat, map[string]any{"message": "check the doors"}, skillCall("early", read))["early"]; !refused(result) {
+		t.Fatalf("a file of an owner-only skill he has not invoked: %q", result)
+	}
+	results := turn(chat, map[string]any{"message": "/owl", "skill": "owl"}, skillCall("body", `{"name":"owl"}`), skillCall("file", read))
+	if !refused(results["body"]) {
+		t.Fatalf("the instructions of an invoked owner-only skill: %q", results["body"])
+	}
+	frame := "Skill `owl` " + skillFrame + "\n"
+	var file struct{ Name, Path, Content string }
+	if !strings.HasPrefix(results["file"], frame) || json.Unmarshal([]byte(strings.TrimPrefix(results["file"], frame)), &file) != nil ||
+		file.Name != "owl" || file.Path != "references/doors.md" || file.Content != "Front, back, cellar.\n" {
+		t.Fatalf("a file of the owner-only skill he invoked: %q", results["file"])
+	}
+	if result := turn(other, map[string]any{"message": "check the doors"}, skillCall("elsewhere", read))["elsewhere"]; !refused(result) {
+		t.Fatalf("a chat where he has not invoked it: %q", result)
+	}
+}
+
+// A skill reaches the model whole. A SKILL.md at the 32 KiB limit that
+// JSON escapes to nearly six times its size (terminal control codes) is
+// never shortened by the tool-result limits: not where requests page long
+// results with read_tool_result, and not where they bound whole groups.
+func TestTheSkillToolReturnsANearLimitSkillWhole(t *testing.T) {
+	const front = "---\nname: big\ndescription: Replay a terminal recording.\n---\n"
+	const line = "\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\"\\\n"
+	var instructions strings.Builder
+	instructions.WriteString("Replay this recording exactly.\n")
+	for len(front)+instructions.Len()+len(line) <= skill.MaxFileBytes {
+		instructions.WriteString(line)
+	}
+	for name, c := range map[string]*skillChat{"paged": newSkillChatWithMemory(t), "group-bounded": newSkillChat(t)} {
+		c.approve("big", map[string]string{"SKILL.md": front + instructions.String()})
+		client := c.send(c.selectChat(web.ContextSessionSelection{Unscoped: true}), "replay it", skillCall("body", `{"name":"big"}`))
+		paged := slices.ContainsFunc(client.requests[0].Tools, func(tool openrouter.Tool) bool { return tool.Function.Name == "read_tool_result" })
+		if paged != (name == "paged") {
+			t.Fatalf("%s: requests offer read_tool_result: %v", name, paged)
+		}
+		result := toolResults(client)["body"]
+		if len(result) < 150<<10 {
+			t.Fatalf("%s: the framed skill is %d bytes; the test wants one well past the result limits", name, len(result))
+		}
+		frame := "Skill `big` " + skillFrame + "\n"
+		var loaded struct{ Instructions string }
+		if !strings.HasPrefix(result, frame) || json.Unmarshal([]byte(strings.TrimPrefix(result, frame)), &loaded) != nil || loaded.Instructions != instructions.String() {
+			t.Fatalf("%s: the skill was cut to %d bytes: %.300q", name, len(result), result)
+		}
+	}
+}
+
 // Reopening Evie keeps each chat's pinned versions, even after the owner
 // approves a newer version: the chat resumes with its receipt, catalog and
 // skill text, while a new chat pins the newer version. A pinned version
@@ -681,14 +786,15 @@ func TestTheOwnerInvokesAPinnedSkillWithSlashName(t *testing.T) {
 
 	listed := post("/api/skills/list", map[string]any{"sessionId": chat})
 	var list struct {
-		Skills []struct {
+		Available bool `json:"available"`
+		Skills    []struct {
 			Name         string `json:"name"`
 			Description  string `json:"description"`
 			ArgumentHint string `json:"argumentHint"`
 			OwnerOnly    bool   `json:"ownerOnly"`
 		} `json:"skills"`
 	}
-	if listed.Code != http.StatusOK || json.Unmarshal(listed.Body.Bytes(), &list) != nil {
+	if listed.Code != http.StatusOK || json.Unmarshal(listed.Body.Bytes(), &list) != nil || !list.Available {
 		t.Fatalf("skill list: %d %s", listed.Code, listed.Body)
 	}
 	if got := fmt.Sprintf("%+v", list.Skills); got != "[{Name:grilling Description:Grill the owner about a plan until every branch is resolved. ArgumentHint: OwnerOnly:false} "+
@@ -757,7 +863,10 @@ func TestTheOwnerInvokesAPinnedSkillWithSlashName(t *testing.T) {
 		!strings.Contains(refused.Body.String(), "skill") || len(c.clients[without].requests) != 0 {
 		t.Fatalf("a chat without the skill capability: %d %s", refused.Code, refused.Body)
 	}
-	if listed := post("/api/skills/list", map[string]any{"sessionId": without}); listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"skills":[]`) {
+	// It lists none and says it can't use skills, so the composer sends its
+	// slash text as an ordinary message.
+	if listed := post("/api/skills/list", map[string]any{"sessionId": without}); listed.Code != http.StatusOK ||
+		!strings.Contains(listed.Body.String(), `"available":false,"skills":[]`) {
 		t.Fatalf("a chat without the skill capability lists %d %s", listed.Code, listed.Body)
 	}
 	if closed := post("/api/skills/list", map[string]any{"sessionId": "not-open"}); closed.Code != http.StatusConflict {

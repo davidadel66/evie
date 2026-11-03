@@ -347,7 +347,7 @@ func (c *ContextComposer) projectAtStart(
 		return contextProjection{}, err
 	}
 	projection.selectedOriginal = withToolResultReductions(projection.selectedOriginal, input.toolResultReductions)
-	limitToolResults := applyToolResultGroupLimits
+	limitToolResults := applyRequestToolResultGroupLimits
 	if offersToolResultPaging(input.Tools) {
 		limitToolResults = applyModelToolResultLimits
 	}

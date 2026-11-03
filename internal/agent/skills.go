@@ -74,23 +74,38 @@ func (s *Session) Skills(ctx context.Context) ([]skill.Pinned, error) {
 	return s.pinnedSkills(ctx)
 }
 
-// OwnerSkill is the pinned skill the owner invokes by name. It refuses a
-// chat without the skill tool (ErrNoSkills) and a name the chat did not pin
-// (ErrSkillNotPinned).
-func (s *Session) OwnerSkill(ctx context.Context, name string) (skill.Pinned, error) {
+// InvokedSkill is a pinned skill the owner invokes in one session, as
+// OwnerSkill resolved it; SendSkill runs a turn with it.
+type InvokedSkill struct {
+	session *Session
+	pinned  skill.Pinned
+}
+
+// For reports whether the skill was resolved for session.
+func (i InvokedSkill) For(session *Session) bool { return session != nil && i.session == session }
+
+// OwnerSkill resolves the pinned skill the owner invokes by name. It
+// refuses a chat without the skill tool (ErrNoSkills) and a name the chat
+// did not pin (ErrSkillNotPinned).
+func (s *Session) OwnerSkill(ctx context.Context, name string) (InvokedSkill, error) {
 	if !s.hasSkillTool() {
-		return skill.Pinned{}, ErrNoSkills
+		return InvokedSkill{}, ErrNoSkills
 	}
 	pinned, err := s.pinnedSkills(ctx)
 	if err != nil {
-		return skill.Pinned{}, err
+		return InvokedSkill{}, err
 	}
 	i := slices.IndexFunc(pinned, func(p skill.Pinned) bool { return p.Name == name })
 	if i < 0 {
-		return skill.Pinned{}, fmt.Errorf("%w: %q", ErrSkillNotPinned, name)
+		return InvokedSkill{}, fmt.Errorf("%w: %q", ErrSkillNotPinned, name)
 	}
-	return pinned[i], nil
+	return InvokedSkill{session: s, pinned: pinned[i]}, nil
 }
+
+// CanUseSkills reports whether the owner can invoke skills in this chat:
+// whether it has the skill tool. A chat pinned to an older preset version,
+// or a delegated worker, cannot.
+func (s *Session) CanUseSkills() bool { return s.hasSkillTool() }
 
 func (s *Session) hasSkillTool() bool {
 	if s.workerInstructions != "" {
@@ -100,15 +115,15 @@ func (s *Session) hasSkillTool() bool {
 }
 
 // SendSkill runs a turn for a message the owner sent with one of the chat's
-// pinned skills. The invocation is recorded in the turn's root message, in
-// the same event, and every request whose window holds that message carries
-// the skill's framed body right before it.
-func (s *Session) SendSkill(ctx context.Context, input, name string, ev Events, approve tools.Approver) error {
-	invoked, err := s.OwnerSkill(ctx, name)
-	if err != nil {
-		return err
+// pinned skills, as OwnerSkill resolved it for this session. The invocation
+// is recorded in the turn's root message, in the same event, and every
+// request whose window holds that message carries the skill's framed body
+// right before it.
+func (s *Session) SendSkill(ctx context.Context, input string, invoked InvokedSkill, ev Events, approve tools.Approver) error {
+	if !invoked.For(s) {
+		return errors.New("agent: the invoked skill was resolved for another chat")
 	}
-	return s.send(ctx, input, &memory.SkillInvocation{Name: invoked.Name, Version: invoked.Hash}, ev, approve)
+	return s.send(ctx, input, &memory.SkillInvocation{Name: invoked.pinned.Name, Version: invoked.pinned.Hash}, ev, approve)
 }
 
 // skillBodyViewEvent marks where an invoked skill's framed body sits in a
@@ -160,7 +175,7 @@ func (s *Session) invokedSkillBodies(ctx context.Context, events []memory.Event,
 			}
 			p := pinned[i]
 			var err error
-			if body, err = skill.Body(p, pinnedSkillSource{ctx: ctx, files: s.skillFiles, commit: p.Commit, dir: p.Path}); err != nil {
+			if body, err = skill.Body(p, p.Source(ctx, s.skillFiles)); err != nil {
 				return nil, fmt.Errorf("read invoked skill %s: %w", p.Name, err)
 			}
 			bodies[key] = body
@@ -191,16 +206,4 @@ func withInvokedSkills(events []memory.Event, bodies map[memory.EventID]string) 
 		out = append(out, event)
 	}
 	return out
-}
-
-// pinnedSkillSource reads a skill's folder at the commit it was approved
-// at.
-type pinnedSkillSource struct {
-	ctx         context.Context
-	files       SkillFiles
-	commit, dir string
-}
-
-func (s pinnedSkillSource) ReadFile(name string) ([]byte, error) {
-	return s.files.ReadFile(s.ctx, s.commit, s.dir+"/"+name)
 }

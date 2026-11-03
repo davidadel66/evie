@@ -28,9 +28,11 @@ const (
 	skillsContractVersion       = "1.0.0"
 )
 
-// SkillStore resolves the skills a session pinned.
+// SkillStore resolves the skills a session pinned, and whether the owner
+// invoked one of them in it.
 type SkillStore interface {
 	SessionSkills(context.Context, memory.SessionID) ([]skill.Pinned, error)
+	OwnerInvokedSkill(ctx context.Context, session memory.SessionID, name, version string) (bool, error)
 }
 
 // SkillFiles reads a file of the procedural repository at an exact commit.
@@ -68,9 +70,11 @@ func (s Skills) ToolCapabilities() []ToolCapability {
 // load reads the session's pinned skills by its session ID and returns the
 // named one's body, or one of its manifest files, from the procedural
 // repository at the commit it was approved at (skills.decisions.md,
-// 2026-11-03). It refuses a name the chat did not pin, an owner-only skill
-// and a path its manifest does not list. The result goes through the
-// ordinary tool-result limits.
+// 2026-11-03). It refuses a name the chat did not pin and a path its
+// manifest does not list. An owner-only skill is David's to start: its
+// body is always refused, and its files are read only once he has invoked
+// that version in this chat. A request shows the result whole; it is at
+// most skill.MaxLoadBytes.
 func (s Skills) load(ctx context.Context, args string) (string, error) {
 	var params struct {
 		Name string `json:"name"`
@@ -93,23 +97,20 @@ func (s Skills) load(ctx context.Context, args string) (string, error) {
 	}
 	p := pinned[i]
 	if !p.ModelInvocable() {
-		return "", fmt.Errorf("skill %q is invoked by David only, with /%s; the skill tool cannot load it", p.Name, p.Name)
+		invoked := false
+		if params.Path != "" {
+			if invoked, err = s.store.OwnerInvokedSkill(ctx, inv.Scope.SessionID, p.Name, p.Hash); err != nil {
+				return "", err
+			}
+		}
+		if !invoked {
+			return "", fmt.Errorf("skill %q is invoked by David only, with /%s; the skill tool cannot load it, "+
+				"and reads its files only after he invokes it in this chat", p.Name, p.Name)
+		}
 	}
-	src := pinnedSkillSource{ctx: ctx, files: s.files, commit: p.Commit, dir: p.Path}
+	src := p.Source(ctx, s.files)
 	if params.Path == "" {
 		return skill.Body(p, src)
 	}
 	return skill.File(p, src, params.Path)
-}
-
-// pinnedSkillSource reads a skill's folder at the commit it was approved
-// at.
-type pinnedSkillSource struct {
-	ctx         context.Context
-	files       SkillFiles
-	commit, dir string
-}
-
-func (s pinnedSkillSource) ReadFile(name string) ([]byte, error) {
-	return s.files.ReadFile(s.ctx, s.commit, s.dir+"/"+name)
 }

@@ -20,9 +20,11 @@ func (a SkillActivation) Pinned() skill.Pinned {
 // Receipt, in receipt order, to the approved versions they pin
 // (skills.spec.md, Visibility and pinning). Each reference must be a Global
 // skill reference whose name was approved at exactly that hash, active or
-// not; anything else is an error, never a fallback to another version.
+// not; anything else is an error, never a fallback to another version. All
+// of them are read in one query.
 func (s *Store) PinnedSkills(ctx context.Context, receipt composition.Receipt) ([]skill.Pinned, error) {
-	var out []skill.Pinned
+	type pin struct{ name, hash string }
+	var pins []pin
 	seen := map[string]bool{}
 	for _, ref := range receipt.Instructions {
 		if !strings.HasPrefix(ref.ID, skill.ReferencePrefix) {
@@ -36,11 +38,35 @@ func (s *Store) PinnedSkills(ctx context.Context, receipt composition.Receipt) (
 			return nil, fmt.Errorf("skill %s is pinned twice", name)
 		}
 		seen[name] = true
-		activation, err := s.SkillActivationByHash(ctx, name, ref.SHA256)
-		if err != nil {
-			return nil, fmt.Errorf("pinned skill: %w", err)
+		pins = append(pins, pin{name, ref.SHA256})
+	}
+	if len(pins) == 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, 2*len(pins))
+	for _, p := range pins {
+		args = append(args, p.name, p.hash)
+	}
+	values := strings.TrimSuffix(strings.Repeat("(?,?),", len(pins)), ",")
+	found, err := querySkillActivations(ctx, s.db, ` WHERE (a.name, a.version_hash) IN (VALUES `+values+`) ORDER BY a.version DESC`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("pinned skill: %w", err)
+	}
+	// The newest approval of each name at its hash, as
+	// SkillActivationByHash reads one.
+	newest := map[pin]SkillActivation{}
+	for _, a := range found {
+		if _, ok := newest[pin{a.Name, a.VersionHash}]; !ok {
+			newest[pin{a.Name, a.VersionHash}] = a
 		}
-		out = append(out, activation.Pinned())
+	}
+	out := make([]skill.Pinned, 0, len(pins))
+	for _, p := range pins {
+		a, ok := newest[p]
+		if !ok {
+			return nil, fmt.Errorf("pinned skill: %w: %s at %s was never approved", ErrSkillNotFound, p.name, p.hash)
+		}
+		out = append(out, a.Pinned())
 	}
 	return out, nil
 }
@@ -62,4 +88,15 @@ func (s *Store) SessionSkills(ctx context.Context, id memory.SessionID) ([]skill
 // SessionSkills are the skills the bound session pinned.
 func (h *SessionHistory) SessionSkills(ctx context.Context) ([]skill.Pinned, error) {
 	return h.store.SessionSkills(ctx, h.sessionID)
+}
+
+// OwnerInvokedSkill reports whether the owner invoked the skill name at
+// version in the session: whether one of its turns' root user messages
+// records that invocation (skills.spec.md, Owner invocation).
+func (s *Store) OwnerInvokedSkill(ctx context.Context, session memory.SessionID, name, version string) (bool, error) {
+	var invoked bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE session_id = ? AND event_type = ? AND role = 'user' AND parent_id IS NULL
+ AND json_extract(payload_json,'$.skill.name') = ? AND json_extract(payload_json,'$.skill.version') = ?)`,
+		session, memory.EventUserMessage, name, version).Scan(&invoked)
+	return invoked, err
 }

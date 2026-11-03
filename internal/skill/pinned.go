@@ -1,6 +1,9 @@
 package skill
 
-import "strings"
+import (
+	"context"
+	"strings"
+)
 
 // A chat pins each skill it can use in its Composition Receipt as an
 // instruction reference: ReferencePrefix, the skill's scope, and its name,
@@ -36,3 +39,24 @@ type Pinned struct {
 // ModelInvocable reports whether the model may see and load the skill;
 // owner-only skills are invoked by David alone.
 func (p Pinned) ModelInvocable() bool { return !p.Metadata.DisableModelInvocation }
+
+// CommitReader reads a file of the procedural repository at an exact
+// commit, as procedural.Repo does.
+type CommitReader interface {
+	ReadFile(ctx context.Context, commit, name string) ([]byte, error)
+}
+
+// Source reads p's folder through r at the commit it was approved at.
+func (p Pinned) Source(ctx context.Context, r CommitReader) Source {
+	return commitSource{ctx: ctx, r: r, commit: p.Commit, dir: p.Path}
+}
+
+type commitSource struct {
+	ctx         context.Context
+	r           CommitReader
+	commit, dir string
+}
+
+func (s commitSource) ReadFile(name string) ([]byte, error) {
+	return s.r.ReadFile(s.ctx, s.commit, s.dir+"/"+name)
+}
