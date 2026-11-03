@@ -1560,6 +1560,18 @@ evieExplorer.register(
       "binary": "evie",
       "words": [
         "skills",
+        "import-claude"
+      ],
+      "package": "cmd/evie",
+      "source": {
+        "file": "cmd/evie/skills.go",
+        "function": "runSkillManagement"
+      }
+    },
+    {
+      "binary": "evie",
+      "words": [
+        "skills",
         "list"
       ],
       "package": "cmd/evie",
