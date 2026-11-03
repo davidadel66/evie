@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef } from "react";
 import type { Item } from "../store/reducer";
+import type { Outgoing } from "./composerCommand";
 import { AssistantMessage, UserMessage } from "./Message";
 import { Activity } from "./Activity";
 import { activityTurns } from "./activityModel";
@@ -26,7 +27,7 @@ function runStarts(activity: Item[]): ChatRunStart[] {
 
 type Props = {
   items: Item[];
-  queued: string[];
+  queued: Outgoing[];
   streaming: boolean;
   onAnswer: (reqId: string, approve: boolean) => void;
   onAlwaysApplies?: AlwaysAppliesSetter;
@@ -80,7 +81,7 @@ export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOp
         {hasOlder && <button type="button" disabled={historyLoading || streaming} onClick={() => { pinned.current = false; prependHeight.current = scroller.current?.scrollHeight ?? null; onOlder?.(); }} className="text-teal self-center py-2 text-sm">Earlier messages</button>}
         {items.length === 0 && !historyLoading && !historyProblem && <Empty />}
         {activityTurns(items, streaming).map((group, index) => <Fragment key={group.key}>
-          {group.user && <UserMessage text={group.user.text} sentAt={group.turn?.startedAt} first={index === 0} />}
+          {group.user && <UserMessage text={group.user.text} skill={group.user.skill} sentAt={group.turn?.startedAt} first={index === 0} />}
           <Activity group={group} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />
           {group.answer.map((item) => <AssistantMessage key={item.key} text={item.text} streaming={false} discarded={item.discarded} />)}
           {runStarts(group.activity).map((start) => {
@@ -89,11 +90,11 @@ export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOp
               onOpen={onOpenRun ? (trigger) => onOpenRun(start.runId, trigger) : undefined} />;
           })}
         </Fragment>)}
-        {queued.map((text, i) => (
+        {queued.map((queuedMessage, i) => (
           // Dimmed + marked: the server hasn't seen these yet, and the
           // transcript shouldn't pretend otherwise.
           <div key={`q-${i}`} className="flex flex-none flex-col items-end gap-[2px] opacity-50">
-            <UserMessage text={text} />
+            <UserMessage text={queuedMessage.message} skill={queuedMessage.skill} />
             <span className="text-ghost font-mono text-[10px]">queued</span>
           </div>
         ))}

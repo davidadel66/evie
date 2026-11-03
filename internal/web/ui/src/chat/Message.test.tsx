@@ -60,3 +60,18 @@ describe("user message", () => {
     expect(html).not.toContain("#d7dcd9");
   });
 });
+
+// skills.spec.md (decision 2026-11-03): a message sent with a skill shows
+// /name above its text.
+describe("user message sent with a skill", () => {
+  it("shows the skill's /name label above the text", () => {
+    const html = renderToStaticMarkup(<UserMessage text="my plan to open a bakery" skill="grilling" />);
+    const label = html.match(/<div class="([^"]*)">\/grilling<\/div>/)?.[1] ?? "";
+    expect(label.split(" ")).toEqual(expect.arrayContaining(["font-mono", "text-teal"]));
+    expect(html.indexOf("/grilling")).toBeLessThan(html.indexOf("my plan to open a bakery"));
+  });
+
+  it("has no label without a skill", () => {
+    expect(renderToStaticMarkup(<UserMessage text="hello" />)).not.toContain("font-mono");
+  });
+});

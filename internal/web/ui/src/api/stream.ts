@@ -51,12 +51,14 @@ export async function streamChat(
 }
 
 /** sendDetached starts a turn whose events arrive through the chat's feed
- *  (multi-chat.spec.md Stage 3). Resolves once the server started it. */
-export async function sendDetached(message: string, sessionId?: string, model?: string): Promise<void> {
+ *  (multi-chat.spec.md Stage 3). Resolves once the server started it. skill
+ *  is the chat's skill David invoked for the message with /name, sent apart
+ *  from its text (skills.spec.md, Owner invocation). */
+export async function sendDetached(message: string, sessionId?: string, model?: string, skill?: string): Promise<void> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, sessionId, model, detach: true }),
+    body: JSON.stringify({ message, sessionId, model, detach: true, skill }),
   });
   if (!res.ok) throw new ApiError(res.status, await errorText(res));
 }

@@ -7,7 +7,8 @@ import { readHistory } from "../api/history";
 import { answerApproval } from "../api/approve";
 import { ApiError, StreamTruncated, followChat, sendDetached } from "../api/stream";
 import { cancelTurn, compactSession, compactionNotice, type ComposerNotice } from "../api/turnControls";
-import { composerCommand } from "../chat/composerCommand";
+import type { ChatSkill } from "../api/skills";
+import { composerCommand, outgoingMessage, type Outgoing } from "../chat/composerCommand";
 import { approvalAlternative } from "../chat/approvalArgs";
 import { isOwnerStop, type ServerEvent } from "./events";
 import { appendUser, reduce, setApprovalAlwaysApplies, setApprovalState, type Item } from "./reducer";
@@ -17,7 +18,7 @@ export type Status = "idle" | "streaming" | "error";
 // Each chat's last view, so switching back shows it at once while its
 // history and feed catch up; queued messages wait with their chat
 // (multi-chat.spec.md Stage 3).
-const views = new Map<string, { items: Item[]; queue: string[] }>();
+const views = new Map<string, { items: Item[]; queue: Outgoing[] }>();
 
 /** How long to wait before following a chat's feed again after it dropped. */
 const RECONNECT_MS = 1000;
@@ -66,8 +67,9 @@ export function splitBatch(
 export type Session = {
   items: Item[];
   status: Status;
-  /** Messages sent mid-turn, fired in order once the turn ends. */
-  queue: string[];
+  /** Messages sent mid-turn, each with its skill, fired in order once the
+   *  turn ends. */
+  queue: Outgoing[];
   clearQueue: () => void;
   /** Banner text when status is "error"; null otherwise. */
   problem: string | null;
@@ -93,7 +95,9 @@ export type Session = {
   retryHistory: () => void;
 };
 
-export function useSession(sessionId?: string, model?: string): Session {
+/** skills are the open chat's skills, which a draft starting with /name
+ *  invokes (skills.spec.md, Owner invocation); undefined until loaded. */
+export function useSession(sessionId?: string, model?: string, skills?: readonly ChatSkill[]): Session {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyProblem, setHistoryProblem] = useState<string | null>(null);
   const [before, setBefore] = useState<string>();
@@ -108,7 +112,7 @@ export function useSession(sessionId?: string, model?: string): Session {
   const latestItems = useRef(items);
   latestItems.current = items;
   const [status, setStatus] = useState<Status>("idle");
-  const [queue, setQueue] = useState<string[]>([]);
+  const [queue, setQueue] = useState<Outgoing[]>([]);
   const latestQueue = useRef(queue);
   latestQueue.current = queue;
   const [problem, setProblem] = useState<string | null>(null);
@@ -199,6 +203,40 @@ export function useSession(sessionId?: string, model?: string): Session {
     return true;
   }, [status, compacting, sessionId]);
 
+  // start sends one message, with its skill, as a new turn.
+  const start = useCallback(
+    (outgoing: Outgoing): boolean => {
+      if (!historyReady.current || historyLoading || historyProblem || historySession.current !== sessionId) return false;
+      // A turn holds the session lock server-side (a second Send is a 409),
+      // so mid-turn messages pool here instead. A queued message is NOT in
+      // items — the transcript must never claim the server saw something it
+      // hasn't.
+      if (status === "streaming" || compacting) {
+        setQueue((q) => [...q, outgoing]);
+        return true;
+      }
+
+      setItems((prev) => appendUser(prev, outgoing.message, outgoing.skill));
+      setStatus("streaming");
+      setProblem(null);
+      setNotice(null);
+
+      // The turn runs on the server whether or not this tab stays; its
+      // events arrive through the chat's feed, which this view follows.
+      const generation = epoch.current;
+      sendDetached(outgoing.message, sessionId, model, outgoing.skill).catch((err: unknown) => {
+        if (generation !== epoch.current) return;
+        setStopping(false);
+        flush(false);
+        setItems((prev) => reduce(prev, { type: "error", message: describe(err) }));
+        setProblem(describe(err));
+        setStatus("error");
+      });
+      return true;
+    },
+    [flush, status, compacting, historyLoading, historyProblem, sessionId, model],
+  );
+
   const send = useCallback(
     (text: string): boolean => {
       const message = text.trim();
@@ -211,34 +249,16 @@ export function useSession(sessionId?: string, model?: string): Session {
       if (command?.kind === "compact") return compact();
       // The composer opens the model picker before sending; never send it as text.
       if (command?.kind === "model") return false;
-      // A turn holds the session lock server-side (a second Send is a 409),
-      // so mid-turn messages pool here instead. A queued message is NOT in
-      // items — the transcript must never claim the server saw something it
-      // hasn't.
-      if (status === "streaming" || compacting) {
-        setQueue((q) => [...q, message]);
-        return true;
+      // `/name` sends with the chat's skill; one it doesn't have is refused
+      // here rather than sent as text.
+      const outgoing = outgoingMessage(message, skills);
+      if ("unknownSkill" in outgoing) {
+        setNotice({ tone: "warning", text: skills ? `This chat has no skill /${outgoing.unknownSkill}.` : "This chat's skills haven't loaded yet. Try again in a moment." });
+        return false;
       }
-
-      setItems((prev) => appendUser(prev, message));
-      setStatus("streaming");
-      setProblem(null);
-      setNotice(null);
-
-      // The turn runs on the server whether or not this tab stays; its
-      // events arrive through the chat's feed, which this view follows.
-      const generation = epoch.current;
-      sendDetached(message, sessionId, model).catch((err: unknown) => {
-        if (generation !== epoch.current) return;
-        setStopping(false);
-        flush(false);
-        setItems((prev) => reduce(prev, { type: "error", message: describe(err) }));
-        setProblem(describe(err));
-        setStatus("error");
-      });
-      return true;
+      return start(outgoing);
     },
-    [flush, compact, status, compacting, historyLoading, historyProblem, sessionId, model],
+    [compact, start, skills, historyLoading, historyProblem, sessionId],
   );
 
   // Stopping is a request: the turn keeps streaming until the server records
@@ -432,8 +452,8 @@ export function useSession(sessionId?: string, model?: string): Session {
     if (status !== "idle" || compacting || queue.length === 0 || !historyReady.current || historySession.current !== sessionId) return;
     const [next, ...rest] = queue;
     setQueue(rest);
-    send(next);
-  }, [status, compacting, queue, send, sessionId]);
+    start(next);
+  }, [status, compacting, queue, start, sessionId]);
 
   return { items: historySession.current === sessionId ? items : (sessionId ? views.get(sessionId)?.items : undefined) ?? [], status, queue, clearQueue: () => setQueue([]), problem, send, answer, setAlwaysApplies, stop, stopping, compacting, notice, dismissProblem, reset, historyLoading, historyProblem, hasOlder: !!before, loadOlder: () => void loadHistory(before), retryHistory: () => { if (historyCursor.current || !sessionId) void loadHistory(historyCursor.current); else follow(sessionId); } };
 }

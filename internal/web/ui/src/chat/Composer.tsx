@@ -3,12 +3,14 @@
 // disables it until the server and displayed scope agree. While a turn
 // streams it also offers Stop, and composer command results report below it.
 // It shares the transcript's centered column. A bare "/" prefix opens the
-// command menu; popovers such as the model picker float above the box.
+// menu of commands and the chat's skills; popovers such as the model picker
+// float above the box.
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import type { ChatSkill } from "../api/skills";
 import type { ComposerNotice } from "../api/turnControls";
 import { ArrowUp, StopSquare } from "../ui/Icon";
-import { slashMatches } from "./composerCommand";
+import { menuChoice, outgoingMessage, slashMenu, type MenuOption } from "./composerCommand";
 
 type Props = {
   value: string;
@@ -28,19 +30,53 @@ type Props = {
   stopping?: boolean;
   /** The latest composer command's result, such as a compaction outcome. */
   notice?: ComposerNotice | null;
+  /** The chat's skills, listed after the commands (skills.spec.md). */
+  skills?: readonly ChatSkill[];
 };
 
-export function Composer({ value, onChange, onSend, onCommand, streaming, disabled = false, overlay, after, onStop, stopping = false, notice }: Props) {
+type MenuRow = MenuOption & { detail: string; hint: boolean; ownerOnly: boolean };
+
+export function Composer({ value, onChange, onSend, onCommand, streaming, disabled = false, overlay, after, onStop, stopping = false, notice, skills = [] }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const menuID = useId();
   // Highlight and dismissal belong to the draft they were set for, so any edit
   // reopens the menu at its first match.
   const [menu, setMenu] = useState({ draft: value, index: 0, dismissed: false });
-  const matches = disabled || overlay ? [] : slashMatches(value);
+  const slash = disabled || overlay ? { commands: [], skills: [] } : slashMenu(value, skills);
+  const commandRows: MenuRow[] = slash.commands.map((command) => ({ kind: "command", name: command.name, detail: command.description, hint: false, ownerOnly: false }));
+  const skillRows: MenuRow[] = slash.skills.map((skill) => ({
+    kind: "skill", name: skill.name, detail: skill.argumentHint || skill.description, hint: !!skill.argumentHint, ownerOnly: skill.ownerOnly,
+  }));
+  const matches = [...commandRows, ...skillRows];
   const current = menu.draft === value ? menu : { draft: value, index: 0, dismissed: false };
   const menuOpen = matches.length > 0 && !current.dismissed;
   const active = Math.min(current.index, matches.length - 1);
   const run = (command: string) => (onCommand ? onCommand(command) : onChange(command));
+  // A command runs at once; a skill fills the draft for the request.
+  const choose = (option: MenuOption) => {
+    const choice = menuChoice(option);
+    if ("run" in choice) run(choice.run);
+    else onChange(choice.draft);
+  };
+  const invoked = menuOpen ? undefined : outgoingMessage(value, skills);
+  const invokedSkill = invoked && "skill" in invoked ? invoked.skill : undefined;
+  const option = (row: MenuRow, i: number) => (
+    <div
+      key={`${row.kind}:${row.name}`}
+      id={`${menuID}-${i}`}
+      role="option"
+      aria-selected={i === active}
+      onMouseDown={(e) => e.preventDefault()}
+      onMouseEnter={() => setMenu({ draft: value, index: i, dismissed: false })}
+      onClick={() => choose(row)}
+      className={`${i === active ? "bg-hover" : ""} flex cursor-pointer items-baseline gap-3 rounded-md px-2.5 py-1.5 text-[13px]`}
+    >
+      <span className="text-ink min-w-[92px] flex-none font-mono">{row.kind === "skill" ? `/${row.name}` : row.name}</span>
+      <span className={`${row.hint ? "text-body" : "text-muted-text"} min-w-0 truncate`}>{row.detail}</span>
+      {row.ownerOnly && <span className="border-hair-input text-muted-text ml-auto flex-none rounded-[10px] border px-[7px] text-[11px]">you only</span>}
+    </div>
+  );
+  const heading = (text: string) => <div role="presentation" className="text-faint px-2.5 pt-1.5 pb-1 text-[11px] tracking-[0.02em]">{text}</div>;
 
   // Grow with the content instead of scrolling inside one row. Reset to auto
   // first so deleting a line shrinks it back.
@@ -57,22 +93,13 @@ export function Composer({ value, onChange, onSend, onCommand, streaming, disabl
         <div className="relative">
           {overlay}
           {menuOpen && (
-            <div id={menuID} role="listbox" aria-label="Commands" className="bg-card border-hair-input absolute bottom-full left-0 z-30 mb-2 w-[min(360px,100%)] overflow-hidden rounded-xl border p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
-              {matches.map((command, i) => (
-                <div
-                  key={command.name}
-                  id={`${menuID}-${i}`}
-                  role="option"
-                  aria-selected={i === active}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onMouseEnter={() => setMenu({ draft: value, index: i, dismissed: false })}
-                  onClick={() => run(command.name)}
-                  className={`${i === active ? "bg-hover" : ""} flex cursor-pointer items-baseline gap-3 rounded-md px-2 py-1.5 text-[13px]`}
-                >
-                  <span className="text-ink font-mono">{command.name}</span>
-                  <span className="text-muted-text min-w-0 truncate">{command.description}</span>
-                </div>
-              ))}
+            <div id={menuID} role="listbox" aria-label="Commands and skills" className="bg-card border-hair-input absolute bottom-full left-0 z-30 mb-2 max-h-[min(420px,60vh)] w-full overflow-y-auto rounded-xl border p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
+              {commandRows.length > 0 && heading("Commands")}
+              {commandRows.map((row, i) => option(row, i))}
+              {commandRows.length > 0 && skillRows.length > 0 && <div role="presentation" className="bg-hair-strong mx-2.5 my-1.5 h-px" />}
+              {skillRows.length > 0 && heading("Skills")}
+              {skillRows.map((row, i) => option(row, commandRows.length + i))}
+              <div role="presentation" className="text-faint px-2.5 pt-1.5 pb-1 text-[11px]">Type to filter · ↑↓ to move · Enter to choose</div>
             </div>
           )}
           <div
@@ -107,12 +134,13 @@ export function Composer({ value, onChange, onSend, onCommand, streaming, disabl
                   }
                   if (e.key === "Tab") {
                     e.preventDefault();
-                    onChange(matches[active].name);
+                    const choice = menuChoice(matches[active]);
+                    onChange("run" in choice ? choice.run : choice.draft);
                     return;
                   }
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    run(matches[active].name);
+                    choose(matches[active]);
                     return;
                   }
                 }
@@ -148,6 +176,7 @@ export function Composer({ value, onChange, onSend, onCommand, streaming, disabl
             </div>
           </div>
         </div>
+        {invokedSkill && <p className="text-faint mt-2 px-1.5 text-xs">Enter sends your request with the {invokedSkill} skill.</p>}
         {notice && (
           <p role="status" className={`mt-2 text-xs ${notice.tone === "warning" ? "text-amber-ink" : "text-muted-text"}`}>
             {notice.text}

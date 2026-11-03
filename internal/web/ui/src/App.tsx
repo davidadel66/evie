@@ -1,6 +1,7 @@
 import { ModelPicker, ModelProblem } from "./chat/ModelSelector";
-import { composerCommand } from "./chat/composerCommand";
+import { composerCommand, draftText } from "./chat/composerCommand";
 import { useChatModels } from "./store/useChatModels";
+import { useChatSkills } from "./store/useChatSkills";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ContextScope,
@@ -62,7 +63,8 @@ const chatView: WorkbenchView = { id: "chat", kind: "chat" };
 export default function App() {
   const contextSessions = useContextSessions();
   const chatModels = useChatModels(contextSessions.snapshot?.activeSession?.id);
-  const { items, status, queue, clearQueue, problem, send, answer, setAlwaysApplies, stop, stopping, compacting, notice, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id, chatModels.catalog?.model);
+  const chatSkills = useChatSkills(contextSessions.snapshot?.activeSession?.id);
+  const { items, status, queue, clearQueue, problem, send, answer, setAlwaysApplies, stop, stopping, compacting, notice, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id, chatModels.catalog?.model, chatSkills.skills);
   // A running compaction holds the conversation like a turn: the server
   // refuses session and model changes until it finishes.
   const working = status === "streaming" || compacting;
@@ -413,7 +415,7 @@ export default function App() {
                       const sessionId = contextSessions.snapshot?.activeSession?.id;
                       if (sessionId) void contextSessions.select({sessionId}).then(() => { chatModels.refresh(); dismissProblem(); }).catch(() => {});
                     }} />{status === "error" && queue.length > 0 && <button type="button" className="text-muted-text mt-2 text-xs underline" onClick={() => {
-                      setDraft([...queue, draft].filter(Boolean).join("\n\n"));
+                      setDraft([...queue.map(draftText), draft].filter(Boolean).join("\n\n"));
                       clearQueue();
                     }}>Return queued messages to draft</button>}</>}
                     onSend={() => submit(draft)}
@@ -422,13 +424,14 @@ export default function App() {
                       // Stop means stop: queued messages return to the draft
                       // instead of firing once the turn ends.
                       if (queue.length > 0) {
-                        setDraft([...queue, draft].filter(Boolean).join("\n\n"));
+                        setDraft([...queue.map(draftText), draft].filter(Boolean).join("\n\n"));
                         clearQueue();
                       }
                       stop();
                     }}
                     stopping={stopping}
                     notice={notice}
+                    skills={chatSkills.skills}
                   />
                 </>
               ) : (

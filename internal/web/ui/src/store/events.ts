@@ -51,7 +51,7 @@ export type ServerEvent =
   /** A chat feed's first event: whether a turn is running (multi-chat.spec.md). */
   | { type: "feed_state"; running: boolean }
   /** The owner's message of the turn it starts, as a chat feed reports it. */
-  | { type: "user_message"; turnId: string; text: string }
+  | { type: "user_message"; turnId: string; text: string; skill?: string }
   /** How an approval ended, as a chat feed reports it. */
   | { type: "approval_decided"; id: string; state: "approved" | "declined" | "expired" };
 
