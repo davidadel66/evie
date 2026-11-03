@@ -84,6 +84,7 @@ var goldenCommands = []string{
 	"evie skills",
 	"evie skills approve",
 	"evie skills deactivate",
+	"evie skills import-claude",
 	"evie skills list",
 	"evie skills propose",
 	"evie skills show",
