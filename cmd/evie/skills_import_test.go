@@ -260,6 +260,39 @@ func TestSkillCLIApproveImportActivatesTheReportedVersions(t *testing.T) {
 	}
 }
 
+// A plugin can list its skill folders in .claude-plugin/plugin.json, as
+// mattpocock-skills does with folders grouped under skills/<group>/. The
+// migration reads those as well as skills/<name>/, and a listed path that
+// leaves the plugin's folder, or names no skill, is reported, not read.
+func TestSkillCLIImportClaudeReadsSkillsAPluginLists(t *testing.T) {
+	c := newSkillCLI(t)
+	root := ".claude/plugins/cache/market/eng-skills/1.3.1"
+	install := filepath.Join(c.home, filepath.FromSlash(root))
+	c.homeSkill(root+"/skills/engineering", "tdd", "Test first (plugin).", nil)
+	c.homeSkill(root+"/skills/productivity", "grilling", "Grill a plan.", nil)
+	c.homeSkill(root+"/skills", "plain", "A skill in the default folder.", nil)
+	c.homeSkill(".claude/plugins/cache/market", "outside", "Not the plugin's own.", nil)
+	writeFiles(t, install, map[string]string{".claude-plugin/plugin.json": `{
+  "name": "eng-skills",
+  "version": "1.3.1",
+  "skills": ["./skills/engineering/tdd", "./skills/productivity/grilling", "./skills/plain", "../../outside", "./skills/engineering/missing"]
+}`})
+	writeFiles(t, filepath.Join(c.home, ".claude", "plugins"), map[string]string{"installed_plugins.json": `{"plugins": {"eng-skills@market": [{"installPath": "` + install + `", "version": "1.3.1"}]}}`})
+
+	report := c.mustRun("skills", "import-claude", "--plugins")
+	proposed := importSection(report, "Proposed")
+	mustContain(t, "listed plugin skills", proposed,
+		"tdd  ", "from plugin eng-skills@market 1.3.1 (~/"+root+"/skills/engineering/tdd)",
+		"grilling  ", "from plugin eng-skills@market 1.3.1 (~/"+root+"/skills/productivity/grilling)",
+		"plain  ", "from plugin eng-skills@market 1.3.1 (~/"+root+"/skills/plain)")
+	if strings.Contains(report, "Not the plugin's own") || strings.Contains(proposed, "outside") || strings.Count(proposed, "plain  ") != 1 {
+		t.Fatalf("a path outside the plugin was read, or a skill was proposed twice:\n%s", report)
+	}
+	mustContain(t, "notes", importSection(report, "Notes"),
+		"plugin eng-skills@market lists ../../outside, which is outside its folder; it was not read",
+		"plugin eng-skills@market lists ./skills/engineering/missing, which holds no SKILL.md; it was not read")
+}
+
 // Installed Claude Code plugin skills are read only with --plugins, from
 // each install path that ~/.claude/plugins/installed_plugins.json lists,
 // last in precedence, and recorded with the plugin's name and version.

@@ -51,8 +51,76 @@ func claudeSkills(home string, plugins bool) ([]foundSkill, []string) {
 		installs, n := pluginInstalls(home)
 		notes = append(notes, n...)
 		for _, p := range installs {
-			add(filepath.Join(p.InstallPath, "skills"), eviedb.SkillSource{Kind: eviedb.SkillSourceClaudePlugin, Plugin: p.name, PluginVersion: p.Version})
+			source := eviedb.SkillSource{Kind: eviedb.SkillSourceClaudePlugin, Plugin: p.name, PluginVersion: p.Version}
+			before := len(found)
+			add(filepath.Join(p.InstallPath, "skills"), source)
+			seen := map[string]bool{}
+			for _, f := range found[before:] {
+				seen[f.dir] = true
+			}
+			listed, n := pluginListedSkills(p, source)
+			notes = append(notes, n...)
+			for _, f := range listed {
+				if !seen[f.dir] {
+					seen[f.dir] = true
+					found = append(found, f)
+				}
+			}
 		}
+	}
+	return found, notes
+}
+
+// pluginListedSkills reads the skill folders a plugin lists in the "skills"
+// field of its .claude-plugin/plugin.json (mattpocock-skills groups them
+// under skills/<group>/), a path or a list of paths relative to the plugin's
+// folder. A listed path must stay inside that folder and hold a SKILL.md;
+// anything else is noted and skipped. No plugin.json, or no field, lists
+// nothing.
+func pluginListedSkills(p pluginInstall, source eviedb.SkillSource) ([]foundSkill, []string) {
+	data, err := os.ReadFile(filepath.Join(p.InstallPath, ".claude-plugin", "plugin.json"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, []string{fmt.Sprintf("could not read plugin %s's plugin.json: %v; the skills it lists were not read", p.name, err)}
+	}
+	var manifest struct {
+		Skills json.RawMessage `json:"skills"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return nil, []string{fmt.Sprintf("plugin %s's plugin.json is not JSON; the skills it lists were not read", p.name)}
+	}
+	var paths []string
+	if len(manifest.Skills) > 0 {
+		if err := json.Unmarshal(manifest.Skills, &paths); err != nil {
+			var one string
+			if err := json.Unmarshal(manifest.Skills, &one); err != nil {
+				return nil, []string{fmt.Sprintf("plugin %s's plugin.json lists skills that are not paths; they were not read", p.name)}
+			}
+			paths = []string{one}
+		}
+	}
+	var found []foundSkill
+	var notes []string
+	for _, rel := range paths {
+		dir := filepath.Join(p.InstallPath, filepath.FromSlash(rel))
+		inside, err := filepath.Rel(p.InstallPath, dir)
+		if filepath.IsAbs(rel) || err != nil || inside == "." || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
+			notes = append(notes, fmt.Sprintf("plugin %s lists %s, which is outside its folder; it was not read", p.name, rel))
+			continue
+		}
+		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+			notes = append(notes, fmt.Sprintf("plugin %s lists %s, which holds no SKILL.md; it was not read", p.name, rel))
+			continue
+		}
+		if _, err := os.Lstat(filepath.Join(dir, skill.InstructionsFile)); err != nil {
+			notes = append(notes, fmt.Sprintf("plugin %s lists %s, which holds no SKILL.md; it was not read", p.name, rel))
+			continue
+		}
+		s := source
+		s.Path = dir
+		found = append(found, foundSkill{name: filepath.Base(dir), dir: dir, source: s})
 	}
 	return found, notes
 }
