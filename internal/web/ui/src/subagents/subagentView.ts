@@ -1,4 +1,4 @@
-import type { Subagent, SubagentAction, SubagentState } from "../api/subagents";
+import type { Subagent, SubagentAction, SubagentReport, SubagentState } from "../api/subagents";
 import { elapsedLabel, toolLabel, type ToolItem } from "../chat/activityModel";
 
 // Presentation of delegated children (chat-activity.spec.md, subagent
@@ -50,4 +50,29 @@ export function subagentActionText(action: SubagentAction): string {
 export function subagentElapsed(child: Subagent, now: number): string | null {
   if (!child.startedAt) return null;
   return elapsedLabel(Date.parse(child.startedAt), child.endedAt ? Date.parse(child.endedAt) : now);
+}
+
+/** The worker detail's two views (artifacts.spec.md). */
+export type SubagentView = "report" | "activity";
+
+/**
+ * Report once the child ended with a report; Activity while it runs or when
+ * it ended without one. Before its report is read, a finished child that
+ * succeeded or stopped partway is expected to have one.
+ */
+export function subagentDefaultView(child: Subagent, report?: SubagentReport): SubagentView {
+  if (!subagentFinished(child.state)) return "activity";
+  if (report) return report.text === undefined ? "activity" : "report";
+  return child.state === "succeeded" || child.state === "partial" ? "report" : "activity";
+}
+
+const workerLabels: Record<string, string> = {research: "Research worker", explore: "Explore worker", build: "Build worker"};
+
+/** Evie's line above a report: the worker kind, how it ended and why. */
+export function subagentReportFacts(report: SubagentReport): string {
+  return [
+    workerLabels[report.worker] ?? `${report.worker} worker`,
+    subagentStateLabel(report.status),
+    report.reason ? `Reason: ${report.reason.replaceAll("_", " ")}` : "",
+  ].filter(Boolean).join(" · ");
 }

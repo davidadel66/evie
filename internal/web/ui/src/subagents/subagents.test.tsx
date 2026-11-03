@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { subagentAPI, type Subagent } from "../api/subagents";
+import { subagentAPI, type Subagent, type SubagentReport } from "../api/subagents";
 import { Activity } from "../chat/Activity";
 import { activityTurns, type ToolItem } from "../chat/activityModel";
 import { appendUser, reduce, type Item } from "../store/reducer";
@@ -69,6 +69,79 @@ describe("subagent presentation", () => {
     expect(html).not.toContain("framed assignment");
   });
 
+  it("shows a finished child's report as an inert document", () => {
+    const text = [
+      "## Findings",
+      "Quoted page: <script>alert(1)</script> and <img src=x onerror=alert(2)> inline.",
+      "",
+      "<div class=\"embed\"><iframe src=\"https://evil.example/frame\"></iframe></div>",
+      "",
+      "See [bad](javascript:alert(3)), [local](/api/settings), [source](https://example.com/a) and [plain](http://example.org/b).",
+      "",
+      "![tracking pixel](https://evil.example/pixel.png) ![local picture](/logo.png)",
+    ].join("\n");
+    const report = {executionId: "child", worker: "research", status: "succeeded" as const, text, totalBytes: text.length, omittedBytes: 0};
+    const html = renderToStaticMarkup(<SubagentDetailView child={child({state: "succeeded", endedAt: "2026-10-12T13:10:42Z"})} report={report} now={0} onBack={() => undefined} onSelect={() => undefined} />);
+    for (const visible of ["&lt;script&gt;alert(1)&lt;/script&gt;", "onerror=alert(2)", "&lt;iframe", "bad", "local", "local picture"]) expect(html).toContain(visible);
+    for (const element of ["<script", "<img", "<iframe", '<link rel="preload"']) expect(html).not.toContain(element);
+    expect(html).not.toMatch(/<[^>]*\son[a-z]+=/i);
+    const hrefs = [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
+    expect(hrefs).toEqual(["https://example.com/a", "http://example.org/b", "https://evil.example/pixel.png"]);
+    expect(html).toMatch(/<a [^>]*href="https:\/\/example\.com\/a"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*>source<\/a>/);
+    expect(html).toMatch(/<a [^>]*href="https:\/\/evil\.example\/pixel\.png"[^>]*>tracking pixel<\/a>/);
+  });
+
+  it("opens on Report once a child ended with a report, and on Activity while it runs or without one", () => {
+    const items: Item[] = [{kind: "user", key: "u", text: "framed"}, {kind: "assistant", key: "a", text: "Activity sentinel.", streaming: false}];
+    const done = child({state: "succeeded", endedAt: "2026-10-12T13:10:42Z"});
+    const render = (props: Partial<Parameters<typeof SubagentDetailView>[0]>) =>
+      renderToStaticMarkup(<SubagentDetailView child={done} trace={{subagent: done, items}} now={0} onBack={() => undefined} onSelect={() => undefined} {...props} />);
+    const selected = (html: string) => html.match(/aria-selected="true"[^>]*>([^<]+)</)?.[1];
+
+    const withReport = render({report: {executionId: "child", worker: "research", status: "succeeded", text: "Report sentinel.", totalBytes: 16, omittedBytes: 0}});
+    expect(selected(withReport)).toBe("Report");
+    expect(withReport).toContain("Report sentinel.");
+    expect(withReport).not.toContain("Activity sentinel.");
+    // Before its report is read, a child that succeeded is expected to have one.
+    expect(selected(render({}))).toBe("Report");
+
+    const running = render({child: child({state: "running"})});
+    expect(selected(running)).toBe("Activity");
+    expect(running).toContain("Activity sentinel.");
+
+    const without = render({child: child({state: "interrupted", endedAt: "2026-10-12T13:10:42Z"}), report: {executionId: "child", worker: "research", status: "interrupted", reason: "no_accepted_final_answer", totalBytes: 0, omittedBytes: 0}});
+    expect(selected(without)).toBe("Activity");
+    expect(without).toContain("Activity sentinel.");
+    // A record from before final report events succeeded without one.
+    expect(selected(render({report: {executionId: "child", worker: "research", status: "succeeded", totalBytes: 0, omittedBytes: 0}}))).toBe("Activity");
+
+    // A tab David picked stays picked.
+    expect(selected(render({view: "activity", report: {executionId: "child", worker: "research", status: "succeeded", text: "x", totalBytes: 1, omittedBytes: 0}}))).toBe("Activity");
+  });
+
+  it("says when a child produced no report, stopped partway, is still running, or was cut", () => {
+    const render = (state: Subagent["state"], report?: SubagentReport) =>
+      renderToStaticMarkup(<SubagentDetailView child={child({state, endedAt: state === "running" ? undefined : "2026-10-12T13:10:42Z"})} report={report} view="report" now={0} onBack={() => undefined} onSelect={() => undefined} />);
+
+    const none = render("interrupted", {executionId: "child", worker: "explore", status: "interrupted", reason: "no_accepted_final_answer", totalBytes: 0, omittedBytes: 0});
+    expect(none).toContain("This worker produced no report.");
+    expect(none).toContain("Explore worker · Interrupted · Reason: no accepted final answer");
+    expect(none).not.toContain("Written by the worker");
+
+    const partial = render("partial", {executionId: "child", worker: "research", status: "partial", reason: "time_budget", text: "Half the findings.", totalBytes: 18, omittedBytes: 0});
+    expect(partial).toContain("Research worker · Partial report · Reason: time budget");
+    expect(partial).toContain("This report is partial: the worker stopped before it finished.");
+    // Evie's line sits above the worker's text, outside it.
+    expect(partial.indexOf("Research worker · Partial report")).toBeLessThan(partial.indexOf("Written by the worker"));
+    expect(partial.indexOf("Written by the worker")).toBeLessThan(partial.indexOf("Half the findings."));
+
+    expect(render("running")).toContain("The report appears when the worker finishes.");
+
+    const cut = render("succeeded", {executionId: "child", worker: "research", status: "succeeded", text: "Long findings.", totalBytes: 1_200_011, omittedBytes: 151_436});
+    expect(cut).toContain("Cut for display: the last 151,436 of its 1,200,011 bytes are not shown.");
+    expect(render("succeeded", {executionId: "child", worker: "research", status: "succeeded", text: "Whole.", totalBytes: 6, omittedBytes: 0})).not.toContain("Cut for display");
+  });
+
   it("reads one call's children and one child's trace for the open conversation", async () => {
     const fetchMock = vi.fn(async () => new Response('{"subagents":[]}'));
     vi.stubGlobal("fetch", fetchMock);
@@ -76,6 +149,13 @@ describe("subagent presentation", () => {
     await subagentAPI.trace("session", "child");
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/subagents/list", expect.objectContaining({body: JSON.stringify({sessionId: "session", turnId: "turn", callId: "call"})}));
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/subagents/trace", expect.objectContaining({body: JSON.stringify({sessionId: "session", executionId: "child"})}));
+  });
+
+  it("reads one child's report for the open conversation", async () => {
+    const fetchMock = vi.fn(async () => new Response('{"report":{"executionId":"child","worker":"research","status":"succeeded","text":"x","totalBytes":1,"omittedBytes":0}}'));
+    vi.stubGlobal("fetch", fetchMock);
+    expect((await subagentAPI.report("session", "child")).text).toBe("x");
+    expect(fetchMock).toHaveBeenCalledWith("/api/subagents/report", expect.objectContaining({method: "POST", body: JSON.stringify({sessionId: "session", executionId: "child"})}));
   });
 
   it("names a waiting delegate row by what it does", () => {

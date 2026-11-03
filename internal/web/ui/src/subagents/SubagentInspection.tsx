@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
-import { subagentAPI, type Subagent, type SubagentAPI, type SubagentTrace } from "../api/subagents";
+import { useEffect, useId, useState, type KeyboardEvent } from "react";
+import { subagentAPI, type Subagent, type SubagentAPI, type SubagentReport, type SubagentTrace } from "../api/subagents";
 import { ToolDebugDetails, ToolInspection } from "../artifacts/ToolInspection";
 import { ActivityItems } from "../chat/Activity";
 import type { ToolItem } from "../chat/activityModel";
+import { Markdown } from "../chat/Markdown";
 import { ChevronDown } from "../ui/Icon";
-import { subagentActionText, subagentElapsed, subagentFinished, subagentProgressLabel, subagentStateLabel, subagentStateTone } from "./subagentView";
+import { subagentActionText, subagentDefaultView, subagentElapsed, subagentFinished, subagentProgressLabel, subagentReportFacts, subagentStateLabel, subagentStateTone, type SubagentView } from "./subagentView";
 import { useSubagentList } from "./useSubagents";
 
 // The children one chat row started (chat-activity.spec.md, subagent
 // inspector amendment): each child's state and latest action, kept current
-// while any is unfinished; one child's own trace; and one of its actions.
+// while any is unfinished; one child's own trace or its report
+// (artifacts.spec.md); and one of its actions.
 export function SubagentInspection({tool, sessionId, api = subagentAPI}: {tool: ToolItem; sessionId: string; api?: SubagentAPI}) {
   const {list, problem} = useSubagentList(sessionId, tool, tool.result === undefined, api);
   const [open, setOpen] = useState<string>();
@@ -53,17 +55,35 @@ export function SubagentList({list, tool, now, problem, onOpen}: {list: Subagent
 
 function SubagentDetail({child, sessionId, api, now, onBack}: {child: Subagent; sessionId: string; api: SubagentAPI; now: number; onBack: () => void}) {
   const trace = useSubagentTrace(sessionId, child, api);
+  const report = useSubagentReport(sessionId, child, api);
   const [selected, setSelected] = useState<string>();
+  // Unset follows the default view until David picks one.
+  const [view, setView] = useState<SubagentView>();
   const action = trace.value?.items.find((item): item is ToolItem => item.kind === "tool" && item.key === selected);
   if (action) return <div>
     <BackButton label="Back to subagent" onClick={() => setSelected(undefined)} />
     <ToolInspection tool={action} />
   </div>;
-  return <SubagentDetailView child={child} trace={trace.value} problem={trace.problem} now={now} onBack={onBack} onSelect={setSelected} />;
+  return <SubagentDetailView child={child} trace={trace.value} problem={trace.problem} report={report.value} reportProblem={report.problem} view={view} now={now} onBack={onBack} onSelect={setSelected} onView={setView} />;
 }
 
-export function SubagentDetailView({child, trace, problem, now, onBack, onSelect}: {child: Subagent; trace?: SubagentTrace; problem?: string; now: number; onBack: () => void; onSelect: (key: string) => void}) {
+export function SubagentDetailView({child, trace, problem, report, reportProblem, view: picked, now, onBack, onSelect, onView = () => undefined}: {
+  child: Subagent; trace?: SubagentTrace; problem?: string; report?: SubagentReport; reportProblem?: string;
+  /** The view David picked; unset follows the default. */
+  view?: SubagentView;
+  now: number; onBack: () => void; onSelect: (key: string) => void; onView?: (view: SubagentView) => void;
+}) {
   const live = !subagentFinished(child.state);
+  const view = picked ?? subagentDefaultView(child, report);
+  const id = useId();
+  const tabs: SubagentView[] = ["report", "activity"];
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const next = view === "report" ? "activity" : "report";
+    onView(next);
+    (event.currentTarget.parentElement?.children[tabs.indexOf(next)] as HTMLButtonElement | undefined)?.focus();
+  };
   return <div>
     <BackButton label="All subagents" onClick={onBack} />
     <div className="space-y-5 px-5 pb-5">
@@ -77,14 +97,44 @@ export function SubagentDetailView({child, trace, problem, now, onBack, onSelect
         <p className="mt-2 max-h-60 overflow-auto leading-relaxed whitespace-pre-wrap break-words">{child.context}</p>
       </details>}
     </div>
-    <div className="border-hair space-y-3 border-t pt-4">
+    <div className="border-hair border-t">
+      <div role="tablist" aria-label="Subagent view" className="border-hair flex gap-4 border-b">
+        {tabs.map((tab) => <button key={tab} id={`${id}-${tab}`} type="button" role="tab" aria-selected={view === tab} aria-controls={`${id}-panel`} tabIndex={view === tab ? 0 : -1}
+          onClick={() => onView(tab)} onKeyDown={onKeyDown}
+          className={`focus-visible:outline-teal -mb-px cursor-pointer border-b-2 py-2 text-xs focus-visible:outline-2 ${view === tab ? "border-teal text-body" : "text-muted-text hover:text-body border-transparent"}`}>
+          {tab === "report" ? "Report" : "Activity"}
+        </button>)}
+      </div>
+      <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${view}`} className="space-y-3 pt-4">
+      {view === "report" ? <SubagentReportView child={child} report={report} problem={reportProblem} /> : <>
       {problem && <p role="alert" className="text-amber-ink text-xs">{problem}</p>}
       {!trace ? !problem && <p role="status" className="text-muted-text text-xs">Loading its activity…</p>
         : <ActivityItems items={trace.items} active={live} onAnswer={() => undefined} onOpenTool={(key) => onSelect(key)} onOpenFile={(key) => onSelect(key)} />}
       {trace && trace.items.length <= 1 && <p className="text-muted-text text-xs">{live ? "Starting…" : "No activity was recorded."}</p>}
+      </>}
+      </div>
     </div>
     </div>
   </div>;
+}
+
+/** A child's stored report as an inert document, below Evie's line about how
+ *  it ended; or why there is none to show. */
+export function SubagentReportView({child, report, problem}: {child: Subagent; report?: SubagentReport; problem?: string}) {
+  if (!subagentFinished(child.state)) return <p role="status" className="text-muted-text text-xs">The report appears when the worker finishes.</p>;
+  if (problem) return <p role="alert" className="text-amber-ink text-xs">{problem}</p>;
+  if (!report) return <p role="status" className="text-muted-text text-xs">Loading its report…</p>;
+  return <>
+    <p className="text-muted-text text-xs">{subagentReportFacts(report)}</p>
+    {report.text === undefined ? <p className="text-body text-[13px]">This worker produced no report.</p> : <section aria-label="Written by the worker" className="space-y-2">
+      <p className="text-muted-text text-xs">Written by the worker</p>
+      {report.status === "partial" && <p className="text-amber-ink text-xs">This report is partial: the worker stopped before it finished.</p>}
+      <div className="border-hair rounded-md border px-4 py-3"><Markdown text={report.text} streaming={false} inert /></div>
+      {report.omittedBytes > 0 && <p className="text-amber-ink text-xs">
+        Cut for display: the last {report.omittedBytes.toLocaleString("en-US")} of its {report.totalBytes.toLocaleString("en-US")} bytes are not shown.
+      </p>}
+    </section>}
+  </>;
 }
 
 function StateLabel({child}: {child: Subagent}) {
@@ -121,6 +171,24 @@ function useSubagentTrace(sessionId: string, child: Subagent, api: SubagentAPI) 
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [api, sessionId, child.executionId, live]);
   return {value, problem};
+}
+
+// A child's stored report, read once after it finishes: a finished attempt's
+// report never changes, so it is not polled.
+function useSubagentReport(sessionId: string, child: Subagent, api: SubagentAPI): {value?: SubagentReport; problem?: string} {
+  const [read, setRead] = useState<{executionId: string; value?: SubagentReport; problem?: string}>();
+  const finished = subagentFinished(child.state);
+  useEffect(() => {
+    if (!finished) return;
+    const controller = new AbortController();
+    api.report(sessionId, child.executionId, controller.signal).then((value) => {
+      if (!controller.signal.aborted) setRead({executionId: child.executionId, value});
+    }, (error: unknown) => {
+      if (!controller.signal.aborted) setRead({executionId: child.executionId, problem: error instanceof Error ? error.message : "The report could not be read."});
+    });
+    return () => controller.abort();
+  }, [api, sessionId, child.executionId, finished]);
+  return read?.executionId === child.executionId ? read : {};
 }
 
 function useNow(ticking: boolean): number {
