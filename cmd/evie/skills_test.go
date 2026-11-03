@@ -230,6 +230,116 @@ func TestSkillCLIProposeReportsClaudeCodeOnlyFeatures(t *testing.T) {
 		"Argument hint: [pr-number]", "License: MIT", "Owner-only: invoked with /review-pr", "inline shell commands")
 }
 
+// Claude Code documents argument-hint unquoted, as in `argument-hint:
+// [pr-number] [priority]`, which is not YAML on its own: such a value is
+// read as its raw text. A YAML list is read as its items, each in
+// brackets.
+func TestSkillCLIProposeReadsClaudeCodeArgumentHints(t *testing.T) {
+	c := newSkillCLI(t)
+	for _, tc := range []struct{ name, line, want string }{
+		{"review-pr", "argument-hint: [pr-number] [priority]", "[pr-number] [priority]"},
+		{"commit", "argument-hint: [message]", "[message]"},
+		{"fix-issue", "argument-hint: [issue, branch]", "[issue] [branch]"},
+		{"hand-off", "argument-hint:\n  - next phase", "[next phase]"},
+	} {
+		dir := writeSkillFolder(t, tc.name, map[string]string{"SKILL.md": "---\nname: " + tc.name + "\ndescription: Do it.\n" + tc.line + "\n---\nGo.\n"})
+		proposed := c.mustRun("skills", "propose", dir)
+		if strings.Contains(proposed, "argument-hint") || !strings.Contains(proposed, "Warnings: none") {
+			t.Fatalf("%s: the hint was not read:\n%s", tc.name, proposed)
+		}
+		mustContain(t, "show "+tc.name, c.mustRun("skills", "show", tc.name), "Argument hint: "+tc.want+"\n")
+	}
+}
+
+// Operating-system and version-control clutter anywhere in a skill folder
+// (the Finder's .DS_Store and Icon\r, AppleDouble ._ files, and .git
+// folders and files) is skipped: never committed or listed in the
+// manifest, and reported as a warning.
+func TestSkillCLIProposeSkipsOSAndVersionControlClutter(t *testing.T) {
+	c := newSkillCLI(t)
+	dir := writeSkillFolder(t, "grilling", map[string]string{
+		"SKILL.md":                    grillingSkill,
+		"references/questions.md":     "What breaks first?\n",
+		".DS_Store":                   "\x00\x00\x00\x01Bud1\xff",
+		"references/.DS_Store":        "\x00\x01\xff",
+		"._SKILL.md":                  "\x00\x05\x16\x07\xff",
+		"Icon\r":                      "",
+		".git/HEAD":                   "ref: refs/heads/master\n",
+		".git/hooks/pre-commit":       "#!/bin/sh\n",
+		"references/.git":             "gitdir: ../elsewhere\n",
+		"references/drafts/.DS_Store": "\xff",
+	})
+	chmod(t, filepath.Join(dir, ".git", "hooks", "pre-commit"), 0o755)
+	proposed := c.mustRun("skills", "propose", dir)
+	_, files, _ := strings.Cut(proposed, "Files:\n")
+	files, _, _ = strings.Cut(files, "Warnings")
+	if want := fmt.Sprintf("  SKILL.md (%d bytes)\n  references/questions.md (19 bytes)\n", len(grillingSkill)); files != want {
+		t.Fatalf("proposed files:\n%s\nwant:\n%s\n%s", files, want, proposed)
+	}
+	mustContain(t, "propose output", proposed, "skipped .DS_Store, ._SKILL.md, .git, \"Icon\\r\", references/.DS_Store and 2 more")
+	// The committed version holds only the skill's own files.
+	var sections []string
+	for _, line := range strings.Split(c.mustRun("skills", "show", "grilling"), "\n") {
+		if strings.HasPrefix(line, "===== ") {
+			sections = append(sections, line)
+		}
+	}
+	if want := []string{"===== SKILL.md =====", "===== references/questions.md =====",
+		"===== No active version to compare with; the files above are the whole change. ====="}; !slices.Equal(sections, want) {
+		t.Fatalf("show's file sections are %q", sections)
+	}
+}
+
+// Claude Code's positional placeholders ($0 to $9, $ARGUMENTS[N]) and its
+// shell blocks (a fence opened with ```!) are reported like its other
+// placeholders and inline commands.
+func TestSkillCLIProposeWarnsAboutPositionalPlaceholdersAndShellBlocks(t *testing.T) {
+	c := newSkillCLI(t)
+	dir := writeSkillFolder(t, "fix-issue", map[string]string{"SKILL.md": "---\nname: fix-issue\ndescription: Fix an issue.\n---\n" +
+		"Fix issue $0 on branch $1.\n" +
+		"Then read $ARGUMENTS[2]; it costs $10 at most.\n" +
+		"```!\n" +
+		"git status\n" +
+		"```\n"})
+	mustContain(t, "propose output", c.mustRun("skills", "propose", dir),
+		"argument placeholders, which Evie never substitutes: $0 (line 5), $1 (line 5), $ARGUMENTS[2] (line 6)\n",
+		"inline shell commands, which Evie never runs: ```! (line 7)\n")
+}
+
+// Proposing a folder whose version is already the name's pending proposal
+// or active version records nothing and says so, as the migration skips
+// it: an import's pending proposal stays the one an approval of the
+// import activates.
+func TestSkillCLIProposeOfAPendingOrActiveVersionRecordsNothing(t *testing.T) {
+	ctx := context.Background()
+	c := newSkillCLI(t)
+	folder := c.homeSkill(".claude/skills", "grilling", "Grill a plan.", nil)
+	report := c.mustRun("skills", "import-claude")
+	importID, hash := importLine.FindStringSubmatch(report)[1], proposedHash(t, report, "grilling")
+	state, err := c.store.SkillState(ctx, "grilling")
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := c.repo.Head(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pending := c.mustRun("skills", "propose", folder)
+	mustContain(t, "propose of the pending version", pending,
+		"Skill grilling is already pending as proposal "+state.Proposals[0].ID+" (version hash "+hash+"); nothing was proposed.")
+	mustContain(t, "approve the import", c.mustRun("skills", "approve", "--import", importID), "Activated grilling version 1 (version hash "+hash+")")
+	mustContain(t, "propose of the active version", c.mustRun("skills", "propose", folder),
+		"Skill grilling is already active as version 1 (version hash "+hash+"); nothing was proposed.")
+
+	if state, err := c.store.SkillState(ctx, "grilling"); err != nil || len(state.Proposals) != 1 {
+		t.Fatalf("proposals after proposing the same version again: %+v, %v", state.Proposals, err)
+	}
+	if after, err := c.repo.Head(ctx); err != nil || after != head {
+		t.Fatalf("the procedural repository moved from %s to %s (%v)", head, after, err)
+	}
+}
+
 func skillMD(name, description string) string {
 	return "---\nname: " + name + "\ndescription: " + description + "\n---\nDo the thing.\n"
 }
@@ -246,6 +356,12 @@ func TestSkillCLIProposeRefusesUnsafeOrInvalidFolders(t *testing.T) {
 	large := map[string]string{"SKILL.md": valid}
 	for i := 0; i < 40; i++ {
 		large[fmt.Sprintf("references/%02d.md", i)] = strings.Repeat("x", 30<<10)
+	}
+	// Files whose names sort before SKILL.md fill the limit before it is
+	// read.
+	manyFirst := map[string]string{"SKILL.md": valid}
+	for i := 0; i <= skill.MaxFiles; i++ {
+		manyFirst[fmt.Sprintf("%02d.md", i)] = "note\n"
 	}
 	cases := []struct {
 		name   string
@@ -304,7 +420,10 @@ func TestSkillCLIProposeRefusesUnsafeOrInvalidFolders(t *testing.T) {
 		{name: "reference over 32 KiB", folder: "grilling", files: map[string]string{"SKILL.md": valid, "references/big.md": strings.Repeat("x", 32<<10+1)},
 			want: "references/big.md: is 32769 bytes; each file is at most 32 KiB"},
 		{name: "more than 64 files", folder: "grilling", files: many, want: ".: has more than 64 files"},
+		{name: "more than 64 files before SKILL.md", folder: "grilling", files: manyFirst, want: ".: has more than 64 files"},
 		{name: "more than 1 MiB", folder: "grilling", files: large, want: ".: is more than 1024 KiB in total"},
+		{name: "nested scripts folder", folder: "grilling", files: map[string]string{"SKILL.md": valid, "references/scripts/run.md": "notes\n"},
+			want: "references/scripts: a scripts/ folder is refused"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

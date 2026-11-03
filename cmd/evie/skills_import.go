@@ -51,33 +51,97 @@ func claudeSkills(home string, plugins bool) ([]foundSkill, []string) {
 		installs, n := pluginInstalls(home)
 		notes = append(notes, n...)
 		for _, p := range installs {
-			source := eviedb.SkillSource{Kind: eviedb.SkillSourceClaudePlugin, Plugin: p.name, PluginVersion: p.Version}
-			before := len(found)
-			add(filepath.Join(p.InstallPath, "skills"), source)
-			seen := map[string]bool{}
-			for _, f := range found[before:] {
-				seen[f.dir] = true
-			}
-			listed, n := pluginListedSkills(p, source)
-			notes = append(notes, n...)
-			for _, f := range listed {
-				if !seen[f.dir] {
-					seen[f.dir] = true
-					found = append(found, f)
-				}
-			}
+			f, n := pluginSkills(home, p)
+			found, notes = append(found, f...), append(notes, n...)
 		}
 	}
 	return found, notes
 }
 
-// pluginListedSkills reads the skill folders a plugin lists in the "skills"
-// field of its .claude-plugin/plugin.json (mattpocock-skills groups them
-// under skills/<group>/), a path or a list of paths relative to the plugin's
-// folder. A listed path must stay inside that folder and hold a SKILL.md;
-// anything else is noted and skipped. No plugin.json, or no field, lists
-// nothing.
-func pluginListedSkills(p pluginInstall, source eviedb.SkillSource) ([]foundSkill, []string) {
+// pluginSkills lists an installed plugin's skill folders: each folder of
+// its skills/, then each path its .claude-plugin/plugin.json lists, once
+// each. A listed path is a skill folder, or a folder of them when it holds
+// no SKILL.md (mattpocock-skills groups its skills under skills/<group>/).
+// Every skill folder must resolve, links followed, inside the plugin's
+// install folder; one that leaves it is noted and not read.
+func pluginSkills(home string, p pluginInstall) ([]foundSkill, []string) {
+	root, err := filepath.EvalSymlinks(p.InstallPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, []string{fmt.Sprintf("could not read plugin %s's folder: %v; its skills were not read", p.name, err)}
+	}
+	source := eviedb.SkillSource{Kind: eviedb.SkillSourceClaudePlugin, Plugin: p.name, PluginVersion: p.Version}
+	var found []foundSkill
+	var notes []string
+	seen := map[string]bool{}
+	// take adds the skill folder dir, shown to the owner as rel, when it
+	// resolves inside the plugin.
+	take := func(dir, rel string) {
+		if seen[dir] {
+			return
+		}
+		seen[dir] = true
+		if resolved, err := filepath.EvalSymlinks(dir); err != nil || !insideFolder(root, resolved) {
+			notes = append(notes, fmt.Sprintf("plugin %s's %s resolves outside its folder; it was not read", p.name, rel))
+			return
+		}
+		s := source
+		s.Path = dir
+		found = append(found, foundSkill{name: filepath.Base(dir), dir: dir, source: s})
+	}
+	skills := filepath.Join(p.InstallPath, "skills")
+	names, n := skillFolderNames(home, skills)
+	notes = append(notes, n...)
+	for _, name := range names {
+		take(filepath.Join(skills, name), "skills/"+name)
+	}
+	listed, n := pluginListedPaths(p)
+	notes = append(notes, n...)
+	for _, rel := range listed {
+		dir := filepath.Join(p.InstallPath, filepath.FromSlash(rel))
+		inside, err := filepath.Rel(p.InstallPath, dir)
+		if filepath.IsAbs(rel) || err != nil || inside == "." || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
+			notes = append(notes, fmt.Sprintf("plugin %s lists %s, which is outside its folder; it was not read", p.name, rel))
+			continue
+		}
+		resolved, err := filepath.EvalSymlinks(dir)
+		if err == nil && !insideFolder(root, resolved) {
+			notes = append(notes, fmt.Sprintf("plugin %s lists %s, which resolves outside its folder; it was not read", p.name, rel))
+			continue
+		}
+		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+			notes = append(notes, fmt.Sprintf("plugin %s lists %s, which holds no SKILL.md; it was not read", p.name, rel))
+			continue
+		}
+		if _, err := os.Lstat(filepath.Join(dir, skill.InstructionsFile)); err == nil {
+			take(dir, filepath.ToSlash(inside))
+			continue
+		}
+		names, n := skillFolderNames(home, dir)
+		notes = append(notes, n...)
+		if len(names) == 0 {
+			notes = append(notes, fmt.Sprintf("plugin %s lists %s, which holds no SKILL.md; it was not read", p.name, rel))
+			continue
+		}
+		for _, name := range names {
+			take(filepath.Join(dir, name), filepath.ToSlash(filepath.Join(inside, name)))
+		}
+	}
+	return found, notes
+}
+
+// insideFolder reports whether the resolved path p is root or inside it.
+func insideFolder(root, p string) bool {
+	rel, err := filepath.Rel(root, p)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
+
+// pluginListedPaths reads the "skills" field of a plugin's
+// .claude-plugin/plugin.json: a path or a list of paths relative to the
+// plugin's folder. No plugin.json, or no field, lists nothing.
+func pluginListedPaths(p pluginInstall) ([]string, []string) {
 	data, err := os.ReadFile(filepath.Join(p.InstallPath, ".claude-plugin", "plugin.json"))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -101,28 +165,7 @@ func pluginListedSkills(p pluginInstall, source eviedb.SkillSource) ([]foundSkil
 			paths = []string{one}
 		}
 	}
-	var found []foundSkill
-	var notes []string
-	for _, rel := range paths {
-		dir := filepath.Join(p.InstallPath, filepath.FromSlash(rel))
-		inside, err := filepath.Rel(p.InstallPath, dir)
-		if filepath.IsAbs(rel) || err != nil || inside == "." || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
-			notes = append(notes, fmt.Sprintf("plugin %s lists %s, which is outside its folder; it was not read", p.name, rel))
-			continue
-		}
-		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-			notes = append(notes, fmt.Sprintf("plugin %s lists %s, which holds no SKILL.md; it was not read", p.name, rel))
-			continue
-		}
-		if _, err := os.Lstat(filepath.Join(dir, skill.InstructionsFile)); err != nil {
-			notes = append(notes, fmt.Sprintf("plugin %s lists %s, which holds no SKILL.md; it was not read", p.name, rel))
-			continue
-		}
-		s := source
-		s.Path = dir
-		found = append(found, foundSkill{name: filepath.Base(dir), dir: dir, source: s})
-	}
-	return found, notes
+	return paths, nil
 }
 
 // pluginInstall is one installed Claude Code plugin, as
@@ -207,9 +250,23 @@ func listFolder(home, dir string) ([]string, []string) {
 // folder, that holds a SKILL.md, from source. Files such as the synced
 // buckets' manifest.json are not skills.
 func skillFolders(home, dir string, source eviedb.SkillSource) ([]foundSkill, []string) {
-	names, notes := listFolder(home, dir)
+	names, notes := skillFolderNames(home, dir)
 	var found []foundSkill
 	for _, name := range names {
+		folder := filepath.Join(dir, name)
+		s := source
+		s.Path = folder
+		found = append(found, foundSkill{name: name, dir: folder, source: s})
+	}
+	return found, notes
+}
+
+// skillFolderNames are the names of dir's entries that are folders, or
+// links to folders, holding a SKILL.md.
+func skillFolderNames(home, dir string) ([]string, []string) {
+	entries, notes := listFolder(home, dir)
+	var names []string
+	for _, name := range entries {
 		folder := filepath.Join(dir, name)
 		if info, err := os.Stat(folder); err != nil || !info.IsDir() {
 			continue
@@ -217,11 +274,9 @@ func skillFolders(home, dir string, source eviedb.SkillSource) ([]foundSkill, []
 		if _, err := os.Lstat(filepath.Join(folder, skill.InstructionsFile)); err != nil {
 			continue
 		}
-		s := source
-		s.Path = folder
-		found = append(found, foundSkill{name: name, dir: folder, source: s})
+		names = append(names, name)
 	}
-	return found, notes
+	return names, notes
 }
 
 // tildePath shows p under home as ~/...
@@ -262,21 +317,9 @@ func (c skillCommands) importClaude(ctx context.Context, out io.Writer, plugins 
 		return errors.New("no home folder to import Claude Code skills from (HOME is not set)")
 	}
 	found, notes := claudeSkills(c.home, plugins)
-	active, err := c.store.ActiveSkills(ctx)
+	standing, err := c.standing(ctx)
 	if err != nil {
 		return err
-	}
-	activeByName := map[string]eviedb.SkillActivation{}
-	for _, a := range active {
-		activeByName[a.Name] = a
-	}
-	pending, err := c.store.PendingSkillProposals(ctx)
-	if err != nil {
-		return err
-	}
-	pendingByName := map[string]eviedb.SkillProposal{}
-	for _, p := range pending {
-		pendingByName[p.Name] = p
 	}
 
 	report := eviedb.SkillImportReport{Plugins: plugins, Notes: notes}
@@ -299,12 +342,12 @@ func (c skillCommands) importClaude(ctx context.Context, out io.Writer, plugins 
 				Problems: []skill.Problem{{Path: ".", Message: err.Error()}}})
 			continue
 		}
-		if a, ok := activeByName[local.Name]; ok && a.VersionHash == local.Hash {
+		if a, ok := standing.active[local.Name]; ok && a.VersionHash == local.Hash {
 			report.Unchanged = append(report.Unchanged, eviedb.SkillImportEntry{Name: f.name, Source: f.source,
 				VersionHash: local.Hash, SameAs: fmt.Sprintf("active version %d", a.Version)})
 			continue
 		}
-		if p, ok := pendingByName[local.Name]; ok && p.VersionHash == local.Hash {
+		if p, ok := standing.pending[local.Name]; ok && p.VersionHash == local.Hash {
 			report.Unchanged = append(report.Unchanged, eviedb.SkillImportEntry{Name: f.name, Source: f.source,
 				VersionHash: local.Hash, SameAs: "pending proposal " + p.ID})
 			continue

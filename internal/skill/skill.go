@@ -81,6 +81,9 @@ const (
 	WarningShellCommand = "shell-command"
 	WarningPlaceholder  = "placeholder"
 	WarningToolMention  = "tool-mention"
+	// WarningSkipped reports operating-system and version-control files a
+	// folder held that are not part of the skill.
+	WarningSkipped = "skipped"
 )
 
 // Warning is one thing a skill uses that behaves differently in Evie.
@@ -192,23 +195,23 @@ func pathProblem(p string) string {
 		}
 	}
 	parts := strings.Split(p, "/")
-	for _, part := range parts {
+	for i, part := range parts {
 		if part == "." || part == ".." {
 			return "is not a clean relative path inside the skill"
 		}
 		if strings.EqualFold(part, ".git") {
 			return "is inside a .git folder, which a skill cannot hold"
 		}
-	}
-	if len(parts) > 1 && parts[0] == "scripts" {
-		return scriptsRefused
+		if part == "scripts" && i < len(parts)-1 {
+			return scriptsRefused
+		}
 	}
 	return ""
 }
 
-// check checks files for a folder named name; refused names paths already
-// refused before they were read.
-func check(name string, files map[string][]byte, refused map[string]bool) (Version, []Problem) {
+// check checks files for a folder named name; unread names paths that are
+// there but were not read: refused before they were read, or past a limit.
+func check(name string, files map[string][]byte, unread map[string]bool) (Version, []Problem) {
 	var problems []Problem
 	add := func(p, format string, args ...any) {
 		problems = append(problems, Problem{Path: p, Message: fmt.Sprintf(format, args...)})
@@ -244,7 +247,7 @@ func check(name string, files map[string][]byte, refused map[string]bool) (Versi
 	v := Version{Name: name, Files: files}
 	text, ok := files[InstructionsFile]
 	if !ok {
-		if !refused[InstructionsFile] {
+		if !unread[InstructionsFile] {
 			add(InstructionsFile, "is missing")
 		}
 		return v, problems
@@ -298,7 +301,7 @@ func frontmatter(folder, text string) (parsedFront, string, []Problem) {
 		return out, "", problems
 	}
 	var doc yaml.Node
-	if err := yaml.Unmarshal([]byte(front.String()), &doc); err != nil {
+	if err := yaml.Unmarshal([]byte(tolerateArgumentHint(front.String())), &doc); err != nil {
 		add("frontmatter is not valid YAML: %v", err)
 		return out, "", problems
 	}
@@ -333,6 +336,12 @@ func frontmatter(folder, text string) (parsedFront, string, []Problem) {
 			}
 			out.metadata.DisableModelInvocation = value.Value == "true"
 		case "argument-hint", "license":
+			if key.Value == "argument-hint" && value.Kind == yaml.SequenceNode {
+				if hint, ok := listHint(value); ok {
+					out.metadata.ArgumentHint = hint
+					continue
+				}
+			}
 			if !text {
 				out.warnings = append(out.warnings, Warning{Kind: WarningFrontmatter,
 					Message: fmt.Sprintf("SKILL.md frontmatter field %q is not text and is ignored (quote it to keep it)", key.Value)})
@@ -379,11 +388,52 @@ func frontmatter(folder, text string) (parsedFront, string, []Problem) {
 	return out, body, problems
 }
 
+// tolerateArgumentHint quotes the value of a top-level argument-hint line
+// that is not YAML on its own, such as Claude Code's documented
+// `argument-hint: [pr-number] [priority]`, so that it reads as its raw
+// text. Every other line, and a value that is YAML, is left alone, and no
+// line moves, so YAML errors keep their line numbers.
+func tolerateArgumentHint(front string) string {
+	lines := strings.Split(front, "\n")
+	for i, line := range lines {
+		value, ok := strings.CutPrefix(line, "argument-hint:")
+		if value = strings.TrimSpace(value); !ok || value == "" {
+			continue
+		}
+		var probe yaml.Node
+		if yaml.Unmarshal([]byte("hint: "+value), &probe) == nil {
+			continue
+		}
+		lines[i] = "argument-hint: '" + strings.ReplaceAll(value, "'", "''") + "'"
+	}
+	return strings.Join(lines, "\n")
+}
+
+// listHint reads an argument-hint given as a YAML list, such as
+// `[message]`, as its items, each in brackets and joined by spaces, the
+// form Claude Code shows.
+func listHint(value *yaml.Node) (string, bool) {
+	if value.Kind != yaml.SequenceNode || len(value.Content) == 0 {
+		return "", false
+	}
+	items := make([]string, len(value.Content))
+	for i, item := range value.Content {
+		if item.Kind != yaml.ScalarNode || strings.TrimSpace(item.Value) == "" {
+			return "", false
+		}
+		items[i] = "[" + item.Value + "]"
+	}
+	return strings.Join(items, " "), true
+}
+
 var (
-	// shellCommand is Claude Code's inline shell command, !`command`.
-	shellCommand = regexp.MustCompile("!`[^`\n]+`")
-	// placeholder is a Claude Code argument or session placeholder.
-	placeholder = regexp.MustCompile(`\$ARGUMENTS(?:\[[0-9]+\])?|\$\{CLAUDE_[A-Z_]+\}`)
+	// shellCommand is Claude Code's inline shell command, !`command`, and
+	// the opening fence of its shell block, ```!.
+	shellCommand = regexp.MustCompile("!`[^`\n]+`|^[ \t]*```!")
+	// placeholder is a Claude Code argument or session placeholder,
+	// including the positional $0 to $9 ("$10" is left alone, as a sum of
+	// money more likely than an argument).
+	placeholder = regexp.MustCompile(`\$ARGUMENTS(?:\[[0-9]+\])?|\$[0-9]\b|\$\{CLAUDE_[A-Z_]+\}`)
 	// claudeTool is a mention of a Claude Code tool: a distinctive name
 	// anywhere, or a common word written as a tool (`Read`, the Read tool,
 	// Read(...)).
@@ -400,7 +450,7 @@ func occurrences(re *regexp.Regexp, text string, lineOffset int) []string {
 	var out []string
 	for i, line := range strings.Split(text, "\n") {
 		for _, m := range re.FindAllString(line, -1) {
-			out = append(out, fmt.Sprintf("%s (line %d)", m, lineOffset+i+1))
+			out = append(out, fmt.Sprintf("%s (line %d)", strings.TrimSpace(m), lineOffset+i+1))
 		}
 	}
 	return out

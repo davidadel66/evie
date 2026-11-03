@@ -293,6 +293,57 @@ func TestSkillCLIImportClaudeReadsSkillsAPluginLists(t *testing.T) {
 		"plugin eng-skills@market lists ./skills/engineering/missing, which holds no SKILL.md; it was not read")
 }
 
+// A path a plugin lists that holds no SKILL.md but whose folders do is a
+// folder of skills. Containment is checked where a plugin's skill folder
+// leads: a folder or listed path that is a link resolving outside the
+// plugin's install folder is noted and not read, though a link inside it
+// is followed.
+func TestSkillCLIImportClaudeReadsAPluginsSkillGroupsAndStaysInsideIt(t *testing.T) {
+	c := newSkillCLI(t)
+	root := ".claude/plugins/cache/market/eng-skills/1.3.1"
+	install := filepath.Join(c.home, filepath.FromSlash(root))
+	c.homeSkill(root+"/skills/engineering", "tdd", "Test first (plugin).", nil)
+	c.homeSkill(root+"/skills/engineering", "grilling", "Grill a plan.", nil)
+	c.homeSkill(root+"/vendored", "wrap", "Wrap a session.", nil)
+	writeFiles(t, filepath.Join(install, "skills", "engineering", "notes"), map[string]string{"README.md": "Not a skill.\n"})
+	leak := c.homeSkill("elsewhere", "leak", "Not the plugin's own.", nil)
+	c.homeSkill("elsewhere/group", "stray", "Not the plugin's own either.", nil)
+	for link, target := range map[string]string{
+		"skills/leak":               leak,                                                 // a skills/<name> link leaving the plugin
+		"skills/wrap":               filepath.Join(install, "vendored", "wrap"),           // a link inside it
+		"skills/engineering/escape": filepath.Join(c.home, "elsewhere", "group", "stray"), // a grouped skill leaving it
+		"linked-group":              filepath.Join(c.home, "elsewhere", "group"),          // a listed path leaving it
+	} {
+		if err := os.Symlink(target, filepath.Join(install, filepath.FromSlash(link))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFiles(t, install, map[string]string{".claude-plugin/plugin.json": `{"name": "eng-skills", "skills": ["./skills/engineering", "./linked-group", "./skills/engineering/notes"]}`})
+	writeFiles(t, filepath.Join(c.home, ".claude", "plugins"), map[string]string{"installed_plugins.json": `{"plugins": {"eng-skills@market": [{"installPath": "` + install + `", "version": "1.3.1"}]}}`})
+
+	report := c.mustRun("skills", "import-claude", "--plugins")
+	proposed := importSection(report, "Proposed")
+	mustContain(t, "grouped plugin skills", proposed,
+		"tdd  ", "from plugin eng-skills@market 1.3.1 (~/"+root+"/skills/engineering/tdd)",
+		"grilling  ", "from plugin eng-skills@market 1.3.1 (~/"+root+"/skills/engineering/grilling)",
+		"wrap  ", "from plugin eng-skills@market 1.3.1 (~/"+root+"/skills/wrap)")
+	if n := strings.Count(proposed, "Warnings: none"); n != 3 {
+		t.Fatalf("%d skills proposed; want 3:\n%s", n, report)
+	}
+	if strings.Contains(report, "Not the plugin's own") || strings.Contains(proposed, "leak") || strings.Contains(proposed, "stray") {
+		t.Fatalf("a skill outside the plugin was read:\n%s", report)
+	}
+	notes := importSection(report, "Notes")
+	mustContain(t, "notes", notes,
+		"plugin eng-skills@market's skills/leak resolves outside its folder; it was not read",
+		"plugin eng-skills@market's skills/engineering/escape resolves outside its folder; it was not read",
+		"plugin eng-skills@market lists ./linked-group, which resolves outside its folder; it was not read",
+		"plugin eng-skills@market lists ./skills/engineering/notes, which holds no SKILL.md; it was not read")
+	if n := strings.Count(notes, "\n"); n != 4 {
+		t.Fatalf("%d notes; want 4:\n%s", n, report)
+	}
+}
+
 // Installed Claude Code plugin skills are read only with --plugins, from
 // each install path that ~/.claude/plugins/installed_plugins.json lists,
 // last in precedence, and recorded with the plugin's name and version.

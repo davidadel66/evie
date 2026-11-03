@@ -9,15 +9,19 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
+	"unicode"
 )
 
 // ReadFolder reads and checks the skill folder dir, named by its last path
 // element. A dir that is itself a link is followed; inside the folder every
 // entry is checked with Lstat before anything is read, and links, scripts/
-// folders, executable and non-regular files are refused, because the
-// procedural repository stores every file as plain, non-executable text.
-// Reads go through an os.Root of the folder, so nothing outside it is
-// read.
+// folders at any depth, executable and non-regular files are refused,
+// because the procedural repository stores every file as plain,
+// non-executable text. Operating-system and version-control clutter is
+// skipped with a warning. Reads go through an os.Root of the folder, so
+// nothing outside it is read.
 func ReadFolder(dir string) (Version, error) {
 	clean := filepath.Clean(dir)
 	info, err := os.Stat(clean)
@@ -36,18 +40,47 @@ func ReadFolder(dir string) (Version, error) {
 	if err := w.walk("."); err != nil {
 		return Version{}, fmt.Errorf("skill folder %s: %w", dir, err)
 	}
+	// A walk stopped at a limit may not have reached SKILL.md; the limit is
+	// the problem then, not a missing SKILL.md.
+	if _, read := w.files[InstructionsFile]; w.stopped && !read {
+		if _, err := root.Lstat(InstructionsFile); err == nil {
+			w.refused[InstructionsFile] = true
+		}
+	}
 	v, problems := check(filepath.Base(clean), w.files, w.refused)
 	problems = append(w.problems, problems...)
 	if len(problems) > 0 {
 		return Version{}, &InvalidError{Problems: problems}
 	}
+	if len(w.skipped) > 0 {
+		v.Warnings = append(v.Warnings, Warning{Kind: WarningSkipped,
+			Message: "skipped " + listed(w.skipped) + ": operating-system and version-control files are not part of a skill"})
+	}
 	return v, nil
 }
 
+// clutter reports whether a folder entry is operating-system or
+// version-control clutter, never part of a skill: the Finder's .DS_Store
+// and Icon\r, AppleDouble ._ files, and a .git folder or file.
+func clutter(name string) bool {
+	return name == ".DS_Store" || name == "Icon\r" || strings.HasPrefix(name, "._") || strings.EqualFold(name, ".git")
+}
+
+// shownPath is p as the owner reads it in a warning: quoted when it holds a
+// control character, such as Icon\r.
+func shownPath(p string) string {
+	if strings.ContainsFunc(p, unicode.IsControl) {
+		return strconv.Quote(p)
+	}
+	return p
+}
+
 type walker struct {
-	root     *os.Root
-	files    map[string][]byte
-	refused  map[string]bool
+	root    *os.Root
+	files   map[string][]byte
+	refused map[string]bool
+	// skipped are the clutter paths left out, in walk order.
+	skipped  []string
 	problems []Problem
 	count    int
 	total    int64
@@ -75,6 +108,10 @@ func (w *walker) walk(dir string) error {
 			return nil
 		}
 		p := path.Join(dir, entry.Name())
+		if clutter(entry.Name()) {
+			w.skipped = append(w.skipped, shownPath(p))
+			continue
+		}
 		info, err := w.root.Lstat(p)
 		if err != nil {
 			return err
@@ -83,7 +120,7 @@ func (w *walker) walk(dir string) error {
 		switch {
 		case mode&fs.ModeSymlink != 0:
 			w.refuse(p, "is a symbolic link; links inside a skill are refused")
-		case mode.IsDir() && dir == "." && entry.Name() == "scripts":
+		case mode.IsDir() && entry.Name() == "scripts":
 			w.refuse(p, "%s", scriptsRefused)
 		case mode.IsDir():
 			if msg := pathProblem(p); msg != "" {

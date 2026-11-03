@@ -136,6 +136,22 @@ func (c skillCommands) propose(ctx context.Context, out io.Writer, folder string
 	if err != nil {
 		return err
 	}
+	// A version that is already pending or active is not proposed again,
+	// as the migration skips it: a new proposal would supersede a pending
+	// one, and an import's approval with it.
+	standing, err := c.standing(ctx)
+	if err != nil {
+		return err
+	}
+	if a, ok := standing.active[local.Name]; ok && a.VersionHash == local.Hash {
+		_, err := fmt.Fprintf(out, "Skill %s is already active as version %d (version hash %s); nothing was proposed.\n", local.Name, a.Version, local.Hash)
+		return err
+	}
+	if p, ok := standing.pending[local.Name]; ok && p.VersionHash == local.Hash {
+		_, err := fmt.Fprintf(out, "Skill %s is already pending as proposal %s (version hash %s); nothing was proposed. Review it with: evie skills show %s\n",
+			local.Name, p.ID, local.Hash, local.Name)
+		return err
+	}
 	committed, commit, err := c.commitSkill(ctx, local, abs)
 	if err != nil {
 		return err
@@ -178,7 +194,36 @@ func (c skillCommands) commitSkill(ctx context.Context, local skill.Version, sou
 	if err != nil {
 		return skill.Version{}, "", fmt.Errorf("the committed skill did not read back: %w", err)
 	}
+	// The committed files are exactly the checked ones, so their warnings
+	// are too, and the folder's say what its walk skipped.
+	committed.Warnings = local.Warnings
 	return committed, commit, nil
+}
+
+// skillStanding is each name's active version and pending proposal: a
+// folder whose version is one of them is not proposed again.
+type skillStanding struct {
+	active  map[string]eviedb.SkillActivation
+	pending map[string]eviedb.SkillProposal
+}
+
+func (c skillCommands) standing(ctx context.Context) (skillStanding, error) {
+	s := skillStanding{active: map[string]eviedb.SkillActivation{}, pending: map[string]eviedb.SkillProposal{}}
+	active, err := c.store.ActiveSkills(ctx)
+	if err != nil {
+		return s, err
+	}
+	for _, a := range active {
+		s.active[a.Name] = a
+	}
+	pending, err := c.store.PendingSkillProposals(ctx)
+	if err != nil {
+		return s, err
+	}
+	for _, p := range pending {
+		s.pending[p.Name] = p
+	}
+	return s, nil
 }
 
 func skillFilesText(b *strings.Builder, m skill.Manifest) {
