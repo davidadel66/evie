@@ -138,3 +138,8 @@ Spec: [artifacts.spec.md](artifacts.spec.md).
   without the canvas prototype David asks for on UI work. He accepted the
   recommendation ("YES"): before-and-after screenshots go on the design
   canvas for his verdict, and any changes land on this branch before merge.
+
+- **2026-11-03 — Canvas verdict: the Report view stays as built.** On the
+  canvas, a finished worker's 24 verified sources fill the first screen and
+  its own report starts below them. David kept that layout ("thats fine to
+  scroll"): sources stay listed above the report, with no folding.
