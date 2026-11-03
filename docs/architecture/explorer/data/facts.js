@@ -16611,6 +16611,33 @@ evieExplorer.register(
   "history": [
     {
       "date": "2026-11-03",
+      "title": "Skills: owner-approved procedures Evie loads on demand",
+      "branch": "feat/skills",
+      "merge": "e07bb02",
+      "touches": [
+        "internal/skill",
+        "internal/eviedb",
+        "internal/plugins",
+        "internal/agent",
+        "internal/web",
+        "internal/web/ui",
+        "internal/memory",
+        "cmd/evie"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/skills.spec.md",
+        "#201",
+        "#202",
+        "#203",
+        "#204"
+      ],
+      "text": [
+        "David relied on dozens of Claude Code skills, but Evie had none, so a procedure had to be explained in the chat each time or hard-coded into the prompt. Skills in the Agent Skills format now come into Evie from the command line: `evie skills propose <folder>`, or `evie skills import-claude` for David's personal, synced and `~/.agents` skills (and installed plugin skills with `--plugins`). Each is checked, committed to the procedural repository and recorded as a proposal; nothing is active until David approves an exact version, one skill or a whole import at a time. Skills that bundle scripts or executables are refused.",
+        "A chat created after an approval pins the active skills in its Composition Receipt for its whole life; older chats resume unchanged on the frozen pre-skills Standard preset. Evie sees a short framed catalog of the chat's skills and loads one with the `skill` tool when it fits. David can force one with `/name` in the composer, which sends the skill with the message and labels it. A skill guides how Evie works and never grants tools, approvals or memory scope."
+      ]
+    },
+    {
+      "date": "2026-11-03",
       "title": "Read a worker's report in the Inspector",
       "branch": "feat/artifacts-report-view",
       "merge": "7fe6b17",
