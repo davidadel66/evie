@@ -171,6 +171,60 @@ func (s *Store) SubagentEvents(ctx context.Context, session memory.SessionID, ex
 	return progress, events, err
 }
 
+// SubagentReport is one delegated child's stored report as the owner opens
+// it from the parent conversation (artifacts.spec.md): the same final report
+// event read_subagent_report pages for the parent model, with how the
+// attempt ended. Text is nil when the attempt has no final report, and cut
+// to subagentReportViewBytes with OmittedBytes left out when it is longer.
+type SubagentReport struct {
+	ExecutionID  string  `json:"executionId"`
+	Worker       string  `json:"worker"`
+	Status       string  `json:"status"`
+	Reason       string  `json:"reason,omitempty"`
+	Text         *string `json:"text,omitempty"`
+	TotalBytes   int     `json:"totalBytes"`
+	OmittedBytes int     `json:"omittedBytes"`
+}
+
+// subagentReportViewBytes bounds the report text the owner view returns. No
+// current model writes a final message this long, so it is a guard, not a
+// page size; a longer report says how many bytes are left out.
+const subagentReportViewBytes = 1 << 20
+
+// SubagentReport returns one child of session with its stored final report,
+// for display. Another session's child is indistinguishable from a missing
+// one (sql.ErrNoRows). It applies the open-chat rule only, not the model-side
+// checks ReadSubagentReport adds (artifacts.decisions.md, 2026-11-02).
+func (s *Store) SubagentReport(ctx context.Context, session memory.SessionID, executionID string) (SubagentReport, error) {
+	var doc SubagentReport
+	err := s.withSubagentReadTransaction(ctx, func(conn *sql.Conn) error {
+		a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE id=? AND parent_session_id=?`, executionID, session))
+		if err != nil {
+			return err
+		}
+		// A run-owned worker's parent session is its run's hidden worker
+		// session, never a chat; it is refused here as well, not only by that.
+		if a.Run != nil {
+			return sql.ErrNoRows
+		}
+		doc = SubagentReport{ExecutionID: a.ID, Worker: a.Worker(), Status: a.State}
+		if a.Result != nil {
+			doc.Reason = a.Result.Reason
+		}
+		if a.FinalEventID == "" {
+			return nil
+		}
+		var report string
+		if err = conn.QueryRowContext(ctx, `SELECT content FROM events WHERE id=? AND session_id=? AND event_type='assistant_message'`, a.FinalEventID, a.Child.ID).Scan(&report); err != nil {
+			return fmt.Errorf("load stored report: %w", err)
+		}
+		text := utf8Prefix(report, subagentReportViewBytes)
+		doc.Text, doc.TotalBytes, doc.OmittedBytes = &text, len(report), len(report)-len(text)
+		return nil
+	})
+	return doc, err
+}
+
 // attemptRange is the child sequences an attempt's events occupy, (after,
 // until]: from the start of the child (an original assignment) or of its own
 // turn (a continuation), up to where the next continuation of the same child

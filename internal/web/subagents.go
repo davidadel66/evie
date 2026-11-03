@@ -18,6 +18,9 @@ import (
 type SubagentReader interface {
 	SubagentsOfCall(ctx context.Context, session memory.SessionID, turn memory.EventID, callID string) ([]eviedb.SubagentProgress, error)
 	SubagentEvents(ctx context.Context, session memory.SessionID, executionID string) (eviedb.SubagentProgress, []memory.Event, error)
+	// SubagentReport is the child's stored final report, the one
+	// read_subagent_report pages for the parent model (artifacts.spec.md).
+	SubagentReport(ctx context.Context, session memory.SessionID, executionID string) (eviedb.SubagentReport, error)
 }
 
 // WithSubagents adds the subagent progress routes.
@@ -115,6 +118,35 @@ func (s *Server) registerSubagentRoutes(mux *http.ServeMux) {
 			Subagent eviedb.SubagentProgress `json:"subagent"`
 			Items    []historyItem           `json:"items"`
 		}{progress, items})
+	}))
+	mux.Handle("/api/subagents/report", s.managementRoute(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			SessionID   memory.SessionID `json:"sessionId"`
+			ExecutionID string           `json:"executionId"`
+		}
+		if status, err := decodeManagementJSON(w, r, &req); err != nil || !boundedID(string(req.SessionID)) || !boundedID(req.ExecutionID) {
+			if err == nil {
+				status = http.StatusBadRequest
+			}
+			jsonError(w, status, "A conversation and subagent are required")
+			return
+		}
+		if !s.isOpenChat(req.SessionID) {
+			managementJSONError(w, http.StatusConflict, "subagents_session_changed", "Conversation changed; reopen the subagent")
+			return
+		}
+		report, err := s.subagents.SubagentReport(r.Context(), req.SessionID, req.ExecutionID)
+		if errors.Is(err, sql.ErrNoRows) {
+			managementJSONError(w, http.StatusNotFound, "subagent_not_found", "No such subagent in this conversation")
+			return
+		}
+		if err != nil {
+			managementJSONError(w, http.StatusInternalServerError, "subagents_unavailable", "The subagent's report could not be read")
+			return
+		}
+		writeJSON(w, http.StatusOK, struct {
+			Report eviedb.SubagentReport `json:"report"`
+		}{report})
 	}))
 }
 
