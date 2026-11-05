@@ -854,14 +854,18 @@ func (f factTexts) lookup(kind, target string) string {
 }
 
 // backs reports whether value appears in region as whole words, as the
-// skill's check finds a backed value (vision.py's contains and norm). Both
-// are compared ignoring case, runs of whitespace, digit-group commas
-// ("100,000" is 100000) and the kind of minus sign, with a word hyphenated
-// across a line end joined; "64" is not found in "640" or "0.64". An
-// ellipsis (…) elides: the pieces around it must appear in that order.
-// Unlike the skill, the check applies no Unicode compatibility
-// normalization (NFKC) or full case folding, which Go's standard library
-// lacks, so it can only be stricter.
+// skill's check finds a backed value (vision.py's contains and norm), and
+// never where the skill would not. Both are compared ignoring runs of
+// whitespace, digit-group commas ("100,000" is 100000), the kind of minus
+// sign and the case of ASCII letters, with a word hyphenated across a line
+// end joined; "64" is not found in "640" or "0.64". An ellipsis (…) elides:
+// the pieces around it must appear in that order.
+//
+// The skill also applies Unicode compatibility normalization (NFKC) and
+// full case folding, which Go's standard library lacks. So check compares
+// every character outside ASCII exactly ("CAFÉ" is not "café", which the
+// skill matches), and takes no match whose edges NFKC could change (see
+// findWords). It can only be stricter than the skill.
 func backs(region, value string) bool {
 	text, at := normText(region), 0
 	for _, piece := range strings.Split(value, "…") {
@@ -885,25 +889,46 @@ func normText(s string) string {
 	runes := []rune(s)
 	var b strings.Builder
 	for i, r := range runes {
-		// A comma between a digit and exactly three more digits groups them.
-		if r == ',' && i > 0 && unicode.IsDigit(runes[i-1]) && i+3 < len(runes) &&
-			unicode.IsDigit(runes[i+1]) && unicode.IsDigit(runes[i+2]) && unicode.IsDigit(runes[i+3]) &&
-			(i+4 == len(runes) || !unicode.IsDigit(runes[i+4])) {
+		if r == ',' && groupsDigits(runes, i) {
 			continue
+		}
+		if 'A' <= r && r <= 'Z' {
+			r += 'a' - 'A'
 		}
 		b.WriteRune(r)
 	}
 	s = lineEndHyphen.ReplaceAllString(b.String(), "-")
-	return strings.ToLower(strings.Join(strings.Fields(s), " "))
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// groupsDigits reports whether the comma at runes[i] groups digits: an ASCII
+// digit before it and exactly three after it, then the end or a stable
+// character that is not a digit. The skill reads digits after NFKC, so it
+// may also drop a comma beside a character NFKC makes a digit; findWords
+// takes no match such a comma could change.
+func groupsDigits(runes []rune, i int) bool {
+	if i < 1 || i+3 >= len(runes) {
+		return false
+	}
+	for _, r := range []rune{runes[i-1], runes[i+1], runes[i+2], runes[i+3]} {
+		if !asciiDigit(r) {
+			return false
+		}
+	}
+	return i+4 == len(runes) || stable(runes[i+4]) && !asciiDigit(runes[i+4])
 }
 
 // findWords returns where the first whole-word want in text at or after
-// from ends, or -1. A want that starts with a letter or digit must not
-// follow a word character or a dot, and one that ends with one must not run
-// on into a word character.
+// from ends, or -1. As the skill's check has it, a want that starts with a
+// letter or digit must not follow a word character or a dot, and one that
+// ends with one must not run on into a word character; a want that starts
+// or ends with a character that is not stable is held to that too, since
+// NFKC may make it a letter. And the match must be one NFKC would leave
+// alone (nfkcLeaves).
 func findWords(text, want string, from int) int {
 	first, _ := utf8.DecodeRuneInString(want)
 	last, _ := utf8.DecodeLastRuneInString(want)
+	wordFirst, wordLast := alnum(first) || !stable(first), alnum(last) || !stable(last)
 	for from <= len(text) {
 		i := strings.Index(text[from:], want)
 		if i < 0 {
@@ -912,7 +937,8 @@ func findWords(text, want string, from int) int {
 		start, end := from+i, from+i+len(want)
 		before, _ := utf8.DecodeLastRuneInString(text[:start])
 		after, _ := utf8.DecodeRuneInString(text[end:])
-		if (!alnum(first) || start == 0 || !wordRune(before) && before != '.') && (!alnum(last) || end == len(text) || !wordRune(after)) {
+		if (start == 0 || !wordFirst || !wordRune(before) && before != '.') &&
+			(end == len(text) || !wordLast || !wordRune(after)) && nfkcLeaves(text, start, end) {
 			return end
 		}
 		_, size := utf8.DecodeRuneInString(text[start:])
@@ -920,6 +946,63 @@ func findWords(text, want string, from int) int {
 	}
 	return -1
 }
+
+// nfkcLeaves reports whether NFKC, which the skill applies before it
+// matches, would leave the match text[start:end] and its edges as they are:
+// the characters on either side of it are stable, it does not start with a
+// combining mark that would join the character before it, and every
+// digit-group comma reaching across one of its edges has only stable
+// characters in its group.
+func nfkcLeaves(text string, start, end int) bool {
+	before, _ := utf8.DecodeLastRuneInString(text[:start])
+	after, _ := utf8.DecodeRuneInString(text[end:])
+	first, _ := utf8.DecodeRuneInString(text[start:])
+	return (start == 0 || stable(before) && !unicode.Is(unicode.M, first)) && (end == len(text) || stable(after)) &&
+		stableGroups(text, start) && stableGroups(text, end)
+}
+
+// stableGroups reports whether every comma whose digit group (the
+// character before it and the four after) reaches across the edge at byte
+// offset edge has only stable characters in it, so the skill keeps or drops
+// the comma as check does.
+func stableGroups(text string, edge int) bool {
+	var near []rune // the five characters before the edge, then the five after
+	for i, s := 0, text[:edge]; i < 5 && s != ""; i++ {
+		r, size := utf8.DecodeLastRuneInString(s)
+		near, s = append([]rune{r}, near...), s[:len(s)-size]
+	}
+	at := len(near)
+	for i, s := 0, text[edge:]; i < 5 && s != ""; i++ {
+		r, size := utf8.DecodeRuneInString(s)
+		near, s = append(near, r), s[size:]
+	}
+	for c, r := range near {
+		if r != ',' || c > at || c+4 < at {
+			continue
+		}
+		for _, g := range near[max(c-1, 0):min(c+5, len(near))] {
+			if !stable(g) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// stableRunes are the characters outside ASCII that check takes beside a
+// match: punctuation and symbols that are their own NFKC form, join no
+// character next to them, and are no word character.
+var stableRunes = map[rune]bool{
+	'—': true, '–': true, '‐': true, '‘': true, '’': true, '“': true, '”': true, '·': true, '•': true, '§': true,
+	'→': true, '←': true, '↔': true, '⇒': true, '×': true, '±': true, '≤': true, '≥': true, '≠': true,
+	'°': true, '€': true, '£': true, '¥': true, '©': true, '®': true,
+}
+
+// stable reports whether NFKC leaves r as it is and joins nothing to it:
+// any ASCII character, or one of stableRunes.
+func stable(r rune) bool { return r < utf8.RuneSelf || stableRunes[r] }
+
+func asciiDigit(r rune) bool { return '0' <= r && r <= '9' }
 
 func alnum(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }
 

@@ -263,12 +263,17 @@ line through its matching brace), the whole file for `code:path`, the part's
 id for `part:`, or the fact's own fields (a route's method, pattern, guard,
 package, and registering function; a table's name and columns; a package's
 path, name, and doc; a command's words and package; an ADR's title and path;
-a term's definition). Case, runs of whitespace, digit-group commas, and the
-kind of minus sign are ignored, a word hyphenated across a line end is
-joined, and an ellipsis (`…`) elides between pieces that must appear in
-order. Unlike the skill, `check` applies no Unicode compatibility
-normalization (NFKC) or full case folding, which Go's standard library lacks,
-so it can only be stricter.
+a term's definition). The case of ASCII letters, runs of whitespace,
+digit-group commas, and the kind of minus sign are ignored, a word
+hyphenated across a line end is joined, and an ellipsis (`…`) elides between
+pieces that must appear in order. The skill also applies Unicode
+compatibility normalization (NFKC) and full case folding, which Go's
+standard library lacks, so `check` compares every other character exactly
+(`CAFÉ` is not `café`) and takes no match whose edges NFKC could change: one
+beside a character outside ASCII other than punctuation NFKC leaves alone
+(such as `—`, `→`, and curly quotes), one that starts with a combining mark,
+or one sharing a digit group with such a character. It can only be stricter
+than the skill.
 
 ### The page's hashes
 

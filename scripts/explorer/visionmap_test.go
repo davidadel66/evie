@@ -322,6 +322,17 @@ func chipAt(i int, chip ...any) func(*testing.T, string) {
 	return breakMap(func(_, step map[string]any) { step["facts"].([]any)[i] = chip })
 }
 
+// withScriptFact adds a declaration to the fixture's TypeScript file and a
+// fact chip on the start step citing it.
+func withScriptFact(decl, name, value string) func(*testing.T, string) {
+	return func(t *testing.T, root string) {
+		writeFile(t, root, fixtureScript, readFile(t, root, fixtureScript)+decl+"\n")
+		breakMap(func(_, step map[string]any) {
+			appendTo(step, "facts", []any{name, value, "code:" + fixtureScript + "#" + name})
+		})(t, root)
+	}
+}
+
 func TestCheckHoldsSystemMapFactValuesToWhatTheyCite(t *testing.T) {
 	// As the skill's check does ("backed values" in references/map-format.md):
 	// once a chip's reference resolves, its value must appear in what the
@@ -377,6 +388,35 @@ func TestCheckHoldsSystemMapFactValuesToWhatTheyCite(t *testing.T) {
 			want:   []string{`step start fact "package"`, `"code:internal/alpha" names a folder, which has no text to find "alpha" in`},
 		},
 		{
+			// The skill folds case after NFKC, so İ becomes i and a combining
+			// dot; check folds only ASCII and compares the rest exactly, so
+			// it can only be stricter.
+			name:   "a value that differs from its source in a non-ASCII letter's case",
+			break_: withScriptFact(`export const city = "İstanbul";`, "city", "istanbul"),
+			want:   []string{`step start fact "city"`, `says "istanbul", which "code:web/stream.ts#city" does not`},
+		},
+		{
+			// NFKC joins e and a combining acute into é, so the skill finds
+			// no "cafe" in the source.
+			name:   "a value whose last letter takes a combining mark in its source",
+			break_: withScriptFact("export const word = \"cafe\u0301\";", "word", "cafe"),
+			want:   []string{`step start fact "word"`, `says "cafe"`},
+		},
+		{
+			// NFKC writes ™ as TM, so the skill reads "xtm", which does not
+			// hold the word "x".
+			name:   "a value beside a character that normalizes to letters",
+			break_: withScriptFact(`export const mark = "x™";`, "mark", "x"),
+			want:   []string{`step start fact "mark"`, `says "x"`},
+		},
+		{
+			// NFKC writes ² as 2, so the skill drops the comma and reads
+			// "1002", where "1" runs on into a digit.
+			name:   "a value beside a digit group that NFKC completes",
+			break_: withScriptFact(`export const sup = "1,00²";`, "sup", "1"),
+			want:   []string{`step start fact "sup"`, `says "1"`},
+		},
+		{
 			name:   "a document",
 			break_: chipAt(3, "guide", "Text", "doc:docs/guide.md"),
 			want:   []string{visionMapPath, `step start fact "guide"`, "a value backed by a doc: reference", "only the vision skill's check reads"},
@@ -390,12 +430,17 @@ func TestCheckHoldsSystemMapFactValuesToWhatTheyCite(t *testing.T) {
 }
 
 func TestCheckMatchesSystemMapFactValuesAsTheSkillDoes(t *testing.T) {
-	// Case, runs of whitespace and digit-group commas are ignored, and an
-	// ellipsis elides between pieces that appear in order.
+	// ASCII case, runs of whitespace and digit-group commas are ignored, an
+	// ellipsis elides between pieces that appear in order, other characters
+	// match exactly, and punctuation NFKC leaves alone may stand beside a
+	// value.
 	root := newVisionFixture(t)
-	writeFile(t, root, fixtureScript, readFile(t, root, fixtureScript)+"export const pageSize = 1000;\n")
+	writeFile(t, root, fixtureScript, readFile(t, root, fixtureScript)+"export const pageSize = 1000;\nexport const city = \"İstanbul\";\nexport const word = \"café.\";\nexport const dash = \"3—4\";\n")
 	m := visionFixtureMap()
 	appendTo(visionStepOf(m), "facts",
+		[]any{"city", "İstanbul", "code:web/stream.ts#city"},
+		[]any{"word", "Café", "code:web/stream.ts#word"},
+		[]any{"dash", "3", "code:web/stream.ts#dash"},
 		[]any{"guarded by", "REQUIREOWNER", "route:GET /widgets"},
 		[]any{"limit", "const  Limit\n= 3", "code:internal/alpha/alpha.go#Limit"},
 		[]any{"page size", "1,000", "code:web/stream.ts#pageSize"},
