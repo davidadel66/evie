@@ -608,7 +608,6 @@ func TestCheckReportsASystemMapPageOlderThanItsInputs(t *testing.T) {
 			name: "the changelog changed",
 			break_: keepPage(func(t *testing.T, root string) {
 				writeFile(t, root, changelogPath, readFile(t, root, changelogPath)+"\nA last paragraph.\n")
-				extractFixture(t, root)
 			}),
 			want: stale,
 		},

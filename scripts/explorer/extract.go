@@ -19,16 +19,15 @@ import (
 // It is sorted and holds no timestamps or line numbers, so a fresh
 // extraction is byte-identical on every platform.
 type Facts struct {
-	Format    int            `json:"format"`
-	Kind      string         `json:"kind"`
-	Packages  []Package      `json:"packages"`
-	Imports   []Import       `json:"imports"`
-	Commands  []Command      `json:"commands"`
-	Routes    []Route        `json:"routes"`
-	Databases []Database     `json:"databases"`
-	Glossary  []Term         `json:"glossary"`
-	ADRs      []ADR          `json:"adrs"`
-	History   []HistoryEntry `json:"history"`
+	Format    int        `json:"format"`
+	Kind      string     `json:"kind"`
+	Packages  []Package  `json:"packages"`
+	Imports   []Import   `json:"imports"`
+	Commands  []Command  `json:"commands"`
+	Routes    []Route    `json:"routes"`
+	Databases []Database `json:"databases"`
+	Glossary  []Term     `json:"glossary"`
+	ADRs      []ADR      `json:"adrs"`
 }
 
 // Package is one directory under cmd/ or internal/ with a non-test Go file.
@@ -138,16 +137,6 @@ func renderFacts(root string, databases []databaseSource) ([]byte, error) {
 // extractFacts reads the facts from the repository at root, creating its
 // databases from databases.
 func extractFacts(root string, databases []databaseSource) (Facts, error) {
-	log, err := readChangelog(root)
-	if err != nil {
-		return Facts{}, err
-	}
-	return factsWith(root, databases, log)
-}
-
-// factsWith reads the facts from the repository at root, creating its
-// databases from databases; the history is the already parsed changelog's.
-func factsWith(root string, databases []databaseSource, log changelogFile) (Facts, error) {
 	facts := Facts{
 		Format:    formatVersion,
 		Kind:      "facts",
@@ -158,7 +147,6 @@ func factsWith(root string, databases []databaseSource, log changelogFile) (Fact
 		Databases: []Database{},
 		Glossary:  []Term{},
 		ADRs:      []ADR{},
-		History:   []HistoryEntry{},
 	}
 	module, err := modulePath(root)
 	if err != nil {
@@ -202,7 +190,6 @@ func factsWith(root string, databases []databaseSource, log changelogFile) (Fact
 	if facts.ADRs, err = readADRs(root); err != nil {
 		return facts, err
 	}
-	facts.History = log.history()
 	return facts, nil
 }
 

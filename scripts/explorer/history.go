@@ -18,24 +18,25 @@ import (
 // (system-page.spec.md, "Changelog format").
 const changelogPath = "CHANGELOG.md"
 
-// HistoryEntry is one changelog entry: a merge to master, or a run of
-// direct-to-master commits.
+// HistoryEntry is one changelog entry as written: a merge to master, or a
+// run of direct-to-master commits. The page's History tab reads the
+// changelog itself; check validates it.
 type HistoryEntry struct {
-	Date    string       `json:"date"`
-	Title   string       `json:"title"`
-	Branch  string       `json:"branch"`
-	Merge   string       `json:"merge,omitempty"`
-	Commits *CommitRange `json:"commits,omitempty"`
-	Touches []string     `json:"touches"`
-	Sources []string     `json:"sources"`
-	Text    []string     `json:"text"`
+	Date    string
+	Title   string
+	Branch  string
+	Merge   string
+	Commits *CommitRange
+	Touches []string
+	Sources []string
+	Text    []string
 }
 
 // CommitRange names the first and last commit of direct-to-master work,
 // both included.
 type CommitRange struct {
-	From string `json:"from"`
-	To   string `json:"to"`
+	From string
+	To   string
 }
 
 // changelogFile is CHANGELOG.md parsed: its entries, and what is wrong with
@@ -82,15 +83,6 @@ func readChangelog(root string) (changelogFile, error) {
 		return changelogFile{}, fmt.Errorf("read %s: %w", changelogPath, err)
 	}
 	return parseChangelog(string(data)), nil
-}
-
-// history is the history facts: every entry as written.
-func (l changelogFile) history() []HistoryEntry {
-	history := make([]HistoryEntry, 0, len(l.entries))
-	for _, e := range l.entries {
-		history = append(history, e.HistoryEntry)
-	}
-	return history
 }
 
 // parseChangelog reads every entry of a changelog: a level-two heading
