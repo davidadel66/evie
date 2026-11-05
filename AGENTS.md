@@ -118,11 +118,11 @@ The drift check holds the facts (`docs/architecture/explorer/data/facts.js`),
 the system map (`.vision/map.json`), and `CHANGELOG.md` to the code. Repair
 stale facts with `go run ./scripts/explorer extract`; a new package needs a
 component part with a cited summary in the map. After the map, the
-changelog, or the facts change, rebuild the committed page,
-`docs/architecture/explorer/system.html`, with the vision skill
-(`python3 ~/.claude/skills/vision/scripts/vision.py build`) and commit it with
-the map; the check catches a page older than the map, but not one older than
-the changelog or the facts. Repair everything else it reports by following
+changelog, the facts, or a design proposal in `.vision/proposals/` changes,
+rebuild the committed page, `docs/architecture/explorer/system.html`, with the
+vision skill (`python3 ~/.claude/skills/vision/scripts/vision.py build`) and
+commit it with them; the check fails on a page older than any of them. Repair
+everything else it reports by following
 [`docs/architecture/explorer/README.md`](docs/architecture/explorer/README.md).
 `/flow` updates the map, `CHANGELOG.md`, and the facts after each piece of
 work.
