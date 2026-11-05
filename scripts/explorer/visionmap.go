@@ -34,14 +34,15 @@ const (
 	// embeds it, and the System view frames it.
 	visionPagePath = "docs/architecture/explorer/system.html"
 	visionBuild    = "python3 ~/.claude/skills/vision/scripts/vision.py build"
-	visionRebuild  = "rebuild with the vision skill: " + visionBuild + ", and commit the page with the map"
 	visionCheck    = "python3 ~/.claude/skills/vision/scripts/vision.py check .vision/map.json"
 	visionFormat   = "the vision skill's references/map-format.md"
-)
 
-// visionRebuildInputs is visionRebuild for a page older than the other
-// files it embeds.
-const visionRebuildInputs = "rebuild with the vision skill: " + visionBuild + ", and commit the page with the facts, the changelog and the proposals"
+	// visionRebuild is how to rebuild the page after the map changed, and
+	// visionRebuildInputs after another file it embeds did.
+	visionRebuild       = visionRebuildWith + "the map"
+	visionRebuildInputs = visionRebuildWith + "the facts, the changelog and the proposals"
+	visionRebuildWith   = "rebuild with the vision skill: " + visionBuild + ", and commit the page with "
+)
 
 // visionMap is the part of a map the check reads: its settings, its flows,
 // its code entries, and its parts, edges and sequences. A top-level flow and
