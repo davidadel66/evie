@@ -293,7 +293,33 @@ func (c *checker) visionMapContent(vm *loadedMap) {
 	for _, q := range m.Sequences {
 		v.sequence("sequence "+q.ID, q.visionMessages)
 	}
+	v.uniqueIDs()
 	v.packageCoverage()
+}
+
+// uniqueIDs reports an id a part, a sequence or a diagram repeats, as the
+// skill's check does: part ids are unique among parts, sequence ids among
+// sequences, and diagram ids across every part's diagrams.
+func (v *visionChecker) uniqueIDs() {
+	repeats := func(what string) func(item, id string) {
+		seen := map[string]bool{}
+		return func(item, id string) {
+			if id != "" && seen[id] {
+				v.add(visionMapPath, item, "the id is used by an earlier "+what, "give each "+what+" its own id, then "+visionRebuild)
+			}
+			seen[id] = true
+		}
+	}
+	part, sequence, diagram := repeats("part"), repeats("sequence"), repeats("diagram")
+	for _, p := range v.m.Parts {
+		part("part "+p.ID, p.ID)
+		for _, d := range p.Diagrams {
+			diagram("part "+p.ID+" diagram "+d.ID, d.ID)
+		}
+	}
+	for _, q := range v.m.Sequences {
+		sequence("sequence "+q.ID, q.ID)
+	}
 }
 
 // visionMeta checks that the map's settings are the ones Evie's check,
@@ -507,9 +533,19 @@ func (v *visionChecker) statement(item string, s *visionStatement) {
 	}
 }
 
-func (v *visionChecker) statements(item string, list []visionStatement) {
+// cited checks a part's statement: it cites at least one source, as every
+// statement of a part must, and each one resolves.
+func (v *visionChecker) cited(item string, s *visionStatement) {
+	if s != nil && len(s.Refs) == 0 {
+		v.add(visionMapPath, item, "the statement cites no source", "cite at least one reference in its refs, the code or document it rests on, then "+visionRebuild)
+	}
+	v.statement(item, s)
+}
+
+// citedList checks a part's statement list, numbering its statements from 1.
+func (v *visionChecker) citedList(item string, list []visionStatement) {
 	for i := range list {
-		v.statement(fmt.Sprintf("%s %d", item, i+1), &list[i])
+		v.cited(fmt.Sprintf("%s %d", item, i+1), &list[i])
 	}
 }
 
@@ -535,11 +571,11 @@ func (v *visionChecker) part(p visionPart) {
 		}
 	}
 	v.mapRefs(item+" refs", p.Refs)
-	v.statement(item+" summary", p.Summary)
-	v.statements(item+" does", p.Does)
-	v.statements(item+" owns", p.Owns)
-	v.statements(item+" interfaces", p.Interfaces)
-	v.statements(item+" gotchas", p.Gotchas)
+	v.cited(item+" summary", p.Summary)
+	v.citedList(item+" does", p.Does)
+	v.citedList(item+" owns", p.Owns)
+	v.citedList(item+" interfaces", p.Interfaces)
+	v.citedList(item+" gotchas", p.Gotchas)
 	v.factChips(item, p.Facts)
 	for _, term := range p.Terms {
 		v.mapRef(item+" terms", "term:"+term)
@@ -589,14 +625,19 @@ func (v *visionChecker) diagram(item string, d visionDiagram) {
 }
 
 // edge checks an edge between two parts: both are parts, its references
-// resolve, and an import edge is one of the facts' imports.
+// resolve, an import edge is one of the facts' imports, and any other edge
+// cites the source that carries it.
 func (v *visionChecker) edge(e visionEdge) {
 	item := fmt.Sprintf("edge %s -> %s (%s)", e.From, e.To, e.Via)
 	v.isPart(item, e.From)
 	v.isPart(item, e.To)
 	v.mapRefs(item, e.Refs)
-	if e.Via == "import" {
+	switch {
+	case e.Via == "import":
 		v.importEdge(item, e.From, e.To)
+	case len(e.Refs) == 0:
+		v.add(visionMapPath, item, "the edge cites no source",
+			"cite the code or document that carries it in its refs, or make it an import edge if the facts' imports carry it, then "+visionRebuild)
 	}
 }
 

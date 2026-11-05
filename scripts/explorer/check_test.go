@@ -279,6 +279,79 @@ func TestCheckReportsPartReferencesThatNoLongerResolve(t *testing.T) {
 	runCheckCases(t, cases)
 }
 
+func TestCheckHoldsTheMapsArchitectureToItsContentRules(t *testing.T) {
+	// As the skill's check has them: every statement of a part and every
+	// edge but an import edge cites a source, and ids are unique among parts,
+	// among sequences, and across every part's diagrams.
+	uncited := func(text string) map[string]any { return map[string]any{"text": text} }
+	cites := []string{"cites no source", "cite at least one reference", "vision.py build", "1 problem(s)"}
+	edit := func(id string, edit func(part map[string]any)) func(*testing.T, string) {
+		return breakPart(id, func(_ *testing.T, part map[string]any) { edit(part) })
+	}
+	runCheckCases(t, []checkCase{
+		{
+			name:   "a part's summary without a source",
+			break_: edit("pkg:internal/beta", func(beta map[string]any) { beta["summary"] = uncited("Beta names the fixture.") }),
+			want:   append([]string{visionMapPath + ": part pkg:internal/beta summary"}, cites...),
+		},
+		{
+			name:   "what a part does, with an empty list of sources",
+			break_: edit("pkg:internal/alpha", func(alpha map[string]any) { appendTo(alpha, "does", statement("Stops a server.")) }),
+			want:   append([]string{"part pkg:internal/alpha does 2"}, cites...),
+		},
+		{
+			name:   "data a part owns, without a source",
+			break_: edit("pkg:internal/beta", func(beta map[string]any) { appendTo(beta, "owns", uncited("Gadgets.")) }),
+			want:   append([]string{"part pkg:internal/beta owns 2"}, cites...),
+		},
+		{
+			name:   "an interface without a source",
+			break_: edit("pkg:cmd/tool", func(tool map[string]any) { appendTo(tool, "interfaces", uncited("Flies.")) }),
+			want:   append([]string{"part pkg:cmd/tool interfaces 2"}, cites...),
+		},
+		{
+			name:   "a gotcha without a source",
+			break_: edit("pkg:internal/alpha", func(alpha map[string]any) { appendTo(alpha, "gotchas", uncited("Watch out.")) }),
+			want:   append([]string{"part pkg:internal/alpha gotchas 2"}, cites...),
+		},
+		{
+			name: "an edge other than an import edge without a source",
+			break_: breakMap(func(m, _ map[string]any) {
+				appendTo(m, "edges", map[string]any{"from": "pkg:internal/alpha", "to": "pkg:internal/delta", "label": "reads", "via": "call"})
+			}),
+			want: []string{visionMapPath + ": edge pkg:internal/alpha -> pkg:internal/delta (call)", "the edge cites no source", "cite the code", "1 problem(s)"},
+		},
+		{
+			name: "a part id used twice",
+			break_: breakMap(func(m, _ map[string]any) {
+				appendTo(m, "parts", map[string]any{"id": "owner", "level": "context", "kind": "person", "title": "Owner again",
+					"summary": statement("The owner again.", "doc:docs/guide.md")})
+			}),
+			want: []string{visionMapPath + ": part owner: the id is used by an earlier part", "give each part its own id", "1 problem(s)"},
+		},
+		{
+			name: "a sequence id used twice",
+			break_: breakMap(func(m, _ map[string]any) {
+				again := map[string]any{}
+				for k, v := range m["sequences"].([]any)[0].(map[string]any) {
+					again[k] = v
+				}
+				again["title"] = "Run the tool again"
+				appendTo(m, "sequences", again)
+			}),
+			want: []string{visionMapPath + ": sequence run: the id is used by an earlier sequence", "give each sequence its own id", "1 problem(s)"},
+		},
+		{
+			name: "a diagram id another part's diagram uses",
+			break_: edit("pkg:internal/beta", func(beta map[string]any) {
+				appendTo(beta, "diagrams", map[string]any{"id": "alpha-graph", "title": "Beta alone", "kind": "graph",
+					"summary": statement("Beta.", "code:internal/beta/beta.go#Name"), "nodes": []any{map[string]any{"id": "b", "label": "beta"}}})
+			}),
+			want: []string{"part pkg:internal/beta diagram alpha-graph: the id is used by an earlier diagram", "1 problem(s)"},
+		},
+	})
+}
+
 func TestCheckHoldsPartFactValuesToWhatTheyCite(t *testing.T) {
 	runCheckCases(t, []checkCase{
 		{

@@ -217,11 +217,18 @@ sequence, code entry, proposal, or setting, and how to fix it:
   is not in what its reference points at ([Backed values](#backed-values));
 - an `import` edge, or a sequence step with `via: "import"`, between two
   package parts whose packages the facts do not import (the caller imports
-  the callee, or the reverse for a `return`);
+  the callee, or the reverse for a `return`), or with an end that is a part
+  without a package;
+- a statement of a part (its summary, `does`, `owns`, `interfaces`, or
+  `gotchas`), or an edge other than an `import` edge, that cites no source;
 - a sequence step, or a sequence diagram's step, that cites no code: none of
   its references is a `code:` reference or a key of the map's `code`;
+- a sequence step whose `from` or `to` is not one of its sequence's
+  participants;
 - a sequence participant, a `contains` entry, an edge's end, or a graph
   diagram node's `node` that is not a part;
+- an id used twice: a part's among the parts, a sequence's among the
+  sequences, or a diagram's among every part's diagrams;
 - an er diagram over a database the facts do not have, or a table that
   database does not have;
 - a code entry whose file is gone, or whose `symbol` the file no longer
@@ -239,8 +246,10 @@ sequence, code entry, proposal, or setting, and how to fix it:
 - a design proposal that is not one JSON object, whose `id` is not its file
   name, or whose `status` the skill does not know
   ([Design proposals](#design-proposals));
-- a missing map: it holds every package's part, and the binary embeds the
-  page built from it.
+- a missing or malformed map: it holds every package's part, and the
+  binary embeds the page built from it. It is reported once; the design
+  proposals and the page's inputs hash are still checked, and the
+  changelog's `part:` sources wait for a map whose parts they can name.
 
 Any other form of the skill's format is refused rather than passed unread,
 naming the skill's own check
@@ -251,8 +260,8 @@ or a `kv` row's reference, a value backed by a `doc:` reference or that is not
 a string, and the skill's notebook, text-source, and index reference kinds
 (`undef:`, `sec:`, and the rest). Teach `scripts/explorer/visionmap.go` the
 form before the map uses it. The check does not re-read highlights or the
-map's structure (titles, levels, groups, statements without a source), which
-only the skill's `check` does.
+map's structure (titles, levels, groups, or a sequence's or diagram's
+statements without a source), which only the skill's `check` does.
 
 ### Backed values
 

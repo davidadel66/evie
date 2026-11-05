@@ -169,3 +169,14 @@ Spec: [system-page.spec.md](system-page.spec.md).
   the inputs hash covers the changelog, so `extract` no longer reads the
   changelog and `check` still validates it. This amends the migration's
   two-way door that kept the list.
+- **2026-11-05 — The map check keeps the content rules the explorer had.**
+  Claude decided, from the branch's review, which found that moving the
+  content files into the map dropped some of the drift check's rules: every
+  statement of a part and every edge other than an import edge cites a
+  source, ids are unique (parts among parts, sequences among sequences,
+  diagrams across the map), every sequence step joins two of its
+  participants, and an import joins two package parts. Each is a rule of the
+  skill's own check too, so a map the skill accepts still passes. This
+  extends the migration's entry above that moved the content rules onto the
+  map. A missing or malformed map is reported once, and the proposals and
+  the page's inputs are still checked without it.
