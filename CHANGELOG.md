@@ -10,6 +10,7 @@ it, and run `go run ./scripts/explorer check`.
 
 ## 2026-11-05 — Fonts bundled with Evie
 Branch: feat/self-hosted-fonts
+Merge: 2fc6d34
 Touches: internal/web/ui
 Sources: doc:cmd/evie/docs/active/ui-chat.spec.md
 
