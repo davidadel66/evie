@@ -84,3 +84,10 @@ Spec: [system-page.spec.md](system-page.spec.md).
   `.vision/map.json` no longer resolves, or when the built page does not
   carry the hash of the current map. Rebuilding runs locally through the
   vision skill, because CI cannot run a script that lives outside the repo.
+- **2026-11-04 — /flow keeps the System current after each piece of work.**
+  David asked: "make sure that flow skill gets updated as well". `/flow`'s
+  step 5 now updates the vision map through the skill, drafts the branch's
+  `CHANGELOG.md` entry, and regenerates the facts and runs the drift check,
+  replacing hand-written changelog entries (this amends the 2026-10-31
+  decision that entries are written by hand until `/implement` drafts them).
+  AGENTS.md says so in its verification section.

@@ -9,7 +9,7 @@ editing this file, run `go run ./scripts/explorer extract` and
 
 ## 2026-11-04 — The System view opens on a map of Evie's flows
 Branch: feat/system-map
-Touches: .vision, docs/architecture/explorer, internal/web, internal/web/ui, scripts/explorer, AGENTS.md
+Touches: .vision, docs/architecture/explorer, internal/web, internal/web/ui, internal/memorybackground, scripts/explorer, AGENTS.md
 Sources: doc:cmd/evie/docs/active/system-page.decisions.md, doc:cmd/evie/docs/active/system-page.spec.md
 
 The explorer shows Evie as components, which says where code lives but not
@@ -19,16 +19,22 @@ subway map whose lines are one chat turn and the flows it starts (Memory,
 Workflows, Subagents, Changes & merge, MCP sign-in, Serve startup), each
 station opening into the steps inside it. It is always dark inside Evie and
 shows no code. History and Where is it? sit beside it as tabs, opening the
-explorer on its History and on its components.
+explorer on its History and on its components in one shared frame, so
+switching between them does not reload it.
 
 The map lives in `.vision/map.json` and points every step at its code and
 every route, table, package and command chip at the extracted facts. The
 vision skill builds it into `docs/architecture/explorer/system.html`, which
 is committed and built into the binary like the facts. The skill lives
 outside the repository, so the drift check now also fails when a reference
-in the map no longer resolves, or when the page was not rebuilt after the
-map changed, comparing the page's map hash with one computed the skill's
-way.
+in the map no longer resolves, when a fact chip no longer says what its
+reference points at (matched as the skill's check matches it), or when the
+page was not rebuilt after the map changed, comparing the page's map hash
+with one computed the skill's way. It reads only the forms Evie's map uses
+and refuses the skill's others. Drawing the map also corrected two claims
+elsewhere: the background memory pass is off unless `EVIE_REMOTE_MEMORY=on`
+or a local extractor enables it, and Automatic Recall can run two more
+searches for exact selectors such as `task-12`.
 
 ## 2026-11-03 — Skills: owner-approved procedures Evie loads on demand
 Branch: feat/skills
