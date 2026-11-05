@@ -268,7 +268,7 @@ func (c *checker) validateVisionMap(vm *loadedMap, inputs pageInputs) {
 func (c *checker) visionMapContent(vm *loadedMap) {
 	m := vm.m
 	c.visionMeta(m)
-	v := &visionChecker{checker: c, loadedMap: vm, facts: factTextsOf(c.facts)}
+	v := &visionChecker{checker: c, loadedMap: vm, factText: factTextsOf(c.facts)}
 	if given(m.Flow) {
 		v.unsupported("flow", "a top-level flow", "give the map a flows list")
 	}
@@ -392,7 +392,7 @@ var (
 type visionChecker struct {
 	*checker
 	*loadedMap
-	facts factTexts
+	factText factTexts // the text a value backed by a facts reference is looked for in
 }
 
 // unsupported refuses a form of the skill's map format that Evie's map does
@@ -579,7 +579,7 @@ func (v *visionChecker) diagram(item string, d visionDiagram) {
 	if d.Kind != "er" {
 		return
 	}
-	if !slices.ContainsFunc(v.checker.facts.Databases, func(db Database) bool { return db.ID == d.Database }) {
+	if !slices.ContainsFunc(v.facts.Databases, func(db Database) bool { return db.ID == d.Database }) {
 		v.add(visionMapPath, item, "there is no database "+d.Database+" in the facts", refFixes["table"]+", then "+visionRebuild)
 		return
 	}
@@ -678,7 +678,7 @@ func (v *visionChecker) packageCoverage() {
 	for _, pkg := range v.partPackage {
 		covered[pkg] = true
 	}
-	for _, pkg := range v.checker.facts.Packages {
+	for _, pkg := range v.facts.Packages {
 		if !covered[pkg.Path] {
 			v.add(visionMapPath, "package "+pkg.Path, fmt.Sprintf(`no part has "package": %q`, pkg.Path),
 				fmt.Sprintf(`add a component part with "package": %q, a group and a cited summary, then %s`, pkg.Path, visionRebuild))
@@ -760,7 +760,7 @@ func (v *visionChecker) region(item, ref, value string) (string, bool) {
 		// As the skill reads it: a part's text is its id.
 		return target, true
 	}
-	return v.facts.lookup(kind, target), true
+	return v.factText.lookup(kind, target), true
 }
 
 // factTexts holds, by reference kind and then target, the text a value
