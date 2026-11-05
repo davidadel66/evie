@@ -1,23 +1,23 @@
 # Facts and the system map
 
-Evie's System view, in its sidebar, is one page with three tabs: **Map**, a
-subway map of Evie's flows whose stations open into the steps inside them;
-**Architecture**, every part Evie is built from at four levels (Context,
-Containers, Components, Flows), each part with the map steps it appears in;
-and **History**, a timeline of `CHANGELOG.md`. The vision skill
+Evie's System view, in its sidebar, is one page with three tabs of its own:
+**Map**, a subway map of Evie's flows whose stations open into the steps
+inside them; **Architecture**, every part Evie is built from at four levels
+(Context, Containers, Components, Flows), each part with the map steps it
+appears in; and **History**, a timeline of `CHANGELOG.md`. The vision skill
 (`~/.claude/skills/vision`) draws the page from the
 [system map](#the-system-map), `.vision/map.json`, the facts in this
-directory, and the changelog. This directory holds what Evie's own tools keep
-true:
+directory, the changelog, and any [design proposals](#design-proposals) in
+`.vision/proposals/`. This directory holds what Evie's own tools keep true:
 
 | Path | What it is |
 | --- | --- |
-| `data/facts.js` | The facts: what the code answers mechanically (packages, imports, commands, routes, tables, glossary terms, ADRs, the changelog's entries). Never edit it by hand; run `extract`. |
-| `system.html` | The page, built by the vision skill from the map. Never edit it by hand; rebuild it. |
+| `data/facts.js` | The facts: what the code answers mechanically (packages, imports, commands, routes, tables, glossary terms, ADRs). Never edit it by hand; run `extract`. |
+| `system.html` | The page, built by the vision skill from the map, the facts, the changelog, and the design proposals. Never edit it by hand; rebuild it. |
 | `snapshot.go` | Package `explorer`: embeds `system.html`, the snapshot's only file, so `evie serve` can serve it under `/explorer/` (see [Served by `evie serve`](#served-by-evie-serve)). |
 
-The drift check holds the facts, the map, and the changelog to the code, so
-CI fails when any of them drifts. Specifications:
+The drift check holds the facts, the map, the changelog, and the page to the
+code, so CI fails when any of them drifts. Specifications:
 [`system-explorer.spec.md`](../../../cmd/evie/docs/active/system-explorer.spec.md)
 (the facts and the check) and
 [`system-page.spec.md`](../../../cmd/evie/docs/active/system-page.spec.md)
@@ -31,19 +31,20 @@ Run both from the repository root.
 go run ./scripts/explorer extract
 ```
 
-Rewrites `data/facts.js` from the code and `CHANGELOG.md`. Output is sorted
-and has no timestamps or line numbers, so running it twice leaves the file
+Rewrites `data/facts.js` from the code. Output is sorted and has no
+timestamps or line numbers, so running it twice leaves the file
 byte-identical on every platform. Run it whenever a package, import, command,
-route, table, glossary term, or ADR is added, removed, or renamed, or
-`CHANGELOG.md` changes, and commit the result.
+route, table, glossary term, or ADR is added, removed, or renamed, and commit
+the result with the page [rebuilt](#changing-the-map) from it.
 
 ```sh
 go run ./scripts/explorer check
 ```
 
 Re-extracts the facts in memory, compares them byte for byte with
-`data/facts.js`, then checks the [system map](#what-the-check-holds-the-map-to)
-and [`CHANGELOG.md`](#history) against them. It prints every problem, one per
+`data/facts.js`, then checks the [system map](#what-the-check-holds-the-map-to),
+the [design proposals](#design-proposals), the page, and
+[`CHANGELOG.md`](#history) against them. It prints every problem, one per
 line, as
 
 ```text
@@ -81,8 +82,7 @@ extract command, and when it has CRLF line endings (the repository's
   "routes": [{"method": "GET", "pattern": "/api/x", "package": "internal/web", "guard": "requireOwner", "source": {"file": "...", "function": "..."}}],
   "databases": [{"id": "evie", "package": "internal/eviedb", "tables": [{"name": "jobs", "columns": [{"name": "id", "type": "INTEGER", "notNull": false, "primaryKey": 1}], "foreignKeys": [{"columns": ["job_id"], "table": "jobs", "references": ["id"]}]}]}],
   "glossary": [{"term": "Plugin", "definition": "...", "avoid": ["Tool", "skill"]}],
-  "adrs": [{"number": "0001", "title": "...", "path": "docs/adr/0001-....md"}],
-  "history": [{"date": "2026-10-26", "title": "...", "branch": "cache/batched-projection", "merge": "cc69b4d", "touches": ["internal/agent"], "sources": ["doc:...", "#179"], "text": ["..."]}]
+  "adrs": [{"number": "0001", "title": "...", "path": "docs/adr/0001-....md"}]
 }
 ```
 
@@ -142,12 +142,10 @@ extract command, and when it has CRLF line endings (the repository's
 - **glossary**: the bold `**Term**:` entries of `GLOSSARY.md`, the paragraph
   after each as the definition, and its `_Avoid_:` line.
 - **adrs**: the numbered files in `docs/adr/` with their first heading.
-- **history**: the entries of `CHANGELOG.md` in the order written, each
-  with its date, title, branch, `merge` or `commits` (`{"from", "to"}`)
-  when given, touched paths, sources, and text paragraphs (see
-  [History](#history)). It is a pure function of the file: git is never
-  asked, so a short SHA stays as written. `extract` fails when
-  `CHANGELOG.md` is missing, as it does without `GLOSSARY.md`.
+
+`extract` does not read `CHANGELOG.md`: the page's History tab reads it
+directly, so the facts carry no copy of it and a changelog edit leaves them
+unchanged.
 
 
 ## The system map
@@ -191,18 +189,21 @@ python3 ~/.claude/skills/vision/scripts/vision.py build
 ```
 
 `build` runs the skill's own check first (every highlight and backed value
-against the code, every part, edge, sequence and changelog entry) and writes
-the map's hash into the page. Rebuild after the changelog or the facts change
-too: the hash covers only the map, so `check` cannot see a page older than
-them.
+against the code, every part, edge, sequence, changelog entry, and design
+proposal) and writes two hashes into the page's head: the map's, and one
+over the other files it embeds, the facts, the changelog, and the design
+proposals. Rebuild after any of them changes, not only the map: `check`
+fails on a page with either hash out of date
+([The page's hashes](#the-pages-hashes)).
 
 ### What the check holds the map to
 
 CI cannot run the skill, which lives outside the repository, so `check` holds
 the map to the code itself. A page built from the current map passed the
 skill's check when it was built, so `check` reads what drifts when the code
-does, and the hash catches a map edited without a rebuild. It reports, naming
-the step, part, edge, sequence, code entry, or setting, and how to fix it:
+does, and the page's two hashes catch a map, facts file, changelog, or
+proposal changed without a rebuild. It reports, naming the step, part, edge,
+sequence, code entry, proposal, or setting, and how to fix it:
 
 - a package in the facts with no part whose `package` names it, and a part
   whose `package` the facts no longer have;
@@ -231,12 +232,13 @@ the step, part, edge, sequence, code entry, or setting, and how to fix it:
   `docs/architecture/explorer/system.html`, `meta.parts` other than
   `"complete"`, `meta.changelog` other than `CHANGELOG.md`, and
   `meta.repository` other than `https://` and the module path in `go.mod`;
-- a page that is missing, carries no `<meta name="vision-map-hash">`, or
-  carries the hash of an older map. The hash is computed exactly as the
-  skill's `references/map-format.md` ("Map hash") says: the map without
-  `meta.commit`, `meta.stamped`, `meta.artifact` and the stamp's code
-  fingerprints, in RFC 8785 canonical JSON, then SHA-256. Stamping and
-  reformatting the map leave it unchanged;
+- a page that is missing, carries no `<meta name="vision-map-hash">` or no
+  `<meta name="vision-inputs-hash">`, or carries the hash of an older map or
+  of an older facts file, changelog, or set of design proposals
+  ([The page's hashes](#the-pages-hashes));
+- a design proposal that is not one JSON object, whose `id` is not its file
+  name, or whose `status` the skill does not know
+  ([Design proposals](#design-proposals));
 - a missing map: it holds every package's part, and the binary embeds the
   page built from it.
 
@@ -267,6 +269,56 @@ joined, and an ellipsis (`…`) elides between pieces that must appear in
 order. Unlike the skill, `check` applies no Unicode compatibility
 normalization (NFKC) or full case folding, which Go's standard library lacks,
 so it can only be stricter.
+
+### The page's hashes
+
+The skill writes both hashes into the page's head, and `check` recomputes
+each exactly as the skill's `references/map-format.md` says, so CI can tell
+a page that was not rebuilt without running the skill:
+
+- **Map hash** (`vision-map-hash`, "Map hash"): the map without
+  `meta.commit`, `meta.stamped`, `meta.artifact` and the stamp's code
+  fingerprints, in RFC 8785 canonical JSON, then SHA-256. Stamping and
+  reformatting the map leave it unchanged.
+- **Inputs hash** (`vision-inputs-hash`, "Inputs hash"): the other files the
+  page embeds, in this order: the facts file `meta.facts` names, the
+  changelog `meta.changelog` names, then every design proposal (each `.json`
+  file directly in `.vision/proposals/` whose name does not start with `.`)
+  sorted by file name as UTF-8 bytes. Each file is one record: its kind
+  (`facts`, `changelog`, or `proposal`), a space, its name (the path as
+  `meta` gives it, or the proposal's file name), a newline, its length in
+  bytes in decimal, a newline, its bytes with every CR LF read as LF, and a
+  newline. A file the map does not name, or that is missing, has no record.
+  The hash is the SHA-256 of the records joined, as lowercase hex after
+  `sha256:`; with no records it is the SHA-256 of nothing,
+  `sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+  Because CR LF reads as LF, a checkout with CRLF line endings agrees with
+  the page.
+
+`scripts/explorer`'s tests hold both to what the skill's own `vision.py`
+computes on fixtures (`testdata/maphash` and `testdata/inputshash`).
+
+### Design proposals
+
+A design proposal draws what one planned feature would add, change, or
+remove over the map as built, with the feature's requirements and decisions;
+the page draws it over the Map and Architecture while a reader turns it on.
+Each is one file, `.vision/proposals/<id>.json`, on the feature's branch, in
+the format of the skill's `references/map-format.md` ("Design proposals").
+`/flow` writes one during a Big brief and deletes it in "Update the System",
+once the map describes what was built. The folder exists only while a
+proposal does; Evie commits no example.
+
+CI cannot run the skill's check, which validates a proposal in full (its
+fields, statements and references, and where each operation points on the
+map), so `check` holds each file only to what it can check without the
+skill: it is one JSON object, its `id` is its file name without `.json`, and
+its `status` is `proposed`, `accepted`, `building`, or `example`. It reads the
+files the skill reads, every `.json` file directly in the folder whose name
+does not start with `.`, and they count toward the
+[inputs hash](#the-pages-hashes). The rest is the skill's: run
+`python3 ~/.claude/skills/vision/scripts/vision.py check .vision/map.json`,
+or `build`, which runs it first.
 
 ## Reference forms
 
@@ -308,18 +360,19 @@ fonts instead of Geist from Google Fonts. The route sits outside the API
 guard, like Evie's own static files: it serves only the public repository's
 architecture and reads no data.
 
-Evie's System view frames `/explorer/?theme=dark#subway`; `theme=dark` pins
-the page dark whatever the system preference. Its Map, Architecture, and
-History tabs move the frame's fragment in place, to `#subway`,
-`#view=architecture`, and `#view=history`, so the page routes between its
-own views without a reload or a history entry.
+Evie's System view frames `/explorer/?theme=dark`, under a System header
+and full height; `theme=dark` pins the page dark whatever the system
+preference, and the page opens on its subway map. The page's own Map,
+Architecture, and History tabs are the only tab bar: Evie draws none, since
+the page routes between its views itself (as when a part chip on the Map
+opens Architecture), and a second bar outside the frame could not follow
+it.
 
 ## History
 
 [`CHANGELOG.md`](../../../CHANGELOG.md) at the repository root records every
 merge to master, newest first: what changed and why. The page's History tab
-draws it (the map's `meta.changelog`), `extract` copies it into the facts'
-`history` list, and `check` validates it.
+draws it (the map's `meta.changelog`), and `check` validates it.
 `/flow` drafts each work branch's entry; it can also be written by hand.
 Specification: the "Changelog format" section of
 [`system-page.spec.md`](../../../cmd/evie/docs/active/system-page.spec.md).
@@ -384,7 +437,9 @@ To add an entry (`/flow` does steps 1 and 2 on the work branch):
 
 1. Write it above every older entry in `CHANGELOG.md`, in the format above.
    On the branch, before the merge exists, leave out `Merge:`.
-2. Run `go run ./scripts/explorer extract`, then `go run ./scripts/explorer
-   check`, and fix what it reports. Commit `CHANGELOG.md` with
-   `data/facts.js`.
-3. Once the merge exists, add its `Merge:` line and run both again.
+2. Rebuild the page (`python3 ~/.claude/skills/vision/scripts/vision.py
+   build`), since it embeds the changelog, then run `go run
+   ./scripts/explorer check` and fix what it reports. Commit `CHANGELOG.md`
+   with `system.html`.
+3. Once the merge exists, add its `Merge:` line, then rebuild and check
+   again.

@@ -139,3 +139,33 @@ Spec: [system-page.spec.md](system-page.spec.md).
   the map, and changelog sources resolve in the map's reference forms
   (`part:` included, `node:` gone); the facts keep their `history` list,
   which no page reads now, so `extract` is unchanged.
+- **2026-11-05 — Evie's outer tabs are dropped in favour of the page's
+  own.** Claude decided: the page draws its own Map, Architecture and
+  History tabs and can change view from inside, so Evie's bar above the
+  frame duplicated them and could fall out of step with what the page
+  showed. The System view keeps its System header, styled like Data's, over
+  one full-height sandboxed frame of `/explorer/?theme=dark`, which opens on
+  the subway map. This amends the migration's two-way doors above: no tab
+  moves the frame's fragment, and none re-applies a view.
+- **2026-11-05 — The drift check also compares the page's inputs hash.**
+  This extends the approved rule that the page carry the current map's hash
+  (2026-11-04) to the page's other inputs. The vision skill writes
+  `<meta name="vision-inputs-hash">` over the facts file, the changelog and
+  the design proposals, and `check` recomputes it as the skill's map format
+  says ("Inputs hash") and fails, naming the rebuild, when the page carries
+  none or an older one. This closes the spec's risk of a page older than
+  the changelog or the facts.
+- **2026-11-05 — Design proposals are back in the vision skill.** David
+  agreed ("yes", "ok"): a proposal is `.vision/proposals/<slug>.json`, one per
+  feature in flight, drawn as an overlay on the Map and Architecture;
+  `/flow` writes one during a Big brief and deletes it in "Update the
+  System". This settles the entry above that they did not carry over into
+  the migration. Claude decided the drift check's share, since CI cannot
+  run the skill's full proposal check: each file is one JSON object, its
+  `id` is its file name, and its `status` is one the skill knows; the folder
+  is absent while there is no proposal, and Evie commits no example.
+- **2026-11-05 — The facts drop their `history` list.** Claude decided:
+  nothing reads it now that the page's History reads `CHANGELOG.md`, and
+  the inputs hash covers the changelog, so `extract` no longer reads the
+  changelog and `check` still validates it. This amends the migration's
+  two-way door that kept the list.
