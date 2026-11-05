@@ -70,3 +70,17 @@ Spec: [system-page.spec.md](system-page.spec.md).
   the explorer still follows the system preference. Claude kept one colour
   table using `light-dark()` so the frame forces dark through
   `color-scheme` instead of duplicating the dark palette.
+- **2026-11-04 — The System view opens on a vision map.** David approved a
+  prototype (branch `prototype/system-vision`, "i love it") and asked to
+  switch the System view once the vision skill absorbed it ("once youre done
+  with the skill, switch evie's system view"). The view gets three tabs: Map
+  (the default: a subway front door whose stations open the flows, with no
+  code shown), History, and Where is it? (today's explorer opened on its
+  History tab and its components index). David answered "yes to both".
+- **2026-11-04 — The built map page is committed and the drift check guards
+  the map.** David approved ("yes to both"): the vision-built page is
+  committed and embedded like `facts.js`, and the explorer's drift check in
+  `verify-change.sh` also fails when a code reference or fact chip in
+  `.vision/map.json` no longer resolves, or when the built page does not
+  carry the hash of the current map. Rebuilding runs locally through the
+  vision skill, because CI cannot run a script that lives outside the repo.
