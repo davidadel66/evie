@@ -1,14 +1,22 @@
-export type SystemTab = "map" | "history" | "where";
+export type SystemTab = "map" | "architecture" | "history";
 
-/** The System view's tabs (system-page.decisions.md, 2026-11-04): the
- *  vision map opens first, on its subway and always dark inside Evie; then
- *  the explorer opened on its History and on its components index. Each tab
- *  is a page and a fragment; tabs on one page share its frame. */
-export const systemTabs: readonly { id: SystemTab; label: string; title: string; page: string; fragment: string }[] = [
-  { id: "map", label: "Map", title: "System map", page: "/explorer/system.html?theme=dark", fragment: "#subway" },
-  { id: "history", label: "History", title: "System history", page: "/explorer/?embedded=1", fragment: "#view=history" },
-  { id: "where", label: "Where is it?", title: "System explorer", page: "/explorer/?embedded=1", fragment: "#view=components" },
+/** The System view's one page (system-page.decisions.md, 2026-11-05): the
+ *  map the vision skill builds, with its Architecture and History, always
+ *  dark inside Evie. */
+export const systemPage = "/explorer/?theme=dark";
+
+/** The System view's tabs: each opens the page's own view for it by
+ *  fragment, as the page routes them, so every tab shares one frame. */
+export const systemTabs: readonly { id: SystemTab; label: string; title: string; fragment: string }[] = [
+  { id: "map", label: "Map", title: "System map", fragment: "#subway" },
+  { id: "architecture", label: "Architecture", title: "System architecture", fragment: "#view=architecture" },
+  { id: "history", label: "History", title: "System history", fragment: "#view=history" },
 ];
+
+/** The address that opens a tab's view of the page. */
+export function systemTabAddress(id: SystemTab): string {
+  return systemPage + (systemTabs.find((item) => item.id === id) ?? systemTabs[0]).fragment;
+}
 
 /** The index of the tab a key moves to from the tab at index at: the arrows
  *  step and wrap, Home and End jump to the ends. Any other key moves

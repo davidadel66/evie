@@ -1,19 +1,22 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { systemTabAfterKey, systemTabs, type SystemTab } from "./systemTabs";
+import { systemTabAddress, systemTabAfterKey, systemTabs, type SystemTab } from "./systemTabs";
 
-// The System view (system-page.spec.md): the system map and the system
-// explorer, built into the binary and served at /explorer/, full height
-// inside Evie. Each page is a frame with scripts and popups but not
-// same-origin, so it cannot use Evie's API or storage; popups escape the
-// sandbox so GitHub links open normally.
+// The System view (system-page.spec.md): the system map page, built into the
+// binary and served at /explorer/, full height inside Evie. Its Map,
+// Architecture and History are views of that one page, in one frame with
+// scripts and popups but not same-origin, so it cannot use Evie's API or
+// storage; popups escape the sandbox so History's GitHub links open
+// normally.
 
 export function SystemView() {
   // Like Data, the view is not remembered: it opens on the map every time.
-  const [tab, setTab] = useState<SystemTab>("map");
-  return <SystemViewTabs tab={tab} onTab={setTab} />;
+  // visit counts tab choices, so choosing the selected tab again brings the
+  // page back to that tab's view after the reader moved it from inside.
+  const [{ tab, visit }, setChoice] = useState<{ tab: SystemTab; visit: number }>({ tab: "map", visit: 0 });
+  return <SystemViewTabs tab={tab} visit={visit} onTab={(next) => setChoice((now) => ({ tab: next, visit: now.visit + 1 }))} />;
 }
 
-export function SystemViewTabs({ tab, onTab }: { tab: SystemTab; onTab: (tab: SystemTab) => void }) {
+export function SystemViewTabs({ tab, visit, onTab }: { tab: SystemTab; visit: number; onTab: (tab: SystemTab) => void }) {
   const id = useId();
   const at = Math.max(0, systemTabs.findIndex((item) => item.id === tab));
   const current = systemTabs[at];
@@ -50,27 +53,26 @@ export function SystemViewTabs({ tab, onTab }: { tab: SystemTab; onTab: (tab: Sy
         </div>
       </header>
       <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${current.id}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* One frame per page: a tab on another page opens a new frame. */}
-        <SystemFrame key={current.page} src={current.page + current.fragment} title={current.title} />
+        <SystemFrame src={systemTabAddress(current.id)} visit={visit} title={current.title} />
       </div>
     </main>
   );
 }
 
-/** One page's frame. It opens at its first tab's address; a later tab on
- *  the same page moves only the fragment, in place, so the page neither
- *  reloads nor adds to the browser's history. The frame is cross-origin to
- *  Evie, and location.replace is one of the few things Evie may still do
- *  to it. */
-function SystemFrame({ src, title }: { src: string; title: string }) {
+/** The page's one frame. It opens at the first tab's address; every later
+ *  tab choice moves only the fragment, in place, so the page neither
+ *  reloads nor adds to the browser's history, and routes to that view
+ *  itself. The frame is cross-origin to Evie, and location.replace is one
+ *  of the few things Evie may still do to it. */
+function SystemFrame({ src, visit, title }: { src: string; visit: number; title: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [opened] = useState(src);
-  const shown = useRef(src);
+  const shown = useRef({ src, visit });
   useEffect(() => {
-    if (src === shown.current) return;
-    shown.current = src;
+    if (src === shown.current.src && visit === shown.current.visit) return;
+    shown.current = { src, visit };
     frame.current?.contentWindow?.location.replace(src);
-  }, [src]);
+  }, [src, visit]);
   return (
     <iframe
       ref={frame}
