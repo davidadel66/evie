@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SystemView, SystemViewTabs } from "./SystemView";
-import { systemTabAfterKey, type SystemTab } from "./systemTabs";
+import { systemTabAfterKey, systemTabs, type SystemTab } from "./systemTabs";
 
 const frameOf = (html: string) => {
   const frames = html.match(/<iframe[^>]*>/g) ?? [];
@@ -56,15 +56,29 @@ describe("SystemView", () => {
     expect(tabsOf(html).filter((t) => t.selected)).toEqual([{ label, selected: true, focusable: true }]);
   });
 
+  it("keeps one explorer frame for History and Where is it?, and its own for the map", () => {
+    // The frame is keyed by its page, so switching between two tabs on one
+    // page moves only its fragment: the explorer does not reload.
+    const page = (id: SystemTab) => systemTabs.find((item) => item.id === id)!.page;
+    expect(page("history")).toBe("/explorer/?embedded=1");
+    expect(page("where")).toBe(page("history"));
+    expect(page("map")).toBe("/explorer/system.html?theme=dark");
+  });
+
   it("moves between tabs with the arrows, wrapping, and with Home and End", () => {
-    expect(systemTabAfterKey("map", "ArrowRight")).toBe("history");
-    expect(systemTabAfterKey("history", "ArrowRight")).toBe("where");
-    expect(systemTabAfterKey("where", "ArrowRight")).toBe("map");
-    expect(systemTabAfterKey("map", "ArrowLeft")).toBe("where");
-    expect(systemTabAfterKey("where", "ArrowLeft")).toBe("history");
-    expect(systemTabAfterKey("history", "Home")).toBe("map");
-    expect(systemTabAfterKey("history", "End")).toBe("where");
-    expect(systemTabAfterKey("map", "Enter")).toBeUndefined();
-    expect(systemTabAfterKey("map", "a")).toBeUndefined();
+    const at = (id: SystemTab) => systemTabs.findIndex((item) => item.id === id);
+    const after = (id: SystemTab, key: string) => {
+      const next = systemTabAfterKey(at(id), key);
+      return next === undefined ? undefined : systemTabs[next].id;
+    };
+    expect(after("map", "ArrowRight")).toBe("history");
+    expect(after("history", "ArrowRight")).toBe("where");
+    expect(after("where", "ArrowRight")).toBe("map");
+    expect(after("map", "ArrowLeft")).toBe("where");
+    expect(after("where", "ArrowLeft")).toBe("history");
+    expect(after("history", "Home")).toBe("map");
+    expect(after("history", "End")).toBe("where");
+    expect(after("map", "Enter")).toBeUndefined();
+    expect(after("map", "a")).toBeUndefined();
   });
 });

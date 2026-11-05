@@ -1,11 +1,11 @@
-import { useId, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { systemTabAfterKey, systemTabs, type SystemTab } from "./systemTabs";
 
 // The System view (system-page.spec.md): the system map and the system
 // explorer, built into the binary and served at /explorer/, full height
-// inside Evie. Every tab is a frame with scripts and popups but not
-// same-origin, so its page cannot use Evie's API or storage; popups escape
-// the sandbox so GitHub links open normally.
+// inside Evie. Each page is a frame with scripts and popups but not
+// same-origin, so it cannot use Evie's API or storage; popups escape the
+// sandbox so GitHub links open normally.
 
 export function SystemView() {
   // Like Data, the view is not remembered: it opens on the map every time.
@@ -15,13 +15,14 @@ export function SystemView() {
 
 export function SystemViewTabs({ tab, onTab }: { tab: SystemTab; onTab: (tab: SystemTab) => void }) {
   const id = useId();
-  const current = systemTabs.find((item) => item.id === tab) ?? systemTabs[0];
+  const at = Math.max(0, systemTabs.findIndex((item) => item.id === tab));
+  const current = systemTabs[at];
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    const next = systemTabAfterKey(current.id, event.key);
-    if (!next) return;
+    const next = systemTabAfterKey(at, event.key);
+    if (next === undefined) return;
     event.preventDefault();
-    onTab(next);
-    (event.currentTarget.parentElement?.children[systemTabs.findIndex((item) => item.id === next)] as HTMLButtonElement | undefined)?.focus();
+    onTab(systemTabs[next].id);
+    (event.currentTarget.parentElement?.children[next] as HTMLButtonElement | undefined)?.focus();
   };
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -49,16 +50,35 @@ export function SystemViewTabs({ tab, onTab }: { tab: SystemTab; onTab: (tab: Sy
         </div>
       </header>
       <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${current.id}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* A new frame per tab, so switching never adds to the browser's history. */}
-        <iframe
-          key={current.id}
-          title={current.title}
-          src={current.src}
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
-          referrerPolicy="no-referrer"
-          className="bg-app min-h-0 w-full flex-1 border-0"
-        />
+        {/* One frame per page: a tab on another page opens a new frame. */}
+        <SystemFrame key={current.page} src={current.page + current.fragment} title={current.title} />
       </div>
     </main>
+  );
+}
+
+/** One page's frame. It opens at its first tab's address; a later tab on
+ *  the same page moves only the fragment, in place, so the page neither
+ *  reloads nor adds to the browser's history. The frame is cross-origin to
+ *  Evie, and location.replace is one of the few things Evie may still do
+ *  to it. */
+function SystemFrame({ src, title }: { src: string; title: string }) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [opened] = useState(src);
+  const shown = useRef(src);
+  useEffect(() => {
+    if (src === shown.current) return;
+    shown.current = src;
+    frame.current?.contentWindow?.location.replace(src);
+  }, [src]);
+  return (
+    <iframe
+      ref={frame}
+      title={title}
+      src={opened}
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+      referrerPolicy="no-referrer"
+      className="bg-app min-h-0 w-full flex-1 border-0"
+    />
   );
 }
