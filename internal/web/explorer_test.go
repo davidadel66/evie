@@ -299,6 +299,20 @@ func TestSystemMapPolicyHashesOnlyScriptsTheBrowserRuns(t *testing.T) {
 	if got := policyDirectives(systemMapPolicy(page))["script-src"]; got != want {
 		t.Errorf("script-src = %q, want %q", got, want)
 	}
+	// The browser runs every JavaScript type, read by its essence (case and
+	// parameters aside), and any type it does not know as data: only data
+	// blocks go unhashed.
+	page = []byte(`<script type="text/ecmascript">ecma()</script>` +
+		`<script type="text/javascript;charset=utf-8">params()</script>` +
+		`<script type='TEXT/JavaScript; charset="utf-8"'>quoted()</script>` +
+		`<script type="">empty()</script>` +
+		`<script type="Application/JSON">{"a":1}</script>` +
+		`<script type="application/json; charset=utf-8">{"b":2}</script>` +
+		`<script type="application/ld+json">{"@type":"x"}</script>`)
+	want = strings.Join([]string{hash("ecma()"), hash("params()"), hash("quoted()"), hash("empty()")}, " ")
+	if got := policyDirectives(systemMapPolicy(page))["script-src"]; got != want {
+		t.Errorf("script-src = %q, want %q", got, want)
+	}
 	if got := policyDirectives(systemMapPolicy(nil))["script-src"]; got != "'none'" {
 		t.Errorf("with no page, script-src = %q, want 'none'", got)
 	}
