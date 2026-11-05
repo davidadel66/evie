@@ -10,9 +10,10 @@ import (
 	"encoding/base64"
 	"io/fs"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/net/html"
 
 	explorer "github.com/davidadel66/evie/docs/architecture/explorer"
 )
@@ -50,16 +51,6 @@ func systemMapPolicy(page []byte) string {
 		"base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
 }
 
-// scriptElement is a script element: its attributes and its text.
-var scriptElement = regexp.MustCompile(`(?is)<script\b([^>]*)>(.*?)</script`)
-
-// scriptType and scriptSource read a script element's type attribute, its
-// value quoted either way or bare, and its src attribute.
-var (
-	scriptType   = regexp.MustCompile(`(?i)(?:^|\s)type\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))`)
-	scriptSource = regexp.MustCompile(`(?i)(?:^|\s)src\s*=`)
-)
-
 // scriptDataTypes are the data blocks a vision page carries, which the
 // browser never runs: its map data is application/json.
 var scriptDataTypes = map[string]bool{"application/json": true, "application/ld+json": true}
@@ -67,21 +58,50 @@ var scriptDataTypes = map[string]bool{"application/json": true, "application/ld+
 // inlineScripts returns the text of each inline script element the browser
 // may run: every one without src whose type, by its essence (lower case,
 // without parameters), is not a data block. Hashing a script of a type the
-// browser does not run only allows what never runs.
+// browser does not run only allows what never runs. The page is read as the
+// browser tokenizes it, so a quoted attribute value may hold ">", a script
+// in a comment is no script, and the text is what the browser hashes: the
+// element's raw text up to its end tag, with line endings as LF.
 func inlineScripts(page []byte) [][]byte {
 	var scripts [][]byte
-	for _, m := range scriptElement.FindAllSubmatch(page, -1) {
-		attrs := m[1]
-		if scriptSource.Match(attrs) {
-			continue
+	z := html.NewTokenizer(bytes.NewReader(page))
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			return scripts
+		case html.StartTagToken, html.SelfClosingTagToken:
+			if name, hasAttr := z.TagName(); string(name) == "script" && runsInline(z, hasAttr) {
+				// The tokenizer reads a script's text raw: one text token, or
+				// none when the element is empty.
+				text := []byte{}
+				if z.Next() == html.TextToken {
+					text = append(text, z.Text()...)
+				}
+				scripts = append(scripts, text)
+			}
 		}
-		// One of the value's three forms matched; the others are empty.
-		if t := scriptType.FindSubmatch(attrs); t != nil && scriptDataTypes[mimeEssence(string(bytes.Join(t[1:], nil)))] {
-			continue
-		}
-		scripts = append(scripts, m[2])
 	}
-	return scripts
+}
+
+// runsInline reads a script start tag's attributes and reports whether the
+// browser runs its text: it has no src, and its type, the first one given,
+// is not a data block.
+func runsInline(z *html.Tokenizer, hasAttr bool) bool {
+	runs, typed := true, false
+	for hasAttr {
+		var key, value []byte
+		key, value, hasAttr = z.TagAttr()
+		switch string(key) {
+		case "src":
+			runs = false
+		case "type":
+			if !typed && scriptDataTypes[mimeEssence(string(value))] {
+				runs = false
+			}
+			typed = true
+		}
+	}
+	return runs
 }
 
 // mimeEssence is a MIME type without its parameters, trimmed and lower case.

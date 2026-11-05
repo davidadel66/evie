@@ -244,6 +244,15 @@ func TestSystemMapPolicyHashesOnlyScriptsTheBrowserRuns(t *testing.T) {
 	if got := policyDirectives(systemMapPolicy(page))["script-src"]; got != want {
 		t.Errorf("script-src = %q, want %q", got, want)
 	}
+	// A quoted attribute value may hold a ">", which does not end the tag:
+	// the hash covers exactly the script's text, and an attribute after it
+	// still counts.
+	page = []byte(`<script data-note="a>b">body()</script>` +
+		`<script data-note='x>y' type="application/json">{"c":3}</script>` +
+		`<script data-note="p>q" src="x.js"></script>`)
+	if got, want := policyDirectives(systemMapPolicy(page))["script-src"], hash("body()"); got != want {
+		t.Errorf("script-src = %q, want %q", got, want)
+	}
 	if got := policyDirectives(systemMapPolicy(nil))["script-src"]; got != "'none'" {
 		t.Errorf("with no page, script-src = %q, want 'none'", got)
 	}
