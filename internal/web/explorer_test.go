@@ -252,8 +252,7 @@ func TestSystemMapPageRunsOnlyItsOwnInlineScripts(t *testing.T) {
 	want = []string{
 		"sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox",
 		"default-src", "'none'",
-		"style-src", "'unsafe-inline' https://fonts.googleapis.com",
-		"font-src", "https://fonts.gstatic.com",
+		"style-src", "'unsafe-inline'",
 		"img-src", "'self' data:",
 		"base-uri", "'none'",
 		"form-action", "'none'",
@@ -264,8 +263,22 @@ func TestSystemMapPageRunsOnlyItsOwnInlineScripts(t *testing.T) {
 			t.Errorf("%s = %q, want %q", want[i], got, want[i+1])
 		}
 	}
-	if _, ok := policy["connect-src"]; ok {
-		t.Errorf("the map page may open connections: %q", rec.Header().Get("Content-Security-Policy"))
+	// default-src 'none' covers fonts and connections: the page reaches no
+	// host but Evie, so no directive may name one.
+	for _, name := range []string{"connect-src", "font-src", "frame-src"} {
+		if _, ok := policy[name]; ok {
+			t.Errorf("the map page may load %s: %q", name, rec.Header().Get("Content-Security-Policy"))
+		}
+	}
+	if header := rec.Header().Get("Content-Security-Policy"); strings.Contains(header, "http") {
+		t.Errorf("the map page's policy names another host: %q", header)
+	}
+	// The page Evie embeds asks for no web fonts, so the policy blocks nothing
+	// it loads.
+	for _, host := range []string{"fonts.googleapis.com", "fonts.gstatic.com"} {
+		if strings.Contains(page, host) {
+			t.Errorf("system.html loads from %s; build it to meta.page so it uses the system fonts", host)
+		}
 	}
 	for name, value := range map[string]string{"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "Cache-Control": "no-store"} {
 		if got := rec.Header().Get(name); got != value {

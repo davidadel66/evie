@@ -38,10 +38,10 @@ const systemMapPage = "system.html"
 
 // systemMapPolicy seals the map page the same way, with what a page built
 // from the vision template needs: its inline scripts, allowed by their
-// hashes (the page is fixed for the life of the binary); inline styles, since
-// it styles elements and SVG it draws as markup; and its web fonts, the Geist
-// stylesheet from Google Fonts and the font files it names. Its map data is
-// a JSON block, which the browser never runs.
+// hashes (the page is fixed for the life of the binary), and inline styles,
+// since it styles elements and SVG it draws as markup. Its map data is a JSON
+// block, which the browser never runs. Like the rest of Evie, it reaches no
+// other host: a page built to meta.page uses the system fonts, not Google's.
 func systemMapPolicy(page []byte) string {
 	sources := make([]string, 0, 2)
 	for _, script := range inlineScripts(page) {
@@ -54,7 +54,7 @@ func systemMapPolicy(page []byte) string {
 	}
 	return "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; " +
 		"default-src 'none'; script-src " + scriptSrc + "; " +
-		"style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; " +
+		"style-src 'unsafe-inline'; img-src 'self' data:; " +
 		"base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
 }
 

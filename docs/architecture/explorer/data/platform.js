@@ -976,7 +976,7 @@ evieExplorer.register(
           ]
         },
         {
-          "text": "The map page gets its own content-security policy: its inline scripts allowed by their hashes, taken once from the snapshot, inline styles, and the Geist web font from Google Fonts; every other file keeps the explorer's policy.",
+          "text": "The map page gets its own content-security policy: its inline scripts allowed by their hashes, taken once from the snapshot, and inline styles, still reaching no host but Evie; every other file keeps the explorer's policy.",
           "refs": [
             "code:internal/web/explorer.go#systemMapPolicy",
             "code:internal/web/explorer.go#inlineScripts"

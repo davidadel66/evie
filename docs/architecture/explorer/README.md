@@ -463,7 +463,9 @@ holds both values in `light-dark()`). Every frame is sandboxed without
 same-origin access, and each page's content-security policy sandboxes it the
 same way when opened on its own. The map page's policy differs from the
 explorer's in what a vision page needs: its inline scripts by their hashes,
-inline styles, and the Geist web font from Google Fonts.
+and inline styles. Like the rest of Evie it reaches no other host: built to
+`meta.page`, the page uses the system fonts instead of Geist from Google
+Fonts.
 
 ## System map
 
