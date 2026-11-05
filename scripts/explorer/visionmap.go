@@ -422,7 +422,7 @@ func (v *visionChecker) mapRef(item, ref string) bool {
 		why = v.resolve(ref, v.parts)
 	}
 	if why != "" {
-		v.add(visionMapPath, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix+", then "+visionRebuild)
+		v.deadRef(visionMapPath, item, ref, why, fix+", then "+visionRebuild)
 		return false
 	}
 	return true

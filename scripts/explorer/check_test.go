@@ -103,15 +103,17 @@ func runCheckCasesOn(t *testing.T, newRoot func(*testing.T) string, cases []chec
 	}
 }
 
-// partOf returns the map's part with id.
-func partOf(t *testing.T, m map[string]any, id string) map[string]any {
+// byID returns the object with id in a list of objects, such as the map's
+// parts or a part's diagrams.
+func byID(t *testing.T, list any, id string) map[string]any {
 	t.Helper()
-	for _, p := range m["parts"].([]any) {
-		if part := p.(map[string]any); part["id"] == id {
-			return part
+	items, _ := list.([]any)
+	for _, item := range items {
+		if object := item.(map[string]any); object["id"] == id {
+			return object
 		}
 	}
-	t.Fatalf("no part %s", id)
+	t.Fatalf("no %s in %d objects", id, len(items))
 	return nil
 }
 
@@ -120,26 +122,14 @@ func partOf(t *testing.T, m map[string]any, id string) map[string]any {
 func breakPart(id string, edit func(t *testing.T, part map[string]any)) func(*testing.T, string) {
 	return func(t *testing.T, root string) {
 		m := visionFixtureMap()
-		edit(t, partOf(t, m, id))
+		edit(t, byID(t, m["parts"], id))
 		writeVision(t, root, m)
 	}
 }
 
-// diagramOf returns a part's diagram with id.
-func diagramOf(t *testing.T, part map[string]any, id string) map[string]any {
-	t.Helper()
-	for _, d := range part["diagrams"].([]any) {
-		if diagram := d.(map[string]any); diagram["id"] == id {
-			return diagram
-		}
-	}
-	t.Fatalf("no diagram %s", id)
-	return nil
-}
-
 // breakDiagram edits one of alpha's or beta's diagrams.
 func breakDiagram(partID, id string, edit func(diagram map[string]any)) func(*testing.T, string) {
-	return breakPart(partID, func(t *testing.T, part map[string]any) { edit(diagramOf(t, part, id)) })
+	return breakPart(partID, func(t *testing.T, part map[string]any) { edit(byID(t, part["diagrams"], id)) })
 }
 
 // breakSequence edits the map's run sequence.
@@ -474,8 +464,8 @@ func TestCheckReportsEveryProblemNotJustTheFirst(t *testing.T) {
 	root := newFixture(t)
 	extractFixture(t, root)
 	m := visionFixtureMap()
-	partOf(t, m, "pkg:internal/delta")["summary"] = statement("Delta.", "code:internal/delta/delta.go#Gone")
-	appendTo(partOf(t, m, "owner"), "links", "adr:0098")
+	byID(t, m["parts"], "pkg:internal/delta")["summary"] = statement("Delta.", "code:internal/delta/delta.go#Gone")
+	appendTo(byID(t, m["parts"], "owner"), "links", "adr:0098")
 	writeVision(t, root, m)
 	writeFile(t, root, "internal/zeta/zeta.go", "package zeta\n")
 
@@ -511,7 +501,7 @@ func TestCheckOutputIsTheSameOnEveryRun(t *testing.T) {
 	for _, key := range []string{"Zeta", "Alpha", "Mu", "Beta", "Omega", "Delta"} {
 		code[key] = map[string]any{"file": "internal/alpha/alpha.go", "symbol": key}
 	}
-	appendTo(partOf(t, m, "pkg:internal/gamma"), "refs", "pkg:internal/ghost", "adr:0099")
+	appendTo(byID(t, m["parts"], "pkg:internal/gamma"), "refs", "pkg:internal/ghost", "adr:0099")
 	writeVision(t, root, m)
 
 	_, first := checkFixture(t, root)

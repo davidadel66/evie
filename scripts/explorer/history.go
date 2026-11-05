@@ -328,7 +328,7 @@ func (c *checker) source(item, ref string, parts map[string]bool) {
 	if !ok {
 		fix = "use one of " + refKinds()
 	}
-	c.add(changelogPath, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix)
+	c.deadRef(changelogPath, item, ref, why, fix)
 }
 
 // commitSHAs are the well-formed commits an entry names: its merge commit

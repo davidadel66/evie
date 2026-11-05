@@ -29,6 +29,12 @@ var refFixes = map[string]string{
 	"part":    "use the id of a part of the map",
 }
 
+// deadRef reports a reference in file that does not resolve: why not, and
+// how to fix it. The system map and the changelog report theirs here.
+func (c *checker) deadRef(file, item, ref, why, fix string) {
+	c.add(file, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix)
+}
+
 // refKinds lists the reference kinds for a fix hint.
 func refKinds() string {
 	return strings.Join(slices.Sorted(maps.Keys(refFixes)), ":, ") + ":"
