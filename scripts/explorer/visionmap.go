@@ -22,11 +22,12 @@ import (
 // outside the repository, so check holds the map to the code itself: every
 // package has a part, every reference in the map resolves against the code
 // and the facts, the map's import edges and sequence steps follow the facts'
-// imports, and the committed page carries the current map's hash. Building
-// the page runs the skill's own check first, so a page built from the
-// current map also means the map passed that check. Check reads only the
-// forms Evie's map uses, and refuses the skill's others rather than passing
-// them unread.
+// imports, and the committed page carries the current map's hash and the
+// hash of the other files it embeds (the facts, the changelog and the design
+// proposals). Building the page runs the skill's own check first, so a page
+// built from the current map also means the map passed that check. Check
+// reads only the forms Evie's map uses, and refuses the skill's others
+// rather than passing them unread.
 const (
 	visionMapPath = ".vision/map.json"
 	// visionPagePath is where the page is built: the snapshot package
@@ -37,6 +38,10 @@ const (
 	visionCheck    = "python3 ~/.claude/skills/vision/scripts/vision.py check .vision/map.json"
 	visionFormat   = "the vision skill's references/map-format.md"
 )
+
+// visionRebuildInputs is visionRebuild for a page older than the other
+// files it embeds.
+const visionRebuildInputs = "rebuild with the vision skill: " + visionBuild + ", and commit the page with the facts, the changelog and the proposals"
 
 // visionMap is the part of a map the check reads: its settings, its flows,
 // its code entries, and its parts, edges and sequences. A top-level flow and
@@ -245,7 +250,7 @@ func (c *checker) validateVisionMap() {
 		v.sequence("sequence "+q.ID, q.Summary, q.Trigger, q.Participants, q.Steps)
 	}
 	v.packageCoverage()
-	c.visionPageHash(data)
+	c.visionPageHash(data, m)
 }
 
 // visionMeta checks that the map's settings are the ones Evie's check,
@@ -269,9 +274,9 @@ func (c *checker) visionMeta(m visionMap) {
 	}
 }
 
-// visionPageHash checks that the page Evie embeds was built from this map,
-// whatever meta.page says.
-func (c *checker) visionPageHash(mapData []byte) {
+// visionPageHash checks that the page Evie embeds was built from this map
+// and from the files it embeds beside it, whatever meta.page says.
+func (c *checker) visionPageHash(mapData []byte, m visionMap) {
 	want, err := mapHash(mapData)
 	if err != nil {
 		c.add(visionMapPath, "map hash", "the map's hash cannot be computed: "+err.Error(), "make the map valid JSON that "+visionFormat+" describes")
@@ -282,16 +287,43 @@ func (c *checker) visionPageHash(mapData []byte) {
 		c.add(visionPagePath, "page", "the built page does not exist", visionRebuild)
 		return
 	}
-	switch m := pageHashMeta.FindSubmatch(html); {
-	case m == nil:
+	switch got := pageHashMeta.FindSubmatch(html); {
+	case got == nil:
 		c.add(visionPagePath, "page", `the page carries no <meta name="vision-map-hash">, so it was not built by the vision skill`, visionRebuild)
-	case string(m[1]) != want:
-		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older map: it carries %s, and %s hashes to %s", m[1], visionMapPath, want), visionRebuild)
+		return
+	case string(got[1]) != want:
+		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older map: it carries %s, and %s hashes to %s", got[1], visionMapPath, want), visionRebuild)
+	}
+	c.visionInputsHash(html, m)
+}
+
+// visionInputsHash checks that the page was built from the facts file and
+// the changelog the map names and from the design proposals as they are
+// now, by the inputs hash the skill writes beside the map's.
+func (c *checker) visionInputsHash(html []byte, m visionMap) {
+	proposals, err := readProposals(c.root)
+	var want string
+	if err == nil {
+		want, err = inputsHash(c.root, m.Meta.Facts, m.Meta.Changelog, proposals)
+	}
+	if err != nil {
+		c.add(visionPagePath, "inputs hash", "the facts file, the changelog and the proposals cannot be read to hash: "+err.Error(), "make them readable")
+		return
+	}
+	switch got := pageInputsMeta.FindSubmatch(html); {
+	case got == nil:
+		c.add(visionPagePath, "page", `the page carries no <meta name="vision-inputs-hash">, so it was built before the vision skill wrote one`, visionRebuildInputs)
+	case string(got[1]) != want:
+		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older facts file, changelog or design proposals: it carries inputs hash %s, and they now hash to %s", got[1], want), visionRebuildInputs)
 	}
 }
 
-// pageHashMeta finds the map hash in a built page, as the skill reads it.
-var pageHashMeta = regexp.MustCompile(`<meta name="vision-map-hash" content="([^"]+)"`)
+// pageHashMeta and pageInputsMeta find the map hash and the inputs hash in
+// a built page, as the skill reads them.
+var (
+	pageHashMeta   = regexp.MustCompile(`<meta name="vision-map-hash" content="([^"]+)"`)
+	pageInputsMeta = regexp.MustCompile(`<meta name="vision-inputs-hash" content="([^"]+)"`)
+)
 
 // visionChecker checks the references of one map.
 type visionChecker struct {

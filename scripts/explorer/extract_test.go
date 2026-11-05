@@ -13,7 +13,7 @@ import (
 
 // newFixture copies testdata/repo into a temporary directory so extract and
 // check never write into testdata, and writes the page built from its system
-// map, as the vision skill's build would.
+// map and inputs, as the vision skill's build would.
 func newFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -39,11 +39,7 @@ func newFixture(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("copy fixture: %v", err)
 	}
-	hash, err := mapHash([]byte(readFile(t, root, visionMapPath)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeVisionPage(t, root, hash)
+	buildVisionPage(t, root)
 	return root
 }
 
@@ -56,6 +52,9 @@ func runTool(t *testing.T, root string, args ...string) (int, string, string) {
 	return code, stdout.String(), stderr.String()
 }
 
+// extractFixture extracts the facts, then rebuilds the page from them, as
+// /flow runs extract and then the vision skill's build, since the page
+// embeds the facts. It returns the facts file.
 func extractFixture(t *testing.T, root string) []byte {
 	t.Helper()
 	code, stdout, stderr := runTool(t, root, "extract")
@@ -66,6 +65,7 @@ func extractFixture(t *testing.T, root string) []byte {
 	if err != nil {
 		t.Fatalf("read facts: %v", err)
 	}
+	buildVisionPage(t, root)
 	return data
 }
 

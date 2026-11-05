@@ -30,12 +30,8 @@ func visionFixtureMap() map[string]any {
 // writeVision writes m as the fixture's map, and the page built from it.
 func writeVision(t *testing.T, root string, m map[string]any) {
 	t.Helper()
-	data := writeVisionMap(t, root, m)
-	hash, err := mapHash(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeVisionPage(t, root, hash)
+	writeVisionMap(t, root, m)
+	buildVisionPage(t, root)
 }
 
 func writeVisionMap(t *testing.T, root string, m map[string]any) []byte {
@@ -48,9 +44,53 @@ func writeVisionMap(t *testing.T, root string, m map[string]any) []byte {
 	return data
 }
 
-func writeVisionPage(t *testing.T, root, hash string) {
+// buildVisionPage writes the page the vision skill's build would write from
+// the fixture's map and the inputs it names: the map's hash and the inputs
+// hash in its head.
+func buildVisionPage(t *testing.T, root string) {
 	t.Helper()
-	writeFile(t, root, visionPagePath, "<!doctype html>\n<meta charset=\"utf-8\">\n<meta name=\"vision-map-hash\" content=\""+hash+"\">\n<title>Fixture</title>\n")
+	writeVisionPage(t, root, fixtureMapHash(t, root), fixtureInputsHash(t, root))
+}
+
+func fixtureMapHash(t *testing.T, root string) string {
+	t.Helper()
+	hash, err := mapHash([]byte(readFile(t, root, visionMapPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hash
+}
+
+// fixtureInputsHash hashes the facts file and changelog the fixture's map
+// names, and its design proposals.
+func fixtureInputsHash(t *testing.T, root string) string {
+	t.Helper()
+	var m struct {
+		Meta struct{ Facts, Changelog string } `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(readFile(t, root, visionMapPath)), &m); err != nil {
+		t.Fatal(err)
+	}
+	proposals, err := readProposals(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, err := inputsHash(root, m.Meta.Facts, m.Meta.Changelog, proposals)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hash
+}
+
+// writeVisionPage writes a page carrying the given hashes; an empty inputs
+// hash leaves its meta out, as on a page built before the skill wrote one.
+func writeVisionPage(t *testing.T, root, mapDigest, inputsDigest string) {
+	t.Helper()
+	head := "<!doctype html>\n<meta charset=\"utf-8\">\n<meta name=\"vision-map-hash\" content=\"" + mapDigest + "\">\n"
+	if inputsDigest != "" {
+		head += "<meta name=\"vision-inputs-hash\" content=\"" + inputsDigest + "\">\n"
+	}
+	writeFile(t, root, visionPagePath, head+"<title>Fixture</title>\n")
 }
 
 // newVisionFixture is the consistent fixture with its facts extracted.
@@ -498,7 +538,7 @@ func TestCheckReportsASystemMapPageNotBuiltFromTheMap(t *testing.T) {
 				if built == now {
 					t.Fatal("renaming a step left the map's hash unchanged")
 				}
-				writeVisionPage(t, root, built)
+				writeVisionPage(t, root, built, fixtureInputsHash(t, root))
 			},
 			want: []string{visionPagePath + ": page", "built from an older map", "vision.py build", "commit the page with the map"},
 		},
@@ -529,6 +569,123 @@ func TestCheckReportsASystemMapPageNotBuiltFromTheMap(t *testing.T) {
 			},
 			want: []string{visionPagePath + ": page", `carries no <meta name="vision-map-hash">`, "rebuild with the vision skill"},
 		},
+	})
+}
+
+// proposalJSON is a design proposal file as the vision skill writes one.
+func proposalJSON(id, status string) string {
+	return `{"id": "` + id + `", "feature": "` + id + `", "title": "Add ` + id + `", "status": "` + status + `",` + "\n" +
+		`  "summary": {"text": "Adds ` + id + `.", "refs": ["doc:docs/guide.md"]}}` + "\n"
+}
+
+// keepPage changes the fixture's inputs with edit, then puts back the page
+// built before it, so the page is older than its inputs and nothing else is
+// wrong.
+func keepPage(edit func(t *testing.T, root string)) func(*testing.T, string) {
+	return func(t *testing.T, root string) {
+		built := readFile(t, root, visionPagePath)
+		edit(t, root)
+		writeFile(t, root, visionPagePath, built)
+	}
+}
+
+func TestCheckReportsASystemMapPageOlderThanItsInputs(t *testing.T) {
+	// The page embeds the facts file, the changelog and the design
+	// proposals, so it must be rebuilt after any of them changes, as the
+	// map hash requires after the map changes.
+	stale := []string{visionPagePath + ": page", "built from an older facts file, changelog or design proposals",
+		"vision.py build", "commit the page with the facts, the changelog and the proposals", "1 problem(s)"}
+	runVisionCases(t, []checkCase{
+		{
+			name: "the facts changed",
+			break_: keepPage(func(t *testing.T, root string) {
+				writeFile(t, root, "docs/adr/0003-third-decision.md", "# Make a third decision\n")
+				extractFixture(t, root)
+			}),
+			want: stale,
+		},
+		{
+			name: "the changelog changed",
+			break_: keepPage(func(t *testing.T, root string) {
+				writeFile(t, root, changelogPath, readFile(t, root, changelogPath)+"\nA last paragraph.\n")
+				extractFixture(t, root)
+			}),
+			want: stale,
+		},
+		{
+			name: "a design proposal was added",
+			break_: keepPage(func(t *testing.T, root string) {
+				writeFile(t, root, visionProposalsDir+"/top-k.json", proposalJSON("top-k", "proposed"))
+			}),
+			want: stale,
+		},
+		{
+			name: "a design proposal changed",
+			break_: func(t *testing.T, root string) {
+				writeFile(t, root, visionProposalsDir+"/top-k.json", proposalJSON("top-k", "proposed"))
+				buildVisionPage(t, root)
+				keepPage(func(t *testing.T, root string) {
+					writeFile(t, root, visionProposalsDir+"/top-k.json", proposalJSON("top-k", "building"))
+				})(t, root)
+			},
+			want: stale,
+		},
+		{
+			// /flow deletes a proposal once its feature merges, and rebuilds.
+			name: "a design proposal was retired",
+			break_: func(t *testing.T, root string) {
+				writeFile(t, root, visionProposalsDir+"/top-k.json", proposalJSON("top-k", "building"))
+				buildVisionPage(t, root)
+				keepPage(func(t *testing.T, root string) {
+					if err := os.Remove(filepath.Join(root, filepath.FromSlash(visionProposalsDir), "top-k.json")); err != nil {
+						t.Fatal(err)
+					}
+				})(t, root)
+			},
+			want: stale,
+		},
+		{
+			name: "the page carries no inputs hash",
+			break_: func(t *testing.T, root string) {
+				writeVisionPage(t, root, fixtureMapHash(t, root), "")
+			},
+			want: []string{visionPagePath + ": page", `carries no <meta name="vision-inputs-hash">`, "rebuild with the vision skill", "1 problem(s)"},
+		},
+	})
+}
+
+func TestCheckAcceptsAPageBuiltFromItsInputs(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		edit func(t *testing.T, root string)
+	}{
+		{"with a design proposal", func(t *testing.T, root string) {
+			writeFile(t, root, visionProposalsDir+"/top-k.json", proposalJSON("top-k", "proposed"))
+			writeFile(t, root, visionProposalsDir+"/notes.md", "Not a proposal: only .json files are.\n")
+		}},
+		{"with an empty proposals folder", func(t *testing.T, root string) {
+			if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(visionProposalsDir)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := newVisionFixture(t)
+			tc.edit(t, root)
+			buildVisionPage(t, root)
+			if code, out := checkFixture(t, root); code != 0 {
+				t.Fatalf("check exit %d, want 0:\n%s", code, out)
+			}
+		})
+	}
+	t.Run("after a checkout turned the changelog's line endings into CRLF", func(t *testing.T) {
+		// The hash reads CRLF as LF, so a Windows checkout of the same
+		// commit agrees with the page.
+		root := newVisionFixture(t)
+		writeFile(t, root, changelogPath, strings.ReplaceAll(readFile(t, root, changelogPath), "\n", "\r\n"))
+		if code, out := checkFixture(t, root); code != 0 {
+			t.Fatalf("check exit %d, want 0:\n%s", code, out)
+		}
 	})
 }
 
