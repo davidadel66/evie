@@ -9,6 +9,7 @@ editing this file, run `go run ./scripts/explorer extract` and
 
 ## 2026-11-04 — The System view opens on a map of Evie's flows
 Branch: feat/system-map
+Merge: 0f5de61
 Touches: .vision, docs/architecture/explorer, internal/web, internal/web/ui, internal/memorybackground, scripts/explorer, AGENTS.md
 Sources: doc:cmd/evie/docs/active/system-page.decisions.md, doc:cmd/evie/docs/active/system-page.spec.md
 

@@ -16613,6 +16613,7 @@ evieExplorer.register(
       "date": "2026-11-04",
       "title": "The System view opens on a map of Evie's flows",
       "branch": "feat/system-map",
+      "merge": "0f5de61",
       "touches": [
         ".vision",
         "docs/architecture/explorer",
