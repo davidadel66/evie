@@ -250,7 +250,14 @@ func (c *checker) validateVisionMap() {
 		v.sequence("sequence "+q.ID, q.Summary, q.Trigger, q.Participants, q.Steps)
 	}
 	v.packageCoverage()
-	c.visionPageHash(data, m)
+	proposals, err := readProposals(c.root)
+	if err != nil {
+		c.add(visionProposalsDir, "folder", "the design proposals cannot be read: "+err.Error(), "make the folder and its files readable")
+	}
+	for _, p := range proposals {
+		c.validateProposal(p)
+	}
+	c.visionPageHash(data, m, proposals, err == nil)
 }
 
 // visionMeta checks that the map's settings are the ones Evie's check,
@@ -275,8 +282,9 @@ func (c *checker) visionMeta(m visionMap) {
 }
 
 // visionPageHash checks that the page Evie embeds was built from this map
-// and from the files it embeds beside it, whatever meta.page says.
-func (c *checker) visionPageHash(mapData []byte, m visionMap) {
+// and from the files it embeds beside it, whatever meta.page says. Without
+// readable proposals, the inputs hash cannot be compared.
+func (c *checker) visionPageHash(mapData []byte, m visionMap, proposals []proposalFile, proposalsRead bool) {
 	want, err := mapHash(mapData)
 	if err != nil {
 		c.add(visionMapPath, "map hash", "the map's hash cannot be computed: "+err.Error(), "make the map valid JSON that "+visionFormat+" describes")
@@ -294,20 +302,18 @@ func (c *checker) visionPageHash(mapData []byte, m visionMap) {
 	case string(got[1]) != want:
 		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older map: it carries %s, and %s hashes to %s", got[1], visionMapPath, want), visionRebuild)
 	}
-	c.visionInputsHash(html, m)
+	if proposalsRead {
+		c.visionInputsHash(html, m, proposals)
+	}
 }
 
 // visionInputsHash checks that the page was built from the facts file and
 // the changelog the map names and from the design proposals as they are
 // now, by the inputs hash the skill writes beside the map's.
-func (c *checker) visionInputsHash(html []byte, m visionMap) {
-	proposals, err := readProposals(c.root)
-	var want string
-	if err == nil {
-		want, err = inputsHash(c.root, m.Meta.Facts, m.Meta.Changelog, proposals)
-	}
+func (c *checker) visionInputsHash(html []byte, m visionMap, proposals []proposalFile) {
+	want, err := inputsHash(c.root, m.Meta.Facts, m.Meta.Changelog, proposals)
 	if err != nil {
-		c.add(visionPagePath, "inputs hash", "the facts file, the changelog and the proposals cannot be read to hash: "+err.Error(), "make them readable")
+		c.add(visionPagePath, "inputs hash", "the facts file or the changelog cannot be read to hash: "+err.Error(), "make them readable")
 		return
 	}
 	switch got := pageInputsMeta.FindSubmatch(html); {
