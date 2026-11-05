@@ -5,8 +5,8 @@
     "valuesLabel": "From the code",
     "facts": "docs/architecture/explorer/data/facts.js",
     "page": "docs/architecture/explorer/system.html",
-    "commit": "2799f219b7955cd1638162a1ef9628421b8cb793",
-    "stamped": "2026-11-05",
+    "commit": "094f2a0444603e6563de4dc3e46542ea2ca42f8c",
+    "stamped": "2026-11-05 (with uncommitted work)",
     "changelog": "CHANGELOG.md",
     "repository": "https://github.com/davidadel66/evie",
     "parts": "complete"

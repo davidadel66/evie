@@ -10,6 +10,7 @@ it, and run `go run ./scripts/explorer check`.
 
 ## 2026-11-05 — Architecture and History move into the System map
 Branch: feat/system-architecture
+Merge: 094f2a0
 Touches: .vision, docs/architecture/explorer, internal/web, internal/web/ui, scripts/explorer, scripts/verify-change.sh, AGENTS.md
 Sources: doc:cmd/evie/docs/active/system-page.decisions.md, doc:cmd/evie/docs/active/system-page.spec.md, doc:docs/architecture/explorer/README.md
 
