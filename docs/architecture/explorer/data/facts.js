@@ -16610,6 +16610,29 @@ evieExplorer.register(
   ],
   "history": [
     {
+      "date": "2026-11-05",
+      "title": "Architecture and History move into the System map",
+      "branch": "feat/system-architecture",
+      "touches": [
+        ".vision",
+        "docs/architecture/explorer",
+        "internal/web",
+        "internal/web/ui",
+        "scripts/explorer",
+        "scripts/verify-change.sh",
+        "AGENTS.md"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/system-page.decisions.md",
+        "doc:cmd/evie/docs/active/system-page.spec.md",
+        "doc:docs/architecture/explorer/README.md"
+      ],
+      "text": [
+        "The System view showed the map beside the old explorer, a second page with its own look that answered \"where is it?\" and drew History. David asked for both to live in the vision skill instead, and its page now has three tabs: Map; Architecture, the renamed \"Where is it?\", with Context, Containers, Components and Flows, where each part lists the map steps that cite it; and History, read straight from this file. Evie's System view is that one page in one frame, and its Map, Architecture and History tabs only move the page's fragment, so switching never reloads it.",
+        "Evie's written explorer content moved into `.vision/map.json` as parts, edges, sequences and groups, so the explorer viewer, its Node tests, the example design proposal, the content files and the manifest are gone; the fact extractor and `facts.js` stay. The drift check now holds the map's architecture to the code the way it held the content files: every package needs a part, every part, edge and sequence reference must resolve, import edges and steps must be real imports, and every sequence step must cite code. Evie serves only the page, and `build.js` is gone, since the page shows no code links and History's GitHub links come from the map. Design proposals did not carry over; they come back as part of the vision skill."
+      ]
+    },
+    {
       "date": "2026-11-04",
       "title": "The System view opens on a map of Evie's flows",
       "branch": "feat/system-map",

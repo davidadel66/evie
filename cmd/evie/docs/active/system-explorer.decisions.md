@@ -49,3 +49,13 @@ Spec: [system-explorer.spec.md](system-explorer.spec.md).
   not the split or its blocking edges.
 - **2026-10-28 — Out of scope: changing `/flow` or `/implement`, and depth
   beyond one level.** David's request; both are done separately or later.
+- **2026-11-05 — The explorer viewer is superseded by the vision skill's
+  page.** The page's Architecture and History tabs replace the viewer, whose
+  page, Node tests, example proposal, content files and manifest are
+  removed; the written content lives on as parts, edges and sequences in
+  `.vision/map.json`, and the drift check holds those to the code. The
+  facts, their extraction rules and the check's facts comparison stand.
+  The decisions above on the viewer (hand-built SVG, the content and
+  proposal data files, the Node tests in verification, the design-proposal
+  overlay) no longer apply; the facts file keeps its wrapper.
+  See [system-page.decisions.md](system-page.decisions.md), 2026-11-05.

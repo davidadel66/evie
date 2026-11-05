@@ -1,11 +1,36 @@
 # Changelog
 
-Every merge to master, newest first: what changed and why. The system
-explorer's History tab shows this file, and its drift check validates it.
+Every merge to master, newest first: what changed and why. The System
+page's History tab shows this file, and the drift check validates it.
 The entry format, the check's rules, and how to add an entry are in the
 [explorer README](docs/architecture/explorer/README.md#history). After
 editing this file, run `go run ./scripts/explorer extract` and
 `go run ./scripts/explorer check`.
+
+## 2026-11-05 — Architecture and History move into the System map
+Branch: feat/system-architecture
+Touches: .vision, docs/architecture/explorer, internal/web, internal/web/ui, scripts/explorer, scripts/verify-change.sh, AGENTS.md
+Sources: doc:cmd/evie/docs/active/system-page.decisions.md, doc:cmd/evie/docs/active/system-page.spec.md, doc:docs/architecture/explorer/README.md
+
+The System view showed the map beside the old explorer, a second page with
+its own look that answered "where is it?" and drew History. David asked for
+both to live in the vision skill instead, and its page now has three tabs:
+Map; Architecture, the renamed "Where is it?", with Context, Containers,
+Components and Flows, where each part lists the map steps that cite it; and
+History, read straight from this file. Evie's System view is that one page
+in one frame, and its Map, Architecture and History tabs only move the
+page's fragment, so switching never reloads it.
+
+Evie's written explorer content moved into `.vision/map.json` as parts,
+edges, sequences and groups, so the explorer viewer, its Node tests, the
+example design proposal, the content files and the manifest are gone; the
+fact extractor and `facts.js` stay. The drift check now holds the map's
+architecture to the code the way it held the content files: every package
+needs a part, every part, edge and sequence reference must resolve, import
+edges and steps must be real imports, and every sequence step must cite
+code. Evie serves only the page, and `build.js` is gone, since the page
+shows no code links and History's GitHub links come from the map. Design
+proposals did not carry over; they come back as part of the vision skill.
 
 ## 2026-11-04 — The System view opens on a map of Evie's flows
 Branch: feat/system-map

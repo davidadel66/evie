@@ -110,28 +110,27 @@ from the repository root:
 
 Install UI dependencies first with `npm --prefix internal/web/ui ci` when
 needed. The verification script runs the full Go test and vet suites, UI lint
-and build, the system explorer's drift check (`go run ./scripts/explorer
-check`) and viewer tests (`node --test
-'docs/architecture/explorer/test/*.test.js'`), and staged and unstaged
-whitespace checks. Format changed Go files with `gofmt` before running it.
+and build, the drift check (`go run ./scripts/explorer check`), and staged and
+unstaged whitespace checks. Format changed Go files with `gofmt` before
+running it.
 
-The drift check fails when the code and the explorer data disagree. Stale
-facts are repaired with `go run ./scripts/explorer extract`; a new package
-needs a component node with a cited summary. Repair everything else it
-reports by following
-[`docs/architecture/explorer/README.md`](docs/architecture/explorer/README.md).
-
-The drift check also guards the system map, `.vision/map.json`: it fails when
-a code reference or fact chip in the map no longer resolves, or when the
-committed page, `docs/architecture/explorer/system.html`, was not rebuilt
-after the map changed. Rebuild the page with the vision skill
+The drift check holds the facts (`docs/architecture/explorer/data/facts.js`),
+the system map (`.vision/map.json`), and `CHANGELOG.md` to the code. Repair
+stale facts with `go run ./scripts/explorer extract`; a new package needs a
+component part with a cited summary in the map. After the map, the
+changelog, or the facts change, rebuild the committed page,
+`docs/architecture/explorer/system.html`, with the vision skill
 (`python3 ~/.claude/skills/vision/scripts/vision.py build`) and commit it with
-the map. `/flow` updates the map, `CHANGELOG.md`, and the facts after each
-piece of work.
+the map; the check catches a page older than the map, but not one older than
+the changelog or the facts. Repair everything else it reports by following
+[`docs/architecture/explorer/README.md`](docs/architecture/explorer/README.md).
+`/flow` updates the map, `CHANGELOG.md`, and the facts after each piece of
+work.
 
 For documentation-only changes, `git diff --check` and `go run
 ./scripts/explorer check` are sufficient locally, since glossary, ADR, and
-heading edits can drift the explorer; CI still runs the full required check.
+heading edits can drift the facts and the map; CI still runs the full required
+check.
 Report exact commands, results, warnings, and every skipped check with its
 reason. Model review never replaces these checks.
 
