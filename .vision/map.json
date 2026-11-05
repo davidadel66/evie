@@ -4,7 +4,9 @@
     "subtitle": "cmd/evie · internal/web · internal/agent · internal/tools · internal/eviedb (SQLite) · OpenRouter",
     "valuesLabel": "From the code",
     "facts": "docs/architecture/explorer/data/facts.js",
-    "page": "docs/architecture/explorer/system.html"
+    "page": "docs/architecture/explorer/system.html",
+    "commit": "20c6679b01fd739916ecc23888cedbef62a459f1",
+    "stamped": "2026-11-04"
   },
   "kinds": [
     {"id": "request", "label": "Owner's request", "shape": "circle"},
@@ -4920,1197 +4922,1551 @@
     "followChat": {
       "file": "internal/web/ui/src/api/stream.ts",
       "symbol": "followChat",
-      "title": "followChat · stream.ts"
+      "title": "followChat · stream.ts",
+      "hash": "3a4ecd025e0d"
     },
     "sendDetached": {
       "file": "internal/web/ui/src/api/stream.ts",
       "symbol": "sendDetached",
-      "title": "sendDetached · stream.ts"
+      "title": "sendDetached · stream.ts",
+      "hash": "006d18d603d1"
     },
     "Server.handleFollow": {
       "file": "internal/web/feed.go",
       "symbol": "Server.handleFollow",
-      "title": "func (s *Server) handleFollow"
+      "title": "func (s *Server) handleFollow",
+      "hash": "2cf47225286d"
     },
     "chatFeed.follow": {
       "file": "internal/web/feed.go",
       "symbol": "chatFeed.follow",
-      "title": "func (f *chatFeed) follow"
+      "title": "func (f *chatFeed) follow",
+      "hash": "a33f290ae2be"
     },
     "chatFeed.publish": {
       "file": "internal/web/feed.go",
       "symbol": "chatFeed.publish",
-      "title": "func (f *chatFeed) publish"
+      "title": "func (f *chatFeed) publish",
+      "hash": "d8ec1aa460a9"
     },
-    "coalesceFrames": {"file": "internal/web/feed.go", "symbol": "coalesceFrames", "title": "func coalesceFrames"},
-    "Server.guard": {"file": "internal/web/serve.go", "symbol": "Server.guard", "title": "func (s *Server) guard"},
+    "coalesceFrames": {
+      "file": "internal/web/feed.go",
+      "symbol": "coalesceFrames",
+      "title": "func coalesceFrames",
+      "hash": "025d6917a68a"
+    },
+    "Server.guard": {
+      "file": "internal/web/serve.go",
+      "symbol": "Server.guard",
+      "title": "func (s *Server) guard",
+      "hash": "da431bfc5342"
+    },
     "Server.managementRoute": {
       "file": "internal/web/serve.go",
       "symbol": "Server.managementRoute",
-      "title": "func (s *Server) managementRoute"
+      "title": "func (s *Server) managementRoute",
+      "hash": "d7bccdbe0eac"
     },
     "Server.handleChat": {
       "file": "internal/web/serve.go",
       "symbol": "Server.handleChat",
-      "title": "func (s *Server) handleChat"
+      "title": "func (s *Server) handleChat",
+      "hash": "c0b3308c23f0"
     },
     "Server.runTurn": {
       "file": "internal/web/serve.go",
       "symbol": "Server.runTurn",
-      "title": "func (s *Server) runTurn"
+      "title": "func (s *Server) runTurn",
+      "hash": "81bcebee3f84"
     },
     "webContextSessionController.selectSession": {
       "file": "cmd/evie/web_context_sessions.go",
       "symbol": "webContextSessionController.selectSession",
-      "title": "func (c *webContextSessionController) selectSession"
+      "title": "func (c *webContextSessionController) selectSession",
+      "hash": "04f1fb74984f"
     },
     "Manager.ResolvePresetContext": {
       "file": "internal/plugins/preset.go",
       "symbol": "Manager.ResolvePresetContext",
-      "title": "func (m *Manager) ResolvePresetContext"
+      "title": "func (m *Manager) ResolvePresetContext",
+      "hash": "b9c6f968c952"
     },
     "Manager.resolvePreset": {
       "file": "internal/plugins/preset.go",
       "symbol": "Manager.resolvePreset",
-      "title": "func (m *Manager) resolvePreset"
+      "title": "func (m *Manager) resolvePreset",
+      "hash": "39476bacad38"
     },
     "Store.CreateWorkspaceSessionForChooserWithComposition": {
       "file": "internal/eviedb/sessions.go",
       "symbol": "Store.CreateWorkspaceSessionForChooserWithComposition",
-      "title": "func (s *Store) CreateWorkspaceSessionForChooserWithComposition"
+      "title": "func (s *Store) CreateWorkspaceSessionForChooserWithComposition",
+      "hash": "697e9b34568f"
     },
-    "main": {"file": "cmd/evie/main.go", "symbol": "main", "title": "func main"},
-    "NewWithToolset": {"file": "internal/agent/agent.go", "symbol": "NewWithToolset", "title": "func NewWithToolset"},
-    "Session.Send": {"file": "internal/agent/agent.go", "symbol": "Session.Send", "title": "func (s *Session) Send"},
-    "Session.send": {"file": "internal/agent/agent.go", "symbol": "Session.send", "title": "func (s *Session) send"},
+    "main": {"file": "cmd/evie/main.go", "symbol": "main", "title": "func main", "hash": "c0703f9a2d75"},
+    "NewWithToolset": {
+      "file": "internal/agent/agent.go",
+      "symbol": "NewWithToolset",
+      "title": "func NewWithToolset",
+      "hash": "cb36e7c4da4b"
+    },
+    "Session.Send": {
+      "file": "internal/agent/agent.go",
+      "symbol": "Session.Send",
+      "title": "func (s *Session) Send",
+      "hash": "2641056f0f30"
+    },
+    "Session.send": {
+      "file": "internal/agent/agent.go",
+      "symbol": "Session.send",
+      "title": "func (s *Session) send",
+      "hash": "00dc884766f1"
+    },
     "SessionTurnOwner.Acquire": {
       "file": "internal/eviedb/turn_owner.go",
       "symbol": "SessionTurnOwner.Acquire",
-      "title": "func (o *SessionTurnOwner) Acquire"
+      "title": "func (o *SessionTurnOwner) Acquire",
+      "hash": "5f1cfb4c3a9d"
     },
     "Session.startHeartbeat": {
       "file": "internal/agent/turn.go",
       "symbol": "Session.startHeartbeat",
-      "title": "func (s *Session) startHeartbeat"
+      "title": "func (s *Session) startHeartbeat",
+      "hash": "509f0098d0d8"
     },
     "defaultTurnTiming": {
       "file": "internal/agent/ownership.go",
       "symbol": "defaultTurnTiming",
-      "title": "var defaultTurnTiming"
+      "title": "var defaultTurnTiming",
+      "hash": "20b098d4dc50"
     },
     "SessionHistory.Append": {
       "file": "internal/eviedb/history.go",
       "symbol": "SessionHistory.Append",
-      "title": "func (h *SessionHistory) Append"
+      "title": "func (h *SessionHistory) Append",
+      "hash": "a1ae45ca4f9a"
     },
     "Store.AppendEventWithLease": {
       "file": "internal/eviedb/events.go",
       "symbol": "Store.AppendEventWithLease",
-      "title": "func (s *Store) AppendEventWithLease"
+      "title": "func (s *Store) AppendEventWithLease",
+      "hash": "00712bbdaab4"
     },
     "Session.runOwnedTurn": {
       "file": "internal/agent/turn.go",
       "symbol": "Session.runOwnedTurn",
-      "title": "func (s *Session) runOwnedTurn"
+      "title": "func (s *Session) runOwnedTurn",
+      "hash": "f1d6738c4665"
     },
     "Session.turnEvents": {
       "file": "internal/agent/request_history.go",
       "symbol": "Session.turnEvents",
-      "title": "func (s *Session) turnEvents"
+      "title": "func (s *Session) turnEvents",
+      "hash": "cd1209049cbd"
     },
     "SessionHistory.RepositoryInstructions": {
       "file": "internal/eviedb/repository_instructions.go",
       "symbol": "SessionHistory.RepositoryInstructions",
-      "title": "func (h *SessionHistory) RepositoryInstructions"
+      "title": "func (h *SessionHistory) RepositoryInstructions",
+      "hash": "dd99dc990535"
     },
     "Render": {
       "file": "internal/repoinstructions/load.go",
       "symbol": "Render",
-      "title": "func Render (repoinstructions)"
+      "title": "func Render (repoinstructions)",
+      "hash": "d3048732313c"
     },
     "Session.standingMemory": {
       "file": "internal/agent/standing_memory.go",
       "symbol": "Session.standingMemory",
-      "title": "func (s *Session) standingMemory"
+      "title": "func (s *Session) standingMemory",
+      "hash": "1d911240e445"
     },
     "Session.performAutomaticCompaction": {
       "file": "internal/agent/automatic_compaction.go",
       "symbol": "Session.performAutomaticCompaction",
-      "title": "func (s *Session) performAutomaticCompaction"
+      "title": "func (s *Session) performAutomaticCompaction",
+      "hash": "45d9762d44a1"
     },
     "Session.requestCompactionFlush": {
       "file": "internal/agent/compaction_flush.go",
       "symbol": "Session.requestCompactionFlush",
-      "title": "func (s *Session) requestCompactionFlush"
+      "title": "func (s *Session) requestCompactionFlush",
+      "hash": "b2ae8e1a6e77"
     },
     "ContextComposer.Compose": {
       "file": "internal/agent/context.go",
       "symbol": "ContextComposer.Compose",
-      "title": "func (c *ContextComposer) Compose"
+      "title": "func (c *ContextComposer) Compose",
+      "hash": "ff41d8fa985d"
     },
     "primaryInstructions": {
       "file": "internal/agent/prompt.go",
       "symbol": "primaryInstructions",
-      "title": "func primaryInstructions"
+      "title": "func primaryInstructions",
+      "hash": "f084c31b0b3b"
     },
     "Session.callProvider": {
       "file": "internal/agent/turn.go",
       "symbol": "Session.callProvider",
-      "title": "func (s *Session) callProvider"
+      "title": "func (s *Session) callProvider",
+      "hash": "af25259eab0b"
     },
     "Session.streamProviderAttempt": {
       "file": "internal/agent/turn.go",
       "symbol": "Session.streamProviderAttempt",
-      "title": "func (s *Session) streamProviderAttempt"
+      "title": "func (s *Session) streamProviderAttempt",
+      "hash": "b9bd88174969"
     },
     "Client.ChatStream": {
       "file": "internal/openrouter/client.go",
       "symbol": "Client.ChatStream",
-      "title": "func (c *Client) ChatStream"
+      "title": "func (c *Client) ChatStream",
+      "hash": "f686dffc1b19"
     },
     "sseEvents.Delta": {
       "file": "internal/web/events.go",
       "symbol": "sseEvents.Delta",
-      "title": "func (e *sseEvents) Delta"
+      "title": "func (e *sseEvents) Delta",
+      "hash": "9ef8c7114f1b"
     },
     "sseEvents.emit": {
       "file": "internal/web/events.go",
       "symbol": "sseEvents.emit",
-      "title": "func (e *sseEvents) emit"
+      "title": "func (e *sseEvents) emit",
+      "hash": "f306632e7ccd"
     },
     "assistantEventInput": {
       "file": "internal/agent/agent.go",
       "symbol": "assistantEventInput",
-      "title": "func assistantEventInput"
+      "title": "func assistantEventInput",
+      "hash": "5fc17e23d6fd"
     },
     "toolIntentInput": {
       "file": "internal/agent/agent.go",
       "symbol": "toolIntentInput",
-      "title": "func toolIntentInput"
+      "title": "func toolIntentInput",
+      "hash": "2b5c6774fb40"
     },
     "toolOutcomeInput": {
       "file": "internal/agent/agent.go",
       "symbol": "toolOutcomeInput",
-      "title": "func toolOutcomeInput"
+      "title": "func toolOutcomeInput",
+      "hash": "0339eb9d5e3b"
     },
     "approvalEventInput": {
       "file": "internal/agent/agent.go",
       "symbol": "approvalEventInput",
-      "title": "func approvalEventInput"
+      "title": "func approvalEventInput",
+      "hash": "17aa9d586fc7"
     },
     "Toolset.ExecuteWithApprovalAuthorizedCompletion": {
       "file": "internal/tools/registry.go",
       "symbol": "Toolset.ExecuteWithApprovalAuthorizedCompletion",
-      "title": "func (t Toolset) ExecuteWithApprovalAuthorizedCompletion"
+      "title": "func (t Toolset) ExecuteWithApprovalAuthorizedCompletion",
+      "hash": "5a1c080c3ae1"
     },
     "Server.followedApprover": {
       "file": "internal/web/feed.go",
       "symbol": "Server.followedApprover",
-      "title": "func (s *Server) followedApprover"
+      "title": "func (s *Server) followedApprover",
+      "hash": "e5814f93cb69"
     },
     "Server.newPending": {
       "file": "internal/web/approvals.go",
       "symbol": "Server.newPending",
-      "title": "func (s *Server) newPending"
+      "title": "func (s *Server) newPending",
+      "hash": "4f5af240ef9c"
     },
     "Server.claimPending": {
       "file": "internal/web/approvals.go",
       "symbol": "Server.claimPending",
-      "title": "func (s *Server) claimPending"
+      "title": "func (s *Server) claimPending",
+      "hash": "1c3a0ec3d9b3"
     },
     "Server.handleApprove": {
       "file": "internal/web/approvals.go",
       "symbol": "Server.handleApprove",
-      "title": "func (s *Server) handleApprove"
+      "title": "func (s *Server) handleApprove",
+      "hash": "bbcd80e1e340"
     },
     "sseEvents.ApprovalRequest": {
       "file": "internal/web/events.go",
       "symbol": "sseEvents.ApprovalRequest",
-      "title": "func (e *sseEvents) ApprovalRequest"
+      "title": "func (e *sseEvents) ApprovalRequest",
+      "hash": "56d8f067794e"
     },
     "answerApproval": {
       "file": "internal/web/ui/src/api/approve.ts",
       "symbol": "answerApproval",
-      "title": "answerApproval · approve.ts"
+      "title": "answerApproval · approve.ts",
+      "hash": "4eebf9df2c60"
     },
-    "admitApproval": {"file": "internal/agent/turn.go", "symbol": "admitApproval", "title": "func admitApproval"},
+    "admitApproval": {
+      "file": "internal/agent/turn.go",
+      "symbol": "admitApproval",
+      "title": "func admitApproval",
+      "hash": "59f6e7189d86"
+    },
     "admitNamedToolResult": {
       "file": "internal/agent/tool_results.go",
       "symbol": "admitNamedToolResult",
-      "title": "func admitNamedToolResult"
+      "title": "func admitNamedToolResult",
+      "hash": "8c23079a3f3e"
     },
     "admitToolResult": {
       "file": "internal/agent/tool_results.go",
       "symbol": "admitToolResult",
-      "title": "func admitToolResult"
+      "title": "func admitToolResult",
+      "hash": "518b2096047b"
     },
     "Session.emitCommittedAssistant": {
       "file": "internal/agent/turn.go",
       "symbol": "Session.emitCommittedAssistant",
-      "title": "func (s *Session) emitCommittedAssistant"
+      "title": "func (s *Session) emitCommittedAssistant",
+      "hash": "8f26ca5e9c2e"
     },
     "sseEvents.AssistantCommitted": {
       "file": "internal/web/activity.go",
       "symbol": "sseEvents.AssistantCommitted",
-      "title": "func (e *sseEvents) AssistantCommitted"
+      "title": "func (e *sseEvents) AssistantCommitted",
+      "hash": "53c019dd358f"
     },
     "sseEvents.TurnDone": {
       "file": "internal/web/events.go",
       "symbol": "sseEvents.TurnDone",
-      "title": "func (e *sseEvents) TurnDone"
+      "title": "func (e *sseEvents) TurnDone",
+      "hash": "1ef800a975c3"
     },
     "Runner.Run": {
       "file": "internal/memorybackground/pass.go",
       "symbol": "Runner.Run",
-      "title": "func (r *Runner) Run"
+      "title": "func (r *Runner) Run",
+      "hash": "1838d7cf0423"
     },
     "Runner.RequestCompactionFlush": {
       "file": "internal/memorybackground/pass.go",
       "symbol": "Runner.RequestCompactionFlush",
-      "title": "func (r *Runner) RequestCompactionFlush"
+      "title": "func (r *Runner) RequestCompactionFlush",
+      "hash": "14a8c1c0e0cc"
     },
     "Runner.Tick": {
       "file": "internal/memorybackground/pass.go",
       "symbol": "Runner.Tick",
-      "title": "func (r *Runner) Tick"
+      "title": "func (r *Runner) Tick",
+      "hash": "e7f3a90239e1"
     },
     "Runner.capExceeded": {
       "file": "internal/memorybackground/pass.go",
       "symbol": "Runner.capExceeded",
-      "title": "func (r *Runner) capExceeded"
+      "title": "func (r *Runner) capExceeded",
+      "hash": "aae36b782eb3"
     },
     "Runner.runSession": {
       "file": "internal/memorybackground/pass.go",
       "symbol": "Runner.runSession",
-      "title": "func (r *Runner) runSession"
+      "title": "func (r *Runner) runSession",
+      "hash": "317c04c04183"
     },
     "Runner.propose": {
       "file": "internal/memorybackground/pass.go",
       "symbol": "Runner.propose",
-      "title": "func (r *Runner) propose"
+      "title": "func (r *Runner) propose",
+      "hash": "3800b5a71116"
     },
     "Runner.call": {
       "file": "internal/memorybackground/pass.go",
       "symbol": "Runner.call",
-      "title": "func (r *Runner) call"
+      "title": "func (r *Runner) call",
+      "hash": "1d7b73815fc1"
     },
     "Runner.prepare": {
       "file": "internal/memorybackground/pass.go",
       "symbol": "Runner.prepare",
-      "title": "func (r *Runner) prepare"
+      "title": "func (r *Runner) prepare",
+      "hash": "d13d12502618"
     },
     "Runner.commit": {
       "file": "internal/memorybackground/pass.go",
       "symbol": "Runner.commit",
-      "title": "func (r *Runner) commit"
+      "title": "func (r *Runner) commit",
+      "hash": "a441a4322f21"
     },
     "Store.DueMemoryBackgroundSessions": {
       "file": "internal/eviedb/memory_background.go",
       "symbol": "Store.DueMemoryBackgroundSessions",
-      "title": "func (s *Store) DueMemoryBackgroundSessions"
+      "title": "func (s *Store) DueMemoryBackgroundSessions",
+      "hash": "cad098754b56"
     },
     "Store.MemoryBackgroundBatch": {
       "file": "internal/eviedb/memory_background.go",
       "symbol": "Store.MemoryBackgroundBatch",
-      "title": "func (s *Store) MemoryBackgroundBatch"
+      "title": "func (s *Store) MemoryBackgroundBatch",
+      "hash": "d83df9825380"
     },
     "Store.MemoryBackgroundPool": {
       "file": "internal/eviedb/memory_background.go",
       "symbol": "Store.MemoryBackgroundPool",
-      "title": "func (s *Store) MemoryBackgroundPool"
+      "title": "func (s *Store) MemoryBackgroundPool",
+      "hash": "116741429bc1"
     },
     "Store.CommitMemoryBackgroundPass": {
       "file": "internal/eviedb/memory_background.go",
       "symbol": "Store.CommitMemoryBackgroundPass",
-      "title": "func (s *Store) CommitMemoryBackgroundPass"
+      "title": "func (s *Store) CommitMemoryBackgroundPass",
+      "hash": "dce071665a39"
     },
     "extractRequest": {
       "file": "internal/memorybackground/prompt.go",
       "symbol": "extractRequest",
-      "title": "func extractRequest"
+      "title": "func extractRequest",
+      "hash": "c9e8e927c4dc"
     },
     "parseExtraction": {
       "file": "internal/memorybackground/prompt.go",
       "symbol": "parseExtraction",
-      "title": "func parseExtraction"
+      "title": "func parseExtraction",
+      "hash": "71d5f6fa2772"
     },
     "decideRequest": {
       "file": "internal/memorybackground/prompt.go",
       "symbol": "decideRequest",
-      "title": "func decideRequest"
+      "title": "func decideRequest",
+      "hash": "f1b24d6f3511"
     },
     "rankSimilar": {
       "file": "internal/memorybackground/similarity.go",
       "symbol": "rankSimilar",
-      "title": "func rankSimilar"
+      "title": "func rankSimilar",
+      "hash": "ac976c299a90"
     },
     "exactDuplicate": {
       "file": "internal/memorybackground/similarity.go",
       "symbol": "exactDuplicate",
-      "title": "func exactDuplicate"
+      "title": "func exactDuplicate",
+      "hash": "0dc2f1890e5a"
     },
     "OpenRouterModel.Complete": {
       "file": "internal/memorybackground/models.go",
       "symbol": "OpenRouterModel.Complete",
-      "title": "func (m *OpenRouterModel) Complete"
+      "title": "func (m *OpenRouterModel) Complete",
+      "hash": "bd3e759d5494"
     },
     "Server.handleMemoryProposalApprove": {
       "file": "internal/web/memory_proposals.go",
       "symbol": "Server.handleMemoryProposalApprove",
-      "title": "func (s *Server) handleMemoryProposalApprove"
+      "title": "func (s *Server) handleMemoryProposalApprove",
+      "hash": "93e49e2f985a"
     },
     "Store.ApproveMemoryProposal": {
       "file": "internal/eviedb/memory_proposal_inbox.go",
       "symbol": "Store.ApproveMemoryProposal",
-      "title": "func (s *Store) ApproveMemoryProposal"
+      "title": "func (s *Store) ApproveMemoryProposal",
+      "hash": "a97f7a8b6a7a"
     },
     "Store.ApplyRememberLiteral": {
       "file": "internal/eviedb/semantic.go",
       "symbol": "Store.ApplyRememberLiteral",
-      "title": "func (s *Store) ApplyRememberLiteral"
+      "title": "func (s *Store) ApplyRememberLiteral",
+      "hash": "6bcde38b9843"
     },
     "Store.ResolveOwnerCandidateReview": {
       "file": "internal/eviedb/candidate_review_apply.go",
       "symbol": "Store.ResolveOwnerCandidateReview",
-      "title": "func (s *Store) ResolveOwnerCandidateReview"
+      "title": "func (s *Store) ResolveOwnerCandidateReview",
+      "hash": "c58a1e57a59c"
     },
     "Store.RunCompilerHost": {
       "file": "internal/eviedb/compiler_reconciliation.go",
       "symbol": "Store.RunCompilerHost",
-      "title": "func (s *Store) RunCompilerHost"
+      "title": "func (s *Store) RunCompilerHost",
+      "hash": "a1a58ea1a86c"
     },
     "Store.runCompilerClaim": {
       "file": "internal/eviedb/compiler_work.go",
       "symbol": "Store.runCompilerClaim",
-      "title": "func (s *Store) runCompilerClaim"
+      "title": "func (s *Store) runCompilerClaim",
+      "hash": "a514ebcfe2bc"
     },
     "Ollama.Extract": {
       "file": "internal/localextractor/ollama.go",
       "symbol": "Ollama.Extract",
-      "title": "func (o *Ollama) Extract"
+      "title": "func (o *Ollama) Extract",
+      "hash": "38481527f008"
     },
     "validateCompilerOutput": {
       "file": "internal/eviedb/compiler_validation.go",
       "symbol": "validateCompilerOutput",
-      "title": "func validateCompilerOutput"
+      "title": "func validateCompilerOutput",
+      "hash": "0843d9ad04cd"
     },
     "Store.publishCompilerResult": {
       "file": "internal/eviedb/compiler_work.go",
       "symbol": "Store.publishCompilerResult",
-      "title": "func (s *Store) publishCompilerResult"
+      "title": "func (s *Store) publishCompilerResult",
+      "hash": "f524434b4c36"
     },
     "startMemoryRetrievalHost": {
       "file": "cmd/evie/memory_retrieval_host.go",
       "symbol": "startMemoryRetrievalHost",
-      "title": "func startMemoryRetrievalHost"
+      "title": "func startMemoryRetrievalHost",
+      "hash": "0aa897bc7c58"
     },
     "Store.RefreshMemoryIndex": {
       "file": "internal/eviedb/retrieval_conversation_index.go",
       "symbol": "Store.RefreshMemoryIndex",
-      "title": "func (s *Store) RefreshMemoryIndex"
+      "title": "func (s *Store) RefreshMemoryIndex",
+      "hash": "c49e7a875794"
     },
     "Client.Embed": {
       "file": "internal/localembedding/client.go",
       "symbol": "Client.Embed",
-      "title": "func (c *Client) Embed"
+      "title": "func (c *Client) Embed",
+      "hash": "e181082f23d8"
     },
     "retrievalTurn.automatic": {
       "file": "internal/agent/retrieval_automatic.go",
       "symbol": "retrievalTurn.automatic",
-      "title": "func (r *retrievalTurn) automatic"
+      "title": "func (r *retrievalTurn) automatic",
+      "hash": "e301c4f6f577"
     },
     "planAutomaticRecall": {
       "file": "internal/agent/retrieval_automatic.go",
       "symbol": "planAutomaticRecall",
-      "title": "func planAutomaticRecall"
+      "title": "func planAutomaticRecall",
+      "hash": "825565d60f38"
     },
     "Store.SearchMemory": {
       "file": "internal/eviedb/retrieval.go",
       "symbol": "Store.SearchMemory",
-      "title": "func (s *Store) SearchMemory"
+      "title": "func (s *Store) SearchMemory",
+      "hash": "5cae492033ca"
     },
     "Store.acceptedRetrievalCandidates": {
       "file": "internal/eviedb/retrieval_graph.go",
       "symbol": "Store.acceptedRetrievalCandidates",
-      "title": "func (s *Store) acceptedRetrievalCandidates"
+      "title": "func (s *Store) acceptedRetrievalCandidates",
+      "hash": "c6c19e2dc1ca"
     },
     "addRetrievalRank": {
       "file": "internal/eviedb/retrieval_graph.go",
       "symbol": "addRetrievalRank",
-      "title": "func addRetrievalRank"
+      "title": "func addRetrievalRank",
+      "hash": "4e65c572afda"
     },
     "prepareDenseQuery": {
       "file": "internal/eviedb/retrieval_dense_query.go",
       "symbol": "prepareDenseQuery",
-      "title": "func prepareDenseQuery"
+      "title": "func prepareDenseQuery",
+      "hash": "7036cdbefc77"
     },
     "newClaimRelevanceGate": {
       "file": "internal/eviedb/retrieval_claim_relevance.go",
       "symbol": "newClaimRelevanceGate",
-      "title": "func newClaimRelevanceGate"
+      "title": "func newClaimRelevanceGate",
+      "hash": "2e9255ba2dcc"
     },
     "Store.searchConversations": {
       "file": "internal/eviedb/retrieval_conversation.go",
       "symbol": "Store.searchConversations",
-      "title": "func (s *Store) searchConversations"
+      "title": "func (s *Store) searchConversations",
+      "hash": "1cd36d269c20"
     },
     "Store.RevalidateMemoryEvidence": {
       "file": "internal/eviedb/retrieval.go",
       "symbol": "Store.RevalidateMemoryEvidence",
-      "title": "func (s *Store) RevalidateMemoryEvidence"
+      "title": "func (s *Store) RevalidateMemoryEvidence",
+      "hash": "284b2d96639a"
     },
     "retrievalTurn.renderProjection": {
       "file": "internal/agent/retrieval.go",
       "symbol": "retrievalTurn.renderProjection",
-      "title": "func (r *retrievalTurn) renderProjection"
+      "title": "func (r *retrievalTurn) renderProjection",
+      "hash": "f08721785c62"
     },
     "runWorkflowActivation": {
       "file": "cmd/evie/workflow_activation.go",
       "symbol": "runWorkflowActivation",
-      "title": "func runWorkflowActivation"
+      "title": "func runWorkflowActivation",
+      "hash": "2cc8183f4996"
     },
     "Server.handleWorkflowApprove": {
       "file": "internal/web/workflows.go",
       "symbol": "Server.handleWorkflowApprove",
-      "title": "func (s *Server) handleWorkflowApprove"
+      "title": "func (s *Server) handleWorkflowApprove",
+      "hash": "6416f0ce97d0"
     },
     "Runtime.Approve": {
       "file": "internal/workflowruntime/runtime.go",
       "symbol": "Runtime.Approve",
-      "title": "func (r *Runtime) Approve"
+      "title": "func (r *Runtime) Approve",
+      "hash": "ac26626629d0"
     },
     "Store.ActivateWorkflow": {
       "file": "internal/eviedb/workflows.go",
       "symbol": "Store.ActivateWorkflow",
-      "title": "func (s *Store) ActivateWorkflow"
+      "title": "func (s *Store) ActivateWorkflow",
+      "hash": "95def2fd56e4"
     },
     "Runtime.Start": {
       "file": "internal/workflowruntime/scheduler.go",
       "symbol": "Runtime.Start",
-      "title": "func (r *Runtime) Start"
+      "title": "func (r *Runtime) Start",
+      "hash": "685891ac2e27"
     },
     "Runtime.tickSchedules": {
       "file": "internal/workflowruntime/schedules.go",
       "symbol": "Runtime.tickSchedules",
-      "title": "func (r *Runtime) tickSchedules"
+      "title": "func (r *Runtime) tickSchedules",
+      "hash": "f73b051de93a"
     },
     "Runtime.tickSchedule": {
       "file": "internal/workflowruntime/schedules.go",
       "symbol": "Runtime.tickSchedule",
-      "title": "func (r *Runtime) tickSchedule"
+      "title": "func (r *Runtime) tickSchedule",
+      "hash": "aaa8fc3a5cb1"
     },
     "Runtime.startSlot": {
       "file": "internal/workflowruntime/schedules.go",
       "symbol": "Runtime.startSlot",
-      "title": "func (r *Runtime) startSlot"
+      "title": "func (r *Runtime) startSlot",
+      "hash": "abbff4557a03"
     },
     "Store.AcquireWorkflowScheduleRunner": {
       "file": "internal/eviedb/workflow_schedules.go",
       "symbol": "Store.AcquireWorkflowScheduleRunner",
-      "title": "func (s *Store) AcquireWorkflowScheduleRunner"
+      "title": "func (s *Store) AcquireWorkflowScheduleRunner",
+      "hash": "23f4362b5705"
     },
     "Store.WorkflowSchedules": {
       "file": "internal/eviedb/workflow_schedules.go",
       "symbol": "Store.WorkflowSchedules",
-      "title": "func (s *Store) WorkflowSchedules"
+      "title": "func (s *Store) WorkflowSchedules",
+      "hash": "8225e71e6cd4"
     },
     "Store.RecordWorkflowScheduleSlot": {
       "file": "internal/eviedb/workflow_schedules.go",
       "symbol": "Store.RecordWorkflowScheduleSlot",
-      "title": "func (s *Store) RecordWorkflowScheduleSlot"
+      "title": "func (s *Store) RecordWorkflowScheduleSlot",
+      "hash": "4ce219b1e518"
     },
     "Timetable.Due": {
       "file": "internal/workflow/schedule.go",
       "symbol": "Timetable.Due",
-      "title": "func (t Timetable) Due"
+      "title": "func (t Timetable) Due",
+      "hash": "c4ab04298696"
     },
     "Runtime.startRun": {
       "file": "internal/workflowruntime/runs.go",
       "symbol": "Runtime.startRun",
-      "title": "func (r *Runtime) startRun"
+      "title": "func (r *Runtime) startRun",
+      "hash": "c2dad005989b"
     },
     "Runtime.prepareRun": {
       "file": "internal/workflowruntime/runs.go",
       "symbol": "Runtime.prepareRun",
-      "title": "func (r *Runtime) prepareRun"
+      "title": "func (r *Runtime) prepareRun",
+      "hash": "960e0b3db704"
     },
     "Runtime.approvedDefinition": {
       "file": "internal/workflowruntime/runs.go",
       "symbol": "Runtime.approvedDefinition",
-      "title": "func (r *Runtime) approvedDefinition"
+      "title": "func (r *Runtime) approvedDefinition",
+      "hash": "17fb368008e2"
     },
     "Runtime.await": {
       "file": "internal/workflowruntime/runs.go",
       "symbol": "Runtime.await",
-      "title": "func (r *Runtime) await"
+      "title": "func (r *Runtime) await",
+      "hash": "3537f9a68986"
     },
     "Runtime.execute": {
       "file": "internal/workflowruntime/runs.go",
       "symbol": "Runtime.execute",
-      "title": "func (r *Runtime) execute"
+      "title": "func (r *Runtime) execute",
+      "hash": "ad1b52d71062"
     },
     "Runtime.heartbeat": {
       "file": "internal/workflowruntime/runs.go",
       "symbol": "Runtime.heartbeat",
-      "title": "func (r *Runtime) heartbeat"
+      "title": "func (r *Runtime) heartbeat",
+      "hash": "89782e4fab31"
     },
     "Runtime.continueRun": {
       "file": "internal/workflowruntime/runs.go",
       "symbol": "Runtime.continueRun",
-      "title": "func (r *Runtime) continueRun"
+      "title": "func (r *Runtime) continueRun",
+      "hash": "f078096d5a9b"
     },
     "Runtime.advance": {
       "file": "internal/workflowruntime/runs.go",
       "symbol": "Runtime.advance",
-      "title": "func (r *Runtime) advance"
+      "title": "func (r *Runtime) advance",
+      "hash": "973f94da5d19"
     },
     "Runtime.step": {
       "file": "internal/workflowruntime/runs.go",
       "symbol": "Runtime.step",
-      "title": "func (r *Runtime) step"
+      "title": "func (r *Runtime) step",
+      "hash": "d33f51b0ff6e"
     },
     "Server.handleWorkflowStart": {
       "file": "internal/web/workflows.go",
       "symbol": "Server.handleWorkflowStart",
-      "title": "func (s *Server) handleWorkflowStart"
+      "title": "func (s *Server) handleWorkflowStart",
+      "hash": "e3815fa5a162"
     },
     "runWorkflowRun": {
       "file": "cmd/evie/workflow_runs.go",
       "symbol": "runWorkflowRun",
-      "title": "func runWorkflowRun"
+      "title": "func runWorkflowRun",
+      "hash": "54efe72efaed"
     },
     "Runtime.StartFromChat": {
       "file": "internal/workflowruntime/session.go",
       "symbol": "Runtime.StartFromChat",
-      "title": "func (r *Runtime) StartFromChat"
+      "title": "func (r *Runtime) StartFromChat",
+      "hash": "9ac7dfc7e438"
     },
     "Runtime.resolve": {
       "file": "internal/workflowruntime/builtins.go",
       "symbol": "Runtime.resolve",
-      "title": "func (r *Runtime) resolve"
+      "title": "func (r *Runtime) resolve",
+      "hash": "f0fa24688513"
     },
     "Validated.AcceptInputs": {
       "file": "internal/workflow/execute.go",
       "symbol": "Validated.AcceptInputs",
-      "title": "func (v *Validated) AcceptInputs"
+      "title": "func (v *Validated) AcceptInputs",
+      "hash": "9ebc2e48e02f"
     },
     "Validated.RunKey": {
       "file": "internal/workflow/execute.go",
       "symbol": "Validated.RunKey",
-      "title": "func (v *Validated) RunKey"
+      "title": "func (v *Validated) RunKey",
+      "hash": "1086592bbb8b"
     },
     "Validated.ScheduleInputs": {
       "file": "internal/workflow/schedule.go",
       "symbol": "Validated.ScheduleInputs",
-      "title": "func (v *Validated) ScheduleInputs"
+      "title": "func (v *Validated) ScheduleInputs",
+      "hash": "a37e54157279"
     },
     "Validated.CheckCapabilityOutput": {
       "file": "internal/workflow/execute.go",
       "symbol": "Validated.CheckCapabilityOutput",
-      "title": "func (v *Validated) CheckCapabilityOutput"
+      "title": "func (v *Validated) CheckCapabilityOutput",
+      "hash": "9e0af1c6e43e"
     },
     "Runtime.pinProviders": {
       "file": "internal/workflowruntime/capabilities.go",
       "symbol": "Runtime.pinProviders",
-      "title": "func (r *Runtime) pinProviders"
+      "title": "func (r *Runtime) pinProviders",
+      "hash": "0dfe9b9367a7"
     },
     "Runtime.checkPinned": {
       "file": "internal/workflowruntime/capabilities.go",
       "symbol": "Runtime.checkPinned",
-      "title": "func (r *Runtime) checkPinned"
+      "title": "func (r *Runtime) checkPinned",
+      "hash": "7d44d5e35a8c"
     },
     "Store.StartWorkflowRun": {
       "file": "internal/eviedb/workflow_runs.go",
       "symbol": "Store.StartWorkflowRun",
-      "title": "func (s *Store) StartWorkflowRun"
+      "title": "func (s *Store) StartWorkflowRun",
+      "hash": "a4bf2cfaa1fe"
     },
     "Runtime.schedule": {
       "file": "internal/workflowruntime/scheduler.go",
       "symbol": "Runtime.schedule",
-      "title": "func (r *Runtime) schedule"
+      "title": "func (r *Runtime) schedule",
+      "hash": "2596233233dd"
     },
     "Runtime.wake": {
       "file": "internal/workflowruntime/scheduler.go",
       "symbol": "Runtime.wake",
-      "title": "func (r *Runtime) wake"
+      "title": "func (r *Runtime) wake",
+      "hash": "663b0cd3340f"
     },
     "Store.DueWorkflowRuns": {
       "file": "internal/eviedb/workflow_run_leases.go",
       "symbol": "Store.DueWorkflowRuns",
-      "title": "func (s *Store) DueWorkflowRuns"
+      "title": "func (s *Store) DueWorkflowRuns",
+      "hash": "e1c29ac45b0e"
     },
     "Store.AcquireWorkflowRunLease": {
       "file": "internal/eviedb/workflow_run_leases.go",
       "symbol": "Store.AcquireWorkflowRunLease",
-      "title": "func (s *Store) AcquireWorkflowRunLease"
+      "title": "func (s *Store) AcquireWorkflowRunLease",
+      "hash": "d4e1e25b9a0f"
     },
     "Store.ReleaseWorkflowRunLease": {
       "file": "internal/eviedb/workflow_run_leases.go",
       "symbol": "Store.ReleaseWorkflowRunLease",
-      "title": "func (s *Store) ReleaseWorkflowRunLease"
+      "title": "func (s *Store) ReleaseWorkflowRunLease",
+      "hash": "b086510dd9b4"
     },
     "Store.AdmitWorkflowRun": {
       "file": "internal/eviedb/workflow_run_leases.go",
       "symbol": "Store.AdmitWorkflowRun",
-      "title": "func (s *Store) AdmitWorkflowRun"
+      "title": "func (s *Store) AdmitWorkflowRun",
+      "hash": "91f97b62925b"
     },
     "Store.ResumeWorkflowRun": {
       "file": "internal/eviedb/workflow_run_leases.go",
       "symbol": "Store.ResumeWorkflowRun",
-      "title": "func (s *Store) ResumeWorkflowRun"
+      "title": "func (s *Store) ResumeWorkflowRun",
+      "hash": "66b29f3df779"
     },
     "beginWorkflowAttempt": {
       "file": "internal/eviedb/workflow_runs.go",
       "symbol": "beginWorkflowAttempt",
-      "title": "func beginWorkflowAttempt"
+      "title": "func beginWorkflowAttempt",
+      "hash": "6866cc7fe6aa"
     },
     "finishWorkflowAttempt": {
       "file": "internal/eviedb/workflow_runs.go",
       "symbol": "finishWorkflowAttempt",
-      "title": "func finishWorkflowAttempt"
+      "title": "func finishWorkflowAttempt",
+      "hash": "814de61330e6"
     },
     "Runtime.effect": {
       "file": "internal/workflowruntime/effects.go",
       "symbol": "Runtime.effect",
-      "title": "func (r *Runtime) effect"
+      "title": "func (r *Runtime) effect",
+      "hash": "b67203f6f252"
     },
     "Runtime.callEffect": {
       "file": "internal/workflowruntime/effects.go",
       "symbol": "Runtime.callEffect",
-      "title": "func (r *Runtime) callEffect"
+      "title": "func (r *Runtime) callEffect",
+      "hash": "0d76c20fa5ce"
     },
     "Runtime.recordAnswer": {
       "file": "internal/workflowruntime/effects.go",
       "symbol": "Runtime.recordAnswer",
-      "title": "func (r *Runtime) recordAnswer"
+      "title": "func (r *Runtime) recordAnswer",
+      "hash": "da1fbdfa5a5e"
     },
     "idempotencyKey": {
       "file": "internal/workflowruntime/effects.go",
       "symbol": "idempotencyKey",
-      "title": "func idempotencyKey"
+      "title": "func idempotencyKey",
+      "hash": "f9f49686ec56"
     },
     "conflictKeys": {
       "file": "internal/workflowruntime/effects.go",
       "symbol": "conflictKeys",
-      "title": "func conflictKeys"
+      "title": "func conflictKeys",
+      "hash": "4939074c49ab"
     },
     "Store.BeginWorkflowEffect": {
       "file": "internal/eviedb/workflow_effects.go",
       "symbol": "Store.BeginWorkflowEffect",
-      "title": "func (s *Store) BeginWorkflowEffect"
+      "title": "func (s *Store) BeginWorkflowEffect",
+      "hash": "42ce0f079db6"
     },
     "Store.FinishWorkflowEffect": {
       "file": "internal/eviedb/workflow_effects.go",
       "symbol": "Store.FinishWorkflowEffect",
-      "title": "func (s *Store) FinishWorkflowEffect"
+      "title": "func (s *Store) FinishWorkflowEffect",
+      "hash": "a3fdc32ce301"
     },
     "Store.MarkWorkflowEffectUnknown": {
       "file": "internal/eviedb/workflow_effects.go",
       "symbol": "Store.MarkWorkflowEffectUnknown",
-      "title": "func (s *Store) MarkWorkflowEffectUnknown"
+      "title": "func (s *Store) MarkWorkflowEffectUnknown",
+      "hash": "b4f4c19c6a5f"
     },
     "Store.CheckWorkflowRunLease": {
       "file": "internal/eviedb/workflow_run_nodes.go",
       "symbol": "Store.CheckWorkflowRunLease",
-      "title": "func (s *Store) CheckWorkflowRunLease"
+      "title": "func (s *Store) CheckWorkflowRunLease",
+      "hash": "7e6a570965a9"
     },
-    "Warm": {"file": "internal/tools/shellsnapshot.go", "symbol": "Warm", "title": "func Warm"},
-    "OpenDB": {"file": "internal/eviedb/db.go", "symbol": "OpenDB", "title": "func OpenDB"},
-    "OpenDBContext": {"file": "internal/eviedb/db.go", "symbol": "OpenDBContext", "title": "func OpenDBContext"},
+    "Warm": {
+      "file": "internal/tools/shellsnapshot.go",
+      "symbol": "Warm",
+      "title": "func Warm",
+      "hash": "2c95251362b8"
+    },
+    "OpenDB": {
+      "file": "internal/eviedb/db.go",
+      "symbol": "OpenDB",
+      "title": "func OpenDB",
+      "hash": "6494834019a6"
+    },
+    "OpenDBContext": {
+      "file": "internal/eviedb/db.go",
+      "symbol": "OpenDBContext",
+      "title": "func OpenDBContext",
+      "hash": "8c2f8d7b5c73"
+    },
     "openDBAtContextWithHooks": {
       "file": "internal/eviedb/db.go",
       "symbol": "openDBAtContextWithHooks",
-      "title": "func openDBAtContextWithHooks"
+      "title": "func openDBAtContextWithHooks",
+      "hash": "dcc998f17365"
     },
     "configuredSubagentPolicy": {
       "file": "cmd/evie/subagents.go",
       "symbol": "configuredSubagentPolicy",
-      "title": "func configuredSubagentPolicy"
+      "title": "func configuredSubagentPolicy",
+      "hash": "8d8724bd4e95"
     },
-    "NewManager": {"file": "internal/plugins/manager.go", "symbol": "NewManager", "title": "func NewManager"},
+    "NewManager": {
+      "file": "internal/plugins/manager.go",
+      "symbol": "NewManager",
+      "title": "func NewManager",
+      "hash": "615d870bae1f"
+    },
     "newMemoryBackgroundHost": {
       "file": "cmd/evie/memory_background.go",
       "symbol": "newMemoryBackgroundHost",
-      "title": "func newMemoryBackgroundHost"
+      "title": "func newMemoryBackgroundHost",
+      "hash": "617fb07e1b9f"
     },
     "startSubagentRecovery": {
       "file": "cmd/evie/subagents.go",
       "symbol": "startSubagentRecovery",
-      "title": "func startSubagentRecovery"
+      "title": "func startSubagentRecovery",
+      "hash": "ece8ad4c451a"
     },
     "newWorkflowRuntime": {
       "file": "cmd/evie/workflow_activation.go",
       "symbol": "newWorkflowRuntime",
-      "title": "func newWorkflowRuntime"
+      "title": "func newWorkflowRuntime",
+      "hash": "9bfba89111a4"
     },
     "startWorkflowScheduler": {
       "file": "cmd/evie/workflow_runs.go",
       "symbol": "startWorkflowScheduler",
-      "title": "func startWorkflowScheduler"
+      "title": "func startWorkflowScheduler",
+      "hash": "856ea23ce19f"
     },
-    "startChangeSync": {"file": "cmd/evie/main.go", "symbol": "startChangeSync", "title": "func startChangeSync"},
-    "NewClient": {"file": "internal/openrouter/client.go", "symbol": "NewClient", "title": "func NewClient"},
+    "startChangeSync": {
+      "file": "cmd/evie/main.go",
+      "symbol": "startChangeSync",
+      "title": "func startChangeSync",
+      "hash": "8df0ed7cf2be"
+    },
+    "NewClient": {
+      "file": "internal/openrouter/client.go",
+      "symbol": "NewClient",
+      "title": "func NewClient",
+      "hash": "497d252cc49b"
+    },
     "Client.ResolveContextProfile": {
       "file": "internal/openrouter/context_profile.go",
       "symbol": "Client.ResolveContextProfile",
-      "title": "func (c *Client) ResolveContextProfile"
+      "title": "func (c *Client) ResolveContextProfile",
+      "hash": "0af20bcaeacd"
     },
     "Client.resolveContextProfile": {
       "file": "internal/openrouter/context_profile.go",
       "symbol": "Client.resolveContextProfile",
-      "title": "func (c *Client) resolveContextProfile"
+      "title": "func (c *Client) resolveContextProfile",
+      "hash": "16f26301a2b8"
     },
     "contextFallbackWarning": {
       "file": "cmd/evie/main.go",
       "symbol": "contextFallbackWarning",
-      "title": "func contextFallbackWarning"
+      "title": "func contextFallbackWarning",
+      "hash": "0198dad3dab7"
     },
     "newWebContextSessionController": {
       "file": "cmd/evie/web_context_sessions.go",
       "symbol": "newWebContextSessionController",
-      "title": "func newWebContextSessionController"
+      "title": "func newWebContextSessionController",
+      "hash": "fedd473c5ff0"
     },
     "configureSubagentRuntime": {
       "file": "cmd/evie/subagents.go",
       "symbol": "configureSubagentRuntime",
-      "title": "func configureSubagentRuntime"
+      "title": "func configureSubagentRuntime",
+      "hash": "c557c0571e58"
     },
     "startConfiguredCompilerHost": {
       "file": "cmd/evie/compiler_host.go",
       "symbol": "startConfiguredCompilerHost",
-      "title": "func startConfiguredCompilerHost"
+      "title": "func startConfiguredCompilerHost",
+      "hash": "f954dc73f992"
     },
     "memoryBackgroundHost.Start": {
       "file": "cmd/evie/memory_background.go",
       "symbol": "memoryBackgroundHost.Start",
-      "title": "func (h *memoryBackgroundHost) Start"
+      "title": "func (h *memoryBackgroundHost) Start",
+      "hash": "831b46f6de60"
     },
     "NewContextDataServer": {
       "file": "internal/web/serve.go",
       "symbol": "NewContextDataServer",
-      "title": "func NewContextDataServer"
+      "title": "func NewContextDataServer",
+      "hash": "ed9670c74459"
     },
-    "listenAddr": {"file": "internal/web/serve.go", "symbol": "listenAddr", "title": "func listenAddr"},
+    "listenAddr": {
+      "file": "internal/web/serve.go",
+      "symbol": "listenAddr",
+      "title": "func listenAddr",
+      "hash": "e0fbefe558c9"
+    },
     "ServeWithContext": {
       "file": "internal/web/lifecycle.go",
       "symbol": "ServeWithContext",
-      "title": "func ServeWithContext"
+      "title": "func ServeWithContext",
+      "hash": "986db0b2c645"
     },
     "serveListenerContext": {
       "file": "internal/web/lifecycle.go",
       "symbol": "serveListenerContext",
-      "title": "func serveListenerContext"
+      "title": "func serveListenerContext",
+      "hash": "508400ca7c68"
     },
     "Server.Close": {
       "file": "internal/web/terminal.go",
       "symbol": "Server.Close",
-      "title": "func (s *Server) Close"
+      "title": "func (s *Server) Close",
+      "hash": "6aee9e054ccf"
     },
     "Subagents.ToolCapabilities": {
       "file": "internal/plugins/subagents.go",
       "symbol": "Subagents.ToolCapabilities",
-      "title": "func (s Subagents) ToolCapabilities"
+      "title": "func (s Subagents) ToolCapabilities",
+      "hash": "68d3e376328d"
     },
     "invokingParent": {
       "file": "internal/plugins/subagents.go",
       "symbol": "invokingParent",
-      "title": "func invokingParent"
+      "title": "func invokingParent",
+      "hash": "15bf8fd9a7ba"
     },
     "decodeStrict": {
       "file": "internal/plugins/subagents.go",
       "symbol": "decodeStrict",
-      "title": "func decodeStrict"
+      "title": "func decodeStrict",
+      "hash": "fe7afde56455"
     },
     "Supervisor.Delegate": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.Delegate",
-      "title": "func (s *Supervisor) Delegate"
+      "title": "func (s *Supervisor) Delegate",
+      "hash": "fa9251c04d64"
     },
     "Supervisor.Explore": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.Explore",
-      "title": "func (s *Supervisor) Explore"
+      "title": "func (s *Supervisor) Explore",
+      "hash": "4399d37d6e32"
     },
     "Supervisor.Build": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.Build",
-      "title": "func (s *Supervisor) Build"
+      "title": "func (s *Supervisor) Build",
+      "hash": "bb2a5981d26e"
     },
     "Supervisor.delegate": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.delegate",
-      "title": "func (s *Supervisor) delegate"
+      "title": "func (s *Supervisor) delegate",
+      "hash": "a8114d2ff8f0"
     },
     "Supervisor.enter": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.enter",
-      "title": "func (s *Supervisor) enter"
+      "title": "func (s *Supervisor) enter",
+      "hash": "54587a837845"
     },
     "Supervisor.buildPlans": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.buildPlans",
-      "title": "func (s *Supervisor) buildPlans"
+      "title": "func (s *Supervisor) buildPlans",
+      "hash": "74566e665127"
     },
     "Supervisor.run": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.run",
-      "title": "func (s *Supervisor) run"
+      "title": "func (s *Supervisor) run",
+      "hash": "21c646feffb9"
     },
     "Supervisor.own": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.own",
-      "title": "func (s *Supervisor) own"
+      "title": "func (s *Supervisor) own",
+      "hash": "15ff0234ad34"
     },
     "Supervisor.execute": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.execute",
-      "title": "func (s *Supervisor) execute"
+      "title": "func (s *Supervisor) execute",
+      "hash": "75fa2ebcec10"
     },
     "Supervisor.watch": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.watch",
-      "title": "func (s *Supervisor) watch"
+      "title": "func (s *Supervisor) watch",
+      "hash": "2e1ad8bc1f4a"
     },
     "Supervisor.commitBuild": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.commitBuild",
-      "title": "func (s *Supervisor) commitBuild"
+      "title": "func (s *Supervisor) commitBuild",
+      "hash": "476522381e31"
     },
     "Supervisor.finish": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.finish",
-      "title": "func (s *Supervisor) finish"
+      "title": "func (s *Supervisor) finish",
+      "hash": "dc41537924a6"
     },
     "Supervisor.settleOnce": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "Supervisor.settleOnce",
-      "title": "func (s *Supervisor) settleOnce"
+      "title": "func (s *Supervisor) settleOnce",
+      "hash": "44077c403770"
     },
     "undeliverable": {
       "file": "internal/subagents/supervisor.go",
       "symbol": "undeliverable",
-      "title": "func undeliverable"
+      "title": "func undeliverable",
+      "hash": "5603b93daf6e"
     },
     "budget.ChatStream": {
       "file": "internal/subagents/budget.go",
       "symbol": "budget.ChatStream",
-      "title": "func (b *budget) ChatStream"
+      "title": "func (b *budget) ChatStream",
+      "hash": "919b39f3d9e9"
     },
     "researchReceipt": {
       "file": "internal/subagents/receipt.go",
       "symbol": "researchReceipt",
-      "title": "func researchReceipt"
+      "title": "func researchReceipt",
+      "hash": "bff410739072"
     },
     "Policy.ValidateWorkerBatch": {
       "file": "internal/delegation/types.go",
       "symbol": "Policy.ValidateWorkerBatch",
-      "title": "func (p Policy) ValidateWorkerBatch"
+      "title": "func (p Policy) ValidateWorkerBatch",
+      "hash": "d481579358be"
     },
     "Policy.validateBatch": {
       "file": "internal/delegation/types.go",
       "symbol": "Policy.validateBatch",
-      "title": "func (p Policy) validateBatch"
+      "title": "func (p Policy) validateBatch",
+      "hash": "d9ea69dd58f8"
     },
     "Result.ParentView": {
       "file": "internal/delegation/parent_view.go",
       "symbol": "Result.ParentView",
-      "title": "func (r Result) ParentView"
+      "title": "func (r Result) ParentView",
+      "hash": "b01d814c57dc"
     },
     "frameChildOutput": {
       "file": "internal/delegation/parent_view.go",
       "symbol": "frameChildOutput",
-      "title": "func frameChildOutput"
+      "title": "func frameChildOutput",
+      "hash": "c5f27e69fc16"
     },
     "Store.AdmitSubagents": {
       "file": "internal/eviedb/subagents.go",
       "symbol": "Store.AdmitSubagents",
-      "title": "func (s *Store) AdmitSubagents"
+      "title": "func (s *Store) AdmitSubagents",
+      "hash": "2afed74a319e"
     },
     "Store.admitSubagents": {
       "file": "internal/eviedb/subagents.go",
       "symbol": "Store.admitSubagents",
-      "title": "func (s *Store) admitSubagents"
+      "title": "func (s *Store) admitSubagents",
+      "hash": "22bf62dc57c1"
     },
     "committedSubagentIntent": {
       "file": "internal/eviedb/subagents.go",
       "symbol": "committedSubagentIntent",
-      "title": "func committedSubagentIntent"
+      "title": "func committedSubagentIntent",
+      "hash": "37c97acf1e75"
     },
     "admitWithinTurnLimit": {
       "file": "internal/eviedb/subagents.go",
       "symbol": "admitWithinTurnLimit",
-      "title": "func admitWithinTurnLimit"
+      "title": "func admitWithinTurnLimit",
+      "hash": "47cdb6e8beda"
     },
     "Store.AdmitBuildSubagents": {
       "file": "internal/eviedb/subagent_build.go",
       "symbol": "Store.AdmitBuildSubagents",
-      "title": "func (s *Store) AdmitBuildSubagents"
+      "title": "func (s *Store) AdmitBuildSubagents",
+      "hash": "3a7d5cea191d"
     },
     "prepareBuildTask": {
       "file": "internal/eviedb/subagent_build.go",
       "symbol": "prepareBuildTask",
-      "title": "func prepareBuildTask"
+      "title": "func prepareBuildTask",
+      "hash": "57de65a0ad7a"
     },
     "issueBuildGrant": {
       "file": "internal/eviedb/subagent_build.go",
       "symbol": "issueBuildGrant",
-      "title": "func issueBuildGrant"
+      "title": "func issueBuildGrant",
+      "hash": "ae3ab134cfb5"
     },
     "Store.FinishBuildSubagent": {
       "file": "internal/eviedb/subagent_build.go",
       "symbol": "Store.FinishBuildSubagent",
-      "title": "func (s *Store) FinishBuildSubagent"
+      "title": "func (s *Store) FinishBuildSubagent",
+      "hash": "10b16a797759"
     },
     "Store.StartSubagent": {
       "file": "internal/eviedb/subagent_execution.go",
       "symbol": "Store.StartSubagent",
-      "title": "func (s *Store) StartSubagent"
+      "title": "func (s *Store) StartSubagent",
+      "hash": "f4ca6d2ae1f2"
     },
     "Store.AuthorizeSubagent": {
       "file": "internal/eviedb/subagent_execution.go",
       "symbol": "Store.AuthorizeSubagent",
-      "title": "func (s *Store) AuthorizeSubagent"
+      "title": "func (s *Store) AuthorizeSubagent",
+      "hash": "f6705b8011ca"
     },
     "Store.FinishSubagent": {
       "file": "internal/eviedb/subagent_execution.go",
       "symbol": "Store.FinishSubagent",
-      "title": "func (s *Store) FinishSubagent"
+      "title": "func (s *Store) FinishSubagent",
+      "hash": "0e751d66b96a"
     },
     "Store.finishSubagent": {
       "file": "internal/eviedb/subagent_execution.go",
       "symbol": "Store.finishSubagent",
-      "title": "func (s *Store) finishSubagent"
+      "title": "func (s *Store) finishSubagent",
+      "hash": "a7647d508ea0"
     },
     "NewDelegatedWithToolset": {
       "file": "internal/agent/agent.go",
       "symbol": "NewDelegatedWithToolset",
-      "title": "func NewDelegatedWithToolset"
+      "title": "func NewDelegatedWithToolset",
+      "hash": "a725a53356f1"
     },
     "Server.registerChangeMergeRoutes": {
       "file": "internal/web/changes_merge.go",
       "symbol": "Server.registerChangeMergeRoutes",
-      "title": "func (s *Server) registerChangeMergeRoutes"
+      "title": "func (s *Server) registerChangeMergeRoutes",
+      "hash": "23fff8c5007d"
     },
     "changeMergeError": {
       "file": "internal/web/changes_merge.go",
       "symbol": "changeMergeError",
-      "title": "func changeMergeError"
+      "title": "func changeMergeError",
+      "hash": "e490af123073"
     },
     "Store.WorkspaceFolder": {
       "file": "internal/eviedb/workspace_folder.go",
       "symbol": "Store.WorkspaceFolder",
-      "title": "func (s *Store) WorkspaceFolder"
+      "title": "func (s *Store) WorkspaceFolder",
+      "hash": "3025576c4b49"
     },
     "Merger.Merge": {
       "file": "internal/changes/merge.go",
       "symbol": "Merger.Merge",
-      "title": "func (m *Merger) Merge"
+      "title": "func (m *Merger) Merge",
+      "hash": "159527ee9bce"
     },
-    "Merger.find": {"file": "internal/changes/merge.go", "symbol": "Merger.find", "title": "func (m *Merger) find"},
+    "Merger.find": {
+      "file": "internal/changes/merge.go",
+      "symbol": "Merger.find",
+      "title": "func (m *Merger) find",
+      "hash": "77861a6a4a06"
+    },
     "Merger.mergeOnGitHub": {
       "file": "internal/changes/merge.go",
       "symbol": "Merger.mergeOnGitHub",
-      "title": "func (m *Merger) mergeOnGitHub"
+      "title": "func (m *Merger) mergeOnGitHub",
+      "hash": "5ab51b06db8b"
     },
     "Merger.needsRebase": {
       "file": "internal/changes/merge.go",
       "symbol": "Merger.needsRebase",
-      "title": "func (m *Merger) needsRebase"
+      "title": "func (m *Merger) needsRebase",
+      "hash": "cbe8179b2132"
     },
     "Merger.cleanUp": {
       "file": "internal/changes/merge.go",
       "symbol": "Merger.cleanUp",
-      "title": "func (m *Merger) cleanUp"
+      "title": "func (m *Merger) cleanUp",
+      "hash": "272cdae01596"
     },
     "Merger.catchUp": {
       "file": "internal/changes/merge.go",
       "symbol": "Merger.catchUp",
-      "title": "func (m *Merger) catchUp"
+      "title": "func (m *Merger) catchUp",
+      "hash": "347359fad5c3"
     },
     "Merger.after": {
       "file": "internal/changes/merge.go",
       "symbol": "Merger.after",
-      "title": "func (m *Merger) after"
+      "title": "func (m *Merger) after",
+      "hash": "d68c2d1b6c11"
     },
     "MergeResult": {
       "file": "internal/changes/merge.go",
       "symbol": "MergeResult",
-      "title": "type MergeResult struct"
+      "title": "type MergeResult struct",
+      "hash": "1faf0eb63cf1"
     },
     "Service.claim": {
       "file": "internal/changes/publish.go",
       "symbol": "Service.claim",
-      "title": "func (s *Service) claim"
+      "title": "func (s *Service) claim",
+      "hash": "8ef6fb517e53"
     },
     "Service.remoteGit": {
       "file": "internal/changes/publish.go",
       "symbol": "Service.remoteGit",
-      "title": "func (s *Service) remoteGit"
+      "title": "func (s *Service) remoteGit",
+      "hash": "a230fdb607e6"
     },
     "Service.Repository": {
       "file": "internal/changes/repository.go",
       "symbol": "Service.Repository",
-      "title": "func (s *Service) Repository"
+      "title": "func (s *Service) Repository",
+      "hash": "cfb5a3673273"
     },
     "Service.check": {
       "file": "internal/changes/repository.go",
       "symbol": "Service.check",
-      "title": "func (s *Service) check"
+      "title": "func (s *Service) check",
+      "hash": "0a857a89688b"
     },
     "Lister.List": {
       "file": "internal/changes/change.go",
       "symbol": "Lister.List",
-      "title": "func (l *Lister) List"
+      "title": "func (l *Lister) List",
+      "hash": "d4d4ac84fb6c"
     },
-    "buildChange": {"file": "internal/changes/builds.go", "symbol": "buildChange", "title": "func buildChange"},
-    "Syncer.sync": {"file": "internal/changes/sync.go", "symbol": "Syncer.sync", "title": "func (s *Syncer) sync"},
+    "buildChange": {
+      "file": "internal/changes/builds.go",
+      "symbol": "buildChange",
+      "title": "func buildChange",
+      "hash": "708ef070ae8c"
+    },
+    "Syncer.sync": {
+      "file": "internal/changes/sync.go",
+      "symbol": "Syncer.sync",
+      "title": "func (s *Syncer) sync",
+      "hash": "51a2245a4b83"
+    },
     "Store.SaveChangePullRequests": {
       "file": "internal/eviedb/change_pull_requests.go",
       "symbol": "Store.SaveChangePullRequests",
-      "title": "func (s *Store) SaveChangePullRequests"
+      "title": "func (s *Store) SaveChangePullRequests",
+      "hash": "963bd2479092"
     },
     "checkGateAttempt": {
       "file": "internal/eviedb/subagent_gate.go",
       "symbol": "checkGateAttempt",
-      "title": "func checkGateAttempt"
+      "title": "func checkGateAttempt",
+      "hash": "2099e2633abc"
     },
     "Supervisor.MergeAsOwner": {
       "file": "internal/subagents/gate.go",
       "symbol": "Supervisor.MergeAsOwner",
-      "title": "func (s *Supervisor) MergeAsOwner"
+      "title": "func (s *Supervisor) MergeAsOwner",
+      "hash": "da394b1194b4"
     },
     "Supervisor.proposeMerge": {
       "file": "internal/subagents/gate.go",
       "symbol": "Supervisor.proposeMerge",
-      "title": "func (s *Supervisor) proposeMerge"
+      "title": "func (s *Supervisor) proposeMerge",
+      "hash": "3fa0375b3877"
     },
     "Supervisor.completeMerge": {
       "file": "internal/subagents/gate.go",
       "symbol": "Supervisor.completeMerge",
-      "title": "func (s *Supervisor) completeMerge"
+      "title": "func (s *Supervisor) completeMerge",
+      "hash": "5cb836ade524"
     },
     "Supervisor.CloseAsOwner": {
       "file": "internal/subagents/gate.go",
       "symbol": "Supervisor.CloseAsOwner",
-      "title": "func (s *Supervisor) CloseAsOwner"
+      "title": "func (s *Supervisor) CloseAsOwner",
+      "hash": "5200d6e9030f"
     },
-    "FastForward": {"file": "internal/worktree/gate.go", "symbol": "FastForward", "title": "func FastForward"},
+    "FastForward": {
+      "file": "internal/worktree/gate.go",
+      "symbol": "FastForward",
+      "title": "func FastForward",
+      "hash": "ba3e53471876"
+    },
     "Client.PullRequest": {
       "file": "internal/github/pulls.go",
       "symbol": "Client.PullRequest",
-      "title": "func (c *Client) PullRequest"
+      "title": "func (c *Client) PullRequest",
+      "hash": "0107aca28edf"
     },
     "Client.MergePullRequest": {
       "file": "internal/github/pulls.go",
       "symbol": "Client.MergePullRequest",
-      "title": "func (c *Client) MergePullRequest"
+      "title": "func (c *Client) MergePullRequest",
+      "hash": "afc072b5921c"
     },
     "Server.registerConnectionRoutes": {
       "file": "internal/web/connections.go",
       "symbol": "Server.registerConnectionRoutes",
-      "title": "func (s *Server) registerConnectionRoutes"
+      "title": "func (s *Server) registerConnectionRoutes",
+      "hash": "07c386ef6bf1"
     },
     "Manager.Add": {
       "file": "internal/mcpconn/manager.go",
       "symbol": "Manager.Add",
-      "title": "func (m *Manager) Add"
+      "title": "func (m *Manager) Add",
+      "hash": "fec4ddb44ffa"
     },
     "Manager.BeginConnect": {
       "file": "internal/mcpconn/manager.go",
       "symbol": "Manager.BeginConnect",
-      "title": "func (m *Manager) BeginConnect"
+      "title": "func (m *Manager) BeginConnect",
+      "hash": "1fe94126689d"
     },
     "Manager.Callback": {
       "file": "internal/mcpconn/manager.go",
       "symbol": "Manager.Callback",
-      "title": "func (m *Manager) Callback"
+      "title": "func (m *Manager) Callback",
+      "hash": "edfa0faec6d5"
     },
     "Manager.completeAttempt": {
       "file": "internal/mcpconn/manager.go",
       "symbol": "Manager.completeAttempt",
-      "title": "func (m *Manager) completeAttempt"
+      "title": "func (m *Manager) completeAttempt",
+      "hash": "06a9794cf190"
     },
     "Manager.Wait": {
       "file": "internal/mcpconn/manager.go",
       "symbol": "Manager.Wait",
-      "title": "func (m *Manager) Wait"
+      "title": "func (m *Manager) Wait",
+      "hash": "8e22f7451c0b"
     },
-    "ValidateURL": {"file": "internal/mcpconn/connection.go", "symbol": "ValidateURL", "title": "func ValidateURL"},
+    "ValidateURL": {
+      "file": "internal/mcpconn/connection.go",
+      "symbol": "ValidateURL",
+      "title": "func ValidateURL",
+      "hash": "665c71a3748d"
+    },
     "Keychain.Save": {
       "file": "internal/mcpconn/keychain.go",
       "symbol": "Keychain.Save",
-      "title": "func (k Keychain) Save"
+      "title": "func (k Keychain) Save",
+      "hash": "ee4e48f21a1b"
     },
     "probeResourceMetadata": {
       "file": "internal/mcpconn/oauth.go",
       "symbol": "probeResourceMetadata",
-      "title": "func probeResourceMetadata"
+      "title": "func probeResourceMetadata",
+      "hash": "842ef2c06733"
     },
-    "discover": {"file": "internal/mcpconn/oauth.go", "symbol": "discover", "title": "func discover"},
-    "register": {"file": "internal/mcpconn/oauth.go", "symbol": "register", "title": "func register"},
+    "discover": {
+      "file": "internal/mcpconn/oauth.go",
+      "symbol": "discover",
+      "title": "func discover",
+      "hash": "69b432328f4d"
+    },
+    "register": {
+      "file": "internal/mcpconn/oauth.go",
+      "symbol": "register",
+      "title": "func register",
+      "hash": "af1952d5e8ad"
+    },
     "authorizationURL": {
       "file": "internal/mcpconn/oauth.go",
       "symbol": "authorizationURL",
-      "title": "func authorizationURL"
+      "title": "func authorizationURL",
+      "hash": "9875a5bf8905"
     },
-    "exchangeCode": {"file": "internal/mcpconn/oauth.go", "symbol": "exchangeCode", "title": "func exchangeCode"},
+    "exchangeCode": {
+      "file": "internal/mcpconn/oauth.go",
+      "symbol": "exchangeCode",
+      "title": "func exchangeCode",
+      "hash": "bde5936dce53"
+    },
     "Store.CreateMCPConnection": {
       "file": "internal/eviedb/mcp_connections.go",
       "symbol": "Store.CreateMCPConnection",
-      "title": "func (s *Store) CreateMCPConnection"
+      "title": "func (s *Store) CreateMCPConnection",
+      "hash": "328b52550b48"
     },
     "Store.SetMCPConnectionStatus": {
       "file": "internal/eviedb/mcp_connections.go",
       "symbol": "Store.SetMCPConnectionStatus",
-      "title": "func (s *Store) SetMCPConnectionStatus"
+      "title": "func (s *Store) SetMCPConnectionStatus",
+      "hash": "12c84414fcc6"
     },
     "Service.SetToolEnabled": {
       "file": "internal/mcpchat/service.go",
       "symbol": "Service.SetToolEnabled",
-      "title": "func (s *Service) SetToolEnabled"
+      "title": "func (s *Service) SetToolEnabled",
+      "hash": "a62d55a952da"
     },
     "Service.reviewInputs": {
       "file": "internal/mcpchat/service.go",
       "symbol": "Service.reviewInputs",
-      "title": "func (s *Service) reviewInputs"
+      "title": "func (s *Service) reviewInputs",
+      "hash": "6cd7332dc4c9"
     },
     "Pool.ListTools": {
       "file": "internal/mcpconn/pool.go",
       "symbol": "Pool.ListTools",
-      "title": "func (p *Pool) ListTools"
+      "title": "func (p *Pool) ListTools",
+      "hash": "166f164369b3"
     },
     "Pool.CallTool": {
       "file": "internal/mcpconn/pool.go",
       "symbol": "Pool.CallTool",
-      "title": "func (p *Pool) CallTool"
+      "title": "func (p *Pool) CallTool",
+      "hash": "3135435d1648"
     },
-    "toolFromSDK": {"file": "internal/mcpconn/pool.go", "symbol": "toolFromSDK", "title": "func toolFromSDK"},
+    "toolFromSDK": {
+      "file": "internal/mcpconn/pool.go",
+      "symbol": "toolFromSDK",
+      "title": "func toolFromSDK",
+      "hash": "758f124cdfc9"
+    },
     "Store.SetWorkspaceAccess": {
       "file": "internal/eviedb/workflows.go",
       "symbol": "Store.SetWorkspaceAccess",
-      "title": "func (s *Store) SetWorkspaceAccess"
+      "title": "func (s *Store) SetWorkspaceAccess",
+      "hash": "f39da75d411e"
     },
     "Store.createWorkspaceSession": {
       "file": "internal/eviedb/sessions.go",
       "symbol": "Store.createWorkspaceSession",
-      "title": "func (s *Store) createWorkspaceSession"
+      "title": "func (s *Store) createWorkspaceSession",
+      "hash": "22fb538b0f22"
     },
     "MCP.ToolCapabilities": {
       "file": "internal/plugins/mcp.go",
       "symbol": "MCP.ToolCapabilities",
-      "title": "func (m MCP) ToolCapabilities"
+      "title": "func (m MCP) ToolCapabilities",
+      "hash": "83731d832861"
     },
-    "MCP.resolve": {"file": "internal/plugins/mcp.go", "symbol": "MCP.resolve", "title": "func (m MCP) resolve"},
+    "MCP.resolve": {
+      "file": "internal/plugins/mcp.go",
+      "symbol": "MCP.resolve",
+      "title": "func (m MCP) resolve",
+      "hash": "efba953938c2"
+    },
     "MCP.requiresApproval": {
       "file": "internal/plugins/mcp.go",
       "symbol": "MCP.requiresApproval",
-      "title": "func (m MCP) requiresApproval"
+      "title": "func (m MCP) requiresApproval",
+      "hash": "8680a04cd5e5"
     },
-    "MCP.call": {"file": "internal/plugins/mcp.go", "symbol": "MCP.call", "title": "func (m MCP) call"},
+    "MCP.call": {
+      "file": "internal/plugins/mcp.go",
+      "symbol": "MCP.call",
+      "title": "func (m MCP) call",
+      "hash": "c351524b80de"
+    },
     "transport.RoundTrip": {
       "file": "internal/mcpconn/transport.go",
       "symbol": "transport.RoundTrip",
-      "title": "func (t *transport) RoundTrip"
+      "title": "func (t *transport) RoundTrip",
+      "hash": "22a4623e32f6"
     }
   },
   "refs": {},
