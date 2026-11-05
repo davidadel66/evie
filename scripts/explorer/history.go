@@ -242,7 +242,7 @@ func validateEntry(e *changelogEntry) {
 		}
 	}
 	if len(e.Sources) == 0 {
-		e.add("missing Sources", "add a Sources: line with at least one explorer reference or #n number")
+		e.add("missing Sources", "add a Sources: line with at least one reference or #n number")
 	}
 	for _, source := range e.Sources {
 		if strings.HasPrefix(source, "#") && !issueNumber.MatchString(source) {
@@ -302,7 +302,7 @@ func (c *checker) validateHistory(log changelogFile) {
 		c.problems = append(c.problems, e.problems...)
 		for _, source := range e.Sources {
 			if !strings.HasPrefix(source, "#") {
-				c.ref(changelogPath, item, source, nil)
+				c.source(item, source)
 			}
 		}
 		c.verifyCommits(repo, item, e)
@@ -316,6 +316,22 @@ func (c *checker) validateHistory(log changelogFile) {
 		}
 		above = e
 	}
+}
+
+// source reports a changelog source that does not resolve. Sources are
+// references in the system map's forms, as the vision skill's History tab
+// reads them; a part: source names a part of the map.
+func (c *checker) source(item, ref string) {
+	why := c.resolve(ref)
+	if why == "" {
+		return
+	}
+	kind, _, _ := strings.Cut(ref, ":")
+	fix, ok := refFixes[kind]
+	if !ok {
+		fix = "use one of " + refKinds()
+	}
+	c.add(changelogPath, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix)
 }
 
 // commitSHAs are the well-formed commits an entry names: its merge commit

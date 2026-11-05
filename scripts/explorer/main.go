@@ -1,5 +1,6 @@
-// Command explorer extracts the system explorer's facts from the code and
-// checks the explorer data against them (system-explorer.spec.md).
+// Command explorer extracts Evie's facts from the code, and checks the facts
+// file, the system map and the changelog against them (system-explorer.spec.md
+// and system-page.spec.md).
 //
 // Run it from the repository root:
 //

@@ -242,7 +242,9 @@ func TestCheckReportsChangelogSourcesThatDoNotResolve(t *testing.T) {
 		{"missing code symbol", "code:internal/alpha/alpha.go#Missing", "declares no Missing"},
 		{"missing package", "pkg:internal/ghost", "no package"},
 		{"missing ADR", "adr:0099", "no ADR 0099"},
+		{"missing part", "part:pkg:internal/ghost", "there is no part pkg:internal/ghost"},
 		{"unknown kind", "https://example.com", "unknown reference kind"},
+		{"code key", "Name", "want kind:target"},
 	} {
 		cases = append(cases, checkCase{
 			name:   tc.name,
@@ -258,6 +260,17 @@ func TestCheckReportsChangelogSourcesThatDoNotResolve(t *testing.T) {
 		})
 	}
 	runCheckCases(t, cases)
+}
+
+func TestCheckAcceptsChangelogSourcesInTheSystemMapsForms(t *testing.T) {
+	// As the vision skill reads them for its History tab: a part, a folder,
+	// and a TypeScript declaration.
+	root := newFixture(t)
+	sources := "Sources: part:pkg:internal/alpha, doc:docs/adr, code:web/stream.ts#followChat, #12"
+	withChangelog(changelog(strings.Replace(validEntry, "Sources: doc:docs/guide.md, #12", sources, 1)))(t, root)
+	if code, out := checkFixture(t, root); code != 0 {
+		t.Fatalf("check exit %d, want 0:\n%s", code, out)
+	}
 }
 
 // git runs git in root, ignoring the owner's configuration, and returns its

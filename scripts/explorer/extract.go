@@ -15,9 +15,9 @@ import (
 	"strings"
 )
 
-// Facts is the generated half of the explorer data. It is sorted and holds no
-// timestamps or line numbers, so a fresh extraction is byte-identical on every
-// platform.
+// Facts is what the code answers mechanically, which the system map cites.
+// It is sorted and holds no timestamps or line numbers, so a fresh
+// extraction is byte-identical on every platform.
 type Facts struct {
 	Format    int            `json:"format"`
 	Kind      string         `json:"kind"`
@@ -126,7 +126,7 @@ func writeFacts(root string, databases []databaseSource) error {
 	return os.WriteFile(file, data, 0o644)
 }
 
-// renderFacts extracts the facts and renders them as the facts data file.
+// renderFacts extracts the facts and renders them as the facts file.
 func renderFacts(root string, databases []databaseSource) ([]byte, error) {
 	facts, err := extractFacts(root, databases)
 	if err != nil {

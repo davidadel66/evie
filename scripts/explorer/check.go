@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 )
 
-// problem is one drift or format failure: the data file it is in, the item
-// that is wrong, what is wrong, and how to fix it.
+// problem is one drift or format failure: the file it is in, the item that
+// is wrong, what is wrong, and how to fix it.
 type problem struct {
 	File    string
 	Item    string
@@ -21,6 +21,40 @@ type problem struct {
 
 func (p problem) String() string {
 	return fmt.Sprintf("%s: %s: %s. Fix: %s.", p.File, p.Item, p.Message, p.Fix)
+}
+
+// checker collects problems while checking the facts file, the system map
+// and the changelog against a fresh extraction of the code.
+type checker struct {
+	root     string
+	facts    Facts
+	problems []problem
+	packages map[string]bool // package paths from the facts
+	imports  map[Import]bool // import edges from the facts
+	parts    map[string]bool // part ids from the system map, which part: references name
+
+	declCache    map[string]*goFile         // Go file -> its declarations
+	scriptCache  map[string]*scriptFile     // JavaScript or TypeScript file -> its declarations
+	headingCache map[string]map[string]bool // Markdown file -> anchors
+}
+
+func newChecker(root string, facts Facts) *checker {
+	c := &checker{root: root, facts: facts, packages: map[string]bool{}, imports: map[Import]bool{}, parts: map[string]bool{}}
+	for _, pkg := range facts.Packages {
+		c.packages[pkg.Path] = true
+	}
+	for _, imp := range facts.Imports {
+		c.imports[imp] = true
+	}
+	return c
+}
+
+func (c *checker) add(file, item, message, fix string) {
+	c.problems = append(c.problems, problem{File: file, Item: item, Message: message, Fix: fix})
+}
+
+func (c *checker) path(rel string) string {
+	return filepath.Join(c.root, filepath.FromSlash(rel))
 }
 
 // runCheck prints every problem and returns the exit code.
@@ -37,13 +71,13 @@ func runCheck(root string, databases []databaseSource, stdout, stderr io.Writer)
 		fmt.Fprintf(stdout, "explorer check: %d problem(s)\n", len(problems))
 		return 1
 	}
-	fmt.Fprintln(stdout, "explorer check: the explorer data matches the code")
+	fmt.Fprintln(stdout, "explorer check: the facts, the system map and the changelog match the code")
 	return 0
 }
 
-// checkRepo re-extracts the facts, compares them with the facts file, and
-// validates every data file against them. It returns every problem found; an
-// error means the check itself could not run.
+// checkRepo re-extracts the facts and compares them with the facts file,
+// then checks the system map and the changelog against them. It returns
+// every problem found; an error means the check itself could not run.
 func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 	log, err := readChangelog(root)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -61,7 +95,7 @@ func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &checker{root: root, facts: facts}
+	c := newChecker(root, facts)
 	current, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(factsPath)))
 	switch {
 	case err == nil && bytes.Equal(current, fresh):
@@ -71,8 +105,8 @@ func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 		c.add(factsPath, "facts", "the facts differ from a fresh extraction of the code",
 			"run "+extractCommand+" and commit the result")
 	}
-	c.validate(c.loadData())
-	c.validateHistory(log)
+	// The map goes first: the changelog's part: sources name its parts.
 	c.validateVisionMap()
+	c.validateHistory(log)
 	return c.problems, nil
 }

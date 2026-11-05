@@ -8,47 +8,20 @@ import (
 	"testing"
 )
 
-// The system map rules run only when .vision/map.json exists; every other
-// fixture has none, so they are unaffected. These tests write a map whose
-// every reference resolves in the fixture repository, and a page carrying
-// its hash, then break one thing.
+// Every fixture has a consistent system map, testdata/repo/.vision/map.json,
+// whose every reference resolves in the fixture repository, and the page
+// built from it (newFixture). These tests break one thing.
 
 const fixtureScript = "web/stream.ts"
 
-// visionFixtureJSON is a consistent map: it reaches every place a map
-// holds a reference, and every reference form check resolves.
-const visionFixtureJSON = `{
-  "meta": {"title": "Fixture", "facts": "docs/architecture/explorer/data/facts.js", "page": "docs/architecture/explorer/system.html"},
-  "kinds": [{"id": "serve", "label": "Serve"}],
-  "flows": [{"id": "main", "name": "Main", "steps": [{
-    "id": "start", "name": "Start the server", "kind": "serve",
-    "code": {"key": "Server.Start", "highlight": ["return nil"]},
-    "refs": ["code:internal/alpha/routes.go#Server.routes", "code:internal/alpha", "doc:docs/guide.md", "doc:docs/guide.md#getting-started-1", "Name"],
-    "facts": [
-      ["route", "GET /widgets", "route:GET /widgets"], ["guarded by", "requireOwner", "route:GET /widgets"], ["route", "/health", "route:/health"],
-      ["package", "internal/alpha", "pkg:internal/alpha"], ["writes", "widgets", "table:fixture.widgets"], ["command", "tool run", "command:tool run"],
-      ["limit", "3", "code:internal/alpha/alpha.go#Limit"], ["follows", "followChat", "code:web/stream.ts#followChat"], ["names", "beta.Name", "Name"],
-      ["decision", "Make the first decision", "adr:0001"], ["term", "spread across two lines", "term:Widget"], ["unbacked", "anything"]
-    ],
-    "flags": [{"text": "A decision and a term back this flag.", "refs": ["adr:0001", "term:Widget"]}],
-    "values": [{"type": "kv", "title": "Limits", "rows": [["limit", "3"], ["name", "beta"]]}],
-    "files": [{"path": "internal/alpha/alpha.go", "note": "The server"}],
-    "children": [{"id": "follow", "name": "Follow", "code": {"key": "Feed.follow"}, "refs": ["code:web/stream.ts#followChat"]}]
-  }]}],
-  "code": {
-    "Server.Start": {"file": "internal/alpha/alpha.go", "symbol": "Server.Start", "title": "func (s *Server) Start"},
-    "Name": {"file": "internal/alpha/alpha.go", "symbol": "Name"},
-    "Handler.Serve": {"file": "internal/alpha/alpha.go", "symbol": "Handler.Serve"},
-    "sendDetached": {"file": "web/stream.ts", "symbol": "sendDetached"},
-    "Feed.follow": {"file": "web/stream.ts", "symbol": "Feed.follow"}
-  },
-  "refs": {},
-  "history": [{"date": "2026-11-04", "summary": "Map created"}]
-}`
-
+// visionFixtureMap is the fixture's map, decoded.
 func visionFixtureMap() map[string]any {
+	data, err := os.ReadFile(filepath.Join("testdata", "repo", filepath.FromSlash(visionMapPath)))
+	if err != nil {
+		panic(err)
+	}
 	var m map[string]any
-	if err := json.Unmarshal([]byte(visionFixtureJSON), &m); err != nil {
+	if err := json.Unmarshal(data, &m); err != nil {
 		panic(err)
 	}
 	return m
@@ -80,13 +53,11 @@ func writeVisionPage(t *testing.T, root, hash string) {
 	writeFile(t, root, visionPagePath, "<!doctype html>\n<meta charset=\"utf-8\">\n<meta name=\"vision-map-hash\" content=\""+hash+"\">\n<title>Fixture</title>\n")
 }
 
-// newVisionFixture is the consistent fixture with a consistent map.
+// newVisionFixture is the consistent fixture with its facts extracted.
 func newVisionFixture(t *testing.T) string {
 	t.Helper()
 	root := newFixture(t)
 	extractFixture(t, root)
-	writeFile(t, root, fixtureScript, "export function followChat() {}\nexport const sendDetached = () => {};\nexport class Feed {\n  follow() {}\n}\n")
-	writeVision(t, root, visionFixtureMap())
 	return root
 }
 
@@ -360,6 +331,7 @@ func TestCheckMatchesSystemMapFactValuesAsTheSkillDoes(t *testing.T) {
 		[]any{"routes", "Server.routes", "route:/health"},
 		[]any{"columns", "name", "table:fixture.widgets"},
 		[]any{"command", "cmd/tool", "command:tool"},
+		[]any{"part", "PKG:internal/alpha", "part:pkg:internal/alpha"},
 	)
 	writeVision(t, root, m)
 	if code, out := checkFixture(t, root); code != 0 {
@@ -383,6 +355,7 @@ func TestCheckReportsSystemMapReferencesThatNoLongerResolve(t *testing.T) {
 		{"package", "pkg:internal/ghost", "no package internal/ghost"},
 		{"ADR", "adr:0099", "no ADR 0099"},
 		{"term", "term:Gadget", "no glossary term Gadget"},
+		{"part", "part:ghost", "there is no part ghost"},
 		{"unknown key", "NoSuchKey", "neither a code key of the map nor a kind:target reference"},
 	} {
 		cases = append(cases, checkCase{
@@ -398,7 +371,7 @@ func TestCheckNamesTheReferenceKindsASystemMapMayUse(t *testing.T) {
 	runVisionCases(t, []checkCase{{
 		name:   "unknown key",
 		break_: breakMap(func(_, step map[string]any) { appendTo(step, "refs", "NoSuchKey") }),
-		want:   []string{"use a code key of the map, or one of adr:, code:, command:, doc:, pkg:, route:, table:, term:"},
+		want:   []string{"use a code key of the map, or one of adr:, code:, command:, doc:, part:, pkg:, route:, table:, term:"},
 	}})
 }
 
@@ -487,6 +460,23 @@ func TestCheckReportsSystemMapSettingsEvieDoesNotUse(t *testing.T) {
 			want: []string{visionMapPath, "meta.page", `"docs/system.html"`, "Evie embeds and serves " + visionPagePath, visionPagePath + ": page", "older map"},
 		},
 		{
+			name:   "parts that need not cover every package",
+			break_: breakMap(func(m, _ map[string]any) { delete(m["meta"].(map[string]any), "parts") }),
+			want:   []string{visionMapPath + ": meta.parts", `meta.parts is ""`, "every package has a part", `set meta.parts to "complete"`},
+		},
+		{
+			name:   "changelog",
+			break_: breakMap(func(m, _ map[string]any) { m["meta"].(map[string]any)["changelog"] = "docs/HISTORY.md" }),
+			want:   []string{visionMapPath + ": meta.changelog", `"docs/HISTORY.md"`, "check validates " + changelogPath, `set meta.changelog to "CHANGELOG.md"`},
+		},
+		{
+			name: "repository",
+			break_: breakMap(func(m, _ map[string]any) {
+				m["meta"].(map[string]any)["repository"] = "https://github.com/someone/fork"
+			}),
+			want: []string{visionMapPath + ": meta.repository", `"https://github.com/someone/fork"`, "the module example.com/fixture", `set meta.repository to "https://example.com/fixture"`},
+		},
+		{
 			name: "malformed map",
 			break_: func(t *testing.T, root string) {
 				writeFile(t, root, visionMapPath, `{"flows": [}`)
@@ -522,15 +512,15 @@ func TestCheckReportsASystemMapPageNotBuiltFromTheMap(t *testing.T) {
 			want: []string{visionPagePath + ": page", "does not exist", "rebuild with the vision skill"},
 		},
 		{
-			// The binary embeds the page, so a page without its map would ship
-			// a map nothing holds to the code.
-			name: "the map is missing but the page is committed",
+			// The map holds every package's part, and the binary embeds the
+			// page built from it, so a repository without it fails once.
+			name: "the map is missing",
 			break_: func(t *testing.T, root string) {
 				if err := os.Remove(filepath.Join(root, filepath.FromSlash(visionMapPath))); err != nil {
 					t.Fatal(err)
 				}
 			},
-			want: []string{visionMapPath + ": map", "does not exist", visionPagePath + ", the page built from it", "git log -- " + visionMapPath},
+			want: []string{visionMapPath + ": map", "does not exist", "every package's part", visionPagePath, "git log -- " + visionMapPath, "1 problem(s)"},
 		},
 		{
 			name: "the page carries no hash",
@@ -545,22 +535,25 @@ func TestCheckReportsASystemMapPageNotBuiltFromTheMap(t *testing.T) {
 func TestCheckAcceptsASystemMapStampedOrReformattedAfterItsPageWasBuilt(t *testing.T) {
 	// The hash covers the map's content: stamp, publishing, key order and
 	// layout leave it unchanged, so a page built before them stays current.
-	// The fixture's page was built from the map written with sorted keys and
-	// indentation; this is the map as written by hand, then stamped.
+	// The fixture's page was built from the map as written by hand; this is
+	// that map stamped, then rewritten with sorted keys and indentation.
 	root := newVisionFixture(t)
 	stamped := strings.NewReplacer(
-		`"page": "docs/architecture/explorer/system.html"}`,
-		`"page": "docs/architecture/explorer/system.html", "commit": "3bcc2db0000000000000000000000000000000000", "stamped": "2026-11-04 (with uncommitted work)", "artifact": "https://claude.ai/artifact/abc"}`,
+		`"parts": "complete"`,
+		`"parts": "complete", "commit": "3bcc2db0000000000000000000000000000000000", "stamped": "2026-11-04 (with uncommitted work)", "artifact": "https://claude.ai/artifact/abc"`,
 		`"symbol": "Server.Start",`,
 		`"symbol": "Server.Start", "hash": "a1b2c3d4e5f6", "src": "func (s *Server) Start() error { return nil }", "startLine": 18, "where": "internal/alpha/alpha.go · lines 18–18",`,
-	).Replace(visionFixtureJSON)
+	).Replace(readFile(t, root, visionMapPath))
 	if strings.Count(stamped, `"hash"`) != 1 || !strings.Contains(stamped, `"artifact"`) {
 		t.Fatal("the stamp fields were not added to the map")
 	}
 	writeFile(t, root, visionMapPath, stamped)
-	code, out := checkFixture(t, root)
-	if code != 0 {
-		t.Fatalf("check exit %d, want 0:\n%s", code, out)
+	if code, out := checkFixture(t, root); code != 0 {
+		t.Fatalf("stamped: check exit %d, want 0:\n%s", code, out)
+	}
+	writeVisionMap(t, root, visionFixtureMap())
+	if code, out := checkFixture(t, root); code != 0 {
+		t.Fatalf("reformatted: check exit %d, want 0:\n%s", code, out)
 	}
 }
 

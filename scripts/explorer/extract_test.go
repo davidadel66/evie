@@ -12,7 +12,8 @@ import (
 )
 
 // newFixture copies testdata/repo into a temporary directory so extract and
-// check never write into testdata.
+// check never write into testdata, and writes the page built from its system
+// map, as the vision skill's build would.
 func newFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -38,6 +39,11 @@ func newFixture(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("copy fixture: %v", err)
 	}
+	hash, err := mapHash([]byte(readFile(t, root, visionMapPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeVisionPage(t, root, hash)
 	return root
 }
 
