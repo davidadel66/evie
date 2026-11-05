@@ -549,9 +549,16 @@ func (v *visionChecker) edge(e visionEdge) {
 }
 
 // importEdge checks that the package of part from imports the package of
-// part to. Parts without a package are the skill's check's to refuse.
+// part to, as the skill's check does: an import joins two package parts. An
+// end that is not a part at all is reported where the ends are checked.
 func (v *visionChecker) importEdge(item, from, to string) {
 	fromPkg, toPkg := v.partPackage[from], v.partPackage[to]
+	for _, end := range []string{from, to} {
+		if v.parts[end] && v.partPackage[end] == "" {
+			v.add(visionMapPath, item, fmt.Sprintf("part %q has no package, but via import joins two package parts", end),
+				"join the package parts whose import carries it, or use a via other than import with a cited source, then "+visionRebuild)
+		}
+	}
 	if fromPkg == "" || toPkg == "" || v.imports[Import{From: fromPkg, To: toPkg}] {
 		return
 	}
@@ -560,8 +567,9 @@ func (v *visionChecker) importEdge(item, from, to string) {
 }
 
 // sequence checks a sequence, or a part's sequence diagram: its statements
-// resolve, its participants are parts, and every step cites the code that
-// carries it and, via import, follows one of the facts' imports.
+// resolve, its participants are parts, and every step joins two of its
+// participants, cites the code that carries it and, via import, follows one
+// of the facts' imports.
 func (v *visionChecker) sequence(item string, q visionMessages) {
 	v.statement(item+" summary", q.Summary)
 	v.statement(item+" trigger", q.Trigger)
@@ -570,6 +578,8 @@ func (v *visionChecker) sequence(item string, q visionMessages) {
 	}
 	for i, s := range q.Steps {
 		stepItem := fmt.Sprintf("%s step %d", item, i+1)
+		v.stepEnd(stepItem, "from", s.From, q.Participants)
+		v.stepEnd(stepItem, "to", s.To, q.Participants)
 		v.mapRefs(stepItem, s.Refs)
 		if !slices.ContainsFunc(s.Refs, v.citesCode) {
 			v.add(visionMapPath, stepItem, "the step cites no code",
@@ -582,6 +592,23 @@ func (v *visionChecker) sequence(item string, q visionMessages) {
 			}
 			v.importEdge(stepItem, from, to)
 		}
+	}
+}
+
+// stepEnd reports a sequence step's end, from or to, that is not one of
+// the sequence's participants. A participant that is not a part is reported
+// with the participants.
+func (v *visionChecker) stepEnd(item, end, id string, participants []string) {
+	switch {
+	case id == "":
+		v.add(visionMapPath, item, "the step has no "+end, "name the participant it goes "+end+", then "+visionRebuild)
+	case slices.Contains(participants, id):
+	case v.parts[id]:
+		v.add(visionMapPath, item, fmt.Sprintf("%s %q is not a participant", end, id),
+			"add it to participants, or correct the step, then "+visionRebuild)
+	default:
+		v.add(visionMapPath, item, fmt.Sprintf("%s %q is neither a participant nor a part", end, id),
+			"name a participant of the sequence, or correct the step, then "+visionRebuild)
 	}
 }
 

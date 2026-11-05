@@ -353,6 +353,34 @@ func TestCheckReportsEdgeAndSequenceProblems(t *testing.T) {
 			want:   []string{"sequence run participants", `"pkg:internal/ghost" is not a part`},
 		},
 		{
+			name:   "sequence step to a part that is not a participant",
+			break_: breakSequence(func(run map[string]any) { nth(run["steps"], 2)["to"] = "pkg:internal/beta" }),
+			want:   []string{visionMapPath + ": sequence run step 3", `to "pkg:internal/beta" is not a participant`, "add it to participants", "vision.py build", "1 problem(s)"},
+		},
+		{
+			name:   "sequence step from something that is not a part",
+			break_: breakSequence(func(run map[string]any) { nth(run["steps"], 2)["from"] = "pkg:internal/ghost" }),
+			want:   []string{"sequence run step 3", `from "pkg:internal/ghost" is neither a participant nor a part`, "1 problem(s)"},
+		},
+		{
+			name:   "sequence step without an end",
+			break_: breakSequence(func(run map[string]any) { delete(nth(run["steps"], 2), "from") }),
+			want:   []string{"sequence run step 3", "the step has no from", "name the participant", "1 problem(s)"},
+		},
+		{
+			name: "sequence step via import from a part with no package",
+			break_: breakSequence(func(run map[string]any) {
+				appendTo(run, "participants", "tool-cli")
+				appendTo(run, "steps", map[string]any{"from": "tool-cli", "to": "pkg:internal/alpha", "label": "Name()", "kind": "call", "via": "import", "refs": []any{"Name"}})
+			}),
+			want: []string{"sequence run step 4", `part "tool-cli" has no package, but via import joins two package parts`, "use a via other than import", "1 problem(s)"},
+		},
+		{
+			name:   "import edge from a part with no package",
+			break_: edge(map[string]any{"from": "owner", "to": "pkg:internal/alpha", "label": "runs", "via": "import"}),
+			want:   []string{"edge owner -> pkg:internal/alpha (import)", `part "owner" has no package, but via import joins two package parts`, "1 problem(s)"},
+		},
+		{
 			name:   "sequence summary",
 			break_: breakSequence(func(run map[string]any) { run["summary"] = statement("Runs.", "code:cmd/tool/main.go#start") }),
 			want:   []string{"sequence run summary", "declares no start"},
@@ -397,6 +425,15 @@ func TestCheckReportsDiagramProblems(t *testing.T) {
 				step["from"], step["to"] = "pkg:internal/alpha", "pkg:cmd/tool"
 			}),
 			want: []string{"part pkg:internal/alpha diagram alpha-sequence step 1", "internal/alpha does not import cmd/tool"},
+		},
+		{
+			name: "sequence diagram step to a part that is not a participant",
+			break_: alpha("alpha-sequence", func(g map[string]any) {
+				step := nth(g["steps"], 0)
+				step["to"] = "pkg:internal/delta"
+				delete(step, "via")
+			}),
+			want: []string{"part pkg:internal/alpha diagram alpha-sequence step 1", `to "pkg:internal/delta" is not a participant`, "1 problem(s)"},
 		},
 		{
 			name:   "sequence diagram participant that is not a part",
