@@ -1,9 +1,9 @@
 /* Fonts as the design specifies them: IBM Plex Sans for UI, IBM Plex Mono for
    anything machine-authored (tool names, args, results), Caveat for the
-   whiteboard's handwriting. Bundled with the app (src/fonts), so the UI loads
-   nothing from another host and works offline.
-   Must precede the tailwind import: @import can't follow emitted rules. */
-@import "./fonts/fonts.css";
+   whiteboard's handwriting. They ship with the app in public/fonts, and
+   index.html loads their own stylesheet, so the UI loads nothing from another
+   host and works offline. They stay out of this file because Workspace tabs get
+   the built copy of it, which must reference no fonts or other files. */
 @import "tailwindcss";
 @import "streamdown/styles.css";
 
