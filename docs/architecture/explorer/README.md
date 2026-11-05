@@ -478,8 +478,8 @@ map. The vision skill (`~/.claude/skills/vision`) draws it; decisions:
 - **The map** is [`.vision/map.json`](../../../.vision/map.json). Its steps
   point at the code they describe (`code` entries and `code:` and `doc:`
   references), and its fact chips cite `data/facts.js` with `route:`,
-  `table:`, `pkg:`, and `command:` references. The page shows none of the
-  code.
+  `table:`, `pkg:`, and `command:` references, or the code with `code:`. The
+  page shows none of the code.
 - **The page** is [`system.html`](system.html), built from the map and
   committed, so `evie serve` embeds it like `facts.js`. Rebuild it after every
   change to the map, from the repository root, and commit the two together:
@@ -493,22 +493,41 @@ map. The vision skill (`~/.claude/skills/vision`) draws it; decisions:
   the map through the skill after each piece of work.
 
 CI cannot run the skill, which lives outside the repository, so `check` holds
-the map to the code itself when `.vision/map.json` exists. It reports, naming
-the step, code entry, or setting and how to fix it:
+the map to the code itself. It reads only the forms Evie's map uses, a
+subset of the skill's map format (its `references/map-format.md`):
+
+- **Code entries** name a `file` and a `symbol` the file declares: a Go
+  declaration as `Name` or `Type.Method` (fields and interface methods too),
+  or a JavaScript or TypeScript function, class, interface, type, enum,
+  namespace, or variable as `Name`, and a member declared on a line directly
+  inside its owner's braces as `Owner.member`.
+- **References**, on a step, a fact chip, or a flag, are a key of the map's
+  `code`, or `code:` and `doc:` by the [reference forms](#reference-forms)
+  with two of the skill's additions: `#Name` may name a JavaScript or
+  TypeScript declaration, and a `doc:` path may be a folder. `pkg:`,
+  `route:`, `table:`, `command:`, `adr:`, and `term:` resolve against the
+  facts.
+- **Backed values.** A fact chip `[label, value, reference]` must also say
+  what its reference points at, as the skill's check matches it ("backed
+  values" in the map format): the value appears, as whole words, in the
+  declaration's lines (from its declaring line through its matching brace),
+  the whole file for `code:path`, or the fact's own fields (a route's method,
+  pattern, guard, package, and registering function; a table's name and
+  columns; a package's path, name, and doc; a command's words and package;
+  an ADR's title and path; a term's definition). Case, runs of whitespace,
+  digit-group commas, and the kind of minus sign are ignored, a word
+  hyphenated across a line end is joined, and an ellipsis (`…`) elides
+  between pieces that must appear in order. Unlike the skill, `check` applies
+  no Unicode compatibility normalization (NFKC) or full case folding, which
+  Go's standard library lacks, so it can only be stricter.
+
+It reports, naming the step, chip, code entry, or setting and how to fix it:
 
 - a code entry whose file is gone, or whose `symbol` the file no longer
-  declares: a Go declaration as `Name` or `Type.Method` (fields and interface
-  methods too), or a JavaScript or TypeScript function, class, interface,
-  type, enum, or variable; `lines` outside the file, a `cell` that is not a
-  notebook code cell, and an inline entry with no `src`;
-- a step's `code.key` that is not in the map's `code` or `refs`;
-- a reference on a step, a fact chip, a flag, a value panel, or a `kv` row
-  that does not resolve: `code:` and `doc:` by the [reference
-  forms](#reference-forms) (with TypeScript and JavaScript declarations as
-  well as Go), `pkg:`, `route:`, `table:`, `command:`, `adr:`, and `term:`
-  against the facts, and bare keys against the map's `code` and `refs`; the
-  skill's notebook and text-source kinds (`sec:`, `undef:` and the rest) are
-  refused, since Evie's map has no such sources;
+  declares;
+- a step's `code.key` that is not in the map's `code`;
+- a reference that does not resolve, and a fact chip whose value is not in
+  what its reference points at;
 - a step's `files` path that does not exist;
 - `meta.facts` other than `docs/architecture/explorer/data/facts.js`, or
   `meta.page` other than `docs/architecture/explorer/system.html`;
@@ -517,13 +536,25 @@ the step, code entry, or setting and how to fix it:
   skill's `references/map-format.md` ("Map hash") says: the map without
   `meta.commit`, `meta.stamped`, `meta.artifact` and the stamp's code
   fingerprints, in RFC 8785 canonical JSON, then SHA-256. Stamping and
-  reformatting the map leave it unchanged.
+  reformatting the map leave it unchanged;
+- a committed page whose map, `.vision/map.json`, is missing: the binary
+  embeds the page, so its map must be there to hold it to the code. A
+  repository with neither has no system map, and the rules do not run.
+
+Any other form of the skill's format is refused rather than passed unread,
+naming the skill's own check
+(`python3 ~/.claude/skills/vision/scripts/vision.py check .vision/map.json`),
+which reads it: a code entry's `lines` or `cell`, an inline `src` entry, a
+single top-level `flow`, library definitions in `refs`, a value panel's `ref`
+or a `kv` row's reference, a value backed by a `doc:` reference or that is not
+a string, and the skill's notebook, text-source, and index reference kinds
+(`undef:`, `sec:`, and the rest) and `node:`. Teach `visionmap.go` the form
+before the map uses it.
 
 A page built from the current map passed the skill's check when it was
-built, so the two rules together keep the map true: the references catch code
-that moved since, and the hash catches a map edited without a rebuild. The
-check proves references resolve and values were checked at build time; it
-does not re-read highlights or backed values against the code, which the
+built, so the rules together keep the map true: the references and backed
+values catch code that changed since, and the hash catches a map edited
+without a rebuild. The check does not re-read highlights, which only the
 skill's `check` does.
 
 ## History

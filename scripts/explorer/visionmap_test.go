@@ -23,30 +23,26 @@ const visionFixtureJSON = `{
   "flows": [{"id": "main", "name": "Main", "steps": [{
     "id": "start", "name": "Start the server", "kind": "serve",
     "code": {"key": "Server.Start", "highlight": ["return nil"]},
-    "refs": ["code:internal/alpha/routes.go#Server.routes", "code:internal/alpha", "doc:docs/guide.md", "doc:docs/guide.md#getting-started-1", "Name", "http.HandleFunc"],
+    "refs": ["code:internal/alpha/routes.go#Server.routes", "code:internal/alpha", "doc:docs/guide.md", "doc:docs/guide.md#getting-started-1", "Name"],
     "facts": [
       ["route", "GET /widgets", "route:GET /widgets"], ["guarded by", "requireOwner", "route:GET /widgets"], ["route", "/health", "route:/health"],
       ["package", "internal/alpha", "pkg:internal/alpha"], ["writes", "widgets", "table:fixture.widgets"], ["command", "tool run", "command:tool run"],
-      ["limit", "3"]
+      ["limit", "3", "code:internal/alpha/alpha.go#Limit"], ["follows", "followChat", "code:web/stream.ts#followChat"], ["names", "beta.Name", "Name"],
+      ["decision", "Make the first decision", "adr:0001"], ["term", "spread across two lines", "term:Widget"], ["unbacked", "anything"]
     ],
     "flags": [{"text": "A decision and a term back this flag.", "refs": ["adr:0001", "term:Widget"]}],
-    "values": [
-      {"type": "kv", "title": "Limits", "ref": "code:internal/alpha/alpha.go#Limit", "rows": [["limit", "3", "code:internal/alpha/alpha.go#Limit"], ["name", "beta"]]},
-      {"type": "big", "title": "Fields", "value": "1", "ref": "code:internal/alpha/alpha.go#Server.Addr"}
-    ],
+    "values": [{"type": "kv", "title": "Limits", "rows": [["limit", "3"], ["name", "beta"]]}],
     "files": [{"path": "internal/alpha/alpha.go", "note": "The server"}],
-    "children": [{"id": "follow", "name": "Follow", "code": {"key": "http.HandleFunc"}, "refs": ["code:web/stream.ts#followChat"]}]
+    "children": [{"id": "follow", "name": "Follow", "code": {"key": "Feed.follow"}, "refs": ["code:web/stream.ts#followChat"]}]
   }]}],
   "code": {
     "Server.Start": {"file": "internal/alpha/alpha.go", "symbol": "Server.Start", "title": "func (s *Server) Start"},
     "Name": {"file": "internal/alpha/alpha.go", "symbol": "Name"},
     "Handler.Serve": {"file": "internal/alpha/alpha.go", "symbol": "Handler.Serve"},
-    "head": {"file": "internal/alpha/alpha.go", "lines": "1-2"},
-    "sketch": {"src": "start, then serve", "label": "a sketch"},
     "sendDetached": {"file": "web/stream.ts", "symbol": "sendDetached"},
     "Feed.follow": {"file": "web/stream.ts", "symbol": "Feed.follow"}
   },
-  "refs": {"http.HandleFunc": {"lib": "net/http", "sig": "http.HandleFunc(pattern, handler)", "text": "Registers a handler."}},
+  "refs": {},
   "history": [{"date": "2026-11-04", "summary": "Map created"}]
 }`
 
@@ -119,103 +115,256 @@ func breakMap(edit func(m, step map[string]any)) func(*testing.T, string) {
 // runVisionCases runs check cases on the fixture with a consistent map.
 func runVisionCases(t *testing.T, cases []checkCase) {
 	t.Helper()
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			root := newVisionFixture(t)
-			tc.break_(t, root)
-			code, out := checkFixture(t, root)
-			if code != 1 {
-				t.Fatalf("check exit %d, want 1:\n%s", code, out)
-			}
-			for _, want := range tc.want {
-				if !strings.Contains(out, want) {
-					t.Errorf("output lacks %q:\n%s", want, out)
-				}
-			}
-		})
-	}
+	runCheckCasesOn(t, newVisionFixture, cases)
+}
+
+// codeEntry replaces one entry of the map's code.
+func codeEntry(key string, e map[string]any) func(*testing.T, string) {
+	return breakMap(func(m, _ map[string]any) { m["code"].(map[string]any)[key] = e })
 }
 
 func TestCheckReportsSystemMapCodeEntriesThatNoLongerResolve(t *testing.T) {
-	entry := func(key string, e map[string]any) func(*testing.T, string) {
-		return breakMap(func(m, _ map[string]any) { m["code"].(map[string]any)[key] = e })
-	}
 	runVisionCases(t, []checkCase{
 		{
 			name:   "Go method renamed",
-			break_: entry("Server.Start", map[string]any{"file": "internal/alpha/alpha.go", "symbol": "Server.Begin"}),
+			break_: codeEntry("Server.Start", map[string]any{"file": "internal/alpha/alpha.go", "symbol": "Server.Begin"}),
 			want:   []string{visionMapPath, "code.Server.Start", "declares no Server.Begin", "Type.Method", "vision.py build"},
 		},
 		{
 			name:   "Go method named without its type",
-			break_: entry("Server.Start", map[string]any{"file": "internal/alpha/alpha.go", "symbol": "Start"}),
+			break_: codeEntry("Server.Start", map[string]any{"file": "internal/alpha/alpha.go", "symbol": "Start"}),
 			want:   []string{"code.Server.Start", "declares no Start"},
 		},
 		{
 			name:   "file removed",
-			break_: entry("Name", map[string]any{"file": "internal/alpha/gone.go", "symbol": "Name"}),
-			want:   []string{"code.Name", "internal/alpha/gone.go does not exist", "point file at an existing repository file"},
+			break_: codeEntry("Name", map[string]any{"file": "internal/alpha/gone.go", "symbol": "Name"}),
+			want:   []string{"code.Name", "internal/alpha/gone.go does not exist", "point file at an existing file"},
 		},
 		{
 			name:   "file outside the repository",
-			break_: entry("Name", map[string]any{"file": "../alpha.go", "symbol": "Name"}),
+			break_: codeEntry("Name", map[string]any{"file": "../alpha.go", "symbol": "Name"}),
 			want:   []string{"code.Name", "inside the repository"},
 		},
 		{
 			name:   "TypeScript function renamed",
-			break_: entry("sendDetached", map[string]any{"file": fixtureScript, "symbol": "sendLater"}),
+			break_: codeEntry("sendDetached", map[string]any{"file": fixtureScript, "symbol": "sendLater"}),
 			want:   []string{"code.sendDetached", fixtureScript + " declares no sendLater"},
 		},
 		{
 			name:   "TypeScript method renamed",
-			break_: entry("Feed.follow", map[string]any{"file": fixtureScript, "symbol": "Feed.unfollow"}),
+			break_: codeEntry("Feed.follow", map[string]any{"file": fixtureScript, "symbol": "Feed.unfollow"}),
 			want:   []string{"code.Feed.follow", "declares no Feed.unfollow"},
 		},
 		{
 			name:   "symbol in a language check cannot read",
-			break_: entry("Name", map[string]any{"file": "docs/guide.md", "symbol": "Guide"}),
-			want:   []string{"code.Name", "not .md files", "cite lines instead"},
-		},
-		{
-			name:   "lines past the end of the file",
-			break_: entry("head", map[string]any{"file": "internal/alpha/alpha.go", "lines": "20-400"}),
-			want:   []string{"code.head", "lines 20-400 are outside internal/alpha/alpha.go"},
-		},
-		{
-			name:   "lines that are not a range",
-			break_: entry("head", map[string]any{"file": "internal/alpha/alpha.go", "lines": "top"}),
-			want:   []string{"code.head", `lines "top" is not a range`},
-		},
-		{
-			name:   "cell of a file that is not a notebook",
-			break_: entry("head", map[string]any{"file": "internal/alpha/alpha.go", "cell": 2}),
-			want:   []string{"code.head", "is not a notebook"},
-		},
-		{
-			name:   "inline entry without source",
-			break_: entry("sketch", map[string]any{"label": "a sketch"}),
-			want:   []string{"code.sketch", "neither src nor a file reference"},
+			break_: codeEntry("Name", map[string]any{"file": "docs/guide.md", "symbol": "Guide"}),
+			want:   []string{"code.Name", "a Go, JavaScript or TypeScript file, not a .md file"},
 		},
 		{
 			name:   "symbol without a file",
-			break_: entry("sketch", map[string]any{"symbol": "Name"}),
-			want:   []string{"code.sketch", "no file"},
+			break_: codeEntry("Name", map[string]any{"symbol": "Name"}),
+			want:   []string{"code.Name", "no file"},
+		},
+		{
+			name:   "entry with neither file nor symbol",
+			break_: codeEntry("Name", map[string]any{"title": "Name"}),
+			want:   []string{"code.Name", "names no file and symbol"},
 		},
 	})
 }
 
-func TestCheckReportsSystemMapNotebookCells(t *testing.T) {
-	runVisionCases(t, []checkCase{{
-		name: "cell that is not a code cell",
-		break_: func(t *testing.T, root string) {
-			writeFile(t, root, "notes/train.ipynb", `{"cells": [{"cell_type": "markdown", "source": "# Train"}, {"cell_type": "code", "source": "x = 1"}]}`)
-			m := visionFixtureMap()
-			m["code"].(map[string]any)["cell"] = map[string]any{"file": "notes/train.ipynb", "cell": 0}
-			m["code"].(map[string]any)["ok"] = map[string]any{"file": "notes/train.ipynb", "cell": 1}
-			writeVision(t, root, m)
+func TestCheckRefusesSystemMapFormsOnlyTheSkillReads(t *testing.T) {
+	// Evie's map uses none of these, so the explorer check does not read
+	// them; it names the skill's check, which does, rather than passing them.
+	refused := func(item string, more ...string) []string {
+		return append([]string{visionMapPath, item, "only the vision skill's check reads", "vision.py check .vision/map.json"}, more...)
+	}
+	runVisionCases(t, []checkCase{
+		{
+			name:   "line range",
+			break_: codeEntry("Name", map[string]any{"file": "internal/alpha/alpha.go", "symbol": "Name", "lines": "1-2"}),
+			want:   refused("code.Name", "a line range"),
 		},
-		want: []string{"code.cell", "cell 0 is not a code cell in notes/train.ipynb"},
-	}})
+		{
+			name: "notebook cell",
+			break_: func(t *testing.T, root string) {
+				writeFile(t, root, "notes/train.ipynb", `{"cells": [{"cell_type": "code", "source": "x = 1"}]}`)
+				codeEntry("cell", map[string]any{"file": "notes/train.ipynb", "cell": 0})(t, root)
+			},
+			want: refused("code.cell", "a notebook cell"),
+		},
+		{
+			name:   "inline source",
+			break_: codeEntry("sketch", map[string]any{"src": "start, then serve", "label": "a sketch"}),
+			want:   refused("code.sketch", "inline src"),
+		},
+		{
+			name: "a single top-level flow",
+			break_: breakMap(func(m, _ map[string]any) {
+				m["flow"] = m["flows"].([]any)[0].(map[string]any)["steps"]
+				delete(m, "flows")
+			}),
+			want: refused("flow", "a top-level flow"),
+		},
+		{
+			name: "library definitions",
+			break_: breakMap(func(m, _ map[string]any) {
+				m["refs"] = map[string]any{"http.HandleFunc": map[string]any{"lib": "net/http", "sig": "http.HandleFunc(pattern, handler)"}}
+			}),
+			want: refused("refs", "library definitions"),
+		},
+		{
+			name: "value panel reference",
+			break_: breakMap(func(_, step map[string]any) {
+				appendTo(step, "values", map[string]any{"type": "big", "title": "Fields", "value": "1", "ref": "code:internal/alpha/alpha.go#Server.Addr"})
+			}),
+			want: refused(`step start big panel "Fields"`, "a value panel's ref"),
+		},
+		{
+			name: "kv row reference",
+			break_: breakMap(func(_, step map[string]any) {
+				panel := step["values"].([]any)[0].(map[string]any)
+				panel["rows"].([]any)[0] = []any{"limit", "3", "code:internal/alpha/alpha.go#Limit"}
+			}),
+			want: refused(`step start kv panel "Limits" row "limit"`, "a kv row's reference"),
+		},
+		{
+			name:   "reference kind",
+			break_: breakMap(func(_, step map[string]any) { appendTo(step, "refs", "sec:3.1") }),
+			want:   refused("step start refs", "sec: references"),
+		},
+		{
+			name:   "explorer node",
+			break_: breakMap(func(_, step map[string]any) { appendTo(step, "refs", "node:pkg:internal/alpha") }),
+			want:   refused("step start refs", "node: references"),
+		},
+	})
+}
+
+func TestCheckFindsTypeScriptMembersOnlyInsideTheirOwnersBody(t *testing.T) {
+	// Feed.follow is gone from Feed, but the file still names follow after
+	// Feed: on a later line, and inside one of Feed's own method bodies.
+	gone := func(src string) func(*testing.T, string) {
+		return func(t *testing.T, root string) { writeFile(t, root, fixtureScript, src) }
+	}
+	rest := "export function followChat() {}\nexport const sendDetached = () => {};\n"
+	runVisionCases(t, []checkCase{
+		{
+			name:   "member deleted, named later in the file",
+			break_: gone("export class Feed {\n  unfollow() {}\n}\n" + rest + "export const feed = new Feed().follow;\n"),
+			want:   []string{"code.Feed.follow", fixtureScript + " declares no Feed.follow"},
+		},
+		{
+			name:   "member deleted, called inside another member",
+			break_: gone("export class Feed {\n  unfollow() {\n    follow();\n  }\n}\n" + rest),
+			want:   []string{"code.Feed.follow", fixtureScript + " declares no Feed.follow"},
+		},
+	})
+}
+
+func TestCheckAcceptsSystemMapFolderReferences(t *testing.T) {
+	// As the skill reads them: code: and doc: name a file or a folder.
+	root := newVisionFixture(t)
+	m := visionFixtureMap()
+	appendTo(visionStepOf(m), "refs", "doc:docs/adr", "code:internal/alpha")
+	writeVision(t, root, m)
+	if code, out := checkFixture(t, root); code != 0 {
+		t.Fatalf("check exit %d, want 0:\n%s", code, out)
+	}
+}
+
+// chipAt replaces the start step's fact chip at i.
+func chipAt(i int, chip ...any) func(*testing.T, string) {
+	return breakMap(func(_, step map[string]any) { step["facts"].([]any)[i] = chip })
+}
+
+func TestCheckHoldsSystemMapFactValuesToWhatTheyCite(t *testing.T) {
+	// As the skill's check does ("backed values" in references/map-format.md):
+	// once a chip's reference resolves, its value must appear in what the
+	// reference points at.
+	runVisionCases(t, []checkCase{
+		{
+			name: "a route's guard changes",
+			break_: func(t *testing.T, root string) {
+				routes := readFile(t, root, "internal/alpha/routes.go")
+				routes = strings.Replace(routes, `mux.HandleFunc("GET /widgets", s.requireOwner(s.listWidgets))`, `mux.HandleFunc("GET /widgets", s.requireAdmin(s.listWidgets))`, 1)
+				writeFile(t, root, "internal/alpha/routes.go", routes+"\nfunc (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc { return next }\n")
+				extractFixture(t, root)
+			},
+			want: []string{visionMapPath, `step start fact "guarded by"`, `says "requireOwner", which "route:GET /widgets" does not`, "vision.py build"},
+		},
+		{
+			name: "a Go constant's value changes",
+			break_: func(t *testing.T, root string) {
+				writeFile(t, root, "internal/alpha/alpha.go", strings.Replace(readFile(t, root, "internal/alpha/alpha.go"), "const Limit = 3", "const Limit = 4", 1))
+			},
+			want: []string{`step start fact "limit"`, `says "3", which "code:internal/alpha/alpha.go#Limit" does not`},
+		},
+		{
+			name: "a value found only inside a longer number",
+			break_: func(t *testing.T, root string) {
+				writeFile(t, root, "internal/alpha/alpha.go", strings.Replace(readFile(t, root, "internal/alpha/alpha.go"), "const Limit = 3", "const Limit = 30", 1))
+			},
+			want: []string{`step start fact "limit"`, `says "3"`},
+		},
+		{
+			name:   "a TypeScript declaration that does not say the value",
+			break_: chipAt(7, "follows", "unfollowChat", "code:web/stream.ts#followChat"),
+			want:   []string{`step start fact "follows"`, `says "unfollowChat", which "code:web/stream.ts#followChat" does not`},
+		},
+		{
+			name:   "a code key whose declaration does not say the value",
+			break_: chipAt(8, "names", "alpha.Name", "Name"),
+			want:   []string{`step start fact "names"`, `says "alpha.Name", which "Name" does not`},
+		},
+		{
+			name:   "a fact that does not say the value",
+			break_: chipAt(3, "package", "internal/beta", "pkg:internal/alpha"),
+			want:   []string{`step start fact "package"`, `says "internal/beta", which "pkg:internal/alpha" does not`},
+		},
+		{
+			name:   "a value in a later piece's place",
+			break_: chipAt(0, "route", "widgets … GET", "route:GET /widgets"),
+			want:   []string{`step start fact "route"`, `says "widgets … GET"`},
+		},
+		{
+			name:   "a folder, which has no text",
+			break_: chipAt(3, "package", "alpha", "code:internal/alpha"),
+			want:   []string{`step start fact "package"`, `"code:internal/alpha" names a folder, which has no text to find "alpha" in`},
+		},
+		{
+			name:   "a document",
+			break_: chipAt(3, "guide", "Text", "doc:docs/guide.md"),
+			want:   []string{visionMapPath, `step start fact "guide"`, "a value backed by a doc: reference", "only the vision skill's check reads"},
+		},
+		{
+			name:   "a value that is not text",
+			break_: chipAt(6, "limit", 3, "code:internal/alpha/alpha.go#Limit"),
+			want:   []string{`step start fact "limit"`, "a value that is not a string", "only the vision skill's check reads"},
+		},
+	})
+}
+
+func TestCheckMatchesSystemMapFactValuesAsTheSkillDoes(t *testing.T) {
+	// Case, runs of whitespace and digit-group commas are ignored, and an
+	// ellipsis elides between pieces that appear in order.
+	root := newVisionFixture(t)
+	writeFile(t, root, fixtureScript, readFile(t, root, fixtureScript)+"export const pageSize = 1000;\n")
+	m := visionFixtureMap()
+	appendTo(visionStepOf(m), "facts",
+		[]any{"guarded by", "REQUIREOWNER", "route:GET /widgets"},
+		[]any{"limit", "const  Limit\n= 3", "code:internal/alpha/alpha.go#Limit"},
+		[]any{"page size", "1,000", "code:web/stream.ts#pageSize"},
+		[]any{"route", "GET … requireOwner", "route:GET /widgets"},
+		[]any{"server", "Server", "code:internal/alpha/alpha.go"},
+		[]any{"routes", "Server.routes", "route:/health"},
+		[]any{"columns", "name", "table:fixture.widgets"},
+		[]any{"command", "cmd/tool", "command:tool"},
+	)
+	writeVision(t, root, m)
+	if code, out := checkFixture(t, root); code != 0 {
+		t.Fatalf("check exit %d, want 0:\n%s", code, out)
+	}
 }
 
 func TestCheckReportsSystemMapReferencesThatNoLongerResolve(t *testing.T) {
@@ -234,9 +383,7 @@ func TestCheckReportsSystemMapReferencesThatNoLongerResolve(t *testing.T) {
 		{"package", "pkg:internal/ghost", "no package internal/ghost"},
 		{"ADR", "adr:0099", "no ADR 0099"},
 		{"term", "term:Gadget", "no glossary term Gadget"},
-		{"kind the explorer check does not resolve", "sec:3.1", "does not resolve sec: references"},
-		{"explorer node", "node:pkg:internal/alpha", "does not resolve node: references"},
-		{"unknown key", "NoSuchKey", "neither a code or refs key"},
+		{"unknown key", "NoSuchKey", "neither a code key of the map nor a kind:target reference"},
 	} {
 		cases = append(cases, checkCase{
 			name:   tc.name,
@@ -247,12 +394,20 @@ func TestCheckReportsSystemMapReferencesThatNoLongerResolve(t *testing.T) {
 	runVisionCases(t, cases)
 }
 
+func TestCheckNamesTheReferenceKindsASystemMapMayUse(t *testing.T) {
+	runVisionCases(t, []checkCase{{
+		name:   "unknown key",
+		break_: breakMap(func(_, step map[string]any) { appendTo(step, "refs", "NoSuchKey") }),
+		want:   []string{"use a code key of the map, or one of adr:, code:, command:, doc:, pkg:, route:, table:, term:"},
+	}})
+}
+
 func jsonQuote(s string) string {
 	data, _ := json.Marshal(s)
 	return string(data)
 }
 
-func TestCheckReportsSystemMapFactChipsFlagsAndPanelsThatNoLongerResolve(t *testing.T) {
+func TestCheckReportsSystemMapFactChipsAndFlagsThatNoLongerResolve(t *testing.T) {
 	runVisionCases(t, []checkCase{
 		{
 			name: "route chip",
@@ -290,26 +445,11 @@ func TestCheckReportsSystemMapFactChipsFlagsAndPanelsThatNoLongerResolve(t *test
 			want: []string{`step start flag "A decision and a term back this flag."`, "declares no Server.Stop"},
 		},
 		{
-			name: "value panel",
-			break_: breakMap(func(_, step map[string]any) {
-				step["values"].([]any)[1].(map[string]any)["ref"] = "code:internal/alpha/alpha.go#Server.Port"
-			}),
-			want: []string{`step start big panel "Fields"`, "declares no Server.Port"},
-		},
-		{
-			name: "kv panel row",
-			break_: breakMap(func(_, step map[string]any) {
-				row := step["values"].([]any)[0].(map[string]any)["rows"].([]any)[1].([]any)
-				step["values"].([]any)[0].(map[string]any)["rows"].([]any)[1] = append(row, "code:internal/alpha/alpha.go#Title")
-			}),
-			want: []string{`step start kv panel "Limits" row "name"`, "declares no Title"},
-		},
-		{
 			name: "step code key",
 			break_: breakMap(func(_, step map[string]any) {
 				step["code"] = map[string]any{"key": "Server.Stop"}
 			}),
-			want: []string{"step start code", `code key "Server.Stop" is not in the map's code or refs`},
+			want: []string{"step start code", `code key "Server.Stop" is not in the map's code`},
 		},
 		{
 			name: "file",
@@ -326,21 +466,7 @@ func TestCheckReportsSystemMapFactChipsFlagsAndPanelsThatNoLongerResolve(t *test
 			}),
 			want: []string{"step follow refs", "declares no leaveChat"},
 		},
-		{
-			name: "a single top-level flow",
-			break_: breakMap(func(m, _ map[string]any) {
-				flow := m["flows"].([]any)[0].(map[string]any)
-				delete(m, "flows")
-				m["flow"] = flow["steps"]
-				appendTo(visionStepOfFlow(m), "refs", "doc:docs/missing.md")
-			}),
-			want: []string{"step start refs", `dead reference "doc:docs/missing.md"`},
-		},
 	})
-}
-
-func visionStepOfFlow(m map[string]any) map[string]any {
-	return m["flow"].([]any)[0].(map[string]any)
 }
 
 func TestCheckReportsSystemMapSettingsEvieDoesNotUse(t *testing.T) {
@@ -396,6 +522,17 @@ func TestCheckReportsASystemMapPageNotBuiltFromTheMap(t *testing.T) {
 			want: []string{visionPagePath + ": page", "does not exist", "rebuild with the vision skill"},
 		},
 		{
+			// The binary embeds the page, so a page without its map would ship
+			// a map nothing holds to the code.
+			name: "the map is missing but the page is committed",
+			break_: func(t *testing.T, root string) {
+				if err := os.Remove(filepath.Join(root, filepath.FromSlash(visionMapPath))); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: []string{visionMapPath + ": map", "does not exist", visionPagePath + ", the page built from it", "git log -- " + visionMapPath},
+		},
+		{
 			name: "the page carries no hash",
 			break_: func(t *testing.T, root string) {
 				writeFile(t, root, visionPagePath, "<!doctype html>\n<title>Hand-made</title>\n")
@@ -425,4 +562,14 @@ func TestCheckAcceptsASystemMapStampedOrReformattedAfterItsPageWasBuilt(t *testi
 	if code != 0 {
 		t.Fatalf("check exit %d, want 0:\n%s", code, out)
 	}
+}
+
+// readFile reads a fixture file.
+func readFile(t *testing.T, root, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(name)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

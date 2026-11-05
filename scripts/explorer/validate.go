@@ -20,7 +20,8 @@ type checker struct {
 	packages map[string]bool   // package paths from the facts
 	imports  map[Import]bool   // import edges from the facts
 
-	declCache    map[string]map[string]bool // Go file -> declared names
+	declCache    map[string]*goFile         // Go file -> its declarations
+	scriptCache  map[string]*scriptFile     // JavaScript or TypeScript file -> its declarations
 	headingCache map[string]map[string]bool // Markdown file -> anchors
 }
 

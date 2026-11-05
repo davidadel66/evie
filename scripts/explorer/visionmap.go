@@ -9,8 +9,8 @@ import (
 	"os"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -21,8 +21,8 @@ import (
 // every reference in the map resolves against the code and the facts, and
 // the committed page carries the current map's hash. Building the page runs
 // the skill's own check first, so a page built from the current map also
-// means the map passed that check. All of this runs only when the map
-// exists.
+// means the map passed that check. Check reads only the forms Evie's map
+// uses, and refuses the skill's others rather than passing them unread.
 const (
 	visionMapPath = ".vision/map.json"
 	// visionPagePath is where the page is built: the snapshot package
@@ -30,19 +30,21 @@ const (
 	visionPagePath = "docs/architecture/explorer/system.html"
 	visionBuild    = "python3 ~/.claude/skills/vision/scripts/vision.py build"
 	visionRebuild  = "rebuild with the vision skill: " + visionBuild + ", and commit the page with the map"
+	visionCheck    = "python3 ~/.claude/skills/vision/scripts/vision.py check .vision/map.json"
 	visionFormat   = "the vision skill's references/map-format.md"
 )
 
 // visionMap is the part of a map the check reads: where it says its facts
-// and page are, its flows (or one bare flow), its code references, and its
-// library references. Other fields belong to the page and are not read.
+// and page are, its flows, and its code entries. A top-level flow and
+// library definitions (refs) are read only to refuse them. Other fields
+// belong to the page and are not read.
 type visionMap struct {
 	Meta struct {
 		Facts string `json:"facts"`
 		Page  string `json:"page"`
 	} `json:"meta"`
 	Flows []visionFlow               `json:"flows"`
-	Flow  []visionStep               `json:"flow"`
+	Flow  json.RawMessage            `json:"flow"`
 	Code  map[string]visionCode      `json:"code"`
 	Refs  map[string]json.RawMessage `json:"refs"`
 }
@@ -73,8 +75,8 @@ type visionFlag struct {
 	Refs []string `json:"refs"`
 }
 
-// visionValue is a value panel: its own reference, and for a kv panel the
-// rows that may each carry one.
+// visionValue is a value panel. Its ref, and a kv row's reference, are read
+// only to refuse them.
 type visionValue struct {
 	Type  string          `json:"type"`
 	Title string          `json:"title"`
@@ -82,30 +84,37 @@ type visionValue struct {
 	Rows  json.RawMessage `json:"rows"`
 }
 
-// visionCode is a code entry: a definition read from a file by symbol,
-// line range or notebook cell, or inline source with no file.
+// visionCode is a code entry: a declaration read from a file by symbol.
+// Line ranges, notebook cells and inline source are read only to refuse
+// them; src beside a symbol is the copy resolving it fills in.
 type visionCode struct {
 	File   string          `json:"file"`
-	Symbol *string         `json:"symbol"`
+	Symbol string          `json:"symbol"`
 	Lines  json.RawMessage `json:"lines"`
-	Cell   *int            `json:"cell"`
+	Cell   json.RawMessage `json:"cell"`
 	Src    *string         `json:"src"`
 }
 
-func (e visionCode) readsRepo() bool { return e.Symbol != nil || e.Lines != nil || e.Cell != nil }
+// visionRefFixes are the reference kinds a map may use, with how to fix
+// each: the explorer's kinds but node: (a map cites code, docs and facts,
+// not explorer nodes), with code: and doc: in the map's forms.
+var visionRefFixes = func() map[string]string {
+	fixes := maps.Clone(refFixes)
+	delete(fixes, "node")
+	fixes["code"] = "point it at an existing repository file or folder, with #Name or #Type.Method naming a declaration in that Go, JavaScript or TypeScript file"
+	fixes["doc"] = "point it at an existing repository file or folder, with #anchor naming one of a Markdown file's headings (GitHub slug)"
+	return fixes
+}()
 
-// visionRefKinds are the reference kinds Evie's map may use: code and docs,
-// resolved against the repository, and facts, resolved against the facts
-// this check extracts. The skill's notebook and text-source kinds (undef:,
-// out:, sec: and the rest) need sources Evie's map does not have.
-var visionRefKinds = map[string]bool{
-	"code": true, "doc": true, "pkg": true, "route": true, "table": true, "command": true, "adr": true, "term": true,
-}
-
-// validateVisionMap checks the system map when the repository has one.
+// validateVisionMap checks the system map when the repository has one, and
+// that it has one when it commits the page built from it.
 func (c *checker) validateVisionMap() {
 	data, err := os.ReadFile(c.path(visionMapPath))
 	if errors.Is(err, fs.ErrNotExist) {
+		if _, err := os.Stat(c.path(visionPagePath)); err == nil {
+			c.add(visionMapPath, "map", "the file does not exist, but "+visionPagePath+", the page built from it, does",
+				"restore the map the page was built from (git log -- "+visionMapPath+" finds it) and commit it with the page")
+		}
 		return
 	}
 	if err != nil {
@@ -118,15 +127,18 @@ func (c *checker) validateVisionMap() {
 		return
 	}
 	c.visionMeta(m)
-	v := &visionChecker{checker: c, m: m}
+	v := &visionChecker{checker: c, m: m, facts: factTextsOf(c.facts)}
+	if m.Flow != nil && string(m.Flow) != "null" {
+		v.unsupported("flow", "a top-level flow", "give the map a flows list")
+	}
+	if len(m.Refs) > 0 {
+		v.unsupported("refs", "library definitions ("+strings.Join(slices.Sorted(maps.Keys(m.Refs)), ", ")+")",
+			"remove them, and cite the code that calls the library")
+	}
 	for _, key := range slices.Sorted(maps.Keys(m.Code)) {
 		v.codeEntry(key, m.Code[key])
 	}
-	flows := m.Flows
-	if flows == nil && m.Flow != nil {
-		flows = []visionFlow{{ID: "main", Steps: m.Flow}}
-	}
-	for _, f := range flows {
+	for _, f := range m.Flows {
 		for _, step := range f.Steps {
 			v.step(step)
 		}
@@ -150,23 +162,21 @@ func (c *checker) visionMeta(m visionMap) {
 // visionPageHash checks that the page Evie embeds was built from this map,
 // whatever meta.page says.
 func (c *checker) visionPageHash(mapData []byte) {
-	page := visionPagePath
 	want, err := mapHash(mapData)
 	if err != nil {
 		c.add(visionMapPath, "map hash", "the map's hash cannot be computed: "+err.Error(), "make the map valid JSON that "+visionFormat+" describes")
 		return
 	}
-	html, err := os.ReadFile(c.path(page))
+	html, err := os.ReadFile(c.path(visionPagePath))
 	if err != nil {
-		c.add(page, "page", "the built page does not exist", visionRebuild)
+		c.add(visionPagePath, "page", "the built page does not exist", visionRebuild)
 		return
 	}
-	m := pageHashMeta.FindSubmatch(html)
-	switch {
+	switch m := pageHashMeta.FindSubmatch(html); {
 	case m == nil:
-		c.add(page, "page", `the page carries no <meta name="vision-map-hash">, so it was not built by the vision skill`, visionRebuild)
+		c.add(visionPagePath, "page", `the page carries no <meta name="vision-map-hash">, so it was not built by the vision skill`, visionRebuild)
 	case string(m[1]) != want:
-		c.add(page, "page", fmt.Sprintf("the page was built from an older map: it carries %s, and %s hashes to %s", m[1], visionMapPath, want), visionRebuild)
+		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older map: it carries %s, and %s hashes to %s", m[1], visionMapPath, want), visionRebuild)
 	}
 }
 
@@ -176,100 +186,98 @@ var pageHashMeta = regexp.MustCompile(`<meta name="vision-map-hash" content="([^
 // visionChecker checks the references of one map.
 type visionChecker struct {
 	*checker
-	m visionMap
+	m     visionMap
+	facts factTexts
 }
 
-func (v *visionChecker) dead(item, ref, why string) {
-	kind, _, _ := strings.Cut(ref, ":")
-	fix, ok := refFixes[kind]
-	if !ok {
-		fix = "use a code or refs key of the map, or a code:, doc:, pkg:, route:, table:, command:, adr: or term: reference"
-	}
-	v.add(visionMapPath, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix+", then "+visionRebuild)
+// unsupported refuses a form of the skill's map format that Evie's map does
+// not use, naming the check that reads it.
+func (v *visionChecker) unsupported(item, form, instead string) {
+	v.add(visionMapPath, item, form+" is a form only the vision skill's check reads ("+visionCheck+"); the explorer check reads the forms Evie's map uses",
+		instead+", or teach scripts/explorer/visionmap.go the form, then "+visionRebuild)
 }
 
-// ref reports ref when it does not resolve. A reference is a key of the
-// map's code or refs, or kind:target.
-func (v *visionChecker) ref(item, ref string) {
+// mapRef reports ref when it does not resolve, and returns whether it does.
+// A reference is a key of the map's code, or kind:target.
+func (v *visionChecker) mapRef(item, ref string) bool {
 	if _, ok := v.m.Code[ref]; ok {
-		return
-	}
-	if _, ok := v.m.Refs[ref]; ok {
-		return
+		return true
 	}
 	kind, target, ok := strings.Cut(ref, ":")
+	fix, known := visionRefFixes[kind]
 	var why string
 	switch {
 	case !ok || target == "":
-		why = "it is neither a code or refs key of the map nor a kind:target reference"
-	case !visionRefKinds[kind]:
-		why = "the explorer check does not resolve " + kind + ": references; Evie's map cites code, docs and facts"
-	case kind == "code":
-		why = v.resolveMapCode(target)
+		why = "it is neither a code key of the map nor a kind:target reference"
+		fix = "use a code key of the map, or one of " + strings.Join(slices.Sorted(maps.Keys(visionRefFixes)), ":, ") + ":"
+	case !known:
+		v.unsupported(item, kind+": references", "cite code, docs or facts instead")
+		return false
 	default:
-		why = v.resolve(ref, nil)
+		why = v.resolveIn(ref, nil, mapForms)
 	}
 	if why != "" {
-		v.dead(item, ref, why)
+		v.add(visionMapPath, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix+", then "+visionRebuild)
+		return false
 	}
+	return true
 }
 
-// resolveMapCode resolves code:path or code:path#Name. Unlike the explorer's
-// own references, a map may name declarations in TypeScript and JavaScript
-// as well as Go.
-func (v *visionChecker) resolveMapCode(target string) string {
-	file, symbol, hasSymbol := strings.Cut(target, "#")
-	if !hasSymbol {
-		return v.resolveCode(target)
+// chip reads a fact or kv row, [label, value] or [label, value, reference].
+func chip(row []any) (label string, value any, ref string) {
+	if len(row) > 0 {
+		label = fmt.Sprint(row[0])
+		if s, ok := row[0].(string); ok {
+			label = s
+		}
 	}
-	return v.resolveSymbol(file, symbol)
+	if len(row) > 1 {
+		value = row[1]
+	}
+	if len(row) > 2 {
+		ref, _ = row[2].(string)
+	}
+	return label, value, ref
 }
 
 func (v *visionChecker) step(s visionStep) {
 	item := "step " + s.ID
 	if s.Code != nil {
-		_, inCode := v.m.Code[s.Code.Key]
-		_, inRefs := v.m.Refs[s.Code.Key]
-		if !inCode && !inRefs {
-			v.add(visionMapPath, item+" code", fmt.Sprintf("code key %q is not in the map's code or refs", s.Code.Key),
+		if _, ok := v.m.Code[s.Code.Key]; !ok {
+			v.add(visionMapPath, item+" code", fmt.Sprintf("code key %q is not in the map's code", s.Code.Key),
 				"add it to code, or correct the key, then "+visionRebuild)
 		}
 	}
 	for _, ref := range s.Refs {
-		v.ref(item+" refs", ref)
+		v.mapRef(item+" refs", ref)
 	}
 	for _, fact := range s.Facts {
-		if len(fact) > 2 {
-			if ref, ok := fact[2].(string); ok && ref != "" {
-				v.ref(fmt.Sprintf("%s fact %q", item, factLabel(fact)), ref)
-			}
+		label, value, ref := chip(fact)
+		if chip := fmt.Sprintf("%s fact %q", item, label); ref != "" && v.mapRef(chip, ref) {
+			v.backed(chip, value, ref)
 		}
 	}
 	for _, flag := range s.Flags {
 		for _, ref := range flag.Refs {
-			v.ref(fmt.Sprintf("%s flag %q", item, clip(flag.Text, 40)), ref)
+			v.mapRef(fmt.Sprintf("%s flag %q", item, clip(flag.Text, 40)), ref)
 		}
 	}
 	for _, value := range s.Values {
 		panel := fmt.Sprintf("%s %s panel %q", item, value.Type, value.Title)
 		if value.Ref != "" {
-			v.ref(panel, value.Ref)
+			v.unsupported(panel, "a value panel's ref", "cite the value in a fact chip, [label, value, reference]")
 		}
-		if value.Type == "kv" {
-			var rows [][]any
-			if json.Unmarshal(value.Rows, &rows) == nil {
-				for _, row := range rows {
-					if len(row) > 2 {
-						if ref, ok := row[2].(string); ok && ref != "" {
-							v.ref(fmt.Sprintf("%s row %q", panel, factLabel(row)), ref)
-						}
-					}
+		var rows [][]any
+		if value.Type == "kv" && json.Unmarshal(value.Rows, &rows) == nil {
+			for _, row := range rows {
+				if label, _, ref := chip(row); ref != "" {
+					v.unsupported(fmt.Sprintf("%s row %q", panel, label), "a kv row's reference", "cite the value in a fact chip, [label, value, reference]")
 				}
 			}
 		}
 	}
 	for _, file := range s.Files {
-		if why := v.resolveCode(file.Path); why != "" {
+		if _, why := v.stat(file.Path); why != "" {
 			v.add(visionMapPath, item+" files", fmt.Sprintf("file %q: %s", file.Path, why),
 				"point it at an existing repository file, or remove it, then "+visionRebuild)
 		}
@@ -277,13 +285,6 @@ func (v *visionChecker) step(s visionStep) {
 	for _, child := range s.Children {
 		v.step(child)
 	}
-}
-
-func factLabel(fact []any) string {
-	if label, ok := fact[0].(string); ok {
-		return label
-	}
-	return fmt.Sprint(fact[0])
 }
 
 // clip shortens s to n characters for a problem's item.
@@ -294,166 +295,231 @@ func clip(s string, n int) string {
 	return string([]rune(s)[:n-1]) + "…"
 }
 
-// codeEntry checks one code entry: inline source needs no file; anything
-// else names a file, and its symbol, line range or notebook cell resolves.
+// codeEntry checks one code entry: it names a file and a symbol, which the
+// file declares, as code:file#symbol would.
 func (v *visionChecker) codeEntry(key string, e visionCode) {
 	item := "code." + key
-	fail := func(message, fix string) {
-		v.add(visionMapPath, item, message, fix+", then "+visionRebuild)
-	}
-	if !e.readsRepo() {
-		if e.Src == nil {
-			fail("the entry has neither src nor a file reference (symbol, lines or cell)", "give it a file and a symbol, or inline src")
-		}
-		return
-	}
-	if e.File == "" {
-		fail("the entry gives symbol, lines or cell but no file", "add the file it reads")
-		return
-	}
-	if why := v.resolveCode(e.File); why != "" {
-		fail(why, "point file at an existing repository file")
-		return
-	}
-	if e.Symbol != nil {
-		if why := v.resolveSymbol(e.File, *e.Symbol); why != "" {
-			fail(why, "rename the symbol to the declaration as the code now spells it (Type.Method for a method), or re-point the entry")
-		}
-	}
-	if e.Cell != nil {
-		if why := v.resolveCell(e.File, *e.Cell); why != "" {
-			fail(why, "point cell at a code cell of the notebook")
-		}
-	}
-	if e.Lines != nil {
-		from, to, ok := parseLineRange(e.Lines)
-		switch {
-		case !ok:
-			fail(fmt.Sprintf("lines %s is not a range like \"10-42\"", e.Lines), "write lines as \"from-to\"")
-		case e.Symbol == nil && e.Cell == nil:
-			// Lines inside a symbol or cell are relative to where it
-			// starts; on their own they must lie inside the file.
-			if n := v.lineCount(e.File); from < 1 || from > to || to > n {
-				fail(fmt.Sprintf("lines %d-%d are outside %s, which has %d lines", from, to, e.File, n), "cite lines the file has, or a symbol")
-			}
-		}
-	}
-}
-
-// lineRange is a lines value: "10-42", "10:42", "10–42", "10", or a number.
-var lineRange = regexp.MustCompile(`^\s*(\d+)\s*(?:[-–:]\s*(\d+))?\s*$`)
-
-func parseLineRange(raw json.RawMessage) (from, to int, ok bool) {
-	var text string
-	if json.Unmarshal(raw, &text) != nil {
-		var n int
-		if json.Unmarshal(raw, &n) != nil {
-			return 0, 0, false
-		}
-		text = strconv.Itoa(n)
-	}
-	m := lineRange.FindStringSubmatch(text)
-	if m == nil {
-		return 0, 0, false
-	}
-	from, _ = strconv.Atoi(m[1])
-	to = from
-	if m[2] != "" {
-		to, _ = strconv.Atoi(m[2])
-	}
-	return from, to, true
-}
-
-func (v *visionChecker) lineCount(file string) int {
-	data, err := os.ReadFile(v.path(file))
-	if err != nil {
-		return 0
-	}
-	return len(strings.Split(string(data), "\n"))
-}
-
-// resolveSymbol returns "" when file declares symbol, or why it does not:
-// Go files by their declarations (Name, or Type.Name for a method, field or
-// interface method), JavaScript and TypeScript files by a declaring line.
-func (v *visionChecker) resolveSymbol(file, symbol string) string {
-	if !cleanRelative(file) {
-		return notInRepo
-	}
-	info, err := os.Stat(v.path(file))
-	if err != nil {
-		return file + " does not exist"
-	}
-	if info.IsDir() {
-		return file + " is a directory, so it declares nothing"
-	}
-	switch ext := fileExt(file); ext {
-	case ".go":
-		decls, err := v.goDecls(file)
-		if err != nil {
-			return err.Error()
-		}
-		if !decls[symbol] {
-			return file + " declares no " + symbol
-		}
-		return ""
-	case ".js", ".jsx", ".mjs", ".ts", ".tsx":
-		data, err := os.ReadFile(v.path(file))
-		if err != nil {
-			return err.Error()
-		}
-		if !scriptDeclares(string(data), symbol) {
-			return file + " declares no " + symbol
-		}
-		return ""
+	switch {
+	case e.Lines != nil:
+		v.unsupported(item, "a line range", "name the declaration with symbol instead")
+	case e.Cell != nil:
+		v.unsupported(item, "a notebook cell", "name the declaration with symbol instead")
+	case e.Symbol == "" && e.Src != nil:
+		v.unsupported(item, "inline src", "cite code in the repository by file and symbol")
+	case e.Symbol == "":
+		v.add(visionMapPath, item, "the entry names no file and symbol", "give it the file and symbol of the declaration it shows, then "+visionRebuild)
+	case e.File == "":
+		v.add(visionMapPath, item, "the entry gives a symbol but no file", "add the file that declares it, then "+visionRebuild)
 	default:
-		return "the explorer check reads declarations only in Go, JavaScript and TypeScript files, not " + ext + " files; cite lines instead"
+		if why := v.resolveCode(e.File+"#"+e.Symbol, mapForms); why != "" {
+			v.add(visionMapPath, item, why, "point file at an existing file and symbol at a declaration in it, as the code now spells it (Type.Method for a method), then "+visionRebuild)
+		}
 	}
 }
 
-func fileExt(file string) string {
-	if i := strings.LastIndex(file, "."); i > strings.LastIndex(file, "/") {
-		return file[i:]
+// backed reports a fact chip whose value is not in what its reference
+// points at, as the skill's check does (references/map-format.md, "backed
+// values"): a declaration's lines, a whole file, or the fact's own fields.
+func (v *visionChecker) backed(item string, value any, ref string) {
+	text, ok := value.(string)
+	if !ok {
+		v.unsupported(item, "a value that is not a string", "write the value as text")
+		return
+	}
+	if region, ok := v.region(item, ref, text); ok && !backs(region, text) {
+		v.add(visionMapPath, item, fmt.Sprintf("says %q, which %q does not", clip(text, 60), ref),
+			"re-read the source and write the value as it now says it, or re-point the reference, then "+visionRebuild)
+	}
+}
+
+// region returns the text a value backed by ref, which resolves, is looked
+// for in. It returns false when there is none: reported here, or for a code
+// entry that does not resolve, at the entry.
+func (v *visionChecker) region(item, ref, value string) (string, bool) {
+	if e, ok := v.m.Code[ref]; ok {
+		text, why := v.declaration(e.File, e.Symbol, mapForms)
+		return text, why == ""
+	}
+	kind, target, _ := strings.Cut(ref, ":")
+	switch kind {
+	case "code":
+		file, symbol, hasSymbol := strings.Cut(target, "#")
+		if hasSymbol {
+			text, why := v.declaration(file, symbol, mapForms)
+			return text, why == ""
+		}
+		if info, _ := v.stat(file); info.IsDir() {
+			v.add(visionMapPath, item, fmt.Sprintf("%q names a folder, which has no text to find %q in", ref, clip(value, 60)),
+				"cite a file or a declaration in it, then "+visionRebuild)
+			return "", false
+		}
+		data, err := os.ReadFile(v.path(file))
+		return string(data), err == nil
+	case "doc":
+		v.unsupported(item, "a value backed by a doc: reference", "cite the code or the fact that holds the value")
+		return "", false
+	}
+	return v.facts.lookup(kind, target), true
+}
+
+// factTexts holds, by reference kind and then target, the text a value
+// backed by a facts reference is looked for in, as the skill's facts_index
+// builds it: the target and the fact's own fields. Targets keep the order
+// they were first seen in, and a repeated target keeps its last text.
+type factTexts map[string]*factKind
+
+type factKind struct {
+	order []string
+	text  map[string]string
+}
+
+func factTextsOf(facts Facts) factTexts {
+	f := factTexts{}
+	for _, p := range facts.Packages {
+		f.put("pkg", p.Path, p.Name, p.Doc)
+	}
+	for _, r := range facts.Routes {
+		target := r.Pattern
+		if r.Method != "" {
+			target = r.Method + " " + r.Pattern
+		}
+		f.put("route", target, r.Guard, r.Package, r.Source.Function)
+	}
+	for _, d := range facts.Databases {
+		for _, t := range d.Tables {
+			fields := []string{t.Name}
+			for _, col := range t.Columns {
+				fields = append(fields, col.Name)
+			}
+			f.put("table", d.ID+"."+t.Name, fields...)
+		}
+	}
+	for _, cmd := range facts.Commands {
+		f.put("command", strings.Join(append([]string{cmd.Binary}, cmd.Words...), " "), cmd.Package)
+	}
+	for _, a := range facts.ADRs {
+		f.put("adr", a.Number, a.Title, a.Path)
+	}
+	for _, g := range facts.Glossary {
+		f.put("term", g.Term, g.Definition)
+	}
+	return f
+}
+
+func (f factTexts) put(kind, target string, fields ...string) {
+	if target == "" {
+		return
+	}
+	k := f[kind]
+	if k == nil {
+		k = &factKind{text: map[string]string{}}
+		f[kind] = k
+	}
+	if _, ok := k.text[target]; !ok {
+		k.order = append(k.order, target)
+	}
+	parts := []string{target}
+	for _, field := range fields {
+		if field != "" {
+			parts = append(parts, field)
+		}
+	}
+	k.text[target] = strings.Join(parts, " ")
+}
+
+// lookup returns a target's text, as the skill's lookup_fact finds it:
+// exactly, or for a bare route pattern the first route with that pattern,
+// or for a bare binary its first command.
+func (f factTexts) lookup(kind, target string) string {
+	k := f[kind]
+	if k == nil {
+		return ""
+	}
+	if text, ok := k.text[target]; ok {
+		return text
+	}
+	for _, key := range k.order {
+		head, tail, spaced := strings.Cut(key, " ")
+		if !spaced {
+			tail = key
+		}
+		switch method, _, ok := splitRoute(target); {
+		case kind == "route" && ok && method == "" && tail == target,
+			kind == "command" && !strings.Contains(target, " ") && head == target:
+			return k.text[key]
+		}
 	}
 	return ""
 }
 
-// scriptDeclares reports whether JavaScript or TypeScript source declares
-// name on a line of its own: a function, class, interface, type, enum or
-// variable. Owner.member needs Owner declared and member named after it.
-func scriptDeclares(src, symbol string) bool {
-	owner, member, dotted := strings.Cut(symbol, ".")
-	decl := regexp.MustCompile(`(?m)^\s*(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?` +
-		`(?:function\*?|class|interface|type|enum|const|let|var)\s+` + regexp.QuoteMeta(owner) + `\b`)
-	loc := decl.FindStringIndex(src)
-	if loc == nil {
-		return false
+// backs reports whether value appears in region as whole words, as the
+// skill's check finds a backed value (vision.py's contains and norm). Both
+// are compared ignoring case, runs of whitespace, digit-group commas
+// ("100,000" is 100000) and the kind of minus sign, with a word hyphenated
+// across a line end joined; "64" is not found in "640" or "0.64". An
+// ellipsis (…) elides: the pieces around it must appear in that order.
+// Unlike the skill, the check applies no Unicode compatibility
+// normalization (NFKC) or full case folding, which Go's standard library
+// lacks, so it can only be stricter.
+func backs(region, value string) bool {
+	text, at := normText(region), 0
+	for _, piece := range strings.Split(value, "…") {
+		want := normText(piece)
+		if want == "" {
+			continue
+		}
+		if at = findWords(text, want, at); at < 0 {
+			return false
+		}
 	}
-	if !dotted {
-		return true
-	}
-	return regexp.MustCompile(`\b` + regexp.QuoteMeta(member) + `\b`).MatchString(src[loc[1]:])
+	return true
 }
 
-// resolveCell returns "" when the notebook has a code cell at index cell,
-// counting from 0 with markdown cells included.
-func (v *visionChecker) resolveCell(file string, cell int) string {
-	if fileExt(file) != ".ipynb" {
-		return file + " is not a notebook, so it has no cells"
+// lineEndHyphen is a word hyphenated across a line end.
+var lineEndHyphen = regexp.MustCompile(`-[ \t]*\n[\s\p{Z}\x{85}]*`)
+
+// normText is text as backs compares it.
+func normText(s string) string {
+	s = strings.NewReplacer("\u2212", "-", "\f", "\n").Replace(s)
+	runes := []rune(s)
+	var b strings.Builder
+	for i, r := range runes {
+		// A comma between a digit and exactly three more digits groups them.
+		if r == ',' && i > 0 && unicode.IsDigit(runes[i-1]) && i+3 < len(runes) &&
+			unicode.IsDigit(runes[i+1]) && unicode.IsDigit(runes[i+2]) && unicode.IsDigit(runes[i+3]) &&
+			(i+4 == len(runes) || !unicode.IsDigit(runes[i+4])) {
+			continue
+		}
+		b.WriteRune(r)
 	}
-	data, err := os.ReadFile(v.path(file))
-	if err != nil {
-		return file + " does not exist"
-	}
-	var nb struct {
-		Cells []struct {
-			CellType string `json:"cell_type"`
-		} `json:"cells"`
-	}
-	if err := json.Unmarshal(data, &nb); err != nil {
-		return file + " is not a notebook: " + err.Error()
-	}
-	if cell < 0 || cell >= len(nb.Cells) || nb.Cells[cell].CellType != "code" {
-		return fmt.Sprintf("cell %d is not a code cell in %s", cell, file)
-	}
-	return ""
+	s = lineEndHyphen.ReplaceAllString(b.String(), "-")
+	return strings.ToLower(strings.Join(strings.Fields(s), " "))
 }
+
+// findWords returns where the first whole-word want in text at or after
+// from ends, or -1. A want that starts with a letter or digit must not
+// follow a word character or a dot, and one that ends with one must not run
+// on into a word character.
+func findWords(text, want string, from int) int {
+	first, _ := utf8.DecodeRuneInString(want)
+	last, _ := utf8.DecodeLastRuneInString(want)
+	for from <= len(text) {
+		i := strings.Index(text[from:], want)
+		if i < 0 {
+			return -1
+		}
+		start, end := from+i, from+i+len(want)
+		before, _ := utf8.DecodeLastRuneInString(text[:start])
+		after, _ := utf8.DecodeRuneInString(text[end:])
+		if (!alnum(first) || start == 0 || !wordRune(before) && before != '.') && (!alnum(last) || end == len(text) || !wordRune(after)) {
+			return end
+		}
+		_, size := utf8.DecodeRuneInString(text[start:])
+		from = start + size
+	}
+	return -1
+}
+
+func alnum(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }
+
+func wordRune(r rune) bool { return alnum(r) || r == '_' }

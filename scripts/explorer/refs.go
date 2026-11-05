@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"maps"
 	"os"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -63,17 +65,36 @@ func (c *checker) ref(file, item, ref string, extra map[string]bool) {
 	c.add(file, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix)
 }
 
+// refForms are the code: and doc: forms beyond the explorer's own: a #Name
+// in a JavaScript or TypeScript file, and a doc: folder. The system map
+// uses both, as the vision skill reads them.
+type refForms struct {
+	scripts, folders bool
+}
+
+// explorerForms are the explorer's own reference forms, and mapForms the
+// system map's.
+var (
+	explorerForms = refForms{}
+	mapForms      = refForms{scripts: true, folders: true}
+)
+
 // resolve returns "" when ref resolves, or why it does not.
 func (c *checker) resolve(ref string, extra map[string]bool) string {
+	return c.resolveIn(ref, extra, explorerForms)
+}
+
+// resolveIn is resolve, with code: and doc: in the given forms.
+func (c *checker) resolveIn(ref string, extra map[string]bool, forms refForms) string {
 	kind, target, ok := strings.Cut(ref, ":")
 	if !ok || target == "" {
 		return "unknown reference kind; want kind:target"
 	}
 	switch kind {
 	case "code":
-		return c.resolveCode(target)
+		return c.resolveCode(target, forms)
 	case "doc":
-		return c.resolveDoc(target)
+		return c.resolveDoc(target, forms)
 	case "adr":
 		for _, adr := range c.facts.ADRs {
 			if adr.Number == target {
@@ -152,56 +173,96 @@ func splitRoute(target string) (method, pattern string, ok bool) {
 
 const notInRepo = "the path must be a clean relative path inside the repository"
 
-func (c *checker) resolveCode(target string) string {
-	file, symbol, hasSymbol := strings.Cut(target, "#")
+// stat returns a repository path's file information, or why it names
+// nothing.
+func (c *checker) stat(file string) (os.FileInfo, string) {
 	if !cleanRelative(file) {
-		return notInRepo
+		return nil, notInRepo
 	}
 	info, err := os.Stat(c.path(file))
 	if err != nil {
-		return file + " does not exist"
+		return nil, file + " does not exist"
 	}
-	if !hasSymbol {
-		return ""
-	}
-	if info.IsDir() || !strings.HasSuffix(file, ".go") {
-		return "#Name and #Type.Method name declarations in a Go file"
-	}
-	decls, err := c.goDecls(file)
-	if err != nil {
-		return err.Error()
-	}
-	if !decls[symbol] {
-		return file + " declares no " + symbol
-	}
-	return ""
+	return info, ""
 }
 
-func (c *checker) resolveDoc(target string) string {
-	file, anchor, hasAnchor := strings.Cut(target, "#")
-	if !cleanRelative(file) {
-		return notInRepo
-	}
-	info, err := os.Stat(c.path(file))
-	if err != nil {
-		return file + " does not exist"
+// resolveCode resolves code:path, a file or folder, and code:path#Name,
+// a declaration in that file.
+func (c *checker) resolveCode(target string, forms refForms) string {
+	file, symbol, hasSymbol := strings.Cut(target, "#")
+	info, why := c.stat(file)
+	if why != "" || !hasSymbol {
+		return why
 	}
 	if info.IsDir() {
+		return file + " is a folder, so it declares nothing"
+	}
+	_, why = c.declaration(file, symbol, forms)
+	return why
+}
+
+// declaration returns the whole lines that declare symbol in file, or why
+// there are none: Go files by their declarations (Name, or Type.Name for a
+// method, field or interface method), and in the map's forms JavaScript
+// and TypeScript files by a declaring line (Name, or Owner.member for a
+// member declared directly in Owner's body).
+func (c *checker) declaration(file, symbol string, forms refForms) (string, string) {
+	var src string
+	var found bool
+	switch ext := path.Ext(file); {
+	case ext == ".go":
+		decls, err := c.goDecls(file)
+		if err != nil {
+			return "", err.Error()
+		}
+		at, ok := decls.spans[symbol]
+		src, found = string(decls.src[at.from:at.to]), ok
+	case forms.scripts && scriptExts[ext]:
+		decls, err := c.scriptDecls(file)
+		if err != nil {
+			return "", err.Error()
+		}
+		src, found = decls.find(symbol)
+	case forms.scripts:
+		return "", "#Name names a declaration in a Go, JavaScript or TypeScript file, not a " + ext + " file"
+	default:
+		return "", "#Name and #Type.Method name declarations in a Go file"
+	}
+	if !found {
+		return "", file + " declares no " + symbol
+	}
+	return src, ""
+}
+
+func (c *checker) resolveDoc(target string, forms refForms) string {
+	file, anchor, hasAnchor := strings.Cut(target, "#")
+	info, why := c.stat(file)
+	switch {
+	case why != "":
+		return why
+	case info.IsDir() && (hasAnchor || !forms.folders):
 		return file + " is not a file"
-	}
-	if !hasAnchor {
+	case !hasAnchor:
 		return ""
-	}
-	if !c.headings(file)[anchor] {
+	case !c.headings(file)[anchor]:
 		return file + " has no heading #" + anchor
 	}
 	return ""
 }
 
-// goDecls returns the names a Go file declares: top-level functions, types,
+// goFile is a Go file's text and the whole lines of each name it declares.
+type goFile struct {
+	src   []byte
+	spans map[string]span
+}
+
+// span is a run of whole lines, as byte offsets into its file.
+type span struct{ from, to int }
+
+// goDecls returns what a Go file declares: top-level functions, types,
 // variables, and constants as Name; methods, struct fields, and interface
-// methods as Type.Name.
-func (c *checker) goDecls(file string) (map[string]bool, error) {
+// methods as Type.Name. Each name keeps the lines of its first declaration.
+func (c *checker) goDecls(file string) (*goFile, error) {
 	if decls, ok := c.declCache[file]; ok {
 		return decls, nil
 	}
@@ -209,36 +270,51 @@ func (c *checker) goDecls(file string) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	parsed, err := parser.ParseFile(token.NewFileSet(), file, src, parser.SkipObjectResolution)
+	fset := token.NewFileSet()
+	parsed, err := parser.ParseFile(fset, file, src, parser.SkipObjectResolution)
 	if err != nil {
 		return nil, fmt.Errorf("%s does not parse: %v", file, err)
 	}
-	decls := map[string]bool{}
+	decls := &goFile{src: src, spans: map[string]span{}}
+	declare := func(name string, node ast.Node) {
+		if _, ok := decls.spans[name]; !ok {
+			decls.spans[name] = lineSpan(src, fset.Position(node.Pos()).Offset, fset.Position(node.End()).Offset)
+		}
+	}
 	for _, decl := range parsed.Decls {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			decls[funcName(d)] = true
+			declare(funcName(d), d)
 		case *ast.GenDecl:
 			for _, spec := range d.Specs {
 				switch s := spec.(type) {
 				case *ast.TypeSpec:
-					decls[s.Name.Name] = true
+					declare(s.Name.Name, s)
 					for _, member := range typeMembers(s.Type) {
-						decls[s.Name.Name+"."+member] = true
+						declare(s.Name.Name+"."+member.name, member.node)
 					}
 				case *ast.ValueSpec:
 					for _, name := range s.Names {
-						decls[name.Name] = true
+						declare(name.Name, s)
 					}
 				}
 			}
 		}
 	}
 	if c.declCache == nil {
-		c.declCache = map[string]map[string]bool{}
+		c.declCache = map[string]*goFile{}
 	}
 	c.declCache[file] = decls
 	return decls, nil
+}
+
+// lineSpan widens the bytes from..to of src to the whole lines they are on.
+func lineSpan(src []byte, from, to int) span {
+	from = bytes.LastIndexByte(src[:from], '\n') + 1
+	if i := bytes.IndexByte(src[to:], '\n'); i >= 0 {
+		return span{from, to + i}
+	}
+	return span{from, len(src)}
 }
 
 func receiverName(expr ast.Expr) string {
@@ -255,9 +331,15 @@ func receiverName(expr ast.Expr) string {
 	return ""
 }
 
-// typeMembers lists the field names of a struct or the method names of an
-// interface; an embedded member is named by its type.
-func typeMembers(expr ast.Expr) []string {
+// typeMember is a struct field or interface method, by name.
+type typeMember struct {
+	name string
+	node ast.Node
+}
+
+// typeMembers lists the fields of a struct or the methods of an interface;
+// an embedded member is named by its type.
+func typeMembers(expr ast.Expr) []typeMember {
 	var list *ast.FieldList
 	switch t := expr.(type) {
 	case *ast.StructType:
@@ -267,18 +349,114 @@ func typeMembers(expr ast.Expr) []string {
 	default:
 		return nil
 	}
-	var names []string
+	var members []typeMember
 	for _, field := range list.List {
 		for _, name := range field.Names {
-			names = append(names, name.Name)
+			members = append(members, typeMember{name.Name, field})
 		}
 		if len(field.Names) == 0 {
 			if name := receiverName(field.Type); name != "" {
-				names = append(names, name)
+				members = append(members, typeMember{name, field})
 			}
 		}
 	}
-	return names
+	return members
+}
+
+// scriptExts are the JavaScript and TypeScript files the map's code:
+// references may name declarations in.
+var scriptExts = map[string]bool{".js": true, ".jsx": true, ".mjs": true, ".ts": true, ".tsx": true}
+
+var (
+	// scriptDecl is a line declaring a function, class, interface, type,
+	// enum, namespace or variable, and the name it declares.
+	scriptDecl = regexp.MustCompile(`^\s*(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?` +
+		`(?:function\s*\*?\s*|(?:class|interface|type|(?:const\s+)?enum|const|let|var|namespace)\s+)([A-Za-z_$][\w$]*)`)
+	// scriptMember is a line in a body declaring a member (a method,
+	// property, accessor or enum member), and the member's name.
+	scriptMember = regexp.MustCompile(`^\s*(?:(?:public|private|protected|static|async|override|readonly|abstract|declare|get|set)\s+)*` +
+		`\*?\s*(#?[A-Za-z_$][\w$]*)\s*[?!]?\s*(?:[(:=<;,]|$)`)
+	// scriptNoise is a string literal or a line comment, whose braces do
+	// not count.
+	scriptNoise = regexp.MustCompile(`"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|` + "`(?:[^`\\\\]|\\\\.)*`" + `|//.*$`)
+)
+
+// scriptFile is a JavaScript or TypeScript file's lines, and the line that
+// first declares each name.
+type scriptFile struct {
+	lines []string
+	decls map[string]int
+}
+
+func (c *checker) scriptDecls(file string) (*scriptFile, error) {
+	if decls, ok := c.scriptCache[file]; ok {
+		return decls, nil
+	}
+	data, err := os.ReadFile(c.path(file))
+	if err != nil {
+		return nil, err
+	}
+	decls := &scriptFile{lines: strings.Split(string(data), "\n"), decls: map[string]int{}}
+	for i, line := range decls.lines {
+		if m := scriptDecl.FindStringSubmatch(line); m != nil {
+			if _, ok := decls.decls[m[1]]; !ok {
+				decls.decls[m[1]] = i
+			}
+		}
+	}
+	if c.scriptCache == nil {
+		c.scriptCache = map[string]*scriptFile{}
+	}
+	c.scriptCache[file] = decls
+	return decls, nil
+}
+
+// find returns the lines that declare symbol, from its declaring line
+// through its matching brace: Name, or Owner.member for a member declared
+// on a line directly inside Owner's braces.
+func (f *scriptFile) find(symbol string) (string, bool) {
+	owner, member, dotted := strings.Cut(symbol, ".")
+	at, ok := f.decls[owner]
+	if !ok {
+		return "", false
+	}
+	end := f.close(at)
+	if !dotted {
+		return strings.Join(f.lines[at:end+1], "\n"), true
+	}
+	depth := 0
+	for i := at; i <= end; i++ {
+		if i > at && depth == 1 {
+			if m := scriptMember.FindStringSubmatch(f.lines[i]); m != nil && m[1] == member {
+				return strings.Join(f.lines[i:f.close(i)+1], "\n"), true
+			}
+		}
+		code := scriptNoise.ReplaceAllString(f.lines[i], "")
+		depth += strings.Count(code, "{") - strings.Count(code, "}")
+	}
+	return "", false
+}
+
+// close returns the last line of the declaration on line i: the line of its
+// matching brace, or the end of a statement without one (the skill's
+// brace_span).
+func (f *scriptFile) close(i int) int {
+	depth, seen := 0, false
+	for j := i; j < len(f.lines); j++ {
+		code := scriptNoise.ReplaceAllString(f.lines[j], "")
+		depth += strings.Count(code, "{") - strings.Count(code, "}")
+		seen = seen || strings.Contains(code, "{")
+		end := strings.TrimRightFunc(code, unicode.IsSpace)
+		switch trimmed := strings.TrimSpace(code); {
+		case seen && depth <= 0:
+			return j
+		case j == i && !seen && !strings.Contains(code, "(") && !strings.HasSuffix(end, "=") && !strings.HasSuffix(end, ",") && !strings.HasSuffix(end, "+"):
+			return i
+		case !seen && j > i && (strings.HasSuffix(end, ";") || trimmed == "" || trimmed == ")"):
+			return j
+		}
+	}
+	return len(f.lines) - 1
 }
 
 var (
