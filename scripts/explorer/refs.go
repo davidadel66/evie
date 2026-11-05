@@ -207,6 +207,28 @@ func (c *checker) resolveDoc(target string) string {
 	return ""
 }
 
+// fileText returns a repository file's whole text, read once, or false
+// when it cannot be read.
+func (c *checker) fileText(file string) (string, bool) {
+	if text, ok := c.textCache[file]; ok {
+		if text == nil {
+			return "", false
+		}
+		return *text, true
+	}
+	if c.textCache == nil {
+		c.textCache = map[string]*string{}
+	}
+	data, err := os.ReadFile(c.path(file))
+	if err != nil {
+		c.textCache[file] = nil
+		return "", false
+	}
+	text := string(data)
+	c.textCache[file] = &text
+	return text, true
+}
+
 // goFile is a Go file's text and the whole lines of each name it declares.
 type goFile struct {
 	src   []byte

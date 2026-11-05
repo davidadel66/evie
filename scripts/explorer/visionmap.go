@@ -751,8 +751,7 @@ func (v *visionChecker) region(item, ref, value string) (string, bool) {
 				"cite a file or a declaration in it, then "+visionRebuild)
 			return "", false
 		}
-		data, err := os.ReadFile(v.path(file))
-		return string(data), err == nil
+		return v.fileText(file)
 	case "doc":
 		v.unsupported(item, "a value backed by a doc: reference", "cite the code or the fact that holds the value")
 		return "", false

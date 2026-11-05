@@ -35,6 +35,7 @@ type checker struct {
 	declCache    map[string]*goFile         // Go file -> its declarations
 	scriptCache  map[string]*scriptFile     // JavaScript or TypeScript file -> its declarations
 	headingCache map[string]map[string]bool // Markdown file -> anchors
+	textCache    map[string]*string         // file a backed value cites whole -> its text, nil when unreadable
 }
 
 func newChecker(root string, facts Facts) *checker {
