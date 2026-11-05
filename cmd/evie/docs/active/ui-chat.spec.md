@@ -221,8 +221,11 @@ Deps (frontend only; the Go side stays stdlib): `react`, `react-dom`,
 `typescript`, `vite`, `@vitejs/plugin-react`, `tailwindcss`,
 `@tailwindcss/vite`, `streamdown`, `@streamdown/code`, `vitest`. The approval
 diff uses edit_file's single-replacement invariant rather than a general diff
-dependency. Fonts load from Google Fonts as the design does — a known offline
-gap; self-hosting is a later polish item.
+dependency. Fonts are bundled with the app in `public/fonts` (SIL OFL 1.1,
+licences beside them) and loaded by `index.html`, so the UI loads nothing from
+another host and works offline, while the stylesheet Workspace tabs share stays
+font-free. David asked to self-host them on 2026-11-05 ("yes self-host them"),
+replacing the earlier Google Fonts import.
 
 ## Files
 
