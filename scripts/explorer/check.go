@@ -31,7 +31,6 @@ type checker struct {
 	problems []problem
 	packages map[string]bool // package paths from the facts
 	imports  map[Import]bool // import edges from the facts
-	parts    map[string]bool // part ids from the system map, which part: references name
 
 	declCache    map[string]*goFile         // Go file -> its declarations
 	scriptCache  map[string]*scriptFile     // JavaScript or TypeScript file -> its declarations
@@ -39,7 +38,7 @@ type checker struct {
 }
 
 func newChecker(root string, facts Facts) *checker {
-	c := &checker{root: root, facts: facts, packages: map[string]bool{}, imports: map[Import]bool{}, parts: map[string]bool{}}
+	c := &checker{root: root, facts: facts, packages: map[string]bool{}, imports: map[Import]bool{}}
 	for _, pkg := range facts.Packages {
 		c.packages[pkg.Path] = true
 	}
@@ -112,12 +111,18 @@ func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 		inputs.changelog = &namedFile{Name: changelogPath, Data: logData}
 	}
 	inputs.proposals, inputs.proposalsErr = readProposals(root)
-	// The map goes first: the changelog's part: sources name its parts.
-	c.validateVisionMap(inputs)
+	vm := c.readVisionMap()
+	// part: references, in the map and in the changelog's sources, name
+	// the map's parts; without a readable map there are none.
+	var parts map[string]bool
+	if vm != nil {
+		parts = vm.parts
+	}
+	c.validateVisionMap(vm, inputs)
 	if missingLog {
 		c.add(changelogPath, "file", "the file does not exist", changelogFix)
 	} else {
-		c.validateHistory(log)
+		c.validateHistory(log, parts)
 	}
 	return c.problems, nil
 }

@@ -35,8 +35,8 @@ func refKinds() string {
 }
 
 // resolve returns "" when ref, "<kind>:<target>", resolves, or why it does
-// not.
-func (c *checker) resolve(ref string) string {
+// not. A part: reference names one of parts, the map's part ids.
+func (c *checker) resolve(ref string, parts map[string]bool) string {
 	kind, target, ok := strings.Cut(ref, ":")
 	if !ok || target == "" {
 		return "unknown reference kind; want kind:target"
@@ -98,7 +98,7 @@ func (c *checker) resolve(ref string) string {
 		}
 		return "there is no package " + target
 	case "part":
-		if c.parts[target] {
+		if parts[target] {
 			return ""
 		}
 		return "there is no part " + target

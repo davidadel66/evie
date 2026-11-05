@@ -604,6 +604,64 @@ func TestCheckReportsASystemMapPageNotBuiltFromTheMap(t *testing.T) {
 	})
 }
 
+func TestCheckReportsAMissingOrMalformedMapOnceAndChecksTheRest(t *testing.T) {
+	// Without a map there are no parts for the changelog's part: sources to
+	// name, so they go unchecked rather than all reading as dead; the design
+	// proposals and the page's inputs hash do not need the map.
+	missing := func(t *testing.T, root string) {
+		if err := os.Remove(filepath.Join(root, filepath.FromSlash(visionMapPath))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	malformed := func(t *testing.T, root string) { writeFile(t, root, visionMapPath, `{"flows": [}`) }
+	undecodable := func(t *testing.T, root string) { writeFile(t, root, visionMapPath, `{"parts": "none"}`+"\n") }
+	missingMap := visionMapPath + ": map: the file does not exist"
+	partSource := withChangelog(changelog(strings.Replace(validEntry, "Sources: doc:docs/guide.md, #12", "Sources: part:pkg:internal/alpha, #12", 1)))
+	then := func(steps ...func(*testing.T, string)) func(*testing.T, string) {
+		return func(t *testing.T, root string) {
+			for _, step := range steps {
+				step(t, root)
+			}
+		}
+	}
+	runVisionCases(t, []checkCase{
+		{
+			name:   "missing, with a part: source in the changelog",
+			break_: then(partSource, missing),
+			want:   []string{missingMap, "1 problem(s)"},
+		},
+		{
+			name:   "malformed, with a part: source in the changelog",
+			break_: then(partSource, malformed),
+			want:   []string{visionMapPath + ": map: malformed map", "1 problem(s)"},
+		},
+		{
+			name:   "not the map's shape, with a part: source in the changelog",
+			break_: then(partSource, undecodable),
+			want:   []string{visionMapPath + ": map: malformed map", "1 problem(s)"},
+		},
+		{
+			name:   "missing, with a proposal whose id is not its file's name",
+			break_: then(withProposal("top-k.json", proposalJSON("topk", "proposed")), missing),
+			want:   []string{missingMap, visionProposalsDir + `/top-k.json: id: id "topk" does not match the file name`, "2 problem(s)"},
+		},
+		{
+			name: "missing, with a page older than the changelog",
+			break_: then(keepPage(func(t *testing.T, root string) {
+				writeFile(t, root, changelogPath, readFile(t, root, changelogPath)+"\nA last paragraph.\n")
+			}), missing),
+			want: []string{missingMap, visionPagePath + ": page: the page was built from an older facts file, changelog or design proposals", "2 problem(s)"},
+		},
+		{
+			name: "malformed, with a page older than a proposal",
+			break_: then(keepPage(func(t *testing.T, root string) {
+				writeFile(t, root, visionProposalsDir+"/top-k.json", proposalJSON("top-k", "proposed"))
+			}), malformed),
+			want: []string{visionMapPath + ": map: malformed map", "older facts file, changelog or design proposals", "2 problem(s)"},
+		},
+	})
+}
+
 // proposalJSON is a design proposal file as the vision skill writes one.
 func proposalJSON(id, status string) string {
 	return `{"id": "` + id + `", "feature": "` + id + `", "title": "Add ` + id + `", "status": "` + status + `",` + "\n" +

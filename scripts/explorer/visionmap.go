@@ -205,31 +205,69 @@ type visionMessage struct {
 	Refs []string `json:"refs"`
 }
 
-// validateVisionMap checks the system map, which holds every package's part
-// and is what the page Evie embeds is built from.
-func (c *checker) validateVisionMap(inputs pageInputs) {
+// loadedMap is the system map as read: its bytes, what check decodes of
+// it, and its parts, by id and by the package each package part is.
+type loadedMap struct {
+	data        []byte
+	m           visionMap
+	parts       map[string]bool   // part ids, which part: references name
+	partPackage map[string]string // part id -> the package it is
+}
+
+// readVisionMap reads and decodes the system map. A map that is missing,
+// unreadable or malformed is reported once, and it returns nil.
+func (c *checker) readVisionMap() *loadedMap {
 	data, err := os.ReadFile(c.path(visionMapPath))
 	if errors.Is(err, fs.ErrNotExist) {
 		c.add(visionMapPath, "map", "the file does not exist, but it holds the system map, every package's part, and what "+visionPagePath+" is built from",
 			"restore it (git log -- "+visionMapPath+" finds it), then "+visionRebuild)
-		return
+		return nil
 	}
 	if err != nil {
 		c.add(visionMapPath, "map", fmt.Sprintf("the map cannot be read: %v", err), "make the file readable")
-		return
+		return nil
 	}
-	var m visionMap
-	if err := json.Unmarshal(data, &m); err != nil {
+	vm := &loadedMap{data: data, parts: map[string]bool{}, partPackage: map[string]string{}}
+	if err := json.Unmarshal(data, &vm.m); err != nil {
 		c.add(visionMapPath, "map", "malformed map: "+err.Error(), "make the map match "+visionFormat)
-		return
+		return nil
 	}
-	for _, p := range m.Parts {
-		if p.ID != "" {
-			c.parts[p.ID] = true
+	for _, p := range vm.m.Parts {
+		if p.ID == "" {
+			continue
+		}
+		vm.parts[p.ID] = true
+		if p.Package != "" {
+			vm.partPackage[p.ID] = p.Package
 		}
 	}
+	return vm
+}
+
+// validateVisionMap checks the system map, which holds every package's part
+// and is what the page Evie embeds is built from, and the design proposals
+// and the page beside it. Without a map (vm nil, reported by readVisionMap)
+// it still checks the proposals and the page's inputs.
+func (c *checker) validateVisionMap(vm *loadedMap, inputs pageInputs) {
+	if vm != nil {
+		c.visionMapContent(vm)
+	}
+	if inputs.proposalsErr != nil {
+		c.add(visionProposalsDir, "folder", "the design proposals cannot be read: "+inputs.proposalsErr.Error(), "make the folder and its files readable")
+	}
+	for _, p := range inputs.proposals {
+		c.validateProposal(p)
+	}
+	c.visionPageHash(vm, inputs)
+}
+
+// visionMapContent checks what the map says against the code and the
+// facts: its settings, code entries, flows, parts, edges and sequences, and
+// that every package has a part.
+func (c *checker) visionMapContent(vm *loadedMap) {
+	m := vm.m
 	c.visionMeta(m)
-	v := &visionChecker{checker: c, m: m, facts: factTextsOf(c.facts), partPackage: map[string]string{}}
+	v := &visionChecker{checker: c, loadedMap: vm, facts: factTextsOf(c.facts)}
 	if given(m.Flow) {
 		v.unsupported("flow", "a top-level flow", "give the map a flows list")
 	}
@@ -246,11 +284,6 @@ func (c *checker) validateVisionMap(inputs pageInputs) {
 		}
 	}
 	for _, p := range m.Parts {
-		if p.ID != "" && p.Package != "" {
-			v.partPackage[p.ID] = p.Package
-		}
-	}
-	for _, p := range m.Parts {
 		v.part(p)
 	}
 	for _, e := range m.Edges {
@@ -260,13 +293,6 @@ func (c *checker) validateVisionMap(inputs pageInputs) {
 		v.sequence("sequence "+q.ID, q.visionMessages)
 	}
 	v.packageCoverage()
-	if inputs.proposalsErr != nil {
-		c.add(visionProposalsDir, "folder", "the design proposals cannot be read: "+inputs.proposalsErr.Error(), "make the folder and its files readable")
-	}
-	for _, p := range inputs.proposals {
-		c.validateProposal(p)
-	}
-	c.visionPageHash(data, m, inputs)
 }
 
 // visionMeta checks that the map's settings are the ones Evie's check,
@@ -291,12 +317,16 @@ func (c *checker) visionMeta(m visionMap) {
 }
 
 // visionPageHash checks that the page Evie embeds was built from this map
-// and from the files it embeds beside it, whatever meta.page says.
-func (c *checker) visionPageHash(mapData []byte, m visionMap, inputs pageInputs) {
-	want, err := mapHash(mapData)
-	if err != nil {
-		c.add(visionMapPath, "map hash", "the map's hash cannot be computed: "+err.Error(), "make the map valid JSON that "+visionFormat+" describes")
-		return
+// and from the files it embeds beside it, whatever meta.page says. Without
+// a map (vm nil) only the inputs can be compared.
+func (c *checker) visionPageHash(vm *loadedMap, inputs pageInputs) {
+	var want string
+	if vm != nil {
+		var err error
+		if want, err = mapHash(vm.data); err != nil {
+			c.add(visionMapPath, "map hash", "the map's hash cannot be computed: "+err.Error(), "make the map valid JSON that "+visionFormat+" describes")
+			return
+		}
 	}
 	html, err := os.ReadFile(c.path(visionPagePath))
 	if err != nil {
@@ -307,19 +337,20 @@ func (c *checker) visionPageHash(mapData []byte, m visionMap, inputs pageInputs)
 	case got == nil:
 		c.add(visionPagePath, "page", `the page carries no <meta name="vision-map-hash">, so it was not built by the vision skill`, visionRebuild)
 		return
-	case string(got[1]) != want:
+	case vm != nil && string(got[1]) != want:
 		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older map: it carries %s, and %s hashes to %s", got[1], visionMapPath, want), visionRebuild)
 	}
-	c.visionInputsHash(html, m, inputs)
+	c.visionInputsHash(html, vm, inputs)
 }
 
 // visionInputsHash checks that the page was built from the facts file and
 // the changelog and from the design proposals as they are now, by the
 // inputs hash the skill writes beside the map's. It hashes the files Evie's
-// settings name: a map that names others is reported at its settings, and
-// without the proposals there is nothing to compare.
-func (c *checker) visionInputsHash(html []byte, m visionMap, inputs pageInputs) {
-	if m.Meta.Facts != factsPath || m.Meta.Changelog != changelogPath || inputs.proposalsErr != nil {
+// settings name, the only ones a map that passes check names: a map that
+// names others is reported at its settings. Without the proposals there is
+// nothing to compare.
+func (c *checker) visionInputsHash(html []byte, vm *loadedMap, inputs pageInputs) {
+	if vm != nil && (vm.m.Meta.Facts != factsPath || vm.m.Meta.Changelog != changelogPath) || inputs.proposalsErr != nil {
 		return
 	}
 	want := inputsHash(inputs.facts, inputs.changelog, inputs.proposals)
@@ -341,9 +372,8 @@ var (
 // visionChecker checks the references of one map.
 type visionChecker struct {
 	*checker
-	m           visionMap
-	facts       factTexts
-	partPackage map[string]string // part id -> the package it is
+	*loadedMap
+	facts factTexts
 }
 
 // unsupported refuses a form of the skill's map format that Evie's map does
@@ -370,7 +400,7 @@ func (v *visionChecker) mapRef(item, ref string) bool {
 		v.unsupported(item, kind+": references", "cite code, docs, facts or parts instead")
 		return false
 	default:
-		why = v.resolve(ref)
+		why = v.resolve(ref, v.parts)
 	}
 	if why != "" {
 		v.add(visionMapPath, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix+", then "+visionRebuild)

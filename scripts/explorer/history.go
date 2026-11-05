@@ -284,8 +284,10 @@ func splitList(e *changelogEntry, key, value string) []string {
 }
 
 // validateHistory checks the parsed changelog and reports each problem
-// against the entry it is in.
-func (c *checker) validateHistory(log changelogFile) {
+// against the entry it is in. A part: source names one of parts, the map's
+// part ids; without a readable map (nil parts) there are none to name, so
+// part: sources go unchecked rather than all reading as dead.
+func (c *checker) validateHistory(log changelogFile, parts map[string]bool) {
 	c.problems = append(c.problems, log.problems...)
 	repo := c.askGit(log.entries)
 	var above *changelogEntry // the nearest entry above with a real date
@@ -294,8 +296,10 @@ func (c *checker) validateHistory(log changelogFile) {
 		item := e.item()
 		c.problems = append(c.problems, e.problems...)
 		for _, source := range e.Sources {
-			if !strings.HasPrefix(source, "#") {
-				c.source(item, source)
+			switch kind, _, _ := strings.Cut(source, ":"); {
+			case strings.HasPrefix(source, "#"), kind == "part" && parts == nil:
+			default:
+				c.source(item, source, parts)
 			}
 		}
 		c.verifyCommits(repo, item, e)
@@ -313,9 +317,9 @@ func (c *checker) validateHistory(log changelogFile) {
 
 // source reports a changelog source that does not resolve. Sources are
 // references in the system map's forms, as the vision skill's History tab
-// reads them; a part: source names a part of the map.
-func (c *checker) source(item, ref string) {
-	why := c.resolve(ref)
+// reads them; a part: source names one of parts.
+func (c *checker) source(item, ref string, parts map[string]bool) {
+	why := c.resolve(ref, parts)
 	if why == "" {
 		return
 	}
