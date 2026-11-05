@@ -18,10 +18,41 @@ import (
 // exists only while a proposal does.
 const visionProposalsDir = ".vision/proposals"
 
-// proposalStatuses are the statuses the vision skill knows: proposed, then
-// accepted once the design is agreed, building once work starts; example
-// marks a proposal that only shows the format.
-var proposalStatuses = []string{"proposed", "accepted", "building", "example"}
+// proposalStatuses are the statuses the vision skill knows, in order, each
+// with when a feature's proposal takes it: proposed, then accepted once the
+// design is agreed, building once work starts. Example, with no when, marks
+// a proposal that only shows the format, which no feature's is.
+var proposalStatuses = []proposalStatus{
+	{"proposed", "while its design is open"},
+	{"accepted", "once the design is agreed"},
+	{"building", "once work starts"},
+	{"example", ""},
+}
+
+type proposalStatus struct{ name, when string }
+
+// knownStatus reports whether status is one the vision skill knows.
+func knownStatus(status string) bool {
+	return slices.ContainsFunc(proposalStatuses, func(s proposalStatus) bool { return s.name == status })
+}
+
+// statusText lists the statuses the skill knows, as "a, b or c"; with
+// when, only those a feature's proposal takes, each with when it does, as
+// "a when, b when, or c when".
+func statusText(when bool) string {
+	var list []string
+	or := " or "
+	for _, s := range proposalStatuses {
+		switch {
+		case !when:
+			list = append(list, s.name)
+		case s.when != "":
+			list, or = append(list, s.name+" "+s.when), ", or "
+		}
+	}
+	last := len(list) - 1
+	return strings.Join(list[:last], ", ") + or + list[last]
+}
 
 // readProposals reads the design proposals as the vision skill finds them:
 // every regular .json file directly in the folder whose name does not start
@@ -98,12 +129,12 @@ func (c *checker) validateProposal(p namedFile) {
 		}
 		c.add(file, "id", fmt.Sprintf("id %s does not match the file name", jsonText(id)), fix+then)
 	}
-	const statusFix = "set it to proposed, accepted once the design is agreed, or building once work starts, and delete the proposal once its feature merges"
+	statusFix := "set it to " + statusText(true) + ", and delete the proposal once its feature merges"
 	switch raw, ok := proposal["status"]; {
 	case !ok:
 		c.add(file, "status", "the proposal has no status", statusFix+then)
-	case !slices.Contains(proposalStatuses, stringOr(raw)):
-		c.add(file, "status", fmt.Sprintf("status %s is not one of proposed, accepted, building or example", jsonText(raw)), statusFix+then)
+	case !knownStatus(stringOr(raw)):
+		c.add(file, "status", fmt.Sprintf("status %s is not one of %s", jsonText(raw), statusText(false)), statusFix+then)
 	}
 }
 
