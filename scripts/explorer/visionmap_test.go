@@ -252,6 +252,24 @@ func TestCheckRefusesSystemMapFormsOnlyTheSkillReads(t *testing.T) {
 	})
 }
 
+func TestCheckReadsANullLineRangeOrCellAsNone(t *testing.T) {
+	// As for a top-level flow, null is no value: the entry still names its
+	// declaration by file and symbol, and check resolves it.
+	for _, field := range []string{"lines", "cell"} {
+		t.Run(field, func(t *testing.T) {
+			root := newVisionFixture(t)
+			codeEntry("Name", map[string]any{"file": "internal/alpha/alpha.go", "symbol": "Name", field: nil})(t, root)
+			if code, out := checkFixture(t, root); code != 0 {
+				t.Fatalf("check exit %d, want 0:\n%s", code, out)
+			}
+			codeEntry("Name", map[string]any{"file": "internal/alpha/alpha.go", "symbol": "Gone", field: nil})(t, root)
+			if code, out := checkFixture(t, root); code != 1 || !strings.Contains(out, "code.Name: internal/alpha/alpha.go declares no Gone") {
+				t.Fatalf("check exit %d, want 1 naming the missing symbol:\n%s", code, out)
+			}
+		})
+	}
+}
+
 func TestCheckFindsTypeScriptMembersOnlyInsideTheirOwnersBody(t *testing.T) {
 	// Feed.follow is gone from Feed, but the file still names follow after
 	// Feed: on a later line, and inside one of Feed's own method bodies.

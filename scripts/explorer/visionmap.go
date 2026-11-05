@@ -110,6 +110,12 @@ type visionCode struct {
 	Src    *string         `json:"src"`
 }
 
+// given reports whether a field read only to refuse it holds a value: it
+// is there and not null.
+func given(raw json.RawMessage) bool {
+	return raw != nil && string(raw) != "null"
+}
+
 // visionStatement is a sentence of the Architecture tab and the references
 // it rests on.
 type visionStatement struct {
@@ -224,7 +230,7 @@ func (c *checker) validateVisionMap() {
 	}
 	c.visionMeta(m)
 	v := &visionChecker{checker: c, m: m, facts: factTextsOf(c.facts), partPackage: map[string]string{}}
-	if m.Flow != nil && string(m.Flow) != "null" {
+	if given(m.Flow) {
 		v.unsupported("flow", "a top-level flow", "give the map a flows list")
 	}
 	if len(m.Refs) > 0 {
@@ -647,9 +653,9 @@ func clip(s string, n int) string {
 func (v *visionChecker) codeEntry(key string, e visionCode) {
 	item := "code." + key
 	switch {
-	case e.Lines != nil:
+	case given(e.Lines):
 		v.unsupported(item, "a line range", "name the declaration with symbol instead")
-	case e.Cell != nil:
+	case given(e.Cell):
 		v.unsupported(item, "a notebook cell", "name the declaration with symbol instead")
 	case e.Symbol == "" && e.Src != nil:
 		v.unsupported(item, "inline src", "cite code in the repository by file and symbol")
