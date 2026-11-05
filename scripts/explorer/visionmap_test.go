@@ -75,11 +75,25 @@ func fixtureInputsHash(t *testing.T, root string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hash, err := inputsHash(root, m.Meta.Facts, m.Meta.Changelog, proposals)
+	return inputsHash(readInput(t, root, m.Meta.Facts), readInput(t, root, m.Meta.Changelog), proposals)
+}
+
+// readInput reads an input of the inputs hash as the skill does: the
+// regular file the map names, or nil, so no record, when it names none or
+// there is no such file.
+func readInput(t *testing.T, root, name string) *namedFile {
+	t.Helper()
+	if name == "" {
+		return nil
+	}
+	data, ok, err := readRegular(filepath.Join(root, filepath.FromSlash(name)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return hash
+	if !ok {
+		return nil
+	}
+	return &namedFile{Name: name, Data: data}
 }
 
 // writeVisionPage writes a page carrying the given hashes; an empty inputs

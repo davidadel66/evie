@@ -23,17 +23,11 @@ const visionProposalsDir = ".vision/proposals"
 // marks a proposal that only shows the format.
 var proposalStatuses = []string{"proposed", "accepted", "building", "example"}
 
-// proposalFile is one design proposal file as stored.
-type proposalFile struct {
-	Name string // the file name, such as top-k.json
-	Data []byte
-}
-
 // readProposals reads the design proposals as the vision skill finds them:
 // every regular .json file directly in the folder whose name does not start
-// with a dot, sorted by file name as UTF-8 bytes. Without the folder there
-// are none.
-func readProposals(root string) ([]proposalFile, error) {
+// with a dot, sorted by file name as UTF-8 bytes, each named by its file
+// name (top-k.json). Without the folder there are none.
+func readProposals(root string) ([]namedFile, error) {
 	dir := filepath.Join(root, filepath.FromSlash(visionProposalsDir))
 	if info, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) || err == nil && !info.IsDir() {
 		return nil, nil
@@ -42,7 +36,7 @@ func readProposals(root string) ([]proposalFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	var files []proposalFile
+	var files []namedFile
 	for _, entry := range entries {
 		name := entry.Name()
 		if strings.HasPrefix(name, ".") || path.Ext(name) != ".json" {
@@ -53,7 +47,7 @@ func readProposals(root string) ([]proposalFile, error) {
 			return nil, err
 		}
 		if ok {
-			files = append(files, proposalFile{Name: name, Data: data})
+			files = append(files, namedFile{Name: name, Data: data})
 		}
 	}
 	return files, nil
@@ -79,7 +73,7 @@ func readRegular(file string) ([]byte, bool, error) {
 // name, and its status is one the skill knows. Everything else (its fields,
 // statements, references and operations on the map) is the skill's own
 // check, which its build runs first.
-func (c *checker) validateProposal(p proposalFile) {
+func (c *checker) validateProposal(p namedFile) {
 	file := visionProposalsDir + "/" + p.Name
 	then := ", then " + visionRebuildInputs
 	format := visionFormat + ` ("Design proposals")`

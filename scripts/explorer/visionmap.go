@@ -207,7 +207,7 @@ type visionMessage struct {
 
 // validateVisionMap checks the system map, which holds every package's part
 // and is what the page Evie embeds is built from.
-func (c *checker) validateVisionMap() {
+func (c *checker) validateVisionMap(inputs pageInputs) {
 	data, err := os.ReadFile(c.path(visionMapPath))
 	if errors.Is(err, fs.ErrNotExist) {
 		c.add(visionMapPath, "map", "the file does not exist, but it holds the system map, every package's part, and what "+visionPagePath+" is built from",
@@ -260,14 +260,13 @@ func (c *checker) validateVisionMap() {
 		v.sequence("sequence "+q.ID, q.visionMessages)
 	}
 	v.packageCoverage()
-	proposals, err := readProposals(c.root)
-	if err != nil {
-		c.add(visionProposalsDir, "folder", "the design proposals cannot be read: "+err.Error(), "make the folder and its files readable")
+	if inputs.proposalsErr != nil {
+		c.add(visionProposalsDir, "folder", "the design proposals cannot be read: "+inputs.proposalsErr.Error(), "make the folder and its files readable")
 	}
-	for _, p := range proposals {
+	for _, p := range inputs.proposals {
 		c.validateProposal(p)
 	}
-	c.visionPageHash(data, m, proposals, err == nil)
+	c.visionPageHash(data, m, inputs)
 }
 
 // visionMeta checks that the map's settings are the ones Evie's check,
@@ -292,9 +291,8 @@ func (c *checker) visionMeta(m visionMap) {
 }
 
 // visionPageHash checks that the page Evie embeds was built from this map
-// and from the files it embeds beside it, whatever meta.page says. Without
-// readable proposals, the inputs hash cannot be compared.
-func (c *checker) visionPageHash(mapData []byte, m visionMap, proposals []proposalFile, proposalsRead bool) {
+// and from the files it embeds beside it, whatever meta.page says.
+func (c *checker) visionPageHash(mapData []byte, m visionMap, inputs pageInputs) {
 	want, err := mapHash(mapData)
 	if err != nil {
 		c.add(visionMapPath, "map hash", "the map's hash cannot be computed: "+err.Error(), "make the map valid JSON that "+visionFormat+" describes")
@@ -312,20 +310,19 @@ func (c *checker) visionPageHash(mapData []byte, m visionMap, proposals []propos
 	case string(got[1]) != want:
 		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older map: it carries %s, and %s hashes to %s", got[1], visionMapPath, want), visionRebuild)
 	}
-	if proposalsRead {
-		c.visionInputsHash(html, m, proposals)
-	}
+	c.visionInputsHash(html, m, inputs)
 }
 
 // visionInputsHash checks that the page was built from the facts file and
-// the changelog the map names and from the design proposals as they are
-// now, by the inputs hash the skill writes beside the map's.
-func (c *checker) visionInputsHash(html []byte, m visionMap, proposals []proposalFile) {
-	want, err := inputsHash(c.root, m.Meta.Facts, m.Meta.Changelog, proposals)
-	if err != nil {
-		c.add(visionPagePath, "inputs hash", "the facts file or the changelog cannot be read to hash: "+err.Error(), "make them readable")
+// the changelog and from the design proposals as they are now, by the
+// inputs hash the skill writes beside the map's. It hashes the files Evie's
+// settings name: a map that names others is reported at its settings, and
+// without the proposals there is nothing to compare.
+func (c *checker) visionInputsHash(html []byte, m visionMap, inputs pageInputs) {
+	if m.Meta.Facts != factsPath || m.Meta.Changelog != changelogPath || inputs.proposalsErr != nil {
 		return
 	}
+	want := inputsHash(inputs.facts, inputs.changelog, inputs.proposals)
 	switch got := pageInputsMeta.FindSubmatch(html); {
 	case got == nil:
 		c.add(visionPagePath, "page", `the page carries no <meta name="vision-inputs-hash">, so it was built before the vision skill wrote one`, visionRebuildInputs)

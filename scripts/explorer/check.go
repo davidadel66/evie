@@ -79,7 +79,7 @@ func runCheck(root string, databases []databaseSource, stdout, stderr io.Writer)
 // then checks the system map and the changelog against them. It returns
 // every problem found; an error means the check itself could not run.
 func checkRepo(root string, databases []databaseSource) ([]problem, error) {
-	log, err := readChangelog(root)
+	log, logData, err := readChangelog(root)
 	missingLog := errors.Is(err, fs.ErrNotExist)
 	if err != nil && !missingLog {
 		return nil, err
@@ -93,17 +93,27 @@ func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 		return nil, err
 	}
 	c := newChecker(root, facts)
-	current, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(factsPath)))
+	current, factsErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(factsPath)))
 	switch {
-	case err == nil && bytes.Equal(current, fresh):
-	case err == nil && hasCRLF(current) && bytes.Equal(bytes.ReplaceAll(current, []byte("\r\n"), []byte("\n")), fresh):
+	case factsErr == nil && bytes.Equal(current, fresh):
+	case factsErr == nil && hasCRLF(current) && bytes.Equal(bytes.ReplaceAll(current, []byte("\r\n"), []byte("\n")), fresh):
 		c.lineEndings(factsPath, current)
 	default:
 		c.add(factsPath, "facts", "the facts differ from a fresh extraction of the code",
 			"run "+extractCommand+" and commit the result")
 	}
+	// The page embeds the facts file and the changelog as they were just
+	// read, and the design proposals.
+	var inputs pageInputs
+	if factsErr == nil {
+		inputs.facts = &namedFile{Name: factsPath, Data: current}
+	}
+	if !missingLog {
+		inputs.changelog = &namedFile{Name: changelogPath, Data: logData}
+	}
+	inputs.proposals, inputs.proposalsErr = readProposals(root)
 	// The map goes first: the changelog's part: sources name its parts.
-	c.validateVisionMap()
+	c.validateVisionMap(inputs)
 	if missingLog {
 		c.add(changelogPath, "file", "the file does not exist", changelogFix)
 	} else {

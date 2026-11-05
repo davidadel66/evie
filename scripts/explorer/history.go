@@ -72,17 +72,18 @@ var metadataFields = []string{"Branch", "Merge", "Commits", "Touches", "Sources"
 // changelogFix is how to write a missing changelog.
 const changelogFix = "create it in the format in docs/architecture/explorer/README.md"
 
-// readChangelog reads and parses CHANGELOG.md. A missing file is an error
-// that says how to create it and matches fs.ErrNotExist.
-func readChangelog(root string) (changelogFile, error) {
+// readChangelog reads and parses CHANGELOG.md, returning its bytes beside
+// it. A missing file is an error that says how to create it and matches
+// fs.ErrNotExist.
+func readChangelog(root string) (changelogFile, []byte, error) {
 	data, err := os.ReadFile(filepath.Join(root, changelogPath))
 	if errors.Is(err, fs.ErrNotExist) {
-		return changelogFile{}, fmt.Errorf("read %s: %w. Fix: %s", changelogPath, err, changelogFix)
+		return changelogFile{}, nil, fmt.Errorf("read %s: %w. Fix: %s", changelogPath, err, changelogFix)
 	}
 	if err != nil {
-		return changelogFile{}, fmt.Errorf("read %s: %w", changelogPath, err)
+		return changelogFile{}, nil, fmt.Errorf("read %s: %w", changelogPath, err)
 	}
-	return parseChangelog(string(data)), nil
+	return parseChangelog(string(data)), data, nil
 }
 
 // parseChangelog reads every entry of a changelog: a level-two heading

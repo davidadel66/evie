@@ -47,11 +47,7 @@ func TestInputsHashAgreesWithTheVisionSkill(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := inputsHash(root, c.Meta.Facts, c.Meta.Changelog, proposals)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got != c.Hash {
+			if got := inputsHash(readInput(t, root, c.Meta.Facts), readInput(t, root, c.Meta.Changelog), proposals); got != c.Hash {
 				t.Errorf("inputsHash = %s, want %s", got, c.Hash)
 			}
 		})
