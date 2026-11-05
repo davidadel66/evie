@@ -357,7 +357,8 @@ func TestCheckReportsSystemMapSettingsEvieDoesNotUse(t *testing.T) {
 				m["meta"].(map[string]any)["page"] = "docs/system.html"
 				writeVisionMap(t, root, m)
 			},
-			want: []string{visionMapPath, "meta.page", `"docs/system.html"`, "Evie embeds and serves " + visionPagePath},
+			// The page Evie serves was built before the change, so it is stale too.
+			want: []string{visionMapPath, "meta.page", `"docs/system.html"`, "Evie embeds and serves " + visionPagePath, visionPagePath + ": page", "older map"},
 		},
 		{
 			name: "malformed map",

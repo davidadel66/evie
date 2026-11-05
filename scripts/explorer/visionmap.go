@@ -131,7 +131,7 @@ func (c *checker) validateVisionMap() {
 			v.step(step)
 		}
 	}
-	c.visionPageHash(data, m.Meta.Page)
+	c.visionPageHash(data)
 }
 
 // visionMeta checks that the map's facts and page are the ones Evie's check
@@ -147,11 +147,10 @@ func (c *checker) visionMeta(m visionMap) {
 	}
 }
 
-// visionPageHash checks that the committed page was built from this map.
-func (c *checker) visionPageHash(mapData []byte, page string) {
-	if !cleanRelative(page) {
-		return // reported by visionMeta
-	}
+// visionPageHash checks that the page Evie embeds was built from this map,
+// whatever meta.page says.
+func (c *checker) visionPageHash(mapData []byte) {
+	page := visionPagePath
 	want, err := mapHash(mapData)
 	if err != nil {
 		c.add(visionMapPath, "map hash", "the map's hash cannot be computed: "+err.Error(), "make the map valid JSON that "+visionFormat+" describes")
