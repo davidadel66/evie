@@ -19,9 +19,9 @@ npm --prefix internal/web/ui run build
 go test ./...
 go vet ./...
 
-# The system explorer: its drift check and its viewer model's tests.
+# The drift check: the facts, the system map and the changelog against the
+# code.
 go run ./scripts/explorer check
-node --test 'docs/architecture/explorer/test/*.test.js'
 
 # Check both unstaged and staged changes. CI separately checks the complete PR
 # diff because a clean checkout has neither.

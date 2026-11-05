@@ -1,8 +1,7 @@
-// Package explorer carries the system explorer into the evie binary: the
-// page, its viewer and stylesheet, its data, and its examples, exactly as
-// they were when the binary was built (system-page.spec.md), and the system
-// map page the vision skill builds from .vision/map.json. It lives beside
-// the files because go:embed reaches only its own directory.
+// Package explorer carries the system map page into the evie binary: the
+// page the vision skill builds from .vision/map.json, exactly as it was when
+// the binary was built (system-page.spec.md). It lives beside the page
+// because go:embed reaches only its own directory.
 package explorer
 
 import (
@@ -10,12 +9,14 @@ import (
 	"io/fs"
 )
 
-// The tests, README.md, and this file stay out of the snapshot.
+// The page is self-contained: its scripts, styles and data are inline, so
+// it is the snapshot's only file. The facts, README.md and this file stay
+// out.
 //
-//go:embed index.html explorer.js explorer.css data examples system.html
+//go:embed system.html
 var files embed.FS
 
-// Files is the explorer snapshot, rooted at the explorer directory.
+// Files is the snapshot, rooted at the explorer directory.
 func Files() fs.FS {
 	return files
 }

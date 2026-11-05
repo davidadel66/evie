@@ -5,8 +5,8 @@
     "valuesLabel": "From the code",
     "facts": "docs/architecture/explorer/data/facts.js",
     "page": "docs/architecture/explorer/system.html",
-    "commit": "9fa2c4c4053522c532973425998bc3d3c825faff",
-    "stamped": "2026-11-05",
+    "commit": "25889f4942f60f61f39e630d9651e7e084809764",
+    "stamped": "2026-11-05 (with uncommitted work)",
     "changelog": "CHANGELOG.md",
     "repository": "https://github.com/davidadel66/evie",
     "parts": "complete"
@@ -6479,7 +6479,7 @@
   "history": [
     {
       "date": "2026-11-05",
-      "summary": "Added the Architecture and History tabs: the explorer's components, containers, sequence flows and diagrams moved into the map as parts, edges and sequences, and History reads CHANGELOG.md"
+      "summary": "Added the Architecture and History tabs: the explorer's components, containers, sequence flows and diagrams moved into the map as parts, edges and sequences, and History reads CHANGELOG.md; the explorer viewer retired, so the snapshot holds only this page"
     },
     {
       "date": "2026-11-05",
@@ -12849,26 +12849,26 @@
       "group": "infrastructure",
       "subgroup": "Surfaces",
       "summary": {
-        "text": "The explorer snapshot: a tiny package beside the system explorer's files that builds the page, its viewer and stylesheet, its data, its examples and the system map page into the evie binary, so the System view shows the map and explorer of the build that is running.",
+        "text": "The map snapshot: a tiny package beside the system map page that builds the page into the evie binary, so the System view shows the Map, Architecture and History of the build that is running.",
         "refs": ["code:docs/architecture/explorer/snapshot.go#Files", "doc:cmd/evie/docs/active/system-page.spec.md#modules"]
       },
       "does": [
         {
-          "text": "Files returns the snapshot rooted at the explorer directory: index.html, explorer.js, explorer.css, data/, examples/ and system.html, the map page the vision skill builds from .vision/map.json, fixed when the binary is built.",
+          "text": "Files returns the snapshot rooted at the explorer directory: system.html alone, the self-contained page the vision skill builds from .vision/map.json, fixed when the binary is built.",
           "refs": ["code:docs/architecture/explorer/snapshot.go#Files", "code:docs/architecture/explorer/snapshot.go#files"]
         },
         {
-          "text": "internal/web serves it under /explorer/, GET and HEAD only, with a 404 for anything else, beside a generated build.js naming the repository, the commit and whether the build had uncommitted changes.",
-          "refs": ["route:/explorer/", "code:internal/web/explorer.go#Server.registerExplorerRoutes", "code:internal/web/explorer.go#readExplorerBuild"]
+          "text": "internal/web serves the page under /explorer/, at the directory and by its own name, GET and HEAD only, with a 404 for anything else.",
+          "refs": ["route:/explorer/", "code:internal/web/explorer.go#Server.registerExplorerRoutes"]
         },
         {
-          "text": "The map page gets its own content-security policy: its inline scripts allowed by their hashes, taken once from the snapshot, and inline styles, still reaching no host but Evie; every other file keeps the explorer's policy.",
+          "text": "Every response carries one content-security policy: the page's inline scripts allowed by their hashes, taken once from the snapshot, and inline styles, reaching no host but Evie.",
           "refs": ["code:internal/web/explorer.go#systemMapPolicy", "code:internal/web/explorer.go#inlineScripts"]
         }
       ],
       "owns": [
         {
-          "text": "No data of its own: only the explorer's files as they were in the commit the binary was built from.",
+          "text": "No data of its own: only the page as it was in the commit the binary was built from.",
           "refs": ["code:docs/architecture/explorer/snapshot.go#files"]
         }
       ],
@@ -12884,7 +12884,7 @@
           "refs": ["code:scripts/explorer/extract.go#snapshotDir", "doc:cmd/evie/docs/active/system-page.decisions.md"]
         },
         {
-          "text": "Edits to the explorer's files reach evie serve only after a rebuild; the tests, README.md and the Go file itself stay out of the snapshot.",
+          "text": "An edit to the map reaches evie serve only once the page is rebuilt and the binary with it; the facts, README.md and the Go file itself stay out of the snapshot.",
           "refs": ["code:docs/architecture/explorer/snapshot.go#files"]
         }
       ],
