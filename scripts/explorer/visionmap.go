@@ -137,11 +137,12 @@ type visionPart struct {
 }
 
 // visionDiagram is a drawing of a part. Which fields it has depends on its
-// kind: graph, sequence, state, or er.
+// kind: graph, sequence, state, or er. Every kind has a summary; a sequence
+// diagram has a sequence's other fields too.
 type visionDiagram struct {
-	ID      string           `json:"id"`
-	Kind    string           `json:"kind"`
-	Summary *visionStatement `json:"summary"`
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+	visionMessages
 	// graph
 	Nodes []struct {
 		ID   string `json:"id"`
@@ -150,10 +151,6 @@ type visionDiagram struct {
 	Edges []struct {
 		Refs []string `json:"refs"`
 	} `json:"edges"`
-	// sequence
-	Trigger      *visionStatement `json:"trigger"`
-	Participants []string         `json:"participants"`
-	Steps        []visionMessage  `json:"steps"`
 	// state
 	States []struct {
 		ID   string   `json:"id"`
@@ -178,7 +175,14 @@ type visionEdge struct {
 
 // visionSequence is a runtime flow drawn as a sequence diagram.
 type visionSequence struct {
-	ID           string           `json:"id"`
+	ID string `json:"id"`
+	visionMessages
+}
+
+// visionMessages is what a sequence and a part's sequence diagram share:
+// a summary, what triggers it, its participants, and the messages between
+// them.
+type visionMessages struct {
 	Summary      *visionStatement `json:"summary"`
 	Trigger      *visionStatement `json:"trigger"`
 	Participants []string         `json:"participants"`
@@ -247,7 +251,7 @@ func (c *checker) validateVisionMap() {
 		v.edge(e)
 	}
 	for _, q := range m.Sequences {
-		v.sequence("sequence "+q.ID, q.Summary, q.Trigger, q.Participants, q.Steps)
+		v.sequence("sequence "+q.ID, q.visionMessages)
 	}
 	v.packageCoverage()
 	proposals, err := readProposals(c.root)
@@ -502,7 +506,7 @@ func (v *visionChecker) part(p visionPart) {
 // facts.
 func (v *visionChecker) diagram(item string, d visionDiagram) {
 	if d.Kind == "sequence" {
-		v.sequence(item, d.Summary, d.Trigger, d.Participants, d.Steps)
+		v.sequence(item, d.visionMessages)
 		return
 	}
 	v.statement(item+" summary", d.Summary)
@@ -558,13 +562,13 @@ func (v *visionChecker) importEdge(item, from, to string) {
 // sequence checks a sequence, or a part's sequence diagram: its statements
 // resolve, its participants are parts, and every step cites the code that
 // carries it and, via import, follows one of the facts' imports.
-func (v *visionChecker) sequence(item string, summary, trigger *visionStatement, participants []string, steps []visionMessage) {
-	v.statement(item+" summary", summary)
-	v.statement(item+" trigger", trigger)
-	for _, id := range participants {
+func (v *visionChecker) sequence(item string, q visionMessages) {
+	v.statement(item+" summary", q.Summary)
+	v.statement(item+" trigger", q.Trigger)
+	for _, id := range q.Participants {
 		v.isPart(item+" participants", id)
 	}
-	for i, s := range steps {
+	for i, s := range q.Steps {
 		stepItem := fmt.Sprintf("%s step %d", item, i+1)
 		v.mapRefs(stepItem, s.Refs)
 		if !slices.ContainsFunc(s.Refs, v.citesCode) {
