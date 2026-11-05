@@ -5,8 +5,8 @@
     "valuesLabel": "From the code",
     "facts": "docs/architecture/explorer/data/facts.js",
     "page": "docs/architecture/explorer/system.html",
-    "commit": "20c6679b01fd739916ecc23888cedbef62a459f1",
-    "stamped": "2026-11-04"
+    "commit": "04f694cc95bde85168144e39bc1472c32c0fe753",
+    "stamped": "2026-11-05"
   },
   "kinds": [
     {"id": "request", "label": "Owner's request", "shape": "circle"},
