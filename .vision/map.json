@@ -5,7 +5,7 @@
     "valuesLabel": "From the code",
     "facts": "docs/architecture/explorer/data/facts.js",
     "page": "docs/architecture/explorer/system.html",
-    "commit": "04f694cc95bde85168144e39bc1472c32c0fe753",
+    "commit": "a7fd0b2c8428a36cfbb6c691b85c37cf61a1de14",
     "stamped": "2026-11-05"
   },
   "kinds": [
