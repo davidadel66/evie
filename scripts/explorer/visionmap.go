@@ -253,8 +253,8 @@ func (v *visionChecker) step(s visionStep) {
 	}
 	for _, fact := range s.Facts {
 		label, value, ref := chip(fact)
-		if chip := fmt.Sprintf("%s fact %q", item, label); ref != "" && v.mapRef(chip, ref) {
-			v.backed(chip, value, ref)
+		if where := fmt.Sprintf("%s fact %q", item, label); ref != "" && v.mapRef(where, ref) {
+			v.backed(where, value, ref)
 		}
 	}
 	for _, flag := range s.Flags {
