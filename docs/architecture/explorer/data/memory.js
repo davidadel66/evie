@@ -429,7 +429,7 @@ evieExplorer.register(
           "title": "Memory stage evolution",
           "kind": "graph",
           "summary": {
-            "text": "How Evie's memory grew, redrawn from today's code: the original three stages (Episodic, Working and Semantic Memory), then the compiler and the always-on background pass with their review paths, retrieval and Automatic Recall, and the architecture plan's standing block and session episodes; the original drawing stops at Stage 3.",
+            "text": "How Evie's memory grew, redrawn from today's code: the original three stages (Episodic, Working and Semantic Memory), then the compiler and the background pass with their review paths, retrieval and Automatic Recall, and the architecture plan's standing block and session episodes; the original drawing stops at Stage 3.",
             "refs": [
               "doc:cmd/evie/docs/active/memory.spec.md#staged-build-order",
               "doc:docs/memory-architecture.md#plan-stages-each-one-reviewable-change",
@@ -543,7 +543,7 @@ evieExplorer.register(
             },
             {
               "id": "background",
-              "label": "Background pass (always on)",
+              "label": "Background pass",
               "node": "pkg:internal/memorybackground",
               "lane": "s4"
             },
@@ -1943,9 +1943,9 @@ evieExplorer.register(
       "title": "memorybackground",
       "group": "memory",
       "summary": {
-        "text": "Runs the always-on background memory pass: when a root conversation goes idle, gathers 20 new owner messages, or has owner messages a committed compaction summarized, it reads only those owner messages, extracts candidate memories, compares them with existing ones, and queues exact ADD, UPDATE or INVALIDATE proposals in the owner's review inbox without applying anything.",
+        "text": "Runs the background memory pass, off unless EVIE_REMOTE_MEMORY=on with OPENROUTER_API_KEY, or EVIE_COMPILER_CONFIG for a local extractor: when a root conversation goes idle, gathers 20 new owner messages, or has owner messages a committed compaction summarized, it reads only those owner messages, extracts candidate memories, compares them with existing ones, and queues exact ADD, UPDATE or INVALIDATE proposals in the owner's review inbox without applying anything.",
         "refs": [
-          "code:internal/memorybackground/config.go",
+          "code:internal/memorybackground/config.go#FromEnv",
           "code:internal/memorybackground/pass.go#Runner.runSession",
           "code:internal/eviedb/memory_background.go#Store.DueMemoryBackgroundSessions",
           "doc:cmd/evie/docs/active/memory.spec.md#background-memory-pass"
@@ -2775,8 +2775,9 @@ evieExplorer.register(
       "id": "background-memory-pass",
       "title": "Background memory pass",
       "summary": {
-        "text": "The always-on pass reads a due conversation's new owner messages, asks a pinned model what is worth remembering, compares it with existing memory, and commits exact prepared proposals to the review inbox under the conversation's turn lease; the owner's approval later applies one through the ordinary Kernel path.",
+        "text": "Once enabled (EVIE_REMOTE_MEMORY=on with OPENROUTER_API_KEY, or EVIE_COMPILER_CONFIG), the pass reads a due conversation's new owner messages, asks a pinned model what is worth remembering, compares it with existing memory, and commits exact prepared proposals to the review inbox under the conversation's turn lease; the owner's approval later applies one through the ordinary Kernel path.",
         "refs": [
+          "code:internal/memorybackground/config.go#FromEnv",
           "code:internal/memorybackground/pass.go#Runner.runSession",
           "code:internal/eviedb/memory_background.go#Store.CommitMemoryBackgroundPass",
           "code:internal/eviedb/memory_proposal_inbox.go#Store.ApproveMemoryProposal",
@@ -3047,7 +3048,7 @@ evieExplorer.register(
       "id": "automatic-recall",
       "title": "Automatic Recall",
       "summary": {
-        "text": "At the start of a turn the agent plans a small query from the owner's message and recent topics, asks the Kernel for at most two accepted memories and two conversation excerpts in the session's own scopes, revalidates them, and sends them as one framed data message just before the active request.",
+        "text": "At the start of a turn the agent plans a small query from the owner's message and recent topics, asks the Kernel in the session's own scopes for two accepted memories and two conversation excerpts, plus two accepted memories for each of up to two exact selectors in the message (an ID, or a token like task-12), so up to six accepted-memory results and two excerpts; it revalidates them and sends them as one framed data message just before the active request.",
         "refs": [
           "code:internal/agent/retrieval_automatic.go#retrievalTurn.automatic",
           "code:internal/agent/retrieval_automatic.go#planAutomaticRecall",
@@ -3088,17 +3089,18 @@ evieExplorer.register(
         {
           "from": "pkg:internal/agent",
           "to": "pkg:internal/agent",
-          "label": "Plans the query: the current message, up to two relevant earlier messages from the last 16, the summary for a follow-up, and any explicit past time; an acknowledgement searches nothing",
+          "label": "Plans the query: the current message, up to two relevant earlier messages from the last 16, the summary for a follow-up, and any explicit past time, plus up to two exact selectors (a UUID, or a token of letters, digits and a separator); an acknowledgement searches nothing",
           "kind": "note",
           "refs": [
             "code:internal/agent/retrieval_automatic.go#planAutomaticRecall",
+            "code:internal/agent/retrieval_automatic.go#explicitRecallSelectors",
             "code:internal/memory/recall_time.go#FindRecallTimeReference"
           ]
         },
         {
           "from": "pkg:internal/agent",
           "to": "pkg:internal/eviedb",
-          "label": "SearchMemory for accepted memory: two results, 6 KiB, scope taken from the session",
+          "label": "SearchMemory for accepted memory: two results, 6 KiB, scope taken from the session; then once per exact selector, two results each",
           "kind": "call",
           "via": "call",
           "refs": [

@@ -400,7 +400,7 @@
               "name": "Automatic Recall",
               "sub": "first request only",
               "type": "op",
-              "what": "At the turn's first request, searches accepted memories and earlier conversations of the same Context Scope and holds at most two of each as framed evidence. The Memory flow shows how.",
+              "what": "At the turn's first request, searches accepted memories and earlier conversations of the same Context Scope (two results each), plus up to two more accepted-memory searches for IDs or tokens like task-12 in the message (two each), so it holds up to six accepted-memory results and two conversation excerpts as framed evidence. The Memory flow shows how.",
               "in": "events, summary, root message",
               "out": "held evidence → EVIE_MEMORY_DATA message",
               "shape": "memory data",
@@ -936,14 +936,14 @@
       "id": "memory",
       "name": "Memory",
       "what": "How owner messages become accepted memories, and how those come back in later turns.",
-      "trigger": "Remembering runs every minute while serve or the REPL runs (sooner after a committed compaction); recall runs at the first model request of each turn.",
+      "trigger": "Once the background pass is enabled, remembering runs every minute while serve or the REPL runs (sooner after a committed compaction); with EVIE_REMOTE_MEMORY=on, recall runs at the first model request of each turn.",
       "steps": [
         {
           "id": "mem-due",
           "name": "Find due conversations",
           "sub": "every minute · runner lease",
           "kind": "mem-remember",
-          "what": "The always-on background pass wakes every minute (sooner after a compaction), takes the single runner lease, checks today's spend caps and lists the conversations that are due.",
+          "what": "Once enabled (EVIE_REMOTE_MEMORY=on with OPENROUTER_API_KEY, or EVIE_COMPILER_CONFIG for a local model), the background pass wakes every minute (sooner after a compaction), takes the single runner lease, checks today's spend caps and lists the conversations that are due. Otherwise it stays off, and evie memory-background status says why.",
           "in": "clock tick, or a compaction flush",
           "out": "due conversations, compaction-owed first",
           "shape": "due sessions",
@@ -1053,11 +1053,11 @@
           "alternatives": true,
           "sub": "two paths · one result",
           "kind": "mem-remember",
-          "what": "Turns owner messages into proposed memory changes: always through the background pass, and optionally through a local compiler host that produces candidates instead.",
+          "what": "Turns owner messages into proposed memory changes: through the background pass when it is enabled, and optionally through a local compiler host that produces candidates instead.",
           "in": "owner-message batch",
           "out": "decisions (pass) or Memory Candidates (compiler)",
           "shape": "decisions",
-          "facts": [["model", "pinned OpenRouter model (EVIE_MEMORY_BACKGROUND_*)"], ["package", "internal/memorybackground", "pkg:internal/memorybackground"], ["package", "internal/localextractor", "pkg:internal/localextractor"]],
+          "facts": [["model", "a pinned OpenRouter model (EVIE_MEMORY_BACKGROUND_MODEL), or the local extractor EVIE_COMPILER_CONFIG names"], ["package", "internal/memorybackground", "pkg:internal/memorybackground"], ["package", "internal/localextractor", "pkg:internal/localextractor"]],
           "code": {
             "key": "Runner.propose",
             "highlight": ["candidates, dropped, err := parseExtraction(raw, batch, pool, r.config.CandidateLimit)", "duplicate := exactDuplicate(c, similar)"]
@@ -1073,8 +1073,10 @@
             {
               "id": "mem-pass",
               "name": "Background pass",
-              "sub": "always on · OpenRouter",
-              "what": "The always-on path: one extract call finds candidates, deterministic checks settle exact duplicates and brand-new facts, and one decide call handles the rest.",
+              "sub": "opt-in · OpenRouter or local",
+              "what": "Off unless FromEnv enables it: through OpenRouter with EVIE_REMOTE_MEMORY=on and OPENROUTER_API_KEY, or locally with EVIE_COMPILER_CONFIG. Then one extract call finds candidates, deterministic checks settle exact duplicates and brand-new facts, and one decide call handles the rest.",
+              "facts": [["remote with", "EVIE_REMOTE_MEMORY", "code:internal/memorybackground/config.go#EnvRemote"], ["and", "OPENROUTER_API_KEY", "code:internal/memorybackground/config.go#EnvAPIKey"], ["or locally with", "EVIE_COMPILER_CONFIG", "code:internal/memorybackground/config.go#EnvLocal"]],
+              "refs": ["code:internal/memorybackground/config.go#FromEnv", "code:internal/memorybackground/config.go#Defaults"],
               "in": "owner-message batch",
               "out": "decisions: ADD, UPDATE, INVALIDATE or no-op",
               "shape": "decisions",
@@ -1531,16 +1533,16 @@
         {
           "id": "mem-recall",
           "name": "Recall in the next turn",
-          "sub": "Automatic Recall · 2 + 2",
+          "sub": "Automatic Recall · up to 4 searches",
           "kind": "mem-recall",
-          "what": "At a turn's first request, plans a small query, asks for at most two accepted memories and two conversation excerpts in the session's own scopes, revalidates them and renders one EVIE_MEMORY_DATA message before the active request.",
+          "what": "At a turn's first request, plans a small query and searches the session's own scopes: accepted memories and conversation excerpts, two results each, plus up to two exact-selector searches of accepted memories (two each) for IDs or tokens like task-12, so up to six accepted-memory results and two excerpts. It revalidates them and renders one EVIE_MEMORY_DATA message before the active request.",
           "in": "owner message + recent topics",
           "out": "EVIE_MEMORY_DATA user message (≤ 36 KiB per turn)",
           "shape": "memory data",
-          "facts": [["needs", "EVIE_REMOTE_MEMORY=on + memory_search tools in the composition"], ["reads", "semantic_claims", "table:evie.semantic_claims"], ["reads", "memory_retrieval_fts_v3", "table:evie.memory_retrieval_fts_v3"], ["reads", "memory_retrieval_event_fts_v4", "table:evie.memory_retrieval_event_fts_v4"], ["package", "internal/agent", "pkg:internal/agent"], ["package", "internal/eviedb", "pkg:internal/eviedb"]],
+          "facts": [["needs", "EVIE_REMOTE_MEMORY=on + memory_search tools in the composition"], ["reads", "semantic_claims", "table:evie.semantic_claims"], ["reads", "memory_retrieval_fts_v3", "table:evie.memory_retrieval_fts_v3"], ["reads", "memory_retrieval_event_fts_v4", "table:evie.memory_retrieval_event_fts_v4"], ["package", "internal/agent", "pkg:internal/agent"], ["package", "internal/eviedb", "pkg:internal/eviedb"], ["per search", "Limit: 2", "retrievalTurn.automatic"]],
           "code": {
             "key": "retrievalTurn.automatic",
-            "highlight": ["plan := planAutomaticRecall(events, summary, root)", "query := memory.RetrievalQuery{Kind: kind, Text: plan.query, Limit: 2, MaxBytes: 6 * 1024", "result, _ := r.search(ctx, query)"]
+            "highlight": ["plan := planAutomaticRecall(events, summary, root)", "query := memory.RetrievalQuery{Kind: kind, Text: plan.query, Limit: 2, MaxBytes: 6 * 1024", "result, _ := r.search(ctx, query)", "for _, selector := range plan.exact {"]
           },
           "files": [
             {
@@ -1566,7 +1568,7 @@
             {
               "type": "kv",
               "title": "Limits in the code",
-              "rows": [["per search", "2 results, 6 KiB"], ["turn memory budget", "36 KiB (retrievalTurnBytes)"], ["earlier messages considered", "last 16"], ["fusion", "reciprocal rank, 1 / (60 + rank)"]]
+              "rows": [["per search", "2 results, 6 KiB"], ["searches", "1 accepted memory + 1 excerpts + up to 2 exact selectors"], ["turn memory budget", "36 KiB (retrievalTurnBytes)"], ["earlier messages considered", "last 16"], ["fusion", "reciprocal rank, 1 / (60 + rank)"]]
             }
           ],
           "children": [
@@ -1575,9 +1577,10 @@
               "name": "Plan the query",
               "sub": "current message · topics",
               "type": "op",
-              "what": "Builds the query from the current message, up to two relevant earlier messages from the last 16, the summary for a follow-up, and any explicit past time; an acknowledgement searches nothing.",
+              "what": "Builds the query from the current message, up to two relevant earlier messages from the last 16, the summary for a follow-up, and any explicit past time, and keeps up to two exact selectors from the message (a UUID, or a token of letters, digits and a separator such as task-12); an acknowledgement searches nothing.",
               "in": "events + summary",
-              "out": "automaticRecallPlan {query, time, relevance}",
+              "out": "automaticRecallPlan {query, exact, time, relevance}",
+              "facts": [["exact selectors", "2", "code:internal/agent/retrieval_automatic.go#explicitRecallSelectors"]],
               "shape": "query",
               "code": {
                 "key": "planAutomaticRecall",
@@ -4730,7 +4733,7 @@
           "name": "Start the memory hosts",
           "kind": "boot-hosts",
           "sub": "retrieval · compiler · pass",
-          "what": "Right before listening, startMemoryForRuntime starts retrieval-index maintenance, the compiler host when configured, and the always-on background memory pass.",
+          "what": "Right before listening, startMemoryForRuntime starts retrieval-index maintenance, the compiler host when configured, and the background memory pass, which only waits for shutdown unless FromEnv enabled it.",
           "in": "runtime context + kernelStore + memoryBackgroundHost",
           "out": "three memory goroutines + one stop func",
           "shape": "memory hosts",
@@ -4792,7 +4795,7 @@
               "id": "boot-mem-background",
               "name": "Start the background pass",
               "sub": "price, then Run",
-              "what": "memoryBackgroundHost.Start first reads its remote model's price (10 s limit, conservative fallback), then runs the background pass; when the pass is off, main logs why.",
+              "what": "memoryBackgroundHost.Start first reads its remote model's price (10 s limit, conservative fallback), then runs the background pass. The pass is off unless EVIE_REMOTE_MEMORY=on with OPENROUTER_API_KEY, or EVIE_COMPILER_CONFIG, enables it; when it is off, main logs why and Run only waits for shutdown.",
               "in": "memoryBackgroundHost",
               "out": "background-pass goroutine + stop func",
               "shape": "background pass",
@@ -4803,7 +4806,7 @@
               "triggers": [
                 {
                   "flow": "memory",
-                  "when": "runs the always-on background memory pass over committed compactions"
+                  "when": "runs the background memory pass, once enabled, over committed compactions"
                 }
               ]
             }
@@ -6471,6 +6474,11 @@
   },
   "refs": {},
   "history": [
+    {
+      "date": "2026-11-05",
+      "summary": "Corrected the map: the background pass is off unless EVIE_REMOTE_MEMORY=on with OPENROUTER_API_KEY or EVIE_COMPILER_CONFIG enables it, and Automatic Recall also runs up to two exact-selector searches",
+      "changed": ["mem-due", "mem-extract", "mem-pass", "boot-memory", "boot-mem-background", "ctx-recall", "mem-recall", "mem-plan"]
+    },
     {
       "date": "2026-11-04",
       "summary": "Map created: Evie's System view drawn as flows, from the approved prototype"

@@ -889,9 +889,10 @@ that before approving.
 The system prompt states Evie's profile and Workspace memory duties. A
 `remember` call shows the approval card only when the owner explicitly asked;
 other proposals queue in a review inbox, and `memory_overview` returns the
-standing set with current profile and Workspace memories in one read. An
-always-on background pass reads the owner's messages after a conversation
-goes idle or every 20 owner messages, decides whether each candidate adds,
+standing set with current profile and Workspace memories in one read. A
+background pass, off unless `EVIE_REMOTE_MEMORY=on` or a local extractor is
+configured, reads the owner's messages after a conversation goes idle or
+every 20 owner messages, decides whether each candidate adds,
 updates or invalidates a memory, and queues every change for review; nothing
 applies without approval.
 

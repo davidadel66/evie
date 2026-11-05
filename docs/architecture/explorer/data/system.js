@@ -2203,9 +2203,10 @@ evieExplorer.register(
       "kind": "process",
       "title": "Background memory pass",
       "summary": {
-        "text": "The always-on background memory pass inside serve and the REPL: it reads owner messages and proposes memory changes for the owner to review.",
+        "text": "The background memory pass inside serve and the REPL, off unless EVIE_REMOTE_MEMORY=on with OPENROUTER_API_KEY, or EVIE_COMPILER_CONFIG naming a local extractor: it reads owner messages and proposes memory changes for the owner to review.",
         "refs": [
           "code:cmd/evie/memory_background.go#memoryBackgroundHost",
+          "code:internal/memorybackground/config.go#FromEnv",
           "doc:cmd/evie/docs/active/memory.spec.md#background-memory-pass"
         ]
       },

@@ -147,7 +147,7 @@ evieExplorer.register(
       "path": "internal/memorybackground",
       "name": "memorybackground",
       "command": false,
-      "doc": "Package memorybackground is the always-on background memory pass (docs/memory-architecture.md, Stage 4 and decision 4): after a root conversation goes idle, or every N new owner messages, it reads only the owner's new messages, extracts candidate memories, compares each with the most similar existing memories, and queues ADD / UPDATE / INVALIDATE proposals (Mem0's operations; NOOP queues nothing) in the owner's review inbox.",
+      "doc": "Package memorybackground is the background memory pass (docs/memory-architecture.md, Stage 4 and decision 4).",
       "testSupport": false
     },
     {
@@ -17794,7 +17794,7 @@ evieExplorer.register(
       ],
       "text": [
         "Writes down memory architecture research and a staged plan in `docs/memory-architecture.md`, then extends it with context-management and orchestration stages. Each accepted compaction now writes or advances its session's episode, which `memory.search_episodes` searches on demand. Approved standing memories reach every request by rule under a hard budget; every kind but plain facts is standing by default, and the owner can switch that before approving.",
-        "The system prompt states Evie's profile and Workspace memory duties. A `remember` call shows the approval card only when the owner explicitly asked; other proposals queue in a review inbox, and `memory_overview` returns the standing set with current profile and Workspace memories in one read. An always-on background pass reads the owner's messages after a conversation goes idle or every 20 owner messages, decides whether each candidate adds, updates or invalidates a memory, and queues every change for review; nothing applies without approval."
+        "The system prompt states Evie's profile and Workspace memory duties. A `remember` call shows the approval card only when the owner explicitly asked; other proposals queue in a review inbox, and `memory_overview` returns the standing set with current profile and Workspace memories in one read. A background pass, off unless `EVIE_REMOTE_MEMORY=on` or a local extractor is configured, reads the owner's messages after a conversation goes idle or every 20 owner messages, decides whether each candidate adds, updates or invalidates a memory, and queues every change for review; nothing applies without approval."
       ]
     },
     {
