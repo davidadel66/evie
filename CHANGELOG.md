@@ -8,6 +8,19 @@ editing this file, rebuild the System page
 (`python3 ~/.claude/skills/vision/scripts/vision.py build`), which embeds
 it, and run `go run ./scripts/explorer check`.
 
+## 2026-11-05 — Fonts bundled with Evie
+Branch: feat/self-hosted-fonts
+Touches: internal/web/ui
+Sources: doc:cmd/evie/docs/active/ui-chat.spec.md
+
+Evie's web UI no longer loads IBM Plex Sans, IBM Plex Mono and Caveat from
+Google Fonts on every visit: the font files now ship inside the app, so opening
+Evie makes no request to another host and the fonts work offline. They are the
+same Latin and Latin Extended files Google served, with their SIL Open Font
+Licence texts beside them; IBM Plex Sans and Caveat are variable fonts, so one
+file per character set covers every weight. A test fails if a stylesheet or
+font is ever loaded from another host again.
+
 ## 2026-11-05 — Architecture and History move into the System map
 Branch: feat/system-architecture
 Merge: 094f2a0
