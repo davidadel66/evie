@@ -35,7 +35,7 @@ evieExplorer.register(
       "path": "docs/architecture/explorer",
       "name": "explorer",
       "command": false,
-      "doc": "Package explorer carries the system explorer into the evie binary: the page, its viewer and stylesheet, its data, and its examples, exactly as they were when the binary was built (system-page.spec.md).",
+      "doc": "Package explorer carries the system explorer into the evie binary: the page, its viewer and stylesheet, its data, and its examples, exactly as they were when the binary was built (system-page.spec.md), and the system map page the vision skill builds from .vision/map.json.",
       "testSupport": false
     },
     {
