@@ -30,8 +30,15 @@ fact extractor and `facts.js` stay. The drift check now holds the map's
 architecture to the code the way it held the content files: every package
 needs a part, every part, edge and sequence reference must resolve, import
 edges and steps must be real imports, and every sequence step must cite
-code. Evie serves only the page, and `build.js` is gone, since the page
-shows no code links and History's GitHub links come from the map.
+code. It also keeps the explorer's content rules: every statement of a
+part and every edge but an import edge cites a source, ids are used once,
+and a sequence step joins two of its participants. A backed value is never
+matched where the skill would not match it, and a missing map no longer
+stops the check of the proposals and the page. Evie serves only the page,
+and `build.js` is gone, since the page shows no code links and History's
+GitHub links come from the map. The page's script hashes come from reading
+it as the browser does, and inside Evie's frame its own moves no longer
+fill Evie's back history.
 
 Design proposals are back as part of the vision skill: one file per feature
 in flight, `.vision/proposals/<slug>.json`, drawn over the Map and
