@@ -7838,18 +7838,32 @@ button.touch:hover {
   // and the steps it sits inside.
   var STEP_INFO = dict();
 
+  // FRAMED is whether the page runs inside another page's frame, as in a
+  // host's view of it. There every move replaces the address, so the page's
+  // own navigation never fills the host's back button; a frame that may not
+  // even compare its top window is framed.
+  var FRAMED = (function () {
+    try {
+      return global.top !== global;
+    } catch (e) {
+      return true;
+    }
+  })();
+
   function writeHash(raw, push) {
     var hash = formatHash(raw);
     app.lastHash = hash;
     if (location.hash === hash) return;
     var url = location.pathname + location.search + hash;
     try {
-      if (push) history.pushState(null, "", url);
+      if (push && !FRAMED) history.pushState(null, "", url);
       else history.replaceState(null, "", url);
     } catch (e) {
       // file:// pages in some browsers refuse history changes; the fragment
       // still works.
-      if (location.hash !== hash) location.hash = hash;
+      if (location.hash === hash) return;
+      if (FRAMED) location.replace(hash);
+      else location.hash = hash;
     }
   }
 
@@ -10891,8 +10905,13 @@ function rememberArch(){
   if (TAB === 'architecture') lastArchPlace = window.visionArch.address() || lastArchPlace;
   if (TAB === 'history') lastHistPlace = window.visionArch.address() || lastHistPlace;
 }
+// FRAMED is whether the page runs inside another page's frame, as in a host's view of it. There a move replaces the
+// address instead of adding a history entry, so the page's own navigation never fills the host's back button; a frame
+// that may not even compare its top window is framed.
+var FRAMED = (function(){ try { return window.top !== window; } catch (err) { return true; } })();
 function navigate(hash){
-  try { history.pushState(null, '', hash); } catch (err) { try { location.hash = hash; return; } catch (err2) { /* nowhere to keep it */ } }
+  try { if (FRAMED) history.replaceState(null, '', hash); else history.pushState(null, '', hash); }
+  catch (err) { try { if (FRAMED) location.replace(hash); else location.hash = hash; return; } catch (err2) { /* nowhere to keep it */ } }
   route();
 }
 function archRaw(){
