@@ -108,12 +108,23 @@ type checkCase struct {
 	want   []string
 }
 
+// runCheckCases runs check cases on the consistent fixture.
 func runCheckCases(t *testing.T, cases []checkCase) {
+	t.Helper()
+	runCheckCasesOn(t, func(t *testing.T) string {
+		root := newFixture(t)
+		extractFixture(t, root)
+		return root
+	}, cases)
+}
+
+// runCheckCasesOn runs each case on a fresh repository from newRoot, which
+// check passes, and wants check to fail with every one of the case's texts.
+func runCheckCasesOn(t *testing.T, newRoot func(*testing.T) string, cases []checkCase) {
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := newFixture(t)
-			extractFixture(t, root)
+			root := newRoot(t)
 			tc.break_(t, root)
 			code, out := checkFixture(t, root)
 			if code != 1 {

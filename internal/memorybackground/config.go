@@ -1,10 +1,12 @@
-// Package memorybackground is the always-on background memory pass
-// (docs/memory-architecture.md, Stage 4 and decision 4): after a root
-// conversation goes idle, or every N new owner messages, it reads only the
-// owner's new messages, extracts candidate memories, compares each with the
-// most similar existing memories, and queues ADD / UPDATE / INVALIDATE
-// proposals (Mem0's operations; NOOP queues nothing) in the owner's review
-// inbox. It never applies memory.
+// Package memorybackground is the background memory pass
+// (docs/memory-architecture.md, Stage 4 and decision 4). It is off unless
+// FromEnv enables it: through OpenRouter with EVIE_REMOTE_MEMORY=on and
+// OPENROUTER_API_KEY, or locally with EVIE_COMPILER_CONFIG. Once enabled,
+// after a root conversation goes idle, or every N new owner messages, it
+// reads only the owner's new messages, extracts candidate memories, compares
+// each with the most similar existing memories, and queues ADD / UPDATE /
+// INVALIDATE proposals (Mem0's operations; NOOP queues nothing) in the
+// owner's review inbox. It never applies memory.
 package memorybackground
 
 import (

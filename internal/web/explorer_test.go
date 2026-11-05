@@ -1,10 +1,13 @@
 package web
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -44,6 +47,7 @@ func TestExplorerServesTheSnapshotByteForByte(t *testing.T) {
 		{"/explorer/data/manifest.js", "data/manifest.js", "text/javascript; charset=utf-8"},
 		{"/explorer/data/facts.js", "data/facts.js", "text/javascript; charset=utf-8"},
 		{"/explorer/examples/design-proposal.js", "examples/design-proposal.js", "text/javascript; charset=utf-8"},
+		{"/explorer/system.html", "system.html", "text/html; charset=utf-8"},
 	}
 	for _, c := range cases {
 		rec := explorerGet(t, h, http.MethodGet, c.target)
@@ -76,7 +80,7 @@ func TestExplorerBareAddressRedirectsToTheDirectory(t *testing.T) {
 
 func TestExplorerAnswersGetAndHeadOnly(t *testing.T) {
 	h := newTestServer(&fakeClient{})
-	for _, target := range []string{"/explorer", "/explorer/", "/explorer/explorer.js", "/explorer/build.js", "/explorer/nope.js"} {
+	for _, target := range []string{"/explorer", "/explorer/", "/explorer/explorer.js", "/explorer/build.js", "/explorer/system.html", "/explorer/nope.js"} {
 		for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions} {
 			rec := explorerGet(t, h, method, target)
 			if rec.Code != http.StatusMethodNotAllowed {
@@ -209,6 +213,117 @@ func TestExplorerBuildScriptNamesTheRepositoryCommitAndModifiedFlag(t *testing.T
 		}
 		if got := rec.Body.String(); got != c.want {
 			t.Errorf("%s: build.js =\n%s\nwant\n%s", c.name, got, c.want)
+		}
+	}
+}
+
+// policyDirectives splits a content-security policy into its directives by
+// name.
+func policyDirectives(policy string) map[string]string {
+	directives := map[string]string{}
+	for _, d := range strings.Split(policy, ";") {
+		name, value, _ := strings.Cut(strings.TrimSpace(d), " ")
+		directives[name] = value
+	}
+	return directives
+}
+
+func TestSystemMapPageRunsOnlyItsOwnInlineScripts(t *testing.T) {
+	// The vision page is one file with inline scripts and styles, so it gets
+	// its own policy: its scripts by hash, never any other inline script.
+	h := newTestServer(&fakeClient{})
+	rec := explorerGet(t, h, http.MethodGet, "/explorer/system.html?theme=dark")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /explorer/system.html: status = %d, want 200", rec.Code)
+	}
+	policy := policyDirectives(rec.Header().Get("Content-Security-Policy"))
+	page := explorerFile(t, "system.html")
+	var want []string
+	for _, m := range regexp.MustCompile(`(?s)<script>(.*?)</script>`).FindAllStringSubmatch(page, -1) {
+		sum := sha256.Sum256([]byte(m[1]))
+		want = append(want, "'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'")
+	}
+	if len(want) == 0 {
+		t.Fatal("system.html has no inline script; was it built from the vision template?")
+	}
+	if got := policy["script-src"]; got != strings.Join(want, " ") {
+		t.Errorf("script-src = %q, want the page's inline scripts by hash, %q", got, strings.Join(want, " "))
+	}
+	want = []string{
+		"sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox",
+		"default-src", "'none'",
+		"style-src", "'unsafe-inline'",
+		"img-src", "'self' data:",
+		"base-uri", "'none'",
+		"form-action", "'none'",
+		"frame-ancestors", "'self'",
+	}
+	for i := 0; i < len(want); i += 2 {
+		if got := policy[want[i]]; got != want[i+1] {
+			t.Errorf("%s = %q, want %q", want[i], got, want[i+1])
+		}
+	}
+	// default-src 'none' covers fonts and connections: the page reaches no
+	// host but Evie, so no directive may name one.
+	for _, name := range []string{"connect-src", "font-src", "frame-src"} {
+		if _, ok := policy[name]; ok {
+			t.Errorf("the map page may load %s: %q", name, rec.Header().Get("Content-Security-Policy"))
+		}
+	}
+	if header := rec.Header().Get("Content-Security-Policy"); strings.Contains(header, "http") {
+		t.Errorf("the map page's policy names another host: %q", header)
+	}
+	// The page Evie embeds asks for no web fonts, so the policy blocks nothing
+	// it loads.
+	for _, host := range []string{"fonts.googleapis.com", "fonts.gstatic.com"} {
+		if strings.Contains(page, host) {
+			t.Errorf("system.html loads from %s; build it to meta.page so it uses the system fonts", host)
+		}
+	}
+	for name, value := range map[string]string{"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "Cache-Control": "no-store"} {
+		if got := rec.Header().Get(name); got != value {
+			t.Errorf("%s = %q, want %q", name, got, value)
+		}
+	}
+}
+
+func TestSystemMapPolicyHashesOnlyScriptsTheBrowserRuns(t *testing.T) {
+	page := []byte("<title>x</title><script>run()</script>\n" +
+		`<script type="application/json" id="vision-data">{"a":1}</script>` +
+		`<script src="x.js"></script><script type="module">mod()</script><SCRIPT data-type="x">upper()</SCRIPT>`)
+	hash := func(s string) string {
+		sum := sha256.Sum256([]byte(s))
+		return "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+	}
+	want := strings.Join([]string{hash("run()"), hash("mod()"), hash("upper()")}, " ")
+	if got := policyDirectives(systemMapPolicy(page))["script-src"]; got != want {
+		t.Errorf("script-src = %q, want %q", got, want)
+	}
+	// The browser runs every JavaScript type, read by its essence (case and
+	// parameters aside), and any type it does not know as data: only data
+	// blocks go unhashed.
+	page = []byte(`<script type="text/ecmascript">ecma()</script>` +
+		`<script type="text/javascript;charset=utf-8">params()</script>` +
+		`<script type='TEXT/JavaScript; charset="utf-8"'>quoted()</script>` +
+		`<script type="">empty()</script>` +
+		`<script type="Application/JSON">{"a":1}</script>` +
+		`<script type="application/json; charset=utf-8">{"b":2}</script>` +
+		`<script type="application/ld+json">{"@type":"x"}</script>`)
+	want = strings.Join([]string{hash("ecma()"), hash("params()"), hash("quoted()"), hash("empty()")}, " ")
+	if got := policyDirectives(systemMapPolicy(page))["script-src"]; got != want {
+		t.Errorf("script-src = %q, want %q", got, want)
+	}
+	if got := policyDirectives(systemMapPolicy(nil))["script-src"]; got != "'none'" {
+		t.Errorf("with no page, script-src = %q, want 'none'", got)
+	}
+}
+
+func TestExplorerFilesOtherThanTheMapKeepTheExplorerPolicy(t *testing.T) {
+	h := newTestServer(&fakeClient{})
+	for _, target := range []string{"/explorer/", "/explorer/index.html", "/explorer/data/facts.js", "/explorer/system.html/x"} {
+		rec := explorerGet(t, h, http.MethodGet, target)
+		if got := rec.Header().Get("Content-Security-Policy"); got != wantExplorerPolicy {
+			t.Errorf("GET %s: policy %q, want %q", target, got, wantExplorerPolicy)
 		}
 	}
 }

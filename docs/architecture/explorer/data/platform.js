@@ -953,7 +953,7 @@ evieExplorer.register(
       "group": "infrastructure",
       "subgroup": "Surfaces",
       "summary": {
-        "text": "The explorer snapshot: a tiny package beside the system explorer's files that builds the page, its viewer and stylesheet, its data and its examples into the evie binary, so the System view shows the explorer of the build that is running.",
+        "text": "The explorer snapshot: a tiny package beside the system explorer's files that builds the page, its viewer and stylesheet, its data, its examples and the system map page into the evie binary, so the System view shows the map and explorer of the build that is running.",
         "refs": [
           "code:docs/architecture/explorer/snapshot.go#Files",
           "doc:cmd/evie/docs/active/system-page.spec.md#modules"
@@ -961,7 +961,7 @@ evieExplorer.register(
       },
       "does": [
         {
-          "text": "Files returns the snapshot rooted at the explorer directory: index.html, explorer.js, explorer.css, data/ and examples/, fixed when the binary is built.",
+          "text": "Files returns the snapshot rooted at the explorer directory: index.html, explorer.js, explorer.css, data/, examples/ and system.html, the map page the vision skill builds from .vision/map.json, fixed when the binary is built.",
           "refs": [
             "code:docs/architecture/explorer/snapshot.go#Files",
             "code:docs/architecture/explorer/snapshot.go#files"
@@ -973,6 +973,13 @@ evieExplorer.register(
             "route:/explorer/",
             "code:internal/web/explorer.go#Server.registerExplorerRoutes",
             "code:internal/web/explorer.go#readExplorerBuild"
+          ]
+        },
+        {
+          "text": "The map page gets its own content-security policy: its inline scripts allowed by their hashes, taken once from the snapshot, and inline styles, still reaching no host but Evie; every other file keeps the explorer's policy.",
+          "refs": [
+            "code:internal/web/explorer.go#systemMapPolicy",
+            "code:internal/web/explorer.go#inlineScripts"
           ]
         }
       ],

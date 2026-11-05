@@ -35,7 +35,7 @@ evieExplorer.register(
       "path": "docs/architecture/explorer",
       "name": "explorer",
       "command": false,
-      "doc": "Package explorer carries the system explorer into the evie binary: the page, its viewer and stylesheet, its data, and its examples, exactly as they were when the binary was built (system-page.spec.md).",
+      "doc": "Package explorer carries the system explorer into the evie binary: the page, its viewer and stylesheet, its data, and its examples, exactly as they were when the binary was built (system-page.spec.md), and the system map page the vision skill builds from .vision/map.json.",
       "testSupport": false
     },
     {
@@ -147,7 +147,7 @@ evieExplorer.register(
       "path": "internal/memorybackground",
       "name": "memorybackground",
       "command": false,
-      "doc": "Package memorybackground is the always-on background memory pass (docs/memory-architecture.md, Stage 4 and decision 4): after a root conversation goes idle, or every N new owner messages, it reads only the owner's new messages, extracts candidate memories, compares each with the most similar existing memories, and queues ADD / UPDATE / INVALIDATE proposals (Mem0's operations; NOOP queues nothing) in the owner's review inbox.",
+      "doc": "Package memorybackground is the background memory pass (docs/memory-architecture.md, Stage 4 and decision 4).",
       "testSupport": false
     },
     {
@@ -16610,6 +16610,28 @@ evieExplorer.register(
   ],
   "history": [
     {
+      "date": "2026-11-04",
+      "title": "The System view opens on a map of Evie's flows",
+      "branch": "feat/system-map",
+      "touches": [
+        ".vision",
+        "docs/architecture/explorer",
+        "internal/web",
+        "internal/web/ui",
+        "internal/memorybackground",
+        "scripts/explorer",
+        "AGENTS.md"
+      ],
+      "sources": [
+        "doc:cmd/evie/docs/active/system-page.decisions.md",
+        "doc:cmd/evie/docs/active/system-page.spec.md"
+      ],
+      "text": [
+        "The explorer shows Evie as components, which says where code lives but not what happens when David sends a message. David approved a prototype that draws Evie the vision way instead, and the System view now opens on it: a subway map whose lines are one chat turn and the flows it starts (Memory, Workflows, Subagents, Changes & merge, MCP sign-in, Serve startup), each station opening into the steps inside it. It is always dark inside Evie and shows no code. History and Where is it? sit beside it as tabs, opening the explorer on its History and on its components in one shared frame, so switching between them does not reload it.",
+        "The map lives in `.vision/map.json` and points every step at its code and every route, table, package and command chip at the extracted facts. The vision skill builds it into `docs/architecture/explorer/system.html`, which is committed and built into the binary like the facts. The skill lives outside the repository, so the drift check now also fails when a reference in the map no longer resolves, when a fact chip no longer says what its reference points at (matched as the skill's check matches it), or when the page was not rebuilt after the map changed, comparing the page's map hash with one computed the skill's way. It reads only the forms Evie's map uses and refuses the skill's others. Drawing the map also corrected two claims elsewhere: the background memory pass is off unless `EVIE_REMOTE_MEMORY=on` or a local extractor enables it, and Automatic Recall can run two more searches for exact selectors such as `task-12`."
+      ]
+    },
+    {
       "date": "2026-11-03",
       "title": "Skills: owner-approved procedures Evie loads on demand",
       "branch": "feat/skills",
@@ -17773,7 +17795,7 @@ evieExplorer.register(
       ],
       "text": [
         "Writes down memory architecture research and a staged plan in `docs/memory-architecture.md`, then extends it with context-management and orchestration stages. Each accepted compaction now writes or advances its session's episode, which `memory.search_episodes` searches on demand. Approved standing memories reach every request by rule under a hard budget; every kind but plain facts is standing by default, and the owner can switch that before approving.",
-        "The system prompt states Evie's profile and Workspace memory duties. A `remember` call shows the approval card only when the owner explicitly asked; other proposals queue in a review inbox, and `memory_overview` returns the standing set with current profile and Workspace memories in one read. An always-on background pass reads the owner's messages after a conversation goes idle or every 20 owner messages, decides whether each candidate adds, updates or invalidates a memory, and queues every change for review; nothing applies without approval."
+        "The system prompt states Evie's profile and Workspace memory duties. A `remember` call shows the approval card only when the owner explicitly asked; other proposals queue in a review inbox, and `memory_overview` returns the standing set with current profile and Workspace memories in one read. A background pass, off unless `EVIE_REMOTE_MEMORY=on` or a local extractor is configured, reads the owner's messages after a conversation goes idle or every 20 owner messages, decides whether each candidate adds, updates or invalidates a memory, and queues every change for review; nothing applies without approval."
       ]
     },
     {

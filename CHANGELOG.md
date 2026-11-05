@@ -7,6 +7,35 @@ The entry format, the check's rules, and how to add an entry are in the
 editing this file, run `go run ./scripts/explorer extract` and
 `go run ./scripts/explorer check`.
 
+## 2026-11-04 — The System view opens on a map of Evie's flows
+Branch: feat/system-map
+Touches: .vision, docs/architecture/explorer, internal/web, internal/web/ui, internal/memorybackground, scripts/explorer, AGENTS.md
+Sources: doc:cmd/evie/docs/active/system-page.decisions.md, doc:cmd/evie/docs/active/system-page.spec.md
+
+The explorer shows Evie as components, which says where code lives but not
+what happens when David sends a message. David approved a prototype that
+draws Evie the vision way instead, and the System view now opens on it: a
+subway map whose lines are one chat turn and the flows it starts (Memory,
+Workflows, Subagents, Changes & merge, MCP sign-in, Serve startup), each
+station opening into the steps inside it. It is always dark inside Evie and
+shows no code. History and Where is it? sit beside it as tabs, opening the
+explorer on its History and on its components in one shared frame, so
+switching between them does not reload it.
+
+The map lives in `.vision/map.json` and points every step at its code and
+every route, table, package and command chip at the extracted facts. The
+vision skill builds it into `docs/architecture/explorer/system.html`, which
+is committed and built into the binary like the facts. The skill lives
+outside the repository, so the drift check now also fails when a reference
+in the map no longer resolves, when a fact chip no longer says what its
+reference points at (matched as the skill's check matches it), or when the
+page was not rebuilt after the map changed, comparing the page's map hash
+with one computed the skill's way. It reads only the forms Evie's map uses
+and refuses the skill's others. Drawing the map also corrected two claims
+elsewhere: the background memory pass is off unless `EVIE_REMOTE_MEMORY=on`
+or a local extractor enables it, and Automatic Recall can run two more
+searches for exact selectors such as `task-12`.
+
 ## 2026-11-03 — Skills: owner-approved procedures Evie loads on demand
 Branch: feat/skills
 Merge: e07bb02
@@ -866,9 +895,10 @@ that before approving.
 The system prompt states Evie's profile and Workspace memory duties. A
 `remember` call shows the approval card only when the owner explicitly asked;
 other proposals queue in a review inbox, and `memory_overview` returns the
-standing set with current profile and Workspace memories in one read. An
-always-on background pass reads the owner's messages after a conversation
-goes idle or every 20 owner messages, decides whether each candidate adds,
+standing set with current profile and Workspace memories in one read. A
+background pass, off unless `EVIE_REMOTE_MEMORY=on` or a local extractor is
+configured, reads the owner's messages after a conversation goes idle or
+every 20 owner messages, decides whether each candidate adds,
 updates or invalidates a memory, and queues every change for review; nothing
 applies without approval.
 

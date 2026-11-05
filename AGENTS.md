@@ -121,6 +121,14 @@ needs a component node with a cited summary. Repair everything else it
 reports by following
 [`docs/architecture/explorer/README.md`](docs/architecture/explorer/README.md).
 
+The drift check also guards the system map, `.vision/map.json`: it fails when
+a code reference or fact chip in the map no longer resolves, or when the
+committed page, `docs/architecture/explorer/system.html`, was not rebuilt
+after the map changed. Rebuild the page with the vision skill
+(`python3 ~/.claude/skills/vision/scripts/vision.py build`) and commit it with
+the map. `/flow` updates the map, `CHANGELOG.md`, and the facts after each
+piece of work.
+
 For documentation-only changes, `git diff --check` and `go run
 ./scripts/explorer check` are sufficient locally, since glossary, ADR, and
 heading edits can drift the explorer; CI still runs the full required check.
