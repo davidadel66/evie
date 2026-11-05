@@ -88,7 +88,7 @@ func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 	if err != nil {
 		return nil, err
 	}
-	fresh, err := wrap(registerOpen, facts)
+	fresh, err := factsFile(facts)
 	if err != nil {
 		return nil, err
 	}
@@ -96,8 +96,9 @@ func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 	current, factsErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(factsPath)))
 	switch {
 	case factsErr == nil && bytes.Equal(current, fresh):
-	case factsErr == nil && hasCRLF(current) && bytes.Equal(bytes.ReplaceAll(current, []byte("\r\n"), []byte("\n")), fresh):
-		c.lineEndings(factsPath, current)
+	case factsErr == nil && bytes.Contains(current, []byte("\r\n")) && bytes.Equal(bytes.ReplaceAll(current, []byte("\r\n"), []byte("\n")), fresh):
+		c.add(factsPath, "file", "the file has CRLF line endings",
+			"convert it to LF line endings; the repository's .gitattributes checks the explorer's files out with LF")
 	default:
 		c.add(factsPath, "facts", "the facts differ from a fresh extraction of the code",
 			"run "+extractCommand+" and commit the result")

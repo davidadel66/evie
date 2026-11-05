@@ -131,7 +131,7 @@ func renderFacts(root string, databases []databaseSource) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return wrap(registerOpen, facts)
+	return factsFile(facts)
 }
 
 // extractFacts reads the facts from the repository at root, creating its
