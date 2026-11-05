@@ -328,9 +328,8 @@ func (c *checker) visionPageHash(vm *loadedMap, inputs pageInputs) {
 			return
 		}
 	}
-	html, err := os.ReadFile(c.path(visionPagePath))
-	if err != nil {
-		c.add(visionPagePath, "page", "the built page does not exist", visionRebuild)
+	html, ok := c.readPage()
+	if !ok {
 		return
 	}
 	switch got := pageHashMeta.FindSubmatch(html); {
@@ -341,6 +340,25 @@ func (c *checker) visionPageHash(vm *loadedMap, inputs pageInputs) {
 		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older map: it carries %s, and %s hashes to %s", got[1], visionMapPath, want), visionRebuild)
 	}
 	c.visionInputsHash(html, vm, inputs)
+}
+
+// readPage reads the built page, or reports why it cannot: there is none,
+// a folder is in its place, or the file cannot be read.
+func (c *checker) readPage() ([]byte, bool) {
+	page := c.path(visionPagePath)
+	html, err := os.ReadFile(page)
+	if err == nil {
+		return html, true
+	}
+	switch info, statErr := os.Stat(page); {
+	case errors.Is(err, fs.ErrNotExist):
+		c.add(visionPagePath, "page", "the built page does not exist", visionRebuild)
+	case statErr == nil && info.IsDir():
+		c.add(visionPagePath, "page", "a folder is where the built page belongs", "remove the folder, then "+visionRebuild)
+	default:
+		c.add(visionPagePath, "page", "the built page cannot be read: "+err.Error(), "make the file readable, or remove it and "+visionRebuild)
+	}
+	return nil, false
 }
 
 // visionInputsHash checks that the page was built from the facts file and

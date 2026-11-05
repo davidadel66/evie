@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -582,6 +583,36 @@ func TestCheckReportsASystemMapPageNotBuiltFromTheMap(t *testing.T) {
 				}
 			},
 			want: []string{visionPagePath + ": page", "does not exist", "rebuild with the vision skill"},
+		},
+		{
+			name: "a folder is where the page belongs",
+			break_: func(t *testing.T, root string) {
+				page := filepath.Join(root, filepath.FromSlash(visionPagePath))
+				if err := os.Remove(page); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Mkdir(page, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: []string{visionPagePath + ": page: a folder is where the built page belongs", "remove the folder, then rebuild with the vision skill", "1 problem(s)"},
+		},
+		{
+			// A link to itself cannot be read, whoever runs the check.
+			name: "the page cannot be read",
+			break_: func(t *testing.T, root string) {
+				if runtime.GOOS == "windows" {
+					t.Skip("making a symbolic link needs a privilege on Windows")
+				}
+				page := filepath.Join(root, filepath.FromSlash(visionPagePath))
+				if err := os.Remove(page); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Base(page), page); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: []string{visionPagePath + ": page: the built page cannot be read:", "make the file readable", "1 problem(s)"},
 		},
 		{
 			// The map holds every package's part, and the binary embeds the
