@@ -3909,7 +3909,7 @@
                   "level": "info"
                 },
                 {
-                  "text": "Comments and the spec say less than the code: Server.Handler's comment says every /api route sits behind the guard and serve.spec.md requires JSON on every /api handler, yet this callback takes plain GET and three other routes are unguarded."
+                  "text": "Comments and the spec say less than the code: Server.Handler's comment says every /api route sits behind the guard and serve.spec.md requires JSON on every /api handler, yet this callback takes plain GET and five other routes are unguarded."
                 }
               ]
             },
@@ -6479,6 +6479,11 @@
   "history": [
     {
       "date": "2026-11-05",
+      "summary": "Corrected the route guards and request limits: six routes sit outside the guard, /explorer and /explorer/ among them, and candidate review's body limits differ by endpoint",
+      "changed": ["mcp-callback"]
+    },
+    {
+      "date": "2026-11-05",
       "summary": "Added the Architecture and History tabs: the explorer's components, containers, sequence flows and diagrams moved into the map as parts, edges and sequences, and History reads CHANGELOG.md; the explorer viewer retired, so the snapshot holds only this page"
     },
     {
@@ -7069,8 +7074,8 @@
       ],
       "interfaces": [
         {
-          "text": "Loopback HTTP: `/api` JSON routes, most of them POST-only management routes behind the same guard, and the static app for every other path.",
-          "refs": ["code:internal/web/serve.go#Server.managementRoute", "code:internal/web/serve.go#Server.guard", "code:internal/web/static.go#Server.staticHandler"]
+          "text": "Loopback HTTP: `/api` JSON routes, most of them POST-only management routes behind the same guard; outside it, the System page under `/explorer/` and each Workspace tab's sealed pages under `/workspace-tabs/`; and the static app for every other path.",
+          "refs": ["code:internal/web/serve.go#Server.managementRoute", "code:internal/web/serve.go#Server.guard", "code:internal/web/static.go#Server.staticHandler", "route:/explorer/", "route:GET /workspace-tabs/{workspace}/{tab}/{path...}"]
         },
         {
           "text": "The OAuth callback for MCP sign-ins at `/api/connections/oauth/callback` on serve's own address.",
@@ -12687,8 +12692,8 @@
       },
       "does": [
         {
-          "text": "Route table and guards: POST /api/chat and POST /api/approve sit behind guard; /, the OAuth callback and the two GET /workspace-tabs routes have no wrapper; every other route sits behind managementRoute (guard plus POST-only).",
-          "refs": ["code:internal/web/serve.go#Server.Handler", "route:POST /api/chat", "route:POST /api/approve", "route:/", "route:/api/connections/oauth/callback"]
+          "text": "Route table and guards: POST /api/chat and POST /api/approve sit behind guard; six routes have no wrapper: /, the OAuth callback, the two GET /workspace-tabs routes, and /explorer and /explorer/, the System page, served outside the API guard by decision; every other route sits behind managementRoute (guard plus POST-only).",
+          "refs": ["code:internal/web/serve.go#Server.Handler", "route:POST /api/chat", "route:POST /api/approve", "route:/", "route:/api/connections/oauth/callback", "route:GET /workspace-tabs/{workspace}/{tab}", "route:GET /workspace-tabs/{workspace}/{tab}/{path...}", "route:/explorer", "route:/explorer/", "code:internal/web/explorer.go#Server.registerExplorerRoutes"]
         },
         {
           "text": "guard admits a request only when its Content-Type is exactly application/json, its Origin (if any) names a loopback host and its Host is loopback, answering 403 otherwise; managementRoute answers 405 with Allow: POST to any other method before guard runs.",
@@ -12765,8 +12770,8 @@
           "refs": ["code:internal/web/static.go#distFS", "code:internal/web/workspace_tabs.go#tabHelper", "code:internal/web/workspace_tabs.go#tabPrelude"]
         },
         {
-          "text": "Request limits: management bodies are one JSON value of at most 4 KiB with unknown fields refused, unless a route sets its own limit, such as candidate review (8 KiB) and tab requests (32 KiB).",
-          "refs": ["code:internal/web/management.go#maxManagementBodyBytes", "code:internal/web/management.go#decodeManagementJSONUpTo", "code:internal/web/candidate_review.go#decodeCandidateRequest", "code:internal/web/workspace_tabs.go#maxTabRequestBytes"]
+          "text": "Request limits: a management body is one JSON value of at most 4 KiB with unknown fields refused, unless its route sets its own limit. Candidate review takes 8 KiB, except resolve and batch/resolve (32 KiB), batch/prepare (64 KiB) and edit (264 KiB); the compiler diagnostics, proposal inbox and background status routes decode as candidate review does, at 8 KiB; and a Workspace tab's approve and data requests take 32 KiB.",
+          "refs": ["code:internal/web/management.go#maxManagementBodyBytes", "code:internal/web/management.go#decodeManagementJSONUpTo", "code:internal/web/candidate_review.go#decodeCandidateRequest", "code:internal/web/candidate_review.go#Server.handleCandidateResolve", "code:internal/web/candidate_review_advanced.go#Server.registerAdvancedCandidateReviewRoutes", "code:internal/web/compiler_diagnostics.go#compilerDiagnosticRoute", "code:internal/web/memory_proposals.go", "code:internal/web/memory_background.go", "code:internal/web/workspace_tabs.go#maxTabRequestBytes", "code:internal/web/workspace_tabs.go#Server.registerWorkspaceTabDataRoutes"]
         }
       ],
       "interfaces": [
@@ -12809,8 +12814,8 @@
           "refs": ["route:GET /workspace-tabs/{workspace}/{tab}/{path...}", "code:internal/web/workspace_tabs.go#tabOrigin", "code:internal/web/workspace_tabs.go#tabContentSecurityPolicy", "code:internal/web/workspace_tabs.go#sealTabResponse", "code:internal/workspacetabs/tabs.go#Open", "doc:cmd/evie/docs/active/workspace-tabs.spec.md#known-residual-risk"]
         },
         {
-          "text": "Comments and the spec say less than the code: Handler's comment says every /api route sits behind the guard and connections.go calls the callback the one unguarded route, and serve.spec.md requires JSON on every /api handler, yet the callback takes plain GET and three other routes are unguarded; the code is what runs.",
-          "refs": ["code:internal/web/serve.go#Server.Handler", "code:internal/web/connections.go#Server.registerConnectionRoutes", "doc:cmd/evie/docs/active/serve.spec.md#part-2--the-server"]
+          "text": "Comments and the spec say less than the code: Handler's comment says every /api route sits behind the guard and connections.go calls the callback the one unguarded route, and serve.spec.md requires JSON on every /api handler, yet the callback takes plain GET and five other routes are unguarded (/, the two GET /workspace-tabs routes, /explorer and /explorer/); the code is what runs.",
+          "refs": ["code:internal/web/serve.go#Server.Handler", "code:internal/web/connections.go#Server.registerConnectionRoutes", "doc:cmd/evie/docs/active/serve.spec.md#part-2--the-server", "route:/", "route:/explorer", "route:/explorer/"]
         },
         {
           "text": "guard is a cross-site defence, not authentication: any local process that sends JSON with a loopback Host passes it (the CLI's connection commands rely on that), and /api/chats/follow replays a running turn's approval_request events, ids included, to any such caller, so the id is no secret from local software.",
