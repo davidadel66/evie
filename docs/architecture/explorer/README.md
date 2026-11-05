@@ -4,8 +4,9 @@ The explorer page shows what Evie does: every package under `cmd/` and
 `internal/` as a component, grouped under the architecture map in
 `AGENTS.md`, with written content on top of facts extracted from the code.
 Open [`index.html`](index.html) straight from disk; it needs no server, build,
-or network. `evie serve` also carries it, built into the binary, as the
-System view in Evie's sidebar. Specifications:
+or network. `evie serve` also carries it, built into the binary, behind the
+System view in Evie's sidebar, which opens on the [system map](#system-map).
+Specifications:
 [`system-explorer.spec.md`](../../../cmd/evie/docs/active/system-explorer.spec.md)
 and [`system-page.spec.md`](../../../cmd/evie/docs/active/system-page.spec.md).
 
@@ -18,7 +19,8 @@ repository's [`CHANGELOG.md`](../../../CHANGELOG.md) (see [History](#history)).
 | Path | What it is |
 | --- | --- |
 | `index.html`, `explorer.js`, `explorer.css` | The page, its one classic-script viewer, and its stylesheet. No modules, no build, no third-party code. |
-| `snapshot.go` | Package `explorer`: embeds the page, viewer, stylesheet, `data/`, and `examples/` (not the tests or this README) so `evie serve` can serve them under `/explorer/`. |
+| `snapshot.go` | Package `explorer`: embeds the page, viewer, stylesheet, `data/`, `examples/`, and `system.html` (not the tests or this README) so `evie serve` can serve them under `/explorer/`. |
+| `system.html` | The [system map](#system-map) page, built by the vision skill from `.vision/map.json`. Never edit by hand; rebuild it. |
 | `data/manifest.js` | The ordered list of data files the page loads. |
 | `data/facts.js` | Generated facts, History included. Never edit by hand; run `extract`. |
 | `data/<owner>.js` | Written content, one file per subsystem owner (below). |
@@ -62,7 +64,8 @@ go run ./scripts/explorer check
 
 Re-extracts the facts in memory, compares them byte for byte with
 `data/facts.js`, then validates every manifest-listed data file, every
-example, and `CHANGELOG.md` against them. It prints every problem, one per line, as
+example, `CHANGELOG.md`, and the [system map](#system-map) (when
+`.vision/map.json` exists) against them. It prints every problem, one per line, as
 
 ```text
 <data file>: <item>: <what is wrong>. Fix: <how to fix it>.
@@ -365,7 +368,9 @@ serve`](#served-by-evie-serve)).
 - duplicate node, flow, diagram, or design proposal ids, and component nodes
   without a group;
 - every `CHANGELOG.md` problem listed under [History](#history), naming the
-  entry by its heading.
+  entry by its heading;
+- when `.vision/map.json` exists, every system map problem listed under
+  [System map](#system-map).
 
 The check proves a source exists, not that a sentence is true. Re-read every
 source you cite.
@@ -449,18 +454,83 @@ repository, served links open the public repository,
 master; only a page opened from disk links into the checkout. From disk,
 History's GitHub links open the public repository too.
 
-Evie's System view frames `/explorer/?embedded=1`; the embedded flag hides
-the brand and keeps the dark colours whatever the system preference
-(each colour token holds both values in `light-dark()`). The frame is sandboxed
-without same-origin access, and the page's content-security policy sandboxes
-it the same way when opened on its own.
+Evie's System view has three tabs, each a frame: Map frames
+`/explorer/system.html?theme=dark#subway` ([System map](#system-map)), History
+frames `/explorer/?embedded=1#view=history`, and Where is it? frames
+`/explorer/?embedded=1#view=components`. The embedded flag hides the brand
+and keeps the dark colours whatever the system preference (each colour token
+holds both values in `light-dark()`). Every frame is sandboxed without
+same-origin access, and each page's content-security policy sandboxes it the
+same way when opened on its own. The map page's policy differs from the
+explorer's in what a vision page needs: its inline scripts by their hashes,
+inline styles, and the Geist web font from Google Fonts.
+
+## System map
+
+The System view opens on a map of what Evie does, drawn as flows: one chat
+turn left to right, and the concept flows it starts (Memory, Workflows,
+Subagents, Changes & merge, MCP sign-in, Serve startup) as lines of a subway
+map. The vision skill (`~/.claude/skills/vision`) draws it; decisions:
+[`system-page.decisions.md`](../../../cmd/evie/docs/active/system-page.decisions.md).
+
+- **The map** is [`.vision/map.json`](../../../.vision/map.json). Its steps
+  point at the code they describe (`code` entries and `code:` and `doc:`
+  references), and its fact chips cite `data/facts.js` with `route:`,
+  `table:`, `pkg:`, and `command:` references. The page shows none of the
+  code.
+- **The page** is [`system.html`](system.html), built from the map and
+  committed, so `evie serve` embeds it like `facts.js`. Rebuild it after every
+  change to the map, from the repository root, and commit the two together:
+
+  ```sh
+  python3 ~/.claude/skills/vision/scripts/vision.py build
+  ```
+
+  `build` runs the skill's own check first (every highlight and backed value
+  against the code) and writes the map's hash into the page. `/flow` updates
+  the map through the skill after each piece of work.
+
+CI cannot run the skill, which lives outside the repository, so `check` holds
+the map to the code itself when `.vision/map.json` exists. It reports, naming
+the step, code entry, or setting and how to fix it:
+
+- a code entry whose file is gone, or whose `symbol` the file no longer
+  declares: a Go declaration as `Name` or `Type.Method` (fields and interface
+  methods too), or a JavaScript or TypeScript function, class, interface,
+  type, enum, or variable; `lines` outside the file, a `cell` that is not a
+  notebook code cell, and an inline entry with no `src`;
+- a step's `code.key` that is not in the map's `code` or `refs`;
+- a reference on a step, a fact chip, a flag, a value panel, or a `kv` row
+  that does not resolve: `code:` and `doc:` by the [reference
+  forms](#reference-forms) (with TypeScript and JavaScript declarations as
+  well as Go), `pkg:`, `route:`, `table:`, `command:`, `adr:`, and `term:`
+  against the facts, and bare keys against the map's `code` and `refs`; the
+  skill's notebook and text-source kinds (`sec:`, `undef:` and the rest) are
+  refused, since Evie's map has no such sources;
+- a step's `files` path that does not exist;
+- `meta.facts` other than `docs/architecture/explorer/data/facts.js`, or
+  `meta.page` other than `docs/architecture/explorer/system.html`;
+- a page that is missing, carries no `<meta name="vision-map-hash">`, or
+  carries the hash of an older map. The hash is computed exactly as the
+  skill's `references/map-format.md` ("Map hash") says: the map without
+  `meta.commit`, `meta.stamped`, `meta.artifact` and the stamp's code
+  fingerprints, in RFC 8785 canonical JSON, then SHA-256. Stamping and
+  reformatting the map leave it unchanged.
+
+A page built from the current map passed the skill's check when it was
+built, so the two rules together keep the map true: the references catch code
+that moved since, and the hash catches a map edited without a rebuild. The
+check proves references resolve and values were checked at build time; it
+does not re-read highlights or backed values against the code, which the
+skill's `check` does.
 
 ## History
 
 [`CHANGELOG.md`](../../../CHANGELOG.md) at the repository root records every
 merge to master, newest first: what changed and why. `extract` copies it into
 the facts' `history` list, the History tab draws it, and `check` validates it.
-It is written by hand. Specification: the "Changelog format" section of
+`/flow` drafts each work branch's entry; it can also be written by hand.
+Specification: the "Changelog format" section of
 [`system-page.spec.md`](../../../cmd/evie/docs/active/system-page.spec.md).
 
 An entry looks like this:
@@ -519,7 +589,7 @@ the directory is not a repository, the check reports
 `CHANGELOG.md: commits: git cannot verify the changelog's commits` once and
 fails. An entry with neither `Merge:` nor `Commits:` needs no git.
 
-To add an entry:
+To add an entry (`/flow` does steps 1 and 2 on the work branch):
 
 1. Write it above every older entry in `CHANGELOG.md`, in the format above.
    On the branch, before the merge exists, leave out `Merge:`.

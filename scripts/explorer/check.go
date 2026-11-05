@@ -73,5 +73,6 @@ func checkRepo(root string, databases []databaseSource) ([]problem, error) {
 	}
 	c.validate(c.loadData())
 	c.validateHistory(log)
+	c.validateVisionMap()
 	return c.problems, nil
 }
