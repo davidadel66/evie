@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,12 +23,13 @@ const validEntry = "## 2026-10-20 — Add the run command\n" +
 	"\n" +
 	"The tool gains a run command.\n"
 
-// withChangelog replaces the fixture's changelog and re-extracts, so check
-// reports the changelog's own problems rather than stale facts.
+// withChangelog replaces the fixture's changelog and rebuilds the page,
+// which embeds it, so check reports the changelog's own problems rather than
+// a stale page.
 func withChangelog(text string) func(*testing.T, string) {
 	return func(t *testing.T, root string) {
 		writeFile(t, root, changelogPath, text)
-		extractFixture(t, root)
+		buildVisionPage(t, root)
 	}
 }
 
@@ -36,36 +38,23 @@ func entryProblem(heading, message string) string {
 	return changelogPath + ": entry \"" + heading + "\": " + message
 }
 
-func TestExtractParsesTheChangelogIntoHistory(t *testing.T) {
+func TestExtractLeavesTheChangelogToThePage(t *testing.T) {
+	// The page's History tab reads CHANGELOG.md itself, so the facts carry
+	// no copy of it and extract does not read it; check still validates it.
 	root := newFixture(t)
-	facts := decodeFacts(t, extractFixture(t, root))
-
-	// Entries keep the file's order; lines of a paragraph join with a space;
-	// the preamble and a heading inside a fence are not entries.
-	want := `[` +
-		`{"branch":"feat/run","date":"2026-10-20","sources":["doc:docs/guide.md#getting-started","#12"],` +
-		`"text":["The tool gains a run command that starts alpha. It reads its widgets first.","A second paragraph says why."],` +
-		`"title":"Add the tool's run command","touches":["cmd/tool","internal/alpha"]},` +
-		`{"branch":"chore/retire-store","date":"2026-10-20","sources":["adr:0001"],` +
-		`"text":["The old store is removed; its history stays readable."],` +
-		`"title":"Retire the old store","touches":["internal/gone"]},` +
-		`{"branch":"master","date":"2026-10-02","sources":["#1","code:internal/alpha/alpha.go"],` +
-		`"text":["The first entry."],` +
-		`"title":"Start the fixture","touches":["internal/alpha","scripts/build"]}` +
-		`]`
-	if got := asJSON(t, facts["history"]); got != want {
-		t.Fatalf("history =\n%s\nwant\n%s", got, want)
+	facts := extractFixture(t, root)
+	if _, ok := decodeFacts(t, facts)["history"]; ok {
+		t.Error("the facts carry a history list")
 	}
-}
-
-func TestExtractFailsClearlyWithoutAChangelog(t *testing.T) {
-	root := newFixture(t)
+	writeFile(t, root, changelogPath, changelog(validEntry))
+	if again := extractFixture(t, root); !bytes.Equal(again, facts) {
+		t.Errorf("changing the changelog changed the facts:\n%s\n---\n%s", facts, again)
+	}
 	if err := os.Remove(filepath.Join(root, changelogPath)); err != nil {
 		t.Fatal(err)
 	}
-	code, _, stderr := runTool(t, root, "extract")
-	if code != 2 || !strings.Contains(stderr, "read CHANGELOG.md") || !strings.Contains(stderr, changelogFormatFix) {
-		t.Fatalf("extract exit %d, stderr %q; want 2 naming CHANGELOG.md and the format to create it in", code, stderr)
+	if again := extractFixture(t, root); !bytes.Equal(again, facts) {
+		t.Errorf("removing the changelog changed the facts:\n%s\n---\n%s", facts, again)
 	}
 }
 
@@ -73,15 +62,30 @@ func TestExtractFailsClearlyWithoutAChangelog(t *testing.T) {
 const changelogFormatFix = "create it in the format in docs/architecture/explorer/README.md"
 
 func TestCheckReportsAMissingChangelog(t *testing.T) {
-	runCheckCases(t, []checkCase{{
-		name: "deleted after extracting",
-		break_: func(t *testing.T, root string) {
-			if err := os.Remove(filepath.Join(root, changelogPath)); err != nil {
-				t.Fatal(err)
-			}
+	runCheckCases(t, []checkCase{
+		{
+			// The map names the changelog for History, and the page was
+			// built with it, so the page is stale too.
+			name: "deleted after the page was built",
+			break_: func(t *testing.T, root string) {
+				if err := os.Remove(filepath.Join(root, changelogPath)); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: []string{changelogPath + ": file: the file does not exist. Fix: " + changelogFormatFix + ".",
+				visionPagePath + ": page: the page was built from an older facts file, changelog or design proposals", "2 problem(s)"},
 		},
-		want: []string{changelogPath + ": file: the file does not exist. Fix: " + changelogFormatFix + ".", "1 problem(s)"},
-	}})
+		{
+			name: "deleted and the page rebuilt",
+			break_: func(t *testing.T, root string) {
+				if err := os.Remove(filepath.Join(root, changelogPath)); err != nil {
+					t.Fatal(err)
+				}
+				buildVisionPage(t, root)
+			},
+			want: []string{changelogPath + ": file: the file does not exist. Fix: " + changelogFormatFix + ".", "1 problem(s)"},
+		},
+	})
 }
 
 func TestCheckReportsMalformedChangelogEntries(t *testing.T) {
@@ -223,7 +227,7 @@ func TestCheckReportsChangelogEntriesOutOfNewestFirstOrder(t *testing.T) {
 }
 
 func TestCheckAcceptsChangelogEntriesOnTheSameDay(t *testing.T) {
-	root := newFixture(t)
+	root := newVisionFixture(t)
 	withChangelog(changelog(entryOn("2026-10-20", "Second merge that day"), entryOn("2026-10-20", "First merge that day")))(t, root)
 	if code, out := checkFixture(t, root); code != 0 {
 		t.Fatalf("check exit %d, want 0:\n%s", code, out)
@@ -242,7 +246,9 @@ func TestCheckReportsChangelogSourcesThatDoNotResolve(t *testing.T) {
 		{"missing code symbol", "code:internal/alpha/alpha.go#Missing", "declares no Missing"},
 		{"missing package", "pkg:internal/ghost", "no package"},
 		{"missing ADR", "adr:0099", "no ADR 0099"},
+		{"missing part", "part:pkg:internal/ghost", "there is no part pkg:internal/ghost"},
 		{"unknown kind", "https://example.com", "unknown reference kind"},
+		{"code key", "Name", "want kind:target"},
 	} {
 		cases = append(cases, checkCase{
 			name:   tc.name,
@@ -258,6 +264,17 @@ func TestCheckReportsChangelogSourcesThatDoNotResolve(t *testing.T) {
 		})
 	}
 	runCheckCases(t, cases)
+}
+
+func TestCheckAcceptsChangelogSourcesInTheSystemMapsForms(t *testing.T) {
+	// As the vision skill reads them for its History tab: a part, a folder,
+	// and a TypeScript declaration.
+	root := newVisionFixture(t)
+	sources := "Sources: part:pkg:internal/alpha, doc:docs/adr, code:web/stream.ts#followChat, #12"
+	withChangelog(changelog(strings.Replace(validEntry, "Sources: doc:docs/guide.md, #12", sources, 1)))(t, root)
+	if code, out := checkFixture(t, root); code != 0 {
+		t.Fatalf("check exit %d, want 0:\n%s", code, out)
+	}
 }
 
 // git runs git in root, ignoring the owner's configuration, and returns its
@@ -329,7 +346,7 @@ func assertCheckReports(t *testing.T, root string, want ...string) {
 }
 
 func TestCheckAcceptsMergeCommitsAndRangesGitKnows(t *testing.T) {
-	root := newFixture(t)
+	root := newVisionFixture(t)
 	h := fixtureHistory(t, root)
 	withChangelog(changelog(
 		withMetadata("Merge: "+h.merge[:7]),
@@ -379,7 +396,7 @@ func TestCheckReportsCommitsGitDoesNotKnow(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			root := newFixture(t)
+			root := newVisionFixture(t)
 			h := fixtureHistory(t, root)
 			withChangelog(changelog(withMetadata(tc.line(h))))(t, root)
 			assertCheckReports(t, root, tc.want(h)...)

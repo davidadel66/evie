@@ -18,24 +18,25 @@ import (
 // (system-page.spec.md, "Changelog format").
 const changelogPath = "CHANGELOG.md"
 
-// HistoryEntry is one changelog entry: a merge to master, or a run of
-// direct-to-master commits.
+// HistoryEntry is one changelog entry as written: a merge to master, or a
+// run of direct-to-master commits. The page's History tab reads the
+// changelog itself; check validates it.
 type HistoryEntry struct {
-	Date    string       `json:"date"`
-	Title   string       `json:"title"`
-	Branch  string       `json:"branch"`
-	Merge   string       `json:"merge,omitempty"`
-	Commits *CommitRange `json:"commits,omitempty"`
-	Touches []string     `json:"touches"`
-	Sources []string     `json:"sources"`
-	Text    []string     `json:"text"`
+	Date    string
+	Title   string
+	Branch  string
+	Merge   string
+	Commits *CommitRange
+	Touches []string
+	Sources []string
+	Text    []string
 }
 
 // CommitRange names the first and last commit of direct-to-master work,
 // both included.
 type CommitRange struct {
-	From string `json:"from"`
-	To   string `json:"to"`
+	From string
+	To   string
 }
 
 // changelogFile is CHANGELOG.md parsed: its entries, and what is wrong with
@@ -71,26 +72,18 @@ var metadataFields = []string{"Branch", "Merge", "Commits", "Touches", "Sources"
 // changelogFix is how to write a missing changelog.
 const changelogFix = "create it in the format in docs/architecture/explorer/README.md"
 
-// readChangelog reads and parses CHANGELOG.md. A missing file is an error
-// that says how to create it and matches fs.ErrNotExist.
-func readChangelog(root string) (changelogFile, error) {
+// readChangelog reads and parses CHANGELOG.md, returning its bytes beside
+// it. A missing file is an error that says how to create it and matches
+// fs.ErrNotExist.
+func readChangelog(root string) (changelogFile, []byte, error) {
 	data, err := os.ReadFile(filepath.Join(root, changelogPath))
 	if errors.Is(err, fs.ErrNotExist) {
-		return changelogFile{}, fmt.Errorf("read %s: %w. Fix: %s", changelogPath, err, changelogFix)
+		return changelogFile{}, nil, fmt.Errorf("read %s: %w. Fix: %s", changelogPath, err, changelogFix)
 	}
 	if err != nil {
-		return changelogFile{}, fmt.Errorf("read %s: %w", changelogPath, err)
+		return changelogFile{}, nil, fmt.Errorf("read %s: %w", changelogPath, err)
 	}
-	return parseChangelog(string(data)), nil
-}
-
-// history is the history facts: every entry as written.
-func (l changelogFile) history() []HistoryEntry {
-	history := make([]HistoryEntry, 0, len(l.entries))
-	for _, e := range l.entries {
-		history = append(history, e.HistoryEntry)
-	}
-	return history
+	return parseChangelog(string(data)), data, nil
 }
 
 // parseChangelog reads every entry of a changelog: a level-two heading
@@ -242,7 +235,7 @@ func validateEntry(e *changelogEntry) {
 		}
 	}
 	if len(e.Sources) == 0 {
-		e.add("missing Sources", "add a Sources: line with at least one explorer reference or #n number")
+		e.add("missing Sources", "add a Sources: line with at least one reference or #n number")
 	}
 	for _, source := range e.Sources {
 		if strings.HasPrefix(source, "#") && !issueNumber.MatchString(source) {
@@ -291,8 +284,10 @@ func splitList(e *changelogEntry, key, value string) []string {
 }
 
 // validateHistory checks the parsed changelog and reports each problem
-// against the entry it is in.
-func (c *checker) validateHistory(log changelogFile) {
+// against the entry it is in. A part: source names one of parts, the map's
+// part ids; without a readable map (nil parts) there are none to name, so
+// part: sources go unchecked rather than all reading as dead.
+func (c *checker) validateHistory(log changelogFile, parts map[string]bool) {
 	c.problems = append(c.problems, log.problems...)
 	repo := c.askGit(log.entries)
 	var above *changelogEntry // the nearest entry above with a real date
@@ -301,8 +296,10 @@ func (c *checker) validateHistory(log changelogFile) {
 		item := e.item()
 		c.problems = append(c.problems, e.problems...)
 		for _, source := range e.Sources {
-			if !strings.HasPrefix(source, "#") {
-				c.ref(changelogPath, item, source, nil)
+			switch kind, _, _ := strings.Cut(source, ":"); {
+			case strings.HasPrefix(source, "#"), kind == "part" && parts == nil:
+			default:
+				c.source(item, source, parts)
 			}
 		}
 		c.verifyCommits(repo, item, e)
@@ -316,6 +313,22 @@ func (c *checker) validateHistory(log changelogFile) {
 		}
 		above = e
 	}
+}
+
+// source reports a changelog source that does not resolve. Sources are
+// references in the system map's forms, as the vision skill's History tab
+// reads them; a part: source names one of parts.
+func (c *checker) source(item, ref string, parts map[string]bool) {
+	why := c.resolve(ref, parts)
+	if why == "" {
+		return
+	}
+	kind, _, _ := strings.Cut(ref, ":")
+	fix, ok := refFixes[kind]
+	if !ok {
+		fix = "use one of " + refKinds()
+	}
+	c.deadRef(changelogPath, item, ref, why, fix)
 }
 
 // commitSHAs are the well-formed commits an entry names: its merge commit

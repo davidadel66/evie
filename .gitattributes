@@ -13,8 +13,8 @@ cmd/evie/docs/fixtures/memory-stage5-integrated/runs/development-v3/frozen/proce
 cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v2/final-verification/verify_change.log binary
 cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v2/final-verification-v2/verify_change.log binary
 
-# The system explorer's data files have fixed wrapper lines and its facts are
-# compared byte for byte with a fresh extraction; the explorer tool's fixture
-# repository is read the same way. Keep them LF on every platform.
+# The facts file has fixed wrapper lines and is compared byte for byte with a
+# fresh extraction; the explorer tool's fixture repository is read the same
+# way. Keep them LF on every platform.
 docs/architecture/explorer/** text eol=lf
 scripts/explorer/testdata/** text eol=lf

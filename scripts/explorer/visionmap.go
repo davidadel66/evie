@@ -14,39 +14,55 @@ import (
 	"unicode/utf8"
 )
 
-// The system map (system-page.decisions.md, 2026-11-04). Evie's System view
-// opens on a page the vision skill builds from .vision/map.json and that the
-// repository commits beside the explorer. CI cannot run the skill, which
-// lives outside the repository, so check holds the map to the code itself:
-// every reference in the map resolves against the code and the facts, and
-// the committed page carries the current map's hash. Building the page runs
-// the skill's own check first, so a page built from the current map also
-// means the map passed that check. Check reads only the forms Evie's map
-// uses, and refuses the skill's others rather than passing them unread.
+// The system map (system-page.decisions.md, 2026-11-04 and 2026-11-05).
+// Evie's System view is a page the vision skill builds from .vision/map.json
+// and that the repository commits beside the facts: a Map of Evie's flows,
+// and Architecture and History tabs drawn from the map's parts, edges and
+// sequences and from CHANGELOG.md. CI cannot run the skill, which lives
+// outside the repository, so check holds the map to the code itself: every
+// package has a part, every reference in the map resolves against the code
+// and the facts, the map's import edges and sequence steps follow the facts'
+// imports, and the committed page carries the current map's hash and the
+// hash of the other files it embeds (the facts, the changelog and the design
+// proposals). Building the page runs the skill's own check first, so a page
+// built from the current map also means the map passed that check. Check
+// reads only the forms Evie's map uses, and refuses the skill's others
+// rather than passing them unread.
 const (
 	visionMapPath = ".vision/map.json"
 	// visionPagePath is where the page is built: the snapshot package
 	// embeds it, and the System view frames it.
 	visionPagePath = "docs/architecture/explorer/system.html"
 	visionBuild    = "python3 ~/.claude/skills/vision/scripts/vision.py build"
-	visionRebuild  = "rebuild with the vision skill: " + visionBuild + ", and commit the page with the map"
 	visionCheck    = "python3 ~/.claude/skills/vision/scripts/vision.py check .vision/map.json"
 	visionFormat   = "the vision skill's references/map-format.md"
+
+	// visionRebuild is how to rebuild the page after the map changed, and
+	// visionRebuildInputs after another file it embeds did.
+	visionRebuild       = visionRebuildWith + "the map"
+	visionRebuildInputs = visionRebuildWith + "the facts, the changelog and the proposals"
+	visionRebuildWith   = "rebuild with the vision skill: " + visionBuild + ", and commit the page with "
 )
 
-// visionMap is the part of a map the check reads: where it says its facts
-// and page are, its flows, and its code entries. A top-level flow and
+// visionMap is the part of a map the check reads: its settings, its flows,
+// its code entries, and its parts, edges and sequences. A top-level flow and
 // library definitions (refs) are read only to refuse them. Other fields
 // belong to the page and are not read.
 type visionMap struct {
 	Meta struct {
-		Facts string `json:"facts"`
-		Page  string `json:"page"`
+		Facts      string `json:"facts"`
+		Page       string `json:"page"`
+		Parts      string `json:"parts"`
+		Changelog  string `json:"changelog"`
+		Repository string `json:"repository"`
 	} `json:"meta"`
-	Flows []visionFlow               `json:"flows"`
-	Flow  json.RawMessage            `json:"flow"`
-	Code  map[string]visionCode      `json:"code"`
-	Refs  map[string]json.RawMessage `json:"refs"`
+	Flows     []visionFlow               `json:"flows"`
+	Flow      json.RawMessage            `json:"flow"`
+	Code      map[string]visionCode      `json:"code"`
+	Refs      map[string]json.RawMessage `json:"refs"`
+	Parts     []visionPart               `json:"parts"`
+	Edges     []visionEdge               `json:"edges"`
+	Sequences []visionSequence           `json:"sequences"`
 }
 
 type visionFlow struct {
@@ -95,40 +111,165 @@ type visionCode struct {
 	Src    *string         `json:"src"`
 }
 
-// visionRefFixes are the reference kinds a map may use, with how to fix
-// each: the explorer's kinds but node: (a map cites code, docs and facts,
-// not explorer nodes), with code: and doc: in the map's forms.
-var visionRefFixes = func() map[string]string {
-	fixes := maps.Clone(refFixes)
-	delete(fixes, "node")
-	fixes["code"] = "point it at an existing repository file or folder, with #Name or #Type.Method naming a declaration in that Go, JavaScript or TypeScript file"
-	fixes["doc"] = "point it at an existing repository file or folder, with #anchor naming one of a Markdown file's headings (GitHub slug)"
-	return fixes
-}()
+// given reports whether a field read only to refuse it holds a value: it
+// is there and not null.
+func given(raw json.RawMessage) bool {
+	return raw != nil && string(raw) != "null"
+}
 
-// validateVisionMap checks the system map when the repository has one, and
-// that it has one when it commits the page built from it.
-func (c *checker) validateVisionMap() {
+// visionStatement is a sentence of the Architecture tab and the references
+// it rests on.
+type visionStatement struct {
+	Text string   `json:"text"`
+	Refs []string `json:"refs"`
+}
+
+// visionPart is one part the system is built from: a package, a container,
+// or a person or system around Evie.
+type visionPart struct {
+	ID         string            `json:"id"`
+	Package    string            `json:"package"`
+	Paths      []string          `json:"paths"`
+	Refs       []string          `json:"refs"`
+	Summary    *visionStatement  `json:"summary"`
+	Does       []visionStatement `json:"does"`
+	Owns       []visionStatement `json:"owns"`
+	Interfaces []visionStatement `json:"interfaces"`
+	Gotchas    []visionStatement `json:"gotchas"`
+	Facts      [][]any           `json:"facts"`
+	Terms      []string          `json:"terms"`
+	Contains   []string          `json:"contains"`
+	Links      []string          `json:"links"`
+	Diagrams   []visionDiagram   `json:"diagrams"`
+}
+
+// visionDiagram is a drawing of a part. Which fields it has depends on its
+// kind: graph, sequence, state, or er. Every kind has a summary; a sequence
+// diagram has a sequence's other fields too.
+type visionDiagram struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+	visionMessages
+	// graph
+	Nodes []struct {
+		ID   string `json:"id"`
+		Node string `json:"node"`
+	} `json:"nodes"`
+	Edges []struct {
+		Refs []string `json:"refs"`
+	} `json:"edges"`
+	// state
+	States []struct {
+		ID   string   `json:"id"`
+		Refs []string `json:"refs"`
+	} `json:"states"`
+	Transitions []struct {
+		Refs []string `json:"refs"`
+	} `json:"transitions"`
+	// er
+	Database string   `json:"database"`
+	Tables   []string `json:"tables"`
+}
+
+// visionEdge is a connection between two parts that the facts' imports do
+// not draw, or a label on one they do.
+type visionEdge struct {
+	From string   `json:"from"`
+	To   string   `json:"to"`
+	Via  string   `json:"via"`
+	Refs []string `json:"refs"`
+}
+
+// visionSequence is a runtime flow drawn as a sequence diagram.
+type visionSequence struct {
+	ID string `json:"id"`
+	visionMessages
+}
+
+// visionMessages is what a sequence and a part's sequence diagram share:
+// a summary, what triggers it, its participants, and the messages between
+// them.
+type visionMessages struct {
+	Summary      *visionStatement `json:"summary"`
+	Trigger      *visionStatement `json:"trigger"`
+	Participants []string         `json:"participants"`
+	Steps        []visionMessage  `json:"steps"`
+}
+
+// visionMessage is one step of a sequence: a message between two
+// participants.
+type visionMessage struct {
+	From string   `json:"from"`
+	To   string   `json:"to"`
+	Kind string   `json:"kind"`
+	Via  string   `json:"via"`
+	Refs []string `json:"refs"`
+}
+
+// loadedMap is the system map as read: its bytes, what check decodes of
+// it, and its parts, by id and by the package each package part is.
+type loadedMap struct {
+	data        []byte
+	m           visionMap
+	parts       map[string]bool   // part ids, which part: references name
+	partPackage map[string]string // part id -> the package it is
+}
+
+// readVisionMap reads and decodes the system map. A map that is missing,
+// unreadable or malformed is reported once, and it returns nil.
+func (c *checker) readVisionMap() *loadedMap {
 	data, err := os.ReadFile(c.path(visionMapPath))
 	if errors.Is(err, fs.ErrNotExist) {
-		if _, err := os.Stat(c.path(visionPagePath)); err == nil {
-			c.add(visionMapPath, "map", "the file does not exist, but "+visionPagePath+", the page built from it, does",
-				"restore the map the page was built from (git log -- "+visionMapPath+" finds it) and commit it with the page")
-		}
-		return
+		c.add(visionMapPath, "map", "the file does not exist, but it holds the system map, every package's part, and what "+visionPagePath+" is built from",
+			"restore it (git log -- "+visionMapPath+" finds it), then "+visionRebuild)
+		return nil
 	}
 	if err != nil {
 		c.add(visionMapPath, "map", fmt.Sprintf("the map cannot be read: %v", err), "make the file readable")
-		return
+		return nil
 	}
-	var m visionMap
-	if err := json.Unmarshal(data, &m); err != nil {
+	vm := &loadedMap{data: data, parts: map[string]bool{}, partPackage: map[string]string{}}
+	if err := json.Unmarshal(data, &vm.m); err != nil {
 		c.add(visionMapPath, "map", "malformed map: "+err.Error(), "make the map match "+visionFormat)
-		return
+		return nil
 	}
+	for _, p := range vm.m.Parts {
+		if p.ID == "" {
+			continue
+		}
+		vm.parts[p.ID] = true
+		if p.Package != "" {
+			vm.partPackage[p.ID] = p.Package
+		}
+	}
+	return vm
+}
+
+// validateVisionMap checks the system map, which holds every package's part
+// and is what the page Evie embeds is built from, and the design proposals
+// and the page beside it. Without a map (vm nil, reported by readVisionMap)
+// it still checks the proposals and the page's inputs.
+func (c *checker) validateVisionMap(vm *loadedMap, inputs pageInputs) {
+	if vm != nil {
+		c.visionMapContent(vm)
+	}
+	if inputs.proposalsErr != nil {
+		c.add(visionProposalsDir, "folder", "the design proposals cannot be read: "+inputs.proposalsErr.Error(), "make the folder and its files readable")
+	}
+	for _, p := range inputs.proposals {
+		c.validateProposal(p)
+	}
+	c.visionPageHash(vm, inputs)
+}
+
+// visionMapContent checks what the map says against the code and the
+// facts: its settings, code entries, flows, parts, edges and sequences, and
+// that every package has a part.
+func (c *checker) visionMapContent(vm *loadedMap) {
+	m := vm.m
 	c.visionMeta(m)
-	v := &visionChecker{checker: c, m: m, facts: factTextsOf(c.facts)}
-	if m.Flow != nil && string(m.Flow) != "null" {
+	v := &visionChecker{checker: c, loadedMap: vm, factText: factTextsOf(c.facts)}
+	if given(m.Flow) {
 		v.unsupported("flow", "a top-level flow", "give the map a flows list")
 	}
 	if len(m.Refs) > 0 {
@@ -143,51 +284,141 @@ func (c *checker) validateVisionMap() {
 			v.step(step)
 		}
 	}
-	c.visionPageHash(data)
+	for _, p := range m.Parts {
+		v.part(p)
+	}
+	for _, e := range m.Edges {
+		v.edge(e)
+	}
+	for _, q := range m.Sequences {
+		v.sequence("sequence "+q.ID, q.visionMessages)
+	}
+	v.uniqueIDs()
+	v.packageCoverage()
 }
 
-// visionMeta checks that the map's facts and page are the ones Evie's check
-// and binary use.
+// uniqueIDs reports an id a part, a sequence or a diagram repeats, as the
+// skill's check does: part ids are unique among parts, sequence ids among
+// sequences, and diagram ids across every part's diagrams.
+func (v *visionChecker) uniqueIDs() {
+	repeats := func(what string) func(item, id string) {
+		seen := map[string]bool{}
+		return func(item, id string) {
+			if id != "" && seen[id] {
+				v.add(visionMapPath, item, "the id is used by an earlier "+what, "give each "+what+" its own id, then "+visionRebuild)
+			}
+			seen[id] = true
+		}
+	}
+	part, sequence, diagram := repeats("part"), repeats("sequence"), repeats("diagram")
+	for _, p := range v.m.Parts {
+		part("part "+p.ID, p.ID)
+		for _, d := range p.Diagrams {
+			diagram("part "+p.ID+" diagram "+d.ID, d.ID)
+		}
+	}
+	for _, q := range v.m.Sequences {
+		sequence("sequence "+q.ID, q.ID)
+	}
+}
+
+// visionMeta checks that the map's settings are the ones Evie's check,
+// binary and changelog use.
 func (c *checker) visionMeta(m visionMap) {
-	if m.Meta.Facts != factsPath {
-		c.add(visionMapPath, "meta.facts", fmt.Sprintf("meta.facts is %q, but the map's fact references resolve against %s", m.Meta.Facts, factsPath),
-			fmt.Sprintf("set meta.facts to %q, then %s", factsPath, visionRebuild))
+	setting := func(item, got, want, why string) {
+		if got != want {
+			c.add(visionMapPath, item, fmt.Sprintf("%s is %q, but %s", item, got, why),
+				fmt.Sprintf("set %s to %q, then %s", item, want, visionRebuild))
+		}
 	}
-	if m.Meta.Page != visionPagePath {
-		c.add(visionMapPath, "meta.page", fmt.Sprintf("meta.page is %q, but Evie embeds and serves %s", m.Meta.Page, visionPagePath),
-			fmt.Sprintf("set meta.page to %q, then %s", visionPagePath, visionRebuild))
+	setting("meta.facts", m.Meta.Facts, factsPath, "the map's fact references resolve against "+factsPath)
+	setting("meta.page", m.Meta.Page, visionPagePath, "Evie embeds and serves "+visionPagePath)
+	setting("meta.parts", m.Meta.Parts, "complete", "check requires that every package has a part")
+	setting("meta.changelog", m.Meta.Changelog, changelogPath, "the History tab draws the file it names, and check validates "+changelogPath)
+	// History's commits, tickets and pull requests link into the repository
+	// the module path names, as the address Go's build stamp carries.
+	if module, err := modulePath(c.root); err == nil {
+		setting("meta.repository", m.Meta.Repository, "https://"+module,
+			"History's commit, ticket and pull-request links must open the module "+module)
 	}
 }
 
-// visionPageHash checks that the page Evie embeds was built from this map,
-// whatever meta.page says.
-func (c *checker) visionPageHash(mapData []byte) {
-	want, err := mapHash(mapData)
-	if err != nil {
-		c.add(visionMapPath, "map hash", "the map's hash cannot be computed: "+err.Error(), "make the map valid JSON that "+visionFormat+" describes")
+// visionPageHash checks that the page Evie embeds was built from this map
+// and from the files it embeds beside it, whatever meta.page says. Without
+// a map (vm nil) only the inputs can be compared.
+func (c *checker) visionPageHash(vm *loadedMap, inputs pageInputs) {
+	var want string
+	if vm != nil {
+		var err error
+		if want, err = mapHash(vm.data); err != nil {
+			c.add(visionMapPath, "map hash", "the map's hash cannot be computed: "+err.Error(), "make the map valid JSON that "+visionFormat+" describes")
+			return
+		}
+	}
+	html, ok := c.readPage()
+	if !ok {
 		return
 	}
-	html, err := os.ReadFile(c.path(visionPagePath))
-	if err != nil {
-		c.add(visionPagePath, "page", "the built page does not exist", visionRebuild)
-		return
-	}
-	switch m := pageHashMeta.FindSubmatch(html); {
-	case m == nil:
+	switch got := pageHashMeta.FindSubmatch(html); {
+	case got == nil:
 		c.add(visionPagePath, "page", `the page carries no <meta name="vision-map-hash">, so it was not built by the vision skill`, visionRebuild)
-	case string(m[1]) != want:
-		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older map: it carries %s, and %s hashes to %s", m[1], visionMapPath, want), visionRebuild)
+		return
+	case vm != nil && string(got[1]) != want:
+		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older map: it carries %s, and %s hashes to %s", got[1], visionMapPath, want), visionRebuild)
+	}
+	c.visionInputsHash(html, vm, inputs)
+}
+
+// readPage reads the built page, or reports why it cannot: there is none,
+// a folder is in its place, or the file cannot be read.
+func (c *checker) readPage() ([]byte, bool) {
+	page := c.path(visionPagePath)
+	html, err := os.ReadFile(page)
+	if err == nil {
+		return html, true
+	}
+	switch info, statErr := os.Stat(page); {
+	case errors.Is(err, fs.ErrNotExist):
+		c.add(visionPagePath, "page", "the built page does not exist", visionRebuild)
+	case statErr == nil && info.IsDir():
+		c.add(visionPagePath, "page", "a folder is where the built page belongs", "remove the folder, then "+visionRebuild)
+	default:
+		c.add(visionPagePath, "page", "the built page cannot be read: "+err.Error(), "make the file readable, or remove it and "+visionRebuild)
+	}
+	return nil, false
+}
+
+// visionInputsHash checks that the page was built from the facts file and
+// the changelog and from the design proposals as they are now, by the
+// inputs hash the skill writes beside the map's. It hashes the files Evie's
+// settings name, the only ones a map that passes check names: a map that
+// names others is reported at its settings. Without the proposals there is
+// nothing to compare.
+func (c *checker) visionInputsHash(html []byte, vm *loadedMap, inputs pageInputs) {
+	if vm != nil && (vm.m.Meta.Facts != factsPath || vm.m.Meta.Changelog != changelogPath) || inputs.proposalsErr != nil {
+		return
+	}
+	want := inputsHash(inputs.facts, inputs.changelog, inputs.proposals)
+	switch got := pageInputsMeta.FindSubmatch(html); {
+	case got == nil:
+		c.add(visionPagePath, "page", `the page carries no <meta name="vision-inputs-hash">, so it was built before the vision skill wrote one`, visionRebuildInputs)
+	case string(got[1]) != want:
+		c.add(visionPagePath, "page", fmt.Sprintf("the page was built from an older facts file, changelog or design proposals: it carries inputs hash %s, and they now hash to %s", got[1], want), visionRebuildInputs)
 	}
 }
 
-// pageHashMeta finds the map hash in a built page, as the skill reads it.
-var pageHashMeta = regexp.MustCompile(`<meta name="vision-map-hash" content="([^"]+)"`)
+// pageHashMeta and pageInputsMeta find the map hash and the inputs hash in
+// a built page, as the skill reads them.
+var (
+	pageHashMeta   = regexp.MustCompile(`<meta name="vision-map-hash" content="([^"]+)"`)
+	pageInputsMeta = regexp.MustCompile(`<meta name="vision-inputs-hash" content="([^"]+)"`)
+)
 
 // visionChecker checks the references of one map.
 type visionChecker struct {
 	*checker
-	m     visionMap
-	facts factTexts
+	*loadedMap
+	factText factTexts // the text a value backed by a facts reference is looked for in
 }
 
 // unsupported refuses a form of the skill's map format that Evie's map does
@@ -204,23 +435,29 @@ func (v *visionChecker) mapRef(item, ref string) bool {
 		return true
 	}
 	kind, target, ok := strings.Cut(ref, ":")
-	fix, known := visionRefFixes[kind]
+	fix, known := refFixes[kind]
 	var why string
 	switch {
 	case !ok || target == "":
 		why = "it is neither a code key of the map nor a kind:target reference"
-		fix = "use a code key of the map, or one of " + strings.Join(slices.Sorted(maps.Keys(visionRefFixes)), ":, ") + ":"
+		fix = "use a code key of the map, or one of " + refKinds()
 	case !known:
-		v.unsupported(item, kind+": references", "cite code, docs or facts instead")
+		v.unsupported(item, kind+": references", "cite code, docs, facts or parts instead")
 		return false
 	default:
-		why = v.resolveIn(ref, nil, mapForms)
+		why = v.resolve(ref, v.parts)
 	}
 	if why != "" {
-		v.add(visionMapPath, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix+", then "+visionRebuild)
+		v.deadRef(visionMapPath, item, ref, why, fix+", then "+visionRebuild)
 		return false
 	}
 	return true
+}
+
+func (v *visionChecker) mapRefs(item string, refs []string) {
+	for _, ref := range refs {
+		v.mapRef(item, ref)
+	}
 }
 
 // chip reads a fact or kv row, [label, value] or [label, value, reference].
@@ -240,6 +477,17 @@ func chip(row []any) (label string, value any, ref string) {
 	return label, value, ref
 }
 
+// factChips checks fact chips: a chip's reference resolves, and its value
+// is in what the reference points at.
+func (v *visionChecker) factChips(item string, facts [][]any) {
+	for _, fact := range facts {
+		label, value, ref := chip(fact)
+		if where := fmt.Sprintf("%s fact %q", item, label); ref != "" && v.mapRef(where, ref) {
+			v.backed(where, value, ref)
+		}
+	}
+}
+
 func (v *visionChecker) step(s visionStep) {
 	item := "step " + s.ID
 	if s.Code != nil {
@@ -248,19 +496,10 @@ func (v *visionChecker) step(s visionStep) {
 				"add it to code, or correct the key, then "+visionRebuild)
 		}
 	}
-	for _, ref := range s.Refs {
-		v.mapRef(item+" refs", ref)
-	}
-	for _, fact := range s.Facts {
-		label, value, ref := chip(fact)
-		if where := fmt.Sprintf("%s fact %q", item, label); ref != "" && v.mapRef(where, ref) {
-			v.backed(where, value, ref)
-		}
-	}
+	v.mapRefs(item+" refs", s.Refs)
+	v.factChips(item, s.Facts)
 	for _, flag := range s.Flags {
-		for _, ref := range flag.Refs {
-			v.mapRef(fmt.Sprintf("%s flag %q", item, clip(flag.Text, 40)), ref)
-		}
+		v.mapRefs(fmt.Sprintf("%s flag %q", item, clip(flag.Text, 40)), flag.Refs)
 	}
 	for _, value := range s.Values {
 		panel := fmt.Sprintf("%s %s panel %q", item, value.Type, value.Title)
@@ -287,6 +526,207 @@ func (v *visionChecker) step(s visionStep) {
 	}
 }
 
+// statement checks the references of a statement, if there is one.
+func (v *visionChecker) statement(item string, s *visionStatement) {
+	if s != nil {
+		v.mapRefs(item, s.Refs)
+	}
+}
+
+// cited checks a part's statement: it cites at least one source, as every
+// statement of a part must, and each one resolves.
+func (v *visionChecker) cited(item string, s *visionStatement) {
+	if s != nil && len(s.Refs) == 0 {
+		v.add(visionMapPath, item, "the statement cites no source", "cite at least one reference in its refs, the code or document it rests on, then "+visionRebuild)
+	}
+	v.statement(item, s)
+}
+
+// citedList checks a part's statement list, numbering its statements from 1.
+func (v *visionChecker) citedList(item string, list []visionStatement) {
+	for i := range list {
+		v.cited(fmt.Sprintf("%s %d", item, i+1), &list[i])
+	}
+}
+
+// isPart reports an id that names no part of the map.
+func (v *visionChecker) isPart(item, id string) {
+	if !v.parts[id] {
+		v.add(visionMapPath, item, fmt.Sprintf("%q is not a part", id), "name a part of the map, or remove it, then "+visionRebuild)
+	}
+}
+
+// part checks one part: the package it is, the files it names, and every
+// reference its statements, facts, terms, links and diagrams make.
+func (v *visionChecker) part(p visionPart) {
+	item := "part " + p.ID
+	if p.Package != "" && !v.packages[p.Package] {
+		v.add(visionMapPath, item, "the facts have no package "+p.Package,
+			"remove the part, or correct its package to an existing package, then "+visionRebuild)
+	}
+	for _, path := range p.Paths {
+		if _, why := v.stat(path); why != "" {
+			v.add(visionMapPath, item+" paths", fmt.Sprintf("path %q: %s", path, why),
+				"point it at an existing repository file or folder, or remove it, then "+visionRebuild)
+		}
+	}
+	v.mapRefs(item+" refs", p.Refs)
+	v.cited(item+" summary", p.Summary)
+	v.citedList(item+" does", p.Does)
+	v.citedList(item+" owns", p.Owns)
+	v.citedList(item+" interfaces", p.Interfaces)
+	v.citedList(item+" gotchas", p.Gotchas)
+	v.factChips(item, p.Facts)
+	for _, term := range p.Terms {
+		v.mapRef(item+" terms", "term:"+term)
+	}
+	for _, id := range p.Contains {
+		v.isPart(item+" contains", id)
+	}
+	v.mapRefs(item+" links", p.Links)
+	for _, d := range p.Diagrams {
+		v.diagram(item+" diagram "+d.ID, d)
+	}
+}
+
+// diagram checks a part's diagram: what its nodes, states and steps cite,
+// that the parts it names exist, and that an er diagram's tables are in the
+// facts.
+func (v *visionChecker) diagram(item string, d visionDiagram) {
+	if d.Kind == "sequence" {
+		v.sequence(item, d.visionMessages)
+		return
+	}
+	v.statement(item+" summary", d.Summary)
+	for _, n := range d.Nodes {
+		if n.Node != "" {
+			v.isPart(item+" node "+n.ID, n.Node)
+		}
+	}
+	for i, e := range d.Edges {
+		v.mapRefs(fmt.Sprintf("%s edge %d", item, i+1), e.Refs)
+	}
+	for _, s := range d.States {
+		v.mapRefs(item+" state "+s.ID, s.Refs)
+	}
+	for i, t := range d.Transitions {
+		v.mapRefs(fmt.Sprintf("%s transition %d", item, i+1), t.Refs)
+	}
+	if d.Kind != "er" {
+		return
+	}
+	if !slices.ContainsFunc(v.facts.Databases, func(db Database) bool { return db.ID == d.Database }) {
+		v.add(visionMapPath, item, "there is no database "+d.Database+" in the facts", refFixes["table"]+", then "+visionRebuild)
+		return
+	}
+	for _, table := range d.Tables {
+		v.mapRef(item, "table:"+d.Database+"."+table)
+	}
+}
+
+// edge checks an edge between two parts: both are parts, its references
+// resolve, an import edge is one of the facts' imports, and any other edge
+// cites the source that carries it.
+func (v *visionChecker) edge(e visionEdge) {
+	item := fmt.Sprintf("edge %s -> %s (%s)", e.From, e.To, e.Via)
+	v.isPart(item, e.From)
+	v.isPart(item, e.To)
+	v.mapRefs(item, e.Refs)
+	switch {
+	case e.Via == "import":
+		v.importEdge(item, e.From, e.To)
+	case len(e.Refs) == 0:
+		v.add(visionMapPath, item, "the edge cites no source",
+			"cite the code or document that carries it in its refs, or make it an import edge if the facts' imports carry it, then "+visionRebuild)
+	}
+}
+
+// importEdge checks that the package of part from imports the package of
+// part to, as the skill's check does: an import joins two package parts. An
+// end that is not a part at all is reported where the ends are checked.
+func (v *visionChecker) importEdge(item, from, to string) {
+	fromPkg, toPkg := v.partPackage[from], v.partPackage[to]
+	for _, end := range []string{from, to} {
+		if v.parts[end] && v.partPackage[end] == "" {
+			v.add(visionMapPath, item, fmt.Sprintf("part %q has no package, but via import joins two package parts", end),
+				"join the package parts whose import carries it, or use a via other than import with a cited source, then "+visionRebuild)
+		}
+	}
+	if fromPkg == "" || toPkg == "" || v.imports[Import{From: fromPkg, To: toPkg}] {
+		return
+	}
+	v.add(visionMapPath, item, fmt.Sprintf("%s does not import %s", fromPkg, toPkg),
+		"remove it, reverse it, or use a via other than import with a cited source, then "+visionRebuild)
+}
+
+// sequence checks a sequence, or a part's sequence diagram: its statements
+// resolve, its participants are parts, and every step joins two of its
+// participants, cites the code that carries it and, via import, follows one
+// of the facts' imports.
+func (v *visionChecker) sequence(item string, q visionMessages) {
+	v.statement(item+" summary", q.Summary)
+	v.statement(item+" trigger", q.Trigger)
+	for _, id := range q.Participants {
+		v.isPart(item+" participants", id)
+	}
+	for i, s := range q.Steps {
+		stepItem := fmt.Sprintf("%s step %d", item, i+1)
+		v.stepEnd(stepItem, "from", s.From, q.Participants)
+		v.stepEnd(stepItem, "to", s.To, q.Participants)
+		v.mapRefs(stepItem, s.Refs)
+		if !slices.ContainsFunc(s.Refs, v.citesCode) {
+			v.add(visionMapPath, stepItem, "the step cites no code",
+				"add a code: reference or a code key of the map naming the code that carries the step, then "+visionRebuild)
+		}
+		if s.Via == "import" {
+			from, to := s.From, s.To
+			if s.Kind == "return" {
+				from, to = to, from
+			}
+			v.importEdge(stepItem, from, to)
+		}
+	}
+}
+
+// stepEnd reports a sequence step's end, from or to, that is not one of
+// the sequence's participants. A participant that is not a part is reported
+// with the participants.
+func (v *visionChecker) stepEnd(item, end, id string, participants []string) {
+	switch {
+	case id == "":
+		v.add(visionMapPath, item, "the step has no "+end, "name the participant it goes "+end+", then "+visionRebuild)
+	case slices.Contains(participants, id):
+	case v.parts[id]:
+		v.add(visionMapPath, item, fmt.Sprintf("%s %q is not a participant", end, id),
+			"add it to participants, or correct the step, then "+visionRebuild)
+	default:
+		v.add(visionMapPath, item, fmt.Sprintf("%s %q is neither a participant nor a part", end, id),
+			"name a participant of the sequence, or correct the step, then "+visionRebuild)
+	}
+}
+
+// citesCode reports whether a reference names code: a code key of the map,
+// or a code: reference.
+func (v *visionChecker) citesCode(ref string) bool {
+	_, key := v.m.Code[ref]
+	return key || strings.HasPrefix(ref, "code:")
+}
+
+// packageCoverage reports every package in the facts without a part
+// (meta.parts "complete").
+func (v *visionChecker) packageCoverage() {
+	covered := map[string]bool{}
+	for _, pkg := range v.partPackage {
+		covered[pkg] = true
+	}
+	for _, pkg := range v.facts.Packages {
+		if !covered[pkg.Path] {
+			v.add(visionMapPath, "package "+pkg.Path, fmt.Sprintf(`no part has "package": %q`, pkg.Path),
+				fmt.Sprintf(`add a component part with "package": %q, a group and a cited summary, then %s`, pkg.Path, visionRebuild))
+		}
+	}
+}
+
 // clip shortens s to n characters for a problem's item.
 func clip(s string, n int) string {
 	if utf8.RuneCountInString(s) <= n {
@@ -300,9 +740,9 @@ func clip(s string, n int) string {
 func (v *visionChecker) codeEntry(key string, e visionCode) {
 	item := "code." + key
 	switch {
-	case e.Lines != nil:
+	case given(e.Lines):
 		v.unsupported(item, "a line range", "name the declaration with symbol instead")
-	case e.Cell != nil:
+	case given(e.Cell):
 		v.unsupported(item, "a notebook cell", "name the declaration with symbol instead")
 	case e.Symbol == "" && e.Src != nil:
 		v.unsupported(item, "inline src", "cite code in the repository by file and symbol")
@@ -311,7 +751,7 @@ func (v *visionChecker) codeEntry(key string, e visionCode) {
 	case e.File == "":
 		v.add(visionMapPath, item, "the entry gives a symbol but no file", "add the file that declares it, then "+visionRebuild)
 	default:
-		if why := v.resolveCode(e.File+"#"+e.Symbol, mapForms); why != "" {
+		if why := v.resolveCode(e.File + "#" + e.Symbol); why != "" {
 			v.add(visionMapPath, item, why, "point file at an existing file and symbol at a declaration in it, as the code now spells it (Type.Method for a method), then "+visionRebuild)
 		}
 	}
@@ -337,7 +777,7 @@ func (v *visionChecker) backed(item string, value any, ref string) {
 // entry that does not resolve, at the entry.
 func (v *visionChecker) region(item, ref, value string) (string, bool) {
 	if e, ok := v.m.Code[ref]; ok {
-		text, why := v.declaration(e.File, e.Symbol, mapForms)
+		text, why := v.declaration(e.File, e.Symbol)
 		return text, why == ""
 	}
 	kind, target, _ := strings.Cut(ref, ":")
@@ -345,7 +785,7 @@ func (v *visionChecker) region(item, ref, value string) (string, bool) {
 	case "code":
 		file, symbol, hasSymbol := strings.Cut(target, "#")
 		if hasSymbol {
-			text, why := v.declaration(file, symbol, mapForms)
+			text, why := v.declaration(file, symbol)
 			return text, why == ""
 		}
 		if info, _ := v.stat(file); info.IsDir() {
@@ -353,13 +793,15 @@ func (v *visionChecker) region(item, ref, value string) (string, bool) {
 				"cite a file or a declaration in it, then "+visionRebuild)
 			return "", false
 		}
-		data, err := os.ReadFile(v.path(file))
-		return string(data), err == nil
+		return v.fileText(file)
 	case "doc":
 		v.unsupported(item, "a value backed by a doc: reference", "cite the code or the fact that holds the value")
 		return "", false
+	case "part":
+		// As the skill reads it: a part's text is its id.
+		return target, true
 	}
-	return v.facts.lookup(kind, target), true
+	return v.factText.lookup(kind, target), true
 }
 
 // factTexts holds, by reference kind and then target, the text a value
@@ -453,14 +895,18 @@ func (f factTexts) lookup(kind, target string) string {
 }
 
 // backs reports whether value appears in region as whole words, as the
-// skill's check finds a backed value (vision.py's contains and norm). Both
-// are compared ignoring case, runs of whitespace, digit-group commas
-// ("100,000" is 100000) and the kind of minus sign, with a word hyphenated
-// across a line end joined; "64" is not found in "640" or "0.64". An
-// ellipsis (…) elides: the pieces around it must appear in that order.
-// Unlike the skill, the check applies no Unicode compatibility
-// normalization (NFKC) or full case folding, which Go's standard library
-// lacks, so it can only be stricter.
+// skill's check finds a backed value (vision.py's contains and norm), and
+// never where the skill would not. Both are compared ignoring runs of
+// whitespace, digit-group commas ("100,000" is 100000), the kind of minus
+// sign and the case of ASCII letters, with a word hyphenated across a line
+// end joined; "64" is not found in "640" or "0.64". An ellipsis (…) elides:
+// the pieces around it must appear in that order.
+//
+// The skill also applies Unicode compatibility normalization (NFKC) and
+// full case folding, which Go's standard library lacks. So check compares
+// every character outside ASCII exactly ("CAFÉ" is not "café", which the
+// skill matches), and takes no match whose edges NFKC could change (see
+// findWords). It can only be stricter than the skill.
 func backs(region, value string) bool {
 	text, at := normText(region), 0
 	for _, piece := range strings.Split(value, "…") {
@@ -484,25 +930,46 @@ func normText(s string) string {
 	runes := []rune(s)
 	var b strings.Builder
 	for i, r := range runes {
-		// A comma between a digit and exactly three more digits groups them.
-		if r == ',' && i > 0 && unicode.IsDigit(runes[i-1]) && i+3 < len(runes) &&
-			unicode.IsDigit(runes[i+1]) && unicode.IsDigit(runes[i+2]) && unicode.IsDigit(runes[i+3]) &&
-			(i+4 == len(runes) || !unicode.IsDigit(runes[i+4])) {
+		if r == ',' && groupsDigits(runes, i) {
 			continue
+		}
+		if 'A' <= r && r <= 'Z' {
+			r += 'a' - 'A'
 		}
 		b.WriteRune(r)
 	}
 	s = lineEndHyphen.ReplaceAllString(b.String(), "-")
-	return strings.ToLower(strings.Join(strings.Fields(s), " "))
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// groupsDigits reports whether the comma at runes[i] groups digits: an ASCII
+// digit before it and exactly three after it, then the end or a stable
+// character that is not a digit. The skill reads digits after NFKC, so it
+// may also drop a comma beside a character NFKC makes a digit; findWords
+// takes no match such a comma could change.
+func groupsDigits(runes []rune, i int) bool {
+	if i < 1 || i+3 >= len(runes) {
+		return false
+	}
+	for _, r := range []rune{runes[i-1], runes[i+1], runes[i+2], runes[i+3]} {
+		if !asciiDigit(r) {
+			return false
+		}
+	}
+	return i+4 == len(runes) || stable(runes[i+4]) && !asciiDigit(runes[i+4])
 }
 
 // findWords returns where the first whole-word want in text at or after
-// from ends, or -1. A want that starts with a letter or digit must not
-// follow a word character or a dot, and one that ends with one must not run
-// on into a word character.
+// from ends, or -1. As the skill's check has it, a want that starts with a
+// letter or digit must not follow a word character or a dot, and one that
+// ends with one must not run on into a word character; a want that starts
+// or ends with a character that is not stable is held to that too, since
+// NFKC may make it a letter. And the match must be one NFKC would leave
+// alone (nfkcLeaves).
 func findWords(text, want string, from int) int {
 	first, _ := utf8.DecodeRuneInString(want)
 	last, _ := utf8.DecodeLastRuneInString(want)
+	wordFirst, wordLast := alnum(first) || !stable(first), alnum(last) || !stable(last)
 	for from <= len(text) {
 		i := strings.Index(text[from:], want)
 		if i < 0 {
@@ -511,7 +978,8 @@ func findWords(text, want string, from int) int {
 		start, end := from+i, from+i+len(want)
 		before, _ := utf8.DecodeLastRuneInString(text[:start])
 		after, _ := utf8.DecodeRuneInString(text[end:])
-		if (!alnum(first) || start == 0 || !wordRune(before) && before != '.') && (!alnum(last) || end == len(text) || !wordRune(after)) {
+		if (start == 0 || !wordFirst || !wordRune(before) && before != '.') &&
+			(end == len(text) || !wordLast || !wordRune(after)) && nfkcLeaves(text, start, end) {
 			return end
 		}
 		_, size := utf8.DecodeRuneInString(text[start:])
@@ -519,6 +987,63 @@ func findWords(text, want string, from int) int {
 	}
 	return -1
 }
+
+// nfkcLeaves reports whether NFKC, which the skill applies before it
+// matches, would leave the match text[start:end] and its edges as they are:
+// the characters on either side of it are stable, it does not start with a
+// combining mark that would join the character before it, and every
+// digit-group comma reaching across one of its edges has only stable
+// characters in its group.
+func nfkcLeaves(text string, start, end int) bool {
+	before, _ := utf8.DecodeLastRuneInString(text[:start])
+	after, _ := utf8.DecodeRuneInString(text[end:])
+	first, _ := utf8.DecodeRuneInString(text[start:])
+	return (start == 0 || stable(before) && !unicode.Is(unicode.M, first)) && (end == len(text) || stable(after)) &&
+		stableGroups(text, start) && stableGroups(text, end)
+}
+
+// stableGroups reports whether every comma whose digit group (the
+// character before it and the four after) reaches across the edge at byte
+// offset edge has only stable characters in it, so the skill keeps or drops
+// the comma as check does.
+func stableGroups(text string, edge int) bool {
+	var near []rune // the five characters before the edge, then the five after
+	for i, s := 0, text[:edge]; i < 5 && s != ""; i++ {
+		r, size := utf8.DecodeLastRuneInString(s)
+		near, s = append([]rune{r}, near...), s[:len(s)-size]
+	}
+	at := len(near)
+	for i, s := 0, text[edge:]; i < 5 && s != ""; i++ {
+		r, size := utf8.DecodeRuneInString(s)
+		near, s = append(near, r), s[size:]
+	}
+	for c, r := range near {
+		if r != ',' || c > at || c+4 < at {
+			continue
+		}
+		for _, g := range near[max(c-1, 0):min(c+5, len(near))] {
+			if !stable(g) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// stableRunes are the characters outside ASCII that check takes beside a
+// match: punctuation and symbols that are their own NFKC form, join no
+// character next to them, and are no word character.
+var stableRunes = map[rune]bool{
+	'—': true, '–': true, '‐': true, '‘': true, '’': true, '“': true, '”': true, '·': true, '•': true, '§': true,
+	'→': true, '←': true, '↔': true, '⇒': true, '×': true, '±': true, '≤': true, '≥': true, '≠': true,
+	'°': true, '€': true, '£': true, '¥': true, '©': true, '®': true,
+}
+
+// stable reports whether NFKC leaves r as it is and joins nothing to it:
+// any ASCII character, or one of stableRunes.
+func stable(r rune) bool { return r < utf8.RuneSelf || stableRunes[r] }
+
+func asciiDigit(r rune) bool { return '0' <= r && r <= '9' }
 
 func alnum(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }
 

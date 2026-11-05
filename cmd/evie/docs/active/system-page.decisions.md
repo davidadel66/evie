@@ -91,3 +91,92 @@ Spec: [system-page.spec.md](system-page.spec.md).
   replacing hand-written changelog entries (this amends the 2026-10-31
   decision that entries are written by hand until `/implement` drafts them).
   AGENTS.md says so in its verification section.
+- **2026-11-05 — "Where is it?" and History move into the vision skill, and
+  the System page becomes the skill's three tabs: Map, Architecture,
+  History.** David asked to move them into the skill ("i think it should be
+  part of the skill", "yes, the skill should contain history as well … just
+  put them into the skill"). The skill's page now carries Architecture, the
+  renamed "Where is it?", with Context, Containers, Components and Flows,
+  and History as its own tab beside the Map, and every view's legend
+  minimizes. Evie's written explorer content moves into `.vision/map.json`
+  as parts, edges, sequences and groups, converted once as the skill's map
+  format lays out ("Migrating from Evie's explorer"); the map names
+  `CHANGELOG.md` for History and requires a part for every package. The
+  fact extractor and `facts.js` stay. The page stays dark inside Evie
+  (2026-11-01) through its `theme=dark`. This amends the 2026-11-04 tabs
+  (Map, History, Where is it?) and the 2026-10-31 History as a fifth
+  explorer tab.
+- **2026-11-05 — The explorer viewer and its Node tests retire.** With
+  Architecture and History in the skill's page, the viewer (`index.html`,
+  `explorer.js`, `explorer.css`), its Node tests, the example proposal, the
+  content files and the manifest are removed, and `verify-change.sh` no
+  longer runs the Node tests. The drift check's content rules move onto the
+  map (every package has a part; references, backed values, imports,
+  sequence steps that cite code, participants, contained parts and er
+  tables), and its data-file, manifest and design-proposal rules go with
+  their inputs. This amends the system explorer's 2026-10-28 decision that
+  the viewer's Node tests are a required verification step.
+- **2026-11-05 — Design proposals did not carry over into this migration.**
+  David wants them back as part of the vision skill ("yes"), added next.
+- **2026-11-05 — `build.js` retires, and the 2026-10-31 commit-link rule
+  with it.** Claude decided: the skill's page shows no code links (it names
+  each source as a plain chip), so nothing on it needs the build's commit;
+  History's commits, tickets and pull requests link into the repository the
+  map's `meta.repository` names, which the drift check holds to the module
+  path in `go.mod`, as `build.js` derived it. `/explorer/` serves only the
+  page, with its policy on every response, and the server no longer reads
+  Go's build stamp.
+- **2026-11-05 — Two-way doors from the migration.** Claude decided: one
+  frame for the three tabs, each moving the page's fragment to its own
+  address (`#subway`, `#view=architecture`, `#view=history`); Architecture
+  opens where the page opens it, on its first level (Context), rather than
+  on Components as "Where is it?" did; choosing the selected tab again
+  re-applies its view, because the page can change view from inside (a part
+  chip on the Map opens Architecture) and Evie's tabs cannot see it, since
+  the frame is cross-origin; the page's own tab bar still shows inside the
+  frame, as the skill has no option to hide it; `/explorer/` and
+  `/explorer/system.html` both serve the page; the drift check now requires
+  the map, and changelog sources resolve in the map's reference forms
+  (`part:` included, `node:` gone); the facts keep their `history` list,
+  which no page reads now, so `extract` is unchanged.
+- **2026-11-05 — Evie's outer tabs are dropped in favour of the page's
+  own.** Claude decided: the page draws its own Map, Architecture and
+  History tabs and can change view from inside, so Evie's bar above the
+  frame duplicated them and could fall out of step with what the page
+  showed. The System view keeps its System header, styled like Data's, over
+  one full-height sandboxed frame of `/explorer/?theme=dark`, which opens on
+  the subway map. This amends the migration's two-way doors above: no tab
+  moves the frame's fragment, and none re-applies a view.
+- **2026-11-05 — The drift check also compares the page's inputs hash.**
+  This extends the approved rule that the page carry the current map's hash
+  (2026-11-04) to the page's other inputs. The vision skill writes
+  `<meta name="vision-inputs-hash">` over the facts file, the changelog and
+  the design proposals, and `check` recomputes it as the skill's map format
+  says ("Inputs hash") and fails, naming the rebuild, when the page carries
+  none or an older one. This closes the spec's risk of a page older than
+  the changelog or the facts.
+- **2026-11-05 — Design proposals are back in the vision skill.** David
+  agreed ("yes", "ok"): a proposal is `.vision/proposals/<slug>.json`, one per
+  feature in flight, drawn as an overlay on the Map and Architecture;
+  `/flow` writes one during a Big brief and deletes it in "Update the
+  System". This settles the entry above that they did not carry over into
+  the migration. Claude decided the drift check's share, since CI cannot
+  run the skill's full proposal check: each file is one JSON object, its
+  `id` is its file name, and its `status` is one the skill knows; the folder
+  is absent while there is no proposal, and Evie commits no example.
+- **2026-11-05 — The facts drop their `history` list.** Claude decided:
+  nothing reads it now that the page's History reads `CHANGELOG.md`, and
+  the inputs hash covers the changelog, so `extract` no longer reads the
+  changelog and `check` still validates it. This amends the migration's
+  two-way door that kept the list.
+- **2026-11-05 — The map check keeps the content rules the explorer had.**
+  Claude decided, from the branch's review, which found that moving the
+  content files into the map dropped some of the drift check's rules: every
+  statement of a part and every edge other than an import edge cites a
+  source, ids are unique (parts among parts, sequences among sequences,
+  diagrams across the map), every sequence step joins two of its
+  participants, and an import joins two package parts. Each is a rule of the
+  skill's own check too, so a map the skill accepts still passes. This
+  extends the migration's entry above that moved the content rules onto the
+  map. A missing or malformed map is reported once, and the proposals and
+  the page's inputs are still checked without it.

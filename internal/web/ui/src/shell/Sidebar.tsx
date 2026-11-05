@@ -51,7 +51,7 @@ type Props = {
   onDeleteWorkspace?: (workspace: Workspace) => void;
   onCloseMobile: () => void;
   onData: () => void;
-  /** Opens the System view: the system explorer. */
+  /** Opens the System view: the system map, its Architecture and History. */
   onSystem: () => void;
   onWorkspace: (workspace: Workspace) => void;
   onNewWorkspaceChat: (workspace: Workspace) => void;

@@ -1,0 +1,150 @@
+[
+  {
+    "name": "facts and changelog, no proposals folder",
+    "meta": {
+      "facts": "docs/architecture/explorer/data/facts.js",
+      "changelog": "CHANGELOG.md"
+    },
+    "files": {
+      "docs/architecture/explorer/data/facts.js": "evieExplorer.register(\n{\n  \"format\": 1,\n  \"kind\": \"facts\"\n}\n);\n",
+      "CHANGELOG.md": "# Changelog\n\n## 2026-11-05 — Name the change\nBranch: feat/x\nTouches: internal/web\nSources: #1\n\nWhat changed — and why.\n"
+    },
+    "hash": "sha256:d3ec3ab98e3abe1f835a52362eab32eec8e2d0c3f0d5301d95bc0978282a2036"
+  },
+  {
+    "name": "empty proposals folder",
+    "meta": {
+      "facts": "docs/architecture/explorer/data/facts.js",
+      "changelog": "CHANGELOG.md"
+    },
+    "files": {
+      "docs/architecture/explorer/data/facts.js": "evieExplorer.register(\n{\n  \"format\": 1,\n  \"kind\": \"facts\"\n}\n);\n",
+      "CHANGELOG.md": "# Changelog\n\n## 2026-11-05 — Name the change\nBranch: feat/x\nTouches: internal/web\nSources: #1\n\nWhat changed — and why.\n"
+    },
+    "dirs": [
+      ".vision/proposals"
+    ],
+    "hash": "sha256:d3ec3ab98e3abe1f835a52362eab32eec8e2d0c3f0d5301d95bc0978282a2036"
+  },
+  {
+    "name": "one proposal",
+    "meta": {
+      "facts": "docs/architecture/explorer/data/facts.js",
+      "changelog": "CHANGELOG.md"
+    },
+    "files": {
+      "docs/architecture/explorer/data/facts.js": "evieExplorer.register(\n{\n  \"format\": 1,\n  \"kind\": \"facts\"\n}\n);\n",
+      "CHANGELOG.md": "# Changelog\n\n## 2026-11-05 — Name the change\nBranch: feat/x\nTouches: internal/web\nSources: #1\n\nWhat changed — and why.\n",
+      ".vision/proposals/top-k.json": "{\n  \"id\": \"top-k\",\n  \"feature\": \"top-k\",\n  \"title\": \"Add top-k\",\n  \"status\": \"proposed\",\n  \"summary\": {\n    \"text\": \"Adds top-k.\",\n    \"refs\": [\n      \"doc:docs/x.md\"\n    ]\n  }\n}\n"
+    },
+    "hash": "sha256:91a40fb3cdac3148af865e2882994801a9d9d15f7e4d0a450ec3c110e348058d"
+  },
+  {
+    "name": "proposals sorted by file name as UTF-8 bytes, others skipped",
+    "meta": {
+      "facts": "docs/architecture/explorer/data/facts.js",
+      "changelog": "CHANGELOG.md"
+    },
+    "files": {
+      "docs/architecture/explorer/data/facts.js": "evieExplorer.register(\n{\n  \"format\": 1,\n  \"kind\": \"facts\"\n}\n);\n",
+      "CHANGELOG.md": "# Changelog\n\n## 2026-11-05 — Name the change\nBranch: feat/x\nTouches: internal/web\nSources: #1\n\nWhat changed — and why.\n",
+      ".vision/proposals/b-second.json": "{\n  \"id\": \"b-second\",\n  \"feature\": \"b-second\",\n  \"title\": \"Add b-second\",\n  \"status\": \"building\",\n  \"summary\": {\n    \"text\": \"Adds b-second.\",\n    \"refs\": [\n      \"doc:docs/x.md\"\n    ]\n  }\n}\n",
+      ".vision/proposals/a-first.json": "{\n  \"id\": \"a-first\",\n  \"feature\": \"a-first\",\n  \"title\": \"Add a-first\",\n  \"status\": \"accepted\",\n  \"summary\": {\n    \"text\": \"Adds a-first.\",\n    \"refs\": [\n      \"doc:docs/x.md\"\n    ]\n  }\n}\n",
+      ".vision/proposals/Z-upper.json": "{\n  \"id\": \"Z-upper\",\n  \"feature\": \"Z-upper\",\n  \"title\": \"Add Z-upper\",\n  \"status\": \"proposed\",\n  \"summary\": {\n    \"text\": \"Adds Z-upper.\",\n    \"refs\": [\n      \"doc:docs/x.md\"\n    ]\n  }\n}\n",
+      ".vision/proposals/_under.json": "{\n  \"id\": \"_under\",\n  \"feature\": \"_under\",\n  \"title\": \"Add _under\",\n  \"status\": \"proposed\",\n  \"summary\": {\n    \"text\": \"Adds _under.\",\n    \"refs\": [\n      \"doc:docs/x.md\"\n    ]\n  }\n}\n",
+      ".vision/proposals/été.json": "{\n  \"id\": \"ete\",\n  \"feature\": \"ete\",\n  \"title\": \"Add ete\",\n  \"status\": \"proposed\",\n  \"summary\": {\n    \"text\": \"Adds ete.\",\n    \"refs\": [\n      \"doc:docs/x.md\"\n    ]\n  }\n}\n",
+      ".vision/proposals/.hidden.json": "{\n  \"id\": \"hidden\",\n  \"feature\": \"hidden\",\n  \"title\": \"Add hidden\",\n  \"status\": \"proposed\",\n  \"summary\": {\n    \"text\": \"Adds hidden.\",\n    \"refs\": [\n      \"doc:docs/x.md\"\n    ]\n  }\n}\n",
+      ".vision/proposals/notes.md": "not a proposal\n",
+      ".vision/proposals/upper.JSON": "{\n  \"id\": \"upper\",\n  \"feature\": \"upper\",\n  \"title\": \"Add upper\",\n  \"status\": \"proposed\",\n  \"summary\": {\n    \"text\": \"Adds upper.\",\n    \"refs\": [\n      \"doc:docs/x.md\"\n    ]\n  }\n}\n",
+      ".vision/proposals/nested/inner.json": "{\n  \"id\": \"inner\",\n  \"feature\": \"inner\",\n  \"title\": \"Add inner\",\n  \"status\": \"proposed\",\n  \"summary\": {\n    \"text\": \"Adds inner.\",\n    \"refs\": [\n      \"doc:docs/x.md\"\n    ]\n  }\n}\n"
+    },
+    "dirs": [
+      ".vision/proposals/folder.json"
+    ],
+    "hash": "sha256:c34b50db88e803f0d5854fc6e5cd66b6379883ecf117d625d80b875eef9ae3f8"
+  },
+  {
+    "name": "CRLF in every input, a lone CR kept",
+    "meta": {
+      "facts": "docs/architecture/explorer/data/facts.js",
+      "changelog": "CHANGELOG.md"
+    },
+    "files": {
+      "docs/architecture/explorer/data/facts.js": "evieExplorer.register(\r\n{\r\n  \"format\": 1,\r\n  \"kind\": \"facts\"\r\n}\r\n);\r\n",
+      "CHANGELOG.md": "# Changelog\r\n\r\n## 2026-11-05 — Name the change\r\nBranch: feat/x\r\nTouches: internal/web\r\nSources: #1\r\n\r\nWhat changed — and why.\r\na lone\rcarriage return\r\n",
+      ".vision/proposals/crlf.json": "{\r\n  \"id\": \"crlf\",\r\n  \"feature\": \"crlf\",\r\n  \"title\": \"Add crlf\",\r\n  \"status\": \"proposed\",\r\n  \"summary\": {\r\n    \"text\": \"Adds crlf.\",\r\n    \"refs\": [\r\n      \"doc:docs/x.md\"\r\n    ]\r\n  }\r\n}\r\n"
+    },
+    "hash": "sha256:76350a7f46c7ffcae4a6a8776500e1cdf4fd78691fc721a35ccb21e41f456ac7"
+  },
+  {
+    "name": "missing changelog",
+    "meta": {
+      "facts": "docs/architecture/explorer/data/facts.js",
+      "changelog": "CHANGELOG.md"
+    },
+    "files": {
+      "docs/architecture/explorer/data/facts.js": "evieExplorer.register(\n{\n  \"format\": 1,\n  \"kind\": \"facts\"\n}\n);\n",
+      ".vision/proposals/top-k.json": "{\n  \"id\": \"top-k\",\n  \"feature\": \"top-k\",\n  \"title\": \"Add top-k\",\n  \"status\": \"proposed\",\n  \"summary\": {\n    \"text\": \"Adds top-k.\",\n    \"refs\": [\n      \"doc:docs/x.md\"\n    ]\n  }\n}\n"
+    },
+    "hash": "sha256:da8b4ace5139f1d2505bf145f4debed29af373b14360c10aff785c074fc0d61b"
+  },
+  {
+    "name": "missing facts file",
+    "meta": {
+      "facts": "docs/architecture/explorer/data/facts.js",
+      "changelog": "CHANGELOG.md"
+    },
+    "files": {
+      "CHANGELOG.md": "# Changelog\n\n## 2026-11-05 — Name the change\nBranch: feat/x\nTouches: internal/web\nSources: #1\n\nWhat changed — and why.\n"
+    },
+    "hash": "sha256:5adbeb938326a6513f594edc1b84bb8992ab65c01141cff602473b7bfb56c459"
+  },
+  {
+    "name": "a proposal that is not valid JSON is hashed as stored",
+    "meta": {
+      "facts": "docs/architecture/explorer/data/facts.js",
+      "changelog": "CHANGELOG.md"
+    },
+    "files": {
+      "docs/architecture/explorer/data/facts.js": "evieExplorer.register(\n{\n  \"format\": 1,\n  \"kind\": \"facts\"\n}\n);\n",
+      "CHANGELOG.md": "# Changelog\n\n## 2026-11-05 — Name the change\nBranch: feat/x\nTouches: internal/web\nSources: #1\n\nWhat changed — and why.\n",
+      ".vision/proposals/broken.json": "{\"id\": \"broken\",\n"
+    },
+    "hash": "sha256:35abeb5c1108a4f305a5cbedce0c6596b77d65d2e2557d3abd7c2d5cd7998d50"
+  },
+  {
+    "name": "nothing named and no proposals",
+    "meta": {},
+    "files": {
+      "docs/architecture/explorer/data/facts.js": "evieExplorer.register(\n{\n  \"format\": 1,\n  \"kind\": \"facts\"\n}\n);\n",
+      "CHANGELOG.md": "# Changelog\n\n## 2026-11-05 — Name the change\nBranch: feat/x\nTouches: internal/web\nSources: #1\n\nWhat changed — and why.\n"
+    },
+    "hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "changelog named by another path",
+    "meta": {
+      "facts": "docs/architecture/explorer/data/facts.js",
+      "changelog": "docs/HISTORY.md"
+    },
+    "files": {
+      "docs/architecture/explorer/data/facts.js": "evieExplorer.register(\n{\n  \"format\": 1,\n  \"kind\": \"facts\"\n}\n);\n",
+      "CHANGELOG.md": "# Changelog\n\n## 2026-11-05 — Name the change\nBranch: feat/x\nTouches: internal/web\nSources: #1\n\nWhat changed — and why.\n",
+      "docs/HISTORY.md": "# Changelog\n\n## 2026-11-05 — Name the change\nBranch: feat/x\nTouches: internal/web\nSources: #1\n\nWhat changed — and why.\n"
+    },
+    "hash": "sha256:96d3c56807a0256b932e64236ddf00cb93d8b33336e3c8567caf304450eb3004"
+  },
+  {
+    "name": "empty files",
+    "meta": {
+      "facts": "docs/architecture/explorer/data/facts.js",
+      "changelog": "CHANGELOG.md"
+    },
+    "files": {
+      "docs/architecture/explorer/data/facts.js": "",
+      "CHANGELOG.md": "",
+      ".vision/proposals/empty.json": ""
+    },
+    "hash": "sha256:8464c05b72f17661bc90234542aad8a4730f24b73915fa7548bfb17bbf32ece4"
+  }
+]

@@ -15,86 +15,43 @@ import (
 	"unicode"
 )
 
-// Reference kinds. Every reference is "<kind>:<target>".
+// refFixes are the reference kinds a map, a part, a sequence or a
+// changelog source may use, as "<kind>:<target>", with how to fix each.
 var refFixes = map[string]string{
-	"code":    "point it at an existing repository file or directory, with #Name or #Type.Method naming a declaration in that Go file",
-	"doc":     "point it at an existing repository file, with #anchor naming one of its Markdown headings (GitHub slug)",
+	"code":    "point it at an existing repository file or folder, with #Name or #Type.Method naming a declaration in that Go, JavaScript or TypeScript file",
+	"doc":     "point it at an existing repository file or folder, with #anchor naming one of a Markdown file's headings (GitHub slug)",
 	"adr":     "use the four-digit number of an ADR in docs/adr",
 	"term":    "use a term exactly as GLOSSARY.md spells it",
 	"table":   "use database.table from the facts databases",
 	"route":   "use a route from the facts as /pattern or METHOD /pattern",
 	"command": "use a binary and word path from the facts commands",
 	"pkg":     "use a package path from the facts",
-	"node":    "use the id of an existing explorer node",
+	"part":    "use the id of a part of the map",
 }
 
-// statement checks a statement's text, that it cites at least one source,
-// and that every reference resolves.
-func (c *checker) statement(file, item string, s *Statement, extra map[string]bool) {
-	if s == nil {
-		return
-	}
-	if strings.TrimSpace(s.Text) == "" {
-		c.missing(file, item, "text")
-	}
-	if len(s.Refs) == 0 {
-		c.noSource(file, item, "statement")
-	}
-	c.refs(file, item, s.Refs, extra)
-}
-
-func (c *checker) refs(file, item string, refs []string, extra map[string]bool) {
-	for _, ref := range refs {
-		c.ref(file, item, ref, extra)
-	}
-}
-
-// ref reports ref when it does not resolve. extra holds node ids that exist
-// only inside the design proposal being checked.
-func (c *checker) ref(file, item, ref string, extra map[string]bool) {
-	kind, _, _ := strings.Cut(ref, ":")
-	why := c.resolve(ref, extra)
-	if why == "" {
-		return
-	}
-	fix, ok := refFixes[kind]
-	if !ok {
-		kinds := slices.Sorted(maps.Keys(refFixes))
-		fix = "use one of " + strings.Join(kinds, ":, ") + ":"
-	}
+// deadRef reports a reference in file that does not resolve: why not, and
+// how to fix it. The system map and the changelog report theirs here.
+func (c *checker) deadRef(file, item, ref, why, fix string) {
 	c.add(file, item, fmt.Sprintf("dead reference %q: %s", ref, why), fix)
 }
 
-// refForms are the code: and doc: forms beyond the explorer's own: a #Name
-// in a JavaScript or TypeScript file, and a doc: folder. The system map
-// uses both, as the vision skill reads them.
-type refForms struct {
-	scripts, folders bool
+// refKinds lists the reference kinds for a fix hint.
+func refKinds() string {
+	return strings.Join(slices.Sorted(maps.Keys(refFixes)), ":, ") + ":"
 }
 
-// explorerForms are the explorer's own reference forms, and mapForms the
-// system map's.
-var (
-	explorerForms = refForms{}
-	mapForms      = refForms{scripts: true, folders: true}
-)
-
-// resolve returns "" when ref resolves, or why it does not.
-func (c *checker) resolve(ref string, extra map[string]bool) string {
-	return c.resolveIn(ref, extra, explorerForms)
-}
-
-// resolveIn is resolve, with code: and doc: in the given forms.
-func (c *checker) resolveIn(ref string, extra map[string]bool, forms refForms) string {
+// resolve returns "" when ref, "<kind>:<target>", resolves, or why it does
+// not. A part: reference names one of parts, the map's part ids.
+func (c *checker) resolve(ref string, parts map[string]bool) string {
 	kind, target, ok := strings.Cut(ref, ":")
 	if !ok || target == "" {
 		return "unknown reference kind; want kind:target"
 	}
 	switch kind {
 	case "code":
-		return c.resolveCode(target, forms)
+		return c.resolveCode(target)
 	case "doc":
-		return c.resolveDoc(target, forms)
+		return c.resolveDoc(target)
 	case "adr":
 		for _, adr := range c.facts.ADRs {
 			if adr.Number == target {
@@ -146,17 +103,16 @@ func (c *checker) resolveIn(ref string, extra map[string]bool, forms refForms) s
 			return ""
 		}
 		return "there is no package " + target
-	case "node":
-		if _, ok := c.nodes[target]; ok || extra[target] {
+	case "part":
+		if parts[target] {
 			return ""
 		}
-		return "there is no node " + target
+		return "there is no part " + target
 	}
 	return "unknown reference kind " + kind
 }
 
-// routeRef is a route reference's one form, which the viewer reads with the
-// same expression (ROUTE_REF in docs/architecture/explorer/explorer.js): a
+// routeRef is a route reference's one form, as the vision skill reads it: a
 // pattern starting with "/", optionally after an upper-case method and one
 // space.
 var routeRef = regexp.MustCompile(`^(?:([A-Z]+) )?(/.*)$`)
@@ -173,6 +129,13 @@ func splitRoute(target string) (method, pattern string, ok bool) {
 
 const notInRepo = "the path must be a clean relative path inside the repository"
 
+// cleanRelative reports whether p is a clean slash path that stays inside
+// the directory it is relative to.
+func cleanRelative(p string) bool {
+	return p != "" && p != "." && p != ".." && !strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "../") &&
+		!strings.Contains(p, `\`) && path.Clean(p) == p
+}
+
 // stat returns a repository path's file information, or why it names
 // nothing.
 func (c *checker) stat(file string) (os.FileInfo, string) {
@@ -188,7 +151,7 @@ func (c *checker) stat(file string) (os.FileInfo, string) {
 
 // resolveCode resolves code:path, a file or folder, and code:path#Name,
 // a declaration in that file.
-func (c *checker) resolveCode(target string, forms refForms) string {
+func (c *checker) resolveCode(target string) string {
 	file, symbol, hasSymbol := strings.Cut(target, "#")
 	info, why := c.stat(file)
 	if why != "" || !hasSymbol {
@@ -197,16 +160,16 @@ func (c *checker) resolveCode(target string, forms refForms) string {
 	if info.IsDir() {
 		return file + " is a folder, so it declares nothing"
 	}
-	_, why = c.declaration(file, symbol, forms)
+	_, why = c.declaration(file, symbol)
 	return why
 }
 
 // declaration returns the whole lines that declare symbol in file, or why
 // there are none: Go files by their declarations (Name, or Type.Name for a
-// method, field or interface method), and in the map's forms JavaScript
-// and TypeScript files by a declaring line (Name, or Owner.member for a
-// member declared directly in Owner's body).
-func (c *checker) declaration(file, symbol string, forms refForms) (string, string) {
+// method, field or interface method), and JavaScript and TypeScript files
+// by a declaring line (Name, or Owner.member for a member declared
+// directly in Owner's body).
+func (c *checker) declaration(file, symbol string) (string, string) {
 	var src string
 	var found bool
 	switch ext := path.Ext(file); {
@@ -217,16 +180,14 @@ func (c *checker) declaration(file, symbol string, forms refForms) (string, stri
 		}
 		at, ok := decls.spans[symbol]
 		src, found = string(decls.src[at.from:at.to]), ok
-	case forms.scripts && scriptExts[ext]:
+	case scriptExts[ext]:
 		decls, err := c.scriptDecls(file)
 		if err != nil {
 			return "", err.Error()
 		}
 		src, found = decls.find(symbol)
-	case forms.scripts:
-		return "", "#Name names a declaration in a Go, JavaScript or TypeScript file, not a " + ext + " file"
 	default:
-		return "", "#Name and #Type.Method name declarations in a Go file"
+		return "", "#Name names a declaration in a Go, JavaScript or TypeScript file, not a " + ext + " file"
 	}
 	if !found {
 		return "", file + " declares no " + symbol
@@ -234,13 +195,15 @@ func (c *checker) declaration(file, symbol string, forms refForms) (string, stri
 	return src, ""
 }
 
-func (c *checker) resolveDoc(target string, forms refForms) string {
+// resolveDoc resolves doc:path, a file or folder, and doc:path#anchor, a
+// heading of that Markdown file.
+func (c *checker) resolveDoc(target string) string {
 	file, anchor, hasAnchor := strings.Cut(target, "#")
 	info, why := c.stat(file)
 	switch {
 	case why != "":
 		return why
-	case info.IsDir() && (hasAnchor || !forms.folders):
+	case info.IsDir() && hasAnchor:
 		return file + " is not a file"
 	case !hasAnchor:
 		return ""
@@ -248,6 +211,28 @@ func (c *checker) resolveDoc(target string, forms refForms) string {
 		return file + " has no heading #" + anchor
 	}
 	return ""
+}
+
+// fileText returns a repository file's whole text, read once, or false
+// when it cannot be read.
+func (c *checker) fileText(file string) (string, bool) {
+	if text, ok := c.textCache[file]; ok {
+		if text == nil {
+			return "", false
+		}
+		return *text, true
+	}
+	if c.textCache == nil {
+		c.textCache = map[string]*string{}
+	}
+	data, err := os.ReadFile(c.path(file))
+	if err != nil {
+		c.textCache[file] = nil
+		return "", false
+	}
+	text := string(data)
+	c.textCache[file] = &text
+	return text, true
 }
 
 // goFile is a Go file's text and the whole lines of each name it declares.
@@ -363,8 +348,8 @@ func typeMembers(expr ast.Expr) []typeMember {
 	return members
 }
 
-// scriptExts are the JavaScript and TypeScript files the map's code:
-// references may name declarations in.
+// scriptExts are the JavaScript and TypeScript files code: references may
+// name declarations in.
 var scriptExts = map[string]bool{".js": true, ".jsx": true, ".mjs": true, ".ts": true, ".tsx": true}
 
 var (

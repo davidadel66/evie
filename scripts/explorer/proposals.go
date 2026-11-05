@@ -1,148 +1,154 @@
 package main
 
-import "fmt"
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path"
+	"path/filepath"
+	"slices"
+	"strings"
+)
 
-// validateProposals checks every design proposal against the built system: a
-// change or remove targets an existing node, edge, or flow, and an add does
-// not collide with one. Existing edges include the facts' import edges,
-// which the viewer draws between package nodes.
-func (c *checker) validateProposals(files []dataFile) {
-	edges := map[string]bool{}
-	for _, file := range files {
-		if file.Content != nil {
-			for _, e := range file.Content.Edges {
-				edges[edgeItem(e)] = true
-			}
+// visionProposalsDir holds the design proposals of features in flight, one
+// file per feature, beside the map ("Design proposals" in the skill's
+// references/map-format.md: proposals/ beside a map named map.json). It
+// exists only while a proposal does.
+const visionProposalsDir = ".vision/proposals"
+
+// proposalStatuses are the statuses the vision skill knows, in order, each
+// with when a feature's proposal takes it: proposed, then accepted once the
+// design is agreed, building once work starts. Example, with no when, marks
+// a proposal that only shows the format, which no feature's is.
+var proposalStatuses = []proposalStatus{
+	{"proposed", "while its design is open"},
+	{"accepted", "once the design is agreed"},
+	{"building", "once work starts"},
+	{"example", ""},
+}
+
+type proposalStatus struct{ name, when string }
+
+// knownStatus reports whether status is one the vision skill knows.
+func knownStatus(status string) bool {
+	return slices.ContainsFunc(proposalStatuses, func(s proposalStatus) bool { return s.name == status })
+}
+
+// statusText lists the statuses the skill knows, as "a, b or c"; with
+// when, only those a feature's proposal takes, each with when it does, as
+// "a when, b when, or c when".
+func statusText(when bool) string {
+	var list []string
+	or := " or "
+	for _, s := range proposalStatuses {
+		switch {
+		case !when:
+			list = append(list, s.name)
+		case s.when != "":
+			list, or = append(list, s.name+" "+s.when), ", or "
 		}
 	}
-	for _, imp := range c.facts.Imports {
-		edges[edgeItem(Edge{From: packageNodeID(imp.From), To: packageNodeID(imp.To), Via: "import"})] = true
+	last := len(list) - 1
+	return strings.Join(list[:last], ", ") + or + list[last]
+}
+
+// readProposals reads the design proposals as the vision skill finds them:
+// every regular .json file directly in the folder whose name does not start
+// with a dot, sorted by file name as UTF-8 bytes, each named by its file
+// name (top-k.json). Without the folder there are none.
+func readProposals(root string) ([]namedFile, error) {
+	dir := filepath.Join(root, filepath.FromSlash(visionProposalsDir))
+	if info, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) || err == nil && !info.IsDir() {
+		return nil, nil
 	}
-	ids := map[string]string{}
-	for _, file := range files {
-		if file.Proposal == nil {
+	entries, err := os.ReadDir(dir) // sorted by name, byte by byte
+	if err != nil {
+		return nil, err
+	}
+	var files []namedFile
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") || path.Ext(name) != ".json" {
 			continue
 		}
-		p := file.Proposal
-		item := "design proposal " + p.ID
-		if p.ID == "" {
-			c.missing(file.Path, item, "id")
+		data, ok, err := readRegular(filepath.Join(dir, name))
+		if err != nil {
+			return nil, err
 		}
-		c.unique(ids, file.Path, item, "design proposal", p.ID)
-		c.validateProposal(file.Path, item, p, edges)
+		if ok {
+			files = append(files, namedFile{Name: name, Data: data})
+		}
+	}
+	return files, nil
+}
+
+// readRegular reads a regular file, following a symbolic link to one. It
+// reports false, and no error, when there is no such file: nothing there, or
+// a folder or another kind of file.
+func readRegular(file string) ([]byte, bool, error) {
+	info, err := os.Stat(file)
+	if errors.Is(err, fs.ErrNotExist) || err == nil && !info.Mode().IsRegular() {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	data, err := os.ReadFile(file)
+	return data, err == nil, err
+}
+
+// validateProposal holds a design proposal to the minimum CI can check
+// without the vision skill: the file is one JSON object, its id is its file
+// name, and its status is one the skill knows. Everything else (its fields,
+// statements, references and operations on the map) is the skill's own
+// check, which its build runs first.
+func (c *checker) validateProposal(p namedFile) {
+	file := visionProposalsDir + "/" + p.Name
+	then := ", then " + visionRebuildInputs
+	format := visionFormat + ` ("Design proposals")`
+	value, err := decodeJSONValue(p.Data)
+	if err != nil {
+		c.add(file, "proposal", "the file is not valid JSON: "+err.Error(), "write it as one JSON object in the format of "+format+then)
+		return
+	}
+	proposal, ok := value.(map[string]any)
+	if !ok {
+		c.add(file, "proposal", "the file is not a JSON object", "write it as one JSON object in the format of "+format+then)
+		return
+	}
+	name := strings.TrimSuffix(p.Name, ".json")
+	switch id, ok := proposal["id"]; {
+	case !ok:
+		c.add(file, "id", "the proposal has no id", fmt.Sprintf("set id to %q, its file's name", name)+then)
+	case id != name:
+		fix := fmt.Sprintf("set id to %q", name)
+		if s, ok := id.(string); ok {
+			fix += fmt.Sprintf(", or rename the file %s.json", s)
+		}
+		c.add(file, "id", fmt.Sprintf("id %s does not match the file name", jsonText(id)), fix+then)
+	}
+	statusFix := "set it to " + statusText(true) + ", and delete the proposal once its feature merges"
+	switch raw, ok := proposal["status"]; {
+	case !ok:
+		c.add(file, "status", "the proposal has no status", statusFix+then)
+	case !knownStatus(stringOr(raw)):
+		c.add(file, "status", fmt.Sprintf("status %s is not one of %s", jsonText(raw), statusText(false)), statusFix+then)
 	}
 }
 
-func (c *checker) validateProposal(file, item string, p *Proposal, edges map[string]bool) {
-	if p.Feature == "" {
-		c.missing(file, item, "feature")
-	}
-	if p.Title == "" {
-		c.missing(file, item, "title")
-	}
-	c.oneOf(file, item, "status", p.Status, statuses, true)
-	sc := scope{proposal: true, added: map[string]bool{}}
-	for _, op := range p.Nodes {
-		if op.Op == "add" && op.ID != "" {
-			sc.added[op.ID] = true
-		}
-	}
-	if p.Spec != "" {
-		c.ref(file, item+" spec", p.Spec, sc.added)
-	}
-	if p.Summary == nil {
-		c.missing(file, item, "summary")
-	}
-	c.statement(file, item+" summary", p.Summary, sc.added)
-	c.statements(file, item+" requirements", p.Requirements, sc.added)
-	c.statements(file, item+" decisions", p.Decisions, sc.added)
-
-	for _, op := range p.Nodes {
-		opItem := fmt.Sprintf("%s %s node %s", item, op.Op, op.ID)
-		c.oneOf(file, opItem, "op", op.Op, operations, true)
-		_, exists := c.nodes[op.ID]
-		if len(op.Children) > 0 {
-			c.add(file, opItem, "malformed data: a design proposal node operation carries no children; children are reserved for the depth pass",
-				"remove children")
-		}
-		switch op.Op {
-		case "add":
-			if exists {
-				c.add(file, opItem, "the node already exists", "use change, or choose a new id")
-			}
-			c.validateNode(file, op.Node, nodeRules{prefix: item + " add ", scope: sc})
-		case "change":
-			c.targetExists(file, opItem, exists, "node")
-			c.topLevel(file, opItem, op.ID)
-			c.validateNodeChange(file, opItem, op.Node, sc)
-		case "remove":
-			c.targetExists(file, opItem, exists, "node")
-			c.topLevel(file, opItem, op.ID)
-		}
-	}
-	for _, op := range p.Edges {
-		opItem := fmt.Sprintf("%s %s %s", item, op.Op, edgeItem(op.Edge))
-		c.oneOf(file, opItem, "op", op.Op, operations, true)
-		exists := edges[edgeItem(op.Edge)]
-		switch op.Op {
-		case "add":
-			if exists {
-				c.add(file, opItem, "the edge already exists", "use change, or add a different edge")
-			}
-			c.validateEdge(file, item+" add ", op.Edge, sc)
-		case "change", "remove":
-			c.targetExists(file, opItem, exists, "edge")
-			c.refs(file, opItem, op.Refs, sc.added)
-		}
-	}
-	for _, op := range p.Flows {
-		opItem := fmt.Sprintf("%s %s flow %s", item, op.Op, op.ID)
-		c.oneOf(file, opItem, "op", op.Op, operations, true)
-		_, exists := c.flows[op.ID]
-		switch op.Op {
-		case "add":
-			if exists {
-				c.add(file, opItem, "the flow already exists", "use change, or choose a new id")
-			}
-			c.validateFlow(file, opItem, op.Flow, false, sc)
-		case "change":
-			c.targetExists(file, opItem, exists, "flow")
-			c.statement(file, opItem+" summary", op.Summary, sc.added)
-			c.statement(file, opItem+" trigger", op.Trigger, sc.added)
-			for _, id := range op.Participants {
-				c.ref(file, opItem+" participants", "node:"+id, sc.added)
-			}
-			for i, step := range op.Steps {
-				for _, ref := range step.Refs {
-					c.ref(file, fmt.Sprintf("%s step %d", opItem, i+1), ref, sc.added)
-				}
-			}
-		case "remove":
-			c.targetExists(file, opItem, exists, "flow")
-		}
-	}
+// stringOr returns a decoded JSON string, or "" for any other value.
+func stringOr(v any) string {
+	s, _ := v.(string)
+	return s
 }
 
-// topLevel reports a design proposal node operation that targets a part;
-// node operations change and remove top-level nodes only.
-func (c *checker) topLevel(file, item, id string) {
-	if parent, ok := c.parts[id]; ok {
-		c.add(file, item, "the node is a part of another node ("+parent+"); design proposal node operations target top-level nodes only",
-			"target "+parent+" instead")
+// jsonText writes a decoded JSON value as JSON, for a problem's message.
+func jsonText(v any) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprint(v)
 	}
-}
-
-func (c *checker) targetExists(file, item string, exists bool, what string) {
-	if !exists {
-		c.add(file, item, "the "+what+" does not exist in the built system", "target an existing "+what+", or use add")
-	}
-}
-
-// validateNodeChange checks the fields a change operation sets; the rest of
-// the node stays as built.
-func (c *checker) validateNodeChange(file, item string, n Node, sc scope) {
-	c.oneOf(file, item, "level", n.Level, nodeLevels, false)
-	c.oneOf(file, item, "kind", n.Kind, nodeKinds, false)
-	c.oneOf(file, item, "group", n.Group, groups, false)
-	c.nodeFields(file, item, n, sc)
+	return string(data)
 }

@@ -127,19 +127,22 @@ func writeCanonical(b *bytes.Buffer, value any) error {
 		}
 		b.WriteByte(']')
 	case map[string]any:
-		keys := make([]string, 0, len(v))
+		// RFC 8785 sorts keys by their UTF-16 code units: a character
+		// outside the Basic Multilingual Plane sorts by its surrogates,
+		// before U+E000 to U+FFFF. Each key is encoded once.
+		keys := make([]utf16Key, 0, len(v))
 		for key := range v {
-			keys = append(keys, key)
+			keys = append(keys, utf16Key{key, utf16.Encode([]rune(key))})
 		}
-		slices.SortFunc(keys, compareUTF16)
+		slices.SortFunc(keys, func(a, b utf16Key) int { return slices.Compare(a.units, b.units) })
 		b.WriteByte('{')
 		for i, key := range keys {
 			if i > 0 {
 				b.WriteByte(',')
 			}
-			writeCanonicalString(b, key)
+			writeCanonicalString(b, key.text)
 			b.WriteByte(':')
-			if err := writeCanonical(b, v[key]); err != nil {
+			if err := writeCanonical(b, v[key.text]); err != nil {
 				return err
 			}
 		}
@@ -150,11 +153,10 @@ func writeCanonical(b *bytes.Buffer, value any) error {
 	return nil
 }
 
-// compareUTF16 orders strings by their UTF-16 code units, as RFC 8785 sorts
-// object keys: a character outside the Basic Multilingual Plane sorts by
-// its surrogates, before U+E000 to U+FFFF.
-func compareUTF16(a, b string) int {
-	return slices.Compare(utf16.Encode([]rune(a)), utf16.Encode([]rune(b)))
+// utf16Key is an object key and its UTF-16 code units, which it sorts by.
+type utf16Key struct {
+	text  string
+	units []uint16
 }
 
 // writeCanonicalString writes s as a JSON string escaping only the
