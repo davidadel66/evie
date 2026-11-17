@@ -86,7 +86,13 @@ test("the same conversation always builds the same request, byte for byte", asyn
   const requests: string[] = []
   for (let attempt = 0; attempt < 2; attempt++) {
     const model = scriptedProvider([{ text: ["Paris."] }, { text: ["About two million."] }])
-    const run = await startEvie([model.plugin])
+    const tools: Plugin = {
+      name: "one-tool",
+      setup(host) {
+        host.tools.add({ name: "lookup", description: "Looks something up.", inputSchema: { type: "object" } })
+      },
+    }
+    const run = await startEvie([model.plugin, tools])
     await say(run.evie, "What is the capital of France?")
     await say(run.evie, "How many people live there?")
     requests.push(JSON.stringify(model.requests))
@@ -182,4 +188,15 @@ test("a client that throws while handling an event does not break the turn", asy
   await say(run.evie, "hi")
 
   expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end", body: { reason: "completed" } })
+})
+
+test("closing Evie cancels a model request that would never finish", async () => {
+  const model = scriptedProvider([{ hang: true }])
+  const run = await startEvie([model.plugin])
+  stop = run.stop
+
+  await run.evie.send({ type: "send_message", text: "hi" })
+  await run.evie.close()
+
+  expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end" })
 })

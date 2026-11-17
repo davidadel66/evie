@@ -48,7 +48,16 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   }
 
   const session = log.createSession(options.projectFolder)
-  const loop = createLoop({ session, model: options.model, log, inbox, host, provider, emit })
+  const loop = createLoop({
+    session,
+    model: options.model,
+    log,
+    inbox,
+    host,
+    provider,
+    atomically: (work) => db.transaction(work)(),
+    emit,
+  })
 
   return {
     async send(command) {
