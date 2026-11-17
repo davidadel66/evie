@@ -204,3 +204,24 @@ test("without an API key no request is made, and the failure says how to set one
     },
   ])
 })
+
+test("a connection that breaks part way through the reply is reported, not thrown", async () => {
+  const { chunks } = await ask([{ status: 200, body: sse(text("Hello")), cutOff: true }])
+
+  expect(chunks).toEqual([
+    { type: "text", text: "Hello" },
+    {
+      type: "finish",
+      reason: "error",
+      error: "The connection to OpenRouter was lost: socket closed",
+      usage: { inputTokens: 0, outputTokens: 0 },
+    },
+  ])
+})
+
+test("the last line of a reply is read even with no line ending after it", async () => {
+  const body = sse(text("Hello")) + usage("stop")
+  const { chunks } = await ask([{ status: 200, body }])
+
+  expect(chunks.at(-1)).toEqual({ type: "finish", reason: "stop", usage: { inputTokens: 12, outputTokens: 5 } })
+})

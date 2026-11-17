@@ -6,7 +6,7 @@
 // documentation (read 2026-11-17), not captured from a live call.
 
 export type FakeResponse =
-  | { status: number; body: string; headers?: Record<string, string>; pieces?: number }
+  | { status: number; body: string; headers?: Record<string, string>; pieces?: number; cutOff?: boolean }
   | { networkError: string }
 
 export type RecordedCall = { url: string; headers: Record<string, string>; body: any }
@@ -36,7 +36,9 @@ export function fakeOpenRouter(responses: FakeResponse[]) {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         for (let at = 0; at < bytes.length; at += size) controller.enqueue(bytes.slice(at, at + size))
-        controller.close()
+        // `cutOff` stands for the connection breaking part way through.
+        if (response.cutOff) controller.error(new TypeError("socket closed"))
+        else controller.close()
       },
     })
     return new Response(body, { status: response.status, headers: response.headers ?? {} })

@@ -80,7 +80,7 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
 
       if (signal.aborted) yield failed("The request was cancelled.")
       else if (!response) yield failed(problem)
-      else yield* readReply(response)
+      else yield* readReply(response, signal)
     },
   }
 }
@@ -117,14 +117,26 @@ type WireChunk = {
   usage?: { prompt_tokens?: number; completion_tokens?: number }
 }
 
-async function* readReply(response: Response): AsyncGenerator<Chunk> {
+async function* readReply(response: Response, signal: AbortSignal): AsyncGenerator<Chunk> {
   // A tool call arrives in pieces that share an index. The first piece has
   // its id and name; later pieces add to its arguments.
   const calls = new Map<number, { id: string; name: string; arguments: string }>()
   let finishReason: string | undefined
   let usage = NO_USAGE
 
-  for await (const chunk of wireChunks(response)) {
+  const chunks = wireChunks(response)
+  while (true) {
+    let chunk: WireChunk
+    try {
+      const next = await chunks.next()
+      if (next.done) break
+      chunk = next.value
+    } catch (cause) {
+      // The connection broke part way through the reply.
+      if (signal.aborted) yield failed("The request was cancelled.")
+      else yield failed(`The connection to OpenRouter was lost: ${cause instanceof Error ? cause.message : String(cause)}`)
+      return
+    }
     if (chunk.error) {
       const code = chunk.error.code ?? "unknown"
       yield failed(`OpenRouter could not finish the reply (${code}): ${chunk.error.message ?? "no reason given"}`)
@@ -178,17 +190,27 @@ async function* wireChunks(response: Response): AsyncGenerator<WireChunk> {
     buffer += decoder.decode(bytes, { stream: true })
     let end: number
     while ((end = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, end).trim()
+      const chunk = parseLine(buffer.slice(0, end))
       buffer = buffer.slice(end + 1)
-      if (!line.startsWith("data:")) continue
-      const payload = line.slice("data:".length).trim()
-      if (payload === "[DONE]") return
-      try {
-        yield JSON.parse(payload) as WireChunk
-      } catch {
-        // A line that is not JSON carries nothing that can be used.
-      }
+      if (chunk === "done") return
+      if (chunk) yield chunk
     }
+  }
+  // The last line may arrive with no line ending after it.
+  const last = parseLine(buffer)
+  if (last && last !== "done") yield last
+}
+
+function parseLine(raw: string): WireChunk | "done" | undefined {
+  const line = raw.trim()
+  if (!line.startsWith("data:")) return undefined
+  const payload = line.slice("data:".length).trim()
+  if (payload === "[DONE]") return "done"
+  try {
+    return JSON.parse(payload) as WireChunk
+  } catch {
+    // A line that is not JSON carries nothing that can be used.
+    return undefined
   }
 }
 
@@ -212,6 +234,7 @@ function retryAfter(response: Response): number | undefined {
 
 function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
+    if (signal.aborted) return resolve()
     const timer = setTimeout(done, milliseconds)
     signal.addEventListener("abort", done, { once: true })
     function done() {
