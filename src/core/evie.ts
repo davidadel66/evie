@@ -71,6 +71,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       session,
       createLoop({
         session,
+        folder: project?.folder ?? null,
+        outputFolder: join(home, "tool-output"),
         model: options.model,
         log,
         inbox,

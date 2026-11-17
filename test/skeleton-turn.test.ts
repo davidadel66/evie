@@ -89,7 +89,7 @@ test("the same conversation always builds the same request, byte for byte", asyn
     const tools: Plugin = {
       name: "one-tool",
       setup(host) {
-        host.tools.add({ name: "lookup", description: "Looks something up.", inputSchema: { type: "object" } })
+        host.tools.add({ name: "lookup", description: "Looks something up.", inputSchema: { type: "object" }, run: async () => "" })
       },
     }
     const run = await startEvie([model.plugin, tools])
@@ -116,8 +116,8 @@ test("a tool registered by a plugin is described to the model, in the order regi
   const tools: Plugin = {
     name: "two-tools",
     setup(host) {
-      host.tools.add({ name: "zebra", description: "Second by name, first by order.", inputSchema: { type: "object" } })
-      host.tools.add({ name: "apple", description: "First by name, second by order.", inputSchema: { type: "object" } })
+      host.tools.add({ name: "zebra", description: "Second by name, first by order.", inputSchema: { type: "object" }, run: async () => "" })
+      host.tools.add({ name: "apple", description: "First by name, second by order.", inputSchema: { type: "object" }, run: async () => "" })
     },
   }
   const run = await startEvie([model.plugin, tools])
@@ -140,8 +140,8 @@ test("two plugins cannot register a tool under the same name", async () => {
   const clash: Plugin = {
     name: "clash",
     setup(host) {
-      host.tools.add({ name: "read", description: "One.", inputSchema: {} })
-      host.tools.add({ name: "read", description: "Two.", inputSchema: {} })
+      host.tools.add({ name: "read", description: "One.", inputSchema: {}, run: async () => "" })
+      host.tools.add({ name: "read", description: "Two.", inputSchema: {}, run: async () => "" })
     },
   }
   await expect(startEvie([model.plugin, clash])).rejects.toThrow('A tool named "read" is already registered')

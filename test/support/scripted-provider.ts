@@ -6,7 +6,13 @@ import type { Plugin, Request } from "../../src/index.ts"
 // `hang` never replies: it waits until the turn's cancel signal fires.
 // `error` is a request the provider reports as failed, after any text;
 // `fail` is a provider that breaks by throwing.
-export type ScriptedReply = { text: string[]; error?: string } | { fail: string } | { hang: true }
+// `calls` are tool calls the model asks for; `input` is given as an object,
+// or as raw text to stand for a model that wrote its input badly.
+export type ScriptedCall = { name: string; input: Record<string, unknown> | string }
+export type ScriptedReply =
+  | { text: string[]; error?: string; calls?: ScriptedCall[] }
+  | { fail: string }
+  | { hang: true }
 
 export function scriptedProvider(script: ScriptedReply[]) {
   const requests: Request[] = []
@@ -26,8 +32,17 @@ export function scriptedProvider(script: ScriptedReply[]) {
           }
           const usage = { inputTokens: 0, outputTokens: 0 }
           for (const text of reply.text) yield { type: "text", text }
+          const calls = reply.calls ?? []
+          for (const [index, call] of calls.entries()) {
+            yield {
+              type: "tool_call",
+              id: `call_${requests.length}_${index}`,
+              name: call.name,
+              arguments: typeof call.input === "string" ? call.input : JSON.stringify(call.input),
+            }
+          }
           if (reply.error !== undefined) yield { type: "finish", reason: "error", error: reply.error, usage }
-          else yield { type: "finish", reason: "stop", usage }
+          else yield { type: "finish", reason: calls.length > 0 ? "tool_calls" : "stop", usage }
         },
       })
     },

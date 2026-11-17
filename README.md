@@ -9,8 +9,13 @@ Motto: simplicity is the most powerful foundation.
 ## Status
 
 Milestone 1 is being built one ticket at a time, tracked in this
-repository's issues. So far you can run `evie` in a terminal and talk to a
-model. It has no tools yet, so it cannot read or change files.
+repository's issues. So far you can run `evie` in a terminal and have a
+model read, create and change files in the folder you started it in. It
+cannot search or run commands yet.
+
+There is no approval step: a tool runs as soon as the model asks for it,
+and it is not confined to the project folder. Use Evie only in a project
+you can restore from git.
 
 ## Running it
 
@@ -76,6 +81,9 @@ scheduled work, memory, voice and a phone app.
 
 Evie adapts proven pieces from other open-source harnesses. Each is
 credited here, and its licence notice kept with the code, as it is adapted.
+
+- [OpenCode](https://github.com/anomalyco/opencode) (MIT): the matching in
+  the `edit` tool, in `src/plugins/files/edit.ts`.
 
 ## Licence
 

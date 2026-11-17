@@ -7,7 +7,10 @@
 export type EventBodies = {
   turn_start: Record<string, never>
   user_message: { text: string }
-  assistant_message: { text: string }
+  // The model's reply: its text and any tool calls it asked for.
+  assistant_message: { text: string; toolCalls?: ToolCall[] }
+  // The text the model reads for one tool call.
+  tool_result: { callId: string; name: string; text: string }
   turn_end: { reason: "completed" | "error"; error?: string }
 }
 
@@ -32,7 +35,14 @@ export type EvieEvent = StoredEvent | DeltaEvent
 
 // ---- The request to a model ---------------------------------------------------
 
-export type Message = { role: "user" | "assistant"; text: string }
+// One request from the model to run a tool. `arguments` is the input as the
+// model wrote it: JSON text that has not been checked yet.
+export type ToolCall = { id: string; name: string; arguments: string }
+
+export type Message =
+  | { role: "user"; text: string }
+  | { role: "assistant"; text: string; toolCalls?: ToolCall[] }
+  | { role: "tool"; callId: string; text: string }
 
 export type ToolDefinition = {
   name: string
@@ -69,9 +79,22 @@ export type Provider = {
 
 // ---- Tools --------------------------------------------------------------------
 
-// What the model is told about a tool. Running a tool arrives with the first
-// tool.
-export type Tool = ToolDefinition
+// What a tool is given when it runs.
+export type ToolContext = {
+  // The turn's cancel signal.
+  signal: AbortSignal
+  // The folder of the session's project, or null in the general session,
+  // which has no project.
+  folder: string | null
+}
+
+// Every tool has this one shape, built in or added by someone else. `run`
+// returns the text the model will read. A failure the model can act on is
+// returned as that text, worded so the model knows what to do next; `run`
+// throws only for a bug.
+export type Tool = ToolDefinition & {
+  run(input: Record<string, unknown>, context: ToolContext): Promise<string>
+}
 
 // ---- Plugins ------------------------------------------------------------------
 

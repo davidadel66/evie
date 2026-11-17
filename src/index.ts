@@ -1,5 +1,6 @@
 export { createEvie, dataFolder, type EvieOptions } from "./core/evie.ts"
 export type * from "./core/types.ts"
 export { createOpenRouterProvider, openrouter, type OpenRouterOptions } from "./plugins/openrouter.ts"
+export { files } from "./plugins/files/index.ts"
 export { loadSettings, type Settings } from "./settings.ts"
 export { runTerminal, type TerminalOptions } from "./terminal/terminal.ts"
