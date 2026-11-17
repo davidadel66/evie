@@ -29,7 +29,17 @@ evie
 Type a message and press Enter. Ctrl-C or Ctrl-D quits.
 
 Evie keeps its state in `~/.evie`. Set `EVIE_HOME` to use another folder.
-The API key is read from the environment and is never written anywhere.
+
+Settings can also be kept in a `.env` file in that folder, one `NAME=value`
+per line, so they need not be exported in every shell:
+
+```
+OPENROUTER_API_KEY=...
+EVIE_MODEL=...
+```
+
+A setting in the real environment wins over the file. Evie reads the API
+key and never writes it anywhere.
 
 Evie is not started in a project. A client opens a session, which belongs
 to a project or to none, and one Evie serves every open session. A project
