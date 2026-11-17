@@ -65,3 +65,9 @@ test("in the general session shell runs in the home folder", async () => {
 
   expect(await call("shell", { command: "pwd" }, general.session)).toBe(await realpath(homedir()))
 })
+
+test("a very long timeout is capped, and the command still runs", async () => {
+  const { call } = await project()
+
+  expect(await call("shell", { command: "echo ok", timeout: 9_999_999_999 })).toBe("ok")
+})

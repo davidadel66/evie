@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
+import { chmod } from "node:fs/promises"
 import { files } from "../src/index.ts"
 import { toolProject } from "./support/tool-project.ts"
 
@@ -112,4 +113,22 @@ test("searching in the general session needs a full path", async () => {
   expect(await call("grep", { pattern: "TODO" }, general.session)).toBe(
     "This session is not in a project, so there is no folder to search. Give the full path of a folder as path.",
   )
+})
+
+test("glob needs a folder to look in, not a file", async () => {
+  const { call } = await project(code)
+
+  expect(await call("glob", { pattern: "*.ts", path: "src/app.ts" })).toBe(
+    '"src/app.ts" is a file. Give a folder to look in as path.',
+  )
+})
+
+test("grep still returns what it found when some files cannot be read", async () => {
+  const { call, path } = await project({ ...code, "locked.txt": "TODO: hidden\n" })
+  await chmod(path("locked.txt"), 0o000)
+
+  const result = await call("grep", { pattern: "TODO" })
+  await chmod(path("locked.txt"), 0o644)
+
+  expect(result).toStartWith("Found 3 matches in 3 files.")
 })

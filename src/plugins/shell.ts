@@ -9,6 +9,7 @@ import { resolvePath, statOrMissing } from "./files/paths.ts"
 // model asks for it, with the permissions of whoever started Evie.
 
 const DEFAULT_TIMEOUT_SECONDS = 120
+const LONGEST_TIMEOUT_SECONDS = 60 * 60
 // How much output is kept in memory. Anything over the limit shown to the
 // model is saved to a file by the shared tool handling; this only stops a
 // runaway command from using up memory.
@@ -35,14 +36,18 @@ const shellTool: Tool = {
     properties: {
       command: { type: "string", description: "The command to run" },
       workdir: { type: "string", description: "The folder to run it in. Defaults to the project folder" },
-      timeout: { type: "integer", description: "Seconds to allow before the command is stopped. Defaults to 120" },
+      timeout: {
+        type: "integer",
+        description: "Seconds to allow before the command is stopped. Defaults to 120; at most 3600",
+      },
     },
     required: ["command"],
   },
 
   async run(input, context) {
     const command = input.command as string
-    const seconds = typeof input.timeout === "number" && input.timeout > 0 ? input.timeout : DEFAULT_TIMEOUT_SECONDS
+    const asked = typeof input.timeout === "number" && input.timeout > 0 ? input.timeout : DEFAULT_TIMEOUT_SECONDS
+    const seconds = Math.min(asked, LONGEST_TIMEOUT_SECONDS)
 
     // The general session has no project folder, so a command runs at home.
     let folder = context.folder ?? homedir()

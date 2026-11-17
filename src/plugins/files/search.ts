@@ -79,6 +79,7 @@ export function searchTools(ripgrep: string): Tool[] {
       const pattern = input.pattern as string
       const where = await searchRoot(input.path as string | undefined, context)
       if ("failure" in where) return where.failure
+      if (where.target.length > 0) return `"${input.path}" is a file. Give a folder to look in as path.`
 
       const found = await runRipgrep(ripgrep, [...COMMON, "--files", "--glob", pattern], where.folder, context.signal)
       if (found.missing) return missing("glob")
@@ -144,6 +145,10 @@ async function runRipgrep(binary: string, args: string[], folder: string, signal
     return { lines: [], more: false, missing: true }
   }
 
+  // Problems are read while the results are, so a long list of them cannot
+  // fill up and stall the search.
+  const problems = new Response(child.stderr).text().catch(() => "")
+
   const lines: string[] = []
   const decoder = new TextDecoder()
   let buffer = ""
@@ -163,10 +168,11 @@ async function runRipgrep(binary: string, args: string[], folder: string, signal
   }
 
   const status = await child.exited
-  // Status 1 means nothing was found. Anything above that is a real problem,
-  // unless ripgrep was stopped here because there was enough.
-  if (!more && status > 1) {
-    const problem = (await new Response(child.stderr).text()).trim()
+  // Status 1 means nothing was found. Anything above that is a problem, but
+  // ripgrep also reports it when only some files could not be read, so what
+  // was found is still returned. It counts as a failure only with no results.
+  if (!more && status > 1 && lines.length === 0) {
+    const problem = (await problems).trim()
     return { lines: [], more: false, error: problem || `ripgrep ended with status ${status}` }
   }
   return { lines, more }
