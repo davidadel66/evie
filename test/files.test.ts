@@ -1,9 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, readFile, writeFile } from "node:fs/promises"
-import { join } from "node:path"
+import { writeFile } from "node:fs/promises"
 import { files } from "../src/index.ts"
-import { say, startEvie, stored } from "./support/harness.ts"
-import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
+import { stored } from "./support/harness.ts"
+import { toolProject } from "./support/tool-project.ts"
 
 let stop: (() => Promise<void>) | undefined
 afterEach(async () => {
@@ -11,24 +10,10 @@ afterEach(async () => {
   stop = undefined
 })
 
-// Starts Evie with the files plugin and a project holding the given files.
-// `call` has the model call one tool, and returns the text it gets back.
 async function project(contents: Record<string, string> = {}) {
-  const script: ScriptedReply[] = []
-  const run = await startEvie([scriptedProvider(script).plugin, files()])
-  stop = run.stop
-  const path = (name: string) => join(run.projectFolder, name)
-  for (const [name, text] of Object.entries(contents)) {
-    await mkdir(join(path(name), ".."), { recursive: true })
-    await writeFile(path(name), text)
-  }
-  async function call(name: string, input: Record<string, unknown>, session = run.session) {
-    script.push({ text: [], calls: [{ name, input }] }, { text: ["done"] })
-    await say(run, "go", session)
-    const results = stored(run.events).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))
-    return results.at(-1)!
-  }
-  return { run, call, path, text: (name: string) => readFile(path(name), "utf8") }
+  const made = await toolProject([files()], contents)
+  stop = made.run.stop
+  return made
 }
 
 // ---- read -------------------------------------------------------------------------

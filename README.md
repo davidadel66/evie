@@ -10,12 +10,15 @@ Motto: simplicity is the most powerful foundation.
 
 Milestone 1 is being built one ticket at a time, tracked in this
 repository's issues. So far you can run `evie` in a terminal and have a
-model read, create and change files in the folder you started it in. It
-cannot search or run commands yet.
+model read, search, create and change files and run commands in the folder
+you started it in.
 
-There is no approval step: a tool runs as soon as the model asks for it,
-and it is not confined to the project folder. Use Evie only in a project
-you can restore from git.
+**There is no approval step yet.** A tool runs as soon as the model asks
+for it, including any shell command, with your permissions, and it is not
+confined to the project folder. Use Evie only in a project you can restore
+from git, and watch what it runs.
+
+Searching needs [ripgrep](https://github.com/BurntSushi/ripgrep).
 
 ## Running it
 
