@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import type { HookContext, Host, Plugin } from "../src/index.ts"
+import type { HookContext, Hooks, Host, Plugin } from "../src/index.ts"
 import { say, startEvie, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -218,7 +218,7 @@ test("a hook that throws around a tool ends the turn, and the call still has a r
 
 test("a hook that returns something that is not a denial does not stop a later hook from denying", async () => {
   const echo = echoTool()
-  const sloppy = (() => true) as unknown as Parameters<Host["on"]>[1]
+  const sloppy = (() => true) as unknown as Hooks["before_tool"]
   const { run, results } = await start(callEcho, [
     echo.plugin,
     plugin("sloppy", (host) => host.on("before_tool", sloppy)),
