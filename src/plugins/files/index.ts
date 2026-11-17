@@ -1,14 +1,21 @@
 import type { Plugin, Tool } from "../../core/types.ts"
 import { edit } from "./edit.ts"
 import { read } from "./read.ts"
+import { searchTools } from "./search.ts"
 import { write } from "./write.ts"
 
-// The built-in plugin for working with files.
-export function files(): Plugin {
+export type FilesOptions = {
+  // The ripgrep program that grep and glob run. Defaults to `rg` on the path.
+  ripgrep?: string
+}
+
+// The built-in plugin for working with files: reading, changing and finding them.
+export function files(options: FilesOptions = {}): Plugin {
   return {
     name: "files",
     setup(host) {
-      for (const tool of [read, write, edit]) host.tools.add(reportingFileErrors(tool))
+      const tools = [read, write, edit, ...searchTools(options.ripgrep ?? "rg")]
+      for (const tool of tools) host.tools.add(reportingFileErrors(tool))
     },
   }
 }
