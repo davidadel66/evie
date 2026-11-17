@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
+import { join } from "node:path"
 import { shell, type EvieEvent, type Plugin } from "../src/index.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
@@ -29,8 +30,9 @@ function next(run: Run, matches: (event: EvieEvent) => boolean) {
 }
 
 // Sends a message, cancels the turn once the given moment arrives, and waits for the turn to end.
-async function sayThenCancel(run: Run, text: string, moment: (event: EvieEvent) => boolean) {
-  const reached = next(run, moment)
+// The moment is an event the client is sent, or a promise such as "the tool has started".
+async function sayThenCancel(run: Run, text: string, moment: ((event: EvieEvent) => boolean) | Promise<unknown>) {
+  const reached = typeof moment === "function" ? next(run, moment) : moment
   const ended = next(run, (event) => event.type === "turn_end")
   await run.evie.send({ type: "send_message", session: run.session, text })
   await reached
@@ -39,17 +41,30 @@ async function sayThenCancel(run: Run, text: string, moment: (event: EvieEvent) 
 }
 
 // A tool that takes a long time, and stops when the turn is cancelled.
-const slowTool: Plugin = {
-  name: "slow-tool",
-  setup(host) {
-    host.tools.add({
-      name: "wait",
-      description: "Waits.",
-      inputSchema: { type: "object" },
-      run: (_input, context) =>
-        new Promise((resolve) => context.signal.addEventListener("abort", () => resolve("stopped waiting"), { once: true })),
-    })
-  },
+// `started` resolves once the tool is running.
+function slowTool(onCancel: "returns" | "throws" = "returns") {
+  let begin = () => {}
+  const started = new Promise<void>((resolve) => (begin = resolve))
+  const plugin: Plugin = {
+    name: "slow-tool",
+    setup(host) {
+      host.tools.add({
+        name: "wait",
+        description: "Waits.",
+        inputSchema: { type: "object" },
+        run: (_input, context) =>
+          new Promise((resolve, reject) => {
+            begin()
+            context.signal.addEventListener(
+              "abort",
+              () => (onCancel === "returns" ? resolve("stopped waiting") : reject(new Error("aborted"))),
+              { once: true },
+            )
+          }),
+      })
+    },
+  }
+  return { plugin, started }
 }
 
 test("cancelling while the model is replying keeps the text so far, marked as interrupted", async () => {
@@ -81,12 +96,13 @@ test("a provider that reports the cancelled request as a failure still ends the 
 })
 
 test("cancelling while a tool runs stops it, and every call still gets a result", async () => {
+  const slow = slowTool()
   const { run } = await start(
     [{ text: ["Working."], calls: [{ name: "wait", input: {} }, { name: "wait", input: {} }] }],
-    [slowTool],
+    [slow.plugin],
   )
 
-  await sayThenCancel(run, "go", (event) => event.type === "assistant_message")
+  await sayThenCancel(run, "go", slow.started)
 
   const results = stored(run.events).flatMap((event) => (event.type === "tool_result" ? [event.body] : []))
   expect(results).toEqual([
@@ -97,12 +113,13 @@ test("cancelling while a tool runs stops it, and every call still gets a result"
 })
 
 test("after a cancel the conversation carries on, with a result for every tool call", async () => {
+  const slow = slowTool()
   const { run, model } = await start(
     [{ text: ["Working."], calls: [{ name: "wait", input: {} }, { name: "wait", input: {} }] }, { text: ["Carrying on."] }],
-    [slowTool],
+    [slow.plugin],
   )
 
-  await sayThenCancel(run, "go", (event) => event.type === "assistant_message")
+  await sayThenCancel(run, "go", slow.started)
   await say(run, "what happened?")
 
   const asked = model.requests[1]!.messages
@@ -127,10 +144,13 @@ test("the interrupted reply is part of what the model sees next", async () => {
 })
 
 test("cancelling stops a running shell command", async () => {
-  const { run } = await start([{ text: [], calls: [{ name: "shell", input: { command: "sleep 30" } }] }], [shell()])
+  const { run } = await start([{ text: [], calls: [{ name: "shell", input: { command: "touch started; sleep 30" } }] }], [shell()])
   const started = Date.now()
+  const commandRunning = (async () => {
+    while (!(await Bun.file(join(run.projectFolder, "started")).exists())) await new Promise((resolve) => setTimeout(resolve, 5))
+  })()
 
-  await sayThenCancel(run, "go", (event) => event.type === "assistant_message")
+  await sayThenCancel(run, "go", commandRunning)
 
   const results = stored(run.events).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))
   expect(results).toEqual(["[Stopped: the turn was cancelled.]"])
@@ -174,21 +194,10 @@ test("a message waiting when a turn is cancelled is answered in a turn of its ow
 })
 
 test("a tool that throws when it is cancelled ends the turn as cancelled, not as a bug", async () => {
-  const throwing: Plugin = {
-    name: "throwing-tool",
-    setup(host) {
-      host.tools.add({
-        name: "wait",
-        description: "Waits.",
-        inputSchema: { type: "object" },
-        run: (_input, context) =>
-          new Promise((_resolve, reject) => context.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true })),
-      })
-    },
-  }
-  const { run } = await start([{ text: [], calls: [{ name: "wait", input: {} }] }], [throwing])
+  const throwing = slowTool("throws")
+  const { run } = await start([{ text: [], calls: [{ name: "wait", input: {} }] }], [throwing.plugin])
 
-  await sayThenCancel(run, "go", (event) => event.type === "assistant_message")
+  await sayThenCancel(run, "go", throwing.started)
 
   const results = stored(run.events).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))
   expect(results).toEqual(["Cancelled: the turn was stopped while this tool was running."])

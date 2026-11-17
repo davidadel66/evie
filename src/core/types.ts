@@ -53,6 +53,8 @@ export type ToolDefinition = {
 
 export type Request = {
   model: string
+  // The system prompt. The core sets none; a plugin adds it in a hook.
+  system?: string
   messages: Message[]
   tools: ToolDefinition[]
 }
@@ -105,6 +107,36 @@ export type Registry<Entry> = {
   list(): readonly Entry[]
 }
 
+// ---- Hooks --------------------------------------------------------------------
+
+// What every hook is told about the moment it runs in.
+export type HookContext = {
+  session: string
+  // The session's project, or null in the general session.
+  project: Project | null
+  // The session's events so far.
+  events: readonly StoredEvent[]
+  // The turn's cancel signal.
+  signal: AbortSignal
+}
+
+// A tool call after its input has been checked and repaired.
+export type CheckedToolCall = { id: string; name: string; input: Record<string, unknown> }
+
+// The named moments in the loop where a plugin's code runs. Hooks run in the
+// order their plugins are listed. A hook may be asynchronous.
+export type Hooks = {
+  // After a request is built and before it is sent. Return a changed request,
+  // or nothing to leave it as it is. The tools left in the request are the
+  // only ones the model can call in that step.
+  before_request(request: Request, context: HookContext): Request | void | Promise<Request | void>
+  // Before a tool runs. Return `{ deny: reason }` to stop it: the tool does
+  // not run and the reason is its result. Return nothing to allow it.
+  before_tool(call: CheckedToolCall, context: HookContext): { deny: string } | void | Promise<{ deny: string } | void>
+  // After a tool has run. Return changed result text, or nothing to leave it.
+  after_tool(call: CheckedToolCall, text: string, context: HookContext): string | void | Promise<string | void>
+}
+
 // The only way a plugin adds anything to Evie. Each project has a host of its
 // own, so what a plugin adds for one project is not seen in another.
 export type Host = {
@@ -112,6 +144,8 @@ export type Host = {
   project: Project | null
   tools: Registry<Tool>
   providers: Registry<Provider>
+  // Attaches a function to a hook.
+  on<Name extends keyof Hooks>(name: Name, handler: Hooks[Name]): void
 }
 
 export type Plugin = {

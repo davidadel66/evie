@@ -250,3 +250,12 @@ test("earlier tool calls and their results are sent back in OpenRouter's format"
     { role: "assistant", content: "It says hello." },
   ])
 })
+
+test("the system prompt is sent as the first message", async () => {
+  const { calls } = await ask([ok(text("ok"), usage("stop"), DONE)], { request: { ...request, system: "You are Evie." } })
+
+  expect(calls[0]?.body.messages).toEqual([
+    { role: "system", content: "You are Evie." },
+    { role: "user", content: "hi" },
+  ])
+})

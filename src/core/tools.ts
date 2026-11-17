@@ -1,11 +1,15 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import type { Tool, ToolCall, ToolContext } from "./types.ts"
+import type { CheckedToolCall, Tool, ToolCall, ToolContext } from "./types.ts"
 
 // What every tool call goes through, whichever tool it is for: find the
-// tool, check and repair the input, run it, and cap the output. The result
+// tool, check and repair the input, ask the plugins, run it, let the plugins
+// see the result, and cap the output. The result
 // is always text for the model. A problem the model can fix is returned as
 // that text; only a bug in a tool throws.
+
+// Thrown when the turn was cancelled before a tool got to run.
+export class CancelledBeforeStart extends Error {}
 
 export const MAX_LINES = 2000
 export const MAX_BYTES = 50 * 1024
@@ -14,8 +18,13 @@ export const MAX_BYTES = 50 * 1024
 const NOTE_LINES = 2
 
 export type ToolRunOptions = {
+  // The tools the model was offered in this step.
   tools: readonly Tool[]
   context: ToolContext
+  // The before_tool hooks: the reason one denied the call, or undefined.
+  before(call: CheckedToolCall): Promise<string | undefined>
+  // The after_tool hooks: the result text as they left it.
+  after(call: CheckedToolCall, text: string): Promise<string>
   // Where output too long to show is saved in full.
   outputFolder: string
 }
@@ -35,12 +44,19 @@ export async function runToolCall(call: ToolCall, options: ToolRunOptions): Prom
     return `The input for ${tool.name} is not right: ${problems.join("; ")}. Send the call again with the input fixed.`
   }
 
+  const checked: CheckedToolCall = { id: call.id, name: tool.name, input: parsed }
+  const denied = await options.before(checked)
+  if (denied !== undefined) return denied
+  // The turn may have been cancelled while the hooks ran.
+  if (options.context.signal.aborted) throw new CancelledBeforeStart()
+
   let output: string
   try {
     output = await tool.run(parsed, options.context)
   } catch (cause) {
     throw new Error(`The tool "${tool.name}" broke: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
+  output = await options.after(checked, output)
   return capOutput(output, join(options.outputFolder, `${safeName(call.id)}.txt`))
 }
 
