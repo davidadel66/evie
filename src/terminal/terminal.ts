@@ -10,9 +10,11 @@ export type TerminalOptions = {
   // Where to print.
   write(text: string): void
   // Called once with a function to run when the owner presses Ctrl-C. That
-  // function cancels the turn in progress and returns true, or returns false
-  // when nothing is running, which is the caller's cue to quit.
-  onInterrupt?: (interrupt: () => boolean) => void
+  // function cancels the turn in progress and says what it did: "cancelled";
+  // "idle" when nothing is running, which is the caller's cue to quit; or
+  // "again" when a cancel was already asked for and the turn has still not
+  // stopped, which is the caller's cue to quit without waiting.
+  onInterrupt?: (interrupt: () => "cancelled" | "idle" | "again") => void
 }
 
 const PROMPT = "\n› "
@@ -42,6 +44,8 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   let unanswered = 0
   let idle = true
   let whenIdle = () => {}
+  // True from a Ctrl-C until the turn it cancelled has ended.
+  let cancelling = false
 
   const stop = evie.subscribe((event) => {
     if (event.session !== session) return
@@ -59,6 +63,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     if (event.type === "turn_end") {
       if (event.body.reason === "error") line(`[error] ${event.body.error ?? "The turn failed."}`)
       if (event.body.reason === "cancelled") line("[cancelled]")
+      cancelling = false
       if (midLine) write("\n")
       if (unanswered === 0) {
         idle = true
@@ -69,9 +74,11 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   })
 
   options.onInterrupt?.(() => {
-    if (idle) return false
-    void evie.send({ type: "cancel", session })
-    return true
+    if (idle) return "idle"
+    if (cancelling) return "again"
+    cancelling = true
+    evie.send({ type: "cancel", session }).catch((cause) => line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`))
+    return "cancelled"
   })
 
   write(`evie · ${project?.name ?? "general"}\n`)

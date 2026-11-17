@@ -18,10 +18,12 @@ const evie = await createEvie({ env, model, plugins: [files(), shell(), openrout
 
 const input = createInterface({ input: process.stdin })
 // Ctrl-C stops the turn in progress. With nothing running it ends the input,
-// which quits.
-let interrupt = () => false
+// which quits. Pressed again while a turn is refusing to stop, it quits at once.
+let interrupt = (): "cancelled" | "idle" | "again" => "idle"
 const onCtrlC = () => {
-  if (!interrupt()) input.close()
+  const did = interrupt()
+  if (did === "idle") input.close()
+  if (did === "again") process.exit(130)
 }
 input.on("SIGINT", onCtrlC)
 process.on("SIGINT", onCtrlC)

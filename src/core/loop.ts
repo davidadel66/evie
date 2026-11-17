@@ -140,6 +140,12 @@ export function createLoop(options: LoopOptions): Loop {
               outputFolder: join(outputFolder, session),
             })
           } catch (cause) {
+            if (signal.aborted) {
+              // Being cancelled makes some tools throw. That is not a bug.
+              emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: "Cancelled: the turn was stopped while this tool was running." }))
+              settleRest(index + 1, "Cancelled: the turn was stopped before this tool ran.")
+              break
+            }
             // A tool broke, which ends the turn.
             reason = "error"
             error = cause instanceof Error ? cause.message : String(cause)

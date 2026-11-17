@@ -94,8 +94,8 @@ test("Ctrl-C stops the turn in progress, and with nothing running says to quit",
   const run = await startEvie([model.plugin])
   stop = run.stop
   let printed = ""
-  let interrupt = () => false
-  const answers: boolean[] = []
+  let interrupt = (): string => "not set"
+  const answers: string[] = []
   await runTerminal({
     evie: run.evie,
     folder: run.projectFolder,
@@ -110,6 +110,6 @@ test("Ctrl-C stops the turn in progress, and with nothing running says to quit",
     onInterrupt: (handler) => (interrupt = handler),
   })
 
-  expect(answers).toEqual([false, true])
+  expect(answers).toEqual(["idle", "cancelled"])
   expect(printed).toContain("Thinking\n[cancelled]\n")
 })

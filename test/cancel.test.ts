@@ -172,3 +172,25 @@ test("a message waiting when a turn is cancelled is answered in a turn of its ow
     { role: "user", text: "second" },
   ])
 })
+
+test("a tool that throws when it is cancelled ends the turn as cancelled, not as a bug", async () => {
+  const throwing: Plugin = {
+    name: "throwing-tool",
+    setup(host) {
+      host.tools.add({
+        name: "wait",
+        description: "Waits.",
+        inputSchema: { type: "object" },
+        run: (_input, context) =>
+          new Promise((_resolve, reject) => context.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true })),
+      })
+    },
+  }
+  const { run } = await start([{ text: [], calls: [{ name: "wait", input: {} }] }], [throwing])
+
+  await sayThenCancel(run, "go", (event) => event.type === "assistant_message")
+
+  const results = stored(run.events).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))
+  expect(results).toEqual(["Cancelled: the turn was stopped while this tool was running."])
+  expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end", body: { reason: "cancelled" } })
+})
