@@ -13,11 +13,23 @@ export type TerminalOptions = {
 
 const PROMPT = "\n› "
 
+const shorten = (text: string, length: number) => (text.length > length ? `${text.slice(0, length)}…` : text)
+
 // The terminal client. It opens a session in the project of the folder it was
 // started in, sends each line typed as a message, and prints the model's reply
 // as it streams. It ends when the input ends, after any turn in progress.
 export async function runTerminal(options: TerminalOptions): Promise<void> {
-  const { evie, write } = options
+  const { evie } = options
+
+  // Whether the last thing printed left the cursor part way along a line.
+  let midLine = false
+  const write = (text: string) => {
+    if (text === "") return
+    options.write(text)
+    midLine = !text.endsWith("\n")
+  }
+  // Prints text on a line of its own.
+  const line = (text: string) => write(`${midLine ? "\n" : ""}${text}\n`)
   const { session, project } = await evie.send({ type: "open_session", folder: options.folder })
 
   // Messages sent that no turn has taken up yet. Several can be answered by
@@ -31,9 +43,18 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     if (event.session !== session) return
     if (event.type === "user_message") unanswered -= 1
     if (event.type === "assistant_delta") write(event.text)
+    // One line for each tool the model asks for, and one for what came back.
+    if (event.type === "assistant_message") {
+      for (const call of event.body.toolCalls ?? []) line(`⏺ ${call.name} ${shorten(call.arguments, 120)}`)
+    }
+    if (event.type === "tool_result") {
+      const lines = event.body.text.split("\n")
+      const more = lines.length > 1 ? ` (+${lines.length - 1} more lines)` : ""
+      line(`  ⎿ ${shorten(lines[0] ?? "", 100)}${more}`)
+    }
     if (event.type === "turn_end") {
-      if (event.body.reason === "error") write(`\n[error] ${event.body.error ?? "The turn failed."}`)
-      write("\n")
+      if (event.body.reason === "error") line(`[error] ${event.body.error ?? "The turn failed."}`)
+      if (midLine) write("\n")
       if (unanswered === 0) {
         idle = true
         write(PROMPT)

@@ -1,10 +1,16 @@
+import { join } from "node:path"
 import type { EventLog } from "./log.ts"
 import type { Inbox } from "./inbox.ts"
 import { buildRequest } from "./request-builder.ts"
-import type { EventBodies, EvieEvent, Host, Provider, StoredEvent } from "./types.ts"
+import { runToolCall } from "./tools.ts"
+import type { EventBodies, EvieEvent, Host, Provider, StoredEvent, ToolCall } from "./types.ts"
 
 export type LoopOptions = {
   session: string
+  // The folder of the session's project, or null in the general session.
+  folder: string | null
+  // Where tool output too long to show is saved in full.
+  outputFolder: string
   model: string
   log: EventLog
   inbox: Inbox
@@ -24,10 +30,11 @@ export type Loop = {
 }
 
 // The turn loop. A turn is everything from a message arriving to the model's
-// final answer. The loop keeps no conversation in memory: each request is
-// rebuilt from the event log.
+// final answer. A step is one model request plus the tool calls it asks for;
+// a turn takes as many steps as the model needs. The loop keeps no
+// conversation in memory: each request is rebuilt from the event log.
 export function createLoop(options: LoopOptions): Loop {
-  const { session, model, log, inbox, host, provider, atomically, emit } = options
+  const { session, folder, outputFolder, model, log, inbox, host, provider, atomically, emit } = options
   // True from the moment a run of turns starts until its last inbox check.
   let active = false
   // True once stop() has been called; no further turn starts.
@@ -72,21 +79,54 @@ export function createLoop(options: LoopOptions): Loop {
     for (const event of started) emit(event)
 
     try {
-      const request = buildRequest(model, log.events(session), host.tools.list())
-      let text = ""
-      for await (const chunk of provider.stream(request, signal)) {
-        if (signal.aborted) throw new Error("The turn was cancelled.")
-        if (chunk.type === "text") {
-          text += chunk.text
-          emit({ type: "assistant_delta", session, text: chunk.text })
+      // One pass of this loop is one step.
+      while (true) {
+        const request = buildRequest(model, log.events(session), host.tools.list())
+        let text = ""
+        const calls: ToolCall[] = []
+        for await (const chunk of provider.stream(request, signal)) {
+          if (signal.aborted) throw new Error("The turn was cancelled.")
+          if (chunk.type === "text") {
+            text += chunk.text
+            emit({ type: "assistant_delta", session, text: chunk.text })
+          }
+          if (chunk.type === "tool_call") calls.push({ id: chunk.id, name: chunk.name, arguments: chunk.arguments })
+          // The provider reports a failed request as a value, not a throw.
+          if (chunk.type === "finish" && chunk.reason === "error") {
+            reason = "error"
+            error = chunk.error
+          }
         }
-        // The provider reports a failed request as a value, not a throw.
-        if (chunk.type === "finish" && chunk.reason === "error") {
-          reason = "error"
-          error = chunk.error
+        if (reason === "error") break
+
+        emit(log.append(session, "assistant_message", calls.length > 0 ? { text, toolCalls: calls } : { text }))
+        // A reply that asks for no tool is the final answer.
+        if (calls.length === 0) break
+
+        // The tools run one at a time, in the order the model asked.
+        for (const [index, call] of calls.entries()) {
+          let result: string
+          try {
+            result = await runToolCall(call, {
+              tools: host.tools.list(),
+              context: { signal, folder },
+              outputFolder: join(outputFolder, session),
+            })
+          } catch (cause) {
+            // A tool broke. Every call still gets a result, so the
+            // conversation stays one a model will accept, and the turn ends.
+            reason = "error"
+            error = cause instanceof Error ? cause.message : String(cause)
+            emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: `${error} This is a bug in the tool, not in the input.` }))
+            for (const skipped of calls.slice(index + 1)) {
+              emit(log.append(session, "tool_result", { callId: skipped.id, name: skipped.name, text: "Not run, because an earlier tool call in this step broke." }))
+            }
+            break
+          }
+          emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: result }))
         }
+        if (reason === "error") break
       }
-      if (reason === "completed") emit(log.append(session, "assistant_message", { text }))
     } catch (cause) {
       reason = "error"
       error = cause instanceof Error ? cause.message : String(cause)

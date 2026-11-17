@@ -55,3 +55,36 @@ test("a turn that fails prints why", async () => {
 
   expect(printed).toContain("[error] No API key. Set OPENROUTER_API_KEY to your OpenRouter key.")
 })
+
+test("each tool the model uses is shown on a line, with a short summary of what came back", async () => {
+  const model = scriptedProvider([
+    { text: ["Looking."], calls: [{ name: "lookup", input: { word: "evie" } }] },
+    { text: ["Found it."] },
+  ])
+  const run = await startEvie([
+    model.plugin,
+    {
+      name: "lookup-tool",
+      setup(host) {
+        host.tools.add({
+          name: "lookup",
+          description: "Looks a word up.",
+          inputSchema: { type: "object", properties: { word: { type: "string" } } },
+          run: async () => "evie: a personal agent\nsecond line\nthird line",
+        })
+      },
+    },
+  ])
+  stop = run.stop
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    lines: (async function* () {
+      yield "look it up"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain('Looking.\n⏺ lookup {"word":"evie"}\n  ⎿ evie: a personal agent (+2 more lines)\nFound it.\n')
+})

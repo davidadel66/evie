@@ -1,4 +1,4 @@
-import type { Chunk, Plugin, Provider, Request, Usage } from "../core/types.ts"
+import type { Chunk, Message, Plugin, Provider, Request, Usage } from "../core/types.ts"
 
 // The built-in provider. It reaches every model through OpenRouter with one
 // plain HTTPS request per step, and reads the streamed reply itself.
@@ -90,7 +90,7 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
 function toBody(request: Request) {
   return {
     model: request.model,
-    messages: request.messages.map((message) => ({ role: message.role, content: message.text })),
+    messages: request.messages.map(toWireMessage),
     // Left out when there are none: an empty list is not documented.
     ...(request.tools.length > 0 && {
       tools: request.tools.map((tool) => ({
@@ -99,6 +99,26 @@ function toBody(request: Request) {
       })),
     }),
     stream: true,
+  }
+}
+
+function toWireMessage(message: Message) {
+  switch (message.role) {
+    case "user":
+      return { role: "user", content: message.text }
+    case "assistant":
+      if (!message.toolCalls) return { role: "assistant", content: message.text }
+      return {
+        role: "assistant",
+        content: message.text === "" ? null : message.text,
+        tool_calls: message.toolCalls.map((call) => ({
+          id: call.id,
+          type: "function",
+          function: { name: call.name, arguments: call.arguments },
+        })),
+      }
+    case "tool":
+      return { role: "tool", tool_call_id: message.callId, content: message.text }
   }
 }
 

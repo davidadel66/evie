@@ -225,3 +225,28 @@ test("the last line of a reply is read even with no line ending after it", async
 
   expect(chunks.at(-1)).toEqual({ type: "finish", reason: "stop", usage: { inputTokens: 12, outputTokens: 5 } })
 })
+
+test("earlier tool calls and their results are sent back in OpenRouter's format", async () => {
+  const withTools: Request = {
+    model: "some/model",
+    tools: [],
+    messages: [
+      { role: "user", text: "read it" },
+      { role: "assistant", text: "", toolCalls: [{ id: "call_a", name: "read", arguments: '{"path":"a.ts"}' }] },
+      { role: "tool", callId: "call_a", text: "1: hello" },
+      { role: "assistant", text: "It says hello." },
+    ],
+  }
+  const { calls } = await ask([ok(text("ok"), usage("stop"), DONE)], { request: withTools })
+
+  expect(calls[0]?.body.messages).toEqual([
+    { role: "user", content: "read it" },
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [{ id: "call_a", type: "function", function: { name: "read", arguments: '{"path":"a.ts"}' } }],
+    },
+    { role: "tool", tool_call_id: "call_a", content: "1: hello" },
+    { role: "assistant", content: "It says hello." },
+  ])
+})
