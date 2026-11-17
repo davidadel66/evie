@@ -16,3 +16,6 @@ research/
 
 # Editor and system files
 .DS_Store
+
+# Agent worktrees
+.claude/
