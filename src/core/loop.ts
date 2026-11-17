@@ -80,8 +80,13 @@ export function createLoop(options: LoopOptions): Loop {
           text += chunk.text
           emit({ type: "assistant_delta", session, text: chunk.text })
         }
+        // The provider reports a failed request as a value, not a throw.
+        if (chunk.type === "finish" && chunk.reason === "error") {
+          reason = "error"
+          error = chunk.error
+        }
       }
-      emit(log.append(session, "assistant_message", { text }))
+      if (reason === "completed") emit(log.append(session, "assistant_message", { text }))
     } catch (cause) {
       reason = "error"
       error = cause instanceof Error ? cause.message : String(cause)

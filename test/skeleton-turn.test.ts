@@ -214,3 +214,16 @@ test("a reply with no text is not sent back to the model as an empty message", a
     { role: "user", text: "hello?" },
   ])
 })
+
+test("a request the provider reports as failed ends the turn with its reason, and stores no reply", async () => {
+  const model = scriptedProvider([{ text: ["Hel"], error: "OpenRouter could not finish the reply (502): gone" }])
+  const run = await startEvie([model.plugin])
+  stop = run.stop
+
+  await say(run, "hi")
+
+  expect(stored(run.events).map((event) => event.type)).toEqual(["turn_start", "user_message", "turn_end"])
+  expect(stored(run.events).at(-1)).toMatchObject({
+    body: { reason: "error", error: "OpenRouter could not finish the reply (502): gone" },
+  })
+})

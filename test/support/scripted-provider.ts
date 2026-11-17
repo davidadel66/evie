@@ -4,7 +4,9 @@ import type { Plugin, Request } from "../../src/index.ts"
 // and records every request it was sent, so a test can check what the model
 // would have seen.
 // `hang` never replies: it waits until the turn's cancel signal fires.
-export type ScriptedReply = { text: string[] } | { fail: string } | { hang: true }
+// `error` is a request the provider reports as failed, after any text;
+// `fail` is a provider that breaks by throwing.
+export type ScriptedReply = { text: string[]; error?: string } | { fail: string } | { hang: true }
 
 export function scriptedProvider(script: ScriptedReply[]) {
   const requests: Request[] = []
@@ -22,8 +24,10 @@ export function scriptedProvider(script: ScriptedReply[]) {
             await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))
             throw new Error("the request was cancelled")
           }
+          const usage = { inputTokens: 0, outputTokens: 0 }
           for (const text of reply.text) yield { type: "text", text }
-          yield { type: "finish", reason: "stop", usage: { inputTokens: 0, outputTokens: 0 } }
+          if (reply.error !== undefined) yield { type: "finish", reason: "error", error: reply.error, usage }
+          else yield { type: "finish", reason: "stop", usage }
         },
       })
     },
