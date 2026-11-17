@@ -1,0 +1,18 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# Local settings and secrets
+.env
+.env.*
+!.env.example
+
+# Planning documents, kept out of the public repository for now
+decisions.md
+design.md
+*.spec.md
+research/
+.vision/
+
+# Editor and system files
+.DS_Store
