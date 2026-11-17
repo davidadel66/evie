@@ -8,8 +8,19 @@ Motto: simplicity is the most powerful foundation.
 
 ## Status
 
-In design. Nothing is built yet. Milestone 1 is tracked in this
-repository's issues.
+Milestone 1 is being built one ticket at a time, tracked in this
+repository's issues. So far the core runs a turn against a scripted
+stand-in for the model; there is no real model, tool or terminal client
+yet.
+
+## Development
+
+Evie needs [Bun](https://bun.sh).
+
+```sh
+bun install
+bun run check   # the type check and the tests
+```
 
 ## What milestone 1 will be
 
