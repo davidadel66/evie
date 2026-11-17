@@ -2,12 +2,15 @@
 // The `evie` command: starts Evie with its built-in plugins and runs the
 // terminal client in the folder it was started in.
 import { createInterface } from "node:readline"
-import { createEvie, openrouter, runTerminal } from "./index.ts"
+import { createEvie, loadSettings, openrouter, runTerminal } from "./index.ts"
 
-const env = process.env
+const env = await loadSettings(process.env)
 const model = env.EVIE_MODEL
 if (!model) {
-  console.error("Set EVIE_MODEL to the name of a model, as listed at https://openrouter.ai/models.")
+  console.error(
+    "Set EVIE_MODEL to the name of a model, as listed at https://openrouter.ai/models,\n" +
+      "in the environment or in the .env file in Evie's data folder.",
+  )
   process.exit(1)
 }
 
