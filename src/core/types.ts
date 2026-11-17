@@ -8,10 +8,11 @@ export type EventBodies = {
   turn_start: Record<string, never>
   user_message: { text: string }
   // The model's reply: its text and any tool calls it asked for.
-  assistant_message: { text: string; toolCalls?: ToolCall[] }
+  // `interrupted` marks a reply that was cut short by a cancel.
+  assistant_message: { text: string; toolCalls?: ToolCall[]; interrupted?: true }
   // The text the model reads for one tool call.
   tool_result: { callId: string; name: string; text: string }
-  turn_end: { reason: "completed" | "error"; error?: string }
+  turn_end: { reason: "completed" | "error" | "cancelled"; error?: string }
 }
 
 export type StoredEventType = keyof EventBodies
@@ -137,6 +138,11 @@ export type Commands = {
   }
   send_message: {
     input: { session: string; text: string }
+    output: void
+  }
+  // Stops the session's turn in progress. Does nothing when it is idle.
+  cancel: {
+    input: { session: string }
     output: void
   }
 }

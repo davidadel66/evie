@@ -34,7 +34,8 @@ cd /path/to/a/project
 evie
 ```
 
-Type a message and press Enter. Ctrl-C or Ctrl-D quits.
+Type a message and press Enter. Ctrl-C stops what Evie is doing; with
+nothing running, Ctrl-C or Ctrl-D quits.
 
 Evie keeps its state in `~/.evie`. Set `EVIE_HOME` to use another folder.
 

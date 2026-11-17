@@ -113,9 +113,14 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     return { session, project }
   }
 
+  function openLoop(session: string): Loop {
+    const loop = loops.get(session)
+    if (!loop) throw new Error(`The session "${session}" is not open.`)
+    return loop
+  }
+
   function sendMessage(input: Commands["send_message"]["input"]): void {
-    const loop = loops.get(input.session)
-    if (!loop) throw new Error(`The session "${input.session}" is not open.`)
+    const loop = openLoop(input.session)
     inbox.add(input.session, { text: input.text })
     loop.wake()
   }
@@ -130,6 +135,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
           return (await openSession(command)) as Output
         case "send_message":
           return sendMessage(command) as Output
+        case "cancel":
+          return openLoop(command.session).cancel() as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

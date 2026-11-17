@@ -88,3 +88,28 @@ test("each tool the model uses is shown on a line, with a short summary of what 
 
   expect(printed).toContain('Looking.\n⏺ lookup {"word":"evie"}\n  ⎿ evie: a personal agent (+2 more lines)\nFound it.\n')
 })
+
+test("Ctrl-C stops the turn in progress, and with nothing running says to quit", async () => {
+  const model = scriptedProvider([{ hang: true, text: ["Thinking"] }])
+  const run = await startEvie([model.plugin])
+  stop = run.stop
+  let printed = ""
+  let interrupt = () => false
+  const answers: boolean[] = []
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    lines: (async function* () {
+      answers.push(interrupt())
+      yield "think hard"
+      // Give the reply a moment to start, then press Ctrl-C.
+      while (!printed.includes("Thinking")) await new Promise((resolve) => setTimeout(resolve, 1))
+      answers.push(interrupt())
+    })(),
+    write: (text) => (printed += text),
+    onInterrupt: (handler) => (interrupt = handler),
+  })
+
+  expect(answers).toEqual([false, true])
+  expect(printed).toContain("Thinking\n[cancelled]\n")
+})

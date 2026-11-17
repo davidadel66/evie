@@ -9,6 +9,10 @@ export type TerminalOptions = {
   lines: AsyncIterable<string>
   // Where to print.
   write(text: string): void
+  // Called once with a function to run when the owner presses Ctrl-C. That
+  // function cancels the turn in progress and returns true, or returns false
+  // when nothing is running, which is the caller's cue to quit.
+  onInterrupt?: (interrupt: () => boolean) => void
 }
 
 const PROMPT = "\n› "
@@ -54,6 +58,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     }
     if (event.type === "turn_end") {
       if (event.body.reason === "error") line(`[error] ${event.body.error ?? "The turn failed."}`)
+      if (event.body.reason === "cancelled") line("[cancelled]")
       if (midLine) write("\n")
       if (unanswered === 0) {
         idle = true
@@ -61,6 +66,12 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
         whenIdle()
       }
     }
+  })
+
+  options.onInterrupt?.(() => {
+    if (idle) return false
+    void evie.send({ type: "cancel", session })
+    return true
   })
 
   write(`evie · ${project?.name ?? "general"}\n`)

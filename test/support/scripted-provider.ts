@@ -3,16 +3,18 @@ import type { Plugin, Request } from "../../src/index.ts"
 // A stand-in for the model. It replays a script of replies, one per request,
 // and records every request it was sent, so a test can check what the model
 // would have seen.
-// `hang` never replies: it waits until the turn's cancel signal fires.
 // `error` is a request the provider reports as failed, after any text;
 // `fail` is a provider that breaks by throwing.
 // `calls` are tool calls the model asks for; `input` is given as an object,
 // or as raw text to stand for a model that wrote its input badly.
 export type ScriptedCall = { name: string; input: Record<string, unknown> | string }
+// `hang` never finishes: after any text, it waits until the turn's cancel
+// signal fires. It then breaks by throwing, or with `reports` ends the reply
+// with a failure the way a real provider does.
 export type ScriptedReply =
   | { text: string[]; error?: string; calls?: ScriptedCall[] }
   | { fail: string }
-  | { hang: true }
+  | { hang: true; text?: string[]; reports?: true }
 
 export function scriptedProvider(script: ScriptedReply[]) {
   const requests: Request[] = []
@@ -27,8 +29,14 @@ export function scriptedProvider(script: ScriptedReply[]) {
           if (!reply) throw new Error("the script has no reply for this request")
           if ("fail" in reply) throw new Error(reply.fail)
           if ("hang" in reply) {
-            await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))
-            throw new Error("the request was cancelled")
+            for (const text of reply.text ?? []) yield { type: "text", text }
+            await new Promise<void>((resolve) => {
+              if (signal.aborted) resolve()
+              else signal.addEventListener("abort", () => resolve(), { once: true })
+            })
+            if (!reply.reports) throw new Error("the request was cancelled")
+            yield { type: "finish", reason: "error", error: "The request was cancelled.", usage: { inputTokens: 0, outputTokens: 0 } }
+            return
           }
           const usage = { inputTokens: 0, outputTokens: 0 }
           for (const text of reply.text) yield { type: "text", text }

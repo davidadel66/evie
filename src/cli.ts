@@ -17,9 +17,14 @@ if (!model) {
 const evie = await createEvie({ env, model, plugins: [files(), shell(), openrouter({ env })] })
 
 const input = createInterface({ input: process.stdin })
-// Ctrl-C ends the input, which ends the terminal once the turn in progress is done.
-input.on("SIGINT", () => input.close())
-process.on("SIGINT", () => input.close())
+// Ctrl-C stops the turn in progress. With nothing running it ends the input,
+// which quits.
+let interrupt = () => false
+const onCtrlC = () => {
+  if (!interrupt()) input.close()
+}
+input.on("SIGINT", onCtrlC)
+process.on("SIGINT", onCtrlC)
 
 try {
   await runTerminal({
@@ -27,6 +32,7 @@ try {
     folder: process.cwd(),
     lines: input,
     write: (text) => void process.stdout.write(text),
+    onInterrupt: (handler) => (interrupt = handler),
   })
 } finally {
   await evie.close()
