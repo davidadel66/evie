@@ -16,7 +16,8 @@ export type LoopOptions = {
 }
 
 export type Loop = {
-  // Tells the loop there may be input waiting. Safe to call at any time.
+  // Tells the loop there may be input waiting. Throws when the loop has
+  // stopped because the event log could not be written.
   wake(): void
   // Stops taking new turns, cancels the running one and waits for it to end.
   stop(): Promise<void>
@@ -35,10 +36,17 @@ export function createLoop(options: LoopOptions): Loop {
   let running: Promise<void> = Promise.resolve()
   // The cancel signal of the turn in progress, if there is one.
   let cancel: AbortController | undefined
+  // Set when the event log could not be written. Nothing can be recorded
+  // after that, so the loop takes no more turns.
+  let broken: Error | undefined
 
   async function run() {
     try {
       while (!stopped && inbox.waiting(session)) await turn()
+    } catch (cause) {
+      // Only a failure to write the log escapes a turn.
+      broken = cause instanceof Error ? cause : new Error(String(cause))
+      stopped = true
     } finally {
       // Cleared in the same tick as the last inbox check, so a message that
       // arrives next always finds the loop idle and starts a new turn.
@@ -50,21 +58,24 @@ export function createLoop(options: LoopOptions): Loop {
     const signal = (cancel = new AbortController()).signal
     let reason: EventBodies["turn_end"]["reason"] = "completed"
     let error: string | undefined
-    try {
-      // Moving input from the inbox to the log is one transaction, so a crash
-      // can neither lose a message nor record it twice.
-      const started = atomically(() => {
-        const events: StoredEvent[] = [log.append(session, "turn_start", {})]
-        for (const message of inbox.take(session)) {
-          events.push(log.append(session, "user_message", { text: message.text }))
-        }
-        return events
-      })
-      for (const event of started) emit(event)
 
+    // Moving input from the inbox to the log is one transaction, so a crash
+    // can neither lose a message nor record it twice. If it fails, the turn
+    // has not started and the failure stops the loop.
+    const started = atomically(() => {
+      const events: StoredEvent[] = [log.append(session, "turn_start", {})]
+      for (const message of inbox.take(session)) {
+        events.push(log.append(session, "user_message", { text: message.text }))
+      }
+      return events
+    })
+    for (const event of started) emit(event)
+
+    try {
       const request = buildRequest(model, log.events(session), host.tools.list())
       let text = ""
       for await (const chunk of provider.stream(request, signal)) {
+        if (signal.aborted) throw new Error("The turn was cancelled.")
         if (chunk.type === "text") {
           text += chunk.text
           emit({ type: "assistant_delta", session, text: chunk.text })
@@ -83,6 +94,7 @@ export function createLoop(options: LoopOptions): Loop {
 
   return {
     wake() {
+      if (broken) throw new Error(`Evie stopped because its event log could not be written: ${broken.message}`)
       if (active || stopped) return
       active = true
       running = run()

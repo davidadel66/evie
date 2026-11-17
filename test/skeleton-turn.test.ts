@@ -200,3 +200,17 @@ test("closing Evie cancels a model request that would never finish", async () =>
 
   expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end" })
 })
+
+test("a reply with no text is not sent back to the model as an empty message", async () => {
+  const model = scriptedProvider([{ text: [] }, { text: ["Here now."] }])
+  const run = await startEvie([model.plugin])
+  stop = run.stop
+
+  await say(run.evie, "hi")
+  await say(run.evie, "hello?")
+
+  expect(model.requests[1]?.messages).toEqual([
+    { role: "user", text: "hi" },
+    { role: "user", text: "hello?" },
+  ])
+})

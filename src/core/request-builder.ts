@@ -7,7 +7,10 @@ export function buildRequest(model: string, events: readonly StoredEvent[], tool
   const messages: Message[] = []
   for (const event of events) {
     if (event.type === "user_message") messages.push({ role: "user", text: event.body.text })
-    if (event.type === "assistant_message") messages.push({ role: "assistant", text: event.body.text })
+    // A reply with no text is left out: providers reject an empty message.
+    if (event.type === "assistant_message" && event.body.text !== "") {
+      messages.push({ role: "assistant", text: event.body.text })
+    }
   }
   return {
     model,
