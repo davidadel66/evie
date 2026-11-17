@@ -1,3 +1,5 @@
+import type { Stats } from "node:fs"
+import { stat } from "node:fs/promises"
 import { isAbsolute, relative, resolve } from "node:path"
 import type { ToolContext } from "../../core/types.ts"
 
@@ -18,4 +20,16 @@ export function displayPath(absolute: string, context: ToolContext): string {
   if (context.folder === null) return absolute
   const inside = relative(context.folder, absolute)
   return inside === "" || inside.startsWith("..") || isAbsolute(inside) ? absolute : inside
+}
+
+// What is at a path, or undefined when nothing is. Any other problem, such as
+// no permission, is thrown, so it is not mistaken for a missing file.
+export async function statOrMissing(absolute: string): Promise<Stats | undefined> {
+  try {
+    return await stat(absolute)
+  } catch (cause) {
+    const code = (cause as { code?: string }).code
+    if (code === "ENOENT" || code === "ENOTDIR") return undefined
+    throw cause
+  }
 }

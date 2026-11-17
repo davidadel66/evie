@@ -224,3 +224,15 @@ test("a tool that breaks ends the turn, and every call still has a result so the
   expect(resultIds).toEqual(callIds)
   expect(callIds).toHaveLength(2)
 })
+
+test("one line too long to show is cut part way, and the note says so in bytes", async () => {
+  const { run } = await start([{ text: [], calls: [{ name: "echo", input: {} }] }, { text: ["ok"] }], {
+    run: async () => "é".repeat(40_000),
+  })
+
+  await say(run, "go")
+
+  const [result] = results(run)
+  expect(result).toContain("[Output cut: showing the first 51200 of 80000 bytes.")
+  expect(result).not.toContain("�")
+})

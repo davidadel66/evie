@@ -237,3 +237,12 @@ test("edit keeps a file's Windows line endings", async () => {
   )
   expect(await text("dos.txt")).toBe("one\r\ntwo\r\nthree\r\ngamma\r\n")
 })
+
+test("a file system refusal is returned for the model to act on, and the turn goes on", async () => {
+  const { run, call } = await project({ "notes.txt": "a file\n" })
+
+  const result = await call("write", { path: "notes.txt/inside.txt", content: "x" })
+
+  expect(result).toStartWith("write could not finish: ")
+  expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end", body: { reason: "completed" } })
+})

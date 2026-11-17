@@ -112,13 +112,20 @@ async function capOutput(output: string, savePath: string): Promise<string> {
   if (lines.length <= MAX_LINES + NOTE_LINES && bytes <= MAX_BYTES) return output
 
   let shown = lines.slice(0, MAX_LINES).join("\n")
+  // Set when even the first line is too long to show whole.
+  let partLine = false
   if (Buffer.byteLength(shown) > MAX_BYTES) {
-    // Cut to the byte limit, then back to the end of the last whole line.
-    shown = Buffer.from(shown).subarray(0, MAX_BYTES).toString("utf8")
+    // Cut to the byte limit, dropping a character the cut split in two.
+    shown = Buffer.from(shown).subarray(0, MAX_BYTES).toString("utf8").replace(/\uFFFD+$/, "")
+    // Then back to the end of the last whole line, when there is one.
     const lastBreak = shown.lastIndexOf("\n")
     if (lastBreak > 0) shown = shown.slice(0, lastBreak)
+    else partLine = true
   }
   const shownLines = shown.split("\n").length
+  const amount = partLine
+    ? `showing the first ${Buffer.byteLength(shown)} of ${bytes} bytes`
+    : `showing the first ${shownLines} of ${lines.length} lines`
 
   let where: string
   try {
@@ -128,7 +135,7 @@ async function capOutput(output: string, savePath: string): Promise<string> {
   } catch (cause) {
     where = `The full output could not be saved (${cause instanceof Error ? cause.message : String(cause)}).`
   }
-  return `${shown}\n\n[Output cut: showing the first ${shownLines} of ${lines.length} lines. ${where}]`
+  return `${shown}\n\n[Output cut: ${amount}. ${where}]`
 }
 
 const safeName = (id: string) => id.replace(/[^A-Za-z0-9_-]/g, "_") || "call"

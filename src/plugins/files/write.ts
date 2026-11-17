@@ -1,7 +1,7 @@
-import { mkdir, stat, writeFile } from "node:fs/promises"
+import { mkdir, writeFile } from "node:fs/promises"
 import { dirname } from "node:path"
 import type { Tool } from "../../core/types.ts"
-import { displayPath, resolvePath } from "./paths.ts"
+import { displayPath, resolvePath, statOrMissing } from "./paths.ts"
 
 export const write: Tool = {
   name: "write",
@@ -24,7 +24,7 @@ export const write: Tool = {
     if ("failure" in target) return target.failure
     const shown = displayPath(target.absolute, context)
 
-    const existing = await stat(target.absolute).catch(() => undefined)
+    const existing = await statOrMissing(target.absolute)
     if (existing?.isDirectory()) return `${shown} is a folder, not a file. Give the path of a file inside it.`
 
     await mkdir(dirname(target.absolute), { recursive: true })

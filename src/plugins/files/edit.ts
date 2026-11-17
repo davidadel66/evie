@@ -24,9 +24,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { readFile, stat, writeFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
 import type { Tool } from "../../core/types.ts"
-import { displayPath, resolvePath } from "./paths.ts"
+import { displayPath, resolvePath, statOrMissing } from "./paths.ts"
 
 export const edit: Tool = {
   name: "edit",
@@ -61,7 +61,7 @@ export const edit: Tool = {
     if ("failure" in target) return target.failure
     const shown = displayPath(target.absolute, context)
 
-    const info = await stat(target.absolute).catch(() => undefined)
+    const info = await statOrMissing(target.absolute)
     if (!info) return `File not found: ${path}. Use write to create it.`
     if (info.isDirectory()) return `${shown} is a folder, not a file.`
     const source = await readFile(target.absolute, "utf8")

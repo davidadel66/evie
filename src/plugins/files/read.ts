@@ -1,7 +1,7 @@
-import { readdir, readFile, stat } from "node:fs/promises"
+import { readdir, readFile } from "node:fs/promises"
 import { basename, dirname, extname } from "node:path"
 import type { Tool } from "../../core/types.ts"
-import { displayPath, resolvePath } from "./paths.ts"
+import { displayPath, resolvePath, statOrMissing } from "./paths.ts"
 
 const DEFAULT_LIMIT = 2000
 const MAX_LINE_LENGTH = 2000
@@ -30,7 +30,7 @@ export const read: Tool = {
     if ("failure" in target) return target.failure
     const shown = displayPath(target.absolute, context)
 
-    const info = await stat(target.absolute).catch(() => undefined)
+    const info = await statOrMissing(target.absolute)
     if (!info) return `File not found: ${path}.${await suggestions(target.absolute)}`
     if (info.isDirectory()) return listFolder(target.absolute, shown)
 

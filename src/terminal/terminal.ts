@@ -66,8 +66,10 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   write(`evie · ${project?.name ?? "general"}\n`)
   write(PROMPT)
   try {
-    for await (const line of options.lines) {
-      const text = line.trim()
+    for await (const typed of options.lines) {
+      // The Enter that ended the typed line moved the cursor to a new one.
+      midLine = false
+      const text = typed.trim()
       if (text === "") {
         if (idle) write(PROMPT)
         continue
