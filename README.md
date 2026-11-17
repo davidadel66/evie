@@ -13,6 +13,10 @@ repository's issues. So far the core runs a turn against a scripted
 stand-in for the model; there is no real model, tool or terminal client
 yet.
 
+Evie is not started in a project. A client opens a session, which belongs
+to a project or to none, and one Evie serves every open session. A project
+is a record with its own id; its folder is where its files are today.
+
 ## Development
 
 Evie needs [Bun](https://bun.sh).

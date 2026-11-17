@@ -88,13 +88,36 @@ export type Plugin = {
   setup(host: Host): void | Promise<void>
 }
 
+// ---- Projects -----------------------------------------------------------------
+
+// A project is a record with its own id. Its folder is where its files are,
+// and can change; the id is what memory, data and sessions are kept under.
+export type Project = { id: string; name: string; folder: string }
+
 // ---- The client interface -------------------------------------------------------
 
-export type Command = { type: "send_message"; text: string }
+// What each command takes and what it gives back.
+export type Commands = {
+  // Opens a session. Give a folder to work in the project that folder
+  // belongs to (created the first time), or a project id, or neither for the
+  // general session, which belongs to no project.
+  open_session: {
+    input: { project?: string; folder?: string }
+    output: { session: string; project: Project | null }
+  }
+  send_message: {
+    input: { session: string; text: string }
+    output: void
+  }
+}
 
-// Everything a client can do: send a command, and subscribe to events.
+export type Command = { [Type in keyof Commands]: { type: Type } & Commands[Type]["input"] }[keyof Commands]
+
+// Everything a client can do: send a command, and subscribe to events. Events
+// from every open session arrive on the one subscription, each naming its
+// session.
 export type Evie = {
-  send(command: Command): Promise<void>
+  send<Sent extends Command>(command: Sent): Promise<Commands[Sent["type"]]["output"]>
   subscribe(listener: (event: EvieEvent) => void): () => void
   close(): Promise<void>
 }

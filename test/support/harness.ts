@@ -3,26 +3,37 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createEvie, type Evie, type EvieEvent, type Plugin } from "../../src/index.ts"
 
-// Starts Evie the way a client would, with its own temporary data folder and
-// project folder, and collects every event the client is sent.
-export async function startEvie(plugins: Plugin[], model = "test/model") {
-  const home = await mkdtemp(join(tmpdir(), "evie-home-"))
+export type Run = Awaited<ReturnType<typeof startEvie>>
+
+// Starts Evie the way a client would and collects every event the client is
+// sent. Each run gets its own temporary data folder, unless one is passed in
+// to stand for Evie being started again, and a temporary project folder with
+// one session already open in it.
+export async function startEvie(plugins: Plugin[], options: { model?: string; home?: string } = {}) {
+  const home = options.home ?? (await mkdtemp(join(tmpdir(), "evie-home-")))
   const projectFolder = await mkdtemp(join(tmpdir(), "evie-project-"))
   const remove = async () => {
-    await rm(home, { recursive: true, force: true })
+    if (!options.home) await rm(home, { recursive: true, force: true })
     await rm(projectFolder, { recursive: true, force: true })
   }
-  const evie = await createEvie({ env: { EVIE_HOME: home }, projectFolder, model, plugins }).catch(async (error) => {
+  const evie = await createEvie({
+    env: { EVIE_HOME: home },
+    model: options.model ?? "test/model",
+    plugins,
+  }).catch(async (error) => {
     await remove()
     throw error
   })
   const events: EvieEvent[] = []
   evie.subscribe((event) => events.push(event))
+  const { session, project } = await evie.send({ type: "open_session", folder: projectFolder })
   return {
     evie,
     events,
     home,
     projectFolder,
+    session,
+    project,
     async stop() {
       await evie.close()
       await remove()
@@ -30,17 +41,17 @@ export async function startEvie(plugins: Plugin[], model = "test/model") {
   }
 }
 
-// Sends a message and waits until the turn it starts has ended.
-export async function say(evie: Evie, text: string) {
+// Sends a message to a session and waits until the turn it starts has ended.
+export async function say(run: { evie: Evie; session: string }, text: string, session = run.session) {
   const ended = new Promise<void>((resolve) => {
-    const stop = evie.subscribe((event) => {
-      if (event.type === "turn_end") {
+    const stop = run.evie.subscribe((event) => {
+      if (event.type === "turn_end" && event.session === session) {
         stop()
         resolve()
       }
     })
   })
-  await evie.send({ type: "send_message", text })
+  await run.evie.send({ type: "send_message", session, text })
   await ended
 }
 
