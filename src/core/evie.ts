@@ -100,6 +100,9 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
           return openSession(command) as Output
         case "send_message":
           return sendMessage(command) as Output
+        default:
+          // Reached only by a client that is not type-checked.
+          throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)
       }
     },
     subscribe(listener) {

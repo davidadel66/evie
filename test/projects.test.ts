@@ -122,3 +122,18 @@ test("a message to a session that is not open is refused", async () => {
     'The session "no-such-session" is not open',
   )
 })
+
+test("opening a session for a file is refused", async () => {
+  const { run } = await start()
+  const file = join(run.projectFolder, "notes.txt")
+  await Bun.write(file, "not a folder")
+
+  await expect(run.evie.send({ type: "open_session", folder: file })).rejects.toThrow("is a file, not a folder")
+})
+
+test("a command Evie does not know is refused", async () => {
+  const { run } = await start()
+  const unknown = { type: "do_something_else" } as unknown as { type: "open_session" }
+
+  await expect(run.evie.send(unknown)).rejects.toThrow('Unknown command "do_something_else"')
+})

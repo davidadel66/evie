@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite"
-import { existsSync, realpathSync } from "node:fs"
+import { existsSync, realpathSync, statSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import type { Project } from "./types.ts"
 
@@ -38,13 +38,10 @@ export function createProjects(db: Database): Projects {
 
   return {
     forFolder(folder) {
-      let resolved: string
-      try {
-        // Symbolic links are resolved so one folder is never two projects.
-        resolved = realpathSync(folder)
-      } catch {
-        throw new Error(`The folder "${folder}" does not exist.`)
-      }
+      if (!existsSync(folder)) throw new Error(`The folder "${folder}" does not exist.`)
+      if (!statSync(folder).isDirectory()) throw new Error(`"${folder}" is a file, not a folder.`)
+      // Symbolic links are resolved so one folder is never two projects.
+      const resolved = realpathSync(folder)
       return findOrCreate(projectRoot(resolved))
     },
 
