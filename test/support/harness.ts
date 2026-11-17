@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createEvie, type Evie, type EvieEvent, type Plugin } from "../../src/index.ts"
+import { createEvie, type Evie, type EvieEvent, type Plugin, type Project } from "../../src/index.ts"
 
 export type Run = Awaited<ReturnType<typeof startEvie>>
 
@@ -9,7 +9,10 @@ export type Run = Awaited<ReturnType<typeof startEvie>>
 // sent. Each run gets its own temporary data folder, unless one is passed in
 // to stand for Evie being started again, and a temporary project folder with
 // one session already open in it.
-export async function startEvie(plugins: Plugin[], options: { model?: string; home?: string } = {}) {
+export async function startEvie(
+  plugins: Plugin[],
+  options: { model?: string; home?: string; projectPlugins?: (project: Project) => Plugin[] } = {},
+) {
   const home = options.home ?? (await mkdtemp(join(tmpdir(), "evie-home-")))
   const projectFolder = await mkdtemp(join(tmpdir(), "evie-project-"))
   const remove = async () => {
@@ -20,6 +23,7 @@ export async function startEvie(plugins: Plugin[], options: { model?: string; ho
     env: { EVIE_HOME: home },
     model: options.model ?? "test/model",
     plugins,
+    ...(options.projectPlugins && { projectPlugins: options.projectPlugins }),
   }).catch(async (error) => {
     await remove()
     throw error
