@@ -33,12 +33,19 @@ export function fakeOpenRouter(responses: FakeResponse[]) {
     // The body arrives in several network pieces that ignore line boundaries.
     const bytes = new TextEncoder().encode(response.body)
     const size = Math.max(1, Math.ceil(bytes.length / (response.pieces ?? 1)))
+    let at = 0
     const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        for (let at = 0; at < bytes.length; at += size) controller.enqueue(bytes.slice(at, at + size))
-        // `cutOff` stands for the connection breaking part way through.
-        if (response.cutOff) controller.error(new TypeError("socket closed"))
-        else controller.close()
+      // One piece is handed over each time the reader asks for more.
+      pull(controller) {
+        if (at < bytes.length) {
+          controller.enqueue(bytes.slice(at, at + size))
+          at += size
+        } else if (response.cutOff) {
+          // `cutOff` stands for the connection breaking part way through.
+          controller.error(new TypeError("socket closed"))
+        } else {
+          controller.close()
+        }
       },
     })
     return new Response(body, { status: response.status, headers: response.headers ?? {} })
