@@ -48,13 +48,17 @@ export type Request = {
 
 // ---- Providers ----------------------------------------------------------------
 
+export type Usage = { inputTokens: number; outputTokens: number }
+
+// What a provider streams back: pieces of text as they are written, each
+// tool call once it is complete, and one finish chunk at the end. A request
+// that fails is not thrown: it ends with a finish chunk whose reason is
+// "error".
 export type Chunk =
   | { type: "text"; text: string }
-  | {
-      type: "finish"
-      reason: "stop" | "tool_calls"
-      usage: { inputTokens: number; outputTokens: number }
-    }
+  | { type: "tool_call"; id: string; name: string; arguments: string }
+  | { type: "finish"; reason: "stop" | "tool_calls" | "length"; usage: Usage }
+  | { type: "finish"; reason: "error"; error: string; usage: Usage }
 
 // How the core reaches a model: a request and the turn's cancel signal go in,
 // a stream of chunks comes out.

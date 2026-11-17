@@ -1,0 +1,57 @@
+import { afterEach, expect, test } from "bun:test"
+import { basename } from "node:path"
+import { runTerminal } from "../src/index.ts"
+import { startEvie } from "./support/harness.ts"
+import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
+
+let stop: (() => Promise<void>) | undefined
+afterEach(async () => {
+  await stop?.()
+  stop = undefined
+})
+
+// Runs the terminal client against Evie with the given lines typed, and
+// returns everything it printed once the input has ended.
+async function type(lines: string[], script: ScriptedReply[]) {
+  const model = scriptedProvider(script)
+  const run = await startEvie([model.plugin])
+  stop = run.stop
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    lines: (async function* () {
+      yield* lines
+    })(),
+    write: (text) => (printed += text),
+  })
+  return { printed, model, run }
+}
+
+test("a line typed is sent to the model and its reply is printed as it streams", async () => {
+  const { printed, model } = await type(["hello"], [{ text: ["Hi", " there"] }])
+
+  expect(model.requests[0]?.messages).toEqual([{ role: "user", text: "hello" }])
+  expect(printed).toContain("Hi there")
+})
+
+test("the terminal works in the project of the folder it was started in", async () => {
+  const { printed, run } = await type([], [])
+
+  expect(printed).toContain(`evie · ${basename(run.projectFolder)}`)
+})
+
+test("each line is its own message, and blank lines are not sent", async () => {
+  const { model } = await type(["first", "   ", "second"], [{ text: ["one"] }, { text: ["two"] }])
+
+  expect(model.requests.at(-1)?.messages.filter((message) => message.role === "user")).toEqual([
+    { role: "user", text: "first" },
+    { role: "user", text: "second" },
+  ])
+})
+
+test("a turn that fails prints why", async () => {
+  const { printed } = await type(["hello"], [{ text: [], error: "No API key. Set OPENROUTER_API_KEY to your OpenRouter key." }])
+
+  expect(printed).toContain("[error] No API key. Set OPENROUTER_API_KEY to your OpenRouter key.")
+})
