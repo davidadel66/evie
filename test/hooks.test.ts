@@ -215,3 +215,18 @@ test("a hook that throws around a tool ends the turn, and the call still has a r
   const asked = model.requests[1]!.messages
   expect(asked.filter((message) => message.role === "tool")).toHaveLength(1)
 })
+
+test("a hook that returns something that is not a denial does not stop a later hook from denying", async () => {
+  const echo = echoTool()
+  const sloppy = (() => true) as unknown as Parameters<Host["on"]>[1]
+  const { run, results } = await start(callEcho, [
+    echo.plugin,
+    plugin("sloppy", (host) => host.on("before_tool", sloppy)),
+    plugin("guard", (host) => host.on("before_tool", () => ({ deny: "Not allowed." }))),
+  ])
+
+  await say(run, "go")
+
+  expect(results()).toEqual(["Not allowed."])
+  expect(echo.runs()).toBe(0)
+})

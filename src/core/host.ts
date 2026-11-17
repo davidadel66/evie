@@ -78,7 +78,9 @@ export async function createHost(
     async beforeTool(toolCall, context) {
       for (const { plugin, handler } of attached.before_tool) {
         const answer = await call("before_tool", plugin, () => handler(toolCall, context))
-        if (answer) return answer.deny
+        // Only a reason in words is a denial. Anything else a plugin returns
+        // must not cut the later hooks short.
+        if (answer && typeof answer.deny === "string") return answer.deny
       }
       return undefined
     },
