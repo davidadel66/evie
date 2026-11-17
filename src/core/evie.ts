@@ -21,7 +21,7 @@ export type EvieOptions = {
 
 // Where all of Evie's state lives. Moving Evie is copying this folder.
 export function dataFolder(env: Record<string, string | undefined>): string {
-  return env.EVIE_HOME || join(homedir(), ".evie2")
+  return env.EVIE_HOME || join(homedir(), ".evie")
 }
 
 // Starts the core and returns the client interface: send a command, and
