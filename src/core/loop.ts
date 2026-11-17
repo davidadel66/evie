@@ -25,6 +25,9 @@ export type Loop = {
   // Tells the loop there may be input waiting. Throws when the loop has
   // stopped because the event log could not be written.
   wake(): void
+  // Cancels the turn in progress, if there is one. Input still waiting
+  // starts a new turn afterwards.
+  cancel(): void
   // Stops taking new turns, cancels the running one and waits for it to end.
   stop(): Promise<void>
 }
@@ -84,27 +87,51 @@ export function createLoop(options: LoopOptions): Loop {
         const request = buildRequest(model, log.events(session), host.tools.list())
         let text = ""
         const calls: ToolCall[] = []
-        for await (const chunk of provider.stream(request, signal)) {
-          if (signal.aborted) throw new Error("The turn was cancelled.")
-          if (chunk.type === "text") {
-            text += chunk.text
-            emit({ type: "assistant_delta", session, text: chunk.text })
+        let failure: string | undefined
+        try {
+          for await (const chunk of provider.stream(request, signal)) {
+            if (signal.aborted) break
+            if (chunk.type === "text") {
+              text += chunk.text
+              emit({ type: "assistant_delta", session, text: chunk.text })
+            }
+            if (chunk.type === "tool_call") calls.push({ id: chunk.id, name: chunk.name, arguments: chunk.arguments })
+            // The provider reports a failed request as a value, not a throw.
+            if (chunk.type === "finish" && chunk.reason === "error") failure = chunk.error
           }
-          if (chunk.type === "tool_call") calls.push({ id: chunk.id, name: chunk.name, arguments: chunk.arguments })
-          // The provider reports a failed request as a value, not a throw.
-          if (chunk.type === "finish" && chunk.reason === "error") {
-            reason = "error"
-            error = chunk.error
-          }
+        } catch (cause) {
+          // Cancelling makes some providers throw. Anything else is a real failure.
+          if (!signal.aborted) throw cause
         }
-        if (reason === "error") break
+
+        if (signal.aborted) {
+          // The text so far is kept, marked as cut short. Tool calls are
+          // dropped: none of them had finished arriving.
+          if (text !== "") emit(log.append(session, "assistant_message", { text, interrupted: true }))
+          reason = "cancelled"
+          break
+        }
+        if (failure !== undefined) {
+          reason = "error"
+          error = failure
+          break
+        }
 
         emit(log.append(session, "assistant_message", calls.length > 0 ? { text, toolCalls: calls } : { text }))
         // A reply that asks for no tool is the final answer.
         if (calls.length === 0) break
 
-        // The tools run one at a time, in the order the model asked.
+        // The tools run one at a time, in the order the model asked. Whatever
+        // happens, every call gets a result, so the conversation stays one a
+        // model will accept.
+        const settleRest = (from: number, text: string) => {
+          for (const call of calls.slice(from)) emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text }))
+        }
         for (const [index, call] of calls.entries()) {
+          if (signal.aborted) {
+            settleRest(index, "Cancelled: the turn was stopped before this tool ran.")
+            break
+          }
           let result: string
           try {
             result = await runToolCall(call, {
@@ -113,19 +140,26 @@ export function createLoop(options: LoopOptions): Loop {
               outputFolder: join(outputFolder, session),
             })
           } catch (cause) {
-            // A tool broke. Every call still gets a result, so the
-            // conversation stays one a model will accept, and the turn ends.
+            if (signal.aborted) {
+              // Being cancelled makes some tools throw. That is not a bug.
+              emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: "Cancelled: the turn was stopped while this tool was running." }))
+              settleRest(index + 1, "Cancelled: the turn was stopped before this tool ran.")
+              break
+            }
+            // A tool broke, which ends the turn.
             reason = "error"
             error = cause instanceof Error ? cause.message : String(cause)
             emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: `${error} This is a bug in the tool, not in the input.` }))
-            for (const skipped of calls.slice(index + 1)) {
-              emit(log.append(session, "tool_result", { callId: skipped.id, name: skipped.name, text: "Not run, because an earlier tool call in this step broke." }))
-            }
+            settleRest(index + 1, "Not run, because an earlier tool call in this step broke.")
             break
           }
           emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: result }))
         }
         if (reason === "error") break
+        if (signal.aborted) {
+          reason = "cancelled"
+          break
+        }
       }
     } catch (cause) {
       reason = "error"
@@ -143,6 +177,9 @@ export function createLoop(options: LoopOptions): Loop {
       if (active || stopped) return
       active = true
       running = run()
+    },
+    cancel() {
+      cancel?.abort()
     },
     async stop() {
       stopped = true
