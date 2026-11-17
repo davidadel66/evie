@@ -15,7 +15,7 @@ test("a message to an idle session is answered and the turn is recorded in order
   const run = await startEvie([model.plugin])
   stop = run.stop
 
-  await say(run.evie, "hi")
+  await say(run, "hi")
 
   expect(stored(run.events).map((event) => event.type)).toEqual([
     "turn_start",
@@ -33,7 +33,7 @@ test("the reply streams to the client as deltas, and no delta is stored", async 
   const run = await startEvie([model.plugin])
   stop = run.stop
 
-  await say(run.evie, "hi")
+  await say(run, "hi")
 
   const deltas = run.events.filter((event) => event.type === "assistant_delta")
   expect(deltas.map((delta) => delta.text)).toEqual(["Hello", " there"])
@@ -49,8 +49,8 @@ test("a second message starts a new turn whose request includes the earlier conv
   const run = await startEvie([model.plugin])
   stop = run.stop
 
-  await say(run.evie, "What is the capital of France?")
-  await say(run.evie, "How many people live there?")
+  await say(run, "What is the capital of France?")
+  await say(run, "How many people live there?")
 
   expect(model.requests[1]?.messages).toEqual([
     { role: "user", text: "What is the capital of France?" },
@@ -71,8 +71,8 @@ test("a message sent while a turn is running is answered in a turn of its own", 
       if (event.type === "turn_end" && ++ended === 2) resolve()
     })
   })
-  await run.evie.send({ type: "send_message", text: "first" })
-  await run.evie.send({ type: "send_message", text: "second" })
+  await run.evie.send({ type: "send_message", session: run.session, text: "first" })
+  await run.evie.send({ type: "send_message", session: run.session, text: "second" })
   await bothEnded
 
   expect(model.requests[1]?.messages).toEqual([
@@ -93,8 +93,8 @@ test("the same conversation always builds the same request, byte for byte", asyn
       },
     }
     const run = await startEvie([model.plugin, tools])
-    await say(run.evie, "What is the capital of France?")
-    await say(run.evie, "How many people live there?")
+    await say(run, "What is the capital of France?")
+    await say(run, "How many people live there?")
     requests.push(JSON.stringify(model.requests))
     await run.stop()
   }
@@ -103,10 +103,10 @@ test("the same conversation always builds the same request, byte for byte", asyn
 
 test("the model named in the settings is the one asked", async () => {
   const model = scriptedProvider([{ text: ["ok"] }])
-  const run = await startEvie([model.plugin], "some/model-name")
+  const run = await startEvie([model.plugin], { model: "some/model-name" })
   stop = run.stop
 
-  await say(run.evie, "hi")
+  await say(run, "hi")
 
   expect(model.requests[0]?.model).toBe("some/model-name")
 })
@@ -123,7 +123,7 @@ test("a tool registered by a plugin is described to the model, in the order regi
   const run = await startEvie([model.plugin, tools])
   stop = run.stop
 
-  await say(run.evie, "hi")
+  await say(run, "hi")
 
   expect(model.requests[0]?.tools).toEqual([
     { name: "zebra", description: "Second by name, first by order.", inputSchema: { type: "object" } },
@@ -152,8 +152,8 @@ test("a turn that fails still ends in the log, and the session carries on", asyn
   const run = await startEvie([model.plugin])
   stop = run.stop
 
-  await say(run.evie, "hi")
-  await say(run.evie, "are you there?")
+  await say(run, "hi")
+  await say(run, "are you there?")
 
   const ends = stored(run.events).filter((event) => event.type === "turn_end")
   expect(ends.map((end) => end.body)).toEqual([
@@ -171,7 +171,7 @@ test("all state is kept in the data folder named by EVIE_HOME", async () => {
   const run = await startEvie([model.plugin])
   stop = run.stop
 
-  await say(run.evie, "hi")
+  await say(run, "hi")
 
   expect(await readdir(run.home)).toContain("evie.db")
   expect(await readdir(run.projectFolder)).toEqual([])
@@ -185,7 +185,7 @@ test("a client that throws while handling an event does not break the turn", asy
     throw new Error("a broken client")
   })
 
-  await say(run.evie, "hi")
+  await say(run, "hi")
 
   expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end", body: { reason: "completed" } })
 })
@@ -195,7 +195,7 @@ test("closing Evie cancels a model request that would never finish", async () =>
   const run = await startEvie([model.plugin])
   stop = run.stop
 
-  await run.evie.send({ type: "send_message", text: "hi" })
+  await run.evie.send({ type: "send_message", session: run.session, text: "hi" })
   await run.evie.close()
 
   expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end" })
@@ -206,8 +206,8 @@ test("a reply with no text is not sent back to the model as an empty message", a
   const run = await startEvie([model.plugin])
   stop = run.stop
 
-  await say(run.evie, "hi")
-  await say(run.evie, "hello?")
+  await say(run, "hi")
+  await say(run, "hello?")
 
   expect(model.requests[1]?.messages).toEqual([
     { role: "user", text: "hi" },
