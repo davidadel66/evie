@@ -104,8 +104,11 @@ export type Registry<Entry> = {
   list(): readonly Entry[]
 }
 
-// The only way a plugin adds anything to Evie.
+// The only way a plugin adds anything to Evie. Each project has a host of its
+// own, so what a plugin adds for one project is not seen in another.
 export type Host = {
+  // The project this host is for, or null for the general session.
+  project: Project | null
   tools: Registry<Tool>
   providers: Registry<Provider>
 }
