@@ -9,11 +9,16 @@ import type { Chunk, Message, Plugin, Provider, Request, Usage } from "../core/t
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 const RETRIES = 3
+// How long a reply may be, in tokens, unless the settings say otherwise.
+// Without a limit OpenRouter reserves the model's maximum, and refuses the
+// request when the account's credits do not cover that.
+const DEFAULT_MAX_TOKENS = 16_000
 const LONGEST_WAIT = 60_000
 
 export type OpenRouterOptions = {
   // Settings from the environment. The API key is `OPENROUTER_API_KEY`; it
-  // is used only here and never written anywhere.
+  // is used only here and never written anywhere. `EVIE_MAX_TOKENS` sets how
+  // long a reply may be.
   env: Record<string, string | undefined>
   // Stand-ins for the network and the clock, for tests.
   fetch?: typeof globalThis.fetch
@@ -49,7 +54,7 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
       const init = {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify(toBody(request)),
+        body: JSON.stringify(toBody(request, maxTokens(options.env.EVIE_MAX_TOKENS))),
         signal,
       }
 
@@ -87,9 +92,15 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
 
 // ---- The request ----------------------------------------------------------------
 
-function toBody(request: Request) {
+function maxTokens(setting: string | undefined): number {
+  const asked = Number(setting)
+  return Number.isInteger(asked) && asked > 0 ? asked : DEFAULT_MAX_TOKENS
+}
+
+function toBody(request: Request, limit: number) {
   return {
     model: request.model,
+    max_tokens: limit,
     messages: [
       ...(request.system === undefined ? [] : [{ role: "system", content: request.system }]),
       ...request.messages.map(toWireMessage),

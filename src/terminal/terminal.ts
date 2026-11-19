@@ -1,4 +1,4 @@
-import type { Evie } from "../core/types.ts"
+import type { Evie, ToolCall } from "../core/types.ts"
 
 export type TerminalOptions = {
   // The client interface. The terminal uses nothing else of Evie.
@@ -11,6 +11,9 @@ export type TerminalOptions = {
   lines: AsyncIterable<string>
   // Where to print.
   write(text: string): void
+  // Whether to print a prompt before each line is typed. Leave it out when
+  // the input line draws its own, as the live input line does.
+  prompt?: boolean
   // Called once with a function to run when the owner presses Ctrl-C. That
   // function cancels the turn in progress and says what it did: "cancelled";
   // "idle" when nothing is running, which is the caller's cue to quit; or
@@ -36,6 +39,9 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     options.write(text)
     midLine = !text.endsWith("\n")
   }
+  // Shown when Evie is ready for the next message: a blank line, then the
+  // prompt unless the input line draws its own.
+  const showPrompt = () => write(options.prompt === false ? "\n" : PROMPT)
   // Prints text on a line of its own.
   const line = (text: string) => write(`${midLine ? "\n" : ""}${text}\n`)
   const { session, project, resumed } = await evie.send({
@@ -50,6 +56,12 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   let unanswered = 0
   let idle = true
   let whenIdle = () => {}
+  // The tool calls of the current step that have not been shown yet.
+  let pendingCalls: ToolCall[] = []
+  const showNextCall = () => {
+    const call = pendingCalls.shift()
+    if (call) line(`⏺ ${call.name} ${shorten(call.arguments, 120)}`)
+  }
   // True from a Ctrl-C until the turn it cancelled has ended.
   let cancelling = false
 
@@ -57,14 +69,18 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     if (event.session !== session) return
     if (event.type === "user_message") unanswered -= 1
     if (event.type === "assistant_delta") write(event.text)
-    // One line for each tool the model asks for, and one for what came back.
+    // One line for each tool the model asks for, and one for what came
+    // back. The tools run one at a time, so each call is shown just before it
+    // runs, with its result straight after.
     if (event.type === "assistant_message") {
-      for (const call of event.body.toolCalls ?? []) line(`⏺ ${call.name} ${shorten(call.arguments, 120)}`)
+      pendingCalls = [...(event.body.toolCalls ?? [])]
+      showNextCall()
     }
     if (event.type === "tool_result") {
       const lines = event.body.text.split("\n")
       const more = lines.length > 1 ? ` (+${lines.length - 1} more lines)` : ""
       line(`  ⎿ ${shorten(lines[0] ?? "", 100)}${more}`)
+      showNextCall()
     }
     if (event.type === "turn_end") {
       if (event.body.reason === "error") line(`[error] ${event.body.error ?? "The turn failed."}`)
@@ -73,7 +89,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       if (midLine) write("\n")
       if (unanswered === 0) {
         idle = true
-        write(PROMPT)
+        showPrompt()
         whenIdle()
       }
     }
@@ -93,14 +109,14 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       ? " · no earlier session here, so this is a new one"
       : ""
   write(`evie · ${project?.name ?? "general"}${about}\n`)
-  write(PROMPT)
+  showPrompt()
   try {
     for await (const typed of options.lines) {
       // The Enter that ended the typed line moved the cursor to a new one.
       midLine = false
       const text = typed.trim()
       if (text === "") {
-        if (idle) write(PROMPT)
+        if (idle) showPrompt()
         continue
       }
       // A slash and a plain word, such as /model, is a command: it runs at
@@ -112,7 +128,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
           .send({ type: "run_command", session, name: command[1]!, args: command[2] ?? "" })
           .then((result) => line(result.text))
           .catch((cause) => line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`))
-        if (idle) write(PROMPT)
+        if (idle) showPrompt()
         continue
       }
       unanswered += 1
