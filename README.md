@@ -1,4 +1,4 @@
-# Evie 2
+# Evie
 
 Evie is a personal agent you run in a terminal. You type a request, and it
 reads, searches and changes files, runs commands and looks things up on the
@@ -41,8 +41,8 @@ You need:
   models from many companies through one account.
 
 ```sh
-git clone https://github.com/davidadel66/evie-2.0.git
-cd evie-2.0
+git clone https://github.com/davidadel66/evie.git
+cd evie
 bun install
 bun link          # makes the `evie` command available
 ```
