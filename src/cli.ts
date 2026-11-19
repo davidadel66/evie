@@ -2,7 +2,7 @@
 // The `evie` command: starts Evie with its built-in plugins and runs the
 // terminal client in the folder it was started in.
 import { createInterface } from "node:readline"
-import { createEvie, files, loadSettings, models, openrouter, runTerminal, shell } from "./index.ts"
+import { createEvie, dataFolder, files, guard, loadSettings, models, openrouter, runTerminal, shell } from "./index.ts"
 
 const env = await loadSettings(process.env)
 const model = env.EVIE_MODEL
@@ -14,7 +14,7 @@ if (!model) {
   process.exit(1)
 }
 
-const evie = await createEvie({ env, model, plugins: [files(), shell(), models(), openrouter({ env })] })
+const evie = await createEvie({ env, model, plugins: [files(), shell(), guard({ dataFolder: dataFolder(env) }), models(), openrouter({ env })] })
 
 const input = createInterface({ input: process.stdin })
 // Ctrl-C stops the turn in progress. With nothing running it ends the input,
