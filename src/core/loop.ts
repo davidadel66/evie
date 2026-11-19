@@ -10,6 +10,7 @@ export type LoopOptions = {
   session: string
   // The session's project, or null in the general session.
   project: Project | null
+  // The model Evie was started with. A session can switch to another.
   // Where tool output too long to show is saved in full.
   outputFolder: string
   model: string
@@ -32,6 +33,13 @@ export type Loop = {
   cancel(): void
   // Stops taking new turns, cancels the running one and waits for it to end.
   stop(): Promise<void>
+}
+
+// The model a session is using: the last one it was switched to, or the one
+// Evie was started with.
+export function currentModel(events: readonly StoredEvent[], startedWith: string): string {
+  const switched = events.findLast((event) => event.type === "model_changed")
+  return switched?.type === "model_changed" ? switched.body.model : startedWith
 }
 
 // The turn loop. A turn is everything from a message arriving to the model's
@@ -90,7 +98,8 @@ export function createLoop(options: LoopOptions): Loop {
         // What a hook is told about the moment it runs in.
         const context = (): HookContext => ({ session, project, events: log.events(session), signal })
 
-        const request = await hooks.beforeRequest(buildRequest(model, log.events(session), host.tools.list()), context())
+        const events = log.events(session)
+        const request = await hooks.beforeRequest(buildRequest(currentModel(events, model), events, host.tools.list()), context())
         // Only the tools the hooks left in the request can be called in this step.
         const offered = host.tools.list().filter((tool) => request.tools.some((left) => left.name === tool.name))
         let text = ""

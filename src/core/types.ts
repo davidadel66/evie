@@ -13,6 +13,8 @@ export type EventBodies = {
   // The text the model reads for one tool call.
   tool_result: { callId: string; name: string; text: string }
   turn_end: { reason: "completed" | "error" | "cancelled"; error?: string }
+  // The owner switched model. It applies from the next model request.
+  model_changed: { model: string }
 }
 
 export type StoredEventType = keyof EventBodies
@@ -107,6 +109,41 @@ export type Registry<Entry> = {
   list(): readonly Entry[]
 }
 
+// ---- Model profiles and commands -------------------------------------------------
+
+// What one family of models is given. Models differ in which tools they
+// handle well and how they read a prompt; a profile holds those differences.
+export type ModelProfile = {
+  name: string
+  // The profile covers every model whose name starts with this. When several
+  // profiles cover a model, the one with the longest prefix is used; the
+  // empty prefix covers every model.
+  prefix: string
+  // The system prompt for these models.
+  prompt: string
+  // The tools for changing files that these models are given. A tool that
+  // some profile lists and this one does not is left out for these models.
+  fileTools: string[]
+}
+
+// What a command is given when the owner runs it.
+export type SlashContext = {
+  session: string
+  project: Project | null
+  // The model the session is using now.
+  model: string
+  // Switches the session's model, from its next request.
+  setModel(model: string): void
+}
+
+// A command the owner types in a client, starting with a slash. It runs at
+// once, without a model turn, and returns the text to show.
+export type SlashCommand = {
+  name: string
+  description: string
+  run(args: string, context: SlashContext): string | Promise<string>
+}
+
 // ---- Hooks --------------------------------------------------------------------
 
 // What every hook is told about the moment it runs in.
@@ -144,6 +181,8 @@ export type Host = {
   project: Project | null
   tools: Registry<Tool>
   providers: Registry<Provider>
+  profiles: Registry<ModelProfile>
+  commands: Registry<SlashCommand>
   // Attaches a function to a hook.
   on<Name extends keyof Hooks>(name: Name, handler: Hooks[Name]): void
 }
@@ -178,6 +217,17 @@ export type Commands = {
   cancel: {
     input: { session: string }
     output: void
+  }
+  // Switches the session's model, from its next model request.
+  set_model: {
+    input: { session: string; model: string }
+    output: void
+  }
+  // Runs a command a plugin registered, such as /model, and returns the
+  // text to show. No model turn is involved.
+  run_command: {
+    input: { session: string; name: string; args: string }
+    output: { text: string }
   }
 }
 

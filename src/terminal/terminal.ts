@@ -92,6 +92,17 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
         if (idle) write(PROMPT)
         continue
       }
+      // A line that starts with a slash is a command, run at once and not
+      // sent to the model.
+      if (text.startsWith("/")) {
+        const [name = "", ...rest] = text.slice(1).split(/\s+/)
+        await evie
+          .send({ type: "run_command", session, name, args: rest.join(" ") })
+          .then((result) => line(result.text))
+          .catch((cause) => line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`))
+        if (idle) write(PROMPT)
+        continue
+      }
       unanswered += 1
       idle = false
       await evie.send({ type: "send_message", session, text })
