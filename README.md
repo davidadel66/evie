@@ -1,17 +1,21 @@
 # Evie 2
 
-Evie is one person's always-on personal agent: a coding harness, a
-researcher and a general assistant. This repository is a rewrite from
-scratch of an earlier version.
+Evie is a personal agent you run in a terminal. You type a request, and it
+reads, searches and changes files, runs commands and looks things up on the
+internet until the request is done.
+
+It is small on purpose. A fixed core runs the conversation, and everything
+else, including every tool, is a plugin you can switch off, replace or add
+to. The whole thing is a few thousand lines of TypeScript, meant to be read.
+
+Evie is being built towards an always-on assistant with a server, a web
+client and memory. This repository is the first milestone of that: the core,
+the plugin system and a terminal client. It is a rewrite from scratch of an
+earlier version.
 
 Motto: simplicity is the most powerful foundation.
 
-## Status
-
-Milestone 1 is being built one ticket at a time, tracked in this
-repository's issues. So far you can run `evie` in a terminal and have a
-model read, search, create and change files and run commands in the folder
-you started it in, and search the internet and read web pages.
+## Before you use it
 
 **There is no approval step yet.** A tool runs as soon as the model asks
 for it, including any shell command, with your permissions, and it is not
@@ -23,41 +27,78 @@ deleting the home folder, `git reset --hard`, a forced push, `sudo`, and
 piping a download into a shell. It also keeps the tools out of Evie's data
 folder and `~/.ssh`, `~/.aws` and `~/.gnupg`. **The guard does not make
 Evie safe to run unattended.** It matches the text of a command, so it stops
-the obvious accident and nothing more.
+the obvious accident and nothing more. Rules that allow, deny or ask before
+a risky action are planned for the next milestone.
 
-Searching needs [ripgrep](https://github.com/BurntSushi/ripgrep).
+## Install
 
-## Running it
+You need:
 
-Evie needs [Bun](https://bun.sh) and an [OpenRouter](https://openrouter.ai)
-API key.
+- [Bun](https://bun.sh), which runs Evie;
+- [ripgrep](https://github.com/BurntSushi/ripgrep), which Evie uses to
+  search files;
+- an [OpenRouter](https://openrouter.ai) API key, which gives access to
+  models from many companies through one account.
 
 ```sh
+git clone https://github.com/davidadel66/evie-2.0.git
+cd evie-2.0
 bun install
-bun link                                  # makes the `evie` command available
-export OPENROUTER_API_KEY=...             # your OpenRouter key
-export EVIE_MODEL=...                     # a model name from openrouter.ai/models
+bun link          # makes the `evie` command available
+```
+
+If `evie` is not found afterwards, add Bun's bin folder to your path. Bun
+prints where that is; it is usually `~/.bun/bin`.
+
+Then tell Evie your key and which model to use:
+
+```sh
+export OPENROUTER_API_KEY=...     # your OpenRouter key
+export EVIE_MODEL=...             # a model name from openrouter.ai/models
+```
+
+Both can be kept in files so you do not have to export them each time. See
+Settings.
+
+## Use
+
+```sh
 cd /path/to/a/project
 evie
 ```
 
-Both can be kept in files instead, as described under Settings.
+Type a message and press Enter.
 
-Type a message and press Enter. The line you are typing stays at the
-bottom, and Evie's output appears above it, so you can type while it works.
-A message you send while Evie is working steers it: it is taken in at the
-next step, and if Evie is in the middle of writing a reply, that reply
-stops and a new one starts with your message taken into account.
+- **You can type while Evie works.** The line you are typing stays at the
+  bottom, and Evie's output appears above it.
+- **A message sent while Evie is working steers it.** It is taken in at the
+  next step. If Evie is in the middle of writing a reply, that reply stops
+  and a new one starts with your message taken into account.
+- **Ctrl-C stops what Evie is doing** and keeps the conversation. With
+  nothing running, Ctrl-C or Ctrl-D quits. If Evie does not stop, a second
+  Ctrl-C quits at once.
+- **`evie --continue`** carries on the last session of the project you are
+  in, with its conversation.
+- **`/model`** shows which model is in use. `/model` and a name switches to
+  another in the middle of a session.
 
-Ctrl-C stops what Evie is doing; with nothing running, Ctrl-C or Ctrl-D
-quits. If Evie does not stop, a second Ctrl-C quits at once.
+### What Evie can do
 
-Run `evie --continue` to carry on the last session of the project you are
-in, with its conversation.
+| Tool | What it does |
+|---|---|
+| `read` | Reads a file, or lists a folder |
+| `write` | Creates a file, or replaces one |
+| `edit` | Replaces a piece of text in a file |
+| `patch` | Changes several files from one block of text |
+| `grep` | Searches the contents of files |
+| `glob` | Finds files by name |
+| `shell` | Runs a command |
+| `web_search` | Searches the internet |
+| `web_fetch` | Reads a web page as text |
 
-Type `/model` to see which model is in use, or `/model` and a name to
-switch to another in the middle of a session. Each family of models is
-given the tools and the system prompt it works best with.
+Models differ in which tools they handle well. Evie gives GPT models `patch`
+and every other model `edit` and `write`, each with a system prompt written
+for it.
 
 ## Settings
 
@@ -90,25 +131,30 @@ and which plugins load.
 it. OpenRouter refuses a request whose limit your credits do not cover, so
 lower it if you see that.
 
-A project can have settings of its own, in `.evie/evie.json` in its folder,
-which win over the global file for that project. See Plugins for when a
-project's file is used.
-
-A setting in the environment wins over both files, so `EVIE_MODEL=...  evie`
+A setting in the environment wins over the files, so `EVIE_MODEL=... evie`
 points one run at another model. `EVIE_MAX_TOKENS` works the same way.
 
-Evie is not started in a project. A client opens a session, which belongs
-to a project or to none, and one Evie serves every open session. A project
-is a record with its own id; its folder is where its files are today.
+A project can have settings of its own, in `.evie/evie.json` in its folder.
+See "Trusting a project" for when that file is used.
 
 ## Plugins
 
 Everything outside Evie's core is a plugin: the tools, the model provider,
-the per-model settings and the guard. Which ones load is set in a file.
+the per-model settings and the guard.
 
-**For every project:** `evie.json` in the data folder (`~/.evie/evie.json`).
-It lists the plugins to load, in order. Without the file, the six built-in
-ones load: `files`, `shell`, `guard`, `models`, `web` and `openrouter`.
+### Choosing which plugins load
+
+`evie.json` in the data folder lists the plugins to load, in order. Without
+a list, the six built-in ones load:
+
+| Plugin | What it adds |
+|---|---|
+| `files` | `read`, `write`, `edit`, `patch`, `grep` and `glob` |
+| `shell` | `shell` |
+| `guard` | The check that refuses the most destructive commands |
+| `models` | What each model family is given, and the `/model` command |
+| `web` | `web_search` and `web_fetch` |
+| `openrouter` | The connection to models through OpenRouter |
 
 ```json
 {
@@ -124,42 +170,25 @@ ones load: `files`, `shell`, `guard`, `models`, `web` and `openrouter`.
 }
 ```
 
-Leaving a plugin out switches it off: without `shell`, the model cannot run
-commands.
+A built-in plugin is named. A plugin of your own is given by the path to
+its file. Leaving a plugin out switches it off: without `shell`, the model
+cannot run commands.
 
-**For one project:** `.evie/evie.json` in that project's folder. It adds
-plugins for that project only, and can switch off a global one there. It
-can also set that project's model:
+A project's own file, `.evie/evie.json` in its folder, adds plugins for that
+project only and can switch off a global one there. It can also set that
+project's model:
 
 ```json
 { "model": "another/model", "plugins": ["./tools/deploy.ts"], "disable": ["shell"] }
 ```
 
-**A plugin file** exports an object with a name and a setup function, or a
-function that returns one from its options:
+### Trusting a project
 
-```ts
-export default {
-  name: "greeter",
-  setup(host) {
-    host.tools.add({
-      name: "greet",
-      description: "Says hello.",
-      inputSchema: { type: "object" },
-      run: async () => "hello",
-    })
-  },
-}
-```
+**A plugin runs with Evie's full permissions. Nothing sandboxes it, so load
+only plugins you trust.**
 
-Through the host a plugin can add tools, providers, model profiles and
-commands, and attach to the hooks `before_request`, `before_tool` and
-`after_tool`.
-
-**A plugin runs with Evie's full permissions. Nothing sandboxes it, so
-load only plugins you trust.** For that reason a project's settings file is
-used only when you list the project's folder under `"trust"` in the global
-file:
+For that reason a project's settings file is used only when you list the
+project's folder under `"trust"` in the global file:
 
 ```json
 { "trust": ["/path/to/my/project"] }
@@ -169,6 +198,95 @@ Otherwise the project's file is ignored as a whole, and Evie tells you so.
 That way opening someone else's repository can neither run their code nor
 switch off a protection such as the guard.
 
+### Writing a plugin
+
+A plugin file exports an object with a name and a setup function. Evie
+calls setup once for each project and passes it the *host*, which is the
+only way a plugin adds anything.
+
+```ts
+export default {
+  name: "greeter",
+  setup(host) {
+    host.tools.add({
+      name: "greet",
+      description: "Says hello to someone.",
+      inputSchema: {
+        type: "object",
+        properties: { name: { type: "string", description: "Who to greet" } },
+        required: ["name"],
+      },
+      run: async (input) => `Hello, ${input.name}.`,
+    })
+  },
+}
+```
+
+To take options from the settings file, export a function that returns the
+plugin:
+
+```ts
+export default (options) => ({
+  name: "greeter",
+  setup(host) {
+    /* use options.greeting */
+  },
+})
+```
+
+Through the host a plugin can add to four lists:
+
+| List | What an entry is |
+|---|---|
+| `host.tools` | Something the model can call. Its `run` returns the text the model reads. A problem the model can fix is returned as that text; `run` throws only for a bug |
+| `host.providers` | A way to reach a model |
+| `host.profiles` | What one family of models is given: a system prompt and its tools for changing files |
+| `host.commands` | A command you type starting with a slash, such as `/model` |
+
+It can also attach to three *hooks*, moments in the loop where a plugin's
+code runs:
+
+| Hook | When it runs | What it can do |
+|---|---|---|
+| `before_request` | After a request is built, before it is sent | Change the system prompt and the tools the model is offered |
+| `before_tool` | After a tool call's input is checked, before the tool runs | Refuse the call with a reason |
+| `after_tool` | After a tool has run | Change the result the model sees |
+
+```ts
+host.on("before_tool", (call) => {
+  if (call.name === "shell" && String(call.input.command).includes("deploy")) {
+    return { deny: "Deploying is not allowed from here." }
+  }
+})
+```
+
+Hooks run in the order their plugins are listed. Each is told the session,
+its project and the conversation so far. `host.project` says which project
+the plugin is being set up for.
+
+The built-in plugins in `src/plugins/` use exactly this interface, and are
+the best examples to read.
+
+## How it works
+
+- **The event log is the truth.** Everything that happens in a session is
+  added to a log in a SQLite database and never changed. Before every
+  request to the model, the conversation is rebuilt from that log. Evie
+  keeps no conversation in memory, which is why resuming a session, or
+  recovering from being stopped part way, needs nothing special.
+- **One way in, one way out.** A client sends commands and subscribes to
+  events. The terminal is a client like any other and uses nothing else, so
+  a web or phone client can be added without changing the core.
+- **A turn is a loop.** The model is asked, the tools it asks for are run,
+  and it is asked again with the results, until it answers without asking
+  for a tool.
+- **Projects have ids.** A session belongs to a project, or to none. A
+  project is a record with its own id, and its folder is only where its
+  files are today.
+
+The core is in `src/core/`, in about 1,300 lines. `types.ts` is the
+place to start.
+
 ## Development
 
 ```sh
@@ -176,30 +294,20 @@ bun install
 bun run check   # the type check and the tests
 ```
 
-## What milestone 1 will be
+The tests drive Evie the way a client does, with a scripted stand-in for the
+model, so they need no key and no network.
 
-A small program, `evie`, run in a project folder from a terminal. You type
-a request, and Evie reads, searches and changes files and runs commands
-until the request is done.
+## What comes next
 
-- A fixed core: one way in (the inbox), one loop that runs turns, one way
-  out (the event stream), and an add-only event log that is the truth.
-- Everything else is a plugin, built in or your own: the tools, the model
-  provider and the per-model settings.
-- Seven tools: `read`, `write`, `edit`, `patch`, `grep`, `glob`, `shell`.
-- Models through OpenRouter, chosen by name and switchable mid-session.
-- TypeScript on Bun, with state in SQLite.
-
-## Later
-
-A full coding harness (instruction files, compaction, permissions, undo,
-subagents), then an always-on server with a web UI and workspaces, then
-scheduled work, memory, voice and a phone app.
+- Instruction files, compaction of long conversations, permissions, undo
+  and subagents.
+- An always-on server, a web client, workspaces, skills and MCP servers.
+- Scheduled work, memory, voice and a phone app.
 
 ## Credits
 
 Evie adapts proven pieces from other open-source harnesses. Each is
-credited here, and its licence notice kept with the code, as it is adapted.
+credited here, and its licence notice is kept with the code.
 
 - [OpenCode](https://github.com/anomalyco/opencode) (MIT): the matching in
   the `edit` tool, in `src/plugins/files/edit.ts`.
@@ -210,4 +318,5 @@ credited here, and its licence notice kept with the code, as it is adapted.
 
 ## Licence
 
-Not chosen yet.
+Not chosen yet. Until a licence is added, the code is published to be read,
+and no permission to use, copy or change it is granted.
