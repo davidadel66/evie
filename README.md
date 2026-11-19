@@ -18,6 +18,13 @@ for it, including any shell command, with your permissions, and it is not
 confined to the project folder. Use Evie only in a project you can restore
 from git, and watch what it runs.
 
+A built-in guard blocks the most clearly destructive commands, such as
+deleting the home folder, `git reset --hard`, a forced push, `sudo`, and
+piping a download into a shell. It also keeps the tools out of Evie's data
+folder and `~/.ssh`, `~/.aws` and `~/.gnupg`. **The guard does not make
+Evie safe to run unattended.** It matches the text of a command, so it stops
+the obvious accident and nothing more.
+
 Searching needs [ripgrep](https://github.com/BurntSushi/ripgrep).
 
 ## Running it
