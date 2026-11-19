@@ -35,16 +35,22 @@ export function instructions(options: InstructionsOptions = {}): Plugin {
       host.on("before_request", async (request) => {
         const sections: string[] = []
 
+        // Each section says that the file's text is already here. Without
+        // that, a model asked about its instructions goes and reads the file
+        // again, which wastes a step and fills the conversation with a copy.
+        const have = (file: Instructions) =>
+          `The contents of ${file.path} are given here ${file.cut ? "up to a size limit" : "in full"}, so you already have them: do not read that file to find them.`
+
         const fromOwner = await readInstructions(join(home, GLOBAL_FILE))
         if (fromOwner) {
-          sections.push(`# Instructions from the owner\n\nThese come from ${fromOwner.path}. Follow them in every project.\n\n${fromOwner.text}`)
+          sections.push(`# Instructions from the owner\n\nThe owner wrote these for every project. Follow them. ${have(fromOwner)}\n\n${fromOwner.text}`)
         }
 
         if (host.project) {
           for (const name of PROJECT_FILES) {
             const fromProject = await readInstructions(join(host.project.folder, name))
             if (!fromProject) continue
-            sections.push(`# Instructions for this project\n\nThese come from ${fromProject.path}. Follow them.\n\n${fromProject.text}`)
+            sections.push(`# Instructions for this project\n\nThese were written for this project. Follow them. ${have(fromProject)}\n\n${fromProject.text}`)
             break
           }
         }
@@ -57,9 +63,11 @@ export function instructions(options: InstructionsOptions = {}): Plugin {
   }
 }
 
+type Instructions = { path: string; text: string; cut: boolean }
+
 // A file's text, or undefined when it is missing or has nothing in it. A
 // file over the limit is cut at the end of a line, with a note saying so.
-async function readInstructions(path: string): Promise<{ path: string; text: string } | undefined> {
+async function readInstructions(path: string): Promise<Instructions | undefined> {
   const bytes = await readFile(path).catch(() => undefined)
   if (!bytes) return undefined
   let text = bytes.subarray(0, MAX_BYTES).toString("utf8")
@@ -68,5 +76,5 @@ async function readInstructions(path: string): Promise<{ path: string; text: str
     text = `${(lastBreak > 0 ? text.slice(0, lastBreak) : text.replace(/�+$/, "")).trimEnd()}\n\n[This file is longer than 32 KiB, so the rest was left out. Read ${path} if you need it.]`
   }
   text = text.trim()
-  return text === "" ? undefined : { path, text }
+  return text === "" ? undefined : { path, text, cut: bytes.length > MAX_BYTES }
 }

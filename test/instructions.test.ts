@@ -36,8 +36,10 @@ test("a project's AGENTS.md is added to what the model is told, after the system
   const prompt = await system()
 
   expect(prompt).toStartWith("You are Evie")
+  const file = join(await realpath(run.projectFolder), "AGENTS.md")
   expect(prompt).toEndWith(
-    `# Instructions for this project\n\nThese come from ${join(await realpath(run.projectFolder), "AGENTS.md")}. Follow them.\n\nUse tabs, never spaces.`,
+    `# Instructions for this project\n\nThese were written for this project. Follow them. The contents of ${file} are given here in full, ` +
+      `so you already have them: do not read that file to find them.\n\nUse tabs, never spaces.`,
   )
 })
 
@@ -58,7 +60,10 @@ test("the owner's own instruction file is added in every session, before the pro
   const inProject = await system()
   const inGeneral = await system(general.session)
 
-  expect(inProject).toContain(`# Instructions from the owner\n\nThese come from ${join(home, "AGENTS.md")}. Follow them in every project.\n\nAlways answer briefly.`)
+  expect(inProject).toContain(
+    `# Instructions from the owner\n\nThe owner wrote these for every project. Follow them. The contents of ${join(home, "AGENTS.md")} ` +
+      `are given here in full, so you already have them: do not read that file to find them.\n\nAlways answer briefly.`,
+  )
   expect(inProject.indexOf("Always answer briefly.")).toBeLessThan(inProject.indexOf("Use tabs."))
   expect(inGeneral).toContain("Always answer briefly.")
   expect(inGeneral).not.toContain("Use tabs.")
@@ -103,6 +108,7 @@ test("a very long instruction file is cut, and the model is told where the rest 
 
   expect(prompt).toContain("Rule 1: keep it short.")
   expect(prompt).not.toContain("Rule 4000:")
+  expect(prompt).toContain("are given here up to a size limit")
   expect(prompt).toEndWith(
     `[This file is longer than 32 KiB, so the rest was left out. Read ${join(await realpath(run.projectFolder), "AGENTS.md")} if you need it.]`,
   )
