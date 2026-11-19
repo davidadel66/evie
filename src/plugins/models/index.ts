@@ -30,9 +30,12 @@ export function models(): Plugin {
         // profile does not list are left out, so a model is never offered
         // two ways of doing the same thing.
         const fileTools = new Set(host.profiles.list().flatMap((each) => each.fileTools))
+        // The profile's prompt comes first. Anything another plugin has
+        // already added, such as the owner's instructions, is kept after it.
+        const prompt = `${profile.prompt}\n\n${where(host.project)}`
         return {
           ...request,
-          system: `${profile.prompt}\n\n${where(host.project)}`,
+          system: request.system ? `${prompt}\n\n${request.system}` : prompt,
           tools: request.tools.filter((tool) => !fileTools.has(tool.name) || profile.fileTools.includes(tool.name)),
         }
       })
