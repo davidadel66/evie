@@ -10,6 +10,14 @@ const SEARCH = "https://api.search.brave.com/res/v1/web/search"
 const DEFAULT_RESULTS = 8
 const MOST_RESULTS = 20
 const DEFAULT_TIMEOUT_SECONDS = 30
+// Some sites refuse a request that does not look like it comes from a
+// browser, so a page is asked for the way a browser would ask.
+const BROWSER_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+  Accept: "text/html, text/plain, application/json, */*;q=0.5",
+  "Accept-Language": "en-US,en;q=0.9",
+}
 // A page is read up to this size. The limit shown to the model is far
 // smaller, and is applied by the handling every tool shares.
 const MOST_CHARACTERS = 5_000_000
@@ -140,7 +148,7 @@ export function web(options: WebOptions): Plugin {
       const typeOf = (reply: Response) => (reply.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase()
       const got = await get(
         address.href,
-        { Accept: "text/html, text/plain, application/json, */*;q=0.5" },
+        BROWSER_HEADERS,
         context.signal,
         // A missing page or one that is not text is turned down before it is downloaded.
         (reply) => {
@@ -183,10 +191,25 @@ const fromTheWeb = (what: string) =>
 function readable(html: string, base: string): { title: string; text: string } {
   const title = plain(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? "")
 
+  // A block of code is lifted out first and put back at the end, so that its
+  // spacing and line breaks, which matter, are left exactly as written.
+  const codeBlocks: string[] = []
+  const hold = (block: string) => `\n\n\u0000${codeBlocks.push(block) - 1}\u0000\n\n`
+
   let text = html
     .replace(/<!--[\s\S]*?-->/g, "")
-    // Parts that are never read: code, styling, and what sits in the head.
+    // Parts that are never read: scripts, styling, and what sits in the head.
     .replace(/<(script|style|noscript|svg|head|template|iframe)\b[\s\S]*?<\/\1>/gi, "")
+    .replace(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi, (_whole, inner: string) => {
+      const language = /class\s*=\s*["'][^"']*\blanguage-([\w+#-]+)/i.exec(inner)?.[1] ?? ""
+      const code = decode(inner.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "")).replace(/^\n+|\s+$/g, "")
+      return hold(`\`\`\`${language}\n${code}\n\`\`\``)
+    })
+    // A word or two of code inside a sentence is marked, so a command can be told from prose.
+    .replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, (_whole, inner: string) => {
+      const code = inner.replace(/<[^>]+>/g, "").trim()
+      return code === "" ? "" : `\`${code}\``
+    })
     // A link is shown as its words followed by where it goes.
     .replace(/<a\b[^>]*?href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi, (_whole, href: string, inner: string) => {
       const words = inner.replace(/<[^>]+>/g, "").trim()
@@ -209,6 +232,8 @@ function readable(html: string, base: string): { title: string; text: string } {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
+    // The blocks of code go back in, untouched.
+    .replace(/\u0000(\d+)\u0000/g, (_whole, index: string) => codeBlocks[Number(index)] ?? "")
   return { title, text }
 }
 

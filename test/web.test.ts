@@ -131,7 +131,7 @@ test("a fetch returns a page's readable text, with scripts and styling removed",
       "",
       "# Getting started",
       "",
-      "Install it with bun add thing. See the full guide (https://example.com/docs/guide).",
+      "Install it with `bun add thing`. See the full guide (https://example.com/docs/guide).",
       "",
       "- First step",
       "- Second step",
@@ -197,4 +197,45 @@ test("a search reply that cannot be read says so, and is not reported as nothing
   const { call } = await online({ [SEARCH]: { body: "<html>gateway error</html>", type: "text/html" } })
 
   expect(await call("web_search", { query: "x" })).toBe("The search service sent a reply that could not be read. Try the search again.")
+})
+
+test("a block of code on a page keeps its spacing and line breaks", async () => {
+  const docs = `<html><body>
+<p>Define it like this:</p>
+<pre><code class="language-ts">function greet(name: string) {
+  if (name) {
+    return &quot;hi &quot; + name   // two levels in
+  }
+}
+</code></pre>
+<p>Then   call   it.</p>
+</body></html>`
+  const { call } = await online({ "https://example.com/docs": { body: docs } })
+
+  const result = await call("web_fetch", { url: "https://example.com/docs" })
+
+  expect(result).toContain(
+    [
+      "Define it like this:",
+      "",
+      "```ts",
+      "function greet(name: string) {",
+      "  if (name) {",
+      '    return "hi " + name   // two levels in',
+      "  }",
+      "}",
+      "```",
+      "",
+      "Then call it.",
+    ].join("\n"),
+  )
+})
+
+test("a page is asked for the way a browser would ask, so sites that refuse robots still answer", async () => {
+  const { call, asked } = await online({ "https://example.com/": { body: "<p>hello</p>" } })
+
+  await call("web_fetch", { url: "https://example.com/" })
+
+  expect(asked[0]?.headers["user-agent"]).toContain("Mozilla/5.0")
+  expect(asked[0]?.headers["accept-language"]).toBe("en-US,en;q=0.9")
 })
