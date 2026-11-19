@@ -9,6 +9,7 @@ import { guard } from "./plugins/guard.ts"
 import { models } from "./plugins/models/index.ts"
 import { openrouter } from "./plugins/openrouter.ts"
 import { shell } from "./plugins/shell.ts"
+import { web } from "./plugins/web.ts"
 import type { Settings } from "./settings.ts"
 
 // Evie's settings files: which model to use, how long a reply may be, and
@@ -58,9 +59,10 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   shell: () => shell(),
   guard: (_options, context) => guard({ dataFolder: context.home }),
   models: () => models(),
+  web: (_options, context) => web({ env: context.env }),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
-const DEFAULT: Entry[] = ["files", "shell", "guard", "models", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "guard", "models", "web", "openrouter"]
 
 export async function loadSettingsFiles(options: { env: Settings }): Promise<SettingsFiles> {
   const home = dataFolder(options.env)

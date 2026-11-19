@@ -59,14 +59,17 @@ async function projectWith(settings: unknown, files: Record<string, string> = {}
 }
 
 const usualTools = ["read", "write", "edit", "grep", "glob", "shell"]
+// What the built-in plugins offer when none is left out. There is no search
+// key in these tests, so of the web tools only fetch is there.
+const defaultTools = [...usualTools, "web_fetch"]
 
 // ---- The global settings file -------------------------------------------------------
 
 test("with no settings file, the built-in plugins load", async () => {
   const { offered, settings } = await start(undefined)
 
-  expect(settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "shell", "guard", "models", "openrouter"])
-  expect(await offered()).toEqual(usualTools)
+  expect(settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "shell", "guard", "models", "web", "openrouter"])
+  expect(await offered()).toEqual(defaultTools)
 })
 
 test("leaving a built-in plugin out of the list removes what it registers", async () => {
@@ -138,7 +141,7 @@ test("a plugin that cannot be loaded stops Evie at start, with an error that nam
   await writeFile(join(outside, "broken.ts"), "export default { name: 'broken', setup() { throw new Error('could not connect') } }")
 
   await expect(start({ plugins: ["no-such-plugin"] })).rejects.toThrow(
-    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, guard, models, openrouter.',
+    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, guard, models, web, openrouter.',
   )
   await expect(start({ plugins: ["/no/such/file.ts"] })).rejects.toThrow('The plugin "/no/such/file.ts" could not be loaded')
   await expect(start({ plugins: [join(outside, "empty.ts")] })).rejects.toThrow("does not export a plugin")
@@ -185,8 +188,8 @@ test("a project's settings file can switch off a global plugin for that project"
   const { run, offered } = await start({ trust: [folder] })
   const inProject = await run.evie.send({ type: "open_session", folder })
 
-  expect(await offered(inProject.session)).toEqual(["read", "write", "edit", "grep", "glob"])
-  expect(await offered()).toEqual(usualTools)
+  expect(await offered(inProject.session)).toEqual(["read", "write", "edit", "grep", "glob", "web_fetch"])
+  expect(await offered()).toEqual(defaultTools)
 })
 
 test("a project can give a global plugin its own options, which replaces it for that project", async () => {
@@ -194,7 +197,7 @@ test("a project can give a global plugin its own options, which replaces it for 
   const { run, offered } = await start({ trust: [folder] })
   const inProject = await run.evie.send({ type: "open_session", folder })
 
-  expect((await offered(inProject.session)).toSorted()).toEqual(usualTools.toSorted())
+  expect((await offered(inProject.session)).toSorted()).toEqual(defaultTools.toSorted())
 })
 
 test("a project that is not trusted has its settings file ignored as a whole, and the owner is told", async () => {
@@ -216,10 +219,10 @@ test("a project that is not trusted has its settings file ignored as a whole, an
       `project is not trusted. To use it, add "${folder}" to "trust" in ${join(home, "evie.json")}.`,
   ])
   // Nothing it asked for happened: no plugin of its own, and the guard is still on.
-  expect(model.requests[0]?.tools.map((tool) => tool.name)).toEqual(usualTools)
+  expect(model.requests[0]?.tools.map((tool) => tool.name)).toEqual(defaultTools)
   const results = stored(run.events).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))
   expect(results[0]).toStartWith("Blocked by the guard:")
-  expect(await offered(opened.session)).toEqual(usualTools)
+  expect(await offered(opened.session)).toEqual(defaultTools)
 })
 
 test("a project with no settings file of its own opens with no notices", async () => {
