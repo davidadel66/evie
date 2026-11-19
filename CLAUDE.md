@@ -10,8 +10,7 @@ principles, and add a part only when it can be justified.
 
 ## Where things stand
 
-The design for milestone 1 is written and is being built one ticket at a
-time.
+Milestone 1 is built. Milestone 2 is next and is not designed yet.
 
 - `decisions.md` is the record of what has been decided and why. Read it
   before proposing anything. Add to it when the owner decides something; do
@@ -53,8 +52,8 @@ until he has understood its part of the map and said go.
 
 ## Milestones
 
-1. The core loop with six tools (`read`, `write`, `edit`, `grep`, `glob`,
-   `shell`), usable in a terminal.
+1. The core loop, a plugin system and nine tools, usable in a terminal.
+   Built.
 2. A real coding harness: prompt and instruction files, compaction,
    permissions, undo, subagents.
 3. The always-on server, web UI, workspaces, plugins.

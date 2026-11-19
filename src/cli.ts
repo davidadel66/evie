@@ -27,6 +27,21 @@ async function start(): Promise<Evie> {
 }
 const evie = await start().catch(fail)
 
+// Prints to the terminal. If whatever was reading Evie's output has gone
+// away, as when it is piped into a program that stops early, there is no one
+// left to print for, so Evie quits quietly.
+function print(text: string) {
+  try {
+    process.stdout.write(text)
+  } catch (cause) {
+    if ((cause as { code?: string }).code === "EPIPE") process.exit(0)
+    throw cause
+  }
+}
+process.stdout.on("error", (cause: { code?: string }) => {
+  if (cause.code === "EPIPE") process.exit(0)
+})
+
 const session = { folder: process.cwd(), resume: process.argv.includes("--continue") || process.argv.includes("-c") }
 // What the terminal client does on Ctrl-C: cancel the turn, or say that
 // nothing is running, or that a cancel is already under way.
@@ -38,7 +53,7 @@ try {
     // A real terminal: keys arrive one at a time, and the line being typed is
     // kept at the bottom with Evie's output above it.
     const live = createLiveInput({
-      write: (text) => void process.stdout.write(text),
+      write: print,
       columns: () => process.stdout.columns || 80,
     })
     live.onInterrupt(() => {
@@ -82,7 +97,7 @@ try {
       evie,
       ...session,
       lines: input,
-      write: (text) => void process.stdout.write(text),
+      write: print,
       onInterrupt: (handler) => (interrupt = handler),
     })
   }
