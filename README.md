@@ -38,6 +38,10 @@ Type a message and press Enter. Ctrl-C stops what Evie is doing; with
 nothing running, Ctrl-C or Ctrl-D quits. If Evie does not stop, a second
 Ctrl-C quits at once.
 
+Type `/model` to see which model is in use, or `/model` and a name to
+switch to another in the middle of a session. Each family of models is
+given the tools and the system prompt it works best with.
+
 Evie keeps its state in `~/.evie`. Set `EVIE_HOME` to use another folder.
 
 Settings can also be kept in a `.env` file in that folder, one `NAME=value`

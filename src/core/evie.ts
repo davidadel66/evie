@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createEventLog } from "./log.ts"
-import { createLoop, type Loop } from "./loop.ts"
+import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { createProjects } from "./projects.ts"
 import { openStore } from "./store.ts"
 import type { Commands, Evie, EvieEvent, Host, Plugin, Project, Provider } from "./types.ts"
@@ -78,8 +78,10 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     }
   }
 
-  // One turn loop for each session open in this process.
-  const loops = new Map<string, Loop>()
+  // Each session open in this process: its turn loop, its project and that
+  // project's plugin host.
+  type Open = { loop: Loop; project: Project | null; host: Host }
+  const sessions = new Map<string, Open>()
 
   async function openSession(input: Commands["open_session"]["input"]): Promise<Commands["open_session"]["output"]> {
     if (input.project !== undefined && input.folder !== undefined) {
@@ -95,35 +97,57 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
     const { host, hooks, provider } = await scopeFor(project)
     const session = projects.createSession(project)
-    loops.set(
+    const loop = createLoop({
       session,
-      createLoop({
-        session,
-        project,
-        outputFolder: join(home, "tool-output"),
-        model: options.model,
-        log,
-        inbox,
-        host,
-        hooks,
-        provider,
-        atomically: (work) => db.transaction(work)(),
-        emit,
-      }),
-    )
+      project,
+      outputFolder: join(home, "tool-output"),
+      model: options.model,
+      log,
+      inbox,
+      host,
+      hooks,
+      provider,
+      atomically: (work) => db.transaction(work)(),
+      emit,
+    })
+    sessions.set(session, { loop, project, host })
     return { session, project }
   }
 
-  function openLoop(session: string): Loop {
-    const loop = loops.get(session)
-    if (!loop) throw new Error(`The session "${session}" is not open.`)
-    return loop
+  function open(session: string): Open {
+    const found = sessions.get(session)
+    if (!found) throw new Error(`The session "${session}" is not open.`)
+    return found
   }
 
   function sendMessage(input: Commands["send_message"]["input"]): void {
-    const loop = openLoop(input.session)
+    const { loop } = open(input.session)
     inbox.add(input.session, { text: input.text })
     loop.wake()
+  }
+
+  // The switch is written to the log, and the next request reads it from there.
+  function setModel(input: Commands["set_model"]["input"]): void {
+    open(input.session)
+    const model = input.model.trim()
+    if (model === "") throw new Error("Give the name of a model, as listed at https://openrouter.ai/models.")
+    emit(log.append(input.session, "model_changed", { model }))
+  }
+
+  async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
+    const { project, host } = open(input.session)
+    const command = host.commands.list().find((candidate) => candidate.name === input.name)
+    if (!command) {
+      const names = host.commands.list().map((candidate) => `/${candidate.name}`).join(", ") || "none"
+      throw new Error(`There is no command "/${input.name}". The commands are: ${names}.`)
+    }
+    const text = await command.run(input.args, {
+      session: input.session,
+      project,
+      model: currentModel(log.events(input.session), options.model),
+      setModel: (model) => setModel({ session: input.session, model }),
+    })
+    return { text }
   }
 
   return {
@@ -137,7 +161,11 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         case "send_message":
           return sendMessage(command) as Output
         case "cancel":
-          return openLoop(command.session).cancel() as Output
+          return open(command.session).loop.cancel() as Output
+        case "set_model":
+          return setModel(command) as Output
+        case "run_command":
+          return (await runCommand(command)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)
@@ -150,7 +178,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       }
     },
     async close() {
-      await Promise.all([...loops.values()].map((loop) => loop.stop()))
+      await Promise.all([...sessions.values()].map(({ loop }) => loop.stop()))
       db.close()
     },
   }
