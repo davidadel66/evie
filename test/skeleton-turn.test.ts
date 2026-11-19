@@ -60,24 +60,23 @@ test("a second message starts a new turn whose request includes the earlier conv
   expect(stored(run.events).filter((event) => event.type === "turn_start")).toHaveLength(2)
 })
 
-test("a message sent while a turn is running is answered in a turn of its own", async () => {
+test("a message sent straight after another joins the same turn", async () => {
   const model = scriptedProvider([{ text: ["one"] }, { text: ["two"] }])
   const run = await startEvie([model.plugin])
   stop = run.stop
 
-  const bothEnded = new Promise<void>((resolve) => {
-    let ended = 0
+  const ended = new Promise<void>((resolve) => {
     run.evie.subscribe((event) => {
-      if (event.type === "turn_end" && ++ended === 2) resolve()
+      if (event.type === "turn_end") resolve()
     })
   })
   await run.evie.send({ type: "send_message", session: run.session, text: "first" })
   await run.evie.send({ type: "send_message", session: run.session, text: "second" })
-  await bothEnded
+  await ended
 
-  expect(model.requests[1]?.messages).toEqual([
+  expect(stored(run.events).filter((event) => event.type === "turn_start")).toHaveLength(1)
+  expect(model.requests.at(-1)?.messages.filter((message) => message.role === "user")).toEqual([
     { role: "user", text: "first" },
-    { role: "assistant", text: "one" },
     { role: "user", text: "second" },
   ])
 })

@@ -25,8 +25,9 @@ export type LoopOptions = {
 }
 
 export type Loop = {
-  // Tells the loop there may be input waiting. Throws when the loop has
-  // stopped because the event log could not be written.
+  // Tells the loop there is input waiting. If the model is writing a reply,
+  // the reply is stopped so the input can be taken in. Throws when the loop
+  // has stopped because the event log could not be written.
   wake(): void
   // Cancels the turn in progress, if there is one. Input still waiting
   // starts a new turn afterwards.
@@ -57,6 +58,8 @@ export function createLoop(options: LoopOptions): Loop {
   let running: Promise<void> = Promise.resolve()
   // The cancel signal of the turn in progress, if there is one.
   let cancel: AbortController | undefined
+  // Stops the reply being streamed, if one is, without ending the turn.
+  let reply: AbortController | undefined
   // Set when the event log could not be written. Nothing can be recorded
   // after that, so the loop takes no more turns.
   let broken: Error | undefined
@@ -98,6 +101,9 @@ export function createLoop(options: LoopOptions): Loop {
         // Steering: a message sent while the turn was working is picked up
         // here, before the next request, so the model sees it without the
         // turn being stopped. The first step already has the turn's input.
+        // A model cannot take in anything new while it is writing, so a
+        // message that arrives during a reply stops that reply (see wake)
+        // and the loop comes back here.
         if (step > 1) {
           const steered = atomically(() =>
             inbox.take(session).map((message) => log.append(session, "user_message", { text: message.text })),
@@ -112,12 +118,19 @@ export function createLoop(options: LoopOptions): Loop {
         const request = await hooks.beforeRequest(buildRequest(currentModel(events, model), events, host.tools.list()), context())
         // Only the tools the hooks left in the request can be called in this step.
         const offered = host.tools.list().filter((tool) => request.tools.some((left) => left.name === tool.name))
+        // A message that arrived while the request was being put together
+        // joins it: go round again and take it in.
+        if (!signal.aborted && inbox.waiting(session)) continue
+
         let text = ""
         const calls: ToolCall[] = []
         let failure: string | undefined
+        const replying = (reply = new AbortController())
+        // The request is halted when the turn is cancelled or the reply is steered.
+        const halted = AbortSignal.any([signal, replying.signal])
         try {
-          for await (const chunk of provider.stream(request, signal)) {
-            if (signal.aborted) break
+          for await (const chunk of provider.stream(request, halted)) {
+            if (halted.aborted) break
             if (chunk.type === "text") {
               text += chunk.text
               emit({ type: "assistant_delta", session, text: chunk.text })
@@ -127,8 +140,10 @@ export function createLoop(options: LoopOptions): Loop {
             if (chunk.type === "finish" && chunk.reason === "error") failure = chunk.error
           }
         } catch (cause) {
-          // Cancelling makes some providers throw. Anything else is a real failure.
-          if (!signal.aborted) throw cause
+          // Stopping a request makes some providers throw. Anything else is a real failure.
+          if (!halted.aborted) throw cause
+        } finally {
+          reply = undefined
         }
 
         if (signal.aborted) {
@@ -137,6 +152,12 @@ export function createLoop(options: LoopOptions): Loop {
           if (text !== "") emit(log.append(session, "assistant_message", { text, interrupted: true }))
           reason = "cancelled"
           break
+        }
+        if (replying.signal.aborted) {
+          // Steered: the reply was stopped to let a new message in. What it
+          // had written is kept, and the turn carries on with the message.
+          if (text !== "") emit(log.append(session, "assistant_message", { text, interrupted: true }))
+          continue
         }
         if (failure !== undefined) {
           reason = "error"
@@ -204,6 +225,9 @@ export function createLoop(options: LoopOptions): Loop {
   return {
     wake() {
       if (broken) throw new Error(`Evie stopped because its event log could not be written: ${broken.message}`)
+      // New input during a reply stops the reply, so the model can be asked
+      // again with the input added.
+      if (active) reply?.abort()
       if (active || stopped) return
       active = true
       running = run()

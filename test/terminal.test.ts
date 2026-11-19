@@ -113,3 +113,38 @@ test("Ctrl-C stops the turn in progress, and with nothing running says to quit",
   expect(answers).toEqual(["idle", "cancelled"])
   expect(printed).toContain("Thinking\n[cancelled]\n")
 })
+
+test("when the model asks for several tools at once, each result is shown under its own call", async () => {
+  const model = scriptedProvider([
+    { text: [], calls: [{ name: "lookup", input: { word: "one" } }, { name: "lookup", input: { word: "two" } }] },
+    { text: ["Done."] },
+  ])
+  const run = await startEvie([
+    model.plugin,
+    {
+      name: "lookup-tool",
+      setup(host) {
+        host.tools.add({
+          name: "lookup",
+          description: "Looks a word up.",
+          inputSchema: { type: "object", properties: { word: { type: "string" } } },
+          run: async (input) => `meaning of ${input.word}`,
+        })
+      },
+    },
+  ])
+  stop = run.stop
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    lines: (async function* () {
+      yield "look both up"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain(
+    '⏺ lookup {"word":"one"}\n  ⎿ meaning of one\n⏺ lookup {"word":"two"}\n  ⎿ meaning of two\nDone.\n',
+  )
+})

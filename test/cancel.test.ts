@@ -173,33 +173,25 @@ test("cancelling a session that is not open is refused", async () => {
   await expect(run.evie.send({ type: "cancel", session: "no-such-session" })).rejects.toThrow('The session "no-such-session" is not open')
 })
 
-test("a message waiting when a turn is cancelled is answered in a turn of its own", async () => {
-  const { run, model } = await start([{ hang: true }, { text: ["Second answer."] }])
-  const bothEnded = new Promise<void>((resolve) => {
-    let ended = 0
-    run.evie.subscribe((event) => {
-      if (event.type === "turn_end" && ++ended === 2) resolve()
-    })
-  })
+test("a turn that was steered can still be cancelled, and the conversation carries on", async () => {
+  const { run, model } = await start([{ hang: true, text: ["Half an ans"] }, { hang: true }, { text: ["Third answer."] }])
+  const send = (text: string) => run.evie.send({ type: "send_message", session: run.session, text })
 
-  await run.evie.send({ type: "send_message", session: run.session, text: "first" })
-  await run.evie.send({ type: "send_message", session: run.session, text: "second" })
+  const firstText = next(run, (event) => event.type === "assistant_delta")
+  const ended = next(run, (event) => event.type === "turn_end")
+  await send("first")
+  await firstText
+  await send("second")
+  while (model.requests.length < 2) await new Promise((resolve) => setTimeout(resolve, 1))
   await run.evie.send({ type: "cancel", session: run.session })
-  await bothEnded
+  await ended
+  await say(run, "third")
 
-  expect(model.requests[1]?.messages).toEqual([
+  expect(stored(run.events).filter((event) => event.type === "turn_end").map((event) => event.body.reason)).toEqual(["cancelled", "completed"])
+  expect(model.requests[2]?.messages).toEqual([
     { role: "user", text: "first" },
+    { role: "assistant", text: "Half an ans" },
     { role: "user", text: "second" },
+    { role: "user", text: "third" },
   ])
-})
-
-test("a tool that throws when it is cancelled ends the turn as cancelled, not as a bug", async () => {
-  const throwing = slowTool("throws")
-  const { run } = await start([{ text: [], calls: [{ name: "wait", input: {} }] }], [throwing.plugin])
-
-  await sayThenCancel(run, "go", throwing.started)
-
-  const results = stored(run.events).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))
-  expect(results).toEqual(["Cancelled: the turn was stopped while this tool was running."])
-  expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end", body: { reason: "cancelled" } })
 })

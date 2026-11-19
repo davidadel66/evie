@@ -5,10 +5,13 @@ import { DONE, data, fakeOpenRouter, sse, type FakeResponse } from "./support/fa
 const KEY = "sk-or-test-key-123"
 const request: Request = { model: "some/model", messages: [{ role: "user", text: "hi" }], tools: [] }
 
-async function ask(responses: FakeResponse[], options: { key?: string | undefined; request?: Request } = {}) {
+async function ask(
+  responses: FakeResponse[],
+  options: { key?: string | undefined; request?: Request; maxTokens?: string } = {},
+) {
   const fake = fakeOpenRouter(responses)
   const provider = createOpenRouterProvider({
-    env: { OPENROUTER_API_KEY: "key" in options ? options.key : KEY },
+    env: { OPENROUTER_API_KEY: "key" in options ? options.key : KEY, EVIE_MAX_TOKENS: options.maxTokens },
     fetch: fake.fetch,
     sleep: fake.sleep,
   })
@@ -48,6 +51,7 @@ test("the request goes to OpenRouter's chat completions endpoint with the key as
   expect(calls[0]?.headers.authorization).toBe(`Bearer ${KEY}`)
   expect(calls[0]?.body).toEqual({
     model: "some/model",
+    max_tokens: 16000,
     messages: [{ role: "user", content: "hi" }],
     stream: true,
   })
@@ -258,4 +262,14 @@ test("the system prompt is sent as the first message", async () => {
     { role: "system", content: "You are Evie." },
     { role: "user", content: "hi" },
   ])
+})
+
+test("a reply is limited to 16,000 tokens unless the settings say otherwise", async () => {
+  const usual = await ask([ok(text("ok"), usage("stop"), DONE)])
+  const chosen = await ask([ok(text("ok"), usage("stop"), DONE)], { maxTokens: "4000" })
+  const nonsense = await ask([ok(text("ok"), usage("stop"), DONE)], { maxTokens: "lots" })
+
+  expect(usual.calls[0]?.body.max_tokens).toBe(16000)
+  expect(chosen.calls[0]?.body.max_tokens).toBe(4000)
+  expect(nonsense.calls[0]?.body.max_tokens).toBe(16000)
 })

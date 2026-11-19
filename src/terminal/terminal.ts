@@ -1,4 +1,4 @@
-import type { Evie } from "../core/types.ts"
+import type { Evie, ToolCall } from "../core/types.ts"
 
 export type TerminalOptions = {
   // The client interface. The terminal uses nothing else of Evie.
@@ -50,6 +50,12 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   let unanswered = 0
   let idle = true
   let whenIdle = () => {}
+  // The tool calls of the current step that have not been shown yet.
+  let pendingCalls: ToolCall[] = []
+  const showNextCall = () => {
+    const call = pendingCalls.shift()
+    if (call) line(`⏺ ${call.name} ${shorten(call.arguments, 120)}`)
+  }
   // True from a Ctrl-C until the turn it cancelled has ended.
   let cancelling = false
 
@@ -57,14 +63,18 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     if (event.session !== session) return
     if (event.type === "user_message") unanswered -= 1
     if (event.type === "assistant_delta") write(event.text)
-    // One line for each tool the model asks for, and one for what came back.
+    // One line for each tool the model asks for, and one for what came
+    // back. The tools run one at a time, so each call is shown just before it
+    // runs, with its result straight after.
     if (event.type === "assistant_message") {
-      for (const call of event.body.toolCalls ?? []) line(`⏺ ${call.name} ${shorten(call.arguments, 120)}`)
+      pendingCalls = [...(event.body.toolCalls ?? [])]
+      showNextCall()
     }
     if (event.type === "tool_result") {
       const lines = event.body.text.split("\n")
       const more = lines.length > 1 ? ` (+${lines.length - 1} more lines)` : ""
       line(`  ⎿ ${shorten(lines[0] ?? "", 100)}${more}`)
+      showNextCall()
     }
     if (event.type === "turn_end") {
       if (event.body.reason === "error") line(`[error] ${event.body.error ?? "The turn failed."}`)
