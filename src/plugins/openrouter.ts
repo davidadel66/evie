@@ -90,7 +90,10 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
 function toBody(request: Request) {
   return {
     model: request.model,
-    messages: request.messages.map(toWireMessage),
+    messages: [
+      ...(request.system === undefined ? [] : [{ role: "system", content: request.system }]),
+      ...request.messages.map(toWireMessage),
+    ],
     // Left out when there are none: an empty list is not documented.
     ...(request.tools.length > 0 && {
       tools: request.tools.map((tool) => ({

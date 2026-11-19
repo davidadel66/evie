@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { createHost } from "./host.ts"
+import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createEventLog } from "./log.ts"
 import { createLoop, type Loop } from "./loop.ts"
@@ -36,15 +36,15 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   // opens in it: the global plugins, then the project's own. The general
   // session's host has the global plugins alone, and is built now, so that a
   // problem with them stops Evie at start.
-  type Scope = { host: Host; provider: Provider }
+  type Scope = { host: Host; hooks: HookRunner; provider: Provider }
   const scopes = new Map<string | null, Promise<Scope>>()
 
   async function buildScope(project: Project | null): Promise<Scope> {
     const own = project && options.projectPlugins ? await options.projectPlugins(project) : []
-    const host = await createHost([...options.plugins, ...own], project)
+    const { host, hooks } = await createHost([...options.plugins, ...own], project)
     const provider = host.providers.list()[0]
     if (!provider) throw new Error("No provider is registered. Load a plugin that registers one.")
-    return { host, provider }
+    return { host, hooks, provider }
   }
 
   function scopeFor(project: Project | null): Promise<Scope> {
@@ -93,18 +93,19 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       project = projects.forFolder(input.folder)
     }
 
-    const { host, provider } = await scopeFor(project)
+    const { host, hooks, provider } = await scopeFor(project)
     const session = projects.createSession(project)
     loops.set(
       session,
       createLoop({
         session,
-        folder: project?.folder ?? null,
+        project,
         outputFolder: join(home, "tool-output"),
         model: options.model,
         log,
         inbox,
         host,
+        hooks,
         provider,
         atomically: (work) => db.transaction(work)(),
         emit,

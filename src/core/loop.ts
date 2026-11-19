@@ -2,19 +2,21 @@ import { join } from "node:path"
 import type { EventLog } from "./log.ts"
 import type { Inbox } from "./inbox.ts"
 import { buildRequest } from "./request-builder.ts"
-import { runToolCall } from "./tools.ts"
-import type { EventBodies, EvieEvent, Host, Provider, StoredEvent, ToolCall } from "./types.ts"
+import { CancelledBeforeStart, runToolCall } from "./tools.ts"
+import type { HookRunner } from "./host.ts"
+import type { EventBodies, EvieEvent, HookContext, Host, Project, Provider, StoredEvent, ToolCall } from "./types.ts"
 
 export type LoopOptions = {
   session: string
-  // The folder of the session's project, or null in the general session.
-  folder: string | null
+  // The session's project, or null in the general session.
+  project: Project | null
   // Where tool output too long to show is saved in full.
   outputFolder: string
   model: string
   log: EventLog
   inbox: Inbox
   host: Host
+  hooks: HookRunner
   provider: Provider
   // Runs a function as one database transaction: all of its writes happen, or none.
   atomically<Result>(work: () => Result): Result
@@ -37,7 +39,8 @@ export type Loop = {
 // a turn takes as many steps as the model needs. The loop keeps no
 // conversation in memory: each request is rebuilt from the event log.
 export function createLoop(options: LoopOptions): Loop {
-  const { session, folder, outputFolder, model, log, inbox, host, provider, atomically, emit } = options
+  const { session, project, outputFolder, model, log, inbox, host, hooks, provider, atomically, emit } = options
+  const folder = project?.folder ?? null
   // True from the moment a run of turns starts until its last inbox check.
   let active = false
   // True once stop() has been called; no further turn starts.
@@ -84,7 +87,12 @@ export function createLoop(options: LoopOptions): Loop {
     try {
       // One pass of this loop is one step.
       while (true) {
-        const request = buildRequest(model, log.events(session), host.tools.list())
+        // What a hook is told about the moment it runs in.
+        const context = (): HookContext => ({ session, project, events: log.events(session), signal })
+
+        const request = await hooks.beforeRequest(buildRequest(model, log.events(session), host.tools.list()), context())
+        // Only the tools the hooks left in the request can be called in this step.
+        const offered = host.tools.list().filter((tool) => request.tools.some((left) => left.name === tool.name))
         let text = ""
         const calls: ToolCall[] = []
         let failure: string | undefined
@@ -135,21 +143,24 @@ export function createLoop(options: LoopOptions): Loop {
           let result: string
           try {
             result = await runToolCall(call, {
-              tools: host.tools.list(),
+              tools: offered,
               context: { signal, folder },
+              before: (checked) => hooks.beforeTool(checked, context()),
+              after: (checked, output) => hooks.afterTool(checked, output, context()),
               outputFolder: join(outputFolder, session),
             })
           } catch (cause) {
             if (signal.aborted) {
               // Being cancelled makes some tools throw. That is not a bug.
-              emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: "Cancelled: the turn was stopped while this tool was running." }))
+              const when = cause instanceof CancelledBeforeStart ? "before this tool ran" : "while this tool was running"
+              emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: `Cancelled: the turn was stopped ${when}.` }))
               settleRest(index + 1, "Cancelled: the turn was stopped before this tool ran.")
               break
             }
-            // A tool broke, which ends the turn.
+            // A tool or a plugin's hook broke, which ends the turn.
             reason = "error"
             error = cause instanceof Error ? cause.message : String(cause)
-            emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: `${error} This is a bug in the tool, not in the input.` }))
+            emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: `${error} This is a bug in Evie or a plugin, not a problem with the input.` }))
             settleRest(index + 1, "Not run, because an earlier tool call in this step broke.")
             break
           }
