@@ -57,6 +57,8 @@ export type Request = {
   model: string
   // The system prompt. The core sets none; a plugin adds it in a hook.
   system?: string
+  // The longest the reply may be, in tokens, when the settings give a limit.
+  maxTokens?: number
   messages: Message[]
   tools: ToolDefinition[]
 }
@@ -192,8 +194,12 @@ export type Plugin = {
   setup(host: Host): void | Promise<void>
 }
 
-// What one project has on top of the global plugins.
-export type ProjectPlugins = {
+// What one project has of its own, on top of the global settings.
+export type ProjectSettings = {
+  // The model sessions in this project start with, when the project sets one.
+  model?: string
+  // The longest a reply may be in this project, when the project sets one.
+  maxTokens?: number
   // The project's own plugins, set up after the global ones.
   plugins: readonly Plugin[]
   // Global plugins switched off for this project, by name.

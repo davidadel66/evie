@@ -3,7 +3,7 @@ import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { dataFolder } from "./core/evie.ts"
-import type { Plugin, Project, ProjectPlugins } from "./core/types.ts"
+import type { Plugin, Project, ProjectSettings } from "./core/types.ts"
 import { files, type FilesOptions } from "./plugins/files/index.ts"
 import { guard } from "./plugins/guard.ts"
 import { models } from "./plugins/models/index.ts"
@@ -11,15 +11,21 @@ import { openrouter } from "./plugins/openrouter.ts"
 import { shell } from "./plugins/shell.ts"
 import type { Settings } from "./settings.ts"
 
-// Which plugins Evie loads, read from settings files.
+// Evie's settings files: which model to use, how long a reply may be, and
+// which plugins to load. Keys are not kept here; they come from the
+// environment, or the `.env` file beside this one.
 //
-// The global file is `evie.json` in the data folder. It lists the plugins
-// every project gets, in order. A project can have a file of its own at
-// `.evie/evie.json` in its folder, which adds plugins for that project only
-// and can switch off a global one.
+// The global file is `evie.json` in the data folder. It applies to every
+// project. A project can have a file of its own at `.evie/evie.json` in its
+// folder, which can set that project's model and reply limit, add plugins
+// for that project only, and switch off a global one.
 //
-//   { "plugins": ["files", { "use": "shell" }, "/path/to/my-plugin.ts"],
+//   { "model": "some/model", "maxTokens": 16000,
+//     "plugins": ["files", { "use": "shell" }, "/path/to/my-plugin.ts"],
 //     "trust": ["/path/to/a/project"] }
+//
+// A setting in the environment, `EVIE_MODEL` or `EVIE_MAX_TOKENS`, wins over
+// both files, so one run can be pointed at another model.
 //
 // A plugin is a built-in one, named, or a file, given by its path. A plugin
 // file is code that runs with Evie's full permissions, and switching a plugin
@@ -28,15 +34,21 @@ import type { Settings } from "./settings.ts"
 // Otherwise it is ignored as a whole, and opening someone else's repository
 // can neither run their code nor change what Evie loads.
 
-export type PluginSettings = {
+export type SettingsFiles = {
+  // The global settings file, whether or not it exists yet.
+  file: string
+  // The model sessions start with, when one is set.
+  model?: string
+  // The longest a reply may be, when a limit is set.
+  maxTokens?: number
   // The global plugins, in the order listed.
   plugins: Plugin[]
   // What a project adds and switches off.
-  projectPlugins(project: Project): Promise<ProjectPlugins>
+  projectSettings(project: Project): Promise<ProjectSettings>
 }
 
 type Entry = string | { use: string; options?: Record<string, unknown> }
-type SettingsFile = { plugins?: Entry[]; trust?: string[]; disable?: string[] }
+type SettingsFile = { model?: string; maxTokens?: number; plugins?: Entry[]; trust?: string[]; disable?: string[] }
 
 // What a built-in plugin is made from: its options from the settings file,
 // and the things only Evie knows. The API key is never taken from options.
@@ -50,7 +62,7 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
 }
 const DEFAULT: Entry[] = ["files", "shell", "guard", "models", "openrouter"]
 
-export async function loadPluginSettings(options: { env: Settings }): Promise<PluginSettings> {
+export async function loadSettingsFiles(options: { env: Settings }): Promise<SettingsFiles> {
   const home = dataFolder(options.env)
   const context: Context = { env: options.env, home }
   const globalFile = join(home, "evie.json")
@@ -60,9 +72,20 @@ export async function loadPluginSettings(options: { env: Settings }): Promise<Pl
   for (const entry of global.plugins ?? DEFAULT) plugins.push(await load(entry, home, context))
   const trusted = new Set((global.trust ?? []).map((folder) => resolve(expandHome(folder))))
 
+  // The environment wins over both files.
+  const fromEnv = {
+    model: options.env.EVIE_MODEL?.trim() || undefined,
+    maxTokens: wholeNumber(options.env.EVIE_MAX_TOKENS),
+  }
+  const model = fromEnv.model ?? global.model
+  const maxTokens = fromEnv.maxTokens ?? global.maxTokens
+
   return {
+    file: globalFile,
+    ...(model !== undefined && { model }),
+    ...(maxTokens !== undefined && { maxTokens }),
     plugins,
-    async projectPlugins(project) {
+    async projectSettings(project) {
       const projectFile = join(project.folder, ".evie", "evie.json")
       const own = await readSettingsFile(projectFile)
       if (!own) return { plugins: [], disable: [], notices: [] }
@@ -87,7 +110,15 @@ export async function loadPluginSettings(options: { env: Settings }): Promise<Pl
         if (plugins.some((global) => global.name === plugin.name)) disable.push(plugin.name)
         added.push(plugin)
       }
-      return { plugins: added, disable, notices: [] }
+      const ownModel = fromEnv.model ? undefined : own.model
+      const ownLimit = fromEnv.maxTokens ? undefined : own.maxTokens
+      return {
+        plugins: added,
+        disable,
+        notices: [],
+        ...(ownModel !== undefined && { model: ownModel }),
+        ...(ownLimit !== undefined && { maxTokens: ownLimit }),
+      }
     },
   }
 }
@@ -124,6 +155,10 @@ async function load(entry: Entry, baseFolder: string, context: Context): Promise
   return exported
 }
 
+const wholeNumber = (text: string | undefined) => {
+  const value = Number(text)
+  return Number.isInteger(value) && value > 0 ? value : undefined
+}
 const looksLikePath = (name: string) => /[/\\]|^[.~]|\.(ts|js|mjs)$/.test(name)
 const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir())
 const isPlugin = (value: unknown): value is Plugin =>
@@ -164,5 +199,11 @@ async function readSettingsFile(file: string): Promise<SettingsFile | undefined>
   listOf("plugins", isEntry, 'plugin names, paths, or { "use": ..., "options": ... } entries')
   listOf("trust", (item) => typeof item === "string", "project folders")
   listOf("disable", (item) => typeof item === "string", "plugin names")
+  if (settings.model !== undefined && (typeof settings.model !== "string" || settings.model.trim() === "")) {
+    throw new Error(`In ${file}, "model" must be the name of a model.`)
+  }
+  if (settings.maxTokens !== undefined && !(Number.isInteger(settings.maxTokens) && (settings.maxTokens as number) > 0)) {
+    throw new Error(`In ${file}, "maxTokens" must be a whole number above zero.`)
+  }
   return settings as SettingsFile
 }

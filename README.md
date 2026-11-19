@@ -41,6 +41,8 @@ cd /path/to/a/project
 evie
 ```
 
+Both can be kept in files instead, as described under Settings.
+
 Type a message and press Enter. The line you are typing stays at the
 bottom, and Evie's output appears above it, so you can type while it works.
 A message you send while Evie is working steers it: it is taken in at the
@@ -57,22 +59,38 @@ Type `/model` to see which model is in use, or `/model` and a name to
 switch to another in the middle of a session. Each family of models is
 given the tools and the system prompt it works best with.
 
-Evie keeps its state in `~/.evie`. Set `EVIE_HOME` to use another folder.
+## Settings
 
-Settings can also be kept in a `.env` file in that folder, one `NAME=value`
-per line, so they need not be exported in every shell:
+Evie keeps its state in `~/.evie`. Set `EVIE_HOME` to use another folder.
+Two files in that folder hold its settings.
+
+**`.env` is for keys.** One `NAME=value` per line. Evie reads the key and
+never writes it anywhere.
 
 ```
 OPENROUTER_API_KEY=...
-EVIE_MODEL=...
 ```
 
-A setting in the real environment wins over the file. Evie reads the API
-key and never writes it anywhere.
+**`evie.json` is for everything else:** the model, how long a reply may be,
+and which plugins load.
 
-`EVIE_MAX_TOKENS` sets how long one reply may be. It is 16,000 unless you
-change it. OpenRouter refuses a request whose limit your credits do not
-cover, so lower it if you see that.
+```json
+{
+  "model": "a-name-from/openrouter.ai-models",
+  "maxTokens": 16000
+}
+```
+
+`maxTokens` is the longest one reply may be. It is 16,000 unless you change
+it. OpenRouter refuses a request whose limit your credits do not cover, so
+lower it if you see that.
+
+A project can have settings of its own, in `.evie/evie.json` in its folder,
+which win over the global file for that project. See Plugins for when a
+project's file is used.
+
+A setting in the environment wins over both files, so `EVIE_MODEL=...  evie`
+points one run at another model. `EVIE_MAX_TOKENS` works the same way.
 
 Evie is not started in a project. A client opens a session, which belongs
 to a project or to none, and one Evie serves every open session. A project
@@ -104,10 +122,11 @@ Leaving a plugin out switches it off: without `shell`, the model cannot run
 commands.
 
 **For one project:** `.evie/evie.json` in that project's folder. It adds
-plugins for that project only, and can switch off a global one there:
+plugins for that project only, and can switch off a global one there. It
+can also set that project's model:
 
 ```json
-{ "plugins": ["./tools/deploy.ts"], "disable": ["shell"] }
+{ "model": "another/model", "plugins": ["./tools/deploy.ts"], "disable": ["shell"] }
 ```
 
 **A plugin file** exports an object with a name and a setup function, or a

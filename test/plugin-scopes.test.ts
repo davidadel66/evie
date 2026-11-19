@@ -29,9 +29,9 @@ function toolPlugin(name: string, setups: string[] = []) {
   return { plugin, setups }
 }
 
-async function start(plugins: Plugin[], projectPlugins?: (project: Project) => Plugin[]) {
+async function start(plugins: Plugin[], projectSettings?: (project: Project) => Plugin[]) {
   const model = scriptedProvider(Array.from({ length: 10 }, () => ({ text: ["ok"] })))
-  const run = await startEvie([model.plugin, ...plugins], projectPlugins ? { projectPlugins } : {})
+  const run = await startEvie([model.plugin, ...plugins], projectSettings ? { projectSettings } : {})
   cleanups.push(run.stop)
   // The names of the tools the model was offered in a session's next turn.
   async function offered(session: string) {

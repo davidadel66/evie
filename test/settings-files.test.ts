@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { loadPluginSettings } from "../src/index.ts"
+import { createEvie, loadSettingsFiles } from "../src/index.ts"
 import { say, startEvie, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -38,9 +38,9 @@ export default {
 async function start(global: unknown, script: ScriptedReply[] = Array.from({ length: 8 }, () => ({ text: ["ok"] }))) {
   const home = await tempFolder("evie-home-")
   if (global !== undefined) await writeFile(join(home, "evie.json"), typeof global === "string" ? global : JSON.stringify(global))
-  const settings = await loadPluginSettings({ env: { EVIE_HOME: home } })
+  const settings = await loadSettingsFiles({ env: { EVIE_HOME: home } })
   const model = scriptedProvider(script)
-  const run = await startEvie([model.plugin, ...settings.plugins], { home, projectPlugins: settings.projectPlugins })
+  const run = await startEvie([model.plugin, ...settings.plugins], { home, projectSettings: settings.projectSettings })
   cleanups.push(run.stop)
   // The names of the tools the model is offered in a session's next turn.
   async function offered(session = run.session) {
@@ -96,7 +96,7 @@ test("a path that is not a full path is taken from the folder the settings file 
     await mkdir(join(home, "plugins"))
     await writeFile(join(home, "plugins", "greeter.ts"), toolPlugin("greet"))
     await writeFile(join(home, "evie.json"), JSON.stringify({ plugins: ["./plugins/greeter.ts"] }))
-    const settings = await loadPluginSettings({ env: { EVIE_HOME: home } })
+    const settings = await loadSettingsFiles({ env: { EVIE_HOME: home } })
     const model = scriptedProvider([{ text: ["ok"] }])
     const run = await startEvie([model.plugin, ...settings.plugins], { home })
     cleanups.push(run.stop)
@@ -155,7 +155,7 @@ test("a settings file that is not valid says which file and why", async () => {
 test("the API key is never read from the settings file", async () => {
   const { run } = await start({ OPENROUTER_API_KEY: "sk-in-the-wrong-place", plugins: [{ use: "openrouter", options: { apiKey: "sk-also-wrong" } }] })
   // No stand-in model is in front this time: the real provider is the only one.
-  const real = await loadPluginSettings({ env: { EVIE_HOME: run.home } })
+  const real = await loadSettingsFiles({ env: { EVIE_HOME: run.home } })
   const alone = await startEvie([...real.plugins], { home: await tempFolder("evie-home-") })
   cleanups.push(alone.stop)
 
@@ -238,5 +238,83 @@ test("a settings file that is there but cannot be read is reported, not passed o
   const home = await tempFolder("evie-home-")
   await mkdir(join(home, "evie.json"))
 
-  await expect(loadPluginSettings({ env: { EVIE_HOME: home } })).rejects.toThrow(/evie\.json could not be read/)
+  await expect(loadSettingsFiles({ env: { EVIE_HOME: home } })).rejects.toThrow(/evie\.json could not be read/)
+})
+
+// ---- The model and the reply limit -----------------------------------------------------
+
+// Starts Evie with the model left for the settings to decide.
+async function startWithSettings(global: unknown, env: Record<string, string> = {}) {
+  const home = await tempFolder("evie-home-")
+  if (global !== undefined) await writeFile(join(home, "evie.json"), JSON.stringify(global))
+  const settings = await loadSettingsFiles({ env: { EVIE_HOME: home, ...env } })
+  const model = scriptedProvider(Array.from({ length: 6 }, () => ({ text: ["ok"] })))
+  const evie = await createEvie({
+    env: { EVIE_HOME: home },
+    plugins: [model.plugin],
+    projectSettings: settings.projectSettings,
+    settingsFile: settings.file,
+    ...(settings.model !== undefined && { model: settings.model }),
+    ...(settings.maxTokens !== undefined && { maxTokens: settings.maxTokens }),
+  })
+  cleanups.push(() => evie.close())
+  // Opens a session in a folder, sends one message, and returns the request the model was sent.
+  async function requestIn(folder?: string) {
+    const opened = await evie.send({ type: "open_session", ...(folder && { folder }) })
+    await say({ evie, session: opened.session }, "hi")
+    return model.requests.at(-1)!
+  }
+  return { evie, home, requestIn }
+}
+
+test("the model and the reply limit come from the global settings file", async () => {
+  const { requestIn } = await startWithSettings({ model: "some/model", maxTokens: 4000, plugins: [] })
+
+  expect(await requestIn()).toMatchObject({ model: "some/model", maxTokens: 4000 })
+})
+
+test("a setting in the environment wins over the settings file", async () => {
+  const { requestIn } = await startWithSettings(
+    { model: "from/the-file", maxTokens: 4000, plugins: [] },
+    { EVIE_MODEL: "from/the-environment", EVIE_MAX_TOKENS: "900" },
+  )
+
+  expect(await requestIn()).toMatchObject({ model: "from/the-environment", maxTokens: 900 })
+})
+
+test("a trusted project can set its own model and reply limit, and other projects keep the global ones", async () => {
+  const special = await projectWith({ model: "project/model", maxTokens: 2000 })
+  const ordinary = await tempFolder("evie-project-")
+  const { requestIn } = await startWithSettings({ model: "global/model", plugins: [], trust: [special] })
+
+  expect(await requestIn(special)).toMatchObject({ model: "project/model", maxTokens: 2000 })
+  expect(await requestIn(ordinary)).toMatchObject({ model: "global/model" })
+  expect((await requestIn(ordinary)).maxTokens).toBeUndefined()
+})
+
+test("the environment still wins over a project's own model", async () => {
+  const special = await projectWith({ model: "project/model" })
+  const { requestIn } = await startWithSettings({ model: "global/model", plugins: [], trust: [special] }, { EVIE_MODEL: "from/the-environment" })
+
+  expect((await requestIn(special)).model).toBe("from/the-environment")
+})
+
+test("a project that is not trusted cannot choose the model", async () => {
+  const special = await projectWith({ model: "expensive/model" })
+  const { requestIn } = await startWithSettings({ model: "global/model", plugins: [] })
+
+  expect((await requestIn(special)).model).toBe("global/model")
+})
+
+test("with no model set anywhere, opening a session says where to set one", async () => {
+  const { evie, home } = await startWithSettings({ plugins: [] })
+
+  await expect(evie.send({ type: "open_session" })).rejects.toThrow(
+    `No model is set. Add "model" to ${join(home, "evie.json")}, with a name from https://openrouter.ai/models.`,
+  )
+})
+
+test("a model or reply limit of the wrong kind in a settings file is refused", async () => {
+  await expect(startWithSettings({ model: 5 })).rejects.toThrow(/"model" must be the name of a model/)
+  await expect(startWithSettings({ model: "a/b", maxTokens: "lots" })).rejects.toThrow(/"maxTokens" must be a whole number above zero/)
 })

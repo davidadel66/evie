@@ -7,19 +7,23 @@ import { createEventLog } from "./log.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { createProjects } from "./projects.ts"
 import { openStore } from "./store.ts"
-import type { Commands, Evie, EvieEvent, Host, Plugin, Project, ProjectPlugins, Provider } from "./types.ts"
+import type { Commands, Evie, EvieEvent, Host, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
 
 export type EvieOptions = {
   // Settings from the environment. `EVIE_HOME` names the data folder.
   env: Record<string, string | undefined>
-  // The name of the model to ask.
-  model: string
+  // The model sessions start with, unless their project sets its own.
+  model?: string
+  // The longest a reply may be, in tokens, unless a project sets its own.
+  maxTokens?: number
+  // Where a model can be set, named when none is. It is only used in that message.
+  settingsFile?: string
   // The global plugins, in order. They are part of every project and of the
   // general session.
   plugins: readonly Plugin[]
   // What a project has on top of the global plugins: its own, added after
   // them for that project only, and any global ones it switches off.
-  projectPlugins?: (project: Project) => ProjectPlugins | readonly Plugin[] | Promise<ProjectPlugins | readonly Plugin[]>
+  projectSettings?: (project: Project) => ProjectSettings | readonly Plugin[] | Promise<ProjectSettings | readonly Plugin[]>
 }
 
 // Where all of Evie's state lives. Moving Evie is copying this folder.
@@ -37,17 +41,32 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   // opens in it: the global plugins, then the project's own. The general
   // session's host has the global plugins alone, and is built now, so that a
   // problem with them stops Evie at start.
-  type Scope = { host: Host; hooks: HookRunner; provider: Provider; notices: string[] }
+  type Scope = {
+    host: Host
+    hooks: HookRunner
+    provider: Provider
+    notices: string[]
+    // The project's own model and reply limit, when it sets them.
+    model?: string
+    maxTokens?: number
+  }
   const scopes = new Map<string | null, Promise<Scope>>()
 
   async function buildScope(project: Project | null): Promise<Scope> {
-    const given = project && options.projectPlugins ? await options.projectPlugins(project) : []
-    const own: ProjectPlugins = "plugins" in given ? given : { plugins: given }
+    const given = project && options.projectSettings ? await options.projectSettings(project) : []
+    const own: ProjectSettings = "plugins" in given ? given : { plugins: given }
     const kept = options.plugins.filter((plugin) => !own.disable?.includes(plugin.name))
     const { host, hooks } = await createHost([...kept, ...own.plugins], project)
     const provider = host.providers.list()[0]
     if (!provider) throw new Error("No provider is registered. Load a plugin that registers one.")
-    return { host, hooks, provider, notices: [...(own.notices ?? [])] }
+    return {
+      host,
+      hooks,
+      provider,
+      notices: [...(own.notices ?? [])],
+      ...(own.model !== undefined && { model: own.model }),
+      ...(own.maxTokens !== undefined && { maxTokens: own.maxTokens }),
+    }
   }
 
   function scopeFor(project: Project | null): Promise<Scope> {
@@ -83,7 +102,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
   // Each session open in this process: its turn loop, its project and that
   // project's plugin host.
-  type Open = { loop: Loop; project: Project | null; host: Host }
+  type Open = { loop: Loop; project: Project | null; host: Host; model: string }
   const sessions = new Map<string, Open>()
 
   async function openSession(input: Commands["open_session"]["input"]): Promise<Commands["open_session"]["output"]> {
@@ -98,7 +117,15 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       project = projects.forFolder(input.folder)
     }
 
-    const { host, hooks, provider, notices } = await scopeFor(project)
+    const scope = await scopeFor(project)
+    const { host, hooks, provider, notices } = scope
+    // A project's own model wins over the global one.
+    const model = scope.model ?? options.model
+    if (!model) {
+      const where = options.settingsFile ? `Add "model" to ${options.settingsFile}` : "Set a model"
+      throw new Error(`No model is set. ${where}, with a name from https://openrouter.ai/models.`)
+    }
+    const maxTokens = scope.maxTokens ?? options.maxTokens
 
     // Continuing: the session used last in this project, when there is one.
     const last = input.continue ? projects.lastSession(project) : undefined
@@ -110,7 +137,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       session,
       project,
       outputFolder: join(home, "tool-output"),
-      model: options.model,
+      model,
+      ...(maxTokens !== undefined && { maxTokens }),
       log,
       inbox,
       host,
@@ -119,7 +147,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       atomically: (work) => db.transaction(work)(),
       emit,
     })
-    sessions.set(session, { loop, project, host })
+    sessions.set(session, { loop, project, host, model })
     // A message that was waiting when Evie last stopped is answered now.
     if (last !== undefined) loop.wake()
     return { session, project, resumed: last !== undefined, notices }
@@ -173,7 +201,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   }
 
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
-    const { project, host } = open(input.session)
+    const { project, host, model: startedWith } = open(input.session)
     const command = host.commands.list().find((candidate) => candidate.name === input.name)
     if (!command) {
       const names = host.commands.list().map((candidate) => `/${candidate.name}`).join(", ") || "none"
@@ -182,7 +210,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     const text = await command.run(input.args, {
       session: input.session,
       project,
-      model: currentModel(log.events(input.session), options.model),
+      model: currentModel(log.events(input.session), startedWith),
       setModel: (model) => setModel({ session: input.session, model }),
     })
     return { text }

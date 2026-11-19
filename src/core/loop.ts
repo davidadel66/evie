@@ -12,8 +12,10 @@ export type LoopOptions = {
   project: Project | null
   // Where tool output too long to show is saved in full.
   outputFolder: string
-  // The model Evie was started with. A session can switch to another.
+  // The model the session starts with. It can switch to another.
   model: string
+  // The longest a reply may be, when the settings give a limit.
+  maxTokens?: number
   log: EventLog
   inbox: Inbox
   host: Host
@@ -48,7 +50,7 @@ export function currentModel(events: readonly StoredEvent[], startedWith: string
 // a turn takes as many steps as the model needs. The loop keeps no
 // conversation in memory: each request is rebuilt from the event log.
 export function createLoop(options: LoopOptions): Loop {
-  const { session, project, outputFolder, model, log, inbox, host, hooks, provider, atomically, emit } = options
+  const { session, project, outputFolder, model, maxTokens, log, inbox, host, hooks, provider, atomically, emit } = options
   const folder = project?.folder ?? null
   // True from the moment a run of turns starts until its last inbox check.
   let active = false
@@ -115,7 +117,7 @@ export function createLoop(options: LoopOptions): Loop {
         const context = (): HookContext => ({ session, project, events: log.events(session), signal })
 
         const events = log.events(session)
-        const request = await hooks.beforeRequest(buildRequest(currentModel(events, model), events, host.tools.list()), context())
+        const request = await hooks.beforeRequest(buildRequest(currentModel(events, model), events, host.tools.list(), maxTokens), context())
         // Only the tools the hooks left in the request can be called in this step.
         const offered = host.tools.list().filter((tool) => request.tools.some((left) => left.name === tool.name))
         // A message that arrived while the request was being put together
