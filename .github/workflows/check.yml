@@ -1,0 +1,23 @@
+# Runs the type check and the tests on every pull request, and on the two
+# long-lived branches: `dev`, where finished work lands first, and `main`,
+# the stable version.
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      # The search tools run ripgrep, and their tests run the real thing.
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - run: bun install --frozen-lockfile
+      - run: bun run check
