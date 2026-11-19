@@ -146,13 +146,14 @@ test("in the terminal, a line starting with / runs a command and is not sent to 
     lines: (async function* () {
       yield "/model openai/gpt-5"
       yield "/nope"
-      yield "hello"
+      yield "/Users/me/app/main.ts is failing, why?"
     })(),
     write: (text) => (printed += text),
   })
 
   expect(printed).toContain("The model is now openai/gpt-5 (profile: gpt).")
   expect(printed).toContain('[error] There is no command "/nope". The commands are: /model.')
+  // A message that starts with a path is a message, not a command.
   expect(provider.requests).toHaveLength(1)
-  expect(provider.requests[0]?.messages).toEqual([{ role: "user", text: "hello" }])
+  expect(provider.requests[0]?.messages).toEqual([{ role: "user", text: "/Users/me/app/main.ts is failing, why?" }])
 })

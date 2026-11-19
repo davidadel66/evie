@@ -10,9 +10,9 @@ export type LoopOptions = {
   session: string
   // The session's project, or null in the general session.
   project: Project | null
-  // The model Evie was started with. A session can switch to another.
   // Where tool output too long to show is saved in full.
   outputFolder: string
+  // The model Evie was started with. A session can switch to another.
   model: string
   log: EventLog
   inbox: Inbox
