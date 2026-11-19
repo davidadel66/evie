@@ -1,5 +1,6 @@
 import type { Plugin, Tool } from "../../core/types.ts"
 import { edit } from "./edit.ts"
+import { patch } from "./patch.ts"
 import { read } from "./read.ts"
 import { searchTools } from "./search.ts"
 import { write } from "./write.ts"
@@ -14,7 +15,7 @@ export function files(options: FilesOptions = {}): Plugin {
   return {
     name: "files",
     setup(host) {
-      const tools = [read, write, edit, ...searchTools(options.ripgrep ?? "rg")]
+      const tools = [read, write, edit, patch, ...searchTools(options.ripgrep ?? "rg")]
       for (const tool of tools) host.tools.add(reportingFileErrors(tool))
     },
   }
