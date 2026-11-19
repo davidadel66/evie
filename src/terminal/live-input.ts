@@ -93,7 +93,10 @@ export function createLiveInput(screen: Screen): LiveInput {
     },
 
     write(text) {
-      if (closed || text === "") return
+      if (text === "") return
+      // Once the input has ended there is no live area to keep, but output
+      // still arriving, such as the rest of a reply, is printed as it comes.
+      if (closed) return screen.write(text.replaceAll("\n", NEW_LINE))
       wipe()
       const lines = (unfinished + text).split("\n")
       unfinished = lines.pop()!

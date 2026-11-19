@@ -113,3 +113,14 @@ test("several lines pasted at once are sent one after another", async () => {
 
   expect(sent).toEqual(["one", "two"])
 })
+
+test("output that arrives after the input has ended is still printed", async () => {
+  const { screen, input, reading } = open()
+
+  input.write("A reply in pro")
+  input.key("\x04")
+  await reading
+  input.write("gress\nand its last line\n")
+
+  expect(screen.shown().filter((row) => row !== "")).toEqual(["A reply in pro", "gress", "and its last line"])
+})
