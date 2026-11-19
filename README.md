@@ -41,13 +41,17 @@ cd /path/to/a/project
 evie
 ```
 
-Type a message and press Enter. Ctrl-C stops what Evie is doing; with
-nothing running, Ctrl-C or Ctrl-D quits. If Evie does not stop, a second
-Ctrl-C quits at once.
+Type a message and press Enter. The line you are typing stays at the
+bottom, and Evie's output appears above it, so you can type while it works.
+A message you send while Evie is working steers it: it is taken in at the
+next step, and if Evie is in the middle of writing a reply, that reply
+stops and a new one starts with your message taken into account.
+
+Ctrl-C stops what Evie is doing; with nothing running, Ctrl-C or Ctrl-D
+quits. If Evie does not stop, a second Ctrl-C quits at once.
 
 Run `evie --continue` to carry on the last session of the project you are
-in, with its conversation. A message you send while Evie is working is seen
-at its next step, so you can steer it without stopping it.
+in, with its conversation.
 
 Type `/model` to see which model is in use, or `/model` and a name to
 switch to another in the middle of a session. Each family of models is
@@ -65,6 +69,10 @@ EVIE_MODEL=...
 
 A setting in the real environment wins over the file. Evie reads the API
 key and never writes it anywhere.
+
+`EVIE_MAX_TOKENS` sets how long one reply may be. It is 16,000 unless you
+change it. OpenRouter refuses a request whose limit your credits do not
+cover, so lower it if you see that.
 
 Evie is not started in a project. A client opens a session, which belongs
 to a project or to none, and one Evie serves every open session. A project
