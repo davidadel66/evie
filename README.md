@@ -89,6 +89,10 @@ credited here, and its licence notice kept with the code, as it is adapted.
 
 - [OpenCode](https://github.com/anomalyco/opencode) (MIT): the matching in
   the `edit` tool, in `src/plugins/files/edit.ts`.
+- [OpenAI Codex](https://github.com/openai/codex) (Apache 2.0): the patch
+  format and the way the `patch` tool finds lines, in
+  `src/plugins/files/patch.ts`, rewritten from Rust. The licence and Codex's
+  notice are in `LICENSES/`.
 
 ## Licence
 
