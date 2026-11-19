@@ -132,10 +132,17 @@ commands, and attach to the hooks `before_request`, `before_tool` and
 `after_tool`.
 
 **A plugin runs with Evie's full permissions. Nothing sandboxes it, so
-load only plugins you trust.** For that reason a project's own plugin files
-are loaded only when you list the project's folder under `"trust"` in the
-global file. Otherwise opening someone else's repository could run their
-code, and Evie tells you which plugin it left out.
+load only plugins you trust.** For that reason a project's settings file is
+used only when you list the project's folder under `"trust"` in the global
+file:
+
+```json
+{ "trust": ["/path/to/my/project"] }
+```
+
+Otherwise the project's file is ignored as a whole, and Evie tells you so.
+That way opening someone else's repository can neither run their code nor
+switch off a protection such as the guard.
 
 ## Development
 

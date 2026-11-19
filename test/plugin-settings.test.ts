@@ -182,24 +182,44 @@ test("a project's settings file adds plugins for that project only, after the gl
 
 test("a project's settings file can switch off a global plugin for that project", async () => {
   const folder = await projectWith({ disable: ["shell"] })
-  const { run, offered } = await start(undefined)
+  const { run, offered } = await start({ trust: [folder] })
   const inProject = await run.evie.send({ type: "open_session", folder })
 
   expect(await offered(inProject.session)).toEqual(["read", "write", "edit", "grep", "glob"])
   expect(await offered()).toEqual(usualTools)
 })
 
-test("a project that is not trusted does not get to run its own plugin files, and the owner is told", async () => {
-  const folder = await projectWith({ plugins: ["./deploy.ts"], disable: ["shell"] }, { "deploy.ts": toolPlugin("deploy") })
-  const { run, home, offered } = await start(undefined)
+test("a project can give a global plugin its own options, which replaces it for that project", async () => {
+  const folder = await projectWith({ plugins: [{ use: "files", options: { ripgrep: "/no/such/ripgrep" } }] })
+  const { run, offered } = await start({ trust: [folder] })
+  const inProject = await run.evie.send({ type: "open_session", folder })
+
+  expect((await offered(inProject.session)).toSorted()).toEqual(usualTools.toSorted())
+})
+
+test("a project that is not trusted has its settings file ignored as a whole, and the owner is told", async () => {
+  const folder = await projectWith(
+    { plugins: ["./deploy.ts", "shell"], disable: ["guard", "shell"] },
+    { "deploy.ts": toolPlugin("deploy") },
+  )
+  const { run, home, offered, model } = await start(undefined, [
+    { text: [], calls: [{ name: "shell", input: { command: "sudo true" } }] },
+    { text: ["ok"] },
+    { text: ["ok"] },
+  ])
 
   const opened = await run.evie.send({ type: "open_session", folder })
+  await say(run, "go", opened.session)
 
   expect(opened.notices).toEqual([
-    `This project lists a plugin of its own, ./deploy.ts, which was not loaded because the project is not trusted. ` +
-      `To load it, add "${folder}" to "trust" in ${join(home, "evie.json")}.`,
+    `This project has a settings file of its own, ${join(folder, ".evie", "evie.json")}, which was ignored because the ` +
+      `project is not trusted. To use it, add "${folder}" to "trust" in ${join(home, "evie.json")}.`,
   ])
-  expect(await offered(opened.session)).toEqual(["read", "write", "edit", "grep", "glob"])
+  // Nothing it asked for happened: no plugin of its own, and the guard is still on.
+  expect(model.requests[0]?.tools.map((tool) => tool.name)).toEqual(usualTools)
+  const results = stored(run.events).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))
+  expect(results[0]).toStartWith("Blocked by the guard:")
+  expect(await offered(opened.session)).toEqual(usualTools)
 })
 
 test("a project with no settings file of its own opens with no notices", async () => {
@@ -208,4 +228,15 @@ test("a project with no settings file of its own opens with no notices", async (
   const opened = await run.evie.send({ type: "open_session", folder: run.projectFolder })
 
   expect(opened.notices).toEqual([])
+})
+
+test("a name that is not a built-in plugin is refused, even one every object has", async () => {
+  await expect(start({ plugins: ["constructor"] })).rejects.toThrow('There is no built-in plugin named "constructor"')
+})
+
+test("a settings file that is there but cannot be read is reported, not passed over", async () => {
+  const home = await tempFolder("evie-home-")
+  await mkdir(join(home, "evie.json"))
+
+  await expect(loadPluginSettings({ env: { EVIE_HOME: home } })).rejects.toThrow(/evie\.json could not be read/)
 })

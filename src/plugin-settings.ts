@@ -22,9 +22,11 @@ import type { Settings } from "./settings.ts"
 //     "trust": ["/path/to/a/project"] }
 //
 // A plugin is a built-in one, named, or a file, given by its path. A plugin
-// file is code that runs with Evie's full permissions. So a project's own
-// plugin files are loaded only when the global file lists that project under
-// "trust": otherwise opening someone else's repository could run their code.
+// file is code that runs with Evie's full permissions, and switching a plugin
+// off can remove a protection such as the guard. So a project's settings file
+// is used only when the global file lists that project under "trust".
+// Otherwise it is ignored as a whole, and opening someone else's repository
+// can neither run their code nor change what Evie loads.
 
 export type PluginSettings = {
   // The global plugins, in the order listed.
@@ -61,24 +63,31 @@ export async function loadPluginSettings(options: { env: Settings }): Promise<Pl
   return {
     plugins,
     async projectPlugins(project) {
-      const own = await readSettingsFile(join(project.folder, ".evie", "evie.json"))
+      const projectFile = join(project.folder, ".evie", "evie.json")
+      const own = await readSettingsFile(projectFile)
       if (!own) return { plugins: [], disable: [], notices: [] }
 
-      const added: Plugin[] = []
-      const notices: string[] = []
-      for (const entry of own.plugins ?? []) {
-        const name = typeof entry === "string" ? entry : entry.use
-        // A built-in plugin is Evie's own code. A file is the project's.
-        if (!(name in BUILT_IN) && !trusted.has(project.folder)) {
-          notices.push(
-            `This project lists a plugin of its own, ${name}, which was not loaded because the project is not trusted. ` +
-              `To load it, add "${project.folder}" to "trust" in ${globalFile}.`,
-          )
-          continue
+      if (!trusted.has(project.folder)) {
+        return {
+          plugins: [],
+          disable: [],
+          notices: [
+            `This project has a settings file of its own, ${projectFile}, which was ignored because the project is ` +
+              `not trusted. To use it, add "${project.folder}" to "trust" in ${globalFile}.`,
+          ],
         }
-        added.push(await load(entry, project.folder, context))
       }
-      return { plugins: added, disable: own.disable ?? [], notices }
+
+      const added: Plugin[] = []
+      const disable = [...(own.disable ?? [])]
+      for (const entry of own.plugins ?? []) {
+        const plugin = await load(entry, project.folder, context)
+        // Listing a plugin that is already global replaces it for this
+        // project, with the options given here.
+        if (plugins.some((global) => global.name === plugin.name)) disable.push(plugin.name)
+        added.push(plugin)
+      }
+      return { plugins: added, disable, notices: [] }
     },
   }
 }
@@ -89,8 +98,7 @@ async function load(entry: Entry, baseFolder: string, context: Context): Promise
   const name = typeof entry === "string" ? entry : entry.use
   const options = typeof entry === "string" ? {} : (entry.options ?? {})
 
-  const builtIn = BUILT_IN[name]
-  if (builtIn) return builtIn(options, context)
+  if (Object.hasOwn(BUILT_IN, name)) return BUILT_IN[name]!(options, context)
 
   if (!looksLikePath(name)) {
     throw new Error(`There is no built-in plugin named "${name}". The built-in plugins are: ${Object.keys(BUILT_IN).join(", ")}.`)
@@ -127,8 +135,15 @@ const isPlugin = (value: unknown): value is Plugin =>
 // ---- Reading a settings file ---------------------------------------------------------------
 
 async function readSettingsFile(file: string): Promise<SettingsFile | undefined> {
-  const text = await readFile(file, "utf8").catch(() => undefined)
-  if (text === undefined) return undefined
+  let text: string
+  try {
+    text = await readFile(file, "utf8")
+  } catch (cause) {
+    // A file that is not there is fine. One that is there and cannot be read
+    // is a problem to report, not to pass over.
+    if ((cause as { code?: string }).code === "ENOENT") return undefined
+    throw new Error(`${file} could not be read: ${cause instanceof Error ? cause.message : String(cause)}`)
+  }
 
   let parsed: unknown
   try {
