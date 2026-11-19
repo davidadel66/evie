@@ -6,6 +6,7 @@ import { dataFolder } from "./core/evie.ts"
 import type { Plugin, Project, ProjectSettings } from "./core/types.ts"
 import { files, type FilesOptions } from "./plugins/files/index.ts"
 import { guard } from "./plugins/guard.ts"
+import { instructions } from "./plugins/instructions.ts"
 import { models } from "./plugins/models/index.ts"
 import { openrouter } from "./plugins/openrouter.ts"
 import { shell } from "./plugins/shell.ts"
@@ -59,10 +60,11 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   shell: () => shell(),
   guard: (_options, context) => guard({ dataFolder: context.home }),
   models: () => models(),
+  instructions: (_options, context) => instructions({ dataFolder: context.home }),
   web: (_options, context) => web({ env: context.env }),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
-const DEFAULT: Entry[] = ["files", "shell", "guard", "models", "web", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "guard", "models", "instructions", "web", "openrouter"]
 
 export async function loadSettingsFiles(options: { env: Settings }): Promise<SettingsFiles> {
   const home = dataFolder(options.env)

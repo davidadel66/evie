@@ -100,6 +100,24 @@ Models differ in which tools they handle well. Evie gives GPT models `patch`
 and every other model `edit` and `write`, each with a system prompt written
 for it.
 
+## Instruction files
+
+Write down how you want Evie to work, once, and it is told every time.
+
+- **`~/.evie/AGENTS.md`** applies in every project: how you like answers,
+  what to always or never do.
+- **`AGENTS.md` in a project's folder** applies in that project: its
+  conventions, how to run its tests, what not to touch. If there is no
+  `AGENTS.md`, a `CLAUDE.md` is used instead.
+
+Both are plain text. They are added to what the model is told, yours first
+and then the project's. An edit takes effect at the next message. A file
+longer than 32 KiB is cut.
+
+A project's instruction file is read whether or not you have trusted the
+project, so look at it before running Evie in a repository you did not
+write.
+
 ## Settings
 
 Evie keeps its state in `~/.evie`. Set `EVIE_HOME` to use another folder.
@@ -145,7 +163,7 @@ the per-model settings and the guard.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the six built-in ones load:
+a list, the seven built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
@@ -153,6 +171,7 @@ a list, the six built-in ones load:
 | `shell` | `shell` |
 | `guard` | The check that refuses the most destructive commands |
 | `models` | What each model family is given, and the `/model` command |
+| `instructions` | The owner's and the project's instruction files |
 | `web` | `web_search` and `web_fetch` |
 | `openrouter` | The connection to models through OpenRouter |
 
@@ -163,6 +182,7 @@ a list, the six built-in ones load:
     "shell",
     "guard",
     "models",
+    "instructions",
     "web",
     "openrouter",
     { "use": "/path/to/my-plugin.ts", "options": { "greeting": "hi" } }
