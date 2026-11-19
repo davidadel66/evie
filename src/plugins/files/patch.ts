@@ -138,7 +138,9 @@ function parsePatch(text: string): { hunks: Hunk[] } | { failure: string } {
         hunk.chunks.push(chunk)
         return chunk
       }
-      while (at < last && !isFileMarker(lines[at]!.trim())) {
+      // Inside a file's changes a line counts as the start of the next file
+      // only when it begins at the margin: indented, it is a line of the file.
+      while (at < last && !isFileMarker(lines[at]!.trimEnd())) {
         const raw = lines[at]!
         if (raw.trim() === "@@") open()
         else if (raw.startsWith("@@ ")) open(raw.slice(3))
@@ -233,6 +235,10 @@ async function plan(
     } else {
       const destination = resolvePath(hunk.moveTo, context)
       if ("failure" in destination) return destination
+      if (destination.absolute !== target.absolute && (await current(destination.absolute)) !== undefined) {
+        const taken = displayPath(destination.absolute, context)
+        return { failure: `${shown} cannot be moved to ${taken}, because that file already exists. ${NOTHING_CHANGED}` }
+      }
       files.set(target.absolute, null)
       files.set(destination.absolute, updated)
       summary.add(`M ${displayPath(destination.absolute, context)} (moved from ${shown})`)
@@ -259,9 +265,10 @@ function applyChunks(content: string, chunks: Chunk[], shown: string): string | 
       from = found + 1
     }
 
-    // Lines added with nothing to find go at the end of the file.
+    // Lines added with nothing to find go straight after the line that says
+    // where to look, or at the end of the file when there is none.
     if (chunk.oldLines.length === 0) {
-      replacements.push({ at: lines.length, remove: 0, lines: chunk.newLines })
+      replacements.push({ at: chunk.context === undefined ? lines.length : from, remove: 0, lines: chunk.newLines })
       continue
     }
 
@@ -291,8 +298,12 @@ function applyChunks(content: string, chunks: Chunk[], shown: string): string | 
     from = found + pattern.length
   }
 
-  // Applied from the end, so earlier positions stay where they are.
-  for (const change of replacements.toSorted((a, b) => b.at - a.at)) lines.splice(change.at, change.remove, ...change.lines)
+  // Applied from the end, so earlier positions stay where they are. Changes
+  // at the same position are applied last-written first, which leaves them
+  // in the order they were written.
+  const ordered = replacements.map((change, written) => ({ ...change, written }))
+  ordered.sort((a, b) => b.at - a.at || b.written - a.written)
+  for (const change of ordered) lines.splice(change.at, change.remove, ...change.lines)
   return lines.length > 0 ? `${lines.join(ending)}${ending}` : ""
 }
 

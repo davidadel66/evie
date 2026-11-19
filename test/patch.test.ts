@@ -192,3 +192,29 @@ test("a patch wrapped the way a shell would pass it is still read", async () => 
   expect(await call("patch", { patchText: wrapped })).toBe("Success. Updated the following files:\nM list.txt")
   expect(await text("list.txt")).toBe("1\n")
 })
+
+test("lines added after a line that says where to look go straight after it, and several additions keep their order", async () => {
+  const { patch, text } = await project({ "list.txt": "one\ntwo\nthree\n" })
+
+  await patch("*** Update File: list.txt", "@@ one", "+one and a half", "@@", "+four", "@@", "+five")
+
+  expect(await text("list.txt")).toBe("one\none and a half\ntwo\nthree\nfour\nfive\n")
+})
+
+test("a file cannot be moved onto one that already exists", async () => {
+  const { patch, text } = await project({ "a.txt": "from a\n", "b.txt": "already here\n" })
+
+  expect(await patch("*** Update File: a.txt", "*** Move to: b.txt", "@@", "-from a", "+moved")).toBe(
+    "a.txt cannot be moved to b.txt, because that file already exists. Nothing was changed.",
+  )
+  expect(await text("b.txt")).toBe("already here\n")
+})
+
+test("a line of a file that looks like a patch instruction is still treated as a line of the file", async () => {
+  const notes = "Example:\n*** Update File: demo.txt\nend\n"
+  const { patch, text } = await project({ "notes.txt": notes })
+
+  await patch("*** Update File: notes.txt", "@@", " Example:", " *** Update File: demo.txt", "-end", "+END")
+
+  expect(await text("notes.txt")).toBe(notes.replace("end\n", "END\n"))
+})
