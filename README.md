@@ -11,7 +11,7 @@ Motto: simplicity is the most powerful foundation.
 Milestone 1 is being built one ticket at a time, tracked in this
 repository's issues. So far you can run `evie` in a terminal and have a
 model read, search, create and change files and run commands in the folder
-you started it in.
+you started it in, and search the internet and read web pages.
 
 **There is no approval step yet.** A tool runs as soon as the model asks
 for it, including any shell command, with your permissions, and it is not
@@ -64,12 +64,17 @@ given the tools and the system prompt it works best with.
 Evie keeps its state in `~/.evie`. Set `EVIE_HOME` to use another folder.
 Two files in that folder hold its settings.
 
-**`.env` is for keys.** One `NAME=value` per line. Evie reads the key and
+**`.env` is for keys.** One `NAME=value` per line. Evie reads a key and
 never writes it anywhere.
 
 ```
 OPENROUTER_API_KEY=...
+BRAVE_API_KEY=...
 ```
+
+`BRAVE_API_KEY` is a [Brave Search](https://brave.com/search/api/) key. It
+is optional: without it Evie can still read a web page it is given the
+address of, but cannot search.
 
 **`evie.json` is for everything else:** the model, how long a reply may be,
 and which plugins load.
@@ -102,8 +107,8 @@ Everything outside Evie's core is a plugin: the tools, the model provider,
 the per-model settings and the guard. Which ones load is set in a file.
 
 **For every project:** `evie.json` in the data folder (`~/.evie/evie.json`).
-It lists the plugins to load, in order. Without the file, the five built-in
-ones load: `files`, `shell`, `guard`, `models` and `openrouter`.
+It lists the plugins to load, in order. Without the file, the six built-in
+ones load: `files`, `shell`, `guard`, `models`, `web` and `openrouter`.
 
 ```json
 {
@@ -112,6 +117,7 @@ ones load: `files`, `shell`, `guard`, `models` and `openrouter`.
     "shell",
     "guard",
     "models",
+    "web",
     "openrouter",
     { "use": "/path/to/my-plugin.ts", "options": { "greeting": "hi" } }
   ]
