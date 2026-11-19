@@ -2,40 +2,37 @@
 // The `evie` command: starts Evie with its built-in plugins and runs the
 // terminal client in the folder it was started in.
 import { createInterface } from "node:readline"
-import {
-  createEvie,
-  createLiveInput,
-  dataFolder,
-  files,
-  guard,
-  loadSettings,
-  models,
-  openrouter,
-  runTerminal,
-  shell,
-} from "./index.ts"
+import { createEvie, createLiveInput, loadSettingsFiles, loadSettings, runTerminal, type Evie } from "./index.ts"
 
+// Keys come from the environment and the .env file in the data folder.
 const env = await loadSettings(process.env)
-const model = env.EVIE_MODEL
-if (!model) {
-  console.error(
-    "Set EVIE_MODEL to the name of a model, as listed at https://openrouter.ai/models,\n" +
-      "in the environment or in the .env file in Evie's data folder.",
-  )
+
+// The model, the reply limit and the plugins come from the settings files.
+// A problem with them, such as a plugin that cannot be loaded, stops Evie
+// here with the reason.
+const fail = (cause: unknown): never => {
+  console.error(cause instanceof Error ? cause.message : String(cause))
   process.exit(1)
 }
-
-const evie = await createEvie({
-  env,
-  model,
-  plugins: [files(), shell(), guard({ dataFolder: dataFolder(env) }), models(), openrouter({ env })],
-})
+async function start(): Promise<Evie> {
+  const settings = await loadSettingsFiles({ env })
+  return createEvie({
+    env,
+    plugins: settings.plugins,
+    projectSettings: settings.projectSettings,
+    settingsFile: settings.file,
+    ...(settings.model !== undefined && { model: settings.model }),
+    ...(settings.maxTokens !== undefined && { maxTokens: settings.maxTokens }),
+  })
+}
+const evie = await start().catch(fail)
 
 const session = { folder: process.cwd(), resume: process.argv.includes("--continue") || process.argv.includes("-c") }
 // What the terminal client does on Ctrl-C: cancel the turn, or say that
 // nothing is running, or that a cancel is already under way.
 let interrupt = (): "cancelled" | "idle" | "again" => "idle"
 
+let problem: unknown
 try {
   if (process.stdin.isTTY && process.stdout.isTTY) {
     // A real terminal: keys arrive one at a time, and the line being typed is
@@ -89,6 +86,10 @@ try {
       onInterrupt: (handler) => (interrupt = handler),
     })
   }
+} catch (cause) {
+  // A session that could not be opened, such as when no model is set.
+  problem = cause
 } finally {
   await evie.close()
 }
+if (problem !== undefined) fail(problem)

@@ -57,6 +57,8 @@ export type Request = {
   model: string
   // The system prompt. The core sets none; a plugin adds it in a hook.
   system?: string
+  // The longest the reply may be, in tokens, when the settings give a limit.
+  maxTokens?: number
   messages: Message[]
   tools: ToolDefinition[]
 }
@@ -192,6 +194,20 @@ export type Plugin = {
   setup(host: Host): void | Promise<void>
 }
 
+// What one project has of its own, on top of the global settings.
+export type ProjectSettings = {
+  // The model sessions in this project start with, when the project sets one.
+  model?: string
+  // The longest a reply may be in this project, when the project sets one.
+  maxTokens?: number
+  // The project's own plugins, set up after the global ones.
+  plugins: readonly Plugin[]
+  // Global plugins switched off for this project, by name.
+  disable?: readonly string[]
+  // Things the owner should be told when a session opens in the project.
+  notices?: readonly string[]
+}
+
 // ---- Projects -----------------------------------------------------------------
 
 // A project is a record with its own id. Its folder is where its files are,
@@ -210,7 +226,9 @@ export type Commands = {
   // is one. `resumed` says whether that happened.
   open_session: {
     input: { project?: string; folder?: string; continue?: boolean }
-    output: { session: string; project: Project | null; resumed: boolean }
+    // `notices` are things the owner should be told, such as a project
+    // plugin that was not loaded.
+    output: { session: string; project: Project | null; resumed: boolean; notices: string[] }
   }
   send_message: {
     input: { session: string; text: string }

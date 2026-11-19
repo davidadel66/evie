@@ -54,7 +54,7 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
       const init = {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify(toBody(request, maxTokens(options.env.EVIE_MAX_TOKENS))),
+        body: JSON.stringify(toBody(request, request.maxTokens ?? maxTokens(options.env.EVIE_MAX_TOKENS))),
         signal,
       }
 
