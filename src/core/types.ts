@@ -205,9 +205,12 @@ export type Commands = {
   // Opens a session. Give a folder to work in the project that folder
   // belongs to (created the first time), or a project id, or neither for the
   // general session, which belongs to no project.
+  // With `continue`, the session that was used last in that project (or
+  // the last general session) is reopened, with its conversation, when there
+  // is one. `resumed` says whether that happened.
   open_session: {
-    input: { project?: string; folder?: string }
-    output: { session: string; project: Project | null }
+    input: { project?: string; folder?: string; continue?: boolean }
+    output: { session: string; project: Project | null; resumed: boolean }
   }
   send_message: {
     input: { session: string; text: string }

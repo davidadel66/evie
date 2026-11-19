@@ -45,6 +45,10 @@ Type a message and press Enter. Ctrl-C stops what Evie is doing; with
 nothing running, Ctrl-C or Ctrl-D quits. If Evie does not stop, a second
 Ctrl-C quits at once.
 
+Run `evie --continue` to carry on the last session of the project you are
+in, with its conversation. A message you send while Evie is working is seen
+at its next step, so you can steer it without stopping it.
+
 Type `/model` to see which model is in use, or `/model` and a name to
 switch to another in the middle of a session. Each family of models is
 given the tools and the system prompt it works best with.

@@ -11,13 +11,19 @@ export type Run = Awaited<ReturnType<typeof startEvie>>
 // one session already open in it.
 export async function startEvie(
   plugins: Plugin[],
-  options: { model?: string; home?: string; projectPlugins?: (project: Project) => Plugin[] } = {},
+  options: {
+    model?: string
+    home?: string
+    // A project folder to use, to stand for Evie being started again in the same project.
+    projectFolder?: string
+    projectPlugins?: (project: Project) => Plugin[]
+  } = {},
 ) {
   const home = options.home ?? (await mkdtemp(join(tmpdir(), "evie-home-")))
-  const projectFolder = await mkdtemp(join(tmpdir(), "evie-project-"))
+  const projectFolder = options.projectFolder ?? (await mkdtemp(join(tmpdir(), "evie-project-")))
   const remove = async () => {
     if (!options.home) await rm(home, { recursive: true, force: true })
-    await rm(projectFolder, { recursive: true, force: true })
+    if (!options.projectFolder) await rm(projectFolder, { recursive: true, force: true })
   }
   const evie = await createEvie({
     env: { EVIE_HOME: home },

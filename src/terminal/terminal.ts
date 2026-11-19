@@ -5,6 +5,8 @@ export type TerminalOptions = {
   evie: Evie
   // The folder the terminal was started in; its project is the one worked on.
   folder: string
+  // Carry on the last session of that project, not start a new one.
+  resume?: boolean
   // The lines the owner types.
   lines: AsyncIterable<string>
   // Where to print.
@@ -36,7 +38,11 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   }
   // Prints text on a line of its own.
   const line = (text: string) => write(`${midLine ? "\n" : ""}${text}\n`)
-  const { session, project } = await evie.send({ type: "open_session", folder: options.folder })
+  const { session, project, resumed } = await evie.send({
+    type: "open_session",
+    folder: options.folder,
+    ...(options.resume && { continue: true }),
+  })
 
   // Messages sent that no turn has taken up yet. Several can be answered by
   // one turn, so turns are not counted: the terminal is idle when a turn ends
@@ -81,7 +87,12 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     return "cancelled"
   })
 
-  write(`evie · ${project?.name ?? "general"}\n`)
+  const about = resumed
+    ? " · continuing the last session"
+    : options.resume
+      ? " · no earlier session here, so this is a new one"
+      : ""
+  write(`evie · ${project?.name ?? "general"}${about}\n`)
   write(PROMPT)
   try {
     for await (const typed of options.lines) {
