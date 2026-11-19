@@ -27,12 +27,33 @@ export function web(options: WebOptions): Plugin {
   const send = options.fetch ?? globalThis.fetch
   const seconds = options.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS
 
-  // Fetches an address, giving up after the timeout or when the turn is
-  // cancelled. A failure is returned in words, not thrown.
-  async function get(url: string, headers: Record<string, string>, signal: AbortSignal): Promise<Response | string> {
+  // Fetches an address and reads what it sends, giving up after the timeout
+  // or when the turn is cancelled, and stopping once there is more than will
+  // ever be used. A failure is returned in words, not thrown. `refuse` can
+  // turn a reply down before its body is read, such as one that is not text.
+  async function get(
+    url: string,
+    headers: Record<string, string>,
+    signal: AbortSignal,
+    refuse?: (response: Response) => string | undefined,
+  ): Promise<{ response: Response; body: string } | string> {
     const timer = AbortSignal.timeout(seconds * 1000)
     try {
-      return await send(url, { headers, redirect: "follow", signal: AbortSignal.any([signal, timer]) })
+      const response = await send(url, { headers, redirect: "follow", signal: AbortSignal.any([signal, timer]) })
+      const refusal = refuse?.(response)
+      if (refusal !== undefined) {
+        await response.body?.cancel().catch(() => {})
+        return refusal
+      }
+      let body = ""
+      if (response.body) {
+        const decoder = new TextDecoder()
+        for await (const piece of response.body) {
+          body += decoder.decode(piece, { stream: true })
+          if (body.length >= MOST_CHARACTERS) break
+        }
+      }
+      return { response, body: body.slice(0, MOST_CHARACTERS) }
     } catch (cause) {
       if (signal.aborted) return `${url} was not fetched, because the turn was cancelled.`
       if (timer.aborted) return `${url} did not answer within ${seconds} seconds.`
@@ -57,16 +78,17 @@ export function web(options: WebOptions): Plugin {
 
     async run(input, context) {
       const query = input.query as string
-      const asked = typeof input.count === "number" ? input.count : DEFAULT_RESULTS
+      const asked = typeof input.count === "number" && Number.isFinite(input.count) ? Math.trunc(input.count) : DEFAULT_RESULTS
       const count = Math.min(MOST_RESULTS, Math.max(1, asked))
       const address = `${SEARCH}?${new URLSearchParams({ q: query, count: String(count) })}`
 
-      const response = await get(
+      const got = await get(
         address,
         { "X-Subscription-Token": options.env.BRAVE_API_KEY ?? "", Accept: "application/json" },
         context.signal,
       )
-      if (typeof response === "string") return response.replace(address, "The search service")
+      if (typeof got === "string") return got.replace(address, "The search service")
+      const { response } = got
       if (response.status === 401 || response.status === 403) {
         return `The search service refused the key (status ${response.status}). Check BRAVE_API_KEY in the settings.`
       }
@@ -75,10 +97,13 @@ export function web(options: WebOptions): Plugin {
       }
       if (!response.ok) return `The search service answered with status ${response.status}, so there are no results.`
 
-      const body = (await response.json().catch(() => ({}))) as {
-        web?: { results?: { title?: string; url?: string; description?: string }[] }
+      let body: { web?: { results?: { title?: string; url?: string; description?: string }[] } } | null
+      try {
+        body = JSON.parse(got.body)
+      } catch {
+        return "The search service sent a reply that could not be read. Try the search again."
       }
-      const results = (body.web?.results ?? []).filter((result) => result.url)
+      const results = (body?.web?.results ?? []).filter((result) => result.url)
       if (results.length === 0) return `No results for "${query}".`
 
       const listed = results.map((result, index) =>
@@ -112,16 +137,24 @@ export function web(options: WebOptions): Plugin {
         return `"${asked}" is not a web address. Give one that starts with http:// or https://.`
       }
 
-      const response = await get(address.href, { Accept: "text/html, text/plain, application/json, */*;q=0.5" }, context.signal)
-      if (typeof response === "string") return response
-      if (!response.ok) return `${asked} answered with status ${response.status}, so there is no page to show.`
-
-      const type = (response.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase()
-      const isText = type === "" || type.startsWith("text/") || /(json|xml|javascript|html)/.test(type)
-      if (!isText) return `${asked} is not text (it is ${type}), so it cannot be shown.`
+      const typeOf = (reply: Response) => (reply.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase()
+      const got = await get(
+        address.href,
+        { Accept: "text/html, text/plain, application/json, */*;q=0.5" },
+        context.signal,
+        // A missing page or one that is not text is turned down before it is downloaded.
+        (reply) => {
+          if (!reply.ok) return `${asked} answered with status ${reply.status}, so there is no page to show.`
+          const type = typeOf(reply)
+          const isText = type === "" || type.startsWith("text/") || /(json|xml|javascript|html)/.test(type)
+          return isText ? undefined : `${asked} is not text (it is ${type}), so it cannot be shown.`
+        },
+      )
+      if (typeof got === "string") return got
+      const { response, body } = got
+      const type = typeOf(response)
 
       const arrived = response.url && response.url !== address.href ? `${response.url} (sent on from ${asked})` : asked
-      const body = (await response.text()).slice(0, MOST_CHARACTERS)
       const note = fromTheWeb("This page comes")
       if (!type.includes("html")) return `${arrived}\n\n${body.trim()}\n\n${note}`
 

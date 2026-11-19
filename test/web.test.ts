@@ -192,3 +192,9 @@ test("a long page is capped like any other tool output, with the full text saved
   expect(saved).not.toBeNull()
   expect(await readFile(saved![1]!, "utf8")).toContain("Paragraph 3000")
 })
+
+test("a search reply that cannot be read says so, and is not reported as nothing found", async () => {
+  const { call } = await online({ [SEARCH]: { body: "<html>gateway error</html>", type: "text/html" } })
+
+  expect(await call("web_search", { query: "x" })).toBe("The search service sent a reply that could not be read. Try the search again.")
+})
