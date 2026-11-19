@@ -1,4 +1,4 @@
-# Evie 2
+# Evie
 
 Evie is one person's always-on personal agent: a coding harness, a
 researcher and a general assistant that works as a right hand across the
@@ -103,7 +103,11 @@ the code. Agents write the code; he reviews the systems and the design.
   Show a snippet only where it makes an idea clear.
 - When he is confused, make the step smaller.
 - Say what you are about to build and wait for his go before building it.
-- Build each ticket on its own branch and open a pull request for it. He
-  reviews every pull request before it is merged.
+- Build each ticket on its own branch and open a pull request for it into
+  `dev`. He reviews every pull request before it is merged.
+- `main` is the stable version: it is what the public sees and what the
+  owner runs day to day. Work reaches it only through a release, which is a
+  pull request from `dev` into `main`. GitHub runs the check on every pull
+  request.
 - Give a recommendation with its real trade-off. When he has decided,
   record it and move on.
