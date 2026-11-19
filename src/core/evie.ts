@@ -7,7 +7,7 @@ import { createEventLog } from "./log.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { createProjects } from "./projects.ts"
 import { openStore } from "./store.ts"
-import type { Commands, Evie, EvieEvent, Host, Plugin, Project, Provider } from "./types.ts"
+import type { Commands, Evie, EvieEvent, Host, Plugin, Project, ProjectPlugins, Provider } from "./types.ts"
 
 export type EvieOptions = {
   // Settings from the environment. `EVIE_HOME` names the data folder.
@@ -17,8 +17,9 @@ export type EvieOptions = {
   // The global plugins, in order. They are part of every project and of the
   // general session.
   plugins: readonly Plugin[]
-  // A project's own plugins, added after the global ones for that project only.
-  projectPlugins?: (project: Project) => readonly Plugin[] | Promise<readonly Plugin[]>
+  // What a project has on top of the global plugins: its own, added after
+  // them for that project only, and any global ones it switches off.
+  projectPlugins?: (project: Project) => ProjectPlugins | readonly Plugin[] | Promise<ProjectPlugins | readonly Plugin[]>
 }
 
 // Where all of Evie's state lives. Moving Evie is copying this folder.
@@ -36,15 +37,17 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   // opens in it: the global plugins, then the project's own. The general
   // session's host has the global plugins alone, and is built now, so that a
   // problem with them stops Evie at start.
-  type Scope = { host: Host; hooks: HookRunner; provider: Provider }
+  type Scope = { host: Host; hooks: HookRunner; provider: Provider; notices: string[] }
   const scopes = new Map<string | null, Promise<Scope>>()
 
   async function buildScope(project: Project | null): Promise<Scope> {
-    const own = project && options.projectPlugins ? await options.projectPlugins(project) : []
-    const { host, hooks } = await createHost([...options.plugins, ...own], project)
+    const given = project && options.projectPlugins ? await options.projectPlugins(project) : []
+    const own: ProjectPlugins = "plugins" in given ? given : { plugins: given }
+    const kept = options.plugins.filter((plugin) => !own.disable?.includes(plugin.name))
+    const { host, hooks } = await createHost([...kept, ...own.plugins], project)
     const provider = host.providers.list()[0]
     if (!provider) throw new Error("No provider is registered. Load a plugin that registers one.")
-    return { host, hooks, provider }
+    return { host, hooks, provider, notices: [...(own.notices ?? [])] }
   }
 
   function scopeFor(project: Project | null): Promise<Scope> {
@@ -95,11 +98,11 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       project = projects.forFolder(input.folder)
     }
 
-    const { host, hooks, provider } = await scopeFor(project)
+    const { host, hooks, provider, notices } = await scopeFor(project)
 
     // Continuing: the session used last in this project, when there is one.
     const last = input.continue ? projects.lastSession(project) : undefined
-    if (last !== undefined && sessions.has(last)) return { session: last, project, resumed: true }
+    if (last !== undefined && sessions.has(last)) return { session: last, project, resumed: true, notices }
     if (last !== undefined) settleUnfinishedTurn(last)
 
     const session = last ?? projects.createSession(project)
@@ -119,7 +122,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     sessions.set(session, { loop, project, host })
     // A message that was waiting when Evie last stopped is answered now.
     if (last !== undefined) loop.wake()
-    return { session, project, resumed: last !== undefined }
+    return { session, project, resumed: last !== undefined, notices }
   }
 
   // If Evie was stopped in the middle of a turn, the log ends with a turn

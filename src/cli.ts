@@ -2,18 +2,7 @@
 // The `evie` command: starts Evie with its built-in plugins and runs the
 // terminal client in the folder it was started in.
 import { createInterface } from "node:readline"
-import {
-  createEvie,
-  createLiveInput,
-  dataFolder,
-  files,
-  guard,
-  loadSettings,
-  models,
-  openrouter,
-  runTerminal,
-  shell,
-} from "./index.ts"
+import { createEvie, createLiveInput, loadPluginSettings, loadSettings, runTerminal, type Evie } from "./index.ts"
 
 const env = await loadSettings(process.env)
 const model = env.EVIE_MODEL
@@ -25,11 +14,16 @@ if (!model) {
   process.exit(1)
 }
 
-const evie = await createEvie({
-  env,
-  model,
-  plugins: [files(), shell(), guard({ dataFolder: dataFolder(env) }), models(), openrouter({ env })],
-})
+// Which plugins load comes from the settings files. A problem with them,
+// such as a plugin that cannot be loaded, stops Evie here with the reason.
+let evie: Evie
+try {
+  const { plugins, projectPlugins } = await loadPluginSettings({ env })
+  evie = await createEvie({ env, model, plugins, projectPlugins })
+} catch (cause) {
+  console.error(cause instanceof Error ? cause.message : String(cause))
+  process.exit(1)
+}
 
 const session = { folder: process.cwd(), resume: process.argv.includes("--continue") || process.argv.includes("-c") }
 // What the terminal client does on Ctrl-C: cancel the turn, or say that

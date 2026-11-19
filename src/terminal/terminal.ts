@@ -44,7 +44,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   const showPrompt = () => write(options.prompt === false ? "\n" : PROMPT)
   // Prints text on a line of its own.
   const line = (text: string) => write(`${midLine ? "\n" : ""}${text}\n`)
-  const { session, project, resumed } = await evie.send({
+  const { session, project, resumed, notices } = await evie.send({
     type: "open_session",
     folder: options.folder,
     ...(options.resume && { continue: true }),
@@ -109,6 +109,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       ? " · no earlier session here, so this is a new one"
       : ""
   write(`evie · ${project?.name ?? "general"}${about}\n`)
+  for (const notice of notices) write(`[note] ${notice}\n`)
   showPrompt()
   try {
     for await (const typed of options.lines) {

@@ -78,6 +78,65 @@ Evie is not started in a project. A client opens a session, which belongs
 to a project or to none, and one Evie serves every open session. A project
 is a record with its own id; its folder is where its files are today.
 
+## Plugins
+
+Everything outside Evie's core is a plugin: the tools, the model provider,
+the per-model settings and the guard. Which ones load is set in a file.
+
+**For every project:** `evie.json` in the data folder (`~/.evie/evie.json`).
+It lists the plugins to load, in order. Without the file, the five built-in
+ones load: `files`, `shell`, `guard`, `models` and `openrouter`.
+
+```json
+{
+  "plugins": [
+    "files",
+    "shell",
+    "guard",
+    "models",
+    "openrouter",
+    { "use": "/path/to/my-plugin.ts", "options": { "greeting": "hi" } }
+  ]
+}
+```
+
+Leaving a plugin out switches it off: without `shell`, the model cannot run
+commands.
+
+**For one project:** `.evie/evie.json` in that project's folder. It adds
+plugins for that project only, and can switch off a global one there:
+
+```json
+{ "plugins": ["./tools/deploy.ts"], "disable": ["shell"] }
+```
+
+**A plugin file** exports an object with a name and a setup function, or a
+function that returns one from its options:
+
+```ts
+export default {
+  name: "greeter",
+  setup(host) {
+    host.tools.add({
+      name: "greet",
+      description: "Says hello.",
+      inputSchema: { type: "object" },
+      run: async () => "hello",
+    })
+  },
+}
+```
+
+Through the host a plugin can add tools, providers, model profiles and
+commands, and attach to the hooks `before_request`, `before_tool` and
+`after_tool`.
+
+**A plugin runs with Evie's full permissions. Nothing sandboxes it, so
+load only plugins you trust.** For that reason a project's own plugin files
+are loaded only when you list the project's folder under `"trust"` in the
+global file. Otherwise opening someone else's repository could run their
+code, and Evie tells you which plugin it left out.
+
 ## Development
 
 ```sh

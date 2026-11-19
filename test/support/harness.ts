@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createEvie, type Evie, type EvieEvent, type Plugin, type Project } from "../../src/index.ts"
+import { createEvie, type Evie, type EvieEvent, type EvieOptions, type Plugin } from "../../src/index.ts"
 
 export type Run = Awaited<ReturnType<typeof startEvie>>
 
@@ -16,7 +16,7 @@ export async function startEvie(
     home?: string
     // A project folder to use, to stand for Evie being started again in the same project.
     projectFolder?: string
-    projectPlugins?: (project: Project) => Plugin[]
+    projectPlugins?: NonNullable<EvieOptions["projectPlugins"]>
   } = {},
 ) {
   const home = options.home ?? (await mkdtemp(join(tmpdir(), "evie-home-")))
