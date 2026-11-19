@@ -11,18 +11,23 @@ export type ScriptedCall = { name: string; input: Record<string, unknown> | stri
 // `hang` never finishes: after any text, it waits until the turn's cancel
 // signal fires. It then breaks by throwing, or with `reports` ends the reply
 // with a failure the way a real provider does.
+// `usage` is what the provider reports the request and reply came to.
+// `tooLong` with `error` is a request refused as more than the model can
+// read, and `cutOff` is a reply that hit its length limit.
 export type ScriptedReply =
-  | { text: string[]; error?: string; calls?: ScriptedCall[] }
+  | { text: string[]; error?: string; tooLong?: true; cutOff?: true; calls?: ScriptedCall[]; usage?: { inputTokens: number; outputTokens: number } }
   | { fail: string }
   | { hang: true; text?: string[]; reports?: true }
 
-export function scriptedProvider(script: ScriptedReply[]) {
+export function scriptedProvider(script: ScriptedReply[], options: { limit?: number } = {}) {
   const requests: Request[] = []
   const plugin: Plugin = {
     name: "scripted-provider",
     setup(host) {
       host.providers.add({
         name: "scripted",
+        // What the model can read, when a test gives it a limit.
+        ...(options.limit !== undefined && { contextLimit: async () => options.limit }),
         async *stream(request, signal) {
           requests.push(structuredClone(request))
           const reply = script[requests.length - 1]
@@ -38,7 +43,7 @@ export function scriptedProvider(script: ScriptedReply[]) {
             yield { type: "finish", reason: "error", error: "The request was cancelled.", usage: { inputTokens: 0, outputTokens: 0 } }
             return
           }
-          const usage = { inputTokens: 0, outputTokens: 0 }
+          const usage = reply.usage ?? { inputTokens: 0, outputTokens: 0 }
           for (const text of reply.text) yield { type: "text", text }
           const calls = reply.calls ?? []
           for (const [index, call] of calls.entries()) {
@@ -49,7 +54,9 @@ export function scriptedProvider(script: ScriptedReply[]) {
               arguments: typeof call.input === "string" ? call.input : JSON.stringify(call.input),
             }
           }
-          if (reply.error !== undefined) yield { type: "finish", reason: "error", error: reply.error, usage }
+          if (reply.error !== undefined) {
+            yield { type: "finish", reason: "error", error: reply.error, usage, ...(reply.tooLong && { tooLong: true as const }) }
+          } else if (reply.cutOff) yield { type: "finish", reason: "length", usage }
           else yield { type: "finish", reason: calls.length > 0 ? "tool_calls" : "stop", usage }
         },
       })

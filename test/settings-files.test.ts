@@ -321,3 +321,16 @@ test("a model or reply limit of the wrong kind in a settings file is refused", a
   await expect(startWithSettings({ model: 5 })).rejects.toThrow(/"model" must be the name of a model/)
   await expect(startWithSettings({ model: "a/b", maxTokens: "lots" })).rejects.toThrow(/"maxTokens" must be a whole number above zero/)
 })
+
+test("when to compact, and a model's limit, can be set in the global settings file", async () => {
+  const home = await tempFolder("evie-home-")
+  await writeFile(join(home, "evie.json"), JSON.stringify({ plugins: [], compactAt: 120000, contextLimits: { "some/model": 64000 } }))
+
+  const settings = await loadSettingsFiles({ env: { EVIE_HOME: home } })
+
+  expect(settings.compaction).toEqual({ ceiling: 120000, limits: { "some/model": 64000 } })
+  await writeFile(join(home, "evie.json"), JSON.stringify({ compactAt: "soon" }))
+  await expect(loadSettingsFiles({ env: { EVIE_HOME: home } })).rejects.toThrow(/"compactAt" must be a whole number above zero/)
+  await writeFile(join(home, "evie.json"), JSON.stringify({ contextLimits: { "some/model": "big" } }))
+  await expect(loadSettingsFiles({ env: { EVIE_HOME: home } })).rejects.toThrow(/"contextLimits" must give a whole number/)
+})

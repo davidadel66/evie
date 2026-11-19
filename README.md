@@ -81,6 +81,9 @@ Type a message and press Enter.
   in, with its conversation.
 - **`/model`** shows which model is in use. `/model` and a name switches to
   another in the middle of a session.
+- **`/compact`** replaces the older part of a long conversation with a
+  summary, to save room. Evie also does this by itself when a conversation
+  gets long.
 
 ### What Evie can do
 
@@ -148,6 +151,24 @@ and which plugins load.
 `maxTokens` is the longest one reply may be. It is 16,000 unless you change
 it. OpenRouter refuses a request whose limit your credits do not cover, so
 lower it if you see that.
+
+**Long conversations.** Every request carries the whole conversation, so a
+long session would eventually be more than the model can read. Before that
+happens, Evie replaces the older part with a summary and carries on. Nothing
+is deleted from its record. It does this at 80% of what the model can read,
+or at 200,000 tokens, whichever comes first, and `/compact` does it on
+request. Two settings change that:
+
+```json
+{
+  "compactAt": 120000,
+  "contextLimits": { "some/model": 64000 }
+}
+```
+
+`compactAt` is the size at which a conversation is compacted. Evie looks up
+what each model can read from OpenRouter; `contextLimits` is for a model it
+gets wrong or does not know.
 
 A setting in the environment wins over the files, so `EVIE_MODEL=... evie`
 points one run at another model. `EVIE_MAX_TOKENS` works the same way.

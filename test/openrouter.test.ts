@@ -273,3 +273,31 @@ test("a reply is limited to 16,000 tokens unless the settings say otherwise", as
   expect(chosen.calls[0]?.body.max_tokens).toBe(4000)
   expect(nonsense.calls[0]?.body.max_tokens).toBe(16000)
 })
+
+test("what a model can read is looked up in OpenRouter's list, once", async () => {
+  const fake = fakeOpenRouter([
+    { status: 200, body: JSON.stringify({ data: [{ id: "some/model", context_length: 200000 }, { id: "other/model", context_length: 8000 }] }) },
+  ])
+  const provider = createOpenRouterProvider({ env: { OPENROUTER_API_KEY: KEY }, fetch: fake.fetch, sleep: fake.sleep })
+
+  expect(await provider.contextLimit?.("some/model")).toBe(200000)
+  expect(await provider.contextLimit?.("other/model")).toBe(8000)
+  expect(await provider.contextLimit?.("unknown/model")).toBeUndefined()
+  expect(fake.calls).toHaveLength(1)
+  expect(fake.calls[0]?.url).toBe("https://openrouter.ai/api/v1/models")
+})
+
+test("when the list cannot be fetched, a model's limit is simply not known", async () => {
+  const fake = fakeOpenRouter([{ networkError: "fetch failed" }])
+  const provider = createOpenRouterProvider({ env: { OPENROUTER_API_KEY: KEY }, fetch: fake.fetch, sleep: fake.sleep })
+
+  expect(await provider.contextLimit?.("some/model")).toBeUndefined()
+})
+
+test("a request refused for being more than the model can read is marked as too long", async () => {
+  const tooLong = await ask([failure(400, "This endpoint's maximum context length is 200000 tokens. However, you requested about 250000 tokens.")])
+  const other = await ask([failure(400, "Invalid model specified")])
+
+  expect(tooLong.chunks[0]).toMatchObject({ type: "finish", reason: "error", tooLong: true })
+  expect(other.chunks[0]).not.toHaveProperty("tooLong")
+})

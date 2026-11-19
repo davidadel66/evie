@@ -23,6 +23,7 @@ async function start(): Promise<Evie> {
     settingsFile: settings.file,
     ...(settings.model !== undefined && { model: settings.model }),
     ...(settings.maxTokens !== undefined && { maxTokens: settings.maxTokens }),
+    ...(settings.compaction !== undefined && { compaction: settings.compaction }),
   })
 }
 const evie = await start().catch(fail)

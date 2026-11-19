@@ -25,7 +25,7 @@ export function fakeOpenRouter(responses: FakeResponse[]) {
     calls.push({
       url: String(input),
       headers: Object.fromEntries(new Headers(init?.headers).entries()),
-      body: JSON.parse(String(init?.body)),
+      body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
     })
     if (!response) throw new Error("the fake has no response for this call")
     if ("networkError" in response) throw new TypeError(response.networkError)

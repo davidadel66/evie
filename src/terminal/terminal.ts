@@ -82,6 +82,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       line(`  ⎿ ${shorten(lines[0] ?? "", 100)}${more}`)
       showNextCall()
     }
+    if (event.type === "compaction") line("[The conversation was getting long, so its earlier part is now a summary.]")
     if (event.type === "turn_end") {
       if (event.body.reason === "error") line(`[error] ${event.body.error ?? "The turn failed."}`)
       if (event.body.reason === "cancelled") line("[cancelled]")

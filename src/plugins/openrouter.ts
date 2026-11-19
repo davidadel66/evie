@@ -8,6 +8,10 @@ import type { Chunk, Message, Plugin, Provider, Request, Usage } from "../core/t
 // https://openrouter.ai/docs/api-reference/overview
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+const MODELS = "https://openrouter.ai/api/v1/models"
+// How a provider says a request was more than the model can read. The
+// wording differs from one model company to the next.
+const TOO_LONG = /context (length|window)|maximum context|too many tokens|prompt is too long|exceeds? the (maximum|limit)|reduce the length/i
 const RETRIES = 3
 // How long a reply may be, in tokens, unless the settings say otherwise.
 // Without a limit OpenRouter reserves the model's maximum, and refuses the
@@ -35,14 +39,31 @@ export function openrouter(options: OpenRouterOptions): Plugin {
 }
 
 const NO_USAGE: Usage = { inputTokens: 0, outputTokens: 0 }
-const failed = (error: string): Chunk => ({ type: "finish", reason: "error", error, usage: NO_USAGE })
+const failed = (error: string): Chunk => ({
+  type: "finish",
+  reason: "error",
+  error,
+  usage: NO_USAGE,
+  ...(TOO_LONG.test(error) && { tooLong: true as const }),
+})
 
 export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
   const send = options.fetch ?? globalThis.fetch
   const sleep = options.sleep ?? wait
+  // What each model can read, fetched from OpenRouter's list once and kept.
+  let limits: Promise<Map<string, number>> | undefined
 
   return {
     name: "openrouter",
+
+    async contextLimit(model) {
+      limits ??= send(MODELS)
+        .then((response) => response.json() as Promise<{ data?: { id?: string; context_length?: number }[] }>)
+        .then((body) => new Map((body.data ?? []).flatMap((entry) => (entry.id && entry.context_length ? [[entry.id, entry.context_length] as const] : []))))
+        // If the list cannot be fetched, the limit is simply not known.
+        .catch(() => new Map<string, number>())
+      return (await limits).get(model)
+    },
 
     async *stream(request, signal) {
       const key = options.env.OPENROUTER_API_KEY
