@@ -42,19 +42,24 @@ export function guard(options: GuardOptions = {}): Plugin {
 
 // ---- Shell commands -----------------------------------------------------------------
 
+// Where a command word can begin: at the start, on a new line, after a
+// symbol that joins commands, or after a word that runs what follows it.
+const STARTS = String.raw`(?:^|[;&|(\n]|\b(?:then|do|else|xargs|exec|nohup|time)\b)\s*`
+
 // Each rule: what it looks for in a command, and why that is blocked.
 const RULES: { matches: RegExp; reason: string }[] = [
-  { matches: /\b(curl|wget)\b[^;&]*\|\s*(sudo\s+)?(ba|z|da|fi)?sh\b/, reason: "this runs code from the internet that nobody has read." },
+  { matches: /\b(curl|wget)\b[^|\n]*\|\s*(sudo\s+)?(ba|z|da|fi)?sh\b/, reason: "this runs code from the internet that nobody has read." },
   { matches: /\bgit\b[^;&|]*\breset\b[^;&|]*--hard\b/, reason: "this discards changes that have not been saved in git." },
-  { matches: /\bgit\s+clean\b[^;&|]*\s-[a-zA-Z]*f/, reason: "this discards files that git is not tracking." },
-  { matches: /\bgit\s+checkout\s+(--\s+)?\.(\s|$)/, reason: "this discards every change in the folder." },
-  { matches: /\bgit\s+restore\s+(--\S+\s+)*\.(\s|$)/, reason: "this discards every change in the folder." },
+  { matches: /\bgit\s+clean\b[^;&|]*\s(-[a-zA-Z]*f|--force\b)/, reason: "this discards files that git is not tracking." },
+  { matches: /\bgit\s+checkout\b[^;&|]*\s\.(\s|$)/, reason: "this discards every change in the folder." },
+  // Taking everything back out of the staging area loses nothing, so that is let through.
+  { matches: /\bgit\s+restore\b(?![^;&|]*--staged\b)[^;&|]*\s\.(\s|$)/, reason: "this discards every change in the folder." },
   { matches: /\bgit\s+push\b[^;&|]*\s(--force(?!-with-lease)\b|-[a-zA-Z]*f\b)/, reason: "a forced push rewrites history that others may have." },
   { matches: /\bmkfs(\.\w+)?\b/, reason: "this erases a disk." },
   { matches: /\bdd\b[^;&|]*\bof=\/dev\//, reason: "this writes straight onto a disk." },
   { matches: /\bdiskutil\s+(erase|partition|zero|secureerase|reformat)/i, reason: "this erases a disk." },
-  { matches: /(^|[;&|(]\s*)(shutdown|reboot|halt|poweroff)\b/, reason: "this stops the machine." },
-  { matches: /(^|[;&|(]\s*)sudo\b/, reason: "this runs as administrator, which nothing Evie does should need." },
+  { matches: new RegExp(`${STARTS}(shutdown|reboot|halt|poweroff)\\b`), reason: "this stops the machine." },
+  { matches: new RegExp(`${STARTS}sudo\\b`), reason: "this runs as administrator, which nothing Evie does should need." },
   { matches: /\bch(mod|own)\s+(-\S*R\S*|--recursive)\b[^;&|]*\s(\/|~\/?|\$HOME\/?|\$\{HOME\}\/?)(\s|$)/, reason: "this changes permissions across the whole machine or home folder." },
   { matches: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/, reason: "this is a fork bomb, which freezes the machine." },
 ]
