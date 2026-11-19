@@ -96,7 +96,13 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     }
 
     const { host, hooks, provider } = await scopeFor(project)
-    const session = projects.createSession(project)
+
+    // Continuing: the session used last in this project, when there is one.
+    const last = input.continue ? projects.lastSession(project) : undefined
+    if (last !== undefined && sessions.has(last)) return { session: last, project, resumed: true }
+    if (last !== undefined) settleUnfinishedTurn(last)
+
+    const session = last ?? projects.createSession(project)
     const loop = createLoop({
       session,
       project,
@@ -111,7 +117,36 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       emit,
     })
     sessions.set(session, { loop, project, host })
-    return { session, project }
+    // A message that was waiting when Evie last stopped is answered now.
+    if (last !== undefined) loop.wake()
+    return { session, project, resumed: last !== undefined }
+  }
+
+  // If Evie was stopped in the middle of a turn, the log ends with a turn
+  // that never finished, and perhaps tool calls with no result. This closes
+  // it off, so the conversation is one a model will accept again.
+  function settleUnfinishedTurn(session: string): void {
+    const events = log.events(session)
+    const started = events.findLastIndex((event) => event.type === "turn_start")
+    if (started === -1) return
+    const turn = events.slice(started)
+    if (turn.some((event) => event.type === "turn_end")) return
+
+    const answered = new Set(turn.flatMap((event) => (event.type === "tool_result" ? [event.body.callId] : [])))
+    const asked = turn.flatMap((event) => (event.type === "assistant_message" ? (event.body.toolCalls ?? []) : []))
+    const closing = db.transaction(() => [
+      ...asked
+        .filter((call) => !answered.has(call.id))
+        .map((call) =>
+          log.append(session, "tool_result", {
+            callId: call.id,
+            name: call.name,
+            text: "Evie stopped before this tool finished, so it has no result.",
+          }),
+        ),
+      log.append(session, "turn_end", { reason: "error", error: "Evie stopped while this turn was running." }),
+    ])()
+    for (const event of closing) emit(event)
   }
 
   function open(session: string): Open {

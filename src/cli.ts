@@ -32,6 +32,7 @@ try {
   await runTerminal({
     evie,
     folder: process.cwd(),
+    resume: process.argv.includes("--continue") || process.argv.includes("-c"),
     lines: input,
     write: (text) => void process.stdout.write(text),
     onInterrupt: (handler) => (interrupt = handler),

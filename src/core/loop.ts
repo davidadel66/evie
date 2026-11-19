@@ -94,7 +94,17 @@ export function createLoop(options: LoopOptions): Loop {
 
     try {
       // One pass of this loop is one step.
-      while (true) {
+      for (let step = 1; ; step++) {
+        // Steering: a message sent while the turn was working is picked up
+        // here, before the next request, so the model sees it without the
+        // turn being stopped. The first step already has the turn's input.
+        if (step > 1) {
+          const steered = atomically(() =>
+            inbox.take(session).map((message) => log.append(session, "user_message", { text: message.text })),
+          )
+          for (const event of steered) emit(event)
+        }
+
         // What a hook is told about the moment it runs in.
         const context = (): HookContext => ({ session, project, events: log.events(session), signal })
 
