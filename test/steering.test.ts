@@ -132,7 +132,10 @@ test("a message sent while the model is writing stops that reply, keeps what it 
   const sent = model.requests[1]!.messages
   expect(sent[0]).toEqual({ role: "user", text: "tell me how the API works" })
   expect(sent[1]).toMatchObject({ role: "assistant" })
-  expect("Here is how the API").toStartWith((sent[1] as { text: string }).text)
+  // The model is told its reply was cut short, and by what.
+  const [written, note] = (sent[1] as { text: string }).text.split("\n\n")
+  expect("Here is how the API").toStartWith(written!)
+  expect(note).toBe("[This reply was cut short: the owner sent a new message before it was finished.]")
   expect(sent[2]).toEqual({ role: "user", text: "focus only on the events" })
 })
 
