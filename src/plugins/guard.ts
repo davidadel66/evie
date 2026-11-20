@@ -7,16 +7,20 @@ import type { CheckedToolCall, Plugin } from "../core/types.ts"
 // they run, and keeps the tools out of a few private folders.
 //
 // It is a seat belt, not a lock. It matches the text of a command, so a
-// command hidden in a script, or built from a variable, gets past it. It is
-// here because this milestone has no approval step; it does not make Evie
-// safe to run unattended.
+// command hidden in a script, or built from a variable, gets past it.
+//
+// The permissions plugin applies the same checks as rules that always deny,
+// so the guard is only needed as a plugin of its own when permissions is
+// switched off.
 
 export type GuardOptions = {
   // The folder Evie keeps its state and keys in. Defaults to the usual place.
   dataFolder?: string
 }
 
-export function guard(options: GuardOptions = {}): Plugin {
+// Makes the check: given a tool call and the project's folder, it returns
+// the reason the call is blocked, worded for the model, or undefined.
+export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall, projectFolder: string | null) => string | undefined {
   const home = homedir()
   const privateFolders = [
     options.dataFolder ?? dataFolder({}),
@@ -25,16 +29,22 @@ export function guard(options: GuardOptions = {}): Plugin {
     join(home, ".gnupg"),
   ].map((folder) => resolve(folder))
 
+  return (call, projectFolder) => {
+    const folder = projectFolder ?? home
+    const reason = call.name === "shell" ? shellReason(call, privateFolders, folder) : fileReason(call, privateFolders, folder)
+    if (reason === undefined) return undefined
+    return `Blocked by the guard: ${reason} The command was not run. If the owner wants this done, they can run it themselves.`
+  }
+}
+
+export function guard(options: GuardOptions = {}): Plugin {
+  const blocked = createGuard(options)
   return {
     name: "guard",
     setup(host) {
       host.on("before_tool", (call, context) => {
-        const projectFolder = context.project?.folder ?? home
-        const reason = call.name === "shell" ? shellReason(call, privateFolders, projectFolder) : fileReason(call, privateFolders, projectFolder)
-        if (reason === undefined) return
-        return {
-          deny: `Blocked by the guard: ${reason} The command was not run. If the owner wants this done, they can run it themselves.`,
-        }
+        const deny = blocked(call, context.project?.folder ?? null)
+        if (deny !== undefined) return { deny }
       })
     },
   }
