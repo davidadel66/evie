@@ -38,7 +38,7 @@ const shellTool: Tool = {
     "error: its output and exit status are returned. To read, search or change files, prefer the read, grep, glob, " +
     "edit and write tools.\n\n" +
     "A command still running after its timeout, 120 seconds by default, is not stopped: it moves to the background " +
-    "and carries on. For a command you know will run for a long time or never end, such as a server, a watcher or " +
+    "and carries on; the owner can also move a command there while you wait for it. For a command you know will run for a long time or never end, such as a server, a watcher or " +
     "a long build, set background to true and it starts there at once; do not add '&' yourself. You are told when a " +
     "background command finishes, with its output, so do not wait for it or keep checking on it.",
   inputSchema: {
@@ -114,10 +114,15 @@ const shellTool: Tool = {
     const onCancel = () => running.stop("cancelled")
     context.signal.addEventListener("abort", onCancel, { once: true })
     if (context.signal.aborted) onCancel()
-    const first = await Promise.race([running.ended, tooLong])
+    // The owner can also ask for it to go to the background while it is waited for.
+    let stopListening = () => {}
+    const asked = new Promise<"asked">((resolve) => (stopListening = context.jobs.whileWaiting(() => resolve("asked"))))
+    const first = await Promise.race([running.ended, tooLong, asked])
     clearTimeout(timer)
+    stopListening()
     context.signal.removeEventListener("abort", onCancel)
 
+    if (first === "asked") return handOver("The owner moved the command to the background, where it is still running.")
     if (first === "too long") {
       return handOver(`The command did not finish within ${seconds} second${seconds === 1 ? "" : "s"}, so it was moved to the background, where it is still running.`)
     }

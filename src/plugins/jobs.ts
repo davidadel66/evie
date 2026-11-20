@@ -1,8 +1,8 @@
 import type { Job, Plugin } from "../core/types.ts"
 
 // The built-in plugin for the owner's and the model's side of background
-// jobs. The jobs themselves are kept by the core; this adds the `/jobs`
-// command for the owner and the `job_stop` tool for the model.
+// jobs. The jobs themselves are kept by the core; this adds the `/jobs` and
+// `/background` commands for the owner and the `job_stop` tool for the model.
 
 export function jobs(): Plugin {
   return {
@@ -22,6 +22,16 @@ export function jobs(): Plugin {
           const all = context.jobs.list()
           if (all.length === 0) return "Nothing has been run in the background in this session."
           return all.map(line).join("\n")
+        },
+      })
+
+      host.commands.add({
+        name: "background",
+        description: "Move the command Evie is waiting on to the background, so it carries on with other work.",
+        run(_args, context) {
+          const moved = context.jobs.background()
+          if (moved === 0) return context.busy ? "Evie is not waiting on anything that can be moved to the background." : "Nothing is running. This is for when Evie is waiting on a long command."
+          return "Moved to the background. Evie carries on, and is told when it finishes."
         },
       })
 

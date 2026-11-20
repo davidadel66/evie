@@ -378,3 +378,27 @@ test("with waitForJobs the terminal stays until a background job has ended and E
 
   expect(printed).toContain("The build is done.")
 })
+
+test("/background moves the command Evie is waiting on to the background, and is only for when it is waiting", async () => {
+  const { run } = await start(
+    [{ text: [], calls: [{ name: "shell", input: { command: "echo started; sleep 0.6; echo finished" } }] }, { text: ["Carrying on."] }, { text: ["It finished."] }],
+    [shell(), jobs()],
+  )
+  const background = async () => (await run.evie.send({ type: "run_command", session: run.session, name: "background", args: "" })).text
+  expect(await background()).toBe("Nothing is running. This is for when Evie is waiting on a long command.")
+
+  const calling = until(run, (event) => event.type === "assistant_message")
+  await run.evie.send({ type: "send_message", session: run.session, text: "run it" })
+  await calling
+  await Bun.sleep(100)
+  expect(await background()).toBe("Moved to the background. Evie carries on, and is told when it finishes.")
+
+  // The call returns at once, the model carries on, and it is told when the command ends.
+  await turnEnds(run, 1)
+  expect(lastResult(run)).toStartWith("The owner moved the command to the background, where it is still running. It is background job 1")
+  await turnEnds(run, 2)
+  expect(notes(run)[0]).toContain("started\nfinished")
+
+  // Once nothing is waited on, there is nothing to move.
+  expect(await background()).toBe("Nothing is running. This is for when Evie is waiting on a long command.")
+})

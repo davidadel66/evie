@@ -189,6 +189,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         start: (work) => jobs.start(sessionId(), work),
         list: () => jobs.list(sessionId()),
         stop: (id) => jobs.stop(sessionId(), id, "model"),
+        whileWaiting: (asked) => jobs.whileWaiting(sessionId(), asked),
       },
     })
     sessions.set(sessionId(), opened)
@@ -271,7 +272,11 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         return loop.busy()
       },
       tell: (note) => loop.tell(note),
-      jobs: { list: () => jobs.list(input.session), stop: (id) => jobs.stop(input.session, id, "owner") },
+      jobs: {
+        list: () => jobs.list(input.session),
+        stop: (id) => jobs.stop(input.session, id, "owner"),
+        background: () => jobs.background(input.session),
+      },
     })
     return { text }
   }

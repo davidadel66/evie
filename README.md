@@ -90,7 +90,8 @@ Type a message and press Enter.
   two minutes moves to the background and carries on, and Evie can start
   one there on purpose, such as a server. When it ends, Evie is told and
   picks the work up again by itself. `/jobs` lists what is running, and
-  `/jobs stop` with an id stops one. Ctrl-C leaves background commands
+  `/jobs stop` with an id stops one. `/background` moves the command Evie
+  is waiting on right now to the background, so you need not wait for it. Ctrl-C leaves background commands
   running; they stop when Evie quits.
 - **`/compact`** replaces the older part of a long conversation with a
   summary, to save room. Evie also does this by itself when a conversation
@@ -263,7 +264,7 @@ a list, the ten built-in ones load:
 |---|---|
 | `files` | `read`, `write`, `edit`, `patch`, `grep` and `glob` |
 | `shell` | `shell` |
-| `jobs` | `job_stop`, and the `/jobs` command |
+| `jobs` | `job_stop`, and the `/jobs` and `/background` commands |
 | `permissions` | The rules that allow, deny or ask before a tool runs, and the `/mode` command |
 | `undo` | The copies kept of files before they are changed, and the `/undo` command |
 | `models` | What each model family is given, and the `/model` command |

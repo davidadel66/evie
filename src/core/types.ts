@@ -154,7 +154,16 @@ export type ToolContext = {
   // The session's background jobs. `start` hands work over to carry on
   // after this call returns: when it ends the model is told, and is woken
   // to deal with the result if the session is idle.
-  jobs: { start(work: JobWork): Job; list(): Job[]; stop(id: string): Job | undefined }
+  jobs: {
+    start(work: JobWork): Job
+    list(): Job[]
+    stop(id: string): Job | undefined
+    // For a tool that is waiting on work it could hand over: calls `asked`
+    // when the owner asks for whatever the turn is waiting on to go to the
+    // background. Returns a function that ends the listening, to be called
+    // when the wait is over.
+    whileWaiting(asked: () => void): () => void
+  }
 }
 
 // Every tool has this one shape, built in or added by someone else. `run`
@@ -208,7 +217,9 @@ export type SlashContext = {
   // at the next step, so it never lands between a tool call and its result.
   tell(text: string): void
   // The session's background jobs, to list them and to stop one.
-  jobs: { list(): Job[]; stop(id: string): Job | undefined }
+  // `background` asks whatever the turn is waiting on to move to the
+  // background, and returns how many things were asked.
+  jobs: { list(): Job[]; stop(id: string): Job | undefined; background(): number }
 }
 
 // A command the owner types in a client, starting with a slash. It runs at

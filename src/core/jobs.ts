@@ -19,6 +19,12 @@ export type Jobs = {
   stop(session: string, id: string, by: "owner" | "model"): Job | undefined
   // Stops every running job and waits for them to end. Used when Evie closes.
   stopAll(): Promise<void>
+  // A tool that is waiting on work it could hand over listens here. Returns
+  // a function that ends the listening.
+  whileWaiting(session: string, asked: () => void): () => void
+  // Asks every tool waiting in the session to hand its work over, and
+  // returns how many were asked.
+  background(session: string): number
 }
 
 type Running = { job: Job; work: JobWork; stoppedBy?: "owner" | "model" | "closing" }
@@ -59,6 +65,8 @@ export function createJobs(options: {
       work()
     } catch {}
   }
+  // What each session's turn is waiting on right now that could be moved.
+  const waiting = new Map<string, Set<() => void>>()
   const announce = (job: Job) => options.emit({ type: "job", session: job.session, job: { ...job } })
 
   return {
@@ -113,6 +121,18 @@ export function createJobs(options: {
       running.stoppedBy = by
       safely(() => running.work.stop())
       return { ...running.job }
+    },
+
+    whileWaiting(session, asked) {
+      const listeners = waiting.get(session) ?? waiting.set(session, new Set()).get(session)!
+      listeners.add(asked)
+      return () => void listeners.delete(asked)
+    },
+
+    background(session) {
+      const listeners = [...(waiting.get(session) ?? [])]
+      for (const asked of listeners) safely(asked)
+      return listeners.length
     },
 
     async stopAll() {
