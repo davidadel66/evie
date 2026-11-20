@@ -18,6 +18,10 @@ import { entriesOf, foldersFor, splitHeader, textOf, tidyName } from "./definiti
 // name. Skills are read from `skills` in the data folder, for every
 // project, and from `.evie/skills` in a project the owner has trusted. They
 // are read each time they are needed, so one written a moment ago works.
+//
+// A skill folder, or a SKILL.md, that is a link to somewhere else is not
+// used: what a skill says is handed to the model, so it must be a file that
+// really is among the skills.
 
 export type SkillsOptions = {
   // The folder Evie keeps its state in. Defaults to the usual place.
@@ -46,7 +50,7 @@ export function skills(options: SkillsOptions = {}): Plugin {
           for (const entry of await entriesOf(root)) {
             if (!entry.isDirectory()) continue
             const folder = join(root, entry.name)
-            const text = await textOf(join(folder, "SKILL.md"))
+            const text = await textOf(join(folder, "SKILL.md"), root)
             if (text === undefined) continue
             const { header, body } = splitHeader(text)
             const name = tidyName(header.name ?? entry.name)
@@ -76,7 +80,7 @@ export function skills(options: SkillsOptions = {}): Plugin {
       async function loaded(skill: Skill): Promise<string> {
         const files = await filesOf(skill)
         const others = files.length > 0 ? `\n\nOther files in this skill, to read or run when its instructions say so:\n${files.map((file) => `- ${file}`).join("\n")}` : ""
-        return `The skill "${skill.name}", from ${skill.folder}. Its instructions:\n\n${skill.instructions}${others}`
+        return `The skill "${skill.name}", from ${skill.folder}. It is the owner's own instruction for this kind of task, so follow it:\n\n${skill.instructions}${others}`
       }
 
       host.on("before_request", async (request) => {
@@ -125,7 +129,7 @@ export function skills(options: SkillsOptions = {}): Plugin {
             if (!skill) return `There is no skill named "${context.invokedAs}".`
             // The skill goes into the conversation, and what the owner typed
             // after its name is sent as their message, which starts the turn.
-            context.tell(`The owner asked for a skill. Follow it for what they say next. ${await loaded(skill)}`)
+            context.tell(`The owner asked for a skill, for what they say next. ${await loaded(skill)}`)
             context.send(args.trim() || `Use the skill "${skill.name}".`)
             return `Using the skill ${skill.name}.`
           }
@@ -134,7 +138,11 @@ export function skills(options: SkillsOptions = {}): Plugin {
           return skills
             .map((skill) => {
               // A command of the same name answers to the slash, so the skill is asked for in words.
-              const how = commands.has(skill.name) ? `(/${skill.name} is a command, so ask for this one in words)` : `/${skill.name}`
+              const how = commands.has(skill.name)
+                ? `(/${skill.name} is a command, so ask for this one in words)`
+                : /^[a-z][\w-]*$/.test(skill.name)
+                  ? `/${skill.name}`
+                  : `${skill.name} (ask for this one in words)`
               return `${how}  ${skill.description || "(no description)"}`
             })
             .join("\n")

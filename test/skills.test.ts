@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { permissions, runTerminal, skills, type Plugin } from "../src/index.ts"
@@ -62,7 +62,7 @@ test("the model is shown each skill's name and description, and loads the instru
   // The instructions are not in the prompt. They arrive when the skill is loaded.
   expect(system).not.toContain("Update the changelog")
   expect(lastResult()).toBe(
-    `The skill "release", from ${join(mine, "release")}. Its instructions:\n\n1. Update the changelog.\n2. Run scripts/tag.sh.\n\n` +
+    `The skill "release", from ${join(mine, "release")}. It is the owner's own instruction for this kind of task, so follow it:\n\n1. Update the changelog.\n2. Run scripts/tag.sh.\n\n` +
       `Other files in this skill, to read or run when its instructions say so:\n- ${join(mine, "release", "notes.md")}\n- ${join(mine, "release", "scripts", "tag.sh")}`,
   )
 })
@@ -107,7 +107,7 @@ test("a slash and a skill's name puts the skill in the conversation and sends wh
 
   expect(stored(run.events).map((event) => event.type)).toEqual(["note", "turn_start", "user_message", "assistant_message", "turn_end"])
   const messages = model.requests[0]!.messages
-  expect(messages[0]?.text).toStartWith('[Note from Evie: The owner asked for a skill. Follow it for what they say next. The skill "release", from ')
+  expect(messages[0]?.text).toStartWith('[Note from Evie: The owner asked for a skill, for what they say next. The skill "release", from ')
   expect(messages[0]?.text).toContain("1. Update the changelog.")
   expect(messages[1]).toEqual({ role: "user", text: "fix the changelog first" })
 })
@@ -193,8 +193,55 @@ test("a command may run a script from the owner's skills, with their say-so, and
   // The script is outside the project, so it is asked about even in auto mode.
   expect(await shell(`sh ${tag}`)).toBe("ran")
   expect(asked).toHaveLength(1)
-  for (const command of [`cat ${join(home, "evie.db")}`, `cat ${join(mine, "..", "evie.db")}`, `sh ${tag}; cat ${join(home, ".env")}`]) {
+  const escapes = [
+    `cat ${join(home, "evie.db")}`,
+    `cat ${mine}/../evie.db`,
+    `sh ${tag}; cat ${join(home, ".env")}`,
+    // From inside the skills folder, the rest of the data folder is two steps up.
+    `cd ${join(mine, "release")} && cat ../../.env`,
+    // A link made there could point anywhere, and so could a path that climbs through one.
+    `ln -s .. ${join(mine, "release", "up")}`,
+    `cat ${mine}/release/up/../.env`,
+    // Writing a skill is for the file tools, which ask in their own way.
+    `echo changed > ${join(mine, "release", "SKILL.md")}`,
+    `cp notes.md ${join(mine, "release", "SKILL.md")}`,
+  ]
+  for (const command of escapes) {
     expect(await shell(command)).toStartWith("Blocked by the guard:")
   }
   expect(ran).toEqual([`sh ${tag}`])
+})
+
+// ---- Found in review --------------------------------------------------------------------------------
+
+test("a skill that is a link to somewhere else is not used, so it cannot hand the model another file", async () => {
+  const outside = await realpath(await mkdtemp(join(tmpdir(), "evie-outside-")))
+  cleanups.push(() => rm(outside, { recursive: true, force: true }))
+  await writeSkill(outside, "linked", "---\ndescription: Kept somewhere else.\n---\nDo it this way.\n")
+  const { run, model, home, mine, slash, script, lastResult } = await start([])
+  await writeFile(join(home, ".env"), "OPENROUTER_API_KEY=secret-value\n")
+  await writeSkill(mine, "release", RELEASE)
+  // A skill whose SKILL.md is a link to the keys, and a skill folder that is a link.
+  await mkdir(join(mine, "leak"))
+  await symlink(join(home, ".env"), join(mine, "leak", "SKILL.md"))
+  await symlink(join(outside, "linked"), join(mine, "linked"))
+
+  expect(await slash("skills")).toBe("/release  How to cut a release of this project.")
+  script.push({ text: [], calls: [{ name: "skill", input: { name: "leak" } }] }, { text: ["No such skill."] })
+  await say(run, "load it")
+
+  expect(lastResult()).toBe('There is no skill named "leak". The skills are: release.')
+  expect(JSON.stringify(model.requests)).not.toContain("secret-value")
+})
+
+test("a very long skill is cut, and a skill whose name cannot be typed after a slash says so", async () => {
+  const { mine, slash, run, script, lastResult } = await start([])
+  await writeSkill(mine, "long", `---\ndescription: A long one.\n---\n${"word ".repeat(10_000)}\n`)
+  await writeSkill(mine, "2fa", "---\ndescription: Two-factor setup.\n---\nDo it.\n")
+
+  expect(await slash("skills")).toBe("2fa (ask for this one in words)  Two-factor setup.\n/long  A long one.")
+  script.push({ text: [], calls: [{ name: "skill", input: { name: "long" } }] }, { text: ["Loaded."] })
+  await say(run, "load it")
+  expect(lastResult()).toContain("[The rest of this file was left out: it is longer than 32 KiB.]")
+  expect(lastResult().length).toBeLessThan(34_000)
 })

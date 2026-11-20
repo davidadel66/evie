@@ -60,7 +60,7 @@ export function subagents(options: SubagentsOptions = {}): Plugin {
           for (const entry of await entriesOf(folder)) {
             if (!entry.isFile() || !entry.name.endsWith(".md")) continue
             const file = join(folder, entry.name)
-            const text = await textOf(file)
+            const text = await textOf(file, folder)
             if (text === undefined) continue
             const { header, body } = splitHeader(text)
             const name = tidyName(header.name ?? entry.name.slice(0, -3))

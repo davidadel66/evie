@@ -1,5 +1,5 @@
-import { readFile, readdir } from "node:fs/promises"
-import { join } from "node:path"
+import { readFile, readdir, realpath } from "node:fs/promises"
+import { isAbsolute, join, relative } from "node:path"
 
 // Agents and skills are files the owner writes: a few lines of header and a
 // body of instructions. This reads them. There are two places they live:
@@ -36,7 +36,23 @@ export function foldersFor(kind: "agents" | "skills", dataFolder: string, projec
 export const tidyName = (name: string) => name.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "")
 
 export const entriesOf = (folder: string) => readdir(folder, { withFileTypes: true }).catch(() => [])
-export const textOf = (file: string) => readFile(file, "utf8").catch(() => undefined)
+// The most of one definition that is read. Longer ones are cut.
+const MOST_BYTES = 32 * 1024
+
+// The text of a definition's file, or undefined when it is not to be used.
+// The file must really be inside `root`, the folder definitions are read
+// from: a link that leads anywhere else is not followed, or a "skill" could
+// be a link to the owner's keys and hand them to the model.
+export async function textOf(file: string, root: string): Promise<string | undefined> {
+  try {
+    const inside = relative(await realpath(root), await realpath(file))
+    if (inside === "" || inside.startsWith("..") || isAbsolute(inside)) return undefined
+    const text = await readFile(file, "utf8")
+    return text.length > MOST_BYTES ? `${text.slice(0, MOST_BYTES)}\n\n[The rest of this file was left out: it is longer than 32 KiB.]` : text
+  } catch {
+    return undefined
+  }
+}
 
 // Whether a definition's `mode` holds it to reading only. Only "auto", or
 // no mode at all, leaves it free to change things. Anything else, a

@@ -106,10 +106,15 @@ function shellReason(call: CheckedToolCall, privateFolders: string[], projectFol
   // A private folder, written the ways a shell command would write it.
   const spelled = command.replaceAll("${HOME}", home).replaceAll("$HOME", home).replace(/(^|[\s"'=:(])~(?=\/|\s|$)/g, `$1${home}`)
   // Words that name a file in the owner's skills are set aside before the
-  // private folders are looked for. Each must be a plain full path that
-  // really is inside the skills folder.
+  // private folders are looked for, so that a skill's script can be run.
+  // Each must be a plain full path that really is inside the skills folder.
+  // This is for running and reading only: a command that writes, copies,
+  // links, deletes or changes folder gets no such allowance, since from
+  // inside the skills folder it could reach the rest of the data folder, or
+  // change a skill without the question that writing one always brings.
+  const onlyRunsOrReads = !/[<>]|(^|[\s;&|(])(cd|pushd|ln|cp|mv|rm|tee|dd|install|touch|mkdir|rmdir|chmod|chown|sed|perl|awk|truncate|rsync|tar|unzip)(\s|$)/.test(command)
   const checked =
-    skillsIn === undefined
+    skillsIn === undefined || !onlyRunsOrReads
       ? spelled
       : spelled
           .split(/(\s+)/)
@@ -230,6 +235,9 @@ function isBrokenLink(absolute: string): boolean {
 
 // True for a path inside the owner's skills in the data folder.
 function isSkill(data: string, path: string): boolean {
+  // A ".." is folded away as text before links are followed, so a path
+  // with one can end up somewhere other than it looks.
+  if (/(^|\/)\.\.(\/|$)/.test(path)) return false
   if (isBrokenLink(resolve(path))) return false
   const inside = relative(followLinks(resolve(data, "skills")), followLinks(resolve(path)))
   return inside !== "" && !inside.startsWith("..") && !isAbsolute(inside)
