@@ -18,6 +18,8 @@ export async function startEvie(
     projectFolder?: string
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
     compaction?: NonNullable<EvieOptions["compaction"]>
+    // Open the session as a client that shows questions and answers them.
+    questions?: boolean
   } = {},
 ) {
   const home = options.home ?? (await mkdtemp(join(tmpdir(), "evie-home-")))
@@ -38,7 +40,7 @@ export async function startEvie(
   })
   const events: EvieEvent[] = []
   evie.subscribe((event) => events.push(event))
-  const { session, project } = await evie.send({ type: "open_session", folder: projectFolder })
+  const { session, project } = await evie.send({ type: "open_session", folder: projectFolder, ...(options.questions && { questions: true }) })
   return {
     evie,
     events,
@@ -68,3 +70,14 @@ export async function say(run: { evie: Evie; session: string }, text: string, se
 }
 
 export const stored = (events: EvieEvent[]) => events.filter((event) => event.type !== "assistant_delta")
+
+// Resolves with the next event the client is sent that matches.
+export function nextEvent<Type extends EvieEvent["type"]>(run: { evie: Evie }, type: Type) {
+  return new Promise<Extract<EvieEvent, { type: Type }>>((resolve) => {
+    const stop = run.evie.subscribe((event) => {
+      if (event.type !== type) return
+      stop()
+      resolve(event as Extract<EvieEvent, { type: Type }>)
+    })
+  })
+}

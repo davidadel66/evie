@@ -20,7 +20,20 @@ export type EventBodies = {
   // on a request is built from the summary and the events from `keepFrom`
   // onwards. `files` are the files the summarised part worked with.
   compaction: { summary: string; keepFrom: number; files: string[] }
+  // Evie asked the owner something. `id` ties the answer to it.
+  question: { id: string } & Question
+  // The answer. `choice` is null when the question was refused: the turn was
+  // cancelled, Evie closed, or the session's client cannot show questions.
+  answer: { id: string; choice: string | null }
 }
+
+// Something Evie asks the owner, with the answers to choose from. With
+// `freeText` the owner may also answer in their own words.
+export type Question = { text: string; choices: string[]; freeText?: true }
+
+// Asks the owner and waits for the answer. It returns the choice, or null
+// when the question was refused, which is to be treated as a no.
+export type Ask = (question: Question) => Promise<string | null>
 
 export type StoredEventType = keyof EventBodies
 
@@ -101,6 +114,8 @@ export type ToolContext = {
   // The folder of the session's project, or null in the general session,
   // which has no project.
   folder: string | null
+  // Asks the owner a question and waits for the answer.
+  ask: Ask
 }
 
 // Every tool has this one shape, built in or added by someone else. `run`
@@ -168,6 +183,8 @@ export type HookContext = {
   events: readonly StoredEvent[]
   // The turn's cancel signal.
   signal: AbortSignal
+  // Asks the owner a question and waits for the answer.
+  ask: Ask
 }
 
 // A tool call after its input has been checked and repaired.
@@ -236,7 +253,9 @@ export type Commands = {
   // the last general session) is reopened, with its conversation, when there
   // is one. `resumed` says whether that happened.
   open_session: {
-    input: { project?: string; folder?: string; continue?: boolean }
+    // `questions` says that this client shows questions and sends back the
+    // answers. Without it, every question in the session is refused at once.
+    input: { project?: string; folder?: string; continue?: boolean; questions?: boolean }
     // `notices` are things the owner should be told, such as a project
     // plugin that was not loaded.
     output: { session: string; project: Project | null; resumed: boolean; notices: string[] }
@@ -253,6 +272,13 @@ export type Commands = {
   // Switches the session's model, from its next model request.
   set_model: {
     input: { session: string; model: string }
+    output: void
+  }
+  // Answers a question Evie asked in a `question` event. `choice` is one of
+  // its choices, or the owner's own words when it allows that, or null to
+  // refuse it.
+  answer_question: {
+    input: { session: string; id: string; choice: string | null }
     output: void
   }
   // Runs a command a plugin registered, such as /model, and returns the
