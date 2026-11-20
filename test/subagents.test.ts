@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, jobs, permissions, runTerminal, subagents, type Chunk, type EvieEvent, type Plugin, type Request } from "../src/index.ts"
@@ -630,4 +630,18 @@ test("by itself the guard lets the owner's agents be read and not written", asyn
 
   expect(await call("read", { path: join(home, "agents", "reviewer.md") })).toContain("You review code changes.")
   expect(await call("write", { path: join(home, "agents", "new.md"), content: "x" })).toStartWith("Blocked by the guard:")
+})
+
+test("an agent file that is a link to somewhere else is not used, so it cannot hand the model another file", async () => {
+  const { run, requests } = await start([{ text: "ok" }], [])
+  await writeFile(join(run.home, ".env"), "OPENROUTER_API_KEY=secret-value\n")
+  await writeAgent(join(run.home, "agents"), "reviewer.md", REVIEWER)
+  await symlink(join(run.home, ".env"), join(run.home, "agents", "leak.md"))
+
+  await say(run, "hi")
+
+  const system = requests.parent[0]!.system!
+  expect(system).toContain("- reviewer:")
+  expect(system).not.toContain("leak")
+  expect(system).not.toContain("secret-value")
 })
