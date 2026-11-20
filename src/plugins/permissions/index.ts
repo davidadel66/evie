@@ -95,7 +95,8 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         if (answer === ALWAYS) {
           const rulesToKeep = always.map(({ rule }) => rule).filter((rule) => !remembered.some((kept) => kept.action === rule.action && kept.match === rule.match))
           remembered.push(...rulesToKeep)
-          await options.remember?.(key, rulesToKeep)
+          // If the answer cannot be saved it still holds until Evie stops.
+          await Promise.resolve(options.remember?.(key, rulesToKeep)).catch(() => {})
           return
         }
         if (answer === null) {

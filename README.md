@@ -147,19 +147,30 @@ Rules go in `evie.json`, and are looked at before the mode:
   "permissions": {
     "mode": "manual",
     "rules": [
-      { "action": "shell", "match": "bun test*", "effect": "allow" },
+      { "action": "shell", "match": "bun test *", "effect": "allow" },
       { "action": "edit", "match": "*.env", "effect": "deny" },
-      { "action": "shell", "match": "git push*", "effect": "ask" }
+      { "action": "shell", "match": "git push *", "effect": "ask" }
     ]
   }
 }
 ```
 
 - `action` is `read`, `edit`, `shell`, `web`, or the name of any other tool.
-- `match` is a pattern for the file, the command, or the address. A `*`
-  stands for anything. A path that is not a full path is taken from the
-  project folder. Without `match`, the rule covers every such action.
 - `effect` is `allow`, `deny` or `ask`.
+- `match` is a pattern for what the action is done to. Without it, the rule
+  covers every such action.
+  - For `read` and `edit` it is a path. `*` stands for anything within one
+    folder, and `**` for anything at all. A pattern with no slash, such as
+    `.env` or `*.pem`, is a file name and matches it in any folder. Any
+    other pattern that is not a full path is taken from the project folder.
+  - For `shell` it is the command, and `*` stands for anything. A pattern
+    that ends in a space and `*`, such as `git push *`, covers `git push`
+    by itself and with anything after it.
+
+A command line is judged one command at a time, so `git status && git push`
+is asked about for the push. A command that names a place outside the
+project, such as `cat /etc/hosts`, counts as reaching outside it. A rule
+that denies reading or changing a file also stops a command that names it.
 
 A rule that denies always wins. Otherwise the last rule that matches
 decides. In `read-only` mode no rule can allow a change.

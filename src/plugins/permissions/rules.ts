@@ -1,7 +1,8 @@
 import { homedir } from "node:os"
-import { dirname, isAbsolute, relative, resolve } from "node:path"
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import type { CheckedToolCall } from "../../core/types.ts"
-import { isOutwardFacing, isReadOnly, partsOf, startOf } from "./shell.ts"
+import { followLinks } from "../guard.ts"
+import { isOutwardFacing, isReadOnly, partsOf, placesIn, plainWords, startOf, wordsIn } from "./shell.ts"
 
 // The rules of the permissions plugin: what a tool call is about to do, and
 // whether that is allowed, denied, or needs the owner's say-so. This file
@@ -18,9 +19,17 @@ export type Mode = (typeof MODES)[number]
 
 // One rule. `action` is what kind of thing is being done: "read" (read, grep,
 // glob), "edit" (write, edit, patch), "shell", "web", or the name of any
-// other tool. `match` is a pattern for what it is done to: a path for read
-// and edit, the command for shell, the address or search for web. A `*` in
-// it stands for anything. Without `match` the rule covers every such action.
+// other tool. `match` is a pattern for what it is done to, and without it
+// the rule covers every such action.
+//
+// For read and edit the pattern is a path. `*` stands for anything within
+// one folder and `**` for anything at all. A pattern with no slash, such as
+// `.env` or `*.pem`, is a file name and matches it in any folder. Any other
+// pattern that is not a full path is taken from the project folder.
+//
+// For shell the pattern is the command, and `*` stands for anything. A
+// pattern ending in a space and `*`, such as `git push *`, covers the
+// command by itself and with anything after it, but not `git pushx`.
 export type Rule = { action: string; match?: string; effect: Effect }
 
 // One thing a tool call does, in the terms the rules use. A call can do
@@ -29,46 +38,61 @@ export type Rule = { action: string; match?: string; effect: Effect }
 export type Act = {
   action: string
   target: string
-  // For a path: whether it is inside the project.
+  // Whether it stays inside the project.
   inside?: boolean
   kind: "path" | "command" | "other"
+  // For a path: whether it is a folder being searched, not one file.
+  folder?: boolean
 }
 
 const READ_TOOLS = ["read", "grep", "glob"]
 const EDIT_TOOLS = ["write", "edit", "patch"]
 const WEB_TOOLS = ["web_search", "web_fetch"]
+// The actions the plugin understands. Anything else is a tool it knows nothing about.
+const KNOWN = ["read", "edit", "shell", "web", "ask"]
 
-const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir())
-const absolutePath = (path: string, folder: string | null) => {
-  const expanded = expandHome(path)
-  return isAbsolute(expanded) ? resolve(expanded) : resolve(folder ?? homedir(), expanded)
-}
+const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir()).replace(/^(\$HOME\b|\$\{HOME\})/, homedir())
+
+const fullPath = (path: string, folder: string | null) => followLinks(isAbsolute(path) ? resolve(path) : resolve(folder ?? homedir(), path))
+
 export function isInside(folder: string | null, absolute: string): boolean {
   if (folder === null) return false
   const within = relative(folder, absolute)
   return within === "" || (!within.startsWith("..") && !isAbsolute(within))
 }
 
-// What a tool call does.
+// The files a patch names. The patch tool reads each line with the space
+// around it taken off, so the same is done here.
+export const patchFiles = (patchText: string) =>
+  [...patchText.matchAll(/^[ \t]*\*\*\* (?:Add File|Update File|Delete File|Move to):[ \t]*(.+?)[ \t]*$/gm)].map((found) => found[1]!)
+
+// What a tool call does. The file tools take a path as it is written, with
+// no `~`, so the same is done here.
 export function actsOf(call: CheckedToolCall, folder: string | null): Act[] {
-  const path = (action: string, given: string): Act => {
-    const target = absolutePath(given, folder)
-    return { action, target, inside: isInside(folder, target), kind: "path" }
+  const path = (action: string, given: string, searched = false): Act => {
+    const target = fullPath(given, folder)
+    return { action, target, inside: isInside(folder, target), kind: "path", ...(searched && { folder: true }) }
   }
   const text = (value: unknown) => (typeof value === "string" ? value : "")
 
-  if (READ_TOOLS.includes(call.name)) return [path("read", text(call.input.path) || ".")]
+  if (READ_TOOLS.includes(call.name)) return [path("read", text(call.input.path) || ".", call.name !== "read")]
   if (call.name === "patch") {
-    const files = [...text(call.input.patchText).matchAll(/^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$/gm)].map((found) => found[1]!.trim())
-    // A patch that names no file changes nothing, and the tool says so itself.
-    return files.map((file) => path("edit", file))
+    const files = patchFiles(text(call.input.patchText))
+    // A patch in which no file can be found is not let through as harmless.
+    return files.length > 0 ? files.map((file) => path("edit", file)) : [{ action: "patch", target: "", kind: "other" }]
   }
   if (EDIT_TOOLS.includes(call.name)) return [path("edit", text(call.input.path) || ".")]
   if (call.name === "shell") {
-    // A command run in a folder outside the project reaches outside it.
     const workdir = text(call.input.workdir)
-    const inside = workdir === "" ? folder !== null : isInside(folder, absolutePath(workdir, folder))
-    return partsOf(text(call.input.command)).map((part) => ({ action: "shell", target: part, inside, kind: "command" }))
+    const runsIn = workdir === "" ? folder : fullPath(expandHome(workdir), folder)
+    return partsOf(text(call.input.command)).map((part) => ({
+      action: "shell",
+      target: part,
+      // A command reaches outside the project when it runs in a folder
+      // outside it, or names a place outside it.
+      inside: isInside(folder, runsIn ?? homedir()) && placesIn(part).every((place) => place === "/dev/null" || isInside(folder, fullPath(expandHome(place), runsIn))),
+      kind: "command",
+    }))
   }
   if (WEB_TOOLS.includes(call.name)) return [{ action: "web", target: text(call.input.url) || text(call.input.query), kind: "other" }]
   return [{ action: call.name, target: "", kind: "other" }]
@@ -76,55 +100,95 @@ export function actsOf(call: CheckedToolCall, folder: string | null): Act[] {
 
 // ---- Matching -------------------------------------------------------------------------
 
+const plainOf = (part: string) => plainWords(part).words.join(" ")
+const escaped = (text: string) => text.replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+// File names differ only by case on a Mac, so there a rule must not either.
+const anyCase = process.platform === "darwin" ? "i" : ""
+
+function pathMatches(pattern: string, target: string, folder: string | null): boolean {
+  const glob = (text: string) => text.split("**").map((piece) => piece.split("*").map(escaped).join("[^/]*")).join("[\\s\\S]*")
+  // A bare file name matches that name in any folder.
+  if (!pattern.includes("/")) return new RegExp(`^${glob(pattern)}$`, anyCase).test(basename(target))
+  const expanded = expandHome(pattern)
+  const full = isAbsolute(expanded) ? expanded : resolve(folder ?? homedir(), expanded)
+  // `folder/**` covers the folder itself as well as what is in it.
+  return new RegExp(`^${glob(full)}$`, anyCase).test(target) || (full.endsWith("/**") && new RegExp(`^${glob(full.slice(0, -3))}$`, anyCase).test(target))
+}
+
+function commandMatches(pattern: string, command: string): boolean {
+  const tidy = pattern.trim()
+  const open = tidy.endsWith(" *")
+  const body = (open ? tidy.slice(0, -2) : tidy).split("*").map(escaped).join("[\\s\\S]*")
+  return new RegExp(`^${body}${open ? "(\\s[\\s\\S]*)?" : ""}$`).test(command.trim())
+}
+
 function matches(rule: Rule, act: Act, folder: string | null): boolean {
   if (rule.action !== "*" && rule.action !== act.action) return false
   if (rule.match === undefined) return true
-  // A path pattern that is not a full path is taken from the project folder.
-  const pattern = act.kind === "path" ? absolutePath(rule.match, folder) : rule.match.trim()
-  const asRegex = new RegExp(`^${pattern.split("*").map((piece) => piece.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[\\s\\S]*")}$`)
-  return asRegex.test(act.target)
+  if (act.kind === "path") return pathMatches(rule.match, act.target, folder)
+  return commandMatches(rule.match, act.target)
 }
 
 // What happens to an act that no rule covers.
 function byMode(act: Act, mode: Mode): Effect {
   if (act.action === "web" || act.action === "ask") return "allow"
-  if (act.action === "read") return act.inside ? "allow" : mode === "read-only" ? "deny" : "ask"
-  if (act.action === "edit") return mode === "read-only" ? "deny" : mode === "auto" && act.inside ? "allow" : "ask"
+  if (act.action === "read") return act.inside ? "allow" : "ask"
+  if (act.action === "edit") return mode === "auto" && act.inside ? "allow" : "ask"
   if (act.action === "shell") {
-    if (isReadOnly(act.target)) return act.inside ? "allow" : mode === "read-only" ? "deny" : "ask"
-    if (mode === "read-only") return "deny"
+    if (isReadOnly(act.target)) return act.inside ? "allow" : "ask"
     if (mode === "manual") return "ask"
     return act.inside && !isOutwardFacing(act.target) ? "allow" : "ask"
   }
   // A tool the plugin knows nothing about.
-  return mode === "read-only" ? "deny" : mode === "auto" ? "allow" : "ask"
+  return mode === "auto" ? "allow" : "ask"
 }
 
 // The effect for one act. A rule that denies always wins. Otherwise the last
-// rule that matches decides, and with no match the mode does. In read-only
-// mode a rule cannot allow a change: read-only means nothing is changed.
+// rule that matches decides, and with no match the mode does.
+//
+// In read-only mode nothing is asked and no rule can allow a change: what
+// would change something, or would need asking, is denied.
 export function effectFor(act: Act, rules: readonly Rule[], mode: Mode, folder: string | null): Effect {
   const matching = rules.filter((rule) => matches(rule, act, folder))
   if (matching.some((rule) => rule.effect === "deny")) return "deny"
-  const changes = act.action === "edit" || (act.action === "shell" && !isReadOnly(act.target))
-  if (mode === "read-only" && changes) return "deny"
-  return matching.at(-1)?.effect ?? byMode(act, mode)
+
+  if (act.kind === "command") {
+    const denies = rules.filter((rule) => rule.effect === "deny")
+    // A rule that denies a command is held against its plain form too, so
+    // `git -C . push` does not get past a rule for `git push`.
+    const plain = plainOf(act.target)
+    if (denies.some((rule) => rule.action === "shell" && rule.match !== undefined && commandMatches(rule.match, plain))) return "deny"
+    // A rule that denies reading or changing a file also stops a command
+    // that names that file, so `cat .env` does not get past a rule for `.env`.
+    const fileRules = denies.filter((rule) => (rule.action === "read" || rule.action === "edit") && rule.match !== undefined)
+    if (fileRules.length > 0) {
+      const named = wordsIn(act.target).map((word) => fullPath(expandHome(word), folder))
+      if (fileRules.some((rule) => named.some((file) => pathMatches(rule.match!, file, folder)))) return "deny"
+    }
+  }
+
+  const effect = matching.at(-1)?.effect ?? byMode(act, mode)
+  if (mode !== "read-only") return effect
+  const changes = act.action === "edit" || (act.action === "shell" && !isReadOnly(act.target)) || !KNOWN.includes(act.action)
+  return changes || effect === "ask" ? "deny" : effect
 }
 
 // ---- Wording ----------------------------------------------------------------------------
 
 // The rule that would allow acts like this one from now on, and how to say
-// it to the owner.
+// it to the owner. The rule is never wider than the words.
 export function alwaysRule(act: Act, folder: string | null): { rule: Rule; label: string } {
   if (act.kind === "path") {
     const doing = act.action === "read" ? "reading" : "changing"
-    if (act.inside && folder !== null) return { rule: { action: act.action, match: `${folder}/*`, effect: "allow" }, label: `${doing} files inside the project` }
+    if (act.inside && folder !== null) return { rule: { action: act.action, match: `${folder}/**`, effect: "allow" }, label: `${doing} files inside the project` }
+    if (act.folder) return { rule: { action: act.action, match: `${act.target}/**`, effect: "allow" }, label: `${doing} anything under ${act.target}` }
     const parent = dirname(act.target)
-    return { rule: { action: act.action, match: `${parent}/*`, effect: "allow" }, label: `${doing} files in ${parent}` }
+    return { rule: { action: act.action, match: join(parent, "*"), effect: "allow" }, label: `${doing} files directly in ${parent}` }
   }
   if (act.kind === "command") {
     const start = startOf(act.target)
-    return { rule: { action: "shell", match: `${start}*`, effect: "allow" }, label: `commands that start with "${start}"` }
+    if (start === undefined) return { rule: { action: "shell", match: act.target, effect: "allow" }, label: `exactly the command "${act.target}"` }
+    return { rule: { action: "shell", match: `${start} *`, effect: "allow" }, label: `commands that start with "${start}"` }
   }
   return { rule: { action: act.action, effect: "allow" }, label: act.action === "web" ? "using the web" : `the tool ${act.action}` }
 }

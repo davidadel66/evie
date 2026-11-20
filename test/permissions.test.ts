@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { loadSettingsFiles, permissions, type PermissionsOptions, type Plugin, type Rule } from "../src/index.ts"
@@ -137,7 +137,7 @@ test("an always answer is remembered for the project, and saved", async () => {
   await attempt(edit("src/other.ts"), undefined, other.session)
 
   expect(asked).toHaveLength(1)
-  expect(saved).toEqual([[folder, [{ action: "edit", match: `${folder}/*`, effect: "allow" }]]])
+  expect(saved).toEqual([[folder, [{ action: "edit", match: `${folder}/**`, effect: "allow" }]]])
 })
 
 test("reading or changing a file outside the project is asked about", async () => {
@@ -147,7 +147,7 @@ test("reading or changing a file outside the project is asked about", async () =
   await attempt(edit("../sibling/file.ts"), always)
 
   expect(asked[0]?.text).toBe("Let Evie read /somewhere/else/notes.md, which is outside the project?")
-  expect(asked[1]?.choices[1]).toStartWith("Always in this project: allow changing files in ")
+  expect(asked[1]?.choices[1]).toStartWith("Always in this project: allow changing files directly in ")
 })
 
 test("a patch is judged by every file it names", async () => {
@@ -155,10 +155,10 @@ test("a patch is judged by every file it names", async () => {
   const patch = (...files: string[]): ScriptedCall => ({ name: "patch", input: { patchText: files.map((file) => `*** Update File: ${file}\n@@\n-a\n+b`).join("\n") } })
 
   await attempt(patch("src/a.ts", "src/b.ts"))
-  await attempt(patch("src/a.ts", "/etc/hosts", "README.md"), YES)
+  await attempt(patch("src/a.ts", "/somewhere/else/hosts", "README.md"), YES)
 
   expect(asked).toHaveLength(1)
-  expect(asked[0]?.text).toBe("Let Evie change these files outside the project?\n\n  /etc/hosts\n  README.md")
+  expect(asked[0]?.text).toBe("Let Evie change these files outside the project?\n\n  /somewhere/else/hosts\n  README.md")
   expect(folder).toBeDefined()
 })
 
@@ -211,13 +211,13 @@ test("in auto mode Evie works freely inside the project and asks before reaching
   await attempt(shell("gh pr view 12"))
   await attempt(shell("curl -X POST https://example.com/hook -d ok"), YES)
   await attempt(shell("curl https://example.com/page"))
-  await attempt(edit("/etc/hosts"), NO)
+  await attempt(edit("/somewhere/else/hosts"), NO)
 
   expect(asked.map((question) => question.text.split("\n").at(-1)?.trim())).toEqual([
     "git push origin dev",
     "gh pr create --fill",
     "curl -X POST https://example.com/hook -d ok",
-    "Let Evie change /etc/hosts, which is outside the project?",
+    "Let Evie change /somewhere/else/hosts, which is outside the project?",
   ])
   expect(ran).toHaveLength(8)
 })
@@ -373,7 +373,7 @@ test("an always answer is written to the global settings file, and is there when
   const first = await withSettings({ permissions: { mode: "manual" } })
   await first.attempt(shell("bun test"), always)
 
-  const rule = { action: "shell", match: "bun test*", effect: "allow" }
+  const rule = { action: "shell", match: "bun test *", effect: "allow" }
   expect(await first.globalFile()).toEqual({
     model: "some/model",
     plugins: ["permissions"],
@@ -404,4 +404,189 @@ test("permissions settings that make no sense stop Evie at start, and say what i
   await expect(load({ mode: "yolo" })).rejects.toThrow('"permissions" has a "mode" that is not one of: read-only, manual, auto.')
   await expect(load({ rules: [{ action: "shell", effect: "maybe" }] })).rejects.toThrow('"permissions" has "rules" that are not a list of rules.')
   await expect(load({ projects: { "/some/project": "all" } })).rejects.toThrow('"permissions" has "projects" that do not give a list of rules')
+})
+
+// ---- Found in review --------------------------------------------------------------------------
+
+test("a patch whose file lines are indented is judged like any other", async () => {
+  const patch = (file: string): ScriptedCall => ({ name: "patch", input: { patchText: `*** Begin Patch\n   *** Add File: ${file}  \n+hello\n*** End Patch` } })
+  const manual = await start()
+  const readOnly = await start({ mode: "read-only" })
+
+  await manual.attempt(patch("/somewhere/else/x.txt"), NO)
+  expect(manual.asked[0]?.text).toBe("Let Evie change /somewhere/else/x.txt, which is outside the project?")
+  expect(await readOnly.attempt(patch("src/x.txt"))).toStartWith("Not allowed: Evie is in read-only mode")
+  expect(await manual.attempt(patch("~/.ssh/authorized_keys"))).toStartWith("Blocked by the guard:")
+  // A patch in which no file can be found is not waved through.
+  expect(await readOnly.attempt({ name: "patch", input: { patchText: "nothing recognisable" } })).toStartWith("Not allowed")
+  expect([...manual.ran, ...readOnly.ran]).toEqual([])
+})
+
+test("an always answer never allows more than its words say", async () => {
+  const { attempt, asked } = await start()
+
+  // Setting a variable runs nothing, so it is not asked about and cannot become a rule for everything.
+  await attempt(shell("DIR=src\nls $DIR"))
+  expect(asked).toEqual([])
+
+  await attempt(shell("npm test 2>&1"), always)
+  expect(asked.at(-1)?.choices[1]).toBe('Always in this project: allow commands that start with "npm test"')
+
+  // A command not written plainly is remembered whole.
+  await attempt(shell("git -C sub push"), always)
+  expect(asked.at(-1)?.choices[1]).toBe('Always in this project: allow exactly the command "git -C sub push"')
+  await attempt(shell("git commit -m wip"), NO)
+  expect(asked).toHaveLength(3)
+
+  // "ls" is not "lsblk".
+  const ruled = await start({ rules: [{ action: "shell", match: "make *", effect: "allow" }] })
+  await ruled.attempt(shell("make"))
+  await ruled.attempt(shell("make build"))
+  await ruled.attempt(shell("makepkg"), NO)
+  expect(ruled.asked).toHaveLength(1)
+})
+
+test("a command that names a place outside the project is treated as reaching outside it", async () => {
+  const manual = await start()
+  const auto = await start({ mode: "auto" })
+  const readOnly = await start({ mode: "read-only" })
+
+  await manual.attempt(shell("cat /etc/passwd"), NO)
+  await manual.attempt(shell("cat ../../other/notes.md"), NO)
+  await auto.attempt(shell("rm -rf ~/Documents/work"), NO)
+  await auto.attempt(shell("mv notes.md $HOME/notes.md"), NO)
+  await auto.attempt(shell("cp --target-directory=/usr/local/bin tool"), NO)
+  expect(await readOnly.attempt(shell("cat ~/.config/gh/hosts.yml"))).toStartWith("Not allowed")
+  // Inside the project, an address, and the usual place to throw output away are all fine.
+  await auto.attempt(shell("rm -rf build/cache"))
+  await auto.attempt(shell("curl https://example.com/a/../b"))
+  await auto.attempt(shell("bun test 2> /dev/null"))
+
+  expect(manual.asked).toHaveLength(2)
+  expect(auto.asked).toHaveLength(3)
+  expect(auto.ran).toHaveLength(3)
+})
+
+test("a command that looks harmless but writes a file or runs a program is not treated as only looking", async () => {
+  const { attempt, ran } = await start({ mode: "read-only" })
+  const more = [
+    "sort -o out.txt in.txt",
+    "uniq in.txt out.txt",
+    "tree -o listing.txt",
+    "git diff --output=changes.txt",
+    "git log --output=log.txt",
+    "rg --pre ./script pattern",
+    "git remote -v add evil https://example.com/x.git",
+    "git remote set-url origin https://example.com/x.git",
+    "GIT_EXTERNAL_DIFF=./script git diff",
+    "date -s tomorrow",
+    "cat notes.md > copy.md",
+  ]
+  for (const command of more) expect(await attempt(shell(command))).toStartWith("Not allowed")
+
+  for (const command of ["git remote -v", "sort names.txt | uniq -c", "git diff --stat"]) await attempt(shell(command))
+  expect(ran).toHaveLength(3)
+})
+
+test("in auto mode a command that sends, publishes or deploys is asked about however it is introduced", async () => {
+  const { attempt, asked, ran } = await start({ mode: "auto" })
+  const outward = [
+    "git -C sub push",
+    "env X=1 git push",
+    "time git push",
+    "if true; then git push; fi",
+    "for r in a b; do git push $r; done",
+    "( ( git push ) )",
+    "npx vercel deploy",
+    "bunx wrangler deploy",
+    "curl --request POST https://example.com",
+    "curl -sd x https://example.com",
+    "curl --json '{}' https://example.com",
+    "wget --post-data=x https://example.com",
+    "nc example.com 80",
+  ]
+  for (const command of outward) await attempt(shell(command), NO)
+
+  expect(asked).toHaveLength(outward.length)
+  expect(ran).toEqual([])
+})
+
+test("an always answer for a file outside the project covers that folder and no deeper", async () => {
+  const { attempt, asked } = await start()
+
+  await attempt(edit("/somewhere/else/notes.txt"), always)
+  await attempt(edit("/somewhere/else/todo.txt"))
+  await attempt(edit("/somewhere/else/deeper/down/secret.txt"), NO)
+  // Searching a folder is an answer about everything under it.
+  await attempt({ name: "grep", input: { pattern: "x", path: "/another/place" } }, always)
+  await attempt(read("/another/place/deep/file.txt"))
+
+  expect(asked.map((question) => question.choices[1])).toEqual([
+    "Always in this project: allow changing files directly in /somewhere/else",
+    "Always in this project: allow changing files directly in /somewhere/else/deeper/down",
+    "Always in this project: allow reading anything under /another/place",
+  ])
+})
+
+test("a link inside the project that points outside it counts as outside", async () => {
+  const outside = await realpath(await mkdtemp(join(tmpdir(), "evie-outside-")))
+  cleanups.push(() => rm(outside, { recursive: true, force: true }))
+  const { attempt, asked, folder } = await start({ mode: "auto" })
+  await symlink(outside, join(folder, "linked"))
+
+  await attempt(edit("linked/file.txt"), NO)
+
+  expect(asked[0]?.text).toBe(`Let Evie change ${join(outside, "file.txt")}, which is outside the project?`)
+})
+
+test("a rule that denies is not got round by writing the same thing another way", async () => {
+  const { attempt, asked, ran } = await start({
+    mode: "auto",
+    rules: [
+      { action: "shell", match: "git push *", effect: "deny" },
+      { action: "read", match: ".env", effect: "deny" },
+      { action: "edit", match: "*.pem", effect: "deny" },
+    ],
+  })
+
+  for (const call of [
+    shell("git -C . push"),
+    shell("FOO=1 git push origin dev"),
+    shell("cat .env"),
+    shell("cat config/.env | head"),
+    read("config/deep/.env"),
+    read("/somewhere/else/.env"),
+    edit("keys/server.pem"),
+    shell("cp keys/server.pem /tmp/x"),
+  ]) {
+    expect(await attempt(call)).toStartWith("Not allowed: one of the owner's rules denies this.")
+  }
+  expect(asked).toEqual([])
+  expect(ran).toEqual([])
+})
+
+test("read-only mode asks nothing and lets no rule allow a change", async () => {
+  const { attempt, asked, ran } = await start({
+    mode: "read-only",
+    rules: [{ action: "deploy", effect: "allow" }, { action: "read", match: "docs/**", effect: "ask" }],
+    remembered: {},
+  })
+
+  expect(await attempt({ name: "deploy", input: {} })).toStartWith("Not allowed")
+  expect(await attempt(read("docs/guide.md"))).toStartWith("Not allowed")
+  expect(asked).toEqual([])
+  expect(ran).toEqual([])
+})
+
+test("a project that lists the permissions plugin itself still gets its own mode and rules", async () => {
+  const { attempt, asked, ran } = await withSettings(
+    { permissions: { mode: "manual" } },
+    { plugins: ["permissions"], permissions: { mode: "auto", rules: [{ action: "edit", match: "*.env", effect: "deny" }] } },
+  )
+
+  await attempt(edit("src/app.ts"))
+  expect(await attempt(edit("config/prod.env"))).toStartWith("Not allowed: one of the owner's rules denies this.")
+
+  expect(asked).toEqual([])
+  expect(ran).toEqual(["edit src/app.ts"])
 })

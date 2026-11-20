@@ -79,12 +79,20 @@ type SettingsFile = {
 
 // What a built-in plugin is made from: its options from the settings file,
 // and the things only Evie knows. The API key is never taken from options.
-type Context = { env: Settings; home: string; globalFile: string; permissions: NonNullable<SettingsFile["permissions"]> }
+// `ownPermissions` is the mode and rules of the project a plugin is being
+// loaded for, when its own settings file gives them.
+type Context = {
+  env: Settings
+  home: string
+  globalFile: string
+  permissions: NonNullable<SettingsFile["permissions"]>
+  ownPermissions?: { mode?: Mode; rules?: Rule[] }
+}
 const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Context) => Plugin> = {
   files: (options) => files(options as FilesOptions),
   shell: () => shell(),
   guard: (_options, context) => guard({ dataFolder: context.home }),
-  permissions: (_options, context) => permissionsFor(context, {}),
+  permissions: (_options, context) => permissionsFor(context, context.ownPermissions ?? {}),
   models: () => models(),
   ask: () => ask(),
   instructions: (_options, context) => instructions({ dataFolder: context.home }),
@@ -184,7 +192,7 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
       const added: Plugin[] = []
       const disable = [...(own.disable ?? [])]
       for (const entry of own.plugins ?? []) {
-        const plugin = await load(entry, project.folder, context)
+        const plugin = await load(entry, project.folder, { ...context, ...(own.permissions && { ownPermissions: own.permissions }) })
         // Listing a plugin that is already global replaces it for this
         // project, with the options given here.
         if (plugins.some((global) => global.name === plugin.name)) disable.push(plugin.name)
@@ -192,9 +200,9 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
       }
       // A project's own mode and rules: the permissions plugin is set up
       // again for this project with them added.
-      const replaced = [...disable]
-      if (own.permissions && plugins.some((global) => global.name === "permissions") && !replaced.includes("permissions")) {
-        disable.push("permissions")
+      // Unless the project lists the plugin itself, or switches it off.
+      if (own.permissions && !disable.includes("permissions")) {
+        if (plugins.some((global) => global.name === "permissions")) disable.push("permissions")
         added.push(permissionsFor(context, own.permissions))
       }
       const ownModel = fromEnv.model ? undefined : own.model

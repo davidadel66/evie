@@ -1,5 +1,6 @@
 import { homedir } from "node:os"
-import { isAbsolute, join, relative, resolve } from "node:path"
+import { realpathSync } from "node:fs"
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { dataFolder } from "../core/evie.ts"
 import type { CheckedToolCall, Plugin } from "../core/types.ts"
 
@@ -27,7 +28,7 @@ export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall,
     join(home, ".ssh"),
     join(home, ".aws"),
     join(home, ".gnupg"),
-  ].map((folder) => resolve(folder))
+  ].flatMap((folder) => [...new Set([resolve(folder), followLinks(resolve(folder))])])
 
   return (call, projectFolder) => {
     const folder = projectFolder ?? home
@@ -123,8 +124,9 @@ function fileReason(call: CheckedToolCall, privateFolders: string[], projectFold
   if (typeof call.input.path === "string") paths.push(call.input.path)
   // A patch names its files inside its text.
   if (typeof call.input.patchText === "string") {
-    for (const match of call.input.patchText.matchAll(/^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$/gm)) {
-      paths.push(match[1]!.trim())
+    // The patch tool reads each line with the space around it taken off.
+    for (const match of call.input.patchText.matchAll(/^[ \t]*\*\*\* (?:Add File|Update File|Delete File|Move to):[ \t]*(.+?)[ \t]*$/gm)) {
+      paths.push(match[1]!)
     }
   }
   const found = paths.find((path) => insidePrivate(path, privateFolders, projectFolder))
@@ -133,9 +135,23 @@ function fileReason(call: CheckedToolCall, privateFolders: string[], projectFold
 
 function insidePrivate(path: string, privateFolders: string[], projectFolder: string): boolean {
   const expanded = path.replace(/^~(?=\/|$)/, homedir())
-  const absolute = isAbsolute(expanded) ? resolve(expanded) : resolve(projectFolder, expanded)
-  return privateFolders.some((folder) => {
-    const inside = relative(folder, absolute)
-    return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
-  })
+  const written = isAbsolute(expanded) ? resolve(expanded) : resolve(projectFolder, expanded)
+  // Checked as written and as it really is, so a link into a private folder is caught.
+  return [written, followLinks(written)].some((absolute) =>
+    privateFolders.some((folder) => {
+      const inside = relative(folder, absolute)
+      return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
+    }),
+  )
+}
+
+// Where a path really is, with any link in it followed. A path that does
+// not exist yet is followed as far as it does exist.
+export function followLinks(absolute: string): string {
+  try {
+    return realpathSync(absolute)
+  } catch {
+    const parent = dirname(absolute)
+    return parent === absolute ? absolute : join(followLinks(parent), basename(absolute))
+  }
 }
