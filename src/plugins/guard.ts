@@ -50,7 +50,10 @@ export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall,
       const named = filesNamed(call)
       if (named.length > 0 && named.every((path) => isAbsolute(path) && isDefinition(data, path))) return undefined
     }
-    const reason = call.name === "shell" ? shellReason(call, privateFolders, folder) : fileReason(call, privateFolders, folder)
+    // A skill can hold scripts, so a command may name a file in the owner's
+    // skills, where something asks the owner before it runs.
+    const skills = options.definitionsCanBeWritten ? data : undefined
+    const reason = call.name === "shell" ? shellReason(call, privateFolders, folder, skills) : fileReason(call, privateFolders, folder)
     if (reason === undefined) return undefined
     return `Blocked by the guard: ${reason} The command was not run. If the owner wants this done, they can run it themselves.`
   }
@@ -93,7 +96,7 @@ const RULES: { matches: RegExp; reason: string }[] = [
   { matches: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/, reason: "this is a fork bomb, which freezes the machine." },
 ]
 
-function shellReason(call: CheckedToolCall, privateFolders: string[], projectFolder: string): string | undefined {
+function shellReason(call: CheckedToolCall, privateFolders: string[], projectFolder: string, skillsIn?: string): string | undefined {
   const command = typeof call.input.command === "string" ? call.input.command : ""
   const home = homedir()
 
@@ -102,8 +105,21 @@ function shellReason(call: CheckedToolCall, privateFolders: string[], projectFol
 
   // A private folder, written the ways a shell command would write it.
   const spelled = command.replaceAll("${HOME}", home).replaceAll("$HOME", home).replace(/(^|[\s"'=:(])~(?=\/|\s|$)/g, `$1${home}`)
+  // Words that name a file in the owner's skills are set aside before the
+  // private folders are looked for. Each must be a plain full path that
+  // really is inside the skills folder.
+  const checked =
+    skillsIn === undefined
+      ? spelled
+      : spelled
+          .split(/(\s+)/)
+          .map((word) => {
+            const path = word.replace(/^["']|["']$/g, "")
+            return /^\/[\w./@+-]+$/.test(path) && isSkill(skillsIn, path) ? "" : word
+          })
+          .join("")
   for (const folder of privateFolders) {
-    if (spelled.includes(folder)) return `${folder} is a private folder.`
+    if (checked.includes(folder)) return `${folder} is a private folder.`
   }
   if (typeof call.input.workdir === "string" && insidePrivate(call.input.workdir, privateFolders, projectFolder)) {
     return `${call.input.workdir} is a private folder.`
@@ -210,4 +226,11 @@ function isBrokenLink(absolute: string): boolean {
   } catch {
     return false
   }
+}
+
+// True for a path inside the owner's skills in the data folder.
+function isSkill(data: string, path: string): boolean {
+  if (isBrokenLink(resolve(path))) return false
+  const inside = relative(followLinks(resolve(data, "skills")), followLinks(resolve(path)))
+  return inside !== "" && !inside.startsWith("..") && !isAbsolute(inside)
 }

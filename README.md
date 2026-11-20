@@ -117,6 +117,7 @@ Type a message and press Enter.
 | `job_stop` | Stops something running in the background |
 | `subagent` | Hands a piece of work to a second agent, which reports back |
 | `subagent_send` | Sends a further message to a subagent |
+| `skill` | Loads one of your skills |
 | `web_search` | Searches the internet |
 | `web_fetch` | Reads a web page as text |
 | `ask` | Asks you a question with choices, and waits for your answer |
@@ -191,6 +192,44 @@ read-only limit that yours has.
 An agent can be used as soon as its file is saved. You can ask Evie to
 write one. For one in `~/.evie/agents/`, Evie asks you every time, in every
 mode, because it applies in every project from then on.
+
+## Skills
+
+A skill is your written instructions for one kind of task: how to cut a
+release, how you like a change reviewed. Evie reads each skill's
+one-line description, and loads the full instructions only when a task
+calls for them. So you can have many without paying for them all on every
+request.
+
+A skill is a folder holding a file named `SKILL.md`:
+
+```
+---
+name: release
+description: How to cut a release of this project.
+---
+1. Update the changelog.
+2. Run scripts/tag.sh.
+```
+
+The folder can hold other files the instructions refer to, such as a
+script or a template. Evie is told where they are when it loads the skill.
+
+Put the folder in **`~/.evie/skills/`** to have the skill in every project,
+or in **`.evie/skills/`** in a project's folder for that project. A
+project's skills are used only when you have trusted the project.
+
+There are three ways a skill is used:
+
+- **Evie picks it up** when a task matches its description.
+- **You ask for it in words:** "use the release skill".
+- **You type a slash and its name:** `/release fix the changelog first`.
+  This always loads it. A built-in command of the same name wins, so a
+  skill called `mode` is reached in words.
+
+`/skills` lists them. A skill can be used as soon as its file is saved. You
+can ask Evie to write one; for one in `~/.evie/skills/`, Evie asks you
+every time, as it does for an agent.
 
 ## Permissions
 
@@ -315,7 +354,7 @@ the per-model settings and the permissions.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the eleven built-in ones load:
+a list, the twelve built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
@@ -327,6 +366,7 @@ a list, the eleven built-in ones load:
 | `models` | What each model family is given, and the `/model` command |
 | `ask` | `ask`, the model's way to put a question to you |
 | `subagents` | `subagent` and `subagent_send` |
+| `skills` | `skill`, the list of your skills, and the `/skills` command |
 | `instructions` | The owner's and the project's instruction files |
 | `web` | `web_search` and `web_fetch` |
 | `openrouter` | The connection to models through OpenRouter |
@@ -342,6 +382,7 @@ a list, the eleven built-in ones load:
     "models",
     "ask",
     "subagents",
+    "skills",
     "instructions",
     "web",
     "openrouter",

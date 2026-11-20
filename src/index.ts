@@ -9,6 +9,7 @@ export { permissions, type Mode, type PermissionsOptions, type Rule } from "./pl
 export { jobs } from "./plugins/jobs.ts"
 export { models } from "./plugins/models/index.ts"
 export { subagents, type SubagentsOptions } from "./plugins/subagents.ts"
+export { skills, type SkillsOptions } from "./plugins/skills.ts"
 export { shell } from "./plugins/shell.ts"
 export { undo, type UndoOptions } from "./plugins/undo.ts"
 export { web, type WebOptions } from "./plugins/web.ts"

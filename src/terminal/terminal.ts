@@ -206,7 +206,9 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       const took = `${Math.max(0, Math.round(((job.ended ?? job.started) - job.started) / 1000))}s`
       line(job.status === "running" ? `[background] job ${job.id} started: ${job.title}` : `[background] job ${job.id} ${job.status} after ${took}: ${job.title}`)
     }
-    if (event.type === "user_message") unanswered -= 1
+    // A message can also come from a command, such as one that starts a
+    // skill, so the count never goes below nothing.
+    if (event.type === "user_message") unanswered = Math.max(0, unanswered - 1)
     if (event.type === "assistant_delta") write(event.text)
     // One line for each tool the model asks for, and one for what came
     // back. The tools run one at a time, so each call is shown just before it
