@@ -30,8 +30,17 @@ export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall,
     join(home, ".gnupg"),
   ].flatMap((folder) => [...new Set([resolve(folder), followLinks(resolve(folder))])])
 
+  // The one part of the data folder the tools may read: output that was too
+  // long to show, and the output of background jobs, which the model is told
+  // to read from there.
+  const savedOutput = followLinks(resolve(options.dataFolder ?? dataFolder({}), "tool-output"))
+
   return (call, projectFolder) => {
     const folder = projectFolder ?? home
+    if (["read", "grep", "glob"].includes(call.name) && typeof call.input.path === "string" && isAbsolute(call.input.path)) {
+      const inside = relative(savedOutput, followLinks(resolve(call.input.path)))
+      if (inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))) return undefined
+    }
     const reason = call.name === "shell" ? shellReason(call, privateFolders, folder) : fileReason(call, privateFolders, folder)
     if (reason === undefined) return undefined
     return `Blocked by the guard: ${reason} The command was not run. If the owner wants this done, they can run it themselves.`

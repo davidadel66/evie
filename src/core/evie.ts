@@ -3,6 +3,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
+import { createJobs } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { createProjects } from "./projects.ts"
@@ -116,6 +117,12 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
   const questions = createQuestions({ log, emit })
   let closed = false
+  // Job output goes beside the tool output that was too long to show.
+  const jobs = createJobs({
+    outputFolder: join(home, "tool-output"),
+    emit,
+    tell: (session, text, wake) => sessions.get(session)?.loop.tell(text, wake),
+  })
 
   // Each session open in this process: its turn loop, its project and that
   // project's plugin host. `canAnswer` says whether its client shows questions.
@@ -178,6 +185,11 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       atomically: (work) => db.transaction(work)(),
       emit,
       ask: (question, signal) => questions.ask(sessionId(), question, { canAnswer: opened.canAnswer, signal }),
+      jobs: {
+        start: (work) => jobs.start(sessionId(), work),
+        list: () => jobs.list(sessionId()),
+        stop: (id) => jobs.stop(sessionId(), id, "model"),
+      },
     })
     sessions.set(sessionId(), opened)
     // A message that was waiting when Evie last stopped is answered now.
@@ -259,6 +271,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         return loop.busy()
       },
       tell: (note) => loop.tell(note),
+      jobs: { list: () => jobs.list(input.session), stop: (id) => jobs.stop(input.session, id, "owner") },
     })
     return { text }
   }
@@ -297,6 +310,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       closed = true
       // A question still open is refused, which lets whatever asked it finish.
       questions.refuseAll()
+      await jobs.stopAll()
       await Promise.all([...sessions.values()].map(({ loop }) => loop.stop()))
       db.close()
     },

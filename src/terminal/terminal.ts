@@ -174,6 +174,13 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       asked = undefined
       line(event.body.choice === null ? "[not answered]" : `[answered] ${event.body.choice}`)
     }
+    // A turn can start without a message from the owner, when a background job ends.
+    if (event.type === "turn_start") idle = false
+    if (event.type === "job") {
+      const { job } = event
+      const took = `${Math.max(0, Math.round(((job.ended ?? job.started) - job.started) / 1000))}s`
+      line(job.status === "running" ? `[background] job ${job.id} started: ${job.title}` : `[background] job ${job.id} ${job.status} after ${took}: ${job.title}`)
+    }
     if (event.type === "user_message") unanswered -= 1
     if (event.type === "assistant_delta") write(event.text)
     // One line for each tool the model asks for, and one for what came

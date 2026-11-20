@@ -86,6 +86,12 @@ Type a message and press Enter.
   changed any. Run it again to go back a turn further. It covers what the
   `write`, `edit` and `patch` tools changed. It does not undo what a shell
   command changed, and it leaves alone any file you have changed since.
+- **A long command does not hold Evie up.** A command still running after
+  two minutes moves to the background and carries on, and Evie can start
+  one there on purpose, such as a server. When it ends, Evie is told and
+  picks the work up again by itself. `/jobs` lists what is running, and
+  `/jobs stop` with an id stops one. Ctrl-C leaves background commands
+  running; they stop when Evie quits.
 - **`/compact`** replaces the older part of a long conversation with a
   summary, to save room. Evie also does this by itself when a conversation
   gets long.
@@ -100,7 +106,8 @@ Type a message and press Enter.
 | `patch` | Changes several files from one block of text |
 | `grep` | Searches the contents of files |
 | `glob` | Finds files by name |
-| `shell` | Runs a command |
+| `shell` | Runs a command, in the background when it is a long one |
+| `job_stop` | Stops something running in the background |
 | `web_search` | Searches the internet |
 | `web_fetch` | Reads a web page as text |
 | `ask` | Asks you a question with choices, and waits for your answer |
@@ -250,12 +257,13 @@ the per-model settings and the permissions.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the nine built-in ones load:
+a list, the ten built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
 | `files` | `read`, `write`, `edit`, `patch`, `grep` and `glob` |
 | `shell` | `shell` |
+| `jobs` | `job_stop`, and the `/jobs` command |
 | `permissions` | The rules that allow, deny or ask before a tool runs, and the `/mode` command |
 | `undo` | The copies kept of files before they are changed, and the `/undo` command |
 | `models` | What each model family is given, and the `/model` command |
@@ -269,6 +277,7 @@ a list, the nine built-in ones load:
   "plugins": [
     "files",
     "shell",
+    "jobs",
     "permissions",
     "undo",
     "models",
@@ -356,7 +365,7 @@ Through the host a plugin can add to four lists:
 
 | List | What an entry is |
 |---|---|
-| `host.tools` | Something the model can call. Its `run` returns the text the model reads. A problem the model can fix is returned as that text; `run` throws only for a bug |
+| `host.tools` | Something the model can call. Its `run` returns the text the model reads. A problem the model can fix is returned as that text; `run` throws only for a bug. Work that should carry on after the call returns is handed over with `context.jobs.start`: Evie lists it, can stop it, and tells the model when it ends |
 | `host.providers` | A way to reach a model |
 | `host.profiles` | What one family of models is given: a system prompt and its tools for changing files |
 | `host.commands` | A command you type starting with a slash, such as `/model`. A command can tell the model something with `context.tell`, which adds a note to the conversation |

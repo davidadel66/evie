@@ -55,7 +55,10 @@ export type StoredEvent = {
 // the complete reply is stored as one `assistant_message`.
 export type DeltaEvent = { type: "assistant_delta"; session: string; text: string }
 
-export type EvieEvent = StoredEvent | DeltaEvent
+// A job started or ended. Sent to clients, never stored.
+export type JobEvent = { type: "job"; session: string; job: Job }
+
+export type EvieEvent = StoredEvent | DeltaEvent | JobEvent
 
 // ---- The request to a model ---------------------------------------------------
 
@@ -108,6 +111,35 @@ export type Provider = {
   contextLimit?(model: string): Promise<number | undefined>
 }
 
+// ---- Jobs ---------------------------------------------------------------------
+
+// Work that carries on after the tool call that started it has returned.
+// `id` counts up within a session. `outputFile` is where the work may write
+// what it prints; the model can read it there.
+export type Job = {
+  id: string
+  session: string
+  kind: string
+  title: string
+  status: "running" | "finished" | "failed" | "stopped"
+  started: number
+  ended?: number
+  outputFile: string
+}
+
+// What a tool hands over when it puts work in the background.
+export type JobWork = {
+  // What sort of work it is, such as "shell".
+  kind: string
+  // A few words to list it by, such as the command.
+  title: string
+  // Settles when the work ends, with what the model should be told about
+  // how it went. Rejecting means the work failed.
+  done: Promise<string>
+  // Stops the work. `done` must settle soon after.
+  stop(): void
+}
+
 // ---- Tools --------------------------------------------------------------------
 
 // What a tool is given when it runs.
@@ -119,6 +151,10 @@ export type ToolContext = {
   folder: string | null
   // Asks the owner a question and waits for the answer.
   ask: Ask
+  // The session's background jobs. `start` hands work over to carry on
+  // after this call returns: when it ends the model is told, and is woken
+  // to deal with the result if the session is idle.
+  jobs: { start(work: JobWork): Job; list(): Job[]; stop(id: string): Job | undefined }
 }
 
 // Every tool has this one shape, built in or added by someone else. `run`
@@ -171,6 +207,8 @@ export type SlashContext = {
   // model reads it with its next request. During a turn the note is added
   // at the next step, so it never lands between a tool call and its result.
   tell(text: string): void
+  // The session's background jobs, to list them and to stop one.
+  jobs: { list(): Job[]; stop(id: string): Job | undefined }
 }
 
 // A command the owner types in a client, starting with a slash. It runs at

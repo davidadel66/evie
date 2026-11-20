@@ -8,6 +8,7 @@ import { ask } from "./plugins/ask.ts"
 import { files, type FilesOptions } from "./plugins/files/index.ts"
 import { guard } from "./plugins/guard.ts"
 import { instructions } from "./plugins/instructions.ts"
+import { jobs } from "./plugins/jobs.ts"
 import { models } from "./plugins/models/index.ts"
 import { openrouter } from "./plugins/openrouter.ts"
 import { MODES, permissions, type Mode, type Rule } from "./plugins/permissions/index.ts"
@@ -92,6 +93,7 @@ type Context = {
 const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Context) => Plugin> = {
   files: (options) => files(options as FilesOptions),
   shell: () => shell(),
+  jobs: () => jobs(),
   guard: (_options, context) => guard({ dataFolder: context.home }),
   permissions: (_options, context) => permissionsFor(context, context.ownPermissions ?? {}),
   undo: (_options, context) => undo({ dataFolder: context.home }),
@@ -102,7 +104,7 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
 // `undo` comes after `permissions`, so a call that is refused is not recorded.
-const DEFAULT: Entry[] = ["files", "shell", "permissions", "undo", "models", "ask", "instructions", "web", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "instructions", "web", "openrouter"]
 
 // The permissions plugin as the settings describe it. A project's own mode
 // wins over the global one, and its rules come after the global ones.

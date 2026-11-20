@@ -16,7 +16,7 @@ import {
 import { buildRequest } from "./request-builder.ts"
 import { CancelledBeforeStart, runToolCall } from "./tools.ts"
 import type { HookRunner } from "./host.ts"
-import type { EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, Usage } from "./types.ts"
+import type { EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, ToolContext, Usage } from "./types.ts"
 
 export type LoopOptions = {
   session: string
@@ -42,6 +42,8 @@ export type LoopOptions = {
   // Asks the owner a question in this session and waits. The wait ends with
   // a refusal when the signal fires.
   ask(question: Question, signal: AbortSignal): Promise<string | null>
+  // The session's background jobs, as tools are given them.
+  jobs: ToolContext["jobs"]
 }
 
 export type Loop = {
@@ -57,8 +59,9 @@ export type Loop = {
   // Whether a turn, or a compaction, is in progress.
   busy(): boolean
   // Adds a note for the model to the conversation: now when the session is
-  // idle, or at the turn's next step when it is not.
-  tell(text: string): void
+  // idle, or at the turn's next step when it is not. With `wake`, an idle
+  // session starts a turn so the model deals with the note.
+  tell(text: string, wake?: boolean): void
   // Stops taking new turns, cancels the running one and waits for it to end.
   stop(): Promise<void>
 }
@@ -91,12 +94,18 @@ export function createLoop(options: LoopOptions): Loop {
   // after that, so the loop takes no more turns.
   let broken: Error | undefined
 
-  // Notes for the model that arrived during a turn. They are written at the
-  // next step, where they cannot come between a tool call and its result.
-  const waitingNotes: string[] = []
-  const writeNotes = () => {
-    for (const text of waitingNotes.splice(0)) emit(log.append(session, "note", { text }))
+  // Notes for the model that have not been written yet. One that arrives
+  // during a turn is written at the next step, where it cannot come between
+  // a tool call and its result. One that is to wake the model is written at
+  // the start of the turn it causes.
+  const waitingNotes: { text: string; wake: boolean }[] = []
+  const writeNotes = (which: "all" | "quiet") => {
+    const writing = waitingNotes.filter((note) => which === "all" || !note.wake)
+    for (const note of writing) waitingNotes.splice(waitingNotes.indexOf(note), 1)
+    for (const { text } of writing) emit(log.append(session, "note", { text }))
   }
+  // There is work for a turn: a message from the owner, or a note the model is to be woken for.
+  const turnWanted = () => inbox.waiting(session) || waitingNotes.some((note) => note.wake)
 
   // ---- Compaction ---------------------------------------------------------------
 
@@ -178,7 +187,7 @@ export function createLoop(options: LoopOptions): Loop {
 
   async function run() {
     try {
-      while (!stopped && inbox.waiting(session)) await turn()
+      while (!stopped && turnWanted()) await turn()
     } catch (cause) {
       // Only a failure to write the log escapes a turn.
       broken = cause instanceof Error ? cause : new Error(String(cause))
@@ -220,7 +229,7 @@ export function createLoop(options: LoopOptions): Loop {
         // A model cannot take in anything new while it is writing, so a
         // message that arrives during a reply stops that reply (see wake)
         // and the loop comes back here.
-        writeNotes()
+        writeNotes("all")
         if (step > 1) {
           const steered = atomically(() =>
             inbox.take(session).map((message) => log.append(session, "user_message", { text: message.text })),
@@ -336,7 +345,7 @@ export function createLoop(options: LoopOptions): Loop {
           try {
             result = await runToolCall(call, {
               tools: offered,
-              context: { signal, folder, ask },
+              context: { signal, folder, ask, jobs: options.jobs },
               before: (checked) => hooks.beforeTool(checked, context()),
               after: (checked, output) => hooks.afterTool(checked, output, context()),
               outputFolder: join(outputFolder, session),
@@ -370,7 +379,8 @@ export function createLoop(options: LoopOptions): Loop {
     } finally {
       // A turn always ends in the log, whatever happened inside it.
       cancel = undefined
-      writeNotes()
+      // A note that is to wake the model is left for the turn that follows.
+      writeNotes("quiet")
       emit(log.append(session, "turn_end", error === undefined ? { reason } : { reason, error }))
     }
   }
@@ -410,16 +420,18 @@ export function createLoop(options: LoopOptions): Loop {
       } finally {
         cancel = undefined
         active = false
-        writeNotes()
-        if (!stopped && inbox.waiting(session)) this.wake()
+        writeNotes("quiet")
+        if (!stopped && turnWanted()) this.wake()
       }
     },
     busy() {
       return active
     },
-    tell(text) {
-      waitingNotes.push(text)
-      if (!active) writeNotes()
+    tell(text, wake = false) {
+      waitingNotes.push({ text, wake })
+      if (active) return
+      if (wake && !stopped) this.wake()
+      else writeNotes("quiet")
     },
     async stop() {
       stopped = true
