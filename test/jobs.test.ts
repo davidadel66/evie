@@ -427,8 +427,8 @@ test("a reply in which the model writes one of Evie's own notes is cut off there
   const said = stored(run.events).flatMap((event) => (event.type === "assistant_message" ? [event.body] : []))
   expect(said.at(-1)).toEqual({ text: "Searching now." })
   expect(ran).toEqual([])
-  // The request names the openings of Evie's own notes as text to stop at.
-  expect(model.requests[0]?.stop).toEqual(["[Note from Evie:", "[This reply was cut short"])
+  // The request names the opening of Evie's own notes as text to stop at.
+  expect(model.requests[0]?.stop).toEqual(["[Note from Evie:"])
 
   // The real result still arrives, and is what the model answers from.
   background.work[0]!.finish("It is in src/real.ts.")

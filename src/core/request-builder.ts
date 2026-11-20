@@ -12,15 +12,17 @@ import type { Message, Request, StoredEvent, Tool } from "./types.ts"
 //
 // Once a conversation has been compacted, the request is the latest summary
 // followed by the events after it. The older events are still in the log.
-// How a note from Evie opens, and how the note on a cut-short reply does.
-// Only the core writes these. A model that has put work in the background
-// is inclined to write the note it is waiting for, and then to make up the
-// result. So a reply is ended the moment the model starts to write either:
-// the request names them as text to stop at, and the loop cuts off anything
-// that got through.
+// How a note from Evie opens. Only the core writes one. A model that has
+// put work in the background is inclined to write the note it is waiting
+// for, and then to make up the result. So a reply is ended the moment the
+// model starts to write one: the request names the opening as text to stop
+// at, and the loop cuts off anything that got through.
+//
+// The note on a cut-short reply is not stopped at. A model has no reason to
+// forge one, and stopping there cut a reply off when the model was only
+// explaining how cut-short replies work.
 export const NOTE_OPENING = "[Note from Evie:"
-const CUT_SHORT_OPENING = "[This reply was cut short"
-export const ONLY_THE_CORE_WRITES = [NOTE_OPENING, CUT_SHORT_OPENING]
+export const ONLY_THE_CORE_WRITES = [NOTE_OPENING]
 
 export function buildRequest(
   model: string,
