@@ -143,6 +143,18 @@ A project's instruction file is read whether or not you have trusted the
 project, so look at it before running Evie in a repository you did not
 write.
 
+**Giving Evie a character.** The built-in prompt says how to work and how to
+communicate, and is neutral about personality on purpose. `~/.evie/AGENTS.md`
+is where you say who Evie is to you: its manner, how much it should push
+back, when it should stop and show you options, how you like to be taught.
+The built-in prompt is in `src/plugins/models/prompts.ts`, if you want to
+see what yours is added to.
+
+Evie is told, at the top of its prompt, which model it is running on and
+when the session started. Those facts are fixed for the session, so a
+session left open for days still says when it began; Evie is told to check
+the clock when the present time matters.
+
 ## Permissions
 
 Before a tool runs, Evie decides whether it is allowed, denied, or needs
