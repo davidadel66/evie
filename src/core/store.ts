@@ -40,6 +40,12 @@ export const MIGRATIONS: Migration[] = [
   (db) => {
     db.run("ALTER TABLE session ADD COLUMN parent TEXT")
   },
+  // 3: a subagent can be one of the owner's named agents, and can be held to
+  // reading only.
+  (db) => {
+    db.run("ALTER TABLE session ADD COLUMN agent TEXT")
+    db.run("ALTER TABLE session ADD COLUMN read_only INTEGER")
+  },
 ]
 
 // Opens Evie's one database file and brings its tables up to date.

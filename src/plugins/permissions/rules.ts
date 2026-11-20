@@ -52,7 +52,7 @@ const READ_TOOLS = ["read", "grep", "glob"]
 const EDIT_TOOLS = ["write", "edit", "patch"]
 const WEB_TOOLS = ["web_search", "web_fetch"]
 // The actions the plugin understands. Anything else is a tool it knows nothing about.
-const KNOWN = ["read", "edit", "shell", "web", "ask", "job_stop", "subagent", "subagent_send"]
+const KNOWN = ["read", "edit", "shell", "web", "ask", "job_stop", "subagent", "subagent_send", "skill"]
 
 const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir()).replace(/^(\$HOME\b|\$\{HOME\})/, homedir())
 
@@ -154,7 +154,8 @@ function matches(rule: Rule, act: Act, folder: string | null): boolean {
 // What happens to an act that no rule covers.
 function byMode(act: Act, mode: Mode): Effect {
   // Using the web, asking the owner and stopping a job change nothing of the owner's.
-  if (["web", "ask", "job_stop"].includes(act.action)) return "allow"
+  // Loading a skill only puts its instructions in front of the model.
+  if (["web", "ask", "job_stop", "skill"].includes(act.action)) return "allow"
   // A subagent works without asking before each step, so in manual mode
   // starting one is asked about: that answer is the owner's say-so for its
   // work. In read-only mode a subagent is read-only too, so starting one
@@ -241,7 +242,7 @@ export function questionFor(call: CheckedToolCall, asking: readonly Act[], folde
   if (call.name === "subagent") {
     const task = String(call.input.task ?? "").trim()
     return (
-      `Let Evie start a subagent (${String(call.input.description ?? "a task")})? It works without asking before each ` +
+      `Let Evie start a subagent (${String(call.input.description ?? "a task")}${typeof call.input.agent === "string" && call.input.agent.trim() !== "" ? `, as the agent "${call.input.agent.trim()}"` : ""})? It works without asking before each ` +
       `step: it may change files and run commands inside the project.\n\n  ${task.length > 400 ? `${task.slice(0, 400)}…` : task}`
     )
   }

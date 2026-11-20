@@ -13,6 +13,7 @@ import { models } from "./plugins/models/index.ts"
 import { openrouter } from "./plugins/openrouter.ts"
 import { MODES, permissions, type Mode, type Rule } from "./plugins/permissions/index.ts"
 import { shell } from "./plugins/shell.ts"
+import { skills } from "./plugins/skills.ts"
 import { subagents } from "./plugins/subagents.ts"
 import { undo } from "./plugins/undo.ts"
 import { web } from "./plugins/web.ts"
@@ -90,6 +91,8 @@ type Context = {
   globalFile: string
   permissions: NonNullable<SettingsFile["permissions"]>
   ownPermissions?: { mode?: Mode; rules?: Rule[] }
+  // Whether the owner has trusted a project, by its folder.
+  trusted(folder: string): boolean
 }
 const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Context) => Plugin> = {
   files: (options) => files(options as FilesOptions),
@@ -100,13 +103,14 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   undo: (_options, context) => undo({ dataFolder: context.home }),
   models: () => models(),
   ask: () => ask(),
-  subagents: () => subagents(),
+  subagents: (_options, context) => subagents({ dataFolder: context.home, trusted: context.trusted }),
+  skills: (_options, context) => skills({ dataFolder: context.home, trusted: context.trusted }),
   instructions: (_options, context) => instructions({ dataFolder: context.home }),
   web: (_options, context) => web({ env: context.env }),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
 // `undo` comes after `permissions`, so a call that is refused is not recorded.
-const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "instructions", "web", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "openrouter"]
 
 // The permissions plugin as the settings describe it. A project's own mode
 // wins over the global one, and its rules come after the global ones.
@@ -131,13 +135,14 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
   const home = dataFolder(options.env)
   const globalFile = join(home, "evie.json")
   const global = (await readSettingsFile(globalFile)) ?? {}
-  const context: Context = { env: options.env, home, globalFile, permissions: global.permissions ?? {} }
-
-  const plugins: Plugin[] = []
-  for (const entry of global.plugins ?? DEFAULT) plugins.push(await load(entry, home, context))
   const folders = (list: string[] | undefined) => new Set((list ?? []).map((folder) => resolve(expandHome(folder))))
   const trusted = folders(global.trust)
   const untrusted = folders(global.untrusted)
+  // Asked each time it matters, since a project can be trusted while Evie runs.
+  const context: Context = { env: options.env, home, globalFile, permissions: global.permissions ?? {}, trusted: (folder) => trusted.has(folder) }
+
+  const plugins: Plugin[] = []
+  for (const entry of global.plugins ?? DEFAULT) plugins.push(await load(entry, home, context))
 
   // The environment wins over both files.
   const fromEnv = {

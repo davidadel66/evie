@@ -117,6 +117,7 @@ Type a message and press Enter.
 | `job_stop` | Stops something running in the background |
 | `subagent` | Hands a piece of work to a second agent, which reports back |
 | `subagent_send` | Sends a further message to a subagent |
+| `skill` | Loads one of your skills |
 | `web_search` | Searches the internet |
 | `web_fetch` | Reads a web page as text |
 | `ask` | Asks you a question with choices, and waits for your answer |
@@ -154,6 +155,81 @@ Evie is told, at the top of its prompt, which model it is running on and
 when the session started. Those facts are fixed for the session, so a
 session left open for days still says when it began; Evie is told to check
 the clock when the present time matters.
+
+## Agents
+
+An agent is a role you define, with its own instructions. Evie can start a
+subagent as one: a reviewer that only reads, a planner, a tester.
+
+An agent is a Markdown file. A short header says what it is, and the rest
+is its instructions:
+
+```
+---
+name: reviewer
+description: Reviews a change for bugs. Give it the diff.
+mode: read-only
+model: some/model
+---
+You review code changes. Read the diff and the files it touches.
+Report bugs, most serious first, each with the file and line.
+```
+
+- `description` is what Evie reads to decide when to use the agent.
+- `mode: read-only` holds the agent to reading. Leave it out, or write
+  `mode: auto`, and the agent works as any subagent does. Any other value,
+  a misspelling included, is taken as read-only, so a slip never gives an
+  agent more than you meant.
+- `model` is optional. Without it the agent uses the model you are using.
+- `name` is optional too: without it the file's name is used.
+
+Put the file in **`~/.evie/agents/`** to have the agent in every project,
+or in **`.evie/agents/`** in a project's folder for that project. A
+project's agents are used only when you have trusted the project, and one
+with the same name as yours replaces yours there. It cannot lift a
+read-only limit that yours has.
+
+An agent can be used as soon as its file is saved. You can ask Evie to
+write one. For one in `~/.evie/agents/`, Evie asks you every time, in every
+mode, because it applies in every project from then on.
+
+## Skills
+
+A skill is your written instructions for one kind of task: how to cut a
+release, how you like a change reviewed. Evie reads each skill's
+one-line description, and loads the full instructions only when a task
+calls for them. So you can have many without paying for them all on every
+request.
+
+A skill is a folder holding a file named `SKILL.md`:
+
+```
+---
+name: release
+description: How to cut a release of this project.
+---
+1. Update the changelog.
+2. Run scripts/tag.sh.
+```
+
+The folder can hold other files the instructions refer to, such as a
+script or a template. Evie is told where they are when it loads the skill.
+
+Put the folder in **`~/.evie/skills/`** to have the skill in every project,
+or in **`.evie/skills/`** in a project's folder for that project. A
+project's skills are used only when you have trusted the project.
+
+There are three ways a skill is used:
+
+- **Evie picks it up** when a task matches its description.
+- **You ask for it in words:** "use the release skill".
+- **You type a slash and its name:** `/release fix the changelog first`.
+  This always loads it. A built-in command of the same name wins, so a
+  skill called `mode` is reached in words.
+
+`/skills` lists them. A skill can be used as soon as its file is saved. You
+can ask Evie to write one; for one in `~/.evie/skills/`, Evie asks you
+every time, as it does for an agent.
 
 ## Permissions
 
@@ -278,7 +354,7 @@ the per-model settings and the permissions.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the eleven built-in ones load:
+a list, the twelve built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
@@ -290,6 +366,7 @@ a list, the eleven built-in ones load:
 | `models` | What each model family is given, and the `/model` command |
 | `ask` | `ask`, the model's way to put a question to you |
 | `subagents` | `subagent` and `subagent_send` |
+| `skills` | `skill`, the list of your skills, and the `/skills` command |
 | `instructions` | The owner's and the project's instruction files |
 | `web` | `web_search` and `web_fetch` |
 | `openrouter` | The connection to models through OpenRouter |
@@ -305,6 +382,7 @@ a list, the eleven built-in ones load:
     "models",
     "ask",
     "subagents",
+    "skills",
     "instructions",
     "web",
     "openrouter",

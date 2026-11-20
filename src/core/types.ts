@@ -149,7 +149,9 @@ export type Children = {
   // Starts a subagent and sends it its first message. `model` is the model
   // it uses; without one it uses the model this session is using. Fails in
   // a session that is itself a subagent: subagents do not start subagents.
-  start(input: { text: string; model?: string }): Promise<string>
+  // With `agent`, it is one of the owner's named agents, which hooks are
+  // told. With `readOnly`, it is held to reading for as long as it lives.
+  start(input: { text: string; model?: string; agent?: string; readOnly?: boolean }): Promise<string>
   // Sends a further message to one of this session's subagents. It keeps
   // its conversation, whether it is still working or has finished.
   send(child: string, text: string): Promise<void>
@@ -244,6 +246,12 @@ export type SlashContext = {
   // `background` asks whatever the turn is waiting on to move to the
   // background, and returns how many things were asked.
   jobs: { list(): Job[]; stop(id: string): Job | undefined; background(): number }
+  // The name the owner typed, which differs from the command's own when the
+  // command covers it.
+  invokedAs: string
+  // Sends a message to the session as if the owner had typed it, which
+  // starts a turn.
+  send(text: string): void
 }
 
 // A command the owner types in a client, starting with a slash. It runs at
@@ -252,6 +260,11 @@ export type SlashCommand = {
   name: string
   description: string
   run(args: string, context: SlashContext): string | Promise<string>
+  // Other names this command answers to, asked about when the owner types a
+  // name that is no command's own. It lets a plugin offer names that are
+  // not known until then, such as one for each of the owner's skills. A
+  // command's own name always wins over a name another command covers.
+  covers?(name: string): boolean | Promise<boolean>
 }
 
 // ---- Hooks --------------------------------------------------------------------
@@ -269,6 +282,10 @@ export type HookContext = {
   ask: Ask
   // The session that started this one as a subagent, when one did.
   parent?: string
+  // For a subagent: the named agent it was started as, when it was one,
+  // and whether it is held to reading only.
+  agent?: string
+  readOnly?: true
 }
 
 // A tool call after its input has been checked and repaired.
