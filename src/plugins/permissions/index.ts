@@ -36,7 +36,8 @@ const ONCE = "Yes, once"
 const NO = "No"
 
 export function permissions(options: PermissionsOptions = {}): Plugin {
-  const blockedByGuard = createGuard(options.dataFolder === undefined ? {} : { dataFolder: options.dataFolder })
+  // This plugin asks before each write to the owner's agents and skills, so the guard may let them through.
+  const blockedByGuard = createGuard({ ...(options.dataFolder !== undefined && { dataFolder: options.dataFolder }), definitionsCanBeWritten: true })
   const startsIn = options.mode ?? "manual"
   const data = options.dataFolder ?? dataFolder({})
 

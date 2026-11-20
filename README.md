@@ -175,15 +175,18 @@ Report bugs, most serious first, each with the file and line.
 ```
 
 - `description` is what Evie reads to decide when to use the agent.
-- `mode: read-only` holds the agent to reading. Leave it out and the agent
-  works as any subagent does.
+- `mode: read-only` holds the agent to reading. Leave it out, or write
+  `mode: auto`, and the agent works as any subagent does. Any other value,
+  a misspelling included, is taken as read-only, so a slip never gives an
+  agent more than you meant.
 - `model` is optional. Without it the agent uses the model you are using.
 - `name` is optional too: without it the file's name is used.
 
 Put the file in **`~/.evie/agents/`** to have the agent in every project,
 or in **`.evie/agents/`** in a project's folder for that project. A
 project's agents are used only when you have trusted the project, and one
-with the same name as yours replaces yours there.
+with the same name as yours replaces yours there. It cannot lift a
+read-only limit that yours has.
 
 An agent can be used as soon as its file is saved. You can ask Evie to
 write one. For one in `~/.evie/agents/`, Evie asks you every time, in every

@@ -1,5 +1,5 @@
 import { homedir } from "node:os"
-import { realpathSync } from "node:fs"
+import { existsSync, lstatSync, realpathSync } from "node:fs"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { dataFolder } from "../core/evie.ts"
 import type { CheckedToolCall, Plugin } from "../core/types.ts"
@@ -17,6 +17,11 @@ import type { CheckedToolCall, Plugin } from "../core/types.ts"
 export type GuardOptions = {
   // The folder Evie keeps its state and keys in. Defaults to the usual place.
   dataFolder?: string
+  // Let the file tools write the owner's agents and skills in the data
+  // folder, as well as read them. Only for a caller that asks the owner
+  // before each such write, as the permissions plugin does. By itself the
+  // guard lets them be read and nothing more.
+  definitionsCanBeWritten?: boolean
 }
 
 // Makes the check: given a tool call and the project's folder, it returns
@@ -39,9 +44,9 @@ export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall,
     if (session !== undefined && ["read", "grep", "glob"].includes(call.name) && typeof call.input.path === "string" && isAbsolute(call.input.path)) {
       if (isSavedOutput(data, session, call.input.path)) return undefined
     }
-    // The owner's agents and skills are theirs to have Evie read and write
-    // with the file tools. The permissions plugin asks before each write.
-    if (FILE_TOOLS.includes(call.name)) {
+    // The owner's agents and skills are theirs to have Evie read with the
+    // file tools, and to write when something asks them first.
+    if (READ_TOOLS.includes(call.name) || (options.definitionsCanBeWritten && FILE_TOOLS.includes(call.name))) {
       const named = filesNamed(call)
       if (named.length > 0 && named.every((path) => isAbsolute(path) && isDefinition(data, path))) return undefined
     }
@@ -132,7 +137,8 @@ function deletesBroadly(command: string, home: string): boolean {
 
 // ---- The file tools -------------------------------------------------------------------
 
-const FILE_TOOLS = ["read", "grep", "glob", "write", "edit", "patch"]
+const READ_TOOLS = ["read", "grep", "glob"]
+const FILE_TOOLS = [...READ_TOOLS, "write", "edit", "patch"]
 
 // The files a call to one of the file tools names.
 function filesNamed(call: CheckedToolCall): string[] {
@@ -189,9 +195,19 @@ export function isSavedOutput(data: string, session: string, path: string): bool
 // True for a path inside the owner's agents or skills in the data folder.
 // Links are followed, so nothing else in the data folder is reached through them.
 export function isDefinition(data: string, path: string): boolean {
+  // A link that points at nothing would be written through to wherever it points.
+  if (isBrokenLink(resolve(path))) return false
   const real = followLinks(resolve(path))
   return ["agents", "skills"].some((kind) => {
     const inside = relative(followLinks(resolve(data, kind)), real)
     return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
   })
+}
+
+function isBrokenLink(absolute: string): boolean {
+  try {
+    return lstatSync(absolute).isSymbolicLink() && !existsSync(absolute)
+  } catch {
+    return false
+  }
 }

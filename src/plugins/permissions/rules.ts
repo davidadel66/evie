@@ -241,7 +241,7 @@ export function questionFor(call: CheckedToolCall, asking: readonly Act[], folde
   if (call.name === "subagent") {
     const task = String(call.input.task ?? "").trim()
     return (
-      `Let Evie start a subagent (${String(call.input.description ?? "a task")})? It works without asking before each ` +
+      `Let Evie start a subagent (${String(call.input.description ?? "a task")}${typeof call.input.agent === "string" && call.input.agent.trim() !== "" ? `, as the agent "${call.input.agent.trim()}"` : ""})? It works without asking before each ` +
       `step: it may change files and run commands inside the project.\n\n  ${task.length > 400 ? `${task.slice(0, 400)}…` : task}`
     )
   }

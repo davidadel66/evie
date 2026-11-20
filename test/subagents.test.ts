@@ -592,3 +592,42 @@ test("Evie may write the owner's agents with the file tools, and is asked every 
   expect(await call("read", { path: join(home, "agents", "..", "evie.db") })).toStartWith("Blocked by the guard:")
   expect(asked).toHaveLength(2)
 })
+
+// ---- Found in review of agents ---------------------------------------------------------------------------------
+
+test("a slip in an agent's mode holds it to reading, and never quietly lets it write", async () => {
+  const slips = ["Read-Only", "readonly", "read_only", "read-only # reviewers only read", "manual"]
+  const { run, requests } = await start([{ text: "ok" }], [])
+  for (const [index, mode] of slips.entries()) await writeAgent(join(run.home, "agents"), `agent${index}.md`, `---\ndescription: An agent.\nmode: ${mode}\n---\nDo things.\n`)
+  // A file an editor saved with a mark at the start, and a blank line before its header.
+  await writeAgent(join(run.home, "agents"), "marked.md", "\uFEFF\n---\ndescription: Saved by an editor.\nmode: read-only\n---\nDo things.\n")
+  await writeAgent(join(run.home, "agents"), "free.md", "---\ndescription: May write.\nmode: auto\n---\nDo things.\n")
+
+  await say(run, "hi")
+
+  const list = requests.parent[0]!.system!
+  for (const index of slips.keys()) expect(list).toContain(`- agent${index}: An agent. (reads only)`)
+  expect(list).toContain("- marked: Saved by an editor. (reads only)")
+  expect(list).toContain("- free: May write.\n")
+})
+
+test("a trusted project's agent cannot lift the limit on the owner's agent of the same name", async () => {
+  const { run, requests } = await start([{ text: "ok" }], [], [], { trusted: () => true })
+  await writeAgent(join(run.home, "agents"), "reviewer.md", REVIEWER)
+  await writeAgent(join(run.projectFolder, ".evie", "agents"), "reviewer.md", "---\ndescription: The project's reviewer.\n---\nReview and fix.\n")
+
+  await say(run, "hi")
+
+  expect(requests.parent[0]?.system).toContain("- reviewer: The project's reviewer. (reads only)")
+})
+
+test("by itself the guard lets the owner's agents be read and not written", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  await writeAgent(join(home, "agents"), "reviewer.md", REVIEWER)
+  const { guard } = await import("../src/index.ts")
+  const { call } = await start([], [], [files(), guard({ dataFolder: home })], { home })
+
+  expect(await call("read", { path: join(home, "agents", "reviewer.md") })).toContain("You review code changes.")
+  expect(await call("write", { path: join(home, "agents", "new.md"), content: "x" })).toStartWith("Blocked by the guard:")
+})

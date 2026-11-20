@@ -1,7 +1,7 @@
 import { join } from "node:path"
 import { dataFolder } from "../core/evie.ts"
 import type { Plugin, ToolContext } from "../core/types.ts"
-import { entriesOf, foldersFor, splitHeader, textOf, tidyName } from "./definitions.ts"
+import { entriesOf, foldersFor, readsOnly, splitHeader, textOf, tidyName } from "./definitions.ts"
 
 // The built-in subagents plugin. It lets the model hand a piece of work to
 // a subagent: a second conversation that starts empty, works with the same
@@ -16,7 +16,8 @@ import { entriesOf, foldersFor, splitHeader, textOf, tidyName } from "./definiti
 //
 // A subagent can be started as one of the owner's agents. An agent is a
 // Markdown file: a header with a name, a description, and optionally a model
-// and `mode: read-only`, and a body that is the agent's instructions. Agents
+// and `mode: read-only`, and a body that is the agent's instructions. Any
+// mode other than "auto" holds the agent to reading, a misspelling included. Agents
 // are read from `agents` in the data folder, for every project, and from
 // `.evie/agents` in a project the owner has trusted. They are read each
 // time they are needed, so one written a moment ago can be used at once.
@@ -69,7 +70,9 @@ export function subagents(options: SubagentsOptions = {}): Plugin {
               description: header.description ?? "",
               prompt: body,
               ...(header.model !== undefined && { model: header.model }),
-              readOnly: header.mode === "read-only",
+              // A project's agent can narrow what the owner's of the same
+              // name may do, and never widens it.
+              readOnly: readsOnly(header.mode) || (found.get(name)?.readOnly ?? false),
               file,
             })
           }

@@ -10,7 +10,10 @@ import { join } from "node:path"
 // A file split into its header and its body. The header is the lines
 // between two lines of `---` at the top, each `name: value`. A file with no
 // header is all body.
-export function splitHeader(text: string): { header: Record<string, string>; body: string } {
+export function splitHeader(given: string): { header: Record<string, string>; body: string } {
+  // A mark some editors put at the start of a file, and blank lines before
+  // the header, are not part of it.
+  const text = given.replace(/^\uFEFF/, "").replace(/^(?:[ \t]*\r?\n)+/, "")
   const found = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text)
   if (!found) return { header: {}, body: text.trim() }
   const header: Record<string, string> = {}
@@ -34,3 +37,12 @@ export const tidyName = (name: string) => name.trim().toLowerCase().replace(/[^a
 
 export const entriesOf = (folder: string) => readdir(folder, { withFileTypes: true }).catch(() => [])
 export const textOf = (file: string) => readFile(file, "utf8").catch(() => undefined)
+
+// Whether a definition's `mode` holds it to reading only. Only "auto", or
+// no mode at all, leaves it free to change things. Anything else, a
+// misspelling included, holds it to reading: a slip in the file must not
+// quietly give an agent more than its owner meant.
+export function readsOnly(mode: string | undefined): boolean {
+  if (mode === undefined) return false
+  return mode.replace(/\s+#.*$/, "").trim().toLowerCase() !== "auto"
+}
