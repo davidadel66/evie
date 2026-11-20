@@ -28,6 +28,10 @@ export type TerminalOptions = {
   // It is used to tell a line that was being typed before a question
   // appeared from an answer to it.
   typing?: () => string
+  // When the input ends, wait for background jobs to end, and for Evie to
+  // deal with their results, before leaving. For input that is not typed
+  // by a person, where leaving would stop the jobs. Ctrl-C ends the wait.
+  waitForJobs?: boolean
 }
 
 const PROMPT = "\n› "
@@ -123,6 +127,9 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   }
   // True from a Ctrl-C until the turn it cancelled has ended.
   let cancelling = false
+  // The background jobs still running, and whether the owner has said to stop waiting for them.
+  const runningJobs = new Set<string>()
+  let gaveUpWaiting = false
   // True while a command such as /compact is running.
   let commanding = false
 
@@ -174,6 +181,16 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       asked = undefined
       line(event.body.choice === null ? "[not answered]" : `[answered] ${event.body.choice}`)
     }
+    // A turn can start without a message from the owner, when a background job ends.
+    if (event.type === "turn_start") idle = false
+    if (event.type === "job") {
+      const { job } = event
+      if (job.status === "running") runningJobs.add(job.id)
+      else runningJobs.delete(job.id)
+      whenIdle()
+      const took = `${Math.max(0, Math.round(((job.ended ?? job.started) - job.started) / 1000))}s`
+      line(job.status === "running" ? `[background] job ${job.id} started: ${job.title}` : `[background] job ${job.id} ${job.status} after ${took}: ${job.title}`)
+    }
     if (event.type === "user_message") unanswered -= 1
     if (event.type === "assistant_delta") write(event.text)
     // One line for each tool the model asks for, and one for what came
@@ -218,7 +235,12 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   session = openedSession
 
   options.onInterrupt?.(() => {
-    if (idle && !commanding) return "idle"
+    if (idle && !commanding) {
+      // Pressed while waiting for jobs after the input ended: stop waiting.
+      gaveUpWaiting = true
+      whenIdle()
+      return "idle"
+    }
     if (cancelling) return "again"
     cancelling = true
     evie.send({ type: "cancel", session: openedSession }).catch((cause) => line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`))
@@ -273,7 +295,10 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     }
     ended = true
     refuse()
-    if (!idle) await new Promise<void>((resolve) => (whenIdle = resolve))
+    // The turn in progress is waited for. So are background jobs, when asked:
+    // one that ends wakes Evie, and that turn is waited for too.
+    const busy = () => !idle || (options.waitForJobs === true && runningJobs.size > 0 && !gaveUpWaiting)
+    while (busy()) await new Promise<void>((resolve) => (whenIdle = resolve))
   } finally {
     stop()
     write("\n")

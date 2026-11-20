@@ -43,6 +43,14 @@ process.stdout.on("error", (cause: { code?: string }) => {
   if (cause.code === "EPIPE") process.exit(0)
 })
 
+// Being told to stop, or the terminal window closing, closes Evie properly,
+// which stops any command it left running in the background.
+for (const signal of ["SIGTERM", "SIGHUP"] as const) {
+  process.on(signal, () => {
+    void evie.close().finally(() => process.exit(signal === "SIGTERM" ? 143 : 129))
+  })
+}
+
 const session = { folder: process.cwd(), resume: process.argv.includes("--continue") || process.argv.includes("-c") }
 // What the terminal client does on Ctrl-C: cancel the turn, or say that
 // nothing is running, or that a cancel is already under way.
@@ -102,6 +110,8 @@ try {
       write: print,
       // Nobody is typing, so a line must not be taken as an answer.
       questions: false,
+      // Leaving would stop a command that was moved to the background.
+      waitForJobs: true,
       onInterrupt: (handler) => (interrupt = handler),
     })
   }

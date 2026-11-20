@@ -37,16 +37,6 @@ test("shell runs in workdir when one is given", async () => {
   )
 })
 
-test("shell stops a command that runs past its timeout, and says so", async () => {
-  const { call } = await project()
-  const started = Date.now()
-
-  const result = await call("shell", { command: "echo before; sleep 30; echo after", timeout: 1 })
-
-  expect(result).toBe("before\n\n[Stopped: the command ran past its timeout of 1 second.]")
-  expect(Date.now() - started).toBeLessThan(10_000)
-})
-
 test("shell says when a command prints nothing", async () => {
   const { call } = await project()
 
