@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, realpath, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { jobs, permissions, runTerminal, subagents, type Chunk, type EvieEvent, type Plugin, type Request } from "../src/index.ts"
+import { files, jobs, permissions, runTerminal, subagents, type Chunk, type EvieEvent, type Plugin, type Request } from "../src/index.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 
 const cleanups: (() => Promise<void>)[] = []
@@ -45,9 +45,14 @@ function twoScripts(parent: Reply[], child: Reply[]) {
 
 const hand = (task: string, extra: Record<string, unknown> = {}) => ({ name: "subagent", input: { description: "look into it", task, ...extra } })
 
-async function start(parent: Reply[], child: Reply[], plugins: Plugin[] = [], options: Parameters<typeof startEvie>[1] = {}) {
+// `trusted` says which project folders the owner has trusted, for a project's own agents.
+async function start(parent: Reply[], child: Reply[], plugins: Plugin[] = [], options: Parameters<typeof startEvie>[1] & { trusted?: (folder: string) => boolean } = {}) {
   const model = twoScripts(parent, child)
-  const run = await startEvie([model.plugin, subagents(), jobs(), ...plugins], options)
+  // Its own data folder, so that no test reads the agents of whoever runs it.
+  const home = options.home ?? (await realpath(await mkdtemp(join(tmpdir(), "evie-home-"))))
+  if (!options.home) cleanups.push(() => rm(home, { recursive: true, force: true }))
+  const { trusted, ...rest } = options
+  const run = await startEvie([model.plugin, subagents({ dataFolder: home, ...(trusted && { trusted }) }), jobs(), ...plugins], { ...rest, home })
   cleanups.push(run.stop)
   // Has the main agent call one tool in a new turn, and returns what the call came back with.
   async function call(name: string, input: Record<string, unknown>) {
@@ -465,4 +470,125 @@ test("the terminal takes two questions that are open at once one after the other
 
   expect(answers).toEqual(["B", "C"])
   expect(printed.indexOf("[question] Second?")).toBeGreaterThan(printed.indexOf("[answered] B"))
+})
+
+// ---- Agents the owner has defined ---------------------------------------------------------------------------
+
+const REVIEWER = `---
+name: reviewer
+description: Reviews a change for bugs. Give it the diff.
+mode: read-only
+model: review/model
+---
+You review code changes. Report bugs, most serious first.
+`
+
+async function writeAgent(folder: string, file: string, text: string) {
+  await mkdir(folder, { recursive: true })
+  await writeFile(join(folder, file), text)
+}
+
+test("the main agent is told which agents the owner has defined, and can start a subagent as one", async () => {
+  const { run, requests } = await start([{ calls: [hand("Review the diff.", { agent: "reviewer" })] }, { text: "A reviewer is on it." }, { text: "It found nothing." }], [{ text: "No bugs." }])
+  await writeAgent(join(run.home, "agents"), "reviewer.md", REVIEWER)
+
+  await say(run, "review my change")
+  await turns(run, 2)
+
+  expect(requests.parent[0]?.system).toContain('Agents the owner has defined. Give one\'s name as "agent" to the subagent tool to start a subagent as it:\n- reviewer: Reviews a change for bugs. Give it the diff. (reads only)')
+  // The subagent has the agent's instructions and its model, and is listed by its name.
+  expect(requests.child[0]?.system).toEndWith('You are working as the agent "reviewer". Its instructions:\n\nYou review code changes. Report bugs, most serious first.')
+  expect(requests.child[0]?.model).toBe("review/model")
+  expect(notes(run)[0]).toStartWith("Background job 1 (subagent: reviewer: look into it) has finished.")
+  // A subagent is not told the list: it starts none.
+  expect(requests.child[0]?.system).not.toContain("Agents the owner has defined")
+})
+
+test("an agent that only reads cannot change anything, whatever mode the session is in", async () => {
+  const edits = editStandIn()
+  const { run } = await start(
+    [{ calls: [hand("Review and fix.", { agent: "reviewer" })] }, { text: "Started." }, { text: "It could not fix it." }],
+    [{ calls: [{ name: "edit", input: { path: "notes.md" } }] }, { text: "I may only read." }],
+    [edits.plugin, permissions({ mode: "auto" })],
+  )
+  await writeAgent(join(run.home, "agents"), "reviewer.md", REVIEWER)
+
+  await say(run, "go")
+  await turns(run, 2)
+
+  expect(ofChildren(run).find((event) => event.type === "tool_result")?.body).toMatchObject({ text: expect.stringContaining("read-only mode") })
+  expect(edits.ran).toEqual([])
+})
+
+test("naming an agent that does not exist says which ones do, and a model the owner asks for wins over the agent's", async () => {
+  const { run, requests } = await start(
+    [{ calls: [hand("Plan it.", { agent: "planner" })] }, { text: "No such agent." }, { calls: [hand("Review it.", { agent: "Reviewer", model: "asked/for" })] }, { text: "Started." }, { text: "Done." }],
+    [{ text: "Fine." }],
+  )
+  await writeAgent(join(run.home, "agents"), "reviewer.md", REVIEWER)
+
+  await say(run, "plan")
+  expect(results(run)[0]).toBe('There is no agent named "planner". The agents are: reviewer. Leave "agent" out for a general subagent.')
+
+  await say(run, "review")
+  await turns(run, 3)
+  expect(requests.child[0]?.model).toBe("asked/for")
+})
+
+test("a project's own agents are used only when the owner has trusted the project, and then win over the owner's of the same name", async () => {
+  const projectAgent = "---\ndescription: The project's own reviewer.\n---\nReview the way this project likes.\n"
+  const untrusted = await start([{ text: "ok" }], [])
+  await writeAgent(join(untrusted.run.home, "agents"), "reviewer.md", REVIEWER)
+  await writeAgent(join(untrusted.run.projectFolder, ".evie", "agents"), "reviewer.md", projectAgent)
+  await writeAgent(join(untrusted.run.projectFolder, ".evie", "agents"), "planner.md", "Plan things.\n")
+  await say(untrusted.run, "hi")
+  expect(untrusted.requests.parent[0]?.system).toContain("- reviewer: Reviews a change for bugs.")
+  expect(untrusted.requests.parent[0]?.system).not.toContain("planner")
+
+  const trusted = await start([{ text: "ok" }], [], [], { trusted: () => true })
+  await writeAgent(join(trusted.run.home, "agents"), "reviewer.md", REVIEWER)
+  await writeAgent(join(trusted.run.projectFolder, ".evie", "agents"), "reviewer.md", projectAgent)
+  await writeAgent(join(trusted.run.projectFolder, ".evie", "agents"), "planner.md", "Plan things.\n")
+  await say(trusted.run, "hi")
+  expect(trusted.requests.parent[0]?.system).toContain("- planner: (no description)\n- reviewer: The project's own reviewer.")
+})
+
+test("an agent written during a session can be used at once", async () => {
+  const { run, parent, requests } = await start([{ text: "No agents yet." }], [{ text: "Planned." }])
+  await say(run, "hi")
+  expect(requests.parent[0]?.system ?? "").not.toContain("Agents the owner has defined")
+
+  await writeAgent(join(run.home, "agents"), "planner.md", "---\ndescription: Plans work.\n---\nWrite a plan.\n")
+  parent.push({ calls: [hand("Plan the release.", { agent: "planner" })] }, { text: "Started." }, { text: "Here is the plan." })
+  await say(run, "plan it")
+  await turns(run, 3)
+
+  expect(requests.child[0]?.system).toContain("Write a plan.")
+})
+
+test("Evie may write the owner's agents with the file tools, and is asked every time, with no always", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  const agentFile = join(home, "agents", "tester.md")
+  const write = { name: "write", input: { path: agentFile, content: "---\ndescription: Runs tests.\n---\nRun the tests.\n" } }
+  const { run, call } = await start([], [], [files(), permissions({ mode: "auto", dataFolder: home })], { home, questions: true })
+  const asked: { text: string; choices: string[] }[] = []
+  run.evie.subscribe((event) => {
+    if (event.type !== "question") return
+    asked.push({ text: event.body.text, choices: event.body.choices })
+    void run.evie.send({ type: "answer_question", session: event.session, id: event.body.id, choice: "Yes, once" })
+  })
+
+  expect(await call("write", write.input)).toStartWith("Created")
+  expect(await call("write", write.input)).not.toStartWith("Blocked")
+  // Asked both times, even in auto mode, and never offered "always".
+  expect(asked).toHaveLength(2)
+  expect(asked[0]?.choices).toEqual(["Yes, once", "No"])
+  expect(asked[0]?.text).toContain("It applies in every project from now on, so it is asked about each time.")
+
+  // Reading it back is free, and the rest of the data folder is still closed.
+  expect(await call("read", { path: agentFile })).toContain("Run the tests.")
+  expect(await call("write", { path: join(home, "evie.json"), content: "{}" })).toStartWith("Blocked by the guard:")
+  expect(await call("read", { path: join(home, "agents", "..", "evie.db") })).toStartWith("Blocked by the guard:")
+  expect(asked).toHaveLength(2)
 })

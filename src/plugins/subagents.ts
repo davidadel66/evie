@@ -1,4 +1,7 @@
+import { join } from "node:path"
+import { dataFolder } from "../core/evie.ts"
 import type { Plugin, ToolContext } from "../core/types.ts"
+import { entriesOf, foldersFor, splitHeader, textOf, tidyName } from "./definitions.ts"
 
 // The built-in subagents plugin. It lets the model hand a piece of work to
 // a subagent: a second conversation that starts empty, works with the same
@@ -10,6 +13,24 @@ import type { Plugin, ToolContext } from "../core/types.ts"
 // subagent's work is a background job, so the model that started it is
 // told, and woken, when the report is ready. This plugin adds the two tools
 // and says what a subagent is not given.
+//
+// A subagent can be started as one of the owner's agents. An agent is a
+// Markdown file: a header with a name, a description, and optionally a model
+// and `mode: read-only`, and a body that is the agent's instructions. Agents
+// are read from `agents` in the data folder, for every project, and from
+// `.evie/agents` in a project the owner has trusted. They are read each
+// time they are needed, so one written a moment ago can be used at once.
+
+export type SubagentsOptions = {
+  // The folder Evie keeps its state in. Defaults to the usual place.
+  dataFolder?: string
+  // Whether the owner has trusted a project, by its folder. A project's own
+  // agents are used only when they have. Defaults to no.
+  trusted?: (folder: string) => boolean
+}
+
+// One of the owner's agents.
+type Agent = { name: string; description: string; prompt: string; model?: string; readOnly: boolean; file: string }
 
 // How many subagents one session may have working at once.
 const MOST_AT_ONCE = 8
@@ -24,10 +45,38 @@ const FOR_SUBAGENTS =
   "names and values that matter, and anything you could not do and why. You cannot ask the owner questions; if you " +
   "need a decision, say so in your report."
 
-export function subagents(): Plugin {
+export function subagents(options: SubagentsOptions = {}): Plugin {
+  const data = options.dataFolder ?? dataFolder({})
+  const trusted = options.trusted ?? (() => false)
+
   return {
     name: "subagents",
     setup(host) {
+      // The agents there are now. A project's agent replaces the owner's of the same name.
+      async function agents(): Promise<Agent[]> {
+        const found = new Map<string, Agent>()
+        for (const folder of foldersFor("agents", data, host.project?.folder ?? null, trusted)) {
+          for (const entry of await entriesOf(folder)) {
+            if (!entry.isFile() || !entry.name.endsWith(".md")) continue
+            const file = join(folder, entry.name)
+            const text = await textOf(file)
+            if (text === undefined) continue
+            const { header, body } = splitHeader(text)
+            const name = tidyName(header.name ?? entry.name.slice(0, -3))
+            if (name === "" || body === "") continue
+            found.set(name, {
+              name,
+              description: header.description ?? "",
+              prompt: body,
+              ...(header.model !== undefined && { model: header.model }),
+              readOnly: header.mode === "read-only",
+              file,
+            })
+          }
+        }
+        return [...found.values()].toSorted((a, b) => a.name.localeCompare(b.name))
+      }
+
       // The subagents this plugin has started, with a few words on what each is doing.
       const started = new Map<string, string>()
       // The job following each subagent's present round of work, if one is.
@@ -65,11 +114,21 @@ export function subagents(): Plugin {
         return job
       }
 
-      host.on("before_request", (request, context) => {
-        if (context.parent === undefined) return
+      host.on("before_request", async (request, context) => {
+        const all = await agents()
+        // The main agent is told which agents it can start a subagent as.
+        if (context.parent === undefined) {
+          if (all.length === 0) return
+          const list = all.map((agent) => `- ${agent.name}: ${agent.description || "(no description)"}${agent.readOnly ? " (reads only)" : ""}`)
+          const about = `Agents the owner has defined. Give one's name as "agent" to the subagent tool to start a subagent as it:\n${list.join("\n")}`
+          return { ...request, system: request.system ? `${request.system}\n\n${about}` : about }
+        }
+        // A subagent is told what it is, and what its agent's instructions are.
+        const agent = all.find((each) => each.name === context.agent)
+        const told = agent ? `${FOR_SUBAGENTS}\n\nYou are working as the agent "${agent.name}". Its instructions:\n\n${agent.prompt}` : FOR_SUBAGENTS
         return {
           ...request,
-          system: request.system ? `${request.system}\n\n${FOR_SUBAGENTS}` : FOR_SUBAGENTS,
+          system: request.system ? `${request.system}\n\n${told}` : told,
           tools: request.tools.filter((tool) => !NOT_FOR_SUBAGENTS.includes(tool.name)),
         }
       })
@@ -86,12 +145,18 @@ export function subagents(): Plugin {
           "has finished. Do not wait for it or check on it: carry on with work that does not overlap with its task, or " +
           "say briefly what you have started and end your reply.\n\n" +
           "The subagent sees none of this conversation, only your task. Write the task so it stands alone: the goal, " +
-          "what you already know, where to look, what is out of scope, and what the report should contain.",
+          "what you already know, where to look, what is out of scope, and what the report should contain.\n\n" +
+          "The owner can define agents: roles with their own instructions. When they have, you are given the list, " +
+          "and can start a subagent as one by its name. An agent is a Markdown file in " +
+          `${join(data, "agents")}, for every project, or in .evie/agents in a project: a header between two lines of ` +
+          '"---" with "name:", "description:", and optionally "model:" and "mode: read-only", followed by the ' +
+          "agent's instructions.",
         inputSchema: {
           type: "object",
           properties: {
             description: { type: "string", description: "Three to five words naming the task, shown to the owner" },
             task: { type: "string", description: "The whole task, written for an agent that has seen nothing else" },
+            agent: { type: "string", description: "The name of one of the owner's agents to start the subagent as. Leave out for a general one" },
             model: {
               type: "string",
               description: "The model for the subagent. Leave this out unless the owner asks for a particular model",
@@ -106,13 +171,31 @@ export function subagents(): Plugin {
           const refusal = tooMany(context)
           if (refusal !== undefined) return refusal
 
+          // Started as one of the owner's agents, when one is named.
+          let agent: Agent | undefined
+          if (typeof input.agent === "string" && input.agent.trim() !== "") {
+            const all = await agents()
+            agent = all.find((each) => each.name === tidyName(input.agent as string))
+            if (!agent) {
+              const names = all.map((each) => each.name).join(", ")
+              return `There is no agent named "${input.agent}". ${names ? `The agents are: ${names}.` : "The owner has defined no agents."} Leave "agent" out for a general subagent.`
+            }
+          }
+          // A model the owner asked for wins over the agent's own.
+          const model = typeof input.model === "string" && input.model.trim() !== "" ? input.model : agent?.model
+
           let child: string
           try {
-            child = await context.children.start({ text: task, ...(typeof input.model === "string" && input.model.trim() !== "" && { model: input.model }) })
+            child = await context.children.start({
+              text: task,
+              ...(model !== undefined && { model }),
+              ...(agent && { agent: agent.name }),
+              ...(agent?.readOnly && { readOnly: true }),
+            })
           } catch (cause) {
             return `The subagent was not started: ${cause instanceof Error ? cause.message : String(cause)}`
           }
-          started.set(child, description)
+          started.set(child, agent ? `${agent.name}: ${description}` : description)
           const job = follow(child, context)
           return (
             `A subagent has started on this, as background job ${job.id}. Its id is "${child}".\n\n` +

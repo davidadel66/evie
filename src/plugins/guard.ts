@@ -39,6 +39,12 @@ export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall,
     if (session !== undefined && ["read", "grep", "glob"].includes(call.name) && typeof call.input.path === "string" && isAbsolute(call.input.path)) {
       if (isSavedOutput(data, session, call.input.path)) return undefined
     }
+    // The owner's agents and skills are theirs to have Evie read and write
+    // with the file tools. The permissions plugin asks before each write.
+    if (FILE_TOOLS.includes(call.name)) {
+      const named = filesNamed(call)
+      if (named.length > 0 && named.every((path) => isAbsolute(path) && isDefinition(data, path))) return undefined
+    }
     const reason = call.name === "shell" ? shellReason(call, privateFolders, folder) : fileReason(call, privateFolders, folder)
     if (reason === undefined) return undefined
     return `Blocked by the guard: ${reason} The command was not run. If the owner wants this done, they can run it themselves.`
@@ -126,7 +132,10 @@ function deletesBroadly(command: string, home: string): boolean {
 
 // ---- The file tools -------------------------------------------------------------------
 
-function fileReason(call: CheckedToolCall, privateFolders: string[], projectFolder: string): string | undefined {
+const FILE_TOOLS = ["read", "grep", "glob", "write", "edit", "patch"]
+
+// The files a call to one of the file tools names.
+function filesNamed(call: CheckedToolCall): string[] {
   const paths: string[] = []
   if (typeof call.input.path === "string") paths.push(call.input.path)
   // A patch names its files inside its text.
@@ -136,6 +145,11 @@ function fileReason(call: CheckedToolCall, privateFolders: string[], projectFold
       paths.push(match[1]!)
     }
   }
+  return paths
+}
+
+function fileReason(call: CheckedToolCall, privateFolders: string[], projectFolder: string): string | undefined {
+  const paths = filesNamed(call)
   const found = paths.find((path) => insidePrivate(path, privateFolders, projectFolder))
   return found === undefined ? undefined : `${found} is in a private folder.`
 }
@@ -170,4 +184,14 @@ export function isSavedOutput(data: string, session: string, path: string): bool
   const saved = followLinks(resolve(data, "tool-output", session))
   const inside = relative(saved, followLinks(resolve(path)))
   return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
+}
+
+// True for a path inside the owner's agents or skills in the data folder.
+// Links are followed, so nothing else in the data folder is reached through them.
+export function isDefinition(data: string, path: string): boolean {
+  const real = followLinks(resolve(path))
+  return ["agents", "skills"].some((kind) => {
+    const inside = relative(followLinks(resolve(data, kind)), real)
+    return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
+  })
 }

@@ -90,6 +90,8 @@ type Context = {
   globalFile: string
   permissions: NonNullable<SettingsFile["permissions"]>
   ownPermissions?: { mode?: Mode; rules?: Rule[] }
+  // Whether the owner has trusted a project, by its folder.
+  trusted(folder: string): boolean
 }
 const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Context) => Plugin> = {
   files: (options) => files(options as FilesOptions),
@@ -100,7 +102,7 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   undo: (_options, context) => undo({ dataFolder: context.home }),
   models: () => models(),
   ask: () => ask(),
-  subagents: () => subagents(),
+  subagents: (_options, context) => subagents({ dataFolder: context.home, trusted: context.trusted }),
   instructions: (_options, context) => instructions({ dataFolder: context.home }),
   web: (_options, context) => web({ env: context.env }),
   openrouter: (_options, context) => openrouter({ env: context.env }),
@@ -131,13 +133,14 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
   const home = dataFolder(options.env)
   const globalFile = join(home, "evie.json")
   const global = (await readSettingsFile(globalFile)) ?? {}
-  const context: Context = { env: options.env, home, globalFile, permissions: global.permissions ?? {} }
-
-  const plugins: Plugin[] = []
-  for (const entry of global.plugins ?? DEFAULT) plugins.push(await load(entry, home, context))
   const folders = (list: string[] | undefined) => new Set((list ?? []).map((folder) => resolve(expandHome(folder))))
   const trusted = folders(global.trust)
   const untrusted = folders(global.untrusted)
+  // Asked each time it matters, since a project can be trusted while Evie runs.
+  const context: Context = { env: options.env, home, globalFile, permissions: global.permissions ?? {}, trusted: (folder) => trusted.has(folder) }
+
+  const plugins: Plugin[] = []
+  for (const entry of global.plugins ?? DEFAULT) plugins.push(await load(entry, home, context))
 
   // The environment wins over both files.
   const fromEnv = {
