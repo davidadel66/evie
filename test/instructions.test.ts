@@ -35,7 +35,7 @@ test("a project's AGENTS.md is added to what the model is told, after the system
 
   const prompt = await system()
 
-  expect(prompt).toStartWith("You are Evie")
+  expect(prompt).toStartWith("Facts about this session.")
   const file = join(await realpath(run.projectFolder), "AGENTS.md")
   expect(prompt).toEndWith(
     `# Instructions for this project\n\nThese were written for this project. Follow them. The contents of ${file} are given here in full, ` +
@@ -73,7 +73,8 @@ test("with no instruction files the system prompt is as it was", async () => {
   const withPlugin = await start()
   const without = await start({}, () => [models()])
 
-  const strip = (text: string) => text.replace(/evie-project-\w+/g, "project")
+  // The two sessions are in different folders, and may have started a minute apart.
+  const strip = (text: string) => text.replace(/evie-project-\w+/g, "project").replace(/The session started on .*/, "")
   expect(strip(await withPlugin.system())).toBe(strip(await without.system()))
 })
 
@@ -124,6 +125,6 @@ test("the instructions are kept whichever order the plugins are listed in", asyn
   const { system } = await start({ project: { "AGENTS.md": "Use tabs." } }, (home) => [instructions({ dataFolder: home }), models()])
 
   const prompt = await system()
-  expect(prompt).toStartWith("You are Evie")
+  expect(prompt).toStartWith("Facts about this session.")
   expect(prompt).toContain("Use tabs.")
 })
