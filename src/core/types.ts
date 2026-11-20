@@ -89,7 +89,12 @@ export type Request = {
 
 // ---- Providers ----------------------------------------------------------------
 
-export type Usage = { inputTokens: number; outputTokens: number }
+// The size of a request and its reply, in tokens, as the provider counted
+// them. `cachedTokens` is how much of the request the provider read from its
+// prompt cache, which is charged at a fraction of the usual price, and
+// `cacheWriteTokens` how much it stored there for next time. Both are part
+// of `inputTokens`, and are given only when the provider reports them.
+export type Usage = { inputTokens: number; outputTokens: number; cachedTokens?: number; cacheWriteTokens?: number }
 
 // What a provider streams back: pieces of text as they are written, each
 // tool call once it is complete, and one finish chunk at the end. A request

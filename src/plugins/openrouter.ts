@@ -145,6 +145,13 @@ function toBody(request: Request, limit: number) {
       })),
     }),
     stream: true,
+    // Every request repeats the conversation so far, so most of it can be
+    // read from the provider's prompt cache at a fraction of the price.
+    // Most providers do that by themselves. Anthropic's models do it only
+    // when asked: this asks, and the cached part then grows with the
+    // conversation. Checked against OpenRouter's documentation on
+    // 2026-11-20: https://openrouter.ai/docs/features/prompt-caching
+    ...(request.model.startsWith("anthropic/") && { cache_control: { type: "ephemeral" } }),
   }
 }
 
@@ -180,7 +187,11 @@ type WireChunk = {
     }
     finish_reason?: string | null
   }[]
-  usage?: { prompt_tokens?: number; completion_tokens?: number }
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } | null
+  }
 }
 
 async function* readReply(response: Response, signal: AbortSignal): AsyncGenerator<Chunk> {
@@ -222,7 +233,14 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
     // final chunk that carries the usage.
     if (choice?.finish_reason) finishReason = choice.finish_reason
     if (chunk.usage) {
-      usage = { inputTokens: chunk.usage.prompt_tokens ?? 0, outputTokens: chunk.usage.completion_tokens ?? 0 }
+      const cached = chunk.usage.prompt_tokens_details?.cached_tokens
+      const written = chunk.usage.prompt_tokens_details?.cache_write_tokens
+      usage = {
+        inputTokens: chunk.usage.prompt_tokens ?? 0,
+        outputTokens: chunk.usage.completion_tokens ?? 0,
+        ...(typeof cached === "number" && { cachedTokens: cached }),
+        ...(typeof written === "number" && { cacheWriteTokens: written }),
+      }
     }
   }
 
