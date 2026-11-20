@@ -113,6 +113,17 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       .catch((cause) => line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`))
   }
 
+  // Questions that have arrived and not been answered, the one on screen included.
+  const waitingQuestions: NonNullable<typeof asked>[] = []
+  const showNextQuestion = () => {
+    asked = waitingQuestions[0]
+    if (!asked) return
+    typedBefore = (options.typing?.() ?? "").trim() !== ""
+    showQuestion()
+    if (ended) refuse()
+    whenAsked()
+  }
+
   // Messages sent that no turn has taken up yet. Several can be answered by
   // one turn, so turns are not counted: the terminal is idle when a turn ends
   // and nothing sent is still waiting.
@@ -171,15 +182,19 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     const mine = session === undefined ? event.type === "question" || event.type === "answer" : event.session === session
     if (!mine) return
     if (event.type === "question") {
-      asked = { session: event.session, question: event.body }
-      typedBefore = (options.typing?.() ?? "").trim() !== ""
-      showQuestion()
-      if (ended) refuse()
-      whenAsked()
+      // More than one can be open at once, such as from two subagents. They
+      // are shown one at a time, in the order they came.
+      waitingQuestions.push({ session: event.session, question: event.body })
+      if (asked === undefined) showNextQuestion()
     }
-    if (event.type === "answer" && asked?.question.id === event.body.id) {
-      asked = undefined
-      line(event.body.choice === null ? "[not answered]" : `[answered] ${event.body.choice}`)
+    if (event.type === "answer") {
+      const at = waitingQuestions.findIndex((waiting) => waiting.question.id === event.body.id)
+      if (at !== -1) waitingQuestions.splice(at, 1)
+      if (asked?.question.id === event.body.id) {
+        asked = undefined
+        line(event.body.choice === null ? "[not answered]" : `[answered] ${event.body.choice}`)
+        showNextQuestion()
+      }
     }
     // A turn can start without a message from the owner, when a background job ends.
     if (event.type === "turn_start") idle = false

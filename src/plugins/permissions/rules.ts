@@ -158,9 +158,8 @@ function byMode(act: Act, mode: Mode): Effect {
   // A subagent works without asking before each step, so in manual mode
   // starting one is asked about: that answer is the owner's say-so for its
   // work. In read-only mode a subagent is read-only too, so starting one
-  // changes nothing. A message to a subagent already started needs no more.
-  if (act.action === "subagent") return mode === "manual" ? "ask" : "allow"
-  if (act.action === "subagent_send") return "allow"
+  // changes nothing. Giving a subagent more work is the same as starting one.
+  if (act.action === "subagent" || act.action === "subagent_send") return mode === "manual" ? "ask" : "allow"
   if (act.action === "read") return act.inside ? "allow" : "ask"
   if (act.action === "edit") return mode === "auto" && act.inside ? "allow" : "ask"
   if (act.action === "shell") {
@@ -221,7 +220,7 @@ export function alwaysRule(act: Act, folder: string | null): { rule: Rule; label
     if (start === undefined) return { rule: { action: "shell", match: act.target, effect: "allow" }, label: `exactly the command "${act.target}"` }
     return { rule: { action: "shell", match: `${start} *`, effect: "allow" }, label: `commands that start with "${start}"` }
   }
-  const label = act.action === "web" ? "using the web" : act.action === "subagent" ? "starting subagents" : `the tool ${act.action}`
+  const label = act.action === "web" ? "using the web" : act.action === "subagent" ? "starting subagents" : act.action === "subagent_send" ? "giving subagents more work" : `the tool ${act.action}`
   return { rule: { action: act.action, effect: "allow" }, label }
 }
 
@@ -244,6 +243,13 @@ export function questionFor(call: CheckedToolCall, asking: readonly Act[], folde
     return (
       `Let Evie start a subagent (${String(call.input.description ?? "a task")})? It works without asking before each ` +
       `step: it may change files and run commands inside the project.\n\n  ${task.length > 400 ? `${task.slice(0, 400)}…` : task}`
+    )
+  }
+  if (call.name === "subagent_send") {
+    const message = String(call.input.message ?? "").trim()
+    return (
+      "Let Evie give its subagent more work? It works without asking before each step: it may change files and run " +
+      `commands inside the project.\n\n  ${message.length > 400 ? `${message.slice(0, 400)}…` : message}`
     )
   }
   const input = JSON.stringify(call.input)

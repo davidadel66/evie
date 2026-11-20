@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { jobs, permissions, subagents, type Chunk, type EvieEvent, type Plugin, type Request } from "../src/index.ts"
+import { jobs, permissions, runTerminal, subagents, type Chunk, type EvieEvent, type Plugin, type Request } from "../src/index.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 
 const cleanups: (() => Promise<void>)[] = []
@@ -255,7 +255,7 @@ test("evie --continue reopens the owner's session and never a subagent's, and a 
   const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
   const projectFolder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
   cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(projectFolder, { recursive: true, force: true }))
-  const first = await start([{ calls: [hand("Find it.")] }, { text: "Started." }, { text: "Found." }], [{ text: "It is in a.ts." }], [], { home, projectFolder })
+  const first = await start([{ calls: [hand("Find it.", { model: "other/model" })] }, { text: "Started." }, { text: "Found." }], [{ text: "It is in a.ts." }], [], { home, projectFolder })
   await say(first.run, "go")
   await turns(first.run, 2)
   const child = childId(first.run)
@@ -271,6 +271,8 @@ test("evie --continue reopens the owner's session and never a subagent's, and a 
   while (!stored(second.run.events).some((event) => event.type === "note")) await until(second.run, (event) => event.type === "note")
 
   expect(second.requests.child[0]?.messages.map((message) => message.text)).toEqual(["Find it.", "It is in a.ts.", "Which line?"])
+  // It carries on with the model it was given, not the main agent's.
+  expect(second.requests.child[0]?.model).toBe("other/model")
 })
 
 // ---- Permissions ---------------------------------------------------------------------------------------------
@@ -337,4 +339,130 @@ test("what a subagent still has to ask is put to the owner in the session that s
   await turns(readOnly.run, 2)
   expect(ofChildren(readOnly.run).find((event) => event.type === "tool_result")?.body).toMatchObject({ text: expect.stringContaining("read-only mode") })
   expect(edits.ran).toEqual([])
+})
+
+// ---- Found in review -----------------------------------------------------------------------------------------
+
+test("a subagent's mode is settled when it is given work: more work in manual mode is asked about, and read-only does not wear off", async () => {
+  const edits = editStandIn()
+  const { run, parent, call } = await start(
+    [{ calls: [hand("Tidy the notes.")] }, { text: "Started." }, { text: "It could not." }],
+    [{ calls: [{ name: "edit", input: { path: "notes.md" } }] }, { text: "Not allowed." }, { calls: [{ name: "edit", input: { path: "notes.md" } }] }, { text: "Still not allowed." }, { calls: [{ name: "edit", input: { path: "notes.md" } }] }, { text: "Tidied." }],
+    [edits.plugin, permissions({ mode: "read-only" })],
+    { questions: true },
+  )
+  const asked: string[] = []
+  let answer = "Yes, once"
+  run.evie.subscribe((event) => {
+    if (event.type !== "question") return
+    asked.push(event.body.text.split("\n")[0]!)
+    void run.evie.send({ type: "answer_question", session: event.session, id: event.body.id, choice: answer })
+  })
+  const mode = (name: string) => run.evie.send({ type: "run_command", session: run.session, name: "mode", args: name })
+  const send = async (message: string) => {
+    const sent = call("subagent_send", { id: childId(run), message })
+    parent.push({ text: "Noted." })
+    return sent
+  }
+
+  // Started from a read-only session: nothing is asked, and it can change nothing.
+  await say(run, "go")
+  await turns(run, 2)
+  expect(edits.ran).toEqual([])
+
+  // The owner moves to manual. Giving the subagent more work is refused: it stays read-only.
+  await mode("manual")
+  answer = "No"
+  expect(await call("subagent_send", { id: childId(run), message: "Try again." })).toStartWith("The owner said no to this.")
+  expect(edits.ran).toEqual([])
+
+  // Agreed to, it works without asking before each step.
+  answer = "Yes, once"
+  expect(await send("Try again.")).toStartWith("The message was sent")
+  await turns(run, 5)
+  expect(asked).toEqual([
+    "Let Evie give its subagent more work? It works without asking before each step: it may change files and run commands inside the project.",
+    "Let Evie give its subagent more work? It works without asking before each step: it may change files and run commands inside the project.",
+  ])
+  expect(edits.ran).toEqual(["notes.md"])
+
+  // Back in read-only, the subagent is read-only at once, whatever it was given before.
+  await mode("read-only")
+  await send("And once more.")
+  await turns(run, 7)
+  expect(edits.ran).toEqual(["notes.md"])
+})
+
+test("a subagent stopped and then sent a message reports on the message", async () => {
+  const { run, parent } = await start([{ calls: [hand("Work for a long time.")] }, { text: "Started." }], [{ hang: true }, { text: "Here is the shorter answer." }])
+  await say(run, "go")
+  const child = childId(run)
+
+  parent.push({ calls: [{ name: "job_stop", input: { id: "1" } }, { name: "subagent_send", input: { id: child, message: "Give me the short version." } }] }, { text: "Asked for less." }, { text: "Got it." })
+  await say(run, "that is taking too long")
+  await turns(run, 3)
+
+  expect(results(run).at(-1)).toMatch(/^The message was sent, and the subagent is working on it as background job 2\./)
+  expect(notes(run)).toHaveLength(1)
+  expect(notes(run)[0]).toContain("Background job 2 (subagent: look into it) has finished.\n\nIts report:\n\nHere is the shorter answer.")
+})
+
+test("a round in which a subagent says nothing does not report what it said in an earlier round", async () => {
+  const { run, parent, call } = await start([{ calls: [hand("Find it.")] }, { text: "Started." }, { text: "Found." }], [{ text: "It is in a.ts." }, { text: "" }])
+  await say(run, "go")
+  await turns(run, 2)
+
+  const sent = call("subagent_send", { id: childId(run), message: "Anything else?" })
+  parent.push({ text: "Nothing more." })
+  await sent
+  await turns(run, 4)
+
+  expect(notes(run)[1]).toContain("Its report:\n\n(It ended without saying anything.)")
+})
+
+test("when Evie closes with a subagent still working, the session that started it records that it was stopped", async () => {
+  const { run } = await start([{ calls: [hand("Work for a long time.")] }, { text: "Started." }], [{ hang: true }])
+  await say(run, "go")
+
+  await run.evie.close()
+
+  expect(notes(run)).toEqual(["Background job 1 (subagent: look into it) was stopped because Evie was closed. Start it again if it is still needed."])
+})
+
+test("the terminal takes two questions that are open at once one after the other", async () => {
+  // A tool that asks two things at the same time, as two subagents might.
+  const answers: (string | null)[] = []
+  const asksTwice: Plugin = {
+    name: "asks-twice",
+    setup(host) {
+      host.tools.add({
+        name: "decide",
+        description: "Asks two questions.",
+        inputSchema: { type: "object" },
+        run: async (_input, context) => {
+          answers.push(...(await Promise.all([context.ask({ text: "First?", choices: ["A", "B"] }), context.ask({ text: "Second?", choices: ["C", "D"] })])))
+          return "decided"
+        },
+      })
+    },
+  }
+  const model = twoScripts([{ calls: [{ name: "decide", input: {} }] }, { text: "Decided." }], [])
+  const run = await startEvie([model.plugin, asksTwice])
+  cleanups.push(run.stop)
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    lines: (async function* () {
+      yield "decide"
+      while (!printed.includes("First?")) await Bun.sleep(1)
+      yield "2"
+      while (!printed.includes("Second?")) await Bun.sleep(1)
+      yield "1"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(answers).toEqual(["B", "C"])
+  expect(printed.indexOf("[question] Second?")).toBeGreaterThan(printed.indexOf("[answered] B"))
 })

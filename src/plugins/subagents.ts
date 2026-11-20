@@ -30,21 +30,40 @@ export function subagents(): Plugin {
     setup(host) {
       // The subagents this plugin has started, with a few words on what each is doing.
       const started = new Map<string, string>()
+      // The job following each subagent's present round of work, if one is.
+      const following = new Map<string, { id: string; stopped: boolean }>()
+      const tooMany = (context: ToolContext) =>
+        context.jobs.list().filter((job) => job.kind === "subagent" && job.status === "running").length >= MOST_AT_ONCE
+          ? `${MOST_AT_ONCE} subagents are already working, which is the most at once. Wait for one to report before starting another.`
+          : undefined
 
-      // Puts a subagent's current round of work on the jobs list. The model
-      // is told its report when the round ends.
-      const follow = (child: string, context: ToolContext) =>
-        context.jobs.start({
+      // Puts a subagent's round of work on the jobs list. The model is told
+      // its report when the round ends.
+      const follow = (child: string, context: ToolContext) => {
+        const entry = { id: "", stopped: false }
+        const job = context.jobs.start({
           kind: "subagent",
           title: `subagent: ${started.get(child) ?? child}`,
-          done: context.children.whenIdle(child).then(({ reply, ended, error }) => {
-            const again = `To send this subagent a further message, use subagent_send with the id "${child}".`
-            if (ended === "completed") return `Its report:\n\n${reply || "(It ended without saying anything.)"}\n\n${again}`
-            const why = ended === "cancelled" ? "It was stopped before it finished." : `It failed: ${error ?? "no reason was given"}.`
-            throw new Error(`${why}${reply ? ` The last thing it said:\n\n${reply}` : ""}\n\n${again}`)
-          }),
-          stop: () => context.children.stop(child),
+          done: context.children
+            .whenIdle(child)
+            .finally(() => {
+              if (following.get(child) === entry) following.delete(child)
+            })
+            .then(({ reply, ended, error }) => {
+              const again = `To send this subagent a further message, use subagent_send with the id "${child}".`
+              if (ended === "completed") return `Its report:\n\n${reply || "(It ended without saying anything.)"}\n\n${again}`
+              const why = ended === "cancelled" ? "It was stopped before it finished." : `It failed: ${error ?? "no reason was given"}.`
+              throw new Error(`${why}${reply ? ` The last thing it said:\n\n${reply}` : ""}\n\n${again}`)
+            }),
+          stop: () => {
+            entry.stopped = true
+            context.children.stop(child)
+          },
         })
+        entry.id = job.id
+        following.set(child, entry)
+        return job
+      }
 
       host.on("before_request", (request, context) => {
         if (context.parent === undefined) return
@@ -84,10 +103,8 @@ export function subagents(): Plugin {
           const task = typeof input.task === "string" ? input.task.trim() : ""
           const description = typeof input.description === "string" && input.description.trim() !== "" ? input.description.trim() : "a task"
           if (task === "") return "The task was empty. Call subagent again with the whole task in words."
-          const working = context.jobs.list().filter((job) => job.kind === "subagent" && job.status === "running").length
-          if (working >= MOST_AT_ONCE) {
-            return `${MOST_AT_ONCE} subagents are already working, which is the most at once. Wait for one to report before starting another.`
-          }
+          const refusal = tooMany(context)
+          if (refusal !== undefined) return refusal
 
           let child: string
           try {
@@ -124,14 +141,21 @@ export function subagents(): Plugin {
           const child = String(input.id ?? "").trim()
           const message = typeof input.message === "string" ? input.message.trim() : ""
           if (message === "") return "The message was empty. Call subagent_send again with what to tell the subagent."
-          const working = context.children.busy(child)
+          // A round of work that is being followed, and has not been
+          // stopped, takes the message in and reports once. Otherwise the
+          // message starts a round, which counts towards how many may work at once.
+          const followed = following.get(child)
+          const joins = followed !== undefined && !followed.stopped && context.children.busy(child)
+          if (!joins) {
+            const refusal = tooMany(context)
+            if (refusal !== undefined) return refusal
+          }
           try {
             await context.children.send(child, message)
           } catch (cause) {
             return `The message was not sent: ${cause instanceof Error ? cause.message : String(cause)} Use the id given when the subagent was started, or start a new one.`
           }
-          // A subagent that is still working already has a job following it.
-          if (working) return "The message was sent. The subagent was still working, and takes it in as it goes. You will be told its report when it has finished."
+          if (joins) return "The message was sent. The subagent was still working, and takes it in as it goes. You will be told its report when it has finished."
           const job = follow(child, context)
           return `The message was sent, and the subagent is working on it as background job ${job.id}. You will be told its report when it has finished.`
         },

@@ -179,7 +179,9 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       const open = sessions.get(id)
       if (open) return open
       settleUnfinished(id)
-      return startLoop({ session: id, project, scope, model: currentModel(log.events(session), sessions.get(session)!.model), canAnswer: false, parent: session })
+      // It carries on with the model it was given, which its log records.
+      const parentModel = currentModel(log.events(session), sessions.get(session)!.model)
+      return startLoop({ session: id, project, scope, model: currentModel(log.events(id), parentModel), canAnswer: false, parent: session })
     }
     const send = (id: string, text: string) => {
       const { loop } = child(id)
@@ -192,6 +194,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         if (projects.parentOf(session) !== undefined) throw new Error("A subagent cannot start subagents of its own.")
         const model = input.model?.trim() || currentModel(log.events(session), sessions.get(session)!.model)
         const id = projects.createSession(project, session)
+        // Recorded in its log, so that it keeps this model if it is opened again later.
+        log.append(id, "model_changed", { model })
         startLoop({ session: id, project, scope, model, canAnswer: false, parent: session })
         send(id, input.text)
         return id
@@ -201,11 +205,19 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         send(id, text)
       },
       async whenIdle(id) {
-        await child(id).loop.idle()
+        const { loop } = child(id)
+        // A subagent has nothing left to do when its turns have ended and
+        // so have any background jobs of its own, whose ending wakes it for
+        // another turn.
+        do {
+          await loop.idle()
+          await jobs.whenEnded(id)
+        } while (loop.busy())
+        // Its report is what it said in full in its last turn, not something from an earlier round.
         const events = log.events(id)
-        const ended = events.findLast((event) => event.type === "turn_end")
-        // The reply to report is the last thing the subagent said in full.
-        const said = events.findLast((event) => event.type === "assistant_message" && event.body.text.trim() !== "")
+        const lastTurn = events.slice(events.findLastIndex((event) => event.type === "turn_start"))
+        const ended = lastTurn.findLast((event) => event.type === "turn_end")
+        const said = lastTurn.findLast((event) => event.type === "assistant_message" && !event.body.interrupted && event.body.text.trim() !== "")
         return {
           reply: said?.type === "assistant_message" ? said.body.text : "",
           ended: ended?.type === "turn_end" ? ended.body.reason : "error",
@@ -213,7 +225,13 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         }
       },
       busy: (id) => sessions.get(id)?.loop.busy() ?? false,
-      stop: (id) => child(id).loop.cancel(),
+      // Stopping is stopping: messages it had not yet read are dropped, so
+      // that it does not carry on with them by itself.
+      stop: (id) => {
+        const { loop } = child(id)
+        inbox.take(id)
+        loop.cancel()
+      },
     }
   }
 
@@ -379,9 +397,12 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       closed = true
       // A question still open is refused, which lets whatever asked it finish.
       questions.refuseAll()
+      // Jobs are marked and noted as stopped by the closing first, while
+      // the sessions that started them can still record it. Then the turns
+      // are stopped, and then the jobs are waited for.
+      const jobsStopped = jobs.stopAll()
       await Promise.all([...sessions.values()].map(({ loop }) => loop.stop()))
-      // After the turns have stopped, so that none can start another job.
-      await jobs.stopAll()
+      await jobsStopped
       db.close()
     },
   }

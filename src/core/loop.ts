@@ -204,6 +204,14 @@ export function createLoop(options: LoopOptions): Loop {
       // Cleared in the same tick as the last inbox check, so a message that
       // arrives next always finds the loop idle and starts a new turn.
       active = false
+      // A note that arrived between the last turn ending and this moment
+      // found the loop busy and was held. It is written now, or it would
+      // wait for a turn that may never come.
+      try {
+        writeNotes("quiet")
+      } catch {
+        // The log cannot be written, which the next thing to try will report.
+      }
     }
   }
 
