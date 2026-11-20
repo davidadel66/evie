@@ -30,6 +30,8 @@ export function buildRequest(
       // an empty message.
       else if (text !== "") messages.push({ role: "assistant", text })
     }
+    // A note is Evie's own word to the model, marked so it is not taken for the owner's.
+    if (event.type === "note") messages.push({ role: "user", text: `[Note from Evie: ${event.body.text}]` })
     if (event.type === "tool_result") {
       messages.push({ role: "tool", callId: event.body.callId, text: event.body.text })
     }

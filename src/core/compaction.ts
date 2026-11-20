@@ -40,6 +40,7 @@ export const estimateTokens = (text: string) => Math.ceil(text.length / 4)
 function eventTokens(event: StoredEvent): number {
   switch (event.type) {
     case "user_message":
+    case "note":
       return estimateTokens(event.body.text)
     case "assistant_message":
       return estimateTokens(event.body.text) + estimateTokens(JSON.stringify(event.body.toolCalls ?? ""))

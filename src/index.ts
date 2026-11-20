@@ -8,6 +8,7 @@ export { instructions, type InstructionsOptions } from "./plugins/instructions.t
 export { permissions, type Mode, type PermissionsOptions, type Rule } from "./plugins/permissions/index.ts"
 export { models } from "./plugins/models/index.ts"
 export { shell } from "./plugins/shell.ts"
+export { undo, type UndoOptions } from "./plugins/undo.ts"
 export { web, type WebOptions } from "./plugins/web.ts"
 export { loadSettingsFiles, type SettingsFiles } from "./settings-files.ts"
 export { loadSettings, type Settings } from "./settings.ts"

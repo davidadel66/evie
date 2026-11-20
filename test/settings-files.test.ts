@@ -69,7 +69,7 @@ const defaultTools = [...usualTools, "ask", "web_fetch"]
 test("with no settings file, the built-in plugins load", async () => {
   const { offered, settings } = await start(undefined)
 
-  expect(settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "shell", "permissions", "models", "ask", "instructions", "web", "openrouter"])
+  expect(settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "shell", "permissions", "undo", "models", "ask", "instructions", "web", "openrouter"])
   expect(await offered()).toEqual(defaultTools)
 })
 
@@ -142,7 +142,7 @@ test("a plugin that cannot be loaded stops Evie at start, with an error that nam
   await writeFile(join(outside, "broken.ts"), "export default { name: 'broken', setup() { throw new Error('could not connect') } }")
 
   await expect(start({ plugins: ["no-such-plugin"] })).rejects.toThrow(
-    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, guard, permissions, models, ask, instructions, web, openrouter.',
+    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, guard, permissions, undo, models, ask, instructions, web, openrouter.',
   )
   await expect(start({ plugins: ["/no/such/file.ts"] })).rejects.toThrow('The plugin "/no/such/file.ts" could not be loaded')
   await expect(start({ plugins: [join(outside, "empty.ts")] })).rejects.toThrow("does not export a plugin")
