@@ -2,7 +2,7 @@ import { homedir } from "node:os"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import type { CheckedToolCall } from "../../core/types.ts"
 import { followLinks } from "../guard.ts"
-import { isOutwardFacing, isReadOnly, partsOf, placesIn, plainWords, startOf, wordsIn } from "./shell.ts"
+import { isOutwardFacing, isReadOnly, leavesForHome, partsOf, placesIn, plainWords, startOf } from "./shell.ts"
 
 // The rules of the permissions plugin: what a tool call is about to do, and
 // whether that is allowed, denied, or needs the owner's say-so. This file
@@ -43,6 +43,8 @@ export type Act = {
   kind: "path" | "command" | "other"
   // For a path: whether it is a folder being searched, not one file.
   folder?: boolean
+  // For a command: the files it names, in full.
+  names?: string[]
 }
 
 const READ_TOOLS = ["read", "grep", "glob"]
@@ -59,6 +61,19 @@ export function isInside(folder: string | null, absolute: string): boolean {
   if (folder === null) return false
   const within = relative(folder, absolute)
   return within === "" || (!within.startsWith("..") && !isAbsolute(within))
+}
+
+// Where a word of a command points, in full: "nowhere" for the places that
+// are not files, and "unknown" when it cannot be told, which is treated as
+// outside the project.
+function whereIs(place: string, runsIn: string | null): string {
+  if (["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/stdin"].includes(place)) return "nowhere"
+  // Another user's home folder.
+  if (/^~[^/]/.test(place)) return "unknown"
+  const expanded = expandHome(place)
+  // A path built from a variable.
+  if (expanded.includes("$")) return expanded.includes("/") ? "unknown" : "nowhere"
+  return fullPath(expanded, runsIn)
 }
 
 // The files a patch names. The patch tool reads each line with the space
@@ -85,14 +100,16 @@ export function actsOf(call: CheckedToolCall, folder: string | null): Act[] {
   if (call.name === "shell") {
     const workdir = text(call.input.workdir)
     const runsIn = workdir === "" ? folder : fullPath(expandHome(workdir), folder)
-    return partsOf(text(call.input.command)).map((part) => ({
-      action: "shell",
-      target: part,
-      // A command reaches outside the project when it runs in a folder
-      // outside it, or names a place outside it.
-      inside: isInside(folder, runsIn ?? homedir()) && placesIn(part).every((place) => place === "/dev/null" || isInside(folder, fullPath(expandHome(place), runsIn))),
-      kind: "command",
-    }))
+    const parts = partsOf(text(call.input.command))
+    const judged = parts.map((part) => {
+      const places = placesIn(part).map((place) => whereIs(place, runsIn))
+      return { part, names: places.filter((place) => place !== "nowhere" && place !== "unknown"), outside: places.some((place) => place === "unknown" || (place !== "nowhere" && !isInside(folder, place))) }
+    })
+    // A command reaches outside the project when it runs in a folder
+    // outside it or names a place outside it. Once one command in the line
+    // has changed folder to somewhere outside, so have the ones after it.
+    const left = !isInside(folder, runsIn ?? homedir()) || judged.some(({ part, outside }) => leavesForHome(part) || (outside && /^(cd|pushd)$/.test(plainWords(part).words[0] ?? "")))
+    return judged.map(({ part, names, outside }) => ({ action: "shell", target: part, inside: !left && !outside, kind: "command", names }))
   }
   if (WEB_TOOLS.includes(call.name)) return [{ action: "web", target: text(call.input.url) || text(call.input.query), kind: "other" }]
   return [{ action: call.name, target: "", kind: "other" }]
@@ -110,9 +127,18 @@ function pathMatches(pattern: string, target: string, folder: string | null): bo
   // A bare file name matches that name in any folder.
   if (!pattern.includes("/")) return new RegExp(`^${glob(pattern)}$`, anyCase).test(basename(target))
   const expanded = expandHome(pattern)
-  const full = isAbsolute(expanded) ? expanded : resolve(folder ?? homedir(), expanded)
-  // `folder/**` covers the folder itself as well as what is in it.
-  return new RegExp(`^${glob(full)}$`, anyCase).test(target) || (full.endsWith("/**") && new RegExp(`^${glob(full.slice(0, -3))}$`, anyCase).test(target))
+  const written = isAbsolute(expanded) ? expanded : resolve(folder ?? homedir(), expanded)
+  // A file is compared by where it really is, so the pattern is too: the
+  // part of it before any `*` is followed through links.
+  const star = written.indexOf("*")
+  const cut = star === -1 ? written.length : written.lastIndexOf("/", star)
+  const followed = cut <= 0 ? written : followLinks(written.slice(0, cut)) + written.slice(cut)
+  return [written, followed].some(
+    (full) =>
+      new RegExp(`^${glob(full)}$`, anyCase).test(target) ||
+      // `folder/**` covers the folder itself as well as what is in it.
+      (full.endsWith("/**") && new RegExp(`^${glob(full.slice(0, -3))}$`, anyCase).test(target)),
+  )
 }
 
 function commandMatches(pattern: string, command: string): boolean {
@@ -161,13 +187,15 @@ export function effectFor(act: Act, rules: readonly Rule[], mode: Mode, folder: 
     // A rule that denies reading or changing a file also stops a command
     // that names that file, so `cat .env` does not get past a rule for `.env`.
     const fileRules = denies.filter((rule) => (rule.action === "read" || rule.action === "edit") && rule.match !== undefined)
-    if (fileRules.length > 0) {
-      const named = wordsIn(act.target).map((word) => fullPath(expandHome(word), folder))
-      if (fileRules.some((rule) => named.some((file) => pathMatches(rule.match!, file, folder)))) return "deny"
-    }
+    if (fileRules.some((rule) => (act.names ?? []).some((file) => pathMatches(rule.match!, file, folder)))) return "deny"
   }
 
-  const effect = matching.at(-1)?.effect ?? byMode(act, mode)
+  const decides = matching.at(-1)
+  let effect = decides?.effect ?? byMode(act, mode)
+  // A rule that allows a kind of command was not written, or answered, with
+  // reaching outside the project in mind. Only a rule for exactly this
+  // command allows that.
+  if (act.kind === "command" && effect === "allow" && decides && act.inside === false && decides.match?.trim() !== act.target) effect = "ask"
   if (mode !== "read-only") return effect
   const changes = act.action === "edit" || (act.action === "shell" && !isReadOnly(act.target)) || !KNOWN.includes(act.action)
   return changes || effect === "ask" ? "deny" : effect
@@ -181,7 +209,7 @@ export function alwaysRule(act: Act, folder: string | null): { rule: Rule; label
   if (act.kind === "path") {
     const doing = act.action === "read" ? "reading" : "changing"
     if (act.inside && folder !== null) return { rule: { action: act.action, match: `${folder}/**`, effect: "allow" }, label: `${doing} files inside the project` }
-    if (act.folder) return { rule: { action: act.action, match: `${act.target}/**`, effect: "allow" }, label: `${doing} anything under ${act.target}` }
+    if (act.folder) return { rule: { action: act.action, match: `${act.target === "/" ? "" : act.target}/**`, effect: "allow" }, label: `${doing} anything under ${act.target}` }
     const parent = dirname(act.target)
     return { rule: { action: act.action, match: join(parent, "*"), effect: "allow" }, label: `${doing} files directly in ${parent}` }
   }

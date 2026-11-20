@@ -590,3 +590,128 @@ test("a project that lists the permissions plugin itself still gets its own mode
   expect(asked).toEqual([])
   expect(ran).toEqual(["edit src/app.ts"])
 })
+
+// ---- Found in the second review ----------------------------------------------------------------
+
+test("read-only mode tells a command that only looks from one that does more, as plainly written", async () => {
+  const { attempt, ran } = await start({ mode: "read-only" })
+  const more = [
+    "npx ls",
+    "bunx cat notes.md",
+    "./ls",
+    "cat ~root/notes",
+    "sort -uo package.json names.txt",
+    "tree -ao listing.txt",
+    "git --git-dir=/elsewhere/.git status",
+    "cat {/etc/passwd,notes.md}",
+    "grep -f/etc/passwd notes.md",
+    'cat "$PWD/../notes.md"',
+    "cd && cat notes.md",
+    "echo x>../notes.md",
+  ]
+  for (const command of more) expect(await attempt(shell(command))).toStartWith("Not allowed")
+
+  const looks = ['rg "a|b" src', "ls src 2>/dev/null", "ls 2>&1", "cd src && ls", "rg '=>' src", 'echo "a && b"', "ls -la \\\n  src"]
+  for (const command of looks) expect(await attempt(shell(command))).toBe("done")
+  expect(ran).toHaveLength(looks.length)
+})
+
+test("a rule that denies holds behind a wrapper with options, a full path, and other ways of naming a file", async () => {
+  const { attempt, ran } = await start({
+    mode: "auto",
+    rules: [
+      { action: "shell", match: "git push *", effect: "deny" },
+      { action: "read", match: ".env", effect: "deny" },
+      { action: "edit", match: "secrets/**", effect: "deny" },
+    ],
+  })
+
+  for (const call of [
+    shell("nice -n 5 git push"),
+    shell("env -i git push"),
+    shell("command -p git push"),
+    shell("/usr/bin/git push"),
+    shell("git --git-dir .git push"),
+    shell("cat<.env"),
+    shell("cat {.env,notes.md}"),
+    shell("bun --env-file=.env run start"),
+    shell("cat .env", "config"),
+    shell("rm key.txt", "secrets"),
+    shell("echo x>secrets/key.txt"),
+  ]) {
+    expect(await attempt(call)).toStartWith("Not allowed: one of the owner's rules denies this.")
+  }
+  expect(ran).toEqual([])
+})
+
+test("in auto mode more ways of publishing, deploying and writing outside the project are asked about", async () => {
+  const { attempt, asked, ran } = await start({ mode: "auto" })
+  const commands = [
+    "twine upload dist/pkg.whl",
+    "gem push pkg.gem",
+    "helm upgrade app chart",
+    "pulumi up",
+    "docker compose push",
+    "docker buildx build --push .",
+    "glab mr create",
+    "bun x vercel deploy",
+    "pnpm dlx vercel",
+    "http POST example.com/hook",
+    "tar -xf a.tar -C../..",
+    "make -C../other clean",
+    "echo x>/etc/x",
+    "cd && rm -rf build",
+  ]
+  for (const command of commands) await attempt(shell(command), NO)
+
+  expect(asked).toHaveLength(commands.length)
+  expect(ran).toEqual([])
+})
+
+test("a rule that allows a kind of command does not stretch to reaching outside the project", async () => {
+  const rules: Rule[] = [
+    { action: "shell", match: "echo *", effect: "allow" },
+    { action: "shell", match: "cat *", effect: "allow" },
+    { action: "shell", match: "rm -rf ~/old-cache", effect: "allow" },
+  ]
+  const manual = await start({ rules })
+  const readOnly = await start({ mode: "read-only", rules })
+
+  await manual.attempt(shell("echo done > notes.md"))
+  await manual.attempt(shell("echo x > ~/.zshrc"), NO)
+  await manual.attempt(shell("cat /etc/passwd"), NO)
+  // A rule for exactly one command still allows that command.
+  await manual.attempt(shell("rm -rf ~/old-cache"))
+  expect(await readOnly.attempt(shell("cat /etc/passwd"))).toStartWith("Not allowed")
+
+  expect(manual.asked).toHaveLength(2)
+  expect(manual.ran).toHaveLength(2)
+})
+
+test("an always answer names three words where two would cover too much", async () => {
+  const { attempt, asked } = await start()
+
+  await attempt(shell("gh pr create --fill"), always)
+  await attempt(shell("bun run build"), always)
+  await attempt(shell("gh pr merge 12"), NO)
+  await attempt(shell("bun run deploy"), NO)
+
+  expect(asked.map((question) => question.choices[1])).toEqual([
+    'Always in this project: allow commands that start with "gh pr create"',
+    'Always in this project: allow commands that start with "bun run build"',
+    'Always in this project: allow commands that start with "gh pr merge"',
+    'Always in this project: allow commands that start with "bun run deploy"',
+  ])
+})
+
+test("a rule written with a path that goes through a link still matches", async () => {
+  const real = await realpath(await mkdtemp(join(tmpdir(), "evie-real-")))
+  const holder = await realpath(await mkdtemp(join(tmpdir(), "evie-links-")))
+  cleanups.push(() => rm(real, { recursive: true, force: true }), () => rm(holder, { recursive: true, force: true }))
+  await symlink(real, join(holder, "link"))
+  const { attempt, asked } = await start({ mode: "auto", rules: [{ action: "read", match: `${join(holder, "link")}/**`, effect: "deny" }] })
+
+  expect(await attempt(read(join(holder, "link", "a.txt")))).toStartWith("Not allowed: one of the owner's rules denies this.")
+  expect(await attempt(shell(`cat ${join(holder, "link", "a.txt")}`))).toStartWith("Not allowed: one of the owner's rules denies this.")
+  expect(asked).toEqual([])
+})
