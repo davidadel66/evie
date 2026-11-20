@@ -144,9 +144,10 @@ export function subagents(options: SubagentsOptions = {}): Plugin {
           "such as searching a codebase, researching a question, reviewing a change or running and reading tests, and " +
           "for pieces of work that do not depend on each other, which you can start several of at once. Keep changes " +
           "to files that depend on each other in your own hands.\n\n" +
-          "A subagent always works in the background. This call returns at once, and you are told its report when it " +
-          "has finished. Do not wait for it or check on it: carry on with work that does not overlap with its task, or " +
-          "say briefly what you have started and end your reply.\n\n" +
+          "A subagent always works in the background. This call returns at once, without the report. You are woken " +
+          "with the report when it has finished, so until then you do not have it: do not guess it, and do not ask " +
+          "the subagent for it. Carry on with work that does not overlap with its task, or say briefly what you have " +
+          "started and end your reply.\n\n" +
           "The subagent sees none of this conversation, only your task. Write the task so it stands alone: the goal, " +
           "what you already know, where to look, what is out of scope, and what the report should contain.\n\n" +
           "The owner can define agents: roles with their own instructions. When they have, you are given the list, " +
@@ -202,9 +203,11 @@ export function subagents(options: SubagentsOptions = {}): Plugin {
           const job = follow(child, context)
           return (
             `A subagent has started on this, as background job ${job.id}. Its id is "${child}".\n\n` +
-            "You will be told its report when it has finished. Do not wait for it or check on it: carry on with work " +
-            "that does not overlap with its task, or say briefly what you have started and end your reply. To send it " +
-            `a further message, use subagent_send with its id. To stop it, use job_stop with the id "${job.id}".`
+            "You do not have its report yet, and you do not know what it will find. Do not guess the report, do not write " +
+            "one yourself, and do not send the subagent a message to ask for it. Carry on with work that does not overlap " +
+            "with its task, or say briefly what you have started and end your reply: you will be woken with its report " +
+            "when it has finished. To give it more work later, use subagent_send with its id. To stop it, use job_stop " +
+            `with the id "${job.id}".`
           )
         },
       })

@@ -13,7 +13,7 @@ import {
   tailBudget,
   triggerSize,
 } from "./compaction.ts"
-import { buildRequest } from "./request-builder.ts"
+import { ONLY_THE_CORE_WRITES, buildRequest } from "./request-builder.ts"
 import { CancelledBeforeStart, runToolCall } from "./tools.ts"
 import type { HookRunner } from "./host.ts"
 import type { EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, ToolContext, Usage } from "./types.ts"
@@ -350,6 +350,16 @@ export function createLoop(options: LoopOptions): Loop {
           reason = "error"
           error = failure
           break
+        }
+
+        // A provider that did not stop where it was asked to may let the
+        // model write what only the core writes. It is cut off there, and so
+        // are the tool calls: what follows such text is the model acting on
+        // a result it made up.
+        const forged = Math.min(...ONLY_THE_CORE_WRITES.map((opening) => text.indexOf(opening)).filter((at) => at !== -1))
+        if (Number.isFinite(forged)) {
+          text = text.slice(0, forged).trimEnd()
+          calls.length = 0
         }
 
         emit(

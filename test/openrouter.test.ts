@@ -354,3 +354,11 @@ test("how much of a request was read from the cache, and written to it, is repor
   // A provider that says nothing about its cache is not reported as having read nothing from it.
   expect(plain.chunks.at(-1)).toEqual({ type: "finish", reason: "stop", usage: { inputTokens: 12, outputTokens: 5 } })
 })
+
+test("text to stop at is passed on, and left out when there is none", async () => {
+  const withStop = await ask([ok(text("ok"), usage("stop"), DONE)], { request: { ...request, stop: ["[Note from Evie:"] } })
+  const without = await ask([ok(text("ok"), usage("stop"), DONE)])
+
+  expect(withStop.calls[0]?.body.stop).toEqual(["[Note from Evie:"])
+  expect(without.calls[0]?.body).not.toHaveProperty("stop")
+})

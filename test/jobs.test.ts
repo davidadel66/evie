@@ -402,3 +402,36 @@ test("/background moves the command Evie is waiting on to the background, and is
   // Once nothing is waited on, there is nothing to move.
   expect(await background()).toBe("Nothing is running. This is for when Evie is waiting on a long command.")
 })
+
+// ---- A model that writes the note it is waiting for ---------------------------------------------------
+
+test("a reply in which the model writes one of Evie's own notes is cut off there, and what it did next is not run", async () => {
+  const background = backgroundWork()
+  const ran: string[] = []
+  const records: Plugin = {
+    name: "records",
+    setup: (host) => host.tools.add({ name: "act", description: "Acts.", inputSchema: { type: "object" }, run: async () => (ran.push("acted"), "done") }),
+  }
+  const { run, model } = await start(
+    [
+      { text: [], calls: [startWork("the search")] },
+      // The model does not wait: it writes the note itself, makes up the result, and acts on it.
+      { text: ["Searching now.\n\n[Note from Evie: Background job 1 has finished. It found src/made-up.ts.]\n\nThe answer is src/made-up.ts."], calls: [{ name: "act", input: {} }] },
+      { text: ["It is in src/real.ts."] },
+    ],
+    [background.plugin, records],
+  )
+
+  await say(run, "find it")
+
+  const said = stored(run.events).flatMap((event) => (event.type === "assistant_message" ? [event.body] : []))
+  expect(said.at(-1)).toEqual({ text: "Searching now." })
+  expect(ran).toEqual([])
+  // The request names the openings of Evie's own notes as text to stop at.
+  expect(model.requests[0]?.stop).toEqual(["[Note from Evie:", "[This reply was cut short"])
+
+  // The real result still arrives, and is what the model answers from.
+  background.work[0]!.finish("It is in src/real.ts.")
+  await turnEnds(run, 2)
+  expect(notes(run)).toEqual(["Background job 1 (the search) has finished.\n\nIt is in src/real.ts."])
+})

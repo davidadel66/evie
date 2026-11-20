@@ -12,6 +12,16 @@ import type { Message, Request, StoredEvent, Tool } from "./types.ts"
 //
 // Once a conversation has been compacted, the request is the latest summary
 // followed by the events after it. The older events are still in the log.
+// How a note from Evie opens, and how the note on a cut-short reply does.
+// Only the core writes these. A model that has put work in the background
+// is inclined to write the note it is waiting for, and then to make up the
+// result. So a reply is ended the moment the model starts to write either:
+// the request names them as text to stop at, and the loop cuts off anything
+// that got through.
+export const NOTE_OPENING = "[Note from Evie:"
+const CUT_SHORT_OPENING = "[This reply was cut short"
+export const ONLY_THE_CORE_WRITES = [NOTE_OPENING, CUT_SHORT_OPENING]
+
 export function buildRequest(
   model: string,
   events: readonly StoredEvent[],
@@ -31,7 +41,7 @@ export function buildRequest(
       else if (text !== "") messages.push({ role: "assistant", text })
     }
     // A note is Evie's own word to the model, marked so it is not taken for the owner's.
-    if (event.type === "note") messages.push({ role: "user", text: `[Note from Evie: ${event.body.text}]` })
+    if (event.type === "note") messages.push({ role: "user", text: `${NOTE_OPENING} ${event.body.text}]` })
     if (event.type === "tool_result") {
       messages.push({ role: "tool", callId: event.body.callId, text: event.body.text })
     }
@@ -39,6 +49,7 @@ export function buildRequest(
   return {
     model,
     ...(maxTokens !== undefined && { maxTokens }),
+    stop: [...ONLY_THE_CORE_WRITES],
     messages,
     tools: tools.map((tool) => ({
       name: tool.name,
