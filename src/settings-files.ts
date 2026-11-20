@@ -1,9 +1,10 @@
-import { readFile } from "node:fs/promises"
+import { readFile, rename, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { dataFolder } from "./core/evie.ts"
-import type { Plugin, Project, ProjectSettings } from "./core/types.ts"
+import type { Ask, Plugin, Project, ProjectSettings } from "./core/types.ts"
+import { ask } from "./plugins/ask.ts"
 import { files, type FilesOptions } from "./plugins/files/index.ts"
 import { guard } from "./plugins/guard.ts"
 import { instructions } from "./plugins/instructions.ts"
@@ -35,6 +36,11 @@ import type { Settings } from "./settings.ts"
 // is used only when the global file lists that project under "trust".
 // Otherwise it is ignored as a whole, and opening someone else's repository
 // can neither run their code nor change what Evie loads.
+//
+// The first time a project with a settings file is opened, the owner is
+// asked whether to trust it. The answer is remembered in the global file:
+// under "trust" for a yes and "untrusted" for a no. A question that could
+// not be put, or was not answered, is a no for now and is asked again.
 
 export type SettingsFiles = {
   // The global settings file, whether or not it exists yet.
@@ -48,7 +54,7 @@ export type SettingsFiles = {
   // The global plugins, in the order listed.
   plugins: Plugin[]
   // What a project adds and switches off.
-  projectSettings(project: Project): Promise<ProjectSettings>
+  projectSettings(project: Project, context?: { ask: Ask }): Promise<ProjectSettings>
 }
 
 type Entry = string | { use: string; options?: Record<string, unknown> }
@@ -61,6 +67,8 @@ type SettingsFile = {
   contextLimits?: Record<string, number>
   plugins?: Entry[]
   trust?: string[]
+  // Projects the owner chose not to trust, so they are not asked again.
+  untrusted?: string[]
   disable?: string[]
 }
 
@@ -72,11 +80,14 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   shell: () => shell(),
   guard: (_options, context) => guard({ dataFolder: context.home }),
   models: () => models(),
+  ask: () => ask(),
   instructions: (_options, context) => instructions({ dataFolder: context.home }),
   web: (_options, context) => web({ env: context.env }),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
-const DEFAULT: Entry[] = ["files", "shell", "guard", "models", "instructions", "web", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "guard", "models", "ask", "instructions", "web", "openrouter"]
+const TRUST = "Yes, trust this project"
+const DO_NOT_TRUST = "No, ignore its settings file"
 
 export async function loadSettingsFiles(options: { env: Settings }): Promise<SettingsFiles> {
   const home = dataFolder(options.env)
@@ -86,7 +97,9 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
 
   const plugins: Plugin[] = []
   for (const entry of global.plugins ?? DEFAULT) plugins.push(await load(entry, home, context))
-  const trusted = new Set((global.trust ?? []).map((folder) => resolve(expandHome(folder))))
+  const folders = (list: string[] | undefined) => new Set((list ?? []).map((folder) => resolve(expandHome(folder))))
+  const trusted = folders(global.trust)
+  const untrusted = folders(global.untrusted)
 
   // The environment wins over both files.
   const fromEnv = {
@@ -107,18 +120,40 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
       },
     }),
     plugins,
-    async projectSettings(project) {
+    async projectSettings(project, asking) {
       const projectFile = join(project.folder, ".evie", "evie.json")
       const own = await readSettingsFile(projectFile)
       if (!own) return { plugins: [], disable: [], notices: [] }
 
+      // A project that is on neither list is asked about, once.
+      if (!trusted.has(project.folder) && !untrusted.has(project.folder) && asking) {
+        const answer = await asking.ask({
+          text:
+            `This project has a settings file of its own, ${projectFile}. It can load plugins, which are code that ` +
+            `runs with your full permissions, and it can switch off protections such as the guard. Use it?`,
+          choices: [TRUST, DO_NOT_TRUST],
+        })
+        // Written down first: an answer that could not be saved does not count.
+        if (answer === TRUST) {
+          await remember(globalFile, "trust", project.folder)
+          trusted.add(project.folder)
+        }
+        if (answer === DO_NOT_TRUST) {
+          await remember(globalFile, "untrusted", project.folder)
+          untrusted.add(project.folder)
+        }
+      }
+
       if (!trusted.has(project.folder)) {
+        const how = untrusted.has(project.folder)
+          ? `move "${project.folder}" from "untrusted" to "trust" in ${globalFile}`
+          : `add "${project.folder}" to "trust" in ${globalFile}`
         return {
           plugins: [],
           disable: [],
           notices: [
             `This project has a settings file of its own, ${projectFile}, which was ignored because the project is ` +
-              `not trusted. To use it, add "${project.folder}" to "trust" in ${globalFile}.`,
+              `not trusted. To use it, ${how}.`,
           ],
         }
       }
@@ -143,6 +178,25 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
       }
     },
   }
+}
+
+// Adds a project folder to one of the lists in the global settings file. The
+// file is read again first, so nothing written to it since Evie started is
+// lost, and replaced in one step, so it is never left half written. Answers
+// are saved one at a time.
+let saving: Promise<void> = Promise.resolve()
+function remember(file: string, list: "trust" | "untrusted", folder: string): Promise<void> {
+  const saved = saving.then(() => save(file, list, folder))
+  saving = saved.catch(() => {})
+  return saved
+}
+async function save(file: string, list: "trust" | "untrusted", folder: string): Promise<void> {
+  const settings: SettingsFile = (await readSettingsFile(file)) ?? {}
+  const other = list === "trust" ? "untrusted" : "trust"
+  settings[list] = [...new Set([...(settings[list] ?? []), folder])]
+  if (settings[other]) settings[other] = settings[other].filter((listed) => resolve(expandHome(listed)) !== folder)
+  await writeFile(`${file}.new`, `${JSON.stringify(settings, null, 2)}\n`)
+  await rename(`${file}.new`, file)
 }
 
 // ---- Loading one plugin -----------------------------------------------------------------
@@ -220,6 +274,7 @@ async function readSettingsFile(file: string): Promise<SettingsFile | undefined>
     typeof item === "string" || (typeof item === "object" && item !== null && typeof (item as { use?: unknown }).use === "string")
   listOf("plugins", isEntry, 'plugin names, paths, or { "use": ..., "options": ... } entries')
   listOf("trust", (item) => typeof item === "string", "project folders")
+  listOf("untrusted", (item) => typeof item === "string", "project folders")
   listOf("disable", (item) => typeof item === "string", "plugin names")
   if (settings.model !== undefined && (typeof settings.model !== "string" || settings.model.trim() === "")) {
     throw new Error(`In ${file}, "model" must be the name of a model.`)

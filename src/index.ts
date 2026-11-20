@@ -1,6 +1,7 @@
 export { createEvie, dataFolder, type EvieOptions } from "./core/evie.ts"
 export type * from "./core/types.ts"
 export { createOpenRouterProvider, openrouter, type OpenRouterOptions } from "./plugins/openrouter.ts"
+export { ask } from "./plugins/ask.ts"
 export { files, type FilesOptions } from "./plugins/files/index.ts"
 export { guard, type GuardOptions } from "./plugins/guard.ts"
 export { instructions, type InstructionsOptions } from "./plugins/instructions.ts"

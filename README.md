@@ -98,6 +98,7 @@ Type a message and press Enter.
 | `shell` | Runs a command |
 | `web_search` | Searches the internet |
 | `web_fetch` | Reads a web page as text |
+| `ask` | Asks you a question with choices, and waits for your answer |
 
 Models differ in which tools they handle well. Evie gives GPT models `patch`
 and every other model `edit` and `write`, each with a system prompt written
@@ -184,7 +185,7 @@ the per-model settings and the guard.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the seven built-in ones load:
+a list, the eight built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
@@ -192,6 +193,7 @@ a list, the seven built-in ones load:
 | `shell` | `shell` |
 | `guard` | The check that refuses the most destructive commands |
 | `models` | What each model family is given, and the `/model` command |
+| `ask` | `ask`, the model's way to put a question to you |
 | `instructions` | The owner's and the project's instruction files |
 | `web` | `web_search` and `web_fetch` |
 | `openrouter` | The connection to models through OpenRouter |
@@ -203,6 +205,7 @@ a list, the seven built-in ones load:
     "shell",
     "guard",
     "models",
+    "ask",
     "instructions",
     "web",
     "openrouter",
@@ -228,16 +231,19 @@ project's model:
 **A plugin runs with Evie's full permissions. Nothing sandboxes it, so load
 only plugins you trust.**
 
-For that reason a project's settings file is used only when you list the
-project's folder under `"trust"` in the global file:
+For that reason a project's settings file is used only when the project's
+folder is listed under `"trust"` in the global file. The first time you
+open a project that has a settings file, Evie asks whether to trust it and
+writes your answer to the global file: under `"trust"` for a yes, and under
+`"untrusted"` for a no, so you are not asked again.
 
 ```json
-{ "trust": ["/path/to/my/project"] }
+{ "trust": ["/path/to/my/project"], "untrusted": ["/path/to/someone-elses"] }
 ```
 
-Otherwise the project's file is ignored as a whole, and Evie tells you so.
-That way opening someone else's repository can neither run their code nor
-switch off a protection such as the guard.
+Until a project is trusted its file is ignored as a whole, and Evie tells
+you so. That way opening someone else's repository can neither run their
+code nor switch off a protection such as the guard.
 
 ### Writing a plugin
 
@@ -292,6 +298,19 @@ code runs:
 | `before_request` | After a request is built, before it is sent | Change the system prompt and the tools the model is offered |
 | `before_tool` | After a tool call's input is checked, before the tool runs | Refuse the call with a reason |
 | `after_tool` | After a tool has run | Change the result the model sees |
+
+A hook and a tool can also ask you a question and wait for the answer.
+`context.ask` returns the choice you made, or `null` when the question was
+refused: the turn was cancelled, or the client cannot show questions. Treat
+`null` as a no.
+
+```ts
+host.on("before_tool", async (call, context) => {
+  if (call.name !== "shell") return
+  const answer = await context.ask({ text: `Run ${call.input.command}?`, choices: ["Yes", "No"] })
+  if (answer !== "Yes") return { deny: "The owner did not allow it." }
+})
+```
 
 ```ts
 host.on("before_tool", (call) => {

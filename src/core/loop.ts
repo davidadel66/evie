@@ -16,7 +16,7 @@ import {
 import { buildRequest } from "./request-builder.ts"
 import { CancelledBeforeStart, runToolCall } from "./tools.ts"
 import type { HookRunner } from "./host.ts"
-import type { EventBodies, EvieEvent, HookContext, Host, Project, Provider, StoredEvent, ToolCall, Usage } from "./types.ts"
+import type { EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, Usage } from "./types.ts"
 
 export type LoopOptions = {
   session: string
@@ -39,6 +39,9 @@ export type LoopOptions = {
   // Runs a function as one database transaction: all of its writes happen, or none.
   atomically<Result>(work: () => Result): Result
   emit(event: EvieEvent): void
+  // Asks the owner a question in this session and waits. The wait ends with
+  // a refusal when the signal fires.
+  ask(question: Question, signal: AbortSignal): Promise<string | null>
 }
 
 export type Loop = {
@@ -124,6 +127,7 @@ export function createLoop(options: LoopOptions): Loop {
       project,
       events,
       signal,
+      ask: (question) => options.ask(question, signal),
     })
 
     // Tried once as it is, then once more with long tool results shortened,
@@ -212,7 +216,8 @@ export function createLoop(options: LoopOptions): Loop {
         }
 
         // What a hook is told about the moment it runs in.
-        const context = (): HookContext => ({ session, project, events: log.events(session), signal })
+        const ask = (question: Question) => options.ask(question, signal)
+        const context = (): HookContext => ({ session, project, events: log.events(session), signal, ask })
 
         // A conversation that has grown too big is compacted before the
         // next request: its older part is replaced by a summary.
@@ -318,7 +323,7 @@ export function createLoop(options: LoopOptions): Loop {
           try {
             result = await runToolCall(call, {
               tools: offered,
-              context: { signal, folder },
+              context: { signal, folder, ask },
               before: (checked) => hooks.beforeTool(checked, context()),
               after: (checked, output) => hooks.afterTool(checked, output, context()),
               outputFolder: join(outputFolder, session),
