@@ -93,6 +93,12 @@ Type a message and press Enter.
   `/jobs stop` with an id stops one. `/background` moves the command Evie
   is waiting on right now to the background, so you need not wait for it. Ctrl-C leaves background commands
   running; they stop when Evie quits.
+- **Evie can hand work to subagents.** For a side task such as searching
+  the code or reviewing a change, it can start a second agent with an empty
+  conversation, which works in the background and reports back. Several
+  can work at once. They show in `/jobs`, where you can stop one. A
+  subagent works without asking before each step, so in `manual` mode Evie
+  asks you before starting one.
 - **`/compact`** replaces the older part of a long conversation with a
   summary, to save room. Evie also does this by itself when a conversation
   gets long.
@@ -109,6 +115,8 @@ Type a message and press Enter.
 | `glob` | Finds files by name |
 | `shell` | Runs a command, in the background when it is a long one |
 | `job_stop` | Stops something running in the background |
+| `subagent` | Hands a piece of work to a second agent, which reports back |
+| `subagent_send` | Sends a further message to a subagent |
 | `web_search` | Searches the internet |
 | `web_fetch` | Reads a web page as text |
 | `ask` | Asks you a question with choices, and waits for your answer |
@@ -258,7 +266,7 @@ the per-model settings and the permissions.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the ten built-in ones load:
+a list, the eleven built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
@@ -269,6 +277,7 @@ a list, the ten built-in ones load:
 | `undo` | The copies kept of files before they are changed, and the `/undo` command |
 | `models` | What each model family is given, and the `/model` command |
 | `ask` | `ask`, the model's way to put a question to you |
+| `subagents` | `subagent` and `subagent_send` |
 | `instructions` | The owner's and the project's instruction files |
 | `web` | `web_search` and `web_fetch` |
 | `openrouter` | The connection to models through OpenRouter |
@@ -283,6 +292,7 @@ a list, the ten built-in ones load:
     "undo",
     "models",
     "ask",
+    "subagents",
     "instructions",
     "web",
     "openrouter",

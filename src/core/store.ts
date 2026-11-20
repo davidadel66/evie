@@ -36,6 +36,10 @@ export const MIGRATIONS: Migration[] = [
       time INTEGER NOT NULL
     )`)
   },
+  // 2: a session can have a parent: the session that started it as a subagent.
+  (db) => {
+    db.run("ALTER TABLE session ADD COLUMN parent TEXT")
+  },
 ]
 
 // Opens Evie's one database file and brings its tables up to date.
