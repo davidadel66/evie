@@ -11,13 +11,17 @@ export type Projects = {
   get(id: string): Project | undefined
   // Starts a session in a project, or the general session when there is
   // none. With `parent`, it is a subagent of that session.
-  createSession(project: Project | null, parent?: string): string
+  // `as` says which named agent a subagent is, and whether it is held to
+  // reading only.
+  createSession(project: Project | null, parent?: string, as?: { agent?: string; readOnly?: boolean }): string
   // The session used last in a project, or the last general session: the one
   // with the newest event. Undefined when none has had a conversation. A
   // subagent's session is never the answer: it is not the owner's to carry on.
   lastSession(project: Project | null): string | undefined
   // The session that started this one as a subagent, if one did.
   parentOf(session: string): string | undefined
+  // What a subagent's session was started as.
+  startedAs(session: string): { agent?: string; readOnly: boolean }
 }
 
 // The folder a project is rooted at: the nearest folder at or above this one
@@ -33,8 +37,10 @@ export function createProjects(db: Database): Projects {
   const byFolder = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE folder = ?")
   const byId = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE id = ?")
   const insertProject = db.query("INSERT INTO project (id, name, folder, created) VALUES (?, ?, ?, ?)")
-  const insertSession = db.query("INSERT INTO session (id, project, created, parent) VALUES (?, ?, ?, ?)")
-  const parent = db.query<{ parent: string | null }, [string]>("SELECT parent FROM session WHERE id = ?")
+  const insertSession = db.query("INSERT INTO session (id, project, created, parent, agent, read_only) VALUES (?, ?, ?, ?, ?, ?)")
+  const parent = db.query<{ parent: string | null; agent: string | null; read_only: number | null }, [string]>(
+    "SELECT parent, agent, read_only FROM session WHERE id = ?",
+  )
   // `IS` compares with null as well as with an id. Only a session the owner
   // has said something in counts: one that holds nothing but a question
   // asked while it was opening is not a conversation to carry on.
@@ -69,10 +75,15 @@ export function createProjects(db: Database): Projects {
       return byId.get(id) ?? undefined
     },
 
-    createSession(project, startedBy) {
+    createSession(project, startedBy, as) {
       const id = crypto.randomUUID()
-      insertSession.run(id, project?.id ?? null, Date.now(), startedBy ?? null)
+      insertSession.run(id, project?.id ?? null, Date.now(), startedBy ?? null, as?.agent ?? null, as?.readOnly ? 1 : 0)
       return id
+    },
+
+    startedAs(session) {
+      const row = parent.get(session)
+      return { ...(row?.agent != null && { agent: row.agent }), readOnly: row?.read_only === 1 }
     },
 
     parentOf(session) {

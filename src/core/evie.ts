@@ -135,6 +135,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   // in who is asked when the session has a question.
   function startLoop(given: { session: string; project: Project | null; scope: Scope; model: string; canAnswer: boolean; parent?: string }): Open {
     const { session, project, scope, model, parent } = given
+    const as = parent === undefined ? { readOnly: false } : projects.startedAs(session)
     const maxTokens = scope.maxTokens ?? options.maxTokens
     const opened: Open = { project, host: scope.host, model, canAnswer: given.canAnswer, ...(parent !== undefined && { parent }) } as Open
     opened.loop = createLoop({
@@ -165,6 +166,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       },
       children: childrenOf(session, project, scope),
       ...(parent !== undefined && { parent }),
+      ...(as.agent !== undefined && { agent: as.agent }),
+      ...(as.readOnly && { readOnly: true }),
     })
     sessions.set(session, opened)
     return opened
@@ -193,7 +196,10 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         if (closed) throw new Error("Evie is closing.")
         if (projects.parentOf(session) !== undefined) throw new Error("A subagent cannot start subagents of its own.")
         const model = input.model?.trim() || currentModel(log.events(session), sessions.get(session)!.model)
-        const id = projects.createSession(project, session)
+        const id = projects.createSession(project, session, {
+          ...(input.agent !== undefined && { agent: input.agent }),
+          ...(input.readOnly && { readOnly: true }),
+        })
         // Recorded in its log, so that it keeps this model if it is opened again later.
         log.append(id, "model_changed", { model })
         startLoop({ session: id, project, scope, model, canAnswer: false, parent: session })

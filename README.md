@@ -155,6 +155,43 @@ when the session started. Those facts are fixed for the session, so a
 session left open for days still says when it began; Evie is told to check
 the clock when the present time matters.
 
+## Agents
+
+An agent is a role you define, with its own instructions. Evie can start a
+subagent as one: a reviewer that only reads, a planner, a tester.
+
+An agent is a Markdown file. A short header says what it is, and the rest
+is its instructions:
+
+```
+---
+name: reviewer
+description: Reviews a change for bugs. Give it the diff.
+mode: read-only
+model: some/model
+---
+You review code changes. Read the diff and the files it touches.
+Report bugs, most serious first, each with the file and line.
+```
+
+- `description` is what Evie reads to decide when to use the agent.
+- `mode: read-only` holds the agent to reading. Leave it out, or write
+  `mode: auto`, and the agent works as any subagent does. Any other value,
+  a misspelling included, is taken as read-only, so a slip never gives an
+  agent more than you meant.
+- `model` is optional. Without it the agent uses the model you are using.
+- `name` is optional too: without it the file's name is used.
+
+Put the file in **`~/.evie/agents/`** to have the agent in every project,
+or in **`.evie/agents/`** in a project's folder for that project. A
+project's agents are used only when you have trusted the project, and one
+with the same name as yours replaces yours there. It cannot lift a
+read-only limit that yours has.
+
+An agent can be used as soon as its file is saved. You can ask Evie to
+write one. For one in `~/.evie/agents/`, Evie asks you every time, in every
+mode, because it applies in every project from then on.
+
 ## Permissions
 
 Before a tool runs, Evie decides whether it is allowed, denied, or needs

@@ -149,7 +149,9 @@ export type Children = {
   // Starts a subagent and sends it its first message. `model` is the model
   // it uses; without one it uses the model this session is using. Fails in
   // a session that is itself a subagent: subagents do not start subagents.
-  start(input: { text: string; model?: string }): Promise<string>
+  // With `agent`, it is one of the owner's named agents, which hooks are
+  // told. With `readOnly`, it is held to reading for as long as it lives.
+  start(input: { text: string; model?: string; agent?: string; readOnly?: boolean }): Promise<string>
   // Sends a further message to one of this session's subagents. It keeps
   // its conversation, whether it is still working or has finished.
   send(child: string, text: string): Promise<void>
@@ -269,6 +271,10 @@ export type HookContext = {
   ask: Ask
   // The session that started this one as a subagent, when one did.
   parent?: string
+  // For a subagent: the named agent it was started as, when it was one,
+  // and whether it is held to reading only.
+  agent?: string
+  readOnly?: true
 }
 
 // A tool call after its input has been checked and repaired.

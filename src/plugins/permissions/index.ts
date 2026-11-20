@@ -1,6 +1,6 @@
 import type { Plugin } from "../../core/types.ts"
 import { dataFolder } from "../../core/evie.ts"
-import { createGuard, isSavedOutput } from "../guard.ts"
+import { createGuard, isDefinition, isSavedOutput } from "../guard.ts"
 import { MODES, actsOf, alwaysRule, effectFor, questionFor, type Mode, type Rule } from "./rules.ts"
 
 // The built-in permissions plugin. Before a tool runs, it decides whether
@@ -36,7 +36,8 @@ const ONCE = "Yes, once"
 const NO = "No"
 
 export function permissions(options: PermissionsOptions = {}): Plugin {
-  const blockedByGuard = createGuard(options.dataFolder === undefined ? {} : { dataFolder: options.dataFolder })
+  // This plugin asks before each write to the owner's agents and skills, so the guard may let them through.
+  const blockedByGuard = createGuard({ ...(options.dataFolder !== undefined && { dataFolder: options.dataFolder }), definitionsCanBeWritten: true })
   const startsIn = options.mode ?? "manual"
   const data = options.dataFolder ?? dataFolder({})
 
@@ -80,7 +81,8 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         const guarded = blockedByGuard(call, folder, context.session)
         if (guarded !== undefined) return { deny: guarded }
 
-        const mode = modeOf(context.session, context.parent)
+        // A subagent started as an agent that only reads stays that way.
+        const mode = context.readOnly ? "read-only" : modeOf(context.session, context.parent)
         const rules = [...(options.rules ?? []), ...remembered]
         const judged = actsOf(call, folder).map((act) => {
           const effect = effectFor(act, rules, mode, folder)
@@ -88,7 +90,15 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
           // outside the project, so it is not asked about. A rule that
           // denies it still does.
           const ownOutput = act.action === "read" && effect !== "deny" && isSavedOutput(data, context.session, act.target)
-          return { act, effect: ownOutput ? ("allow" as const) : effect }
+          if (ownOutput) return { act, effect: "allow" as const, standing: false }
+          // An agent or a skill in the data folder applies in every project
+          // from then on. Reading one is free. Writing one is asked about
+          // every time, whatever the mode and whatever was answered before.
+          if (act.kind === "path" && isDefinition(data, act.target) && effect !== "deny") {
+            if (act.action === "read") return { act, effect: "allow" as const, standing: false }
+            if (mode !== "read-only") return { act, effect: "ask" as const, standing: true }
+          }
+          return { act, effect, standing: false }
         })
 
         if (judged.some(({ effect }) => effect === "deny")) {
@@ -111,10 +121,15 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         const always = asking.map((act) => alwaysRule(act, folder))
         const labels = [...new Set(always.map(({ label }) => label))]
         const ALWAYS = `Always ${folder === null ? "outside a project" : "in this project"}: allow ${labels.join(", and ")}`
-        const given = await context.ask({ text: questionFor(call, asking, folder), choices: [ONCE, ALWAYS, NO], freeText: true })
+        // There is no "always" for a standing instruction: each one is looked at.
+        const everyTime = judged.some(({ effect, standing }) => effect === "ask" && standing)
+        const text = everyTime
+          ? `${questionFor(call, asking, folder)}\n\nThis is an agent or a skill of yours. It applies in every project from now on, so it is asked about each time.`
+          : questionFor(call, asking, folder)
+        const given = await context.ask({ text, choices: everyTime ? [ONCE, NO] : [ONCE, ALWAYS, NO], freeText: true })
         // A plain word typed in place of a number means what it says.
         const word = given?.trim().toLowerCase()
-        const answer = word === "y" || word === "yes" ? ONCE : word === "n" || word === "no" ? NO : word === "always" ? ALWAYS : given
+        const answer = word === "y" || word === "yes" ? ONCE : word === "n" || word === "no" ? NO : word === "always" && !everyTime ? ALWAYS : given
 
         // Work given to a subagent, now that it is allowed: its mode is settled here.
         if ((answer === ONCE || answer === ALWAYS) && call.name === "subagent_send") subagentModes.set(String(call.input.id ?? ""), forSubagent(context.session))

@@ -48,6 +48,9 @@ export type LoopOptions = {
   children: ToolContext["children"]
   // The session that started this one as a subagent, when one did.
   parent?: string
+  // For a subagent: the named agent it is, and whether it only reads.
+  agent?: string
+  readOnly?: boolean
 }
 
 export type Loop = {
@@ -87,6 +90,12 @@ export function currentModel(events: readonly StoredEvent[], startedWith: string
 export function createLoop(options: LoopOptions): Loop {
   const { session, project, outputFolder, model, maxTokens, log, inbox, host, hooks, provider, atomically, emit } = options
   const folder = project?.folder ?? null
+  // What a subagent's hooks are told about how it was started.
+  const startedAs = {
+    ...(options.parent !== undefined && { parent: options.parent }),
+    ...(options.agent !== undefined && { agent: options.agent }),
+    ...(options.readOnly && { readOnly: true as const }),
+  }
   // True from the moment a run of turns starts until its last inbox check.
   let active = false
   // True once stop() has been called; no further turn starts.
@@ -156,7 +165,7 @@ export function createLoop(options: LoopOptions): Loop {
       events,
       signal,
       ask: (question) => options.ask(question, signal),
-      ...(options.parent !== undefined && { parent: options.parent }),
+      ...startedAs,
     })
 
     // Tried once as it is, then once more with long tool results shortened,
@@ -261,7 +270,7 @@ export function createLoop(options: LoopOptions): Loop {
           events: log.events(session),
           signal,
           ask,
-          ...(options.parent !== undefined && { parent: options.parent }),
+          ...startedAs,
         })
 
         // A conversation that has grown too big is compacted before the
