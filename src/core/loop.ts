@@ -54,6 +54,11 @@ export type Loop = {
   cancel(): void
   // Compacts the conversation now, on request, and says what happened.
   compactNow(): Promise<string>
+  // Whether a turn, or a compaction, is in progress.
+  busy(): boolean
+  // Adds a note for the model to the conversation: now when the session is
+  // idle, or at the turn's next step when it is not.
+  tell(text: string): void
   // Stops taking new turns, cancels the running one and waits for it to end.
   stop(): Promise<void>
 }
@@ -85,6 +90,13 @@ export function createLoop(options: LoopOptions): Loop {
   // Set when the event log could not be written. Nothing can be recorded
   // after that, so the loop takes no more turns.
   let broken: Error | undefined
+
+  // Notes for the model that arrived during a turn. They are written at the
+  // next step, where they cannot come between a tool call and its result.
+  const waitingNotes: string[] = []
+  const writeNotes = () => {
+    for (const text of waitingNotes.splice(0)) emit(log.append(session, "note", { text }))
+  }
 
   // ---- Compaction ---------------------------------------------------------------
 
@@ -208,6 +220,7 @@ export function createLoop(options: LoopOptions): Loop {
         // A model cannot take in anything new while it is writing, so a
         // message that arrives during a reply stops that reply (see wake)
         // and the loop comes back here.
+        writeNotes()
         if (step > 1) {
           const steered = atomically(() =>
             inbox.take(session).map((message) => log.append(session, "user_message", { text: message.text })),
@@ -357,6 +370,7 @@ export function createLoop(options: LoopOptions): Loop {
     } finally {
       // A turn always ends in the log, whatever happened inside it.
       cancel = undefined
+      writeNotes()
       emit(log.append(session, "turn_end", error === undefined ? { reason } : { reason, error }))
     }
   }
@@ -396,8 +410,16 @@ export function createLoop(options: LoopOptions): Loop {
       } finally {
         cancel = undefined
         active = false
+        writeNotes()
         if (!stopped && inbox.waiting(session)) this.wake()
       }
+    },
+    busy() {
+      return active
+    },
+    tell(text) {
+      waitingNotes.push(text)
+      if (!active) writeNotes()
     },
     async stop() {
       stopped = true

@@ -12,6 +12,7 @@ import { models } from "./plugins/models/index.ts"
 import { openrouter } from "./plugins/openrouter.ts"
 import { MODES, permissions, type Mode, type Rule } from "./plugins/permissions/index.ts"
 import { shell } from "./plugins/shell.ts"
+import { undo } from "./plugins/undo.ts"
 import { web } from "./plugins/web.ts"
 import type { Settings } from "./settings.ts"
 
@@ -93,13 +94,15 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   shell: () => shell(),
   guard: (_options, context) => guard({ dataFolder: context.home }),
   permissions: (_options, context) => permissionsFor(context, context.ownPermissions ?? {}),
+  undo: (_options, context) => undo({ dataFolder: context.home }),
   models: () => models(),
   ask: () => ask(),
   instructions: (_options, context) => instructions({ dataFolder: context.home }),
   web: (_options, context) => web({ env: context.env }),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
-const DEFAULT: Entry[] = ["files", "shell", "permissions", "models", "ask", "instructions", "web", "openrouter"]
+// `undo` comes after `permissions`, so a call that is refused is not recorded.
+const DEFAULT: Entry[] = ["files", "shell", "permissions", "undo", "models", "ask", "instructions", "web", "openrouter"]
 
 // The permissions plugin as the settings describe it. A project's own mode
 // wins over the global one, and its rules come after the global ones.
@@ -204,6 +207,12 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
       if (own.permissions && !disable.includes("permissions")) {
         if (plugins.some((global) => global.name === "permissions")) disable.push("permissions")
         added.push(permissionsFor(context, own.permissions))
+        // Undo has to stay after permissions, so that it keeps no copy for a
+        // call that is refused, and takes its copy after any question.
+        if (plugins.some((global) => global.name === "undo") && !disable.includes("undo") && !added.some((plugin) => plugin.name === "undo")) {
+          disable.push("undo")
+          added.push(undo({ dataFolder: context.home }))
+        }
       }
       const ownModel = fromEnv.model ? undefined : own.model
       const ownLimit = fromEnv.maxTokens ? undefined : own.maxTokens
