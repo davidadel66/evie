@@ -10,7 +10,8 @@ principles, and add a part only when it can be justified.
 
 ## Where things stand
 
-Milestone 1 is built. Milestone 2 is next and is not designed yet.
+Milestones 1 and 2 are built and released. Milestone 3 is next and is not
+designed yet.
 
 - `decisions.md` is the record of what has been decided and why. Read it
   before proposing anything. Add to it when the owner decides something; do
@@ -20,10 +21,13 @@ Milestone 1 is built. Milestone 2 is next and is not designed yet.
   vision skill; run its commands with `--root` set to this folder). The owner
   reads the map to understand the system, so keep it in step with the design.
 - `research/` holds one report per harness studied, each read from source:
-  OpenCode, Codex, DeepSeek Harness, Letta, and pi with T3 Code. They are
-  evidence, not instructions.
-- `milestone-1.spec.md` is the spec for milestone 1. Its tickets are issues
-  on GitHub, each naming the tickets that block it.
+  OpenCode, Codex, DeepSeek Harness, Letta, and pi with T3 Code. It also
+  holds reports on single questions, such as compaction, background work,
+  agents working together, and communicating well. They are evidence, not
+  instructions.
+- `milestone-1.spec.md` is the spec for milestone 1, and `milestone-2.md`
+  lists the tickets of milestone 2. The tickets are issues on GitHub, each
+  naming the tickets that block it.
 
 These documents, the map and `research/` are planning documents. For now
 they are kept out of the public repository and exist only in the owner's
@@ -55,7 +59,8 @@ until he has understood its part of the map and said go.
 1. The core loop, a plugin system and nine tools, usable in a terminal.
    Built.
 2. A real coding harness: prompt and instruction files, compaction,
-   permissions, undo, subagents.
+   questions, permissions, undo, background jobs, subagents, agents and
+   skills. Built.
 3. The always-on server, web UI, workspaces, plugins.
 4. Scheduled work, memory, voice, phone.
 
@@ -115,3 +120,10 @@ the code. Agents write the code; he reviews the systems and the design.
   request.
 - Give a recommendation with its real trade-off. When he has decided,
   record it and move on.
+- Take one topic at a time. When there are several things to settle, list
+  them, take the first, and wait. Say where you are in the list.
+- For a decision about how something looks, how he uses it, or how the
+  system is built, show two or three options side by side as mocks or
+  examples, with what is for and against each. Give your recommendation
+  after the options, and say what would change it.
+- Lead with the answer. Prefer short points and a drawing to paragraphs.
