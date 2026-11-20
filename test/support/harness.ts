@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createEvie, type Evie, type EvieEvent, type EvieOptions, type Plugin } from "../../src/index.ts"
+import { createEvie, type Evie, type EvieEvent, type EvieOptions, type Plugin, type StoredEvent } from "../../src/index.ts"
 
 export type Run = Awaited<ReturnType<typeof startEvie>>
 
@@ -69,7 +69,8 @@ export async function say(run: { evie: Evie; session: string }, text: string, se
   await ended
 }
 
-export const stored = (events: EvieEvent[]) => events.filter((event) => event.type !== "assistant_delta")
+// The events that are kept in the log, leaving out the ones only sent to clients.
+export const stored = (events: EvieEvent[]) => events.filter((event): event is StoredEvent => "seq" in event)
 
 // Resolves with the next event the client is sent that matches.
 export function nextEvent<Type extends EvieEvent["type"]>(run: { evie: Evie }, type: Type) {

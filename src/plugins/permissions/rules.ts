@@ -52,7 +52,7 @@ const READ_TOOLS = ["read", "grep", "glob"]
 const EDIT_TOOLS = ["write", "edit", "patch"]
 const WEB_TOOLS = ["web_search", "web_fetch"]
 // The actions the plugin understands. Anything else is a tool it knows nothing about.
-const KNOWN = ["read", "edit", "shell", "web", "ask"]
+const KNOWN = ["read", "edit", "shell", "web", "ask", "job_stop"]
 
 const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir()).replace(/^(\$HOME\b|\$\{HOME\})/, homedir())
 
@@ -153,7 +153,8 @@ function matches(rule: Rule, act: Act, folder: string | null): boolean {
 
 // What happens to an act that no rule covers.
 function byMode(act: Act, mode: Mode): Effect {
-  if (act.action === "web" || act.action === "ask") return "allow"
+  // Using the web, asking the owner and stopping a job change nothing of the owner's.
+  if (["web", "ask", "job_stop"].includes(act.action)) return "allow"
   if (act.action === "read") return act.inside ? "allow" : "ask"
   if (act.action === "edit") return mode === "auto" && act.inside ? "allow" : "ask"
   if (act.action === "shell") {
