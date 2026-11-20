@@ -8,13 +8,18 @@ export type EventBodies = {
   turn_start: Record<string, never>
   user_message: { text: string }
   // The model's reply: its text and any tool calls it asked for.
-  // `interrupted` marks a reply that was cut short by a cancel.
-  assistant_message: { text: string; toolCalls?: ToolCall[]; interrupted?: true }
+  // `interrupted` marks a reply that was cut short by a cancel. `usage` is
+  // the size of the request and the reply, as the provider counted them.
+  assistant_message: { text: string; toolCalls?: ToolCall[]; interrupted?: true; usage?: Usage }
   // The text the model reads for one tool call.
   tool_result: { callId: string; name: string; text: string }
   turn_end: { reason: "completed" | "error" | "cancelled"; error?: string }
   // The owner switched model. It applies from the next model request.
   model_changed: { model: string }
+  // The conversation before `keepFrom` was replaced by a summary. From here
+  // on a request is built from the summary and the events from `keepFrom`
+  // onwards. `files` are the files the summarised part worked with.
+  compaction: { summary: string; keepFrom: number; files: string[] }
 }
 
 export type StoredEventType = keyof EventBodies
@@ -74,14 +79,17 @@ export type Usage = { inputTokens: number; outputTokens: number }
 export type Chunk =
   | { type: "text"; text: string }
   | { type: "tool_call"; id: string; name: string; arguments: string }
-  | { type: "finish"; reason: "stop" | "tool_calls" | "length"; usage: Usage }
-  | { type: "finish"; reason: "error"; error: string; usage: Usage }
+  | { type: "finish"; reason: "stop" | "tool_calls" | "length"; usage?: Usage }
+  // `tooLong` marks a request refused for being more than the model can read.
+  | { type: "finish"; reason: "error"; error: string; usage?: Usage; tooLong?: true }
 
 // How the core reaches a model: a request and the turn's cancel signal go in,
 // a stream of chunks comes out.
 export type Provider = {
   name: string
   stream(request: Request, signal: AbortSignal): AsyncIterable<Chunk>
+  // How many tokens a model can read in one request, when the provider knows.
+  contextLimit?(model: string): Promise<number | undefined>
 }
 
 // ---- Tools --------------------------------------------------------------------
@@ -136,6 +144,9 @@ export type SlashContext = {
   model: string
   // Switches the session's model, from its next request.
   setModel(model: string): void
+  // Replaces the older part of the conversation with a summary now, and
+  // returns a sentence saying what happened.
+  compact(): Promise<string>
 }
 
 // A command the owner types in a client, starting with a slash. It runs at

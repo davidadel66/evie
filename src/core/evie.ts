@@ -18,6 +18,9 @@ export type EvieOptions = {
   maxTokens?: number
   // Where a model can be set, named when none is. It is only used in that message.
   settingsFile?: string
+  // When a long conversation is compacted: a ceiling in tokens, and limits
+  // for models whose own limit the provider does not know.
+  compaction?: { ceiling?: number; limits?: Record<string, number> }
   // The global plugins, in order. They are part of every project and of the
   // general session.
   plugins: readonly Plugin[]
@@ -57,6 +60,12 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     const own: ProjectSettings = "plugins" in given ? given : { plugins: given }
     const kept = options.plugins.filter((plugin) => !own.disable?.includes(plugin.name))
     const { host, hooks } = await createHost([...kept, ...own.plugins], project)
+    // A command of the core's own, beside the ones plugins register.
+    host.commands.add({
+      name: "compact",
+      description: "Replace the older part of the conversation with a summary, to save room.",
+      run: (_args, context) => context.compact(),
+    })
     const provider = host.providers.list()[0]
     if (!provider) throw new Error("No provider is registered. Load a plugin that registers one.")
     return {
@@ -139,6 +148,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       outputFolder: join(home, "tool-output"),
       model,
       ...(maxTokens !== undefined && { maxTokens }),
+      ...(options.compaction && { compaction: options.compaction }),
       log,
       inbox,
       host,
@@ -201,7 +211,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   }
 
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
-    const { project, host, model: startedWith } = open(input.session)
+    const { project, host, model: startedWith, loop } = open(input.session)
     const command = host.commands.list().find((candidate) => candidate.name === input.name)
     if (!command) {
       const names = host.commands.list().map((candidate) => `/${candidate.name}`).join(", ") || "none"
@@ -212,6 +222,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       project,
       model: currentModel(log.events(input.session), startedWith),
       setModel: (model) => setModel({ session: input.session, model }),
+      compact: () => loop.compactNow(),
     })
     return { text }
   }

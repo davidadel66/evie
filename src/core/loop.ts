@@ -1,10 +1,22 @@
 import { join } from "node:path"
 import type { EventLog } from "./log.ts"
 import type { Inbox } from "./inbox.ts"
+import {
+  DEFAULT_CEILING,
+  SUMMARY_PROMPT,
+  chooseCut,
+  clipToolResults,
+  conversationOf,
+  filesIn,
+  mergeFiles,
+  sizeOf,
+  tailBudget,
+  triggerSize,
+} from "./compaction.ts"
 import { buildRequest } from "./request-builder.ts"
 import { CancelledBeforeStart, runToolCall } from "./tools.ts"
 import type { HookRunner } from "./host.ts"
-import type { EventBodies, EvieEvent, HookContext, Host, Project, Provider, StoredEvent, ToolCall } from "./types.ts"
+import type { EventBodies, EvieEvent, HookContext, Host, Project, Provider, StoredEvent, ToolCall, Usage } from "./types.ts"
 
 export type LoopOptions = {
   session: string
@@ -16,6 +28,9 @@ export type LoopOptions = {
   model: string
   // The longest a reply may be, when the settings give a limit.
   maxTokens?: number
+  // When to compact: a ceiling in tokens, and limits for models whose own
+  // limit the provider does not know or gets wrong.
+  compaction?: { ceiling?: number; limits?: Record<string, number> }
   log: EventLog
   inbox: Inbox
   host: Host
@@ -34,6 +49,8 @@ export type Loop = {
   // Cancels the turn in progress, if there is one. Input still waiting
   // starts a new turn afterwards.
   cancel(): void
+  // Compacts the conversation now, on request, and says what happened.
+  compactNow(): Promise<string>
   // Stops taking new turns, cancels the running one and waits for it to end.
   stop(): Promise<void>
 }
@@ -66,6 +83,83 @@ export function createLoop(options: LoopOptions): Loop {
   // after that, so the loop takes no more turns.
   let broken: Error | undefined
 
+  // ---- Compaction ---------------------------------------------------------------
+
+  const ceiling = options.compaction?.ceiling ?? DEFAULT_CEILING
+  const knownLimits = new Map<string, number>()
+
+  // The size at which a conversation with this model is compacted. The
+  // model's limit is looked up once and kept. A lookup that fails, or that
+  // is still going when the work is cancelled, leaves the limit unknown for
+  // now and is made again the next time.
+  async function triggerFor(modelName: string, signal: AbortSignal): Promise<number> {
+    if (!knownLimits.has(modelName)) {
+      const cancelled = new Promise<undefined>((resolve) => signal.addEventListener("abort", () => resolve(undefined), { once: true }))
+      const lookedUp = provider.contextLimit?.(modelName).catch(() => undefined)
+      const limit = options.compaction?.limits?.[modelName] ?? (signal.aborted ? undefined : await Promise.race([lookedUp, cancelled]))
+      if (limit !== undefined) knownLimits.set(modelName, limit)
+    }
+    return triggerSize(knownLimits.get(modelName), ceiling)
+  }
+
+  // Replaces the older part of the conversation with a summary written by
+  // the model. The summary request is the conversation the model has already
+  // seen, with one instruction added at the end, so the provider's prompt
+  // cache covers almost all of it. A summary that is empty, cut short, or
+  // that tries to carry on working is thrown away, and nothing changes.
+  async function compact(signal: AbortSignal): Promise<"done" | "nothing" | "failed"> {
+    const events = log.events(session)
+    const modelName = currentModel(events, model)
+    const { compaction: earlier, kept } = conversationOf(events)
+    const keepFrom = chooseCut(kept, tailBudget(await triggerFor(modelName, signal)))
+    if (keepFrom === undefined) return "nothing"
+
+    // What is being summarised: the part still sent that falls before the
+    // cut, led by the earlier summary when there is one. The earlier summary
+    // was written later than some of what it sits in front of, so it is
+    // placed by hand, not found by its position in the log.
+    const old = [...(earlier ? [earlier] : []), ...kept.filter((event) => event.seq < keepFrom)]
+    const base = await hooks.beforeRequest(buildRequest(modelName, old, host.tools.list(), maxTokens), {
+      session,
+      project,
+      events,
+      signal,
+    })
+
+    // Tried once as it is, then once more with long tool results shortened,
+    // in case the summary request is itself more than the model can read.
+    for (const messages of [base.messages, clipToolResults(base.messages, 2000)]) {
+      const request = { ...base, messages: [...messages, { role: "user" as const, text: SUMMARY_PROMPT }] }
+      let summary = ""
+      let usable = true
+      let tooLong = false
+      try {
+        for await (const chunk of provider.stream(request, signal)) {
+          if (signal.aborted) return "failed"
+          if (chunk.type === "text") summary += chunk.text
+          // A summary does not use tools. One that asks for one is carrying on the task.
+          if (chunk.type === "tool_call") usable = false
+          if (chunk.type === "finish") {
+            if (chunk.reason !== "stop") usable = false
+            if (chunk.reason === "error" && chunk.tooLong) tooLong = true
+          }
+        }
+      } catch {
+        return "failed"
+      }
+      if (signal.aborted) return "failed"
+      if (usable && summary.trim() !== "") {
+        const files = mergeFiles(earlier?.body.files ?? [], filesIn(old))
+        emit(log.append(session, "compaction", { summary: summary.trim(), keepFrom, files }))
+        return "done"
+      }
+      if (!tooLong) return "failed"
+    }
+    return "failed"
+  }
+
+  // ---- Turns --------------------------------------------------------------------
+
   async function run() {
     try {
       while (!stopped && inbox.waiting(session)) await turn()
@@ -84,6 +178,10 @@ export function createLoop(options: LoopOptions): Loop {
     const signal = (cancel = new AbortController()).signal
     let reason: EventBodies["turn_end"]["reason"] = "completed"
     let error: string | undefined
+    // A compaction that fails is not tried again in the same turn, and a
+    // request refused as too long is compacted and retried only once.
+    let compactionFailed = false
+    let retriedTooLong = false
 
     // Moving input from the inbox to the log is one transaction, so a crash
     // can neither lose a message nor record it twice. If it fails, the turn
@@ -116,6 +214,17 @@ export function createLoop(options: LoopOptions): Loop {
         // What a hook is told about the moment it runs in.
         const context = (): HookContext => ({ session, project, events: log.events(session), signal })
 
+        // A conversation that has grown too big is compacted before the
+        // next request: its older part is replaced by a summary.
+        const grown = log.events(session)
+        if (!compactionFailed && sizeOf(grown) >= (await triggerFor(currentModel(grown, model), signal))) {
+          compactionFailed = (await compact(signal)) === "failed"
+        }
+        if (signal.aborted) {
+          reason = "cancelled"
+          break
+        }
+
         const events = log.events(session)
         const request = await hooks.beforeRequest(buildRequest(currentModel(events, model), events, host.tools.list(), maxTokens), context())
         // Only the tools the hooks left in the request can be called in this step.
@@ -127,6 +236,8 @@ export function createLoop(options: LoopOptions): Loop {
         let text = ""
         const calls: ToolCall[] = []
         let failure: string | undefined
+        let tooLong = false
+        let usage: Usage | undefined
         const replying = (reply = new AbortController())
         // The request is halted when the turn is cancelled or the reply is steered.
         const halted = AbortSignal.any([signal, replying.signal])
@@ -139,7 +250,12 @@ export function createLoop(options: LoopOptions): Loop {
             }
             if (chunk.type === "tool_call") calls.push({ id: chunk.id, name: chunk.name, arguments: chunk.arguments })
             // The provider reports a failed request as a value, not a throw.
-            if (chunk.type === "finish" && chunk.reason === "error") failure = chunk.error
+            if (chunk.type === "finish") {
+              if (chunk.reason === "error") {
+                failure = chunk.error
+                tooLong = chunk.tooLong === true
+              } else usage = chunk.usage
+            }
           }
         } catch (cause) {
           // Stopping a request makes some providers throw. Anything else is a real failure.
@@ -162,12 +278,28 @@ export function createLoop(options: LoopOptions): Loop {
           continue
         }
         if (failure !== undefined) {
+          // A request that was more than the model can read is compacted
+          // and sent again, once.
+          if (tooLong && !retriedTooLong) {
+            retriedTooLong = true
+            if ((await compact(signal)) === "done") continue
+            if (signal.aborted) {
+              reason = "cancelled"
+              break
+            }
+          }
           reason = "error"
           error = failure
           break
         }
 
-        emit(log.append(session, "assistant_message", calls.length > 0 ? { text, toolCalls: calls } : { text }))
+        emit(
+          log.append(session, "assistant_message", {
+            text,
+            ...(calls.length > 0 && { toolCalls: calls }),
+            ...(usage && { usage }),
+          }),
+        )
         // A reply that asks for no tool is the final answer.
         if (calls.length === 0) break
 
@@ -236,6 +368,31 @@ export function createLoop(options: LoopOptions): Loop {
     },
     cancel() {
       cancel?.abort()
+    },
+    async compactNow() {
+      if (active) return "Evie is in the middle of a turn. Compact when it has finished."
+      if (stopped) return "Evie is closing, so nothing was changed."
+      // Held as busy while it runs, so a message that arrives waits for it.
+      // It is the running work, like a turn: cancel() stops it, and stop()
+      // waits for it to end before the database is closed.
+      active = true
+      const stopping = (cancel = new AbortController())
+      const work = compact(stopping.signal)
+      running = work.then(
+        () => {},
+        () => {},
+      )
+      try {
+        const outcome = await work
+        if (outcome === "done") return "Compacted: the earlier part of the conversation is now a summary."
+        if (stopping.signal.aborted) return "Compaction was cancelled, so nothing was changed."
+        if (outcome === "nothing") return "There is not enough conversation to compact yet."
+        return "The summary could not be written, so nothing was changed."
+      } finally {
+        cancel = undefined
+        active = false
+        if (!stopped && inbox.waiting(session)) this.wake()
+      }
     },
     async stop() {
       stopped = true

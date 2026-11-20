@@ -43,6 +43,8 @@ export type SettingsFiles = {
   model?: string
   // The longest a reply may be, when a limit is set.
   maxTokens?: number
+  // When a long conversation is compacted, when the settings say.
+  compaction?: { ceiling?: number; limits?: Record<string, number> }
   // The global plugins, in the order listed.
   plugins: Plugin[]
   // What a project adds and switches off.
@@ -50,7 +52,17 @@ export type SettingsFiles = {
 }
 
 type Entry = string | { use: string; options?: Record<string, unknown> }
-type SettingsFile = { model?: string; maxTokens?: number; plugins?: Entry[]; trust?: string[]; disable?: string[] }
+type SettingsFile = {
+  model?: string
+  maxTokens?: number
+  // The size, in tokens, at which a conversation is compacted.
+  compactAt?: number
+  // What a model can read, for a model whose limit is not known or is wrong.
+  contextLimits?: Record<string, number>
+  plugins?: Entry[]
+  trust?: string[]
+  disable?: string[]
+}
 
 // What a built-in plugin is made from: its options from the settings file,
 // and the things only Evie knows. The API key is never taken from options.
@@ -88,6 +100,12 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
     file: globalFile,
     ...(model !== undefined && { model }),
     ...(maxTokens !== undefined && { maxTokens }),
+    ...((global.compactAt !== undefined || global.contextLimits !== undefined) && {
+      compaction: {
+        ...(global.compactAt !== undefined && { ceiling: global.compactAt }),
+        ...(global.contextLimits !== undefined && { limits: global.contextLimits }),
+      },
+    }),
     plugins,
     async projectSettings(project) {
       const projectFile = join(project.folder, ".evie", "evie.json")
@@ -206,8 +224,13 @@ async function readSettingsFile(file: string): Promise<SettingsFile | undefined>
   if (settings.model !== undefined && (typeof settings.model !== "string" || settings.model.trim() === "")) {
     throw new Error(`In ${file}, "model" must be the name of a model.`)
   }
-  if (settings.maxTokens !== undefined && !(Number.isInteger(settings.maxTokens) && (settings.maxTokens as number) > 0)) {
-    throw new Error(`In ${file}, "maxTokens" must be a whole number above zero.`)
+  const positive = (value: unknown) => Number.isInteger(value) && (value as number) > 0
+  for (const key of ["maxTokens", "compactAt"]) {
+    if (settings[key] !== undefined && !positive(settings[key])) throw new Error(`In ${file}, "${key}" must be a whole number above zero.`)
+  }
+  const limits = settings.contextLimits
+  if (limits !== undefined && (typeof limits !== "object" || limits === null || Array.isArray(limits) || !Object.values(limits).every(positive))) {
+    throw new Error(`In ${file}, "contextLimits" must give a whole number above zero for each model name.`)
   }
   return settings as SettingsFile
 }

@@ -17,6 +17,7 @@ export async function startEvie(
     // A project folder to use, to stand for Evie being started again in the same project.
     projectFolder?: string
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
+    compaction?: NonNullable<EvieOptions["compaction"]>
   } = {},
 ) {
   const home = options.home ?? (await mkdtemp(join(tmpdir(), "evie-home-")))
@@ -30,6 +31,7 @@ export async function startEvie(
     model: options.model ?? "test/model",
     plugins,
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
+    ...(options.compaction && { compaction: options.compaction }),
   }).catch(async (error) => {
     await remove()
     throw error
