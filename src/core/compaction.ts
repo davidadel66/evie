@@ -30,7 +30,8 @@ export function triggerSize(modelLimit: number | undefined, ceiling: number): nu
   return modelLimit === undefined ? ceiling : Math.min(Math.floor(modelLimit * SHARE_OF_LIMIT), ceiling)
 }
 
-export const tailBudget = (trigger: number) => Math.round(trigger * SHARE_KEPT)
+// Never less than one token, so the newest message is always kept.
+export const tailBudget = (trigger: number) => Math.max(1, Math.round(trigger * SHARE_KEPT))
 
 // A rough count of the tokens in a piece of text. Providers report the true
 // count for a whole request; this is only for what has been added since.
@@ -93,7 +94,8 @@ export function chooseCut(kept: readonly StoredEvent[], budget: number): number 
   }
   // Move back to the reply that asked for this tool, if the cut landed on a result.
   while (at > 0 && spoken[at]!.type === "tool_result") at -= 1
-  if (at <= 0) return undefined
+  // Nothing to summarise, or nothing to keep.
+  if (at <= 0 || at >= spoken.length) return undefined
   return spoken[at]!.seq
 }
 

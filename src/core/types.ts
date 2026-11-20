@@ -79,9 +79,9 @@ export type Usage = { inputTokens: number; outputTokens: number }
 export type Chunk =
   | { type: "text"; text: string }
   | { type: "tool_call"; id: string; name: string; arguments: string }
-  | { type: "finish"; reason: "stop" | "tool_calls" | "length"; usage: Usage }
+  | { type: "finish"; reason: "stop" | "tool_calls" | "length"; usage?: Usage }
   // `tooLong` marks a request refused for being more than the model can read.
-  | { type: "finish"; reason: "error"; error: string; usage: Usage; tooLong?: true }
+  | { type: "finish"; reason: "error"; error: string; usage?: Usage; tooLong?: true }
 
 // How the core reaches a model: a request and the turn's cancel signal go in,
 // a stream of chunks comes out.

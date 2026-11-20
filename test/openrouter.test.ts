@@ -150,7 +150,6 @@ test("after three retries the failure is reported as the end of the reply", asyn
       type: "finish",
       reason: "error",
       error: "OpenRouter could not answer (503): No available provider",
-      usage: { inputTokens: 0, outputTokens: 0 },
     },
   ])
 })
@@ -164,7 +163,6 @@ test("a request OpenRouter refuses outright is not retried, and the key is not i
       type: "finish",
       reason: "error",
       error: "OpenRouter could not answer (401): Invalid credentials",
-      usage: { inputTokens: 0, outputTokens: 0 },
     },
   ])
   expect(JSON.stringify(chunks)).not.toContain(KEY)
@@ -184,7 +182,6 @@ test("a failure after text has streamed ends the reply and is not retried", asyn
       type: "finish",
       reason: "error",
       error: "OpenRouter could not finish the reply (502): Provider disconnected unexpectedly",
-      usage: { inputTokens: 0, outputTokens: 0 },
     },
   ])
 })
@@ -204,7 +201,6 @@ test("without an API key no request is made, and the failure says how to set one
       type: "finish",
       reason: "error",
       error: "No API key. Set OPENROUTER_API_KEY to your OpenRouter key.",
-      usage: { inputTokens: 0, outputTokens: 0 },
     },
   ])
 })
@@ -218,7 +214,6 @@ test("a connection that breaks part way through the reply is reported, not throw
       type: "finish",
       reason: "error",
       error: "The connection to OpenRouter was lost: socket closed",
-      usage: { inputTokens: 0, outputTokens: 0 },
     },
   ])
 })
@@ -294,10 +289,45 @@ test("when the list cannot be fetched, a model's limit is simply not known", asy
   expect(await provider.contextLimit?.("some/model")).toBeUndefined()
 })
 
+test("a list that could not be fetched is fetched again the next time, and the fetch has a time limit", async () => {
+  const fake = fakeOpenRouter([{ networkError: "fetch failed" }, { status: 200, body: JSON.stringify({ data: [{ id: "some/model", context_length: 200000 }] }) }])
+  const provider = createOpenRouterProvider({ env: { OPENROUTER_API_KEY: KEY }, fetch: fake.fetch, sleep: fake.sleep })
+
+  expect(await provider.contextLimit?.("some/model")).toBeUndefined()
+  expect(await provider.contextLimit?.("some/model")).toBe(200000)
+  expect(fake.calls.map((call) => call.canBeStopped)).toEqual([true, true])
+})
+
+test("a reply that carries no token counts reports none", async () => {
+  const { chunks } = await ask([ok(text("Hello"), finish("stop"), DONE)])
+
+  expect(chunks.at(-1)).toEqual({ type: "finish", reason: "stop" })
+})
+
 test("a request refused for being more than the model can read is marked as too long", async () => {
   const tooLong = await ask([failure(400, "This endpoint's maximum context length is 200000 tokens. However, you requested about 250000 tokens.")])
   const other = await ask([failure(400, "Invalid model specified")])
 
   expect(tooLong.chunks[0]).toMatchObject({ type: "finish", reason: "error", tooLong: true })
   expect(other.chunks[0]).not.toHaveProperty("tooLong")
+})
+
+test("only a refused request is marked as too long, not a rate limit or a failure that reads alike", async () => {
+  const busy = failure(429, "Rate limit reached: too many tokens per minute")
+  const rateLimited = await ask([busy, busy, busy, busy])
+  const unreachable = await ask([
+    { networkError: "body exceeds the maximum context length" },
+    { networkError: "body exceeds the maximum context length" },
+    { networkError: "body exceeds the maximum context length" },
+    { networkError: "body exceeds the maximum context length" },
+  ])
+  const tooLarge = await ask([failure(413, "prompt is too long: 250000 tokens > 200000 maximum")])
+  const midReply = await ask([
+    ok(text("Hello"), data({ error: { code: 400, message: "This model's maximum context length is 8000 tokens" }, choices: [] })),
+  ])
+
+  expect(rateLimited.chunks[0]).not.toHaveProperty("tooLong")
+  expect(unreachable.chunks[0]).not.toHaveProperty("tooLong")
+  expect(tooLarge.chunks[0]).toMatchObject({ tooLong: true })
+  expect(midReply.chunks.at(-1)).toMatchObject({ reason: "error", tooLong: true })
 })

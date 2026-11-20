@@ -9,7 +9,8 @@ export type FakeResponse =
   | { status: number; body: string; headers?: Record<string, string>; pieces?: number; cutOff?: boolean }
   | { networkError: string }
 
-export type RecordedCall = { url: string; headers: Record<string, string>; body: any }
+// `canBeStopped` says whether the call was given a signal that can end it.
+export type RecordedCall = { url: string; headers: Record<string, string>; body: any; canBeStopped: boolean }
 
 // Joins server-sent event lines the way OpenRouter sends them.
 export const sse = (...lines: string[]) => lines.map((line) => `${line}\n\n`).join("")
@@ -26,6 +27,7 @@ export function fakeOpenRouter(responses: FakeResponse[]) {
       url: String(input),
       headers: Object.fromEntries(new Headers(init?.headers).entries()),
       body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+      canBeStopped: init?.signal != null,
     })
     if (!response) throw new Error("the fake has no response for this call")
     if ("networkError" in response) throw new TypeError(response.networkError)

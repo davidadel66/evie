@@ -86,13 +86,18 @@ export function createLoop(options: LoopOptions): Loop {
   // ---- Compaction ---------------------------------------------------------------
 
   const ceiling = options.compaction?.ceiling ?? DEFAULT_CEILING
-  const knownLimits = new Map<string, number | undefined>()
+  const knownLimits = new Map<string, number>()
 
-  // The size at which a conversation with this model is compacted.
-  async function triggerFor(modelName: string): Promise<number> {
+  // The size at which a conversation with this model is compacted. The
+  // model's limit is looked up once and kept. A lookup that fails, or that
+  // is still going when the work is cancelled, leaves the limit unknown for
+  // now and is made again the next time.
+  async function triggerFor(modelName: string, signal: AbortSignal): Promise<number> {
     if (!knownLimits.has(modelName)) {
-      const set = options.compaction?.limits?.[modelName]
-      knownLimits.set(modelName, set ?? (await provider.contextLimit?.(modelName).catch(() => undefined)))
+      const cancelled = new Promise<undefined>((resolve) => signal.addEventListener("abort", () => resolve(undefined), { once: true }))
+      const lookedUp = provider.contextLimit?.(modelName).catch(() => undefined)
+      const limit = options.compaction?.limits?.[modelName] ?? (signal.aborted ? undefined : await Promise.race([lookedUp, cancelled]))
+      if (limit !== undefined) knownLimits.set(modelName, limit)
     }
     return triggerSize(knownLimits.get(modelName), ceiling)
   }
@@ -106,7 +111,7 @@ export function createLoop(options: LoopOptions): Loop {
     const events = log.events(session)
     const modelName = currentModel(events, model)
     const { compaction: earlier, kept } = conversationOf(events)
-    const keepFrom = chooseCut(kept, tailBudget(await triggerFor(modelName)))
+    const keepFrom = chooseCut(kept, tailBudget(await triggerFor(modelName, signal)))
     if (keepFrom === undefined) return "nothing"
 
     // What is being summarised: the part still sent that falls before the
@@ -212,7 +217,7 @@ export function createLoop(options: LoopOptions): Loop {
         // A conversation that has grown too big is compacted before the
         // next request: its older part is replaced by a summary.
         const grown = log.events(session)
-        if (!compactionFailed && sizeOf(grown) >= (await triggerFor(currentModel(grown, model)))) {
+        if (!compactionFailed && sizeOf(grown) >= (await triggerFor(currentModel(grown, model), signal))) {
           compactionFailed = (await compact(signal)) === "failed"
         }
         if (signal.aborted) {
@@ -278,6 +283,10 @@ export function createLoop(options: LoopOptions): Loop {
           if (tooLong && !retriedTooLong) {
             retriedTooLong = true
             if ((await compact(signal)) === "done") continue
+            if (signal.aborted) {
+              reason = "cancelled"
+              break
+            }
           }
           reason = "error"
           error = failure
@@ -362,14 +371,25 @@ export function createLoop(options: LoopOptions): Loop {
     },
     async compactNow() {
       if (active) return "Evie is in the middle of a turn. Compact when it has finished."
+      if (stopped) return "Evie is closing, so nothing was changed."
       // Held as busy while it runs, so a message that arrives waits for it.
+      // It is the running work, like a turn: cancel() stops it, and stop()
+      // waits for it to end before the database is closed.
       active = true
+      const stopping = (cancel = new AbortController())
+      const work = compact(stopping.signal)
+      running = work.then(
+        () => {},
+        () => {},
+      )
       try {
-        const outcome = await compact(new AbortController().signal)
+        const outcome = await work
         if (outcome === "done") return "Compacted: the earlier part of the conversation is now a summary."
+        if (stopping.signal.aborted) return "Compaction was cancelled, so nothing was changed."
         if (outcome === "nothing") return "There is not enough conversation to compact yet."
         return "The summary could not be written, so nothing was changed."
       } finally {
+        cancel = undefined
         active = false
         if (!stopped && inbox.waiting(session)) this.wake()
       }

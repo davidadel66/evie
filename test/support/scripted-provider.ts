@@ -19,7 +19,9 @@ export type ScriptedReply =
   | { fail: string }
   | { hang: true; text?: string[]; reports?: true }
 
-export function scriptedProvider(script: ScriptedReply[], options: { limit?: number } = {}) {
+// `limit` is what the model can read. `lookUpLimit` stands in for the lookup
+// itself, for a test where it fails or never answers.
+export function scriptedProvider(script: ScriptedReply[], options: { limit?: number; lookUpLimit?: () => Promise<number | undefined> } = {}) {
   const requests: Request[] = []
   const plugin: Plugin = {
     name: "scripted-provider",
@@ -28,6 +30,7 @@ export function scriptedProvider(script: ScriptedReply[], options: { limit?: num
         name: "scripted",
         // What the model can read, when a test gives it a limit.
         ...(options.limit !== undefined && { contextLimit: async () => options.limit }),
+        ...(options.lookUpLimit && { contextLimit: options.lookUpLimit }),
         async *stream(request, signal) {
           requests.push(structuredClone(request))
           const reply = script[requests.length - 1]
@@ -40,10 +43,11 @@ export function scriptedProvider(script: ScriptedReply[], options: { limit?: num
               else signal.addEventListener("abort", () => resolve(), { once: true })
             })
             if (!reply.reports) throw new Error("the request was cancelled")
-            yield { type: "finish", reason: "error", error: "The request was cancelled.", usage: { inputTokens: 0, outputTokens: 0 } }
+            yield { type: "finish", reason: "error", error: "The request was cancelled." }
             return
           }
-          const usage = reply.usage ?? { inputTokens: 0, outputTokens: 0 }
+          // A reply with no `usage` in the script reports none, as some providers do.
+          const usage = reply.usage && { usage: reply.usage }
           for (const text of reply.text) yield { type: "text", text }
           const calls = reply.calls ?? []
           for (const [index, call] of calls.entries()) {
@@ -55,9 +59,9 @@ export function scriptedProvider(script: ScriptedReply[], options: { limit?: num
             }
           }
           if (reply.error !== undefined) {
-            yield { type: "finish", reason: "error", error: reply.error, usage, ...(reply.tooLong && { tooLong: true as const }) }
-          } else if (reply.cutOff) yield { type: "finish", reason: "length", usage }
-          else yield { type: "finish", reason: calls.length > 0 ? "tool_calls" : "stop", usage }
+            yield { type: "finish", reason: "error", error: reply.error, ...usage, ...(reply.tooLong && { tooLong: true as const }) }
+          } else if (reply.cutOff) yield { type: "finish", reason: "length", ...usage }
+          else yield { type: "finish", reason: calls.length > 0 ? "tool_calls" : "stop", ...usage }
         },
       })
     },

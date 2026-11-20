@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { runTerminal, type Message, type Plugin } from "../src/index.ts"
+import { runTerminal, type EvieEvent, type Message, type Plugin } from "../src/index.ts"
 import { say, startEvie, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -31,8 +31,14 @@ const pathTool: Plugin = {
 
 // Starts Evie so that a conversation is compacted at 1,000 tokens, which
 // keeps about the last 150 word for word.
-async function start(script: ScriptedReply[], options: { limit?: number; ceiling?: number; home?: string; projectFolder?: string } = {}) {
-  const model = scriptedProvider(script, options.limit === undefined ? {} : { limit: options.limit })
+async function start(
+  script: ScriptedReply[],
+  options: { limit?: number; lookUpLimit?: () => Promise<number | undefined>; ceiling?: number; home?: string; projectFolder?: string } = {},
+) {
+  const model = scriptedProvider(script, {
+    ...(options.limit !== undefined && { limit: options.limit }),
+    ...(options.lookUpLimit && { lookUpLimit: options.lookUpLimit }),
+  })
   const run = await startEvie([model.plugin, pathTool], {
     compaction: { ceiling: options.ceiling ?? 1000 },
     ...(options.home && { home: options.home }),
@@ -42,6 +48,12 @@ async function start(script: ScriptedReply[], options: { limit?: number; ceiling
   const compactions = () => stored(run.events).filter((event) => event.type === "compaction")
   return { run, model, compactions }
 }
+
+// Waits until the model has been sent this many requests.
+async function requestsReach(model: { requests: unknown[] }, count: number) {
+  while (model.requests.length < count) await Bun.sleep(1)
+}
+const turnEnds = (run: { events: EvieEvent[] }) => stored(run.events).filter((event) => event.type === "turn_end")
 
 const isSummary = (message: Message | undefined) => message?.role === "user" && message.text.startsWith("[The earlier part of this conversation was replaced")
 
@@ -272,4 +284,108 @@ test("the terminal says when the conversation has been compacted", async () => {
 
   expect(printed).toContain("[The conversation was getting long, so its earlier part is now a summary.]")
   expect(printed).not.toContain("## Goal")
+})
+
+test("/compact can be cancelled, and nothing is changed", async () => {
+  const { run, model, compactions } = await start([{ text: ["A1"] }, { text: ["A2"] }, { hang: true }, { text: ["A3"] }])
+  await say(run, long("first", 200))
+  await say(run, long("second", 200))
+
+  const compacting = run.evie.send({ type: "run_command", session: run.session, name: "compact", args: "" })
+  await requestsReach(model, 3)
+  await run.evie.send({ type: "cancel", session: run.session })
+
+  expect((await compacting).text).toBe("Compaction was cancelled, so nothing was changed.")
+  expect(compactions()).toEqual([])
+  // The session carries on as before.
+  await say(run, "third")
+  expect(turnEnds(run).at(-1)).toMatchObject({ body: { reason: "completed" } })
+})
+
+test("closing Evie during /compact stops the summary and waits for it", async () => {
+  const { run, model, compactions } = await start([{ text: ["A1"] }, { text: ["A2"] }, { hang: true }])
+  await say(run, long("first", 200))
+  await say(run, long("second", 200))
+
+  let answer: string | undefined
+  const compacting = run.evie.send({ type: "run_command", session: run.session, name: "compact", args: "" }).then((result) => (answer = result.text))
+  await requestsReach(model, 3)
+  await run.evie.close()
+
+  // By the time Evie has closed, the compaction is over: nothing is left to write to the closed database.
+  expect(answer).toBe("Compaction was cancelled, so nothing was changed.")
+  expect(compactions()).toEqual([])
+  await compacting
+})
+
+test("a turn cancelled while it compacts after a too-long request ends as cancelled", async () => {
+  const { run, model, compactions } = await start([
+    { text: ["A1"] },
+    { text: ["A2"] },
+    { text: [], error: "This endpoint's maximum context length is 1000 tokens.", tooLong: true },
+    { hang: true },
+  ])
+  await say(run, long("first", 100))
+  await say(run, long("second", 100))
+
+  const ended = new Promise<void>((resolve) => run.evie.subscribe((event) => event.type === "turn_end" && resolve()))
+  await run.evie.send({ type: "send_message", session: run.session, text: long("third", 100) })
+  await requestsReach(model, 4)
+  await run.evie.send({ type: "cancel", session: run.session })
+  await ended
+
+  expect(turnEnds(run).at(-1)).toEqual(expect.objectContaining({ body: { reason: "cancelled" } }))
+  expect(compactions()).toEqual([])
+})
+
+test("when the provider reports no sizes, the conversation is measured by estimate and still compacted", async () => {
+  const { run, compactions } = await start([{ text: ["A1"] }, { text: ["A2"] }, { text: [SUMMARY] }, { text: ["A3"] }])
+
+  await say(run, long("first", 400))
+  await say(run, long("second", 400))
+  await say(run, long("third", 400))
+
+  expect(stored(run.events).find((event) => event.type === "assistant_message")?.body).not.toHaveProperty("usage")
+  expect(compactions()).toHaveLength(1)
+})
+
+test("a very small limit does not break the turn: the newest message is always kept", async () => {
+  const { run, model, compactions } = await start([{ text: ["A1"] }, { text: [SUMMARY] }, { text: ["A2"] }], { ceiling: 2 })
+
+  await say(run, "hi")
+  await say(run, "hello again")
+
+  expect(compactions()).toHaveLength(1)
+  expect(model.requests[2]!.messages.at(-1)).toEqual({ role: "user", text: "hello again" })
+  expect(turnEnds(run).at(-1)).toMatchObject({ body: { reason: "completed" } })
+})
+
+test("a turn can be cancelled while the model's limit is being looked up", async () => {
+  const { run } = await start([{ text: ["A1"] }], { lookUpLimit: () => new Promise(() => {}) })
+
+  const ended = new Promise<void>((resolve) => run.evie.subscribe((event) => event.type === "turn_end" && resolve()))
+  await run.evie.send({ type: "send_message", session: run.session, text: "hi" })
+  await Bun.sleep(5)
+  await run.evie.send({ type: "cancel", session: run.session })
+  await ended
+
+  expect(turnEnds(run).at(-1)).toMatchObject({ body: { reason: "cancelled" } })
+})
+
+test("a limit that could not be looked up is looked up again later", async () => {
+  let lookups = 0
+  const lookUpLimit = async () => {
+    if (++lookups === 1) throw new Error("the list could not be fetched")
+    return 1000
+  }
+  const { run, compactions } = await start(
+    [{ text: ["A1"], usage: used(400) }, { text: ["A2"], usage: used(790) }, { text: [SUMMARY] }, { text: ["A3"] }],
+    { lookUpLimit, ceiling: 200_000 },
+  )
+
+  await say(run, long("first", 100))
+  await say(run, long("second", 100))
+  await say(run, long("third", 100))
+
+  expect(compactions()).toHaveLength(1)
 })

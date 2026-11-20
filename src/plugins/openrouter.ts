@@ -10,8 +10,13 @@ import type { Chunk, Message, Plugin, Provider, Request, Usage } from "../core/t
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 const MODELS = "https://openrouter.ai/api/v1/models"
 // How a provider says a request was more than the model can read. The
-// wording differs from one model company to the next.
-const TOO_LONG = /context (length|window)|maximum context|too many tokens|prompt is too long|exceeds? the (maximum|limit)|reduce the length/i
+// wording differs from one model company to the next. It is looked for only
+// in a request that was refused as bad or too large, because a rate limit or
+// a network failure can use the same words.
+const TOO_LONG = /context (length|window)|maximum context|too many tokens|prompt is too long|input token count|maximum number of tokens|reduce the length/i
+const REFUSED = [400, 413]
+// How long the list of models may take to arrive.
+const LIST_TIMEOUT = 10_000
 const RETRIES = 3
 // How long a reply may be, in tokens, unless the settings say otherwise.
 // Without a limit OpenRouter reserves the model's maximum, and refuses the
@@ -38,31 +43,34 @@ export function openrouter(options: OpenRouterOptions): Plugin {
   }
 }
 
-const NO_USAGE: Usage = { inputTokens: 0, outputTokens: 0 }
-const failed = (error: string): Chunk => ({
+// A failed request, as the chunk that ends it. `status` is the HTTP status
+// or error code it was refused with, when there was one.
+const failed = (error: string, status?: number): Chunk => ({
   type: "finish",
   reason: "error",
   error,
-  usage: NO_USAGE,
-  ...(TOO_LONG.test(error) && { tooLong: true as const }),
+  ...(status !== undefined && REFUSED.includes(status) && TOO_LONG.test(error) && { tooLong: true as const }),
 })
 
 export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
   const send = options.fetch ?? globalThis.fetch
   const sleep = options.sleep ?? wait
   // What each model can read, fetched from OpenRouter's list once and kept.
-  let limits: Promise<Map<string, number>> | undefined
+  let limits: Promise<Map<string, number> | undefined> | undefined
 
   return {
     name: "openrouter",
 
     async contextLimit(model) {
-      limits ??= send(MODELS)
+      limits ??= send(MODELS, { signal: AbortSignal.timeout(LIST_TIMEOUT) })
         .then((response) => response.json() as Promise<{ data?: { id?: string; context_length?: number }[] }>)
         .then((body) => new Map((body.data ?? []).flatMap((entry) => (entry.id && entry.context_length ? [[entry.id, entry.context_length] as const] : []))))
         // If the list cannot be fetched, the limit is simply not known.
-        .catch(() => new Map<string, number>())
-      return (await limits).get(model)
+        .catch(() => undefined)
+      const list = await limits
+      // A failed fetch is not kept, so the next call tries again.
+      if (!list) limits = undefined
+      return list?.get(model)
     },
 
     async *stream(request, signal) {
@@ -83,6 +91,7 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
       // reply has started streaming, a failure ends it.
       let response: Response | undefined
       let problem = ""
+      let status: number | undefined
       let delay = 0
       for (let attempt = 0; attempt <= RETRIES; attempt++) {
         if (attempt > 0) await sleep(delay, signal)
@@ -94,18 +103,20 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
             break
           }
           problem = `OpenRouter could not answer (${received.status}): ${await errorMessage(received)}`
+          status = received.status
           const retryable = received.status === 429 || received.status >= 500
           if (!retryable) break
           delay = retryAfter(received) ?? 1000 * 2 ** attempt
         } catch (cause) {
           if (signal.aborted) break
           problem = `OpenRouter could not be reached: ${cause instanceof Error ? cause.message : String(cause)}`
+          status = undefined
           delay = 1000 * 2 ** attempt
         }
       }
 
       if (signal.aborted) yield failed("The request was cancelled.")
-      else if (!response) yield failed(problem)
+      else if (!response) yield failed(problem, status)
       else yield* readReply(response, signal)
     },
   }
@@ -177,7 +188,8 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
   // its id and name; later pieces add to its arguments.
   const calls = new Map<number, { id: string; name: string; arguments: string }>()
   let finishReason: string | undefined
-  let usage = NO_USAGE
+  // The token counts, when the reply carries them. Not every one does.
+  let usage: Usage | undefined
 
   const chunks = wireChunks(response)
   while (true) {
@@ -194,7 +206,7 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
     }
     if (chunk.error) {
       const code = chunk.error.code ?? "unknown"
-      yield failed(`OpenRouter could not finish the reply (${code}): ${chunk.error.message ?? "no reason given"}`)
+      yield failed(`OpenRouter could not finish the reply (${code}): ${chunk.error.message ?? "no reason given"}`, Number(chunk.error.code))
       return
     }
     const choice = chunk.choices?.[0]
@@ -222,7 +234,7 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
     case "stop":
     case "tool_calls":
     case "length":
-      yield { type: "finish", reason: finishReason, usage }
+      yield { type: "finish", reason: finishReason, ...(usage && { usage }) }
       return
     case undefined:
       yield failed("The reply ended before it was finished.")
