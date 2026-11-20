@@ -17,8 +17,13 @@ export type Jobs = {
   list(session: string): Job[]
   // Stops a running job. `by` says who asked, which decides who is told.
   stop(session: string, id: string, by: "owner" | "model"): Job | undefined
-  // Stops every running job and waits for them to end. Used when Evie closes.
+  // Stops every running job and waits for them to end. Used when Evie
+  // closes. Each is marked and noted as stopped by the closing at once,
+  // before the returned promise is waited for, and work handed over from
+  // then on is stopped as it arrives.
   stopAll(): Promise<void>
+  // Settles when the jobs now running in a session have ended.
+  whenEnded(session: string): Promise<void>
   // A tool that is waiting on work it could hand over listens here. Returns
   // a function that ends the listening.
   whileWaiting(session: string, asked: () => void): () => void
@@ -38,6 +43,7 @@ export function createJobs(options: {
   tell(session: string, text: string, wake: boolean): void
 }): Jobs {
   const all = new Map<string, Running[]>()
+  let closing = false
   const ofSession = (session: string) => all.get(session) ?? all.set(session, []).get(session)!
   // The highest id each session has used. Every job leaves an output file,
   // so the count carries on from there when a session is continued after
@@ -108,6 +114,11 @@ export function createJobs(options: {
         (result) => settle("finished", result),
         (cause) => settle("failed", cause instanceof Error ? cause.message : String(cause)),
       )
+      // Evie is closing: nothing new is left running.
+      if (closing) {
+        running.stoppedBy = "closing"
+        safely(() => work.stop())
+      }
       return { ...job }
     },
 
@@ -135,10 +146,11 @@ export function createJobs(options: {
       return listeners.length
     },
 
-    async stopAll() {
+    stopAll() {
+      closing = true
       const live = [...all.values()].flat().filter(({ job }) => job.status === "running")
-      for (const { job, work } of live) {
-        const running = live.find((other) => other.job === job)!
+      for (const running of live) {
+        const { job, work } = running
         running.stoppedBy = "closing"
         // Written now, while the log is still open, so that a session
         // continued later does not go on expecting to hear from the job.
@@ -147,7 +159,11 @@ export function createJobs(options: {
       }
       // Work that will not stop must not keep Evie from closing.
       const patience = new Promise<void>((resolve) => setTimeout(resolve, 3000).unref())
-      await Promise.race([Promise.allSettled(live.map(({ work }) => work.done)), patience])
+      return Promise.race([Promise.allSettled(live.map(({ work }) => work.done)).then(() => {}), patience])
+    },
+
+    async whenEnded(session) {
+      await Promise.allSettled((all.get(session) ?? []).filter(({ job }) => job.status === "running").map(({ work }) => work.done))
     },
   }
 }

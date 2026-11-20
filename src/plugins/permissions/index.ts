@@ -49,7 +49,20 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
       const remembered: Rule[] = [...(options.remembered?.[key] ?? [])]
       // The mode of each session that has changed it.
       const modes = new Map<string, Mode>()
-      const modeOf = (session: string) => modes.get(session) ?? startsIn
+      // A subagent has no mode the owner sets. It works in auto, so that it
+      // is not asking about every step from the background; or read-only,
+      // when the session that started it was read-only at the time. Which
+      // of the two is settled each time it is given work, and not by what
+      // the starting session's mode happens to be later: a read-only
+      // subagent does not become free to change things because its starter
+      // left read-only. It does become read-only at once if its starter does.
+      const subagentModes = new Map<string, Mode>()
+      const forSubagent = (parent: string): Mode => ((modes.get(parent) ?? startsIn) === "read-only" ? "read-only" : "auto")
+      const modeOf = (session: string, parent?: string): Mode => {
+        if (parent === undefined) return modes.get(session) ?? startsIn
+        if (!subagentModes.has(session)) subagentModes.set(session, forSubagent(parent))
+        return forSubagent(parent) === "read-only" ? "read-only" : subagentModes.get(session)!
+      }
 
       host.commands.add({
         name: "mode",
@@ -67,7 +80,7 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         const guarded = blockedByGuard(call, folder, context.session)
         if (guarded !== undefined) return { deny: guarded }
 
-        const mode = modeOf(context.session)
+        const mode = modeOf(context.session, context.parent)
         const rules = [...(options.rules ?? []), ...remembered]
         const judged = actsOf(call, folder).map((act) => {
           const effect = effectFor(act, rules, mode, folder)
@@ -89,7 +102,10 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         }
 
         const asking = judged.filter(({ effect }) => effect === "ask").map(({ act }) => act)
-        if (asking.length === 0) return
+        if (asking.length === 0) {
+          if (call.name === "subagent_send") subagentModes.set(String(call.input.id ?? ""), forSubagent(context.session))
+          return
+        }
 
         // One "always" choice covers everything this call was asked about.
         const always = asking.map((act) => alwaysRule(act, folder))
@@ -100,6 +116,8 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         const word = given?.trim().toLowerCase()
         const answer = word === "y" || word === "yes" ? ONCE : word === "n" || word === "no" ? NO : word === "always" ? ALWAYS : given
 
+        // Work given to a subagent, now that it is allowed: its mode is settled here.
+        if ((answer === ONCE || answer === ALWAYS) && call.name === "subagent_send") subagentModes.set(String(call.input.id ?? ""), forSubagent(context.session))
         if (answer === ONCE) return
         if (answer === ALWAYS) {
           const rulesToKeep = always.map(({ rule }) => rule).filter((rule) => !remembered.some((kept) => kept.action === rule.action && kept.match === rule.match))
