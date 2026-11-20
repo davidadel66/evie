@@ -254,7 +254,10 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       model: currentModel(log.events(input.session), startedWith),
       setModel: (model) => setModel({ session: input.session, model }),
       compact: () => loop.compactNow(),
-      busy: loop.busy(),
+      // Read each time it is asked, since a turn can start while a command runs.
+      get busy() {
+        return loop.busy()
+      },
       tell: (note) => loop.tell(note),
     })
     return { text }

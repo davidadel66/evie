@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, undo, type Plugin } from "../src/index.ts"
@@ -91,7 +91,7 @@ test("a file the owner has changed since is left alone, and undo says so", async
   await say(run, "change both")
   await writeFile(join(projectFolder, "mine.md"), "the owner's own edit\n")
 
-  expect(await undoIt()).toBe("Put back: other.md. Left alone, because it has changed since: mine.md.")
+  expect(await undoIt()).toBe("Put back: other.md. Left alone, because something other than Evie's file tools changed it: mine.md.")
   expect(await file("mine.md")).toBe("the owner's own edit\n")
   expect(await file("other.md")).toBe("a\n")
 })
@@ -184,4 +184,90 @@ test("a note added during a turn is written at the next step, never between a to
 
   expect(stored(run.events).map((event) => event.type)).toEqual(["turn_start", "user_message", "assistant_message", "tool_result", "note", "assistant_message", "turn_end"])
   expect(model.requests[1]?.messages.at(-1)).toEqual({ role: "user", text: "[Note from Evie: the tests moved]" })
+})
+
+// ---- Found in review ---------------------------------------------------------------------------
+
+test("a file the owner edits part way through a turn is not put back over their edit", async () => {
+  // A stand-in for the owner editing the file by hand between two of Evie's edits.
+  const ownerEdits: Plugin = {
+    name: "owner-edits",
+    setup(host) {
+      host.tools.add({
+        name: "wait",
+        description: "Waits.",
+        inputSchema: { type: "object" },
+        run: async (_input, context) => {
+          const path = join(context.folder!, "notes.md")
+          await writeFile(path, `${await readFile(path, "utf8")}the owner's own line\n`)
+          return "waited"
+        },
+      })
+    },
+  }
+  const { run, file, undoIt } = await start(
+    turn(edit("notes.md", "one", "two"), { name: "wait", input: {} }, edit("notes.md", "two", "three")),
+    { "notes.md": "one\n" },
+    undefined,
+    [ownerEdits],
+  )
+
+  await say(run, "change it twice")
+
+  expect(await undoIt()).toBe("Left alone, because something other than Evie's file tools changed it: notes.md.")
+  expect(await file("notes.md")).toBe("three\nthe owner's own line\n")
+})
+
+test("one file reached by two names is one file to undo", async () => {
+  const { run, projectFolder, file } = await start([], { "notes.md": "one\n" })
+  await symlink(join(projectFolder, "notes.md"), join(projectFolder, "link.md"))
+  const again = await start(turn(edit("notes.md", "one", "two"), edit("link.md", "two", "three")), {}, { home: run.home, projectFolder })
+
+  await say(again.run, "change it by both names")
+  expect(await file("notes.md")).toBe("three\n")
+
+  expect(await again.undoIt()).toBe("Put back: notes.md.")
+  expect(await file("notes.md")).toBe("one\n")
+})
+
+test("a file that cannot be put back is said so, and can be undone once that is fixed", async () => {
+  const { run, projectFolder, file, undoIt } = await start(turn(edit("locked.md", "one", "two"), edit("free.md", "a", "b")), { "locked.md": "one\n", "free.md": "a\n" })
+  await say(run, "change both")
+  await chmod(join(projectFolder, "locked.md"), 0o444)
+
+  const first = await undoIt()
+  expect(first).toStartWith("Put back: free.md. Could not be put back: locked.md (")
+  expect(first).toEndWith("Run /undo again once that is sorted out.")
+  expect(await file("free.md")).toBe("a\n")
+
+  await chmod(join(projectFolder, "locked.md"), 0o644)
+  expect(await undoIt()).toBe("Put back: locked.md.")
+  expect(await file("locked.md")).toBe("one\n")
+})
+
+test("a file Evie was stopped part way through changing is left alone, and its copy is kept", async () => {
+  // A plugin whose after_tool hook breaks, so undo never learns what the file held afterwards.
+  const breaks: Plugin = {
+    name: "breaks",
+    setup(host) {
+      host.on("after_tool", () => {
+        throw new Error("stopped here")
+      })
+    },
+  }
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  const projectFolder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(projectFolder, { recursive: true, force: true }))
+  await writeFile(join(projectFolder, "notes.md"), "one\n")
+  const model = scriptedProvider(turn(edit("notes.md", "one", "two")))
+  const run = await startEvie([model.plugin, files(), breaks, undo({ dataFolder: home })], { home, projectFolder })
+  cleanups.push(run.stop)
+
+  await say(run, "change it")
+  const said = (await run.evie.send({ type: "run_command", session: run.session, name: "undo", args: "" })).text
+
+  expect(said).toStartWith("Left alone, because Evie was stopped part way through changing it: notes.md. What was there before is kept in ")
+  const keptIn = said.slice(said.indexOf("kept in ") + "kept in ".length, -1)
+  expect(await readFile(join(keptIn, "0"), "utf8")).toBe("one\n")
+  expect(await readFile(join(projectFolder, "notes.md"), "utf8")).toBe("two\n")
 })

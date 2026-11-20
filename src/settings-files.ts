@@ -207,6 +207,12 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
       if (own.permissions && !disable.includes("permissions")) {
         if (plugins.some((global) => global.name === "permissions")) disable.push("permissions")
         added.push(permissionsFor(context, own.permissions))
+        // Undo has to stay after permissions, so that it keeps no copy for a
+        // call that is refused, and takes its copy after any question.
+        if (plugins.some((global) => global.name === "undo") && !disable.includes("undo") && !added.some((plugin) => plugin.name === "undo")) {
+          disable.push("undo")
+          added.push(undo({ dataFolder: context.home }))
+        }
       }
       const ownModel = fromEnv.model ? undefined : own.model
       const ownLimit = fromEnv.maxTokens ? undefined : own.maxTokens
