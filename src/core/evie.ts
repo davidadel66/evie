@@ -344,7 +344,16 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
     const { project, host, model: startedWith, loop } = open(input.session)
-    const command = host.commands.list().find((candidate) => candidate.name === input.name)
+    // A command's own name first, then any command that covers the name.
+    let command = host.commands.list().find((candidate) => candidate.name === input.name)
+    if (!command) {
+      for (const candidate of host.commands.list()) {
+        if (await candidate.covers?.(input.name)) {
+          command = candidate
+          break
+        }
+      }
+    }
     if (!command) {
       const names = host.commands.list().map((candidate) => `/${candidate.name}`).join(", ") || "none"
       throw new Error(`There is no command "/${input.name}". The commands are: ${names}.`)
@@ -360,6 +369,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         return loop.busy()
       },
       tell: (note) => loop.tell(note),
+      invokedAs: input.name,
+      send: (text) => sendMessage({ session: input.session, text }),
       jobs: {
         list: () => jobs.list(input.session),
         stop: (id) => jobs.stop(input.session, id, "owner"),

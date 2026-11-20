@@ -246,6 +246,12 @@ export type SlashContext = {
   // `background` asks whatever the turn is waiting on to move to the
   // background, and returns how many things were asked.
   jobs: { list(): Job[]; stop(id: string): Job | undefined; background(): number }
+  // The name the owner typed, which differs from the command's own when the
+  // command covers it.
+  invokedAs: string
+  // Sends a message to the session as if the owner had typed it, which
+  // starts a turn.
+  send(text: string): void
 }
 
 // A command the owner types in a client, starting with a slash. It runs at
@@ -254,6 +260,11 @@ export type SlashCommand = {
   name: string
   description: string
   run(args: string, context: SlashContext): string | Promise<string>
+  // Other names this command answers to, asked about when the owner types a
+  // name that is no command's own. It lets a plugin offer names that are
+  // not known until then, such as one for each of the owner's skills. A
+  // command's own name always wins over a name another command covers.
+  covers?(name: string): boolean | Promise<boolean>
 }
 
 // ---- Hooks --------------------------------------------------------------------

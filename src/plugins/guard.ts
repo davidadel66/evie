@@ -50,7 +50,10 @@ export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall,
       const named = filesNamed(call)
       if (named.length > 0 && named.every((path) => isAbsolute(path) && isDefinition(data, path))) return undefined
     }
-    const reason = call.name === "shell" ? shellReason(call, privateFolders, folder) : fileReason(call, privateFolders, folder)
+    // A skill can hold scripts, so a command may name a file in the owner's
+    // skills, where something asks the owner before it runs.
+    const skills = options.definitionsCanBeWritten ? data : undefined
+    const reason = call.name === "shell" ? shellReason(call, privateFolders, folder, skills) : fileReason(call, privateFolders, folder)
     if (reason === undefined) return undefined
     return `Blocked by the guard: ${reason} The command was not run. If the owner wants this done, they can run it themselves.`
   }
@@ -93,7 +96,7 @@ const RULES: { matches: RegExp; reason: string }[] = [
   { matches: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/, reason: "this is a fork bomb, which freezes the machine." },
 ]
 
-function shellReason(call: CheckedToolCall, privateFolders: string[], projectFolder: string): string | undefined {
+function shellReason(call: CheckedToolCall, privateFolders: string[], projectFolder: string, skillsIn?: string): string | undefined {
   const command = typeof call.input.command === "string" ? call.input.command : ""
   const home = homedir()
 
@@ -102,8 +105,26 @@ function shellReason(call: CheckedToolCall, privateFolders: string[], projectFol
 
   // A private folder, written the ways a shell command would write it.
   const spelled = command.replaceAll("${HOME}", home).replaceAll("$HOME", home).replace(/(^|[\s"'=:(])~(?=\/|\s|$)/g, `$1${home}`)
+  // Words that name a file in the owner's skills are set aside before the
+  // private folders are looked for, so that a skill's script can be run.
+  // Each must be a plain full path that really is inside the skills folder.
+  // This is for running and reading only: a command that writes, copies,
+  // links, deletes or changes folder gets no such allowance, since from
+  // inside the skills folder it could reach the rest of the data folder, or
+  // change a skill without the question that writing one always brings.
+  const onlyRunsOrReads = !/[<>]|(^|[\s;&|(])(cd|pushd|ln|cp|mv|rm|tee|dd|install|touch|mkdir|rmdir|chmod|chown|sed|perl|awk|truncate|rsync|tar|unzip)(\s|$)/.test(command)
+  const checked =
+    skillsIn === undefined || !onlyRunsOrReads
+      ? spelled
+      : spelled
+          .split(/(\s+)/)
+          .map((word) => {
+            const path = word.replace(/^["']|["']$/g, "")
+            return /^\/[\w./@+-]+$/.test(path) && isSkill(skillsIn, path) ? "" : word
+          })
+          .join("")
   for (const folder of privateFolders) {
-    if (spelled.includes(folder)) return `${folder} is a private folder.`
+    if (checked.includes(folder)) return `${folder} is a private folder.`
   }
   if (typeof call.input.workdir === "string" && insidePrivate(call.input.workdir, privateFolders, projectFolder)) {
     return `${call.input.workdir} is a private folder.`
@@ -210,4 +231,14 @@ function isBrokenLink(absolute: string): boolean {
   } catch {
     return false
   }
+}
+
+// True for a path inside the owner's skills in the data folder.
+function isSkill(data: string, path: string): boolean {
+  // A ".." is folded away as text before links are followed, so a path
+  // with one can end up somewhere other than it looks.
+  if (/(^|\/)\.\.(\/|$)/.test(path)) return false
+  if (isBrokenLink(resolve(path))) return false
+  const inside = relative(followLinks(resolve(data, "skills")), followLinks(resolve(path)))
+  return inside !== "" && !inside.startsWith("..") && !isAbsolute(inside)
 }
