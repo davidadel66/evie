@@ -136,8 +136,6 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
     // Continuing: the session used last in this project, when there is one.
     const last = input.continue ? projects.lastSession(project) : undefined
-    const alreadyOpen = last === undefined ? undefined : sessions.get(last)
-    if (last !== undefined && !alreadyOpen) settleUnfinished(last)
     // A new session is created only once it is needed: when the project's
     // settings ask a question, or when everything else has gone well.
     let session = last
@@ -155,10 +153,14 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     }
     const maxTokens = scope.maxTokens ?? options.maxTokens
 
+    // From here to the session being listed as open nothing waits, so two
+    // clients continuing the same session at once cannot both start it.
+    const alreadyOpen = last === undefined ? undefined : sessions.get(last)
     if (last !== undefined && alreadyOpen) {
       alreadyOpen.canAnswer ||= canAnswer
       return { session: last, project, resumed: true, notices }
     }
+    if (last !== undefined) settleUnfinished(last)
 
     const opened: Open = { project, host, model, canAnswer } as Open
     opened.loop = createLoop({

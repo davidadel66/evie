@@ -20,6 +20,14 @@ export type TerminalOptions = {
   // "again" when a cancel was already asked for and the turn has still not
   // stopped, which is the caller's cue to quit without waiting.
   onInterrupt?: (interrupt: () => "cancelled" | "idle" | "again") => void
+  // Whether the owner can be asked questions here. Leave it out for yes. It
+  // is no when the input is not typed by a person, such as a pipe: a line
+  // meant as a message must not be taken as an answer.
+  questions?: boolean
+  // What the owner has typed and not yet sent, when the input line can say.
+  // It is used to tell a line that was being typed before a question
+  // appeared from an answer to it.
+  typing?: () => string
 }
 
 const PROMPT = "\n› "
@@ -57,6 +65,9 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   // The question waiting for the owner's answer, and the session it is in.
   let asked: { session: string; question: EventBodies["question"] } | undefined
   let whenAsked = () => {}
+  // True when the owner was part way through typing a line as the question
+  // appeared. That line was not meant as its answer.
+  let typedBefore = false
   const showQuestion = () => {
     if (!asked) return
     const { text, choices, freeText } = asked.question
@@ -75,6 +86,20 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   // Takes a typed line as the answer to the question that is waiting.
   const answer = async (typed: string) => {
     if (!asked) return
+    if (typedBefore) {
+      // Sent as the message it was meant to be, when there is a session to
+      // send it to. The model reads it at its next step.
+      typedBefore = false
+      if (session !== undefined && typed !== "") {
+        line("[That line was typed before the question appeared, so it was sent as a message, not taken as the answer.]")
+        unanswered += 1
+        idle = false
+        await evie.send({ type: "send_message", session, text: typed })
+      } else if (typed !== "") {
+        line("[That line was typed before the question appeared, so it was not taken as the answer.]")
+      }
+      return showQuestion()
+    }
     const { choices, freeText } = asked.question
     const picked = /^\d+$/.test(typed) ? choices[Number(typed) - 1] : undefined
     const choice = picked ?? (freeText && typed !== "" && !/^\d+$/.test(typed) ? typed : undefined)
@@ -98,6 +123,40 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   }
   // True from a Ctrl-C until the turn it cancelled has ended.
   let cancelling = false
+  // True while a command such as /compact is running.
+  let commanding = false
+
+  // Waits for work that can stop to ask a question: opening the session, or
+  // running a command. Lines are read during it only while a question is
+  // waiting, and each one is taken as the answer.
+  async function answeringDuring<Result>(work: Promise<Result>): Promise<Result> {
+    let finished = false
+    const settled = work
+      .then(
+        () => {},
+        () => {},
+      )
+      .then(() => {
+        finished = true
+        whenAsked()
+      })
+    while (!finished) {
+      if (!asked) await new Promise<void>((resolve) => (whenAsked = resolve))
+      if (finished || !asked) continue
+      const typed = await Promise.race([nextLine(), settled])
+      if (!typed) continue
+      reading = undefined
+      if (typed.done) {
+        ended = true
+        refuse()
+        asked = undefined
+      } else {
+        midLine = false
+        await answer(typed.value.trim())
+      }
+    }
+    return work
+  }
 
   const stop = evie.subscribe((event) => {
     // Until the session is open, the only events that can be for this
@@ -106,6 +165,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     if (!mine) return
     if (event.type === "question") {
       asked = { session: event.session, question: event.body }
+      typedBefore = (options.typing?.() ?? "").trim() !== ""
       showQuestion()
       if (ended) refuse()
       whenAsked()
@@ -143,38 +203,22 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     }
   })
 
-  // Opening can stop to ask a question, such as whether to trust the
-  // project. Lines are read during it only while a question is waiting.
-  let opened = false
-  const opening = evie
-    .send({ type: "open_session", folder: options.folder, questions: true, ...(options.resume && { continue: true }) })
-    .finally(() => {
-      opened = true
-      whenAsked()
-    })
-  opening.catch(() => {})
-  while (!opened) {
-    if (!asked) await new Promise<void>((resolve) => (whenAsked = resolve))
-    if (opened || !asked) continue
-    const typed = await Promise.race([nextLine(), opening.then(() => undefined, () => undefined)])
-    if (!typed) continue
-    reading = undefined
-    if (typed.done) {
-      ended = true
-      refuse()
-    } else {
-      midLine = false
-      await answer(typed.value.trim())
-    }
-  }
-  const { project, resumed, notices, session: openedSession } = await opening.catch((cause) => {
+  // Opening can stop to ask a question, such as whether to trust the project.
+  const { project, resumed, notices, session: openedSession } = await answeringDuring(
+    evie.send({
+      type: "open_session",
+      folder: options.folder,
+      ...(options.questions !== false && { questions: true }),
+      ...(options.resume && { continue: true }),
+    }),
+  ).catch((cause) => {
     stop()
     throw cause
   })
   session = openedSession
 
   options.onInterrupt?.(() => {
-    if (idle) return "idle"
+    if (idle && !commanding) return "idle"
     if (cancelling) return "again"
     cancelling = true
     evie.send({ type: "cancel", session: openedSession }).catch((cause) => line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`))
@@ -211,11 +255,16 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       // not a plain word, so a message may start with one.
       const command = /^\/([A-Za-z][\w-]*)(?:\s+(.*))?$/.exec(text)
       if (command) {
-        await evie
-          .send({ type: "run_command", session: openedSession, name: command[1]!, args: command[2] ?? "" })
+        // A command can ask a question too, so lines are still read for answers.
+        commanding = true
+        await answeringDuring(evie.send({ type: "run_command", session: openedSession, name: command[1]!, args: command[2] ?? "" }))
           .then((result) => line(result.text))
           .catch((cause) => line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`))
-        if (idle) showPrompt()
+        commanding = false
+        if (idle) {
+          cancelling = false
+          showPrompt()
+        }
         continue
       }
       unanswered += 1

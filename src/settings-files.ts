@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises"
+import { readFile, rename, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -133,13 +133,14 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
             `runs with your full permissions, and it can switch off protections such as the guard. Use it?`,
           choices: [TRUST, DO_NOT_TRUST],
         })
+        // Written down first: an answer that could not be saved does not count.
         if (answer === TRUST) {
-          trusted.add(project.folder)
           await remember(globalFile, "trust", project.folder)
+          trusted.add(project.folder)
         }
         if (answer === DO_NOT_TRUST) {
-          untrusted.add(project.folder)
           await remember(globalFile, "untrusted", project.folder)
+          untrusted.add(project.folder)
         }
       }
 
@@ -180,13 +181,22 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
 }
 
 // Adds a project folder to one of the lists in the global settings file. The
-// file is read again first, so nothing written to it since Evie started is lost.
-async function remember(file: string, list: "trust" | "untrusted", folder: string): Promise<void> {
+// file is read again first, so nothing written to it since Evie started is
+// lost, and replaced in one step, so it is never left half written. Answers
+// are saved one at a time.
+let saving: Promise<void> = Promise.resolve()
+function remember(file: string, list: "trust" | "untrusted", folder: string): Promise<void> {
+  const saved = saving.then(() => save(file, list, folder))
+  saving = saved.catch(() => {})
+  return saved
+}
+async function save(file: string, list: "trust" | "untrusted", folder: string): Promise<void> {
   const settings: SettingsFile = (await readSettingsFile(file)) ?? {}
   const other = list === "trust" ? "untrusted" : "trust"
   settings[list] = [...new Set([...(settings[list] ?? []), folder])]
   if (settings[other]) settings[other] = settings[other].filter((listed) => resolve(expandHome(listed)) !== folder)
-  await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`)
+  await writeFile(`${file}.new`, `${JSON.stringify(settings, null, 2)}\n`)
+  await rename(`${file}.new`, file)
 }
 
 // ---- Loading one plugin -----------------------------------------------------------------

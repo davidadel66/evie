@@ -77,6 +77,7 @@ try {
         lines: live.lines,
         write: live.write,
         prompt: false,
+        typing: live.typing,
         onInterrupt: (handler) => (interrupt = handler),
       })
     } finally {
@@ -99,6 +100,8 @@ try {
       ...session,
       lines: input,
       write: print,
+      // Nobody is typing, so a line must not be taken as an answer.
+      questions: false,
       onInterrupt: (handler) => (interrupt = handler),
     })
   }

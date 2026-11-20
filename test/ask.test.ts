@@ -214,14 +214,17 @@ const toolPlugin = `export default { name: "deploy", setup(host) { host.tools.ad
 
 // Evie started the way the evie command does, with a project that has a
 // settings file of its own and is on neither list.
-async function startWithProject(global: Record<string, unknown> = {}) {
-  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
-  const folder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
-  cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(folder, { recursive: true, force: true }))
-  await mkdir(join(folder, ".evie"))
-  await writeFile(join(folder, ".evie", "evie.json"), JSON.stringify({ plugins: ["./deploy.ts"] }))
-  await writeFile(join(folder, "deploy.ts"), toolPlugin)
-  await writeFile(join(home, "evie.json"), JSON.stringify({ model: "some/model", plugins: [], ...global }))
+// Pass `again` to stand for Evie being started once more on the same data and project.
+async function startWithProject(again?: { home: string; folder: string }) {
+  const home = again?.home ?? (await realpath(await mkdtemp(join(tmpdir(), "evie-home-"))))
+  const folder = again?.folder ?? (await realpath(await mkdtemp(join(tmpdir(), "evie-project-"))))
+  if (!again) {
+    cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(folder, { recursive: true, force: true }))
+    await mkdir(join(folder, ".evie"))
+    await writeFile(join(folder, ".evie", "evie.json"), JSON.stringify({ plugins: ["./deploy.ts"] }))
+    await writeFile(join(folder, "deploy.ts"), toolPlugin)
+    await writeFile(join(home, "evie.json"), JSON.stringify({ model: "some/model", plugins: [] }))
+  }
   const settings = await loadSettingsFiles({ env: { EVIE_HOME: home } })
   const model = scriptedProvider(Array.from({ length: 4 }, () => ({ text: ["ok"] })))
   const run = await startEvie([model.plugin, ...settings.plugins], { home, projectSettings: settings.projectSettings })
@@ -362,4 +365,121 @@ test("the terminal asks whether to trust a project while it is opening, before t
   expect(printed).toContain("  1. Yes, trust this project\n  2. No, ignore its settings file\nType a number.\n")
   expect(printed.indexOf("[answered] Yes, trust this project")).toBeLessThan(printed.indexOf("evie · "))
   expect((await globalFile()).trust).toEqual([folder])
+})
+
+// ---- Found in review ------------------------------------------------------------------------
+
+test("a session that holds nothing but a question is not the one --continue carries on", async () => {
+  const first = await startWithProject()
+  const { opened } = await first.open(null)
+  await say(first.run, "remember this", opened.session)
+  await first.run.evie.close()
+
+  // Started again: opening asks once more, in a new session that never gets a message.
+  const second = await startWithProject(first)
+  await second.run.evie.send({ type: "open_session", folder: first.folder })
+  const continued = await second.run.evie.send({ type: "open_session", folder: first.folder, continue: true })
+
+  expect(continued).toMatchObject({ session: opened.session, resumed: true })
+})
+
+test("two clients continuing the same session at once share one session, and its questions are still asked", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  const projectFolder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(projectFolder, { recursive: true, force: true }))
+  const first = await startEvie([scriptedProvider([{ text: ["Hello."] }]).plugin], { home, projectFolder })
+  await say(first, "hi")
+  await first.stop()
+
+  const deploy = asksBeforeDeploy()
+  const again = await startEvie([scriptedProvider(callsDeploy).plugin, deploy.plugin], { home, projectFolder: await realpath(await mkdtemp(join(tmpdir(), "evie-other-"))) })
+  cleanups.push(again.stop)
+  const [shows, silent] = await Promise.all([
+    again.evie.send({ type: "open_session", folder: projectFolder, continue: true, questions: true }),
+    again.evie.send({ type: "open_session", folder: projectFolder, continue: true }),
+  ])
+  expect(silent.session).toBe(shows.session)
+
+  await sayAndAnswer({ ...again, session: shows.session }, "ship it", "Yes")
+  expect(deploy.answers).toEqual(["Yes"])
+})
+
+test("a command that stops to ask a question can be answered in the terminal", async () => {
+  // A plugin that asks before a request when told to. /compact makes a request of its own.
+  const answers: (string | null)[] = []
+  let askNow = false
+  const asksFirst: Plugin = {
+    name: "asks-first",
+    setup(host) {
+      host.on("before_request", async (_request, context) => {
+        if (askNow) answers.push(await context.ask(DEPLOY))
+      })
+    },
+  }
+  const model = scriptedProvider([{ text: ["A1"] }, { text: ["A2"] }, { text: ["## Goal\nCarry on."] }])
+  // Compacted at 2,000 tokens, so the two messages below are left alone until /compact.
+  const run = await startEvie([model.plugin, asksFirst], { compaction: { ceiling: 2000 } })
+  cleanups.push(run.stop)
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    lines: (async function* () {
+      yield "x".repeat(4000)
+      while (!printed.includes("A1")) await Bun.sleep(1)
+      yield "y".repeat(1600)
+      while (!printed.includes("A2")) await Bun.sleep(1)
+      askNow = true
+      yield "/compact"
+      while (!printed.includes("Type a number.")) await Bun.sleep(1)
+      yield "2"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(answers).toEqual(["No"])
+  expect(printed).toContain("Compacted: the earlier part of the conversation is now a summary.")
+})
+
+test("where nobody is typing, a question is refused and the line is sent as the message it was", async () => {
+  const { run, folder } = await startWithProject()
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder,
+    questions: false,
+    lines: (async function* () {
+      yield "1"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("which was ignored because the project is not trusted")
+  expect(stored(run.events).find((event) => event.type === "user_message")?.body).toEqual({ text: "1" })
+})
+
+test("a line the owner was already typing when a question appeared is sent as a message, not taken as the answer", async () => {
+  const deploy = asksBeforeDeploy({ ...DEPLOY, freeText: true })
+  const { run, model } = await start(callsDeploy, [deploy.plugin], {})
+  let printed = ""
+  let typing = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    typing: () => typing,
+    lines: (async function* () {
+      yield "ship it"
+      // Part way through a line as the question appears.
+      typing = "also update the"
+      while (!printed.includes("Type a number, or your own answer.")) await Bun.sleep(1)
+      typing = ""
+      yield "also update the docs"
+      yield "1"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(deploy.answers).toEqual(["Yes"])
+  expect(printed).toContain("so it was sent as a message, not taken as the answer.")
+  expect(model.requests.at(-1)?.messages.filter((message) => message.role === "user").at(-1)).toEqual({ role: "user", text: "also update the docs" })
 })
