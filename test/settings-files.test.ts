@@ -59,16 +59,17 @@ async function projectWith(settings: unknown, files: Record<string, string> = {}
 }
 
 const usualTools = ["read", "write", "edit", "grep", "glob", "shell"]
+// The same with the ask tool, which the default plugins add.
 // What the built-in plugins offer when none is left out. There is no search
 // key in these tests, so of the web tools only fetch is there.
-const defaultTools = [...usualTools, "web_fetch"]
+const defaultTools = [...usualTools, "ask", "web_fetch"]
 
 // ---- The global settings file -------------------------------------------------------
 
 test("with no settings file, the built-in plugins load", async () => {
   const { offered, settings } = await start(undefined)
 
-  expect(settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "shell", "guard", "models", "web", "openrouter"])
+  expect(settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "shell", "permissions", "models", "ask", "instructions", "web", "openrouter"])
   expect(await offered()).toEqual(defaultTools)
 })
 
@@ -141,7 +142,7 @@ test("a plugin that cannot be loaded stops Evie at start, with an error that nam
   await writeFile(join(outside, "broken.ts"), "export default { name: 'broken', setup() { throw new Error('could not connect') } }")
 
   await expect(start({ plugins: ["no-such-plugin"] })).rejects.toThrow(
-    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, guard, models, web, openrouter.',
+    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, guard, permissions, models, ask, instructions, web, openrouter.',
   )
   await expect(start({ plugins: ["/no/such/file.ts"] })).rejects.toThrow('The plugin "/no/such/file.ts" could not be loaded')
   await expect(start({ plugins: [join(outside, "empty.ts")] })).rejects.toThrow("does not export a plugin")
@@ -188,7 +189,7 @@ test("a project's settings file can switch off a global plugin for that project"
   const { run, offered } = await start({ trust: [folder] })
   const inProject = await run.evie.send({ type: "open_session", folder })
 
-  expect(await offered(inProject.session)).toEqual(["read", "write", "edit", "grep", "glob", "web_fetch"])
+  expect(await offered(inProject.session)).toEqual(["read", "write", "edit", "grep", "glob", "ask", "web_fetch"])
   expect(await offered()).toEqual(defaultTools)
 })
 
@@ -320,4 +321,17 @@ test("with no model set anywhere, opening a session says where to set one", asyn
 test("a model or reply limit of the wrong kind in a settings file is refused", async () => {
   await expect(startWithSettings({ model: 5 })).rejects.toThrow(/"model" must be the name of a model/)
   await expect(startWithSettings({ model: "a/b", maxTokens: "lots" })).rejects.toThrow(/"maxTokens" must be a whole number above zero/)
+})
+
+test("when to compact, and a model's limit, can be set in the global settings file", async () => {
+  const home = await tempFolder("evie-home-")
+  await writeFile(join(home, "evie.json"), JSON.stringify({ plugins: [], compactAt: 120000, contextLimits: { "some/model": 64000 } }))
+
+  const settings = await loadSettingsFiles({ env: { EVIE_HOME: home } })
+
+  expect(settings.compaction).toEqual({ ceiling: 120000, limits: { "some/model": 64000 } })
+  await writeFile(join(home, "evie.json"), JSON.stringify({ compactAt: "soon" }))
+  await expect(loadSettingsFiles({ env: { EVIE_HOME: home } })).rejects.toThrow(/"compactAt" must be a whole number above zero/)
+  await writeFile(join(home, "evie.json"), JSON.stringify({ contextLimits: { "some/model": "big" } }))
+  await expect(loadSettingsFiles({ env: { EVIE_HOME: home } })).rejects.toThrow(/"contextLimits" must give a whole number/)
 })

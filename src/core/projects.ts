@@ -30,10 +30,13 @@ export function createProjects(db: Database): Projects {
   const byId = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE id = ?")
   const insertProject = db.query("INSERT INTO project (id, name, folder, created) VALUES (?, ?, ?, ?)")
   const insertSession = db.query("INSERT INTO session (id, project, created) VALUES (?, ?, ?)")
-  // `IS` compares with null as well as with an id.
+  // `IS` compares with null as well as with an id. Only a session the owner
+  // has said something in counts: one that holds nothing but a question
+  // asked while it was opening is not a conversation to carry on.
   const lastUsed = db.query<{ id: string }, [string | null]>(
     `SELECT session.id FROM session JOIN event ON event.session = session.id
      WHERE session.project IS ?
+       AND session.id IN (SELECT session FROM event WHERE type = 'user_message')
      GROUP BY session.id
      ORDER BY MAX(event.time) DESC, session.created DESC
      LIMIT 1`,

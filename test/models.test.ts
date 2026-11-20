@@ -118,7 +118,7 @@ test("a command that does not exist says which ones do", async () => {
   const { run } = await start("anthropic/claude-sonnet-4.6")
 
   await expect(run.evie.send({ type: "run_command", session: run.session, name: "nope", args: "" })).rejects.toThrow(
-    'There is no command "/nope". The commands are: /model.',
+    'There is no command "/nope". The commands are: /model, /compact.',
   )
 })
 
@@ -152,7 +152,7 @@ test("in the terminal, a line starting with / runs a command and is not sent to 
   })
 
   expect(printed).toContain("The model is now openai/gpt-5 (profile: gpt).")
-  expect(printed).toContain('[error] There is no command "/nope". The commands are: /model.')
+  expect(printed).toContain('[error] There is no command "/nope". The commands are: /model, /compact.')
   // A message that starts with a path is a message, not a command.
   expect(provider.requests).toHaveLength(1)
   expect(provider.requests[0]?.messages).toEqual([{ role: "user", text: "/Users/me/app/main.ts is failing, why?" }])

@@ -1,16 +1,21 @@
+import { conversationOf, summaryMessage } from "./compaction.ts"
 import type { Message, Request, StoredEvent, Tool } from "./types.ts"
 
 // Builds what the model sees from the session's events and the registered
 // tools. It is a pure function: the same log always gives the same request,
 // which is what keeps a provider's prompt cache working.
+//
+// Once a conversation has been compacted, the request is the latest summary
+// followed by the events after it. The older events are still in the log.
 export function buildRequest(
   model: string,
   events: readonly StoredEvent[],
   tools: readonly Tool[],
   maxTokens?: number,
 ): Request {
-  const messages: Message[] = []
-  for (const event of events) {
+  const { compaction, kept } = conversationOf(events)
+  const messages: Message[] = compaction ? [{ role: "user", text: summaryMessage(compaction.body) }] : []
+  for (const event of kept) {
     if (event.type === "user_message") messages.push({ role: "user", text: event.body.text })
     if (event.type === "assistant_message") {
       const { text, toolCalls } = event.body

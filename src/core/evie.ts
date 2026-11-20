@@ -6,8 +6,9 @@ import { createInbox } from "./inbox.ts"
 import { createEventLog } from "./log.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { createProjects } from "./projects.ts"
+import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
-import type { Commands, Evie, EvieEvent, Host, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
+import type { Ask, Commands, Evie, EvieEvent, Host, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
 
 export type EvieOptions = {
   // Settings from the environment. `EVIE_HOME` names the data folder.
@@ -18,12 +19,17 @@ export type EvieOptions = {
   maxTokens?: number
   // Where a model can be set, named when none is. It is only used in that message.
   settingsFile?: string
+  // When a long conversation is compacted: a ceiling in tokens, and limits
+  // for models whose own limit the provider does not know.
+  compaction?: { ceiling?: number; limits?: Record<string, number> }
   // The global plugins, in order. They are part of every project and of the
   // general session.
   plugins: readonly Plugin[]
   // What a project has on top of the global plugins: its own, added after
-  // them for that project only, and any global ones it switches off.
-  projectSettings?: (project: Project) => ProjectSettings | readonly Plugin[] | Promise<ProjectSettings | readonly Plugin[]>
+  // them for that project only, and any global ones it switches off. It is
+  // called the first time a session opens in the project, and can ask the
+  // owner a question, such as whether to trust the project.
+  projectSettings?: (project: Project, context: { ask: Ask }) => ProjectSettings | readonly Plugin[] | Promise<ProjectSettings | readonly Plugin[]>
 }
 
 // Where all of Evie's state lives. Moving Evie is copying this folder.
@@ -52,11 +58,17 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   }
   const scopes = new Map<string | null, Promise<Scope>>()
 
-  async function buildScope(project: Project | null): Promise<Scope> {
-    const given = project && options.projectSettings ? await options.projectSettings(project) : []
+  async function buildScope(project: Project | null, ask: Ask): Promise<Scope> {
+    const given = project && options.projectSettings ? await options.projectSettings(project, { ask }) : []
     const own: ProjectSettings = "plugins" in given ? given : { plugins: given }
     const kept = options.plugins.filter((plugin) => !own.disable?.includes(plugin.name))
     const { host, hooks } = await createHost([...kept, ...own.plugins], project)
+    // A command of the core's own, beside the ones plugins register.
+    host.commands.add({
+      name: "compact",
+      description: "Replace the older part of the conversation with a summary, to save room.",
+      run: (_args, context) => context.compact(),
+    })
     const provider = host.providers.list()[0]
     if (!provider) throw new Error("No provider is registered. Load a plugin that registers one.")
     return {
@@ -69,11 +81,13 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     }
   }
 
-  function scopeFor(project: Project | null): Promise<Scope> {
+  // `ask` is used only when the scope is built now, by the session that is
+  // opening the project for the first time.
+  function scopeFor(project: Project | null, ask: Ask): Promise<Scope> {
     const key = project?.id ?? null
     let scope = scopes.get(key)
     if (!scope) {
-      scope = buildScope(project)
+      scope = buildScope(project, ask)
       scopes.set(key, scope)
       // A set that failed to build is forgotten, so the next session tries again.
       scope.catch(() => scopes.delete(key))
@@ -81,7 +95,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     return scope
   }
 
-  await scopeFor(null)
+  await scopeFor(null, async () => null)
 
   const home = dataFolder(options.env)
   await mkdir(home, { recursive: true })
@@ -100,9 +114,12 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     }
   }
 
+  const questions = createQuestions({ log, emit })
+  let closed = false
+
   // Each session open in this process: its turn loop, its project and that
-  // project's plugin host.
-  type Open = { loop: Loop; project: Project | null; host: Host; model: string }
+  // project's plugin host. `canAnswer` says whether its client shows questions.
+  type Open = { loop: Loop; project: Project | null; host: Host; model: string; canAnswer: boolean }
   const sessions = new Map<string, Open>()
 
   async function openSession(input: Commands["open_session"]["input"]): Promise<Commands["open_session"]["output"]> {
@@ -117,7 +134,16 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       project = projects.forFolder(input.folder)
     }
 
-    const scope = await scopeFor(project)
+    // Continuing: the session used last in this project, when there is one.
+    const last = input.continue ? projects.lastSession(project) : undefined
+    // A new session is created only once it is needed: when the project's
+    // settings ask a question, or when everything else has gone well.
+    let session = last
+    const sessionId = () => (session ??= projects.createSession(project))
+    const canAnswer = input.questions === true
+
+    const scope = await scopeFor(project, (question) => questions.ask(sessionId(), question, { canAnswer }))
+    if (closed) throw new Error("Evie was closed while the session was opening.")
     const { host, hooks, provider, notices } = scope
     // A project's own model wins over the global one.
     const model = scope.model ?? options.model
@@ -127,18 +153,23 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     }
     const maxTokens = scope.maxTokens ?? options.maxTokens
 
-    // Continuing: the session used last in this project, when there is one.
-    const last = input.continue ? projects.lastSession(project) : undefined
-    if (last !== undefined && sessions.has(last)) return { session: last, project, resumed: true, notices }
-    if (last !== undefined) settleUnfinishedTurn(last)
+    // From here to the session being listed as open nothing waits, so two
+    // clients continuing the same session at once cannot both start it.
+    const alreadyOpen = last === undefined ? undefined : sessions.get(last)
+    if (last !== undefined && alreadyOpen) {
+      alreadyOpen.canAnswer ||= canAnswer
+      return { session: last, project, resumed: true, notices }
+    }
+    if (last !== undefined) settleUnfinished(last)
 
-    const session = last ?? projects.createSession(project)
-    const loop = createLoop({
-      session,
+    const opened: Open = { project, host, model, canAnswer } as Open
+    opened.loop = createLoop({
+      session: sessionId(),
       project,
       outputFolder: join(home, "tool-output"),
       model,
       ...(maxTokens !== undefined && { maxTokens }),
+      ...(options.compaction && { compaction: options.compaction }),
       log,
       inbox,
       host,
@@ -146,16 +177,26 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       provider,
       atomically: (work) => db.transaction(work)(),
       emit,
+      ask: (question, signal) => questions.ask(sessionId(), question, { canAnswer: opened.canAnswer, signal }),
     })
-    sessions.set(session, { loop, project, host, model })
+    sessions.set(sessionId(), opened)
     // A message that was waiting when Evie last stopped is answered now.
-    if (last !== undefined) loop.wake()
-    return { session, project, resumed: last !== undefined, notices }
+    if (last !== undefined) opened.loop.wake()
+    return { session: sessionId(), project, resumed: last !== undefined, notices }
   }
 
   // If Evie was stopped in the middle of a turn, the log ends with a turn
-  // that never finished, and perhaps tool calls with no result. This closes
-  // it off, so the conversation is one a model will accept again.
+  // that never finished, and perhaps tool calls with no result or a question
+  // with no answer. This closes them off, so the conversation is one a model
+  // will accept again and no question is left looking open.
+  function settleUnfinished(session: string): void {
+    const answered = new Set(log.events(session).flatMap((event) => (event.type === "answer" ? [event.body.id] : [])))
+    for (const event of log.events(session)) {
+      if (event.type === "question" && !answered.has(event.body.id)) emit(log.append(session, "answer", { id: event.body.id, choice: null }))
+    }
+    settleUnfinishedTurn(session)
+  }
+
   function settleUnfinishedTurn(session: string): void {
     const events = log.events(session)
     const started = events.findLastIndex((event) => event.type === "turn_start")
@@ -201,7 +242,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   }
 
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
-    const { project, host, model: startedWith } = open(input.session)
+    const { project, host, model: startedWith, loop } = open(input.session)
     const command = host.commands.list().find((candidate) => candidate.name === input.name)
     if (!command) {
       const names = host.commands.list().map((candidate) => `/${candidate.name}`).join(", ") || "none"
@@ -212,6 +253,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       project,
       model: currentModel(log.events(input.session), startedWith),
       setModel: (model) => setModel({ session: input.session, model }),
+      compact: () => loop.compactNow(),
     })
     return { text }
   }
@@ -230,6 +272,9 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
           return open(command.session).loop.cancel() as Output
         case "set_model":
           return setModel(command) as Output
+        case "answer_question":
+          // The session may still be opening: a project can ask before it is open.
+          return questions.answer(command.session, command.id, command.choice) as Output
         case "run_command":
           return (await runCommand(command)) as Output
         default:
@@ -244,6 +289,9 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       }
     },
     async close() {
+      closed = true
+      // A question still open is refused, which lets whatever asked it finish.
+      questions.refuseAll()
       await Promise.all([...sessions.values()].map(({ loop }) => loop.stop()))
       db.close()
     },

@@ -103,6 +103,10 @@ the code. Agents write the code; he reviews the systems and the design.
   Show a snippet only where it makes an idea clear.
 - When he is confused, make the step smaller.
 - Say what you are about to build and wait for his go before building it.
+- Before each ticket, explain where it sits in the system: in the core
+  loop, in a plugin that adds to a list, or in a plugin on a hook, and why
+  it belongs there. He does not review the code line by line; he reviews
+  the architecture.
 - Build each ticket on its own branch and open a pull request for it into
   `dev`. He reviews every pull request before it is merged.
 - `main` is the stable version: it is what the public sees and what the

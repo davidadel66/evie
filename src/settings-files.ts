@@ -1,13 +1,16 @@
-import { readFile } from "node:fs/promises"
+import { readFile, rename, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { dataFolder } from "./core/evie.ts"
-import type { Plugin, Project, ProjectSettings } from "./core/types.ts"
+import type { Ask, Plugin, Project, ProjectSettings } from "./core/types.ts"
+import { ask } from "./plugins/ask.ts"
 import { files, type FilesOptions } from "./plugins/files/index.ts"
 import { guard } from "./plugins/guard.ts"
+import { instructions } from "./plugins/instructions.ts"
 import { models } from "./plugins/models/index.ts"
 import { openrouter } from "./plugins/openrouter.ts"
+import { MODES, permissions, type Mode, type Rule } from "./plugins/permissions/index.ts"
 import { shell } from "./plugins/shell.ts"
 import { web } from "./plugins/web.ts"
 import type { Settings } from "./settings.ts"
@@ -34,6 +37,11 @@ import type { Settings } from "./settings.ts"
 // is used only when the global file lists that project under "trust".
 // Otherwise it is ignored as a whole, and opening someone else's repository
 // can neither run their code nor change what Evie loads.
+//
+// The first time a project with a settings file is opened, the owner is
+// asked whether to trust it. The answer is remembered in the global file:
+// under "trust" for a yes and "untrusted" for a no. A question that could
+// not be put, or was not answered, is a no for now and is asked again.
 
 export type SettingsFiles = {
   // The global settings file, whether or not it exists yet.
@@ -42,37 +50,87 @@ export type SettingsFiles = {
   model?: string
   // The longest a reply may be, when a limit is set.
   maxTokens?: number
+  // When a long conversation is compacted, when the settings say.
+  compaction?: { ceiling?: number; limits?: Record<string, number> }
   // The global plugins, in the order listed.
   plugins: Plugin[]
   // What a project adds and switches off.
-  projectSettings(project: Project): Promise<ProjectSettings>
+  projectSettings(project: Project, context?: { ask: Ask }): Promise<ProjectSettings>
 }
 
 type Entry = string | { use: string; options?: Record<string, unknown> }
-type SettingsFile = { model?: string; maxTokens?: number; plugins?: Entry[]; trust?: string[]; disable?: string[] }
+type SettingsFile = {
+  model?: string
+  maxTokens?: number
+  // The size, in tokens, at which a conversation is compacted.
+  compactAt?: number
+  // What a model can read, for a model whose limit is not known or is wrong.
+  contextLimits?: Record<string, number>
+  plugins?: Entry[]
+  // How freely Evie may act: the mode sessions start in, the rules, and the
+  // owner's remembered "always" answers for each project. A project's own
+  // file can set `mode` and `rules`.
+  permissions?: { mode?: Mode; rules?: Rule[]; projects?: Record<string, Rule[]> }
+  trust?: string[]
+  // Projects the owner chose not to trust, so they are not asked again.
+  untrusted?: string[]
+  disable?: string[]
+}
 
 // What a built-in plugin is made from: its options from the settings file,
 // and the things only Evie knows. The API key is never taken from options.
-type Context = { env: Settings; home: string }
+// `ownPermissions` is the mode and rules of the project a plugin is being
+// loaded for, when its own settings file gives them.
+type Context = {
+  env: Settings
+  home: string
+  globalFile: string
+  permissions: NonNullable<SettingsFile["permissions"]>
+  ownPermissions?: { mode?: Mode; rules?: Rule[] }
+}
 const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Context) => Plugin> = {
   files: (options) => files(options as FilesOptions),
   shell: () => shell(),
   guard: (_options, context) => guard({ dataFolder: context.home }),
+  permissions: (_options, context) => permissionsFor(context, context.ownPermissions ?? {}),
   models: () => models(),
+  ask: () => ask(),
+  instructions: (_options, context) => instructions({ dataFolder: context.home }),
   web: (_options, context) => web({ env: context.env }),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
-const DEFAULT: Entry[] = ["files", "shell", "guard", "models", "web", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "permissions", "models", "ask", "instructions", "web", "openrouter"]
+
+// The permissions plugin as the settings describe it. A project's own mode
+// wins over the global one, and its rules come after the global ones.
+function permissionsFor(context: Context, own: { mode?: Mode; rules?: Rule[] }): Plugin {
+  const mode = own.mode ?? context.permissions.mode
+  return permissions({
+    dataFolder: context.home,
+    ...(mode !== undefined && { mode }),
+    rules: [...(context.permissions.rules ?? []), ...(own.rules ?? [])],
+    remembered: context.permissions.projects ?? {},
+    remember: (project, rules) =>
+      update(context.globalFile, (settings) => {
+        const kept = ((settings.permissions ??= {}).projects ??= {})
+        kept[project] = [...(kept[project] ?? []), ...rules]
+      }),
+  })
+}
+const TRUST = "Yes, trust this project"
+const DO_NOT_TRUST = "No, ignore its settings file"
 
 export async function loadSettingsFiles(options: { env: Settings }): Promise<SettingsFiles> {
   const home = dataFolder(options.env)
-  const context: Context = { env: options.env, home }
   const globalFile = join(home, "evie.json")
   const global = (await readSettingsFile(globalFile)) ?? {}
+  const context: Context = { env: options.env, home, globalFile, permissions: global.permissions ?? {} }
 
   const plugins: Plugin[] = []
   for (const entry of global.plugins ?? DEFAULT) plugins.push(await load(entry, home, context))
-  const trusted = new Set((global.trust ?? []).map((folder) => resolve(expandHome(folder))))
+  const folders = (list: string[] | undefined) => new Set((list ?? []).map((folder) => resolve(expandHome(folder))))
+  const trusted = folders(global.trust)
+  const untrusted = folders(global.untrusted)
 
   // The environment wins over both files.
   const fromEnv = {
@@ -86,19 +144,47 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
     file: globalFile,
     ...(model !== undefined && { model }),
     ...(maxTokens !== undefined && { maxTokens }),
+    ...((global.compactAt !== undefined || global.contextLimits !== undefined) && {
+      compaction: {
+        ...(global.compactAt !== undefined && { ceiling: global.compactAt }),
+        ...(global.contextLimits !== undefined && { limits: global.contextLimits }),
+      },
+    }),
     plugins,
-    async projectSettings(project) {
+    async projectSettings(project, asking) {
       const projectFile = join(project.folder, ".evie", "evie.json")
       const own = await readSettingsFile(projectFile)
       if (!own) return { plugins: [], disable: [], notices: [] }
 
+      // A project that is on neither list is asked about, once.
+      if (!trusted.has(project.folder) && !untrusted.has(project.folder) && asking) {
+        const answer = await asking.ask({
+          text:
+            `This project has a settings file of its own, ${projectFile}. It can load plugins, which are code that ` +
+            `runs with your full permissions, and it can switch off protections such as the guard. Use it?`,
+          choices: [TRUST, DO_NOT_TRUST],
+        })
+        // Written down first: an answer that could not be saved does not count.
+        if (answer === TRUST) {
+          await remember(globalFile, "trust", project.folder)
+          trusted.add(project.folder)
+        }
+        if (answer === DO_NOT_TRUST) {
+          await remember(globalFile, "untrusted", project.folder)
+          untrusted.add(project.folder)
+        }
+      }
+
       if (!trusted.has(project.folder)) {
+        const how = untrusted.has(project.folder)
+          ? `move "${project.folder}" from "untrusted" to "trust" in ${globalFile}`
+          : `add "${project.folder}" to "trust" in ${globalFile}`
         return {
           plugins: [],
           disable: [],
           notices: [
             `This project has a settings file of its own, ${projectFile}, which was ignored because the project is ` +
-              `not trusted. To use it, add "${project.folder}" to "trust" in ${globalFile}.`,
+              `not trusted. To use it, ${how}.`,
           ],
         }
       }
@@ -106,11 +192,18 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
       const added: Plugin[] = []
       const disable = [...(own.disable ?? [])]
       for (const entry of own.plugins ?? []) {
-        const plugin = await load(entry, project.folder, context)
+        const plugin = await load(entry, project.folder, { ...context, ...(own.permissions && { ownPermissions: own.permissions }) })
         // Listing a plugin that is already global replaces it for this
         // project, with the options given here.
         if (plugins.some((global) => global.name === plugin.name)) disable.push(plugin.name)
         added.push(plugin)
+      }
+      // A project's own mode and rules: the permissions plugin is set up
+      // again for this project with them added.
+      // Unless the project lists the plugin itself, or switches it off.
+      if (own.permissions && !disable.includes("permissions")) {
+        if (plugins.some((global) => global.name === "permissions")) disable.push("permissions")
+        added.push(permissionsFor(context, own.permissions))
       }
       const ownModel = fromEnv.model ? undefined : own.model
       const ownLimit = fromEnv.maxTokens ? undefined : own.maxTokens
@@ -123,6 +216,30 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
       }
     },
   }
+}
+
+// Changes the global settings file. The file is read again first, so nothing
+// written to it since Evie started is lost, and replaced in one step, so it
+// is never left half written. Changes are made one at a time.
+let saving: Promise<void> = Promise.resolve()
+function update(file: string, change: (settings: SettingsFile) => void): Promise<void> {
+  const saved = saving.then(async () => {
+    const settings: SettingsFile = (await readSettingsFile(file)) ?? {}
+    change(settings)
+    await writeFile(`${file}.new`, `${JSON.stringify(settings, null, 2)}\n`)
+    await rename(`${file}.new`, file)
+  })
+  saving = saved.catch(() => {})
+  return saved
+}
+
+// Adds a project folder to one of the two lists, and takes it off the other.
+function remember(file: string, list: "trust" | "untrusted", folder: string): Promise<void> {
+  return update(file, (settings) => {
+    const other = list === "trust" ? "untrusted" : "trust"
+    settings[list] = [...new Set([...(settings[list] ?? []), folder])]
+    if (settings[other]) settings[other] = settings[other].filter((listed) => resolve(expandHome(listed)) !== folder)
+  })
 }
 
 // ---- Loading one plugin -----------------------------------------------------------------
@@ -200,12 +317,40 @@ async function readSettingsFile(file: string): Promise<SettingsFile | undefined>
     typeof item === "string" || (typeof item === "object" && item !== null && typeof (item as { use?: unknown }).use === "string")
   listOf("plugins", isEntry, 'plugin names, paths, or { "use": ..., "options": ... } entries')
   listOf("trust", (item) => typeof item === "string", "project folders")
+  listOf("untrusted", (item) => typeof item === "string", "project folders")
   listOf("disable", (item) => typeof item === "string", "plugin names")
   if (settings.model !== undefined && (typeof settings.model !== "string" || settings.model.trim() === "")) {
     throw new Error(`In ${file}, "model" must be the name of a model.`)
   }
-  if (settings.maxTokens !== undefined && !(Number.isInteger(settings.maxTokens) && (settings.maxTokens as number) > 0)) {
-    throw new Error(`In ${file}, "maxTokens" must be a whole number above zero.`)
+  const positive = (value: unknown) => Number.isInteger(value) && (value as number) > 0
+  for (const key of ["maxTokens", "compactAt"]) {
+    if (settings[key] !== undefined && !positive(settings[key])) throw new Error(`In ${file}, "${key}" must be a whole number above zero.`)
   }
+  const limits = settings.contextLimits
+  if (limits !== undefined && (typeof limits !== "object" || limits === null || Array.isArray(limits) || !Object.values(limits).every(positive))) {
+    throw new Error(`In ${file}, "contextLimits" must give a whole number above zero for each model name.`)
+  }
+  checkPermissions(settings.permissions, file)
   return settings as SettingsFile
+}
+
+function checkPermissions(value: unknown, file: string): void {
+  if (value === undefined) return
+  const wrong = (what: string): never => {
+    throw new Error(`In ${file}, "permissions" ${what}`)
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return wrong("must be an object.")
+  const { mode, rules, projects } = value as Record<string, unknown>
+  if (mode !== undefined && !MODES.includes(mode as Mode)) wrong(`has a "mode" that is not one of: ${MODES.join(", ")}.`)
+  const isRule = (rule: unknown) => {
+    if (typeof rule !== "object" || rule === null) return false
+    const { action, match, effect } = rule as Record<string, unknown>
+    return typeof action === "string" && action !== "" && (match === undefined || typeof match === "string") && ["allow", "deny", "ask"].includes(effect as string)
+  }
+  const isRules = (list: unknown) => Array.isArray(list) && list.every(isRule)
+  const shape = 'Each rule is { "action": ..., "match": ..., "effect": "allow", "deny" or "ask" }.'
+  if (rules !== undefined && !isRules(rules)) wrong(`has "rules" that are not a list of rules. ${shape}`)
+  if (projects !== undefined && (typeof projects !== "object" || projects === null || Array.isArray(projects) || !Object.values(projects).every(isRules))) {
+    wrong(`has "projects" that do not give a list of rules for each project folder. ${shape}`)
+  }
 }

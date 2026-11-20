@@ -20,6 +20,8 @@ export type LiveInput = {
   write(text: string): void
   // Takes what was typed, as the terminal delivers it a key at a time.
   key(data: string): void
+  // What the owner has typed and not yet sent.
+  typing(): string
   // Sets what Ctrl-C does.
   onInterrupt(handler: () => void): void
   // Ends the input and leaves the screen tidy.
@@ -138,6 +140,10 @@ export function createLiveInput(screen: Screen): LiveInput {
       }
       wipe()
       draw()
+    },
+
+    typing() {
+      return typed
     },
 
     onInterrupt(handler) {

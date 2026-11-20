@@ -17,18 +17,17 @@ Motto: simplicity is the most powerful foundation.
 
 ## Before you use it
 
-**There is no approval step yet.** A tool runs as soon as the model asks
-for it, including any shell command, with your permissions, and it is not
-confined to the project folder. Use Evie only in a project you can restore
-from git, and watch what it runs.
+**Evie asks before it changes anything, but it is not a sandbox.** Tools
+run with your permissions and are not confined to the project folder. What
+stands between the model and your machine is a set of rules that allow,
+deny or ask, described under "Permissions". The rules judge a shell command
+by its text, so they make the obvious risk visible and can be fooled by a
+command hidden in a script. Use Evie in a project you can restore from git.
 
-A built-in guard blocks the most clearly destructive commands, such as
-deleting the home folder, `git reset --hard`, a forced push, `sudo`, and
-piping a download into a shell. It also keeps the tools out of Evie's data
-folder and `~/.ssh`, `~/.aws` and `~/.gnupg`. **The guard does not make
-Evie safe to run unattended.** It matches the text of a command, so it stops
-the obvious accident and nothing more. Rules that allow, deny or ask before
-a risky action are planned for the next milestone.
+Some things are refused in every mode: the most clearly destructive
+commands, such as deleting the home folder, `git reset --hard`, a forced
+push, `sudo`, and piping a download into a shell; and any tool reaching
+into Evie's data folder or `~/.ssh`, `~/.aws` and `~/.gnupg`.
 
 ## Install
 
@@ -81,6 +80,11 @@ Type a message and press Enter.
   in, with its conversation.
 - **`/model`** shows which model is in use. `/model` and a name switches to
   another in the middle of a session.
+- **`/mode`** shows how freely Evie may act, and `/mode auto`, `/mode manual`
+  or `/mode read-only` changes it for the session. See "Permissions".
+- **`/compact`** replaces the older part of a long conversation with a
+  summary, to save room. Evie also does this by itself when a conversation
+  gets long.
 
 ### What Evie can do
 
@@ -95,10 +99,89 @@ Type a message and press Enter.
 | `shell` | Runs a command |
 | `web_search` | Searches the internet |
 | `web_fetch` | Reads a web page as text |
+| `ask` | Asks you a question with choices, and waits for your answer |
 
 Models differ in which tools they handle well. Evie gives GPT models `patch`
 and every other model `edit` and `write`, each with a system prompt written
 for it.
+
+## Instruction files
+
+Write down how you want Evie to work, once, and it is told every time.
+
+- **`~/.evie/AGENTS.md`** applies in every project: how you like answers,
+  what to always or never do.
+- **`AGENTS.md` in a project's folder** applies in that project: its
+  conventions, how to run its tests, what not to touch. If there is no
+  `AGENTS.md`, a `CLAUDE.md` is used instead.
+
+Both are plain text. They are added to what the model is told, yours first
+and then the project's. An edit takes effect at the next message. A file
+longer than 32 KiB is cut.
+
+A project's instruction file is read whether or not you have trusted the
+project, so look at it before running Evie in a repository you did not
+write.
+
+## Permissions
+
+Before a tool runs, Evie decides whether it is allowed, denied, or needs
+your say-so. When it needs your say-so, Evie asks, and you answer "Yes,
+once", "Always in this project", or "No". You can also type a reason in
+place of a number, and the model is told it.
+
+What happens without a rule depends on the mode:
+
+| | Read and search | Change files in the project | Shell commands | Outside the project |
+|---|---|---|---|---|
+| `read-only` | Allowed | Denied | Only ones that just look, such as `ls` and `git status` | Denied |
+| `manual` | Allowed | Asks | Asks, except ones that just look | Asks |
+| `auto` | Allowed | Allowed | Allowed, except ones that send, publish or deploy, which ask | Asks |
+
+Sessions start in `manual`. `/mode` changes the mode for the session.
+
+Rules go in `evie.json`, and are looked at before the mode:
+
+```json
+{
+  "permissions": {
+    "mode": "manual",
+    "rules": [
+      { "action": "shell", "match": "bun test *", "effect": "allow" },
+      { "action": "edit", "match": "*.env", "effect": "deny" },
+      { "action": "shell", "match": "git push *", "effect": "ask" }
+    ]
+  }
+}
+```
+
+- `action` is `read`, `edit`, `shell`, `web`, or the name of any other tool.
+- `effect` is `allow`, `deny` or `ask`.
+- `match` is a pattern for what the action is done to. Without it, the rule
+  covers every such action.
+  - For `read` and `edit` it is a path. `*` stands for anything within one
+    folder, and `**` for anything at all. A pattern with no slash, such as
+    `.env` or `*.pem`, is a file name and matches it in any folder. Any
+    other pattern that is not a full path is taken from the project folder.
+  - For `shell` it is the command, and `*` stands for anything. A pattern
+    that ends in a space and `*`, such as `git push *`, covers `git push`
+    by itself and with anything after it.
+
+A command line is judged one command at a time, so `git status && git push`
+is asked about for the push. A command that names a place outside the
+project, such as `cat /etc/hosts`, counts as reaching outside it. A rule
+that denies reading or changing a file also stops a command that names it.
+
+A rule that denies always wins. Otherwise the last rule that matches
+decides. In `read-only` mode no rule can allow a change.
+
+An "Always in this project" answer is saved as a rule in the global
+`evie.json`, under `permissions.projects` and the project's folder. A
+trusted project's own `.evie/evie.json` can set `mode` and `rules` for that
+project; its rules come after the global ones.
+
+When nobody can be asked, as when input is piped in, what would be asked is
+denied.
 
 ## Settings
 
@@ -131,6 +214,24 @@ and which plugins load.
 it. OpenRouter refuses a request whose limit your credits do not cover, so
 lower it if you see that.
 
+**Long conversations.** Every request carries the whole conversation, so a
+long session would eventually be more than the model can read. Before that
+happens, Evie replaces the older part with a summary and carries on. Nothing
+is deleted from its record. It does this at 80% of what the model can read,
+or at 200,000 tokens, whichever comes first, and `/compact` does it on
+request. Two settings change that:
+
+```json
+{
+  "compactAt": 120000,
+  "contextLimits": { "some/model": 64000 }
+}
+```
+
+`compactAt` is the size at which a conversation is compacted. Evie looks up
+what each model can read from OpenRouter; `contextLimits` is for a model it
+gets wrong or does not know.
+
 A setting in the environment wins over the files, so `EVIE_MODEL=... evie`
 points one run at another model. `EVIE_MAX_TOKENS` works the same way.
 
@@ -140,19 +241,21 @@ See "Trusting a project" for when that file is used.
 ## Plugins
 
 Everything outside Evie's core is a plugin: the tools, the model provider,
-the per-model settings and the guard.
+the per-model settings and the permissions.
 
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the six built-in ones load:
+a list, the eight built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
 | `files` | `read`, `write`, `edit`, `patch`, `grep` and `glob` |
 | `shell` | `shell` |
-| `guard` | The check that refuses the most destructive commands |
+| `permissions` | The rules that allow, deny or ask before a tool runs, and the `/mode` command |
 | `models` | What each model family is given, and the `/model` command |
+| `ask` | `ask`, the model's way to put a question to you |
+| `instructions` | The owner's and the project's instruction files |
 | `web` | `web_search` and `web_fetch` |
 | `openrouter` | The connection to models through OpenRouter |
 
@@ -161,14 +264,20 @@ a list, the six built-in ones load:
   "plugins": [
     "files",
     "shell",
-    "guard",
+    "permissions",
     "models",
+    "ask",
+    "instructions",
     "web",
     "openrouter",
     { "use": "/path/to/my-plugin.ts", "options": { "greeting": "hi" } }
   ]
 }
 ```
+
+One more built-in plugin, `guard`, is not loaded by default. It is the
+part of `permissions` that refuses the most destructive commands, by
+itself, for running Evie with no other rules.
 
 A built-in plugin is named. A plugin of your own is given by the path to
 its file. Leaving a plugin out switches it off: without `shell`, the model
@@ -187,16 +296,19 @@ project's model:
 **A plugin runs with Evie's full permissions. Nothing sandboxes it, so load
 only plugins you trust.**
 
-For that reason a project's settings file is used only when you list the
-project's folder under `"trust"` in the global file:
+For that reason a project's settings file is used only when the project's
+folder is listed under `"trust"` in the global file. The first time you
+open a project that has a settings file, Evie asks whether to trust it and
+writes your answer to the global file: under `"trust"` for a yes, and under
+`"untrusted"` for a no, so you are not asked again.
 
 ```json
-{ "trust": ["/path/to/my/project"] }
+{ "trust": ["/path/to/my/project"], "untrusted": ["/path/to/someone-elses"] }
 ```
 
-Otherwise the project's file is ignored as a whole, and Evie tells you so.
-That way opening someone else's repository can neither run their code nor
-switch off a protection such as the guard.
+Until a project is trusted its file is ignored as a whole, and Evie tells
+you so. That way opening someone else's repository can neither run their
+code nor switch off a protection such as the guard.
 
 ### Writing a plugin
 
@@ -251,6 +363,19 @@ code runs:
 | `before_request` | After a request is built, before it is sent | Change the system prompt and the tools the model is offered |
 | `before_tool` | After a tool call's input is checked, before the tool runs | Refuse the call with a reason |
 | `after_tool` | After a tool has run | Change the result the model sees |
+
+A hook and a tool can also ask you a question and wait for the answer.
+`context.ask` returns the choice you made, or `null` when the question was
+refused: the turn was cancelled, or the client cannot show questions. Treat
+`null` as a no.
+
+```ts
+host.on("before_tool", async (call, context) => {
+  if (call.name !== "shell") return
+  const answer = await context.ask({ text: `Run ${call.input.command}?`, choices: ["Yes", "No"] })
+  if (answer !== "Yes") return { deny: "The owner did not allow it." }
+})
+```
 
 ```ts
 host.on("before_tool", (call) => {

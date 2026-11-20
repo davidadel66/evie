@@ -23,6 +23,7 @@ async function start(): Promise<Evie> {
     settingsFile: settings.file,
     ...(settings.model !== undefined && { model: settings.model }),
     ...(settings.maxTokens !== undefined && { maxTokens: settings.maxTokens }),
+    ...(settings.compaction !== undefined && { compaction: settings.compaction }),
   })
 }
 const evie = await start().catch(fail)
@@ -76,6 +77,7 @@ try {
         lines: live.lines,
         write: live.write,
         prompt: false,
+        typing: live.typing,
         onInterrupt: (handler) => (interrupt = handler),
       })
     } finally {
@@ -98,6 +100,8 @@ try {
       ...session,
       lines: input,
       write: print,
+      // Nobody is typing, so a line must not be taken as an answer.
+      questions: false,
       onInterrupt: (handler) => (interrupt = handler),
     })
   }

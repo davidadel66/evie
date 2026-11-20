@@ -8,14 +8,32 @@ export type EventBodies = {
   turn_start: Record<string, never>
   user_message: { text: string }
   // The model's reply: its text and any tool calls it asked for.
-  // `interrupted` marks a reply that was cut short by a cancel.
-  assistant_message: { text: string; toolCalls?: ToolCall[]; interrupted?: true }
+  // `interrupted` marks a reply that was cut short by a cancel. `usage` is
+  // the size of the request and the reply, as the provider counted them.
+  assistant_message: { text: string; toolCalls?: ToolCall[]; interrupted?: true; usage?: Usage }
   // The text the model reads for one tool call.
   tool_result: { callId: string; name: string; text: string }
   turn_end: { reason: "completed" | "error" | "cancelled"; error?: string }
   // The owner switched model. It applies from the next model request.
   model_changed: { model: string }
+  // The conversation before `keepFrom` was replaced by a summary. From here
+  // on a request is built from the summary and the events from `keepFrom`
+  // onwards. `files` are the files the summarised part worked with.
+  compaction: { summary: string; keepFrom: number; files: string[] }
+  // Evie asked the owner something. `id` ties the answer to it.
+  question: { id: string } & Question
+  // The answer. `choice` is null when the question was refused: the turn was
+  // cancelled, Evie closed, or the session's client cannot show questions.
+  answer: { id: string; choice: string | null }
 }
+
+// Something Evie asks the owner, with the answers to choose from. With
+// `freeText` the owner may also answer in their own words.
+export type Question = { text: string; choices: string[]; freeText?: true }
+
+// Asks the owner and waits for the answer. It returns the choice, or null
+// when the question was refused, which is to be treated as a no.
+export type Ask = (question: Question) => Promise<string | null>
 
 export type StoredEventType = keyof EventBodies
 
@@ -74,14 +92,17 @@ export type Usage = { inputTokens: number; outputTokens: number }
 export type Chunk =
   | { type: "text"; text: string }
   | { type: "tool_call"; id: string; name: string; arguments: string }
-  | { type: "finish"; reason: "stop" | "tool_calls" | "length"; usage: Usage }
-  | { type: "finish"; reason: "error"; error: string; usage: Usage }
+  | { type: "finish"; reason: "stop" | "tool_calls" | "length"; usage?: Usage }
+  // `tooLong` marks a request refused for being more than the model can read.
+  | { type: "finish"; reason: "error"; error: string; usage?: Usage; tooLong?: true }
 
 // How the core reaches a model: a request and the turn's cancel signal go in,
 // a stream of chunks comes out.
 export type Provider = {
   name: string
   stream(request: Request, signal: AbortSignal): AsyncIterable<Chunk>
+  // How many tokens a model can read in one request, when the provider knows.
+  contextLimit?(model: string): Promise<number | undefined>
 }
 
 // ---- Tools --------------------------------------------------------------------
@@ -93,6 +114,8 @@ export type ToolContext = {
   // The folder of the session's project, or null in the general session,
   // which has no project.
   folder: string | null
+  // Asks the owner a question and waits for the answer.
+  ask: Ask
 }
 
 // Every tool has this one shape, built in or added by someone else. `run`
@@ -136,6 +159,9 @@ export type SlashContext = {
   model: string
   // Switches the session's model, from its next request.
   setModel(model: string): void
+  // Replaces the older part of the conversation with a summary now, and
+  // returns a sentence saying what happened.
+  compact(): Promise<string>
 }
 
 // A command the owner types in a client, starting with a slash. It runs at
@@ -157,6 +183,8 @@ export type HookContext = {
   events: readonly StoredEvent[]
   // The turn's cancel signal.
   signal: AbortSignal
+  // Asks the owner a question and waits for the answer.
+  ask: Ask
 }
 
 // A tool call after its input has been checked and repaired.
@@ -225,7 +253,9 @@ export type Commands = {
   // the last general session) is reopened, with its conversation, when there
   // is one. `resumed` says whether that happened.
   open_session: {
-    input: { project?: string; folder?: string; continue?: boolean }
+    // `questions` says that this client shows questions and sends back the
+    // answers. Without it, every question in the session is refused at once.
+    input: { project?: string; folder?: string; continue?: boolean; questions?: boolean }
     // `notices` are things the owner should be told, such as a project
     // plugin that was not loaded.
     output: { session: string; project: Project | null; resumed: boolean; notices: string[] }
@@ -242,6 +272,13 @@ export type Commands = {
   // Switches the session's model, from its next model request.
   set_model: {
     input: { session: string; model: string }
+    output: void
+  }
+  // Answers a question Evie asked in a `question` event. `choice` is one of
+  // its choices, or the owner's own words when it allows that, or null to
+  // refuse it.
+  answer_question: {
+    input: { session: string; id: string; choice: string | null }
     output: void
   }
   // Runs a command a plugin registered, such as /model, and returns the
