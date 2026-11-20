@@ -331,3 +331,34 @@ test("only a refused request is marked as too long, not a rate limit or a failur
   expect(tooLarge.chunks[0]).toMatchObject({ tooLong: true })
   expect(midReply.chunks.at(-1)).toMatchObject({ reason: "error", tooLong: true })
 })
+
+// ---- The prompt cache ----------------------------------------------------------------------------
+
+test("an Anthropic model is asked to cache the prompt, and other models are left to do it by themselves", async () => {
+  const claude = await ask([ok(text("ok"), usage("stop"), DONE)], { request: { ...request, model: "anthropic/claude-sonnet-4.6" } })
+  const other = await ask([ok(text("ok"), usage("stop"), DONE)], { request: { ...request, model: "openai/gpt-5.2" } })
+
+  expect(claude.calls[0]?.body.cache_control).toEqual({ type: "ephemeral" })
+  expect(other.calls[0]?.body).not.toHaveProperty("cache_control")
+})
+
+test("how much of a request was read from the cache, and written to it, is reported with its size", async () => {
+  const withCache = data({
+    choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: "stop" }],
+    usage: { prompt_tokens: 9000, completion_tokens: 40, prompt_tokens_details: { cached_tokens: 8200, cache_write_tokens: 600 } },
+  })
+  const { chunks } = await ask([ok(text("ok"), withCache, DONE)])
+  const plain = await ask([ok(text("ok"), usage("stop"), DONE)])
+
+  expect(chunks.at(-1)).toEqual({ type: "finish", reason: "stop", usage: { inputTokens: 9000, outputTokens: 40, cachedTokens: 8200, cacheWriteTokens: 600 } })
+  // A provider that says nothing about its cache is not reported as having read nothing from it.
+  expect(plain.chunks.at(-1)).toEqual({ type: "finish", reason: "stop", usage: { inputTokens: 12, outputTokens: 5 } })
+})
+
+test("text to stop at is passed on, and left out when there is none", async () => {
+  const withStop = await ask([ok(text("ok"), usage("stop"), DONE)], { request: { ...request, stop: ["[Note from Evie:"] } })
+  const without = await ask([ok(text("ok"), usage("stop"), DONE)])
+
+  expect(withStop.calls[0]?.body.stop).toEqual(["[Note from Evie:"])
+  expect(without.calls[0]?.body).not.toHaveProperty("stop")
+})

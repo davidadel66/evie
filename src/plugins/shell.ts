@@ -100,7 +100,8 @@ const shellTool: Tool = {
       }
       return (
         `${why} It is background job ${job.id}, and its output is being written to ${job.outputFile}.\n\n` +
-        "You will be told when it finishes, with its output. Do not wait for it, and do not keep checking on it: " +
+        "You do not have its result yet. You will be told when it finishes, with its output. Do not guess what it " +
+        "will print, do not wait for it, and do not keep checking on it: " +
         "carry on with work that does not depend on it, or end your reply if there is nothing else to do. Read the " +
         `output file only if what it holds so far lets you do something useful now. To stop it, use job_stop with the id "${job.id}". ` +
         "Do not start another copy while it is running."

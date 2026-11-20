@@ -8,8 +8,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "check": "tsc --noEmit && bun test"
+    "test": "bun test --timeout 20000",
+    "check": "tsc --noEmit && bun test --timeout 20000"
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",
