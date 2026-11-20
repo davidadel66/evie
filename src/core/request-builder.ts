@@ -5,6 +5,11 @@ import type { Message, Request, StoredEvent, Tool } from "./types.ts"
 // tools. It is a pure function: the same log always gives the same request,
 // which is what keeps a provider's prompt cache working.
 //
+// A reply that was cut short is stored as far as it got, marked interrupted.
+// The model is shown it with a note saying so, or it would take the half
+// reply for one it chose to end there. The note is only in the request: the
+// stored reply is not changed.
+//
 // Once a conversation has been compacted, the request is the latest summary
 // followed by the events after it. The older events are still in the log.
 export function buildRequest(
@@ -15,10 +20,11 @@ export function buildRequest(
 ): Request {
   const { compaction, kept } = conversationOf(events)
   const messages: Message[] = compaction ? [{ role: "user", text: summaryMessage(compaction.body) }] : []
-  for (const event of kept) {
+  for (const [index, event] of kept.entries()) {
     if (event.type === "user_message") messages.push({ role: "user", text: event.body.text })
     if (event.type === "assistant_message") {
-      const { text, toolCalls } = event.body
+      const { toolCalls } = event.body
+      const text = event.body.interrupted ? `${event.body.text}\n\n${cutShortNote(kept, index)}` : event.body.text
       if (toolCalls && toolCalls.length > 0) messages.push({ role: "assistant", text, toolCalls })
       // A reply with no text and no tool call is left out: providers reject
       // an empty message.
@@ -39,4 +45,13 @@ export function buildRequest(
     })),
     // Only what the model is told about a tool goes in: not its function.
   }
+}
+
+// What cut a reply short is read from what follows it in the log: a turn
+// that ended as cancelled, or a message from the owner in the same turn.
+function cutShortNote(events: readonly StoredEvent[], at: number): string {
+  const next = events.slice(at + 1).find((event) => event.type === "user_message" || event.type === "turn_end")
+  if (next?.type === "turn_end" && next.body.reason === "cancelled") return "[This reply was cut short: the owner cancelled it before it was finished.]"
+  if (next?.type === "user_message") return "[This reply was cut short: the owner sent a new message before it was finished.]"
+  return "[This reply was cut short before it was finished.]"
 }

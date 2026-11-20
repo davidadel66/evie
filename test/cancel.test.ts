@@ -130,17 +130,22 @@ test("after a cancel the conversation carries on, with a result for every tool c
   expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end", body: { reason: "completed" } })
 })
 
-test("the interrupted reply is part of what the model sees next", async () => {
-  const { run, model } = await start([{ hang: true, text: ["Half an ans"] }, { text: ["The rest."] }])
+test("the model is shown a cancelled reply with a note that the owner cancelled it", async () => {
+  const { run, model } = await start([{ hang: true, text: ["Half an ans"] }, { text: ["The rest."] }, { text: ["More."] }])
 
   await sayThenCancel(run, "explain", (event) => event.type === "assistant_delta")
   await say(run, "go on")
 
   expect(model.requests[1]?.messages).toEqual([
     { role: "user", text: "explain" },
-    { role: "assistant", text: "Half an ans" },
+    { role: "assistant", text: "Half an ans\n\n[This reply was cut short: the owner cancelled it before it was finished.]" },
     { role: "user", text: "go on" },
   ])
+  // The note is only in the request. What is stored is what was written.
+  expect(stored(run.events).find((event) => event.type === "assistant_message")?.body).toEqual({ text: "Half an ans", interrupted: true })
+  // The same log gives the same request, which keeps the prompt cache working.
+  await say(run, "and again")
+  expect(model.requests[2]?.messages.slice(0, 3)).toEqual(model.requests[1]!.messages)
 })
 
 test("cancelling stops a running shell command", async () => {
@@ -190,7 +195,8 @@ test("a turn that was steered can still be cancelled, and the conversation carri
   expect(stored(run.events).filter((event) => event.type === "turn_end").map((event) => event.body.reason)).toEqual(["cancelled", "completed"])
   expect(model.requests[2]?.messages).toEqual([
     { role: "user", text: "first" },
-    { role: "assistant", text: "Half an ans" },
+    // Cut short by the second message, not by the cancel that came later.
+    { role: "assistant", text: "Half an ans\n\n[This reply was cut short: the owner sent a new message before it was finished.]" },
     { role: "user", text: "second" },
     { role: "user", text: "third" },
   ])
