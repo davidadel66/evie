@@ -133,6 +133,8 @@ function toBody(request: Request, limit: number) {
   return {
     model: request.model,
     max_tokens: limit,
+    // The reply ends the moment the model writes any of these.
+    ...(request.stop && request.stop.length > 0 && { stop: request.stop }),
     messages: [
       ...(request.system === undefined ? [] : [{ role: "system", content: request.system }]),
       ...request.messages.map(toWireMessage),

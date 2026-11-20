@@ -83,6 +83,9 @@ export type Request = {
   system?: string
   // The longest the reply may be, in tokens, when the settings give a limit.
   maxTokens?: number
+  // Text that ends the reply the moment the model writes it. The core uses
+  // it for the opening of its own notes, which only it may write.
+  stop?: string[]
   messages: Message[]
   tools: ToolDefinition[]
 }
