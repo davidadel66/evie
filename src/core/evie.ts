@@ -254,6 +254,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       model: currentModel(log.events(input.session), startedWith),
       setModel: (model) => setModel({ session: input.session, model }),
       compact: () => loop.compactNow(),
+      busy: loop.busy(),
+      tell: (note) => loop.tell(note),
     })
     return { text }
   }

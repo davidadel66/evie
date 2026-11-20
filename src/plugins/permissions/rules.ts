@@ -1,6 +1,7 @@
 import { homedir } from "node:os"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import type { CheckedToolCall } from "../../core/types.ts"
+import { patchFiles } from "../files/paths.ts"
 import { followLinks } from "../guard.ts"
 import { isOutwardFacing, isReadOnly, leavesForHome, partsOf, placesIn, plainWords, startOf } from "./shell.ts"
 
@@ -75,11 +76,6 @@ function whereIs(place: string, runsIn: string | null): string {
   if (expanded.includes("$")) return expanded.includes("/") ? "unknown" : "nowhere"
   return fullPath(expanded, runsIn)
 }
-
-// The files a patch names. The patch tool reads each line with the space
-// around it taken off, so the same is done here.
-export const patchFiles = (patchText: string) =>
-  [...patchText.matchAll(/^[ \t]*\*\*\* (?:Add File|Update File|Delete File|Move to):[ \t]*(.+?)[ \t]*$/gm)].map((found) => found[1]!)
 
 // What a tool call does. The file tools take a path as it is written, with
 // no `~`, so the same is done here.

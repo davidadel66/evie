@@ -25,6 +25,9 @@ export type EventBodies = {
   // The answer. `choice` is null when the question was refused: the turn was
   // cancelled, Evie closed, or the session's client cannot show questions.
   answer: { id: string; choice: string | null }
+  // Something the model is told that neither it nor the owner said, such as
+  // that the owner undid its changes. It is shown to the model in place.
+  note: { text: string }
 }
 
 // Something Evie asks the owner, with the answers to choose from. With
@@ -162,6 +165,12 @@ export type SlashContext = {
   // Replaces the older part of the conversation with a summary now, and
   // returns a sentence saying what happened.
   compact(): Promise<string>
+  // Whether a turn is in progress in the session.
+  busy: boolean
+  // Tells the model something, by adding a note to the conversation. The
+  // model reads it with its next request. During a turn the note is added
+  // at the next step, so it never lands between a tool call and its result.
+  tell(text: string): void
 }
 
 // A command the owner types in a client, starting with a slash. It runs at

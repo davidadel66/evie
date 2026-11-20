@@ -33,3 +33,8 @@ export async function statOrMissing(absolute: string): Promise<Stats | undefined
     throw cause
   }
 }
+
+// The files a patch names. The patch tool reads each line with the space
+// around it taken off, so the same is done here.
+export const patchFiles = (patchText: string) =>
+  [...patchText.matchAll(/^[ \t]*\*\*\* (?:Add File|Update File|Delete File|Move to):[ \t]*(.+?)[ \t]*$/gm)].map((found) => found[1]!)

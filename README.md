@@ -82,6 +82,10 @@ Type a message and press Enter.
   another in the middle of a session.
 - **`/mode`** shows how freely Evie may act, and `/mode auto`, `/mode manual`
   or `/mode read-only` changes it for the session. See "Permissions".
+- **`/undo`** puts files back as they were before Evie's last turn that
+  changed any. Run it again to go back a turn further. It covers what the
+  `write`, `edit` and `patch` tools changed. It does not undo what a shell
+  command changed, and it leaves alone any file you have changed since.
 - **`/compact`** replaces the older part of a long conversation with a
   summary, to save room. Evie also does this by itself when a conversation
   gets long.
@@ -246,13 +250,14 @@ the per-model settings and the permissions.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the eight built-in ones load:
+a list, the nine built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
 | `files` | `read`, `write`, `edit`, `patch`, `grep` and `glob` |
 | `shell` | `shell` |
 | `permissions` | The rules that allow, deny or ask before a tool runs, and the `/mode` command |
+| `undo` | The copies kept of files before they are changed, and the `/undo` command |
 | `models` | What each model family is given, and the `/model` command |
 | `ask` | `ask`, the model's way to put a question to you |
 | `instructions` | The owner's and the project's instruction files |
@@ -265,6 +270,7 @@ a list, the eight built-in ones load:
     "files",
     "shell",
     "permissions",
+    "undo",
     "models",
     "ask",
     "instructions",
@@ -353,7 +359,7 @@ Through the host a plugin can add to four lists:
 | `host.tools` | Something the model can call. Its `run` returns the text the model reads. A problem the model can fix is returned as that text; `run` throws only for a bug |
 | `host.providers` | A way to reach a model |
 | `host.profiles` | What one family of models is given: a system prompt and its tools for changing files |
-| `host.commands` | A command you type starting with a slash, such as `/model` |
+| `host.commands` | A command you type starting with a slash, such as `/model`. A command can tell the model something with `context.tell`, which adds a note to the conversation |
 
 It can also attach to three *hooks*, moments in the loop where a plugin's
 code runs:
