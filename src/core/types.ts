@@ -140,6 +140,28 @@ export type JobWork = {
   stop(): void
 }
 
+// ---- Subagents ----------------------------------------------------------------
+
+// How a tool starts and talks to subagents. A subagent is a child session:
+// a conversation of its own, with an empty start, running the same loop in
+// the same project. Each is known by the id of its session.
+export type Children = {
+  // Starts a subagent and sends it its first message. `model` is the model
+  // it uses; without one it uses the model this session is using. Fails in
+  // a session that is itself a subagent: subagents do not start subagents.
+  start(input: { text: string; model?: string }): Promise<string>
+  // Sends a further message to one of this session's subagents. It keeps
+  // its conversation, whether it is still working or has finished.
+  send(child: string, text: string): Promise<void>
+  // Settles when the subagent next has nothing left to do, with its last
+  // reply and how its last turn ended.
+  whenIdle(child: string): Promise<{ reply: string; ended: "completed" | "error" | "cancelled"; error?: string }>
+  // Whether the subagent is working now.
+  busy(child: string): boolean
+  // Stops what the subagent is doing.
+  stop(child: string): void
+}
+
 // ---- Tools --------------------------------------------------------------------
 
 // What a tool is given when it runs.
@@ -164,6 +186,8 @@ export type ToolContext = {
     // when the wait is over.
     whileWaiting(asked: () => void): () => void
   }
+  // This session's subagents.
+  children: Children
 }
 
 // Every tool has this one shape, built in or added by someone else. `run`
@@ -243,6 +267,8 @@ export type HookContext = {
   signal: AbortSignal
   // Asks the owner a question and waits for the answer.
   ask: Ask
+  // The session that started this one as a subagent, when one did.
+  parent?: string
 }
 
 // A tool call after its input has been checked and repaired.

@@ -13,6 +13,7 @@ import { models } from "./plugins/models/index.ts"
 import { openrouter } from "./plugins/openrouter.ts"
 import { MODES, permissions, type Mode, type Rule } from "./plugins/permissions/index.ts"
 import { shell } from "./plugins/shell.ts"
+import { subagents } from "./plugins/subagents.ts"
 import { undo } from "./plugins/undo.ts"
 import { web } from "./plugins/web.ts"
 import type { Settings } from "./settings.ts"
@@ -99,12 +100,13 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   undo: (_options, context) => undo({ dataFolder: context.home }),
   models: () => models(),
   ask: () => ask(),
+  subagents: () => subagents(),
   instructions: (_options, context) => instructions({ dataFolder: context.home }),
   web: (_options, context) => web({ env: context.env }),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
 // `undo` comes after `permissions`, so a call that is refused is not recorded.
-const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "instructions", "web", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "instructions", "web", "openrouter"]
 
 // The permissions plugin as the settings describe it. A project's own mode
 // wins over the global one, and its rules come after the global ones.

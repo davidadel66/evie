@@ -44,6 +44,10 @@ export type LoopOptions = {
   ask(question: Question, signal: AbortSignal): Promise<string | null>
   // The session's background jobs, as tools are given them.
   jobs: ToolContext["jobs"]
+  // The session's subagents, as tools are given them.
+  children: ToolContext["children"]
+  // The session that started this one as a subagent, when one did.
+  parent?: string
 }
 
 export type Loop = {
@@ -58,6 +62,9 @@ export type Loop = {
   compactNow(): Promise<string>
   // Whether a turn, or a compaction, is in progress.
   busy(): boolean
+  // Settles when the loop next has nothing left to do: at once when it is
+  // idle, and otherwise when the turns it is running have finished.
+  idle(): Promise<void>
   // Adds a note for the model to the conversation: now when the session is
   // idle, or at the turn's next step when it is not. With `wake`, an idle
   // session starts a turn so the model deals with the note.
@@ -149,6 +156,7 @@ export function createLoop(options: LoopOptions): Loop {
       events,
       signal,
       ask: (question) => options.ask(question, signal),
+      ...(options.parent !== undefined && { parent: options.parent }),
     })
 
     // Tried once as it is, then once more with long tool results shortened,
@@ -239,7 +247,14 @@ export function createLoop(options: LoopOptions): Loop {
 
         // What a hook is told about the moment it runs in.
         const ask = (question: Question) => options.ask(question, signal)
-        const context = (): HookContext => ({ session, project, events: log.events(session), signal, ask })
+        const context = (): HookContext => ({
+          session,
+          project,
+          events: log.events(session),
+          signal,
+          ask,
+          ...(options.parent !== undefined && { parent: options.parent }),
+        })
 
         // A conversation that has grown too big is compacted before the
         // next request: its older part is replaced by a summary.
@@ -345,7 +360,7 @@ export function createLoop(options: LoopOptions): Loop {
           try {
             result = await runToolCall(call, {
               tools: offered,
-              context: { signal, folder, ask, jobs: options.jobs },
+              context: { signal, folder, ask, jobs: options.jobs, children: options.children },
               before: (checked) => hooks.beforeTool(checked, context()),
               after: (checked, output) => hooks.afterTool(checked, output, context()),
               outputFolder: join(outputFolder, session),
@@ -426,6 +441,9 @@ export function createLoop(options: LoopOptions): Loop {
     },
     busy() {
       return active
+    },
+    idle() {
+      return running
     },
     tell(text, wake = false) {
       waitingNotes.push({ text, wake })

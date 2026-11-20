@@ -49,7 +49,11 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
       const remembered: Rule[] = [...(options.remembered?.[key] ?? [])]
       // The mode of each session that has changed it.
       const modes = new Map<string, Mode>()
-      const modeOf = (session: string) => modes.get(session) ?? startsIn
+      // A subagent has no mode of its own. It works in auto, so that it is
+      // not asking about every step from the background, unless the session
+      // that started it is read-only, in which case it is read-only too.
+      const modeOf = (session: string, parent?: string): Mode =>
+        parent === undefined ? (modes.get(session) ?? startsIn) : (modes.get(parent) ?? startsIn) === "read-only" ? "read-only" : "auto"
 
       host.commands.add({
         name: "mode",
@@ -67,7 +71,7 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         const guarded = blockedByGuard(call, folder, context.session)
         if (guarded !== undefined) return { deny: guarded }
 
-        const mode = modeOf(context.session)
+        const mode = modeOf(context.session, context.parent)
         const rules = [...(options.rules ?? []), ...remembered]
         const judged = actsOf(call, folder).map((act) => {
           const effect = effectFor(act, rules, mode, folder)

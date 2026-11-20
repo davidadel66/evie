@@ -52,7 +52,7 @@ const READ_TOOLS = ["read", "grep", "glob"]
 const EDIT_TOOLS = ["write", "edit", "patch"]
 const WEB_TOOLS = ["web_search", "web_fetch"]
 // The actions the plugin understands. Anything else is a tool it knows nothing about.
-const KNOWN = ["read", "edit", "shell", "web", "ask", "job_stop"]
+const KNOWN = ["read", "edit", "shell", "web", "ask", "job_stop", "subagent", "subagent_send"]
 
 const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir()).replace(/^(\$HOME\b|\$\{HOME\})/, homedir())
 
@@ -155,6 +155,12 @@ function matches(rule: Rule, act: Act, folder: string | null): boolean {
 function byMode(act: Act, mode: Mode): Effect {
   // Using the web, asking the owner and stopping a job change nothing of the owner's.
   if (["web", "ask", "job_stop"].includes(act.action)) return "allow"
+  // A subagent works without asking before each step, so in manual mode
+  // starting one is asked about: that answer is the owner's say-so for its
+  // work. In read-only mode a subagent is read-only too, so starting one
+  // changes nothing. A message to a subagent already started needs no more.
+  if (act.action === "subagent") return mode === "manual" ? "ask" : "allow"
+  if (act.action === "subagent_send") return "allow"
   if (act.action === "read") return act.inside ? "allow" : "ask"
   if (act.action === "edit") return mode === "auto" && act.inside ? "allow" : "ask"
   if (act.action === "shell") {
@@ -215,7 +221,8 @@ export function alwaysRule(act: Act, folder: string | null): { rule: Rule; label
     if (start === undefined) return { rule: { action: "shell", match: act.target, effect: "allow" }, label: `exactly the command "${act.target}"` }
     return { rule: { action: "shell", match: `${start} *`, effect: "allow" }, label: `commands that start with "${start}"` }
   }
-  return { rule: { action: act.action, effect: "allow" }, label: act.action === "web" ? "using the web" : `the tool ${act.action}` }
+  const label = act.action === "web" ? "using the web" : act.action === "subagent" ? "starting subagents" : `the tool ${act.action}`
+  return { rule: { action: act.action, effect: "allow" }, label }
 }
 
 const shown = (path: string, folder: string | null) => (folder !== null && isInside(folder, path) ? relative(folder, path) || "." : path)
@@ -231,6 +238,13 @@ export function questionFor(call: CheckedToolCall, asking: readonly Act[], folde
     const outside = asking.some((act) => !act.inside) ? " outside the project" : ""
     const files = [...new Set(asking.map((act) => shown(act.target, folder)))]
     return files.length === 1 ? `Let Evie ${doing} ${files[0]}${outside && ", which is"}${outside}?` : `Let Evie ${doing} these files${outside}?\n\n  ${files.join("\n  ")}`
+  }
+  if (call.name === "subagent") {
+    const task = String(call.input.task ?? "").trim()
+    return (
+      `Let Evie start a subagent (${String(call.input.description ?? "a task")})? It works without asking before each ` +
+      `step: it may change files and run commands inside the project.\n\n  ${task.length > 400 ? `${task.slice(0, 400)}…` : task}`
+    )
   }
   const input = JSON.stringify(call.input)
   return `Let Evie use the tool ${call.name}?\n\n  ${input.length > 300 ? `${input.slice(0, 300)}…` : input}`

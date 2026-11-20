@@ -9,7 +9,7 @@ import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { createProjects } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
-import type { Ask, Commands, Evie, EvieEvent, Host, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
+import type { Ask, Children, Commands, Evie, EvieEvent, Host, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
 
 export type EvieOptions = {
   // Settings from the environment. `EVIE_HOME` names the data folder.
@@ -126,8 +126,96 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
   // Each session open in this process: its turn loop, its project and that
   // project's plugin host. `canAnswer` says whether its client shows questions.
-  type Open = { loop: Loop; project: Project | null; host: Host; model: string; canAnswer: boolean }
+  // `parent` is the session that started this one as a subagent.
+  type Open = { loop: Loop; project: Project | null; host: Host; model: string; canAnswer: boolean; parent?: string }
   const sessions = new Map<string, Open>()
+
+  // Starts the turn loop of a session and lists the session as open. Used
+  // for a session a client opens and for a subagent alike: they differ only
+  // in who is asked when the session has a question.
+  function startLoop(given: { session: string; project: Project | null; scope: Scope; model: string; canAnswer: boolean; parent?: string }): Open {
+    const { session, project, scope, model, parent } = given
+    const maxTokens = scope.maxTokens ?? options.maxTokens
+    const opened: Open = { project, host: scope.host, model, canAnswer: given.canAnswer, ...(parent !== undefined && { parent }) } as Open
+    opened.loop = createLoop({
+      session,
+      project,
+      outputFolder: join(home, "tool-output"),
+      model,
+      ...(maxTokens !== undefined && { maxTokens }),
+      ...(options.compaction && { compaction: options.compaction }),
+      log,
+      inbox,
+      host: scope.host,
+      hooks: scope.hooks,
+      provider: scope.provider,
+      atomically: (work) => db.transaction(work)(),
+      emit,
+      // A subagent has no client of its own. What it needs to ask is put to
+      // the owner in the session that started it, marked as coming from it.
+      ask: (question, signal) =>
+        parent === undefined
+          ? questions.ask(session, question, { canAnswer: opened.canAnswer, signal })
+          : questions.ask(parent, { ...question, text: `A subagent asks: ${question.text}` }, { canAnswer: sessions.get(parent)?.canAnswer ?? false, signal }),
+      jobs: {
+        start: (work) => jobs.start(session, work),
+        list: () => jobs.list(session),
+        stop: (id) => jobs.stop(session, id, "model"),
+        whileWaiting: (asked) => jobs.whileWaiting(session, asked),
+      },
+      children: childrenOf(session, project, scope),
+      ...(parent !== undefined && { parent }),
+    })
+    sessions.set(session, opened)
+    return opened
+  }
+
+  // A session's subagents, as its tools are given them.
+  function childrenOf(session: string, project: Project | null, scope: Scope): Children {
+    // One of this session's subagents, opened again if Evie has been
+    // stopped since it was started.
+    const child = (id: string): Open => {
+      if (projects.parentOf(id) !== session) throw new Error(`"${id}" is not a subagent of this session.`)
+      const open = sessions.get(id)
+      if (open) return open
+      settleUnfinished(id)
+      return startLoop({ session: id, project, scope, model: currentModel(log.events(session), sessions.get(session)!.model), canAnswer: false, parent: session })
+    }
+    const send = (id: string, text: string) => {
+      const { loop } = child(id)
+      inbox.add(id, { text })
+      loop.wake()
+    }
+    return {
+      async start(input) {
+        if (closed) throw new Error("Evie is closing.")
+        if (projects.parentOf(session) !== undefined) throw new Error("A subagent cannot start subagents of its own.")
+        const model = input.model?.trim() || currentModel(log.events(session), sessions.get(session)!.model)
+        const id = projects.createSession(project, session)
+        startLoop({ session: id, project, scope, model, canAnswer: false, parent: session })
+        send(id, input.text)
+        return id
+      },
+      async send(id, text) {
+        if (closed) throw new Error("Evie is closing.")
+        send(id, text)
+      },
+      async whenIdle(id) {
+        await child(id).loop.idle()
+        const events = log.events(id)
+        const ended = events.findLast((event) => event.type === "turn_end")
+        // The reply to report is the last thing the subagent said in full.
+        const said = events.findLast((event) => event.type === "assistant_message" && event.body.text.trim() !== "")
+        return {
+          reply: said?.type === "assistant_message" ? said.body.text : "",
+          ended: ended?.type === "turn_end" ? ended.body.reason : "error",
+          ...(ended?.type === "turn_end" && ended.body.error !== undefined && { error: ended.body.error }),
+        }
+      },
+      busy: (id) => sessions.get(id)?.loop.busy() ?? false,
+      stop: (id) => child(id).loop.cancel(),
+    }
+  }
 
   async function openSession(input: Commands["open_session"]["input"]): Promise<Commands["open_session"]["output"]> {
     if (input.project !== undefined && input.folder !== undefined) {
@@ -151,14 +239,13 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
     const scope = await scopeFor(project, (question) => questions.ask(sessionId(), question, { canAnswer }))
     if (closed) throw new Error("Evie was closed while the session was opening.")
-    const { host, hooks, provider, notices } = scope
+    const { notices } = scope
     // A project's own model wins over the global one.
     const model = scope.model ?? options.model
     if (!model) {
       const where = options.settingsFile ? `Add "model" to ${options.settingsFile}` : "Set a model"
       throw new Error(`No model is set. ${where}, with a name from https://openrouter.ai/models.`)
     }
-    const maxTokens = scope.maxTokens ?? options.maxTokens
 
     // From here to the session being listed as open nothing waits, so two
     // clients continuing the same session at once cannot both start it.
@@ -169,30 +256,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     }
     if (last !== undefined) settleUnfinished(last)
 
-    const opened: Open = { project, host, model, canAnswer } as Open
-    opened.loop = createLoop({
-      session: sessionId(),
-      project,
-      outputFolder: join(home, "tool-output"),
-      model,
-      ...(maxTokens !== undefined && { maxTokens }),
-      ...(options.compaction && { compaction: options.compaction }),
-      log,
-      inbox,
-      host,
-      hooks,
-      provider,
-      atomically: (work) => db.transaction(work)(),
-      emit,
-      ask: (question, signal) => questions.ask(sessionId(), question, { canAnswer: opened.canAnswer, signal }),
-      jobs: {
-        start: (work) => jobs.start(sessionId(), work),
-        list: () => jobs.list(sessionId()),
-        stop: (id) => jobs.stop(sessionId(), id, "model"),
-        whileWaiting: (asked) => jobs.whileWaiting(sessionId(), asked),
-      },
-    })
-    sessions.set(sessionId(), opened)
+    const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer })
     // A message that was waiting when Evie last stopped is answered now.
     if (last !== undefined) opened.loop.wake()
     return { session: sessionId(), project, resumed: last !== undefined, notices }
