@@ -197,7 +197,8 @@ test("cancelling a turn leaves its background jobs running, and closing Evie sto
 
   await run.evie.close()
   expect(background.work[0]!.stopped).toBe(true)
-  expect(notes(run)).toEqual([])
+  // Written to the log, so a session continued later does not go on waiting to hear from the job.
+  expect(notes(run)).toEqual(["Background job 1 (the server) was stopped because Evie was closed. Start it again if it is still needed."])
 })
 
 // ---- Shell commands in the background ------------------------------------------------------------
@@ -217,7 +218,7 @@ test("a command started in the background returns at once, and the model is told
 
   await turnEnds(run, 2)
   const file = join(run.home, "tool-output", run.session, "job-1.log")
-  expect(notes(run)).toEqual([`Background job 1 (echo one; sleep 0.3; echo two; exit 3) has finished.\n\none\ntwo\n\n[Exit status: 3]\n\nThe full output is in ${file}.`])
+  expect(notes(run)).toEqual([`Background job 1 (echo one; sleep 0.3; echo two; exit 3) failed.\n\none\ntwo\n\n[Exit status: 3]\n\nThe full output is in ${file}.`])
   expect(await readFile(file, "utf8")).toBe("one\ntwo\n")
 })
 
@@ -306,4 +307,74 @@ test("the terminal says when a job starts and ends, and shows the turn its endin
 
   expect(printed).toContain("[background] job 1 started: the build\n")
   expect(printed).toMatch(/\[background\] job 1 finished after \d+s: the build\nThe build passed\./)
+})
+
+// ---- Found in review -------------------------------------------------------------------------------
+
+test("a session continued after Evie stopped carries on counting its jobs, so an id is never used twice", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  const projectFolder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(projectFolder, { recursive: true, force: true }))
+  const first = backgroundWork()
+  const before = await startEvie([scriptedProvider([{ text: [], calls: [startWork("first")] }, { text: ["Started."] }]).plugin, first.plugin], { home, projectFolder })
+  await say(before, "go")
+  await before.stop()
+
+  const second = backgroundWork()
+  const after = await startEvie([scriptedProvider([{ text: [], calls: [startWork("second")] }, { text: ["Started."] }]).plugin, second.plugin], { home, projectFolder })
+  cleanups.push(after.stop)
+  const continued = await after.evie.send({ type: "open_session", folder: projectFolder, continue: true })
+  await say(after, "go again", continued.session)
+
+  expect(second.work[0]!.job).toMatchObject({ id: "2", session: before.session })
+})
+
+test("a background command that ends badly is a job that failed, and one that prints a great deal is told by its end", async () => {
+  const { run } = await start(
+    [{ text: [], calls: [{ name: "shell", input: { command: "seq 1 20000; echo the very last line; exit 2", background: true } }] }, { text: ["Running."] }, { text: ["It failed."] }],
+    [shell()],
+  )
+
+  await say(run, "run it")
+  await turnEnds(run, 2)
+
+  expect(jobEvents(run)).toEqual(["1 running", "1 failed"])
+  expect(notes(run)[0]).toContain("the very last line\n\n[Only the end of the output is shown.]\n[Exit status: 2]")
+  expect(notes(run)[0]!.length).toBeLessThan(7000)
+  // The file has all of it.
+  expect((await readFile(join(run.home, "tool-output", run.session, "job-1.log"), "utf8")).split("\n")).toHaveLength(20002)
+})
+
+test("a session may read its own saved output and not another session's", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  const script: ScriptedReply[] = [{ text: [], calls: [{ name: "shell", input: { command: "echo secret of the first session", background: true } }] }, { text: ["Running."] }, { text: ["Ended."] }]
+  const run = await startEvie([scriptedProvider(script).plugin, shell(), files(), permissions({ mode: "auto", dataFolder: home })], { home })
+  cleanups.push(run.stop)
+  await say(run, "run it")
+  await turnEnds(run, 2)
+  const other = await run.evie.send({ type: "open_session", folder: run.projectFolder })
+
+  script.push({ text: [], calls: [{ name: "read", input: { path: join(home, "tool-output", run.session, "job-1.log") } }] }, { text: ["No."] })
+  await say(run, "read the other session's output", other.session)
+
+  expect(lastResult(run)).toStartWith("Blocked by the guard:")
+})
+
+test("with waitForJobs the terminal stays until a background job has ended and Evie has dealt with it", async () => {
+  const model = scriptedProvider([{ text: [], calls: [{ name: "shell", input: { command: "sleep 0.3; echo built", background: true } }] }, { text: ["Started it."] }, { text: ["The build is done."] }])
+  const run = await startEvie([model.plugin, shell()])
+  cleanups.push(run.stop)
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    waitForJobs: true,
+    lines: (async function* () {
+      yield "build it"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("The build is done.")
 })

@@ -1,3 +1,4 @@
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { EvieEvent, Job, JobWork } from "./types.ts"
 
@@ -32,13 +33,39 @@ export function createJobs(options: {
 }): Jobs {
   const all = new Map<string, Running[]>()
   const ofSession = (session: string) => all.get(session) ?? all.set(session, []).get(session)!
+  // The highest id each session has used. Every job leaves an output file,
+  // so the count carries on from there when a session is continued after
+  // Evie was stopped, and an id is never used for two different jobs.
+  const lastId = new Map<string, number>()
+  const nextId = (session: string): number => {
+    if (!lastId.has(session)) {
+      let highest = 0
+      try {
+        for (const name of readdirSync(join(options.outputFolder, session))) {
+          const used = /^job-(\d+)\.log$/.exec(name)
+          if (used) highest = Math.max(highest, Number(used[1]))
+        }
+      } catch {
+        // No folder yet: this is the session's first job.
+      }
+      lastId.set(session, highest)
+    }
+    lastId.set(session, lastId.get(session)! + 1)
+    return lastId.get(session)!
+  }
+  // A plugin's own code must not be able to break the core by throwing.
+  const safely = (work: () => void) => {
+    try {
+      work()
+    } catch {}
+  }
   const announce = (job: Job) => options.emit({ type: "job", session: job.session, job: { ...job } })
 
   return {
     start(session, work) {
       const jobs = ofSession(session)
       // Ids count up within a session, so they are short enough to type.
-      const id = String(jobs.length + 1)
+      const id = String(nextId(session))
       const job: Job = {
         id,
         session,
@@ -48,6 +75,11 @@ export function createJobs(options: {
         started: Date.now(),
         outputFile: join(options.outputFolder, session, `job-${id}.log`),
       }
+      // The file is there from the start, empty, even for work that writes nothing.
+      safely(() => {
+        mkdirSync(join(options.outputFolder, session), { recursive: true })
+        writeFileSync(job.outputFile, "")
+      })
       const running: Running = { job, work }
       jobs.push(running)
       announce(job)
@@ -62,7 +94,7 @@ export function createJobs(options: {
         const how = job.status === "stopped" ? "was stopped by the owner" : job.status === "failed" ? "failed" : "has finished"
         // A job that ended by itself wakes the session, so the result is
         // dealt with even if the turn that started it is long over.
-        options.tell(session, `Background job ${id} (${job.title}) ${how}.\n\n${result}`, running.stoppedBy === undefined)
+        safely(() => options.tell(session, `Background job ${id} (${job.title}) ${how}.\n\n${result}`, running.stoppedBy === undefined))
       }
       work.done.then(
         (result) => settle("finished", result),
@@ -79,15 +111,19 @@ export function createJobs(options: {
       const running = (all.get(session) ?? []).find(({ job }) => job.id === id)
       if (!running || running.job.status !== "running") return running && { ...running.job }
       running.stoppedBy = by
-      running.work.stop()
+      safely(() => running.work.stop())
       return { ...running.job }
     },
 
     async stopAll() {
       const live = [...all.values()].flat().filter(({ job }) => job.status === "running")
-      for (const running of live) {
+      for (const { job, work } of live) {
+        const running = live.find((other) => other.job === job)!
         running.stoppedBy = "closing"
-        running.work.stop()
+        // Written now, while the log is still open, so that a session
+        // continued later does not go on expecting to hear from the job.
+        safely(() => options.tell(job.session, `Background job ${job.id} (${job.title}) was stopped because Evie was closed. Start it again if it is still needed.`, false))
+        safely(() => work.stop())
       }
       // Work that will not stop must not keep Evie from closing.
       const patience = new Promise<void>((resolve) => setTimeout(resolve, 3000).unref())

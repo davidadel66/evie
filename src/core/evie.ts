@@ -310,8 +310,9 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       closed = true
       // A question still open is refused, which lets whatever asked it finish.
       questions.refuseAll()
-      await jobs.stopAll()
       await Promise.all([...sessions.values()].map(({ loop }) => loop.stop()))
+      // After the turns have stopped, so that none can start another job.
+      await jobs.stopAll()
       db.close()
     },
   }

@@ -1,8 +1,7 @@
 import type { Plugin } from "../../core/types.ts"
-import { resolve } from "node:path"
 import { dataFolder } from "../../core/evie.ts"
-import { createGuard, followLinks } from "../guard.ts"
-import { MODES, actsOf, alwaysRule, effectFor, isInside, questionFor, type Mode, type Rule } from "./rules.ts"
+import { createGuard, isSavedOutput } from "../guard.ts"
+import { MODES, actsOf, alwaysRule, effectFor, questionFor, type Mode, type Rule } from "./rules.ts"
 
 // The built-in permissions plugin. Before a tool runs, it decides whether
 // the call is allowed, denied, or needs the owner's say-so, and asks when it
@@ -39,8 +38,7 @@ const NO = "No"
 export function permissions(options: PermissionsOptions = {}): Plugin {
   const blockedByGuard = createGuard(options.dataFolder === undefined ? {} : { dataFolder: options.dataFolder })
   const startsIn = options.mode ?? "manual"
-  // Output Evie saved for the model to read. Reading it is always allowed.
-  const savedOutput = followLinks(resolve(options.dataFolder ?? dataFolder({}), "tool-output"))
+  const data = options.dataFolder ?? dataFolder({})
 
   return {
     name: "permissions",
@@ -66,15 +64,19 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
       })
 
       host.on("before_tool", async (call, context) => {
-        const guarded = blockedByGuard(call, folder)
+        const guarded = blockedByGuard(call, folder, context.session)
         if (guarded !== undefined) return { deny: guarded }
 
         const mode = modeOf(context.session)
         const rules = [...(options.rules ?? []), ...remembered]
-        const judged = actsOf(call, folder).map((act) => ({
-          act,
-          effect: act.action === "read" && isInside(savedOutput, act.target) ? ("allow" as const) : effectFor(act, rules, mode, folder),
-        }))
+        const judged = actsOf(call, folder).map((act) => {
+          const effect = effectFor(act, rules, mode, folder)
+          // Reading the output Evie saved for this session is not reaching
+          // outside the project, so it is not asked about. A rule that
+          // denies it still does.
+          const ownOutput = act.action === "read" && effect !== "deny" && isSavedOutput(data, context.session, act.target)
+          return { act, effect: ownOutput ? ("allow" as const) : effect }
+        })
 
         if (judged.some(({ effect }) => effect === "deny")) {
           return {

@@ -82,12 +82,22 @@ const shellTool: Tool = {
       const job = context.jobs.start({
         kind: "shell",
         title: command.length > 80 ? `${command.slice(0, 80)}…` : command,
-        done: running.ended.then((ended) => `${describe(ended, given, MOST_TOLD)}\n\nThe full output is in ${job.outputFile}.`),
+        // A command that did not end well is a job that failed.
+        done: running.ended.then((ended) => {
+          const told = `${describe(ended, given, MOST_TOLD)}\n\nThe full output is in ${job.outputFile}.`
+          if (ended.how === "exited" && ended.status === 0) return told
+          if (ended.how === "stopped") return told
+          throw new Error(told)
+        }),
         stop: () => running.stop("stopped"),
       })
       running.writeTo(job.outputFile)
       // A background command is only stopped by the clock when a time was asked for.
-      if (background && given !== undefined) setTimeout(() => running.stop("timeout"), given * 1000).unref()
+      if (background && given !== undefined) {
+        const clock = setTimeout(() => running.stop("timeout"), given * 1000)
+        clock.unref()
+        void running.ended.then(() => clearTimeout(clock))
+      }
       return (
         `${why} It is background job ${job.id}, and its output is being written to ${job.outputFile}.\n\n` +
         "You will be told when it finishes, with its output. Do not wait for it, and do not keep checking on it: " +
@@ -115,11 +125,30 @@ const shellTool: Tool = {
   },
 }
 
-// How much of a background command's output the model is told when it ends.
+// How much of a background command's output the model is told when it ends,
+// and how much of it is kept in memory to tell it from.
 const MOST_TOLD = 6000
+const KEPT_OF_BACKGROUND = 4 * MOST_TOLD
+
+// The commands still running, by process id. A command runs in a process
+// group of its own, so it does not die with Evie by itself. However Evie
+// exits, even without closing properly, whatever is left is stopped here.
+const live = new Set<number>()
+process.on("exit", () => {
+  for (const pid of live) {
+    try {
+      process.kill(-pid, "SIGTERM")
+    } catch {
+      // Already gone.
+    }
+  }
+})
 
 type Ended = {
+  // What the command printed. Once it is in the background, only the end of it.
   output: string
+  // True when `output` is only the end of what was printed.
+  onlyTheEnd?: boolean
   dropped: boolean
   how: "exited" | "timeout" | "cancelled" | "stopped" | "failed"
   status?: number | null
@@ -133,9 +162,9 @@ type Ended = {
 function describe(ended: Ended, timeout: number | undefined, most?: number): string {
   let output = ended.output.trimEnd()
   const notes: string[] = []
-  if (most !== undefined && output.length > most) {
+  if (most !== undefined && (output.length > most || ended.onlyTheEnd)) {
     output = output.slice(-most)
-    notes.push(`[Only the last ${most} characters of the output are shown.]`)
+    notes.push(`[Only the end of the output is shown.]`)
   }
   if (ended.dropped) notes.push("[Some output was dropped: the command printed more than 5 MiB.]")
   if (ended.how === "timeout") {
@@ -173,14 +202,21 @@ function startCommand(command: string, folder: string): Running {
   const pieces: Buffer[] = []
   let collected = 0
   let dropped = false
+  // Once the output goes to a file, only its end is kept in memory.
   let file: string | undefined
+  let end = Buffer.alloc(0)
+  let onlyTheEnd = false
   const collect = (piece: Buffer) => {
     if (file !== undefined) {
       try {
         appendFileSync(file, piece)
       } catch {
-        // The file could not be written. What is kept in memory still is.
+        // The file could not be written. The end of the output is still kept.
       }
+      const joined = Buffer.concat([end, piece])
+      if (joined.length > KEPT_OF_BACKGROUND) onlyTheEnd = true
+      end = joined.subarray(-KEPT_OF_BACKGROUND)
+      return
     }
     if (collected >= MAX_COLLECTED_BYTES) {
       dropped = true
@@ -193,6 +229,7 @@ function startCommand(command: string, folder: string): Running {
   // together, in the order they arrive.
   child.stdout.on("data", collect)
   child.stderr.on("data", collect)
+  if (child.pid !== undefined) live.add(child.pid)
 
   let how: Ended["how"] = "exited"
   const kill = (name: "SIGTERM" | "SIGKILL") => {
@@ -203,8 +240,14 @@ function startCommand(command: string, folder: string): Running {
     }
   }
 
+  let over = false
   const ended = new Promise<Ended>((resolve) => {
-    const finish = (rest: Partial<Ended>) => resolve({ output: Buffer.concat(pieces).toString("utf8"), dropped, how, ...rest })
+    const finish = (rest: Partial<Ended>) => {
+      over = true
+      if (child.pid !== undefined) live.delete(child.pid)
+      const output = file === undefined ? Buffer.concat(pieces) : end
+      resolve({ output: output.toString("utf8"), dropped, how, ...(onlyTheEnd && { onlyTheEnd }), ...rest })
+    }
     child.on("error", (problem) => finish({ how: "failed", problem: problem.message }))
     child.on("close", (status, endedBy) => finish({ status, signal: endedBy }))
   })
@@ -212,7 +255,8 @@ function startCommand(command: string, folder: string): Running {
   return {
     ended,
     stop(reason) {
-      if (how !== "exited") return
+      // Once the command has ended its process id may belong to something else.
+      if (over || how !== "exited") return
       how = reason
       kill("SIGTERM")
       // A command that ignores the polite request is stopped outright.
@@ -221,8 +265,13 @@ function startCommand(command: string, folder: string): Running {
     writeTo(path) {
       try {
         mkdirSync(dirname(path), { recursive: true })
-        writeFileSync(path, Buffer.concat(pieces))
+        const soFar = Buffer.concat(pieces)
+        writeFileSync(path, soFar)
         file = path
+        // From here the file holds everything, and memory only the end.
+        onlyTheEnd = dropped || soFar.length > KEPT_OF_BACKGROUND
+        end = soFar.subarray(-KEPT_OF_BACKGROUND)
+        pieces.length = 0
       } catch {
         // Without the file the output is still told when the command ends.
       }
