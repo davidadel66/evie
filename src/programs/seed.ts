@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path"
 import { openStore } from "../core/store.ts"
 import { ask, createEvie, dataFolder, files, jobs, shell, subagents, type Plugin, type Settings } from "../index.ts"
 import { scriptedProvider, type ScriptedReply } from "../plugins/scripted.ts"
-import { fail, print } from "./common.ts"
+import { fail, print, reason } from "./common.ts"
 
 // `evie seed`: fills an empty data folder with made-up projects and
 // sessions, for trying out a development copy of Evie or a new client
@@ -251,8 +251,15 @@ export async function seed(env: Settings) {
     if (existsSync(folder)) fail(`${folder} is already there, so nothing was seeded. Remove it first, or set EVIE_HOME to another folder.`)
   }
 
-  for (const [name, contents] of Object.entries(PROJECTS)) await makeProject(join(projectsFolder(home), name), contents, env).catch(fail)
-  for (const seeded of SESSIONS) await seedSession(env, home, seeded).catch(fail)
+  // From here, a failure leaves part of the seed behind, which the checks
+  // above would refuse the next time, so it says what to remove.
+  const stopped = (cause: unknown): never => {
+    const left = [projectsFolder(home), join(home, "evie.db"), join(home, "server-token")].filter((path) => existsSync(path))
+    const named = left.length > 1 ? `${left.slice(0, -1).join(", ")} and ${left.at(-1)}` : left[0]
+    return fail(named ? `${reason(cause)}\nThe seed stopped part way. To seed again, remove ${named} first.` : cause)
+  }
+  for (const [name, contents] of Object.entries(PROJECTS)) await makeProject(join(projectsFolder(home), name), contents, env).catch(stopped)
+  for (const seeded of SESSIONS) await seedSession(env, home, seeded).catch(stopped)
 
   const width = Math.max(...SESSIONS.map((seeded) => seeded.kind.length))
   print(

@@ -162,3 +162,15 @@ test("a made-up session that never finishes is given up on in time, naming the s
 
   await expect(seeding).rejects.toThrow('The made-up session "a turn that never ends" did not go as scripted: it waited 0.1 seconds for the turn to end')
 })
+
+test("a seed that stops part way says what it left, and what to remove before seeding again", async () => {
+  const home = await tempFolder()
+
+  // With no git on the path, which names only an empty folder, it stops
+  // while making the first project.
+  await mkdir(join(home, "no-tools"))
+  const seeded = await evie(["seed"], home, { PATH: join(home, "no-tools") })
+
+  expect(seeded.code).toBe(1)
+  expect(seeded.stderr).toContain(`The seed stopped part way. To seed again, remove ${home}-seed and ${join(home, "evie.db")} first.`)
+})
