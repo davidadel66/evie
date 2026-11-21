@@ -172,18 +172,22 @@ evie service status      # whether it is installed and running, and where its lo
 evie service uninstall   # stops it, and no longer starts it at login
 ```
 
-`install` writes a launch agent, `~/Library/LaunchAgents/com.evie.serve.plist`,
-for the copy of Evie it is run from, and starts it. Run it again after
-updating Evie: it stops the server that is running and starts it on the
-new version. The service is given the data folder (`EVIE_HOME`, when it is
-set) and the `PATH` of the terminal it was installed from, so that it finds
-Bun and the commands Evie runs; install it again after changing either.
-Nothing else from that terminal reaches it, so a key or setting exported
-there, such as `OPENROUTER_API_KEY` or `EVIE_MODEL`, has to be in the data
-folder's `.env` (or, for the model, in `evie.json`) for the service to have
-it. `install` names any it finds set only in the terminal, without showing
-their values. What the server prints goes to `serve.log` in the data
-folder.
+`install` writes a launch agent,
+`~/Library/LaunchAgents/com.evie.serve.plist`, for the copy of Evie it is
+run from, and starts it. Run it again after updating Evie: it stops the
+server that is running and starts it on the new version.
+
+The service is given the data folder (`EVIE_HOME`, when it is set) and the
+`PATH` of the terminal it was installed from, so that it finds Bun and the
+commands Evie runs; install it again after changing either. It runs the
+`bun` that path finds, by the name the path gives it, which a package
+manager usually keeps in place when it updates Bun; if Bun moves, install
+the service again. Nothing else from that terminal reaches it, so a key or
+setting exported there, such as `OPENROUTER_API_KEY` or `EVIE_MODEL`, has
+to be in the data folder's `.env` (or, for the model, in `evie.json`) for
+the service to have it. `install` names any it finds set only in the
+terminal, without showing their values. What the server prints goes to
+`serve.log` in the data folder.
 
 The service does not keep the Mac awake. While it sleeps, work in progress
 pauses, and `evie` catches up when it wakes. On other systems, run

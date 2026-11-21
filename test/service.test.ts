@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { runService, type Computer } from "../src/programs/service.ts"
@@ -64,7 +64,8 @@ test("install writes a login service that runs this evie's server, and loads it"
   const { computer, calls, folder, plist } = await mac()
   const home = join(folder, "data & more")
 
-  const done = await runService({ EVIE_HOME: home, PATH: "/usr/bin:/bin" }, ["install"], computer)
+  // A path with no Bun on it, so the Bun running now is used, and its folder is put first.
+  const done = await runService({ EVIE_HOME: home, PATH: `${folder}/tools:/usr/bin` }, ["install"], computer)
 
   expect(done.ok).toBe(true)
   expect(done.text).toContain(plist)
@@ -86,7 +87,7 @@ test("install writes a login service that runs this evie's server, and loads it"
     <key>EVIE_HOME</key>
     <string>${folder}/data &amp; more</string>
     <key>PATH</key>
-    <string>${dirname(BUN)}:/usr/bin:/bin</string>
+    <string>${dirname(BUN)}:${folder}/tools:/usr/bin</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
@@ -115,6 +116,22 @@ test("installing again unloads the older service first, so the server restarts o
   expect(done.ok).toBe(true)
   expect(calls).toEqual(["print gui/501/com.evie.serve", "bootout gui/501/com.evie.serve", `bootstrap gui/501 ${plist}`, "print gui/501/com.evie.serve"])
   expect(await readFile(plist, "utf8")).toContain(`<string>${CLI}</string>`)
+})
+
+test("the service runs the Bun this terminal's path finds, as written there, so that it outlives an update to Bun", async () => {
+  const { computer, folder, plist } = await mac()
+  const tools = join(folder, "tools")
+  await mkdir(tools)
+  // As a package manager links a versioned Bun into a folder on the path.
+  await symlink(BUN, join(tools, "bun"))
+  const path = `/no/such/folder:${tools}:/usr/bin`
+
+  const done = await runService({ EVIE_HOME: join(folder, "data"), PATH: path }, ["install"], computer)
+
+  const written = await readFile(plist, "utf8")
+  expect(written).toContain(`  <array>\n    <string>${join(tools, "bun")}</string>\n`)
+  expect(written).toContain(`<key>PATH</key>\n    <string>${path}</string>`)
+  expect(done.text).toContain("If Bun moves, as when it is installed again somewhere else, run `evie service install` again.")
 })
 
 test("install looks again a moment after starting the server, and says it is running only when it is", async () => {

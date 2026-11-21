@@ -1,6 +1,7 @@
+import { accessSync, constants, statSync } from "node:fs"
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { delimiter, dirname, join, resolve } from "node:path"
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path"
 import { dataFolder, loadSettings, type Settings } from "../index.ts"
 import { fail, print } from "./common.ts"
 
@@ -143,6 +144,7 @@ export async function runService(env: Settings, [action]: string[], computer: Co
         `${older ? "Reinstalled the login service, and started the server again on this version" : "Installed the login service, and started the server"}, ` +
         `which is running${pid ? ` as process ${pid}` : ""}: \`evie serve\` now runs when you log in, and starts again if it stops.\n` +
         `  Service file: ${file}\n  Log:          ${log}\n` +
+        "If Bun moves, as when it is installed again somewhere else, run `evie service install` again.\n" +
         settingsNote,
     }
   }
@@ -224,17 +226,32 @@ async function installed(file: string): Promise<{ home: string; log: string } | 
   return { home, log: value("StandardOutPath") ?? join(home, "serve.log") }
 }
 
-// The launch agent's file: run this checkout's `evie serve` with the Bun
-// running now, at login and again whenever it stops, with what it prints
-// going to the log. launchd gives it a bare environment, so the data folder
-// and a path that finds Bun and the commands Evie runs are set here.
+// The Bun to run the server with: the first the path finds, named as the
+// path names it. That is often a link a package manager keeps in place when
+// it updates Bun, where the Bun running now can be in a folder for one
+// version, which an update removes. The Bun running now when the path has none.
+function bunToRun(path: string[]): string {
+  for (const folder of path.filter((each) => isAbsolute(each))) {
+    const candidate = join(folder, "bun")
+    try {
+      accessSync(candidate, constants.X_OK)
+      if (statSync(candidate).isFile()) return candidate
+    } catch {}
+  }
+  return process.execPath
+}
+
+// The launch agent's file: run this checkout's `evie serve` with Bun, at
+// login and again whenever it stops, with what it prints going to the log.
+// launchd gives it a bare environment, so the data folder and a path that
+// finds Bun and the commands Evie runs are set here.
 function launchAgent(env: Settings, log: string): string {
-  const bun = process.execPath
-  const cli = join(import.meta.dir, "..", "cli.ts")
   const path = (env.PATH ?? "").split(delimiter).filter((folder) => folder !== "")
+  const bun = bunToRun(path)
+  const cli = join(import.meta.dir, "..", "cli.ts")
   const environment: Record<string, string> = {
     ...(env.EVIE_HOME && { EVIE_HOME: resolve(env.EVIE_HOME) }),
-    PATH: [...new Set([dirname(bun), ...path])].join(delimiter),
+    PATH: (path.includes(dirname(bun)) ? path : [dirname(bun), ...path]).join(delimiter),
   }
   const string = (text: string) => `<string>${text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</string>`
   return `<?xml version="1.0" encoding="UTF-8"?>
