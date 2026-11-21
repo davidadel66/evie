@@ -246,13 +246,23 @@ function endOf(file: string, most: number): Printed {
 // The file a command's own shell writes its exit status to, beside its output.
 const exitFileOf = (outputFile: string) => outputFile.replace(/\.log$/, ".exit")
 
+// The signals that end a process that does not catch them. A shell gives a
+// command that died by one the status 128 and its number. Others, such as
+// stop, continue or a child having ended, never end a process, so a status
+// that stands for one of them is only a status the command chose.
+const ENDING = ["SIGHUP", "SIGINT", "SIGQUIT", "SIGILL", "SIGTRAP", "SIGABRT", "SIGFPE", "SIGKILL", "SIGBUS", "SIGSEGV", "SIGSYS", "SIGPIPE", "SIGALRM", "SIGTERM", "SIGXCPU", "SIGXFSZ", "SIGVTALRM", "SIGPROF", "SIGUSR1", "SIGUSR2"]
+const numbered = constants.signals as Record<string, number | undefined>
+// The signal that a status stands for, when it stands for one that ends a process.
+const endedBy = (status: number) => (status > 128 ? ENDING.find((name) => numbered[name] === status - 128) : undefined)
+
 // The command runs in a shell of its own, under one that writes how it
-// ended to the exit file. When the command dies by a signal, the outer one
-// then sends itself the same signal, so that it is seen to end the same
-// way, and its own report of the death is kept out of the output. Stopped
-// by a signal itself, the outer one ends too, and writes nothing.
+// ended to the exit file. When the command died by a signal that ends a
+// process, the outer one then sends itself the same signal, so that it is
+// seen to end the same way, and its own report of the death is kept out of
+// the output. Stopped by a signal itself, the outer one ends too, and writes nothing.
 const RUNS_THEN_RECORDS =
-  'exec 3>&2 2>/dev/null; /bin/sh -c "$1" 2>&3 3>&-; status=$?; echo $status > "$2"; [ $status -gt 128 ] && kill -$((status - 128)) $$; exit $status'
+  'exec 3>&2 2>/dev/null; /bin/sh -c "$1" 2>&3 3>&-; status=$?; echo $status > "$2"; ' +
+  `case $status in ${ENDING.flatMap((name) => (numbered[name] === undefined ? [] : [128 + numbered[name]!])).join("|")}) kill -$((status - 128)) $$;; esac; exit $status`
 
 type Running = {
   pid: number | undefined
@@ -408,15 +418,16 @@ function resumeCommand(job: JobRecord): JobWork {
   return { kind: "shell", title: job.title, done: done.then((ended) => toldOf(ended, timeout, job.outputFile)), stop: () => stop("stopped") }
 }
 
-// How a command ended, from its exit file, or undefined while it has none.
-// A status over 128 is a death by the signal of that number less 128.
+// How a command ended, from its exit file, or undefined while it has none:
+// read as a command here is, so a status that stands for a signal that
+// ends a process is a death by that signal.
 function exitStatus(file: string): Pick<Ended, "status" | "signal"> | undefined {
   try {
     const text = readFileSync(file, "utf8").trim()
     if (text === "") return undefined
     const status = Number(text)
-    const signal = Object.entries(constants.signals).find(([, number]) => number === status - 128)?.[0]
-    return status > 128 && signal !== undefined ? { signal } : { status }
+    const signal = endedBy(status)
+    return signal !== undefined ? { signal } : { status }
   } catch {
     return undefined
   }

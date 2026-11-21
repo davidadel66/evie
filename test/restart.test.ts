@@ -120,6 +120,23 @@ test("a background command that died by a signal while no Evie was running is to
   expect(notes(second.run, session)).toEqual([`Background job 1 (sleep 0.3; kill -TERM $$) failed.\n\n[Ended by signal SIGTERM]\n\nThe full output is in ${file}.`])
 })
 
+test("a background command that ended with a status like a signal's while no Evie was running is told by its status", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "sleep 0.3; exit 145", background: true } }] }, { text: ["Started."] }])
+  await say(first.run, "run it")
+  const session = first.run.session
+  await first.restart()
+  await Bun.sleep(700)
+
+  const second = await startAgain([{ text: ["It failed."] }])
+  const woken = turnEnded(second.run, session)
+  await second.run.evie.resumeWork()
+  await woken
+
+  const file = join(home, "tool-output", session, "job-1.log")
+  expect(notes(second.run, session)).toEqual([`Background job 1 (sleep 0.3; exit 145) failed.\n\n[Exit status: 145]\n\nThe full output is in ${file}.`])
+})
+
 // Whether any process of a group is there. Signal 0 only asks.
 const groupThere = (group: number) => {
   try {

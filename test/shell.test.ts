@@ -109,3 +109,12 @@ test("a command whose output file cannot be made is not run, and the result says
       "where it keeps what tools print (ENOTDIR). Tell the owner that this folder cannot be written to: no command can run until it can.",
   )
 })
+
+test("a command that exits with a status that is not a death by a signal that ends a process says its status, and ends at once", async () => {
+  const { call } = await project()
+
+  // On macOS 145 is 128 and stop's number, and 148 is 128 and that of a child having ended.
+  expect(await call("shell", { command: "exit 145", timeout: 3 })).toBe("[Exit status: 145]")
+  expect(await call("shell", { command: "exit 148", timeout: 3 })).toBe("[Exit status: 148]")
+  expect(await call("shell", { command: "kill -TERM $$" })).toBe("[Ended by signal SIGTERM]")
+})
