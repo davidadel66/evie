@@ -17,7 +17,7 @@ import {
 import { nextEvent, say, startEvie, stored, type Run } from "./support/harness.ts"
 import { lineTo } from "./support/line.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
-import { serveEvie, type Served } from "./support/served.ts"
+import { serveEvie } from "./support/served.ts"
 import { openTokens } from "../src/server/tokens.ts"
 
 // The terminal client run over the network: Evie behind its server, and the
@@ -968,8 +968,8 @@ test("a command whose reply was lost is carried out once when it is sent again, 
 // A connection of this device's own to the server, as a client written
 // apart from `connect` would make, which sends commands with the ids the
 // test chooses. `heard` is everything the server sent on it, in order.
-async function ownLine(served: Served) {
-  const socket = new WebSocket(`${served.server.url.replace(/^http/, "ws")}/ws`, { headers: { Authorization: `Bearer ${served.token}` } })
+async function ownLine(url: string, token: string) {
+  const socket = new WebSocket(`${url.replace(/^http/, "ws")}/ws`, { headers: { Authorization: `Bearer ${token}` } })
   await new Promise((resolve) => socket.addEventListener("open", resolve, { once: true }))
   cleanups.push(async () => socket.close())
   const heard: ServerMessage[] = []
@@ -1002,7 +1002,7 @@ test("the server remembers the replies to the last 200 commands of each device, 
   const count = counted()
   const served = await serveEvie([scriptedProvider([]).plugin, count.plugin])
   cleanups.push(served.stop)
-  const own = await ownLine(served)
+  const own = await ownLine(served.server.url, served.token)
   for (let n = 1; n <= 200; n++) await countAs(own, served.run.session, `command ${n}`)
   expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
 
@@ -1017,7 +1017,7 @@ test("a command its client says it sends once, as a catch-up after a drop is, ha
   const count = counted()
   const served = await serveEvie([scriptedProvider([]).plugin, count.plugin])
   cleanups.push(served.stop)
-  const own = await ownLine(served)
+  const own = await ownLine(served.server.url, served.token)
   for (let n = 1; n <= 200; n++) await countAs(own, served.run.session, `command ${n}`)
 
   // Sent twice with one id, by a client that does not keep its promise, it is carried out twice.
@@ -1026,6 +1026,59 @@ test("a command its client says it sends once, as a catch-up after a drop is, ha
 
   expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
   expect(count.runs()).toBe(202)
+})
+
+test("a session opened by its id twice at once on one connection has its events held back until the last reply is sent", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  // Stands for the core: each open of the session reads where it stands,
+  // and the first finishes once the second has read too, which is then slow
+  // to finish, as one that opens a session again can be.
+  const listeners = new Set<(event: EvieEvent) => void>()
+  let opens = 0
+  const bothRead = gate()
+  const secondFinish = gate()
+  const core: Evie = {
+    async send(command) {
+      if (command.type !== "open_session" || command.session === undefined) return served.run.evie.send(command)
+      const open = ++opens
+      const reply = await served.run.evie.send(command)
+      if (open === 1) await bothRead.opened
+      if (open === 2) {
+        bothRead.open()
+        await secondFinish.opened
+      }
+      return reply
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+      const stop = served.run.evie.subscribe(listener)
+      return () => {
+        listeners.delete(listener)
+        stop()
+      }
+    },
+    close: () => served.run.evie.close(),
+  }
+  const server = startServer({ evie: core, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+  cleanups.push(() => server.stop())
+  const own = await ownLine(server.url, served.token)
+  const open = { type: "open_session", session: served.run.session, after: 0 } as const
+  const first = own.send({ id: "first", command: open })
+  const second = own.send({ id: "second", command: open })
+  await first
+
+  // The session goes on once both have read where it stands, while the second is still finishing.
+  for (const listener of listeners) listener({ type: "assistant_delta", session: served.run.session, text: "since" })
+  secondFinish.open()
+  await second
+  while (!own.heard.some((message) => "event" in message)) await Bun.sleep(1)
+
+  expect(own.heard.map((message) => ("reply" in message ? message.reply : "event" in message ? message.event.type : "other"))).toEqual([
+    "first",
+    "second",
+    "assistant_delta",
+  ])
 })
 
 test("a session opened by its id is sent to the client from the moment the core is asked, so no event falls in between, and those events follow the reply", async () => {

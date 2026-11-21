@@ -40,16 +40,19 @@ type Admitted = { token: string; device: string }
 
 // What the server keeps for each connection: who it is, the sessions it has
 // opened, how many sessions it is opening right now, the sessions it is
-// opening by their id right now, each with its events held back until the
-// reply has been sent, and the questions it was sent while opening that
-// are still waiting, by id, with their session.
+// opening by their id right now, and the questions it was sent while
+// opening that are still waiting, by id, with their session.
 type Connection = Admitted & {
   unsubscribe: () => void
   sessions: Set<string>
   opening: number
-  joining: Map<string, EvieEvent[]>
+  joining: Map<string, Joining>
   openingQuestions: Map<string, string>
 }
+
+// A session a connection is opening by its id: how many opens of it are
+// under way, and its events, held back until they have all been answered.
+type Joining = { opens: number; held: EvieEvent[] }
 
 // The browser's cookie that holds its token.
 const COOKIE = "evie_token"
@@ -102,6 +105,23 @@ export function startServer(options: ServerOptions): EvieServer {
     if (connection.sessions.has(event.session) || connection.joining.has(event.session)) return true
     return connection.opening > 0 && (event.type === "question" || event.type === "answer") && !openedHere.has(event.session)
   }
+  // Holds back a connection's events for a session it is opening by its id,
+  // and gives back what sends them, to be called once the reply has been
+  // sent. When the connection opens the session again before the first open
+  // is answered, they are held until the last reply is sent, since the
+  // client can still be catching up from that one.
+  function holdBack(socket: ServerWebSocket<Connection>, session: string): () => void {
+    const joining = socket.data.joining.get(session) ?? { opens: 0, held: [] }
+    socket.data.joining.set(session, joining)
+    joining.opens += 1
+    return () => {
+      joining.opens -= 1
+      if (joining.opens > 0) return
+      socket.data.joining.delete(session)
+      for (const event of joining.held) send(socket, { event })
+    }
+  }
+
   // Closes the connection if its token has been taken back, and says whether
   // it did. A check that fails, such as when the database stays busy past
   // its wait, cannot say the token was taken back: the connection is kept,
@@ -203,8 +223,8 @@ export function startServer(options: ServerOptions): EvieServer {
           if (event.type === "answer") socket.data.openingQuestions.delete(event.body.id)
           // Held back while the session is being opened by its id: see
           // `message`. Not a question or an answer, which opening it can wait on.
-          const held = socket.data.joining.get(event.session)
-          if (held && event.type !== "question" && event.type !== "answer") return void held.push(event)
+          const joining = socket.data.joining.get(event.session)
+          if (joining && event.type !== "question" && event.type !== "answer") return void joining.held.push(event)
           send(socket, { event })
         })
       },
@@ -222,12 +242,11 @@ export function startServer(options: ServerOptions): EvieServer {
         // stands, so that no event falls between that reading and the reply.
         // Until the reply is sent its events are held back, so that what
         // reaches the client before the reply is in it, and what comes after
-        // is new. A session already open is read in the same step it is
-        // handed the command. One opened again is read once it is open, so
-        // the events of its opening are in the reply and also come after it,
-        // and the client skips the second by their numbers.
-        const joining = open?.session
-        if (joining !== undefined && !socket.data.joining.has(joining)) socket.data.joining.set(joining, [])
+        // is new: see `holdBack`. A session already open is read in the same
+        // step it is handed the command. One opened again is read once it is
+        // open, so the events of its opening are in the reply and also come
+        // after it, and the client skips the second by their numbers.
+        const release = open?.session === undefined ? undefined : holdBack(socket, open.session)
         try {
           const reply = await replyTo(socket.data.device, message)
           // The session opened is learned from the reply, before the reply is
@@ -240,11 +259,7 @@ export function startServer(options: ServerOptions): EvieServer {
           send(socket, reply)
         } finally {
           if (open) socket.data.opening -= 1
-          if (joining !== undefined) {
-            const held = socket.data.joining.get(joining) ?? []
-            socket.data.joining.delete(joining)
-            for (const event of held) send(socket, { event })
-          }
+          release?.()
         }
       },
       close(socket) {
