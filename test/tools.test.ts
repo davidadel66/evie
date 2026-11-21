@@ -239,6 +239,46 @@ test("for a tool that keeps the end, output over 50 KiB is cut at the start of a
   expect(result).toContain("[Output cut: showing the last 50 of 100 lines.")
 })
 
+// 100 lines, the first and last of 1,024 bytes and the rest of 1,023, so the
+// first 50 lines with the 49 breaks between them are exactly 50 KiB, and so
+// are the last 50: either way the cut falls on a line boundary.
+const boundaryLine = (n: number) => `${n} `.padEnd(n === 1 || n === 100 ? 1024 : 1023, "x")
+const onBoundary = Array.from({ length: 100 }, (_, index) => boundaryLine(index + 1)).join("\n")
+// Each line shown as its number when it is whole, or as itself when not.
+const lineNumbers = (shown: string) =>
+  shown.split("\n").map((line) => {
+    const n = Number.parseInt(line)
+    return line === boundaryLine(n) ? n : line
+  })
+const numbers = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, index) => from + index)
+
+test("output over 50 KiB whose cut falls at the end of a line keeps that line", async () => {
+  const { run } = await start([{ text: [], calls: [{ name: "echo", input: {} }] }, { text: ["ok"] }], {
+    run: async () => onBoundary,
+  })
+
+  await say(run, "go")
+
+  const [result] = results(run)
+  const shown = result!.split("\n\n[Output cut")[0]!
+  expect(lineNumbers(shown)).toEqual(numbers(1, 50))
+  expect(result).toContain("[Output cut: showing the first 50 of 100 lines.")
+})
+
+test("for a tool that keeps the end, output over 50 KiB whose cut falls at the start of a line keeps that line", async () => {
+  const { run } = await start([{ text: [], calls: [{ name: "echo", input: {} }] }, { text: ["ok"] }], {
+    longOutput: "end",
+    run: async () => onBoundary,
+  })
+
+  await say(run, "go")
+
+  const [result] = results(run)
+  const shown = result!.split("\n\n[Output cut")[0]!
+  expect(lineNumbers(shown)).toEqual(numbers(51, 100))
+  expect(result).toContain("[Output cut: showing the last 50 of 100 lines.")
+})
+
 test("for a tool that keeps the end, one line too long to show keeps its end, without splitting a character", async () => {
   // 80,003 bytes. The last 51,200 begin in the middle of an "é", which is
   // left out, so 51,199 are shown.

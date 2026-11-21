@@ -132,11 +132,15 @@ async function capOutput(output: string, savePath: string, keep: "start" | "end"
   let partLine = false
   if (Buffer.byteLength(shown) > MAX_BYTES && keep === "start") {
     // Cut to the byte limit, dropping a character the cut split in two.
-    shown = Buffer.from(shown).subarray(0, MAX_BYTES).toString("utf8").replace(/\uFFFD+$/, "")
-    // Then back to the end of the last whole line, when there is one.
-    const lastBreak = shown.lastIndexOf("\n")
-    if (lastBreak > 0) shown = shown.slice(0, lastBreak)
-    else partLine = true
+    const buffer = Buffer.from(shown)
+    shown = buffer.subarray(0, MAX_BYTES).toString("utf8").replace(/\uFFFD+$/, "")
+    // Then back to the end of the last whole line, when there is one, unless
+    // the cut fell just before a line break and so already ends a whole line.
+    if (buffer[MAX_BYTES] !== 0x0a) {
+      const lastBreak = shown.lastIndexOf("\n")
+      if (lastBreak > 0) shown = shown.slice(0, lastBreak)
+      else partLine = true
+    }
   } else if (Buffer.byteLength(shown) > MAX_BYTES) {
     // Cut to the last bytes that fit, starting after a character the cut
     // split in two: the bytes that carry on a character come first.
@@ -144,10 +148,13 @@ async function capOutput(output: string, savePath: string, keep: "start" | "end"
     let from = buffer.length - MAX_BYTES
     while ((buffer[from]! & 0xc0) === 0x80) from++
     shown = buffer.subarray(from).toString("utf8")
-    // Then on to the start of the first whole line, when there is one.
-    const firstBreak = shown.indexOf("\n")
-    if (firstBreak >= 0 && firstBreak < shown.length - 1) shown = shown.slice(firstBreak + 1)
-    else partLine = true
+    // Then on to the start of the first whole line, when there is one, unless
+    // the cut fell just after a line break and so already starts a whole line.
+    if (buffer[from - 1] !== 0x0a) {
+      const firstBreak = shown.indexOf("\n")
+      if (firstBreak >= 0 && firstBreak < shown.length - 1) shown = shown.slice(firstBreak + 1)
+      else partLine = true
+    }
   }
   const part = keep === "start" ? "first" : "last"
   const amount = partLine
