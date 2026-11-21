@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { connect } from "../src/index.ts"
+import { connect, startServer } from "../src/index.ts"
 import { openTokens } from "../src/server/tokens.ts"
 import { loadServerSettings } from "../src/settings-files.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
@@ -176,6 +176,37 @@ test("a command sent with a token that was just taken back is not carried out", 
   await expect(client.send({ type: "open_session", folder: served.run.projectFolder })).rejects.toThrow(
     "The connection to Evie was lost before it answered: This device's token was taken back.",
   )
+})
+
+test("a token check that fails, such as with the database busy, keeps the connection, and it is checked again later", async () => {
+  const served = await start()
+  let failing = false
+  const server = startServer({
+    evie: served.run.evie,
+    tokens: {
+      check: (secret) => {
+        if (failing) throw new Error("database is locked")
+        return served.tokens.check(secret)
+      },
+    },
+    host: "127.0.0.1",
+    port: 0,
+    recheckEvery: 10,
+  })
+  cleanups.push(() => server.stop())
+  let dropped: string | undefined
+  const client = await connect({ url: server.url, token: served.token, onDrop: (reason) => (dropped = reason) })
+  cleanups.push(() => client.close())
+
+  failing = true
+  await Bun.sleep(50)
+  expect((await client.send({ type: "open_session", folder: served.run.projectFolder })).session).toBeString()
+  expect(dropped).toBeUndefined()
+
+  failing = false
+  await takeBack(served.run.home, "test device")
+  while (dropped === undefined) await Bun.sleep(5)
+  expect(dropped).toBe("This device's token was taken back")
 })
 
 // ---- The browser ---------------------------------------------------------------------------

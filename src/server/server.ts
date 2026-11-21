@@ -61,9 +61,18 @@ export function startServer(options: ServerOptions): EvieServer {
     if (connection.sessions.has(event.session)) return true
     return connection.opening > 0 && (event.type === "question" || event.type === "answer") && !openedHere.has(event.session)
   }
-  // Closes the connection if its token has been taken back, and says whether it did.
+  // Closes the connection if its token has been taken back, and says whether
+  // it did. A check that fails, such as when the database stays busy past
+  // its wait, cannot say the token was taken back: the connection is kept,
+  // and checked again next time.
   const closeIfTakenBack = (socket: ServerWebSocket<Connection>) => {
-    if (options.tokens.check(socket.data.token) !== undefined) return false
+    let device: string | undefined
+    try {
+      device = options.tokens.check(socket.data.token)
+    } catch {
+      return false
+    }
+    if (device !== undefined) return false
     socket.close(TAKEN_BACK, "This device's token was taken back")
     return true
   }
