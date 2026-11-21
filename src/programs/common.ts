@@ -1,10 +1,13 @@
 // What the programs share: printing, stopping with a reason, and the exit
 // code for each signal that stops them.
 
+// What went wrong, in words.
+export const reason = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
+
 // A problem that stops the command, such as a plugin that cannot be loaded,
 // is printed with its reason.
 export const fail = (cause: unknown): never => {
-  console.error(cause instanceof Error ? cause.message : String(cause))
+  console.error(reason(cause))
   process.exit(1)
 }
 

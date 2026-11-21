@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import { Database } from "bun:sqlite"
-import { mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { openStore } from "../src/core/store.ts"
@@ -188,6 +188,19 @@ test("evie serve with a server setting it cannot use stops, and says which", asy
 
   expect(served.code).toBe(1)
   expect(served.stderr).toContain(`In ${join(home, "evie.json")}, "server" has a "port" that is not a whole number from 1 to 65535.`)
+})
+
+test("evie serve that cannot make this computer's token stops, and says why in one line", async () => {
+  const home = await homeWith(await freePort(), [])
+  // Stands for a data folder where the token file cannot be read or written.
+  await mkdir(join(home, "server-token"))
+
+  const served = await evie(["serve"], { home })
+
+  expect(served.code).toBe(1)
+  expect(served.stdout).toBe("")
+  expect(served.stderr).toStartWith(`This computer's token could not be made: ${join(home, "server-token")} could not be read:`)
+  expect(served.stderr.trim()).not.toContain("\n")
 })
 
 test("when the server stops in the middle of a turn, evie says the connection was lost and exits with an error", async () => {
