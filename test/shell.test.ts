@@ -118,3 +118,18 @@ test("a command that exits with a status that is not a death by a signal that en
   expect(await call("shell", { command: "exit 148", timeout: 3 })).toBe("[Exit status: 148]")
   expect(await call("shell", { command: "kill -TERM $$" })).toBe("[Ended by signal SIGTERM]")
 })
+
+test("a process group Evie may not signal is not taken for its command's, so the command ends with its shell", async () => {
+  const { call } = await project()
+  // A stand-in for the signal check, as if every group asked about were another user's.
+  const kill = process.kill
+  process.kill = ((pid: number, signal?: string | number) => {
+    if (pid < 0 && signal === 0) throw Object.assign(new Error("kill EPERM"), { code: "EPERM" })
+    return kill.call(process, pid, signal)
+  }) as typeof process.kill
+  try {
+    expect(await call("shell", { command: "sleep 0.5 & echo early", timeout: 3 })).toBe("early")
+  } finally {
+    process.kill = kill
+  }
+})

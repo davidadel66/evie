@@ -331,13 +331,15 @@ function startCommand(command: string, folder: string, outputFile: string): Runn
 // to tell whether what it started has ended too.
 const ALL_GONE_EVERY = 50
 
-// Whether any process of a group is there. Signal 0 only asks.
+// Whether any process of a group is there. Signal 0 only asks. A group Evie
+// may not signal is another user's, so not its command's: as far as the
+// command goes, it has gone.
 function groupThere(group: number): boolean {
   try {
     process.kill(-group, 0)
     return true
-  } catch (cause) {
-    return (cause as { code?: string }).code === "EPERM"
+  } catch {
+    return false
   }
 }
 
