@@ -8,10 +8,15 @@ import { patchFiles } from "./files/paths.ts"
 // Evie keeps what it adds to the project, for a project whose own settings
 // say `"sync": "private"`. The folder is made a git repository of its own,
 // and the first time, a private repository on the owner's GitHub account,
-// named `evie-` and the project's name, with the owner's `gh`. A minute
-// after Evie last changed something there, and once an hour, what changed
-// is committed and pushed, without asking: the setting is the owner's
-// permission. `/sync` does it at once, and says how it went.
+// named `evie-` and the project's name, or the next free name after it,
+// with the owner's `gh`. A minute after Evie last changed something there,
+// and once an hour, what changed is committed and pushed, without asking:
+// the setting is the owner's permission. `/sync` does it at once, and says
+// how it went.
+//
+// Before every push, the remote must be the repository Evie made, as its
+// git settings record, and GitHub must say it is private. A `.evie/` folder
+// that is, or looks like, an Evie data folder is never synced.
 //
 // A try that fails, as with no `gh`, `gh` not logged in, or no network,
 // never fails a turn: it is kept for `/sync` to tell, and the next try tries
