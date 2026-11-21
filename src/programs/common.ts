@@ -27,3 +27,9 @@ export function print(text: string) {
 // signal's number, as a shell expects.
 export const EXIT_CODES = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 } as const
 export type StopSignal = keyof typeof EXIT_CODES
+
+// The file that tells a server it is being stopped for good, as when its
+// login service is removed, rather than to be started again. It is written,
+// empty, in the server's data folder just before the server is stopped, and
+// the server removes it as it stops.
+export const STOP_FOR_GOOD = "stop-for-good"
