@@ -31,8 +31,9 @@ type Row = {
   // When its latest event was stored, settling aside, or null when it has none.
   active: number | null
   // The body of its latest event when that is the owner settling it, or
-  // bringing it back, after anything else happened in it.
+  // bringing it back, after anything else happened in it, and when that was.
   hand: string | null
+  handTime: number | null
   // The body of its first message, or null when it has none.
   first: string | null
   // Which came last of its turns' starts and ends, or null when it has neither.
@@ -42,6 +43,7 @@ type Row = {
 const COLUMNS = `session.id, session.project, session.created,
   (SELECT time FROM event WHERE event.session = session.id AND type != 'settled' ORDER BY seq DESC LIMIT 1) AS active,
   (SELECT CASE type WHEN 'settled' THEN body END FROM event WHERE event.session = session.id ORDER BY seq DESC LIMIT 1) AS hand,
+  (SELECT CASE type WHEN 'settled' THEN time END FROM event WHERE event.session = session.id ORDER BY seq DESC LIMIT 1) AS handTime,
   (SELECT body FROM event WHERE event.session = session.id AND type = 'user_message' ORDER BY seq LIMIT 1) AS first,
   (SELECT type FROM event WHERE event.session = session.id AND type IN ('turn_start', 'turn_end') ORDER BY seq DESC LIMIT 1) AS turn`
 
@@ -73,9 +75,11 @@ export function createSummaries(options: {
     // opened again and it is closed off, but nothing runs it.
     if ((row.turn === "turn_start" && options.open(row.id)) || options.jobRunning(row.id)) return "working"
     const byHand = row.hand === null ? undefined : (JSON.parse(row.hand) as EventBodies["settled"]).settled
-    // The owner's choice, when made after the last activity, wins over the week of quiet.
-    if (byHand !== undefined) return byHand ? "settled" : "active"
-    return Date.now() - lastActive(row) >= SETTLES_AFTER ? "settled" : "active"
+    // Settled by the owner after the last activity, it stays settled.
+    if (byHand === true) return "settled"
+    // Brought back by the owner, the week of quiet starts again then, as it would with activity.
+    const quietSince = byHand === false ? Math.max(lastActive(row), row.handTime!) : lastActive(row)
+    return Date.now() - quietSince >= SETTLES_AFTER ? "settled" : "active"
   }
 
   const summaryOf = (row: Row): SessionSummary => ({

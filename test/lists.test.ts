@@ -213,19 +213,20 @@ test("the owner can settle a session by hand, which is not activity in it, and i
   expect(stored(run.events).at(-1)).toMatchObject({ type: "settled", session: run.session, body: { settled: true } })
 })
 
-test("a session brought back by hand is active, however long it has been quiet, until it is settled again", async () => {
+test("a session brought back by hand, however long it had been quiet, is active for a week from then, as after activity, and then settles by itself", async () => {
   const { run } = await start([{ text: ["ok"] }])
   await say(run, "hi")
   await run.evie.send({ type: "settle_session", session: run.session, settled: true })
   setSystemTime(new Date(Date.now() + 30 * DAY))
 
   await run.evie.send({ type: "settle_session", session: run.session, settled: false })
+  const back = stored(run.events).at(-1)!.time
   const broughtBack = await stateOf(run)
-  setSystemTime(new Date(Date.now() + 30 * DAY))
-  const aMonthOn = await stateOf(run)
-  await run.evie.send({ type: "settle_session", session: run.session, settled: true })
+  setSystemTime(new Date(back + 7 * DAY - 1))
+  const nearlyAWeek = await stateOf(run)
+  setSystemTime(new Date(back + 7 * DAY))
 
-  expect([broughtBack, aMonthOn]).toEqual(["active", "active"])
+  expect([broughtBack, nearlyAWeek]).toEqual(["active", "active"])
   expect(await stateOf(run)).toBe("settled")
 })
 

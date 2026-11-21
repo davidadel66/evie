@@ -69,7 +69,8 @@ export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent
 // a question in it waits for the owner; `working` while a turn or a
 // background job of its own runs; `settled` when neither, and the owner set
 // it aside by hand after its last activity, or a week has passed without
-// any; `active` otherwise, idle but recent. It is worked out from the log
+// any, counted from when the owner last brought it back by hand if that was
+// later; `active` otherwise, idle but recent. It is worked out from the log
 // and from what is running each time it is asked for, and never stored.
 export type SessionState = "needs_you" | "working" | "active" | "settled"
 
@@ -461,7 +462,8 @@ export type Commands = {
   }
   // Sets a session aside, or with `settled: false` brings it back, as a
   // `settled` event in its log. It need not be open. What happens in it
-  // afterwards makes it active again.
+  // afterwards makes it active again. Brought back, it settles again after a
+  // week of quiet, as it would after activity.
   settle_session: {
     input: { session: string; settled: boolean }
     output: void
