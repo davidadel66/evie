@@ -18,6 +18,11 @@ export type Projects = {
   // with the newest event. Undefined when none has had a conversation. A
   // subagent's session is never the answer: it is not the owner's to carry on.
   lastSession(project: Project | null): string | undefined
+  // The project a session belongs to, null for a general session, or
+  // undefined when there is no session with that id. A session whose
+  // project is missing from the database, which only a damaged one holds,
+  // is an error, not a general session.
+  projectOf(session: string): Project | null | undefined
   // The session that started this one as a subagent, if one did.
   parentOf(session: string): string | undefined
   // What a subagent's session was started as.
@@ -38,8 +43,8 @@ export function createProjects(db: Database): Projects {
   const byId = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE id = ?")
   const insertProject = db.query("INSERT INTO project (id, name, folder, created) VALUES (?, ?, ?, ?)")
   const insertSession = db.query("INSERT INTO session (id, project, created, parent, agent, read_only) VALUES (?, ?, ?, ?, ?, ?)")
-  const parent = db.query<{ parent: string | null; agent: string | null; read_only: number | null }, [string]>(
-    "SELECT parent, agent, read_only FROM session WHERE id = ?",
+  const sessionRow = db.query<{ project: string | null; parent: string | null; agent: string | null; read_only: number | null }, [string]>(
+    "SELECT project, parent, agent, read_only FROM session WHERE id = ?",
   )
   // `IS` compares with null as well as with an id. Only a session the owner
   // has said something in counts: one that holds nothing but a question
@@ -82,12 +87,21 @@ export function createProjects(db: Database): Projects {
     },
 
     startedAs(session) {
-      const row = parent.get(session)
+      const row = sessionRow.get(session)
       return { ...(row?.agent != null && { agent: row.agent }), readOnly: row?.read_only === 1 }
     },
 
+    projectOf(session) {
+      const row = sessionRow.get(session)
+      if (!row) return undefined
+      if (row.project === null) return null
+      const project = byId.get(row.project)
+      if (!project) throw new Error(`The session "${session}" belongs to the project "${row.project}", which is missing from Evie's database.`)
+      return project
+    },
+
     parentOf(session) {
-      return parent.get(session)?.parent ?? undefined
+      return sessionRow.get(session)?.parent ?? undefined
     },
 
     lastSession(project) {

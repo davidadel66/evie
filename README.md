@@ -122,6 +122,18 @@ Type a message and press Enter.
 It reads the settings files when it starts, so a change to them takes
 effect when the server is started again.
 
+When the connection to the server drops, as when the laptop sleeps or the
+server is started again, `evie` says so and connects again by itself, then
+shows what it missed, without repeating anything. When it cannot catch up,
+as when the project's plugins fail to load as the server opens the session
+again, it says that some of what happened may be missing, and why. A
+message or command it had sent when the line dropped is sent again, and
+carried out once, however long the line was down, as long as the server
+kept running: the server remembers the replies to the last 200 commands of
+each device. Ctrl-C while it is trying stops it. When nobody is typing in
+it, as when its input comes from a pipe or a script, it gives up after two
+minutes of trying, says why, and exits with an error.
+
 Every connection has to bring a token, a long random secret, even on this
 computer: the server can run commands, and any web page open in a browser
 can try to reach it. The first time the server starts, it makes a token

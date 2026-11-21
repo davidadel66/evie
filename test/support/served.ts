@@ -13,6 +13,7 @@ export async function serveEvie(
     host?: string
     origins?: string[]
     recheckEvery?: number
+    keepaliveEvery?: number
     questions?: boolean
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
   } = {},
@@ -28,6 +29,7 @@ export async function serveEvie(
     port: 0,
     ...(options.origins && { origins: options.origins }),
     ...(options.recheckEvery !== undefined && { recheckEvery: options.recheckEvery }),
+    ...(options.keepaliveEvery !== undefined && { keepaliveEvery: options.keepaliveEvery }),
   })
   const clients: { close(): Promise<void> }[] = []
   return {
