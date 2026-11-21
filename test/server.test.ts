@@ -635,6 +635,44 @@ test("live events that reach the client before what it missed are held back, and
   for (const piece of ["Hel", "world", "lookup", "found it", "Do", "ne."]) expect(printed.split(piece)).toHaveLength(2)
 })
 
+test("a session opened just as the line dropped is caught up on from the moment its reply describes, though the reply comes from the server's memory", async () => {
+  const more = gate()
+  const rest = gate()
+  const { served, line, connect } = await serveOverALine([piecemealModel([["Work", "ing", more.opened, " and", rest.opened, " done."]])])
+  // Another client leaves the session with its reply part written.
+  const left = await served.connect()
+  const { session } = await left.send({ type: "open_session", folder: served.run.projectFolder })
+  const writing = written(served.run, "ing")
+  await left.send({ type: "send_message", session, text: "do the work" })
+  await writing
+  await left.close()
+
+  // The reply to the terminal's opening is lost, and the reply goes on while the line is down.
+  const lost = line.loseReplyTo("open_session")
+  const writingMore = written(served.run, " and")
+  let printed = ""
+  // The terminal reads no line until its session is open, so this goes on beside it.
+  const meanwhile = (async () => {
+    await lost
+    more.open()
+    await writingMore
+    line.mend()
+    while (!printed.includes(" and")) await Bun.sleep(1)
+    rest.open()
+  })()
+  await runTerminal({
+    evie: await connect(),
+    folder: served.run.projectFolder,
+    resume: true,
+    lines: (async function* () {
+      await meanwhile
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("[note] A turn is still running in this session. Ctrl-C stops it.\nWorking and done.\n")
+})
+
 test("a client closed while its line is down stops trying, and a command waiting for the line fails, saying so", async () => {
   const { served, line, connect } = await serveOverALine([scriptedProvider([]).plugin])
   let dropped = 0
