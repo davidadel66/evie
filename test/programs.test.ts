@@ -265,6 +265,19 @@ test("tokens are made, listed and taken back by name, each without touching the 
   expect(gone.stderr).toContain('There is no token named "laptop".')
 })
 
+test("a token command whose database cannot be opened stops, and says why in one line", async () => {
+  const home = await tempFolder("evie-home-")
+  // Stands for a database that cannot be opened.
+  await mkdir(join(home, "evie.db"))
+
+  const listed = await evie(["token", "list"], { home })
+
+  expect(listed.code).toBe(1)
+  expect(listed.stdout).toBe("")
+  expect(listed.stderr).toContain("database")
+  expect(listed.stderr.trim()).not.toContain("\n")
+})
+
 test("a token command waits while the server is writing to the database, instead of failing", async () => {
   const home = await tempFolder("evie-home-")
   openStore(join(home, "evie.db")).close()

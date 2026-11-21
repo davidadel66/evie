@@ -8,7 +8,7 @@ import { fail, print } from "./common.ts"
 // running.
 export async function token(env: Settings, [action, ...words]: string[]) {
   const name = words.join(" ").trim()
-  const tokens = await openTokens(dataFolder(env))
+  const tokens = await openTokens(dataFolder(env)).catch(fail)
 
   if (action === "add" && name !== "") {
     const made = tokens.add(name)
