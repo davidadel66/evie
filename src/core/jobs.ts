@@ -119,7 +119,7 @@ export function createJobs(options: {
       renameSync(`${file}.new`, file)
     })
   }
-  // What the tool's call is still waiting on right now, in each session, that could be moved.
+  // What each session's turn is waiting on right now that could be moved.
   const waiting = new Map<string, Set<() => void>>()
   const announce = (job: Job) => options.emit({ type: "job", session: job.session, job: { ...job } })
 
@@ -161,6 +161,19 @@ export function createJobs(options: {
     return { ...job }
   }
 
+  // The next number in a session, and a record for it. Ids count up within a
+  // session, so they are short enough to type. The output file is there
+  // from the start, empty, even for work that writes nothing.
+  function take(session: string, kind: string, title: string): JobRecord {
+    const id = String(nextId(session))
+    const outputFile = join(folderOf(session), jobFileName(id))
+    safely(() => {
+      mkdirSync(folderOf(session), { recursive: true })
+      writeFileSync(outputFile, "")
+    })
+    return { id, session, kind, title, started: Date.now(), outputFile, status: "running", told: false, keep: {} }
+  }
+
   // Removes every file of a job, and gives its number back when it is the last one taken.
   function release(record: JobRecord) {
     if (gone) return
@@ -171,30 +184,16 @@ export function createJobs(options: {
 
   return {
     start(session, work) {
-      // Ids count up within a session, so they are short enough to type.
-      const id = String(nextId(session))
-      const outputFile = join(folderOf(session), jobFileName(id))
-      // The file is there from the start, empty, even for work that writes nothing.
-      safely(() => {
-        mkdirSync(folderOf(session), { recursive: true })
-        writeFileSync(outputFile, "")
-      })
-      return track({ id, session, kind: work.kind, title: work.title, started: Date.now(), outputFile, status: "running", told: false, keep: { ...work.keep } }, work)
+      return track({ ...take(session, work.kind, work.title), keep: { ...work.keep } }, work)
     },
 
     reserve(session, { kind, title, call }) {
-      const id = String(nextId(session))
-      const outputFile = join(folderOf(session), jobFileName(id))
-      safely(() => {
-        mkdirSync(folderOf(session), { recursive: true })
-        writeFileSync(outputFile, "")
-      })
-      const record: JobRecord = { id, session, kind, title, started: Date.now(), outputFile, call, inCall: true, status: "running", told: false, keep: {} }
+      const record: JobRecord = { ...take(session, kind, title), call, inCall: true }
       save(record)
       let released = false
       return {
-        id,
-        outputFile,
+        id: record.id,
+        outputFile: record.outputFile,
         keep(data) {
           if (released) return
           Object.assign(record.keep, data)

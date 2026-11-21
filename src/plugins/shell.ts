@@ -270,7 +270,7 @@ function startCommand(command: string, folder: string, outputFile: string): Runn
       // Once the command has ended its process id may belong to something else.
       if (over || how !== "exited" || child.pid === undefined) return
       how = reason
-      stopGroup(child.pid)
+      stopGroup(child.pid, () => !over)
     },
   }
 }

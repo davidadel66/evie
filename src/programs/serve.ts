@@ -49,7 +49,7 @@ export async function serve(env: Settings) {
   // Only now, so that a second `evie serve`, which cannot have the port,
   // never touches the folder or the work of the one already running.
   const stopTidying = keepOutputTidy(join(home, "tool-output"))
-  void evie.resumeWork()
+  void evie.resumeWork().catch((cause) => console.error(`The work left by the last run could not be picked up: ${reason(cause)}`))
 
   // Stopped for good, with Ctrl-C or with the file that says so, Evie is
   // closed properly: turns are stopped, and so is any command left running
