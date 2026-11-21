@@ -1,4 +1,4 @@
-import type { Evie, EventBodies, ToolCall } from "../core/types.ts"
+import type { Evie, EventBodies, EvieEvent, ToolCall } from "../core/types.ts"
 
 export type TerminalOptions = {
   // The client interface. The terminal uses nothing else of Evie.
@@ -120,6 +120,8 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       .catch((cause) => line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`))
   }
 
+  // The ids of the questions that arrived while the session was opening.
+  const askedWhileOpening = new Set<string>()
   // Questions that have arrived and not been answered, the one on screen included.
   const waitingQuestions: NonNullable<typeof asked>[] = []
   // Queues a question, to be shown after any already waiting. One can reach
@@ -154,6 +156,41 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     const call = pendingCalls.shift()
     if (call) line(`⏺ ${call.name} ${shorten(call.arguments, 120)}`)
   }
+  const answered = (choice: string | null) => (choice === null ? "[not answered]" : `[answered] ${choice}`)
+
+  // Draws an event of the conversation, the same way whether it is happening
+  // now or is from earlier, read back when a session is continued. One from
+  // earlier did not stream, so Evie's reply is drawn whole. So are the
+  // owner's messages, marked as typed, and Evie's questions and how they were
+  // answered: as they happened, the owner's typing and the question waiting
+  // for an answer showed them.
+  const draw = (event: EvieEvent, earlier = false) => {
+    if (event.type === "assistant_delta") write(event.text)
+    if (earlier && event.type === "user_message") write(`${midLine ? "\n" : ""}${PROMPT}${event.body.text}\n`)
+    if (earlier && event.type === "question") line(`[question] ${event.body.text}`)
+    if (earlier && event.type === "answer") line(answered(event.body.choice))
+    // One line for each tool the model asks for, and one for what came
+    // back. The tools run one at a time, so each call is shown just before it
+    // runs, with its result straight after.
+    if (event.type === "assistant_message") {
+      if (earlier) write(event.body.text)
+      pendingCalls = [...(event.body.toolCalls ?? [])]
+      showNextCall()
+    }
+    if (event.type === "tool_result") {
+      const lines = event.body.text.split("\n")
+      const more = lines.length > 1 ? ` (+${lines.length - 1} more lines)` : ""
+      line(`  ⎿ ${shorten(lines[0] ?? "", 100)}${more}`)
+      showNextCall()
+    }
+    if (event.type === "compaction") line("[The conversation was getting long, so its earlier part is now a summary.]")
+    if (event.type === "turn_end") {
+      if (event.body.reason === "error") line(`[error] ${event.body.error ?? "The turn failed."}`)
+      if (event.body.reason === "cancelled") line("[cancelled]")
+      if (midLine) write("\n")
+    }
+  }
+
   // True from a Ctrl-C until the turn it cancelled has ended.
   let cancelling = false
   // The background jobs still running, and whether the owner has said to stop waiting for them.
@@ -199,11 +236,35 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     return work
   }
 
-  const stop = evie.subscribe((event) => {
+  // Draws the last page of a continued session's earlier conversation, up to
+  // where the session stood as it was opened: every event after that is
+  // drawn as it arrives. A question still waiting is left out, to be shown
+  // after it with its choices, to be answered. So is a question asked while
+  // the session was opening, with its answer: both were shown as they came.
+  async function showEarlier(session: string, upTo: number, waiting: EventBodies["question"][]) {
+    const page = await evie.send({ type: "read_history", session, before: upTo + 1 }).catch((cause) => {
+      line(`[note] The earlier conversation could not be shown: ${cause instanceof Error ? cause.message : String(cause)}`)
+    })
+    if (!page) return
+    const leftOut = new Set([...waiting.map((question) => question.id), ...askedWhileOpening])
+    for (const event of page.events) if (!((event.type === "question" || event.type === "answer") && leftOut.has(event.body.id))) draw(event, true)
+    // Events are numbered from 1, so those before the page are one fewer than its first one's number.
+    if (page.earlier) line(`[note] ${page.events[0]!.seq - 1} earlier events of this session are not shown.`)
+  }
+
+  // Events that arrive while the earlier conversation of a session continued
+  // is read, held back until it has been drawn, so that they come after it.
+  let held: EvieEvent[] | undefined
+  const stop = evie.subscribe((event) => (held ? held.push(event) : handle(event)))
+
+  function handle(event: EvieEvent) {
+    // Summaries are for a client that lists sessions, which this one does not.
+    if (event.type === "summary") return
     // Until the session is open, the only events that can be for this
     // terminal are a question asked while it opens, and its answer.
     const mine = session === undefined ? event.type === "question" || event.type === "answer" : event.session === session
     if (!mine) return
+    if (session === undefined && event.type === "question") askedWhileOpening.add(event.body.id)
     // More than one can be open at once, such as from two subagents. They
     // are shown one at a time, in the order they came. Where nobody types,
     // as from a pipe, a question is only shown: the session may belong to
@@ -221,7 +282,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       if (at !== -1) waitingQuestions.splice(at, 1)
       if (asked?.question.id === event.body.id) {
         asked = undefined
-        line(event.body.choice === null ? "[not answered]" : `[answered] ${event.body.choice}`)
+        line(answered(event.body.choice))
         showNextQuestion()
       }
     }
@@ -238,36 +299,19 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     // A message can also come from a command, such as one that starts a
     // skill, so the count never goes below nothing.
     if (event.type === "user_message") unanswered = Math.max(0, unanswered - 1)
-    if (event.type === "assistant_delta") write(event.text)
-    // One line for each tool the model asks for, and one for what came
-    // back. The tools run one at a time, so each call is shown just before it
-    // runs, with its result straight after.
-    if (event.type === "assistant_message") {
-      pendingCalls = [...(event.body.toolCalls ?? [])]
-      showNextCall()
-    }
-    if (event.type === "tool_result") {
-      const lines = event.body.text.split("\n")
-      const more = lines.length > 1 ? ` (+${lines.length - 1} more lines)` : ""
-      line(`  ⎿ ${shorten(lines[0] ?? "", 100)}${more}`)
-      showNextCall()
-    }
-    if (event.type === "compaction") line("[The conversation was getting long, so its earlier part is now a summary.]")
+    draw(event)
     if (event.type === "turn_end") {
-      if (event.body.reason === "error") line(`[error] ${event.body.error ?? "The turn failed."}`)
-      if (event.body.reason === "cancelled") line("[cancelled]")
       cancelling = false
-      if (midLine) write("\n")
       if (unanswered === 0) {
         idle = true
         showPrompt()
         whenIdle()
       }
     }
-  })
+  }
 
   // Opening can stop to ask a question, such as whether to trust the project.
-  const { project, resumed, notices, session: openedSession, turnRunning, openQuestions, replySoFar } = await answeringDuring(
+  const { project, resumed, notices, session: openedSession, turnRunning, openQuestions, replySoFar, lastSeq } = await answeringDuring(
     evie.send({
       type: "open_session",
       folder: options.folder,
@@ -279,6 +323,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     throw cause
   })
   session = openedSession
+  if (resumed) held = []
   for (const question of openQuestions) questionsOpen.set(question.id, openedSession)
   // The session can be one another terminal left running, with its turn
   // still going: the terminal waits for it, and Ctrl-C stops it.
@@ -303,6 +348,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       ? " · no earlier session here, so this is a new one"
       : ""
   write(`evie · ${project?.name ?? "general"}${about}\n`)
+  if (resumed) await showEarlier(openedSession, lastSeq, openQuestions)
   for (const notice of notices) write(`[note] ${notice}\n`)
   if (idle) showPrompt()
   else line("[note] A turn is still running in this session. Ctrl-C stops it.")
@@ -313,6 +359,10 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   // they can be answered. Not where nobody types, as from a pipe: a line
   // meant as a message must not be taken as an answer.
   if (options.questions !== false) for (const question of openQuestions) queueQuestion({ session: openedSession, question })
+  // What arrived meanwhile comes after.
+  const arrived = held ?? []
+  held = undefined
+  for (const event of arrived) handle(event)
   try {
     while (!ended) {
       const read = await nextLine()

@@ -6,6 +6,9 @@ import type { EventBodies, StoredEvent, StoredEventType } from "./types.ts"
 export type EventLog = {
   append<Type extends StoredEventType>(session: string, type: Type, body: EventBodies[Type]): StoredEvent
   events(session: string): StoredEvent[]
+  // Up to `limit` of a session's events, the latest of those numbered below
+  // `before`, in order, and whether there are earlier ones.
+  page(session: string, before: number, limit: number): { events: StoredEvent[]; earlier: boolean }
 }
 
 type EventRow = { session: string; seq: number; type: string; body: string; time: number }
@@ -18,6 +21,19 @@ export function createEventLog(db: Database): EventLog {
   const select = db.query<EventRow, [string]>(
     "SELECT session, seq, type, body, time FROM event WHERE session = ? ORDER BY seq",
   )
+
+  // Read back from `before` through the log's key, so only the page is read.
+  const selectBefore = db.query<EventRow, [string, number, number]>(
+    "SELECT session, seq, type, body, time FROM event WHERE session = ? AND seq < ? ORDER BY seq DESC LIMIT ?",
+  )
+  const fromRow = (row: EventRow) =>
+    ({
+      session: row.session,
+      seq: row.seq,
+      type: row.type,
+      body: JSON.parse(row.body),
+      time: row.time,
+    }) as StoredEvent
 
   const appendRow = db.transaction((session: string, type: string, body: string, time: number): number => {
     const seq = nextSeq.get(session)?.seq ?? 1
@@ -33,16 +49,13 @@ export function createEventLog(db: Database): EventLog {
     },
 
     events(session) {
-      return select.all(session).map(
-        (row) =>
-          ({
-            session: row.session,
-            seq: row.seq,
-            type: row.type,
-            body: JSON.parse(row.body),
-            time: row.time,
-          }) as StoredEvent,
-      )
+      return select.all(session).map(fromRow)
+    },
+
+    page(session, before, limit) {
+      // One more than the page is read, to tell whether there are earlier ones.
+      const rows = selectBefore.all(session, before, limit + 1)
+      return { events: rows.slice(0, limit).reverse().map(fromRow), earlier: rows.length > limit }
     },
   }
 }

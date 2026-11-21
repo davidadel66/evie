@@ -28,6 +28,9 @@ export type EventBodies = {
   // Something the model is told that neither it nor the owner said, such as
   // that the owner undid its changes. It is shown to the model in place.
   note: { text: string }
+  // The owner set the session aside, or with false brought it back. It is
+  // not activity in the session, and the model is not shown it.
+  settled: { settled: boolean }
 }
 
 // Something Evie asks the owner, with the answers to choose from. With
@@ -58,7 +61,30 @@ export type DeltaEvent = { type: "assistant_delta"; session: string; text: strin
 // A job started or ended. Sent to clients, never stored.
 export type JobEvent = { type: "job"; session: string; job: Job }
 
-export type EvieEvent = StoredEvent | DeltaEvent | JobEvent
+export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent
+
+// ---- Sessions in a list ---------------------------------------------------------
+
+// Where a session stands, as a list of sessions shows it: `needs_you` while
+// a question in it waits for the owner; `working` while a turn or a
+// background job of its own runs; `settled` when neither, and the owner set
+// it aside by hand after its last activity, or a week has passed without
+// any, counted from when the owner last brought it back by hand if that was
+// later; `active` otherwise, idle but recent. It is worked out from the log
+// and from what is running each time it is asked for, and never stored.
+export type SessionState = "needs_you" | "working" | "active" | "settled"
+
+// One line of a list of sessions. `project` is the id of its project, null
+// for a general session. `name` is the opening words of its first message,
+// null until it has one. `lastActive` is the time of its latest stored
+// event, settling aside, or when it was made if it has none.
+export type SessionSummary = { session: string; project: string | null; name: string | null; state: SessionState; lastActive: number }
+
+// A session's summary, sent when it is first listed and whenever its
+// state, name or latest activity changes, after the event that changed it.
+// Sent to clients, never stored. Evie's server sends it to every client,
+// whatever sessions it has open, so that each can keep a list of sessions.
+export type SummaryEvent = { type: "summary" } & SessionSummary
 
 // ---- The request to a model ---------------------------------------------------
 
@@ -434,13 +460,43 @@ export type Commands = {
     input: { session: string; name: string; args: string }
     output: { text: string }
   }
+  // Sets a session aside, or with `settled: false` brings it back, as a
+  // `settled` event in its log. It need not be open, but it is not settled
+  // while it is working or a question in it waits. What happens in it
+  // afterwards makes it active again. Brought back, it settles again after a
+  // week of quiet, as it would after activity.
+  settle_session: {
+    input: { session: string; settled: boolean }
+    output: void
+  }
+  // A page of a session's earlier conversation: its latest stored events
+  // numbered below `before`, or its latest of all without it, in order, and
+  // whether there are earlier ones, which a page with `before` set to the
+  // first one's number reads. A page is 50 events unless `limit` asks for
+  // another number, from 1 to 500. The session need not be open, and
+  // can be a subagent's.
+  read_history: {
+    input: { session: string; before?: number; limit?: number }
+    output: { events: StoredEvent[]; earlier: boolean }
+  }
+  // Every project, by name.
+  list_projects: {
+    input: Record<never, never>
+    output: Project[]
+  }
+  // Every session the owner has said something in, or that has asked a
+  // question, that is not a subagent's, the latest active first.
+  list_sessions: {
+    input: Record<never, never>
+    output: SessionSummary[]
+  }
 }
 
 export type Command = { [Type in keyof Commands]: { type: Type } & Commands[Type]["input"] }[keyof Commands]
 
 // Everything a client can do: send a command, and subscribe to events. Events
 // from every open session arrive on the one subscription, each naming its
-// session.
+// session, and so do the summaries of every session.
 export type Evie = {
   send<Sent extends Command>(command: Sent): Promise<Commands[Sent["type"]]["output"]>
   subscribe(listener: (event: EvieEvent) => void): () => void

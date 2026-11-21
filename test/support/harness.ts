@@ -18,6 +18,7 @@ export async function startEvie(
     projectFolder?: string
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
     compaction?: NonNullable<EvieOptions["compaction"]>
+    quietCheckEvery?: number
     // Open the session as a client that shows questions and answers them.
     questions?: boolean
   } = {},
@@ -34,6 +35,7 @@ export async function startEvie(
     plugins,
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
     ...(options.compaction && { compaction: options.compaction }),
+    ...(options.quietCheckEvery !== undefined && { quietCheckEvery: options.quietCheckEvery }),
   }).catch(async (error) => {
     await remove()
     throw error
