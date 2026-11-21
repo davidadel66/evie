@@ -134,6 +134,19 @@ test("installing again unloads the older service first, so the server restarts o
   expect(await readFile(plist, "utf8")).toContain(`<string>${CLI}</string>`)
 })
 
+test("installing again when the older service cannot be stopped leaves its file as it was", async () => {
+  const { computer, folder, plist } = await mac({ refuses: { bootout: { output: "Boot-out failed: 5: Input/output error" } } })
+  const env = { EVIE_HOME: join(folder, "data"), PATH: "/usr/bin" }
+  await runService(env, ["install"], computer)
+  const older = (await readFile(plist, "utf8")).replace(CLI, "/an/older/checkout/src/cli.ts")
+  await writeFile(plist, older)
+
+  const done = await runService(env, ["install"], computer)
+
+  expect(done).toEqual({ ok: false, text: "The running login service could not be stopped. launchctl said: Boot-out failed: 5: Input/output error" })
+  expect(await readFile(plist, "utf8")).toBe(older)
+})
+
 test("the service runs the Bun this terminal's path finds, as written there, so that it outlives an update to Bun", async () => {
   const { computer, folder, plist } = await mac()
   const tools = join(folder, "tools")

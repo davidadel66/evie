@@ -101,15 +101,16 @@ export async function runService(env: Settings, [action]: string[], computer: Co
   if (action === "install") {
     // The log is written in the data folder, which launchd does not make.
     await mkdir(home, { recursive: true })
-    await mkdir(computer.launchAgents, { recursive: true })
-    await writeFile(file, launchAgent(env, log))
     // One that is loaded already is running an older version: it is stopped
-    // and unloaded, so that the new file is the one that runs.
+    // and unloaded, so that the new file is the one that runs. Its file is
+    // replaced only once it is, so one that cannot be stopped is left whole.
     const older = (await loaded()) !== undefined
     if (older) {
       const stopped = await computer.launchctl(["bootout", `${domain}/${LABEL}`])
       if (stopped.code !== 0) return { ok: false, text: `The running login service could not be stopped. launchctl said: ${stopped.output}` }
     }
+    await mkdir(computer.launchAgents, { recursive: true })
+    await writeFile(file, launchAgent(env, log))
     // A name disabled earlier, as by an older program that used it, is never
     // loaded until it is enabled again; enabling one that is not disabled
     // changes nothing.
