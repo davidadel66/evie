@@ -14,6 +14,9 @@ export type ServerOptions = {
   // Where to listen. Port 0 takes any free port.
   host: string
   port: number
+  // Web pages, besides Evie's own address, that may connect, such as
+  // http://localhost:5173. Any other page a browser has open is refused.
+  origins?: readonly string[]
 }
 
 export type EvieServer = {
@@ -28,9 +31,22 @@ export type EvieServer = {
 type Connection = { token: string; device: string; unsubscribe: () => void }
 
 export function startServer(options: ServerOptions): EvieServer {
+  const listed = (options.origins ?? []).map((origin) => new URL(origin).origin)
+
   // Who is asking: the device whose token the request carries, or the
   // answer that refuses it.
-  function admit(request: Request): { token: string; device: string } | Response {
+  //
+  // Any web page open in a browser can try to reach a server on the same
+  // computer, and the browser sends it the cookie too. But a browser always
+  // says which page is asking, in `Origin`, so a page other than Evie's own
+  // or one the owner listed is refused. A client that is not a browser sends
+  // no `Origin`, and needs only its token.
+  function admit(request: Request, port: number): { token: string; device: string } | Response {
+    const origin = request.headers.get("origin")
+    const own = [`http://127.0.0.1:${port}`, `http://localhost:${port}`, `http://${options.host}:${port}`]
+    if (origin !== null && !own.includes(origin) && !listed.includes(origin)) {
+      return new Response("Connections from this page are not allowed.", { status: 403 })
+    }
     const token = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]
     const device = token === undefined ? undefined : options.tokens.check(token)
     if (token === undefined || device === undefined) return new Response("This needs a token that Evie accepts.", { status: 401 })
@@ -45,13 +61,13 @@ export function startServer(options: ServerOptions): EvieServer {
       if (path === PATHS.socket) {
         // Checked before the WebSocket opens, so a connection that is
         // refused never reaches the core.
-        const admitted = admit(request)
+        const admitted = admit(request, server.port!)
         if (admitted instanceof Response) return admitted
         if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {} } })) return undefined
         return new Response("Connect here with a WebSocket.", { status: 400 })
       }
       if (path === PATHS.check) {
-        const admitted = admit(request)
+        const admitted = admit(request, server.port!)
         return admitted instanceof Response ? admitted : new Response("This token is accepted.")
       }
       return new Response("Not found.", { status: 404 })

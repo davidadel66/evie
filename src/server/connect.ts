@@ -109,5 +109,6 @@ async function whyRefused(address: URL, token: string | undefined): Promise<stri
       `computer with \`evie token add <name>\`; this computer's own token is made again when \`evie serve\` restarts.`
     )
   }
+  if (status === 403) return `The Evie server at ${where} does not let this page connect. Add its address to "origins" under "server" in evie.json.`
   return `Could not connect to the Evie server at ${where} (it answered ${status}).`
 }

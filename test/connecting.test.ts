@@ -34,3 +34,36 @@ test("with no server running, the client says so and how to start one", async ()
 
   await expect(connect({ url, token: "any" })).rejects.toThrow(`No Evie server is running at ${url}. Start it with \`evie serve\`.`)
 })
+
+// Whether a WebSocket opens with the given headers, as a browser would send
+// them. A browser always says which page is connecting, in `Origin`.
+function opens(url: string, headers: Record<string, string>) {
+  return new Promise<boolean>((resolve) => {
+    const socket = new WebSocket(`${url.replace(/^http/, "ws")}/ws`, { headers })
+    socket.addEventListener("open", () => {
+      socket.close()
+      resolve(true)
+    })
+    socket.addEventListener("close", () => resolve(false))
+  })
+}
+
+test("a web page from another address is refused, even with a good token", async () => {
+  const { server, token } = await served()
+  const fromElsewhere = { Authorization: `Bearer ${token}`, Origin: "http://somewhere.example" }
+
+  expect(await opens(server.url, fromElsewhere)).toBe(false)
+  expect((await fetch(`${server.url}/ws`, { headers: fromElsewhere })).status).toBe(403)
+  expect((await fetch(`${server.url}/check`, { headers: fromElsewhere })).status).toBe(403)
+})
+
+test("Evie's own page, and a page the owner listed, are let in", async () => {
+  const { server, token } = await served({ origins: ["http://localhost:5173/"] })
+  const port = new URL(server.url).port
+
+  for (const origin of [`http://127.0.0.1:${port}`, `http://localhost:${port}`, "http://localhost:5173"]) {
+    expect(await opens(server.url, { Authorization: `Bearer ${token}`, Origin: origin })).toBe(true)
+  }
+  // A client that is not a browser sends no Origin, and needs only its token.
+  expect(await opens(server.url, { Authorization: `Bearer ${token}` })).toBe(true)
+})
