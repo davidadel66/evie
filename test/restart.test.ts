@@ -221,6 +221,45 @@ test("a job handed over while Evie closes for good is told as stopped, and not t
   expect(notes(second.run, session)).toEqual([])
 })
 
+test("a job whose plugin fails to pick it up is told so in whole sentences", async () => {
+  const { startAgain } = await machine()
+  // Work that cannot be picked up again: its plugin breaks when asked to.
+  const fragile: Plugin = {
+    name: "fragile",
+    setup(host) {
+      host.tools.add({
+        name: "start_work",
+        description: "Starts some work.",
+        inputSchema: { type: "object" },
+        run: async (_input, context) => {
+          context.jobs.start({ kind: "fragile", title: "fragile work", done: new Promise(() => {}), stop: () => {} })
+          return "Started."
+        },
+      })
+      host.jobKinds.add({
+        name: "fragile",
+        resume: () => {
+          throw new Error("its server has gone")
+        },
+      })
+    },
+  }
+  const first = await startAgain([{ text: [], calls: [{ name: "start_work", input: {} }] }, { text: ["Started."] }], [fragile])
+  await say(first.run, "start it")
+  const session = first.run.session
+  await first.restart()
+
+  const second = await startAgain([{ text: ["It is not known."] }], [fragile])
+  const woken = turnEnded(second.run, session)
+  await second.run.evie.resumeWork()
+  await woken
+
+  expect(notes(second.run, session)).toEqual([
+    "Background job 1 (fragile work) has ended, and how it ended is not known.\n\nEvie restarted while it was running, and could " +
+      "not pick it up again: its server has gone. Check whether it took effect, and run it again only if it did not.",
+  ])
+})
+
 // The process group of a command that prints its own first, once the whole line is there.
 async function groupOf(file: string) {
   while (!(await Bun.file(file).text().catch(() => "")).includes("\n")) await Bun.sleep(5)

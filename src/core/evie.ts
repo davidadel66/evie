@@ -503,7 +503,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     kind: record.kind,
     title: record.title,
     done: Promise.reject(
-      new EndNotKnown(`Evie restarted while it was running, and could not pick it up again: ${why} Check whether it took effect, and run it again only if it did not.`),
+      new EndNotKnown(`Evie restarted while it was running, and could not pick it up again: ${why.replace(/\.*$/, ".")} Check whether it took effect, and run it again only if it did not.`),
     ),
     stop: () => {},
   })
