@@ -118,6 +118,9 @@ Type a message and press Enter.
 ### The server and other devices
 
 `evie serve` listens on this computer only, at `http://127.0.0.1:3843`.
+It reads the settings files when it starts, so a change to them takes
+effect when the server is started again.
+
 Every connection has to bring a token, a long random secret, even on this
 computer: the server can run commands, and any web page open in a browser
 can try to reach it. The first time the server starts, it makes a token

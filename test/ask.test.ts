@@ -291,6 +291,23 @@ test("a trust question that is not answered is a no for now, and nothing is reme
   expect(await silent.globalFile()).toEqual({ model: "some/model", plugins: [] })
 })
 
+test("a project left undecided is asked about again when the next session opens in it, while Evie keeps running", async () => {
+  const project = await startWithProject()
+  // A client that cannot show the question, such as input from a pipe: the file is ignored for now.
+  const quietly = await project.run.evie.send({ type: "open_session", folder: project.folder })
+  expect(quietly.notices).toHaveLength(1)
+
+  const asked = nextEvent(project.run, "question")
+  const opening = project.run.evie.send({ type: "open_session", folder: project.folder, questions: true })
+  const question = await Promise.race([asked, opening.then(() => undefined)])
+
+  expect(question?.body.choices).toEqual(["Yes, trust this project", "No, ignore its settings file"])
+  await project.run.evie.send({ type: "answer_question", session: question!.session, id: question!.body.id, choice: "Yes, trust this project" })
+  const opened = await opening
+  expect(opened.notices).toEqual([])
+  expect(await project.offered(opened.session)).toEqual(["deploy"])
+})
+
 // ---- The terminal ---------------------------------------------------------------------------
 
 test("the terminal shows a question with numbered choices and takes the number typed as the answer", async () => {

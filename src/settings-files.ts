@@ -204,6 +204,9 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
             `This project has a settings file of its own, ${projectFile}, which was ignored because the project is ` +
               `not trusted. To use it, ${how}.`,
           ],
+          // On neither list: the owner has not decided, so this is for now,
+          // and the next session in the project asks again.
+          ...(!untrusted.has(project.folder) && { forNow: true as const }),
         }
       }
 

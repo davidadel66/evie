@@ -343,6 +343,10 @@ export type ProjectSettings = {
   disable?: readonly string[]
   // Things the owner should be told when a session opens in the project.
   notices?: readonly string[]
+  // These settings hold for now only, as when the owner has not yet said
+  // whether to trust the project. They are not kept: the next session that
+  // opens in the project asks for them again.
+  forNow?: true
 }
 
 // ---- Projects -----------------------------------------------------------------

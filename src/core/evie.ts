@@ -56,6 +56,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     // The project's own model and reply limit, when it sets them.
     model?: string
     maxTokens?: number
+    // Built from settings that hold for now only, so not kept.
+    forNow?: true
   }
   const scopes = new Map<string | null, Promise<Scope>>()
 
@@ -79,6 +81,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       notices: [...(own.notices ?? [])],
       ...(own.model !== undefined && { model: own.model }),
       ...(own.maxTokens !== undefined && { maxTokens: own.maxTokens }),
+      ...(own.forNow && { forNow: true as const }),
     }
   }
 
@@ -90,8 +93,14 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     if (!scope) {
       scope = buildScope(project, ask)
       scopes.set(key, scope)
-      // A set that failed to build is forgotten, so the next session tries again.
-      scope.catch(() => scopes.delete(key))
+      // A set that failed to build is forgotten, so the next session tries
+      // again. So is one built from settings that hold for now only, such as
+      // while the owner has not said whether to trust the project, so the
+      // next session asks again. A session already open keeps the set it has.
+      scope.then(
+        (built) => built.forNow && scopes.delete(key),
+        () => scopes.delete(key),
+      )
     }
     return scope
   }
@@ -127,7 +136,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   // Each session open in this process: its turn loop, its project and that
   // project's plugin host. `canAnswer` says whether its client shows questions.
   // `parent` is the session that started this one as a subagent.
-  type Open = { loop: Loop; project: Project | null; host: Host; model: string; canAnswer: boolean; parent?: string }
+  type Open = { loop: Loop; project: Project | null; host: Host; notices: string[]; model: string; canAnswer: boolean; parent?: string }
   const sessions = new Map<string, Open>()
 
   // Starts the turn loop of a session and lists the session as open. Used
@@ -137,7 +146,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     const { session, project, scope, model, parent } = given
     const as = parent === undefined ? { readOnly: false } : projects.startedAs(session)
     const maxTokens = scope.maxTokens ?? options.maxTokens
-    const opened: Open = { project, host: scope.host, model, canAnswer: given.canAnswer, ...(parent !== undefined && { parent }) } as Open
+    const opened: Open = { project, host: scope.host, notices: scope.notices, model, canAnswer: given.canAnswer, ...(parent !== undefined && { parent }) } as Open
     opened.loop = createLoop({
       session,
       project,
@@ -261,6 +270,17 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     const sessionId = () => (session ??= projects.createSession(project))
     const canAnswer = input.questions === true
 
+    // A session still open in this process, such as one another client left
+    // running, is joined as it is. Its project's plugins were set up when it
+    // opened, so nothing is set up or asked about again.
+    const alreadyOpen = () => (last === undefined ? undefined : sessions.get(last))
+    const join = (id: string, open: Open) => {
+      open.canAnswer ||= canAnswer
+      return { ...whereItIs(id), project, resumed: true, notices: open.notices }
+    }
+    const openBefore = alreadyOpen()
+    if (last !== undefined && openBefore && !closed) return join(last, openBefore)
+
     const scope = await scopeFor(project, (question) => questions.ask(sessionId(), question, { canAnswer }))
     if (closed) throw new Error("Evie was closed while the session was opening.")
     const { notices } = scope
@@ -273,11 +293,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
     // From here to the session being listed as open nothing waits, so two
     // clients continuing the same session at once cannot both start it.
-    const alreadyOpen = last === undefined ? undefined : sessions.get(last)
-    if (last !== undefined && alreadyOpen) {
-      alreadyOpen.canAnswer ||= canAnswer
-      return { ...whereItIs(last), project, resumed: true, notices }
-    }
+    const openAfter = alreadyOpen()
+    if (last !== undefined && openAfter) return join(last, openAfter)
     if (last !== undefined) settleUnfinished(last)
 
     const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer })
