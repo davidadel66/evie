@@ -411,7 +411,7 @@ test("a session's history is read a page at a time, back from its latest events,
   expect(whole).toEqual({ events: all, earlier: false })
 })
 
-test("a page of history is 50 events unless it asks for another number, and never more than 500", async () => {
+test("a page of history is 50 events unless it asks for another number, from 1 to 500", async () => {
   const { run } = await start([])
   await run.evie.close()
   // A long conversation, written straight into the log.
@@ -430,8 +430,10 @@ test("a page of history is 50 events unless it asks for another number, and neve
 
   expect(await seqs()).toEqual([50, 551, 600, true])
   expect(await seqs(10)).toEqual([10, 591, 600, true])
-  expect(await seqs(1000)).toEqual([500, 101, 600, true])
-  await expect(again.evie.send({ type: "read_history", session: run.session, limit: 0 })).rejects.toThrow("`limit` is how many events to read, a whole number from 1 to 500.")
+  expect(await seqs(500)).toEqual([500, 101, 600, true])
+  for (const limit of [0, 501, 2.5]) {
+    await expect(again.evie.send({ type: "read_history", session: run.session, limit })).rejects.toThrow("`limit` is how many events to read, a whole number from 1 to 500.")
+  }
 })
 
 test("the history of a session that is not open can be read, and so can a subagent's", async () => {

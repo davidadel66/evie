@@ -447,9 +447,9 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   function readHistory(input: Commands["read_history"]["input"]): Commands["read_history"]["output"] {
     if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
     const limit = input.limit ?? PAGE
-    if (!Number.isInteger(limit) || limit < 1) throw new Error(`\`limit\` is how many events to read, a whole number from 1 to ${LONGEST_PAGE}.`)
+    if (!Number.isInteger(limit) || limit < 1 || limit > LONGEST_PAGE) throw new Error(`\`limit\` is how many events to read, a whole number from 1 to ${LONGEST_PAGE}.`)
     if (input.before !== undefined && !Number.isInteger(input.before)) throw new Error("`before` is the number of an event, and the page holds the events before it.")
-    return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, Math.min(limit, LONGEST_PAGE))
+    return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, limit)
   }
 
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {

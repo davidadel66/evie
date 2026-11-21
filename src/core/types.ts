@@ -472,8 +472,8 @@ export type Commands = {
   // A page of a session's earlier conversation: its latest stored events
   // numbered below `before`, or its latest of all without it, in order, and
   // whether there are earlier ones, which a page with `before` set to the
-  // first one's number reads. A page is 50 events unless `limit` says
-  // otherwise, and never more than 500. The session need not be open, and
+  // first one's number reads. A page is 50 events unless `limit` asks for
+  // another number, from 1 to 500. The session need not be open, and
   // can be a subagent's.
   read_history: {
     input: { session: string; before?: number; limit?: number }
