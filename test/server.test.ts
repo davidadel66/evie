@@ -635,6 +635,26 @@ test("live events that reach the client before what it missed are held back, and
   for (const piece of ["Hel", "world", "lookup", "found it", "Do", "ne."]) expect(printed.split(piece)).toHaveLength(2)
 })
 
+test("a client closed while its line is down stops trying, and a command waiting for the line fails, saying so", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider([]).plugin])
+  let dropped = 0
+  let back = 0
+  const client = await connect({ onDrop: () => dropped++, onBack: () => back++ })
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  await line.cut()
+  while (dropped === 0) await Bun.sleep(1)
+  const waiting = client.send({ type: "cancel", session })
+
+  await client.close()
+  line.mend()
+
+  await expect(waiting).rejects.toThrow("The connection to Evie was lost before it answered: the connection was closed.")
+  await expect(client.send({ type: "cancel", session })).rejects.toThrow("Not connected to Evie: the connection was closed.")
+  // Past the first time it would have tried again.
+  await Bun.sleep(1500)
+  expect(back).toBe(0)
+})
+
 test("a message whose reply was lost when the line dropped is sent again once the line is back, and carried out once", async () => {
   const { served, line, connect } = await serveOverALine([scriptedProvider([{ text: ["Hi."] }]).plugin])
   const client = await connect()
