@@ -68,6 +68,9 @@ clients. Start the server and leave it running:
 evie serve
 ```
 
+On a Mac it can instead start by itself whenever you log in; see "Keeping
+the server running".
+
 Then, in another terminal, go to a project and start the client:
 
 ```sh
@@ -189,6 +192,38 @@ These work whether or not the server is running. On the other device, set
 or just `my-mac.local`, and `EVIE_TOKEN` to its token. The server listens on this computer only
 unless `host` under `server` in `evie.json` says otherwise, and the
 connection is not encrypted, so only change that on a network you trust.
+
+### Keeping the server running
+
+On a Mac, the server can run as a login service, so that it is there
+whenever you are logged in, and is started again if it stops:
+
+```sh
+evie service install     # starts `evie serve` now, and at every login
+evie service status      # whether it is installed and running, and where its log is
+evie service uninstall   # stops it, and no longer starts it at login
+```
+
+`install` writes a launch agent,
+`~/Library/LaunchAgents/com.evie.serve.plist`, for the copy of Evie it is
+run from, and starts it. Run it again after updating Evie: it stops the
+server that is running and starts it on the new version.
+
+The service is given the data folder (`EVIE_HOME`, when it is set) and the
+`PATH` of the terminal it was installed from, so that it finds Bun and the
+commands Evie runs; install it again after changing either. It runs the
+`bun` that path finds, by the name the path gives it, which a package
+manager usually keeps in place when it updates Bun; if Bun moves, install
+the service again. Nothing else from that terminal reaches it, so a key or
+setting exported there, such as `OPENROUTER_API_KEY` or `EVIE_MODEL`, has
+to be in the data folder's `.env` (or, for the model, in `evie.json`) for
+the service to have it. `install` names any it finds set only in the
+terminal, without showing their values. What the server prints goes to
+`serve.log` in the data folder.
+
+The service does not keep the Mac awake. While it sleeps, work in progress
+pauses, and `evie` catches up when it wakes. On other systems, run
+`evie serve` yourself for now.
 
 ### What Evie can do
 
@@ -672,12 +707,70 @@ The repository has two long-lived branches:
   brings, and is merged once its check passes. There is no separate build
   or deploy step: Evie runs from its source with Bun.
 - **Taking a release:** in a copy of the repository that follows `main`, pull
-  it (`git pull origin main`), then start `evie serve` again so the server
-  runs the new version.
+  it (`git pull origin main`), then start the server again so it runs the
+  new version: `evie service install` does that for the login service, or
+  stop and start `evie serve` if you run it by hand.
 
 To try work on `dev` without risking the copy you use every day, keep two
 copies of the repository side by side: one on `main` that you use, and one
-on `dev` that you try things in.
+on `dev` that you try things in, as the next section describes.
+
+### A development copy beside the everyday one
+
+To try a change without risking the Evie you use every day, run a second
+copy, from another checkout, with a data folder of its own. Its server,
+database, tool output, undo copies and settings are then its own, so a
+change to its tables cannot stop the everyday Evie from opening its own.
+
+A small launcher on your path sets the folder, such as
+`~/.local/bin/evie-dev`:
+
+```sh
+#!/bin/sh
+EVIE_HOME="$HOME/.evie-dev" exec bun /path/to/the/development/checkout/src/cli.ts "$@"
+```
+
+Make the folder once, with links to what you wrote in the everyday one, so
+that both use the same keys, instruction file, agents and skills. Give it a
+settings file of its own, with a model and a port for its server:
+
+```sh
+mkdir -p ~/.evie-dev
+for name in .env AGENTS.md agents skills; do ln -s ~/.evie/$name ~/.evie-dev/$name; done
+echo '{ "model": "a-name-from/openrouter.ai-models", "server": { "port": 3844 } }' > ~/.evie-dev/evie.json
+```
+
+Then `evie-dev serve` starts the development server, and `evie-dev` in
+another terminal connects to it. Start that server by hand rather than as a
+login service: a broken development build kept alive by one would be
+started again and again. There is one login service, so `evie-dev service
+install` refuses while the everyday one is installed, and `evie-dev service
+status` says whose it is. Anything written through the links, such as a new
+agent, is shared with the everyday Evie.
+
+### Made-up sessions
+
+`evie seed` fills an empty data folder with made-up projects and sessions,
+for trying out a development copy or a client without your real ones: a
+plain conversation, tool calls, a question answered, a background job, a
+subagent, and a compacted conversation. The projects are small git
+repositories beside the data folder, in a folder of the same name with
+`-seed` added, such as `~/.evie-dev-seed`: the tools are kept out of the
+data folder, so they could not work in a project inside it. Every session
+is made by running real turns through Evie against a scripted stand-in for
+the model, so it needs no key and costs nothing. None of them is waiting
+for an answer: Evie refuses a question still open when it stops, so a
+session shows as waiting for an answer only while a real question is open.
+
+```sh
+evie-dev seed
+```
+
+It fills only a folder that `EVIE_HOME` names, never the everyday
+`~/.evie`, and it refuses a data folder that already has sessions, so
+made-up sessions are never mixed in with real ones. It also refuses when
+one of its project folders is already there. To seed a folder again,
+remove `evie.db` and `server-token` from it, and its `-seed` folder, first.
 
 ## What comes next
 
