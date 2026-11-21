@@ -35,6 +35,11 @@ import type { Settings } from "./settings.ts"
 // A setting in the environment, `EVIE_MODEL` or `EVIE_MAX_TOKENS`, wins over
 // both files, so one run can be pointed at another model.
 //
+// `server` in the global file says where `evie serve` listens, and which web
+// pages besides its own may connect:
+//
+//   { "server": { "host": "127.0.0.1", "port": 3843, "origins": ["http://localhost:5173"] } }
+//
 // A plugin is a built-in one, named, or a file, given by its path. A plugin
 // file is code that runs with Evie's full permissions, and switching a plugin
 // off can remove a protection such as the guard. So a project's settings file
@@ -79,6 +84,7 @@ type SettingsFile = {
   // Projects the owner chose not to trust, so they are not asked again.
   untrusted?: string[]
   disable?: string[]
+  server?: { host?: string; port?: number; origins?: string[] }
 }
 
 // What a built-in plugin is made from: its options from the settings file,
@@ -260,6 +266,30 @@ function remember(file: string, list: "trust" | "untrusted", folder: string): Pr
   })
 }
 
+// ---- The server -----------------------------------------------------------------------------
+
+// Where the server listens, the web pages besides its own that may connect
+// to it, and the address a client on this computer connects to.
+export type ServerSettings = { host: string; port: number; origins: string[]; address: string }
+
+// The server listens on this computer only, unless the settings say
+// otherwise. 3843 spells EVIE on a phone's keypad.
+const SERVER_HOST = "127.0.0.1"
+const SERVER_PORT = 3843
+
+// The server's settings, from the global settings file. A client connects to
+// `EVIE_SERVER` from the environment when it is set, as another device
+// reaching this one does; an address given without `http://` is taken to
+// have it.
+export async function loadServerSettings(options: { env: Settings }): Promise<ServerSettings> {
+  const global = (await readSettingsFile(join(dataFolder(options.env), "evie.json"))) ?? {}
+  const host = global.server?.host ?? SERVER_HOST
+  const port = global.server?.port ?? SERVER_PORT
+  const given = options.env.EVIE_SERVER?.trim()
+  const address = given ? (given.includes("://") ? given : `http://${given}`) : `http://${host}:${port}`
+  return { host, port, origins: global.server?.origins ?? [], address }
+}
+
 // ---- Loading one plugin -----------------------------------------------------------------
 
 async function load(entry: Entry, baseFolder: string, context: Context): Promise<Plugin> {
@@ -349,7 +379,25 @@ async function readSettingsFile(file: string): Promise<SettingsFile | undefined>
     throw new Error(`In ${file}, "contextLimits" must give a whole number above zero for each model name.`)
   }
   checkPermissions(settings.permissions, file)
+  checkServer(settings.server, file)
   return settings as SettingsFile
+}
+
+function checkServer(value: unknown, file: string): void {
+  if (value === undefined) return
+  const wrong = (what: string): never => {
+    throw new Error(`In ${file}, "server" ${what}`)
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return wrong("must be an object.")
+  const { host, port, origins } = value as Record<string, unknown>
+  if (host !== undefined && (typeof host !== "string" || host.trim() === "")) wrong('has a "host" that is not an address, such as "127.0.0.1".')
+  if (port !== undefined && !(Number.isInteger(port) && (port as number) >= 1 && (port as number) <= 65535)) {
+    wrong('has a "port" that is not a whole number from 1 to 65535.')
+  }
+  const isPage = (origin: unknown) => typeof origin === "string" && URL.canParse(origin)
+  if (origins !== undefined && !(Array.isArray(origins) && origins.every(isPage))) {
+    wrong('has "origins" that are not a list of web addresses, such as "http://localhost:5173".')
+  }
 }
 
 function checkPermissions(value: unknown, file: string): void {

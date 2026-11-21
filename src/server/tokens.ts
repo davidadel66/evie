@@ -1,5 +1,7 @@
 import type { Database } from "bun:sqlite"
 import { createHash, randomBytes } from "node:crypto"
+import { readFile, rename, rm, writeFile } from "node:fs/promises"
+import { join } from "node:path"
 
 // The tokens devices connect to the server with: one long random secret per
 // device, each with a name such as "laptop" or "phone", so that one can be
@@ -35,4 +37,34 @@ export function createTokens(db: Database): Tokens {
     remove: (name) => db.run("DELETE FROM token WHERE name = ?", [name]).changes > 0,
     check: (secret) => db.query<{ name: string }, [string]>("SELECT name FROM token WHERE hash = ?").get(hash(secret))?.name,
   }
+}
+
+// This computer's own token, kept in a file in the data folder that only the
+// owner's user can read, so that `evie` here connects with nothing to set
+// up. It is no weaker than the keys in `.env` beside it: whatever can read
+// one can read the other.
+const OWN_NAME = "this computer"
+const OWN_FILE = "server-token"
+
+// Makes this computer's token when it has none that works: the file is
+// missing, or holds a token that was taken back. Called when the server
+// starts.
+export async function ensureOwnToken(tokens: Tokens, home: string): Promise<void> {
+  const saved = await readOwnToken(home)
+  if (saved !== undefined && tokens.check(saved) !== undefined) return
+  tokens.remove(OWN_NAME)
+  const made = tokens.add(OWN_NAME)
+  if ("refused" in made) throw new Error(made.refused)
+  // Written beside the file, readable by the owner only, and then moved into
+  // place, so the secret is never in a file others can read.
+  const file = join(home, OWN_FILE)
+  await rm(`${file}.new`, { force: true })
+  await writeFile(`${file}.new`, `${made.secret}\n`, { mode: 0o600 })
+  await rename(`${file}.new`, file)
+}
+
+// This computer's token, or undefined when the server has not made one yet.
+export async function readOwnToken(home: string): Promise<string | undefined> {
+  const text = await readFile(join(home, OWN_FILE), "utf8").catch(() => "")
+  return text.trim() || undefined
 }
