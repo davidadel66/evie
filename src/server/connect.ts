@@ -10,6 +10,9 @@ export type ConnectOptions = {
   // Called when the connection ends without `close` being called, such as
   // when the server stops, with why.
   onDrop?: (reason: string) => void
+  // Gives up connecting when it fires, such as at a time limit. It is used
+  // only while connecting: once the connection is open it changes nothing.
+  signal?: AbortSignal
 }
 
 // Why a connection could not be made. The message says it in words for the
@@ -18,7 +21,7 @@ export type ConnectOptions = {
 export class ConnectError extends Error {
   constructor(
     message: string,
-    readonly reason: "no server" | "token" | "page" | "other",
+    readonly reason: "no server" | "no answer" | "token" | "page" | "other",
   ) {
     super(message)
   }
@@ -28,7 +31,8 @@ export class ConnectError extends Error {
 // gives, `send`, `subscribe` and `close`, carried over one WebSocket. A
 // client written for the core works over it unchanged. Closing it closes
 // the connection only: the server, and anything running in it, carry on.
-// When the connection is refused, it rejects with a `ConnectError`.
+// When the connection is refused, or the signal fires before it opens, it
+// rejects with a `ConnectError`.
 export async function connect(options: ConnectOptions): Promise<Evie> {
   const address = new URL(options.url)
   const socketAddress = new URL(PATHS.socket, address)
@@ -36,11 +40,21 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   // A browser's WebSocket takes no headers, and has the cookie in place of the token.
   const headers = options.token === undefined ? undefined : { Authorization: `Bearer ${options.token}` }
   const socket = headers === undefined ? new WebSocket(socketAddress) : new WebSocket(socketAddress, { headers })
-  const opened = await new Promise<boolean>((resolve) => {
-    socket.addEventListener("open", () => resolve(true), { once: true })
-    socket.addEventListener("close", () => resolve(false), { once: true })
+  const { signal } = options
+  let giveUp = () => {}
+  const opened = await new Promise<"open" | "refused" | "gave up">((resolve) => {
+    giveUp = () => resolve("gave up")
+    socket.addEventListener("open", () => resolve("open"), { once: true })
+    socket.addEventListener("close", () => resolve("refused"), { once: true })
+    if (signal?.aborted) giveUp()
+    else signal?.addEventListener("abort", giveUp, { once: true })
   })
-  if (!opened) throw await whyRefused(address, headers)
+  signal?.removeEventListener("abort", giveUp)
+  if (opened === "gave up") {
+    socket.close()
+    throw noAnswer(address)
+  }
+  if (opened === "refused") throw await whyRefused(address, headers, signal)
 
   // Commands sent that have not been answered yet, by id.
   const waiting = new Map<string, { resolve(result: unknown): void; reject(error: Error): void }>()
@@ -105,16 +119,14 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 // A WebSocket that is refused tells the client only that it failed, so the
 // server is asked why over plain HTTP, and the answer is put in words for
 // the owner.
-async function whyRefused(address: URL, headers: Record<string, string> | undefined): Promise<ConnectError> {
+async function whyRefused(address: URL, headers: Record<string, string> | undefined, signal: AbortSignal | undefined): Promise<ConnectError> {
   const where = address.origin
   let status: number
   try {
-    const response = await fetch(new URL(PATHS.check, address), {
-      headers: headers ?? {},
-      signal: AbortSignal.timeout(5000),
-    })
+    const response = await fetch(new URL(PATHS.check, address), { headers: headers ?? {}, ...(signal && { signal }) })
     status = response.status
   } catch {
+    if (signal?.aborted) return noAnswer(address)
     return new ConnectError(`No Evie server is running at ${where}. Start it with \`evie serve\`.`, "no server")
   }
   if (status === 401 && headers === undefined) return new ConnectError(`The Evie server at ${where} asks for a token, and none was given.`, "token")
@@ -130,3 +142,7 @@ async function whyRefused(address: URL, headers: Record<string, string> | undefi
   }
   return new ConnectError(`Could not connect to the Evie server at ${where} (it answered ${status}).`, "other")
 }
+
+// Something took the connection but did not answer in time.
+const noAnswer = (address: URL) =>
+  new ConnectError(`No Evie server answered at ${address.origin}. Check the address, and that \`evie serve\` is running there.`, "no answer")

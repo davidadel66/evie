@@ -40,6 +40,26 @@ test("with no server running, the client says so and how to start one", async ()
   await expect(connect({ url, token: "any" })).rejects.toThrow(`No Evie server is running at ${url}. Start it with \`evie serve\`.`)
 })
 
+test("a client gives up on an address where nothing answers when its signal fires, closes its connection, and says so", async () => {
+  // Takes connections and never answers them.
+  let closed = false
+  const silent = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {}, close: () => void (closed = true) } })
+  cleanups.push(async () => silent.stop(true))
+  const url = `http://127.0.0.1:${silent.port}`
+
+  await expect(connect({ url, token: "any", signal: AbortSignal.timeout(100) })).rejects.toThrow(`No Evie server answered at ${url}.`)
+  while (!closed) await Bun.sleep(5)
+})
+
+test("a client's signal has no effect once its connection is open", async () => {
+  const served = await start()
+  const client = await served.connect({ signal: AbortSignal.timeout(20) })
+
+  await Bun.sleep(60)
+
+  expect((await client.send({ type: "open_session", folder: served.run.projectFolder })).session).toBeString()
+})
+
 // Whether a WebSocket opens with the given headers, as a browser would send
 // them. A browser always says which page is connecting, in `Origin`.
 function opens(url: string, headers: Record<string, string>) {

@@ -16,6 +16,9 @@ export async function terminal(env: Settings, args: string[]) {
   const evie = await connect({
     url: serverSettings.address,
     token,
+    // So that an address where something takes the connection but never
+    // answers does not leave the terminal waiting for ever.
+    signal: AbortSignal.timeout(10_000),
     // The server stopped, or took this device's token back. Connecting again
     // is not built yet, so the terminal says so and leaves.
     onDrop: (reason) => {
