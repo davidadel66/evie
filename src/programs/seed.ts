@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path"
 import { openStore } from "../core/store.ts"
 import { ask, createEvie, dataFolder, files, jobs, shell, subagents, type Plugin, type Settings } from "../index.ts"
 import { scriptedProvider, type ScriptedReply } from "../plugins/scripted.ts"
-import { fail, print, reason } from "./common.ts"
+import { fail, print } from "./common.ts"
 
 // `evie seed`: fills an empty data folder with made-up projects and
 // sessions, for trying out a development copy of Evie or a new client
@@ -63,7 +63,7 @@ type Session = {
 // and what the owner does in it. A subagent it starts has replies of its
 // own, since the two work at the same time; its requests are the ones that
 // open with its task.
-type Seeded = {
+export type Seeded = {
   kind: string
   project?: ProjectName
   replies: ScriptedReply[]
@@ -252,7 +252,7 @@ export async function seed(env: Settings) {
   }
 
   for (const [name, contents] of Object.entries(PROJECTS)) await makeProject(join(projectsFolder(home), name), contents, env).catch(fail)
-  for (const seeded of SESSIONS) await seedSession(env, home, seeded).catch((cause) => fail(`The made-up session "${seeded.kind}" did not go as scripted: ${reason(cause)}`))
+  for (const seeded of SESSIONS) await seedSession(env, home, seeded).catch(fail)
 
   const width = Math.max(...SESSIONS.map((seeded) => seeded.kind.length))
   print(
@@ -312,7 +312,10 @@ async function makeProject(folder: string, contents: Record<string, string>, set
 
 // Runs one made-up session on an Evie of its own, with its own script, and
 // closes it. Every turn must end as the script says, and use the whole of it.
-async function seedSession(env: Settings, home: string, seeded: Seeded) {
+// Each wait is given up on after `timeoutMs`, long enough for any script
+// that is going as it should, so that one that is not cannot hang the seed.
+export async function seedSession(env: Settings, home: string, seeded: Seeded, options: { timeoutMs?: number } = {}) {
+  const timeoutMs = options.timeoutMs ?? 60_000
   const own = scriptedProvider(seeded.replies)
   const subagent = seeded.subagent && { task: seeded.subagent.task, ...scriptedProvider(seeded.subagent.replies) }
   // One model for the session and its subagent, which answers each from its own script.
@@ -345,14 +348,23 @@ async function seedSession(env: Settings, home: string, seeded: Seeded) {
     if (event.type === "answer" && event.session === session) question = undefined
     for (const check of [...waiting]) check()
   })
-  // Settles once `done` holds.
-  const until = (done: () => boolean) =>
+  // Settles once `done` holds, or something has gone wrong, or the wait
+  // has gone on too long, which is something gone wrong. `what` is what
+  // it waits for, in words.
+  const until = (done: () => boolean, what: string) =>
     new Promise<void>((resolve) => {
-      const check = () => {
-        if (!done()) return
+      const finish = () => {
+        clearTimeout(timer)
         waiting.delete(check)
         resolve()
       }
+      const check = () => {
+        if (done() || problems.length > 0) finish()
+      }
+      const timer = setTimeout(() => {
+        problems.push(`it waited ${timeoutMs / 1000} seconds for ${what}.`)
+        finish()
+      }, timeoutMs)
       waiting.add(check)
       check()
     })
@@ -364,10 +376,10 @@ async function seedSession(env: Settings, home: string, seeded: Seeded) {
       async say(text, turns = 1) {
         const target = ended + turns
         await evie.send({ type: "send_message", session, text })
-        await until(() => ended >= target || problems.length > 0)
+        await until(() => ended >= target, turns === 1 ? "the turn to end" : `${turns} turns to end`)
       },
       async answer(choice) {
-        await until(() => question !== undefined || problems.length > 0)
+        await until(() => question !== undefined, "a question to answer")
         if (question !== undefined) await evie.send({ type: "answer_question", session, id: question, choice })
       },
       async compact() {
@@ -378,9 +390,10 @@ async function seedSession(env: Settings, home: string, seeded: Seeded) {
   } finally {
     await evie.close()
   }
-  if (problems.length > 0) throw new Error(problems.join(" "))
+  const wrong = (why: string) => new Error(`The made-up session "${seeded.kind}" did not go as scripted: ${why}`)
+  if (problems.length > 0) throw wrong(problems.join(" "))
   const allUsed = (who: string, asked: number, replies: number) => {
-    if (asked !== replies) throw new Error(`the ${who} model was asked ${asked} times, and its script has ${replies} replies.`)
+    if (asked !== replies) throw wrong(`the ${who} model was asked ${asked} times, and its script has ${replies} replies.`)
   }
   allUsed("session's", own.requests.length, seeded.replies.length)
   if (subagent) allUsed("subagent's", subagent.requests.length, seeded.subagent!.replies.length)

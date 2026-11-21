@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createGuard } from "../src/plugins/guard.ts"
+import { seedSession, type Seeded } from "../src/programs/seed.ts"
 
 // `evie seed`, run as the owner runs it: a process of its own, with a
 // temporary data folder, no key and nothing of the real environment but the path.
@@ -150,4 +151,14 @@ test("evie seed refuses when one of its project folders is already there, and le
   expect(seeded.stderr).toContain(`${taken} is already there, so nothing was seeded. Remove it first`)
   expect(await readFile(join(taken, "notes.txt"), "utf8")).toBe("someone's notes")
   expect(await readdir(`${home}-seed`)).toEqual(["recipe-box"])
+})
+
+test("a made-up session that never finishes is given up on in time, naming the session and what it waited for", async () => {
+  const home = await tempFolder()
+  // A model that never finishes its reply, so the turn never ends by itself.
+  const stuck: Seeded = { kind: "a turn that never ends", replies: [{ hang: true }], run: (session) => session.say("hello") }
+
+  const seeding = seedSession({ EVIE_HOME: home }, home, stuck, { timeoutMs: 100 })
+
+  await expect(seeding).rejects.toThrow('The made-up session "a turn that never ends" did not go as scripted: it waited 0.1 seconds for the turn to end')
 })
