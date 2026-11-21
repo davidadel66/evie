@@ -3,8 +3,8 @@ import { Database } from "bun:sqlite"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { runTerminal } from "../src/index.ts"
-import { say, startEvie } from "./support/harness.ts"
+import { runTerminal, type Plugin } from "../src/index.ts"
+import { say, startEvie, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
 const cleanups: (() => Promise<void>)[] = []
@@ -211,4 +211,125 @@ test("the terminal continues the last session when asked to, and says so", async
 
   expect(printed).toContain("continuing the last session")
   expect(second.model.requests[0]?.messages.map((message) => message.role)).toEqual(["user", "assistant", "user"])
+})
+
+// ---- Opening a session by its id ---------------------------------------------------------
+// How a client catches up after its connection dropped: it names the session
+// and the last event it saw, and is given what came after.
+
+test("a session opened by its id is joined as it is, with the events after the number given and the reply being written", async () => {
+  const { startAgain } = await machine()
+  const { run } = await startAgain([{ text: ["Paris."] }, { hang: true, text: ["Madr", "id is"] }])
+  await say(run, "What is the capital of France?")
+  const writing = new Promise<void>((resolve) => run.evie.subscribe((event) => event.type === "assistant_delta" && event.text === "id is" && resolve()))
+  await run.evie.send({ type: "send_message", session: run.session, text: "And of Spain?" })
+  await writing
+
+  // 1 turn_start, 2 user_message, 3 assistant_message "Paris.", then the rest.
+  const joined = await run.evie.send({ type: "open_session", session: run.session, after: 3 })
+
+  expect(joined).toMatchObject({ session: run.session, project: run.project, resumed: true, turnRunning: true, replySoFar: "Madrid is", lastSeq: 6 })
+  expect(joined.events?.map((event) => [event.seq, event.type])).toEqual([
+    [4, "turn_end"],
+    [5, "turn_start"],
+    [6, "user_message"],
+  ])
+})
+
+test("a session opened by its id that is not open, as after Evie was started again, is opened in its own project, with a turn cut off closed first", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain()
+  await say(first.run, "hi")
+  await first.quit()
+  // Evie was stopped in the middle of a tool: a turn that started, a reply
+  // asking for a tool, and nothing after.
+  const db = new Database(join(home, "evie.db"))
+  const add = (seq: number, type: string, body: unknown) =>
+    db.run("INSERT INTO event (session, seq, type, body, time) VALUES (?, ?, ?, ?, ?)", [first.run.session, seq, type, JSON.stringify(body), Date.now() + seq])
+  add(5, "turn_start", {})
+  add(6, "user_message", { text: "run the tool" })
+  add(7, "assistant_message", { text: "Running.", toolCalls: [{ id: "call_x", name: "work", arguments: "{}" }] })
+  db.close()
+
+  // Started again somewhere else, so nothing ties it to the session's project.
+  const second = await startAgain([{ text: ["Carrying on."] }])
+  const elsewhere = await second.run.evie.send({ type: "open_session" })
+  const reopened = await second.run.evie.send({ type: "open_session", session: first.run.session, after: 4 })
+  await say(second.run, "what happened?", reopened.session)
+
+  expect(elsewhere.project).toBeNull()
+  expect(reopened).toMatchObject({ session: first.run.session, project: first.run.project, resumed: true, turnRunning: false, lastSeq: 9 })
+  expect(reopened.events?.map((event) => [event.seq, event.type])).toEqual([
+    [5, "turn_start"],
+    [6, "user_message"],
+    [7, "assistant_message"],
+    [8, "tool_result"],
+    [9, "turn_end"],
+  ])
+  expect(second.model.requests[0]?.messages.at(-1)).toEqual({ role: "user", text: "what happened?" })
+})
+
+test("opening by id refuses a subagent's session, saying to open the one that started it, and refuses an id that is no session's", async () => {
+  const { home, projectFolder } = await machine()
+  // A tool that starts a subagent and gives back the id of its session.
+  const delegate: Plugin = {
+    name: "delegate",
+    setup(host) {
+      host.tools.add({ name: "delegate", description: "Starts a subagent.", inputSchema: { type: "object" }, run: (_input, context) => context.children.start({ text: "look around" }) })
+    },
+  }
+  const model = scriptedProvider([{ text: [], calls: [{ name: "delegate", input: {} }] }, { text: ["ok"] }, { text: ["ok"] }])
+  const run = await startEvie([model.plugin, delegate], { home, projectFolder })
+  cleanups.push(() => run.evie.close())
+  await say(run, "hand it over")
+  const child = stored(run.events).find((event) => event.type === "tool_result")!.body.text
+
+  await expect(run.evie.send({ type: "open_session", session: child })).rejects.toThrow(
+    `The session "${child}" is a subagent's. Open the session that started it, "${run.session}", instead.`,
+  )
+  await expect(run.evie.send({ type: "open_session", session: "no-such-session" })).rejects.toThrow('There is no session with the id "no-such-session".')
+})
+
+test("a session's id is given alone, without a folder, a project or `continue`, and a number to catch up from only with a session's id", async () => {
+  const { startAgain } = await machine()
+  const { run } = await startAgain()
+  const alone = "Open a session by its id alone, without a project, a folder or `continue`."
+
+  // The compiler refuses these, and the core refuses them from a client that is not type-checked.
+  // @ts-expect-error
+  await expect(run.evie.send({ type: "open_session", session: run.session, folder: run.projectFolder })).rejects.toThrow(alone)
+  // @ts-expect-error
+  await expect(run.evie.send({ type: "open_session", session: run.session, project: run.project!.id })).rejects.toThrow(alone)
+  // @ts-expect-error
+  await expect(run.evie.send({ type: "open_session", session: run.session, continue: true })).rejects.toThrow(alone)
+  // @ts-expect-error
+  await expect(run.evie.send({ type: "open_session", folder: run.projectFolder, after: 3 })).rejects.toThrow(
+    "`after` is the number of the last event seen in a session, so it is given only with `session`.",
+  )
+})
+
+test("a session's id may come with `continue: false`, which asks for nothing more, from a client that sends every field", async () => {
+  const { startAgain } = await machine()
+  const { run } = await startAgain()
+
+  // @ts-expect-error The compiler refuses it, but a client that is not type-checked can send it.
+  const opened = await run.evie.send({ type: "open_session", session: run.session, continue: false })
+
+  expect(opened).toMatchObject({ session: run.session, project: run.project, resumed: true })
+})
+
+test("a session whose project has gone from the database is refused when opened by its id, not opened as a general session", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain()
+  await say(first.run, "hi")
+  await first.quit()
+  const db = new Database(join(home, "evie.db"))
+  db.run("DELETE FROM project WHERE id = ?", [first.run.project!.id])
+  db.close()
+
+  const second = await startAgain()
+
+  await expect(second.run.evie.send({ type: "open_session", session: first.run.session })).rejects.toThrow(
+    `The session "${first.run.session}" belongs to the project "${first.run.project!.id}", which is missing from Evie's database.`,
+  )
 })

@@ -32,6 +32,9 @@ export type TerminalOptions = {
   // deal with their results, before leaving. For input that is not typed
   // by a person, where leaving would stop the jobs. Ctrl-C ends the wait.
   waitForJobs?: boolean
+  // Called once with a function that prints a note of the caller's own on a
+  // line of its own, such as that the connection to the server dropped.
+  onNote?: (show: (text: string) => void) => void
 }
 
 const PROMPT = "\n› "
@@ -63,6 +66,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   const showPrompt = () => write(options.prompt === false ? "\n" : PROMPT)
   // Prints text on a line of its own.
   const line = (text: string) => write(`${midLine ? "\n" : ""}${text}\n`)
+  options.onNote?.((text) => line(`[note] ${text}`))
 
   // The lines typed are read one at a time, here and nowhere else, because
   // a question can need a line before the session has finished opening.
@@ -263,7 +267,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   })
 
   // Opening can stop to ask a question, such as whether to trust the project.
-  const { project, resumed, notices, session: openedSession, turnRunning, openQuestions } = await answeringDuring(
+  const { project, resumed, notices, session: openedSession, turnRunning, openQuestions, replySoFar } = await answeringDuring(
     evie.send({
       type: "open_session",
       folder: options.folder,
@@ -302,6 +306,9 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   for (const notice of notices) write(`[note] ${notice}\n`)
   if (idle) showPrompt()
   else line("[note] A turn is still running in this session. Ctrl-C stops it.")
+  // The reply being written when the session was joined. The rest of it
+  // streams in after it.
+  write(replySoFar ?? "")
   // Questions it asked while no terminal was connected are shown now, so
   // they can be answered. Not where nobody types, as from a pipe: a line
   // meant as a message must not be taken as an answer.

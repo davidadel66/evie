@@ -165,14 +165,14 @@ test("a token taken back is refused from then on and its open connection is clos
   const served = await start({ recheckEvery: 20 })
   const phone = served.tokens.add("phone")
   if (!("secret" in phone)) throw new Error(phone.refused)
-  let dropped: string | undefined
-  await served.connect({ onDrop: (reason) => (dropped = reason) })
+  let ended: string | undefined
+  await served.connect({ onEnd: (cause) => (ended = cause.message) })
   const phoneClient = await served.connect({ token: phone.secret })
 
   expect(await takeBack(served.run.home, "test device")).toBe(true)
-  while (dropped === undefined) await Bun.sleep(5)
+  while (ended === undefined) await Bun.sleep(5)
 
-  expect(dropped).toBe("This device's token was taken back")
+  expect(ended).toBe("This device's token was taken back")
   await expect(served.connect()).rejects.toThrow("did not accept the token")
   const opened = await phoneClient.send({ type: "open_session", folder: served.run.projectFolder })
   expect(opened.session).toBeString()
@@ -205,19 +205,19 @@ test("a token check that fails, such as with the database busy, keeps the connec
     recheckEvery: 10,
   })
   cleanups.push(() => server.stop())
-  let dropped: string | undefined
-  const client = await connect({ url: server.url, token: served.token, onDrop: (reason) => (dropped = reason) })
+  let ended: string | undefined
+  const client = await connect({ url: server.url, token: served.token, onEnd: (cause) => (ended = cause.message) })
   cleanups.push(() => client.close())
 
   failing = true
   await Bun.sleep(50)
   expect((await client.send({ type: "open_session", folder: served.run.projectFolder })).session).toBeString()
-  expect(dropped).toBeUndefined()
+  expect(ended).toBeUndefined()
 
   failing = false
   await takeBack(served.run.home, "test device")
-  while (dropped === undefined) await Bun.sleep(5)
-  expect(dropped).toBe("This device's token was taken back")
+  while (ended === undefined) await Bun.sleep(5)
+  expect(ended).toBe("This device's token was taken back")
 })
 
 test("a token that cannot be checked, such as with the database busy, is answered with try again, not let in", async () => {

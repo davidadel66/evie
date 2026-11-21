@@ -56,6 +56,8 @@ const shellTool: Tool = {
     },
     required: ["command"],
   },
+  // Errors, test summaries and how the command ended come last.
+  longOutput: "end",
 
   async run(input, context) {
     const command = input.command as string

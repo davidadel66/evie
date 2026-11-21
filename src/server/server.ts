@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from "bun"
 import type { Commands, Evie, EvieEvent } from "../core/types.ts"
 import type { Tokens } from "./tokens.ts"
-import { hostInAddress, PATHS, type ClientMessage, type ServerMessage } from "./wire.ts"
+import { hostInAddress, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
 
 // Evie's server. It is a client of the core, as the terminal was: it uses
 // only `send` and `subscribe`, and carries them over one WebSocket to each
@@ -22,6 +22,10 @@ export type ServerOptions = {
   // sends nothing. A token is taken back by `evie token remove`, in another
   // process, so the server cannot be told; it looks.
   recheckEvery?: number
+  // How often, in milliseconds, each connection is sent a keepalive, so that
+  // its client can tell a quiet line from a dead one. Every 15 seconds when
+  // left out, which is for tests to change.
+  keepaliveEvery?: number
 }
 
 export type EvieServer = {
@@ -35,21 +39,69 @@ export type EvieServer = {
 type Admitted = { token: string; device: string }
 
 // What the server keeps for each connection: who it is, the sessions it has
-// opened, how many sessions it is opening right now, and the questions it was
-// sent while opening that are still waiting, by id, with their session.
-type Connection = Admitted & { unsubscribe: () => void; sessions: Set<string>; opening: number; openingQuestions: Map<string, string> }
+// opened, how many sessions it is opening right now, the sessions it is
+// opening by their id right now, and the questions it was sent while
+// opening that are still waiting, by id, with their session.
+type Connection = Admitted & {
+  unsubscribe: () => void
+  sessions: Set<string>
+  opening: number
+  joining: Map<string, Joining>
+  openingQuestions: Map<string, string>
+}
 
-// The close code for a connection whose token was taken back. Codes from
-// 4000 are the application's own.
-const TAKEN_BACK = 4001
+// A session a connection is opening by its id: how many opens of it are
+// under way, and its events, held back until they have all been answered.
+type Joining = { opens: number; held: EvieEvent[] }
+
+// The reply to a command a device sent, and whether it has settled.
+type Remembered = { reply: Promise<ServerMessage>; settled: boolean }
+
 // The browser's cookie that holds its token.
 const COOKIE = "evie_token"
+// How many of each device's commands the server remembers the replies to,
+// to answer the same command sent again after the line dropped. There is no
+// time limit, since a laptop can sleep all night with a command unanswered.
+// A device sends far fewer commands than this while its line is down, and
+// each reply kept is small.
+const REMEMBERED = 200
 
 export function startServer(options: ServerOptions): EvieServer {
   const connections = new Set<ServerWebSocket<Connection>>()
   // Every session a client has opened through this server, whether or not
   // that client is still connected.
   const openedHere = new Set<string>()
+  // The reply to each of the last commands a device has sent, by the
+  // command's id, oldest first. A client whose line dropped before the reply
+  // reached it sends the command again with the same id, and is answered
+  // from here, or waits for the first one to finish, so it is carried out once.
+  const replies = new Map<string, Map<string, Remembered>>()
+
+  function replyTo(device: string, message: ClientMessage): Promise<ServerMessage> {
+    const carryOut = () =>
+      options.evie.send(message.command).then(
+        (result): ServerMessage => ({ reply: message.id, result }),
+        (cause): ServerMessage => ({ reply: message.id, error: cause instanceof Error ? cause.message : String(cause) }),
+      )
+    // A command its client will never send again, such as its own catch-up
+    // after a drop, whose reply can be large, is not remembered.
+    if (message.once === true) return carryOut()
+    let sent = replies.get(device)
+    if (!sent) replies.set(device, (sent = new Map()))
+    const remembered = sent.get(message.id)
+    if (remembered) return remembered.reply
+    const kept: Remembered = { reply: carryOut(), settled: false }
+    void kept.reply.then(() => (kept.settled = true))
+    sent.set(message.id, kept)
+    // The oldest are forgotten first: a map keeps the order its keys were
+    // added in. One still being carried out is kept however old it is, so
+    // that the same command sent again waits for it, not carried out twice.
+    for (const [id, old] of sent) {
+      if (sent.size <= REMEMBERED) break
+      if (old.settled) sent.delete(id)
+    }
+    return kept.reply
+  }
 
   // Which events a connection is sent: those of the sessions it has opened.
   // A session can ask a question before it is open, such as whether to trust
@@ -59,9 +111,29 @@ export function startServer(options: ServerOptions): EvieServer {
   // other's opening question. That is accepted: it needs both to be opening
   // at once, and a question from a session already open never goes astray.
   function sentTo(connection: Connection, event: EvieEvent): boolean {
-    if (connection.sessions.has(event.session)) return true
+    if (connection.sessions.has(event.session) || connection.joining.has(event.session)) return true
     return connection.opening > 0 && (event.type === "question" || event.type === "answer") && !openedHere.has(event.session)
   }
+  // Holds back a connection's events for a session it is opening by its id,
+  // and gives back what sends them, to be called once the reply has been
+  // sent. When the connection opens the session again before the first open
+  // is answered, they are held until the last reply is sent, since the
+  // client can still be catching up from that one. When no open of it
+  // succeeded, and the connection does not have it open from before, they
+  // are dropped: the connection is sent nothing more of that session.
+  function holdBack(socket: ServerWebSocket<Connection>, session: string): () => void {
+    const joining = socket.data.joining.get(session) ?? { opens: 0, held: [] }
+    socket.data.joining.set(session, joining)
+    joining.opens += 1
+    return () => {
+      joining.opens -= 1
+      if (joining.opens > 0) return
+      socket.data.joining.delete(session)
+      if (!socket.data.sessions.has(session)) return
+      for (const event of joining.held) send(socket, { event })
+    }
+  }
+
   // Closes the connection if its token has been taken back, and says whether
   // it did. A check that fails, such as when the database stays busy past
   // its wait, cannot say the token was taken back: the connection is kept,
@@ -74,6 +146,8 @@ export function startServer(options: ServerOptions): EvieServer {
       return false
     }
     if (device !== undefined) return false
+    // None of its commands can be sent again, so their replies are forgotten.
+    replies.delete(socket.data.device)
     socket.close(TAKEN_BACK, "This device's token was taken back")
     return true
   }
@@ -142,7 +216,7 @@ export function startServer(options: ServerOptions): EvieServer {
         // refused never reaches the core.
         const admitted = admit(request, server.port!)
         if (admitted instanceof Response) return admitted
-        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {}, sessions: new Set(), opening: 0, openingQuestions: new Map() } })) return undefined
+        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {}, sessions: new Set(), opening: 0, joining: new Map(), openingQuestions: new Map() } })) return undefined
         return new Response("Connect here with a WebSocket.", { status: 400 })
       }
       if (path === PATHS.check) {
@@ -161,6 +235,10 @@ export function startServer(options: ServerOptions): EvieServer {
           // is kept track of until it is answered: see `close`.
           if (event.type === "question" && !socket.data.sessions.has(event.session)) socket.data.openingQuestions.set(event.body.id, event.session)
           if (event.type === "answer") socket.data.openingQuestions.delete(event.body.id)
+          // Held back while the session is being opened by its id: see
+          // `message`. Not a question or an answer, which opening it can wait on.
+          const joining = socket.data.joining.get(event.session)
+          if (joining && event.type !== "question" && event.type !== "answer") return void joining.held.push(event)
           send(socket, { event })
         })
       },
@@ -171,22 +249,31 @@ export function startServer(options: ServerOptions): EvieServer {
         // A client that sends something else has a bug. Its connection is
         // closed, saying why, and nothing else is touched.
         if (!message) return socket.close(1007, 'Each message must be JSON of the form { "id": ..., "command": ... }')
-        const opening = message.command.type === "open_session"
-        if (opening) socket.data.opening += 1
+        const open = message.command.type === "open_session" ? message.command : undefined
+        if (open) socket.data.opening += 1
+        // A session opened by its id, as a client catching up does, is sent
+        // to this connection from now, before the core reads where it
+        // stands, so that no event falls between that reading and the reply.
+        // Until the reply is sent its events are held back, so that what
+        // reaches the client before the reply is in it, and what comes after
+        // is new: see `holdBack`. A session already open is read in the same
+        // step it is handed the command. One opened again is read once it is
+        // open, so the events of its opening are in the reply and also come
+        // after it, and the client skips the second by their numbers.
+        const release = open?.session === undefined ? undefined : holdBack(socket, open.session)
         try {
-          const result = await options.evie.send(message.command)
+          const reply = await replyTo(socket.data.device, message)
           // The session opened is learned from the reply, before the reply is
           // sent, so the client is sent its events from then on.
-          if (opening) {
-            const { session } = result as Commands["open_session"]["output"]
+          if (open && "result" in reply) {
+            const { session } = reply.result as Commands["open_session"]["output"]
             socket.data.sessions.add(session)
             openedHere.add(session)
           }
-          send(socket, { reply: message.id, result })
-        } catch (cause) {
-          send(socket, { reply: message.id, error: cause instanceof Error ? cause.message : String(cause) })
+          send(socket, reply)
         } finally {
-          if (opening) socket.data.opening -= 1
+          if (open) socket.data.opening -= 1
+          release?.()
         }
       },
       close(socket) {
@@ -207,11 +294,15 @@ export function startServer(options: ServerOptions): EvieServer {
   const recheck = setInterval(() => {
     for (const socket of connections) closeIfTakenBack(socket)
   }, options.recheckEvery ?? 3000)
+  const keepalive = setInterval(() => {
+    for (const socket of connections) send(socket, { keepalive: true })
+  }, options.keepaliveEvery ?? 15_000)
 
   return {
     url: `http://${hostInAddress(options.host)}:${server.port}`,
     async stop() {
       clearInterval(recheck)
+      clearInterval(keepalive)
       await server.stop(true)
     },
   }

@@ -1,10 +1,14 @@
+import { join } from "node:path"
+import { keepOutputTidy } from "../core/tools.ts"
 import { createEvie, dataFolder, loadSettingsFiles, startServer, type EvieServer, type Settings } from "../index.ts"
 import { ensureOwnToken, openTokens } from "../server/tokens.ts"
 import { loadServerSettings } from "../settings-files.ts"
 import { EXIT_CODES, fail, print, reason, type StopSignal } from "./common.ts"
 
 // `evie serve`: starts the core with the plugins the settings list, and
-// serves it until told to stop. The first time, it makes this computer's token.
+// serves it until told to stop. The first time, it makes this computer's
+// token. Once it is listening, it tidies away tool output older than a week,
+// and again each day while it runs.
 export async function serve(env: Settings) {
   const settings = await loadSettingsFiles({ env }).catch(fail)
   const serverSettings = await loadServerSettings({ env }).catch(fail)
@@ -41,6 +45,9 @@ export async function serve(env: Settings) {
     )
   }
   print(`evie serve · listening on ${server.url}\n`)
+  // Only now, so that a second `evie serve`, which cannot have the port,
+  // never touches the folder of the one already running.
+  const stopTidying = keepOutputTidy(join(home, "tool-output"))
 
   // Being told to stop closes Evie properly: turns are stopped, and so is any
   // command left running in the background. Each step is taken even when the
@@ -51,6 +58,7 @@ export async function serve(env: Settings) {
     process.on(signal, () => {
       if (stopping) process.exit(code)
       stopping = true
+      stopTidying()
       void server
         .stop()
         .finally(() => evie.close())
