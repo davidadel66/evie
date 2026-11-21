@@ -91,6 +91,13 @@ const shellTool: Tool = {
     // restarts while this call waits, the next start finds the command.
     const reserved = context.jobs.reserve({ kind: "shell", title, call: context.callId })
     const running = startCommand(command, folder, reserved.outputFile)
+    if (running.unwritable !== undefined) {
+      reserved.release()
+      return (
+        `The command was not run: Evie could not write its output file in ${dirname(reserved.outputFile)}, the folder where ` +
+        `it keeps what tools print (${running.unwritable}). Tell the owner that this folder cannot be written to: no command can run until it can.`
+      )
+    }
     if (running.pid !== undefined) reserved.keep({ pid: running.pid, group: running.pid, processStart: startOf(running.pid) })
 
     // Hands the command over to carry on as a background job. From here it
@@ -246,6 +253,8 @@ const RUNS_THEN_RECORDS =
 
 type Running = {
   pid: number | undefined
+  // Why the output file could not be opened, when it could not, and so the command was not run.
+  unwritable?: string
   // Settles when the command has ended, however it ended.
   ended: Promise<Ended>
   // Stops the command and everything it started.
@@ -257,9 +266,15 @@ function startCommand(command: string, folder: string, outputFile: string): Runn
   // stops anything it started, and so that it does not end with Evie. It has
   // no input to read from, and what it prints, normally or as errors, goes
   // to the one file in the order it is printed.
+  let out: number
+  try {
+    out = openSync(outputFile, "a")
+  } catch (cause) {
+    const unwritable = (cause as { code?: string }).code ?? (cause instanceof Error ? cause.message : String(cause))
+    return { pid: undefined, unwritable, ended: Promise.resolve({ how: "failed", problem: unwritable }), stop: () => {} }
+  }
   let child: ReturnType<typeof spawn>
   try {
-    const out = openSync(outputFile, "a")
     try {
       child = spawn("/bin/sh", ["-c", RUNS_THEN_RECORDS, "sh", command, exitFileOf(outputFile)], { cwd: folder, stdio: ["ignore", out, out], detached: true })
     } finally {

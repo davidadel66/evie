@@ -544,8 +544,8 @@ test("evie serve stopped with Ctrl-C, by closing its terminal, or with a stop-fo
   for (const how of ["Ctrl-C", "terminal closed", "stop-for-good"] as const) {
     const port = await freePort()
     const { home, server, output } = await commandRunning(port, "ps -o pgid= -p $$ | tr -d ' '; sleep 30")
-    while ((await readFile(output, "utf8")).trim() === "") await Bun.sleep(5)
-    const group = Number((await readFile(output, "utf8")).trim())
+    while (!(await readFile(output, "utf8")).includes("\n")) await Bun.sleep(5)
+    const group = Number((await readFile(output, "utf8")).split("\n")[0])
     cleanups.push(async () => void (groupThere(group) && process.kill(-group, "SIGKILL")))
 
     if (how === "Ctrl-C") server.kill("SIGINT")

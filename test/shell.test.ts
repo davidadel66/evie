@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
-import { readFile, realpath } from "node:fs/promises"
+import { readFile, realpath, writeFile } from "node:fs/promises"
+import { join } from "node:path"
 import { homedir } from "node:os"
 import { shell } from "../src/index.ts"
 import { toolProject } from "./support/tool-project.ts"
@@ -96,4 +97,15 @@ test("a command that prints more than 5 MiB shows its end, and keeps all of it i
   const kept = /The full output is saved at (\S+)\. Read that file/.exec(result)![1]!
   expect((await readFile(kept, "utf8")).length).toBe(6000000 + "\nthe very end\n".length)
   expect(result).not.toContain("[Output cut:")
+})
+
+test("a command whose output file cannot be made is not run, and the result says the folder cannot be written and what to do", async () => {
+  const { run, call } = await project()
+  // Stands for a data folder where tool output cannot be written.
+  await writeFile(join(run.home, "tool-output"), "")
+
+  expect(await call("shell", { command: "echo hi" })).toBe(
+    `The command was not run: Evie could not write its output file in ${join(run.home, "tool-output", run.session)}, the folder ` +
+      "where it keeps what tools print (ENOTDIR). Tell the owner that this folder cannot be written to: no command can run until it can.",
+  )
 })

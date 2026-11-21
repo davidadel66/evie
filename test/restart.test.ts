@@ -129,10 +129,10 @@ const groupThere = (group: number) => {
   }
 }
 
-// The process group of a command that prints its own first.
+// The process group of a command that prints its own first, once the whole line is there.
 async function groupOf(file: string) {
-  while ((await Bun.file(file).text().catch(() => "")).trim() === "") await Bun.sleep(5)
-  return Number((await Bun.file(file).text()).trim().split("\n")[0])
+  while (!(await Bun.file(file).text().catch(() => "")).includes("\n")) await Bun.sleep(5)
+  return Number((await Bun.file(file).text()).split("\n")[0])
 }
 
 test("a background command that went while no Evie was running, without saying how it ended, is told as not known", async () => {
