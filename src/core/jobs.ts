@@ -28,6 +28,9 @@ export type Jobs = {
   adopt(record: JobRecord, work: JobWork, wake: boolean): Job
   // Gives back the number and files of work left that never became a job.
   release(record: JobRecord): void
+  // Records that the call waiting on work left has been told it carries
+  // on as a job, which it is from now on, whenever it is taken back.
+  handedOver(record: JobRecord): void
   // The session's jobs, oldest first, the ended ones included.
   list(session: string): Job[]
   // Stops a running job. `by` says who asked, which decides who is told.
@@ -251,6 +254,11 @@ export function createJobs(options: {
     },
 
     release,
+
+    handedOver(record) {
+      delete record.inCall
+      save(record)
+    },
 
     list(session) {
       return (all.get(session) ?? []).map(({ job }) => ({ ...job }))

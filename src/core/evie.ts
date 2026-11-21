@@ -60,6 +60,10 @@ const RESTARTED =
 const STOPPED_ASKING =
   "Evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the " +
   "question went unanswered. It is left for the owner to carry on."
+const STOPPED_UNTRUSTED =
+  "Evie's server restarted while you were working, and this project's own settings file has not yet been trusted or " +
+  "refused, so the turn was left stopped rather than carried on without it. The owner can carry on with `evie -c` in " +
+  "the project, which asks about the file first."
 const STOPPED_LONG_AGO =
   "Evie's server restarted while you were working, and this turn was cut off more than an hour ago, so it was left " +
   "stopped rather than carried on now. It is left for the owner to carry on."
@@ -386,6 +390,13 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const openAfter = alreadyOpen()
     if (last !== undefined && openAfter) return join(last, openAfter)
     const left = last !== undefined ? settleLeft(last) : undefined
+    // Picked up in a project whose own settings the owner has not yet
+    // trusted or refused, the session would run without them. It is left
+    // closed off instead, with its jobs left for when the owner opens it.
+    if (resuming && scope.forNow && left) {
+      if (left.cut !== "none") emit(log.append(sessionId(), "note", { text: STOPPED_UNTRUSTED }))
+      return { ...whereItIs(sessionId()), project, resumed: true, notices }
+    }
 
     const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer: canAnswer || resuming })
     if (left) carryOn(sessionId(), opened, left)
@@ -420,7 +431,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // `cut` says whether it ended with a turn cut off, and if so whether the
   // turn was waiting for an answer to a question.
   // `cutAt` is when the turn's last event was written.
-  type Left = { records: JobRecord[]; moved: Set<string>; cut: Cut; cutAt: number }
+  type Left = { records: JobRecord[]; cut: Cut; cutAt: number }
 
   // Closes off a turn the session's last run cut off, before the session
   // opens, so the conversation is one a model will accept again. A call that
@@ -429,7 +440,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   function settleLeft(session: string): Left {
     const records = jobs.left(session)
     const waitedOn = new Map(records.flatMap((record) => (record.inCall && record.call !== undefined ? [[record.call, record]] : [])))
-    const { given: moved, cut, cutAt } = settleUnfinished(session, (call) => {
+    const { given, cut, cutAt } = settleUnfinished(session, (call) => {
       const record = waitedOn.get(call)
       return (
         record &&
@@ -437,14 +448,16 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           `and its output is being written to ${record.outputFile}. You will be told when it ends, with its output. Do not start another copy while it is running.`
       )
     })
-    return { records, moved, cut, cutAt }
+    // Its call has been told so: it is a job now, whenever it is taken back.
+    for (const record of records) if (record.inCall && given.has(record.call ?? "")) jobs.handedOver(record)
+    return { records, cut, cutAt }
   }
 
   // Once the session is open: a turn cut off is carried on, with a note,
   // unless it was waiting for an answer or has been carried on too often;
   // its jobs left are taken back, each picked up by the plugin of its kind;
   // and a message that was waiting when Evie last stopped is answered.
-  function carryOn(session: string, opened: Open, { records, moved, cut, cutAt }: Left): void {
+  function carryOn(session: string, opened: Open, { records, cut, cutAt }: Left): void {
     // A turn left stopped is the owner's to carry on, so the jobs taken back
     // with it are told of when they end without starting a turn.
     let leftStopped = cut === "asking"
@@ -457,7 +470,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     }
     for (const record of records) {
       // Work a call was waiting on that ended within its call never became a job.
-      if (record.inCall && !moved.has(record.call ?? "")) {
+      if (record.inCall) {
         jobs.release(record)
         continue
       }

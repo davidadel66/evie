@@ -3,7 +3,7 @@ import { chmod, mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Database } from "bun:sqlite"
-import { ask, jobs, shell, subagents, type Chunk, type EvieEvent, type Plugin, type Request } from "../src/index.ts"
+import { ask, jobs, shell, subagents, type Chunk, type EvieEvent, type EvieOptions, type Plugin, type Request } from "../src/index.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -28,7 +28,7 @@ async function tempFolder(prefix: string) {
 async function machine() {
   const home = await tempFolder("evie-home-")
   const projectFolder = await tempFolder("evie-project-")
-  async function startAgain(script: ScriptedReply[] | Plugin, plugins: Plugin[] = [shell()], options: { questions?: boolean } = {}) {
+  async function startAgain(script: ScriptedReply[] | Plugin, plugins: Plugin[] = [shell()], options: { questions?: boolean; projectSettings?: NonNullable<EvieOptions["projectSettings"]> } = {}) {
     const model = Array.isArray(script) ? scriptedProvider(script) : { plugin: script, requests: [] }
     const run = await startEvie([model.plugin, ...plugins], { home, projectFolder, ...options })
     let closed = false
@@ -616,4 +616,31 @@ test("a job picked up in a session left stopped is told when it ends, without st
 
   expect(second.model.requests).toEqual([])
   expect(of(second.run, session).filter((event) => event.type === "turn_start")).toEqual([])
+})
+
+test("a session in a project not yet trusted or refused is closed off at start, not carried on without its settings, and opens again as the owner's", async () => {
+  const { startAgain } = await machine()
+  // A project with a settings file of its own, asked about each time until the owner says.
+  const projectSettings: NonNullable<EvieOptions["projectSettings"]> = async (_project, { ask }) =>
+    (await ask({ text: "Use this project's settings?", choices: ["yes", "no"] })) === "yes" ? { plugins: [] } : { plugins: [], forNow: true }
+  const first = await startAgain([{ hang: true }], [], { projectSettings })
+  const session = first.run.session
+  await untilAsked(first.run, first.model.requests, "find the bug")
+  await first.restart()
+
+  const second = await startAgain([], [], { projectSettings })
+  await second.run.evie.resumeWork()
+
+  expect(second.model.requests).toEqual([])
+  expect(notes(second.run, session)).toEqual([
+    "Evie's server restarted while you were working, and this project's own settings file has not yet been trusted or " +
+      "refused, so the turn was left stopped rather than carried on without it. The owner can carry on with `evie -c` in " +
+      "the project, which asks about the file first.",
+  ])
+  await expect(second.run.evie.send({ type: "cancel", session })).rejects.toThrow("is not open")
+  const asked = until(second.run, (event) => event.type === "question" && event.session === session)
+  const opening = second.run.evie.send({ type: "open_session", session, questions: true })
+  const question = await asked
+  await second.run.evie.send({ type: "answer_question", session, id: question.type === "question" ? question.body.id : "", choice: "yes" })
+  expect(await opening).toMatchObject({ session, turnRunning: false })
 })
