@@ -263,7 +263,13 @@ function startCommand(command: string, folder: string, outputFile: string): Runn
       resolve({ how, ...rest })
     }
     child.on("error", (problem) => finish({ how: "failed", problem: problem.message }))
-    child.on("close", (status, endedBy) => finish({ status, signal: endedBy }))
+    // It has ended once all it started has ended too, since what it left
+    // running in its group, such as a server it started with "&", is still
+    // its work, and still writes to its output file.
+    child.on("close", (status, endedBy) => {
+      const whenAllGone = () => (child.pid !== undefined && groupThere(child.pid) ? setTimeout(whenAllGone, ALL_GONE_EVERY) : finish({ status, signal: endedBy }))
+      whenAllGone()
+    })
   })
 
   return {
@@ -275,6 +281,20 @@ function startCommand(command: string, folder: string, outputFile: string): Runn
       how = reason
       stopGroup(child.pid, () => !over)
     },
+  }
+}
+
+// How often, in milliseconds, a command whose shell has ended is looked at
+// to tell whether what it started has ended too.
+const ALL_GONE_EVERY = 50
+
+// Whether any process of a group is there. Signal 0 only asks.
+function groupThere(group: number): boolean {
+  try {
+    process.kill(-group, 0)
+    return true
+  } catch (cause) {
+    return (cause as { code?: string }).code === "EPERM"
   }
 }
 

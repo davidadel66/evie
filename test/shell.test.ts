@@ -77,3 +77,12 @@ test("a command that dies by a signal says which signal", async () => {
 
   expect(await call("shell", { command: "echo before; kill -KILL $$" })).toBe("before\n\n[Ended by signal SIGKILL]")
 })
+
+test("a command that leaves something running is waited for until all it started has ended, and at its timeout moves to the background", async () => {
+  const { call } = await project()
+
+  expect(await call("shell", { command: "(sleep 0.4; echo late) & echo early" })).toBe("early\nlate")
+  expect(await call("shell", { command: "sleep 30 & echo early", timeout: 1 })).toStartWith(
+    "The command did not finish within 1 second, so it was moved to the background, where it is still running. It is background job 1,",
+  )
+})
