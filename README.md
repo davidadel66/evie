@@ -774,9 +774,6 @@ remove `evie.db` and `server-token` from it, and its `-seed` folder, first.
 
 ## What comes next
 
-- The rest of the server: lists of sessions and their history, the server
-  starting by itself when you log in, and a development copy beside the
-  stable one.
 - A web client, with a workspace for each project.
 - Scheduled work, memory, voice and a phone app.
 
