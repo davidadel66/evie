@@ -9,14 +9,17 @@ export type Projects = {
   // The project a folder belongs to, created the first time it is asked for.
   forFolder(folder: string): Project
   get(id: string): Project | undefined
+  // Every project, by name.
+  list(): Project[]
   // Starts a session in a project, or the general session when there is
   // none. With `parent`, it is a subagent of that session.
   // `as` says which named agent a subagent is, and whether it is held to
   // reading only.
   createSession(project: Project | null, parent?: string, as?: { agent?: string; readOnly?: boolean }): string
   // The session used last in a project, or the last general session: the one
-  // with the newest event. Undefined when none has had a conversation. A
-  // subagent's session is never the answer: it is not the owner's to carry on.
+  // with the newest event, settling aside. Undefined when none has had a
+  // conversation. A subagent's session is never the answer: it is not the
+  // owner's to carry on.
   lastSession(project: Project | null): string | undefined
   // The project a session belongs to, null for a general session, or
   // undefined when there is no session with that id. A session whose
@@ -41,6 +44,7 @@ function projectRoot(folder: string): string {
 export function createProjects(db: Database): Projects {
   const byFolder = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE folder = ?")
   const byId = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE id = ?")
+  const all = db.query<Project, []>("SELECT id, name, folder FROM project ORDER BY name COLLATE NOCASE, created")
   const insertProject = db.query("INSERT INTO project (id, name, folder, created) VALUES (?, ?, ?, ?)")
   const insertSession = db.query("INSERT INTO session (id, project, created, parent, agent, read_only) VALUES (?, ?, ?, ?, ?, ?)")
   const sessionRow = db.query<{ project: string | null; parent: string | null; agent: string | null; read_only: number | null }, [string]>(
@@ -48,9 +52,11 @@ export function createProjects(db: Database): Projects {
   )
   // `IS` compares with null as well as with an id. Only a session the owner
   // has said something in counts: one that holds nothing but a question
-  // asked while it was opening is not a conversation to carry on.
+  // asked while it was opening is not a conversation to carry on. Settling
+  // a session by hand, or bringing it back, is not using it, so it is left
+  // out, as it is from a session's activity.
   const lastUsed = db.query<{ id: string }, [string | null]>(
-    `SELECT session.id FROM session JOIN event ON event.session = session.id
+    `SELECT session.id FROM session JOIN event ON event.session = session.id AND event.type != 'settled'
      WHERE session.project IS ?
        AND session.parent IS NULL
        AND session.id IN (SELECT session FROM event WHERE type = 'user_message')
@@ -78,6 +84,10 @@ export function createProjects(db: Database): Projects {
 
     get(id) {
       return byId.get(id) ?? undefined
+    },
+
+    list() {
+      return all.all()
     },
 
     createSession(project, startedBy, as) {

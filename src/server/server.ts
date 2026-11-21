@@ -51,7 +51,8 @@ type Connection = Admitted & {
 }
 
 // A session a connection is opening by its id: how many opens of it are
-// under way, and its events, held back until they have all been answered.
+// under way, and its events and summaries, held back until they have all
+// been answered.
 type Joining = { opens: number; held: EvieEvent[] }
 
 // The reply to a command a device sent, and whether it has settled.
@@ -103,7 +104,8 @@ export function startServer(options: ServerOptions): EvieServer {
     return kept.reply
   }
 
-  // Which events a connection is sent: those of the sessions it has opened.
+  // Which events a connection is sent, summaries aside: those of the
+  // sessions it has opened.
   // A session can ask a question before it is open, such as whether to trust
   // its project, so while a connection is opening one it is also sent the
   // questions and answers of sessions that no client has opened here yet.
@@ -115,12 +117,13 @@ export function startServer(options: ServerOptions): EvieServer {
     return connection.opening > 0 && (event.type === "question" || event.type === "answer") && !openedHere.has(event.session)
   }
   // Holds back a connection's events for a session it is opening by its id,
-  // and gives back what sends them, to be called once the reply has been
-  // sent. When the connection opens the session again before the first open
-  // is answered, they are held until the last reply is sent, since the
-  // client can still be catching up from that one. When no open of it
-  // succeeded, and the connection does not have it open from before, they
-  // are dropped: the connection is sent nothing more of that session.
+  // and its summaries with them, and gives back what sends them, to be
+  // called once the reply has been sent. When the connection opens the
+  // session again before the first open is answered, they are held until the
+  // last reply is sent, since the client can still be catching up from that
+  // one. When no open of it succeeded, and the connection does not have it
+  // open from before, its events are dropped: the connection is sent nothing
+  // more of that session but its summaries, which go to every connection.
   function holdBack(socket: ServerWebSocket<Connection>, session: string): () => void {
     const joining = socket.data.joining.get(session) ?? { opens: 0, held: [] }
     socket.data.joining.set(session, joining)
@@ -129,8 +132,8 @@ export function startServer(options: ServerOptions): EvieServer {
       joining.opens -= 1
       if (joining.opens > 0) return
       socket.data.joining.delete(session)
-      if (!socket.data.sessions.has(session)) return
-      for (const event of joining.held) send(socket, { event })
+      const opened = socket.data.sessions.has(session)
+      for (const event of joining.held) if (opened || event.type === "summary") send(socket, { event })
     }
   }
 
@@ -230,6 +233,14 @@ export function startServer(options: ServerOptions): EvieServer {
       open(socket) {
         connections.add(socket)
         socket.data.unsubscribe = options.evie.subscribe((event) => {
+          // A session's summary goes to every connection, whatever it has
+          // open, so that each can keep a list of every session. While the
+          // session is being opened by its id it is held back with the
+          // session's events, so that it never comes before an event it tells of.
+          if (event.type === "summary") {
+            const joining = socket.data.joining.get(event.session)
+            return joining ? void joining.held.push(event) : send(socket, { event })
+          }
           if (!sentTo(socket.data, event)) return
           // A question sent while opening, from a session not yet opened here,
           // is kept track of until it is answered: see `close`.

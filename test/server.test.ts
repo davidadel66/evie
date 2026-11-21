@@ -245,7 +245,8 @@ test("a client opening a session is sent its own opening question, and never a q
 
   expect(trust).toMatchObject({ session: secondSession, body: { text: "Trust this project?" } })
   expect(deploy.body.text).toBe("Deploy to production?")
-  expect(secondSaw.filter((event) => event.session === firstSession)).toEqual([])
+  // Every client is sent each session's summary, but none of the events of a session it has not opened.
+  expect(secondSaw.filter((event) => event.session === firstSession && event.type !== "summary")).toEqual([])
 })
 
 test("a client that closes while its session is still opening has the opening question refused, so the project is not left half open", async () => {
@@ -297,10 +298,13 @@ test("a terminal that continues a session left running is shown the question wai
     write: (text) => (printed += text),
   })
 
+  // The earlier conversation comes first, without the question, which is shown after it with its choices.
   expect(printed).toContain(
-    "· continuing the last session\n[note] A turn is still running in this session. Ctrl-C stops it.\n[question] Deploy to production?\n",
+    "· continuing the last session\n\n› ship it\n⏺ deploy {}\n[note] A turn is still running in this session. Ctrl-C stops it.\n[question] Deploy to production?\n",
   )
-  expect(printed).toContain("[answered] Yes\n")
+  expect(printed.split("Deploy to production?")).toHaveLength(2)
+  // The tool's result, once the question is answered, comes under its call.
+  expect(printed).toContain("[answered] Yes\n  ⎿ deployed\nDone.\n")
   expect(printed).toContain("Done.")
   expect(deploy.answers).toEqual(["Yes"])
 })
@@ -1256,16 +1260,18 @@ test("an event stored after a catch-up has read the session, and a question afte
   ])
 })
 
-test("a session that fails to open by its id has the events held back meanwhile dropped, since the connection does not have it open", async () => {
+test("a session that fails to open by its id has the events held back meanwhile dropped, since the connection does not have it open, but not its summary, which every client is sent", async () => {
   const served = await serveEvie([scriptedProvider([]).plugin])
   cleanups.push(served.stop)
-  // Stands for the core sending an event of the session as it is asked to
-  // open it, and then failing, as when its project's plugins fail to load.
+  // Stands for the core sending an event of the session, and its summary,
+  // as it is asked to open it, and then failing, as when its project's
+  // plugins fail to load.
   const listeners = new Set<(event: EvieEvent) => void>()
   const core: Evie = {
     send(command) {
       if (command.type !== "open_session" || command.session === undefined) return served.run.evie.send(command)
       for (const listener of listeners) listener({ type: "assistant_delta", session: command.session, text: "not for this client" })
+      for (const listener of listeners) listener({ type: "summary", session: command.session, project: null, name: "hi", state: "active", lastActive: 1 })
       return Promise.reject(new Error("The project's plugins could not be loaded."))
     },
     subscribe(listener) {
@@ -1289,7 +1295,46 @@ test("a session that fails to open by its id has the events held back meanwhile 
   // Anything sent after the reply to the open comes before the reply to this.
   await own.send({ id: "after", command: { type: "cancel", session: served.run.session } })
 
-  expect(own.heard.map((message) => ("reply" in message ? message.reply : "event" in message ? message.event.type : "other"))).toEqual(["open", "after"])
+  expect(own.heard.map((message) => ("reply" in message ? message.reply : "event" in message ? message.event.type : "other"))).toEqual(["open", "summary", "after"])
+})
+
+test("a session opened by its id has its summaries held back with its events, and sent after them, so none comes before the event it tells of", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  // Stands for the core storing an event of the session, and sending the
+  // summary that event changed, after it has read where the session stands
+  // for the open and before the reply is sent.
+  const listeners = new Set<(event: EvieEvent) => void>()
+  const core: Evie = {
+    async send(command) {
+      const reply = await served.run.evie.send(command)
+      if (command.type === "open_session" && command.session !== undefined) {
+        const { lastSeq } = reply as { lastSeq: number }
+        const session = command.session
+        for (const listener of listeners) listener({ type: "turn_start", session, seq: lastSeq + 1, time: 1, body: {} })
+        for (const listener of listeners) listener({ type: "summary", session, project: null, name: "hi", state: "working", lastActive: 1 })
+      }
+      return reply
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+      const stop = served.run.evie.subscribe(listener)
+      return () => {
+        listeners.delete(listener)
+        stop()
+      }
+    },
+    close: () => served.run.evie.close(),
+  }
+  const server = startServer({ evie: core, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+  cleanups.push(() => server.stop())
+  const own = await ownLine(server.url, served.token)
+
+  await own.send({ id: "open", command: { type: "open_session", session: served.run.session, after: 0 } })
+  // Anything sent after the reply to the open comes before the reply to this.
+  await own.send({ id: "after", command: { type: "cancel", session: served.run.session } })
+
+  expect(own.heard.map((message) => ("reply" in message ? message.reply : "event" in message ? message.event.type : "other"))).toEqual(["open", "turn_start", "summary", "after"])
 })
 
 test("a background job the server stopped when it was stopped is shown as stopped once the client is back, and a pipe waiting for it leaves", async () => {
@@ -1467,4 +1512,68 @@ test("a catch-up that asks a question, has it answered, and then fails says that
   expect(printed.split("Said while the line was down.")).toHaveLength(2)
   expect(printed.split("[question] Trust this project?")).toHaveLength(4)
   expect(printed.split("[answered] Yes")).toHaveLength(4)
+})
+
+// ---- Lists and summaries ------------------------------------------------------------------
+
+test("a client that has opened no session is sent the summary of every session as it changes, and none of its events", async () => {
+  const served = await serveEvie([scriptedProvider([{ text: ["Hel", "lo."] }]).plugin])
+  cleanups.push(served.stop)
+  const watcher = await served.connect()
+  const watched: EvieEvent[] = []
+  watcher.subscribe((event) => watched.push(event))
+  const worker = await served.connect()
+
+  const { session } = await worker.send({ type: "open_session", folder: served.run.projectFolder })
+  const ended = nextEvent({ evie: worker }, "turn_end")
+  await worker.send({ type: "send_message", session, text: "hi" })
+  await ended
+  // The summary saying the turn has ended comes to the watcher on a line of its own.
+  const told = (): boolean => watched.some((event) => event.type === "summary" && event.session === session && event.state === "active" && event.name === "hi")
+  for (let waited = 0; !told() && waited < 2000; waited += 5) await Bun.sleep(5)
+
+  expect(watched.filter((event) => event.type !== "summary")).toEqual([])
+  const states = watched.flatMap((event) => (event.type === "summary" && event.session === session ? [event.state] : []))
+  expect(states.filter((state, at) => state !== states[at - 1])).toEqual(["working", "active"])
+})
+
+test("over the network, a client lists projects and sessions, settles a session, and reads its history a page at a time", async () => {
+  const served = await serveEvie([scriptedProvider([{ text: ["Paris."] }]).plugin])
+  cleanups.push(served.stop)
+  await say(served.run, "What is the capital of France?")
+  const client = await served.connect()
+  const { session, project } = served.run
+
+  const projects = await client.send({ type: "list_projects" })
+  await client.send({ type: "settle_session", session, settled: true })
+  const sessions = await client.send({ type: "list_sessions" })
+  const page = await client.send({ type: "read_history", session, limit: 2 })
+
+  const events = stored(served.run.events)
+  expect(projects).toEqual([project!])
+  expect(sessions).toEqual([{ session, project: project!.id, name: "What is the capital of France?", state: "settled", lastActive: events.at(-2)!.time }])
+  expect(page).toEqual({ events: events.slice(-2), earlier: true })
+  expect(page.events.map((event) => event.type)).toEqual(["turn_end", "settled"])
+})
+
+test("over the network, a command whose field is read as text is refused when that field is not text, and nothing is stored", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  const own = await ownLine(served.server.url, served.token)
+  const { session } = served.run
+  // Sent as a client that is not type-checked could send them.
+  const replyTo = async (id: string, command: Record<string, unknown>) => {
+    const reply = await own.send({ id, command: command as unknown as ClientMessage["command"] })
+    return "error" in reply ? reply.error : "carried out"
+  }
+
+  expect(await replyTo("message", { type: "send_message", session, text: 42 })).toBe("`text` is the message, and must be text.")
+  expect(await replyTo("model", { type: "set_model", session, model: ["some/model"] })).toBe("`model` is the name of a model, and must be text.")
+  expect(await replyTo("answer", { type: "answer_question", session, id: "q1", choice: 1 })).toBe("`choice` is the answer, and must be text, or null to refuse the question.")
+  expect(await replyTo("command", { type: "run_command", session, name: "compact", args: 3 })).toBe("`name` is the command's name and `args` what was typed after it, and both must be text.")
+  expect(await replyTo("command name", { type: "run_command", session, name: null, args: "" })).toBe("`name` is the command's name and `args` what was typed after it, and both must be text.")
+  expect(await replyTo("folder", { type: "open_session", folder: 7 })).toBe("`folder` is the path of a folder, and must be text.")
+  // A turn the message had started would be under way by now.
+  await Bun.sleep(20)
+  expect(stored(served.run.events)).toEqual([])
 })
