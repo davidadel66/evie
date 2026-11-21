@@ -17,8 +17,9 @@ export type Projects = {
   // reading only.
   createSession(project: Project | null, parent?: string, as?: { agent?: string; readOnly?: boolean }): string
   // The session used last in a project, or the last general session: the one
-  // with the newest event. Undefined when none has had a conversation. A
-  // subagent's session is never the answer: it is not the owner's to carry on.
+  // with the newest event, settling aside. Undefined when none has had a
+  // conversation. A subagent's session is never the answer: it is not the
+  // owner's to carry on.
   lastSession(project: Project | null): string | undefined
   // The project a session belongs to, null for a general session, or
   // undefined when there is no session with that id. A session whose
@@ -51,9 +52,11 @@ export function createProjects(db: Database): Projects {
   )
   // `IS` compares with null as well as with an id. Only a session the owner
   // has said something in counts: one that holds nothing but a question
-  // asked while it was opening is not a conversation to carry on.
+  // asked while it was opening is not a conversation to carry on. Settling
+  // a session by hand, or bringing it back, is not using it, so it is left
+  // out, as it is from a session's activity.
   const lastUsed = db.query<{ id: string }, [string | null]>(
-    `SELECT session.id FROM session JOIN event ON event.session = session.id
+    `SELECT session.id FROM session JOIN event ON event.session = session.id AND event.type != 'settled'
      WHERE session.project IS ?
        AND session.parent IS NULL
        AND session.id IN (SELECT session FROM event WHERE type = 'user_message')

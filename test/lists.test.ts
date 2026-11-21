@@ -239,6 +239,24 @@ test("anything that happens in a session settled by hand makes it active again",
   expect(await stateOf(run)).toBe("active")
 })
 
+test("settling an older session by hand, or bringing it back, does not make it the one --continue carries on", async () => {
+  const { run } = await start([{ text: ["ok"] }, { text: ["ok"] }])
+  await say(run, "the older one")
+  await Bun.sleep(5)
+  const newer = (await run.evie.send({ type: "open_session", folder: run.projectFolder })).session
+  await say(run, "the newer one", newer)
+  await Bun.sleep(5)
+  const continued = async () => (await run.evie.send({ type: "open_session", folder: run.projectFolder, continue: true })).session
+
+  await run.evie.send({ type: "settle_session", session: run.session, settled: true })
+  const afterSettling = await continued()
+  await Bun.sleep(5)
+  await run.evie.send({ type: "settle_session", session: run.session, settled: false })
+  const afterBringingBack = await continued()
+
+  expect([afterSettling, afterBringingBack]).toEqual([newer, newer])
+})
+
 test("only a session that is there, and not a subagent's, can be settled", async () => {
   const { run } = await start([{ text: [], calls: [{ name: "delegate", input: {} }] }, { text: ["ok"] }, { text: ["Started it."] }], [delegate])
   await say(run, "hand it over")
