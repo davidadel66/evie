@@ -130,6 +130,17 @@ test("an EVIE_SERVER that is not a server's address is refused, saying it is EVI
   expect((await serverSettings(undefined, { EVIE_SERVER: "my-mac.local:3843" })).address).toBe("http://my-mac.local:3843")
 })
 
+test("an EVIE_SERVER that names no port is taken to be on Evie's own port, 3843", async () => {
+  const address = async (given: string) => (await serverSettings(undefined, { EVIE_SERVER: given })).address
+  expect(await address("my-mac.local")).toBe("http://my-mac.local:3843")
+  expect(await address("http://my-mac.local")).toBe("http://my-mac.local:3843")
+  expect(await address("[::1]")).toBe("http://[::1]:3843")
+  // A port that is given is kept, even the one the address would have anyway.
+  expect(await address("http://my-mac.local:80")).toBe("http://my-mac.local:80")
+  // Evie serves plain HTTP only, so an https address is something in front of it, on the usual port.
+  expect(await address("https://evie.example")).toBe("https://evie.example")
+})
+
 test("a server listening on ::1 gives an address a client connects to, and lets its own page in", async () => {
   const served = await start({ host: "::1" })
 

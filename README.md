@@ -141,8 +141,8 @@ evie token remove phone   # takes it back; a device using it is disconnected
 ```
 
 These work whether or not the server is running. On the other device, set
-`EVIE_SERVER` to the server's address, such as `http://my-mac.local:3843`,
-and `EVIE_TOKEN` to its token. The server listens on this computer only
+`EVIE_SERVER` to the server's address, such as `http://my-mac.local:3843`
+or just `my-mac.local`, and `EVIE_TOKEN` to its token. The server listens on this computer only
 unless `host` under `server` in `evie.json` says otherwise, and the
 connection is not encrypted, so only change that on a network you trust.
 

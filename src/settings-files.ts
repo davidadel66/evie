@@ -284,7 +284,7 @@ const SERVER_PORT = 3843
 // The server's settings, from the global settings file. A client connects to
 // `EVIE_SERVER` from the environment when it is set, as another device
 // reaching this one does; an address given without `http://` is taken to
-// have it.
+// have it, and one that names no port is taken to be on Evie's own.
 export async function loadServerSettings(options: { env: Settings }): Promise<ServerSettings> {
   const global = (await readSettingsFile(join(dataFolder(options.env), "evie.json"))) ?? {}
   const host = global.server?.host ?? SERVER_HOST
@@ -292,12 +292,25 @@ export async function loadServerSettings(options: { env: Settings }): Promise<Se
   const given = options.env.EVIE_SERVER?.trim()
   const address = given ? (given.includes("://") ? given : `http://${given}`) : `http://${hostInAddress(host)}:${port}`
   if (given && !isWebAddress(address)) throw new Error(`EVIE_SERVER is not the address of a server, such as http://my-mac.local:3843: "${given}".`)
-  return { host, port, origins: global.server?.origins ?? [], address }
+  return { host, port, origins: global.server?.origins ?? [], address: withEviePort(address) }
 }
 
 // An address a browser or the client can reach: one that starts with
 // http:// or https://.
 const isWebAddress = (text: string) => URL.canParse(text) && ["http:", "https:"].includes(new URL(text).protocol)
+
+// An http address that names no port, such as http://my-mac.local, with
+// Evie's own port added. The port is looked for in the text, since a URL
+// drops one that is the scheme's own, such as :80. An https address is left
+// as it is: Evie serves plain HTTP, so https is something in front of it, on
+// the usual port.
+function withEviePort(address: string): string {
+  const url = new URL(address)
+  const authority = /^[^:]+:\/\/([^/?#]*)/.exec(address)?.[1]?.replace(/^.*@/, "") ?? ""
+  if (url.protocol !== "http:" || /:\d+$/.test(authority)) return address
+  url.port = String(SERVER_PORT)
+  return url.href.replace(/\/$/, "")
+}
 
 // ---- Loading one plugin -----------------------------------------------------------------
 
