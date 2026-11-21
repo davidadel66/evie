@@ -52,14 +52,13 @@ type OpenInput = Extract<Command, { type: "open_session" }>
 // What the server sends back for one command.
 type Reply = Extract<ServerMessage, { reply: string }>
 
-// A command waiting for its reply. The owner's are sent again on each new
-// line until they are answered. The client's own, to catch up on a session
-// (`own`), are sent once: when their line drops they are given up on, and
-// the client catches up afresh on the next line.
+// A command waiting for its reply: the owner's, sent again on each new line
+// until answered, or the client's own (`own`), to catch up on a session,
+// sent once and given up on when its line drops. `sentOn` is the line it
+// was last sent on; `resent` says it was sent on an earlier one too.
 type Waiting = {
   message: ClientMessage
   own: boolean
-  // The line it was last sent on, and whether it was sent on an earlier one too.
   sentOn?: WebSocket
   resent: boolean
   answer(reply: Reply): void
@@ -78,12 +77,9 @@ type Seen = {
   // For a session the owner opened: whether it was opened as one that
   // shows questions, so that it is opened the same way after a drop.
   openAs?: { questions: boolean }
-  // True while the client is catching up on the session. The server sends
-  // the reply after every event it describes, so what arrives meanwhile is
-  // in it, and is not passed on as it comes (see `onEvent`).
+  // True while the client is catching up on the session, and the numbers
+  // of the questions and answers passed on meanwhile: see `onEvent`.
   behind: boolean
-  // Questions and answers passed on as they came all the same while the
-  // client was catching up, since opening the session can wait on one.
   early: Set<number>
 }
 
@@ -111,7 +107,8 @@ const DEAD_AFTER = 45_000
 // last one it passed on, and the reply being written, and passes those on
 // before any live event, so nothing is shown twice and nothing is lost. A
 // command that was not answered when the line dropped is sent again with
-// the same id, which the server answers without carrying it out twice.
+// the same id, and the server, while it keeps running, answers it without
+// carrying it out twice: it remembers the ids in its memory.
 export async function connect(options: ConnectOptions): Promise<Evie> {
   const address = new URL(options.url)
   // A browser's WebSocket takes no headers, and has the cookie in place of the token.
@@ -130,8 +127,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   let closing: Promise<void> | undefined
   // Fires when the line as it is now has carried nothing for too long.
   let silence: ReturnType<typeof setTimeout> | undefined
-  // While the line is down: why it is, as the last try to connect again
-  // said, and when to give up.
+  // While the line is down: why, as the last try to connect again said, and when to give up.
   let down: ConnectError | undefined
   let giveUp: ReturnType<typeof setTimeout> | undefined
 
@@ -175,9 +171,10 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   }
 
   // A live event from the server. While the client catches up on its
-  // session it is in the reply on its way, with one exception: a question,
-  // or its answer, is passed on at once, since opening a session again can
-  // wait on one, such as whether to trust its project.
+  // session, the server sends the reply after every event it describes, so
+  // the event is in the reply on its way. A question or its answer is passed
+  // on at once all the same, since opening a session again can wait on one,
+  // such as whether to trust its project.
   function onEvent(event: EvieEvent) {
     const seen = sessions.get(event.session)
     if (!seen?.behind) return passOn(event)
@@ -193,19 +190,17 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     const seen = seenOf(output.session)
     // A session opened by its folder, or to continue, is sent to this line
     // only once the server has learned which it is, a moment after the core
-    // read where it stands, so what happened in that moment is caught up on.
+    // read where it stands, so that moment is caught up on.
     const unsent = !seen.openAs && input.session === undefined
     if (seen.openAs) seen.openAs.questions ||= input.questions === true
     else {
       seen.openAs = { questions: input.questions === true }
-      // The owner is given the reply so far with the reply, and shows it.
+      // The owner is given the reply so far, and the jobs, with the reply.
       seen.shown = output.replySoFar ?? ""
-      // Only what changes in the jobs from here is passed on.
       for (const job of output.jobs) seen.jobs.set(job.id, job)
-      // Its events are sent from the moment the reply describes, so for a
-      // session none of whose events have been passed on yet, the number in
-      // it is where the client stands. Once one has, such as the question
-      // whether to trust its project, none after it is ever skipped.
+      // The reply's number is where the client stands, unless it has passed
+      // on events of the session already, such as the question whether to
+      // trust its project: none after those is ever skipped.
       if (seen.seq === 0) seen.seq = output.lastSeq
     }
     // What lies between is caught up on, as when the server answers a
@@ -235,10 +230,10 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     // plugins fail to load, is left as it is: a command sent to it says why.
     if ("result" in reply) {
       const output = reply.result as Opened
-      // A job's events are not stored, so how each job stands is passed on
-      // where it has changed, first, since the turns missed are often Evie
-      // dealing with a job that ended. A job missing from the list ran in the
-      // server before it was started again, which stopped it.
+      // Jobs' events are not stored, so each job that has changed is passed
+      // on, first, since the turns missed are often Evie dealing with a job
+      // that ended. One missing from the list ran in the server before it
+      // was started again, which stopped it.
       const listed = new Set(output.jobs.map((job) => job.id))
       const gone = [...seen.jobs.values()].filter((job) => job.status === "running" && !listed.has(job.id))
       for (const job of gone) passOn({ type: "job", session, job: { ...job, status: "stopped", ended: Date.now() } })
@@ -270,8 +265,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   // Sends each of the owner's waiting commands that has not been sent on
   // the line as it is now, in the order they were sent. While rejoining,
   // only answers to questions go: opening a session again can wait on one,
-  // and anything else could reach a session before it is open again. The
-  // client's own commands are sent once, on their line, and never here.
+  // and anything else could reach a session before it is open again.
   function flush() {
     const line = socket
     if (!line) return
@@ -333,8 +327,8 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       waiting.delete(id)
       command.lose(reason)
     }
-    down = new ConnectError(`The connection to the Evie server at ${address.origin} dropped: ${reason}.`, "other")
-    if (options.giveUpAfter !== undefined) giveUp = setTimeout(() => down && end(down), options.giveUpAfter)
+    const why = (down = new ConnectError(`The connection to the Evie server at ${address.origin} dropped: ${reason}.`, "other"))
+    if (options.giveUpAfter !== undefined) giveUp = setTimeout(() => end(down ?? why), options.giveUpAfter)
     options.onDrop?.(reason)
     void tryAgain()
   }
@@ -380,12 +374,19 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     waiting.clear()
   }
 
-  function end(cause: ConnectError) {
-    if (stopping.signal.aborted) return
-    stopping.abort(cause.message)
-    socket = undefined
+  // Stops the client for good, saying why, and hands back the line it was on.
+  function stop(why: string): WebSocket | undefined {
+    stopping.abort(why)
     clearTimeout(silence)
     clearTimeout(giveUp)
+    const line = socket
+    socket = undefined
+    return line
+  }
+
+  function end(cause: ConnectError) {
+    if (stopping.signal.aborted) return
+    stop(cause.message)
     loseAll(cause.message)
     options.onEnd?.(cause)
   }
@@ -420,11 +421,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     },
     close() {
       closing ??= (async () => {
-        stopping.abort("the connection was closed")
-        const line = socket
-        socket = undefined
-        clearTimeout(silence)
-        clearTimeout(giveUp)
+        const line = stop("the connection was closed")
         if (line && line.readyState !== WebSocket.CLOSED) {
           await new Promise<void>((resolve) => {
             line.addEventListener("close", () => resolve(), { once: true })

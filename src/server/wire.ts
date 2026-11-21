@@ -4,9 +4,11 @@ import type { Command, EvieEvent } from "../core/types.ts"
 // one of these, as JSON text. They carry the core's own commands and events
 // unchanged, so a client works the same over the network as in one process.
 
-// From a client: a command, with an id the client chose. The reply to it
-// names the same id. A command sent again with the same id, after the line
-// dropped, is answered with the first one's reply, not carried out again.
+// From a client: a command, with an id the client chose, which must be
+// unique for its device, such as a random UUID. The reply to it names the
+// same id. A command sent again with the same id, after the line dropped, is
+// answered with the first one's reply, not carried out again, while the
+// server keeps running: it remembers the ids in its memory, for ten minutes.
 export type ClientMessage = { id: string; command: Command }
 
 // From the server: the reply to one command, with what the command returned,
