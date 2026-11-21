@@ -46,6 +46,15 @@ export const MIGRATIONS: Migration[] = [
     db.run("ALTER TABLE session ADD COLUMN agent TEXT")
     db.run("ALTER TABLE session ADD COLUMN read_only INTEGER")
   },
+  // 4: the tokens devices connect to the server with. Only a hash of each
+  // secret is kept, so a copy of the database lets no one in.
+  (db) => {
+    db.run(`CREATE TABLE token (
+      name TEXT PRIMARY KEY,
+      hash TEXT NOT NULL UNIQUE,
+      created INTEGER NOT NULL
+    )`)
+  },
 ]
 
 // Opens Evie's one database file and brings its tables up to date.
