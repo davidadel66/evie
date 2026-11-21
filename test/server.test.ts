@@ -1260,16 +1260,18 @@ test("an event stored after a catch-up has read the session, and a question afte
   ])
 })
 
-test("a session that fails to open by its id has the events held back meanwhile dropped, since the connection does not have it open", async () => {
+test("a session that fails to open by its id has the events held back meanwhile dropped, since the connection does not have it open, but not its summary, which every client is sent", async () => {
   const served = await serveEvie([scriptedProvider([]).plugin])
   cleanups.push(served.stop)
-  // Stands for the core sending an event of the session as it is asked to
-  // open it, and then failing, as when its project's plugins fail to load.
+  // Stands for the core sending an event of the session, and its summary,
+  // as it is asked to open it, and then failing, as when its project's
+  // plugins fail to load.
   const listeners = new Set<(event: EvieEvent) => void>()
   const core: Evie = {
     send(command) {
       if (command.type !== "open_session" || command.session === undefined) return served.run.evie.send(command)
       for (const listener of listeners) listener({ type: "assistant_delta", session: command.session, text: "not for this client" })
+      for (const listener of listeners) listener({ type: "summary", session: command.session, project: null, name: "hi", state: "active", lastActive: 1 })
       return Promise.reject(new Error("The project's plugins could not be loaded."))
     },
     subscribe(listener) {
@@ -1293,7 +1295,46 @@ test("a session that fails to open by its id has the events held back meanwhile 
   // Anything sent after the reply to the open comes before the reply to this.
   await own.send({ id: "after", command: { type: "cancel", session: served.run.session } })
 
-  expect(own.heard.map((message) => ("reply" in message ? message.reply : "event" in message ? message.event.type : "other"))).toEqual(["open", "after"])
+  expect(own.heard.map((message) => ("reply" in message ? message.reply : "event" in message ? message.event.type : "other"))).toEqual(["open", "summary", "after"])
+})
+
+test("a session opened by its id has its summaries held back with its events, and sent after them, so none comes before the event it tells of", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  // Stands for the core storing an event of the session, and sending the
+  // summary that event changed, after it has read where the session stands
+  // for the open and before the reply is sent.
+  const listeners = new Set<(event: EvieEvent) => void>()
+  const core: Evie = {
+    async send(command) {
+      const reply = await served.run.evie.send(command)
+      if (command.type === "open_session" && command.session !== undefined) {
+        const { lastSeq } = reply as { lastSeq: number }
+        const session = command.session
+        for (const listener of listeners) listener({ type: "turn_start", session, seq: lastSeq + 1, time: 1, body: {} })
+        for (const listener of listeners) listener({ type: "summary", session, project: null, name: "hi", state: "working", lastActive: 1 })
+      }
+      return reply
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+      const stop = served.run.evie.subscribe(listener)
+      return () => {
+        listeners.delete(listener)
+        stop()
+      }
+    },
+    close: () => served.run.evie.close(),
+  }
+  const server = startServer({ evie: core, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+  cleanups.push(() => server.stop())
+  const own = await ownLine(server.url, served.token)
+
+  await own.send({ id: "open", command: { type: "open_session", session: served.run.session, after: 0 } })
+  // Anything sent after the reply to the open comes before the reply to this.
+  await own.send({ id: "after", command: { type: "cancel", session: served.run.session } })
+
+  expect(own.heard.map((message) => ("reply" in message ? message.reply : "event" in message ? message.event.type : "other"))).toEqual(["open", "turn_start", "summary", "after"])
 })
 
 test("a background job the server stopped when it was stopped is shown as stopped once the client is back, and a pipe waiting for it leaves", async () => {
