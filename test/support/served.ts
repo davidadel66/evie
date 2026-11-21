@@ -9,7 +9,13 @@ export type Served = Awaited<ReturnType<typeof serveEvie>>
 // database handle of their own, the way the token commands open it.
 export async function serveEvie(
   plugins: Plugin[],
-  options: { origins?: string[]; recheckEvery?: number; questions?: boolean; projectSettings?: NonNullable<EvieOptions["projectSettings"]> } = {},
+  options: {
+    host?: string
+    origins?: string[]
+    recheckEvery?: number
+    questions?: boolean
+    projectSettings?: NonNullable<EvieOptions["projectSettings"]>
+  } = {},
 ) {
   const run = await startEvie(plugins, { ...(options.questions && { questions: true }), ...(options.projectSettings && { projectSettings: options.projectSettings }) })
   const tokens = await openTokens(run.home)
@@ -18,7 +24,7 @@ export async function serveEvie(
   const server = startServer({
     evie: run.evie,
     tokens,
-    host: "127.0.0.1",
+    host: options.host ?? "127.0.0.1",
     port: 0,
     ...(options.origins && { origins: options.origins }),
     ...(options.recheckEvery !== undefined && { recheckEvery: options.recheckEvery }),

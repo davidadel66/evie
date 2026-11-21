@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from "bun"
 import type { Commands, Evie, EvieEvent } from "../core/types.ts"
 import type { Tokens } from "./tokens.ts"
-import { PATHS, type ClientMessage, type ServerMessage } from "./wire.ts"
+import { hostInAddress, PATHS, type ClientMessage, type ServerMessage } from "./wire.ts"
 
 // Evie's server. It is a client of the core, as the terminal was: it uses
 // only `send` and `subscribe`, and carries them over one WebSocket to each
@@ -67,7 +67,10 @@ export function startServer(options: ServerOptions): EvieServer {
     socket.close(TAKEN_BACK, "This device's token was taken back")
     return true
   }
-  const allowedOrigins = (options.origins ?? []).map((origin) => new URL(origin).origin)
+  // An address without http:// or https://, such as "localhost:5173", has
+  // the origin "null", which is also what a browser sends from a page that
+  // has no address of its own, such as a file. It is never let in.
+  const allowedOrigins = (options.origins ?? []).map((origin) => new URL(origin).origin).filter((origin) => origin !== "null")
 
   // Any web page open in a browser can try to reach a server on the same
   // computer, and the browser sends Evie's cookie with it. But a browser
@@ -76,7 +79,7 @@ export function startServer(options: ServerOptions): EvieServer {
   // browser sends no `Origin`, and needs only its token.
   function refusedPage(request: Request, port: number): Response | undefined {
     const origin = request.headers.get("origin")
-    const own = [`http://127.0.0.1:${port}`, `http://localhost:${port}`, `http://${options.host}:${port}`]
+    const own = [`http://127.0.0.1:${port}`, `http://localhost:${port}`, `http://${hostInAddress(options.host)}:${port}`]
     if (origin === null || own.includes(origin) || allowedOrigins.includes(origin)) return undefined
     return new Response("Connections from this page are not allowed.", { status: 403 })
   }
@@ -176,7 +179,7 @@ export function startServer(options: ServerOptions): EvieServer {
   }, options.recheckEvery ?? 3000)
 
   return {
-    url: `http://${options.host}:${server.port}`,
+    url: `http://${hostInAddress(options.host)}:${server.port}`,
     async stop() {
       clearInterval(recheck)
       await server.stop(true)

@@ -1,6 +1,10 @@
 import { afterEach, expect, test } from "bun:test"
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { connect } from "../src/index.ts"
 import { openTokens } from "../src/server/tokens.ts"
+import { loadServerSettings } from "../src/settings-files.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
 
@@ -67,6 +71,52 @@ test("Evie's own page, and a page the owner listed, are let in", async () => {
   }
   // A client that is not a browser sends no Origin, and needs only its token.
   expect(await opens(server.url, { Authorization: `Bearer ${token}` })).toBe(true)
+})
+
+test("a web page whose origin is null is never let in, even when the settings list an origin that comes out as null", async () => {
+  // An address without http:// or https:// has no origin of its own; its origin is the text "null".
+  const { server, token } = await start({ origins: ["localhost:5173"] })
+
+  expect(await opens(server.url, { Authorization: `Bearer ${token}`, Origin: "null" })).toBe(false)
+})
+
+// ---- Addresses ------------------------------------------------------------------------------
+
+// The server's settings, as `evie serve` and `evie` read them, from a global
+// settings file with the given "server" in a data folder of its own.
+async function serverSettings(server: unknown, env: Record<string, string> = {}) {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  if (server !== undefined) await writeFile(join(home, "evie.json"), JSON.stringify({ server }))
+  return loadServerSettings({ env: { EVIE_HOME: home, ...env } })
+}
+
+test("an origin in the settings must be a web address that starts with http:// or https://", async () => {
+  await expect(serverSettings({ origins: ["localhost:5173"] })).rejects.toThrow(
+    '"server" has "origins" that are not a list of web addresses, such as "http://localhost:5173".',
+  )
+  expect((await serverSettings({ origins: ["https://evie.example"] })).origins).toEqual(["https://evie.example"])
+})
+
+test("a host with colons, such as the IPv6 address ::1, is put in brackets in the address a client connects to", async () => {
+  expect((await serverSettings({ host: "::1", port: 3843 })).address).toBe("http://[::1]:3843")
+})
+
+test("an EVIE_SERVER that is not a server's address is refused, saying it is EVIE_SERVER that is wrong", async () => {
+  await expect(serverSettings(undefined, { EVIE_SERVER: "my mac:3843" })).rejects.toThrow(
+    'EVIE_SERVER is not the address of a server, such as http://my-mac.local:3843: "my mac:3843".',
+  )
+  await expect(serverSettings(undefined, { EVIE_SERVER: "ftp://my-mac.local" })).rejects.toThrow("EVIE_SERVER is not the address of a server")
+  expect((await serverSettings(undefined, { EVIE_SERVER: "my-mac.local:3843" })).address).toBe("http://my-mac.local:3843")
+})
+
+test("a server listening on ::1 gives an address a client connects to, and lets its own page in", async () => {
+  const served = await start({ host: "::1" })
+
+  expect(served.server.url).toMatch(/^http:\/\/\[::1\]:\d+$/)
+  const client = await served.connect()
+  expect((await client.send({ type: "open_session", folder: served.run.projectFolder })).session).toBeString()
+  expect(await opens(served.server.url, { Authorization: `Bearer ${served.token}`, Origin: served.server.url })).toBe(true)
 })
 
 // Takes a token back the way `evie token remove` does: from a database

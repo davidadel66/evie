@@ -4,6 +4,7 @@ import { isAbsolute, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { dataFolder } from "./core/evie.ts"
 import type { Ask, Plugin, Project, ProjectSettings } from "./core/types.ts"
+import { hostInAddress } from "./server/wire.ts"
 import { ask } from "./plugins/ask.ts"
 import { files, type FilesOptions } from "./plugins/files/index.ts"
 import { guard } from "./plugins/guard.ts"
@@ -289,9 +290,14 @@ export async function loadServerSettings(options: { env: Settings }): Promise<Se
   const host = global.server?.host ?? SERVER_HOST
   const port = global.server?.port ?? SERVER_PORT
   const given = options.env.EVIE_SERVER?.trim()
-  const address = given ? (given.includes("://") ? given : `http://${given}`) : `http://${host}:${port}`
+  const address = given ? (given.includes("://") ? given : `http://${given}`) : `http://${hostInAddress(host)}:${port}`
+  if (given && !isWebAddress(address)) throw new Error(`EVIE_SERVER is not the address of a server, such as http://my-mac.local:3843: "${given}".`)
   return { host, port, origins: global.server?.origins ?? [], address }
 }
+
+// An address a browser or the client can reach: one that starts with
+// http:// or https://.
+const isWebAddress = (text: string) => URL.canParse(text) && ["http:", "https:"].includes(new URL(text).protocol)
 
 // ---- Loading one plugin -----------------------------------------------------------------
 
@@ -397,7 +403,7 @@ function checkServer(value: unknown, file: string): void {
   if (port !== undefined && !(Number.isInteger(port) && (port as number) >= 1 && (port as number) <= 65535)) {
     wrong('has a "port" that is not a whole number from 1 to 65535.')
   }
-  const isPage = (origin: unknown) => typeof origin === "string" && URL.canParse(origin)
+  const isPage = (origin: unknown) => typeof origin === "string" && isWebAddress(origin)
   if (origins !== undefined && !(Array.isArray(origins) && origins.every(isPage))) {
     wrong('has "origins" that are not a list of web addresses, such as "http://localhost:5173".')
   }

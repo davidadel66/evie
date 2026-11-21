@@ -18,3 +18,7 @@ export type ServerMessage = { reply: string; result?: unknown } | { reply: strin
 // refused tells the client only that it failed. `login` trades a token for
 // a cookie, for a browser.
 export const PATHS = { socket: "/ws", check: "/check", login: "/login" } as const
+
+// A host as it is written in an address. An IPv6 address, such as ::1, has
+// colons of its own, so it goes in brackets: http://[::1]:3843.
+export const hostInAddress = (host: string) => (host.includes(":") && !host.startsWith("[") ? `[${host}]` : host)
