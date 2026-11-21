@@ -260,8 +260,13 @@ const endedBy = (status: number) => (status > 128 ? ENDING.find((name) => number
 // process, the outer one then sends itself the same signal, so that it is
 // seen to end the same way, and its own report of the death is kept out of
 // the output. Stopped by a signal itself, the outer one ends too, and writes nothing.
+// The command runs in a subshell that becomes it (`exec`), so that the shell
+// waiting on it has its own error output on /dev/null while it waits. Some
+// shells, such as dash, the usual /bin/sh on Linux, report a command killed
+// by a signal ("Killed") on the error output in force while waiting, which
+// would otherwise land in the command's output.
 const RUNS_THEN_RECORDS =
-  'exec 3>&2 2>/dev/null; /bin/sh -c "$1" 2>&3 3>&-; status=$?; echo $status > "$2"; ' +
+  'exec 3>&2 2>/dev/null; ( exec /bin/sh -c "$1" 2>&3 3>&- ); status=$?; echo $status > "$2"; ' +
   `case $status in ${ENDING.flatMap((name) => (numbered[name] === undefined ? [] : [128 + numbered[name]!])).join("|")}) kill -$((status - 128)) $$;; esac; exit $status`
 
 type Running = {
