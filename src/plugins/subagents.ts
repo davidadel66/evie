@@ -107,7 +107,7 @@ export function subagents(options: SubagentsOptions = {}): Plugin {
             .then(({ reply, ended, error }) => {
               const again = `To send this subagent a further message, use subagent_send with the id "${child}".`
               if (ended === "completed") return `Its report:\n\n${reply || "(It ended without saying anything.)"}\n\n${again}`
-              const why = ended === "cancelled" ? "It was stopped before it finished." : `It failed: ${error ?? "no reason was given"}.`
+              const why = ended === "cancelled" ? "It was stopped before it finished." : `It failed: ${(error ?? "no reason was given").replace(/\.$/, "")}.`
               throw new Error(`${why}${reply ? ` The last thing it said:\n\n${reply}` : ""}\n\n${again}`)
             }),
           stop: () => {

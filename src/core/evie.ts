@@ -46,9 +46,12 @@ const PAGE = 50
 const LONGEST_PAGE = 500
 
 // What the model is told when a turn a restart cut off is carried on, and
-// when it is not. A turn is carried on after at most three restarts, in
-// five minutes for the owner's session and on one task for a subagent, so
-// that a turn that itself stops the server cannot keep it restarting.
+// when it is not. A turn is carried on only when it was cut off within the
+// last hour, as by a restart, an update or a crash, which come back within
+// seconds: older work is not started again by itself. It is carried on
+// after at most three restarts, in five minutes for the owner's session
+// and on one task for a subagent, so that a turn that itself stops the
+// server cannot keep it restarting.
 const RESTARTED =
   "Evie's server restarted while you were working, and your turn was cut short. Carry on from where you left off. A " +
   "command or other action you started may have finished, or may still be running: before you repeat one that " +
@@ -57,6 +60,10 @@ const RESTARTED =
 const STOPPED_ASKING =
   "Evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the " +
   "question went unanswered. It is left for the owner to carry on."
+const STOPPED_LONG_AGO =
+  "Evie's server restarted while you were working, and this turn was cut off more than an hour ago, so it was left " +
+  "stopped rather than carried on now. It is left for the owner to carry on."
+const CUT_OFF_WITHIN = 60 * 60_000
 const STOPPED_AGAIN =
   "Evie's server restarted while you were working, and this turn had already been carried on after three restarts, " +
   "so it was left stopped, in case it is what stops the server."
@@ -412,7 +419,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // and the calls of a turn it cut off that were waiting on one of them.
   // `cut` says whether it ended with a turn cut off, and if so whether the
   // turn was waiting for an answer to a question.
-  type Left = { records: JobRecord[]; moved: Set<string>; cut: Cut }
+  // `cutAt` is when the turn's last event was written.
+  type Left = { records: JobRecord[]; moved: Set<string>; cut: Cut; cutAt: number }
 
   // Closes off a turn the session's last run cut off, before the session
   // opens, so the conversation is one a model will accept again. A call that
@@ -421,7 +429,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   function settleLeft(session: string): Left {
     const records = jobs.left(session)
     const waitedOn = new Map(records.flatMap((record) => (record.inCall && record.call !== undefined ? [[record.call, record]] : [])))
-    const { given: moved, cut } = settleUnfinished(session, (call) => {
+    const { given: moved, cut, cutAt } = settleUnfinished(session, (call) => {
       const record = waitedOn.get(call)
       return (
         record &&
@@ -429,18 +437,19 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           `and its output is being written to ${record.outputFile}. You will be told when it ends, with its output. Do not start another copy while it is running.`
       )
     })
-    return { records, moved, cut }
+    return { records, moved, cut, cutAt }
   }
 
   // Once the session is open: a turn cut off is carried on, with a note,
   // unless it was waiting for an answer or has been carried on too often;
   // its jobs left are taken back, each picked up by the plugin of its kind;
   // and a message that was waiting when Evie last stopped is answered.
-  function carryOn(session: string, opened: Open, { records, moved, cut }: Left): void {
+  function carryOn(session: string, opened: Open, { records, moved, cut, cutAt }: Left): void {
     if (cut === "asking") opened.loop.tell(STOPPED_ASKING)
     if (cut === "working") {
-      const again = restartsOf(session) < MOST_RESTARTS
-      opened.loop.tell(again ? RESTARTED : STOPPED_AGAIN, again)
+      const recent = Date.now() - cutAt <= CUT_OFF_WITHIN
+      const again = recent && restartsOf(session) < MOST_RESTARTS
+      opened.loop.tell(!recent ? STOPPED_LONG_AGO : again ? RESTARTED : STOPPED_AGAIN, again)
     }
     for (const record of records) {
       // Work a call was waiting on that ended within its call never became a job.
@@ -488,7 +497,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // will accept again and no question is left looking open. `resultOf` gives
   // a call's result when there is more to say than that it has none.
   // Returns the calls given such a result, and how the turn was cut off.
-  function settleUnfinished(session: string, resultOf: (call: string) => string | undefined): { given: Set<string>; cut: Cut } {
+  function settleUnfinished(session: string, resultOf: (call: string) => string | undefined): { given: Set<string>; cut: Cut; cutAt: number } {
     const before = log.events(session)
     const answered = new Set(before.flatMap((event) => (event.type === "answer" ? [event.body.id] : [])))
     const unanswered = before.filter((event) => event.type === "question" && !answered.has(event.body.id))
@@ -496,9 +505,11 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const given = new Set<string>()
     const events = log.events(session)
     const started = events.findLastIndex((event) => event.type === "turn_start")
-    if (started === -1) return { given, cut: "none" }
+    if (started === -1) return { given, cut: "none", cutAt: 0 }
     const turn = events.slice(started)
-    if (turn.some((event) => event.type === "turn_end")) return { given, cut: "none" }
+    if (turn.some((event) => event.type === "turn_end")) return { given, cut: "none", cutAt: 0 }
+    // Its last event before any written here.
+    const cutAt = before.at(-1)!.time
     const asking = unanswered.some((event) => event.seq > events[started]!.seq)
 
     const done = new Set(turn.flatMap((event) => (event.type === "tool_result" ? [event.body.callId] : [])))
@@ -514,7 +525,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       log.append(session, "turn_end", { reason: "error", error: "Evie stopped while this turn was running." }),
     ])()
     for (const event of closing) emit(event)
-    return { given, cut: asking ? "asking" : "working" }
+    return { given, cut: asking ? "asking" : "working", cutAt }
   }
 
   function open(session: string): Open {

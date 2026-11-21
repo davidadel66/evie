@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { chmod, mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { Database } from "bun:sqlite"
 import { ask, jobs, shell, subagents, type Chunk, type EvieEvent, type Plugin, type Request } from "../src/index.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
@@ -351,6 +352,36 @@ test("a turn of the owner's session cut off by a restart is closed off and carri
   ])
 })
 
+// Moves a session's events back in time, as if they had happened this many minutes earlier.
+function happenedEarlier(home: string, session: string, minutes: number) {
+  const db = new Database(join(home, "evie.db"))
+  db.run("UPDATE event SET time = time - ? WHERE session = ?", [minutes * 60_000, session])
+  db.close()
+}
+
+const LONG_AGO =
+  "Evie's server restarted while you were working, and this turn was cut off more than an hour ago, so it was left " +
+  "stopped rather than carried on now. It is left for the owner to carry on."
+
+test("a turn cut off within the last hour is carried on, and one cut off longer ago is left stopped, with a note", async () => {
+  for (const minutes of [59, 61]) {
+    const { home, startAgain } = await machine()
+    const first = await startAgain([{ hang: true }])
+    const session = first.run.session
+    await untilAsked(first.run, first.model.requests, "find the bug")
+    await first.restart()
+    happenedEarlier(home, session, minutes)
+
+    const second = await startAgain([{ text: ["Found it."] }])
+    await second.run.evie.resumeWork()
+    await Bun.sleep(100)
+
+    if (minutes === 59) expect(notes(second.run, session)).toEqual([RESTARTED])
+    else expect(notes(second.run, session)).toEqual([LONG_AGO])
+    expect(second.model.requests).toHaveLength(minutes === 59 ? 1 : 0)
+  }
+})
+
 test("a turn is carried on after at most three restarts in five minutes, and then left stopped, with a note", async () => {
   const { startAgain } = await machine()
   const first = await startAgain([{ hang: true }])
@@ -498,4 +529,30 @@ test("a subagent that finished before a restart, whose report the session that s
 
   expect(secondModel.requests.child).toEqual([])
   expect(notes(second.run, session)[0]).toStartWith("Background job 1 (subagent: look into it) has finished.\n\nIts report:\n\nThe bug is in parse.ts, line 12.")
+})
+
+test("a subagent's turn cut off within the last hour is carried on, and one cut off longer ago is left stopped", async () => {
+  for (const minutes of [59, 61]) {
+    const { home, startAgain } = await machine()
+    const firstModel = twoScripts([{ calls: [hand] }, { text: "A subagent is looking." }], [{ hang: true }])
+    const first = await startAgain(firstModel.plugin, [subagents({ dataFolder: home }), jobs()])
+    const session = first.run.session
+    await say(first.run, "where is the bug?")
+    while (firstModel.requests.child.length < 1) await Bun.sleep(5)
+    const child = stored(first.run.events).find((event) => event.session !== session)!.session
+    await first.restart()
+    happenedEarlier(home, child, minutes)
+
+    const secondModel = twoScripts([{ text: "Noted." }], [{ text: "The bug is in parse.ts, line 12." }])
+    const second = await startAgain(secondModel.plugin, [subagents({ dataFolder: home }), jobs()])
+    const reported = turnCompleted(second.run, session)
+    await second.run.evie.resumeWork()
+    await reported
+
+    expect(secondModel.requests.child).toHaveLength(minutes === 59 ? 1 : 0)
+    expect(notes(second.run, child)).toEqual([minutes === 59 ? RESTARTED : LONG_AGO])
+    expect(notes(second.run, session)[0]).toStartWith(
+      minutes === 59 ? "Background job 1 (subagent: look into it) has finished." : "Background job 1 (subagent: look into it) failed.\n\nIt failed: Evie stopped while this turn was running.\n\n",
+    )
+  }
 })
