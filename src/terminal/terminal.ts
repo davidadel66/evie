@@ -38,10 +38,16 @@ const PROMPT = "\n› "
 
 const shorten = (text: string, length: number) => (text.length > length ? `${text.slice(0, length)}…` : text)
 
+// What waiting for a command gives in place of its result when the input
+// ends while the command's question is waiting: the terminal is leaving.
+const LEFT = Symbol("left")
+
 // The terminal client. It opens a session in the project of the folder it was
 // started in, sends each line typed as a message, and prints the model's reply
 // as it streams. When Evie asks a question, the next line typed is the
-// answer. It ends when the input ends, after any turn in progress.
+// answer. It ends when the input ends, after any turn in progress, unless
+// that turn is waiting on a question: then it leaves the question for another
+// terminal, or for this one started again, to answer.
 export async function runTerminal(options: TerminalOptions): Promise<void> {
   const { evie } = options
 
@@ -80,13 +86,10 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     line(freeText ? "Type a number, or your own answer." : "Type a number.")
     if (options.prompt !== false) write(PROMPT.trimStart())
   }
-  // Once the input has ended there is no one to answer, so a question that
-  // is waiting, or that arrives later, is refused.
+  // Whether the input has ended. A terminal never refuses a question by
+  // leaving, since another client can share the session and answer it, with
+  // one exception: a question asked while its session opens (see answeringDuring).
   let ended = false
-  const refuse = () => {
-    if (!asked) return
-    evie.send({ type: "answer_question", session: asked.session, id: asked.question.id, choice: null }).catch(() => {})
-  }
   // Takes a typed line as the answer to the question that is waiting.
   const answer = async (typed: string) => {
     if (!asked) return
@@ -115,14 +118,25 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
 
   // Questions that have arrived and not been answered, the one on screen included.
   const waitingQuestions: NonNullable<typeof asked>[] = []
+  // Queues a question, to be shown after any already waiting. One can reach
+  // the terminal twice, as an event and in the reply that opened the session.
+  const queueQuestion = (question: NonNullable<typeof asked>) => {
+    if (waitingQuestions.some((waiting) => waiting.question.id === question.question.id)) return
+    waitingQuestions.push(question)
+    if (asked === undefined) showNextQuestion()
+  }
   const showNextQuestion = () => {
     asked = waitingQuestions[0]
     if (!asked) return
     typedBefore = (options.typing?.() ?? "").trim() !== ""
     showQuestion()
-    if (ended) refuse()
     whenAsked()
   }
+
+  // Every question asked and not yet answered, by id, with its session,
+  // whether or not this terminal takes answers. While one is open in the
+  // terminal's session, the turn there waits on it.
+  const questionsOpen = new Map<string, string>()
 
   // Messages sent that no turn has taken up yet. Several can be answered by
   // one turn, so turns are not counted: the terminal is idle when a turn ends
@@ -146,8 +160,12 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
 
   // Waits for work that can stop to ask a question: opening the session, or
   // running a command. Lines are read during it only while a question is
-  // waiting, and each one is taken as the answer.
-  async function answeringDuring<Result>(work: Promise<Result>): Promise<Result> {
+  // waiting, and each one is taken as the answer. When the input ends while
+  // one is waiting, a command stops being waited for and gives `left`, and
+  // the question is left open. A question asked while the session is opening,
+  // such as whether to trust the project, is refused instead: no other client
+  // can reach it, and while it waits every session opening in the project waits.
+  async function answeringDuring<Result, Left = never>(work: Promise<Result>, left?: Left): Promise<Result | Left> {
     let finished = false
     const settled = work
       .then(
@@ -164,14 +182,15 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       const typed = await Promise.race([nextLine(), settled])
       if (!typed) continue
       reading = undefined
-      if (typed.done) {
-        ended = true
-        refuse()
-        asked = undefined
-      } else {
+      if (!typed.done) {
         midLine = false
         await answer(typed.value.trim())
+        continue
       }
+      ended = true
+      if (left !== undefined) return left
+      if (asked) evie.send({ type: "answer_question", session: asked.session, id: asked.question.id, choice: null }).catch(() => {})
+      asked = undefined
     }
     return work
   }
@@ -181,13 +200,19 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     // terminal are a question asked while it opens, and its answer.
     const mine = session === undefined ? event.type === "question" || event.type === "answer" : event.session === session
     if (!mine) return
+    // More than one can be open at once, such as from two subagents. They
+    // are shown one at a time, in the order they came. Where nobody types,
+    // as from a pipe, a question is only shown: the session may belong to
+    // another terminal that does take answers, and a line meant as a message
+    // must not be taken as one.
+    if (event.type === "question" && options.questions === false) line(`[question] ${event.body.text} (not answered here)`)
+    else if (event.type === "question") queueQuestion({ session: event.session, question: event.body })
     if (event.type === "question") {
-      // More than one can be open at once, such as from two subagents. They
-      // are shown one at a time, in the order they came.
-      waitingQuestions.push({ session: event.session, question: event.body })
-      if (asked === undefined) showNextQuestion()
+      questionsOpen.set(event.body.id, event.session)
+      whenIdle()
     }
     if (event.type === "answer") {
+      questionsOpen.delete(event.body.id)
       const at = waitingQuestions.findIndex((waiting) => waiting.question.id === event.body.id)
       if (at !== -1) waitingQuestions.splice(at, 1)
       if (asked?.question.id === event.body.id) {
@@ -238,7 +263,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   })
 
   // Opening can stop to ask a question, such as whether to trust the project.
-  const { project, resumed, notices, session: openedSession } = await answeringDuring(
+  const { project, resumed, notices, session: openedSession, turnRunning, openQuestions } = await answeringDuring(
     evie.send({
       type: "open_session",
       folder: options.folder,
@@ -250,6 +275,10 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     throw cause
   })
   session = openedSession
+  for (const question of openQuestions) questionsOpen.set(question.id, openedSession)
+  // The session can be one another terminal left running, with its turn
+  // still going: the terminal waits for it, and Ctrl-C stops it.
+  idle = !turnRunning
 
   options.onInterrupt?.(() => {
     if (idle && !commanding) {
@@ -271,7 +300,12 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       : ""
   write(`evie · ${project?.name ?? "general"}${about}\n`)
   for (const notice of notices) write(`[note] ${notice}\n`)
-  showPrompt()
+  if (idle) showPrompt()
+  else line("[note] A turn is still running in this session. Ctrl-C stops it.")
+  // Questions it asked while no terminal was connected are shown now, so
+  // they can be answered. Not where nobody types, as from a pipe: a line
+  // meant as a message must not be taken as an answer.
+  if (options.questions !== false) for (const question of openQuestions) queueQuestion({ session: openedSession, question })
   try {
     while (!ended) {
       const read = await nextLine()
@@ -296,10 +330,11 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       if (command) {
         // A command can ask a question too, so lines are still read for answers.
         commanding = true
-        await answeringDuring(evie.send({ type: "run_command", session: openedSession, name: command[1]!, args: command[2] ?? "" }))
-          .then((result) => line(result.text))
+        await answeringDuring(evie.send({ type: "run_command", session: openedSession, name: command[1]!, args: command[2] ?? "" }), LEFT)
+          .then((result) => result !== LEFT && line(result.text))
           .catch((cause) => line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`))
         commanding = false
+        if (ended) break
         if (idle) {
           cancelling = false
           showPrompt()
@@ -311,11 +346,29 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       await evie.send({ type: "send_message", session: openedSession, text })
     }
     ended = true
-    refuse()
     // The turn in progress is waited for. So are background jobs, when asked:
-    // one that ends wakes Evie, and that turn is waited for too.
+    // one that ends wakes Evie, and that turn is waited for too. A question
+    // waiting in the session is not: nobody here will answer it, so the
+    // terminal says so and leaves it for whoever comes back to the session.
     const busy = () => !idle || (options.waitForJobs === true && runningJobs.size > 0 && !gaveUpWaiting)
-    while (busy()) await new Promise<void>((resolve) => (whenIdle = resolve))
+    const questionWaiting = () => [...questionsOpen.values()].includes(openedSession)
+    for (;;) {
+      if (questionWaiting()) {
+        // A question can be refused the moment it is asked, when no client
+        // that shows questions has opened the session, and over the network
+        // the refusal arrives just after the question. A reply comes after
+        // every event sent before it, so asking where the session stands, as
+        // `evie -c` does, lets that refusal arrive first.
+        await evie.send({ type: "open_session", folder: options.folder, continue: true }).catch(() => {})
+        if (questionWaiting()) {
+          line("[note] A question is waiting for an answer. `evie -c` in a terminal comes back to it.")
+          break
+        }
+        continue
+      }
+      if (!busy()) break
+      await new Promise<void>((resolve) => (whenIdle = resolve))
+    }
   } finally {
     stop()
     write("\n")

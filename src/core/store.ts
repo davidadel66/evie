@@ -46,6 +46,15 @@ export const MIGRATIONS: Migration[] = [
     db.run("ALTER TABLE session ADD COLUMN agent TEXT")
     db.run("ALTER TABLE session ADD COLUMN read_only INTEGER")
   },
+  // 4: the tokens devices connect to the server with. Only a hash of each
+  // secret is kept, so a copy of the database lets no one in.
+  (db) => {
+    db.run(`CREATE TABLE token (
+      name TEXT PRIMARY KEY,
+      hash TEXT NOT NULL UNIQUE,
+      created INTEGER NOT NULL
+    )`)
+  },
 ]
 
 // Opens Evie's one database file and brings its tables up to date.
@@ -57,6 +66,10 @@ export const MIGRATIONS: Migration[] = [
 export function openStore(path: string, migrations: readonly Migration[] = MIGRATIONS): Database {
   const db = new Database(path, { create: true, strict: true })
   try {
+    // More than one process can have the database open, such as the server
+    // and `evie token`. One that finds it being written to waits for its
+    // turn, for up to five seconds, instead of failing at once.
+    db.run("PRAGMA busy_timeout = 5000")
     const applied = db.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version ?? 0
     if (applied > migrations.length) {
       throw new Error(

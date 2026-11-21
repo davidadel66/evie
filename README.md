@@ -61,6 +61,15 @@ Settings.
 
 ## Use
 
+Evie runs as a server on your computer, and the terminal is one of its
+clients. Start the server and leave it running:
+
+```sh
+evie serve
+```
+
+Then, in another terminal, go to a project and start the client:
+
 ```sh
 cd /path/to/a/project
 evie
@@ -76,6 +85,10 @@ Type a message and press Enter.
 - **Ctrl-C stops what Evie is doing** and keeps the conversation. With
   nothing running, Ctrl-C or Ctrl-D quits. If Evie does not stop, a second
   Ctrl-C quits at once.
+- **Closing the terminal stops nothing.** A turn still running carries on
+  in the server, and a question still waiting for your answer keeps
+  waiting: `evie --continue` shows it again. Stopping the server, with
+  Ctrl-C where it runs, stops everything.
 - **`evie --continue`** carries on the last session of the project you are
   in, with its conversation.
 - **`/model`** shows which model is in use. `/model` and a name switches to
@@ -92,7 +105,7 @@ Type a message and press Enter.
   picks the work up again by itself. `/jobs` lists what is running, and
   `/jobs stop` with an id stops one. `/background` moves the command Evie
   is waiting on right now to the background, so you need not wait for it. Ctrl-C leaves background commands
-  running; they stop when Evie quits.
+  running; they stop when the server stops.
 - **Evie can hand work to subagents.** For a side task such as searching
   the code or reviewing a change, it can start a second agent with an empty
   conversation, which works in the background and reports back. Several
@@ -102,6 +115,36 @@ Type a message and press Enter.
 - **`/compact`** replaces the older part of a long conversation with a
   summary, to save room. Evie also does this by itself when a conversation
   gets long.
+
+### The server and other devices
+
+`evie serve` listens on this computer only, at `http://127.0.0.1:3843`.
+It reads the settings files when it starts, so a change to them takes
+effect when the server is started again.
+
+Every connection has to bring a token, a long random secret, even on this
+computer: the server can run commands, and any web page open in a browser
+can try to reach it. The first time the server starts, it makes a token
+named "this computer" and saves it in `server-token` in the data folder,
+where only your user can read it. `evie` on this computer uses it, with
+nothing to set up, and sends it to no other server. Once taken back it
+stays taken back; to make a new one, remove `server-token` and start
+`evie serve` again.
+
+Each other device gets a token of its own, so that one can be taken back
+without the others:
+
+```sh
+evie token add phone      # prints the new token, once only
+evie token list           # the tokens there are, and when each was made
+evie token remove phone   # takes it back; a device using it is disconnected
+```
+
+These work whether or not the server is running. On the other device, set
+`EVIE_SERVER` to the server's address, such as `http://my-mac.local:3843`
+or just `my-mac.local`, and `EVIE_TOKEN` to its token. The server listens on this computer only
+unless `host` under `server` in `evie.json` says otherwise, and the
+connection is not encrypted, so only change that on a network you trust.
 
 ### What Evie can do
 
@@ -306,7 +349,8 @@ BRAVE_API_KEY=...
 
 `BRAVE_API_KEY` is a [Brave Search](https://brave.com/search/api/) key. It
 is optional: without it Evie can still read a web page it is given the
-address of, but cannot search.
+address of, but cannot search. `EVIE_TOKEN` is for a device that connects
+to a server on another computer; see "The server and other devices".
 
 **`evie.json` is for everything else:** the model, how long a reply may be,
 and which plugins load.
@@ -340,8 +384,19 @@ request. Two settings change that:
 what each model can read from OpenRouter; `contextLimits` is for a model it
 gets wrong or does not know.
 
-A setting in the environment wins over the files, so `EVIE_MODEL=... evie`
-points one run at another model. `EVIE_MAX_TOKENS` works the same way.
+**The server.** Where `evie serve` listens, and which web pages besides its
+own may connect to it, such as a web client being developed on another
+port:
+
+```json
+{
+  "server": { "host": "127.0.0.1", "port": 3843, "origins": ["http://localhost:5173"] }
+}
+```
+
+A setting in the environment wins over the files, so `EVIE_MODEL=... evie serve`
+points the server at another model. `EVIE_MAX_TOKENS` works the same way,
+and `EVIE_SERVER` points `evie` at another server.
 
 A project can have settings of its own, in `.evie/evie.json` in its folder.
 See "Trusting a project" for when that file is used.
@@ -518,6 +573,9 @@ the best examples to read.
 - **One way in, one way out.** A client sends commands and subscribes to
   events. The terminal is a client like any other and uses nothing else, so
   a web or phone client can be added without changing the core.
+- **The server carries them over the network.** `evie serve` runs the core
+  and passes commands and events over one WebSocket, as JSON in the core's
+  own shapes. It is in `src/server/`; `wire.ts` holds the messages.
 - **A turn is a loop.** The model is asked, the tools it asks for are run,
   and it is asked again with the results, until it answers without asking
   for a tool.
