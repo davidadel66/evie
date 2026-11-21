@@ -298,10 +298,13 @@ test("a terminal that continues a session left running is shown the question wai
     write: (text) => (printed += text),
   })
 
+  // The earlier conversation comes first, without the question, which is shown after it with its choices.
   expect(printed).toContain(
-    "· continuing the last session\n[note] A turn is still running in this session. Ctrl-C stops it.\n[question] Deploy to production?\n",
+    "· continuing the last session\n\n› ship it\n⏺ deploy {}\n[note] A turn is still running in this session. Ctrl-C stops it.\n[question] Deploy to production?\n",
   )
-  expect(printed).toContain("[answered] Yes\n")
+  expect(printed.split("Deploy to production?")).toHaveLength(2)
+  // The tool's result, once the question is answered, comes under its call.
+  expect(printed).toContain("[answered] Yes\n  ⎿ deployed\nDone.\n")
   expect(printed).toContain("Done.")
   expect(deploy.answers).toEqual(["Yes"])
 })

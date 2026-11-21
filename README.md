@@ -90,7 +90,11 @@ Type a message and press Enter.
   waiting: `evie --continue` shows it again. Stopping the server, with
   Ctrl-C where it runs, stops everything.
 - **`evie --continue`** carries on the last session of the project you are
-  in, with its conversation.
+  in, with its conversation. It first shows the end of the earlier
+  conversation, as it looked when it happened: your messages, Evie's
+  replies, and a line for each tool Evie used and what came back. A long
+  session shows its last 50 events, with a line saying how many earlier
+  ones are left out.
 - **`/model`** shows which model is in use. `/model` and a name switches to
   another in the middle of a session.
 - **`/mode`** shows how freely Evie may act, and `/mode auto`, `/mode manual`

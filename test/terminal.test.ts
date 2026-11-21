@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import { basename } from "node:path"
-import { runTerminal } from "../src/index.ts"
-import { startEvie } from "./support/harness.ts"
+import { runTerminal, type Plugin } from "../src/index.ts"
+import { say, startEvie } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
 let stop: (() => Promise<void>) | undefined
@@ -147,4 +147,59 @@ test("when the model asks for several tools at once, each result is shown under 
   expect(printed).toContain(
     '⏺ lookup {"word":"one"}\n  ⎿ meaning of one\n⏺ lookup {"word":"two"}\n  ⎿ meaning of two\nDone.\n',
   )
+})
+
+// ---- The earlier conversation, when continuing ---------------------------------------------------
+
+// A tool that looks a word up.
+const lookup: Plugin = {
+  name: "lookup-tool",
+  setup(host) {
+    host.tools.add({
+      name: "lookup",
+      description: "Looks a word up.",
+      inputSchema: { type: "object", properties: { word: { type: "string" } } },
+      run: async () => "evie: a personal agent\nsecond line",
+    })
+  },
+}
+
+// Runs the terminal to continue the last session, with nothing typed, and returns what it printed.
+async function continueIn(run: Awaited<ReturnType<typeof startEvie>>) {
+  let printed = ""
+  await runTerminal({ evie: run.evie, folder: run.projectFolder, resume: true, lines: (async function* () {})(), write: (text) => (printed += text) })
+  return printed
+}
+
+test("--continue prints the earlier conversation before the prompt, drawn as it was when it streamed", async () => {
+  const model = scriptedProvider([{ text: ["Looking."], calls: [{ name: "lookup", input: { word: "evie" } }] }, { text: ["Found it."] }, { text: ["Hello."] }])
+  const run = await startEvie([model.plugin, lookup])
+  stop = run.stop
+  await say(run, "look it up")
+  await say(run, "thanks")
+
+  const printed = await continueIn(run)
+
+  expect(printed).toContain(
+    "continuing the last session\n" +
+      '\n› look it up\nLooking.\n⏺ lookup {"word":"evie"}\n  ⎿ evie: a personal agent (+1 more lines)\nFound it.\n' +
+      "\n› thanks\nHello.\n" +
+      "\n› ",
+  )
+  expect(printed).not.toContain("earlier events")
+})
+
+test("--continue in a session longer than a page prints its last 50 events, and says how many earlier ones are not shown", async () => {
+  // Thirteen turns of four events each: 52 events, so the first two are not shown.
+  const turns = Array.from({ length: 13 }, (_, at) => at + 1)
+  const model = scriptedProvider(turns.map((turn) => ({ text: [`Reply ${turn}.`] })))
+  const run = await startEvie([model.plugin])
+  stop = run.stop
+  for (const turn of turns) await say(run, `Message ${turn}`)
+
+  const printed = await continueIn(run)
+
+  expect(printed).toContain("continuing the last session\nReply 1.\n\n› Message 2\nReply 2.\n")
+  expect(printed).toContain("\n› Message 13\nReply 13.\n[note] 2 earlier events of this session are not shown.\n\n› ")
+  expect(printed).not.toContain("Message 1\n")
 })
