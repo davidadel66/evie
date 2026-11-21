@@ -34,6 +34,16 @@ export type Jobs = {
 
 type Running = { job: Job; work: JobWork; stoppedBy?: "owner" | "model" | "closing" }
 
+// The name of a job's output file, in its session's folder.
+export const jobFileName = (id: string) => `job-${id}.log`
+
+// The id of the job whose output file has this name, or undefined when it
+// is not a job's output file.
+export function jobOfFile(name: string): number | undefined {
+  const match = /^job-(\d+)\.log$/.exec(name)
+  return match ? Number(match[1]) : undefined
+}
+
 export function createJobs(options: {
   // Where each job's output file goes: a folder per session.
   outputFolder: string
@@ -54,8 +64,7 @@ export function createJobs(options: {
       let highest = 0
       try {
         for (const name of readdirSync(join(options.outputFolder, session))) {
-          const used = /^job-(\d+)\.log$/.exec(name)
-          if (used) highest = Math.max(highest, Number(used[1]))
+          highest = Math.max(highest, jobOfFile(name) ?? 0)
         }
       } catch {
         // No folder yet: this is the session's first job.
@@ -87,7 +96,7 @@ export function createJobs(options: {
         title: work.title,
         status: "running",
         started: Date.now(),
-        outputFile: join(options.outputFolder, session, `job-${id}.log`),
+        outputFile: join(options.outputFolder, session, jobFileName(id)),
       }
       // The file is there from the start, empty, even for work that writes nothing.
       safely(() => {

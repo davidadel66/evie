@@ -61,3 +61,13 @@ test("a very long timeout is capped, and the command still runs", async () => {
 
   expect(await call("shell", { command: "echo ok", timeout: 9_999_999_999 })).toBe("ok")
 })
+
+test("a command that prints more than 2,000 lines shows its last lines, with how it ended", async () => {
+  const { call } = await project()
+
+  // 2,500 numbers, a blank line and the exit status make 2,502 lines.
+  const result = await call("shell", { command: "seq 1 2500; exit 1" })
+
+  expect(result).toStartWith("503\n504\n")
+  expect(result).toContain("\n2500\n\n[Exit status: 1]\n\n[Output cut: showing the last 2000 of 2502 lines. The full output is saved at ")
+})
