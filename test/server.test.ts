@@ -597,3 +597,39 @@ test("when the line drops part way through a reply that uses a tool, the termina
   expect(printed).toContain("Hello world.\n⏺ lookup {}\n  ⎿ found it\nDone.\n")
   for (const piece of ["Hel", "world", "lookup", "found it", "Do"]) expect(printed.split(piece)).toHaveLength(2)
 })
+
+test("live events that reach the client before what it missed are held back, and shown after it", async () => {
+  const carryOn = gate()
+  const finish = gate()
+  const release = gate()
+  const { served, line, connect } = await serveOverALine([
+    piecemealModel([["Hel", "lo", carryOn.opened, " world.", { call: "lookup" }], ["Do", finish.opened, "ne."]]),
+    lookup,
+  ])
+  const writingDo = written(served.run, "Do")
+  let printed = ""
+  await runTerminal({
+    evie: await connect(),
+    folder: served.run.projectFolder,
+    lines: (async function* () {
+      yield "look it up"
+      while (!printed.includes("Hello")) await Bun.sleep(1)
+      await line.cut()
+      carryOn.open()
+      await writingDo
+      // What the client missed is held up on its way back, as by a slow
+      // network, while the end of the reply goes past it.
+      const caught = line.holdReplyTo("open_session", release.opened)
+      line.mend()
+      await caught
+      const ended = line.passedOn('"turn_end"')
+      finish.open()
+      await ended
+      release.open()
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("Hello world.\n⏺ lookup {}\n  ⎿ found it\nDone.\n")
+  for (const piece of ["Hel", "world", "lookup", "found it", "Do", "ne."]) expect(printed.split(piece)).toHaveLength(2)
+})
