@@ -114,7 +114,7 @@ test("a session the owner has said nothing in is not listed, and no summary of i
   ])
 })
 
-test("a session with nothing said in it is listed, with no name, while a question in it waits, such as one asked as it opens", async () => {
+test("a session with nothing said in it is listed, with no name, once it has asked a question, such as one asked as it opens, and stays listed once it is answered", async () => {
   // A project that asks whether to trust it whenever a session opens in it, once told to.
   let asks = false
   const run = await startEvie([scriptedProvider([]).plugin], {
@@ -126,17 +126,23 @@ test("a session with nothing said in it is listed, with no name, while a questio
   cleanups.push(run.stop)
   asks = true
   const asked = nextEvent(run, "question")
+  const answered = nextEvent(run, "answer")
   const opening = run.evie.send({ type: "open_session", folder: run.projectFolder, questions: true })
   const question = await asked
 
-  const listed = await run.evie.send({ type: "list_sessions" })
-  const sent = summaries(run)
+  const whileAsking = await run.evie.send({ type: "list_sessions" })
   await run.evie.send({ type: "answer_question", session: question.session, id: question.body.id, choice: "Yes" })
+  const answer = await answered
   await opening
 
-  const summary = { session: question.session, project: run.project!.id, name: null, state: "needs_you" as const, lastActive: question.time }
-  expect(listed).toEqual([summary])
-  expect(sent).toEqual([{ type: "summary", ...summary }])
+  const summary = { session: question.session, project: run.project!.id, name: null }
+  expect(whileAsking).toEqual([{ ...summary, state: "needs_you", lastActive: question.time }])
+  expect(await run.evie.send({ type: "list_sessions" })).toEqual([{ ...summary, state: "active", lastActive: answer.time }])
+  // So a client keeping a list is told it no longer needs the owner.
+  expect(summaries(run)).toEqual([
+    { type: "summary", ...summary, state: "needs_you", lastActive: question.time },
+    { type: "summary", ...summary, state: "active", lastActive: answer.time },
+  ])
 })
 
 test("a session's name is the opening words of its first message, cut at a word's end when its first line is long", async () => {

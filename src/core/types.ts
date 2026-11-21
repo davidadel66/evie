@@ -484,8 +484,8 @@ export type Commands = {
     input: Record<never, never>
     output: Project[]
   }
-  // Every session the owner has said something in, or in which a question
-  // is waiting, that is not a subagent's, the latest active first.
+  // Every session the owner has said something in, or that has asked a
+  // question, that is not a subagent's, the latest active first.
   list_sessions: {
     input: Record<never, never>
     output: SessionSummary[]

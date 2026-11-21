@@ -8,8 +8,9 @@ import type { SessionState, SessionSummary, SummaryEvent } from "./types.ts"
 // from what is running, and the last one sent of each session is kept, to
 // tell whether it has changed. A subagent's session has none: it is part of
 // the session that started it. Nor has a session the owner has said nothing
-// in, such as one a terminal opened and left, unless a question in it is
-// waiting: it is no conversation to list. It has one from its first message.
+// in and that has asked nothing, such as one a terminal opened and left: it
+// is no conversation to list. It has one from its first message or question,
+// and keeps it, so that a client is always told how it stands.
 
 export type Summaries = {
   // Every session that has a summary, the latest active first.
@@ -70,8 +71,10 @@ export function createSummaries(options: {
     `SELECT ${COLUMNS} FROM session WHERE parent IS NULL ORDER BY COALESCE(active, created) DESC, created DESC`,
   )
   const one = db.query<Row, [string]>(`SELECT ${COLUMNS} FROM session WHERE id = ? AND parent IS NULL`)
+  // Read only for a session with no message, whose log is short.
+  const asked = db.query<{ asked: number }, [string]>("SELECT EXISTS (SELECT 1 FROM event WHERE session = ? AND type = 'question') AS asked")
 
-  const listed = (row: Row) => row.first !== null || options.asking(row.id)
+  const listed = (row: Row) => row.first !== null || asked.get(row.id)?.asked === 1
   const lastActive = (row: Row) => row.active ?? row.created
   const stateOf = (row: Row): SessionState => {
     if (options.asking(row.id)) return "needs_you"
