@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from "node:fs/promises"
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { delimiter, dirname, join, resolve } from "node:path"
 import { dataFolder, type Settings } from "../index.ts"
@@ -70,6 +70,19 @@ export async function runService(env: Settings, [action]: string[], computer: Co
     }
   }
 
+  // There is one login service, whichever copy of Evie installed it. A copy
+  // with another data folder, such as a development copy, may look at it
+  // but not replace or remove it.
+  const current = await installed(file)
+  if ((action === "install" || action === "uninstall") && current && current.home !== home) {
+    return {
+      ok: false,
+      text:
+        `The login service installed now is for the data folder ${current.home}, not this copy's, ${home}. ` +
+        "There is one login service, so uninstall it from the copy of Evie that uses that folder first.",
+    }
+  }
+
   if (action === "install") {
     // The log is written in the data folder, which launchd does not make.
     await mkdir(home, { recursive: true })
@@ -114,22 +127,23 @@ export async function runService(env: Settings, [action]: string[], computer: Co
   }
 
   if (action === "status") {
-    const installed = await Bun.file(file).exists()
     const shown = await loaded()
     // launchctl describes a loaded service as a list of `name = value` lines.
     const running = shown !== undefined && /^\s*state = running\s*$/m.test(shown)
     const pid = shown === undefined ? undefined : /^\s*pid = (\d+)\s*$/m.exec(shown)?.[1]
-    return {
-      ok: true,
-      text:
-        (installed ? `Installed: yes, at ${file}.\n` : "Installed: no. `evie service install` installs it.\n") +
-        (running
-          ? `Running:   yes${pid ? `, as process ${pid}` : ""}.\n`
-          : shown !== undefined
-            ? "Running:   no. It is loaded, but not running at the moment; its log may say why.\n"
-            : "Running:   no.\n") +
-        `Log:       ${log}\n`,
-    }
+    const lines = current
+      ? [`Installed:   yes, at ${file}`, `Data folder: ${current.home}`]
+      : ["Installed:   no. `evie service install` installs it."]
+    lines.push(
+      running
+        ? `Running:     yes${pid ? `, as process ${pid}` : ""}`
+        : shown !== undefined
+          ? "Running:     no. It is loaded, but not running at the moment; its log may say why."
+          : "Running:     no",
+    )
+    if (current) lines.push(`Log:         ${current.log}`)
+    if (current && current.home !== home) lines.push(`This service belongs to another copy of Evie: this one's data folder is ${home}.`)
+    return { ok: true, text: `${lines.join("\n")}\n` }
   }
   return {
     ok: false,
@@ -140,6 +154,20 @@ export async function runService(env: Settings, [action]: string[], computer: Co
       "  evie service status      whether it is installed and running, and where its log is",
     ].join("\n"),
   }
+}
+
+// What the installed service's file says: the data folder it serves, and
+// where its log is. Undefined when none is installed. The file is read as
+// `install` writes it; one without a data folder serves the usual one.
+async function installed(file: string): Promise<{ home: string; log: string } | undefined> {
+  const text = await readFile(file, "utf8").catch(() => undefined)
+  if (text === undefined) return undefined
+  const value = (key: string) => {
+    const found = new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`).exec(text)?.[1]
+    return found?.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&")
+  }
+  const home = value("EVIE_HOME") ?? dataFolder({})
+  return { home, log: value("StandardOutPath") ?? join(home, "serve.log") }
 }
 
 // The launch agent's file: run this checkout's `evie serve` with the Bun

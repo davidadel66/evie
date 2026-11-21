@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { runService, type Computer } from "../src/programs/service.ts"
@@ -102,12 +102,14 @@ test("install writes a login service that runs this evie's server, and loads it"
 })
 
 test("installing again unloads the older service first, so the server restarts on this version", async () => {
-  const { computer, calls, folder, plist } = await mac({ loaded: true })
-  const home = join(folder, "data")
-  await mkdir(dirname(plist), { recursive: true })
-  await writeFile(plist, "an older version")
+  const { computer, calls, folder, plist } = await mac()
+  const env = { EVIE_HOME: join(folder, "data"), PATH: "/usr/bin" }
+  await runService(env, ["install"], computer)
+  // As an older checkout of Evie would have written it.
+  await writeFile(plist, (await readFile(plist, "utf8")).replace(CLI, "/an/older/checkout/src/cli.ts"))
+  calls.length = 0
 
-  const done = await runService({ EVIE_HOME: home, PATH: "/usr/bin" }, ["install"], computer)
+  const done = await runService(env, ["install"], computer)
 
   expect(done.ok).toBe(true)
   expect(calls).toEqual(["print gui/501/com.evie.serve", "bootout gui/501/com.evie.serve", `bootstrap gui/501 ${plist}`])
@@ -153,22 +155,47 @@ test("uninstall unloads the service and removes its file", async () => {
   expect(await Bun.file(plist).exists()).toBe(false)
 })
 
-test("status says whether the service is installed and running, and where its log is", async () => {
+test("status says whether the service is installed and running, and which data folder and log it has", async () => {
   const { computer, calls, folder, plist } = await mac()
   const env = { EVIE_HOME: join(folder, "data"), PATH: "/usr/bin" }
-  const log = join(folder, "data", "serve.log")
 
   const before = await runService(env, ["status"], computer)
   expect(before.ok).toBe(true)
-  expect(before.text).toBe(
-    "Installed: no. `evie service install` installs it.\n" + "Running:   no.\n" + `Log:       ${log}\n`,
-  )
+  expect(before.text).toBe("Installed:   no. `evie service install` installs it.\n" + "Running:     no\n")
 
   await runService(env, ["install"], computer)
   calls.length = 0
   const after = await runService(env, ["status"], computer)
-  expect(after.text).toBe(`Installed: yes, at ${plist}.\n` + "Running:   yes, as process 4242.\n" + `Log:       ${log}\n`)
+  expect(after.text).toBe(
+    `Installed:   yes, at ${plist}\n` +
+      `Data folder: ${join(folder, "data")}\n` +
+      "Running:     yes, as process 4242\n" +
+      `Log:         ${join(folder, "data", "serve.log")}\n`,
+  )
   expect(calls).toEqual(["print gui/501/com.evie.serve"])
+})
+
+test("there is one login service for every copy of Evie: another copy sees whose it is, and cannot replace or remove it", async () => {
+  const { computer, calls, folder, plist } = await mac()
+  const everyday = join(folder, "everyday")
+  await runService({ EVIE_HOME: everyday, PATH: "/usr/bin" }, ["install"], computer)
+  const installed = await readFile(plist, "utf8")
+  calls.length = 0
+  const otherCopy = { EVIE_HOME: join(folder, "dev"), PATH: "/usr/bin" }
+
+  const status = await runService(otherCopy, ["status"], computer)
+  expect(status.text).toContain(`Data folder: ${everyday}\n`)
+  expect(status.text).toContain(`Log:         ${join(everyday, "serve.log")}\n`)
+  expect(status.text).toContain(`belongs to another copy of Evie: this one's data folder is ${join(folder, "dev")}`)
+
+  for (const action of ["install", "uninstall"]) {
+    const done = await runService(otherCopy, [action], computer)
+    expect(done.ok).toBe(false)
+    expect(done.text).toContain(`The login service installed now is for the data folder ${everyday}`)
+    expect(done.text).toContain("uninstall it from the copy of Evie that uses that folder first")
+  }
+  expect(await readFile(plist, "utf8")).toBe(installed)
+  expect(calls.filter((call) => !call.startsWith("print"))).toEqual([])
 })
 
 test("on a system other than macOS, each action says the login service is not supported there yet", async () => {
