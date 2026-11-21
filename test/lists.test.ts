@@ -97,6 +97,8 @@ test("sessions are listed the latest active first, and a general session has no 
 })
 
 test("a session the owner has said nothing in is not listed, and no summary of it is sent, until its first message", async () => {
+  // The clock is held still, so that the events of a turn are stored at the same moment.
+  setSystemTime(new Date(Date.now()))
   const { run } = await start([{ text: ["ok"] }])
   const opened = (await run.evie.send({ type: "open_session", folder: run.projectFolder })).session
   const before = await run.evie.send({ type: "list_sessions" })
