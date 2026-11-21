@@ -37,9 +37,16 @@ export type EvieServer = {
 type Admitted = { token: string; device: string }
 
 // What the server keeps for each connection: who it is, the sessions it has
-// opened, how many sessions it is opening right now, and the questions it was
-// sent while opening that are still waiting, by id, with their session.
-type Connection = Admitted & { unsubscribe: () => void; sessions: Set<string>; opening: number; openingQuestions: Map<string, string> }
+// opened, how many sessions it is opening right now, the sessions it is
+// opening by their id right now, and the questions it was sent while
+// opening that are still waiting, by id, with their session.
+type Connection = Admitted & {
+  unsubscribe: () => void
+  sessions: Set<string>
+  opening: number
+  joining: Set<string>
+  openingQuestions: Map<string, string>
+}
 
 // The browser's cookie that holds its token.
 const COOKIE = "evie_token"
@@ -91,7 +98,7 @@ export function startServer(options: ServerOptions): EvieServer {
   // other's opening question. That is accepted: it needs both to be opening
   // at once, and a question from a session already open never goes astray.
   function sentTo(connection: Connection, event: EvieEvent): boolean {
-    if (connection.sessions.has(event.session)) return true
+    if (connection.sessions.has(event.session) || connection.joining.has(event.session)) return true
     return connection.opening > 0 && (event.type === "question" || event.type === "answer") && !openedHere.has(event.session)
   }
   // Closes the connection if its token has been taken back, and says whether
@@ -174,7 +181,7 @@ export function startServer(options: ServerOptions): EvieServer {
         // refused never reaches the core.
         const admitted = admit(request, server.port!)
         if (admitted instanceof Response) return admitted
-        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {}, sessions: new Set(), opening: 0, openingQuestions: new Map() } })) return undefined
+        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {}, sessions: new Set(), opening: 0, joining: new Set(), openingQuestions: new Map() } })) return undefined
         return new Response("Connect here with a WebSocket.", { status: 400 })
       }
       if (path === PATHS.check) {
@@ -205,6 +212,15 @@ export function startServer(options: ServerOptions): EvieServer {
         if (!message) return socket.close(1007, 'Each message must be JSON of the form { "id": ..., "command": ... }')
         const opening = message.command.type === "open_session"
         if (opening) socket.data.opening += 1
+        // A session opened by its id, as a client catching up does, is sent
+        // to this connection from now, before the core reads where it
+        // stands, so that every event after that reading reaches the client.
+        // A session already open is read in the same step it is handed the
+        // command. One opened again is read once it is open, so the events
+        // of its opening are sent both as they happen and in the reply, and
+        // the client skips the second by their numbers.
+        const joining = message.command.type === "open_session" ? message.command.session : undefined
+        if (joining !== undefined) socket.data.joining.add(joining)
         try {
           const reply = await replyTo(socket.data.device, message)
           // The session opened is learned from the reply, before the reply is
@@ -217,6 +233,7 @@ export function startServer(options: ServerOptions): EvieServer {
           send(socket, reply)
         } finally {
           if (opening) socket.data.opening -= 1
+          if (joining !== undefined) socket.data.joining.delete(joining)
         }
       },
       close(socket) {

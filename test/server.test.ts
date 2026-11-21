@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { runTerminal, type ConnectOptions, type Evie, type EvieEvent, type Plugin } from "../src/index.ts"
+import { connect, runTerminal, startServer, type ConnectOptions, type Evie, type EvieEvent, type Plugin } from "../src/index.ts"
 import { nextEvent, say, stored, type Run } from "./support/harness.ts"
 import { lineTo } from "./support/line.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
@@ -683,4 +683,39 @@ test("a command sent again while it is still being carried out waits for it, and
 
   expect(await waiting).toEqual({ text: "done" })
   expect(runs).toBe(1)
+})
+
+test("a session opened by its id is sent to the client from before the core reads where it stands, so no event falls in between", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  // Stands for the core sending an event of the session in the very step it
+  // is asked to open it.
+  const listeners = new Set<(event: EvieEvent) => void>()
+  const core: Evie = {
+    send(command) {
+      if (command.type === "open_session" && command.session !== undefined) {
+        for (const listener of listeners) listener({ type: "assistant_delta", session: command.session, text: "just then" })
+      }
+      return served.run.evie.send(command)
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+      const stop = served.run.evie.subscribe(listener)
+      return () => {
+        listeners.delete(listener)
+        stop()
+      }
+    },
+    close: () => served.run.evie.close(),
+  }
+  const server = startServer({ evie: core, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+  cleanups.push(() => server.stop())
+  const client = await connect({ url: server.url, token: served.token })
+  cleanups.push(() => client.close())
+  const heard: EvieEvent[] = []
+  client.subscribe((event) => heard.push(event))
+
+  await client.send({ type: "open_session", session: served.run.session })
+
+  expect(heard).toEqual([{ type: "assistant_delta", session: served.run.session, text: "just then" }])
 })
