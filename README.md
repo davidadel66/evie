@@ -696,8 +696,9 @@ evie-dev seed
 
 It fills only a folder that `EVIE_HOME` names, never the everyday
 `~/.evie`, and it refuses a data folder that already has sessions, so
-made-up sessions are never mixed in with real ones. To seed a folder again, remove `evie.db` and
-`server-token` from it first.
+made-up sessions are never mixed in with real ones. It also refuses when
+one of its project folders is already there. To seed a folder again,
+remove `evie.db` and `server-token` from it, and its `-seed` folder, first.
 
 ## What comes next
 

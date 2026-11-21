@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import { Database } from "bun:sqlite"
 import { existsSync } from "node:fs"
-import { mkdtemp, readdir, realpath, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createGuard } from "../src/plugins/guard.ts"
@@ -136,4 +136,18 @@ test("evie seed refuses to fill the everyday data folder: EVIE_HOME must name an
 
   expect(existsSync(everyday)).toBe(false)
   expect(existsSync(`${everyday}-seed`)).toBe(false)
+})
+
+test("evie seed refuses when one of its project folders is already there, and leaves it alone", async () => {
+  const home = await tempFolder()
+  const taken = join(`${home}-seed`, "recipe-box")
+  await mkdir(taken, { recursive: true })
+  await writeFile(join(taken, "notes.txt"), "someone's notes")
+
+  const seeded = await evie(["seed"], home)
+
+  expect(seeded.code).toBe(1)
+  expect(seeded.stderr).toContain(`${taken} is already there, so nothing was seeded. Remove it first`)
+  expect(await readFile(join(taken, "notes.txt"), "utf8")).toBe("someone's notes")
+  expect(await readdir(`${home}-seed`)).toEqual(["recipe-box"])
 })

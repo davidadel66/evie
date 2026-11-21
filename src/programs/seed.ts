@@ -1,5 +1,5 @@
-import { realpathSync } from "node:fs"
-import { mkdir, rm, writeFile } from "node:fs/promises"
+import { existsSync, realpathSync } from "node:fs"
+import { mkdir, writeFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { openStore } from "../core/store.ts"
 import { ask, createEvie, dataFolder, files, jobs, shell, subagents, type Plugin, type Settings } from "../index.ts"
@@ -244,6 +244,13 @@ export async function seed(env: Settings) {
     )
   }
 
+  // A project folder already there is not the seed's to replace: it may hold
+  // something else, or what an earlier seed left.
+  for (const name of Object.keys(PROJECTS)) {
+    const folder = join(projectsFolder(home), name)
+    if (existsSync(folder)) fail(`${folder} is already there, so nothing was seeded. Remove it first, or set EVIE_HOME to another folder.`)
+  }
+
   for (const [name, contents] of Object.entries(PROJECTS)) await makeProject(join(projectsFolder(home), name), contents).catch(fail)
   for (const seeded of SESSIONS) await seedSession(env, home, seeded).catch((cause) => fail(`The made-up session "${seeded.kind}" did not go as scripted: ${reason(cause)}`))
 
@@ -279,11 +286,10 @@ function sessionsIn(home: string): number {
   }
 }
 
-// Writes a made-up project's files, from scratch, and makes it a git
-// repository with one commit. Git is run apart from the owner's own git
+// Writes a made-up project's files and makes it a git repository with one
+// commit. Git is run apart from the owner's own git
 // settings, so that nothing in them, such as signing every commit, applies.
 async function makeProject(folder: string, contents: Record<string, string>) {
-  await rm(folder, { recursive: true, force: true })
   for (const [file, text] of Object.entries(contents)) {
     await mkdir(dirname(join(folder, file)), { recursive: true })
     await writeFile(join(folder, file), text)
