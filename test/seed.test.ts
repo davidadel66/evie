@@ -89,7 +89,6 @@ test("evie seed fills an empty data folder with made-up projects and sessions of
       "a plain conversation",
       "tool calls",
       "a question answered",
-      "a question still waiting",
       "a background job that finished",
       "one that started a subagent",
       "a subagent's own conversation",

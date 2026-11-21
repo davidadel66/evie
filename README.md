@@ -669,15 +669,15 @@ agent, is shared with the everyday Evie.
 
 `evie seed` fills an empty data folder with made-up projects and sessions,
 for trying out a development copy or a client without your real ones: a
-plain conversation, tool calls, a question answered and one still waiting,
-a background job, a subagent, and a compacted conversation. The projects
-are small git repositories beside the data folder, in a folder of the same
-name with `-seed` added, such as `~/.evie-dev-seed`: the tools are kept out
-of the data folder, so they could not work in a project inside it. Every
-session is made by running real turns through Evie against a scripted
-stand-in for the model, so it needs no key and costs nothing. The question
-still waiting is left as a server that is stopped all at once leaves one,
-so it is refused when a server first opens that session.
+plain conversation, tool calls, a question answered, a background job, a
+subagent, and a compacted conversation. The projects are small git
+repositories beside the data folder, in a folder of the same name with
+`-seed` added, such as `~/.evie-dev-seed`: the tools are kept out of the
+data folder, so they could not work in a project inside it. Every session
+is made by running real turns through Evie against a scripted stand-in for
+the model, so it needs no key and costs nothing. None of them is waiting
+for an answer: Evie refuses a question still open when it stops, so a
+session shows as waiting for an answer only while a real question is open.
 
 ```sh
 evie-dev seed

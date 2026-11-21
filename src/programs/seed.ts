@@ -55,9 +55,6 @@ type Session = {
   answer(choice: string): Promise<void>
   // Replaces the older part of the conversation with a summary, as /compact does.
   compact(): Promise<void>
-  // Sends a message and waits only until the session asks the owner
-  // something, which is left unanswered.
-  sayUntilAsked(text: string): Promise<void>
 }
 
 // One made-up session: what it shows, its project (none for the general
@@ -73,11 +70,6 @@ type Seeded = {
   // The size, in tokens, at which a conversation counts as long, when it is
   // set small so that a few turns are enough to compact.
   compactAt?: number
-  // Evie is not closed when the script is done, since closing it would
-  // refuse the question the session is waiting on. The session is left as a
-  // server that is stopped all at once leaves it, with the question in its
-  // log and no answer.
-  leftWaiting?: true
   run(session: Session): Promise<void>
 }
 
@@ -228,20 +220,6 @@ const SESSIONS: Seeded[] = [
   },
   // A session settled by hand belongs here too, once the core has a way to
   // settle one.
-  {
-    kind: "a question still waiting",
-    project: "garden-planner",
-    leftWaiting: true,
-    replies: [
-      {
-        text: ["A few names come to mind."],
-        calls: [{ name: "ask", input: { question: "Which name do you prefer for the project?", choices: ["Sprout", "Leafy", "Keep garden-planner"] } }],
-      },
-    ],
-    async run(session) {
-      await session.sayUntilAsked("Can you think of a friendlier name for this project?")
-    },
-  },
 ]
 
 export async function seed(env: Settings) {
@@ -368,17 +346,13 @@ async function seedSession(env: Settings, home: string, seeded: Seeded) {
         await until(() => question !== undefined || problems.length > 0)
         if (question !== undefined) await evie.send({ type: "answer_question", session, id: question, choice })
       },
-      async sayUntilAsked(text) {
-        await evie.send({ type: "send_message", session, text })
-        await until(() => question !== undefined || problems.length > 0)
-      },
       async compact() {
         const { text } = await evie.send({ type: "run_command", session, name: "compact", args: "" })
         if (!text.startsWith("Compacted")) problems.push(text)
       },
     })
   } finally {
-    if (!seeded.leftWaiting) await evie.close()
+    await evie.close()
   }
   if (problems.length > 0) throw new Error(problems.join(" "))
   const allUsed = (who: string, asked: number, replies: number) => {
