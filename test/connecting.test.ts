@@ -1,8 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
-import { join } from "node:path"
-import { openStore } from "../src/core/store.ts"
 import { connect } from "../src/index.ts"
-import { createTokens } from "../src/server/tokens.ts"
+import { openTokens } from "../src/server/tokens.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
 
@@ -73,12 +71,12 @@ test("Evie's own page, and a page the owner listed, are let in", async () => {
 
 // Takes a token back the way `evie token remove` does: from a database
 // handle of its own, while the server holds the database open.
-function takeBack(home: string, name: string) {
-  const db = openStore(join(home, "evie.db"))
+async function takeBack(home: string, name: string) {
+  const tokens = await openTokens(home)
   try {
-    return createTokens(db).remove(name)
+    return tokens.remove(name)
   } finally {
-    db.close()
+    tokens.close()
   }
 }
 
@@ -90,7 +88,7 @@ test("a token taken back is refused from then on and its open connection is clos
   await served.connect({ onDrop: (reason) => (dropped = reason) })
   const phoneClient = await served.connect({ token: phone.secret })
 
-  expect(takeBack(served.run.home, "test device")).toBe(true)
+  expect(await takeBack(served.run.home, "test device")).toBe(true)
   while (dropped === undefined) await Bun.sleep(5)
 
   expect(dropped).toBe("This device's token was taken back")
@@ -103,7 +101,7 @@ test("a command sent with a token that was just taken back is not carried out", 
   const served = await start({ recheckEvery: 60_000 })
   const client = await served.connect()
 
-  takeBack(served.run.home, "test device")
+  await takeBack(served.run.home, "test device")
 
   await expect(client.send({ type: "open_session", folder: served.run.projectFolder })).rejects.toThrow(
     "The connection to Evie was lost before it answered: This device's token was taken back.",

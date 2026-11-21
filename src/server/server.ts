@@ -31,10 +31,12 @@ export type EvieServer = {
   stop(): Promise<void>
 }
 
-// What the server keeps for each connection: the token it was opened with,
-// the name of its device, the sessions it has opened, and how many sessions
-// it is opening right now.
-type Connection = { token: string; device: string; unsubscribe: () => void; sessions: Set<string>; opening: number }
+// A device that is let in: the token it brought, and the device's name.
+type Admitted = { token: string; device: string }
+
+// What the server keeps for each connection: who it is, the sessions it has
+// opened, and how many sessions it is opening right now.
+type Connection = Admitted & { unsubscribe: () => void; sessions: Set<string>; opening: number }
 
 // The close code for a connection whose token was taken back. Codes from
 // 4000 are the application's own.
@@ -59,13 +61,13 @@ export function startServer(options: ServerOptions): EvieServer {
     if (connection.sessions.has(event.session)) return true
     return connection.opening > 0 && (event.type === "question" || event.type === "answer") && !openedHere.has(event.session)
   }
-  // Closes the connection if its token has been taken back, and says whether it is still let in.
-  const stillLetIn = (socket: ServerWebSocket<Connection>) => {
-    if (options.tokens.check(socket.data.token) !== undefined) return true
+  // Closes the connection if its token has been taken back, and says whether it did.
+  const closeIfTakenBack = (socket: ServerWebSocket<Connection>) => {
+    if (options.tokens.check(socket.data.token) !== undefined) return false
     socket.close(TAKEN_BACK, "This device's token was taken back")
-    return false
+    return true
   }
-  const listed = (options.origins ?? []).map((origin) => new URL(origin).origin)
+  const allowedOrigins = (options.origins ?? []).map((origin) => new URL(origin).origin)
 
   // Any web page open in a browser can try to reach a server on the same
   // computer, and the browser sends Evie's cookie with it. But a browser
@@ -75,12 +77,12 @@ export function startServer(options: ServerOptions): EvieServer {
   function refusedPage(request: Request, port: number): Response | undefined {
     const origin = request.headers.get("origin")
     const own = [`http://127.0.0.1:${port}`, `http://localhost:${port}`, `http://${options.host}:${port}`]
-    if (origin === null || own.includes(origin) || listed.includes(origin)) return undefined
+    if (origin === null || own.includes(origin) || allowedOrigins.includes(origin)) return undefined
     return new Response("Connections from this page are not allowed.", { status: 403 })
   }
 
   // The device a token belongs to, or the answer that refuses it.
-  function deviceFor(token: string | undefined): { token: string; device: string } | Response {
+  function deviceFor(token: string | undefined): Admitted | Response {
     const device = token === undefined ? undefined : options.tokens.check(token)
     if (token === undefined || device === undefined) return new Response("This needs a token that Evie accepts.", { status: 401 })
     return { token, device }
@@ -89,7 +91,7 @@ export function startServer(options: ServerOptions): EvieServer {
   // Who is asking: the device whose token the request carries, in the
   // `Authorization` header or the browser's cookie, or the answer that
   // refuses it.
-  function admit(request: Request, port: number): { token: string; device: string } | Response {
+  function admit(request: Request, port: number): Admitted | Response {
     const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]
     const cookie = new Bun.CookieMap(request.headers.get("cookie") ?? "").get(COOKIE) ?? undefined
     return refusedPage(request, port) ?? deviceFor(bearer ?? cookie)
@@ -139,7 +141,7 @@ export function startServer(options: ServerOptions): EvieServer {
       },
       async message(socket, text) {
         // A command is carried out only while its device is still let in.
-        if (!stillLetIn(socket)) return
+        if (closeIfTakenBack(socket)) return
         const message = parse(String(text))
         // A client that sends something else has a bug. Its connection is
         // closed, saying why, and nothing else is touched.
@@ -170,7 +172,7 @@ export function startServer(options: ServerOptions): EvieServer {
   })
 
   const recheck = setInterval(() => {
-    for (const socket of connections) stillLetIn(socket)
+    for (const socket of connections) closeIfTakenBack(socket)
   }, options.recheckEvery ?? 3000)
 
   return {

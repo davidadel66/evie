@@ -1,7 +1,8 @@
 import type { Database } from "bun:sqlite"
 import { createHash, randomBytes } from "node:crypto"
-import { readFile, rename, rm, writeFile } from "node:fs/promises"
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import { openStore } from "../core/store.ts"
 
 // The tokens devices connect to the server with: one long random secret per
 // device, each with a name such as "laptop" or "phone", so that one can be
@@ -22,10 +23,18 @@ export type Tokens = {
 
 const hash = (secret: string) => createHash("sha256").update(secret).digest("hex")
 
-// Works on the `token` table of the database it is given. The server and the
-// token commands each open the database, so a token taken back by the
-// command is refused by a server that is already running.
-export function createTokens(db: Database): Tokens {
+// The tokens in the data folder's database, which is made if it is not there
+// yet. The server and the token commands each open it for themselves, so a
+// token taken back by the command is refused by a server that is already
+// running. `close` closes the database.
+export async function openTokens(home: string): Promise<Tokens & { close(): void }> {
+  await mkdir(home, { recursive: true })
+  const db = openStore(join(home, "evie.db"))
+  return { ...createTokens(db), close: () => db.close() }
+}
+
+// Works on the `token` table of the database it is given.
+function createTokens(db: Database): Tokens {
   return {
     add(name) {
       const secret = randomBytes(32).toString("base64url")
@@ -64,7 +73,16 @@ export async function ensureOwnToken(tokens: Tokens, home: string): Promise<void
 }
 
 // This computer's token, or undefined when the server has not made one yet.
+// A file that is there and cannot be read is a problem to report, not to
+// pass over.
 export async function readOwnToken(home: string): Promise<string | undefined> {
-  const text = await readFile(join(home, OWN_FILE), "utf8").catch(() => "")
+  const file = join(home, OWN_FILE)
+  let text: string
+  try {
+    text = await readFile(file, "utf8")
+  } catch (cause) {
+    if ((cause as { code?: string }).code === "ENOENT") return undefined
+    throw new Error(`${file} could not be read: ${cause instanceof Error ? cause.message : String(cause)}`)
+  }
   return text.trim() || undefined
 }

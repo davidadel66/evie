@@ -1,7 +1,5 @@
-import { join } from "node:path"
-import { openStore } from "../../src/core/store.ts"
 import { connect, startServer, type ConnectOptions, type EvieOptions, type Plugin } from "../../src/index.ts"
-import { createTokens } from "../../src/server/tokens.ts"
+import { openTokens } from "../../src/server/tokens.ts"
 import { startEvie } from "./harness.ts"
 
 export type Served = Awaited<ReturnType<typeof serveEvie>>
@@ -14,8 +12,7 @@ export async function serveEvie(
   options: { origins?: string[]; recheckEvery?: number; questions?: boolean; projectSettings?: NonNullable<EvieOptions["projectSettings"]> } = {},
 ) {
   const run = await startEvie(plugins, { ...(options.questions && { questions: true }), ...(options.projectSettings && { projectSettings: options.projectSettings }) })
-  const db = openStore(join(run.home, "evie.db"))
-  const tokens = createTokens(db)
+  const tokens = await openTokens(run.home)
   const made = tokens.add("test device")
   if (!("secret" in made)) throw new Error(made.refused)
   const server = startServer({
@@ -41,7 +38,7 @@ export async function serveEvie(
     async stop() {
       for (const client of clients) await client.close()
       await server.stop()
-      db.close()
+      tokens.close()
       await run.stop()
     },
   }
