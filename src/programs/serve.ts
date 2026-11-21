@@ -51,10 +51,11 @@ export async function serve(env: Settings) {
   const stopTidying = keepOutputTidy(join(home, "tool-output"))
   void evie.resumeWork().catch((cause) => console.error(`The work left by the last run could not be picked up: ${reason(cause)}`))
 
-  // Stopped for good, with Ctrl-C or with the file that says so, Evie is
-  // closed properly: turns are stopped, and so is any command left running
-  // in the background. Stopped any other way, as when the login service is
-  // restarted, its work is left as it is for the next start to pick up.
+  // Stopped for good, with Ctrl-C, by closing the terminal it runs in, or
+  // with the file that says so, Evie is closed properly: turns are stopped,
+  // and so is any command left running in the background. Told to stop
+  // otherwise, as launchd does when the login service is restarted, its
+  // work is left as it is for the next start to pick up.
   // Each step is taken even when the one before it fails, so the core is
   // closed whatever happens to the listener. Told again while that is under
   // way, it stops at once.
@@ -64,7 +65,7 @@ export async function serve(env: Settings) {
       if (stopping) process.exit(code)
       stopping = true
       stopTidying()
-      const forGood = signal === "SIGINT" || existsSync(join(home, STOP_FOR_GOOD))
+      const forGood = signal !== "SIGTERM" || existsSync(join(home, STOP_FOR_GOOD))
       try {
         rmSync(join(home, STOP_FOR_GOOD), { force: true })
       } catch {

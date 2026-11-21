@@ -656,8 +656,8 @@ the best examples to read.
   included, is carried on by itself, with a note telling the model to check
   before repeating anything that changes something: at most three times in
   five minutes, and not when the turn was waiting for an answer. Only
-  stopping the server for good, with Ctrl-C where it runs or by removing
-  its login service, stops background commands.
+  stopping the server for good, with Ctrl-C, by closing the terminal it
+  runs in, or by removing its login service, stops background commands.
 - **One way in, one way out.** A client sends commands and subscribes to
   events. The terminal is a client like any other and uses nothing else, so
   a web or phone client can be added without changing the core.

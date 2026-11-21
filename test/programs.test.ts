@@ -539,8 +539,9 @@ test("evie serve stopped as a restart stops it leaves a background command runni
   expect(await notesOnceThere(home, session, 1)).toEqual([`Background job 1 (sleep 1; echo built) has finished.\n\nbuilt\n\nThe full output is in ${output}.`])
 })
 
-test("evie serve stopped with Ctrl-C, or with a stop-for-good file in its data folder, stops its background commands", async () => {
-  for (const how of ["Ctrl-C", "stop-for-good"] as const) {
+test("evie serve stopped with Ctrl-C, by closing its terminal, or with a stop-for-good file in its data folder, stops its background commands", async () => {
+  const codes = { "Ctrl-C": 130, "terminal closed": 129, "stop-for-good": 143 }
+  for (const how of ["Ctrl-C", "terminal closed", "stop-for-good"] as const) {
     const port = await freePort()
     const { home, server, output } = await commandRunning(port, "ps -o pgid= -p $$ | tr -d ' '; sleep 30")
     while ((await readFile(output, "utf8")).trim() === "") await Bun.sleep(5)
@@ -548,12 +549,13 @@ test("evie serve stopped with Ctrl-C, or with a stop-for-good file in its data f
     cleanups.push(async () => void (groupThere(group) && process.kill(-group, "SIGKILL")))
 
     if (how === "Ctrl-C") server.kill("SIGINT")
+    else if (how === "terminal closed") server.kill("SIGHUP")
     else {
       await writeFile(join(home, "stop-for-good"), "")
       server.kill("SIGTERM")
     }
 
-    expect(await server.exited).toBe(how === "Ctrl-C" ? 130 : 143)
+    expect(await server.exited).toBe(codes[how])
     expect(groupThere(group)).toBe(false)
     expect(await Bun.file(join(home, "stop-for-good")).exists()).toBe(false)
   }
