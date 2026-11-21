@@ -1,12 +1,23 @@
 import type { Database } from "bun:sqlite"
-import type { EventBodies, SessionState, SessionSummary } from "./types.ts"
+import type { EventBodies, SessionState, SessionSummary, SummaryEvent } from "./types.ts"
 
 // Summaries: one line for each session, for a client to list sessions by
-// without opening them.
+// without opening them, and sent again whenever that line changes.
+//
+// A summary is worked out afresh each time, from the session's log and
+// from what is running, and the last one sent of each session is kept, to
+// tell whether it has changed. A subagent's session has none: it is part of
+// the session that started it.
 
 export type Summaries = {
   // Every session that is not a subagent's, the latest active first.
   list(): SessionSummary[]
+  // Something has happened in a session, or it was made: its summary is
+  // sent if it has changed.
+  changed(session: string): void
+  // Sends the summary of each session that has changed with nothing
+  // happening in it, which only time does: a week of quiet settles it.
+  look(): void
 }
 
 // What a summary is worked out from: the session's own row, and a few
@@ -46,11 +57,13 @@ export function createSummaries(options: {
   asking(session: string): boolean
   open(session: string): boolean
   jobRunning(session: string): boolean
+  emit(event: SummaryEvent): void
 }): Summaries {
   const { db } = options
   const all = db.query<Row, []>(
     `SELECT ${COLUMNS} FROM session WHERE parent IS NULL ORDER BY COALESCE(active, created) DESC, created DESC`,
   )
+  const one = db.query<Row, [string]>(`SELECT ${COLUMNS} FROM session WHERE id = ? AND parent IS NULL`)
 
   const lastActive = (row: Row) => row.active ?? row.created
   const stateOf = (row: Row): SessionState => {
@@ -73,10 +86,30 @@ export function createSummaries(options: {
     lastActive: lastActive(row),
   })
 
+  // The last summary sent of each session, or worked out when Evie started.
+  const sent = new Map<string, SessionSummary>()
+  const send = (summary: SessionSummary) => {
+    const was = sent.get(summary.session)
+    if (was && same(was, summary)) return
+    sent.set(summary.session, summary)
+    options.emit({ type: "summary", ...summary })
+  }
+  for (const summary of all.all().map(summaryOf)) sent.set(summary.session, summary)
+
   return {
     list: () => all.all().map(summaryOf),
+    changed(session) {
+      const row = one.get(session)
+      if (row) send(summaryOf(row))
+    },
+    look() {
+      for (const row of all.all()) send(summaryOf(row))
+    },
   }
 }
+
+const same = (one: SessionSummary, other: SessionSummary) =>
+  one.project === other.project && one.name === other.name && one.state === other.state && one.lastActive === other.lastActive
 
 // How long a session's name may be, in characters, before it is cut short.
 const NAME_LENGTH = 60

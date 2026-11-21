@@ -58,9 +58,9 @@ function backgroundWork() {
   return { plugin, finish: (result: string) => finish(result) }
 }
 
-async function start(script: ScriptedReply[], plugins: Plugin[] = []) {
+async function start(script: ScriptedReply[], plugins: Plugin[] = [], options: { quietCheckEvery?: number } = {}) {
   const model = scriptedProvider(script)
-  const run = await startEvie([model.plugin, ...plugins], { questions: true })
+  const run = await startEvie([model.plugin, ...plugins], { questions: true, ...options })
   cleanups.push(run.stop)
   return { run, model }
 }
@@ -248,6 +248,51 @@ test("only a session that is there, and not a subagent's, can be settled", async
   await expect(run.evie.send({ type: "settle_session", session: child, settled: true })).rejects.toThrow(
     `The session "${child}" is a subagent's, which is not listed. Settle the session that started it, "${run.session}", instead.`,
   )
+})
+
+// ---- Summaries --------------------------------------------------------------------------------
+
+const summaries = (run: Run) => run.events.flatMap((event) => (event.type === "summary" ? [event] : []))
+
+test("a session's summary is sent when it is made, and whenever its state, name or latest activity changes, and only then", async () => {
+  // The clock is held still, so that the session is made, and the events of a turn are stored, at the same moment.
+  const now = Date.now()
+  setSystemTime(new Date(now))
+  const { run } = await start([{ text: ["Hel", "lo."] }, { text: ["Back."] }])
+  await say(run, "hi")
+  // Neither of these changes anything in its summary: bringing back a session that is active, or a settling with nothing after.
+  await run.evie.send({ type: "settle_session", session: run.session, settled: false })
+  await run.evie.send({ type: "settle_session", session: run.session, settled: true })
+  await run.evie.send({ type: "settle_session", session: run.session, settled: true })
+  setSystemTime(new Date(now + 1))
+  await say(run, "hello again")
+
+  const summary = { type: "summary" as const, session: run.session, project: run.project!.id, name: "hi" }
+  expect(summaries(run)).toEqual([
+    { ...summary, name: null, state: "active", lastActive: now },
+    { ...summary, state: "working", lastActive: now },
+    { ...summary, state: "active", lastActive: now },
+    { ...summary, state: "settled", lastActive: now },
+    { ...summary, state: "working", lastActive: now + 1 },
+    { ...summary, state: "active", lastActive: now + 1 },
+  ])
+  // Each is sent after the event that changed it.
+  expect(run.events.findLastIndex((event) => event.type === "summary")).toBe(run.events.findLastIndex((event) => event.type === "turn_end") + 1)
+})
+
+test("the core looks every so often for sessions that a week of quiet has settled, and sends each one's summary once", async () => {
+  const { run } = await start([{ text: ["ok"] }], [], { quietCheckEvery: 10 })
+  await say(run, "hi")
+  const settled = new Promise<void>((resolve) => run.evie.subscribe((event) => event.type === "summary" && event.state === "settled" && resolve()))
+
+  setSystemTime(new Date(stored(run.events).at(-1)!.time + 7 * DAY))
+  await settled
+  // Long enough for the core to look several times more.
+  await Bun.sleep(60)
+
+  expect(summaries(run).filter((summary) => summary.state === "settled")).toEqual([
+    { type: "summary", session: run.session, project: run.project!.id, name: "hi", state: "settled", lastActive: stored(run.events).at(-1)!.time },
+  ])
 })
 
 // ---- History ------------------------------------------------------------------------------------

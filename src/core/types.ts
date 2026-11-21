@@ -61,7 +61,7 @@ export type DeltaEvent = { type: "assistant_delta"; session: string; text: strin
 // A job started or ended. Sent to clients, never stored.
 export type JobEvent = { type: "job"; session: string; job: Job }
 
-export type EvieEvent = StoredEvent | DeltaEvent | JobEvent
+export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent
 
 // ---- Sessions in a list ---------------------------------------------------------
 
@@ -78,6 +78,12 @@ export type SessionState = "needs_you" | "working" | "active" | "settled"
 // null until it has one. `lastActive` is the time of its latest stored
 // event, settling aside, or when it was made if it has none.
 export type SessionSummary = { session: string; project: string | null; name: string | null; state: SessionState; lastActive: number }
+
+// A session's summary, sent when the session is made and whenever its
+// state, name or latest activity changes, after the event that changed it.
+// Sent to clients, never stored. Evie's server sends it to every client,
+// whatever sessions it has open, so that each can keep a list of sessions.
+export type SummaryEvent = { type: "summary" } & SessionSummary
 
 // ---- The request to a model ---------------------------------------------------
 

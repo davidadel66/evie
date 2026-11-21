@@ -32,6 +32,10 @@ export type EvieOptions = {
   // called the first time a session opens in the project, and can ask the
   // owner a question, such as whether to trust the project.
   projectSettings?: (project: Project, context: { ask: Ask }) => ProjectSettings | readonly Plugin[] | Promise<ProjectSettings | readonly Plugin[]>
+  // How often, in milliseconds, sessions are looked at for any that a week
+  // of quiet has settled, to send their summaries: nothing happens in a
+  // session to tell of it. Once an hour when left out, which is for tests to change.
+  quietCheckEvery?: number
 }
 
 // How many events a page of a session's history holds, unless it asks for
@@ -121,7 +125,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   const projects = createProjects(db)
 
   const listeners = new Set<(event: EvieEvent) => void>()
-  const emit = (event: EvieEvent) => {
+  const deliver = (event: EvieEvent) => {
     for (const listener of [...listeners]) {
       // A client that throws while handling an event must not break the turn.
       try {
@@ -129,14 +133,14 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       } catch {}
     }
   }
+  // Every event goes out this way. Then the summary of its session, if the
+  // event changed it. A piece of a reply cannot, and is sent too often to look.
+  const emit = (event: EvieEvent) => {
+    deliver(event)
+    if (!closed && event.type !== "assistant_delta" && event.type !== "summary") summaries.changed(event.session)
+  }
 
   const questions = createQuestions({ log, emit })
-  const summaries = createSummaries({
-    db,
-    asking: (session) => questions.waiting(session).length > 0,
-    open: (session) => sessions.has(session),
-    jobRunning: (session) => jobs.list(session).some((job) => job.status === "running"),
-  })
   let closed = false
   // Job output goes beside the tool output that was too long to show.
   const jobs = createJobs({
@@ -150,6 +154,16 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   // `parent` is the session that started this one as a subagent.
   type Open = { loop: Loop; project: Project | null; host: Host; notices: string[]; model: string; canAnswer: boolean; parent?: string }
   const sessions = new Map<string, Open>()
+
+  const summaries = createSummaries({
+    db,
+    asking: (session) => questions.waiting(session).length > 0,
+    open: (session) => sessions.has(session),
+    jobRunning: (session) => jobs.list(session).some((job) => job.status === "running"),
+    emit: deliver,
+  })
+  // It is no reason on its own to keep the process running.
+  const quietCheck = setInterval(() => summaries.look(), options.quietCheckEvery ?? 60 * 60_000).unref()
 
   // Starts the turn loop of a session and lists the session as open. Used
   // for a session a client opens and for a subagent alike: they differ only
@@ -294,7 +308,12 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     // A new session is created only once it is needed: when the project's
     // settings ask a question, or when everything else has gone well.
     let session = last
-    const sessionId = () => (session ??= projects.createSession(project))
+    const sessionId = () => {
+      if (session !== undefined) return session
+      session = projects.createSession(project)
+      summaries.changed(session)
+      return session
+    }
     const canAnswer = input.questions === true
 
     // A session still open in this process, such as one another client left
@@ -504,6 +523,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     },
     async close() {
       closed = true
+      clearInterval(quietCheck)
       // A question still open is refused, which lets whatever asked it finish.
       questions.refuseAll()
       // Jobs are marked and noted as stopped by the closing first, while
