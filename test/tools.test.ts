@@ -1,5 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
-import { readFile, realpath } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { deleteOldOutput } from "../src/core/tools.ts"
 import type { Plugin, Tool, ToolContext } from "../src/index.ts"
 import { say, startEvie, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
@@ -288,4 +291,58 @@ test("one line too long to show is cut part way, and the note says so in bytes",
   const [result] = results(run)
   expect(result).toContain("[Output cut: showing the first 51200 of 80000 bytes.")
   expect(result).not.toContain("�")
+})
+
+// ---- Saved output is kept for a week ----------------------------------------------
+
+const DAY = 24 * 60 * 60 * 1000
+
+// A folder of saved output holding the given files, each last changed the
+// given number of days ago.
+async function savedOutput(files: Record<string, number>) {
+  const folder = await mkdtemp(join(tmpdir(), "evie-tool-output-"))
+  const after = stop
+  stop = async () => {
+    await after?.()
+    await rm(folder, { recursive: true, force: true })
+  }
+  for (const [name, days] of Object.entries(files)) {
+    const path = join(folder, name)
+    await mkdir(join(path, ".."), { recursive: true })
+    await writeFile(path, "output")
+    const when = new Date(Date.now() - days * DAY)
+    await utimes(path, when, when)
+  }
+  return folder
+}
+
+const left = async (folder: string) => (await readdir(folder, { recursive: true })).sort()
+
+test("saved output older than seven days is deleted, and so is a folder left empty, while newer output is kept", async () => {
+  const folder = await savedOutput({
+    "old-session/call_1.txt": 8,
+    "old-session/job-1.log": 30,
+    "mixed-session/call_1.txt": 8,
+    "mixed-session/call_2.txt": 6,
+    "mixed-session/job-1.log": 0,
+  })
+
+  await deleteOldOutput(folder)
+
+  expect(await left(folder)).toEqual(["mixed-session", "mixed-session/call_2.txt", "mixed-session/job-1.log"])
+})
+
+test("a missing folder, or a file that cannot be deleted, does not stop the rest being tidied", async () => {
+  const folder = await savedOutput({ "locked/call_1.txt": 8, "open/call_1.txt": 8 })
+  // A file is deleted from its folder, so this one's cannot be.
+  await chmod(join(folder, "locked"), 0o500)
+
+  try {
+    await deleteOldOutput(join(folder, "missing"))
+    await deleteOldOutput(folder)
+  } finally {
+    await chmod(join(folder, "locked"), 0o700)
+  }
+
+  expect(await left(folder)).toEqual(["locked", "locked/call_1.txt"])
 })

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises"
+import { lstat, mkdir, readdir, rmdir, unlink, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import type { CheckedToolCall, Tool, ToolCall, ToolContext } from "./types.ts"
 
@@ -166,3 +166,38 @@ async function capOutput(output: string, savePath: string, keep: "start" | "end"
 }
 
 const safeName = (id: string) => id.replace(/[^A-Za-z0-9_-]/g, "_") || "call"
+
+// Saved output is kept for a week, long enough to come back to, and then
+// deleted so that the folder does not grow for ever.
+const KEEP_OUTPUT_FOR = 7 * 24 * 60 * 60 * 1000
+
+// Deletes the files in a folder of saved output last changed more than a
+// week ago, then every folder inside it left empty. The folder itself is
+// kept. Anything that cannot be read or deleted is left as it is: tidying
+// up must never stop Evie from starting.
+export async function deleteOldOutput(folder: string): Promise<void> {
+  const oldest = Date.now() - KEEP_OUTPUT_FOR
+  const tidy = async (inside: string) => {
+    let entries
+    try {
+      entries = await readdir(inside, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const path = join(inside, entry.name)
+      try {
+        if (entry.isDirectory()) {
+          await tidy(path)
+          // Refused, as it should be, while anything is left inside.
+          await rmdir(path)
+        } else if ((await lstat(path)).mtimeMs < oldest) {
+          await unlink(path)
+        }
+      } catch {
+        // Left as it is.
+      }
+    }
+  }
+  await tidy(folder)
+}

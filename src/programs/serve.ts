@@ -1,13 +1,19 @@
+import { join } from "node:path"
+import { deleteOldOutput } from "../core/tools.ts"
 import { createEvie, dataFolder, loadSettingsFiles, startServer, type EvieServer, type Settings } from "../index.ts"
 import { ensureOwnToken, openTokens } from "../server/tokens.ts"
 import { loadServerSettings } from "../settings-files.ts"
 import { EXIT_CODES, fail, print, reason, type StopSignal } from "./common.ts"
 
 // `evie serve`: starts the core with the plugins the settings list, and
-// serves it until told to stop. The first time, it makes this computer's token.
+// serves it until told to stop. The first time, it makes this computer's
+// token. Each time, it first tidies away tool output older than a week.
 export async function serve(env: Settings) {
   const settings = await loadSettingsFiles({ env }).catch(fail)
   const serverSettings = await loadServerSettings({ env }).catch(fail)
+  // Tool output saved more than a week ago is deleted, before the core starts
+  // so that nothing is writing there meanwhile.
+  await deleteOldOutput(join(dataFolder(env), "tool-output"))
   const evie = await createEvie({
     env,
     plugins: settings.plugins,
