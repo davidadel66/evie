@@ -124,7 +124,10 @@ export function startServer(options: ServerOptions): EvieServer {
       async message(socket, text) {
         // A command is carried out only while its device is still let in.
         if (!stillLetIn(socket)) return
-        const message = JSON.parse(String(text)) as ClientMessage
+        const message = parse(String(text))
+        // A client that sends something else has a bug. Its connection is
+        // closed, saying why, and nothing else is touched.
+        if (!message) return socket.close(1007, 'Each message must be JSON of the form { "id": ..., "command": ... }')
         try {
           send(socket, { reply: message.id, result: await options.evie.send(message.command) })
         } catch (cause) {
@@ -152,3 +155,14 @@ export function startServer(options: ServerOptions): EvieServer {
 }
 
 const send = (socket: ServerWebSocket<Connection>, message: ServerMessage) => socket.send(JSON.stringify(message))
+
+// A message from a client, when it has the shape of one. Whether the command
+// is one the core knows is for the core to say, in its reply.
+function parse(text: string): ClientMessage | undefined {
+  try {
+    const message = JSON.parse(text) as Partial<ClientMessage> | null
+    return typeof message?.id === "string" && typeof message.command === "object" && message.command !== null ? (message as ClientMessage) : undefined
+  } catch {
+    return undefined
+  }
+}

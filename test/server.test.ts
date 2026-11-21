@@ -239,3 +239,17 @@ test("when the connection drops, a command still waiting fails with a clear erro
   expect(dropped).toBeString()
   await expect(client.send({ type: "cancel", session })).rejects.toThrow("Not connected to Evie")
 })
+
+test("a message that is not a command closes that connection only, saying why, and the server carries on", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  const socket = new WebSocket(`${served.server.url.replace(/^http/, "ws")}/ws`, { headers: { Authorization: `Bearer ${served.token}` } })
+  await new Promise((resolve) => socket.addEventListener("open", resolve))
+  const closed = new Promise<CloseEvent>((resolve) => socket.addEventListener("close", resolve))
+
+  socket.send("not a command")
+
+  expect((await closed).reason).toBe('Each message must be JSON of the form { "id": ..., "command": ... }')
+  const client = await served.connect()
+  expect((await client.send({ type: "open_session", folder: served.run.projectFolder })).session).toBeString()
+})

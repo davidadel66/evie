@@ -4,7 +4,8 @@ import { PATHS, type ClientMessage, type ServerMessage } from "./wire.ts"
 export type ConnectOptions = {
   // The server's address, such as http://127.0.0.1:3843.
   url: string
-  // This device's token.
+  // This device's token. Left out in a browser, which cannot set headers on
+  // a WebSocket and sends instead the cookie it was given at login.
   token?: string
   // Called when the connection ends without `close` being called, such as
   // when the server stops, with why.
