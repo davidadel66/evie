@@ -38,10 +38,24 @@ export class ConnectError extends Error {
 }
 
 type Opened = Commands["open_session"]["output"]
+type OpenInput = Extract<Command, { type: "open_session" }>
+// What the server sends back for one command.
+type Reply = Extract<ServerMessage, { reply: string }>
 
-// A command the owner sent that has not been answered yet. `sentOn` is the
-// line it was last sent on; `resent` says it was sent on an earlier line too.
-type Waiting = { message: ClientMessage; resolve(result: unknown): void; reject(error: Error): void; sentOn?: WebSocket; resent: boolean }
+// A command waiting for its reply. The owner's are sent again on each new
+// line until they are answered. The client's own, to catch up on a session
+// (`own`), are sent once: when their line drops they are given up on, and
+// the client catches up afresh on the next line.
+type Waiting = {
+  message: ClientMessage
+  own: boolean
+  // The line it was last sent on, and whether it was sent on an earlier one too.
+  sentOn?: WebSocket
+  resent: boolean
+  answer(reply: Reply): void
+  // No reply will come, for the reason given.
+  lose(why: string): void
+}
 
 // What the client keeps for each session whose events it has passed on.
 type Seen = {
@@ -51,7 +65,7 @@ type Seen = {
   shown: string
   // For a session the owner opened: whether it was opened as one that
   // shows questions, so that it is opened the same way after a drop.
-  opened?: { questions: boolean }
+  openAs?: { questions: boolean }
   // While catching up on the session: its live events, held back until
   // what was missed has been passed on.
   held: EvieEvent[] | undefined
@@ -64,6 +78,9 @@ type Seen = {
 // then twice as long each time, up to ten seconds.
 const FIRST_WAIT = 1000
 const LONGEST_WAIT = 10_000
+// How long a try to connect again may take before it is given up on, for a
+// server that takes the connection but never answers.
+const CONNECT_TIMEOUT = 10_000
 
 // Connects to Evie's server and returns the same client interface the core
 // gives, `send`, `subscribe` and `close`, carried over one WebSocket. A
@@ -85,24 +102,19 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   let socket: WebSocket | undefined = await openSocket(address, headers, options.signal)
 
   const listeners = new Set<(event: EvieEvent) => void>()
-  // The owner's commands that have not been answered, by id, in the order sent.
+  // Commands waiting for their reply, by id, in the order sent.
   const waiting = new Map<string, Waiting>()
-  // The client's own commands, to catch up on a session. They are never
-  // sent again: after another drop, it catches up afresh.
-  const catching = new Map<string, { resolve(message: ServerMessage): void; reject(error: Error): void }>()
   const sessions = new Map<string, Seen>()
-  // True from the line coming back until every session has been caught up on.
-  let catchingUp = false
-  // True from the owner being told the line dropped until being told it is back.
-  let down = false
-  // Set once the client has stopped for good: why.
-  let ended: string | undefined
-  // Fires when the client stops, to stop it trying again.
+  // True from the line coming back until every session has been caught up
+  // on. Meanwhile only answers to questions are sent: see `flush`.
+  let rejoining = false
+  // Fires when the client stops for good, with why, and stops it trying again.
   const stopping = new AbortController()
-  let closed: Promise<void> | undefined
+  let closing: Promise<void> | undefined
 
-  const tell = (event: EvieEvent) => {
-    // As in the core, a listener that throws does not stop the others hearing it.
+  // Hands an event to every listener. As in the core, a listener that
+  // throws does not stop the others hearing it.
+  const deliver = (event: EvieEvent) => {
     for (const listener of [...listeners]) {
       try {
         listener(event)
@@ -118,7 +130,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 
   // Passes an event on to the owner, once: a stored event whose number has
   // been passed on already is skipped.
-  function pass(event: EvieEvent) {
+  function passOn(event: EvieEvent) {
     const seen = seenOf(event.session)
     if ("seq" in event) {
       if (!isNew(seen, event)) return
@@ -127,49 +139,51 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     if (event.type === "assistant_delta") seen.shown += event.text
     // A reply's text ends with the reply, or with its turn when it failed.
     else if (event.type === "assistant_message" || event.type === "turn_end" || event.type === "compaction") seen.shown = ""
-    tell(event)
+    deliver(event)
   }
   // Passes on, as one piece, the part of a reply's text that has not been passed on yet.
-  function passText(session: string, text: string) {
+  function passOnText(session: string, text: string) {
     const rest = unshown(text, seenOf(session).shown)
-    if (rest !== "") pass({ type: "assistant_delta", session, text: rest })
+    if (rest !== "") passOn({ type: "assistant_delta", session, text: rest })
   }
 
-  function arrived(event: EvieEvent) {
+  // A live event from the server.
+  function onEvent(event: EvieEvent) {
     const seen = sessions.get(event.session)
-    if (!seen?.held) return pass(event)
+    if (!seen?.held) return passOn(event)
     // A question is passed on at once: opening a session again can wait on
     // one, such as whether to trust its project.
     if (event.type === "question" || event.type === "answer") {
       if (isNew(seen, event)) {
         seen.early.add(event.seq)
-        tell(event)
+        deliver(event)
       }
       return
     }
     seen.held.push(event)
   }
 
-  // A session the owner opened. Its events are sent from the moment its
-  // reply describes, so the number in the reply is where the client stands.
-  function opened(command: Waiting, output: Opened) {
-    const input = command.message.command as Extract<Command, { type: "open_session" }>
+  // The reply to a session the owner opened. Its events are sent from the
+  // moment the reply describes, so the number in it is where the client stands.
+  function onOpened(command: Waiting, output: Opened) {
+    const input = command.message.command as OpenInput
     const seen = seenOf(output.session)
     seen.seq = Math.max(seen.seq, output.lastSeq)
-    if (seen.opened) seen.opened.questions ||= input.questions === true
+    if (seen.openAs) seen.openAs.questions ||= input.questions === true
     else {
-      seen.opened = { questions: input.questions === true }
+      seen.openAs = { questions: input.questions === true }
       // The owner is given the reply so far with the reply, and shows it.
       seen.shown = output.replySoFar ?? ""
     }
     // A reply to a command sent again can describe a moment before the
     // line dropped, so the session is caught up on from there.
-    if (command.resent && socket) catchUp(output.session, socket).catch(() => {})
+    if (command.resent && socket) void catchUp(output.session, socket)
   }
 
   // Asks the server for what was missed in a session since the last event
   // passed on, and passes it on, then the live events held back meanwhile.
-  // It fails only when the line drops again first.
+  // When the line drops first, it passes nothing on: the client catches up
+  // afresh on the next line.
   async function catchUp(session: string, line: WebSocket): Promise<void> {
     const seen = seenOf(session)
     seen.held = []
@@ -177,8 +191,9 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       type: "open_session",
       session,
       after: seen.seq,
-      ...(seen.opened?.questions && { questions: true }),
+      ...(seen.openAs?.questions && { questions: true }),
     })
+    if (!reply) return
     const held = seen.held ?? []
     seen.held = undefined
     // A session that could not be opened again, as when its project's
@@ -186,38 +201,40 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     if ("result" in reply) {
       const output = reply.result as Opened
       for (const event of output.events ?? []) {
-        // The terminal shows a reply's text as it streams, so the part of a
-        // reply that was missed is passed on as one piece before the reply.
-        if (event.type === "assistant_message" && isNew(seen, event)) passText(session, event.body.text)
-        pass(event)
+        // A client of the core always sees a reply's text as pieces before
+        // the stored message, so the part of a reply that was missed is
+        // passed on as one piece before it.
+        if (event.type === "assistant_message" && isNew(seen, event)) passOnText(session, event.body.text)
+        passOn(event)
       }
-      passText(session, output.replySoFar ?? "")
+      passOnText(session, output.replySoFar ?? "")
       seen.seq = Math.max(seen.seq, output.lastSeq)
     }
-    for (const event of held) pass(event)
+    for (const event of held) passOn(event)
     for (const seq of seen.early) seen.seq = Math.max(seen.seq, seq)
     seen.early.clear()
   }
 
-  // Sends a command of the client's own on this line, and resolves with
-  // the server's reply, or fails if the line drops first.
-  function ask(line: WebSocket, command: Command): Promise<ServerMessage> {
-    const id = crypto.randomUUID()
-    return new Promise((resolve, reject) => {
-      catching.set(id, { resolve, reject })
-      sendOn(line, { id, command })
+  // Sends a command of the client's own on this line. It resolves with the
+  // server's reply, or with nothing when the line drops first.
+  function ask(line: WebSocket, command: Command): Promise<Reply | undefined> {
+    const message: ClientMessage = { id: crypto.randomUUID(), command }
+    return new Promise((resolve) => {
+      waiting.set(message.id, { message, own: true, sentOn: line, resent: false, answer: resolve, lose: () => resolve(undefined) })
+      sendOn(line, message)
     })
   }
 
   // Sends each of the owner's waiting commands that has not been sent on
-  // the line as it is now, in the order they were sent. While catching up,
+  // the line as it is now, in the order they were sent. While rejoining,
   // only answers to questions go: opening a session again can wait on one,
-  // and anything else could reach a session before it is open again.
+  // and anything else could reach a session before it is open again. The
+  // client's own commands are sent once, on their line, and never here.
   function flush() {
     const line = socket
     if (!line) return
     for (const command of waiting.values()) {
-      if (command.sentOn === line || (catchingUp && command.message.command.type !== "answer_question")) continue
+      if (command.sentOn === line || (rejoining && command.message.command.type !== "answer_question")) continue
       command.resent = command.sentOn !== undefined
       command.sentOn = line
       sendOn(line, command.message)
@@ -231,28 +248,23 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     } catch {}
   }
 
-  function heard(line: WebSocket, text: string) {
+  // A message from the server, on the line it came on.
+  function onMessage(line: WebSocket, text: string) {
     if (line !== socket) return
     const received = JSON.parse(text) as ServerMessage
-    if ("event" in received) return arrived(received.event)
-    const own = catching.get(received.reply)
-    if (own) {
-      catching.delete(received.reply)
-      return own.resolve(received)
-    }
+    if ("event" in received) return onEvent(received.event)
     const command = waiting.get(received.reply)
     if (!command) return
     waiting.delete(received.reply)
-    if ("error" in received) return command.reject(new Error(received.error))
-    if (command.message.command.type === "open_session") opened(command, received.result as Opened)
-    command.resolve(received.result)
+    command.answer(received)
   }
 
   function use(line: WebSocket) {
     socket = line
-    line.addEventListener("message", (message) => heard(line, String(message.data)))
+    line.addEventListener("message", (message) => onMessage(line, String(message.data)))
     line.addEventListener("close", (event) => {
-      if (line !== socket || closed) return
+      // A line given up on, or closed by `close`, is no longer `socket`.
+      if (line !== socket) return
       if (event.code === TAKEN_BACK) return end(new ConnectError(event.reason || "This device's token was taken back", "token"))
       dropped(event.reason || "the server went away")
     })
@@ -260,30 +272,31 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 
   function dropped(reason: string) {
     socket = undefined
-    catchingUp = false
+    rejoining = false
     // What was held back is in the log, or in the reply so far, and comes
     // again when the client catches up afresh.
     for (const seen of sessions.values()) seen.held = undefined
-    for (const own of catching.values()) own.reject(new Error(`The line dropped: ${reason}.`))
-    catching.clear()
-    if (!down) {
-      down = true
-      options.onDrop?.(reason)
+    for (const [id, command] of waiting) {
+      if (!command.own) continue
+      waiting.delete(id)
+      command.lose(reason)
     }
+    options.onDrop?.(reason)
     void tryAgain()
   }
 
   async function tryAgain() {
     for (let wait = FIRST_WAIT; ; wait = Math.min(wait * 2, LONGEST_WAIT)) {
-      if (!(await pause(wait, stopping.signal))) return
+      await pause(wait, stopping.signal)
+      if (stopping.signal.aborted) return
       let line: WebSocket
       try {
-        // A server that takes the connection but never answers is given up on, and tried again.
-        line = await openSocket(address, headers, AbortSignal.any([stopping.signal, AbortSignal.timeout(LONGEST_WAIT)]))
+        line = await openSocket(address, headers, AbortSignal.any([stopping.signal, AbortSignal.timeout(CONNECT_TIMEOUT)]))
       } catch (cause) {
+        if (!(cause instanceof ConnectError)) throw cause
         if (stopping.signal.aborted) return
         // A refusal that trying again will not change.
-        if (cause instanceof ConnectError && (cause.reason === "token" || cause.reason === "page")) return end(cause)
+        if (cause.reason === "token" || cause.reason === "page") return end(cause)
         continue
       }
       if (stopping.signal.aborted) return line.close()
@@ -293,36 +306,28 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 
   async function back(line: WebSocket) {
     use(line)
-    down = false
     options.onBack?.()
-    catchingUp = true
+    rejoining = true
     flush()
-    const open = [...sessions].flatMap(([session, seen]) => (seen.opened ? [session] : []))
-    try {
-      await Promise.all(open.map((session) => catchUp(session, line)))
-    } catch {
-      // The line dropped again, and trying again has begun.
-      return
-    }
+    const open = [...sessions].flatMap(([session, seen]) => (seen.openAs ? [session] : []))
+    await Promise.all(open.map((session) => catchUp(session, line)))
+    // The line dropped again first, and trying again has begun.
     if (socket !== line) return
-    catchingUp = false
+    rejoining = false
     flush()
   }
 
-  const failWaiting = (why: string) => {
-    const error = new Error(`The connection to Evie was lost before it answered: ${why.replace(/\.$/, "")}.`)
-    for (const command of waiting.values()) command.reject(error)
+  // Every command still waiting fails, saying why.
+  const loseAll = (why: string) => {
+    for (const command of waiting.values()) command.lose(why)
     waiting.clear()
-    for (const own of catching.values()) own.reject(error)
-    catching.clear()
   }
 
   function end(cause: ConnectError) {
-    if (ended !== undefined) return
-    ended = cause.message
-    stopping.abort()
+    if (stopping.signal.aborted) return
+    stopping.abort(cause.message)
     socket = undefined
-    failWaiting(cause.message)
+    loseAll(cause.message)
     options.onEnd?.(cause)
   }
 
@@ -330,13 +335,23 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 
   return {
     send<Sent extends Command>(command: Sent) {
-      if (ended !== undefined) return Promise.reject(new Error(`Not connected to Evie: ${ended.replace(/\.$/, "")}.`))
+      if (stopping.signal.aborted) return Promise.reject(new Error(`Not connected to Evie: ${String(stopping.signal.reason).replace(/\.$/, "")}.`))
       const message: ClientMessage = { id: crypto.randomUUID(), command }
-      const reply = new Promise<Commands[Sent["type"]]["output"]>((resolve, reject) => {
-        waiting.set(message.id, { message, resolve: resolve as (result: unknown) => void, reject, resent: false })
+      return new Promise<Commands[Sent["type"]]["output"]>((resolve, reject) => {
+        const waited: Waiting = {
+          message,
+          own: false,
+          resent: false,
+          answer(reply) {
+            if ("error" in reply) return reject(new Error(reply.error))
+            if (command.type === "open_session") onOpened(waited, reply.result as Opened)
+            resolve(reply.result as Commands[Sent["type"]]["output"])
+          },
+          lose: (why) => reject(new Error(`The connection to Evie was lost before it answered: ${why.replace(/\.$/, "")}.`)),
+        }
+        waiting.set(message.id, waited)
+        flush()
       })
-      flush()
-      return reply
     },
     subscribe(listener) {
       listeners.add(listener)
@@ -345,9 +360,8 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       }
     },
     close() {
-      closed ??= (async () => {
-        ended ??= "the connection was closed"
-        stopping.abort()
+      closing ??= (async () => {
+        stopping.abort("the connection was closed")
         const line = socket
         socket = undefined
         if (line && line.readyState !== WebSocket.CLOSED) {
@@ -356,9 +370,9 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
             line.close()
           })
         }
-        failWaiting("the connection was closed")
+        loseAll("the connection was closed")
       })()
-      return closed
+      return closing
     },
   }
 }
@@ -372,20 +386,17 @@ function unshown(text: string, shown: string): string {
   return shown.startsWith(text) ? "" : text
 }
 
-// Waits, and says whether it waited the whole time: false when the signal
-// fired first.
-function pause(ms: number, signal: AbortSignal): Promise<boolean> {
+// Waits, or until the signal fires. A browser has no node:timers/promises,
+// and this client runs in one too.
+function pause(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    if (signal.aborted) return resolve(false)
-    const stop = () => {
+    const done = () => {
       clearTimeout(timer)
-      resolve(false)
+      signal.removeEventListener("abort", done)
+      resolve()
     }
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", stop)
-      resolve(true)
-    }, ms)
-    signal.addEventListener("abort", stop, { once: true })
+    const timer = setTimeout(done, ms)
+    signal.addEventListener("abort", done, { once: true })
   })
 }
 
@@ -395,7 +406,7 @@ async function openSocket(address: URL, headers: Record<string, string> | undefi
   socketAddress.protocol = address.protocol === "https:" ? "wss:" : "ws:"
   const socket = headers === undefined ? new WebSocket(socketAddress) : new WebSocket(socketAddress, { headers })
   let giveUp = () => {}
-  const opened = await new Promise<"open" | "refused" | "gave up">((resolve) => {
+  const outcome = await new Promise<"open" | "refused" | "gave up">((resolve) => {
     giveUp = () => resolve("gave up")
     socket.addEventListener("open", () => resolve("open"), { once: true })
     socket.addEventListener("close", () => resolve("refused"), { once: true })
@@ -403,11 +414,11 @@ async function openSocket(address: URL, headers: Record<string, string> | undefi
     else signal?.addEventListener("abort", giveUp, { once: true })
   })
   signal?.removeEventListener("abort", giveUp)
-  if (opened === "gave up") {
+  if (outcome === "gave up") {
     socket.close()
     throw noAnswer(address)
   }
-  if (opened === "refused") throw await whyRefused(address, headers, signal)
+  if (outcome === "refused") throw await whyRefused(address, headers, signal)
   return socket
 }
 
