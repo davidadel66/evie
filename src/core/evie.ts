@@ -137,7 +137,13 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   // event changed it. A piece of a reply cannot, and is sent too often to look.
   const emit = (event: EvieEvent) => {
     deliver(event)
-    if (!closed && event.type !== "assistant_delta" && event.type !== "summary") summaries.changed(event.session)
+    if (closed || event.type === "assistant_delta" || event.type === "summary") return
+    // The event is already stored, so a summary that cannot be worked out,
+    // as while the database is busy, must not break the turn. It is skipped,
+    // and the next change sends one.
+    try {
+      summaries.changed(event.session)
+    } catch {}
   }
 
   const questions = createQuestions({ log, emit })

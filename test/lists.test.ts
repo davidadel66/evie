@@ -375,6 +375,19 @@ test("the core looks every so often for sessions that a week of quiet has settle
   ])
 })
 
+test("a summary that cannot be worked out is skipped, and the turn whose event it would describe goes on", async () => {
+  const { run } = await start([{ text: ["Read it."] }, { text: ["Still here."] }])
+  const ended = nextEvent(run, "turn_end")
+  // A first message that is not text, as a client that is not type-checked can send: no name can be made from it.
+  await run.evie.send({ type: "send_message", session: run.session, text: 42 as unknown as string })
+  const first = await Promise.race([ended, Bun.sleep(1000).then(() => undefined)])
+
+  expect(first?.body).toEqual({ reason: "completed" })
+  expect(stored(run.events).flatMap((event) => (event.type === "assistant_message" ? [event.body.text] : []))).toEqual(["Read it."])
+  await say(run, "and again")
+  expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end", body: { reason: "completed" } })
+})
+
 // ---- History ------------------------------------------------------------------------------------
 
 test("a session's history is read a page at a time, back from its latest events, each page in order, saying whether there are earlier ones", async () => {
