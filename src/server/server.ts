@@ -93,9 +93,16 @@ export function startServer(options: ServerOptions): EvieServer {
     return new Response("Connections from this page are not allowed.", { status: 403 })
   }
 
-  // The device a token belongs to, or the answer that refuses it.
+  // The device a token belongs to, or the answer that refuses it. A check
+  // that fails, such as when the database stays busy past its wait, says
+  // neither yes nor no, so the client is told to try again.
   function deviceFor(token: string | undefined): Admitted | Response {
-    const device = token === undefined ? undefined : options.tokens.check(token)
+    let device: string | undefined
+    try {
+      device = token === undefined ? undefined : options.tokens.check(token)
+    } catch {
+      return new Response("The token could not be checked just now. Try again.", { status: 503 })
+    }
     if (token === undefined || device === undefined) return new Response("This needs a token that Evie accepts.", { status: 401 })
     return { token, device }
   }

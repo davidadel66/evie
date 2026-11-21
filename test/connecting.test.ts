@@ -220,6 +220,35 @@ test("a token check that fails, such as with the database busy, keeps the connec
   expect(dropped).toBe("This device's token was taken back")
 })
 
+test("a token that cannot be checked, such as with the database busy, is answered with try again, not let in", async () => {
+  const served = await start()
+  const server = startServer({
+    evie: served.run.evie,
+    tokens: {
+      check: () => {
+        throw new Error("database is locked")
+      },
+    },
+    host: "127.0.0.1",
+    port: 0,
+  })
+  cleanups.push(() => server.stop())
+  const page = `http://127.0.0.1:${new URL(server.url).port}`
+  const bearer = { Authorization: `Bearer ${served.token}` }
+
+  for (const answer of [
+    await fetch(`${server.url}/ws`, { headers: bearer }),
+    await fetch(`${server.url}/check`, { headers: bearer }),
+    await login(server.url, page, { token: served.token }),
+  ]) {
+    expect(answer.status).toBe(503)
+    expect(await answer.text()).toBe("The token could not be checked just now. Try again.")
+  }
+  await expect(connect({ url: server.url, token: served.token })).rejects.toThrow(
+    `The Evie server at ${server.url} could not check the token just now. Try again.`,
+  )
+})
+
 // ---- The browser ---------------------------------------------------------------------------
 
 const login = (url: string, origin: string, body: unknown) =>

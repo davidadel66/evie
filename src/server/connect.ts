@@ -140,6 +140,7 @@ async function whyRefused(address: URL, headers: Record<string, string> | undefi
   if (status === 403) {
     return new ConnectError(`The Evie server at ${where} does not let this page connect. Add its address to "origins" under "server" in evie.json.`, "page")
   }
+  if (status === 503) return new ConnectError(`The Evie server at ${where} could not check the token just now. Try again.`, "other")
   return new ConnectError(`Could not connect to the Evie server at ${where} (it answered ${status}).`, "other")
 }
 
