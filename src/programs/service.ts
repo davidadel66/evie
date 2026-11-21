@@ -13,6 +13,10 @@ const LABEL = "com.evie.serve"
 // How many times loading the service is tried, and how long to wait between tries.
 const LOAD_TRIES = 5
 const LOAD_PAUSE_MS = 500
+// How long after loading the service to look whether the server is still
+// running: one that cannot start, such as with a broken settings file,
+// has stopped by then.
+const START_CHECK_MS = 2000
 
 // The settings `evie serve` reads from its environment. The service starts
 // it with none of the terminal's, so each has to be in the data folder's
@@ -116,16 +120,30 @@ export async function runService(env: Settings, [action]: string[], computer: Co
       return { ok: false, text: `${file} was written, but launchctl could not load it, after ${LOAD_TRIES} tries. It said: ${started.output}` }
     }
     const missed = await notSeen(env, home)
+    const settingsNote =
+      missed.length === 0
+        ? ""
+        : `These settings are set in this terminal, but not in ${join(home, ".env")}, so the service will not see them: ` +
+          `${missed.join(", ")}. Put them in that file, then run \`evie service install\` again.\n`
+
+    await computer.wait(START_CHECK_MS)
+    const shown = await loaded()
+    const pid = shown === undefined ? undefined : runningAs(shown)
+    if (pid === undefined) {
+      return {
+        ok: false,
+        text:
+          "The login service is installed, but the server is not running: it stopped soon after it started, and launchd " +
+          `will start it again in a while. Its log says why: ${log}\n${settingsNote}`,
+      }
+    }
     return {
       ok: true,
       text:
-        `${older ? "Reinstalled the login service, and started the server again on this version" : "Installed the login service, and started the server"}: ` +
-        `\`evie serve\` now runs when you log in, and starts again if it stops.\n` +
+        `${older ? "Reinstalled the login service, and started the server again on this version" : "Installed the login service, and started the server"}, ` +
+        `which is running${pid ? ` as process ${pid}` : ""}: \`evie serve\` now runs when you log in, and starts again if it stops.\n` +
         `  Service file: ${file}\n  Log:          ${log}\n` +
-        (missed.length === 0
-          ? ""
-          : `These settings are set in this terminal, but not in ${join(home, ".env")}, so the service will not see them: ` +
-            `${missed.join(", ")}. Put them in that file, then run \`evie service install\` again.\n`),
+        settingsNote,
     }
   }
 
@@ -143,9 +161,8 @@ export async function runService(env: Settings, [action]: string[], computer: Co
 
   if (action === "status") {
     const shown = await loaded()
-    // launchctl describes a loaded service as a list of `name = value` lines.
-    const running = shown !== undefined && /^\s*state = running\s*$/m.test(shown)
-    const pid = shown === undefined ? undefined : /^\s*pid = (\d+)\s*$/m.exec(shown)?.[1]
+    const pid = shown === undefined ? undefined : runningAs(shown)
+    const running = pid !== undefined
     const lines = current
       ? [`Installed:   yes, at ${file}`, `Data folder: ${current.home}`]
       : ["Installed:   no. `evie service install` installs it."]
@@ -169,6 +186,15 @@ export async function runService(env: Settings, [action]: string[], computer: Co
       "  evie service status      whether it is installed and running, and where its log is",
     ].join("\n"),
   }
+}
+
+// Whether launchctl's description of the loaded service says its server is
+// running, and as which process: an empty string when it does not say.
+// Undefined when it is not running. The description is a list of
+// `name = value` lines.
+function runningAs(shown: string): string | undefined {
+  if (!/^\s*state = running\s*$/m.test(shown)) return undefined
+  return /^\s*pid = (\d+)\s*$/m.exec(shown)?.[1] ?? ""
 }
 
 // The names of the server's settings that are set in this terminal but in

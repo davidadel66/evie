@@ -24,9 +24,9 @@ async function tempFolder() {
 
 // A Mac whose launchctl has the service loaded, or not, to begin with.
 // `refuses` names a launchctl command that fails, with what it prints, for
-// the first `times` it is run, or every time. The pauses between tries are
-// recorded, not waited for.
-async function mac(options: { loaded?: boolean; refuses?: Record<string, { output: string; times?: number }> } = {}) {
+// the first `times` it is run, or every time. With `stops`, the server the
+// service starts stops at once. Pauses are recorded, not waited for.
+async function mac(options: { loaded?: boolean; refuses?: Record<string, { output: string; times?: number }>; stops?: true } = {}) {
   const folder = await tempFolder()
   let loaded = options.loaded ?? false
   const calls: string[] = []
@@ -47,6 +47,7 @@ async function mac(options: { loaded?: boolean; refuses?: Record<string, { outpu
         return { code: 5, output: refusal.output }
       }
       if (args[0] === "print") {
+        if (loaded && options.stops) return { code: 0, output: "gui/501/com.evie.serve = {\n\tstate = not running\n\tlast exit code = 1\n}" }
         return loaded
           ? { code: 0, output: "gui/501/com.evie.serve = {\n\tstate = running\n\tpid = 4242\n}" }
           : { code: 113, output: 'Could not find service "com.evie.serve" in domain for user gui: 501' }
@@ -98,7 +99,7 @@ test("install writes a login service that runs this evie's server, and loads it"
 </dict>
 </plist>
 `)
-  expect(calls).toEqual(["print gui/501/com.evie.serve", `bootstrap gui/501 ${plist}`])
+  expect(calls).toEqual(["print gui/501/com.evie.serve", `bootstrap gui/501 ${plist}`, "print gui/501/com.evie.serve"])
 })
 
 test("installing again unloads the older service first, so the server restarts on this version", async () => {
@@ -112,8 +113,23 @@ test("installing again unloads the older service first, so the server restarts o
   const done = await runService(env, ["install"], computer)
 
   expect(done.ok).toBe(true)
-  expect(calls).toEqual(["print gui/501/com.evie.serve", "bootout gui/501/com.evie.serve", `bootstrap gui/501 ${plist}`])
+  expect(calls).toEqual(["print gui/501/com.evie.serve", "bootout gui/501/com.evie.serve", `bootstrap gui/501 ${plist}`, "print gui/501/com.evie.serve"])
   expect(await readFile(plist, "utf8")).toContain(`<string>${CLI}</string>`)
+})
+
+test("install looks again a moment after starting the server, and says it is running only when it is", async () => {
+  const up = await mac()
+  const started = await runService({ EVIE_HOME: join(up.folder, "data"), PATH: "/usr/bin" }, ["install"], up.computer)
+  expect(started.ok).toBe(true)
+  expect(started.text).toContain("started the server, which is running as process 4242")
+  expect(up.waits).toEqual([2000])
+
+  const down = await mac({ stops: true })
+  const stopped = await runService({ EVIE_HOME: join(down.folder, "data"), PATH: "/usr/bin" }, ["install"], down.computer)
+  expect(stopped.ok).toBe(false)
+  expect(stopped.text).toContain("The login service is installed, but the server is not running")
+  expect(stopped.text).toContain(join(down.folder, "data", "serve.log"))
+  expect(stopped.text).not.toContain("started the server")
 })
 
 test("install names the settings set in this terminal that the service will not see, and never their values", async () => {
@@ -153,8 +169,8 @@ test("a service launchctl will not load at first, as while the older server is s
 
   expect(done.ok).toBe(true)
   const load = `bootstrap gui/501 ${plist}`
-  expect(calls).toEqual(["print gui/501/com.evie.serve", "bootout gui/501/com.evie.serve", load, load, load])
-  expect(waits).toEqual([500, 500])
+  expect(calls).toEqual(["print gui/501/com.evie.serve", "bootout gui/501/com.evie.serve", load, load, load, "print gui/501/com.evie.serve"])
+  expect(waits).toEqual([500, 500, 2000])
 })
 
 test("a service launchctl will not load after five tries is reported with what launchctl said", async () => {
