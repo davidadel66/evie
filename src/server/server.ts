@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from "bun"
 import type { Commands, Evie, EvieEvent } from "../core/types.ts"
 import type { Tokens } from "./tokens.ts"
-import { hostInAddress, PATHS, type ClientMessage, type ServerMessage } from "./wire.ts"
+import { hostInAddress, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
 
 // Evie's server. It is a client of the core, as the terminal was: it uses
 // only `send` and `subscribe`, and carries them over one WebSocket to each
@@ -39,9 +39,6 @@ type Admitted = { token: string; device: string }
 // sent while opening that are still waiting, by id, with their session.
 type Connection = Admitted & { unsubscribe: () => void; sessions: Set<string>; opening: number; openingQuestions: Map<string, string> }
 
-// The close code for a connection whose token was taken back. Codes from
-// 4000 are the application's own.
-const TAKEN_BACK = 4001
 // The browser's cookie that holds its token.
 const COOKIE = "evie_token"
 

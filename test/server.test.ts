@@ -2,8 +2,9 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { runTerminal, type Evie, type EvieEvent, type Plugin } from "../src/index.ts"
-import { nextEvent, say, stored } from "./support/harness.ts"
+import { runTerminal, type ConnectOptions, type Evie, type EvieEvent, type Plugin } from "../src/index.ts"
+import { nextEvent, say, stored, type Run } from "./support/harness.ts"
+import { lineTo } from "./support/line.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
 
@@ -522,29 +523,6 @@ test("closing a client stops nothing: a turn still running carries on in the ser
   expect(reply?.body).toMatchObject({ text: "Working and done." })
 })
 
-test("when the connection drops, a command still waiting fails with a clear error, and the client is told why", async () => {
-  let finish = (_text: string) => {}
-  const waits: Plugin = {
-    name: "waits",
-    setup(host) {
-      host.commands.add({ name: "wait", description: "Waits.", run: () => new Promise<string>((resolve) => (finish = resolve)) })
-    },
-  }
-  const served = await serveEvie([scriptedProvider([]).plugin, waits])
-  cleanups.push(served.stop)
-  cleanups.push(async () => finish("done"))
-  let dropped: string | undefined
-  const client = await served.connect({ onDrop: (reason) => (dropped = reason) })
-  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
-  const waiting = client.send({ type: "run_command", session, name: "wait", args: "" })
-
-  await served.server.stop()
-
-  await expect(waiting).rejects.toThrow("The connection to Evie was lost before it answered")
-  expect(dropped).toBeString()
-  await expect(client.send({ type: "cancel", session })).rejects.toThrow("Not connected to Evie")
-})
-
 test("a message that is not a command closes that connection only, saying why, and the server carries on", async () => {
   const served = await serveEvie([scriptedProvider([]).plugin])
   cleanups.push(served.stop)
@@ -557,4 +535,65 @@ test("a message that is not a command closes that connection only, saying why, a
   expect((await closed).reason).toBe('Each message must be JSON of the form { "id": ..., "command": ... }')
   const client = await served.connect()
   expect((await client.send({ type: "open_session", folder: served.run.projectFolder })).session).toBeString()
+})
+
+// ---- Catching up after the line drops ---------------------------------------------------------
+
+// A tool that looks something up.
+const lookup: Plugin = {
+  name: "lookup-tool",
+  setup(host) {
+    host.tools.add({ name: "lookup", description: "Looks something up.", inputSchema: { type: "object" }, run: async () => "found it" })
+  },
+}
+
+// Evie behind its server, and a line between them that the test can cut
+// and mend while the server runs on.
+async function serveOverALine(plugins: Plugin[]) {
+  const served = await serveEvie(plugins)
+  cleanups.push(served.stop)
+  const line = await lineTo(served.server.url)
+  cleanups.push(line.stop)
+  return { served, line, connect: (given: Partial<ConnectOptions> = {}) => served.connect({ url: line.url, ...given }) }
+}
+
+// Settles once Evie has written this piece of a reply, whether or not any client heard it.
+function written(run: Run, text: string) {
+  return new Promise<void>((resolve) => {
+    const stop = run.evie.subscribe((event) => {
+      if (event.type !== "assistant_delta" || event.text !== text) return
+      stop()
+      resolve()
+    })
+  })
+}
+
+test("when the line drops part way through a reply that uses a tool, the terminal shows every piece of text and every tool line once, in order, once it is back", async () => {
+  const carryOn = gate()
+  const finish = gate()
+  const { served, line, connect } = await serveOverALine([
+    piecemealModel([["Hel", "lo", carryOn.opened, " world.", { call: "lookup" }], ["Do", finish.opened, "ne."]]),
+    lookup,
+  ])
+  const writingDo = written(served.run, "Do")
+  let printed = ""
+  await runTerminal({
+    evie: await connect(),
+    folder: served.run.projectFolder,
+    lines: (async function* () {
+      yield "look it up"
+      while (!printed.includes("Hello")) await Bun.sleep(1)
+      await line.cut()
+      // While the line is down the reply goes on, the tool runs, and the next reply starts.
+      carryOn.open()
+      await writingDo
+      line.mend()
+      while (!printed.includes("Do")) await Bun.sleep(1)
+      finish.open()
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("Hello world.\n⏺ lookup {}\n  ⎿ found it\nDone.\n")
+  for (const piece of ["Hel", "world", "lookup", "found it", "Do"]) expect(printed.split(piece)).toHaveLength(2)
 })
