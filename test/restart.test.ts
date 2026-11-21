@@ -268,11 +268,13 @@ async function groupOf(file: string) {
 
 test("a background command that went while no Evie was running, without saying how it ended, is told as not known", async () => {
   const { home, startAgain } = await machine()
-  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "ps -o pgid= -p $$ | tr -d ' '; sleep 30", background: true } }] }, { text: ["Started."] }])
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "sleep 30 & ps -o pgid= -p $$ | tr -d ' '; wait", background: true } }] }, { text: ["Started."] }])
   await say(first.run, "serve it")
   const session = first.run.session
   const file = join(home, "tool-output", session, "job-1.log")
+  // Printed once the sleep has started, so stopping the group cannot miss it.
   const group = await groupOf(file)
+  cleanups.push(async () => void (groupThere(group) && process.kill(-group, "SIGKILL")))
   await first.restart()
   // Stopped outright, so its shell writes nothing.
   process.kill(-group, "SIGKILL")
@@ -285,7 +287,7 @@ test("a background command that went while no Evie was running, without saying h
   await woken
 
   expect(notes(second.run, session)).toEqual([
-    `Background job 1 (ps -o pgid= -p $$ | tr -d ' '; sleep 30) has ended, and how it ended is not known.\n\n${group}\n\n` +
+    `Background job 1 (sleep 30 & ps -o pgid= -p $$ | tr -d ' '; wait) has ended, and how it ended is not known.\n\n${group}\n\n` +
       "[Evie restarted while it was running, and it has since gone without leaving its exit status. Check whether it took " +
       `effect, and run it again only if it did not.]\n\nThe full output is in ${file}.`,
   ])
@@ -730,4 +732,42 @@ test("a subagent is carried on after at most three restarts on its task, and the
     "Evie's server restarted while you were working, and this turn had already been carried on after three restarts, so it was left stopped, in case it is what stops the server.",
   ])
   expect(notes(last.run, session)[0]).toStartWith("Background job 1 (subagent: look into it) failed.\n\nIt failed: Evie stopped while this turn was running.")
+})
+
+test("a subagent's question left open is closed when the session it asked through opens, though nothing picks the subagent up", async () => {
+  const { home, startAgain } = await machine()
+  const confirm: Plugin = {
+    name: "confirm",
+    setup(host) {
+      host.tools.add({
+        name: "confirm",
+        description: "Asks the owner to go ahead.",
+        inputSchema: { type: "object" },
+        run: async (_input, context) => `The owner said: ${await context.ask({ text: "Go ahead?", choices: ["yes", "no"] })}`,
+      })
+    },
+  }
+  const firstModel = twoScripts([{ calls: [hand] }, { text: "A subagent is looking." }], [{ calls: [{ name: "confirm", input: {} }] }])
+  const first = await startAgain(firstModel.plugin, [subagents({ dataFolder: home }), jobs(), confirm], { questions: true })
+  const session = first.run.session
+  const asked = until(first.run, (event) => event.type === "question")
+  await first.run.evie.send({ type: "send_message", session, text: "where is the bug?" })
+  const question = await asked
+  const child = stored(first.run.events).find((event) => event.session !== session)!.session
+  await first.restart()
+  // The job that followed the subagent is lost, so opening its session does not pick it up.
+  await rm(join(home, "tool-output", session, "job-1.json"))
+
+  const secondModel = twoScripts([], [])
+  const second = await startAgain(secondModel.plugin, [subagents({ dataFolder: home }), jobs(), confirm])
+  await second.run.evie.send({ type: "open_session", session })
+
+  const id = question.type === "question" ? question.body.id : ""
+  expect(of(second.run, session).filter((event) => event.type === "answer")).toMatchObject([{ body: { id, choice: null } }])
+  // Picked up later all the same, the subagent still knows it was waiting.
+  await second.run.evie.resumeWork()
+  expect(secondModel.requests.child).toEqual([])
+  expect(notes(second.run, child)).toEqual([
+    "Evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the question went unanswered. It is left for the owner to carry on.",
+  ])
 })
