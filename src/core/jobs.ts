@@ -65,6 +65,16 @@ export function jobOfFile(name: string): number | undefined {
 
 const RECORD = /^job-(\d+)\.json$/
 
+// What work that has ended rejects with when no one can tell how it ended.
+export class EndNotKnown extends Error {}
+
+const HOW: Record<Exclude<Job["status"], "running">, string> = {
+  finished: "has finished",
+  failed: "failed",
+  stopped: "was stopped by the owner",
+  unknown: "has ended, and how it ended is not known",
+}
+
 export function createJobs(options: {
   // Where each job's output file goes: a folder per session.
   outputFolder: string
@@ -123,7 +133,7 @@ export function createJobs(options: {
     save(record)
     announce(job)
 
-    const settle = (status: "finished" | "failed", result: string) => {
+    const settle = (status: "finished" | "failed" | "unknown", result: string) => {
       job.status = running.stoppedBy ? "stopped" : status
       job.ended = Date.now()
       // Left for a restart: the next start tells of it.
@@ -134,14 +144,14 @@ export function createJobs(options: {
       // The model that stopped a job already knows, and when Evie is
       // closing it was told then.
       if (running.stoppedBy === "model" || running.stoppedBy === "closing") return
-      const how = job.status === "stopped" ? "was stopped by the owner" : job.status === "failed" ? "failed" : "has finished"
+      const how = HOW[job.status as keyof typeof HOW]
       // A job that ended by itself wakes the session, so the result is
       // dealt with even if the turn that started it is long over.
       safely(() => options.tell(session, `Background job ${id} (${job.title}) ${how}.\n\n${result}`, running.stoppedBy === undefined))
     }
     work.done.then(
       (result) => settle("finished", result),
-      (cause) => settle("failed", cause instanceof Error ? cause.message : String(cause)),
+      (cause) => settle(cause instanceof EndNotKnown ? "unknown" : "failed", cause instanceof Error ? cause.message : String(cause)),
     )
     // Evie is closing: nothing new is left running.
     if (closing) {

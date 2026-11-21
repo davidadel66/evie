@@ -3,7 +3,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
-import { createJobs } from "./jobs.ts"
+import { createJobs, EndNotKnown } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { createProjects } from "./projects.ts"
@@ -436,7 +436,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   const lost = (record: JobRecord, why: string): JobWork => ({
     kind: record.kind,
     title: record.title,
-    done: Promise.reject(new Error(`Evie restarted while it was running, and could not pick it up again: ${why}`)),
+    done: Promise.reject(new EndNotKnown(`Evie restarted while it was running, and could not pick it up again: ${why}`)),
     stop: () => {},
   })
 

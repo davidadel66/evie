@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process"
 import { closeSync, fstatSync, openSync, readFileSync, readSync } from "node:fs"
 import { homedir } from "node:os"
+import { EndNotKnown } from "../core/jobs.ts"
 import type { JobRecord, JobWork, Plugin, Tool } from "../core/types.ts"
 import { resolvePath, statOrMissing } from "./files/paths.ts"
 
@@ -149,7 +150,8 @@ const MOST_TOLD = 6000
 const KEPT_OF_BACKGROUND = 4 * MOST_TOLD
 
 type Ended = {
-  how: "exited" | "timeout" | "cancelled" | "stopped" | "failed"
+  // "unknown" is a command picked up again that has gone without leaving its exit status.
+  how: "exited" | "timeout" | "cancelled" | "stopped" | "failed" | "unknown"
   status?: number | null
   signal?: string | null
   problem?: string
@@ -164,7 +166,7 @@ type Printed = { text: string; cut: boolean }
 function toldOf(ended: Ended, timeout: number | undefined, outputFile: string): string {
   const told = `${describe(ended, endOf(outputFile, KEPT_OF_BACKGROUND), timeout, MOST_TOLD)}\n\nThe full output is in ${outputFile}.`
   if ((ended.how === "exited" && ended.status === 0) || ended.how === "stopped") return told
-  throw new Error(told)
+  throw ended.how === "unknown" ? new EndNotKnown(told) : new Error(told)
 }
 
 // What the model is told about a command that has ended: what it printed,
@@ -185,6 +187,8 @@ function describe(ended: Ended, printed: Printed, timeout: number | undefined, m
     notes.push("[Stopped on request.]")
   } else if (ended.how === "failed") {
     notes.push(`[The command could not be started: ${ended.problem}]`)
+  } else if (ended.how === "unknown") {
+    notes.push("[Evie restarted while it was running, and it has since gone without leaving its exit status.]")
   } else if (ended.signal) {
     notes.push(`[Ended by signal ${ended.signal}]`)
   } else if (ended.status !== 0) {
@@ -329,8 +333,7 @@ function resumeCommand(job: JobRecord): JobWork {
         // It may have written its status just as it ended.
         const last = exitStatus(exitFile)
         if (last !== undefined) return { how, status: last }
-        if (how !== "exited") return { how }
-        throw new Error(`how it ended is not known`)
+        return { how: how === "exited" ? ("unknown" as const) : how }
       }
       await Bun.sleep(WATCH_EVERY)
     }

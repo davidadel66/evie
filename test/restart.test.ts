@@ -79,3 +79,75 @@ test("a background command keeps running across a restart, is found again, and i
   await Bun.sleep(300)
   expect(notes(third.run, session)).toEqual([])
 })
+
+test("a background command that ends while no Evie is running is told at the next start, which wakes its session", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "sleep 0.3; echo tests failed; exit 4", background: true } }] }, { text: ["Started."] }])
+  await say(first.run, "test it")
+  const session = first.run.session
+  await first.restart()
+  await Bun.sleep(700)
+
+  const second = await startAgain([{ text: ["Four tests failed."] }])
+  const woken = turnEnded(second.run, session)
+  await second.run.evie.resumeWork()
+  await woken
+
+  const file = join(home, "tool-output", session, "job-1.log")
+  expect(notes(second.run, session)).toEqual([`Background job 1 (sleep 0.3; echo tests failed; exit 4) failed.\n\ntests failed\n\n[Exit status: 4]\n\nThe full output is in ${file}.`])
+  expect(second.model.requests[0]?.messages.at(-1)?.text).toContain("tests failed")
+})
+
+// The process group of a command that prints its own first.
+async function groupOf(file: string) {
+  while ((await Bun.file(file).text().catch(() => "")).trim() === "") await Bun.sleep(5)
+  return Number((await Bun.file(file).text()).trim().split("\n")[0])
+}
+
+test("a background command that went while no Evie was running, without saying how it ended, is told as not known", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "ps -o pgid= -p $$; sleep 30", background: true } }] }, { text: ["Started."] }])
+  await say(first.run, "serve it")
+  const session = first.run.session
+  const file = join(home, "tool-output", session, "job-1.log")
+  const group = await groupOf(file)
+  await first.restart()
+  // Stopped outright, so its shell writes nothing.
+  process.kill(-group, "SIGKILL")
+  await Bun.sleep(100)
+
+  const second = await startAgain([{ text: ["It has gone."] }])
+  const woken = turnEnded(second.run, session)
+  const ended = until(second.run, (event) => event.type === "job" && event.job.status !== "running")
+  await second.run.evie.resumeWork()
+  await woken
+
+  expect(notes(second.run, session)).toEqual([
+    `Background job 1 (ps -o pgid= -p $$; sleep 30) has ended, and how it ended is not known.\n\n${group}\n\n` +
+      `[Evie restarted while it was running, and it has since gone without leaving its exit status.]\n\nThe full output is in ${file}.`,
+  ])
+  expect(await ended).toMatchObject({ job: { id: "1", status: "unknown" } })
+})
+
+test("a process that now has a command's id, but started at another time, is not taken for the command", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "ps -o pgid= -p $$; sleep 30", background: true } }] }, { text: ["Started."] }])
+  await say(first.run, "serve it")
+  const session = first.run.session
+  const group = await groupOf(join(home, "tool-output", session, "job-1.log"))
+  cleanups.push(async () => void process.kill(-group, "SIGKILL"))
+  await first.restart()
+  // As if the command had gone and another process been given its id.
+  const record = join(home, "tool-output", session, "job-1.json")
+  const kept = JSON.parse(await Bun.file(record).text())
+  await Bun.write(record, JSON.stringify({ ...kept, keep: { ...kept.keep, processStart: "Mon Jan  1 00:00:00 2001" } }))
+
+  const second = await startAgain([{ text: ["It has gone."] }])
+  const woken = turnEnded(second.run, session)
+  await second.run.evie.resumeWork()
+  await woken
+
+  expect(notes(second.run, session)[0]).toStartWith("Background job 1 (ps -o pgid= -p $$; sleep 30) has ended, and how it ended is not known.")
+  // The other process is left alone.
+  expect(() => process.kill(group, 0)).not.toThrow()
+})

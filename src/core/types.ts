@@ -155,7 +155,9 @@ export type Job = {
   session: string
   kind: string
   title: string
-  status: "running" | "finished" | "failed" | "stopped"
+  // "unknown" is for work that has ended, but no one can tell how, as for a
+  // command that went while no Evie was running without leaving its status.
+  status: "running" | "finished" | "failed" | "stopped" | "unknown"
   started: number
   ended?: number
   outputFile: string
@@ -168,7 +170,8 @@ export type JobWork = {
   // A few words to list it by, such as the command.
   title: string
   // Settles when the work ends, with what the model should be told about
-  // how it went. Rejecting means the work failed.
+  // how it went. Rejecting means the work failed, and rejecting with an
+  // `EndNotKnown` that it ended in a way no one can tell.
   done: Promise<string>
   // Stops the work. `done` must settle soon after.
   stop(): void

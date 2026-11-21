@@ -294,7 +294,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       else runningJobs.delete(job.id)
       whenIdle()
       const took = `${Math.max(0, Math.round(((job.ended ?? job.started) - job.started) / 1000))}s`
-      line(job.status === "running" ? `[background] job ${job.id} started: ${job.title}` : `[background] job ${job.id} ${job.status} after ${took}: ${job.title}`)
+      line(job.status === "running" ? `[background] job ${job.id} started: ${job.title}` : `[background] job ${job.id} ${job.status === "unknown" ? "ended (how is not known)" : job.status} after ${took}: ${job.title}`)
     }
     // A message can also come from a command, such as one that starts a
     // skill, so the count never goes below nothing.
