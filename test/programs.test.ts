@@ -281,6 +281,16 @@ test("tokens are made, listed and taken back by name, each without touching the 
   expect(gone.stderr).toContain('There is no token named "laptop".')
 })
 
+test("the name of this computer's own token is kept for the server, which makes that token itself", async () => {
+  const home = await tempFolder("evie-home-")
+
+  const added = await evie(["token", "add", "this", "computer"], { home })
+
+  expect(added.code).toBe(1)
+  expect(added.stderr).toContain('"this computer" is the name of the token `evie serve` makes for this computer itself. Choose another name.')
+  expect((await evie(["token", "list"], { home })).stdout).toContain("There are no tokens.")
+})
+
 test("a token command whose database cannot be opened stops, and says why in one line", async () => {
   const home = await tempFolder("evie-home-")
   // Stands for a database that cannot be opened.

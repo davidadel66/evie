@@ -51,8 +51,9 @@ function createTokens(db: Database): Tokens {
 // This computer's own token, kept in a file in the data folder that only the
 // owner's user can read, so that `evie` here connects with nothing to set
 // up. It is no weaker than the keys in `.env` beside it: whatever can read
-// one can read the other.
-const OWN_NAME = "this computer"
+// one can read the other. Its name is kept for it: the token commands make
+// no token by that name, since the server replaces one when it makes its own.
+export const OWN_NAME = "this computer"
 const OWN_FILE = "server-token"
 
 // The file that holds this computer's token.

@@ -1,5 +1,5 @@
 import { dataFolder, type Settings } from "../index.ts"
-import { openTokens } from "../server/tokens.ts"
+import { openTokens, OWN_NAME } from "../server/tokens.ts"
 import { fail, print } from "./common.ts"
 
 // `evie token`: makes, lists and takes back the tokens devices connect with.
@@ -10,7 +10,9 @@ export async function token(env: Settings, [action, ...words]: string[]) {
   const name = words.join(" ").trim()
   const tokens = await openTokens(dataFolder(env)).catch(fail)
 
-  if (action === "add" && name !== "") {
+  if (action === "add" && name === OWN_NAME) {
+    fail(`"${OWN_NAME}" is the name of the token \`evie serve\` makes for this computer itself. Choose another name.`)
+  } else if (action === "add" && name !== "") {
     const made = tokens.add(name)
     if ("refused" in made) fail(made.refused)
     else {
