@@ -7,13 +7,10 @@ import { EXIT_CODES, fail, print, reason, type StopSignal } from "./common.ts"
 
 // `evie serve`: starts the core with the plugins the settings list, and
 // serves it until told to stop. The first time, it makes this computer's
-// token. Each time, it first tidies away tool output older than a week.
+// token. Once it is listening, it tidies away tool output older than a week.
 export async function serve(env: Settings) {
   const settings = await loadSettingsFiles({ env }).catch(fail)
   const serverSettings = await loadServerSettings({ env }).catch(fail)
-  // Tool output saved more than a week ago is deleted, before the core starts
-  // so that nothing is writing there meanwhile.
-  await deleteOldOutput(join(dataFolder(env), "tool-output"))
   const evie = await createEvie({
     env,
     plugins: settings.plugins,
@@ -47,6 +44,9 @@ export async function serve(env: Settings) {
     )
   }
   print(`evie serve · listening on ${server.url}\n`)
+  // Only now, so that a second `evie serve`, which cannot have the port,
+  // never touches the folder of the one already running.
+  void deleteOldOutput(join(home, "tool-output"))
 
   // Being told to stop closes Evie properly: turns are stopped, and so is any
   // command left running in the background. Each step is taken even when the
