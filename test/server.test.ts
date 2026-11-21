@@ -633,3 +633,54 @@ test("live events that reach the client before what it missed are held back, and
   expect(printed).toContain("Hello world.\n⏺ lookup {}\n  ⎿ found it\nDone.\n")
   for (const piece of ["Hel", "world", "lookup", "found it", "Do", "ne."]) expect(printed.split(piece)).toHaveLength(2)
 })
+
+test("a message whose reply was lost when the line dropped is sent again once the line is back, and carried out once", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider([{ text: ["Hi."] }]).plugin])
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const ended = nextEvent(served.run, "turn_end")
+
+  const lost = line.loseReplyTo("send_message")
+  const sent = client.send({ type: "send_message", session, text: "hello" })
+  await lost
+  line.mend()
+  await sent
+  await ended
+
+  expect(stored(served.run.events).filter((event) => event.type === "user_message" && event.session === session).map((event) => event.body)).toEqual([
+    { text: "hello" },
+  ])
+})
+
+test("a command sent again while it is still being carried out waits for it, and is answered with its reply", async () => {
+  let runs = 0
+  const finishing: ((text: string) => void)[] = []
+  const waits: Plugin = {
+    name: "waits",
+    setup(host) {
+      host.commands.add({
+        name: "wait",
+        description: "Waits.",
+        run: () => {
+          runs += 1
+          return new Promise<string>((resolve) => finishing.push(resolve))
+        },
+      })
+    },
+  }
+  const { served, line, connect } = await serveOverALine([scriptedProvider([]).plugin, waits])
+  cleanups.push(async () => finishing.forEach((finish) => finish("done")))
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const waiting = client.send({ type: "run_command", session, name: "wait", args: "" })
+  while (runs === 0) await Bun.sleep(1)
+
+  await line.cut()
+  const sentAgain = line.passedOn('"run_command"')
+  line.mend()
+  await sentAgain
+  finishing[0]!("done")
+
+  expect(await waiting).toEqual({ text: "done" })
+  expect(runs).toBe(1)
+})

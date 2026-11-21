@@ -17,9 +17,9 @@ export async function lineTo(serverUrl: string) {
   let listening: ReturnType<typeof Bun.serve<Ends>> | undefined
   let port = 0
   // What to do with the next reply to a command of a given type.
-  const lose = new Set<string>()
+  const lose = new Map<string, () => void>()
   const hold = new Map<string, { until: Promise<unknown>; caught(): void }>()
-  // Waiting for a message from the server with this text in it to be passed on.
+  // Waiting for a message with this text in it to go through, either way.
   const watching = new Set<{ text: string; seen(): void }>()
 
   // Only what the server reads of a request is passed on.
@@ -30,6 +30,14 @@ export async function lineTo(serverUrl: string) {
       if (value !== null) kept[name] = value
     }
     return kept
+  }
+
+  const saw = (text: string) => {
+    for (const watch of [...watching]) {
+      if (!text.includes(watch.text)) continue
+      watching.delete(watch)
+      watch.seen()
+    }
   }
 
   const listen = () => {
@@ -63,7 +71,11 @@ export async function lineTo(serverUrl: string) {
             const text = String(message.data)
             const received = JSON.parse(text) as ServerMessage
             const type = "reply" in received ? sent.get(received.reply) : undefined
-            if (type !== undefined && lose.delete(type)) return void cut()
+            const losing = type === undefined ? undefined : lose.get(type)
+            if (losing && type !== undefined) {
+              lose.delete(type)
+              return void cut().then(losing)
+            }
             const held = type === undefined ? undefined : hold.get(type)
             if (held && type !== undefined) {
               hold.delete(type)
@@ -71,11 +83,7 @@ export async function lineTo(serverUrl: string) {
               return void held.until.then(() => client.send(text))
             }
             client.send(text)
-            for (const watch of [...watching]) {
-              if (!text.includes(watch.text)) continue
-              watching.delete(watch)
-              watch.seen()
-            }
+            saw(text)
           })
           upstream.addEventListener("close", (event) => client.close(event.code === 1006 || event.code === 1005 ? 1000 : event.code, event.reason))
         },
@@ -83,6 +91,7 @@ export async function lineTo(serverUrl: string) {
           const message = JSON.parse(String(text)) as ClientMessage
           client.data.sent.set(message.id, message.command.type)
           client.data.upstream.send(String(text))
+          saw(String(text))
         },
         close(client) {
           clients.delete(client)
@@ -112,8 +121,9 @@ export async function lineTo(serverUrl: string) {
     },
     // The reply to the next command of this type is lost: the line is cut
     // as it comes back, after the server has carried the command out.
+    // Settles once that has happened.
     loseReplyTo(type: string) {
-      lose.add(type)
+      return new Promise<void>((lost) => lose.set(type, lost))
     },
     // The reply to the next command of this type is held back until `until`
     // settles, while everything else the server sends goes on through.
@@ -121,8 +131,8 @@ export async function lineTo(serverUrl: string) {
     holdReplyTo(type: string, until: Promise<unknown>) {
       return new Promise<void>((caught) => hold.set(type, { until, caught }))
     },
-    // Settles once a message from the server with this text in it has been
-    // passed on to a client.
+    // Settles once a message with this text in it has gone through the
+    // line, from the server or from a client.
     passedOn(text: string) {
       return new Promise<void>((seen) => watching.add({ text, seen }))
     },

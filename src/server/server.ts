@@ -20,7 +20,9 @@ export type ServerOptions = {
   // How often, in milliseconds, open connections are checked against the
   // tokens, so that one whose token was taken back is closed even while it
   // sends nothing. A token is taken back by `evie token remove`, in another
-  // process, so the server cannot be told; it looks.
+  // process, so the server cannot be told; it looks. Replies kept for
+  // commands sent again are looked over at the same time, and forgotten
+  // ten minutes after they were given.
   recheckEvery?: number
 }
 
@@ -41,12 +43,45 @@ type Connection = Admitted & { unsubscribe: () => void; sessions: Set<string>; o
 
 // The browser's cookie that holds its token.
 const COOKIE = "evie_token"
+// How long the reply to a command is kept after it was given, to answer the
+// same command sent again after the line dropped.
+const REMEMBER_FOR = 10 * 60_000
 
 export function startServer(options: ServerOptions): EvieServer {
   const connections = new Set<ServerWebSocket<Connection>>()
   // Every session a client has opened through this server, whether or not
   // that client is still connected.
   const openedHere = new Set<string>()
+  // The reply to each command a device has sent, by the command's id, with
+  // when it was given. A client whose line dropped before the reply reached
+  // it sends the command again with the same id, and is answered from here,
+  // or waits for the first one to finish, so it is carried out once.
+  const replies = new Map<string, Map<string, { reply: Promise<ServerMessage>; given?: number }>>()
+
+  function replyTo(device: string, message: ClientMessage): Promise<ServerMessage> {
+    let sent = replies.get(device)
+    if (!sent) replies.set(device, (sent = new Map()))
+    const remembered = sent.get(message.id)
+    if (remembered) return remembered.reply
+    const entry: { reply: Promise<ServerMessage>; given?: number } = {
+      reply: options.evie.send(message.command).then(
+        (result): ServerMessage => ({ reply: message.id, result }),
+        (cause): ServerMessage => ({ reply: message.id, error: cause instanceof Error ? cause.message : String(cause) }),
+      ),
+    }
+    void entry.reply.then(() => (entry.given = Date.now()))
+    sent.set(message.id, entry)
+    return entry.reply
+  }
+
+  // Replies kept longer than they are needed are forgotten.
+  function forgetOldReplies() {
+    const now = Date.now()
+    for (const [device, sent] of replies) {
+      for (const [id, { given }] of sent) if (given !== undefined && now - given > REMEMBER_FOR) sent.delete(id)
+      if (sent.size === 0) replies.delete(device)
+    }
+  }
 
   // Which events a connection is sent: those of the sessions it has opened.
   // A session can ask a question before it is open, such as whether to trust
@@ -171,17 +206,15 @@ export function startServer(options: ServerOptions): EvieServer {
         const opening = message.command.type === "open_session"
         if (opening) socket.data.opening += 1
         try {
-          const result = await options.evie.send(message.command)
+          const reply = await replyTo(socket.data.device, message)
           // The session opened is learned from the reply, before the reply is
           // sent, so the client is sent its events from then on.
-          if (opening) {
-            const { session } = result as Commands["open_session"]["output"]
+          if (opening && "result" in reply) {
+            const { session } = reply.result as Commands["open_session"]["output"]
             socket.data.sessions.add(session)
             openedHere.add(session)
           }
-          send(socket, { reply: message.id, result })
-        } catch (cause) {
-          send(socket, { reply: message.id, error: cause instanceof Error ? cause.message : String(cause) })
+          send(socket, reply)
         } finally {
           if (opening) socket.data.opening -= 1
         }
@@ -203,6 +236,7 @@ export function startServer(options: ServerOptions): EvieServer {
 
   const recheck = setInterval(() => {
     for (const socket of connections) closeIfTakenBack(socket)
+    forgetOldReplies()
   }, options.recheckEvery ?? 3000)
 
   return {
