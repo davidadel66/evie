@@ -337,8 +337,15 @@ test("one line too long to show is cut part way, and the note says so in bytes",
 
 const DAY = 24 * 60 * 60 * 1000
 
+// Marks a file or folder as last changed the given number of days ago.
+async function age(path: string, days: number) {
+  const when = new Date(Date.now() - days * DAY)
+  await utimes(path, when, when)
+}
+
 // A folder of saved output holding the given files, each last changed the
-// given number of days ago.
+// given number of days ago. Each folder inside last changed when its newest
+// file was added, as it would have.
 async function savedOutput(files: Record<string, number>) {
   const folder = await mkdtemp(join(tmpdir(), "evie-tool-output-"))
   const after = stop
@@ -346,13 +353,16 @@ async function savedOutput(files: Record<string, number>) {
     await after?.()
     await rm(folder, { recursive: true, force: true })
   }
+  const newest = new Map<string, number>()
   for (const [name, days] of Object.entries(files)) {
     const path = join(folder, name)
-    await mkdir(join(path, ".."), { recursive: true })
+    const inside = join(path, "..")
+    await mkdir(inside, { recursive: true })
     await writeFile(path, "output")
-    const when = new Date(Date.now() - days * DAY)
-    await utimes(path, when, when)
+    await age(path, days)
+    newest.set(inside, Math.min(newest.get(inside) ?? days, days))
   }
+  for (const [inside, days] of newest) if (inside !== folder) await age(inside, days)
   return folder
 }
 
@@ -370,6 +380,19 @@ test("saved output older than seven days is deleted, and so is a folder left emp
   await deleteOldOutput(folder)
 
   expect(await left(folder)).toEqual(["mixed-session", "mixed-session/call_2.txt", "mixed-session/job-1.log"])
+})
+
+test("a folder that changed in the last week is kept even when empty, as output may be about to be saved in it", async () => {
+  const folder = await savedOutput({ "old-session/call_1.txt": 8 })
+  // Made a moment ago, for a file not yet written.
+  await mkdir(join(folder, "new-session"))
+  // Left empty a while ago.
+  await mkdir(join(folder, "empty-session"))
+  await age(join(folder, "empty-session"), 8)
+
+  await deleteOldOutput(folder)
+
+  expect(await left(folder)).toEqual(["new-session"])
 })
 
 // Root can delete from a folder it may not write to, so there the file could

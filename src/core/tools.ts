@@ -181,7 +181,7 @@ const KEEP_OUTPUT_FOR = 7 * 24 * 60 * 60 * 1000
 // Deletes the files in a folder of saved output last changed more than a
 // week ago, then every folder inside it left empty. The folder itself is
 // kept. Anything that cannot be read or deleted is left as it is: tidying
-// up must never stop Evie from starting.
+// up must never stop Evie from working.
 export async function deleteOldOutput(folder: string): Promise<void> {
   const oldest = Date.now() - KEEP_OUTPUT_FOR
   const tidy = async (inside: string) => {
@@ -195,9 +195,13 @@ export async function deleteOldOutput(folder: string): Promise<void> {
       const path = join(inside, entry.name)
       try {
         if (entry.isDirectory()) {
+          // Evie may be writing meanwhile, and makes a folder just before the
+          // file it saves there, so a folder that changed in the last week
+          // is kept even when empty.
+          const recent = (await lstat(path)).mtimeMs >= oldest
           await tidy(path)
           // Refused, as it should be, while anything is left inside.
-          await rmdir(path)
+          if (!recent) await rmdir(path)
         } else if ((await lstat(path)).mtimeMs < oldest) {
           await unlink(path)
         }
