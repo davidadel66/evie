@@ -9,6 +9,8 @@ export type Projects = {
   // The project a folder belongs to, created the first time it is asked for.
   forFolder(folder: string): Project
   get(id: string): Project | undefined
+  // Every project, by name.
+  list(): Project[]
   // Starts a session in a project, or the general session when there is
   // none. With `parent`, it is a subagent of that session.
   // `as` says which named agent a subagent is, and whether it is held to
@@ -41,6 +43,7 @@ function projectRoot(folder: string): string {
 export function createProjects(db: Database): Projects {
   const byFolder = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE folder = ?")
   const byId = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE id = ?")
+  const all = db.query<Project, []>("SELECT id, name, folder FROM project ORDER BY name COLLATE NOCASE, created")
   const insertProject = db.query("INSERT INTO project (id, name, folder, created) VALUES (?, ?, ?, ?)")
   const insertSession = db.query("INSERT INTO session (id, project, created, parent, agent, read_only) VALUES (?, ?, ?, ?, ?, ?)")
   const sessionRow = db.query<{ project: string | null; parent: string | null; agent: string | null; read_only: number | null }, [string]>(
@@ -78,6 +81,10 @@ export function createProjects(db: Database): Projects {
 
     get(id) {
       return byId.get(id) ?? undefined
+    },
+
+    list() {
+      return all.all()
     },
 
     createSession(project, startedBy, as) {

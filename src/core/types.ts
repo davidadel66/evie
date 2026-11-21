@@ -460,6 +460,21 @@ export type Commands = {
     input: { session: string; settled: boolean }
     output: void
   }
+  // A page of a session's earlier conversation: its latest stored events
+  // numbered below `before`, or its latest of all without it, in order, and
+  // whether there are earlier ones, which a page with `before` set to the
+  // first one's number reads. A page is 50 events unless `limit` says
+  // otherwise, and never more than 500. The session need not be open, and
+  // can be a subagent's.
+  read_history: {
+    input: { session: string; before?: number; limit?: number }
+    output: { events: StoredEvent[]; earlier: boolean }
+  }
+  // Every project, by name.
+  list_projects: {
+    input: Record<never, never>
+    output: Project[]
+  }
   // Every session that is not a subagent's, the latest active first.
   list_sessions: {
     input: Record<never, never>

@@ -34,6 +34,11 @@ export type EvieOptions = {
   projectSettings?: (project: Project, context: { ask: Ask }) => ProjectSettings | readonly Plugin[] | Promise<ProjectSettings | readonly Plugin[]>
 }
 
+// How many events a page of a session's history holds, unless it asks for
+// another number, and the most it can ask for.
+const PAGE = 50
+const LONGEST_PAGE = 500
+
 // Where all of Evie's state lives. Moving Evie is copying this folder.
 export function dataFolder(env: Record<string, string | undefined>): string {
   return env.EVIE_HOME || join(homedir(), ".evie")
@@ -413,6 +418,14 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     emit(log.append(input.session, "settled", { settled: input.settled }))
   }
 
+  function readHistory(input: Commands["read_history"]["input"]): Commands["read_history"]["output"] {
+    if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
+    const limit = input.limit ?? PAGE
+    if (!Number.isInteger(limit) || limit < 1) throw new Error(`\`limit\` is how many events to read, a whole number from 1 to ${LONGEST_PAGE}.`)
+    if (input.before !== undefined && !Number.isInteger(input.before)) throw new Error("`before` is the number of an event, and the page holds the events before it.")
+    return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, Math.min(limit, LONGEST_PAGE))
+  }
+
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
     const { project, host, model: startedWith, loop } = open(input.session)
     // A command's own name first, then any command that covers the name.
@@ -472,6 +485,10 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
           return (await runCommand(command)) as Output
         case "settle_session":
           return settleSession(command) as Output
+        case "read_history":
+          return readHistory(command) as Output
+        case "list_projects":
+          return projects.list() as Output
         case "list_sessions":
           return summaries.list() as Output
         default:

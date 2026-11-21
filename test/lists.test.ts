@@ -1,5 +1,7 @@
 import { afterEach, expect, setSystemTime, test } from "bun:test"
 import { Database } from "bun:sqlite"
+import { mkdtemp, realpath, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { Plugin } from "../src/index.ts"
 import { nextEvent, say, startEvie, stored, type Run } from "./support/harness.ts"
@@ -111,6 +113,17 @@ test("a subagent's session is not listed: it is part of the session that started
   const listed = await run.evie.send({ type: "list_sessions" })
 
   expect(listed.map((summary) => summary.session)).toEqual([run.session])
+})
+
+test("every project is listed, by name", async () => {
+  const { run } = await start([])
+  const folder = await realpath(await mkdtemp(join(tmpdir(), "a-first-project-")))
+  cleanups.push(() => rm(folder, { recursive: true, force: true }))
+  const other = (await run.evie.send({ type: "open_session", folder })).project!
+
+  const listed = await run.evie.send({ type: "list_projects" })
+
+  expect(listed).toEqual([other, run.project!])
 })
 
 // ---- A session's state ------------------------------------------------------------------------
@@ -235,4 +248,66 @@ test("only a session that is there, and not a subagent's, can be settled", async
   await expect(run.evie.send({ type: "settle_session", session: child, settled: true })).rejects.toThrow(
     `The session "${child}" is a subagent's, which is not listed. Settle the session that started it, "${run.session}", instead.`,
   )
+})
+
+// ---- History ------------------------------------------------------------------------------------
+
+test("a session's history is read a page at a time, back from its latest events, each page in order, saying whether there are earlier ones", async () => {
+  const { run } = await start([{ text: ["one"] }, { text: ["two"] }])
+  await say(run, "first")
+  await say(run, "second")
+  // 1 turn_start, 2 user_message, 3 assistant_message, 4 turn_end, then 5 to 8 the same again.
+  const all = stored(run.events)
+  expect(all.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+
+  const latest = await run.evie.send({ type: "read_history", session: run.session, limit: 3 })
+  const before = await run.evie.send({ type: "read_history", session: run.session, before: 6, limit: 3 })
+  const first = await run.evie.send({ type: "read_history", session: run.session, before: 3, limit: 3 })
+  const whole = await run.evie.send({ type: "read_history", session: run.session })
+
+  expect(latest).toEqual({ events: all.slice(5, 8), earlier: true })
+  expect(before).toEqual({ events: all.slice(2, 5), earlier: true })
+  expect(first).toEqual({ events: all.slice(0, 2), earlier: false })
+  expect(whole).toEqual({ events: all, earlier: false })
+})
+
+test("a page of history is 50 events unless it asks for another number, and never more than 500", async () => {
+  const { run } = await start([])
+  await run.evie.close()
+  // A long conversation, written straight into the log.
+  const db = new Database(join(run.home, "evie.db"))
+  const add = db.query("INSERT INTO event (session, seq, type, body, time) VALUES (?, ?, 'note', ?, ?)")
+  db.transaction(() => {
+    for (let seq = 1; seq <= 600; seq++) add.run(run.session, seq, JSON.stringify({ text: `note ${seq}` }), seq)
+  })()
+  db.close()
+  const again = await startEvie([scriptedProvider([]).plugin], { home: run.home })
+  cleanups.push(again.stop)
+  const seqs = async (limit?: number) => {
+    const page = await again.evie.send({ type: "read_history", session: run.session, ...(limit !== undefined && { limit }) })
+    return [page.events.length, page.events[0]?.seq, page.events.at(-1)?.seq, page.earlier]
+  }
+
+  expect(await seqs()).toEqual([50, 551, 600, true])
+  expect(await seqs(10)).toEqual([10, 591, 600, true])
+  expect(await seqs(1000)).toEqual([500, 101, 600, true])
+  await expect(again.evie.send({ type: "read_history", session: run.session, limit: 0 })).rejects.toThrow("`limit` is how many events to read, a whole number from 1 to 500.")
+})
+
+test("the history of a session that is not open can be read, and so can a subagent's", async () => {
+  const { run } = await start([{ text: [], calls: [{ name: "delegate", input: {} }] }, { text: ["Looked."] }, { text: ["Started it."] }], [delegate])
+  await say(run, "hand it over")
+  const child = stored(run.events).find((event) => event.type === "tool_result")!.body.text
+  // The subagent's turn ends with its report: its last event is its turn's end.
+  while (stored(run.events).filter((event) => event.session === child && event.type === "turn_end").length === 0) await Bun.sleep(1)
+  await run.evie.close()
+
+  const again = await startEvie([scriptedProvider([]).plugin], { home: run.home })
+  cleanups.push(again.stop)
+  const parent = await again.evie.send({ type: "read_history", session: run.session })
+  const subagent = await again.evie.send({ type: "read_history", session: child })
+
+  expect(parent.events.map((event) => event.type)).toEqual(stored(run.events).filter((event) => event.session === run.session).map((event) => event.type))
+  expect(subagent.events.map((event) => event.type)).toEqual(["model_changed", "turn_start", "user_message", "assistant_message", "turn_end"])
+  await expect(again.evie.send({ type: "read_history", session: "no-such-session" })).rejects.toThrow('There is no session with the id "no-such-session".')
 })
