@@ -546,13 +546,15 @@ export type Commands = {
   // itself when it is missing, and a `.evie/evie.json` in it whose
   // `"sync": "private"` backs up the project's `.evie/` folder to a private
   // repository. The project is registered, named after its folder unless
-  // `name` is given, and trusted. `madeFolder` says whether the folder was
-  // missing. A folder that is already a project, has Evie settings of its
-  // own, is inside a git repository below its top, or is in Evie's data
-  // folder is refused, and nothing is made.
+  // `name` is given, and trusted, unless its `.evie/` folder already held
+  // something, which its first session then asks about. `madeFolder` says
+  // whether the folder was missing, and `trusted` whether it is trusted. A
+  // folder that is already a project, has Evie settings of its own, is
+  // inside a git repository below its top, or is in Evie's data folder is
+  // refused, and nothing is made.
   new_project: {
     input: { folder: string; name?: string }
-    output: { project: Project; madeFolder: boolean }
+    output: { project: Project; madeFolder: boolean; trusted: boolean }
   }
   // Every session the owner has said something in, or that has asked a
   // question, that is not a subagent's, the latest active first.

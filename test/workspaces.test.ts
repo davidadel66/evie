@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import { loadSettingsFiles } from "../src/index.ts"
 import { git } from "./support/git.ts"
-import { startEvie, stored, type Run } from "./support/harness.ts"
+import { nextEvent, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 
 const cleanups: (() => Promise<void>)[] = []
@@ -46,7 +46,7 @@ test("new_project makes the folder when it is missing, with a .evie/evie.json th
 
   const made = await run.evie.send({ type: "new_project", folder })
 
-  expect(made).toEqual({ project: { id: expect.any(String), name: "finances", folder }, madeFolder: true })
+  expect(made).toEqual({ project: { id: expect.any(String), name: "finances", folder }, madeFolder: true, trusted: false })
   expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ sync: "private" })
   expect(await run.evie.send({ type: "list_projects" })).toContainEqual(made.project)
 })
@@ -58,7 +58,7 @@ test("new_project takes a folder that is already there, and a name of the owner'
 
   const made = await run.evie.send({ type: "new_project", folder, name: "  Family finances " })
 
-  expect(made).toEqual({ project: { id: expect.any(String), name: "Family finances", folder }, madeFolder: false })
+  expect(made).toEqual({ project: { id: expect.any(String), name: "Family finances", folder }, madeFolder: false, trusted: false })
   expect(await readFile(join(folder, "budget.csv"), "utf8")).toBe("rent,1000\n")
 })
 
@@ -66,7 +66,7 @@ test("a project new_project makes is trusted, so its own settings are used witho
   const { run, globalFile } = await startWithSettings()
   const folder = join(await tempFolder("evie-place-"), "notes")
 
-  await run.evie.send({ type: "new_project", folder })
+  expect((await run.evie.send({ type: "new_project", folder })).trusted).toBe(true)
   const opened = await run.evie.send({ type: "open_session", folder, questions: true })
 
   expect(await globalFile()).toEqual({ plugins: [], trust: [folder] })
@@ -202,4 +202,56 @@ test("a project made but not trusted, as when the global settings file cannot be
   await expect(making).rejects.toThrow(`The project "notes" was made at ${folder}, but could not be trusted: `)
   await expect(making).rejects.toThrow(/Evie asks whether to trust it when a session first opens there\.$/)
   expect((await run.evie.send({ type: "list_projects" })).map((project) => project.name)).toContain("notes")
+})
+
+test("a folder whose .evie/ already holds something, such as a skill, is made a project but not trusted, so its first session asks", async () => {
+  const { run, globalFile } = await startWithSettings()
+  const folder = await tempFolder("evie-cloned-")
+  await mkdir(join(folder, ".evie", "skills", "deploy"), { recursive: true })
+  await writeFile(join(folder, ".evie", "skills", "deploy", "SKILL.md"), "---\nname: deploy\ndescription: Deploys.\n---\nRun theirs.\n")
+
+  const made = await run.evie.send({ type: "new_project", folder })
+
+  expect(made).toMatchObject({ project: { folder }, madeFolder: false, trusted: false })
+  expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ sync: "private" })
+  expect(await globalFile()).toEqual({ plugins: [] })
+  const asked = nextEvent(run, "question")
+  const opening = run.evie.send({ type: "open_session", folder, questions: true })
+  expect((await asked).body.choices).toEqual(["Yes, trust this project", "No, ignore its settings file"])
+  await run.evie.send({ type: "answer_question", session: (await asked).session, id: (await asked).body.id, choice: null })
+  await opening
+})
+
+test("new_project refuses a folder whose .evie is a file, before making anything", async () => {
+  const run = await start()
+  const folder = await tempFolder("evie-place-")
+  await writeFile(join(folder, ".evie"), "not a folder")
+
+  await expect(run.evie.send({ type: "new_project", folder })).rejects.toThrow(
+    `${join(folder, ".evie")} is a file. Evie keeps what it adds to a project in a folder of that name, so move the file elsewhere, then make the project.`,
+  )
+  expect(await readFile(join(folder, ".evie"), "utf8")).toBe("not a folder")
+  expect(await run.evie.send({ type: "list_projects" })).toEqual([run.project!])
+})
+
+test("a folder inside the data folder whose name starts with two dots is still inside it", async () => {
+  const run = await start()
+  const folder = join(run.home, "..scratch", "notes")
+
+  await expect(run.evie.send({ type: "new_project", folder })).rejects.toThrow(`${folder} is in Evie's data folder`)
+  expect(await exists(join(run.home, "..scratch"))).toBe(false)
+})
+
+test("a repository that commits its .evie/ on purpose is left alone", async () => {
+  const run = await start()
+  const repository = await tempFolder("evie-repo-")
+  await git(["init", "--quiet"], repository)
+  await mkdir(join(repository, ".evie"))
+  await writeFile(join(repository, ".evie", "evie.json"), "{}\n")
+  await git(["add", ".evie/evie.json"], repository)
+  await git(["commit", "--quiet", "-m", "Share Evie's settings"], repository)
+
+  await run.evie.send({ type: "open_session", folder: repository })
+
+  expect(await readFile(join(repository, ".git", "info", "exclude"), "utf8")).not.toContain("/.evie/")
 })

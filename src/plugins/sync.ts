@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs"
-import { isAbsolute, join, relative, resolve } from "node:path"
+import { isAbsolute, join, relative, resolve, sep } from "node:path"
 import { dataFolder } from "../core/evie.ts"
 import type { CheckedToolCall, Plugin, Project } from "../core/types.ts"
 import { patchFiles } from "./files/paths.ts"
@@ -200,10 +200,11 @@ function changesEvie(call: CheckedToolCall, folder: string): boolean {
   return named.some((path) => within(resolve(folder, path), evie))
 }
 
-// Whether a path is a folder or inside it.
+// Whether a path is a folder or inside it. A path inside it may have a name
+// that starts with two dots, such as `..cache`.
 function within(path: string, folder: string): boolean {
   const inside = relative(folder, path)
-  return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
+  return inside !== ".." && !inside.startsWith(`..${sep}`) && !isAbsolute(inside)
 }
 
 // A path with its links resolved, or as it is when it cannot be.

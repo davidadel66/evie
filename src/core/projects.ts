@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite"
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import type { Project } from "./types.ts"
 
 // Projects and the sessions that belong to them. A project is found by its
@@ -50,8 +50,11 @@ function projectRoot(folder: string): string {
 // exclude list, which git reads as it reads a .gitignore but which is never
 // committed. A worktree's `.git` is a file naming its own folder in the main
 // repository, and a `commondir` file there names the folder whose exclude
-// list it shares. Nothing here may stop a project opening, so a list that
-// cannot be read or written is left as it is.
+// list it shares. A repository that already commits something in `.evie/`
+// does so on purpose, and is left alone; when git cannot be asked, the line
+// is added, since it never changes what is already committed. Nothing here
+// may stop a project opening, so a list that cannot be read or written is
+// left as it is.
 export function keepEvieOutOfGit(folder: string): void {
   try {
     const dotGit = join(folder, ".git")
@@ -68,11 +71,22 @@ export function keepEvieOutOfGit(folder: string): void {
     const exclude = join(gitFolder, "info", "exclude")
     const listed = existsSync(exclude) ? readFileSync(exclude, "utf8") : ""
     if (listed.split(/\r?\n/).some((line) => line.trim() === EXCLUDED)) return
+    if (tracksEvie(folder)) return
     mkdirSync(dirname(exclude), { recursive: true })
     appendFileSync(exclude, `${listed === "" || listed.endsWith("\n") ? "" : "\n"}${EXCLUDED}\n`)
   } catch {}
 }
 const EXCLUDED = "/.evie/"
+
+// Whether the repository at this folder commits anything in its `.evie/`.
+function tracksEvie(folder: string): boolean {
+  try {
+    const asked = Bun.spawnSync(["git", "ls-files", "--", ".evie"], { cwd: folder, stdin: "ignore", stdout: "pipe", stderr: "ignore" })
+    return asked.exitCode === 0 && asked.stdout.toString().trim() !== ""
+  } catch {
+    return false
+  }
+}
 
 // A folder as it really is, links resolved, whether or not it exists yet:
 // the part that exists is resolved and the rest added to it.
@@ -82,17 +96,25 @@ function realFolder(folder: string): string {
   return join(realFolder(parent), basename(folder))
 }
 
-// Whether a folder is another one or inside it.
+// Whether a folder is another one or inside it. A folder inside it may
+// have a name that starts with two dots, such as `..cache`.
 const within = (folder: string, outer: string) => {
   const path = relative(outer, folder)
-  return path === "" || (!path.startsWith("..") && !isAbsolute(path))
+  return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path)
 }
 
 // Makes a new project, as the `new_project` command asks: the folder when it
 // is missing, and its `.evie/evie.json`, which backs up its `.evie/` folder
 // to a private repository. It is registered at the folder as it really is.
 // Everything that would refuse it is checked before anything is made.
-export async function makeProject(projects: Projects, input: { folder: string; name?: string }, dataFolder: string): Promise<{ project: Project; madeFolder: boolean }> {
+// `heldFiles` says that its `.evie/` folder already held something, such as
+// skills or agents, which came with the folder and so are not to be trusted
+// without the owner reading them.
+export async function makeProject(
+  projects: Projects,
+  input: { folder: string; name?: string },
+  dataFolder: string,
+): Promise<{ project: Project; madeFolder: boolean; heldFiles: boolean }> {
   // Checked here, since a client that is not type-checked can send anything.
   const given = input.folder
   if (typeof given !== "string" || !isAbsolute(given)) {
@@ -112,7 +134,11 @@ export async function makeProject(projects: Projects, input: { folder: string; n
   }
   if (within(folder, data)) throw new Error(`${given} is in Evie's data folder, ${dataFolder}, where Evie keeps its own state. Choose a folder outside it.`)
   if (within(data, join(folder, ".evie"))) throw new Error(`The .evie folder of ${given} is, or holds, Evie's data folder, ${dataFolder}. Choose another folder for the project.`)
-  const settingsFile = join(folder, ".evie", "evie.json")
+  const evie = join(folder, ".evie")
+  if (existsSync(evie) && !statSync(evie).isDirectory()) {
+    throw new Error(`${evie} is a file. Evie keeps what it adds to a project in a folder of that name, so move the file elsewhere, then make the project.`)
+  }
+  const settingsFile = join(evie, "evie.json")
   const already = projects.list().find((project) => project.folder === folder)
   if (already) throw new Error(`${given} is already the project "${already.name}". To back up its .evie folder, set "sync": "private" in ${settingsFile}.`)
   // Settings that came with the folder, as in a repository cloned from
@@ -122,9 +148,10 @@ export async function makeProject(projects: Projects, input: { folder: string; n
   }
 
   const madeFolder = !existsSync(folder)
-  await mkdir(join(folder, ".evie"), { recursive: true })
+  const heldFiles = existsSync(evie) && readdirSync(evie).length > 0
+  await mkdir(evie, { recursive: true })
   await writeFile(settingsFile, `${JSON.stringify({ sync: "private" }, null, 2)}\n`, { flag: "wx" })
-  return { project: projects.create(folder, input.name?.trim() ?? basename(folder)), madeFolder }
+  return { project: projects.create(folder, input.name?.trim() ?? basename(folder)), madeFolder, heldFiles }
 }
 
 export function createProjects(db: Database): Projects {

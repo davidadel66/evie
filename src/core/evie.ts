@@ -617,17 +617,20 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   }
 
   async function newProject(input: Commands["new_project"]["input"]): Promise<Commands["new_project"]["output"]> {
-    const made = await makeProject(projects, input, home)
-    keepEvieOutOfGit(made.project.folder)
+    const { project, madeFolder, heldFiles } = await makeProject(projects, input, home)
+    keepEvieOutOfGit(project.folder)
     // The project is made by now. Untrusted, it still works, and its first
-    // session asks whether to trust its settings file.
-    await options.trust?.(made.project.folder).catch((cause) => {
-      throw new Error(
-        `The project "${made.project.name}" was made at ${made.project.folder}, but could not be trusted: ` +
-          `${(cause instanceof Error ? cause.message : String(cause)).replace(/\.*$/, ".")} Evie asks whether to trust it when a session first opens there.`,
-      )
-    })
-    return made
+    // session asks whether to trust its settings file and what came with it.
+    const trusted = !heldFiles && options.trust !== undefined
+    if (trusted) {
+      await options.trust!(project.folder).catch((cause) => {
+        throw new Error(
+          `The project "${project.name}" was made at ${project.folder}, but could not be trusted: ` +
+            `${(cause instanceof Error ? cause.message : String(cause)).replace(/\.*$/, ".")} Evie asks whether to trust it when a session first opens there.`,
+        )
+      })
+    }
+    return { project, madeFolder, trusted }
   }
 
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
