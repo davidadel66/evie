@@ -111,7 +111,7 @@ export async function makeProject(projects: Projects, input: { folder: string; n
     throw new Error(`${given} is inside the git repository at ${root}, so it belongs to that repository's project. Make the project at the repository's own folder instead.`)
   }
   if (within(folder, data)) throw new Error(`${given} is in Evie's data folder, ${dataFolder}, where Evie keeps its own state. Choose a folder outside it.`)
-  if (within(join(folder, ".evie"), data)) throw new Error(`The .evie folder of ${given} is Evie's data folder, ${dataFolder}. Choose another folder for the project.`)
+  if (within(data, join(folder, ".evie"))) throw new Error(`The .evie folder of ${given} is, or holds, Evie's data folder, ${dataFolder}. Choose another folder for the project.`)
   const settingsFile = join(folder, ".evie", "evie.json")
   const already = projects.list().find((project) => project.folder === folder)
   if (already) throw new Error(`${given} is already the project "${already.name}". To back up its .evie folder, set "sync": "private" in ${settingsFile}.`)

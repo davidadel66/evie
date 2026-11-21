@@ -34,6 +34,10 @@ import type { Settings } from "./settings.ts"
 //     "plugins": ["files", { "use": "shell" }, "/path/to/my-plugin.ts"],
 //     "trust": ["/path/to/a/project"] }
 //
+// A project's own file can also say where its `.evie/` folder syncs:
+// `"sync": "private"` backs it up to a private repository, through the sync
+// plugin, and `"none"` keeps it on this computer.
+//
 // A setting in the environment, `EVIE_MODEL` or `EVIE_MAX_TOKENS`, wins over
 // both files, so one run can be pointed at another model.
 //

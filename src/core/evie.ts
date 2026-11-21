@@ -619,8 +619,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   async function newProject(input: Commands["new_project"]["input"]): Promise<Commands["new_project"]["output"]> {
     const made = await makeProject(projects, input, home)
     keepEvieOutOfGit(made.project.folder)
-    // Made and registered, untrusted the project still works, and its
-    // settings file is on neither list, so its first session asks.
+    // The project is made by now. Untrusted, it still works, and its first
+    // session asks whether to trust its settings file.
     await options.trust?.(made.project.folder).catch((cause) => {
       throw new Error(
         `The project "${made.project.name}" was made at ${made.project.folder}, but could not be trusted: ` +

@@ -547,8 +547,9 @@ export type Commands = {
   // `"sync": "private"` backs up the project's `.evie/` folder to a private
   // repository. The project is registered, named after its folder unless
   // `name` is given, and trusted. `madeFolder` says whether the folder was
-  // missing. A folder that is already a project, that has Evie settings of
-  // its own, or that is in Evie's data folder is refused.
+  // missing. A folder that is already a project, has Evie settings of its
+  // own, is inside a git repository below its top, or is in Evie's data
+  // folder is refused, and nothing is made.
   new_project: {
     input: { folder: string; name?: string }
     output: { project: Project; madeFolder: boolean }

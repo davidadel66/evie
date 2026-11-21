@@ -229,7 +229,7 @@ function notSynced(setting: "none" | undefined): string {
 function repositoryName(project: Project): string {
   const name = project.name
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -249,6 +249,7 @@ async function runCommand(command: string[], cwd: string): Promise<Ran> {
       timeout: 2 * 60_000,
     })
     const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
+    if (child.signalCode !== null) return { code: code || 1, stdout, stderr: `${stderr.trim()} It took more than two minutes, so it was stopped.`.trim() }
     return { code, stdout, stderr }
   } catch (cause) {
     return { code: 127, stdout: "", stderr: `${command[0]} could not be started: is it installed, and on the PATH Evie's server runs with? (${cause instanceof Error ? cause.message : String(cause)})` }
