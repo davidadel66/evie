@@ -9,6 +9,9 @@ export type EventLog = {
   // Up to `limit` of a session's events, the latest of those numbered below
   // `before`, in order, and whether there are earlier ones.
   page(session: string, before: number, limit: number): { events: StoredEvent[]; earlier: boolean }
+  // The sessions whose last turn started and never ended, as when Evie
+  // stopped in the middle of it.
+  cutOff(): string[]
 }
 
 type EventRow = { session: string; seq: number; type: string; body: string; time: number }
@@ -25,6 +28,9 @@ export function createEventLog(db: Database): EventLog {
   // Read back from `before` through the log's key, so only the page is read.
   const selectBefore = db.query<EventRow, [string, number, number]>(
     "SELECT session, seq, type, body, time FROM event WHERE session = ? AND seq < ? ORDER BY seq DESC LIMIT ?",
+  )
+  const lastTurns = db.query<{ id: string }, []>(
+    `SELECT id FROM session WHERE (SELECT type FROM event WHERE event.session = session.id AND type IN ('turn_start', 'turn_end') ORDER BY seq DESC LIMIT 1) = 'turn_start'`,
   )
   const fromRow = (row: EventRow) =>
     ({
@@ -56,6 +62,10 @@ export function createEventLog(db: Database): EventLog {
       // One more than the page is read, to tell whether there are earlier ones.
       const rows = selectBefore.all(session, before, limit + 1)
       return { events: rows.slice(0, limit).reverse().map(fromRow), earlier: rows.length > limit }
+    },
+
+    cutOff() {
+      return lastTurns.all().map((row) => row.id)
     },
   }
 }

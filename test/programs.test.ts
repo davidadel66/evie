@@ -55,10 +55,11 @@ async function homeWith(port: number, replies: (string | ScriptedReply)[]) {
   return home
 }
 
-// Writes the settings of a data folder made by `homeWith` again, with other replies.
-async function scriptIn(home: string, port: number, replies: (string | ScriptedReply)[]) {
+// Writes the settings of a data folder made by `homeWith` again, with other
+// replies, and any built-in plugins named.
+async function scriptIn(home: string, port: number, replies: (string | ScriptedReply)[], builtIn: string[] = []) {
   const script = replies.map((reply) => (typeof reply === "string" ? { text: [reply] } : reply))
-  await writeFile(join(home, "evie.json"), JSON.stringify({ model: "test/model", plugins: [{ use: SCRIPTED, options: { script } }], server: { port } }))
+  await writeFile(join(home, "evie.json"), JSON.stringify({ model: "test/model", plugins: [{ use: SCRIPTED, options: { script } }, ...builtIn], server: { port } }))
 }
 
 // Starts `evie` in a project folder with its input kept open, to be typed
@@ -484,4 +485,97 @@ test("a token command waits while the server is writing to the database, instead
   const added = await adding
   expect(added.stderr).toBe("")
   expect(added.code).toBe(0)
+})
+
+// ---- Stopping, for a restart or for good ------------------------------------------------------
+
+// A data folder and a project where `evie serve` has started a background
+// command, and an `evie` that asked for it, left connected.
+async function commandRunning(port: number, command: string) {
+  const home = await tempFolder("evie-home-")
+  await scriptIn(home, port, [{ text: [], calls: [{ name: "shell", input: { command, background: true } }] }, "Started."], ["shell", "jobs"])
+  const project = await tempFolder("evie-project-")
+  const server = await serve(home)
+  const terminal = evieTyping(home, project)
+  terminal.type("run it")
+  await terminal.shows("Started.")
+  const db = reading(home)
+  const session = db.query<{ session: string }, []>("SELECT session FROM event WHERE type = 'user_message'").get()!.session
+  db.close()
+  const output = join(home, "tool-output", session, "job-1.log")
+  return { home, server, session, output }
+}
+
+// The database of a data folder, to read while the server may be writing:
+// a read that finds it busy waits, as the server's own do.
+function reading(home: string) {
+  const db = new Database(join(home, "evie.db"), { readonly: true })
+  db.run("PRAGMA busy_timeout = 5000")
+  return db
+}
+
+// The notes stored in a session, once there are as many as asked for.
+async function notesOnceThere(home: string, session: string, count: number) {
+  for (;;) {
+    const db = reading(home)
+    const notes = db.query<{ body: string }, [string]>("SELECT body FROM event WHERE session = ? AND type = 'note' ORDER BY seq").all(session)
+    db.close()
+    if (notes.length >= count) return notes.map((note) => JSON.parse(note.body).text as string)
+    await Bun.sleep(20)
+  }
+}
+
+// Whether any process of a group is there. Signal 0 only asks.
+const groupThere = (group: number) => {
+  try {
+    process.kill(-group, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+test("evie serve stopped as a restart stops it leaves a background command running, and the next evie serve tells of its end", async () => {
+  const port = await freePort()
+  const { home, server, session, output } = await commandRunning(port, "sleep 1; echo built")
+
+  server.kill("SIGTERM")
+  expect(await server.exited).toBe(143)
+  await scriptIn(home, port, ["The build is done."], ["shell", "jobs"])
+  await serve(home)
+
+  expect(await notesOnceThere(home, session, 1)).toEqual([`Background job 1 (sleep 1; echo built) has finished.\n\nbuilt\n\nThe full output is in ${output}.`])
+})
+
+test("evie serve removes a stop-for-good file left from before it started, so a restart of it is not taken for a stop for good", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  // Left by an uninstall while no server was running to read it.
+  await writeFile(join(home, "stop-for-good"), "")
+
+  await serve(home)
+
+  expect(await Bun.file(join(home, "stop-for-good")).exists()).toBe(false)
+})
+
+test("evie serve stopped with Ctrl-C, by closing its terminal, or with a stop-for-good file in its data folder, stops its background commands", async () => {
+  const codes = { "Ctrl-C": 130, "terminal closed": 129, "stop-for-good": 143 }
+  for (const how of ["Ctrl-C", "terminal closed", "stop-for-good"] as const) {
+    const port = await freePort()
+    const { home, server, output } = await commandRunning(port, "ps -o pgid= -p $$ | tr -d ' '; sleep 30")
+    while (!(await readFile(output, "utf8")).includes("\n")) await Bun.sleep(5)
+    const group = Number((await readFile(output, "utf8")).split("\n")[0])
+    cleanups.push(async () => void (groupThere(group) && process.kill(-group, "SIGKILL")))
+
+    if (how === "Ctrl-C") server.kill("SIGINT")
+    else if (how === "terminal closed") server.kill("SIGHUP")
+    else {
+      await writeFile(join(home, "stop-for-good"), "")
+      server.kill("SIGTERM")
+    }
+
+    expect(await server.exited).toBe(codes[how])
+    expect(groupThere(group)).toBe(false)
+    expect(await Bun.file(join(home, "stop-for-good")).exists()).toBe(false)
+  }
 })

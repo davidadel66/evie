@@ -13,7 +13,8 @@ import type { EventBodies, EvieEvent, Question } from "./types.ts"
 export type Questions = {
   // Asks the owner and waits. Returns the choice, or null for a refusal.
   // `canAnswer` says whether the session's client shows questions at all.
-  ask(session: string, question: Question, options: { canAnswer: boolean; signal?: AbortSignal }): Promise<string | null>
+  // `asker` is the session that asks, when it is not this one.
+  ask(session: string, question: Question, options: { canAnswer: boolean; signal?: AbortSignal; asker?: string }): Promise<string | null>
   // The owner's answer to an open question, or null to refuse it.
   answer(session: string, id: string, choice: string | null): void
   // The questions in a session still waiting for an answer, oldest first.
@@ -29,13 +30,13 @@ export function createQuestions(options: { log: EventLog; emit(event: EvieEvent)
   const open = new Map<string, Open>()
 
   return {
-    ask(session, question, { canAnswer, signal }) {
+    ask(session, question, { canAnswer, signal, asker }) {
       if (question.text.trim() === "") throw new Error("A question needs some text.")
       if (question.choices.length === 0 && !question.freeText) throw new Error("A question needs choices, or to allow an answer in words.")
 
       const id = crypto.randomUUID().slice(0, 8)
       const asked: Question = { text: question.text, choices: [...question.choices], ...(question.freeText && { freeText: true as const }) }
-      const event = log.append(session, "question", { id, ...asked })
+      const event = log.append(session, "question", { id, ...(asker !== undefined && { asker }), ...asked })
 
       return new Promise((resolve) => {
         // The answer is written to the log in the same step that ends the

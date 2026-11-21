@@ -4,7 +4,7 @@ import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { runTerminal, type Plugin } from "../src/index.ts"
-import { say, startEvie, stored } from "./support/harness.ts"
+import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
 const cleanups: (() => Promise<void>)[] = []
@@ -20,6 +20,13 @@ async function tempFolder(prefix: string) {
 
 // One data folder and one project folder, with Evie started in them as many
 // times as a test needs. Each start stands for running `evie` again.
+// Resolves when a turn of the session ends as turns do, not closed off because Evie stopped.
+function turnCompleted(run: { evie: Run["evie"] }, session: string) {
+  return new Promise<void>((resolve) => {
+    run.evie.subscribe((event) => event.type === "turn_end" && event.session === session && event.body.reason === "completed" && resolve())
+  })
+}
+
 async function machine() {
   const home = await tempFolder("evie-home-")
   const projectFolder = await tempFolder("evie-project-")
@@ -136,7 +143,7 @@ test("the model a session was switched to is still in use after Evie is started 
   expect(second.model.requests[0]?.model).toBe("other/model")
 })
 
-test("a turn cut off when Evie stopped is closed off, so the conversation can carry on", async () => {
+test("a turn cut off when Evie stopped is closed off, so the conversation can carry on, and is carried on when its session opens", async () => {
   const { home, projectFolder, startAgain } = await machine()
   const first = await startAgain()
   await say(first.run, "hi")
@@ -159,15 +166,16 @@ test("a turn cut off when Evie stopped is closed off, so the conversation can ca
   db.close()
 
   const second = await startAgain([{ text: ["Carrying on."] }])
-  const reopened = await second.run.evie.send({ type: "open_session", folder: projectFolder, continue: true })
-  await say(second.run, "what happened?", reopened.session)
+  const carriedOn = turnCompleted(second.run, first.run.session)
+  await second.run.evie.send({ type: "open_session", folder: projectFolder, continue: true })
+  await carriedOn
 
   const asked = second.model.requests[0]!.messages
-  expect(asked.slice(-3)).toEqual([
+  expect(asked.slice(-3, -1)).toEqual([
     { role: "tool", callId: "call_x", text: "first done" },
     { role: "tool", callId: "call_y", text: "Evie stopped before this tool finished, so it has no result." },
-    { role: "user", text: "what happened?" },
   ])
+  expect(asked.at(-1)?.text).toStartWith("[Note from Evie: Evie's server restarted while you were working, and your turn was cut short.")
 })
 
 test("a message that was waiting when Evie stopped is answered when its session is continued", async () => {
@@ -254,19 +262,23 @@ test("a session opened by its id that is not open, as after Evie was started aga
   // Started again somewhere else, so nothing ties it to the session's project.
   const second = await startAgain([{ text: ["Carrying on."] }])
   const elsewhere = await second.run.evie.send({ type: "open_session" })
+  const carriedOn = turnCompleted(second.run, first.run.session)
   const reopened = await second.run.evie.send({ type: "open_session", session: first.run.session, after: 4 })
-  await say(second.run, "what happened?", reopened.session)
+  await carriedOn
 
   expect(elsewhere.project).toBeNull()
-  expect(reopened).toMatchObject({ session: first.run.session, project: first.run.project, resumed: true, turnRunning: false, lastSeq: 9 })
+  // Closed off, then carried on by itself, which has started.
+  expect(reopened).toMatchObject({ session: first.run.session, project: first.run.project, resumed: true, turnRunning: true, lastSeq: 11 })
   expect(reopened.events?.map((event) => [event.seq, event.type])).toEqual([
     [5, "turn_start"],
     [6, "user_message"],
     [7, "assistant_message"],
     [8, "tool_result"],
     [9, "turn_end"],
+    [10, "turn_start"],
+    [11, "note"],
   ])
-  expect(second.model.requests[0]?.messages.at(-1)).toEqual({ role: "user", text: "what happened?" })
+  expect(second.model.requests[0]?.messages.at(-1)?.text).toStartWith("[Note from Evie: Evie's server restarted while you were working")
 })
 
 test("opening by id refuses a subagent's session, saying to open the one that started it, and refuses an id that is no session's", async () => {

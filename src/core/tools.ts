@@ -173,7 +173,8 @@ async function capOutput(output: string, savePath: string, keep: "start" | "end"
   return `${shown}\n\n[Output cut: ${amount}. ${where}]`
 }
 
-const safeName = (id: string) => id.replace(/[^A-Za-z0-9_-]/g, "_") || "call"
+// A call's id as it can be part of a file's name.
+export const safeName = (id: string) => id.replace(/[^A-Za-z0-9_-]/g, "_") || "call"
 
 const DAY = 24 * 60 * 60 * 1000
 

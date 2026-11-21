@@ -21,7 +21,9 @@ export type EventBodies = {
   // onwards. `files` are the files the summarised part worked with.
   compaction: { summary: string; keepFrom: number; files: string[] }
   // Evie asked the owner something. `id` ties the answer to it.
-  question: { id: string } & Question
+  // `asker` is the session that asked, when it is not this one: a subagent,
+  // whose questions are put to the owner in the session that started it.
+  question: { id: string; asker?: string } & Question
   // The answer. `choice` is null when the question was refused: the turn was
   // cancelled, Evie closed, or the session's client cannot show questions.
   answer: { id: string; choice: string | null }
@@ -155,7 +157,9 @@ export type Job = {
   session: string
   kind: string
   title: string
-  status: "running" | "finished" | "failed" | "stopped"
+  // "unknown" is for work that has ended, but no one can tell how, as for a
+  // command that went while no Evie was running without leaving its status.
+  status: "running" | "finished" | "failed" | "stopped" | "unknown"
   started: number
   ended?: number
   outputFile: string
@@ -168,10 +172,59 @@ export type JobWork = {
   // A few words to list it by, such as the command.
   title: string
   // Settles when the work ends, with what the model should be told about
-  // how it went. Rejecting means the work failed.
+  // how it went. Rejecting means the work failed, and rejecting with an
+  // `EndNotKnown` that it ended in a way no one can tell.
   done: Promise<string>
   // Stops the work. `done` must settle soon after.
   stop(): void
+  // What the job's record keeps for the work's plugin, to pick the work up
+  // again after Evie restarts, such as the id of a subagent.
+  keep?: Record<string, unknown>
+}
+
+// A job number taken for work a tool call waits on, before it is a job: its
+// output file and its record are there from the start, so that if Evie
+// restarts while the call waits, the next start finds the work and makes it
+// a job then. `start` makes it a job now; `release` gives the number and the
+// files back when the work ended within its call.
+export type ReservedJob = {
+  id: string
+  outputFile: string
+  // Adds to what the record keeps for the work's plugin, such as the id of
+  // the process doing it.
+  keep(data: Record<string, unknown>): void
+  start(work: JobWork): Job
+  release(): void
+}
+
+// What is kept of a job in a file beside its output, so that a later run of
+// Evie can find it again: written when it starts, and again when it changes.
+export type JobRecord = {
+  id: string
+  session: string
+  kind: string
+  title: string
+  started: number
+  outputFile: string
+  // The tool call it belongs to. While `inCall` is set, that call is still
+  // waiting on the work, which is not yet a job.
+  call?: string
+  inCall?: true
+  status: Job["status"]
+  ended?: number
+  // Whether the model has been told how it ended, or knows.
+  told: boolean
+  // What the work's plugin keeps, to pick it up again.
+  keep: Record<string, unknown>
+}
+
+// How a plugin picks up a job of its own kind that an earlier run of Evie
+// left, given the job's record: the work it returns is watched as any job's
+// is. `context` is the job's session's, as its tools are given it.
+export type JobKind = {
+  // The kind, as the plugin's work names it.
+  name: string
+  resume(job: JobRecord, context: { children: Children }): JobWork
 }
 
 // ---- Subagents ----------------------------------------------------------------
@@ -204,6 +257,8 @@ export type Children = {
 export type ToolContext = {
   // The turn's cancel signal.
   signal: AbortSignal
+  // The id of the tool call being run.
+  callId: string
   // The folder of the session's project, or null in the general session,
   // which has no project.
   folder: string | null
@@ -211,9 +266,11 @@ export type ToolContext = {
   ask: Ask
   // The session's background jobs. `start` hands work over to carry on
   // after this call returns: when it ends the model is told, and is woken
-  // to deal with the result if the session is idle.
+  // to deal with the result if the session is idle. `reserve` is for work
+  // the call waits on that may become a job, named by the call it belongs to.
   jobs: {
     start(work: JobWork): Job
+    reserve(work: { kind: string; title: string; call: string }): ReservedJob
     list(): Job[]
     stop(id: string): Job | undefined
     // For a tool that is waiting on work it could hand over: calls `asked`
@@ -353,6 +410,7 @@ export type Host = {
   providers: Registry<Provider>
   profiles: Registry<ModelProfile>
   commands: Registry<SlashCommand>
+  jobKinds: Registry<JobKind>
   // Attaches a function to a hook.
   on<Name extends keyof Hooks>(name: Name, handler: Hooks[Name]): void
 }
@@ -501,4 +559,17 @@ export type Evie = {
   send<Sent extends Command>(command: Sent): Promise<Commands[Sent["type"]]["output"]>
   subscribe(listener: (event: EvieEvent) => void): () => void
   close(): Promise<void>
+}
+
+// The core itself, as the program that runs it holds it: the client
+// interface, and what only that program does.
+export type Core = Omit<Evie, "close"> & {
+  // Picks up the work an earlier run of Evie left in the data folder: jobs
+  // still running, or that ended with no one there to tell, and turns cut
+  // off. Called once, by the server, once it is sure to be the only one.
+  resumeWork(): Promise<void>
+  // Stops Evie for good: turns and background jobs are stopped. With
+  // `restart`, nothing is stopped and nothing more is written, so the next
+  // start finds the work as it is, as it would after a crash.
+  close(options?: { restart?: boolean }): Promise<void>
 }
