@@ -9,7 +9,10 @@
 //                              list them and take one back
 //   evie service install       runs `evie serve` at login, on macOS;
 //                              uninstall and status remove it and report on it
+//   evie seed                  fills an empty data folder with made-up
+//                              projects and sessions
 import { loadSettings } from "./settings.ts"
+import { seed } from "./programs/seed.ts"
 import { serve } from "./programs/serve.ts"
 import { service } from "./programs/service.ts"
 import { terminal } from "./programs/terminal.ts"
@@ -29,4 +32,5 @@ const [command, ...rest] = process.argv.slice(2)
 if (command === "serve") await serve(env)
 else if (command === "token") await token(env, rest)
 else if (command === "service") await service(env, rest)
+else if (command === "seed") await seed(env)
 else await terminal(env, process.argv.slice(2))
