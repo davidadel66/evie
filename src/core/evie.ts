@@ -138,9 +138,9 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   const emit = (event: EvieEvent) => {
     deliver(event)
     if (closed || event.type === "assistant_delta" || event.type === "summary") return
-    // The event is already stored, so a summary that cannot be worked out,
-    // as while the database is busy, must not break the turn. It is skipped,
-    // and the next change sends one.
+    // The event has been sent, and a stored one stored, so a summary that
+    // cannot be worked out, as while the database is busy, must not break
+    // the turn. It is skipped, and the next change sends one.
     try {
       summaries.changed(event.session)
     } catch {}
