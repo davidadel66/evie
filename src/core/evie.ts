@@ -172,7 +172,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   const jobs = createJobs({
     outputFolder: join(home, "tool-output"),
     emit,
-    tell: (session, text, wake) => sessions.get(session)?.loop.tell(text, wake),
+    tell: (session, text, wake, kept) => sessions.get(session)?.loop.tell(text, wake, kept),
   })
 
   // Each session open in this process: its turn loop, its project and that

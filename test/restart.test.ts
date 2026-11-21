@@ -147,6 +147,24 @@ test("a job no plugin loaded now can pick up again is told as ended in a way not
   ])
 })
 
+test("a job that ended while a turn was running, cut off by a restart before it was told, is told at the next start", async () => {
+  const { startAgain } = await machine()
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "sleep 0.3; echo done", background: true } }] }, { hang: true }])
+  const session = first.run.session
+  // Its note waits for the turn's next step, which never comes.
+  const ended = until(first.run, (event) => event.type === "job" && event.job.status === "finished")
+  await first.run.evie.send({ type: "send_message", session, text: "run it" })
+  await ended
+  await first.restart()
+
+  const second = await startAgain([{ text: ["Carrying on."] }, { text: ["It is done."] }])
+  const told = until(second.run, (event) => event.type === "note" && event.session === session && event.body.text.startsWith("Background job 1"))
+  await second.run.evie.resumeWork()
+
+  const note = await told
+  expect(note.type === "note" && note.body.text).toStartWith("Background job 1 (sleep 0.3; echo done) has finished.\n\ndone")
+})
+
 // The process group of a command that prints its own first, once the whole line is there.
 async function groupOf(file: string) {
   while (!(await Bun.file(file).text().catch(() => "")).includes("\n")) await Bun.sleep(5)

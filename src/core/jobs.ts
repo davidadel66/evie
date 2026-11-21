@@ -80,8 +80,9 @@ export function createJobs(options: {
   outputFolder: string
   emit(event: EvieEvent): void
   // Adds a note for the model to a session, and with `wake` starts a turn
-  // for it when the session is idle.
-  tell(session: string, text: string, wake: boolean): void
+  // for it when the session is idle. `kept` is called once the note is in
+  // the log, which may be later: a note is held during a turn until its next step.
+  tell(session: string, text: string, wake: boolean, kept: () => void): void
 }): Jobs {
   const all = new Map<string, Running[]>()
   let closing = false
@@ -108,6 +109,12 @@ export function createJobs(options: {
     try {
       work()
     } catch {}
+  }
+  // The model has been told how a job ended, or knows: it is not told again
+  // when Evie starts again.
+  const told = (record: JobRecord) => {
+    record.told = true
+    save(record)
   }
   // Written whole under another name first, so a record is never found half written.
   const save = (record: JobRecord) => {
@@ -139,15 +146,18 @@ export function createJobs(options: {
       // Left for a restart: the next start tells of it.
       if (gone) return
       announce(job)
-      Object.assign(record, { status: job.status, ended: job.ended, told: true })
+      Object.assign(record, { status: job.status, ended: job.ended })
       save(record)
       // The model that stopped a job already knows, and when Evie is
       // closing it was told then.
+      if (running.stoppedBy === "model") told(record)
       if (running.stoppedBy === "model" || running.stoppedBy === "closing") return
       const how = HOW[job.status as keyof typeof HOW]
       // A job that ended by itself wakes the session, so the result is
-      // dealt with even if the turn that started it is long over.
-      safely(() => options.tell(session, `Background job ${id} (${job.title}) ${how}.\n\n${result}`, running.stoppedBy === undefined))
+      // dealt with even if the turn that started it is long over. It counts
+      // as told only once its note is in the log, so a restart before then
+      // leaves it to be told by the next start.
+      safely(() => options.tell(session, `Background job ${id} (${job.title}) ${how}.\n\n${result}`, running.stoppedBy === undefined, () => told(record)))
     }
     work.done.then(
       (result) => settle("finished", result),
@@ -265,9 +275,7 @@ export function createJobs(options: {
         running.stoppedBy = "closing"
         // Written now, while the log is still open, so that a session
         // continued later does not go on expecting to hear from the job.
-        safely(() => options.tell(job.session, `Background job ${job.id} (${job.title}) was stopped because Evie was closed. Start it again if it is still needed.`, false))
-        record.told = true
-        save(record)
+        safely(() => options.tell(job.session, `Background job ${job.id} (${job.title}) was stopped because Evie was closed. Start it again if it is still needed.`, false, () => told(record)))
         safely(() => work.stop())
       }
       // Work that will not stop must not keep Evie from closing.

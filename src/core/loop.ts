@@ -74,8 +74,9 @@ export type Loop = {
   idle(): Promise<void>
   // Adds a note for the model to the conversation: now when the session is
   // idle, or at the turn's next step when it is not. With `wake`, an idle
-  // session starts a turn so the model deals with the note.
-  tell(text: string, wake?: boolean): void
+  // session starts a turn so the model deals with the note. `kept` is
+  // called once the note is in the log.
+  tell(text: string, wake?: boolean, kept?: () => void): void
   // Stops taking new turns, cancels the running one and waits for it to end.
   stop(): Promise<void>
 }
@@ -120,11 +121,14 @@ export function createLoop(options: LoopOptions): Loop {
   // during a turn is written at the next step, where it cannot come between
   // a tool call and its result. One that is to wake the model is written at
   // the start of the turn it causes.
-  const waitingNotes: { text: string; wake: boolean }[] = []
+  const waitingNotes: { text: string; wake: boolean; kept?: () => void }[] = []
   const writeNotes = (which: "all" | "quiet") => {
     const writing = waitingNotes.filter((note) => which === "all" || !note.wake)
     for (const note of writing) waitingNotes.splice(waitingNotes.indexOf(note), 1)
-    for (const { text } of writing) emit(log.append(session, "note", { text }))
+    for (const { text, kept } of writing) {
+      emit(log.append(session, "note", { text }))
+      kept?.()
+    }
   }
   // There is work for a turn: a message from the owner, or a note the model is to be woken for.
   const turnWanted = () => inbox.waiting(session) || waitingNotes.some((note) => note.wake)
@@ -486,8 +490,8 @@ export function createLoop(options: LoopOptions): Loop {
     idle() {
       return running
     },
-    tell(text, wake = false) {
-      waitingNotes.push({ text, wake })
+    tell(text, wake = false, kept) {
+      waitingNotes.push({ text, wake, ...(kept && { kept }) })
       if (active) return
       if (wake && !stopped) this.wake()
       else writeNotes("quiet")
