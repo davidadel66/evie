@@ -41,10 +41,9 @@ export function createProjects(db: Database): Projects {
   const byId = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE id = ?")
   const insertProject = db.query("INSERT INTO project (id, name, folder, created) VALUES (?, ?, ?, ?)")
   const insertSession = db.query("INSERT INTO session (id, project, created, parent, agent, read_only) VALUES (?, ?, ?, ?, ?, ?)")
-  const parent = db.query<{ parent: string | null; agent: string | null; read_only: number | null }, [string]>(
-    "SELECT parent, agent, read_only FROM session WHERE id = ?",
+  const sessionRow = db.query<{ project: string | null; parent: string | null; agent: string | null; read_only: number | null }, [string]>(
+    "SELECT project, parent, agent, read_only FROM session WHERE id = ?",
   )
-  const sessionProject = db.query<{ project: string | null }, [string]>("SELECT project FROM session WHERE id = ?")
   // `IS` compares with null as well as with an id. Only a session the owner
   // has said something in counts: one that holds nothing but a question
   // asked while it was opening is not a conversation to carry on.
@@ -86,18 +85,18 @@ export function createProjects(db: Database): Projects {
     },
 
     startedAs(session) {
-      const row = parent.get(session)
+      const row = sessionRow.get(session)
       return { ...(row?.agent != null && { agent: row.agent }), readOnly: row?.read_only === 1 }
     },
 
     projectOf(session) {
-      const row = sessionProject.get(session)
+      const row = sessionRow.get(session)
       if (!row) return undefined
       return row.project === null ? null : (byId.get(row.project) ?? null)
     },
 
     parentOf(session) {
-      return parent.get(session)?.parent ?? undefined
+      return sessionRow.get(session)?.parent ?? undefined
     },
 
     lastSession(project) {

@@ -295,8 +295,12 @@ test("a session's id is given alone, without a folder or project, and a number t
   const { run } = await startAgain()
   const alone = "Open a session by its id alone, without a project or a folder."
 
+  // The compiler refuses these, and the core refuses them from a client that is not type-checked.
+  // @ts-expect-error
   await expect(run.evie.send({ type: "open_session", session: run.session, folder: run.projectFolder })).rejects.toThrow(alone)
+  // @ts-expect-error
   await expect(run.evie.send({ type: "open_session", session: run.session, project: run.project!.id })).rejects.toThrow(alone)
+  // @ts-expect-error
   await expect(run.evie.send({ type: "open_session", folder: run.projectFolder, after: 3 })).rejects.toThrow(
     "`after` is the number of the last event seen in a session, so it is given only with `session`.",
   )

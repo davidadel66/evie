@@ -372,7 +372,12 @@ export type Commands = {
   open_session: {
     // `questions` says that this client shows questions and sends back the
     // answers. Without it, every question in the session is refused at once.
-    input: { project?: string; folder?: string; continue?: boolean; questions?: boolean; session?: string; after?: number }
+    // A session's id is given alone, without a project, a folder or
+    // `continue`; the core also refuses the mix from a client that is not
+    // type-checked.
+    input:
+      | { session: string; after?: number; questions?: boolean; project?: never; folder?: never; continue?: never }
+      | { project?: string; folder?: string; continue?: boolean; questions?: boolean; session?: never; after?: never }
     // `notices` are things the owner should be told, such as a project
     // plugin that was not loaded. A session that is continued can be one
     // another client left running: `turnRunning` says whether a turn is

@@ -53,6 +53,10 @@ type Connection = Admitted & {
   openingQuestions: Map<string, string>
 }
 
+// The reply to a command a device sent, kept to answer the same command
+// sent again, with when it was given.
+type Remembered = { reply: Promise<ServerMessage>; given?: number }
+
 // The browser's cookie that holds its token.
 const COOKIE = "evie_token"
 // How long the reply to a command is kept after it was given, to answer the
@@ -68,14 +72,14 @@ export function startServer(options: ServerOptions): EvieServer {
   // when it was given. A client whose line dropped before the reply reached
   // it sends the command again with the same id, and is answered from here,
   // or waits for the first one to finish, so it is carried out once.
-  const replies = new Map<string, Map<string, { reply: Promise<ServerMessage>; given?: number }>>()
+  const replies = new Map<string, Map<string, Remembered>>()
 
   function replyTo(device: string, message: ClientMessage): Promise<ServerMessage> {
     let sent = replies.get(device)
     if (!sent) replies.set(device, (sent = new Map()))
     const remembered = sent.get(message.id)
     if (remembered) return remembered.reply
-    const entry: { reply: Promise<ServerMessage>; given?: number } = {
+    const entry: Remembered = {
       reply: options.evie.send(message.command).then(
         (result): ServerMessage => ({ reply: message.id, result }),
         (cause): ServerMessage => ({ reply: message.id, error: cause instanceof Error ? cause.message : String(cause) }),
