@@ -651,7 +651,7 @@ test("what is written while the reply with what was missed is on its way is show
   for (const piece of ["Hel", "world", "lookup", "found it", "Do", "ne."]) expect(printed.split(piece)).toHaveLength(2)
 })
 
-test("a session opened just as the line dropped is caught up on from the moment its reply describes, though the reply comes from the server's memory", async () => {
+test("a session opened just as the line dropped is shown as it stands once the line is back, though the reply comes from the server's memory", async () => {
   const more = gate()
   const rest = gate()
   const { served, line, connect } = await serveOverALine([piecemealModel([["Work", "ing", more.opened, " and", rest.opened, " done."]])])
@@ -687,6 +687,28 @@ test("a session opened just as the line dropped is caught up on from the moment 
   })
 
   expect(printed).toContain("[note] A turn is still running in this session. Ctrl-C stops it.\nWorking and done.\n")
+})
+
+test("an open whose reply was lost, sent again after the session's turn has ended and its question was answered, is given where the session stands now, not what the server remembers", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider(callsDeploy()).plugin, asksBeforeDeploy().plugin])
+  // Another client leaves a turn running that stops to ask a question.
+  const left = await served.connect()
+  const { session } = await left.send({ type: "open_session", folder: served.run.projectFolder, questions: true })
+  const asked = nextEvent(served.run, "question")
+  await left.send({ type: "send_message", session, text: "ship it" })
+  const question = await asked
+
+  // The reply to this client's open is lost, with the turn running and the question waiting.
+  const lost = line.loseReplyTo("open_session")
+  const opening = (await connect()).send({ type: "open_session", folder: served.run.projectFolder, continue: true })
+  await lost
+  // While the line is down, the question is answered and the turn ends.
+  const ended = nextEvent(served.run, "turn_end")
+  await left.send({ type: "answer_question", session, id: question.body.id, choice: "Yes" })
+  await ended
+  line.mend()
+
+  expect(await opening).toMatchObject({ session, resumed: true, turnRunning: false, openQuestions: [] })
 })
 
 // A tool that hands work to the background, which ends when the test says.
@@ -794,7 +816,9 @@ test("a session continued by its folder is caught up on at once, so what is writ
 
   // The core, with the reply going on in the moment between its reading
   // where a session opened by its folder stands and the server learning
-  // which session that is.
+  // which session that is. The open by its id that follows is slow to be
+  // answered once it has read where the session stands, and the rest of the
+  // reply is written meanwhile.
   let gapped = false
   const core: Evie = {
     async send(command) {
@@ -805,6 +829,11 @@ test("a session continued by its folder is caught up on at once, so what is writ
         more.open()
         await writingMore
       }
+      if (command.type === "open_session" && command.session !== undefined) {
+        const ended = nextEvent(served.run, "turn_end")
+        rest.open()
+        await ended
+      }
       return reply
     },
     subscribe: (listener) => served.run.evie.subscribe(listener),
@@ -812,28 +841,14 @@ test("a session continued by its folder is caught up on at once, so what is writ
   }
   const server = startServer({ evie: core, tokens: served.tokens, host: "127.0.0.1", port: 0 })
   cleanups.push(() => server.stop())
-  const line = await lineTo(server.url)
-  cleanups.push(line.stop)
-  // The reply is slow to reach the terminal, and the rest is written meanwhile.
-  const release = gate()
-  const caught = line.holdReplyTo("open_session", release.opened)
-  const meanwhile = (async () => {
-    await caught
-    const ended = nextEvent(served.run, "turn_end")
-    rest.open()
-    await ended
-    release.open()
-  })()
-  const client = await connect({ url: line.url, token: served.token })
+  const client = await connect({ url: server.url, token: served.token })
   cleanups.push(() => client.close())
   let printed = ""
   await runTerminal({
     evie: client,
     folder: served.run.projectFolder,
     resume: true,
-    lines: (async function* () {
-      await meanwhile
-    })(),
+    lines: (async function* () {})(),
     write: (text) => (printed += text),
   })
 
