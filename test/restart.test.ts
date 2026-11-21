@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { shell, type EvieEvent, type Plugin } from "../src/index.ts"
+import { ask, shell, type EvieEvent, type Plugin } from "../src/index.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -26,9 +26,9 @@ async function tempFolder(prefix: string) {
 async function machine() {
   const home = await tempFolder("evie-home-")
   const projectFolder = await tempFolder("evie-project-")
-  async function startAgain(script: ScriptedReply[], plugins: Plugin[] = [shell()]) {
+  async function startAgain(script: ScriptedReply[], plugins: Plugin[] = [shell()], options: { questions?: boolean } = {}) {
     const model = scriptedProvider(script)
-    const run = await startEvie([model.plugin, ...plugins], { home, projectFolder })
+    const run = await startEvie([model.plugin, ...plugins], { home, projectFolder, ...options })
     let closed = false
     const close = async (how?: { restart: true }) => {
       if (!closed) await run.evie.close(how)
@@ -52,6 +52,9 @@ function until(run: Run, matches: (event: EvieEvent) => boolean) {
 const of = (run: Run, session: string) => stored(run.events).filter((event) => event.session === session)
 const notes = (run: Run, session: string) => of(run, session).flatMap((event) => (event.type === "note" ? [event.body.text] : []))
 const turnEnded = (run: Run, session: string) => until(run, (event) => event.type === "turn_end" && event.session === session)
+// A turn that ends as turns do, not one closed off because Evie stopped in the middle of it.
+const turnCompleted = (run: Run, session: string) =>
+  until(run, (event) => event.type === "turn_end" && event.session === session && event.body.reason === "completed")
 
 // ---- Background commands ------------------------------------------------------------------------
 
@@ -178,4 +181,104 @@ test("a command a call was waiting on when Evie restarted becomes a background j
       `and its output is being written to ${file}. You will be told when it ends, with its output. Do not start another copy while it is running.`,
   ])
   expect(notes(second.run, session).at(-1)).toBe(`Background job 1 (echo started; sleep 0.6; echo finished) has finished.\n\nstarted\nfinished\n\nThe full output is in ${file}.`)
+})
+
+// ---- Turns cut off ------------------------------------------------------------------------------
+
+const RESTARTED =
+  "Evie's server restarted while you were working, and your turn was cut short. Carry on from where you left off. A " +
+  "command or other action you started may have finished, or may still be running: before you repeat one that " +
+  "changes something, check that it did not take effect and is not still running, and if you cannot tell, say so " +
+  "rather than repeat it."
+
+// Sends a message, and resolves once the model has been asked for this many replies in all.
+async function untilAsked(run: Run, requests: unknown[], text: string, count = 1) {
+  await run.evie.send({ type: "send_message", session: run.session, text })
+  while (requests.length < count) await Bun.sleep(5)
+}
+
+test("a turn of the owner's session cut off by a restart is closed off and carried on by itself, with a note", async () => {
+  const { startAgain } = await machine()
+  const first = await startAgain([{ hang: true, text: ["Looking"] }])
+  const session = first.run.session
+  await untilAsked(first.run, first.model.requests, "find the bug")
+  await first.restart()
+
+  const second = await startAgain([{ text: ["Found it."] }])
+  const carriedOn = turnCompleted(second.run, session)
+  await second.run.evie.resumeWork()
+  await carriedOn
+
+  expect(of(second.run, session).map((event) => event.type)).toEqual(["turn_end", "turn_start", "note", "assistant_message", "turn_end"])
+  expect(of(second.run, session)[0]).toMatchObject({ body: { reason: "error", error: "Evie stopped while this turn was running." } })
+  expect(second.model.requests[0]?.messages).toEqual([
+    { role: "user", text: "find the bug" },
+    { role: "user", text: `[Note from Evie: ${RESTARTED}]` },
+  ])
+})
+
+test("a turn is carried on after at most three restarts in five minutes, and then left stopped, with a note", async () => {
+  const { startAgain } = await machine()
+  const first = await startAgain([{ hang: true }])
+  const session = first.run.session
+  await untilAsked(first.run, first.model.requests, "do the thing")
+  await first.restart()
+  // Each restart cuts off the turn carried on after the one before.
+  for (let restart = 1; restart <= 3; restart++) {
+    const again = await startAgain([{ hang: true }])
+    await again.run.evie.resumeWork()
+    while (again.model.requests.length < 1) await Bun.sleep(5)
+    await again.restart()
+  }
+
+  const last = await startAgain([])
+  await last.run.evie.resumeWork()
+  await Bun.sleep(100)
+
+  expect(last.model.requests).toEqual([])
+  expect(notes(last.run, session)).toEqual([
+    "Evie's server restarted while you were working, and this turn had already been carried on after three restarts, so it was left stopped, in case it is what stops the server.",
+  ])
+  expect(await last.run.evie.send({ type: "list_sessions" })).toMatchObject([{ session, state: "active" }])
+})
+
+test("a turn cut off while it was waiting for an answer is left stopped, with a note, and the question is closed", async () => {
+  const { startAgain } = await machine()
+  const first = await startAgain([{ text: [], calls: [{ name: "ask", input: { question: "Which branch?", choices: ["main", "dev"] } }] }], [ask()], { questions: true })
+  const session = first.run.session
+  const asked = until(first.run, (event) => event.type === "question")
+  await first.run.evie.send({ type: "send_message", session, text: "merge it" })
+  await asked
+  await first.restart()
+
+  const second = await startAgain([], [ask()])
+  await second.run.evie.resumeWork()
+  await Bun.sleep(100)
+
+  expect(second.model.requests).toEqual([])
+  expect(of(second.run, session).map((event) => event.type)).toEqual(["answer", "tool_result", "turn_end", "note"])
+  expect(notes(second.run, session)).toEqual([
+    "Evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the question went unanswered. It is left for the owner to carry on.",
+  ])
+})
+
+test("the questions of a turn carried on wait for the owner, who answers once a client opens the session", async () => {
+  const { startAgain } = await machine()
+  const first = await startAgain([{ hang: true }], [ask()])
+  const session = first.run.session
+  await untilAsked(first.run, first.model.requests, "merge it")
+  await first.restart()
+
+  const second = await startAgain([{ text: [], calls: [{ name: "ask", input: { question: "Which branch?", choices: ["main", "dev"] } }] }, { text: ["Merged into dev."] }], [ask()])
+  const asked = until(second.run, (event) => event.type === "question" && event.session === session)
+  await second.run.evie.resumeWork()
+  await asked
+  await Bun.sleep(50)
+  const opened = await second.run.evie.send({ type: "open_session", session, questions: true })
+  expect(opened.openQuestions).toMatchObject([{ text: "Which branch?" }])
+
+  const done = turnCompleted(second.run, session)
+  await second.run.evie.send({ type: "answer_question", session, id: opened.openQuestions[0]!.id, choice: "dev" })
+  await done
+  expect(of(second.run, session).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))).toEqual(["The owner chose: dev"])
 })
