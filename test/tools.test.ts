@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { deleteOldOutput } from "../src/core/tools.ts"
+import { deleteOldOutput, keepOutputTidy } from "../src/core/tools.ts"
 import type { Plugin, Tool, ToolContext } from "../src/index.ts"
 import { say, startEvie, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
@@ -393,6 +393,33 @@ test("a folder that changed in the last week is kept even when empty, as output 
   await deleteOldOutput(folder)
 
   expect(await left(folder)).toEqual(["new-session"])
+})
+
+test("output kept tidy is tidied again each time the interval comes round, until that stops", async () => {
+  const folder = await savedOutput({ "call_1.txt": 8 })
+  const oldFile = async (name: string) => {
+    await writeFile(join(folder, name), "output")
+    await age(join(folder, name), 8)
+  }
+
+  const stopTidying = keepOutputTidy(folder, { every: 20 })
+  try {
+    // Output that has grown old while the server runs, twice over, each
+    // added once the tidying before has deleted what was there.
+    for (const name of ["call_2.txt", "call_3.txt"]) {
+      while ((await left(folder)).length > 0) await Bun.sleep(1)
+      await oldFile(name)
+    }
+    while ((await left(folder)).length > 0) await Bun.sleep(1)
+  } finally {
+    stopTidying()
+  }
+  // Any tidying under way when it stopped has ended by now.
+  await Bun.sleep(50)
+  await oldFile("call_4.txt")
+  await Bun.sleep(100)
+
+  expect(await left(folder)).toEqual(["call_4.txt"])
 })
 
 // Root can delete from a folder it may not write to, so there the file could

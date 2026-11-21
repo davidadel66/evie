@@ -174,9 +174,20 @@ async function capOutput(output: string, savePath: string, keep: "start" | "end"
 
 const safeName = (id: string) => id.replace(/[^A-Za-z0-9_-]/g, "_") || "call"
 
+const DAY = 24 * 60 * 60 * 1000
+
 // Saved output is kept for a week, long enough to come back to, and then
 // deleted so that the folder does not grow for ever.
-const KEEP_OUTPUT_FOR = 7 * 24 * 60 * 60 * 1000
+const KEEP_OUTPUT_FOR = 7 * DAY
+
+// Tidies a folder of saved output now, and again every day for as long as it
+// is left to, since a server runs for weeks. `every` is how often, in
+// milliseconds. Returns what stops it.
+export function keepOutputTidy(folder: string, options: { every?: number } = {}): () => void {
+  void deleteOldOutput(folder)
+  const timer = setInterval(() => void deleteOldOutput(folder), options.every ?? DAY)
+  return () => clearInterval(timer)
+}
 
 // Deletes the files in a folder of saved output last changed more than a
 // week ago, then every folder inside it left empty. The folder itself is
