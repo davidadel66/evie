@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import { Database } from "bun:sqlite"
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { openStore } from "../src/core/store.ts"
@@ -201,6 +201,28 @@ test("evie serve that cannot make this computer's token stops, and says why in o
   expect(served.stdout).toBe("")
   expect(served.stderr).toStartWith(`This computer's token could not be made: ${join(home, "server-token")} could not be read:`)
   expect(served.stderr.trim()).not.toContain("\n")
+})
+
+test("evie serve deletes saved output older than a week once it is listening, and one that cannot listen leaves it alone", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  const saved = join(home, "tool-output", "a-session", "call_1.txt")
+  await mkdir(join(saved, ".."), { recursive: true })
+  await writeFile(saved, "output")
+  const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+  for (const path of [saved, join(saved, "..")]) await utimes(path, eightDaysAgo, eightDaysAgo)
+
+  // Something else has the port, as another `evie serve` would.
+  const other = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response() })
+  const refused = await evie(["serve"], { home })
+  await other.stop(true)
+
+  expect(refused.code).toBe(1)
+  expect(refused.stderr).toContain("Is another `evie serve` running?")
+  expect(await readFile(saved, "utf8")).toBe("output")
+
+  await serve(home)
+  while ((await readdir(join(home, "tool-output"))).length > 0) await Bun.sleep(1)
 })
 
 test("when the server stops in the middle of a turn, evie says the connection was lost and exits with an error", async () => {

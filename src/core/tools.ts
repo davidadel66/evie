@@ -1,5 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises"
+import { lstat, mkdir, readdir, rmdir, unlink, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import { jobOfFile } from "./jobs.ts"
 import type { CheckedToolCall, Tool, ToolCall, ToolContext } from "./types.ts"
 
 // What every tool call goes through, whichever tool it is for: find the
@@ -57,7 +58,7 @@ export async function runToolCall(call: ToolCall, options: ToolRunOptions): Prom
     throw new Error(`The tool "${tool.name}" broke: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
   output = await options.after(checked, output)
-  return capOutput(output, join(options.outputFolder, `${safeName(call.id)}.txt`))
+  return capOutput(output, join(options.outputFolder, `${safeName(call.id)}.txt`), tool.longOutput === "end" ? "end" : "start")
 }
 
 // ---- The input ------------------------------------------------------------------
@@ -120,28 +121,46 @@ function repairAndCheck(input: Record<string, unknown>, inputSchema: Record<stri
 // ---- The output -----------------------------------------------------------------
 
 // Output over the limit is saved in full and the model is shown the start,
-// with a note saying how much there is and where the rest is. Nothing is
-// silently cut off.
-async function capOutput(output: string, savePath: string): Promise<string> {
+// or the end for a tool that asks for it, with a note saying how much there
+// is and where the rest is. Nothing is silently cut off.
+async function capOutput(output: string, savePath: string, keep: "start" | "end"): Promise<string> {
   const lines = output.split("\n")
   const bytes = Buffer.byteLength(output)
   if (lines.length <= MAX_LINES + NOTE_LINES && bytes <= MAX_BYTES) return output
 
-  let shown = lines.slice(0, MAX_LINES).join("\n")
-  // Set when even the first line is too long to show whole.
+  let shown = (keep === "end" ? lines.slice(-MAX_LINES) : lines.slice(0, MAX_LINES)).join("\n")
+  // Set when even the one line nearest the kept end is too long to show whole.
   let partLine = false
-  if (Buffer.byteLength(shown) > MAX_BYTES) {
+  if (Buffer.byteLength(shown) > MAX_BYTES && keep === "start") {
     // Cut to the byte limit, dropping a character the cut split in two.
-    shown = Buffer.from(shown).subarray(0, MAX_BYTES).toString("utf8").replace(/\uFFFD+$/, "")
-    // Then back to the end of the last whole line, when there is one.
-    const lastBreak = shown.lastIndexOf("\n")
-    if (lastBreak > 0) shown = shown.slice(0, lastBreak)
-    else partLine = true
+    const buffer = Buffer.from(shown)
+    shown = buffer.subarray(0, MAX_BYTES).toString("utf8").replace(/\uFFFD+$/, "")
+    // Then back to the end of the last whole line, when there is one, unless
+    // the cut fell just before a line break and so already ends a whole line.
+    if (buffer[MAX_BYTES] !== 0x0a) {
+      const lastBreak = shown.lastIndexOf("\n")
+      if (lastBreak > 0) shown = shown.slice(0, lastBreak)
+      else partLine = true
+    }
+  } else if (Buffer.byteLength(shown) > MAX_BYTES) {
+    // Cut to the last bytes that fit, starting after a character the cut
+    // split in two: the bytes that carry on a character come first.
+    const buffer = Buffer.from(shown)
+    let from = buffer.length - MAX_BYTES
+    while ((buffer[from]! & 0xc0) === 0x80) from++
+    shown = buffer.subarray(from).toString("utf8")
+    // Then on to the start of the first whole line, when there is one, unless
+    // the cut fell just after a line break and so already starts a whole line.
+    if (buffer[from - 1] !== 0x0a) {
+      const firstBreak = shown.indexOf("\n")
+      if (firstBreak >= 0 && firstBreak < shown.length - 1) shown = shown.slice(firstBreak + 1)
+      else partLine = true
+    }
   }
-  const shownLines = shown.split("\n").length
+  const part = keep === "start" ? "first" : "last"
   const amount = partLine
-    ? `showing the first ${Buffer.byteLength(shown)} of ${bytes} bytes`
-    : `showing the first ${shownLines} of ${lines.length} lines`
+    ? `showing the ${part} ${Buffer.byteLength(shown)} of ${bytes} bytes`
+    : `showing the ${part} ${shown.split("\n").length} of ${lines.length} lines`
 
   let where: string
   try {
@@ -155,3 +174,56 @@ async function capOutput(output: string, savePath: string): Promise<string> {
 }
 
 const safeName = (id: string) => id.replace(/[^A-Za-z0-9_-]/g, "_") || "call"
+
+const DAY = 24 * 60 * 60 * 1000
+
+// Saved output is kept for a week, long enough to come back to, and then
+// deleted so that the folder does not grow for ever.
+const KEEP_OUTPUT_FOR = 7 * DAY
+
+// Tidies a folder of saved output now, and again every day for as long as it
+// is left to, since a server runs for weeks. `every` is how often, in
+// milliseconds. Returns what stops it.
+export function keepOutputTidy(folder: string, options: { every?: number } = {}): () => void {
+  void deleteOldOutput(folder)
+  const timer = setInterval(() => void deleteOldOutput(folder), options.every ?? DAY)
+  return () => clearInterval(timer)
+}
+
+// Deletes the files in a folder of saved output last changed more than a
+// week ago, then every folder inside it left empty. The folder itself is
+// kept, and so is every background job's output file, however old: a
+// session's jobs are numbered from those files, so deleting one would let a
+// later job take a number the conversation already uses. Anything that
+// cannot be read or deleted is left as it is: tidying up must never stop
+// Evie from working.
+export async function deleteOldOutput(folder: string): Promise<void> {
+  const oldest = Date.now() - KEEP_OUTPUT_FOR
+  const tidy = async (inside: string) => {
+    let entries
+    try {
+      entries = await readdir(inside, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const path = join(inside, entry.name)
+      try {
+        if (entry.isDirectory()) {
+          // Evie may be writing meanwhile, and makes a folder just before the
+          // file it saves there, so a folder that changed in the last week
+          // is kept even when empty.
+          const recent = (await lstat(path)).mtimeMs >= oldest
+          await tidy(path)
+          // Refused, as it should be, while anything is left inside.
+          if (!recent) await rmdir(path)
+        } else if (jobOfFile(entry.name) === undefined && (await lstat(path)).mtimeMs < oldest) {
+          await unlink(path)
+        }
+      } catch {
+        // Left as it is.
+      }
+    }
+  }
+  await tidy(folder)
+}
