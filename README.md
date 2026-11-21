@@ -116,6 +116,33 @@ Type a message and press Enter.
   summary, to save room. Evie also does this by itself when a conversation
   gets long.
 
+### Commands at a glance
+
+In your shell:
+
+| Command | What it does |
+|---|---|
+| `evie serve` | Runs the server. Leave it running; every client talks to it. |
+| `evie` | Starts the terminal client in the project of the folder you are in. |
+| `evie -c` (or `--continue`) | Carries on the last session of this project, joining it if it is still running. |
+| `evie token add <name>` | Makes a token for another device, and prints it once. |
+| `evie token list` | Lists the devices' tokens and when each was made. |
+| `evie token remove <name>` | Takes a device's token back, and disconnects that device. |
+
+Inside `evie`, a line starting with `/` is a command, not a message:
+
+| Command | What it does |
+|---|---|
+| `/model [name]` | Shows the model in use, or switches to the one named. |
+| `/mode [read-only, manual or auto]` | Shows or changes how freely Evie may act. |
+| `/compact` | Replaces the older part of the conversation with a summary, to save room. |
+| `/undo` | Puts back the files Evie's last turn changed. Run it again to go back further. |
+| `/jobs` | Lists what is running in the background; `/jobs stop <id>` stops one. |
+| `/background` | Moves the command Evie is waiting on to the background. |
+| `/skills` | Lists your skills; `/<skill name>` starts one. |
+
+Ctrl-C stops the turn in progress, and quits when nothing is running.
+
 ### The server and other devices
 
 `evie serve` listens on this computer only, at `http://127.0.0.1:3843`.
@@ -608,11 +635,42 @@ bun run check   # the type check and the tests
 The tests drive Evie the way a client does, with a scripted stand-in for the
 model, so they need no key and no network.
 
+### How changes are checked and released
+
+The repository has two long-lived branches:
+
+- `dev`, where finished work lands first;
+- `main`, the stable version, which is what most people should run.
+
+```
+ a branch per change --pull request--> dev --release: pull request--> main
+                         check runs              check runs
+```
+
+- **Every change is its own branch and pull request into `dev`.** The
+  change is reviewed before it is merged.
+- **GitHub runs the check on every pull request** and on every push to `dev`
+  and `main`. It is `.github/workflows/check.yml`: it sets up Bun 1.4.0
+  and ripgrep, which the search tools run, and then runs `bun run check`,
+  the type check and every test. A pull request whose check fails is not
+  merged.
+- **A release is a pull request from `dev` into `main`.** It lists what it
+  brings, and is merged once its check passes. There is no separate build
+  or deploy step: Evie runs from its source with Bun.
+- **Taking a release:** in a copy of the repository that follows `main`, pull
+  it (`git pull origin main`), then start `evie serve` again so the server
+  runs the new version.
+
+To try work on `dev` without risking the copy you use every day, keep two
+copies of the repository side by side: one on `main` that you use, and one
+on `dev` that you try things in.
+
 ## What comes next
 
-- Instruction files, compaction of long conversations, permissions, undo
-  and subagents.
-- An always-on server, a web client, workspaces, skills and MCP servers.
+- The rest of the server: lists of sessions and their history, the server
+  starting by itself when you log in, a development copy beside the stable
+  one, and work that carries on across a restart of the server.
+- A web client, with a workspace for each project.
 - Scheduled work, memory, voice and a phone app.
 
 ## Credits
