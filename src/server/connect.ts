@@ -84,8 +84,9 @@ type Seen = {
   // shows questions, so that it is opened the same way after a drop.
   openAs?: { questions: boolean }
   // True while the client is catching up on the session, and the numbers
-  // of the questions and answers passed on meanwhile, kept until a catch-up
-  // has passed on what came before them: see `onEvent` and `catchUp`.
+  // of the questions and answers passed on meanwhile, so that they are
+  // skipped when they come round again, kept until the client's number has
+  // passed them: see `onEvent` and `catchUp`.
   behind: boolean
   early: Set<number>
   // Whether the owner has been given where the session stands, in the reply
@@ -308,9 +309,14 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     // the reply so far in the reply to its open, so they are not passed on.
     if (seen.told) passOnText(session, output.replySoFar ?? "")
     else tell(seen, output)
+    // The client stands where the reply read the session. A question or an
+    // answer passed on meanwhile can be numbered past that, and so can the
+    // events the server held back until the reply was sent, which follow
+    // now, some of them numbered below that question. So the number goes no
+    // further, and each such question or answer stays in `early`, to be
+    // skipped if it comes round again.
     seen.seq = Math.max(seen.seq, output.lastSeq)
-    for (const seq of seen.early) seen.seq = Math.max(seen.seq, seq)
-    seen.early.clear()
+    for (const seq of seen.early) if (seq <= seen.seq) seen.early.delete(seq)
     for (const open of opening) open.caughtUp(output)
   }
 

@@ -1205,6 +1205,57 @@ test("a session opened by its id is sent to the client from the moment the core 
   expect(heard).toEqual(["the reply", "just then"])
 })
 
+test("an event stored after a catch-up has read the session, and a question after it, are each passed on once, though the question reaches the client first", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  // Stands for the core storing an event of the session and then asking a
+  // question in it, after it has read where the session stands for the
+  // client's open of it by its id and before the reply is sent. The server
+  // holds the event back until the reply is sent, and sends the question at once.
+  const listeners = new Set<(event: EvieEvent) => void>()
+  let caughtUp = false
+  const core: Evie = {
+    async send(command) {
+      const reply = await served.run.evie.send(command)
+      if (command.type === "open_session" && command.session !== undefined && !caughtUp) {
+        caughtUp = true
+        const { lastSeq } = reply as { lastSeq: number }
+        const session = command.session
+        const stored: EvieEvent = { type: "user_message", session, seq: lastSeq + 1, time: Date.now(), body: { text: "stored in between" } }
+        const question: EvieEvent = { type: "question", session, seq: lastSeq + 2, time: Date.now(), body: { id: "q1", text: "Go on?", choices: ["Yes", "No"] } }
+        for (const listener of listeners) listener(stored)
+        for (const listener of listeners) listener(question)
+      }
+      return reply
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+      const stop = served.run.evie.subscribe(listener)
+      return () => {
+        listeners.delete(listener)
+        stop()
+      }
+    },
+    close: () => served.run.evie.close(),
+  }
+  const server = startServer({ evie: core, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+  cleanups.push(() => server.stop())
+  const client = await connect({ url: server.url, token: served.token })
+  cleanups.push(() => client.close())
+  const heard: EvieEvent[] = []
+  client.subscribe((event) => heard.push(event))
+
+  // Opened by its folder, the session is caught up on at once.
+  const { session, lastSeq } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  // What the server held back is sent before the reply to this.
+  await client.send({ type: "cancel", session })
+
+  expect(heard.flatMap((event) => (event.session === session && "seq" in event ? [[event.type, event.seq]] : []))).toEqual([
+    ["question", lastSeq + 2],
+    ["user_message", lastSeq + 1],
+  ])
+})
+
 test("a session that fails to open by its id has the events held back meanwhile dropped, since the connection does not have it open", async () => {
   const served = await serveEvie([scriptedProvider([]).plugin])
   cleanups.push(served.stop)
