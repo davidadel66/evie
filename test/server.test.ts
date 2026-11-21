@@ -554,8 +554,8 @@ const FIRST_WAIT = 20
 
 // Evie behind its server, and a line between them that the test can cut
 // and mend while the server runs on.
-async function serveOverALine(plugins: Plugin[]) {
-  const served = await serveEvie(plugins)
+async function serveOverALine(plugins: Plugin[], options: Parameters<typeof serveEvie>[1] = {}) {
+  const served = await serveEvie(plugins, options)
   cleanups.push(served.stop)
   const line = await lineTo(served.server.url)
   cleanups.push(line.stop)
@@ -730,6 +730,41 @@ test("a background job that ends while the line is down is shown as ended once i
   expect(printed).toContain("[background] job 1 started: the build\n")
   expect(printed).toMatch(/\[background\] job 1 finished after \d+s: the build\nThe build passed\./)
   expect(printed.split("[background] job 1 finished")).toHaveLength(2)
+})
+
+// A project that asks whether to trust it each time its plugins are set up,
+// until the owner says yes, as one with a settings file of its own does.
+const asksTrust: NonNullable<EvieOptions["projectSettings"]> = async (_project, { ask }) => {
+  const answer = await ask({ text: "Trust this project?", choices: ["Yes", "No"] })
+  return { plugins: [], ...(answer !== "Yes" && { forNow: true as const }) }
+}
+
+test("a question whether to trust the project, refused because the line dropped while it was on screen, is shown as not answered once the line is back, and the session is open", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider([{ text: ["Hi."] }]).plugin], { projectSettings: asksTrust })
+  const refused = () => {
+    const trust = questionsAsked(served.run.events).at(-1)
+    return stored(served.run.events).some((event) => event.type === "answer" && event.body.id === trust?.body.id)
+  }
+  let printed = ""
+  await runTerminal({
+    evie: await connect(),
+    folder: served.run.projectFolder,
+    lines: (async function* () {
+      while (!printed.includes("Type a number.")) await Bun.sleep(1)
+      await line.cut()
+      // The server refuses the question, so that the project is not left half set up.
+      while (!refused()) await Bun.sleep(1)
+      line.mend()
+      while (!printed.includes("[not answered]")) await Bun.sleep(1)
+      yield "hello"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("[question] Trust this project?\n  1. Yes\n  2. No\nType a number.\n")
+  expect(printed.split("[question] Trust this project?")).toHaveLength(2)
+  expect(printed).toContain("[not answered]\n")
+  expect(printed).toContain("Hi.")
 })
 
 test("a client closed while its line is down stops trying, and a command waiting for the line fails, saying so", async () => {

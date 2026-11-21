@@ -172,12 +172,10 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     seen.held.push(event)
   }
 
-  // The reply to a session the owner opened. Its events are sent from the
-  // moment the reply describes, so the number in it is where the client stands.
+  // The reply to a session the owner opened.
   function onOpened(command: Waiting, output: Opened) {
     const input = command.message.command as OpenInput
     const seen = seenOf(output.session)
-    seen.seq = Math.max(seen.seq, output.lastSeq)
     if (seen.openAs) seen.openAs.questions ||= input.questions === true
     else {
       seen.openAs = { questions: input.questions === true }
@@ -185,10 +183,16 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       seen.shown = output.replySoFar ?? ""
       // Only what changes in the jobs from here is passed on.
       for (const job of output.jobs) seen.jobs.set(job.id, job)
+      // Its events are sent from the moment the reply describes, so for a
+      // session none of whose events have been passed on yet, the number in
+      // it is where the client stands. Once one has, such as the question
+      // whether to trust its project, none after it is ever skipped.
+      if (seen.seq === 0) seen.seq = output.lastSeq
     }
-    // A reply to a command sent again can describe a moment before the
-    // line dropped, so the session is caught up on from there.
-    if (command.resent && socket) void catchUp(output.session, socket)
+    // What lies between is caught up on, as when the server answers a
+    // command sent again from its memory of a moment before the line
+    // dropped, and refused that question when it did.
+    if (socket && (command.resent || seen.seq < output.lastSeq)) void catchUp(output.session, socket)
   }
 
   // Asks the server for what was missed in a session since the last event
