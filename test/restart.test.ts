@@ -110,7 +110,7 @@ async function groupOf(file: string) {
 
 test("a background command that went while no Evie was running, without saying how it ended, is told as not known", async () => {
   const { home, startAgain } = await machine()
-  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "ps -o pgid= -p $$; sleep 30", background: true } }] }, { text: ["Started."] }])
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "ps -o pgid= -p $$ | tr -d ' '; sleep 30", background: true } }] }, { text: ["Started."] }])
   await say(first.run, "serve it")
   const session = first.run.session
   const file = join(home, "tool-output", session, "job-1.log")
@@ -127,7 +127,7 @@ test("a background command that went while no Evie was running, without saying h
   await woken
 
   expect(notes(second.run, session)).toEqual([
-    `Background job 1 (ps -o pgid= -p $$; sleep 30) has ended, and how it ended is not known.\n\n${group}\n\n` +
+    `Background job 1 (ps -o pgid= -p $$ | tr -d ' '; sleep 30) has ended, and how it ended is not known.\n\n${group}\n\n` +
       `[Evie restarted while it was running, and it has since gone without leaving its exit status.]\n\nThe full output is in ${file}.`,
   ])
   expect(await ended).toMatchObject({ job: { id: "1", status: "unknown" } })
@@ -135,7 +135,7 @@ test("a background command that went while no Evie was running, without saying h
 
 test("a process that now has a command's id, but started at another time, is not taken for the command", async () => {
   const { home, startAgain } = await machine()
-  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "ps -o pgid= -p $$; sleep 30", background: true } }] }, { text: ["Started."] }])
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "ps -o pgid= -p $$ | tr -d ' '; sleep 30", background: true } }] }, { text: ["Started."] }])
   await say(first.run, "serve it")
   const session = first.run.session
   const group = await groupOf(join(home, "tool-output", session, "job-1.log"))
@@ -151,7 +151,7 @@ test("a process that now has a command's id, but started at another time, is not
   await second.run.evie.resumeWork()
   await woken
 
-  expect(notes(second.run, session)[0]).toStartWith("Background job 1 (ps -o pgid= -p $$; sleep 30) has ended, and how it ended is not known.")
+  expect(notes(second.run, session)[0]).toStartWith("Background job 1 (ps -o pgid= -p $$ | tr -d ' '; sleep 30) has ended, and how it ended is not known.")
   // The other process is left alone.
   expect(() => process.kill(group, 0)).not.toThrow()
 })

@@ -542,7 +542,7 @@ test("evie serve stopped as a restart stops it leaves a background command runni
 test("evie serve stopped with Ctrl-C, or with a stop-for-good file in its data folder, stops its background commands", async () => {
   for (const how of ["Ctrl-C", "stop-for-good"] as const) {
     const port = await freePort()
-    const { home, server, output } = await commandRunning(port, "ps -o pgid= -p $$; sleep 30")
+    const { home, server, output } = await commandRunning(port, "ps -o pgid= -p $$ | tr -d ' '; sleep 30")
     while ((await readFile(output, "utf8")).trim() === "") await Bun.sleep(5)
     const group = Number((await readFile(output, "utf8")).trim())
     cleanups.push(async () => void (groupThere(group) && process.kill(-group, "SIGKILL")))
