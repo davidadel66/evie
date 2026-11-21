@@ -47,6 +47,8 @@ export async function terminal(env: Settings, args: string[]) {
       down = false
       note("Connected to Evie's server again.")
     },
+    // Catching up on what was missed failed, so some of it may not be shown.
+    onMissing: (text) => note(text),
     // The server took this device's token back, or refuses it now, which
     // trying again will not change, or the line stayed down too long.
     onEnd: (cause) => {

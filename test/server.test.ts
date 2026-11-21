@@ -1337,7 +1337,7 @@ test("after the server is started again, a session whose project asks again whet
   expect(printed).toContain("Hi again.")
 })
 
-test("a catch-up that asks a question, has it answered, and then fails skips nothing: the next one shows what was missed before the question, and each question once", async () => {
+test("a catch-up that asks a question, has it answered, and then fails says that some events may be missing, and skips nothing: the next one shows what was missed before the question, and each question once", async () => {
   const home = await tempFolder("evie-home-")
   const projectFolder = await tempFolder("evie-project-")
   // The project asks whether to trust it each time its plugins are set up.
@@ -1366,10 +1366,12 @@ test("a catch-up that asks a question, has it answered, and then fails skips not
   })
   const line = await lineTo(served.server.url)
   cleanups.push(line.stop)
-  const client = await connect({ url: line.url, token: made.secret, firstWait: FIRST_WAIT })
+  const notes: string[] = []
+  const client = await connect({ url: line.url, token: made.secret, firstWait: FIRST_WAIT, onMissing: (note) => notes.push(note) })
   cleanups.push(() => client.close())
 
   let printed = ""
+  let session = ""
   const count = (text: string) => printed.split(text).length - 1
   await runTerminal({
     evie: client,
@@ -1379,7 +1381,7 @@ test("a catch-up that asks a question, has it answered, and then fails skips not
       yield "1"
       yield "hello"
       while (!printed.includes("Hi.")) await Bun.sleep(1)
-      const session = stored(served.run.events).find((event) => event.type === "user_message")!.session
+      session = stored(served.run.events).find((event) => event.type === "user_message")!.session
       // While the line is down, another client's message is answered in the
       // session, and then the server is started again.
       await line.cut()
@@ -1410,6 +1412,7 @@ test("a catch-up that asks a question, has it answered, and then fails skips not
     write: (text) => (printed += text),
   })
 
+  expect(notes).toEqual([`Catching up on the session ${session} failed, so some of its events may be missing here. The project's plugins could not be loaded.`])
   expect(printed.split("Said while the line was down.")).toHaveLength(2)
   expect(printed.split("[question] Trust this project?")).toHaveLength(4)
   expect(printed.split("[answered] Yes")).toHaveLength(4)

@@ -16,6 +16,11 @@ export type ConnectOptions = {
   // Called when the line is back after a drop. What was missed while it was
   // down is passed on straight after.
   onBack?: () => void
+  // Called when catching up on a session fails, as when its project's
+  // plugins fail to load as it is opened again, with a note for the owner
+  // saying that some of its events may be missing, and why. Its live events,
+  // when any reach the client, are passed on as before.
+  onMissing?: (note: string) => void
   // Called when the client stops for good without `close` being called,
   // because the server took this device's token back, or refuses it or the
   // page, or because the line stayed down past `giveUpAfter`, with why.
@@ -267,15 +272,18 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     })
     seen.behind = false
     // A session that could not be opened again, as when its project's
-    // plugins fail to load, is left as it is: a command sent to it says why.
-    // Then, or when the line dropped first, the events after the last one
+    // plugins fail to load, is left as it is: a command sent to it says why,
+    // and the owner is told that some of its events may be missing, since
+    // any live ones that reach the client from then on move its number past
+    // them. Then, or when the line dropped first, the events after the last one
     // passed on have not been, besides the questions and answers passed on
     // meanwhile. So the number stays where it is, for the next catch-up to
     // ask from, and those questions and answers stay in `early`, for it to skip.
     if (!reply) return
     const opening = seen.opening.splice(0)
-    if (!("result" in reply)) {
+    if ("error" in reply) {
       for (const open of opening) open.caughtUp(undefined)
+      options.onMissing?.(`Catching up on the session ${session} failed, so some of its events may be missing here. ${reply.error}`)
       return
     }
     const output = reply.result as Opened
