@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import { runTerminal, type Evie, type Plugin } from "../src/index.ts"
+import { nextEvent, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
 
@@ -178,4 +179,63 @@ test("--continue over the network carries on the last session of the project", a
     { role: "user", text: "first" },
     { role: "user", text: "second" },
   ])
+})
+
+// ---- Leaving, and losing the connection ------------------------------------------------
+
+test("closing a client stops nothing: a turn still running carries on in the server", async () => {
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  const slow: Plugin = {
+    name: "slow-model",
+    setup(host) {
+      host.providers.add({
+        name: "slow",
+        async *stream() {
+          yield { type: "text", text: "Working" }
+          await gate
+          yield { type: "text", text: " and done." }
+          yield { type: "finish", reason: "stop" }
+        },
+      })
+    },
+  }
+  const served = await serveEvie([slow])
+  cleanups.push(served.stop)
+  const client = await served.connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const started = new Promise<void>((resolve) => client.subscribe((event) => event.type === "assistant_delta" && resolve()))
+  await client.send({ type: "send_message", session, text: "do the work" })
+  await started
+
+  await client.close()
+  const ended = nextEvent(served.run, "turn_end")
+  release()
+
+  expect(await ended).toMatchObject({ session, body: { reason: "completed" } })
+  const reply = stored(served.run.events).findLast((event) => event.type === "assistant_message" && event.session === session)
+  expect(reply?.body).toMatchObject({ text: "Working and done." })
+})
+
+test("when the connection drops, a command still waiting fails with a clear error, and the client is told why", async () => {
+  let finish = (_text: string) => {}
+  const waits: Plugin = {
+    name: "waits",
+    setup(host) {
+      host.commands.add({ name: "wait", description: "Waits.", run: () => new Promise<string>((resolve) => (finish = resolve)) })
+    },
+  }
+  const served = await serveEvie([scriptedProvider([]).plugin, waits])
+  cleanups.push(served.stop)
+  cleanups.push(async () => finish("done"))
+  let dropped: string | undefined
+  const client = await served.connect({ onDrop: (reason) => (dropped = reason) })
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const waiting = client.send({ type: "run_command", session, name: "wait", args: "" })
+
+  await served.server.stop()
+
+  await expect(waiting).rejects.toThrow("The connection to Evie was lost before it answered")
+  expect(dropped).toBeString()
+  await expect(client.send({ type: "cancel", session })).rejects.toThrow("Not connected to Evie")
 })
