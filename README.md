@@ -133,6 +133,7 @@ In your shell:
 | `evie serve` | Runs the server. Leave it running; every client talks to it. |
 | `evie` | Starts the terminal client in the project of the folder you are in. |
 | `evie -c` (or `--continue`) | Carries on the last session of this project, joining it if it is still running. |
+| `evie new <folder> [name]` | Makes a project in a folder, backed up to a private GitHub repository. See "Workspaces". |
 | `evie token add <name>` | Makes a token for another device, and prints it once. |
 | `evie token list` | Lists the devices' tokens and when each was made. |
 | `evie token remove <name>` | Takes a device's token back, and disconnects that device. |
@@ -148,6 +149,7 @@ Inside `evie`, a line starting with `/` is a command, not a message:
 | `/jobs` | Lists what is running in the background; `/jobs stop <id>` stops one. |
 | `/background` | Moves the command Evie is waiting on to the background. |
 | `/skills` | Lists your skills; `/<skill name>` starts one. |
+| `/sync` | Backs up the project's `.evie` folder to its private repository now. |
 
 Ctrl-C stops the turn in progress, and quits when nothing is running.
 
@@ -247,6 +249,66 @@ pauses, and `evie` catches up when it wakes. On other systems, run
 Models differ in which tools they handle well. Evie gives GPT models `patch`
 and every other model `edit` and `write`, each with a system prompt written
 for it.
+
+## Workspaces
+
+Every project keeps what Evie adds to it in a `.evie` folder inside the
+project's own folder: its settings, and later its dashboards, files for
+retrieval and schedules. This is the same for a code repository and for
+any other folder, such as one for your finances. A project's folder is
+wherever you keep it; there is no fixed place for them.
+
+**Making one.** With the server running:
+
+```sh
+evie new ~/finances              # named "finances", after its folder
+evie new ~/finances "Finances"   # or named as you say
+```
+
+The folder is made when it is missing. Evie makes `.evie/evie.json` in it,
+registers the project, and trusts it (see "Trusting a project"), so its
+own settings are used without asking. A folder that is already a project,
+that already has a `.evie/evie.json`, that is inside a git repository
+other than at its top, or that is in Evie's data folder is refused. Then
+run `evie` in that folder to start working there.
+
+**Kept out of the project's own git.** When a project's folder is a git
+repository, Evie adds `/.evie/` to the repository's local exclude list,
+`.git/info/exclude`, each time a session opens there. Git reads that list
+the way it reads a `.gitignore`, but it is never committed, so a code
+repository never commits what Evie keeps in it, and nothing the
+repository commits is changed.
+
+**Backed up to a private repository.** Where a project's `.evie` folder
+goes is a setting in its own `.evie/evie.json`:
+
+```json
+{ "sync": "private" }
+```
+
+- `"private"` makes the `.evie` folder a git repository of its own and,
+  the first time, a private repository on your GitHub account named
+  `evie-` and the project's name, in lower case with spaces and other
+  characters made into dashes (`evie-finances`). It is made with GitHub's
+  command-line tool, `gh`, which has to be installed and logged in
+  (`gh auth login`) on the computer the server runs on. A private
+  repository of that name already on your account is used instead; a
+  public one is never pushed to. A minute after Evie last changed
+  something in the `.evie` folder, and once an hour, what changed is
+  committed and pushed, without asking: the setting is your permission.
+  `/sync` does it at once and says how it went.
+- `"none"`, or no setting, keeps it on this computer.
+
+`evie new` starts a project as `"private"`. Like the rest of a project's
+own settings, the setting counts only once the project is trusted, so a
+repository cloned from someone else cannot turn syncing on for itself.
+
+A sync that fails, as when `gh` is missing or not logged in, or there is no
+network, never interrupts Evie's work. It is tried again a minute after
+the next change and every hour, and `/sync` says what went wrong. Nothing
+is ever pushed by force. Only the `.evie` folder is backed up: keep a
+workspace's other documents in `.evie/files/`, or in git yourself, to
+have them backed up too.
 
 ## Instruction files
 
@@ -478,7 +540,8 @@ points the server at another model. `EVIE_MAX_TOKENS` works the same way,
 and `EVIE_SERVER` points `evie` at another server.
 
 A project can have settings of its own, in `.evie/evie.json` in its folder.
-See "Trusting a project" for when that file is used.
+See "Trusting a project" for when that file is used, and "Workspaces" for
+its `sync` setting.
 
 ## Plugins
 
@@ -488,7 +551,7 @@ the per-model settings and the permissions.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the twelve built-in ones load:
+a list, the thirteen built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
@@ -503,6 +566,7 @@ a list, the twelve built-in ones load:
 | `skills` | `skill`, the list of your skills, and the `/skills` command |
 | `instructions` | The owner's and the project's instruction files |
 | `web` | `web_search` and `web_fetch` |
+| `sync` | The backing up of a project's `.evie` folder, and the `/sync` command |
 | `openrouter` | The connection to models through OpenRouter |
 
 ```json
@@ -519,6 +583,7 @@ a list, the twelve built-in ones load:
     "skills",
     "instructions",
     "web",
+    "sync",
     "openrouter",
     { "use": "/path/to/my-plugin.ts", "options": { "greeting": "hi" } }
   ]

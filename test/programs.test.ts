@@ -419,6 +419,40 @@ test("Ctrl-C while the connection is down stops evie trying, and it leaves", asy
   expect(terminal.printed.out).toContain("[note] Stopped trying to reach Evie's server. `evie -c` comes back to this session.\n")
 })
 
+// ---- evie new --------------------------------------------------------------------------------
+
+test("evie new makes a project through the server, in a folder named from where it is run, and prints what it made", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  const place = await tempFolder("evie-place-")
+  await serve(home)
+
+  const made = await evie(["new", "notes", "My", "notes"], { home, cwd: place })
+
+  const folder = join(place, "notes")
+  expect(made.stderr).toBe("")
+  expect(made.code).toBe(0)
+  expect(made.stdout).toBe(
+    `Made ${folder}, and the project "My notes" in it, which is trusted.\n` +
+      `Its settings are in ${join(folder, ".evie", "evie.json")}, which holds "sync": "private": its .evie folder is backed ` +
+      "up to a private GitHub repository, made the first time it syncs.\n" +
+      "Run `evie` in that folder to start working there.\n",
+  )
+  expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ sync: "private" })
+  expect(JSON.parse(await readFile(join(home, "evie.json"), "utf8")).trust).toEqual([folder])
+
+  const again = await evie(["new", folder], { home })
+  expect(again.code).toBe(1)
+  expect(again.stderr).toContain(`${folder} is already the project "My notes".`)
+})
+
+test("evie new with no folder says how it is used", async () => {
+  const said = await evie(["new"], { home: await tempFolder("evie-home-") })
+
+  expect(said.code).toBe(1)
+  expect(said.stderr).toBe("Usage:\n  evie new <folder> [name]   make a project in a folder, made when it is missing, named after it unless a name is given\n")
+})
+
 // ---- evie token ------------------------------------------------------------------------------
 
 test("tokens are made, listed and taken back by name, each without touching the others", async () => {
