@@ -20,9 +20,7 @@ export type ServerOptions = {
   // How often, in milliseconds, open connections are checked against the
   // tokens, so that one whose token was taken back is closed even while it
   // sends nothing. A token is taken back by `evie token remove`, in another
-  // process, so the server cannot be told; it looks. Replies kept for
-  // commands sent again are looked over at the same time, and forgotten
-  // ten minutes after they were given.
+  // process, so the server cannot be told; it looks.
   recheckEvery?: number
   // How often, in milliseconds, each connection is sent a keepalive, so that
   // its client can tell a quiet line from a dead one. Every 15 seconds when
@@ -53,50 +51,44 @@ type Connection = Admitted & {
   openingQuestions: Map<string, string>
 }
 
-// The reply to a command a device sent, kept to answer the same command
-// sent again, with when it was given.
-type Remembered = { reply: Promise<ServerMessage>; given?: number }
-
 // The browser's cookie that holds its token.
 const COOKIE = "evie_token"
-// How long the reply to a command is kept after it was given, to answer the
-// same command sent again after the line dropped.
-const REMEMBER_FOR = 10 * 60_000
+// How many of each device's commands the server remembers the replies to,
+// to answer the same command sent again after the line dropped. There is no
+// time limit, since a laptop can sleep all night with a command unanswered.
+// A device sends far fewer commands than this while its line is down, and
+// each reply kept is small.
+const REMEMBERED = 200
 
 export function startServer(options: ServerOptions): EvieServer {
   const connections = new Set<ServerWebSocket<Connection>>()
   // Every session a client has opened through this server, whether or not
   // that client is still connected.
   const openedHere = new Set<string>()
-  // The reply to each command a device has sent, by the command's id, with
-  // when it was given. A client whose line dropped before the reply reached
-  // it sends the command again with the same id, and is answered from here,
-  // or waits for the first one to finish, so it is carried out once.
-  const replies = new Map<string, Map<string, Remembered>>()
+  // The reply to each of the last commands a device has sent, by the
+  // command's id, oldest first. A client whose line dropped before the reply
+  // reached it sends the command again with the same id, and is answered
+  // from here, or waits for the first one to finish, so it is carried out once.
+  const replies = new Map<string, Map<string, Promise<ServerMessage>>>()
 
   function replyTo(device: string, message: ClientMessage): Promise<ServerMessage> {
+    const carryOut = () =>
+      options.evie.send(message.command).then(
+        (result): ServerMessage => ({ reply: message.id, result }),
+        (cause): ServerMessage => ({ reply: message.id, error: cause instanceof Error ? cause.message : String(cause) }),
+      )
+    // A command its client will never send again, such as its own catch-up
+    // after a drop, whose reply can be large, is not remembered.
+    if (message.once === true) return carryOut()
     let sent = replies.get(device)
     if (!sent) replies.set(device, (sent = new Map()))
     const remembered = sent.get(message.id)
-    if (remembered) return remembered.reply
-    const entry: Remembered = {
-      reply: options.evie.send(message.command).then(
-        (result): ServerMessage => ({ reply: message.id, result }),
-        (cause): ServerMessage => ({ reply: message.id, error: cause instanceof Error ? cause.message : String(cause) }),
-      ),
-    }
-    void entry.reply.then(() => (entry.given = Date.now()))
-    sent.set(message.id, entry)
-    return entry.reply
-  }
-
-  // Replies kept longer than they are needed are forgotten.
-  function forgetOldReplies() {
-    const now = Date.now()
-    for (const [device, sent] of replies) {
-      for (const [id, { given }] of sent) if (given !== undefined && now - given > REMEMBER_FOR) sent.delete(id)
-      if (sent.size === 0) replies.delete(device)
-    }
+    if (remembered) return remembered
+    const reply = carryOut()
+    sent.set(message.id, reply)
+    // A map keeps the order its keys were added in, so the first is the oldest.
+    if (sent.size > REMEMBERED) sent.delete(sent.keys().next().value!)
+    return reply
   }
 
   // Which events a connection is sent: those of the sessions it has opened.
@@ -272,7 +264,6 @@ export function startServer(options: ServerOptions): EvieServer {
 
   const recheck = setInterval(() => {
     for (const socket of connections) closeIfTakenBack(socket)
-    forgetOldReplies()
   }, options.recheckEvery ?? 3000)
   const keepalive = setInterval(() => {
     for (const socket of connections) send(socket, { keepalive: true })

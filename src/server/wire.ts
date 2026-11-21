@@ -8,8 +8,12 @@ import type { Command, EvieEvent } from "../core/types.ts"
 // unique for its device, such as a random UUID. The reply to it names the
 // same id. A command sent again with the same id, after the line dropped, is
 // answered with the first one's reply, not carried out again, while the
-// server keeps running: it remembers the ids in its memory, for ten minutes.
-export type ClientMessage = { id: string; command: Command }
+// server keeps running: it remembers, in its memory, the replies to the last
+// 200 commands of each device, however long ago they were sent. `once` says
+// the client will never send this command again, as with its own catch-up
+// after a drop, whose reply can be large: its reply is not remembered, and
+// it takes none of the 200 places.
+export type ClientMessage = { id: string; command: Command; once?: true }
 
 // From the server: the reply to one command, with what the command returned,
 // or the message of the error it failed with; or an event; or a keepalive,

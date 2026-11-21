@@ -1,12 +1,23 @@
-import { afterEach, expect, test } from "bun:test"
+import { afterEach, expect, setSystemTime, test } from "bun:test"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { connect, runTerminal, startServer, type ConnectOptions, type Evie, type EvieEvent, type EvieOptions, type Plugin } from "../src/index.ts"
+import {
+  connect,
+  runTerminal,
+  startServer,
+  type ClientMessage,
+  type ConnectOptions,
+  type Evie,
+  type EvieEvent,
+  type EvieOptions,
+  type Plugin,
+  type ServerMessage,
+} from "../src/index.ts"
 import { nextEvent, say, startEvie, stored, type Run } from "./support/harness.ts"
 import { lineTo } from "./support/line.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
-import { serveEvie } from "./support/served.ts"
+import { serveEvie, type Served } from "./support/served.ts"
 import { openTokens } from "../src/server/tokens.ts"
 
 // The terminal client run over the network: Evie behind its server, and the
@@ -918,6 +929,103 @@ test("a command sent again while it is still being carried out waits for it, and
 
   expect(await waiting).toEqual({ text: "done" })
   expect(runs).toBe(1)
+})
+
+// A command that counts the times it is carried out, and says which time it is.
+function counted() {
+  let runs = 0
+  const plugin: Plugin = {
+    name: "counted",
+    setup(host) {
+      host.commands.add({ name: "count", description: "Counts.", run: () => `run ${++runs}` })
+    },
+  }
+  return { plugin, runs: () => runs }
+}
+
+test("a command whose reply was lost is carried out once when it is sent again, however long the line was down", async () => {
+  const count = counted()
+  // The server's regular checks run every few milliseconds, in place of every few seconds.
+  const { served, line, connect } = await serveOverALine([scriptedProvider([]).plugin, count.plugin], { recheckEvery: 5 })
+  const client = await connect()
+  const lost = line.loseReplyTo("run_command")
+  const sent = client.send({ type: "run_command", session: served.run.session, name: "count", args: "" })
+  await lost
+
+  // The line stays down overnight: the clock moves on twelve hours while the server's checks run.
+  setSystemTime(new Date(Date.now() + 12 * 60 * 60_000))
+  try {
+    await Bun.sleep(50)
+  } finally {
+    setSystemTime()
+  }
+  line.mend()
+
+  expect(await sent).toEqual({ text: "run 1" })
+  expect(count.runs()).toBe(1)
+})
+
+// A connection of this device's own to the server, as a client written
+// apart from `connect` would make, which sends commands with the ids the
+// test chooses. `heard` is everything the server sent on it, in order.
+async function ownLine(served: Served) {
+  const socket = new WebSocket(`${served.server.url.replace(/^http/, "ws")}/ws`, { headers: { Authorization: `Bearer ${served.token}` } })
+  await new Promise((resolve) => socket.addEventListener("open", resolve, { once: true }))
+  cleanups.push(async () => socket.close())
+  const heard: ServerMessage[] = []
+  const waiting = new Map<string, (reply: Extract<ServerMessage, { reply: string }>) => void>()
+  socket.addEventListener("message", (message) => {
+    const received = JSON.parse(String(message.data)) as ServerMessage
+    if ("keepalive" in received) return
+    heard.push(received)
+    if ("reply" in received) waiting.get(received.reply)?.(received)
+  })
+  return {
+    heard,
+    // Sends a command, and settles with its reply.
+    send(message: ClientMessage) {
+      return new Promise<Extract<ServerMessage, { reply: string }>>((resolve) => {
+        waiting.set(message.id, resolve)
+        socket.send(JSON.stringify(message))
+      })
+    },
+  }
+}
+
+// Runs the counting command with this id, as a command sent once when `once` is given, and gives back what it returned.
+async function countAs(line: Awaited<ReturnType<typeof ownLine>>, session: string, id: string, once?: true) {
+  const reply = await line.send({ id, command: { type: "run_command", session, name: "count", args: "" }, ...(once && { once }) })
+  return "result" in reply ? reply.result : reply
+}
+
+test("the server remembers the replies to the last 200 commands of each device, and the 201st pushes out the first", async () => {
+  const count = counted()
+  const served = await serveEvie([scriptedProvider([]).plugin, count.plugin])
+  cleanups.push(served.stop)
+  const own = await ownLine(served)
+  for (let n = 1; n <= 200; n++) await countAs(own, served.run.session, `command ${n}`)
+  expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
+
+  await countAs(own, served.run.session, "command 201")
+
+  expect(await countAs(own, served.run.session, "command 2")).toEqual({ text: "run 2" })
+  expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 202" })
+  expect(count.runs()).toBe(202)
+})
+
+test("a command its client says it sends once, as a catch-up after a drop is, has its reply forgotten, and pushes out no other", async () => {
+  const count = counted()
+  const served = await serveEvie([scriptedProvider([]).plugin, count.plugin])
+  cleanups.push(served.stop)
+  const own = await ownLine(served)
+  for (let n = 1; n <= 200; n++) await countAs(own, served.run.session, `command ${n}`)
+
+  // Sent twice with one id, by a client that does not keep its promise, it is carried out twice.
+  expect(await countAs(own, served.run.session, "catching up", true)).toEqual({ text: "run 201" })
+  expect(await countAs(own, served.run.session, "catching up", true)).toEqual({ text: "run 202" })
+
+  expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
+  expect(count.runs()).toBe(202)
 })
 
 test("a session opened by its id is sent to the client from the moment the core is asked, so no event falls in between, and those events follow the reply", async () => {

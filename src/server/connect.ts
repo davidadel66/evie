@@ -54,8 +54,9 @@ type Reply = Extract<ServerMessage, { reply: string }>
 
 // A command waiting for its reply: the owner's, sent again on each new line
 // until answered, or the client's own (`own`), to catch up on a session,
-// sent once and given up on when its line drops. `sentOn` is the line it
-// was last sent on; `resent` says it was sent on an earlier one too.
+// sent once and given up on when its line drops, so the server is told not
+// to remember its reply. `sentOn` is the line it was last sent on; `resent`
+// says it was sent on an earlier one too.
 type Waiting = {
   message: ClientMessage
   own: boolean
@@ -108,7 +109,8 @@ const DEAD_AFTER = 45_000
 // before any live event, so nothing is shown twice and nothing is lost. A
 // command that was not answered when the line dropped is sent again with
 // the same id, and the server, while it keeps running, answers it without
-// carrying it out twice: it remembers the ids in its memory.
+// carrying it out twice: it remembers the replies to the last 200 commands
+// of each device, however long the line was down.
 export async function connect(options: ConnectOptions): Promise<Evie> {
   const address = new URL(options.url)
   // A browser's WebSocket takes no headers, and has the cookie in place of the token.
@@ -255,7 +257,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   // Sends a command of the client's own on this line. It resolves with the
   // server's reply, or with nothing when the line drops first.
   function ask(line: WebSocket, command: Command): Promise<Reply | undefined> {
-    const message: ClientMessage = { id: crypto.randomUUID(), command }
+    const message: ClientMessage = { id: crypto.randomUUID(), command, once: true }
     return new Promise((resolve) => {
       waiting.set(message.id, { message, own: true, sentOn: line, resent: false, answer: resolve, lose: () => resolve(undefined) })
       sendOn(line, message)
