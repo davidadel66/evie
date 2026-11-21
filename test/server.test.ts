@@ -1493,7 +1493,7 @@ test("a client that has opened no session is sent the summary of every session a
 
   expect(watched.filter((event) => event.type !== "summary")).toEqual([])
   const states = watched.flatMap((event) => (event.type === "summary" && event.session === session ? [event.state] : []))
-  expect(states.filter((state, at) => state !== states[at - 1])).toEqual(["active", "working", "active"])
+  expect(states.filter((state, at) => state !== states[at - 1])).toEqual(["working", "active"])
 })
 
 test("over the network, a client lists projects and sessions, settles a session, and reads its history a page at a time", async () => {

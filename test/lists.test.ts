@@ -67,6 +67,9 @@ async function start(script: ScriptedReply[], plugins: Plugin[] = [], options: {
 
 // ---- Lists ------------------------------------------------------------------------------------
 
+// The summaries the client was sent.
+const summaries = (run: Run) => run.events.flatMap((event) => (event.type === "summary" ? [event] : []))
+
 test("a session is listed with its project, its first message as its name, and when it was last active, and one that is idle and recent is active", async () => {
   const { run } = await start([{ text: ["Noted."] }])
   await say(run, "Keep a list of what to plant")
@@ -78,22 +81,59 @@ test("a session is listed with its project, its first message as its name, and w
   ])
 })
 
-test("sessions are listed the latest active first, one with no message yet has no name, and a general session has no project", async () => {
+test("sessions are listed the latest active first, and a general session has no project", async () => {
   const { run } = await start([{ text: ["ok"] }, { text: ["ok"] }])
   const general = (await run.evie.send({ type: "open_session" })).session
   await say(run, "in the general session", general)
   await Bun.sleep(5)
   await say(run, "in the project")
-  await Bun.sleep(5)
-  const empty = (await run.evie.send({ type: "open_session", folder: run.projectFolder })).session
 
   const listed = await run.evie.send({ type: "list_sessions" })
 
   expect(listed.map(({ session, project, name }) => ({ session, project, name }))).toEqual([
-    { session: empty, project: run.project!.id, name: null },
     { session: run.session, project: run.project!.id, name: "in the project" },
     { session: general, project: null, name: "in the general session" },
   ])
+})
+
+test("a session the owner has said nothing in is not listed, and no summary of it is sent, until its first message", async () => {
+  const { run } = await start([{ text: ["ok"] }])
+  const opened = (await run.evie.send({ type: "open_session", folder: run.projectFolder })).session
+  const before = await run.evie.send({ type: "list_sessions" })
+
+  await say(run, "now something", opened)
+
+  // The session the test began with is never said anything in either.
+  expect(before).toEqual([])
+  expect((await run.evie.send({ type: "list_sessions" })).map((summary) => summary.session)).toEqual([opened])
+  expect(summaries(run).map(({ session, name, state }) => ({ session, name, state }))).toEqual([
+    { session: opened, name: "now something", state: "working" },
+    { session: opened, name: "now something", state: "active" },
+  ])
+})
+
+test("a session with nothing said in it is listed, with no name, while a question in it waits, such as one asked as it opens", async () => {
+  // A project that asks whether to trust it whenever a session opens in it, once told to.
+  let asks = false
+  const run = await startEvie([scriptedProvider([]).plugin], {
+    projectSettings: async (_project, { ask }) => {
+      if (asks) await ask({ text: "Trust this project?", choices: ["Yes", "No"] })
+      return { plugins: [], forNow: true }
+    },
+  })
+  cleanups.push(run.stop)
+  asks = true
+  const asked = nextEvent(run, "question")
+  const opening = run.evie.send({ type: "open_session", folder: run.projectFolder, questions: true })
+  const question = await asked
+
+  const listed = await run.evie.send({ type: "list_sessions" })
+  await run.evie.send({ type: "answer_question", session: question.session, id: question.body.id, choice: "Yes" })
+  await opening
+
+  const summary = { session: question.session, project: run.project!.id, name: null, state: "needs_you" as const, lastActive: question.time }
+  expect(listed).toEqual([summary])
+  expect(summaries(run)).toEqual([{ type: "summary", ...summary }])
 })
 
 test("a session's name is the opening words of its first message, cut at a word's end when its first line is long", async () => {
@@ -295,10 +335,8 @@ test("only a session that is there, and not a subagent's, can be settled", async
 
 // ---- Summaries --------------------------------------------------------------------------------
 
-const summaries = (run: Run) => run.events.flatMap((event) => (event.type === "summary" ? [event] : []))
-
-test("a session's summary is sent when it is made, and whenever its state, name or latest activity changes, and only then", async () => {
-  // The clock is held still, so that the session is made, and the events of a turn are stored, at the same moment.
+test("a session's summary is sent when its first message comes, and whenever its state, name or latest activity changes, and only then", async () => {
+  // The clock is held still, so that the events of a turn are stored at the same moment.
   const now = Date.now()
   setSystemTime(new Date(now))
   const { run } = await start([{ text: ["Hel", "lo."] }, { text: ["Back."] }])
@@ -312,7 +350,6 @@ test("a session's summary is sent when it is made, and whenever its state, name 
 
   const summary = { type: "summary" as const, session: run.session, project: run.project!.id, name: "hi" }
   expect(summaries(run)).toEqual([
-    { ...summary, name: null, state: "active", lastActive: now },
     { ...summary, state: "working", lastActive: now },
     { ...summary, state: "active", lastActive: now },
     { ...summary, state: "settled", lastActive: now },

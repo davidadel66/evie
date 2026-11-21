@@ -7,16 +7,17 @@ import type { EventBodies, SessionState, SessionSummary, SummaryEvent } from "./
 // A summary is worked out afresh each time, from the session's log and
 // from what is running, and the last one sent of each session is kept, to
 // tell whether it has changed. A subagent's session has none: it is part of
-// the session that started it.
+// the session that started it. Nor has a session the owner has said nothing
+// in, such as one a terminal opened and left, unless a question in it is
+// waiting: it is no conversation to list. It has one from its first message.
 
 export type Summaries = {
-  // Every session that is not a subagent's, the latest active first.
+  // Every session that has a summary, the latest active first.
   list(): SessionSummary[]
   // Where a session stands now, or undefined when there is no such session
   // or it is a subagent's.
   state(session: string): SessionState | undefined
-  // Something has happened in a session, or it was made: its summary is
-  // sent if it has changed.
+  // Something has happened in a session: its summary is sent if it has changed.
   changed(session: string): void
   // Sends the summary of each session that has changed with nothing
   // happening in it, which only time does: a week of quiet settles it.
@@ -70,6 +71,7 @@ export function createSummaries(options: {
   )
   const one = db.query<Row, [string]>(`SELECT ${COLUMNS} FROM session WHERE id = ? AND parent IS NULL`)
 
+  const listed = (row: Row) => row.first !== null || options.asking(row.id)
   const lastActive = (row: Row) => row.active ?? row.created
   const stateOf = (row: Row): SessionState => {
     if (options.asking(row.id)) return "needs_you"
@@ -101,20 +103,20 @@ export function createSummaries(options: {
     sent.set(summary.session, summary)
     options.emit({ type: "summary", ...summary })
   }
-  for (const summary of all.all().map(summaryOf)) sent.set(summary.session, summary)
+  for (const summary of all.all().filter(listed).map(summaryOf)) sent.set(summary.session, summary)
 
   return {
-    list: () => all.all().map(summaryOf),
+    list: () => all.all().filter(listed).map(summaryOf),
     state(session) {
       const row = one.get(session)
       return row ? stateOf(row) : undefined
     },
     changed(session) {
       const row = one.get(session)
-      if (row) send(summaryOf(row))
+      if (row && listed(row)) send(summaryOf(row))
     },
     look() {
-      for (const row of all.all()) send(summaryOf(row))
+      for (const row of all.all().filter(listed)) send(summaryOf(row))
     },
   }
 }

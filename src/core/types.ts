@@ -80,7 +80,7 @@ export type SessionState = "needs_you" | "working" | "active" | "settled"
 // event, settling aside, or when it was made if it has none.
 export type SessionSummary = { session: string; project: string | null; name: string | null; state: SessionState; lastActive: number }
 
-// A session's summary, sent when the session is made and whenever its
+// A session's summary, sent when it is first listed and whenever its
 // state, name or latest activity changes, after the event that changed it.
 // Sent to clients, never stored. Evie's server sends it to every client,
 // whatever sessions it has open, so that each can keep a list of sessions.
@@ -484,7 +484,8 @@ export type Commands = {
     input: Record<never, never>
     output: Project[]
   }
-  // Every session that is not a subagent's, the latest active first.
+  // Every session the owner has said something in, or in which a question
+  // is waiting, that is not a subagent's, the latest active first.
   list_sessions: {
     input: Record<never, never>
     output: SessionSummary[]

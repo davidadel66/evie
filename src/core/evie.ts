@@ -308,12 +308,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     // A new session is created only once it is needed: when the project's
     // settings ask a question, or when everything else has gone well.
     let session = last
-    const sessionId = () => {
-      if (session !== undefined) return session
-      session = projects.createSession(project)
-      summaries.changed(session)
-      return session
-    }
+    const sessionId = () => (session ??= projects.createSession(project))
     const canAnswer = input.questions === true
 
     // A session still open in this process, such as one another client left
