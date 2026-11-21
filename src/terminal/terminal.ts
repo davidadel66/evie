@@ -200,6 +200,8 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   }
 
   const stop = evie.subscribe((event) => {
+    // Summaries are for a client that lists sessions, which this one does not.
+    if (event.type === "summary") return
     // Until the session is open, the only events that can be for this
     // terminal are a question asked while it opens, and its answer.
     const mine = session === undefined ? event.type === "question" || event.type === "answer" : event.session === session

@@ -103,7 +103,8 @@ export function startServer(options: ServerOptions): EvieServer {
     return kept.reply
   }
 
-  // Which events a connection is sent: those of the sessions it has opened.
+  // Which events a connection is sent, summaries aside: those of the
+  // sessions it has opened.
   // A session can ask a question before it is open, such as whether to trust
   // its project, so while a connection is opening one it is also sent the
   // questions and answers of sessions that no client has opened here yet.
@@ -230,6 +231,10 @@ export function startServer(options: ServerOptions): EvieServer {
       open(socket) {
         connections.add(socket)
         socket.data.unsubscribe = options.evie.subscribe((event) => {
+          // A session's summary goes to every connection, whatever it has
+          // open, so that each can keep a list of every session. It is not
+          // held back, being no part of catching up on a session.
+          if (event.type === "summary") return send(socket, { event })
           if (!sentTo(socket.data, event)) return
           // A question sent while opening, from a session not yet opened here,
           // is kept track of until it is answered: see `close`.

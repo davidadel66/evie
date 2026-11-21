@@ -245,7 +245,8 @@ test("a client opening a session is sent its own opening question, and never a q
 
   expect(trust).toMatchObject({ session: secondSession, body: { text: "Trust this project?" } })
   expect(deploy.body.text).toBe("Deploy to production?")
-  expect(secondSaw.filter((event) => event.session === firstSession)).toEqual([])
+  // Every client is sent each session's summary, but none of the events of a session it has not opened.
+  expect(secondSaw.filter((event) => event.session === firstSession && event.type !== "summary")).toEqual([])
 })
 
 test("a client that closes while its session is still opening has the opening question refused, so the project is not left half open", async () => {
@@ -1467,4 +1468,46 @@ test("a catch-up that asks a question, has it answered, and then fails says that
   expect(printed.split("Said while the line was down.")).toHaveLength(2)
   expect(printed.split("[question] Trust this project?")).toHaveLength(4)
   expect(printed.split("[answered] Yes")).toHaveLength(4)
+})
+
+// ---- Lists and summaries ------------------------------------------------------------------
+
+test("a client that has opened no session is sent the summary of every session as it changes, and none of its events", async () => {
+  const served = await serveEvie([scriptedProvider([{ text: ["Hel", "lo."] }]).plugin])
+  cleanups.push(served.stop)
+  const watcher = await served.connect()
+  const watched: EvieEvent[] = []
+  watcher.subscribe((event) => watched.push(event))
+  const worker = await served.connect()
+
+  const { session } = await worker.send({ type: "open_session", folder: served.run.projectFolder })
+  const ended = nextEvent({ evie: worker }, "turn_end")
+  await worker.send({ type: "send_message", session, text: "hi" })
+  await ended
+  // The summary saying the turn has ended comes to the watcher on a line of its own.
+  const told = (): boolean => watched.some((event) => event.type === "summary" && event.session === session && event.state === "active" && event.name === "hi")
+  for (let waited = 0; !told() && waited < 2000; waited += 5) await Bun.sleep(5)
+
+  expect(watched.filter((event) => event.type !== "summary")).toEqual([])
+  const states = watched.flatMap((event) => (event.type === "summary" && event.session === session ? [event.state] : []))
+  expect(states.filter((state, at) => state !== states[at - 1])).toEqual(["active", "working", "active"])
+})
+
+test("over the network, a client lists projects and sessions, settles a session, and reads its history a page at a time", async () => {
+  const served = await serveEvie([scriptedProvider([{ text: ["Paris."] }]).plugin])
+  cleanups.push(served.stop)
+  await say(served.run, "What is the capital of France?")
+  const client = await served.connect()
+  const { session, project } = served.run
+
+  const projects = await client.send({ type: "list_projects" })
+  await client.send({ type: "settle_session", session, settled: true })
+  const sessions = await client.send({ type: "list_sessions" })
+  const page = await client.send({ type: "read_history", session, limit: 2 })
+
+  const events = stored(served.run.events)
+  expect(projects).toEqual([project!])
+  expect(sessions).toEqual([{ session, project: project!.id, name: "What is the capital of France?", state: "settled", lastActive: events.at(-2)!.time }])
+  expect(page).toEqual({ events: events.slice(-2), earlier: true })
+  expect(page.events.map((event) => event.type)).toEqual(["turn_end", "settled"])
 })

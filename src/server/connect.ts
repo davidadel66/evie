@@ -197,7 +197,13 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   // the event is in the reply on its way. A question or its answer is passed
   // on at once all the same, since opening a session again can wait on one,
   // such as whether to trust its project.
+  //
+  // A session's summary, which comes for every session, is passed on as it
+  // comes. It is no part of a session's events: it is not counted, and those
+  // sent while the line was down are not caught up on. A client that keeps a
+  // list of sessions lists them again when the line is back (see `onBack`).
   function onEvent(event: EvieEvent) {
+    if (event.type === "summary") return deliver(event)
     const seen = sessions.get(event.session)
     if (!seen?.behind) return passOn(event)
     if ((event.type === "question" || event.type === "answer") && isNew(seen, event)) {
