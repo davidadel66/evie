@@ -143,6 +143,8 @@ export function startServer(options: ServerOptions): EvieServer {
       return false
     }
     if (device !== undefined) return false
+    // None of its commands can be sent again, so their replies are forgotten.
+    replies.delete(socket.data.device)
     socket.close(TAKEN_BACK, "This device's token was taken back")
     return true
   }

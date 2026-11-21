@@ -991,6 +991,7 @@ async function ownLine(url: string, token: string) {
   const socket = new WebSocket(`${url.replace(/^http/, "ws")}/ws`, { headers: { Authorization: `Bearer ${token}` } })
   await new Promise((resolve) => socket.addEventListener("open", resolve, { once: true }))
   cleanups.push(async () => socket.close())
+  const closed = new Promise<CloseEvent>((resolve) => socket.addEventListener("close", resolve, { once: true }))
   const heard: ServerMessage[] = []
   const waiting = new Map<string, (reply: Extract<ServerMessage, { reply: string }>) => void>()
   socket.addEventListener("message", (message) => {
@@ -1001,6 +1002,8 @@ async function ownLine(url: string, token: string) {
   })
   return {
     heard,
+    // Settles once the server has closed the connection.
+    closed,
     // Sends a command, and settles with its reply.
     send(message: ClientMessage) {
       return new Promise<Extract<ServerMessage, { reply: string }>>((resolve) => {
@@ -1065,6 +1068,21 @@ test("a command still being carried out is never pushed out of the server's memo
   // The oldest that had settled was pushed out in its place.
   expect(await countAs(own, session, "command 2")).toEqual({ text: "run 2" })
   expect(await countAs(own, session, "command 1")).toEqual({ text: "run 201" })
+})
+
+test("a device whose token is taken back has the replies to its commands forgotten, so a new token of the same name starts afresh", async () => {
+  const count = counted()
+  const served = await serveEvie([scriptedProvider([]).plugin, count.plugin], { recheckEvery: 5 })
+  cleanups.push(served.stop)
+  const own = await ownLine(served.server.url, served.token)
+  expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
+
+  served.tokens.remove("test device")
+  await own.closed
+  const made = served.tokens.add("test device")
+  if (!("secret" in made)) throw new Error(made.refused)
+
+  expect(await countAs(await ownLine(served.server.url, made.secret), served.run.session, "command 1")).toEqual({ text: "run 2" })
 })
 
 test("a command its client says it sends once, as a catch-up after a drop is, has its reply forgotten, and pushes out no other", async () => {
