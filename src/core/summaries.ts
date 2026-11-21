@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite"
-import type { EventBodies, SessionState, SessionSummary, SummaryEvent } from "./types.ts"
+import type { SessionState, SessionSummary, SummaryEvent } from "./types.ts"
 
 // Summaries: one line for each session, for a client to list sessions by
 // without opening them, and sent again whenever that line changes.
@@ -79,7 +79,7 @@ export function createSummaries(options: {
     // off when Evie stopped has not ended either, until its session is
     // opened again and it is closed off, but nothing runs it.
     if ((row.turn === "turn_start" && options.open(row.id)) || options.jobRunning(row.id)) return "working"
-    const byHand = row.hand === null ? undefined : (JSON.parse(row.hand) as EventBodies["settled"]).settled
+    const byHand = bodyOf(row.hand)?.settled
     // Settled by the owner after the last activity, it stays settled.
     if (byHand === true) return "settled"
     // Brought back by the owner, the week of quiet starts again then, as it would with activity.
@@ -90,7 +90,7 @@ export function createSummaries(options: {
   const summaryOf = (row: Row): SessionSummary => ({
     session: row.id,
     project: row.project,
-    name: row.first === null ? null : nameFrom((JSON.parse(row.first) as { text: string }).text),
+    name: nameOf(bodyOf(row.first)?.text),
     state: stateOf(row),
     lastActive: lastActive(row),
   })
@@ -124,13 +124,27 @@ export function createSummaries(options: {
 const same = (one: SessionSummary, other: SessionSummary) =>
   one.project === other.project && one.name === other.name && one.state === other.state && one.lastActive === other.lastActive
 
+// A stored body read back, or undefined when it is not a JSON object. Evie
+// writes only bodies of the right shape, but a damaged database can hold
+// others, which give no name and no choice by hand rather than stopping Evie.
+function bodyOf(body: string | null): Record<string, unknown> | undefined {
+  if (body === null) return undefined
+  try {
+    const parsed: unknown = JSON.parse(body)
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : undefined
+  } catch {
+    return undefined
+  }
+}
+
 // How long a session's name may be, in characters, before it is cut short.
 const NAME_LENGTH = 60
 
 // A session's name until it is given one: the opening words of its first
 // message, from its first line, cut at a word's end with an ellipsis when
-// that line is long.
-function nameFrom(text: string): string | null {
+// that line is long. None when the message's text is not text.
+function nameOf(text: unknown): string | null {
+  if (typeof text !== "string") return null
   const first = text.trim().split("\n")[0]!.trim()
   if (first === "") return null
   if (first.length <= NAME_LENGTH) return first

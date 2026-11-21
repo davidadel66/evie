@@ -398,6 +398,31 @@ test("a summary that cannot be worked out is skipped, the turn whose event it wo
   expect(summaries(run).at(-1)).toMatchObject({ session: run.session, name: "hi", state: "active" })
 })
 
+test("Evie starts, and lists sessions, on a data folder whose log holds bodies of the wrong shape, which give no name and no choice by hand", async () => {
+  const { run } = await start([])
+  await run.evie.close()
+  // Written straight into the log, as a damaged database could hold them: a
+  // first message whose text is not text, then a settling that says neither
+  // yes nor no, and in another session a first message that is not JSON at all.
+  const now = Date.now()
+  const other = crypto.randomUUID()
+  const db = new Database(join(run.home, "evie.db"))
+  const add = db.query("INSERT INTO event (session, seq, type, body, time) VALUES (?, ?, ?, ?, ?)")
+  add.run(run.session, 1, "user_message", JSON.stringify({ text: 42 }), now - 2)
+  add.run(run.session, 2, "settled", "null", now - 1)
+  db.run("INSERT INTO session (id, project, created) VALUES (?, ?, ?)", [other, run.project!.id, now - 3])
+  add.run(other, 1, "user_message", "not JSON", now)
+  db.close()
+
+  const again = await startEvie([scriptedProvider([]).plugin], { home: run.home })
+  cleanups.push(again.stop)
+
+  expect(await again.evie.send({ type: "list_sessions" })).toEqual([
+    { session: other, project: run.project!.id, name: null, state: "active", lastActive: now },
+    { session: run.session, project: run.project!.id, name: null, state: "active", lastActive: now - 2 },
+  ])
+})
+
 // ---- History ------------------------------------------------------------------------------------
 
 test("a session's history is read a page at a time, back from its latest events, each page in order, saying whether there are earlier ones", async () => {
