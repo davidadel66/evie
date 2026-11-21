@@ -28,6 +28,9 @@ export type EventBodies = {
   // Something the model is told that neither it nor the owner said, such as
   // that the owner undid its changes. It is shown to the model in place.
   note: { text: string }
+  // The owner set the session aside, or with false brought it back. It is
+  // not activity in the session, and the model is not shown it.
+  settled: { settled: boolean }
 }
 
 // Something Evie asks the owner, with the answers to choose from. With
@@ -59,6 +62,22 @@ export type DeltaEvent = { type: "assistant_delta"; session: string; text: strin
 export type JobEvent = { type: "job"; session: string; job: Job }
 
 export type EvieEvent = StoredEvent | DeltaEvent | JobEvent
+
+// ---- Sessions in a list ---------------------------------------------------------
+
+// Where a session stands, as a list of sessions shows it: `needs_you` while
+// a question in it waits for the owner; `working` while a turn or a
+// background job of its own runs; `settled` when neither, and the owner set
+// it aside by hand after its last activity, or a week has passed without
+// any; `active` otherwise, idle but recent. It is worked out from the log
+// and from what is running each time it is asked for, and never stored.
+export type SessionState = "needs_you" | "working" | "active" | "settled"
+
+// One line of a list of sessions. `project` is the id of its project, null
+// for a general session. `name` is the opening words of its first message,
+// null until it has one. `lastActive` is the time of its latest stored
+// event, settling aside, or when it was made if it has none.
+export type SessionSummary = { session: string; project: string | null; name: string | null; state: SessionState; lastActive: number }
 
 // ---- The request to a model ---------------------------------------------------
 
@@ -433,6 +452,18 @@ export type Commands = {
   run_command: {
     input: { session: string; name: string; args: string }
     output: { text: string }
+  }
+  // Sets a session aside, or with `settled: false` brings it back, as a
+  // `settled` event in its log. It need not be open. What happens in it
+  // afterwards makes it active again.
+  settle_session: {
+    input: { session: string; settled: boolean }
+    output: void
+  }
+  // Every session that is not a subagent's, the latest active first.
+  list_sessions: {
+    input: Record<never, never>
+    output: SessionSummary[]
   }
 }
 

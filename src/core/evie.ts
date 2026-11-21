@@ -9,6 +9,7 @@ import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { createProjects } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
+import { createSummaries } from "./summaries.ts"
 import type { Ask, Children, Commands, Evie, EvieEvent, Host, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
 
 export type EvieOptions = {
@@ -125,6 +126,12 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   }
 
   const questions = createQuestions({ log, emit })
+  const summaries = createSummaries({
+    db,
+    asking: (session) => questions.waiting(session).length > 0,
+    open: (session) => sessions.has(session),
+    jobRunning: (session) => jobs.list(session).some((job) => job.status === "running"),
+  })
   let closed = false
   // Job output goes beside the tool output that was too long to show.
   const jobs = createJobs({
@@ -396,6 +403,16 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     emit(log.append(input.session, "model_changed", { model }))
   }
 
+  // Written to the log, where the session's state is read from. Any session
+  // can be settled, open or not, but not a subagent's, which is not listed.
+  function settleSession(input: Commands["settle_session"]["input"]): void {
+    if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
+    const parent = projects.parentOf(input.session)
+    if (parent !== undefined) throw new Error(`The session "${input.session}" is a subagent's, which is not listed. Settle the session that started it, "${parent}", instead.`)
+    if (typeof input.settled !== "boolean") throw new Error("`settled` is true to settle the session, or false to bring it back.")
+    emit(log.append(input.session, "settled", { settled: input.settled }))
+  }
+
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
     const { project, host, model: startedWith, loop } = open(input.session)
     // A command's own name first, then any command that covers the name.
@@ -453,6 +470,10 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
           return questions.answer(command.session, command.id, command.choice) as Output
         case "run_command":
           return (await runCommand(command)) as Output
+        case "settle_session":
+          return settleSession(command) as Output
+        case "list_sessions":
+          return summaries.list() as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)
