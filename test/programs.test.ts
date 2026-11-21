@@ -499,17 +499,25 @@ async function commandRunning(port: number, command: string) {
   const terminal = evieTyping(home, project)
   terminal.type("run it")
   await terminal.shows("Started.")
-  const db = new Database(join(home, "evie.db"), { readonly: true })
+  const db = reading(home)
   const session = db.query<{ session: string }, []>("SELECT session FROM event WHERE type = 'user_message'").get()!.session
   db.close()
   const output = join(home, "tool-output", session, "job-1.log")
   return { home, server, session, output }
 }
 
+// The database of a data folder, to read while the server may be writing:
+// a read that finds it busy waits, as the server's own do.
+function reading(home: string) {
+  const db = new Database(join(home, "evie.db"), { readonly: true })
+  db.run("PRAGMA busy_timeout = 5000")
+  return db
+}
+
 // The notes stored in a session, once there are as many as asked for.
 async function notesOnceThere(home: string, session: string, count: number) {
   for (;;) {
-    const db = new Database(join(home, "evie.db"), { readonly: true })
+    const db = reading(home)
     const notes = db.query<{ body: string }, [string]>("SELECT body FROM event WHERE session = ? AND type = 'note' ORDER BY seq").all(session)
     db.close()
     if (notes.length >= count) return notes.map((note) => JSON.parse(note.body).text as string)
