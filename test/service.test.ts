@@ -1,7 +1,9 @@
 import { afterEach, expect, test } from "bun:test"
+import { existsSync } from "node:fs"
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
+import { STOP_FOR_GOOD } from "../src/programs/common.ts"
 import { runService, type Computer } from "../src/programs/service.ts"
 
 // `evie service`, with a stand-in for the Mac: a temporary folder in place
@@ -213,6 +215,31 @@ test("uninstall unloads the service and removes its file", async () => {
   expect(done.ok).toBe(true)
   expect(calls).toEqual(["print gui/501/com.evie.serve", "bootout gui/501/com.evie.serve"])
   expect(await Bun.file(plist).exists()).toBe(false)
+})
+
+test("uninstall tells the server it is stopping for good, by a file in its data folder, before unloading it; installing again does not", async () => {
+  const { computer, folder } = await mac()
+  const home = join(folder, "data")
+  const env = { EVIE_HOME: home, PATH: "/usr/bin" }
+  const told = join(home, STOP_FOR_GOOD)
+  // Whether the file was there each time launchctl was asked to unload the service.
+  const atBootout: boolean[] = []
+  const watched: Computer = {
+    ...computer,
+    launchctl: (args) => {
+      if (args[0] === "bootout") atBootout.push(existsSync(told))
+      return computer.launchctl(args)
+    },
+  }
+
+  await runService(env, ["install"], watched)
+  await runService(env, ["install"], watched)
+  expect(atBootout).toEqual([false])
+  expect(existsSync(told)).toBe(false)
+
+  await runService(env, ["uninstall"], watched)
+  expect(atBootout).toEqual([false, true])
+  expect(await readFile(told, "utf8")).toBe("")
 })
 
 test("status says whether the service is installed and running, and which data folder and log it has", async () => {

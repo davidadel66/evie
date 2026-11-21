@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { delimiter, dirname, isAbsolute, join, resolve } from "node:path"
 import { dataFolder, loadSettings, type Settings } from "../index.ts"
-import { fail, print } from "./common.ts"
+import { fail, print, STOP_FOR_GOOD } from "./common.ts"
 
 // `evie service`: the login service, which runs `evie serve` when the owner
 // logs in and starts it again if it stops. It is a macOS launch agent: a
@@ -152,6 +152,10 @@ export async function runService(env: Settings, [action]: string[], computer: Co
   if (action === "uninstall") {
     const wasLoaded = (await loaded()) !== undefined
     if (wasLoaded) {
+      // Removing the service stops the server for good, unlike the stop
+      // before a restart, so the server is told first. A data folder that
+      // is gone cannot be told, and the server is stopped all the same.
+      await writeFile(join(current?.home ?? home, STOP_FOR_GOOD), "").catch(() => {})
       const stopped = await computer.launchctl(["bootout", `${domain}/${LABEL}`])
       if (stopped.code !== 0) return { ok: false, text: `The login service could not be stopped. launchctl said: ${stopped.output}` }
     }
