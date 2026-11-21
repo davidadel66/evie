@@ -669,9 +669,11 @@ echo '{ "model": "a-name-from/openrouter.ai-models", "server": { "port": 3844 } 
 ```
 
 Then `evie-dev serve` starts the development server, and `evie-dev` in
-another terminal connects to it. Start that server by hand rather than as
-a login service: a broken development build kept alive by one would be
-started again and again. Anything written through the links, such as a new
+another terminal connects to it. Start that server by hand rather than as a
+login service: a broken development build kept alive by one would be
+started again and again. There is one login service, so `evie-dev service
+install` refuses while the everyday one is installed, and `evie-dev service
+status` says whose it is. Anything written through the links, such as a new
 agent, is shared with the everyday Evie.
 
 ### Made-up sessions
