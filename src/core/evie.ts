@@ -451,7 +451,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       const kind = opened.host.jobKinds.list().find((each) => each.name === record.kind)
       let work: JobWork
       try {
-        work = kind ? kind.resume(record, { children: opened.children }) : lost(record, `No plugin loaded now picks up work of the kind "${record.kind}".`)
+        work = kind ? kind.resume(record, { children: opened.children }) : lost(record, `no plugin loaded now picks up work of the kind "${record.kind}".`)
       } catch (cause) {
         work = lost(record, cause instanceof Error ? cause.message : String(cause))
       }
@@ -476,7 +476,9 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   const lost = (record: JobRecord, why: string): JobWork => ({
     kind: record.kind,
     title: record.title,
-    done: Promise.reject(new EndNotKnown(`Evie restarted while it was running, and could not pick it up again: ${why}`)),
+    done: Promise.reject(
+      new EndNotKnown(`Evie restarted while it was running, and could not pick it up again: ${why} Check whether it took effect, and run it again only if it did not.`),
+    ),
     stop: () => {},
   })
 

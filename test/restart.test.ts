@@ -129,6 +129,24 @@ const groupThere = (group: number) => {
   }
 }
 
+test("a job no plugin loaded now can pick up again is told as ended in a way not known, with what to do", async () => {
+  const { startAgain } = await machine()
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "sleep 0.5", background: true } }] }, { text: ["Started."] }])
+  await say(first.run, "run it")
+  const session = first.run.session
+  await first.restart()
+
+  const second = await startAgain([{ text: ["It is not known."] }], [])
+  const woken = turnEnded(second.run, session)
+  await second.run.evie.resumeWork()
+  await woken
+
+  expect(notes(second.run, session)).toEqual([
+    "Background job 1 (sleep 0.5) has ended, and how it ended is not known.\n\nEvie restarted while it was running, and could not " +
+      'pick it up again: no plugin loaded now picks up work of the kind "shell". Check whether it took effect, and run it again only if it did not.',
+  ])
+})
+
 // The process group of a command that prints its own first, once the whole line is there.
 async function groupOf(file: string) {
   while (!(await Bun.file(file).text().catch(() => "")).includes("\n")) await Bun.sleep(5)
@@ -155,7 +173,8 @@ test("a background command that went while no Evie was running, without saying h
 
   expect(notes(second.run, session)).toEqual([
     `Background job 1 (ps -o pgid= -p $$ | tr -d ' '; sleep 30) has ended, and how it ended is not known.\n\n${group}\n\n` +
-      `[Evie restarted while it was running, and it has since gone without leaving its exit status.]\n\nThe full output is in ${file}.`,
+      "[Evie restarted while it was running, and it has since gone without leaving its exit status. Check whether it took " +
+      `effect, and run it again only if it did not.]\n\nThe full output is in ${file}.`,
   ])
   expect(await ended).toMatchObject({ job: { id: "1", status: "unknown" } })
 })

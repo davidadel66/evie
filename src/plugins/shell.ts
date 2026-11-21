@@ -210,7 +210,10 @@ function describe(ended: Ended, printed: Printed, timeout: number | undefined, m
   } else if (ended.how === "failed") {
     notes.push(`[The command could not be started: ${ended.problem}]`)
   } else if (ended.how === "unknown") {
-    notes.push("[Evie restarted while it was running, and it has since gone without leaving its exit status.]")
+    notes.push(
+      "[Evie restarted while it was running, and it has since gone without leaving its exit status. Check whether it " +
+        "took effect, and run it again only if it did not.]",
+    )
   } else if (ended.signal) {
     notes.push(`[Ended by signal ${ended.signal}]`)
   } else if (ended.status !== 0) {
