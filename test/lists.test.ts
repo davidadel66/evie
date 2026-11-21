@@ -378,17 +378,24 @@ test("the core looks every so often for sessions that a week of quiet has settle
   ])
 })
 
-test("a summary that cannot be worked out is skipped, and the turn whose event it would describe goes on", async () => {
+test("a summary that cannot be worked out is skipped, the turn whose event it would describe goes on, and the next change sends one", async () => {
   const { run } = await start([{ text: ["Read it."] }, { text: ["Still here."] }])
+  // Another handle on the database takes away a column the summaries are
+  // read from, so that working one out fails, as when the database cannot be read.
+  const db = new Database(join(run.home, "evie.db"))
+  cleanups.push(async () => db.close())
+  db.run("ALTER TABLE session RENAME COLUMN parent TO parent_gone")
   const ended = nextEvent(run, "turn_end")
-  // A first message that is not text, as a client that is not type-checked can send: no name can be made from it.
-  await run.evie.send({ type: "send_message", session: run.session, text: 42 as unknown as string })
+  await run.evie.send({ type: "send_message", session: run.session, text: "hi" })
   const first = await Promise.race([ended, Bun.sleep(1000).then(() => undefined)])
+  const sentMeanwhile = summaries(run)
+  db.run("ALTER TABLE session RENAME COLUMN parent_gone TO parent")
+  await say(run, "and again")
 
   expect(first?.body).toEqual({ reason: "completed" })
-  expect(stored(run.events).flatMap((event) => (event.type === "assistant_message" ? [event.body.text] : []))).toEqual(["Read it."])
-  await say(run, "and again")
-  expect(stored(run.events).at(-1)).toMatchObject({ type: "turn_end", body: { reason: "completed" } })
+  expect(sentMeanwhile).toEqual([])
+  expect(stored(run.events).flatMap((event) => (event.type === "assistant_message" ? [event.body.text] : []))).toEqual(["Read it.", "Still here."])
+  expect(summaries(run).at(-1)).toMatchObject({ session: run.session, name: "hi", state: "active" })
 })
 
 // ---- History ------------------------------------------------------------------------------------
