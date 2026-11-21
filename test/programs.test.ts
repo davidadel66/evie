@@ -51,9 +51,60 @@ async function freePort() {
 // on the given port.
 async function homeWith(port: number, replies: (string | ScriptedReply)[]) {
   const home = await tempFolder("evie-home-")
+  await scriptIn(home, port, replies)
+  return home
+}
+
+// Writes the settings of a data folder made by `homeWith` again, with other replies.
+async function scriptIn(home: string, port: number, replies: (string | ScriptedReply)[]) {
   const script = replies.map((reply) => (typeof reply === "string" ? { text: [reply] } : reply))
   await writeFile(join(home, "evie.json"), JSON.stringify({ model: "test/model", plugins: [{ use: SCRIPTED, options: { script } }], server: { port } }))
-  return home
+}
+
+// Starts `evie` in a project folder with its input kept open, to be typed
+// into a line at a time, and gathers what it prints as it goes.
+function evieTyping(home: string, project: string) {
+  const run = Bun.spawn([process.execPath, CLI], {
+    cwd: project,
+    env: { PATH: process.env.PATH ?? "", HOME: home, EVIE_HOME: home },
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  cleanups.push(async () => {
+    run.kill()
+    await run.exited
+  })
+  const printed = { out: "", err: "" }
+  const gather = async (from: ReadableStream<Uint8Array>, into: "out" | "err") => {
+    const decoder = new TextDecoder()
+    for await (const chunk of from) printed[into] += decoder.decode(chunk)
+  }
+  const done = Promise.all([gather(run.stdout, "out"), gather(run.stderr, "err")])
+  return {
+    run,
+    printed,
+    type(line: string) {
+      run.stdin.write(`${line}\n`)
+      run.stdin.flush()
+    },
+    // Settles once this has been printed.
+    async shows(text: string) {
+      while (!printed.out.includes(text)) await Bun.sleep(10)
+    },
+    // Ends the input, and settles with the exit code once everything printed has been read.
+    async ends() {
+      run.stdin.end()
+      const code = await run.exited
+      await done
+      return code
+    },
+    async exited() {
+      const code = await run.exited
+      await done
+      return code
+    },
+  }
 }
 
 // Starts `evie serve` and resolves once it is listening. What it prints is
@@ -203,31 +254,6 @@ test("evie serve that cannot make this computer's token stops, and says why in o
   expect(served.stderr.trim()).not.toContain("\n")
 })
 
-test("when the server stops in the middle of a turn, evie says the connection was lost and exits with an error", async () => {
-  const port = await freePort()
-  const home = await homeWith(port, [{ hang: true, text: ["Thinking"] }])
-  const project = await tempFolder("evie-project-")
-  const server = await serve(home)
-  const client = Bun.spawn([process.execPath, CLI], {
-    cwd: project,
-    env: { PATH: process.env.PATH ?? "", HOME: home, EVIE_HOME: home },
-    stdin: new Blob(["think hard\n"]),
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  let printed = ""
-  const reading = (async () => {
-    for await (const chunk of client.stdout) printed += new TextDecoder().decode(chunk)
-  })()
-  while (!printed.includes("Thinking")) await Bun.sleep(10)
-
-  server.kill("SIGTERM")
-
-  expect(await client.exited).toBe(1)
-  await reading
-  expect(await new Response(client.stderr).text()).toContain("[error] The connection to the Evie server was lost")
-})
-
 test("evie in a real terminal that is told to stop puts the terminal back as it was", async () => {
   const port = await freePort()
   const home = await homeWith(port, [])
@@ -274,6 +300,62 @@ test("evie with a server running but this computer's token file gone says the fi
   expect(said.stderr).toContain(
     `An Evie server is running at http://127.0.0.1:${port}, but this computer's token file, ${join(home, "server-token")}, is missing. ` +
       "Stopping that server and starting `evie serve` again makes a new one.",
+  )
+})
+
+// ---- When the line to the server drops ----------------------------------------------------
+
+const DROPPED = "[note] The connection to Evie's server dropped. Trying again…"
+const BACK = "[note] Connected to Evie's server again."
+
+test("when evie serve is stopped and started again, evie connects again by itself, saying so, and the next line is answered in the same session", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, ["First reply."])
+  const project = await tempFolder("evie-project-")
+  const server = await serve(home)
+  const terminal = evieTyping(home, project)
+  terminal.type("first")
+  await terminal.shows("First reply.")
+
+  server.kill("SIGTERM")
+  await server.exited
+  await terminal.shows(DROPPED)
+  // The server started again is a new process, so its scripted model starts its replies again.
+  await scriptIn(home, port, ["Second reply."])
+  await serve(home)
+  await terminal.shows(BACK)
+  terminal.type("second")
+
+  expect(await terminal.ends()).toBe(0)
+  expect(terminal.printed.err).toBe("")
+  expect(terminal.printed.out).toContain(`${DROPPED}\n${BACK}\n`)
+  expect(terminal.printed.out).toContain("Second reply.")
+  const db = new Database(join(home, "evie.db"), { readonly: true })
+  const said = db.query<{ session: string; body: string }, []>("SELECT session, body FROM event WHERE type = 'user_message' ORDER BY time").all()
+  db.close()
+  expect(said.map((row) => JSON.parse(row.body).text)).toEqual(["first", "second"])
+  expect(new Set(said.map((row) => row.session)).size).toBe(1)
+})
+
+test("when this computer's token is taken back while the connection is down, evie stops trying, and says why", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, ["Hello."])
+  const project = await tempFolder("evie-project-")
+  const server = await serve(home)
+  const terminal = evieTyping(home, project)
+  terminal.type("hello")
+  await terminal.shows("Hello.")
+  server.kill("SIGTERM")
+  await server.exited
+  await terminal.shows(DROPPED)
+
+  expect((await evie(["token", "remove", "this computer"], { home })).code).toBe(0)
+  await serve(home)
+
+  expect(await terminal.exited()).toBe(1)
+  expect(terminal.printed.err).toContain(
+    `The Evie server at http://127.0.0.1:${port} refused this computer's token. Removing ${join(home, "server-token")} and ` +
+      "starting `evie serve` again makes a new one.",
   )
 })
 

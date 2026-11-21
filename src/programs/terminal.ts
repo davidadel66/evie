@@ -3,7 +3,7 @@ import { connect, ConnectError, createLiveInput, dataFolder, runTerminal, type S
 import { ownTokenFile, readOwnToken } from "../server/tokens.ts"
 import { PATHS } from "../server/wire.ts"
 import { loadServerSettings } from "../settings-files.ts"
-import { EXIT_CODES, fail, print } from "./common.ts"
+import { EXIT_CODES, fail, print, reason } from "./common.ts"
 
 // `evie`: connects to the server and runs the terminal client over the
 // connection, in the folder it is run in. The server is at the address in
@@ -12,31 +12,35 @@ import { EXIT_CODES, fail, print } from "./common.ts"
 export async function terminal(env: Settings, args: string[]) {
   const serverSettings = await loadServerSettings({ env }).catch(fail)
   const { token, own } = await tokenFor(env, serverSettings.address)
+  // Why the server could not be reached, in words. When it refused this
+  // computer's own token, that was taken back, or made by a server whose
+  // data folder has since changed, and the way to a new one is given.
+  const why = (cause: unknown) =>
+    own && cause instanceof ConnectError && cause.reason === "token"
+      ? `The Evie server at ${new URL(serverSettings.address).origin} refused this computer's token. Removing ` +
+        `${ownTokenFile(dataFolder(env))} and starting \`evie serve\` again makes a new one.`
+      : reason(cause)
   // Puts the terminal back as it was, when the live input line has taken it over.
   let restore = () => {}
+  // Prints a note on a line of its own. The terminal client does it once it runs.
+  let note = (text: string) => print(`[note] ${text}\n`)
   const evie = await connect({
     url: serverSettings.address,
     token,
     // So that an address where something takes the connection but never
     // answers does not leave the terminal waiting for ever.
     signal: AbortSignal.timeout(10_000),
-    // The server stopped, or took this device's token back. Connecting again
-    // is not built yet, so the terminal says so and leaves.
-    onDrop: (reason) => {
+    // As when the laptop sleeps or the server is stopped. The client
+    // connects again by itself, and shows what was missed meanwhile.
+    onDrop: () => note("The connection to Evie's server dropped. Trying again…"),
+    onBack: () => note("Connected to Evie's server again."),
+    // The server took this device's token back, or refuses it now, which
+    // trying again will not change.
+    onEnd: (cause) => {
       restore()
-      console.error(`\n[error] The connection to the Evie server was lost: ${reason}. \`evie --continue\` carries on with this session.`)
-      process.exit(1)
+      fail(why(cause))
     },
-  }).catch((cause) => {
-    // Taken back, or made by a server whose data folder has since changed.
-    if (own && cause instanceof ConnectError && cause.reason === "token") {
-      fail(
-        `The Evie server at ${new URL(serverSettings.address).origin} refused this computer's token. Removing ` +
-          `${ownTokenFile(dataFolder(env))} and starting \`evie serve\` again makes a new one.`,
-      )
-    }
-    return fail(cause)
-  })
+  }).catch((cause) => fail(why(cause)))
 
   // Leaving stops nothing in the server: being told to stop, or the terminal
   // window closing, closes the connection only.
@@ -86,6 +90,7 @@ export async function terminal(env: Settings, args: string[]) {
           prompt: false,
           typing: live.typing,
           onInterrupt: (handler) => (interrupt = handler),
+          onNote: (show) => (note = show),
         })
       } finally {
         live.close()
@@ -113,6 +118,7 @@ export async function terminal(env: Settings, args: string[]) {
         // to the background, and what Evie made of it.
         waitForJobs: true,
         onInterrupt: (handler) => (interrupt = handler),
+        onNote: (show) => (note = show),
       })
     }
   } catch (cause) {
