@@ -290,10 +290,13 @@ function stopGroup(group: number, still: () => boolean = () => true) {
 
 // When a process started, as the system gives it, or undefined when there
 // is no such process. With its id, it tells the process apart from a later
-// one that has been given the same id. Asking takes a few milliseconds.
+// one that has been given the same id. It is asked for in one time zone and
+// language, so that it reads the same to every run of Evie. Asking takes a
+// few milliseconds.
 function startOf(pid: number): string | undefined {
   try {
-    const at = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)], { stderr: "ignore" }).stdout.toString().trim()
+    const env = { PATH: process.env.PATH ?? "", TZ: "UTC", LC_ALL: "C" }
+    const at = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)], { env, stderr: "ignore" }).stdout.toString().trim()
     return at === "" ? undefined : at
   } catch {
     return undefined

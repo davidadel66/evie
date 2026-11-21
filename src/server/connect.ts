@@ -297,7 +297,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     // Jobs' events are not stored, so each job that has changed is passed
     // on, first, since the turns missed are often Evie dealing with a job
     // that ended. One missing from the list ran in the server before it was
-    // started again, which stopped it.
+    // stopped for good and started again, which stopped it.
     if (seen.told) {
       const listed = new Set(output.jobs.map((job) => job.id))
       const gone = [...seen.jobs.values()].filter((job) => job.status === "running" && !listed.has(job.id))

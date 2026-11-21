@@ -88,7 +88,8 @@ Type a message and press Enter.
 - **Closing the terminal stops nothing.** A turn still running carries on
   in the server, and a question still waiting for your answer keeps
   waiting: `evie --continue` shows it again. Stopping the server, with
-  Ctrl-C where it runs, stops everything.
+  Ctrl-C where it runs, stops everything. Restarting it stops nothing for
+  good: see "How it works".
 - **`evie --continue`** carries on the last session of the project you are
   in, with its conversation. It first shows the end of the earlier
   conversation, as it looked when it happened: your messages, Evie's
@@ -109,7 +110,7 @@ Type a message and press Enter.
   picks the work up again by itself. `/jobs` lists what is running, and
   `/jobs stop` with an id stops one. `/background` moves the command Evie
   is waiting on right now to the background, so you need not wait for it. Ctrl-C leaves background commands
-  running; they stop when the server stops.
+  running; they stop when the server is stopped for good.
 - **Evie can hand work to subagents.** For a side task such as searching
   the code or reviewing a change, it can start a second agent with an empty
   conversation, which works in the background and reports back. Several
@@ -613,6 +614,15 @@ the best examples to read.
   request to the model, the conversation is rebuilt from that log. Evie
   keeps no conversation in memory, which is why resuming a session, or
   recovering from being stopped part way, needs nothing special.
+- **Work carries on across a restart.** Each command is a program of its
+  own that writes what it prints straight to a file, so it keeps running
+  while the server restarts, and the new server finds it again, with its
+  output and how it ended. A turn the restart cut off, a subagent's
+  included, is carried on by itself, with a note telling the model to check
+  before repeating anything that changes something: at most three times in
+  five minutes, and not when the turn was waiting for an answer. Only
+  stopping the server for good, with Ctrl-C where it runs or by removing
+  its login service, stops background commands.
 - **One way in, one way out.** A client sends commands and subscribes to
   events. The terminal is a client like any other and uses nothing else, so
   a web or phone client can be added without changing the core.
@@ -672,8 +682,8 @@ on `dev` that you try things in.
 ## What comes next
 
 - The rest of the server: lists of sessions and their history, the server
-  starting by itself when you log in, a development copy beside the stable
-  one, and work that carries on across a restart of the server.
+  starting by itself when you log in, and a development copy beside the
+  stable one.
 - A web client, with a workspace for each project.
 - Scheduled work, memory, voice and a phone app.
 
