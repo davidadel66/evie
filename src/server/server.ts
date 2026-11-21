@@ -54,6 +54,9 @@ type Connection = Admitted & {
 // under way, and its events, held back until they have all been answered.
 type Joining = { opens: number; held: EvieEvent[] }
 
+// The reply to a command a device sent, and whether it has settled.
+type Remembered = { reply: Promise<ServerMessage>; settled: boolean }
+
 // The browser's cookie that holds its token.
 const COOKIE = "evie_token"
 // How many of each device's commands the server remembers the replies to,
@@ -72,7 +75,7 @@ export function startServer(options: ServerOptions): EvieServer {
   // command's id, oldest first. A client whose line dropped before the reply
   // reached it sends the command again with the same id, and is answered
   // from here, or waits for the first one to finish, so it is carried out once.
-  const replies = new Map<string, Map<string, Promise<ServerMessage>>>()
+  const replies = new Map<string, Map<string, Remembered>>()
 
   function replyTo(device: string, message: ClientMessage): Promise<ServerMessage> {
     const carryOut = () =>
@@ -86,12 +89,18 @@ export function startServer(options: ServerOptions): EvieServer {
     let sent = replies.get(device)
     if (!sent) replies.set(device, (sent = new Map()))
     const remembered = sent.get(message.id)
-    if (remembered) return remembered
-    const reply = carryOut()
-    sent.set(message.id, reply)
-    // A map keeps the order its keys were added in, so the first is the oldest.
-    if (sent.size > REMEMBERED) sent.delete(sent.keys().next().value!)
-    return reply
+    if (remembered) return remembered.reply
+    const kept: Remembered = { reply: carryOut(), settled: false }
+    void kept.reply.then(() => (kept.settled = true))
+    sent.set(message.id, kept)
+    // The oldest are forgotten first: a map keeps the order its keys were
+    // added in. One still being carried out is kept however old it is, so
+    // that the same command sent again waits for it, not carried out twice.
+    for (const [id, old] of sent) {
+      if (sent.size <= REMEMBERED) break
+      if (old.settled) sent.delete(id)
+    }
+    return kept.reply
   }
 
   // Which events a connection is sent: those of the sessions it has opened.

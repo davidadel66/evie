@@ -1032,6 +1032,41 @@ test("the server remembers the replies to the last 200 commands of each device, 
   expect(count.runs()).toBe(202)
 })
 
+test("a command still being carried out is never pushed out of the server's memory, however many of the device's commands come after it", async () => {
+  let runs = 0
+  let finish = (_text: string) => {}
+  const waits: Plugin = {
+    name: "waits",
+    setup(host) {
+      host.commands.add({
+        name: "wait",
+        description: "Waits, the first time it is run.",
+        run: () => (++runs === 1 ? new Promise<string>((resolve) => (finish = resolve)) : "carried out again"),
+      })
+    },
+  }
+  const count = counted()
+  const served = await serveEvie([scriptedProvider([]).plugin, waits, count.plugin])
+  cleanups.push(served.stop)
+  const session = served.run.session
+  const wait = { type: "run_command", session, name: "wait", args: "" } as const
+  const own = await ownLine(served.server.url, served.token)
+  const waiting = own.send({ id: "waiting", command: wait })
+  while (runs === 0) await Bun.sleep(1)
+  for (let n = 1; n <= 200; n++) await countAs(own, session, `command ${n}`)
+
+  // Sent again on a new connection, as after a drop, it waits for the first.
+  const again = (await ownLine(served.server.url, served.token)).send({ id: "waiting", command: wait })
+  finish("done")
+
+  expect(await waiting).toMatchObject({ result: { text: "done" } })
+  expect(await again).toMatchObject({ result: { text: "done" } })
+  expect(runs).toBe(1)
+  // The oldest that had settled was pushed out in its place.
+  expect(await countAs(own, session, "command 2")).toEqual({ text: "run 2" })
+  expect(await countAs(own, session, "command 1")).toEqual({ text: "run 201" })
+})
+
 test("a command its client says it sends once, as a catch-up after a drop is, has its reply forgotten, and pushes out no other", async () => {
   const count = counted()
   const served = await serveEvie([scriptedProvider([]).plugin, count.plugin])
