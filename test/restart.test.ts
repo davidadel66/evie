@@ -36,7 +36,7 @@ async function machine() {
       closed = true
     }
     cleanups.push(() => close())
-    return { run, model, restart: () => close({ restart: true }) }
+    return { run, model, restart: () => close({ restart: true }), quit: () => close() }
   }
   return { home, projectFolder, startAgain }
 }
@@ -163,6 +163,44 @@ test("a job that ended while a turn was running, cut off by a restart before it 
 
   const note = await told
   expect(note.type === "note" && note.body.text).toStartWith("Background job 1 (sleep 0.3; echo done) has finished.\n\ndone")
+})
+
+test("a job handed over while Evie closes for good is told as stopped, and not told again at the next start", async () => {
+  const { startAgain } = await machine()
+  // A tool that hands its work over only once its turn is stopped, as Evie closes.
+  let running = () => {}
+  const started = new Promise<void>((resolve) => (running = resolve))
+  const late: Plugin = {
+    name: "late",
+    setup(host) {
+      host.tools.add({
+        name: "late",
+        description: "Hands work over late.",
+        inputSchema: { type: "object" },
+        run: (_input, context) =>
+          new Promise((resolve) => {
+            running()
+            context.signal.addEventListener("abort", () => {
+              let finish = (_result: string) => {}
+              const done = new Promise<string>((settle) => (finish = settle))
+              context.jobs.start({ kind: "late", title: "late work", done, stop: () => finish("It was stopped.") })
+              resolve("Handed over.")
+            })
+          }),
+      })
+    },
+  }
+  const first = await startAgain([{ text: [], calls: [{ name: "late", input: {} }] }], [late])
+  const session = first.run.session
+  await first.run.evie.send({ type: "send_message", session, text: "go" })
+  await started
+  await first.quit()
+
+  expect(notes(first.run, session)).toEqual(["Background job 1 (late work) was stopped because Evie was closed. Start it again if it is still needed."])
+  const second = await startAgain([], [late])
+  await second.run.evie.resumeWork()
+  await Bun.sleep(200)
+  expect(notes(second.run, session)).toEqual([])
 })
 
 // The process group of a command that prints its own first, once the whole line is there.

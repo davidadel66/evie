@@ -164,11 +164,18 @@ export function createJobs(options: {
       (cause) => settle(cause instanceof EndNotKnown ? "unknown" : "failed", cause instanceof Error ? cause.message : String(cause)),
     )
     // Evie is closing: nothing new is left running.
-    if (closing) {
-      running.stoppedBy = "closing"
-      safely(() => work.stop())
-    }
+    if (closing) stopForClosing(running)
     return { ...job }
+  }
+
+  // Stops a job because Evie is closing for good. The note is written now,
+  // while the log is still open, so that a session continued later does
+  // not go on expecting to hear from the job.
+  function stopForClosing(running: Running) {
+    const { job, work, record } = running
+    running.stoppedBy = "closing"
+    safely(() => options.tell(job.session, `Background job ${job.id} (${job.title}) was stopped because Evie was closed. Start it again if it is still needed.`, false, () => told(record)))
+    safely(() => work.stop())
   }
 
   // The next number in a session, and a record for it. Ids count up within a
@@ -270,14 +277,7 @@ export function createJobs(options: {
     stopAll() {
       closing = true
       const live = [...all.values()].flat().filter(({ job }) => job.status === "running")
-      for (const running of live) {
-        const { job, work, record } = running
-        running.stoppedBy = "closing"
-        // Written now, while the log is still open, so that a session
-        // continued later does not go on expecting to hear from the job.
-        safely(() => options.tell(job.session, `Background job ${job.id} (${job.title}) was stopped because Evie was closed. Start it again if it is still needed.`, false, () => told(record)))
-        safely(() => work.stop())
-      }
+      for (const running of live) stopForClosing(running)
       // Work that will not stop must not keep Evie from closing.
       const patience = new Promise<void>((resolve) => setTimeout(resolve, 3000).unref())
       return Promise.race([Promise.allSettled(live.map(({ work }) => work.done)).then(() => {}), patience])
