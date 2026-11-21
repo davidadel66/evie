@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs"
-import { isAbsolute, join, relative, resolve, sep } from "node:path"
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { dataFolder } from "../core/evie.ts"
 import type { CheckedToolCall, Plugin, Project } from "../core/types.ts"
 import { patchFiles } from "./files/paths.ts"
@@ -35,6 +35,13 @@ export type SyncOptions = {
   // Stops the timers, for good.
   signal?: AbortSignal
 }
+
+// How many names a repository is tried under, from `evie-<name>` to `evie-<name>-100`.
+const MOST_NAMES = 100
+
+// Files an Evie data folder holds and a project's `.evie/` does not: its
+// database, its keys and this computer's token.
+const DATA_FOLDER_FILES = ["evie.db", ".env", "server-token"]
 
 // The tools that change the files they name.
 const FILE_TOOLS = ["write", "edit", "patch"]
@@ -96,11 +103,14 @@ export function sync(options: SyncOptions): Plugin {
   // repositories the first time. Returns what happened, in words.
   async function push(project: Project, evie: string): Promise<string> {
     // As for a project at the home folder, whose .evie folder is the data folder's usual place.
-    const [here, kept] = [real(evie), real(data)]
+    const [here, kept] = [realPath(evie), realPath(data)]
     if (within(here, kept) || within(kept, here)) throw new Error("It is Evie's data folder, which holds its keys and state, and is never synced.")
+    // Any copy's data folder, not only this server's.
+    const marker = DATA_FOLDER_FILES.find((file) => existsSync(join(evie, file)))
+    if (marker) throw new Error(`It holds ${marker}, as an Evie data folder does, and a data folder, with its keys and state, is never synced.`)
     const step: Step = async (name, command) => {
       const done = await run(command, evie)
-      if (done.code !== 0) throw new Error(`\`${name}\` failed: ${(done.stderr.trim() || done.stdout.trim() || `it exited with ${done.code}`).replace(/\.*$/, ".")}`)
+      if (done.code !== 0) throw new Error(failure(name, done))
       return done.stdout
     }
     // Named in full, so that a `.evie/` folder that is not yet a repository
@@ -123,34 +133,78 @@ export function sync(options: SyncOptions): Plugin {
       await git("add", "--all")
       await git("commit", "--quiet", "--message", "Sync from evie")
     }
-    const first = (await run(["git", `--git-dir=${gitDir}`, "remote", "get-url", "origin"], evie)).code !== 0 ? await connect(project, evie, step, git) : undefined
-    await git("push", "--quiet", "--set-upstream", "origin", "HEAD")
-    if (first !== undefined) return `${first} for ${evie}, and pushed what it holds there.`
-    return `Pushed the changes in ${evie} to ${(await git("remote", "get-url", "origin")).trim()}.`
-  }
-
-  // Gives the `.evie/` repository its remote: the project's private
-  // repository on GitHub, made now unless one of its name is already there.
-  // Returns what was done, in words.
-  async function connect(project: Project, evie: string, step: Step, git: (...args: string[]) => Promise<string>): Promise<string> {
-    const name = repositoryName(project)
-    const found = await run(["gh", "repo", "view", name, "--json", "isPrivate,url,sshUrl"], evie)
-    if (found.code !== 0) {
-      await step("gh repo create", ["gh", "repo", "create", name, "--private", "--source", evie, "--remote", "origin"])
-      return `Made the private GitHub repository ${name}`
+    // Pushed only to the repository Evie made for it, recorded in the
+    // repository's own settings, and only while GitHub says it is private.
+    const answer = async (...args: string[]) => {
+      const done = await run(["git", `--git-dir=${gitDir}`, ...args], evie)
+      return done.code === 0 ? done.stdout.trim() : undefined
     }
-    const there = JSON.parse(found.stdout) as { isPrivate: boolean; url: string; sshUrl: string }
-    if (!there.isPrivate) {
+    const origin = await answer("remote", "get-url", "origin")
+    let name = await answer("config", "--get", "evie.repository")
+    let made = false
+    if (name === undefined) {
+      if (origin !== undefined) {
+        throw new Error(
+          `Its git repository has a remote, origin, that Evie did not set up, ${origin}, so nothing was pushed. To have Evie make a ` +
+            `private repository for it instead, remove that remote: git -C ${evie} remote remove origin.`,
+        )
+      }
+      name = await makeRepository(project, evie, step, git)
+      made = true
+    }
+    const there = await privateRepository(name, evie)
+    const now = await answer("remote", "get-url", "origin")
+    if (now === undefined) await git("remote", "add", "origin", (await viaSsh(evie)) ? there.sshUrl : there.url)
+    else if (![there.url, there.sshUrl].map(plain).includes(plain(now))) {
       throw new Error(
-        `A repository named ${name} is already on your GitHub account, and it is public, so nothing was pushed to it. ` +
-          "Make it private, or rename it so that Evie makes a private one.",
+        `Its remote, origin, is ${now}, which is not the private repository Evie made for it, ${name}, so nothing was pushed. ` +
+          `To push there again, set it back: git -C ${evie} remote set-url origin ${there.url}.`,
       )
     }
-    // By the way the owner's `gh` reaches GitHub, as `gh repo create` would:
-    // over https unless it says ssh.
+    const pushed = await run(["git", `--git-dir=${gitDir}`, "push", "--quiet", "--set-upstream", "origin", "HEAD"], evie)
+    if (pushed.code !== 0 && /\[rejected\]|fetch first|non-fast-forward/.test(pushed.stderr)) {
+      throw new Error(
+        `The repository ${name} on GitHub has commits that ${evie} does not, as when another computer has synced to it, so the push ` +
+          `was refused and nothing there was overwritten. To bring them in, run git -C ${evie} pull --no-rebase origin main, then /sync.`,
+      )
+    }
+    if (pushed.code !== 0) throw new Error(failure("git push", pushed))
+    if (made) return `Made the private GitHub repository ${name} for ${evie}, and pushed what it holds there.`
+    return `Pushed the changes in ${evie} to ${name} on GitHub.`
+  }
+
+  // The repository on GitHub, by its name on the owner's account, when
+  // GitHub says it is private. Anything else ends the try.
+  async function privateRepository(name: string, evie: string): Promise<{ url: string; sshUrl: string }> {
+    const viewed = await run(["gh", "repo", "view", name, "--json", "isPrivate,url,sshUrl"], evie)
+    if (viewed.code !== 0) {
+      throw new Error(`Whether the repository ${name} on GitHub is private could not be checked, so nothing was pushed: ${failure("gh repo view", viewed)}`)
+    }
+    const there = JSON.parse(viewed.stdout) as { isPrivate: boolean; url: string; sshUrl: string }
+    if (there.isPrivate !== true) throw new Error(`The repository ${name} on GitHub is public now, so nothing was pushed to it. Make it private again on GitHub, then /sync.`)
+    return there
+  }
+
+  // Whether the owner's `gh` reaches GitHub over ssh rather than https, as
+  // `gh repo create` does when it sets a remote.
+  async function viaSsh(evie: string): Promise<boolean> {
     const protocol = await run(["gh", "config", "get", "git_protocol"], evie)
-    await git("remote", "add", "origin", protocol.code === 0 && protocol.stdout.trim() === "ssh" ? there.sshUrl : there.url)
-    return `Used the private GitHub repository ${name}, already on the account,`
+    return protocol.code === 0 && protocol.stdout.trim() === "ssh"
+  }
+
+  // Makes the project's private repository on GitHub, under the first name
+  // not already on the account, since a repository already there is never
+  // taken over, and records it as the one Evie made. Returns its name.
+  async function makeRepository(project: Project, evie: string, step: Step, git: (...args: string[]) => Promise<string>): Promise<string> {
+    const base = repositoryName(project)
+    for (let count = 1; count <= MOST_NAMES; count++) {
+      const name = count === 1 ? base : `${base}-${count}`
+      if ((await run(["gh", "repo", "view", name, "--json", "name"], evie)).code === 0) continue
+      await step("gh repo create", ["gh", "repo", "create", name, "--private", "--source", evie, "--remote", "origin"])
+      await git("config", "evie.repository", name)
+      return name
+    }
+    throw new Error(`Every name from ${base} to ${base}-${MOST_NAMES} is already taken on your GitHub account.`)
   }
 
   return {
@@ -196,9 +250,16 @@ function changesEvie(call: CheckedToolCall, folder: string): boolean {
   if (call.name === "shell") return true
   if (!FILE_TOOLS.includes(call.name)) return false
   const named = call.name === "patch" ? patchFiles(String(call.input.patchText ?? "")) : typeof call.input.path === "string" ? [call.input.path] : []
-  const evie = join(folder, ".evie")
-  return named.some((path) => within(resolve(folder, path), evie))
+  const evie = realPath(join(folder, ".evie"))
+  return named.some((path) => within(realPath(resolve(folder, path)), evie))
 }
+
+// That a command failed, and what it said.
+const failure = (name: string, done: Ran) => `\`${name}\` failed: ${(done.stderr.trim() || done.stdout.trim() || `it exited with ${done.code}`).replace(/\.*$/, ".")}`
+
+// A repository's address with any ending `.git` or `/` taken off, so that
+// two ways of writing the same one compare equal.
+const plain = (address: string) => address.trim().replace(/\/+$/, "").replace(/\.git$/, "")
 
 // Whether a path is a folder or inside it. A path inside it may have a name
 // that starts with two dots, such as `..cache`.
@@ -207,12 +268,14 @@ function within(path: string, folder: string): boolean {
   return inside !== ".." && !inside.startsWith(`..${sep}`) && !isAbsolute(inside)
 }
 
-// A path with its links resolved, or as it is when it cannot be.
-function real(path: string): string {
+// A path with its links resolved, as far as it exists: a file not made yet
+// is named in the folder it will be made in, as that folder really is.
+function realPath(path: string): string {
   try {
     return realpathSync(path)
   } catch {
-    return resolve(path)
+    const parent = dirname(path)
+    return parent === path ? path : join(realPath(parent), basename(path))
   }
 }
 

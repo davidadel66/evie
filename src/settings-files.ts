@@ -211,7 +211,8 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
         const answer = await asking.ask({
           text:
             `This project has a settings file of its own, ${projectFile}. It can load plugins, which are code that ` +
-            `runs with your full permissions, and it can switch off protections such as the guard. Use it?`,
+            `runs with your full permissions, and it can switch off protections such as the guard. It can also have its ` +
+            `.evie folder backed up to a private repository on your GitHub account. Use it?`,
           choices: [TRUST, DO_NOT_TRUST],
         })
         // Written down first: an answer that could not be saved does not count.

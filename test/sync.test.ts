@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, shell, sync, type Plugin } from "../src/index.ts"
@@ -77,7 +77,11 @@ async function standInGitHub() {
 // is "private" unless given, and nothing when given as undefined.
 // With `dataFolderInside`, the project's .evie folder is Evie's data folder,
 // as it is for a project at the home folder.
-async function start(options: { setting?: "private" | "none" | undefined; script?: ScriptedReply[]; after?: number; every?: number; dataFolderInside?: true } = {}) {
+// `scriptFor` makes the model's replies once the project folder is known.
+async function start(
+  options: { setting?: "private" | "none" | undefined; script?: ScriptedReply[]; after?: number; every?: number; dataFolderInside?: true } = {},
+  scriptFor?: (projectFolder: string) => Promise<ScriptedReply[]>,
+) {
   const setting = "setting" in options ? options.setting : "private"
   const github = await standInGitHub()
   const projectFolder = await tempFolder("evie-project-")
@@ -99,12 +103,12 @@ async function start(options: { setting?: "private" | "none" | undefined; script
     },
     signal: stopped.signal,
   })
-  const model = scriptedProvider(options.script ?? [])
+  const model = scriptedProvider(scriptFor ? await scriptFor(projectFolder) : (options.script ?? []))
   const run = await startEvie([model.plugin, files(), shell(), plugin], { home, projectFolder })
   cleanups.push(run.stop)
   const evieFolder = join(projectFolder, ".evie")
   const syncNow = async () => (await run.evie.send({ type: "run_command", session: run.session, name: "sync", args: "" })).text
-  return { run, github, evieFolder, commands, syncNow, name: `evie-${run.project!.name.toLowerCase()}` }
+  return { run, github, projectFolder, evieFolder, commands, syncNow, name: `evie-${run.project!.name.toLowerCase()}` }
 }
 
 // ---- The first sync ------------------------------------------------------------------------------
@@ -126,7 +130,7 @@ test("a later /sync commits and pushes what changed, and with nothing changed, p
   await mkdir(join(evieFolder, "dashboards"))
   await writeFile(join(evieFolder, "dashboards", "usage.md"), "# Usage\n")
 
-  expect(await syncNow()).toBe(`Pushed the changes in ${evieFolder} to ${join(github.folder, `${name}.git`)}.`)
+  expect(await syncNow()).toBe(`Pushed the changes in ${evieFolder} to ${name} on GitHub.`)
   expect(await github.commits(name)).toEqual([
     { subject: "Sync from evie", files: ["dashboards/usage.md", "evie.json"] },
     { subject: "Sync from evie", files: ["evie.json"] },
@@ -151,22 +155,16 @@ test("the repository is named evie- and the project's name in lower case, with s
   expect(github.repositories.get("evie-family-finances-cafe")).toEqual({ isPrivate: true })
 })
 
-test("a private repository of that name already on the account is used rather than made, and a public one is never pushed to", async () => {
-  const kept = await start()
-  await kept.github.own(kept.name, { isPrivate: true })
+test("a repository of that name already on the account is never taken over: the next free name, with -2, -3 and so on, is made", async () => {
+  const { github, evieFolder, syncNow, name } = await start()
+  await github.own(name, { isPrivate: true })
+  await github.own(`${name}-2`, { isPrivate: false })
 
-  expect(await kept.syncNow()).toBe(`Used the private GitHub repository ${kept.name}, already on the account, for ${kept.evieFolder}, and pushed what it holds there.`)
-  expect(kept.commands.some((command) => command[0] === "gh" && command[2] === "create")).toBe(false)
-  expect(await kept.github.commits(kept.name)).toHaveLength(1)
-
-  const open = await start()
-  await open.github.own(open.name, { isPrivate: false })
-
-  expect(await open.syncNow()).toStartWith(
-    `Could not sync ${open.evieFolder}: A repository named ${open.name} is already on your GitHub account, and it is public, so nothing ` +
-      "was pushed to it. Make it private, or rename it so that Evie makes a private one.",
-  )
-  expect(await open.github.commits(open.name)).toEqual([])
+  expect(await syncNow()).toBe(`Made the private GitHub repository ${name}-3 for ${evieFolder}, and pushed what it holds there.`)
+  expect(github.repositories.get(`${name}-3`)).toEqual({ isPrivate: true })
+  expect(await github.commits(`${name}-3`)).toHaveLength(1)
+  expect(await github.commits(name)).toEqual([])
+  expect(await github.commits(`${name}-2`)).toEqual([])
 })
 
 // ---- Syncing after Evie changes something --------------------------------------------------
@@ -188,6 +186,28 @@ test("a while after Evie last changed something in .evie/, what changed is commi
   await Bun.sleep(300)
 
   expect(await github.commits(name)).toEqual([{ subject: "Sync from evie", files: ["evie.json", "notes.md", "plan.md"] }])
+})
+
+test("a change named by a path through a link to the project is known to be in .evie/", async () => {
+  const link = join(await tempFolder("evie-links-"), "project")
+  const { run, github, name } = await start({ after: 50 }, async (projectFolder) => {
+    await symlink(projectFolder, link)
+    return turn(write(join(link, ".evie", "linked.md"), "through the link\n"))
+  })
+
+  await say(run, "write it down")
+  await commitsReach(github, name, 1)
+
+  expect((await github.commits(name))[0]!.files).toEqual(["evie.json", "linked.md"])
+})
+
+test("a file in .evie/ whose name starts with two dots is in .evie/", async () => {
+  const { run, github, name } = await start({ after: 50, script: turn(write(".evie/..notes.md", "dots\n")) })
+
+  await say(run, "write it down")
+  await commitsReach(github, name, 1)
+
+  expect((await github.commits(name))[0]!.files).toEqual(["..notes.md", "evie.json"])
 })
 
 test("a change outside .evie/ is no reason to sync, and a command, which may have changed it, is", async () => {
@@ -256,4 +276,79 @@ test("a .evie folder that is Evie's data folder, as for a project at the home fo
 
   expect(await syncNow()).toStartWith(`Could not sync ${evieFolder}: It is Evie's data folder, which holds its keys and state, and is never synced.`)
   expect(commands).toEqual([])
+})
+
+// ---- Pushing only to the private repository Evie made ---------------------------------------------
+
+test("a remote Evie did not set up itself is never pushed to, and /sync says how to let Evie make its own", async () => {
+  const { github, evieFolder, syncNow } = await start()
+  await github.own("somewhere-else", { isPrivate: false })
+  await git(["init", "--quiet", "--initial-branch=main"], evieFolder)
+  await git(["remote", "add", "origin", join(github.folder, "somewhere-else.git")], evieFolder)
+
+  expect(await syncNow()).toStartWith(
+    `Could not sync ${evieFolder}: Its git repository has a remote, origin, that Evie did not set up, ${join(github.folder, "somewhere-else.git")}, ` +
+      `so nothing was pushed. To have Evie make a private repository for it instead, remove that remote: git -C ${evieFolder} remote remove origin.`,
+  )
+  expect(await github.commits("somewhere-else")).toEqual([])
+})
+
+test("before every push the repository is checked to be private: one made public since, or that cannot be checked, is not pushed to", async () => {
+  const { github, evieFolder, syncNow, name } = await start()
+  await syncNow()
+
+  github.repositories.set(name, { isPrivate: false })
+  await writeFile(join(evieFolder, "secret.md"), "mine\n")
+  expect(await syncNow()).toStartWith(
+    `Could not sync ${evieFolder}: The repository ${name} on GitHub is public now, so nothing was pushed to it. Make it private again on GitHub, then /sync.`,
+  )
+
+  github.repositories.set(name, { isPrivate: true })
+  github.failWith("error connecting to api.github.com")
+  expect(await syncNow()).toStartWith(
+    `Could not sync ${evieFolder}: Whether the repository ${name} on GitHub is private could not be checked, so nothing was pushed: ` +
+      "`gh repo view` failed: error connecting to api.github.com.",
+  )
+  expect(await github.commits(name)).toHaveLength(1)
+})
+
+test("a remote removed by hand is set back to the repository Evie made, rather than a new one made", async () => {
+  const { github, evieFolder, commands, syncNow, name } = await start()
+  await syncNow()
+  await git(["remote", "remove", "origin"], evieFolder)
+  await writeFile(join(evieFolder, "later.md"), "later\n")
+
+  expect(await syncNow()).toBe(`Pushed the changes in ${evieFolder} to ${name} on GitHub.`)
+  expect(await github.commits(name)).toHaveLength(2)
+  expect(commands.filter((command) => command[0] === "gh" && command[2] === "create")).toHaveLength(1)
+})
+
+test("a push refused because the repository has commits this one does not says that nothing was overwritten, and what to do", async () => {
+  const { github, evieFolder, syncNow, name } = await start()
+  await syncNow()
+  // Another computer syncs to the same repository.
+  const elsewhere = join(await tempFolder("evie-elsewhere-"), "copy")
+  await git(["clone", "--quiet", join(github.folder, `${name}.git`), elsewhere], github.folder)
+  await writeFile(join(elsewhere, "theirs.md"), "theirs\n")
+  await git(["add", "theirs.md"], elsewhere)
+  await git(["commit", "--quiet", "-m", "From elsewhere"], elsewhere)
+  await git(["push", "--quiet", "origin", "main"], elsewhere)
+  await writeFile(join(evieFolder, "mine.md"), "mine\n")
+
+  expect(await syncNow()).toBe(
+    `Could not sync ${evieFolder}: The repository ${name} on GitHub has commits that ${evieFolder} does not, as when another computer ` +
+      "has synced to it, so the push was refused and nothing there was overwritten. To bring them in, run " +
+      `git -C ${evieFolder} pull --no-rebase origin main, then /sync. It is tried again a minute after Evie next changes something there, and every hour.`,
+  )
+  expect((await github.commits(name)).map((commit) => commit.subject)).toEqual(["From elsewhere", "Sync from evie"])
+})
+
+test("a .evie folder that holds what a data folder holds, as a copy of one does, is never synced", async () => {
+  for (const marker of ["evie.db", ".env", "server-token"]) {
+    const { evieFolder, commands, syncNow } = await start()
+    await writeFile(join(evieFolder, marker), "stands for a data folder's own file\n")
+
+    expect(await syncNow()).toStartWith(`Could not sync ${evieFolder}: It holds ${marker}, as an Evie data folder does, and a data folder, with its keys and state, is never synced.`)
+    expect(commands).toEqual([])
+  }
 })

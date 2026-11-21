@@ -291,12 +291,15 @@ goes is a setting in its own `.evie/evie.json`:
   `evie-` and the project's name, in lower case with spaces and other
   characters made into dashes (`evie-finances`). It is made with GitHub's
   command-line tool, `gh`, which has to be installed and logged in
-  (`gh auth login`) on the computer the server runs on. A private
-  repository of that name already on your account is used instead; a
-  public one is never pushed to. A minute after Evie last changed
-  something in the `.evie` folder, and once an hour, what changed is
-  committed and pushed, without asking: the setting is your permission.
-  `/sync` does it at once and says how it went.
+  (`gh auth login`) on the computer the server runs on. A repository
+  already on your account is never taken over: when the name is taken,
+  the next free one is used, such as `evie-finances-2`. Evie records the
+  repository it made in the `.evie` folder's own git settings, and before
+  every push checks that the remote is still that repository and that
+  GitHub still says it is private; otherwise nothing is pushed. A minute
+  after Evie last changed something in the `.evie` folder, and once an
+  hour, what changed is committed and pushed, without asking: the setting
+  is your permission. `/sync` does it at once and says how it went.
 - `"none"`, or no setting, keeps it on this computer.
 
 `evie new` starts a project as `"private"`. Like the rest of a project's
@@ -306,7 +309,10 @@ repository cloned from someone else cannot turn syncing on for itself.
 A sync that fails, as when `gh` is missing or not logged in, or there is no
 network, never interrupts Evie's work. It is tried again a minute after
 the next change and every hour, and `/sync` says what went wrong. Nothing
-is ever pushed by force. Only the `.evie` folder is backed up: keep a
+is ever pushed by force: when the repository has commits the folder does
+not, as when another computer synced to it, `/sync` says so and how to
+bring them in. A `.evie` folder that holds what a data folder holds
+(`evie.db`, `.env` or `server-token`) is never synced. Only the `.evie` folder is backed up: keep a
 workspace's other documents in `.evie/files/`, or in git yourself, to
 have them backed up too.
 
