@@ -70,7 +70,7 @@ const defaultTools = [...usualTools, "job_stop", "ask", "subagent", "subagent_se
 test("with no settings file, the built-in plugins load", async () => {
   const { offered, settings } = await start(undefined)
 
-  expect(settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "openrouter"])
+  expect(settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "openrouter"])
   expect(await offered()).toEqual(defaultTools)
 })
 
@@ -143,7 +143,7 @@ test("a plugin that cannot be loaded stops Evie at start, with an error that nam
   await writeFile(join(outside, "broken.ts"), "export default { name: 'broken', setup() { throw new Error('could not connect') } }")
 
   await expect(start({ plugins: ["no-such-plugin"] })).rejects.toThrow(
-    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, jobs, guard, permissions, undo, models, ask, subagents, skills, instructions, web, openrouter.',
+    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, jobs, guard, permissions, undo, models, ask, subagents, skills, instructions, web, sync, openrouter.',
   )
   await expect(start({ plugins: ["/no/such/file.ts"] })).rejects.toThrow('The plugin "/no/such/file.ts" could not be loaded')
   await expect(start({ plugins: [join(outside, "empty.ts")] })).rejects.toThrow("does not export a plugin")
@@ -335,4 +335,31 @@ test("when to compact, and a model's limit, can be set in the global settings fi
   await expect(loadSettingsFiles({ env: { EVIE_HOME: home } })).rejects.toThrow(/"compactAt" must be a whole number above zero/)
   await writeFile(join(home, "evie.json"), JSON.stringify({ contextLimits: { "some/model": "big" } }))
   await expect(loadSettingsFiles({ env: { EVIE_HOME: home } })).rejects.toThrow(/"contextLimits" must give a whole number/)
+})
+
+// ---- Where a project's .evie folder syncs -------------------------------------------------------
+
+test("a project's sync setting is used only when the project is trusted", async () => {
+  const trusted = await projectWith({ sync: "private" })
+  const local = await projectWith({ sync: "none" })
+  const cloned = await projectWith({ sync: "private" })
+  const plain = await tempFolder("evie-project-")
+  const home = await tempFolder("evie-home-")
+  await writeFile(join(home, "evie.json"), JSON.stringify({ trust: [trusted, local, plain] }))
+  const settings = await loadSettingsFiles({ env: { EVIE_HOME: home } })
+  const syncOf = (folder: string) => settings.syncSetting({ id: "an-id", name: "a-name", folder })
+
+  expect(await syncOf(trusted)).toBe("private")
+  expect(await syncOf(local)).toBe("none")
+  expect(await syncOf(cloned)).toBeUndefined()
+  expect(await syncOf(plain)).toBeUndefined()
+})
+
+test("a sync setting that is not private or none is refused when the settings are read", async () => {
+  const folder = await projectWith({ sync: "public" })
+  const { run, settings } = await start({ plugins: ["files"], trust: [folder] })
+
+  const refusal = `In ${join(folder, ".evie", "evie.json")}, "sync" must be "private", to back up the project's .evie folder to a private repository, or "none".`
+  await expect(run.evie.send({ type: "open_session", folder })).rejects.toThrow(refusal)
+  await expect(settings.syncSetting({ id: "an-id", name: "a-name", folder })).rejects.toThrow(refusal)
 })

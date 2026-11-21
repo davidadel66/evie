@@ -18,3 +18,11 @@ export async function git(args: string[], cwd: string): Promise<string> {
   if (code !== 0) throw new Error(`git ${args.join(" ")} failed: ${stderr}`)
   return stdout
 }
+
+// Runs a command with the same settings as `git` above, and returns how it
+// went, as the sync plugin is told.
+export async function ran(command: string[], cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
+  const run = Bun.spawn(command, { cwd, env: GIT_ENV, stdin: "ignore", stdout: "pipe", stderr: "pipe" })
+  const [stdout, stderr, code] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text(), run.exited])
+  return { code, stdout, stderr }
+}
