@@ -102,6 +102,23 @@ test("a background command that ends while no Evie is running is told at the nex
   expect(second.model.requests[0]?.messages.at(-1)?.text).toContain("tests failed")
 })
 
+test("a background command that died by a signal while no Evie was running is told by that signal", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "sleep 0.3; kill -TERM $$", background: true } }] }, { text: ["Started."] }])
+  await say(first.run, "run it")
+  const session = first.run.session
+  await first.restart()
+  await Bun.sleep(700)
+
+  const second = await startAgain([{ text: ["It was stopped."] }])
+  const woken = turnEnded(second.run, session)
+  await second.run.evie.resumeWork()
+  await woken
+
+  const file = join(home, "tool-output", session, "job-1.log")
+  expect(notes(second.run, session)).toEqual([`Background job 1 (sleep 0.3; kill -TERM $$) failed.\n\n[Ended by signal SIGTERM]\n\nThe full output is in ${file}.`])
+})
+
 // The process group of a command that prints its own first.
 async function groupOf(file: string) {
   while ((await Bun.file(file).text().catch(() => "")).trim() === "") await Bun.sleep(5)

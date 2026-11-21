@@ -71,3 +71,9 @@ test("a command that prints more than 2,000 lines shows its last lines, with how
   expect(result).toStartWith("503\n504\n")
   expect(result).toContain("\n2500\n\n[Exit status: 1]\n\n[Output cut: showing the last 2000 of 2502 lines. The full output is saved at ")
 })
+
+test("a command that dies by a signal says which signal", async () => {
+  const { call } = await project()
+
+  expect(await call("shell", { command: "echo before; kill -KILL $$" })).toBe("before\n\n[Ended by signal SIGKILL]")
+})

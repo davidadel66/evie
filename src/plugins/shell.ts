@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import { closeSync, fstatSync, openSync, readFileSync, readSync } from "node:fs"
-import { homedir } from "node:os"
+import { constants, homedir } from "node:os"
 import { EndNotKnown } from "../core/jobs.ts"
 import type { JobRecord, JobWork, Plugin, Tool } from "../core/types.ts"
 import { resolvePath, statOrMissing } from "./files/paths.ts"
@@ -222,9 +222,12 @@ function endOf(file: string, most: number): Printed {
 const exitFileOf = (outputFile: string) => outputFile.replace(/\.log$/, ".exit")
 
 // The command runs in a shell of its own, under one that writes how it
-// ended to the exit file. Stopped by a signal, the outer one ends too, and
-// writes nothing.
-const RUNS_THEN_RECORDS = '/bin/sh -c "$1"; status=$?; echo $status > "$2"; exit $status'
+// ended to the exit file. When the command dies by a signal, the outer one
+// then sends itself the same signal, so that it is seen to end the same
+// way, and its own report of the death is kept out of the output. Stopped
+// by a signal itself, the outer one ends too, and writes nothing.
+const RUNS_THEN_RECORDS =
+  'exec 3>&2 2>/dev/null; /bin/sh -c "$1" 2>&3 3>&-; status=$?; echo $status > "$2"; [ $status -gt 128 ] && kill -$((status - 128)) $$; exit $status'
 
 type Running = {
   pid: number | undefined
@@ -331,11 +334,11 @@ function resumeCommand(job: JobRecord): JobWork {
   const done = (async () => {
     for (;;) {
       const status = exitStatus(exitFile)
-      if (status !== undefined) return { how, status }
+      if (status !== undefined) return { how, ...status }
       if (!ours || !alive(pid as number)) {
         // It may have written its status just as it ended.
         const last = exitStatus(exitFile)
-        if (last !== undefined) return { how, status: last }
+        if (last !== undefined) return { how, ...last }
         return { how: how === "exited" ? ("unknown" as const) : how }
       }
       await Bun.sleep(WATCH_EVERY)
@@ -347,11 +350,15 @@ function resumeCommand(job: JobRecord): JobWork {
   return { kind: "shell", title: job.title, done: done.then((ended) => toldOf(ended, timeout, job.outputFile)), stop: () => stop("stopped") }
 }
 
-// The status in an exit file, or undefined while it has none.
-function exitStatus(file: string): number | undefined {
+// How a command ended, from its exit file, or undefined while it has none.
+// A status over 128 is a death by the signal of that number less 128.
+function exitStatus(file: string): Pick<Ended, "status" | "signal"> | undefined {
   try {
     const text = readFileSync(file, "utf8").trim()
-    return text === "" ? undefined : Number(text)
+    if (text === "") return undefined
+    const status = Number(text)
+    const signal = Object.entries(constants.signals).find(([, number]) => number === status - 128)?.[0]
+    return status > 128 && signal !== undefined ? { signal } : { status }
   } catch {
     return undefined
   }
