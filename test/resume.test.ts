@@ -290,10 +290,10 @@ test("opening by id refuses a subagent's session, saying to open the one that st
   await expect(run.evie.send({ type: "open_session", session: "no-such-session" })).rejects.toThrow('There is no session with the id "no-such-session".')
 })
 
-test("a session's id is given alone, without a folder or project, and a number to catch up from only with a session's id", async () => {
+test("a session's id is given alone, without a folder, a project or `continue`, and a number to catch up from only with a session's id", async () => {
   const { startAgain } = await machine()
   const { run } = await startAgain()
-  const alone = "Open a session by its id alone, without a project or a folder."
+  const alone = "Open a session by its id alone, without a project, a folder or `continue`."
 
   // The compiler refuses these, and the core refuses them from a client that is not type-checked.
   // @ts-expect-error
@@ -301,7 +301,25 @@ test("a session's id is given alone, without a folder or project, and a number t
   // @ts-expect-error
   await expect(run.evie.send({ type: "open_session", session: run.session, project: run.project!.id })).rejects.toThrow(alone)
   // @ts-expect-error
+  await expect(run.evie.send({ type: "open_session", session: run.session, continue: true })).rejects.toThrow(alone)
+  // @ts-expect-error
   await expect(run.evie.send({ type: "open_session", folder: run.projectFolder, after: 3 })).rejects.toThrow(
     "`after` is the number of the last event seen in a session, so it is given only with `session`.",
+  )
+})
+
+test("a session whose project has gone from the database is refused when opened by its id, not opened as a general session", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain()
+  await say(first.run, "hi")
+  await first.quit()
+  const db = new Database(join(home, "evie.db"))
+  db.run("DELETE FROM project WHERE id = ?", [first.run.project!.id])
+  db.close()
+
+  const second = await startAgain()
+
+  await expect(second.run.evie.send({ type: "open_session", session: first.run.session })).rejects.toThrow(
+    `The session "${first.run.session}" belongs to the project "${first.run.project!.id}", which is missing from Evie's database.`,
   )
 })

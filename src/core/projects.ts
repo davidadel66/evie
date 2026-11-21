@@ -19,7 +19,9 @@ export type Projects = {
   // subagent's session is never the answer: it is not the owner's to carry on.
   lastSession(project: Project | null): string | undefined
   // The project a session belongs to, null for a general session, or
-  // undefined when there is no session with that id.
+  // undefined when there is no session with that id. A session whose
+  // project is missing from the database, which only a damaged one holds,
+  // is an error, not a general session.
   projectOf(session: string): Project | null | undefined
   // The session that started this one as a subagent, if one did.
   parentOf(session: string): string | undefined
@@ -92,7 +94,10 @@ export function createProjects(db: Database): Projects {
     projectOf(session) {
       const row = sessionRow.get(session)
       if (!row) return undefined
-      return row.project === null ? null : (byId.get(row.project) ?? null)
+      if (row.project === null) return null
+      const project = byId.get(row.project)
+      if (!project) throw new Error(`The session "${session}" belongs to the project "${row.project}", which is missing from Evie's database.`)
+      return project
     },
 
     parentOf(session) {

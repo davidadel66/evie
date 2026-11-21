@@ -254,8 +254,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     if (input.project !== undefined && input.folder !== undefined) {
       throw new Error("Open a session with a project or a folder, not both.")
     }
-    if (input.session !== undefined && (input.project !== undefined || input.folder !== undefined)) {
-      throw new Error("Open a session by its id alone, without a project or a folder.")
+    if (input.session !== undefined && (input.project !== undefined || input.folder !== undefined || input.continue !== undefined)) {
+      throw new Error("Open a session by its id alone, without a project, a folder or `continue`.")
     }
     if (input.after !== undefined && input.session === undefined) {
       throw new Error("`after` is the number of the last event seen in a session, so it is given only with `session`.")
