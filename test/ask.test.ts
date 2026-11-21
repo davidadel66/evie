@@ -475,6 +475,34 @@ test("where nobody is typing, a question is refused and the line is sent as the 
   expect(stored(run.events).find((event) => event.type === "user_message")?.body).toEqual({ text: "1" })
 })
 
+test("where nobody is typing, a question from a session another terminal answers for is shown but never answered", async () => {
+  // The session is opened and used by a client that shows questions, as a
+  // real terminal does; a pipe then joins it.
+  const deploy = asksBeforeDeploy()
+  const { run } = await start([{ text: ["Hi."] }, ...callsDeploy], [deploy.plugin])
+  await say(run, "hello")
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    resume: true,
+    questions: false,
+    lines: (async function* () {
+      yield "ship it"
+      while (!printed.includes("Deploy to production?")) await Bun.sleep(1)
+      yield "1"
+      // Reached once "1" has been sent. The other terminal answers.
+      const question = stored(run.events).find((event) => event.type === "question")!
+      await run.evie.send({ type: "answer_question", session: run.session, id: question.type === "question" ? question.body.id : "", choice: "No" })
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(deploy.answers).toEqual(["No"])
+  expect(stored(run.events).flatMap((event) => (event.type === "user_message" ? [event.body.text] : []))).toEqual(["hello", "ship it", "1"])
+  expect(printed).toContain("[question] Deploy to production? (not answered here)")
+})
+
 test("a line the owner was already typing when a question appeared is sent as a message, not taken as the answer", async () => {
   const deploy = asksBeforeDeploy({ ...DEPLOY, freeText: true })
   const { run, model } = await start(callsDeploy, [deploy.plugin], {})

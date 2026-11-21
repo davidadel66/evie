@@ -189,8 +189,12 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     const mine = session === undefined ? event.type === "question" || event.type === "answer" : event.session === session
     if (!mine) return
     // More than one can be open at once, such as from two subagents. They
-    // are shown one at a time, in the order they came.
-    if (event.type === "question") queueQuestion({ session: event.session, question: event.body })
+    // are shown one at a time, in the order they came. Where nobody types,
+    // as from a pipe, a question is only shown: the session may belong to
+    // another terminal that does take answers, and a line meant as a message
+    // must not be taken as one.
+    if (event.type === "question" && options.questions === false) line(`[question] ${event.body.text} (not answered here)`)
+    else if (event.type === "question") queueQuestion({ session: event.session, question: event.body })
     if (event.type === "answer") {
       const at = waitingQuestions.findIndex((waiting) => waiting.question.id === event.body.id)
       if (at !== -1) waitingQuestions.splice(at, 1)
