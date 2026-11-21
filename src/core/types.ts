@@ -461,7 +461,8 @@ export type Commands = {
     output: { text: string }
   }
   // Sets a session aside, or with `settled: false` brings it back, as a
-  // `settled` event in its log. It need not be open. What happens in it
+  // `settled` event in its log. It need not be open, but it is not settled
+  // while it is working or a question in it waits. What happens in it
   // afterwards makes it active again. Brought back, it settles again after a
   // week of quiet, as it would after activity.
   settle_session: {

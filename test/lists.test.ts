@@ -258,6 +258,30 @@ test("settling an older session by hand, or bringing it back, does not make it t
   expect([afterSettling, afterBringingBack]).toEqual([newer, newer])
 })
 
+test("a session is not settled while a turn or a background job runs in it, since what it does next would make it active again", async () => {
+  const work = backgroundWork()
+  const { run } = await start([{ hang: true, text: ["Thinking"] }, { text: [], calls: [{ name: "start_work", input: {} }] }, { text: ["Started."] }, { text: ["It finished."] }], [work.plugin])
+  const settle = () => run.evie.send({ type: "settle_session", session: run.session, settled: true })
+  const refused = "This session is working, or waiting for an answer to a question. Wait until it has finished, then settle it."
+  const writing = nextEvent(run, "assistant_delta")
+  await run.evie.send({ type: "send_message", session: run.session, text: "think hard" })
+  await writing
+
+  await expect(settle()).rejects.toThrow(refused)
+  const cancelled = nextEvent(run, "turn_end")
+  await run.evie.send({ type: "cancel", session: run.session })
+  await cancelled
+  await say(run, "start the work")
+  await expect(settle()).rejects.toThrow(refused)
+  const dealtWith = nextEvent(run, "turn_end")
+  work.finish("all done")
+  await dealtWith
+  await settle()
+
+  expect(stored(run.events).filter((event) => event.type === "settled")).toHaveLength(1)
+  expect(await stateOf(run)).toBe("settled")
+})
+
 test("only a session that is there, and not a subagent's, can be settled", async () => {
   const { run } = await start([{ text: [], calls: [{ name: "delegate", input: {} }] }, { text: ["ok"] }, { text: ["Started it."] }], [delegate])
   await say(run, "hand it over")

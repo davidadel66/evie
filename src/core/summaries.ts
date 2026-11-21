@@ -12,6 +12,9 @@ import type { EventBodies, SessionState, SessionSummary, SummaryEvent } from "./
 export type Summaries = {
   // Every session that is not a subagent's, the latest active first.
   list(): SessionSummary[]
+  // Where a session stands now, or undefined when there is no such session
+  // or it is a subagent's.
+  state(session: string): SessionState | undefined
   // Something has happened in a session, or it was made: its summary is
   // sent if it has changed.
   changed(session: string): void
@@ -102,6 +105,10 @@ export function createSummaries(options: {
 
   return {
     list: () => all.all().map(summaryOf),
+    state(session) {
+      const row = one.get(session)
+      return row ? stateOf(row) : undefined
+    },
     changed(session) {
       const row = one.get(session)
       if (row) send(summaryOf(row))

@@ -428,12 +428,18 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   }
 
   // Written to the log, where the session's state is read from. Any session
-  // can be settled, open or not, but not a subagent's, which is not listed.
+  // can be settled, open or not, but not a subagent's, which is not listed,
+  // and not while it is working or waiting for an answer.
   function settleSession(input: Commands["settle_session"]["input"]): void {
     if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
     const parent = projects.parentOf(input.session)
     if (parent !== undefined) throw new Error(`The session "${input.session}" is a subagent's, which is not listed. Settle the session that started it, "${parent}", instead.`)
     if (typeof input.settled !== "boolean") throw new Error("`settled` is true to settle the session, or false to bring it back.")
+    // What goes on in it next is activity, which would make it active again.
+    const state = summaries.state(input.session)
+    if (input.settled && (state === "working" || state === "needs_you")) {
+      throw new Error("This session is working, or waiting for an answer to a question. Wait until it has finished, then settle it.")
+    }
     emit(log.append(input.session, "settled", { settled: input.settled }))
   }
 
