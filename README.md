@@ -86,8 +86,9 @@ Type a message and press Enter.
   nothing running, Ctrl-C or Ctrl-D quits. If Evie does not stop, a second
   Ctrl-C quits at once.
 - **Closing the terminal stops nothing.** A turn still running carries on
-  in the server. Stopping the server, with Ctrl-C where it runs, stops
-  everything.
+  in the server, and a question still waiting for your answer keeps
+  waiting: `evie --continue` shows it again. Stopping the server, with
+  Ctrl-C where it runs, stops everything.
 - **`evie --continue`** carries on the last session of the project you are
   in, with its conversation.
 - **`/model`** shows which model is in use. `/model` and a name switches to

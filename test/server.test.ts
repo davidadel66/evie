@@ -3,7 +3,7 @@ import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { runTerminal, type Evie, type EvieEvent, type Plugin } from "../src/index.ts"
-import { nextEvent, stored } from "./support/harness.ts"
+import { nextEvent, say, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
 
@@ -296,6 +296,112 @@ test("Ctrl-C in a terminal that continues a session left running stops that sess
   expect(answers).toEqual(["cancelled"])
   expect(printed).toContain("[cancelled]\n")
   expect(stored(served.run.events).findLast((event) => event.type === "turn_end" && event.session === session)?.body).toEqual({ reason: "cancelled" })
+})
+
+// ---- Several clients on one session ------------------------------------------------------
+
+// What a terminal says when it leaves with a question still waiting.
+const WAITING = "[note] A question is waiting for an answer. `evie -c` in a terminal comes back to it."
+
+// The questions asked so far, in the order they were asked.
+const questionsAsked = (events: EvieEvent[]) => stored(events).flatMap((event) => (event.type === "question" ? [event] : []))
+
+test("a pipe that joins a session leaves when its input ends, saying a question is waiting, and another client can still answer it", async () => {
+  const deploy = asksBeforeDeploy()
+  const served = await serveEvie([scriptedProvider([{ text: ["Hi."] }, ...callsDeploy()]).plugin, deploy.plugin])
+  cleanups.push(served.stop)
+  // The session is opened and used by a client that shows questions, as a real terminal does.
+  const shows = await served.connect()
+  const { session } = await shows.send({ type: "open_session", folder: served.run.projectFolder, questions: true })
+  await say({ evie: shows, session }, "hello")
+
+  let printed = ""
+  await runTerminal({
+    evie: await served.connect(),
+    folder: served.run.projectFolder,
+    resume: true,
+    questions: false,
+    waitForJobs: true,
+    lines: (async function* () {
+      yield "ship it"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("[question] Deploy to production? (not answered here)")
+  expect(printed).toContain(WAITING)
+  expect(stored(served.run.events).some((event) => event.type === "answer")).toBe(false)
+  // The question is still open: the other client answers it, and the turn finishes.
+  const ended = nextEvent(served.run, "turn_end")
+  await shows.send({ type: "answer_question", session, id: questionsAsked(served.run.events)[0]!.body.id, choice: "Yes" })
+  expect(await ended).toMatchObject({ session, body: { reason: "completed" } })
+  expect(deploy.answers).toEqual(["Yes"])
+})
+
+test("when one of two terminals on a session stops typing, the question waiting in it is left for the other to answer", async () => {
+  const deploy = asksBeforeDeploy()
+  const served = await serveEvie([scriptedProvider([{ text: ["Hi."] }, ...callsDeploy()]).plugin, deploy.plugin])
+  cleanups.push(served.stop)
+  let first = ""
+  let second = ""
+  let joined = () => {}
+  const secondJoined = new Promise<void>((resolve) => (joined = resolve))
+
+  const firstTerminal = runTerminal({
+    evie: await served.connect(),
+    folder: served.run.projectFolder,
+    lines: (async function* () {
+      yield "hello"
+      await secondJoined
+      yield "ship it"
+      while (!first.includes("Type a number.")) await Bun.sleep(1)
+      // The input ends here, with the question on screen.
+    })(),
+    write: (text) => (first += text),
+  })
+  while (!first.includes("Hi.")) await Bun.sleep(1)
+  const secondTerminal = runTerminal({
+    evie: await served.connect(),
+    folder: served.run.projectFolder,
+    resume: true,
+    lines: (async function* () {
+      while (!second.includes("continuing the last session")) await Bun.sleep(1)
+      joined()
+      while (!second.includes("Type a number.")) await Bun.sleep(1)
+      // Answered only once the first terminal has gone.
+      await firstTerminal
+      yield "1"
+    })(),
+    write: (text) => (second += text),
+  })
+  await Promise.all([firstTerminal, secondTerminal])
+
+  expect(first).toContain(WAITING)
+  expect(stored(served.run.events).flatMap((event) => (event.type === "answer" ? [event.body.choice] : []))).toEqual(["Yes"])
+  expect(second).toContain("[answered] Yes\n")
+  expect(second).toContain("Done.")
+  expect(deploy.answers).toEqual(["Yes"])
+})
+
+test("a pipe alone in its session, whose questions are refused at once, waits for the turn to finish after its input ends", async () => {
+  const deploy = asksBeforeDeploy()
+  const served = await serveEvie([scriptedProvider(callsDeploy()).plugin, deploy.plugin])
+  cleanups.push(served.stop)
+  let printed = ""
+  await runTerminal({
+    evie: await served.connect(),
+    folder: served.run.projectFolder,
+    questions: false,
+    waitForJobs: true,
+    lines: (async function* () {
+      yield "ship it"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(deploy.answers).toEqual([null])
+  expect(printed).toContain("Done.")
+  expect(printed).not.toContain("A question is waiting")
 })
 
 // ---- Leaving, and losing the connection ------------------------------------------------

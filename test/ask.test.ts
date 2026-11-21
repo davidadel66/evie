@@ -350,7 +350,10 @@ test("the terminal takes an answer in the owner's own words when the question al
   expect(toolResults(run)).toEqual(["The owner answered in their own words: plain files"])
 })
 
-test("when the input ends with a question still open, the terminal refuses it and the turn finishes", async () => {
+// What a terminal says when it leaves with a question still waiting.
+const WAITING = "[note] A question is waiting for an answer. `evie -c` in a terminal comes back to it."
+
+test("when the input ends with a question still open, the terminal leaves it open, says so, and leaves", async () => {
   const deploy = asksBeforeDeploy()
   const { run } = await start(callsDeploy, [deploy.plugin], {})
   let printed = ""
@@ -363,8 +366,13 @@ test("when the input ends with a question still open, the terminal refuses it an
     write: (text) => (printed += text),
   })
 
+  expect(printed).toContain("[question] Deploy to production?")
+  expect(printed).toContain(WAITING)
+  expect(stored(run.events).some((event) => event.type === "answer")).toBe(false)
+  // The question is still open in the core, which refuses it when Evie closes.
+  await run.evie.close()
   expect(deploy.answers).toEqual([null])
-  expect(printed).toContain("[not answered]")
+  expect(stored(run.events).find((event) => event.type === "answer")?.body).toMatchObject({ choice: null })
 })
 
 test("the terminal asks whether to trust a project while it is opening, before the first prompt", async () => {
@@ -456,6 +464,65 @@ test("a command that stops to ask a question can be answered in the terminal", a
 
   expect(answers).toEqual(["No"])
   expect(printed).toContain("Compacted: the earlier part of the conversation is now a summary.")
+})
+
+test("when the input ends while a command waits on a question, the terminal leaves the question open and leaves", async () => {
+  let askNow = false
+  const asksFirst: Plugin = {
+    name: "asks-first",
+    setup(host) {
+      host.on("before_request", async (_request, context) => {
+        if (askNow) await context.ask(DEPLOY)
+      })
+    },
+  }
+  const model = scriptedProvider([{ text: ["A1"] }, { text: ["A2"] }, { text: ["## Goal\nCarry on."] }])
+  const run = await startEvie([model.plugin, asksFirst], { compaction: { ceiling: 2000 } })
+  cleanups.push(run.stop)
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    lines: (async function* () {
+      yield "x".repeat(4000)
+      while (!printed.includes("A1")) await Bun.sleep(1)
+      yield "y".repeat(1600)
+      while (!printed.includes("A2")) await Bun.sleep(1)
+      askNow = true
+      yield "/compact"
+      while (!printed.includes("Type a number.")) await Bun.sleep(1)
+      // The input ends here, with the command's question on screen.
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain(WAITING)
+  expect(printed).not.toContain("Compacted")
+  expect(stored(run.events).some((event) => event.type === "answer")).toBe(false)
+})
+
+test("when the input ends while the project's opening question waits, the terminal refuses it, so the project is not left half open", async () => {
+  const { run, folder, globalFile } = await startWithProject()
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder,
+    lines: (async function* () {
+      while (!printed.includes("Type a number.")) await Bun.sleep(1)
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(stored(run.events).find((event) => event.type === "answer")?.body).toMatchObject({ choice: null })
+  expect(printed).toContain("evie · ")
+  expect(await globalFile()).toEqual({ model: "some/model", plugins: [] })
+  // The next session to open in the project is asked again, rather than
+  // waiting on a question nobody can reach.
+  const asked = nextEvent(run, "question")
+  const opening = run.evie.send({ type: "open_session", folder, questions: true })
+  const again = await asked
+  await run.evie.send({ type: "answer_question", session: again.session, id: again.body.id, choice: "Yes, trust this project" })
+  expect((await opening).notices).toEqual([])
 })
 
 test("where nobody is typing, a question is refused and the line is sent as the message it was", async () => {
