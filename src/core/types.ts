@@ -492,7 +492,7 @@ export type Command = { [Type in keyof Commands]: { type: Type } & Commands[Type
 
 // Everything a client can do: send a command, and subscribe to events. Events
 // from every open session arrive on the one subscription, each naming its
-// session.
+// session, and so do the summaries of every session.
 export type Evie = {
   send<Sent extends Command>(command: Sent): Promise<Commands[Sent["type"]]["output"]>
   subscribe(listener: (event: EvieEvent) => void): () => void

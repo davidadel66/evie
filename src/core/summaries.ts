@@ -117,7 +117,7 @@ const NAME_LENGTH = 60
 // A session's name until it is given one: the opening words of its first
 // message, from its first line, cut at a word's end with an ellipsis when
 // that line is long.
-export function nameFrom(text: string): string | null {
+function nameFrom(text: string): string | null {
   const first = text.trim().split("\n")[0]!.trim()
   if (first === "") return null
   if (first.length <= NAME_LENGTH) return first
