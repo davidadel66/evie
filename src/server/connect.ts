@@ -181,6 +181,8 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     })
     const held = seen.held ?? []
     seen.held = undefined
+    // A session that could not be opened again, as when its project's
+    // plugins fail to load, is left as it is: a command sent to it says why.
     if ("result" in reply) {
       const output = reply.result as Opened
       for (const event of output.events ?? []) {
@@ -192,8 +194,6 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       passText(session, output.replySoFar ?? "")
       seen.seq = Math.max(seen.seq, output.lastSeq)
     }
-    // A session that could not be opened again is left as it is; a command
-    // sent to it says why.
     for (const event of held) pass(event)
     for (const seq of seen.early) seen.seq = Math.max(seen.seq, seq)
     seen.early.clear()

@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { connect, runTerminal, startServer, type ConnectOptions, type Evie, type EvieEvent, type Plugin } from "../src/index.ts"
+import { connect, runTerminal, startServer, type ConnectOptions, type Evie, type EvieEvent, type EvieOptions, type Plugin } from "../src/index.ts"
 import { nextEvent, say, startEvie, stored, type Run } from "./support/harness.ts"
 import { lineTo } from "./support/line.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
@@ -785,7 +785,7 @@ test("after the server is started again, a session whose project asks again whet
   // The project asks each time its plugins are set up, as one with a settings
   // file of its own does until the owner decides; the question is asked again
   // when the server is started again.
-  const projectSettings = async (_project: unknown, { ask }: { ask: (question: { text: string; choices: string[] }) => Promise<string | null> }) => {
+  const projectSettings: NonNullable<EvieOptions["projectSettings"]> = async (_project, { ask }) => {
     const answer = await ask({ text: "Trust this project?", choices: ["Yes", "No"] })
     return { plugins: [], ...(answer !== "Yes" && { forNow: true as const }) }
   }
