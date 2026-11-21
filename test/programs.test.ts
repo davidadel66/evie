@@ -229,12 +229,28 @@ test("when the server stops in the middle of a turn, evie says the connection wa
 })
 
 test("evie on a computer where no server has run yet says to start one", async () => {
-  const home = await tempFolder("evie-home-")
+  // On a port of its own, where nothing listens.
+  const home = await homeWith(await freePort(), [])
 
   const said = await evie([], { home, input: "hello\n" })
 
   expect(said.code).toBe(1)
   expect(said.stderr).toContain("No Evie server has run on this computer yet. Start one with `evie serve`, which also makes this computer's token.")
+})
+
+test("evie with a server running but this computer's token file gone says the file is missing, and how to make a new one", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  await serve(home)
+  await rm(join(home, "server-token"))
+
+  const said = await evie([], { home, input: "hello\n" })
+
+  expect(said.code).toBe(1)
+  expect(said.stderr).toContain(
+    `An Evie server is running at http://127.0.0.1:${port}, but this computer's token file, ${join(home, "server-token")}, is missing. ` +
+      "Stopping that server and starting `evie serve` again makes a new one.",
+  )
 })
 
 // ---- evie token ------------------------------------------------------------------------------

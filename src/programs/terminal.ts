@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline"
 import { connect, ConnectError, createLiveInput, dataFolder, runTerminal, type Settings } from "../index.ts"
 import { ownTokenFile, readOwnToken } from "../server/tokens.ts"
+import { PATHS } from "../server/wire.ts"
 import { loadServerSettings } from "../settings-files.ts"
 import { EXIT_CODES, fail, print } from "./common.ts"
 
@@ -142,7 +143,24 @@ async function tokenFor(env: Settings, address: string): Promise<{ token: string
     )
   }
   const own = await readOwnToken(dataFolder(env)).catch(fail)
-  return own === undefined
-    ? fail("No Evie server has run on this computer yet. Start one with `evie serve`, which also makes this computer's token.")
-    : { token: own, own: true }
+  if (own !== undefined) return { token: own, own: true }
+  // No token file: either no server has run here yet, or the file was removed
+  // after one started, as the refusal of a token taken back advises.
+  if (await evieAnswers(address)) {
+    fail(
+      `An Evie server is running at ${new URL(address).origin}, but this computer's token file, ${ownTokenFile(dataFolder(env))}, ` +
+        "is missing. Stopping that server and starting `evie serve` again makes a new one.",
+    )
+  }
+  return fail("No Evie server has run on this computer yet. Start one with `evie serve`, which also makes this computer's token.")
+}
+
+// Whether an Evie server answers at the address. Asked with no token, it
+// says that one is needed.
+async function evieAnswers(address: string): Promise<boolean> {
+  try {
+    return (await fetch(new URL(PATHS.check, address), { signal: AbortSignal.timeout(3000) })).status === 401
+  } catch {
+    return false
+  }
 }
