@@ -234,6 +234,29 @@ test("a client opening a session is sent its own opening question, and never a q
   expect(secondSaw.filter((event) => event.session === firstSession)).toEqual([])
 })
 
+test("a client that closes while its session is still opening has the opening question refused, so the project is not left half open", async () => {
+  const trusted = await tempFolder("evie-project-")
+  const served = await serveEvie([scriptedProvider([]).plugin], {
+    projectSettings: async (project, { ask }) => {
+      if (project.folder === trusted) await ask({ text: "Trust this project?", choices: ["Yes", "No"] })
+      return []
+    },
+  })
+  cleanups.push(served.stop)
+  const leaving = await served.connect()
+  const trustAsked = nextEvent({ evie: leaving }, "question")
+  void leaving.send({ type: "open_session", folder: trusted, questions: true }).catch(() => {})
+  const trust = await trustAsked
+  // The terminal's window is closed while the question is on screen.
+  await leaving.close()
+
+  const next = await served.connect()
+  const opened = await Promise.race([next.send({ type: "open_session", folder: trusted, questions: true }), Bun.sleep(2000).then(() => "still waiting" as const)])
+
+  expect(opened).not.toBe("still waiting")
+  expect(stored(served.run.events).find((event) => event.type === "answer" && event.body.id === trust.body.id)?.body).toEqual({ id: trust.body.id, choice: null })
+})
+
 // ---- Joining a session another client left running -----------------------------------------
 
 test("a terminal that continues a session left running is shown the question waiting in it, and answering it lets the turn finish", async () => {

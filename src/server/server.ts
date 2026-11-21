@@ -35,8 +35,9 @@ export type EvieServer = {
 type Admitted = { token: string; device: string }
 
 // What the server keeps for each connection: who it is, the sessions it has
-// opened, and how many sessions it is opening right now.
-type Connection = Admitted & { unsubscribe: () => void; sessions: Set<string>; opening: number }
+// opened, how many sessions it is opening right now, and the questions it was
+// sent while opening that are still waiting, by id, with their session.
+type Connection = Admitted & { unsubscribe: () => void; sessions: Set<string>; opening: number; openingQuestions: Map<string, string> }
 
 // The close code for a connection whose token was taken back. Codes from
 // 4000 are the application's own.
@@ -141,7 +142,7 @@ export function startServer(options: ServerOptions): EvieServer {
         // refused never reaches the core.
         const admitted = admit(request, server.port!)
         if (admitted instanceof Response) return admitted
-        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {}, sessions: new Set(), opening: 0 } })) return undefined
+        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {}, sessions: new Set(), opening: 0, openingQuestions: new Map() } })) return undefined
         return new Response("Connect here with a WebSocket.", { status: 400 })
       }
       if (path === PATHS.check) {
@@ -155,7 +156,12 @@ export function startServer(options: ServerOptions): EvieServer {
       open(socket) {
         connections.add(socket)
         socket.data.unsubscribe = options.evie.subscribe((event) => {
-          if (sentTo(socket.data, event)) send(socket, { event })
+          if (!sentTo(socket.data, event)) return
+          // A question sent while opening, from a session not yet opened here,
+          // is kept track of until it is answered: see `close`.
+          if (event.type === "question" && !socket.data.sessions.has(event.session)) socket.data.openingQuestions.set(event.body.id, event.session)
+          if (event.type === "answer") socket.data.openingQuestions.delete(event.body.id)
+          send(socket, { event })
         })
       },
       async message(socket, text) {
@@ -186,6 +192,14 @@ export function startServer(options: ServerOptions): EvieServer {
       close(socket) {
         connections.delete(socket)
         socket.data.unsubscribe()
+        // Closing a client stops nothing, with one exception. A question asked
+        // while a session is still opening, such as whether to trust its
+        // project, belongs to a session no other client can reach, and the
+        // project's setup waits on it, so every later session in that project
+        // would wait too. It is refused, which counts as a no for now.
+        for (const [id, session] of socket.data.openingQuestions) {
+          if (!openedHere.has(session)) options.evie.send({ type: "answer_question", session, id, choice: null }).catch(() => {})
+        }
       },
     },
   })
