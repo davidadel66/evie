@@ -263,7 +263,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   })
 
   // Opening can stop to ask a question, such as whether to trust the project.
-  const { project, resumed, notices, session: openedSession, turnRunning, openQuestions } = await answeringDuring(
+  const { project, resumed, notices, session: openedSession, turnRunning, openQuestions, replySoFar } = await answeringDuring(
     evie.send({
       type: "open_session",
       folder: options.folder,
@@ -302,6 +302,9 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   for (const notice of notices) write(`[note] ${notice}\n`)
   if (idle) showPrompt()
   else line("[note] A turn is still running in this session. Ctrl-C stops it.")
+  // The reply being written when the session was joined. The rest of it
+  // streams in after it.
+  write(replySoFar ?? "")
   // Questions it asked while no terminal was connected are shown now, so
   // they can be answered. Not where nobody types, as from a pipe: a line
   // meant as a message must not be taken as an answer.

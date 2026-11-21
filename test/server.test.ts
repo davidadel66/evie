@@ -321,6 +321,65 @@ test("Ctrl-C in a terminal that continues a session left running stops that sess
   expect(stored(served.run.events).findLast((event) => event.type === "turn_end" && event.session === session)?.body).toEqual({ reason: "cancelled" })
 })
 
+// A door a test opens, for a model to wait at part way through a reply.
+function gate() {
+  let open = () => {}
+  const opened = new Promise<void>((resolve) => (open = resolve))
+  return { open, opened }
+}
+
+// A model whose replies are written piece by piece: a string is text, a
+// promise is waited for, so the test decides when the reply goes on, and
+// `{ call }` asks for a tool with no input. One reply per request, in turn.
+function piecemealModel(replies: (string | Promise<void> | { call: string })[][]): Plugin {
+  let asked = 0
+  return {
+    name: "piecemeal-model",
+    setup(host) {
+      host.providers.add({
+        name: "piecemeal",
+        async *stream(_request, signal) {
+          const pieces = replies[asked++] ?? []
+          let calls = 0
+          for (const piece of pieces) {
+            if (signal.aborted) return
+            if (typeof piece === "string") yield { type: "text", text: piece }
+            else if ("call" in piece) yield { type: "tool_call", id: `call_${asked}_${calls++}`, name: piece.call, arguments: "{}" }
+            else await piece
+          }
+          yield { type: "finish", reason: calls > 0 ? "tool_calls" : "stop" }
+        },
+      })
+    },
+  }
+}
+
+test("a terminal that continues a session part way through a reply shows the reply so far, then the rest as it comes", async () => {
+  const more = gate()
+  const served = await serveEvie([piecemealModel([["Work", "ing", more.opened, " and done."]])])
+  cleanups.push(served.stop)
+  const left = await served.connect()
+  const { session } = await left.send({ type: "open_session", folder: served.run.projectFolder })
+  const writing = new Promise<void>((resolve) => served.run.evie.subscribe((event) => event.type === "assistant_delta" && event.text === "ing" && resolve()))
+  await left.send({ type: "send_message", session, text: "do the work" })
+  await writing
+  await left.close()
+
+  let printed = ""
+  await runTerminal({
+    evie: await served.connect(),
+    folder: served.run.projectFolder,
+    resume: true,
+    lines: (async function* () {
+      while (!printed.includes("Ctrl-C stops it.")) await Bun.sleep(1)
+      more.open()
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("[note] A turn is still running in this session. Ctrl-C stops it.\nWorking and done.\n")
+})
+
 // ---- Several clients on one session ------------------------------------------------------
 
 // What a terminal says when it leaves with a question still waiting.
