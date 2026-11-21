@@ -286,6 +286,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     if (input.project !== undefined && input.folder !== undefined) {
       throw new Error("Open a session with a project or a folder, not both.")
     }
+    if (input.folder !== undefined && typeof input.folder !== "string") throw new Error("`folder` is the path of a folder, and must be text.")
     if (input.session !== undefined && (input.project !== undefined || input.folder !== undefined || input.continue === true)) {
       throw new Error("Open a session by its id alone, without a project, a folder or `continue`.")
     }
@@ -414,7 +415,11 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     return found
   }
 
+  // Here and in the commands that follow, a field read as text is checked to
+  // be text, since a client that is not type-checked can send anything, and
+  // what is stored is read back as text.
   function sendMessage(input: Commands["send_message"]["input"]): void {
+    if (typeof input.text !== "string") throw new Error("`text` is the message, and must be text.")
     const { loop } = open(input.session)
     inbox.add(input.session, { text: input.text })
     loop.wake()
@@ -422,6 +427,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
   // The switch is written to the log, and the next request reads it from there.
   function setModel(input: Commands["set_model"]["input"]): void {
+    if (typeof input.model !== "string") throw new Error("`model` is the name of a model, and must be text.")
     open(input.session)
     const model = input.model.trim()
     if (model === "") throw new Error("Give the name of a model, as listed at https://openrouter.ai/models.")
@@ -453,6 +459,9 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   }
 
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
+    if (typeof input.name !== "string" || typeof input.args !== "string") {
+      throw new Error("`name` is the command's name and `args` what was typed after it, and both must be text.")
+    }
     const { project, host, model: startedWith, loop } = open(input.session)
     // A command's own name first, then any command that covers the name.
     let command = host.commands.list().find((candidate) => candidate.name === input.name)

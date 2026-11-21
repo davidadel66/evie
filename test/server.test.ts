@@ -1555,3 +1555,25 @@ test("over the network, a client lists projects and sessions, settles a session,
   expect(page).toEqual({ events: events.slice(-2), earlier: true })
   expect(page.events.map((event) => event.type)).toEqual(["turn_end", "settled"])
 })
+
+test("over the network, a command whose field is read as text is refused when that field is not text, and nothing is stored", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  const own = await ownLine(served.server.url, served.token)
+  const { session } = served.run
+  // Sent as a client that is not type-checked could send them.
+  const replyTo = async (id: string, command: Record<string, unknown>) => {
+    const reply = await own.send({ id, command: command as unknown as ClientMessage["command"] })
+    return "error" in reply ? reply.error : "carried out"
+  }
+
+  expect(await replyTo("message", { type: "send_message", session, text: 42 })).toBe("`text` is the message, and must be text.")
+  expect(await replyTo("model", { type: "set_model", session, model: ["some/model"] })).toBe("`model` is the name of a model, and must be text.")
+  expect(await replyTo("answer", { type: "answer_question", session, id: "q1", choice: 1 })).toBe("`choice` is the answer, and must be text, or null to refuse the question.")
+  expect(await replyTo("command", { type: "run_command", session, name: "compact", args: 3 })).toBe("`name` is the command's name and `args` what was typed after it, and both must be text.")
+  expect(await replyTo("command name", { type: "run_command", session, name: null, args: "" })).toBe("`name` is the command's name and `args` what was typed after it, and both must be text.")
+  expect(await replyTo("folder", { type: "open_session", folder: 7 })).toBe("`folder` is the path of a folder, and must be text.")
+  // A turn the message had started would be under way by now.
+  await Bun.sleep(20)
+  expect(stored(served.run.events)).toEqual([])
+})
