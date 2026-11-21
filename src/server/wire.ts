@@ -5,7 +5,7 @@ import type { Command, EvieEvent } from "../core/types.ts"
 // unchanged, so a client works the same over the network as in one process.
 
 // From a client: a command, with an id the client chose, which must be
-// unique for its device, such as a random UUID. The reply to it names the
+// unique for its device, such as 128 random bits. The reply to it names the
 // same id. A command sent again with the same id, after the line dropped, is
 // answered with the first one's reply, not carried out again, while the
 // server keeps running: it remembers, in its memory, the replies to the last

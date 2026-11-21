@@ -260,7 +260,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   // Sends a command of the client's own on this line. It resolves with the
   // server's reply, or with nothing when the line drops first.
   function ask(line: WebSocket, command: Command): Promise<Reply | undefined> {
-    const message: ClientMessage = { id: crypto.randomUUID(), command, once: true }
+    const message: ClientMessage = { id: commandId(), command, once: true }
     return new Promise((resolve) => {
       waiting.set(message.id, { message, own: true, sentOn: line, resent: false, answer: resolve, lose: () => resolve(undefined) })
       sendOn(line, message)
@@ -401,7 +401,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   return {
     send<Sent extends Command>(command: Sent) {
       if (stopping.signal.aborted) return Promise.reject(new Error(`Not connected to Evie: ${String(stopping.signal.reason).replace(/\.$/, "")}.`))
-      const message: ClientMessage = { id: crypto.randomUUID(), command }
+      const message: ClientMessage = { id: commandId(), command }
       return new Promise<Commands[Sent["type"]]["output"]>((resolve, reject) => {
         const waited: Waiting = {
           message,
@@ -438,6 +438,15 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       return closing
     },
   }
+}
+
+// A new id for a command: 128 random bits, as hex. It is made from
+// `getRandomValues`, since a browser leaves `crypto.randomUUID` out of a
+// page served over plain HTTP from another computer, and this client runs
+// in the web UI too.
+export function commandId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
 }
 
 // The part of a reply's text that has not been passed on yet, given what

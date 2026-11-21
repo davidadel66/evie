@@ -18,6 +18,7 @@ import { nextEvent, say, startEvie, stored, type Run } from "./support/harness.t
 import { lineTo } from "./support/line.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
+import { commandId } from "../src/server/connect.ts"
 import { openTokens } from "../src/server/tokens.ts"
 
 // The terminal client run over the network: Evie behind its server, and the
@@ -929,6 +930,24 @@ test("a command sent again while it is still being carried out waits for it, and
 
   expect(await waiting).toEqual({ text: "done" })
   expect(runs).toBe(1)
+})
+
+test("a client makes its commands' ids without crypto.randomUUID, which a browser leaves out of a page served over plain HTTP from another computer", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  const client = await served.connect()
+  Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true })
+  try {
+    await client.send({ type: "cancel", session: served.run.session })
+  } finally {
+    delete (crypto as { randomUUID?: unknown }).randomUUID
+  }
+
+  // Each is 128 random bits, as hex, so no two are the same.
+  const ids = Array.from({ length: 1000 }, () => commandId())
+  for (const id of ids) expect(id).toMatch(/^[0-9a-f]{32}$/)
+  expect(new Set(ids).size).toBe(1000)
+  expect(typeof crypto.randomUUID).toBe("function")
 })
 
 // A command that counts the times it is carried out, and says which time it is.
