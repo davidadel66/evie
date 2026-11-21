@@ -57,6 +57,8 @@ export function createQuestions(options: { log: EventLog; emit(event: EvieEvent)
     },
 
     answer(session, id, choice) {
+      // Checked, since a client that is not type-checked can send anything, and the answer is stored.
+      if (choice !== null && typeof choice !== "string") throw new Error("`choice` is the answer, and must be text, or null to refuse the question.")
       const asked = open.get(id)
       if (!asked || asked.session !== session) throw new Error(`There is no open question "${id}" in this session. It may already have been answered.`)
       const { question } = asked

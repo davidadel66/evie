@@ -9,6 +9,7 @@ import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { createProjects } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
+import { createSummaries } from "./summaries.ts"
 import type { Ask, Children, Commands, Evie, EvieEvent, Host, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
 
 export type EvieOptions = {
@@ -31,7 +32,16 @@ export type EvieOptions = {
   // called the first time a session opens in the project, and can ask the
   // owner a question, such as whether to trust the project.
   projectSettings?: (project: Project, context: { ask: Ask }) => ProjectSettings | readonly Plugin[] | Promise<ProjectSettings | readonly Plugin[]>
+  // How often, in milliseconds, sessions are looked at for any that a week
+  // of quiet has settled, to send their summaries: nothing happens in a
+  // session to tell of it. Once an hour when left out, which is for tests to change.
+  quietCheckEvery?: number
 }
+
+// How many events a page of a session's history holds, unless it asks for
+// another number, and the most it can ask for.
+const PAGE = 50
+const LONGEST_PAGE = 500
 
 // Where all of Evie's state lives. Moving Evie is copying this folder.
 export function dataFolder(env: Record<string, string | undefined>): string {
@@ -115,13 +125,25 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   const projects = createProjects(db)
 
   const listeners = new Set<(event: EvieEvent) => void>()
-  const emit = (event: EvieEvent) => {
+  const deliver = (event: EvieEvent) => {
     for (const listener of [...listeners]) {
       // A client that throws while handling an event must not break the turn.
       try {
         listener(event)
       } catch {}
     }
+  }
+  // Every event goes out this way. Then the summary of its session, if the
+  // event changed it. A piece of a reply cannot, and is sent too often to look.
+  const emit = (event: EvieEvent) => {
+    deliver(event)
+    if (closed || event.type === "assistant_delta" || event.type === "summary") return
+    // The event has been sent, and a stored one stored, so a summary that
+    // cannot be worked out, as while the database is busy, must not break
+    // the turn. It is skipped, and the next change sends one.
+    try {
+      summaries.changed(event.session)
+    } catch {}
   }
 
   const questions = createQuestions({ log, emit })
@@ -138,6 +160,21 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
   // `parent` is the session that started this one as a subagent.
   type Open = { loop: Loop; project: Project | null; host: Host; notices: string[]; model: string; canAnswer: boolean; parent?: string }
   const sessions = new Map<string, Open>()
+
+  const summaries = createSummaries({
+    db,
+    asking: (session) => questions.waiting(session).length > 0,
+    open: (session) => sessions.has(session),
+    jobRunning: (session) => jobs.list(session).some((job) => job.status === "running"),
+    emit: deliver,
+  })
+  // It is no reason on its own to keep the process running. A look that
+  // fails, as while the database is busy, must not stop Evie: the next tries again.
+  const quietCheck = setInterval(() => {
+    try {
+      summaries.look()
+    } catch {}
+  }, options.quietCheckEvery ?? 60 * 60_000).unref()
 
   // Starts the turn loop of a session and lists the session as open. Used
   // for a session a client opens and for a subagent alike: they differ only
@@ -254,6 +291,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     if (input.project !== undefined && input.folder !== undefined) {
       throw new Error("Open a session with a project or a folder, not both.")
     }
+    if (input.folder !== undefined && typeof input.folder !== "string") throw new Error("`folder` is the path of a folder, and must be text.")
     if (input.session !== undefined && (input.project !== undefined || input.folder !== undefined || input.continue === true)) {
       throw new Error("Open a session by its id alone, without a project, a folder or `continue`.")
     }
@@ -382,7 +420,11 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     return found
   }
 
+  // Here and in the commands that follow, a field read as text is checked to
+  // be text, since a client that is not type-checked can send anything, and
+  // what is stored is read back as text.
   function sendMessage(input: Commands["send_message"]["input"]): void {
+    if (typeof input.text !== "string") throw new Error("`text` is the message, and must be text.")
     const { loop } = open(input.session)
     inbox.add(input.session, { text: input.text })
     loop.wake()
@@ -390,13 +432,41 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
   // The switch is written to the log, and the next request reads it from there.
   function setModel(input: Commands["set_model"]["input"]): void {
+    if (typeof input.model !== "string") throw new Error("`model` is the name of a model, and must be text.")
     open(input.session)
     const model = input.model.trim()
     if (model === "") throw new Error("Give the name of a model, as listed at https://openrouter.ai/models.")
     emit(log.append(input.session, "model_changed", { model }))
   }
 
+  // Written to the log, where the session's state is read from. Any session
+  // can be settled, open or not, but not a subagent's, which is not listed,
+  // and not while it is working or waiting for an answer.
+  function settleSession(input: Commands["settle_session"]["input"]): void {
+    if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
+    const parent = projects.parentOf(input.session)
+    if (parent !== undefined) throw new Error(`The session "${input.session}" is a subagent's, which is not listed. Settle the session that started it, "${parent}", instead.`)
+    if (typeof input.settled !== "boolean") throw new Error("`settled` is true to settle the session, or false to bring it back.")
+    // What goes on in it next is activity, which would make it active again.
+    const state = summaries.state(input.session)
+    if (input.settled && (state === "working" || state === "needs_you")) {
+      throw new Error("This session is working, or waiting for an answer to a question. Wait until it has finished, then settle it.")
+    }
+    emit(log.append(input.session, "settled", { settled: input.settled }))
+  }
+
+  function readHistory(input: Commands["read_history"]["input"]): Commands["read_history"]["output"] {
+    if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
+    const limit = input.limit ?? PAGE
+    if (!Number.isInteger(limit) || limit < 1 || limit > LONGEST_PAGE) throw new Error(`\`limit\` is how many events to read, a whole number from 1 to ${LONGEST_PAGE}.`)
+    if (input.before !== undefined && !Number.isInteger(input.before)) throw new Error("`before` is the number of an event, and the page holds the events before it.")
+    return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, limit)
+  }
+
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
+    if (typeof input.name !== "string" || typeof input.args !== "string") {
+      throw new Error("`name` is the command's name and `args` what was typed after it, and both must be text.")
+    }
     const { project, host, model: startedWith, loop } = open(input.session)
     // A command's own name first, then any command that covers the name.
     let command = host.commands.list().find((candidate) => candidate.name === input.name)
@@ -453,6 +523,14 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
           return questions.answer(command.session, command.id, command.choice) as Output
         case "run_command":
           return (await runCommand(command)) as Output
+        case "settle_session":
+          return settleSession(command) as Output
+        case "read_history":
+          return readHistory(command) as Output
+        case "list_projects":
+          return projects.list() as Output
+        case "list_sessions":
+          return summaries.list() as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)
@@ -466,6 +544,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     },
     async close() {
       closed = true
+      clearInterval(quietCheck)
       // A question still open is refused, which lets whatever asked it finish.
       questions.refuseAll()
       // Jobs are marked and noted as stopped by the closing first, while
