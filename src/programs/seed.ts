@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs"
 import { mkdir, rm, writeFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { openStore } from "../core/store.ts"
@@ -223,6 +224,11 @@ const SESSIONS: Seeded[] = [
 ]
 
 export async function seed(env: Settings) {
+  // Only a folder named on purpose is filled, never the everyday one.
+  const everyday = dataFolder({})
+  const another = "Set EVIE_HOME to another folder, such as ~/.evie-dev, to seed that one."
+  if (!env.EVIE_HOME) fail(`EVIE_HOME is not set, so the seed would fill the everyday data folder, ${everyday}. ${another}`)
+  if (sameFolder(env.EVIE_HOME!, everyday)) fail(`EVIE_HOME names the everyday data folder, ${everyday}. ${another}`)
   const home = dataFolder(env)
   await mkdir(home, { recursive: true }).catch(fail)
   let count = 0
@@ -248,6 +254,18 @@ export async function seed(env: Settings) {
       `  sessions:\n` +
       SESSIONS.map((seeded) => `    ${seeded.kind.padEnd(width)}   ${seeded.project ?? "no project"}\n`).join(""),
   )
+}
+
+// Whether two paths are the same folder, links followed where they exist.
+function sameFolder(one: string, other: string): boolean {
+  const real = (path: string) => {
+    try {
+      return realpathSync(path)
+    } catch {
+      return resolve(path)
+    }
+  }
+  return real(one) === real(other)
 }
 
 // How many sessions the data folder's database holds. Opening it makes it

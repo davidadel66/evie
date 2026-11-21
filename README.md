@@ -694,8 +694,9 @@ session shows as waiting for an answer only while a real question is open.
 evie-dev seed
 ```
 
-It refuses a data folder that already has sessions, so made-up sessions are
-never mixed in with real ones. To seed a folder again, remove `evie.db` and
+It fills only a folder that `EVIE_HOME` names, never the everyday
+`~/.evie`, and it refuses a data folder that already has sessions, so
+made-up sessions are never mixed in with real ones. To seed a folder again, remove `evie.db` and
 `server-token` from it first.
 
 ## What comes next

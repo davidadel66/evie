@@ -25,10 +25,12 @@ async function tempFolder() {
   return folder
 }
 
-async function evie(args: string[], home: string) {
+// Runs `evie` with `home` as both the home folder and the data folder,
+// unless `env` says otherwise.
+async function evie(args: string[], home: string, env: Record<string, string | undefined> = {}) {
   const run = Bun.spawn([process.execPath, CLI, ...args], {
     cwd: home,
-    env: { PATH: process.env.PATH ?? "", HOME: home, EVIE_HOME: home },
+    env: { PATH: process.env.PATH ?? "", HOME: home, EVIE_HOME: home, ...env },
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -118,4 +120,20 @@ test("evie seed refuses a data folder that already has sessions, and leaves it a
   expect(again.code).toBe(1)
   expect(again.stderr).toContain(`${home} already has sessions, so nothing was seeded.`)
   expect(count()).toBe(before)
+})
+
+test("evie seed refuses to fill the everyday data folder: EVIE_HOME must name another", async () => {
+  const home = await tempFolder()
+  const everyday = join(home, ".evie")
+
+  const unset = await evie(["seed"], home, { EVIE_HOME: undefined })
+  expect(unset.code).toBe(1)
+  expect(unset.stderr).toContain(`EVIE_HOME is not set, so the seed would fill the everyday data folder, ${everyday}.`)
+
+  const named = await evie(["seed"], home, { EVIE_HOME: everyday })
+  expect(named.code).toBe(1)
+  expect(named.stderr).toContain(`EVIE_HOME names the everyday data folder, ${everyday}.`)
+
+  expect(existsSync(everyday)).toBe(false)
+  expect(existsSync(`${everyday}-seed`)).toBe(false)
 })
