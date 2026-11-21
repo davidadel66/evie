@@ -1213,3 +1213,81 @@ test("after the server is started again, a session whose project asks again whet
   expect(printed.split("[answered] Yes")).toHaveLength(3)
   expect(printed).toContain("Hi again.")
 })
+
+test("a catch-up that asks a question, has it answered, and then fails skips nothing: the next one shows what was missed before the question, and each question once", async () => {
+  const home = await tempFolder("evie-home-")
+  const projectFolder = await tempFolder("evie-project-")
+  // The project asks whether to trust it each time its plugins are set up.
+  // Once, after the owner has answered, its plugins fail to load.
+  let failOnce = false
+  const projectSettings: NonNullable<EvieOptions["projectSettings"]> = async (_project, { ask }) => {
+    const answer = await ask({ text: "Trust this project?", choices: ["Yes", "No"] })
+    if (answer !== null && failOnce) {
+      failOnce = false
+      throw new Error("The project's plugins could not be loaded.")
+    }
+    return { plugins: [], ...(answer !== "Yes" && { forNow: true as const }) }
+  }
+  const tokens = await openTokens(home)
+  cleanups.push(async () => tokens.close())
+  const made = tokens.add("test device")
+  if (!("secret" in made)) throw new Error(made.refused)
+  const serve = async (script: ScriptedReply[], port = 0) => {
+    const run = await startEvie([scriptedProvider(script).plugin], { home, projectFolder, projectSettings })
+    return { run, server: startServer({ evie: run.evie, tokens, host: "127.0.0.1", port }) }
+  }
+  let served = await serve([{ text: ["Hi."] }, { text: ["Said while the line was down."] }])
+  cleanups.push(async () => {
+    await served.server.stop()
+    await served.run.evie.close()
+  })
+  const line = await lineTo(served.server.url)
+  cleanups.push(line.stop)
+  const client = await connect({ url: line.url, token: made.secret, firstWait: FIRST_WAIT })
+  cleanups.push(() => client.close())
+
+  let printed = ""
+  const count = (text: string) => printed.split(text).length - 1
+  await runTerminal({
+    evie: client,
+    folder: projectFolder,
+    lines: (async function* () {
+      while (count("Type a number.") < 1) await Bun.sleep(1)
+      yield "1"
+      yield "hello"
+      while (!printed.includes("Hi.")) await Bun.sleep(1)
+      const session = stored(served.run.events).find((event) => event.type === "user_message")!.session
+      // While the line is down, another client's message is answered in the
+      // session, and then the server is started again.
+      await line.cut()
+      await say(served.run, "are you there?", session)
+      const port = Number(new URL(served.server.url).port)
+      await served.server.stop()
+      await served.run.evie.close()
+      failOnce = true
+      served = await serve([], port)
+      // Catching up opens the session again, which asks, and fails once it is answered.
+      line.mend()
+      while (count("Type a number.") < 2) await Bun.sleep(1)
+      yield "1"
+      while (count("[answered] Yes") < 2) await Bun.sleep(1)
+      // Sent once the catch-up is over, so it is answered after it, by a session that is not open.
+      yield "/nothing"
+      while (!printed.includes(`[error] The session "${session}" is not open.`)) await Bun.sleep(1)
+      // The line drops again, and the next catch-up opens the session.
+      await line.cut()
+      line.mend()
+      while (count("Type a number.") < 3) await Bun.sleep(1)
+      yield "1"
+      while (count("[answered] Yes") < 3) await Bun.sleep(1)
+      // Answered after that catch-up too.
+      yield "/nothing"
+      while (!printed.includes('[error] There is no command "/nothing"')) await Bun.sleep(1)
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed.split("Said while the line was down.")).toHaveLength(2)
+  expect(printed.split("[question] Trust this project?")).toHaveLength(4)
+  expect(printed.split("[answered] Yes")).toHaveLength(4)
+})

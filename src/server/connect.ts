@@ -79,7 +79,8 @@ type Seen = {
   // shows questions, so that it is opened the same way after a drop.
   openAs?: { questions: boolean }
   // True while the client is catching up on the session, and the numbers
-  // of the questions and answers passed on meanwhile: see `onEvent`.
+  // of the questions and answers passed on meanwhile, kept until a catch-up
+  // has passed on what came before them: see `onEvent` and `catchUp`.
   behind: boolean
   early: Set<number>
 }
@@ -227,29 +228,31 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       ...(seen.openAs?.questions && { questions: true }),
     })
     seen.behind = false
-    if (!reply) return
     // A session that could not be opened again, as when its project's
     // plugins fail to load, is left as it is: a command sent to it says why.
-    if ("result" in reply) {
-      const output = reply.result as Opened
-      // Jobs' events are not stored, so each job that has changed is passed
-      // on, first, since the turns missed are often Evie dealing with a job
-      // that ended. One missing from the list ran in the server before it
-      // was started again, which stopped it.
-      const listed = new Set(output.jobs.map((job) => job.id))
-      const gone = [...seen.jobs.values()].filter((job) => job.status === "running" && !listed.has(job.id))
-      for (const job of gone) passOn({ type: "job", session, job: { ...job, status: "stopped", ended: Date.now() } })
-      for (const job of output.jobs) passOn({ type: "job", session, job })
-      for (const event of output.events ?? []) {
-        // A client of the core always sees a reply's text as pieces before
-        // the stored message, so the part of a reply that was missed is
-        // passed on as one piece before it.
-        if (event.type === "assistant_message" && isNew(seen, event)) passOnText(session, event.body.text)
-        passOn(event)
-      }
-      passOnText(session, output.replySoFar ?? "")
-      seen.seq = Math.max(seen.seq, output.lastSeq)
+    // Then, or when the line dropped first, the events after the last one
+    // passed on have not been, besides the questions and answers passed on
+    // meanwhile. So the number stays where it is, for the next catch-up to
+    // ask from, and those questions and answers stay in `early`, for it to skip.
+    if (!reply || !("result" in reply)) return
+    const output = reply.result as Opened
+    // Jobs' events are not stored, so each job that has changed is passed
+    // on, first, since the turns missed are often Evie dealing with a job
+    // that ended. One missing from the list ran in the server before it was
+    // started again, which stopped it.
+    const listed = new Set(output.jobs.map((job) => job.id))
+    const gone = [...seen.jobs.values()].filter((job) => job.status === "running" && !listed.has(job.id))
+    for (const job of gone) passOn({ type: "job", session, job: { ...job, status: "stopped", ended: Date.now() } })
+    for (const job of output.jobs) passOn({ type: "job", session, job })
+    for (const event of output.events ?? []) {
+      // A client of the core always sees a reply's text as pieces before
+      // the stored message, so the part of a reply that was missed is
+      // passed on as one piece before it.
+      if (event.type === "assistant_message" && isNew(seen, event)) passOnText(session, event.body.text)
+      passOn(event)
     }
+    passOnText(session, output.replySoFar ?? "")
+    seen.seq = Math.max(seen.seq, output.lastSeq)
     for (const seq of seen.early) seen.seq = Math.max(seen.seq, seq)
     seen.early.clear()
   }
