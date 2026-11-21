@@ -161,9 +161,14 @@ export async function runService(env: Settings, [action]: string[], computer: Co
       // Removing the service stops the server for good, unlike the stop
       // before a restart, so the server is told first. A data folder that
       // is gone cannot be told, and the server is stopped all the same.
-      await writeFile(join(current?.home ?? home, STOP_FOR_GOOD), "").catch(() => {})
+      const told = join(current?.home ?? home, STOP_FOR_GOOD)
+      await writeFile(told, "").catch(() => {})
       const stopped = await computer.launchctl(["bootout", `${domain}/${LABEL}`])
-      if (stopped.code !== 0) return { ok: false, text: `The login service could not be stopped. launchctl said: ${stopped.output}` }
+      if (stopped.code !== 0) {
+        // The server goes on running, and the file must not make its next restart a stop for good.
+        await rm(told, { force: true }).catch(() => {})
+        return { ok: false, text: `The login service could not be stopped. launchctl said: ${stopped.output}` }
+      }
     }
     const hadFile = await Bun.file(file).exists()
     await rm(file, { force: true })

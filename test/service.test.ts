@@ -244,6 +244,19 @@ test("uninstall unloads the service and removes its file", async () => {
   expect(await Bun.file(plist).exists()).toBe(false)
 })
 
+test("uninstall that cannot stop the service takes back the file telling the server it stops for good", async () => {
+  const { computer, folder } = await mac({ refuses: { bootout: { output: "Boot-out failed: 5: Input/output error" } } })
+  const home = join(folder, "data")
+  const env = { EVIE_HOME: home, PATH: "/usr/bin" }
+  await runService(env, ["install"], computer)
+
+  const done = await runService(env, ["uninstall"], computer)
+
+  expect(done.ok).toBe(false)
+  // Left there, it would make the server's next restart count as a stop for good.
+  expect(existsSync(join(home, STOP_FOR_GOOD))).toBe(false)
+})
+
 test("uninstall tells the server it is stopping for good, by a file in its data folder, before unloading it; installing again does not", async () => {
   const { computer, folder } = await mac()
   const home = join(folder, "data")

@@ -547,6 +547,17 @@ test("evie serve stopped as a restart stops it leaves a background command runni
   expect(await notesOnceThere(home, session, 1)).toEqual([`Background job 1 (sleep 1; echo built) has finished.\n\nbuilt\n\nThe full output is in ${output}.`])
 })
 
+test("evie serve removes a stop-for-good file left from before it started, so a restart of it is not taken for a stop for good", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  // Left by an uninstall while no server was running to read it.
+  await writeFile(join(home, "stop-for-good"), "")
+
+  await serve(home)
+
+  expect(await Bun.file(join(home, "stop-for-good")).exists()).toBe(false)
+})
+
 test("evie serve stopped with Ctrl-C, by closing its terminal, or with a stop-for-good file in its data folder, stops its background commands", async () => {
   const codes = { "Ctrl-C": 130, "terminal closed": 129, "stop-for-good": 143 }
   for (const how of ["Ctrl-C", "terminal closed", "stop-for-good"] as const) {

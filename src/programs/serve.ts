@@ -6,6 +6,15 @@ import { ensureOwnToken, openTokens } from "../server/tokens.ts"
 import { loadServerSettings } from "../settings-files.ts"
 import { EXIT_CODES, fail, print, reason, STOP_FOR_GOOD, type StopSignal } from "./common.ts"
 
+// Removes the file that says the server is to stop for good, if it is there.
+function forgetStopForGood(home: string) {
+  try {
+    rmSync(join(home, STOP_FOR_GOOD), { force: true })
+  } catch {
+    // Left as it is: the next stop is for good too.
+  }
+}
+
 // `evie serve`: starts the core with the plugins the settings list, and
 // serves it until told to stop. The first time, it makes this computer's
 // token. Once it is listening, it picks up the work an earlier run left, and
@@ -45,6 +54,10 @@ export async function serve(env: Settings) {
         `Is another \`evie serve\` running? The port can be changed under "server" in ${settings.file}.`,
     )
   }
+  // A file saying to stop for good, left from before this server started,
+  // as by an uninstall while none was running, is not for this one: left,
+  // it would make its next restart a stop for good.
+  forgetStopForGood(home)
   print(`evie serve · listening on ${server.url}\n`)
   // Only now, so that a second `evie serve`, which cannot have the port,
   // never touches the folder or the work of the one already running.
@@ -66,11 +79,7 @@ export async function serve(env: Settings) {
       stopping = true
       stopTidying()
       const forGood = signal !== "SIGTERM" || existsSync(join(home, STOP_FOR_GOOD))
-      try {
-        rmSync(join(home, STOP_FOR_GOOD), { force: true })
-      } catch {
-        // Left as it is: the next stop is for good too.
-      }
+      forgetStopForGood(home)
       void server
         .stop()
         .finally(() => evie.close(forGood ? {} : { restart: true }))
