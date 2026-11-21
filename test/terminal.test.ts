@@ -203,3 +203,39 @@ test("--continue in a session longer than a page prints its last 50 events, and 
   expect(printed).toContain("\n› Message 13\nReply 13.\n[note] 2 earlier events of this session are not shown.\n\n› ")
   expect(printed).not.toContain("Message 1\n")
 })
+
+test("--continue does not draw again a question asked while the session was opening, which was shown and answered as it was asked", async () => {
+  // A project that asks whether to trust it whenever a session opens in it, once told to.
+  let asks = false
+  const projectSettings = async (_project: unknown, { ask }: { ask: (question: { text: string; choices: string[] }) => Promise<string | null> }) => {
+    if (asks) await ask({ text: "Trust this project?", choices: ["Yes", "No"] })
+    return { plugins: [], forNow: true as const }
+  }
+  const first = await startEvie([scriptedProvider([{ text: ["Hello."] }]).plugin], { projectSettings })
+  await say(first, "hi")
+  await first.evie.close()
+  // Started again, so that continuing opens the session afresh, and its project asks.
+  const run = await startEvie([scriptedProvider([]).plugin], { home: first.home, projectFolder: first.projectFolder, projectSettings })
+  stop = async () => {
+    await run.stop()
+    await first.stop()
+  }
+  asks = true
+
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    resume: true,
+    lines: (async function* () {
+      while (!printed.includes("Type a number.")) await Bun.sleep(1)
+      yield "1"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("[answered] Yes\nevie · ")
+  expect(printed).toContain("continuing the last session\n\n› hi\nHello.\n\n› ")
+  expect(printed.split("Trust this project?")).toHaveLength(2)
+  expect(printed.split("[answered] Yes")).toHaveLength(2)
+})

@@ -120,6 +120,8 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       .catch((cause) => line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`))
   }
 
+  // The ids of the questions that arrived while the session was opening.
+  const askedWhileOpening = new Set<string>()
   // Questions that have arrived and not been answered, the one on screen included.
   const waitingQuestions: NonNullable<typeof asked>[] = []
   // Queues a question, to be shown after any already waiting. One can reach
@@ -237,14 +239,15 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   // Draws the last page of a continued session's earlier conversation, up to
   // where the session stood as it was opened: every event after that is
   // drawn as it arrives. A question still waiting is left out, to be shown
-  // after it with its choices, to be answered.
+  // after it with its choices, to be answered. So is a question asked while
+  // the session was opening, with its answer: both were shown as they came.
   async function showEarlier(session: string, upTo: number, waiting: EventBodies["question"][]) {
     const page = await evie.send({ type: "read_history", session, before: upTo + 1 }).catch((cause) => {
       line(`[note] The earlier conversation could not be shown: ${cause instanceof Error ? cause.message : String(cause)}`)
     })
     if (!page) return
-    const asking = new Set(waiting.map((question) => question.id))
-    for (const event of page.events) if (!(event.type === "question" && asking.has(event.body.id))) draw(event, true)
+    const leftOut = new Set([...waiting.map((question) => question.id), ...askedWhileOpening])
+    for (const event of page.events) if (!((event.type === "question" || event.type === "answer") && leftOut.has(event.body.id))) draw(event, true)
     // Events are numbered from 1, so those before the page are one fewer than its first one's number.
     if (page.earlier) line(`[note] ${page.events[0]!.seq - 1} earlier events of this session are not shown.`)
   }
@@ -261,6 +264,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     // terminal are a question asked while it opens, and its answer.
     const mine = session === undefined ? event.type === "question" || event.type === "answer" : event.session === session
     if (!mine) return
+    if (session === undefined && event.type === "question") askedWhileOpening.add(event.body.id)
     // More than one can be open at once, such as from two subagents. They
     // are shown one at a time, in the order they came. Where nobody types,
     // as from a pipe, a question is only shown: the session may belong to
