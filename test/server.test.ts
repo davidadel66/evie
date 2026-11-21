@@ -3,10 +3,11 @@ import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { connect, runTerminal, startServer, type ConnectOptions, type Evie, type EvieEvent, type Plugin } from "../src/index.ts"
-import { nextEvent, say, stored, type Run } from "./support/harness.ts"
+import { nextEvent, say, startEvie, stored, type Run } from "./support/harness.ts"
 import { lineTo } from "./support/line.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
+import { openTokens } from "../src/server/tokens.ts"
 
 // The terminal client run over the network: Evie behind its server, and the
 // terminal given the client that `connect` returns in place of Evie itself.
@@ -718,4 +719,60 @@ test("a session opened by its id is sent to the client from before the core read
   await client.send({ type: "open_session", session: served.run.session })
 
   expect(heard).toEqual([{ type: "assistant_delta", session: served.run.session, text: "just then" }])
+})
+
+test("after the server is started again, a session whose project asks again whether to trust it shows the question while catching up, and carries on once it is answered", async () => {
+  const home = await tempFolder("evie-home-")
+  const projectFolder = await tempFolder("evie-project-")
+  // The project asks each time its plugins are set up, as one with a settings
+  // file of its own does until the owner decides; the question is asked again
+  // when the server is started again.
+  const projectSettings = async (_project: unknown, { ask }: { ask: (question: { text: string; choices: string[] }) => Promise<string | null> }) => {
+    const answer = await ask({ text: "Trust this project?", choices: ["Yes", "No"] })
+    return { plugins: [], ...(answer !== "Yes" && { forNow: true as const }) }
+  }
+  const tokens = await openTokens(home)
+  cleanups.push(async () => tokens.close())
+  const made = tokens.add("test device")
+  if (!("secret" in made)) throw new Error(made.refused)
+  const serve = async (reply: string, port = 0) => {
+    const run = await startEvie([scriptedProvider([{ text: [reply] }]).plugin], { home, projectFolder, projectSettings })
+    const server = startServer({ evie: run.evie, tokens, host: "127.0.0.1", port })
+    return { run, server }
+  }
+  let served = await serve("Hi.")
+  cleanups.push(async () => {
+    await served.server.stop()
+    await served.run.evie.close()
+  })
+  const line = await lineTo(served.server.url)
+  cleanups.push(line.stop)
+  const client = await connect({ url: line.url, token: made.secret })
+  cleanups.push(() => client.close())
+
+  let printed = ""
+  const asked = () => printed.split("Type a number.").length - 1
+  await runTerminal({
+    evie: client,
+    folder: projectFolder,
+    lines: (async function* () {
+      while (asked() < 1) await Bun.sleep(1)
+      yield "1"
+      yield "hello"
+      while (!printed.includes("Hi.")) await Bun.sleep(1)
+      // The server is stopped and started again on the same port and data folder.
+      const port = Number(new URL(served.server.url).port)
+      await served.server.stop()
+      await served.run.evie.close()
+      served = await serve("Hi again.", port)
+      while (asked() < 2) await Bun.sleep(1)
+      yield "1"
+      yield "again"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed.split("[question] Trust this project?")).toHaveLength(3)
+  expect(printed.split("[answered] Yes")).toHaveLength(3)
+  expect(printed).toContain("Hi again.")
 })
