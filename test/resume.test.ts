@@ -212,3 +212,26 @@ test("the terminal continues the last session when asked to, and says so", async
   expect(printed).toContain("continuing the last session")
   expect(second.model.requests[0]?.messages.map((message) => message.role)).toEqual(["user", "assistant", "user"])
 })
+
+// ---- Opening a session by its id ---------------------------------------------------------
+// How a client catches up after its connection dropped: it names the session
+// and the last event it saw, and is given what came after.
+
+test("a session opened by its id is joined as it is, with the events after the number given and the reply being written", async () => {
+  const { startAgain } = await machine()
+  const { run } = await startAgain([{ text: ["Paris."] }, { hang: true, text: ["Madr", "id is"] }])
+  await say(run, "What is the capital of France?")
+  const writing = new Promise<void>((resolve) => run.evie.subscribe((event) => event.type === "assistant_delta" && event.text === "id is" && resolve()))
+  await run.evie.send({ type: "send_message", session: run.session, text: "And of Spain?" })
+  await writing
+
+  // 1 turn_start, 2 user_message, 3 assistant_message "Paris.", then the rest.
+  const joined = await run.evie.send({ type: "open_session", session: run.session, after: 3 })
+
+  expect(joined).toMatchObject({ session: run.session, project: run.project, resumed: true, turnRunning: true, replySoFar: "Madrid is", lastSeq: 6 })
+  expect(joined.events?.map((event) => [event.seq, event.type])).toEqual([
+    [4, "turn_end"],
+    [5, "turn_start"],
+    [6, "user_message"],
+  ])
+})

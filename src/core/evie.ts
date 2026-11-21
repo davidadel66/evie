@@ -255,15 +255,19 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       throw new Error("Open a session with a project or a folder, not both.")
     }
     let project = null
-    if (input.project !== undefined) {
+    if (input.session !== undefined) {
+      project = projects.projectOf(input.session) ?? null
+      if (!sessions.has(input.session)) throw new Error(`The session "${input.session}" is not open.`)
+    } else if (input.project !== undefined) {
       project = projects.get(input.project) ?? null
       if (!project) throw new Error(`There is no project with the id "${input.project}".`)
     } else if (input.folder !== undefined) {
       project = projects.forFolder(input.folder)
     }
 
-    // Continuing: the session used last in this project, when there is one.
-    const last = input.continue ? projects.lastSession(project) : undefined
+    // Continuing: the session used last in this project, when there is one,
+    // or the one named.
+    const last = input.session ?? (input.continue ? projects.lastSession(project) : undefined)
     // A new session is created only once it is needed: when the project's
     // settings ask a question, or when everything else has gone well.
     let session = last
@@ -276,7 +280,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     const alreadyOpen = () => (last === undefined ? undefined : sessions.get(last))
     const join = (id: string, open: Open) => {
       open.canAnswer ||= canAnswer
-      return { ...whereItIs(id), project, resumed: true, notices: open.notices }
+      return { ...whereItIs(id, input.after), project, resumed: true, notices: open.notices }
     }
     const openBefore = alreadyOpen()
     if (last !== undefined && openBefore && !closed) return join(last, openBefore)
@@ -300,16 +304,27 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer })
     // A message that was waiting when Evie last stopped is answered now.
     if (last !== undefined) opened.loop.wake()
-    return { ...whereItIs(sessionId()), project, resumed: last !== undefined, notices }
+    return { ...whereItIs(sessionId(), input.after), project, resumed: last !== undefined, notices }
   }
 
   // Where a session that is being opened stands: whether a turn is running
-  // in it, as in one another client left running, and the questions it is
-  // still waiting on. A turn is running when the log's last turn has not ended.
-  function whereItIs(session: string) {
+  // in it, as in one another client left running, the questions it is still
+  // waiting on, and the reply being written. A turn is running when the log's
+  // last turn has not ended. With `after`, the events after that number too.
+  // All of it is read in one step, with nothing waited for in between, so it
+  // describes a single moment: every event emitted later is sent as it happens.
+  function whereItIs(session: string, after?: number) {
     const events = log.events(session)
     const turnRunning = events.findLastIndex((event) => event.type === "turn_start") > events.findLastIndex((event) => event.type === "turn_end")
-    return { session, turnRunning, openQuestions: questions.waiting(session) }
+    const replySoFar = sessions.get(session)?.loop.replySoFar() ?? ""
+    return {
+      session,
+      turnRunning,
+      openQuestions: questions.waiting(session),
+      lastSeq: events.at(-1)?.seq ?? 0,
+      ...(after !== undefined && { events: events.filter((event) => event.seq > after) }),
+      ...(replySoFar !== "" && { replySoFar }),
+    }
   }
 
   // If Evie was stopped in the middle of a turn, the log ends with a turn

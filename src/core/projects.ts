@@ -18,6 +18,9 @@ export type Projects = {
   // with the newest event. Undefined when none has had a conversation. A
   // subagent's session is never the answer: it is not the owner's to carry on.
   lastSession(project: Project | null): string | undefined
+  // The project a session belongs to, null for a general session, or
+  // undefined when there is no session with that id.
+  projectOf(session: string): Project | null | undefined
   // The session that started this one as a subagent, if one did.
   parentOf(session: string): string | undefined
   // What a subagent's session was started as.
@@ -41,6 +44,7 @@ export function createProjects(db: Database): Projects {
   const parent = db.query<{ parent: string | null; agent: string | null; read_only: number | null }, [string]>(
     "SELECT parent, agent, read_only FROM session WHERE id = ?",
   )
+  const sessionProject = db.query<{ project: string | null }, [string]>("SELECT project FROM session WHERE id = ?")
   // `IS` compares with null as well as with an id. Only a session the owner
   // has said something in counts: one that holds nothing but a question
   // asked while it was opening is not a conversation to carry on.
@@ -84,6 +88,12 @@ export function createProjects(db: Database): Projects {
     startedAs(session) {
       const row = parent.get(session)
       return { ...(row?.agent != null && { agent: row.agent }), readOnly: row?.read_only === 1 }
+    },
+
+    projectOf(session) {
+      const row = sessionProject.get(session)
+      if (!row) return undefined
+      return row.project === null ? null : (byId.get(row.project) ?? null)
     },
 
     parentOf(session) {

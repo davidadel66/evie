@@ -65,6 +65,10 @@ export type Loop = {
   compactNow(): Promise<string>
   // Whether a turn, or a compaction, is in progress.
   busy(): boolean
+  // The text of the reply the model is writing now, as far as it has got,
+  // or nothing when it is not writing one. It is not in the log until the
+  // reply is complete, so a client that joins part way through is given it.
+  replySoFar(): string
   // Settles when the loop next has nothing left to do: at once when it is
   // idle, and otherwise when the turns it is running have finished.
   idle(): Promise<void>
@@ -106,6 +110,8 @@ export function createLoop(options: LoopOptions): Loop {
   let cancel: AbortController | undefined
   // Stops the reply being streamed, if one is, without ending the turn.
   let reply: AbortController | undefined
+  // The text of the reply being streamed, as far as it has got.
+  let writing = ""
   // Set when the event log could not be written. Nothing can be recorded
   // after that, so the loop takes no more turns.
   let broken: Error | undefined
@@ -305,6 +311,10 @@ export function createLoop(options: LoopOptions): Loop {
             if (halted.aborted) break
             if (chunk.type === "text") {
               text += chunk.text
+              // Kept in the same step as the piece is sent, so a client that
+              // joins is given each piece either in the text so far or as an
+              // event, never both.
+              writing = text
               emit({ type: "assistant_delta", session, text: chunk.text })
             }
             if (chunk.type === "tool_call") calls.push({ id: chunk.id, name: chunk.name, arguments: chunk.arguments })
@@ -321,6 +331,7 @@ export function createLoop(options: LoopOptions): Loop {
           if (!halted.aborted) throw cause
         } finally {
           reply = undefined
+          writing = ""
         }
 
         if (signal.aborted) {
@@ -468,6 +479,9 @@ export function createLoop(options: LoopOptions): Loop {
     },
     busy() {
       return active
+    },
+    replySoFar() {
+      return writing
     },
     idle() {
       return running

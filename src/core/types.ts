@@ -365,15 +365,23 @@ export type Commands = {
   // With `continue`, the session that was used last in that project (or
   // the last general session) is reopened, with its conversation, when there
   // is one. `resumed` says whether that happened.
+  // Or give `session` to open that session by its id, in its own project.
+  // With `after` as well, the session's stored events after that number are
+  // returned, which is how a client catches up after its connection dropped.
+  // A subagent's session is not opened by itself: its parent is.
   open_session: {
     // `questions` says that this client shows questions and sends back the
     // answers. Without it, every question in the session is refused at once.
-    input: { project?: string; folder?: string; continue?: boolean; questions?: boolean }
+    input: { project?: string; folder?: string; continue?: boolean; questions?: boolean; session?: string; after?: number }
     // `notices` are things the owner should be told, such as a project
     // plugin that was not loaded. A session that is continued can be one
     // another client left running: `turnRunning` says whether a turn is
-    // running in it, and `openQuestions` are the questions it asked that
-    // are still waiting for an answer.
+    // running in it, `openQuestions` are the questions it asked that are
+    // still waiting for an answer, and `replySoFar` is the text of the reply
+    // the model is writing in it now, when it is writing one; the rest of
+    // that reply follows as events. `lastSeq` is the number of the last
+    // event in the session's log as it was opened (0 when there is none):
+    // every event after it is sent to the client as it happens.
     output: {
       session: string
       project: Project | null
@@ -381,6 +389,9 @@ export type Commands = {
       notices: string[]
       turnRunning: boolean
       openQuestions: EventBodies["question"][]
+      lastSeq: number
+      events?: StoredEvent[]
+      replySoFar?: string
     }
   }
   send_message: {
