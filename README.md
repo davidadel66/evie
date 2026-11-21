@@ -68,6 +68,9 @@ clients. Start the server and leave it running:
 evie serve
 ```
 
+On a Mac it can instead start by itself whenever you log in; see "Keeping
+the server running".
+
 Then, in another terminal, go to a project and start the client:
 
 ```sh
@@ -157,6 +160,29 @@ These work whether or not the server is running. On the other device, set
 or just `my-mac.local`, and `EVIE_TOKEN` to its token. The server listens on this computer only
 unless `host` under `server` in `evie.json` says otherwise, and the
 connection is not encrypted, so only change that on a network you trust.
+
+### Keeping the server running
+
+On a Mac, the server can run as a login service, so that it is there
+whenever you are logged in, and is started again if it stops:
+
+```sh
+evie service install     # starts `evie serve` now, and at every login
+evie service status      # whether it is installed and running, and where its log is
+evie service uninstall   # stops it, and no longer starts it at login
+```
+
+`install` writes a launch agent, `~/Library/LaunchAgents/com.evie.serve.plist`,
+for the copy of Evie it is run from, and starts it. Run it again after
+updating Evie: it stops the server that is running and starts it on the
+new version. The service is given the data folder (`EVIE_HOME`, when it is
+set) and the `PATH` of the terminal it was installed from, so that it finds
+Bun and the commands Evie runs; install it again after changing either.
+What the server prints goes to `serve.log` in the data folder.
+
+The service does not keep the Mac awake. While it sleeps, work in progress
+pauses, and `evie` catches up when it wakes. On other systems, run
+`evie serve` yourself for now.
 
 ### What Evie can do
 
@@ -607,6 +633,57 @@ bun run check   # the type check and the tests
 
 The tests drive Evie the way a client does, with a scripted stand-in for the
 model, so they need no key and no network.
+
+### A development copy beside the everyday one
+
+To try a change without risking the Evie you use every day, run a second
+copy, from another checkout, with a data folder of its own. Its server,
+database, tool output, undo copies and settings are then its own, so a
+change to its tables cannot stop the everyday Evie from opening its own.
+
+A small launcher on your path sets the folder, such as
+`~/.local/bin/evie-dev`:
+
+```sh
+#!/bin/sh
+EVIE_HOME="$HOME/.evie-dev" exec bun /path/to/the/development/checkout/src/cli.ts "$@"
+```
+
+Make the folder once, with links to what you wrote in the everyday one, so
+that both use the same keys, instruction file, agents and skills. Give it a
+settings file of its own, with a model and a port for its server:
+
+```sh
+mkdir -p ~/.evie-dev
+for name in .env AGENTS.md agents skills; do ln -s ~/.evie/$name ~/.evie-dev/$name; done
+echo '{ "model": "a-name-from/openrouter.ai-models", "server": { "port": 3844 } }' > ~/.evie-dev/evie.json
+```
+
+Then `evie-dev serve` starts the development server, and `evie-dev` in
+another terminal connects to it. Start that server by hand rather than as
+a login service: a broken development build kept alive by one would be
+started again and again. Anything written through the links, such as a new
+agent, is shared with the everyday Evie.
+
+### Made-up sessions
+
+`evie seed` fills an empty data folder with made-up projects and sessions,
+for trying out a development copy or a client without your real ones: a
+plain conversation, tool calls, a question answered and one still waiting,
+a background job, a subagent, and a compacted conversation. The projects
+are small git repositories in `seed-projects` in the data folder. Every
+session is made by running real turns through Evie against a scripted
+stand-in for the model, so it needs no key and costs nothing. The question
+still waiting is left as a server that is stopped all at once leaves one,
+so it is refused when a server first opens that session.
+
+```sh
+evie-dev seed
+```
+
+It refuses a data folder that already has sessions, so made-up sessions are
+never mixed in with real ones. To seed a folder again, remove `evie.db` and
+`server-token` from it first.
 
 ## What comes next
 
