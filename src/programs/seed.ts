@@ -251,7 +251,7 @@ export async function seed(env: Settings) {
     if (existsSync(folder)) fail(`${folder} is already there, so nothing was seeded. Remove it first, or set EVIE_HOME to another folder.`)
   }
 
-  for (const [name, contents] of Object.entries(PROJECTS)) await makeProject(join(projectsFolder(home), name), contents).catch(fail)
+  for (const [name, contents] of Object.entries(PROJECTS)) await makeProject(join(projectsFolder(home), name), contents, env).catch(fail)
   for (const seeded of SESSIONS) await seedSession(env, home, seeded).catch((cause) => fail(`The made-up session "${seeded.kind}" did not go as scripted: ${reason(cause)}`))
 
   const width = Math.max(...SESSIONS.map((seeded) => seeded.kind.length))
@@ -289,13 +289,13 @@ function sessionsIn(home: string): number {
 // Writes a made-up project's files and makes it a git repository with one
 // commit. Git is run apart from the owner's own git
 // settings, so that nothing in them, such as signing every commit, applies.
-async function makeProject(folder: string, contents: Record<string, string>) {
+async function makeProject(folder: string, contents: Record<string, string>, settings: Settings) {
   for (const [file, text] of Object.entries(contents)) {
     await mkdir(dirname(join(folder, file)), { recursive: true })
     await writeFile(join(folder, file), text)
   }
   const env = {
-    PATH: process.env.PATH ?? "",
+    PATH: settings.PATH ?? "",
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_AUTHOR_NAME: "Evie seed",
