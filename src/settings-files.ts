@@ -66,6 +66,8 @@ export type SettingsFiles = {
   plugins: Plugin[]
   // What a project adds and switches off.
   projectSettings(project: Project, context?: { ask: Ask }): Promise<ProjectSettings>
+  // Trusts a project, by its folder, as answering yes to the question does.
+  trust(folder: string): Promise<void>
 }
 
 type Entry = string | { use: string; options?: Record<string, unknown> }
@@ -170,6 +172,11 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
       },
     }),
     plugins,
+    async trust(folder) {
+      await remember(globalFile, "trust", folder)
+      trusted.add(folder)
+      untrusted.delete(folder)
+    },
     async projectSettings(project, asking) {
       const projectFile = join(project.folder, ".evie", "evie.json")
       const own = await readSettingsFile(projectFile)

@@ -542,6 +542,17 @@ export type Commands = {
     input: Record<never, never>
     output: Project[]
   }
+  // Makes a new project at a folder, given by its full path: the folder
+  // itself when it is missing, and a `.evie/evie.json` in it whose
+  // `"sync": "private"` backs up the project's `.evie/` folder to a private
+  // repository. The project is registered, named after its folder unless
+  // `name` is given, and trusted. `madeFolder` says whether the folder was
+  // missing. A folder that is already a project, that has Evie settings of
+  // its own, or that is in Evie's data folder is refused.
+  new_project: {
+    input: { folder: string; name?: string }
+    output: { project: Project; madeFolder: boolean }
+  }
   // Every session the owner has said something in, or that has asked a
   // question, that is not a subagent's, the latest active first.
   list_sessions: {
