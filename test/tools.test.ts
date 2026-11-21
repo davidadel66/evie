@@ -184,6 +184,25 @@ test("output over 2,000 lines is saved in full, and the model is shown the start
   expect(await readFile(note![1]!, "utf8")).toBe(long)
 })
 
+test("a tool that keeps the end of long output shows its last 2,000 lines, and the full output is saved", async () => {
+  const long = Array.from({ length: 2500 }, (_, index) => `line ${index + 1}`).join("\n")
+  const { run } = await start([{ text: [], calls: [{ name: "echo", input: {} }] }, { text: ["ok"] }], {
+    longOutput: "end",
+    run: async () => long,
+  })
+
+  await say(run, "go")
+
+  const [result] = results(run)
+  const note = /\n\n\[Output cut: showing the last 2000 of 2500 lines\. The full output is saved at (.+?)\. Read that file with offset and limit to see more\.\]$/.exec(result!)
+  expect(result).toStartWith("line 501\nline 502\n")
+  expect(result).toContain("line 2500\n\n[Output cut")
+  expect(result).not.toContain("line 500\n")
+  expect(note).not.toBeNull()
+  expect(note![1]).toStartWith(`${run.home}/tool-output/`)
+  expect(await readFile(note![1]!, "utf8")).toBe(long)
+})
+
 test("output over 50 KiB is cut at the end of a line", async () => {
   const wide = Array.from({ length: 100 }, (_, index) => `${index + 1} ${"x".repeat(1000)}`).join("\n")
   const { run } = await start([{ text: [], calls: [{ name: "echo", input: {} }] }, { text: ["ok"] }], {
@@ -197,6 +216,40 @@ test("output over 50 KiB is cut at the end of a line", async () => {
   expect(Buffer.byteLength(shown)).toBeLessThanOrEqual(50 * 1024)
   expect(shown.endsWith("x".repeat(1000))).toBe(true)
   expect(result).toContain("of 100 lines")
+})
+
+test("for a tool that keeps the end, output over 50 KiB is cut at the start of a line", async () => {
+  // Line 100 is 1,004 bytes and each line before it 1,003 and a line break,
+  // so the last 50 lines are 50,200 bytes and the last 51 are over the limit.
+  const wide = Array.from({ length: 100 }, (_, index) => `${index + 1} ${"x".repeat(1000)}`).join("\n")
+  const { run } = await start([{ text: [], calls: [{ name: "echo", input: {} }] }, { text: ["ok"] }], {
+    longOutput: "end",
+    run: async () => wide,
+  })
+
+  await say(run, "go")
+
+  const [result] = results(run)
+  const shown = result!.split("\n\n[Output cut")[0]!
+  expect(shown.startsWith(`51 ${"x".repeat(1000)}\n52 `)).toBe(true)
+  expect(shown.endsWith(`100 ${"x".repeat(1000)}`)).toBe(true)
+  expect(result).toContain("[Output cut: showing the last 50 of 100 lines.")
+})
+
+test("for a tool that keeps the end, one line too long to show keeps its end, without splitting a character", async () => {
+  // 80,003 bytes. The last 51,200 begin in the middle of an "é", which is
+  // left out, so 51,199 are shown.
+  const { run } = await start([{ text: [], calls: [{ name: "echo", input: {} }] }, { text: ["ok"] }], {
+    longOutput: "end",
+    run: async () => `${"é".repeat(40_000)}end`,
+  })
+
+  await say(run, "go")
+
+  const [result] = results(run)
+  expect(result).toStartWith("éé")
+  expect(result).toContain("end\n\n[Output cut: showing the last 51199 of 80003 bytes.")
+  expect(result).not.toContain("�")
 })
 
 test("a tool that breaks ends the turn, and every call still has a result so the conversation carries on", async () => {

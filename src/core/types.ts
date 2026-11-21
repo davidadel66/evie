@@ -206,6 +206,11 @@ export type ToolContext = {
 // throws only for a bug.
 export type Tool = ToolDefinition & {
   run(input: Record<string, unknown>, context: ToolContext): Promise<string>
+  // Which end of output too long to show the model is shown: the start, as
+  // for a file the model reads on from, or the end, as for a command, whose
+  // errors and summary come last. The start when not given. The full output
+  // is saved either way.
+  longOutput?: "start" | "end"
 }
 
 // ---- Plugins ------------------------------------------------------------------

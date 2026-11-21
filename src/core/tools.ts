@@ -57,7 +57,7 @@ export async function runToolCall(call: ToolCall, options: ToolRunOptions): Prom
     throw new Error(`The tool "${tool.name}" broke: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
   output = await options.after(checked, output)
-  return capOutput(output, join(options.outputFolder, `${safeName(call.id)}.txt`))
+  return capOutput(output, join(options.outputFolder, `${safeName(call.id)}.txt`), tool.longOutput ?? "start")
 }
 
 // ---- The input ------------------------------------------------------------------
@@ -120,17 +120,28 @@ function repairAndCheck(input: Record<string, unknown>, inputSchema: Record<stri
 // ---- The output -----------------------------------------------------------------
 
 // Output over the limit is saved in full and the model is shown the start,
-// with a note saying how much there is and where the rest is. Nothing is
-// silently cut off.
-async function capOutput(output: string, savePath: string): Promise<string> {
+// or the end for a tool that asks for it, with a note saying how much there
+// is and where the rest is. Nothing is silently cut off.
+async function capOutput(output: string, savePath: string, keep: "start" | "end"): Promise<string> {
   const lines = output.split("\n")
   const bytes = Buffer.byteLength(output)
   if (lines.length <= MAX_LINES + NOTE_LINES && bytes <= MAX_BYTES) return output
 
-  let shown = lines.slice(0, MAX_LINES).join("\n")
-  // Set when even the first line is too long to show whole.
+  let shown = (keep === "end" ? lines.slice(-MAX_LINES) : lines.slice(0, MAX_LINES)).join("\n")
+  // Set when even the one line nearest the kept end is too long to show whole.
   let partLine = false
-  if (Buffer.byteLength(shown) > MAX_BYTES) {
+  if (Buffer.byteLength(shown) > MAX_BYTES && keep === "end") {
+    // Cut to the last bytes that fit, starting after a character the cut
+    // split in two: the bytes that carry on a character come first.
+    const buffer = Buffer.from(shown)
+    let from = buffer.length - MAX_BYTES
+    while ((buffer[from]! & 0xc0) === 0x80) from++
+    shown = buffer.subarray(from).toString("utf8")
+    // Then on to the start of the first whole line, when there is one.
+    const firstBreak = shown.indexOf("\n")
+    if (firstBreak >= 0 && firstBreak < shown.length - 1) shown = shown.slice(firstBreak + 1)
+    else partLine = true
+  } else if (Buffer.byteLength(shown) > MAX_BYTES) {
     // Cut to the byte limit, dropping a character the cut split in two.
     shown = Buffer.from(shown).subarray(0, MAX_BYTES).toString("utf8").replace(/\uFFFD+$/, "")
     // Then back to the end of the last whole line, when there is one.
@@ -138,10 +149,10 @@ async function capOutput(output: string, savePath: string): Promise<string> {
     if (lastBreak > 0) shown = shown.slice(0, lastBreak)
     else partLine = true
   }
-  const shownLines = shown.split("\n").length
+  const end = keep === "end" ? "last" : "first"
   const amount = partLine
-    ? `showing the first ${Buffer.byteLength(shown)} of ${bytes} bytes`
-    : `showing the first ${shownLines} of ${lines.length} lines`
+    ? `showing the ${end} ${Buffer.byteLength(shown)} of ${bytes} bytes`
+    : `showing the ${end} ${shown.split("\n").length} of ${lines.length} lines`
 
   let where: string
   try {
