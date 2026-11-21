@@ -359,6 +359,25 @@ test("when this computer's token is taken back while the connection is down, evi
   )
 })
 
+test("Ctrl-C while the connection is down stops evie trying, and it leaves", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [{ hang: true, text: ["Thinking"] }])
+  const project = await tempFolder("evie-project-")
+  const server = await serve(home)
+  const terminal = evieTyping(home, project)
+  terminal.type("think hard")
+  await terminal.shows("Thinking")
+  // The turn was still running, as far as evie knows, when the connection dropped.
+  server.kill("SIGTERM")
+  await server.exited
+  await terminal.shows(DROPPED)
+
+  terminal.run.kill("SIGINT")
+
+  expect(await terminal.exited()).toBe(130)
+  expect(terminal.printed.out).toContain("[note] Stopped trying to reach Evie's server. `evie -c` comes back to this session.\n")
+})
+
 // ---- evie token ------------------------------------------------------------------------------
 
 test("tokens are made, listed and taken back by name, each without touching the others", async () => {

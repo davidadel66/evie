@@ -24,6 +24,8 @@ export async function terminal(env: Settings, args: string[]) {
   let restore = () => {}
   // Prints a note on a line of its own. The terminal client does it once it runs.
   let note = (text: string) => print(`[note] ${text}\n`)
+  // True while the connection to the server is down.
+  let down = false
   const evie = await connect({
     url: serverSettings.address,
     token,
@@ -32,8 +34,14 @@ export async function terminal(env: Settings, args: string[]) {
     signal: AbortSignal.timeout(10_000),
     // As when the laptop sleeps or the server is stopped. The client
     // connects again by itself, and shows what was missed meanwhile.
-    onDrop: () => note("The connection to Evie's server dropped. Trying again…"),
-    onBack: () => note("Connected to Evie's server again."),
+    onDrop: () => {
+      down = true
+      note("The connection to Evie's server dropped. Trying again…")
+    },
+    onBack: () => {
+      down = false
+      note("Connected to Evie's server again.")
+    },
     // The server took this device's token back, or refuses it now, which
     // trying again will not change.
     onEnd: (cause) => {
@@ -48,6 +56,14 @@ export async function terminal(env: Settings, args: string[]) {
     process.on(signal, () => {
       void evie.close().finally(() => process.exit(EXIT_CODES[signal]))
     })
+  }
+
+  // Ctrl-C while the connection is down stops trying, and leaves, whatever
+  // the terminal client was waiting for. Nothing in the server is stopped.
+  const leave = () => {
+    note("Stopped trying to reach Evie's server. `evie -c` comes back to this session.")
+    restore()
+    void evie.close().finally(() => process.exit(EXIT_CODES.SIGINT))
   }
 
   const session = { folder: process.cwd(), resume: args.includes("--continue") || args.includes("-c") }
@@ -65,6 +81,7 @@ export async function terminal(env: Settings, args: string[]) {
         columns: () => process.stdout.columns || 80,
       })
       live.onInterrupt(() => {
+        if (down) return leave()
         const did = interrupt()
         // With nothing running, Ctrl-C quits. Pressed again while a turn is
         // refusing to stop, it quits at once.
@@ -101,6 +118,7 @@ export async function terminal(env: Settings, args: string[]) {
       // Not a terminal, such as input from a pipe: read whole lines.
       const input = createInterface({ input: process.stdin })
       const onCtrlC = () => {
+        if (down) return leave()
         const did = interrupt()
         if (did === "idle") input.close()
         if (did === "again") process.exit(EXIT_CODES.SIGINT)
