@@ -57,7 +57,7 @@ export async function runToolCall(call: ToolCall, options: ToolRunOptions): Prom
     throw new Error(`The tool "${tool.name}" broke: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
   output = await options.after(checked, output)
-  return capOutput(output, join(options.outputFolder, `${safeName(call.id)}.txt`), tool.longOutput ?? "start")
+  return capOutput(output, join(options.outputFolder, `${safeName(call.id)}.txt`), tool.longOutput === "end" ? "end" : "start")
 }
 
 // ---- The input ------------------------------------------------------------------
