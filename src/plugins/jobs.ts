@@ -59,4 +59,4 @@ export function jobs(): Plugin {
 }
 
 const seconds = (job: Job) => Math.max(0, Math.round(((job.ended ?? Date.now()) - job.started) / 1000))
-const line = (job: Job) => `${job.id}  ${job.status === "running" ? `running for ${seconds(job)}s` : `${job.status} after ${seconds(job)}s`}  ${job.title}`
+const line = (job: Job) => `${job.id}  ${job.status === "running" ? `running for ${seconds(job)}s` : `${job.status === "unknown" ? "ended (how is not known)" : job.status} after ${seconds(job)}s`}  ${job.title}`

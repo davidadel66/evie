@@ -382,14 +382,14 @@ test("saved output older than seven days is deleted, and so is a folder left emp
   expect(await left(folder)).toEqual(["mixed-session", "mixed-session/call_2.txt", "mixed-session/job-1.log"])
 })
 
-test("a background job's output file is kept however old, and so is its folder, while other old output beside it is deleted", async () => {
+test("a background job's files are kept however old, and so is their folder, while other old output beside them is deleted", async () => {
   // A session's jobs are numbered from their files, so a deleted one would
   // let a later job take a number the conversation already uses.
-  const folder = await savedOutput({ "a-session/job-1.log": 30, "a-session/call_1.txt": 30 })
+  const folder = await savedOutput({ "a-session/job-1.log": 30, "a-session/job-1.json": 30, "a-session/job-1.exit": 30, "a-session/call_1.txt": 30 })
 
   await deleteOldOutput(folder)
 
-  expect(await left(folder)).toEqual(["a-session", "a-session/job-1.log"])
+  expect(await left(folder)).toEqual(["a-session", "a-session/job-1.exit", "a-session/job-1.json", "a-session/job-1.log"])
 })
 
 test("a folder that changed in the last week is kept even when empty, as output may be about to be saved in it", async () => {

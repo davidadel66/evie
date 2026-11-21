@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
-import { realpath } from "node:fs/promises"
+import { readFile, realpath, writeFile } from "node:fs/promises"
+import { join } from "node:path"
 import { homedir } from "node:os"
 import { shell } from "../src/index.ts"
 import { toolProject } from "./support/tool-project.ts"
@@ -70,4 +71,65 @@ test("a command that prints more than 2,000 lines shows its last lines, with how
 
   expect(result).toStartWith("503\n504\n")
   expect(result).toContain("\n2500\n\n[Exit status: 1]\n\n[Output cut: showing the last 2000 of 2502 lines. The full output is saved at ")
+})
+
+test("a command that dies by a signal says which signal", async () => {
+  const { call } = await project()
+
+  expect(await call("shell", { command: "echo before; kill -KILL $$" })).toBe("before\n\n[Ended by signal SIGKILL]")
+})
+
+test("a command that leaves something running is waited for until all it started has ended, and at its timeout moves to the background", async () => {
+  const { call } = await project()
+
+  expect(await call("shell", { command: "(sleep 0.4; echo late) & echo early" })).toBe("early\nlate")
+  expect(await call("shell", { command: "sleep 30 & echo early", timeout: 1 })).toStartWith(
+    "The command did not finish within 1 second, so it was moved to the background, where it is still running. It is background job 1,",
+  )
+})
+
+test("a command that prints more than 5 MiB shows its end, and keeps all of it in a file it names", async () => {
+  const { call } = await project()
+
+  const result = await call("shell", { command: "yes 0123456789 | head -c 6000000; echo; echo the very end" })
+
+  expect(result).toContain("\nthe very end\n\n[Only the end of the output is shown.]\n\n[The full output is saved at ")
+  const kept = /The full output is saved at (\S+)\. Read that file/.exec(result)![1]!
+  expect((await readFile(kept, "utf8")).length).toBe(6000000 + "\nthe very end\n".length)
+  expect(result).not.toContain("[Output cut:")
+})
+
+test("a command whose output file cannot be made is not run, and the result says the folder cannot be written and what to do", async () => {
+  const { run, call } = await project()
+  // Stands for a data folder where tool output cannot be written.
+  await writeFile(join(run.home, "tool-output"), "")
+
+  expect(await call("shell", { command: "echo hi" })).toBe(
+    `The command was not run: Evie could not write its output file in ${join(run.home, "tool-output", run.session)}, the folder ` +
+      "where it keeps what tools print (ENOTDIR). Tell the owner that this folder cannot be written to: no command can run until it can.",
+  )
+})
+
+test("a command that exits with a status that is not a death by a signal that ends a process says its status, and ends at once", async () => {
+  const { call } = await project()
+
+  // On macOS 145 is 128 and stop's number, and 148 is 128 and that of a child having ended.
+  expect(await call("shell", { command: "exit 145", timeout: 3 })).toBe("[Exit status: 145]")
+  expect(await call("shell", { command: "exit 148", timeout: 3 })).toBe("[Exit status: 148]")
+  expect(await call("shell", { command: "kill -TERM $$" })).toBe("[Ended by signal SIGTERM]")
+})
+
+test("a process group Evie may not signal is not taken for its command's, so the command ends with its shell", async () => {
+  const { call } = await project()
+  // A stand-in for the signal check, as if every group asked about were another user's.
+  const kill = process.kill
+  process.kill = ((pid: number, signal?: string | number) => {
+    if (pid < 0 && signal === 0) throw Object.assign(new Error("kill EPERM"), { code: "EPERM" })
+    return kill.call(process, pid, signal)
+  }) as typeof process.kill
+  try {
+    expect(await call("shell", { command: "sleep 0.5 & echo early", timeout: 3 })).toBe("early")
+  } finally {
+    process.kill = kill
+  }
 })

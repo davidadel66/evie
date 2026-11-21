@@ -101,15 +101,21 @@ export async function runService(env: Settings, [action]: string[], computer: Co
   if (action === "install") {
     // The log is written in the data folder, which launchd does not make.
     await mkdir(home, { recursive: true })
-    await mkdir(computer.launchAgents, { recursive: true })
-    await writeFile(file, launchAgent(env, log))
     // One that is loaded already is running an older version: it is stopped
-    // and unloaded, so that the new file is the one that runs.
+    // and unloaded, so that the new file is the one that runs. Its file is
+    // replaced only once it is, so one that cannot be stopped is left whole.
     const older = (await loaded()) !== undefined
     if (older) {
       const stopped = await computer.launchctl(["bootout", `${domain}/${LABEL}`])
       if (stopped.code !== 0) return { ok: false, text: `The running login service could not be stopped. launchctl said: ${stopped.output}` }
     }
+    await mkdir(computer.launchAgents, { recursive: true })
+    await writeFile(file, launchAgent(env, log))
+    // A name disabled earlier, as by an older program that used it, is never
+    // loaded until it is enabled again; enabling one that is not disabled
+    // changes nothing.
+    const enabled = await computer.launchctl(["enable", `${domain}/${LABEL}`])
+    if (enabled.code !== 0) return { ok: false, text: `The login service could not be enabled. launchctl said: ${enabled.output}` }
     // An older server that is slow to stop can leave the new one unable to
     // load for a moment, so loading is tried a few times before giving up.
     let started = await computer.launchctl(["bootstrap", domain, file])
@@ -155,9 +161,14 @@ export async function runService(env: Settings, [action]: string[], computer: Co
       // Removing the service stops the server for good, unlike the stop
       // before a restart, so the server is told first. A data folder that
       // is gone cannot be told, and the server is stopped all the same.
-      await writeFile(join(current?.home ?? home, STOP_FOR_GOOD), "").catch(() => {})
+      const told = join(current?.home ?? home, STOP_FOR_GOOD)
+      await writeFile(told, "").catch(() => {})
       const stopped = await computer.launchctl(["bootout", `${domain}/${LABEL}`])
-      if (stopped.code !== 0) return { ok: false, text: `The login service could not be stopped. launchctl said: ${stopped.output}` }
+      if (stopped.code !== 0) {
+        // The server goes on running, and the file must not make its next restart a stop for good.
+        await rm(told, { force: true }).catch(() => {})
+        return { ok: false, text: `The login service could not be stopped. launchctl said: ${stopped.output}` }
+      }
     }
     const hadFile = await Bun.file(file).exists()
     await rm(file, { force: true })
