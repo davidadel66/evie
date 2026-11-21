@@ -308,6 +308,16 @@ test("a session's id is given alone, without a folder, a project or `continue`, 
   )
 })
 
+test("a session's id may come with `continue: false`, which asks for nothing more, from a client that sends every field", async () => {
+  const { startAgain } = await machine()
+  const { run } = await startAgain()
+
+  // @ts-expect-error The compiler refuses it, but a client that is not type-checked can send it.
+  const opened = await run.evie.send({ type: "open_session", session: run.session, continue: false })
+
+  expect(opened).toMatchObject({ session: run.session, project: run.project, resumed: true })
+})
+
 test("a session whose project has gone from the database is refused when opened by its id, not opened as a general session", async () => {
   const { home, startAgain } = await machine()
   const first = await startAgain()

@@ -374,7 +374,7 @@ export type Commands = {
     // answers. Without it, every question in the session is refused at once.
     // A session's id is given alone, without a project, a folder or
     // `continue`; the core also refuses the mix from a client that is not
-    // type-checked.
+    // type-checked, though it takes `continue: false`, which asks for nothing.
     input:
       | { session: string; after?: number; questions?: boolean; project?: never; folder?: never; continue?: never }
       | { project?: string; folder?: string; continue?: boolean; questions?: boolean; session?: never; after?: never }
