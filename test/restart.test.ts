@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ask, shell, type EvieEvent, type Plugin } from "../src/index.ts"
+import { ask, jobs, shell, subagents, type Chunk, type EvieEvent, type Plugin, type Request } from "../src/index.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -23,11 +23,12 @@ async function tempFolder(prefix: string) {
 // One data folder and one project folder, with Evie started in them as many
 // times as a test needs. `restart` closes a run the way a restart does,
 // leaving its work running; anything still open at the end is closed for good.
+// The model is a script of replies, or a plugin that stands in for it.
 async function machine() {
   const home = await tempFolder("evie-home-")
   const projectFolder = await tempFolder("evie-project-")
-  async function startAgain(script: ScriptedReply[], plugins: Plugin[] = [shell()], options: { questions?: boolean } = {}) {
-    const model = scriptedProvider(script)
+  async function startAgain(script: ScriptedReply[] | Plugin, plugins: Plugin[] = [shell()], options: { questions?: boolean } = {}) {
+    const model = Array.isArray(script) ? scriptedProvider(script) : { plugin: script, requests: [] }
     const run = await startEvie([model.plugin, ...plugins], { home, projectFolder, ...options })
     let closed = false
     const close = async (how?: { restart: true }) => {
@@ -281,4 +282,87 @@ test("the questions of a turn carried on wait for the owner, who answers once a 
   await second.run.evie.send({ type: "answer_question", session, id: opened.openQuestions[0]!.id, choice: "dev" })
   await done
   expect(of(second.run, session).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))).toEqual(["The owner chose: dev"])
+})
+
+// ---- Subagents ----------------------------------------------------------------------------------
+
+type Reply = { text?: string; calls?: { name: string; input: Record<string, unknown> }[] } | { hang: true }
+
+// A stand-in for the model with one script for the main agent and one for
+// subagents, which tells them apart by the system prompt a subagent is given.
+function twoScripts(parent: Reply[], child: Reply[]) {
+  const requests = { parent: [] as Request[], child: [] as Request[] }
+  let calls = 0
+  const plugin: Plugin = {
+    name: "two-scripts",
+    setup(host) {
+      host.providers.add({
+        name: "two-scripts",
+        async *stream(request, signal): AsyncGenerator<Chunk> {
+          const who = request.system?.includes("You are a subagent") ? "child" : "parent"
+          requests[who].push(structuredClone(request))
+          const reply = (who === "child" ? child : parent)[requests[who].length - 1]
+          if (!reply) throw new Error(`the ${who} script has no reply for this request`)
+          if ("hang" in reply) {
+            await new Promise<void>((resolve) => (signal.aborted ? resolve() : signal.addEventListener("abort", () => resolve(), { once: true })))
+            throw new Error("the request was cancelled")
+          }
+          if (reply.text) yield { type: "text", text: reply.text }
+          for (const call of reply.calls ?? []) yield { type: "tool_call", id: `call_${++calls}`, name: call.name, arguments: JSON.stringify(call.input) }
+          yield { type: "finish", reason: reply.calls?.length ? "tool_calls" : "stop" }
+        },
+      })
+    },
+  }
+  return { plugin, requests }
+}
+
+const hand = { name: "subagent", input: { description: "look into it", task: "Find where the bug is." } }
+
+test("a subagent cut off by a restart is carried on, its job is there again, and its report reaches the session that started it", async () => {
+  const { home, startAgain } = await machine()
+  const firstModel = twoScripts([{ calls: [hand] }, { text: "A subagent is looking." }], [{ hang: true }])
+  const first = await startAgain(firstModel.plugin, [subagents({ dataFolder: home }), jobs()])
+  const session = first.run.session
+  await say(first.run, "where is the bug?")
+  while (firstModel.requests.child.length < 1) await Bun.sleep(5)
+  const child = stored(first.run.events).find((event) => event.session !== session)!.session
+  await first.restart()
+
+  const secondModel = twoScripts([{ text: "It is in parse.ts." }], [{ text: "The bug is in parse.ts, line 12." }])
+  const second = await startAgain(secondModel.plugin, [subagents({ dataFolder: home }), jobs()])
+  const reported = turnCompleted(second.run, session)
+  await second.run.evie.resumeWork()
+  const opened = await second.run.evie.send({ type: "open_session", session })
+  expect(opened.jobs).toMatchObject([{ id: "1", kind: "subagent", status: "running", title: "subagent: look into it" }])
+  await reported
+
+  expect(secondModel.requests.child[0]?.messages.at(-1)?.text).toBe(`[Note from Evie: ${RESTARTED}]`)
+  expect(notes(second.run, session)).toEqual([
+    `Background job 1 (subagent: look into it) has finished.\n\nIts report:\n\nThe bug is in parse.ts, line 12.\n\n` +
+      `To send this subagent a further message, use subagent_send with the id "${child}".`,
+  ])
+})
+
+test("a subagent that finished before a restart, whose report the session that started it was not told, has it delivered", async () => {
+  const { home, startAgain } = await machine()
+  const firstModel = twoScripts([{ calls: [hand] }, { text: "A subagent is looking." }, { text: "Noted." }], [{ text: "The bug is in parse.ts, line 12." }])
+  const first = await startAgain(firstModel.plugin, [subagents({ dataFolder: home }), jobs()])
+  const session = first.run.session
+  const told = until(first.run, (event) => event.type === "turn_end" && event.session === session && firstModel.requests.parent.length === 3)
+  await say(first.run, "where is the bug?")
+  await told
+  await first.restart()
+  // As if Evie had stopped between the subagent finishing and the report being told.
+  const record = join(home, "tool-output", session, "job-1.json")
+  await Bun.write(record, JSON.stringify({ ...JSON.parse(await Bun.file(record).text()), status: "running", told: false }))
+
+  const secondModel = twoScripts([{ text: "It is in parse.ts." }], [])
+  const second = await startAgain(secondModel.plugin, [subagents({ dataFolder: home }), jobs()])
+  const reported = turnCompleted(second.run, session)
+  await second.run.evie.resumeWork()
+  await reported
+
+  expect(secondModel.requests.child).toEqual([])
+  expect(notes(second.run, session)[0]).toStartWith("Background job 1 (subagent: look into it) has finished.\n\nIts report:\n\nThe bug is in parse.ts, line 12.")
 })

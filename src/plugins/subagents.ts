@@ -1,6 +1,6 @@
 import { join } from "node:path"
 import { dataFolder } from "../core/evie.ts"
-import type { Plugin, ToolContext } from "../core/types.ts"
+import type { Children, JobWork, Plugin, ToolContext } from "../core/types.ts"
 import { entriesOf, foldersFor, readsOnly, splitHeader, textOf, tidyName } from "./definitions.ts"
 
 // The built-in subagents plugin. It lets the model hand a piece of work to
@@ -12,7 +12,8 @@ import { entriesOf, foldersFor, readsOnly, splitHeader, textOf, tidyName } from 
 // The child session, its loop and its questions are the core's. A
 // subagent's work is a background job, so the model that started it is
 // told, and woken, when the report is ready. This plugin adds the two tools
-// and says what a subagent is not given.
+// and says what a subagent is not given. When Evie restarts, the core
+// carries the subagent on, and this plugin follows its round of work again.
 //
 // A subagent can be started as one of the owner's agents. An agent is a
 // Markdown file: a header with a name, a description, and optionally a model
@@ -82,21 +83,23 @@ export function subagents(options: SubagentsOptions = {}): Plugin {
 
       // The subagents this plugin has started, with a few words on what each is doing.
       const started = new Map<string, string>()
-      // The job following each subagent's present round of work, if one is.
-      const following = new Map<string, { id: string; stopped: boolean }>()
+      // Each subagent whose present round of work a job follows, and whether it was stopped.
+      const following = new Map<string, { stopped: boolean }>()
       const tooMany = (context: ToolContext) =>
         context.jobs.list().filter((job) => job.kind === "subagent" && job.status === "running").length >= MOST_AT_ONCE
           ? `${MOST_AT_ONCE} subagents are already working, which is the most at once. Wait for one to report before starting another.`
           : undefined
 
-      // Puts a subagent's round of work on the jobs list. The model is told
-      // its report when the round ends.
-      const follow = (child: string, context: ToolContext) => {
-        const entry = { id: "", stopped: false }
-        const job = context.jobs.start({
+      // A subagent's round of work, as a job. The model is told its report
+      // when the round ends.
+      const round = (child: string, children: Children, title: string): JobWork => {
+        const entry = { stopped: false }
+        following.set(child, entry)
+        return {
           kind: "subagent",
-          title: `subagent: ${started.get(child) ?? child}`,
-          done: context.children
+          title,
+          keep: { child },
+          done: children
             .whenIdle(child)
             .finally(() => {
               if (following.get(child) === entry) following.delete(child)
@@ -109,13 +112,13 @@ export function subagents(options: SubagentsOptions = {}): Plugin {
             }),
           stop: () => {
             entry.stopped = true
-            context.children.stop(child)
+            children.stop(child)
           },
-        })
-        entry.id = job.id
-        following.set(child, entry)
-        return job
+        }
       }
+      const follow = (child: string, context: ToolContext) => context.jobs.start(round(child, context.children, `subagent: ${started.get(child) ?? child}`))
+      // A round an earlier run of Evie left, which the core has carried on.
+      host.jobKinds.add({ name: "subagent", resume: (job, { children }) => round(String(job.keep.child), children, job.title) })
 
       host.on("before_request", async (request, context) => {
         const all = await agents()
