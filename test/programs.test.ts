@@ -4,6 +4,7 @@ import { mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { openStore } from "../src/core/store.ts"
+import type { ScriptedReply } from "./support/scripted-provider.ts"
 
 // The real programs, run as the owner runs them: `evie serve`, `evie` and
 // `evie token`, each as a process of its own, with a temporary data folder.
@@ -45,11 +46,12 @@ async function freePort() {
   return port
 }
 
-// A data folder whose settings load the scripted model, replying with the
-// given texts in turn, and put the server on the given port.
-async function homeWith(port: number, replies: string[]) {
+// A data folder whose settings load the scripted model, giving the replies
+// in turn (a plain text for a reply of that text alone), and put the server
+// on the given port.
+async function homeWith(port: number, replies: (string | ScriptedReply)[]) {
   const home = await tempFolder("evie-home-")
-  const script = replies.map((text) => ({ text: [text] }))
+  const script = replies.map((reply) => (typeof reply === "string" ? { text: [reply] } : reply))
   await writeFile(join(home, "evie.json"), JSON.stringify({ model: "test/model", plugins: [{ use: SCRIPTED, options: { script } }], server: { port } }))
   return home
 }
@@ -155,6 +157,31 @@ test("evie serve with a server setting it cannot use stops, and says which", asy
 
   expect(served.code).toBe(1)
   expect(served.stderr).toContain(`In ${join(home, "evie.json")}, "server" has a "port" that is not a whole number from 1 to 65535.`)
+})
+
+test("when the server stops in the middle of a turn, evie says the connection was lost and exits with an error", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [{ hang: true, text: ["Thinking"] }])
+  const project = await tempFolder("evie-project-")
+  const server = await serve(home)
+  const client = Bun.spawn([process.execPath, CLI], {
+    cwd: project,
+    env: { PATH: process.env.PATH ?? "", HOME: home, EVIE_HOME: home },
+    stdin: new Blob(["think hard\n"]),
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  let printed = ""
+  const reading = (async () => {
+    for await (const chunk of client.stdout) printed += new TextDecoder().decode(chunk)
+  })()
+  while (!printed.includes("Thinking")) await Bun.sleep(10)
+
+  server.kill("SIGTERM")
+
+  expect(await client.exited).toBe(1)
+  await reading
+  expect(await new Response(client.stderr).text()).toContain("[error] The connection to the Evie server was lost")
 })
 
 test("evie on a computer with no token yet says how to get one", async () => {
