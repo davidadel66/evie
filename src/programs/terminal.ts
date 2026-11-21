@@ -33,7 +33,9 @@ export async function terminal(env: Settings, args: string[]) {
     // answers does not leave the terminal waiting for ever.
     signal: AbortSignal.timeout(10_000),
     // Not typed in by a person, as from a pipe or a script, there is no
-    // one to press Ctrl-C, so evie gives up after a while (decision 75).
+    // one to press Ctrl-C, and trying for ever would leave the script hung
+    // for good, so evie gives up after a while. A terminal a person types
+    // in keeps trying, since a laptop can sleep for hours and they come back.
     ...(!process.stdin.isTTY && { giveUpAfter: giveUpAfter(env) }),
     // As when the laptop sleeps or the server is stopped. The client
     // connects again by itself, and shows what was missed meanwhile.
