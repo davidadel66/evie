@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { runService, type Computer } from "../src/programs/service.ts"
@@ -114,6 +114,33 @@ test("installing again unloads the older service first, so the server restarts o
   expect(done.ok).toBe(true)
   expect(calls).toEqual(["print gui/501/com.evie.serve", "bootout gui/501/com.evie.serve", `bootstrap gui/501 ${plist}`])
   expect(await readFile(plist, "utf8")).toContain(`<string>${CLI}</string>`)
+})
+
+test("install names the settings set in this terminal that the service will not see, and never their values", async () => {
+  const { computer, folder } = await mac()
+  const home = join(folder, "data")
+  await mkdir(home, { recursive: true })
+  await writeFile(join(home, ".env"), "BRAVE_API_KEY=brave-secret\n")
+  await writeFile(join(home, "evie.json"), JSON.stringify({ maxTokens: 8000 }))
+  // As `evie` passes them on: the terminal's settings, with the .env file's added.
+  const env = {
+    EVIE_HOME: home,
+    PATH: "/usr/bin",
+    OPENROUTER_API_KEY: "sk-or-secret",
+    EVIE_MODEL: "some/model",
+    EVIE_MAX_TOKENS: "4000",
+    BRAVE_API_KEY: "brave-secret",
+    EVIE_TOKEN: "a-device-token",
+  }
+
+  const done = await runService(env, ["install"], computer)
+
+  expect(done.ok).toBe(true)
+  expect(done.text).toContain(
+    `These settings are set in this terminal, but not in ${join(home, ".env")}, so the service will not see them: OPENROUTER_API_KEY, EVIE_MODEL.`,
+  )
+  for (const value of ["sk-or-secret", "some/model", "brave-secret", "a-device-token"]) expect(done.text).not.toContain(value)
+  for (const covered of ["BRAVE_API_KEY", "EVIE_MAX_TOKENS", "EVIE_TOKEN"]) expect(done.text).not.toContain(covered)
 })
 
 test("a service launchctl will not load at first, as while the older server is still stopping, is loaded when tried again", async () => {

@@ -178,7 +178,12 @@ updating Evie: it stops the server that is running and starts it on the
 new version. The service is given the data folder (`EVIE_HOME`, when it is
 set) and the `PATH` of the terminal it was installed from, so that it finds
 Bun and the commands Evie runs; install it again after changing either.
-What the server prints goes to `serve.log` in the data folder.
+Nothing else from that terminal reaches it, so a key or setting exported
+there, such as `OPENROUTER_API_KEY` or `EVIE_MODEL`, has to be in the data
+folder's `.env` (or, for the model, in `evie.json`) for the service to have
+it. `install` names any it finds set only in the terminal, without showing
+their values. What the server prints goes to `serve.log` in the data
+folder.
 
 The service does not keep the Mac awake. While it sleeps, work in progress
 pauses, and `evie` catches up when it wakes. On other systems, run

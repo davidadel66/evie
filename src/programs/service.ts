@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { delimiter, dirname, join, resolve } from "node:path"
-import { dataFolder, type Settings } from "../index.ts"
+import { dataFolder, loadSettings, type Settings } from "../index.ts"
 import { fail, print } from "./common.ts"
 
 // `evie service`: the login service, which runs `evie serve` when the owner
@@ -13,6 +13,16 @@ const LABEL = "com.evie.serve"
 // How many times loading the service is tried, and how long to wait between tries.
 const LOAD_TRIES = 5
 const LOAD_PAUSE_MS = 500
+
+// The settings `evie serve` reads from its environment. The service starts
+// it with none of the terminal's, so each has to be in the data folder's
+// `.env`, or, for some, in its `evie.json`, for the service to have it.
+const SERVER_SETTINGS: { name: string; inSettingsFile?: string }[] = [
+  { name: "OPENROUTER_API_KEY" },
+  { name: "BRAVE_API_KEY" },
+  { name: "EVIE_MODEL", inSettingsFile: "model" },
+  { name: "EVIE_MAX_TOKENS", inSettingsFile: "maxTokens" },
+]
 
 // What the login service needs from the computer it runs on. Tests stand
 // in for it, so that they never touch the real launch agents or launchd.
@@ -105,12 +115,17 @@ export async function runService(env: Settings, [action]: string[], computer: Co
     if (started.code !== 0) {
       return { ok: false, text: `${file} was written, but launchctl could not load it, after ${LOAD_TRIES} tries. It said: ${started.output}` }
     }
+    const missed = await notSeen(env, home)
     return {
       ok: true,
       text:
         `${older ? "Reinstalled the login service, and started the server again on this version" : "Installed the login service, and started the server"}: ` +
         `\`evie serve\` now runs when you log in, and starts again if it stops.\n` +
-        `  Service file: ${file}\n  Log:          ${log}\n`,
+        `  Service file: ${file}\n  Log:          ${log}\n` +
+        (missed.length === 0
+          ? ""
+          : `These settings are set in this terminal, but not in ${join(home, ".env")}, so the service will not see them: ` +
+            `${missed.join(", ")}. Put them in that file, then run \`evie service install\` again.\n`),
     }
   }
 
@@ -154,6 +169,19 @@ export async function runService(env: Settings, [action]: string[], computer: Co
       "  evie service status      whether it is installed and running, and where its log is",
     ].join("\n"),
   }
+}
+
+// The names of the server's settings that are set in this terminal but in
+// neither of the data folder's files, so that the service, which is not
+// started from this terminal, will not have them. Only names: never values.
+async function notSeen(env: Settings, home: string): Promise<string[]> {
+  const inEnvFile = await loadSettings({ EVIE_HOME: home })
+  const inSettingsFile: Record<string, unknown> = await readFile(join(home, "evie.json"), "utf8")
+    .then((text) => JSON.parse(text) ?? {})
+    .catch(() => ({}))
+  return SERVER_SETTINGS.filter(
+    ({ name, inSettingsFile: key }) => env[name] !== undefined && inEnvFile[name] === undefined && !(key !== undefined && inSettingsFile[key] !== undefined),
+  ).map(({ name }) => name)
 }
 
 // What the installed service's file says: the data folder it serves, and
