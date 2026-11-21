@@ -644,3 +644,34 @@ test("a session in a project not yet trusted or refused is closed off at start, 
   await second.run.evie.send({ type: "answer_question", session, id: question.type === "question" ? question.body.id : "", choice: "yes" })
   expect(await opening).toMatchObject({ session, turnRunning: false })
 })
+
+test("a subagent is carried on after at most three restarts on its task, and then left stopped, and its session is told it failed", async () => {
+  const { home, startAgain } = await machine()
+  const firstModel = twoScripts([{ calls: [hand] }, { text: "A subagent is looking." }], [{ hang: true }])
+  const first = await startAgain(firstModel.plugin, [subagents({ dataFolder: home }), jobs()])
+  const session = first.run.session
+  await say(first.run, "where is the bug?")
+  while (firstModel.requests.child.length < 1) await Bun.sleep(5)
+  const child = stored(first.run.events).find((event) => event.session !== session)!.session
+  await first.restart()
+  // Each restart cuts off the subagent's turn carried on after the one before.
+  for (let restart = 1; restart <= 3; restart++) {
+    const model = twoScripts([], [{ hang: true }])
+    const again = await startAgain(model.plugin, [subagents({ dataFolder: home }), jobs()])
+    await again.run.evie.resumeWork()
+    while (model.requests.child.length < 1) await Bun.sleep(5)
+    await again.restart()
+  }
+
+  const lastModel = twoScripts([{ text: "It could not finish." }], [])
+  const last = await startAgain(lastModel.plugin, [subagents({ dataFolder: home }), jobs()])
+  const reported = turnCompleted(last.run, session)
+  await last.run.evie.resumeWork()
+  await reported
+
+  expect(lastModel.requests.child).toEqual([])
+  expect(notes(last.run, child)).toEqual([
+    "Evie's server restarted while you were working, and this turn had already been carried on after three restarts, so it was left stopped, in case it is what stops the server.",
+  ])
+  expect(notes(last.run, session)[0]).toStartWith("Background job 1 (subagent: look into it) failed.\n\nIt failed: Evie stopped while this turn was running.")
+})

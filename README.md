@@ -652,10 +652,12 @@ the best examples to read.
 - **Work carries on across a restart.** Each command is a program of its
   own that writes what it prints straight to a file, so it keeps running
   while the server restarts, and the new server finds it again, with its
-  output and how it ended. A turn the restart cut off, a subagent's
-  included, is carried on by itself, with a note telling the model to check
-  before repeating anything that changes something: at most three times in
-  five minutes, and not when the turn was waiting for an answer. Only
+  output and how it ended. A turn the restart cut off within the last hour
+  is carried on by itself, with a note telling the model to check before
+  repeating anything that changes something: a turn of your own session at
+  most three times in five minutes, and a subagent's at most three times
+  for its task. A turn that was waiting for an answer, or was cut off
+  longer ago, is left stopped, with a note, for you to carry on. Only
   stopping the server for good, with Ctrl-C, by closing the terminal it
   runs in, or by removing its login service, stops background commands.
 - **One way in, one way out.** A client sends commands and subscribes to
