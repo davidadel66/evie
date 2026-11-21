@@ -234,6 +234,70 @@ test("a client opening a session is sent its own opening question, and never a q
   expect(secondSaw.filter((event) => event.session === firstSession)).toEqual([])
 })
 
+// ---- Joining a session another client left running -----------------------------------------
+
+test("a terminal that continues a session left running is shown the question waiting in it, and answering it lets the turn finish", async () => {
+  const deploy = asksBeforeDeploy()
+  const served = await serveEvie([scriptedProvider(callsDeploy()).plugin, deploy.plugin])
+  cleanups.push(served.stop)
+  const left = await served.connect()
+  const { session } = await left.send({ type: "open_session", folder: served.run.projectFolder, questions: true })
+  const asked = nextEvent(served.run, "question")
+  await left.send({ type: "send_message", session, text: "ship it" })
+  await asked
+  // The terminal that started the turn goes away without answering.
+  await left.close()
+
+  let printed = ""
+  await runTerminal({
+    evie: await served.connect(),
+    folder: served.run.projectFolder,
+    resume: true,
+    lines: (async function* () {
+      while (!printed.includes("Type a number.")) await Bun.sleep(1)
+      yield "1"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain(
+    "· continuing the last session\n[note] A turn is still running in this session. Ctrl-C stops it.\n[question] Deploy to production?\n",
+  )
+  expect(printed).toContain("[answered] Yes\n")
+  expect(printed).toContain("Done.")
+  expect(deploy.answers).toEqual(["Yes"])
+})
+
+test("Ctrl-C in a terminal that continues a session left running stops that session's turn", async () => {
+  const served = await serveEvie([scriptedProvider([{ hang: true, text: ["Thinking"] }]).plugin])
+  cleanups.push(served.stop)
+  const left = await served.connect()
+  const { session } = await left.send({ type: "open_session", folder: served.run.projectFolder })
+  const thinking = nextEvent(served.run, "assistant_delta")
+  await left.send({ type: "send_message", session, text: "think hard" })
+  await thinking
+  await left.close()
+
+  let printed = ""
+  let interrupt = (): string => "not set"
+  const answers: string[] = []
+  await runTerminal({
+    evie: await served.connect(),
+    folder: served.run.projectFolder,
+    resume: true,
+    lines: (async function* () {
+      while (!printed.includes("Ctrl-C stops it.")) await Bun.sleep(1)
+      answers.push(interrupt())
+    })(),
+    write: (text) => (printed += text),
+    onInterrupt: (handler) => (interrupt = handler),
+  })
+
+  expect(answers).toEqual(["cancelled"])
+  expect(printed).toContain("[cancelled]\n")
+  expect(stored(served.run.events).findLast((event) => event.type === "turn_end" && event.session === session)?.body).toEqual({ reason: "cancelled" })
+})
+
 // ---- Leaving, and losing the connection ------------------------------------------------
 
 test("closing a client stops nothing: a turn still running carries on in the server", async () => {

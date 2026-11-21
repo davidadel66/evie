@@ -1,5 +1,5 @@
 import type { EventLog } from "./log.ts"
-import type { EvieEvent, Question } from "./types.ts"
+import type { EventBodies, EvieEvent, Question } from "./types.ts"
 
 // Questions: how Evie asks the owner something and waits for the answer.
 //
@@ -16,6 +16,8 @@ export type Questions = {
   ask(session: string, question: Question, options: { canAnswer: boolean; signal?: AbortSignal }): Promise<string | null>
   // The owner's answer to an open question, or null to refuse it.
   answer(session: string, id: string, choice: string | null): void
+  // The questions in a session still waiting for an answer, oldest first.
+  waiting(session: string): EventBodies["question"][]
   // Refuses every question that is still open. Used when Evie closes.
   refuseAll(): void
 }
@@ -62,6 +64,10 @@ export function createQuestions(options: { log: EventLog; emit(event: EvieEvent)
         throw new Error(`"${choice}" is not one of the choices: ${question.choices.join(", ")}.`)
       }
       asked.settle(choice)
+    },
+
+    waiting(session) {
+      return [...open].flatMap(([id, asked]) => (asked.session === session ? [{ id, ...asked.question }] : []))
     },
 
     refuseAll() {

@@ -276,14 +276,23 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     const alreadyOpen = last === undefined ? undefined : sessions.get(last)
     if (last !== undefined && alreadyOpen) {
       alreadyOpen.canAnswer ||= canAnswer
-      return { session: last, project, resumed: true, notices }
+      return { ...whereItIs(last), project, resumed: true, notices }
     }
     if (last !== undefined) settleUnfinished(last)
 
     const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer })
     // A message that was waiting when Evie last stopped is answered now.
     if (last !== undefined) opened.loop.wake()
-    return { session: sessionId(), project, resumed: last !== undefined, notices }
+    return { ...whereItIs(sessionId()), project, resumed: last !== undefined, notices }
+  }
+
+  // Where a session that is being opened stands: whether a turn is running
+  // in it, as in one another client left running, and the questions it is
+  // still waiting on. A turn is running when the log's last turn has not ended.
+  function whereItIs(session: string) {
+    const events = log.events(session)
+    const turnRunning = events.findLastIndex((event) => event.type === "turn_start") > events.findLastIndex((event) => event.type === "turn_end")
+    return { session, turnRunning, openQuestions: questions.waiting(session) }
   }
 
   // If Evie was stopped in the middle of a turn, the log ends with a turn
