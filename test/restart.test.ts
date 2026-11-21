@@ -151,3 +151,31 @@ test("a process that now has a command's id, but started at another time, is not
   // The other process is left alone.
   expect(() => process.kill(group, 0)).not.toThrow()
 })
+
+// Sends a message and resolves once the output file of the session's first job has this in it.
+async function untilPrinted(run: Run, text: string, home: string, printed: string) {
+  await run.evie.send({ type: "send_message", session: run.session, text })
+  const file = join(home, "tool-output", run.session, "job-1.log")
+  while (!(await Bun.file(file).text().catch(() => "")).includes(printed)) await Bun.sleep(5)
+  return file
+}
+
+test("a command a call was waiting on when Evie restarted becomes a background job, and the call's result says so", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "echo started; sleep 0.6; echo finished" } }] }])
+  const session = first.run.session
+  const file = await untilPrinted(first.run, "build it", home, "started")
+  await first.restart()
+
+  const second = await startAgain([{ text: ["Carrying on."] }, { text: ["It finished."] }])
+  const told = until(second.run, (event) => event.type === "note" && event.session === session && event.body.text.startsWith("Background job 1"))
+  await second.run.evie.resumeWork()
+  await told
+
+  const results = of(second.run, session).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))
+  expect(results).toEqual([
+    "Evie restarted while this was running, so it was moved to the background, where it carries on as job 1, " +
+      `and its output is being written to ${file}. You will be told when it ends, with its output. Do not start another copy while it is running.`,
+  ])
+  expect(notes(second.run, session).at(-1)).toBe(`Background job 1 (echo started; sleep 0.6; echo finished) has finished.\n\nstarted\nfinished\n\nThe full output is in ${file}.`)
+})
