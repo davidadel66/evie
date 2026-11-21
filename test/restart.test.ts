@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, realpath, rm } from "node:fs/promises"
+import { chmod, mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ask, jobs, shell, subagents, type Chunk, type EvieEvent, type Plugin, type Request } from "../src/index.ts"
@@ -119,6 +119,16 @@ test("a background command that died by a signal while no Evie was running is to
   expect(notes(second.run, session)).toEqual([`Background job 1 (sleep 0.3; kill -TERM $$) failed.\n\n[Ended by signal SIGTERM]\n\nThe full output is in ${file}.`])
 })
 
+// Whether any process of a group is there. Signal 0 only asks.
+const groupThere = (group: number) => {
+  try {
+    process.kill(-group, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 // The process group of a command that prints its own first.
 async function groupOf(file: string) {
   while ((await Bun.file(file).text().catch(() => "")).trim() === "") await Bun.sleep(5)
@@ -199,6 +209,37 @@ test("a command a call was waiting on when Evie restarted becomes a background j
       `and its output is being written to ${file}. You will be told when it ends, with its output. Do not start another copy while it is running.`,
   ])
   expect(notes(second.run, session).at(-1)).toBe(`Background job 1 (echo started; sleep 0.6; echo finished) has finished.\n\nstarted\nfinished\n\nThe full output is in ${file}.`)
+})
+
+test("a command picked up again whose start time cannot be read is still watched while it runs, and can be stopped", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain([{ text: [], calls: [{ name: "shell", input: { command: "ps -o pgid= -p $$ | tr -d ' '; sleep 30", background: true } }] }, { text: ["Started."] }])
+  await say(first.run, "serve it")
+  const session = first.run.session
+  const file = join(home, "tool-output", session, "job-1.log")
+  const group = await groupOf(file)
+  cleanups.push(async () => void (groupThere(group) && process.kill(-group, "SIGKILL")))
+  await first.restart()
+  // A ps that fails, put first on the path.
+  const tools = await tempFolder("evie-tools-")
+  await Bun.write(join(tools, "ps"), "#!/bin/sh\nexit 1\n")
+  await chmod(join(tools, "ps"), 0o755)
+  const path = process.env.PATH
+  process.env.PATH = `${tools}:${path}`
+  cleanups.push(async () => void (process.env.PATH = path))
+
+  const second = await startAgain([{ text: ["Stopped."] }], [shell(), jobs()])
+  await second.run.evie.resumeWork()
+  await Bun.sleep(1200)
+  expect((await second.run.evie.send({ type: "open_session", session })).jobs).toMatchObject([{ id: "1", status: "running" }])
+
+  const stopped = until(second.run, (event) => event.type === "job" && event.job.status === "stopped")
+  expect((await second.run.evie.send({ type: "run_command", session, name: "jobs", args: "stop 1" })).text).toStartWith("Stopping job 1")
+  await stopped
+  expect(groupThere(group)).toBe(false)
+  expect(notes(second.run, session)).toEqual([
+    `Background job 1 (ps -o pgid= -p $$ | tr -d ' '; sleep 30) was stopped by the owner.\n\n${group}\n\n[Stopped on request.]\n\nThe full output is in ${file}.`,
+  ])
 })
 
 // ---- Turns cut off ------------------------------------------------------------------------------

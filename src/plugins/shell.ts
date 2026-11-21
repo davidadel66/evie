@@ -329,40 +329,45 @@ function startOf(pid: number): string | undefined {
 // ---- Picking a command up again -----------------------------------------------------------
 
 // How often a command picked up again is looked at, to tell when it has ended.
-const WATCH_EVERY = 200
+const WATCH_EVERY = 500
 
-// A command an earlier run of Evie left, watched until it ends. It is the
-// command that was started only when a process of its id, started at the
-// time recorded, is there; then it can be stopped, and it has ended once its
-// exit file is written or the process has gone.
+// A command an earlier run of Evie left, watched until it ends: until its
+// process group has gone, as a command running here is. Then its exit file
+// says how it ended; with none, it was stopped, or how it ended is not known.
 function resumeCommand(job: JobRecord): JobWork {
   const { pid, processStart, deadline } = job.keep as { pid?: unknown; processStart?: unknown; deadline?: unknown }
   const exitFile = exitFileOf(job.outputFile)
   const timeout = typeof deadline === "number" ? Math.round((deadline - job.started) / 1000) : undefined
-  const ours = typeof pid === "number" && typeof processStart === "string" && startOf(pid) === processStart
+  // Whether the group of the recorded id is someone else's now. The
+  // command's own shell leads its group: while a process of that id is
+  // there, it is the command's unless it started at another time than the
+  // one recorded. One whose start time cannot be read is taken to be the
+  // command's. Once the shell has gone, a group left with that id is still
+  // the command's, since no new group can take the id while any of the
+  // old one is left. Asked afresh each time, as the id can pass on.
+  const someoneElses = () => {
+    if (typeof pid !== "number") return true
+    if (!alive(pid)) return false
+    const at = startOf(pid)
+    return typeof processStart === "string" && at !== undefined && at !== processStart
+  }
+  const running = () => typeof pid === "number" && groupThere(pid) && !someoneElses()
   let how: "exited" | "stopped" | "timeout" = "exited"
   let over = false
   const stop = (reason: "stopped" | "timeout") => {
     if (over || how !== "exited") return
     how = reason
-    if (ours) stopGroup(pid as number, () => !over)
+    if (running()) stopGroup(pid as number, () => !over)
   }
   let clock: ReturnType<typeof setTimeout> | undefined
   if (typeof deadline === "number") clock = setTimeout(() => stop("timeout"), Math.max(0, deadline - Date.now()))
   clock?.unref()
 
   const done = (async () => {
-    for (;;) {
-      const status = exitStatus(exitFile)
-      if (status !== undefined) return { how, ...status }
-      if (!ours || !alive(pid as number)) {
-        // It may have written its status just as it ended.
-        const last = exitStatus(exitFile)
-        if (last !== undefined) return { how, ...last }
-        return { how: how === "exited" ? ("unknown" as const) : how }
-      }
-      await Bun.sleep(WATCH_EVERY)
-    }
+    while (running()) await Bun.sleep(WATCH_EVERY)
+    const status = exitStatus(exitFile)
+    if (status !== undefined) return { how, ...status }
+    return { how: how === "exited" ? ("unknown" as const) : how }
   })().finally(() => {
     over = true
     clearTimeout(clock)
