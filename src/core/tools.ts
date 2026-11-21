@@ -1,5 +1,6 @@
 import { lstat, mkdir, readdir, rmdir, unlink, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import { jobOfFile } from "./jobs.ts"
 import type { CheckedToolCall, Tool, ToolCall, ToolContext } from "./types.ts"
 
 // What every tool call goes through, whichever tool it is for: find the
@@ -191,8 +192,11 @@ export function keepOutputTidy(folder: string, options: { every?: number } = {})
 
 // Deletes the files in a folder of saved output last changed more than a
 // week ago, then every folder inside it left empty. The folder itself is
-// kept. Anything that cannot be read or deleted is left as it is: tidying
-// up must never stop Evie from working.
+// kept, and so is every background job's output file, however old: a
+// session's jobs are numbered from those files, so deleting one would let a
+// later job take a number the conversation already uses. Anything that
+// cannot be read or deleted is left as it is: tidying up must never stop
+// Evie from working.
 export async function deleteOldOutput(folder: string): Promise<void> {
   const oldest = Date.now() - KEEP_OUTPUT_FOR
   const tidy = async (inside: string) => {
@@ -213,7 +217,7 @@ export async function deleteOldOutput(folder: string): Promise<void> {
           await tidy(path)
           // Refused, as it should be, while anything is left inside.
           if (!recent) await rmdir(path)
-        } else if ((await lstat(path)).mtimeMs < oldest) {
+        } else if (jobOfFile(entry.name) === undefined && (await lstat(path)).mtimeMs < oldest) {
           await unlink(path)
         }
       } catch {

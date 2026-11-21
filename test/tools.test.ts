@@ -371,7 +371,7 @@ const left = async (folder: string) => (await readdir(folder, { recursive: true 
 test("saved output older than seven days is deleted, and so is a folder left empty, while newer output is kept", async () => {
   const folder = await savedOutput({
     "old-session/call_1.txt": 8,
-    "old-session/job-1.log": 30,
+    "old-session/call_2.txt": 30,
     "mixed-session/call_1.txt": 8,
     "mixed-session/call_2.txt": 6,
     "mixed-session/job-1.log": 0,
@@ -380,6 +380,16 @@ test("saved output older than seven days is deleted, and so is a folder left emp
   await deleteOldOutput(folder)
 
   expect(await left(folder)).toEqual(["mixed-session", "mixed-session/call_2.txt", "mixed-session/job-1.log"])
+})
+
+test("a background job's output file is kept however old, and so is its folder, while other old output beside it is deleted", async () => {
+  // A session's jobs are numbered from their files, so a deleted one would
+  // let a later job take a number the conversation already uses.
+  const folder = await savedOutput({ "a-session/job-1.log": 30, "a-session/call_1.txt": 30 })
+
+  await deleteOldOutput(folder)
+
+  expect(await left(folder)).toEqual(["a-session", "a-session/job-1.log"])
 })
 
 test("a folder that changed in the last week is kept even when empty, as output may be about to be saved in it", async () => {
