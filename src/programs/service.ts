@@ -110,6 +110,11 @@ export async function runService(env: Settings, [action]: string[], computer: Co
       const stopped = await computer.launchctl(["bootout", `${domain}/${LABEL}`])
       if (stopped.code !== 0) return { ok: false, text: `The running login service could not be stopped. launchctl said: ${stopped.output}` }
     }
+    // A name disabled earlier, as by an older program that used it, is never
+    // loaded until it is enabled again; enabling one that is not disabled
+    // changes nothing.
+    const enabled = await computer.launchctl(["enable", `${domain}/${LABEL}`])
+    if (enabled.code !== 0) return { ok: false, text: `The login service could not be enabled. launchctl said: ${enabled.output}` }
     // An older server that is slow to stop can leave the new one unable to
     // load for a moment, so loading is tried a few times before giving up.
     let started = await computer.launchctl(["bootstrap", domain, file])
