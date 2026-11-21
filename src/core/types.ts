@@ -21,7 +21,9 @@ export type EventBodies = {
   // onwards. `files` are the files the summarised part worked with.
   compaction: { summary: string; keepFrom: number; files: string[] }
   // Evie asked the owner something. `id` ties the answer to it.
-  question: { id: string } & Question
+  // `asker` is the session that asked, when it is not this one: a subagent,
+  // whose questions are put to the owner in the session that started it.
+  question: { id: string; asker?: string } & Question
   // The answer. `choice` is null when the question was refused: the turn was
   // cancelled, Evie closed, or the session's client cannot show questions.
   answer: { id: string; choice: string | null }

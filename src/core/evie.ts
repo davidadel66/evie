@@ -233,7 +233,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       ask: (question, signal) =>
         parent === undefined
           ? questions.ask(session, question, { canAnswer: opened.canAnswer, signal })
-          : questions.ask(parent, { ...question, text: `A subagent asks: ${question.text}` }, { canAnswer: sessions.get(parent)?.canAnswer ?? false, signal }),
+          : questions.ask(parent, { ...question, text: `A subagent asks: ${question.text}` }, { canAnswer: sessions.get(parent)?.canAnswer ?? false, signal, asker: session }),
       jobs: {
         start: (work) => jobs.start(session, work),
         reserve: (work) => jobs.reserve(session, work),
@@ -499,9 +499,15 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // Returns the calls given such a result, and how the turn was cut off.
   function settleUnfinished(session: string, resultOf: (call: string) => string | undefined): { given: Set<string>; cut: Cut; cutAt: number } {
     const before = log.events(session)
-    const answered = new Set(before.flatMap((event) => (event.type === "answer" ? [event.body.id] : [])))
-    const unanswered = before.filter((event) => event.type === "question" && !answered.has(event.body.id))
-    for (const event of unanswered) if (event.type === "question") emit(log.append(session, "answer", { id: event.body.id, choice: null }))
+    // The questions this session asked: in its own log, and for a
+    // subagent, in the log of the session that started it. A subagent's
+    // questions in this one's log are its own to settle.
+    const parent = projects.parentOf(session)
+    const unanswered = [
+      ...unansweredIn(session, (asker) => asker === undefined),
+      ...(parent === undefined ? [] : unansweredIn(parent, (asker) => asker === session)),
+    ]
+    for (const { where, id } of unanswered) emit(log.append(where, "answer", { id, choice: null }))
     const given = new Set<string>()
     const events = log.events(session)
     const started = events.findLastIndex((event) => event.type === "turn_start")
@@ -510,7 +516,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     if (turn.some((event) => event.type === "turn_end")) return { given, cut: "none", cutAt: 0 }
     // Its last event before any written here.
     const cutAt = before.at(-1)!.time
-    const asking = unanswered.some((event) => event.seq > events[started]!.seq)
+    const asking = unanswered.some(({ time }) => time >= events[started]!.time)
 
     const done = new Set(turn.flatMap((event) => (event.type === "tool_result" ? [event.body.callId] : [])))
     const asked = turn.flatMap((event) => (event.type === "assistant_message" ? (event.body.toolCalls ?? []) : []))
@@ -526,6 +532,13 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     ])()
     for (const event of closing) emit(event)
     return { given, cut: asking ? "asking" : "working", cutAt }
+  }
+
+  // The questions in a session's log with no answer, of those whose asker matches.
+  function unansweredIn(where: string, askedBy: (asker: string | undefined) => boolean) {
+    const events = log.events(where)
+    const answered = new Set(events.flatMap((event) => (event.type === "answer" ? [event.body.id] : [])))
+    return events.flatMap((event) => (event.type === "question" && askedBy(event.body.asker) && !answered.has(event.body.id) ? [{ where, id: event.body.id, time: event.time }] : []))
   }
 
   function open(session: string): Open {

@@ -556,3 +556,41 @@ test("a subagent's turn cut off within the last hour is carried on, and one cut 
     )
   }
 })
+
+test("a subagent cut off while waiting for an answer is left stopped, and the turn of the session it asked through is carried on", async () => {
+  const { home, startAgain } = await machine()
+  // A subagent is not given the ask tool, but its tools can still ask, as a permission check does.
+  const confirm: Plugin = {
+    name: "confirm",
+    setup(host) {
+      host.tools.add({
+        name: "confirm",
+        description: "Asks the owner to go ahead.",
+        inputSchema: { type: "object" },
+        run: async (_input, context) => `The owner said: ${await context.ask({ text: "Go ahead?", choices: ["yes", "no"] })}`,
+      })
+    },
+  }
+  const firstModel = twoScripts([{ calls: [hand] }, { hang: true }], [{ calls: [{ name: "confirm", input: {} }] }])
+  const first = await startAgain(firstModel.plugin, [subagents({ dataFolder: home }), jobs(), confirm], { questions: true })
+  const session = first.run.session
+  const asked = until(first.run, (event) => event.type === "question")
+  await first.run.evie.send({ type: "send_message", session, text: "where is the bug?" })
+  await asked
+  while (firstModel.requests.parent.length < 2) await Bun.sleep(5)
+  const child = stored(first.run.events).find((event) => event.session !== session)!.session
+  await first.restart()
+
+  const secondModel = twoScripts([{ text: "Carrying on." }, { text: "Noted." }, { text: "Noted." }], [])
+  const second = await startAgain(secondModel.plugin, [subagents({ dataFolder: home }), jobs(), confirm])
+  const carriedOn = turnCompleted(second.run, session)
+  await second.run.evie.resumeWork()
+  await carriedOn
+
+  expect(secondModel.requests.child).toEqual([])
+  expect(notes(second.run, child)).toEqual([
+    "Evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the question went unanswered. It is left for the owner to carry on.",
+  ])
+  expect(notes(second.run, session)[0]).toBe(RESTARTED)
+  expect(of(second.run, session).filter((event) => event.type === "answer")).toMatchObject([{ body: { choice: null } }])
+})
