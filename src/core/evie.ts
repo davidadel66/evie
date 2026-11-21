@@ -320,7 +320,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
   // Where a session that is being opened stands: whether a turn is running
   // in it, as in one another client left running, the questions it is still
-  // waiting on, and the reply being written. A turn is running when the log's
+  // waiting on, its jobs, and the reply being written. A turn is running when the log's
   // last turn has not ended. With `after`, the events after that number too.
   // All of it is read in one step, with nothing waited for in between, so it
   // describes a single moment: every event emitted later is sent as it happens.
@@ -333,6 +333,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
       turnRunning,
       openQuestions: questions.waiting(session),
       lastSeq: events.at(-1)?.seq ?? 0,
+      jobs: jobs.list(session),
       ...(after !== undefined && { events: events.filter((event) => event.seq > after) }),
       ...(replySoFar !== "" && { replySoFar }),
     }

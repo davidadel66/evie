@@ -677,6 +677,61 @@ test("a session opened just as the line dropped is caught up on from the moment 
   expect(printed).toContain("[note] A turn is still running in this session. Ctrl-C stops it.\nWorking and done.\n")
 })
 
+// A tool that hands work to the background, which ends when the test says.
+function backgroundWork() {
+  const ending: ((result: string) => void)[] = []
+  const plugin: Plugin = {
+    name: "background-work",
+    setup(host) {
+      host.tools.add({
+        name: "start_work",
+        description: "Starts some work in the background.",
+        inputSchema: { type: "object" },
+        run: async (_input, context) => {
+          let end = (_result: string) => {}
+          const done = new Promise<string>((resolve) => (end = resolve))
+          ending.push(end)
+          const job = context.jobs.start({ kind: "work", title: "the build", done, stop: () => end("It was stopped.") })
+          return `Started as job ${job.id}.`
+        },
+      })
+    },
+  }
+  return { plugin, finish: (result: string) => ending.shift()?.(result) }
+}
+const startsWork = (): ScriptedReply[] => [{ text: [], calls: [{ name: "start_work", input: {} }] }, { text: ["Started it."] }]
+
+// Settles once the log holds this many ends of turns.
+async function turnsEnded(run: Run, count: number) {
+  while (stored(run.events).filter((event) => event.type === "turn_end").length < count) await Bun.sleep(1)
+}
+
+test("a background job that ends while the line is down is shown as ended once it is back, and a pipe waiting for it leaves", async () => {
+  const work = backgroundWork()
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...startsWork(), { text: ["The build passed."] }]).plugin, work.plugin])
+  let printed = ""
+  await runTerminal({
+    evie: await connect(),
+    folder: served.run.projectFolder,
+    questions: false,
+    waitForJobs: true,
+    lines: (async function* () {
+      yield "build it"
+      await turnsEnded(served.run, 1)
+      await line.cut()
+      // The work ends while the line is down, and Evie deals with it.
+      work.finish("All passed.")
+      await turnsEnded(served.run, 2)
+      line.mend()
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("[background] job 1 started: the build\n")
+  expect(printed).toMatch(/\[background\] job 1 finished after \d+s: the build\nThe build passed\./)
+  expect(printed.split("[background] job 1 finished")).toHaveLength(2)
+})
+
 test("a client closed while its line is down stops trying, and a command waiting for the line fails, saying so", async () => {
   const { served, line, connect } = await serveOverALine([scriptedProvider([]).plugin])
   let dropped = 0
@@ -781,6 +836,46 @@ test("a session opened by its id is sent to the client from before the core read
   await client.send({ type: "open_session", session: served.run.session })
 
   expect(heard).toEqual([{ type: "assistant_delta", session: served.run.session, text: "just then" }])
+})
+
+test("a background job the server stopped when it was stopped is shown as stopped once the client is back, and a pipe waiting for it leaves", async () => {
+  const home = await tempFolder("evie-home-")
+  const projectFolder = await tempFolder("evie-project-")
+  const tokens = await openTokens(home)
+  cleanups.push(async () => tokens.close())
+  const made = tokens.add("test device")
+  if (!("secret" in made)) throw new Error(made.refused)
+  const serve = async (script: ScriptedReply[], port = 0) => {
+    const run = await startEvie([scriptedProvider(script).plugin, backgroundWork().plugin], { home, projectFolder })
+    return { run, server: startServer({ evie: run.evie, tokens, host: "127.0.0.1", port }) }
+  }
+  let served = await serve(startsWork())
+  cleanups.push(async () => {
+    await served.server.stop()
+    await served.run.evie.close()
+  })
+  const client = await connect({ url: served.server.url, token: made.secret, firstWait: FIRST_WAIT })
+  cleanups.push(() => client.close())
+
+  let printed = ""
+  await runTerminal({
+    evie: client,
+    folder: projectFolder,
+    questions: false,
+    waitForJobs: true,
+    lines: (async function* () {
+      yield "build it"
+      while (!printed.includes("Started it.")) await Bun.sleep(1)
+      // The server is stopped, which stops the job, and started again on the same port and data folder.
+      const port = Number(new URL(served.server.url).port)
+      await served.server.stop()
+      await served.run.evie.close()
+      served = await serve([], port)
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toMatch(/\[background\] job 1 stopped after \d+s: the build\n/)
 })
 
 test("after the server is started again, a session whose project asks again whether to trust it shows the question while catching up, and carries on once it is answered", async () => {

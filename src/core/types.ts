@@ -381,7 +381,9 @@ export type Commands = {
     // the model is writing in it now, when it is writing one; the rest of
     // that reply follows as events. `lastSeq` is the number of the last
     // event in the session's log as it was opened (0 when there is none):
-    // every event after it is sent to the client as it happens.
+    // every event after it is sent to the client as it happens. `jobs` are
+    // the session's background jobs, the ended ones included: their events
+    // are not stored, so a client that missed some learns here how each stands.
     output: {
       session: string
       project: Project | null
@@ -390,6 +392,7 @@ export type Commands = {
       turnRunning: boolean
       openQuestions: EventBodies["question"][]
       lastSeq: number
+      jobs: Job[]
       events?: StoredEvent[]
       replySoFar?: string
     }

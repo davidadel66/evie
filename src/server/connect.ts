@@ -1,4 +1,4 @@
-import type { Command, Commands, Evie, EvieEvent, StoredEvent } from "../core/types.ts"
+import type { Command, Commands, Evie, EvieEvent, Job, StoredEvent } from "../core/types.ts"
 import { PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
 
 export type ConnectOptions = {
@@ -66,6 +66,8 @@ type Seen = {
   seq: number
   // The text of the reply being written, as far as it has been passed on.
   shown: string
+  // Each of the session's jobs, as it was last passed on, by id.
+  jobs: Map<string, Job>
   // For a session the owner opened: whether it was opened as one that
   // shows questions, so that it is opened the same way after a drop.
   openAs?: { questions: boolean }
@@ -126,18 +128,22 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   }
   const seenOf = (session: string): Seen => {
     let seen = sessions.get(session)
-    if (!seen) sessions.set(session, (seen = { seq: 0, shown: "", held: undefined, early: new Set() }))
+    if (!seen) sessions.set(session, (seen = { seq: 0, shown: "", jobs: new Map(), held: undefined, early: new Set() }))
     return seen
   }
   const isNew = (seen: Seen, event: StoredEvent) => event.seq > seen.seq && !seen.early.has(event.seq)
 
   // Passes an event on to the owner, once: a stored event whose number has
-  // been passed on already is skipped.
+  // been passed on already is skipped, and so is a job that has not changed.
   function passOn(event: EvieEvent) {
     const seen = seenOf(event.session)
     if ("seq" in event) {
       if (!isNew(seen, event)) return
       seen.seq = event.seq
+    }
+    if (event.type === "job") {
+      if (seen.jobs.get(event.job.id)?.status === event.job.status) return
+      seen.jobs.set(event.job.id, event.job)
     }
     if (event.type === "assistant_delta") seen.shown += event.text
     // A reply's text ends with the reply, or with its turn when it failed.
@@ -177,6 +183,8 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       seen.openAs = { questions: input.questions === true }
       // The owner is given the reply so far with the reply, and shows it.
       seen.shown = output.replySoFar ?? ""
+      // Only what changes in the jobs from here is passed on.
+      for (const job of output.jobs) seen.jobs.set(job.id, job)
     }
     // A reply to a command sent again can describe a moment before the
     // line dropped, so the session is caught up on from there.
@@ -203,6 +211,14 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     // plugins fail to load, is left as it is: a command sent to it says why.
     if ("result" in reply) {
       const output = reply.result as Opened
+      // A job's events are not stored, so how each job stands is passed on
+      // where it has changed, first, since the turns missed are often Evie
+      // dealing with a job that ended. A job missing from the list ran in the
+      // server before it was started again, which stopped it.
+      const listed = new Set(output.jobs.map((job) => job.id))
+      const gone = [...seen.jobs.values()].filter((job) => job.status === "running" && !listed.has(job.id))
+      for (const job of gone) passOn({ type: "job", session, job: { ...job, status: "stopped", ended: Date.now() } })
+      for (const job of output.jobs) passOn({ type: "job", session, job })
       for (const event of output.events ?? []) {
         // A client of the core always sees a reply's text as pieces before
         // the stored message, so the part of a reply that was missed is
