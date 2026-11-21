@@ -3,8 +3,8 @@ import { Database } from "bun:sqlite"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { runTerminal } from "../src/index.ts"
-import { say, startEvie } from "./support/harness.ts"
+import { runTerminal, type Plugin } from "../src/index.ts"
+import { say, startEvie, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
 const cleanups: (() => Promise<void>)[] = []
@@ -234,4 +234,70 @@ test("a session opened by its id is joined as it is, with the events after the n
     [5, "turn_start"],
     [6, "user_message"],
   ])
+})
+
+test("a session opened by its id that is not open, as after Evie was started again, is opened in its own project, with a turn cut off closed first", async () => {
+  const { home, startAgain } = await machine()
+  const first = await startAgain()
+  await say(first.run, "hi")
+  await first.quit()
+  // Evie was stopped in the middle of a tool: a turn that started, a reply
+  // asking for a tool, and nothing after.
+  const db = new Database(join(home, "evie.db"))
+  const add = (seq: number, type: string, body: unknown) =>
+    db.run("INSERT INTO event (session, seq, type, body, time) VALUES (?, ?, ?, ?, ?)", [first.run.session, seq, type, JSON.stringify(body), Date.now() + seq])
+  add(5, "turn_start", {})
+  add(6, "user_message", { text: "run the tool" })
+  add(7, "assistant_message", { text: "Running.", toolCalls: [{ id: "call_x", name: "work", arguments: "{}" }] })
+  db.close()
+
+  // Started again somewhere else, so nothing ties it to the session's project.
+  const second = await startAgain([{ text: ["Carrying on."] }])
+  const elsewhere = await second.run.evie.send({ type: "open_session" })
+  const reopened = await second.run.evie.send({ type: "open_session", session: first.run.session, after: 4 })
+  await say(second.run, "what happened?", reopened.session)
+
+  expect(elsewhere.project).toBeNull()
+  expect(reopened).toMatchObject({ session: first.run.session, project: first.run.project, resumed: true, turnRunning: false, lastSeq: 9 })
+  expect(reopened.events?.map((event) => [event.seq, event.type])).toEqual([
+    [5, "turn_start"],
+    [6, "user_message"],
+    [7, "assistant_message"],
+    [8, "tool_result"],
+    [9, "turn_end"],
+  ])
+  expect(second.model.requests[0]?.messages.at(-1)).toEqual({ role: "user", text: "what happened?" })
+})
+
+test("opening by id refuses a subagent's session, saying to open the one that started it, and refuses an id that is no session's", async () => {
+  const { home, projectFolder } = await machine()
+  // A tool that starts a subagent and gives back the id of its session.
+  const delegate: Plugin = {
+    name: "delegate",
+    setup(host) {
+      host.tools.add({ name: "delegate", description: "Starts a subagent.", inputSchema: { type: "object" }, run: (_input, context) => context.children.start({ text: "look around" }) })
+    },
+  }
+  const model = scriptedProvider([{ text: [], calls: [{ name: "delegate", input: {} }] }, { text: ["ok"] }, { text: ["ok"] }])
+  const run = await startEvie([model.plugin, delegate], { home, projectFolder })
+  cleanups.push(() => run.evie.close())
+  await say(run, "hand it over")
+  const child = stored(run.events).find((event) => event.type === "tool_result")!.body.text
+
+  await expect(run.evie.send({ type: "open_session", session: child })).rejects.toThrow(
+    `The session "${child}" is a subagent's. Open the session that started it, "${run.session}", instead.`,
+  )
+  await expect(run.evie.send({ type: "open_session", session: "no-such-session" })).rejects.toThrow('There is no session with the id "no-such-session".')
+})
+
+test("a session's id is given alone, without a folder or project, and a number to catch up from only with a session's id", async () => {
+  const { startAgain } = await machine()
+  const { run } = await startAgain()
+  const alone = "Open a session by its id alone, without a project or a folder."
+
+  await expect(run.evie.send({ type: "open_session", session: run.session, folder: run.projectFolder })).rejects.toThrow(alone)
+  await expect(run.evie.send({ type: "open_session", session: run.session, project: run.project!.id })).rejects.toThrow(alone)
+  await expect(run.evie.send({ type: "open_session", folder: run.projectFolder, after: 3 })).rejects.toThrow(
+    "`after` is the number of the last event seen in a session, so it is given only with `session`.",
+  )
 })

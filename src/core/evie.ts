@@ -254,10 +254,21 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     if (input.project !== undefined && input.folder !== undefined) {
       throw new Error("Open a session with a project or a folder, not both.")
     }
+    if (input.session !== undefined && (input.project !== undefined || input.folder !== undefined)) {
+      throw new Error("Open a session by its id alone, without a project or a folder.")
+    }
+    if (input.after !== undefined && input.session === undefined) {
+      throw new Error("`after` is the number of the last event seen in a session, so it is given only with `session`.")
+    }
     let project = null
     if (input.session !== undefined) {
-      project = projects.projectOf(input.session) ?? null
-      if (!sessions.has(input.session)) throw new Error(`The session "${input.session}" is not open.`)
+      const found = projects.projectOf(input.session)
+      if (found === undefined) throw new Error(`There is no session with the id "${input.session}".`)
+      // A subagent runs as part of the session that started it, which asks
+      // its questions and opens it again when needed.
+      const parent = projects.parentOf(input.session)
+      if (parent !== undefined) throw new Error(`The session "${input.session}" is a subagent's. Open the session that started it, "${parent}", instead.`)
+      project = found
     } else if (input.project !== undefined) {
       project = projects.get(input.project) ?? null
       if (!project) throw new Error(`There is no project with the id "${input.project}".`)
@@ -266,7 +277,7 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     }
 
     // Continuing: the session used last in this project, when there is one,
-    // or the one named.
+    // or the one named, which is opened in its own project the same way.
     const last = input.session ?? (input.continue ? projects.lastSession(project) : undefined)
     // A new session is created only once it is needed: when the project's
     // settings ask a question, or when everything else has gone well.
