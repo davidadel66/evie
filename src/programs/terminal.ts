@@ -32,6 +32,9 @@ export async function terminal(env: Settings, args: string[]) {
     // So that an address where something takes the connection but never
     // answers does not leave the terminal waiting for ever.
     signal: AbortSignal.timeout(10_000),
+    // Not typed in by a person, as from a pipe or a script, there is no
+    // one to press Ctrl-C, so evie gives up after a while (decision 75).
+    ...(!process.stdin.isTTY && { giveUpAfter: giveUpAfter(env) }),
     // As when the laptop sleeps or the server is stopped. The client
     // connects again by itself, and shows what was missed meanwhile.
     onDrop: () => {
@@ -43,7 +46,7 @@ export async function terminal(env: Settings, args: string[]) {
       note("Connected to Evie's server again.")
     },
     // The server took this device's token back, or refuses it now, which
-    // trying again will not change.
+    // trying again will not change, or the line stayed down too long.
     onEnd: (cause) => {
       restore()
       fail(why(cause))
@@ -148,6 +151,11 @@ export async function terminal(env: Settings, args: string[]) {
   }
   if (problem !== undefined) fail(problem)
 }
+
+// How long evie, when nobody types in it, goes on trying to reach the
+// server after the line drops: two minutes, which rides out a restart.
+// `EVIE_GIVE_UP_AFTER`, in seconds, changes it, for tests.
+const giveUpAfter = (env: Settings) => (Number(env.EVIE_GIVE_UP_AFTER) || 120) * 1000
 
 // The names a client on this computer reaches its own server by.
 const THIS_COMPUTER = ["127.0.0.1", "localhost", "[::1]"]

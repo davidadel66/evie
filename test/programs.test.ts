@@ -63,10 +63,10 @@ async function scriptIn(home: string, port: number, replies: (string | ScriptedR
 
 // Starts `evie` in a project folder with its input kept open, to be typed
 // into a line at a time, and gathers what it prints as it goes.
-function evieTyping(home: string, project: string) {
+function evieTyping(home: string, project: string, env: Record<string, string> = {}) {
   const run = Bun.spawn([process.execPath, CLI], {
     cwd: project,
-    env: { PATH: process.env.PATH ?? "", HOME: home, EVIE_HOME: home },
+    env: { PATH: process.env.PATH ?? "", HOME: home, EVIE_HOME: home, ...env },
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
@@ -335,6 +335,24 @@ test("when evie serve is stopped and started again, evie connects again by itsel
   db.close()
   expect(said.map((row) => JSON.parse(row.body).text)).toEqual(["first", "second"])
   expect(new Set(said.map((row) => row.session)).size).toBe(1)
+})
+
+test("evie run from a pipe or a script gives up when the server stays down, saying why, and leaves with an error", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, ["Hello."])
+  const project = await tempFolder("evie-project-")
+  const server = await serve(home)
+  // Two seconds in place of two minutes, so that the test does not wait that long.
+  const terminal = evieTyping(home, project, { EVIE_GIVE_UP_AFTER: "2" })
+  terminal.type("hello")
+  await terminal.shows("Hello.")
+
+  server.kill("SIGTERM")
+  await server.exited
+  await terminal.shows(DROPPED)
+
+  expect(await terminal.exited()).toBe(1)
+  expect(terminal.printed.err).toBe(`No Evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
 })
 
 test("when this computer's token is taken back while the connection is down, evie stops trying, and says why", async () => {

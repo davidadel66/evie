@@ -10,16 +10,21 @@ export type ConnectOptions = {
   // Called when the line to the server drops without `close` being called,
   // as when the laptop sleeps or the server stops, with why. The client
   // tries again by itself, after one second and then twice as long each
-  // time, up to ten seconds, until the line is back or `close` is called.
-  // Commands sent meanwhile wait for the line.
+  // time, up to ten seconds, until the line is back, `close` is called, or
+  // `giveUpAfter` has passed. Commands sent meanwhile wait for the line.
   onDrop?: (reason: string) => void
   // Called when the line is back after a drop. What was missed while it was
   // down is passed on straight after.
   onBack?: () => void
   // Called when the client stops for good without `close` being called,
   // because the server took this device's token back, or refuses it or the
-  // page, with why. Commands still waiting fail, and so does any sent after.
+  // page, or because the line stayed down past `giveUpAfter`, with why.
+  // Commands still waiting fail, and so does any sent after.
   onEnd?: (cause: ConnectError) => void
+  // How long, in milliseconds, to go on trying after the line drops, for a
+  // client that has no one to stop it, such as a script. Then it ends, with
+  // why the last try failed. Left out, it keeps trying.
+  giveUpAfter?: number
   // Gives up connecting when it fires, such as at a time limit. It is used
   // only while connecting: once the connection is open it changes nothing.
   signal?: AbortSignal
@@ -125,6 +130,10 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   let closing: Promise<void> | undefined
   // Fires when the line as it is now has carried nothing for too long.
   let silence: ReturnType<typeof setTimeout> | undefined
+  // While the line is down: why it is, as the last try to connect again
+  // said, and when to give up.
+  let down: ConnectError | undefined
+  let giveUp: ReturnType<typeof setTimeout> | undefined
 
   // Hands an event to every listener. As in the core, a listener that
   // throws does not stop the others hearing it.
@@ -324,6 +333,8 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       waiting.delete(id)
       command.lose(reason)
     }
+    down = new ConnectError(`The connection to the Evie server at ${address.origin} dropped: ${reason}.`, "other")
+    if (options.giveUpAfter !== undefined) giveUp = setTimeout(() => down && end(down), options.giveUpAfter)
     options.onDrop?.(reason)
     void tryAgain()
   }
@@ -340,6 +351,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
         if (stopping.signal.aborted) return
         // A refusal that trying again will not change.
         if (cause.reason === "token" || cause.reason === "page") return end(cause)
+        down = cause
         continue
       }
       if (stopping.signal.aborted) return line.close()
@@ -349,6 +361,8 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 
   async function back(line: WebSocket) {
     use(line)
+    down = undefined
+    clearTimeout(giveUp)
     options.onBack?.()
     rejoining = true
     flush()
@@ -371,6 +385,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     stopping.abort(cause.message)
     socket = undefined
     clearTimeout(silence)
+    clearTimeout(giveUp)
     loseAll(cause.message)
     options.onEnd?.(cause)
   }
@@ -409,6 +424,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
         const line = socket
         socket = undefined
         clearTimeout(silence)
+        clearTimeout(giveUp)
         if (line && line.readyState !== WebSocket.CLOSED) {
           await new Promise<void>((resolve) => {
             line.addEventListener("close", () => resolve(), { once: true })

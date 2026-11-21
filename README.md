@@ -125,7 +125,9 @@ effect when the server is started again.
 When the connection to the server drops, as when the laptop sleeps or the
 server is started again, `evie` says so and connects again by itself, then
 shows what it missed, without repeating anything. Ctrl-C while it is trying
-stops it.
+stops it. When nobody is typing in it, as when its input comes from a pipe
+or a script, it gives up after two minutes of trying, says why, and exits
+with an error.
 
 Every connection has to bring a token, a long random secret, even on this
 computer: the server can run commands, and any web page open in a browser
