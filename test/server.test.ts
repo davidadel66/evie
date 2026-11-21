@@ -548,6 +548,10 @@ const lookup: Plugin = {
   },
 }
 
+// How long a client in these tests waits before it first tries again, in
+// place of a second, so that the tests do not wait for real seconds.
+const FIRST_WAIT = 20
+
 // Evie behind its server, and a line between them that the test can cut
 // and mend while the server runs on.
 async function serveOverALine(plugins: Plugin[]) {
@@ -555,7 +559,7 @@ async function serveOverALine(plugins: Plugin[]) {
   cleanups.push(served.stop)
   const line = await lineTo(served.server.url)
   cleanups.push(line.stop)
-  return { served, line, connect: (given: Partial<ConnectOptions> = {}) => served.connect({ url: line.url, ...given }) }
+  return { served, line, connect: (given: Partial<ConnectOptions> = {}) => served.connect({ url: line.url, firstWait: FIRST_WAIT, ...given }) }
 }
 
 // Settles once Evie has written this piece of a reply, whether or not any client heard it.
@@ -688,8 +692,8 @@ test("a client closed while its line is down stops trying, and a command waiting
 
   await expect(waiting).rejects.toThrow("The connection to Evie was lost before it answered: the connection was closed.")
   await expect(client.send({ type: "cancel", session })).rejects.toThrow("Not connected to Evie: the connection was closed.")
-  // Past the first time it would have tried again.
-  await Bun.sleep(1500)
+  // Past the first few times it would have tried again.
+  await Bun.sleep(FIRST_WAIT * 10)
   expect(back).toBe(0)
 })
 
@@ -805,7 +809,7 @@ test("after the server is started again, a session whose project asks again whet
   })
   const line = await lineTo(served.server.url)
   cleanups.push(line.stop)
-  const client = await connect({ url: line.url, token: made.secret })
+  const client = await connect({ url: line.url, token: made.secret, firstWait: FIRST_WAIT })
   cleanups.push(() => client.close())
 
   let printed = ""

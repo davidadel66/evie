@@ -23,6 +23,9 @@ export type ConnectOptions = {
   // Gives up connecting when it fires, such as at a time limit. It is used
   // only while connecting: once the connection is open it changes nothing.
   signal?: AbortSignal
+  // For tests: the first wait, in milliseconds, before trying again after
+  // a drop. One second when left out.
+  firstWait?: number
 }
 
 // Why a connection could not be made. The message says it in words for the
@@ -286,7 +289,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   }
 
   async function tryAgain() {
-    for (let wait = FIRST_WAIT; ; wait = Math.min(wait * 2, LONGEST_WAIT)) {
+    for (let wait = options.firstWait ?? FIRST_WAIT; ; wait = Math.min(wait * 2, LONGEST_WAIT)) {
       await pause(wait, stopping.signal)
       if (stopping.signal.aborted) return
       let line: WebSocket
