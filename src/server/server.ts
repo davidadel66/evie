@@ -24,6 +24,10 @@ export type ServerOptions = {
   // commands sent again are looked over at the same time, and forgotten
   // ten minutes after they were given.
   recheckEvery?: number
+  // How often, in milliseconds, each connection is sent a keepalive, so that
+  // its client can tell a quiet line from a dead one. Every 15 seconds when
+  // left out, which is for tests to change.
+  keepaliveEvery?: number
 }
 
 export type EvieServer = {
@@ -266,11 +270,15 @@ export function startServer(options: ServerOptions): EvieServer {
     for (const socket of connections) closeIfTakenBack(socket)
     forgetOldReplies()
   }, options.recheckEvery ?? 3000)
+  const keepalive = setInterval(() => {
+    for (const socket of connections) send(socket, { keepalive: true })
+  }, options.keepaliveEvery ?? 15_000)
 
   return {
     url: `http://${hostInAddress(options.host)}:${server.port}`,
     async stop() {
       clearInterval(recheck)
+      clearInterval(keepalive)
       await server.stop(true)
     },
   }

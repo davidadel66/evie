@@ -10,9 +10,11 @@ import type { Command, EvieEvent } from "../core/types.ts"
 export type ClientMessage = { id: string; command: Command }
 
 // From the server: the reply to one command, with what the command returned,
-// or the message of the error it failed with; or an event. A command that
-// returns nothing has no `result`.
-export type ServerMessage = { reply: string; result?: unknown } | { reply: string; error: string } | { event: EvieEvent }
+// or the message of the error it failed with; or an event; or a keepalive,
+// which carries nothing and is sent every so often so that a client can tell
+// a line that is quiet from one that has died without closing. A command
+// that returns nothing has no `result`.
+export type ServerMessage = { reply: string; result?: unknown } | { reply: string; error: string } | { event: EvieEvent } | { keepalive: true }
 
 // Where things are on the server. `socket` is the WebSocket. `check` answers
 // over plain HTTP whether a token would be let in, since a WebSocket that is

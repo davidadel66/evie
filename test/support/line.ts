@@ -10,9 +10,10 @@ export type Line = Awaited<ReturnType<typeof lineTo>>
 // the server as it is.
 export async function lineTo(serverUrl: string) {
   const server = new URL(serverUrl)
-  // For each client: its own connection to the server, and the commands it
-  // sent, by id, so that the reply to one can be lost or held back.
-  type Ends = { upstream: WebSocket; sent: Map<string, string> }
+  // For each client: its own connection to the server, the commands it
+  // sent, by id, so that the reply to one can be lost or held back, and
+  // whether the connection has gone silent.
+  type Ends = { upstream: WebSocket; sent: Map<string, string>; frozen: boolean }
   const clients = new Set<ServerWebSocket<Ends>>()
   let listening: ReturnType<typeof Bun.serve<Ends>> | undefined
   let port = 0
@@ -59,7 +60,7 @@ export async function lineTo(serverUrl: string) {
           upstream.addEventListener("close", () => resolve(false), { once: true })
         })
         if (!opened) return fetch(new URL("/check", server), { headers: headersOf(request) })
-        if (bun.upgrade(request, { data: { upstream, sent: new Map() } })) return undefined
+        if (bun.upgrade(request, { data: { upstream, sent: new Map(), frozen: false } })) return undefined
         upstream.close()
         return new Response("Connect here with a WebSocket.", { status: 400 })
       },
@@ -74,6 +75,7 @@ export async function lineTo(serverUrl: string) {
             saw(text)
           }
           upstream.addEventListener("message", (message) => {
+            if (client.data.frozen) return
             const text = String(message.data)
             if (queued) return void queued.push(text)
             const received = JSON.parse(text) as ServerMessage
@@ -98,6 +100,7 @@ export async function lineTo(serverUrl: string) {
           upstream.addEventListener("close", (event) => client.close(event.code === 1006 || event.code === 1005 ? 1000 : event.code, event.reason))
         },
         message(client, text) {
+          if (client.data.frozen) return
           const message = JSON.parse(String(text)) as ClientMessage
           client.data.sent.set(message.id, message.command.type)
           client.data.upstream.send(String(text))
@@ -128,6 +131,12 @@ export async function lineTo(serverUrl: string) {
     // Listens again, on the same address.
     mend() {
       if (!listening) listen()
+    },
+    // Every connection through the line goes silent at once, both ways,
+    // without closing, as when a laptop wakes on another network and its
+    // old connections are dead. New connections go through as usual.
+    freeze() {
+      for (const client of clients) client.data.frozen = true
     },
     // The reply to the next command of this type is lost: the line is cut
     // as it comes back, after the server has carried the command out.

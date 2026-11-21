@@ -829,6 +829,26 @@ test("a session continued by its folder is caught up on at once, so what is writ
   for (const piece of ["Work", " and", " done."]) expect(printed.split(piece)).toHaveLength(2)
 })
 
+test("a line that goes silent without closing, as when a laptop wakes on another network, is noticed, and the client connects again", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider([{ text: ["Hi."] }, { text: ["Hi again."] }]).plugin], { keepaliveEvery: 20 })
+  const drops: string[] = []
+  let back = 0
+  const client = await connect({ deadAfter: 300, onDrop: (reason) => drops.push(reason), onBack: () => back++ })
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  await say({ evie: client, session }, "hello")
+  // A line that is only quiet is kept: the server's keepalives come through it.
+  await Bun.sleep(600)
+  expect(drops).toEqual([])
+
+  line.freeze()
+  while (back === 0) await Bun.sleep(5)
+  await say({ evie: client, session }, "are you there?")
+
+  expect(drops).toEqual(["the server stopped answering"])
+  const replies = stored(served.run.events).flatMap((event) => (event.type === "assistant_message" && event.session === session ? [event.body.text] : []))
+  expect(replies).toEqual(["Hi.", "Hi again."])
+})
+
 test("a client closed while its line is down stops trying, and a command waiting for the line fails, saying so", async () => {
   const { served, line, connect } = await serveOverALine([scriptedProvider([]).plugin])
   let dropped = 0

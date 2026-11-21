@@ -24,8 +24,10 @@ export type ConnectOptions = {
   // only while connecting: once the connection is open it changes nothing.
   signal?: AbortSignal
   // For tests: the first wait, in milliseconds, before trying again after
-  // a drop. One second when left out.
+  // a drop, one second when left out; and how long the line may carry
+  // nothing before it is taken to have dropped, 45 seconds when left out.
   firstWait?: number
+  deadAfter?: number
 }
 
 // Why a connection could not be made. The message says it in words for the
@@ -87,6 +89,10 @@ const LONGEST_WAIT = 10_000
 // How long a try to connect again may take before it is given up on, for a
 // server that takes the connection but never answers.
 const CONNECT_TIMEOUT = 10_000
+// A line can die without closing, as when a laptop sleeps or changes
+// network. The server sends a keepalive every 15 seconds, so a line that
+// has carried nothing for three times that long is taken to have dropped.
+const DEAD_AFTER = 45_000
 
 // Connects to Evie's server and returns the same client interface the core
 // gives, `send`, `subscribe` and `close`, carried over one WebSocket. A
@@ -117,6 +123,8 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   // Fires when the client stops for good, with why, and stops it trying again.
   const stopping = new AbortController()
   let closing: Promise<void> | undefined
+  // Fires when the line as it is now has carried nothing for too long.
+  let silence: ReturnType<typeof setTimeout> | undefined
 
   // Hands an event to every listener. As in the core, a listener that
   // throws does not stop the others hearing it.
@@ -273,10 +281,21 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     } catch {}
   }
 
+  // Starts timing the line's silence again, from now.
+  function heardFrom(line: WebSocket) {
+    clearTimeout(silence)
+    silence = setTimeout(() => {
+      dropped("the server stopped answering")
+      line.close()
+    }, options.deadAfter ?? DEAD_AFTER)
+  }
+
   // A message from the server, on the line it came on.
   function onMessage(line: WebSocket, text: string) {
     if (line !== socket) return
+    heardFrom(line)
     const received = JSON.parse(text) as ServerMessage
+    if ("keepalive" in received) return
     if ("event" in received) return onEvent(received.event)
     const command = waiting.get(received.reply)
     if (!command) return
@@ -286,6 +305,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 
   function use(line: WebSocket) {
     socket = line
+    heardFrom(line)
     line.addEventListener("message", (message) => onMessage(line, String(message.data)))
     line.addEventListener("close", (event) => {
       // A line given up on, or closed by `close`, is no longer `socket`.
@@ -297,6 +317,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 
   function dropped(reason: string) {
     socket = undefined
+    clearTimeout(silence)
     rejoining = false
     for (const [id, command] of waiting) {
       if (!command.own) continue
@@ -349,6 +370,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     if (stopping.signal.aborted) return
     stopping.abort(cause.message)
     socket = undefined
+    clearTimeout(silence)
     loseAll(cause.message)
     options.onEnd?.(cause)
   }
@@ -386,6 +408,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
         stopping.abort("the connection was closed")
         const line = socket
         socket = undefined
+        clearTimeout(silence)
         if (line && line.readyState !== WebSocket.CLOSED) {
           await new Promise<void>((resolve) => {
             line.addEventListener("close", () => resolve(), { once: true })
