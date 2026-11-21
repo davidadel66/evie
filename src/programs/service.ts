@@ -10,6 +10,9 @@ import { fail, print } from "./common.ts"
 // service runner, what to run and how.
 
 const LABEL = "com.evie.serve"
+// How many times loading the service is tried, and how long to wait between tries.
+const LOAD_TRIES = 5
+const LOAD_PAUSE_MS = 500
 
 // What the login service needs from the computer it runs on. Tests stand
 // in for it, so that they never touch the real launch agents or launchd.
@@ -23,6 +26,8 @@ export type Computer = {
   // Runs launchctl, the command that talks to launchd, and gives back its
   // exit code and what it printed.
   launchctl(args: string[]): Promise<{ code: number; output: string }>
+  // Waits this many milliseconds, between one try and the next.
+  wait(ms: number): Promise<void>
 }
 
 export function thisComputer(): Computer {
@@ -35,6 +40,7 @@ export function thisComputer(): Computer {
       const [out, err, code] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text(), run.exited])
       return { code, output: `${out}${err}`.trim() }
     },
+    wait: (ms) => Bun.sleep(ms),
   }
 }
 
@@ -76,9 +82,15 @@ export async function runService(env: Settings, [action]: string[], computer: Co
       const stopped = await computer.launchctl(["bootout", `${domain}/${LABEL}`])
       if (stopped.code !== 0) return { ok: false, text: `The running login service could not be stopped. launchctl said: ${stopped.output}` }
     }
-    const started = await computer.launchctl(["bootstrap", domain, file])
+    // An older server that is slow to stop can leave the new one unable to
+    // load for a moment, so loading is tried a few times before giving up.
+    let started = await computer.launchctl(["bootstrap", domain, file])
+    for (let tries = 1; started.code !== 0 && tries < LOAD_TRIES; tries++) {
+      await computer.wait(LOAD_PAUSE_MS)
+      started = await computer.launchctl(["bootstrap", domain, file])
+    }
     if (started.code !== 0) {
-      return { ok: false, text: `${file} was written, but launchctl could not load it. It said: ${started.output}` }
+      return { ok: false, text: `${file} was written, but launchctl could not load it, after ${LOAD_TRIES} tries. It said: ${started.output}` }
     }
     return {
       ok: true,

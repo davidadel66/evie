@@ -23,19 +23,29 @@ async function tempFolder() {
 }
 
 // A Mac whose launchctl has the service loaded, or not, to begin with.
-// `refuses` names a launchctl command that fails, with what it prints.
-async function mac(options: { loaded?: boolean; refuses?: Record<string, string> } = {}) {
+// `refuses` names a launchctl command that fails, with what it prints, for
+// the first `times` it is run, or every time. The pauses between tries are
+// recorded, not waited for.
+async function mac(options: { loaded?: boolean; refuses?: Record<string, { output: string; times?: number }> } = {}) {
   const folder = await tempFolder()
   let loaded = options.loaded ?? false
   const calls: string[] = []
+  const waits: number[] = []
+  const refused: Record<string, number> = {}
   const computer: Computer = {
     platform: "darwin",
     launchAgents: join(folder, "LaunchAgents"),
     uid: 501,
+    async wait(ms) {
+      waits.push(ms)
+    },
     async launchctl(args) {
       calls.push(args.join(" "))
-      const refused = options.refuses?.[args[0]!]
-      if (refused !== undefined) return { code: 5, output: refused }
+      const refusal = options.refuses?.[args[0]!]
+      if (refusal && (refusal.times === undefined || (refused[args[0]!] ?? 0) < refusal.times)) {
+        refused[args[0]!] = (refused[args[0]!] ?? 0) + 1
+        return { code: 5, output: refusal.output }
+      }
       if (args[0] === "print") {
         return loaded
           ? { code: 0, output: "gui/501/com.evie.serve = {\n\tstate = running\n\tpid = 4242\n}" }
@@ -46,7 +56,7 @@ async function mac(options: { loaded?: boolean; refuses?: Record<string, string>
       return { code: 0, output: "" }
     },
   }
-  return { computer, calls, folder, plist: join(folder, "LaunchAgents", "com.evie.serve.plist") }
+  return { computer, calls, waits, folder, plist: join(folder, "LaunchAgents", "com.evie.serve.plist") }
 }
 
 test("install writes a login service that runs this evie's server, and loads it", async () => {
@@ -104,14 +114,30 @@ test("installing again unloads the older service first, so the server restarts o
   expect(await readFile(plist, "utf8")).toContain(`<string>${CLI}</string>`)
 })
 
-test("a service launchctl will not load is reported with what launchctl said", async () => {
-  const { computer, folder, plist } = await mac({ refuses: { bootstrap: "Bootstrap failed: 5: Input/output error" } })
+test("a service launchctl will not load at first, as while the older server is still stopping, is loaded when tried again", async () => {
+  const { computer, calls, waits, folder, plist } = await mac({
+    loaded: true,
+    refuses: { bootstrap: { output: "Bootstrap failed: 5: Input/output error", times: 2 } },
+  })
+
+  const done = await runService({ EVIE_HOME: join(folder, "data"), PATH: "/usr/bin" }, ["install"], computer)
+
+  expect(done.ok).toBe(true)
+  const load = `bootstrap gui/501 ${plist}`
+  expect(calls).toEqual(["print gui/501/com.evie.serve", "bootout gui/501/com.evie.serve", load, load, load])
+  expect(waits).toEqual([500, 500])
+})
+
+test("a service launchctl will not load after five tries is reported with what launchctl said", async () => {
+  const { computer, calls, waits, folder, plist } = await mac({ refuses: { bootstrap: { output: "Bootstrap failed: 5: Input/output error" } } })
 
   const done = await runService({ EVIE_HOME: join(folder, "data"), PATH: "/usr/bin" }, ["install"], computer)
 
   expect(done.ok).toBe(false)
   expect(done.text).toContain("Bootstrap failed: 5: Input/output error")
   expect(done.text).toContain(plist)
+  expect(calls.filter((call) => call.startsWith("bootstrap"))).toHaveLength(5)
+  expect(waits).toEqual([500, 500, 500, 500])
 })
 
 test("uninstall unloads the service and removes its file", async () => {
