@@ -343,6 +343,10 @@ export type ProjectSettings = {
   disable?: readonly string[]
   // Things the owner should be told when a session opens in the project.
   notices?: readonly string[]
+  // These settings hold for now only, as when the owner has not yet said
+  // whether to trust the project. They are not kept: the next session that
+  // opens in the project asks for them again.
+  forNow?: true
 }
 
 // ---- Projects -----------------------------------------------------------------
@@ -366,8 +370,18 @@ export type Commands = {
     // answers. Without it, every question in the session is refused at once.
     input: { project?: string; folder?: string; continue?: boolean; questions?: boolean }
     // `notices` are things the owner should be told, such as a project
-    // plugin that was not loaded.
-    output: { session: string; project: Project | null; resumed: boolean; notices: string[] }
+    // plugin that was not loaded. A session that is continued can be one
+    // another client left running: `turnRunning` says whether a turn is
+    // running in it, and `openQuestions` are the questions it asked that
+    // are still waiting for an answer.
+    output: {
+      session: string
+      project: Project | null
+      resumed: boolean
+      notices: string[]
+      turnRunning: boolean
+      openQuestions: EventBodies["question"][]
+    }
   }
   send_message: {
     input: { session: string; text: string }
