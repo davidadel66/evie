@@ -67,8 +67,15 @@ export async function lineTo(serverUrl: string) {
         open(client) {
           clients.add(client)
           const { upstream, sent } = client.data
+          // While a reply is held back, it and everything after it, in order.
+          let queued: string[] | undefined
+          const pass = (text: string) => {
+            client.send(text)
+            saw(text)
+          }
           upstream.addEventListener("message", (message) => {
             const text = String(message.data)
+            if (queued) return void queued.push(text)
             const received = JSON.parse(text) as ServerMessage
             const type = "reply" in received ? sent.get(received.reply) : undefined
             const losing = type === undefined ? undefined : lose.get(type)
@@ -79,11 +86,14 @@ export async function lineTo(serverUrl: string) {
             const held = type === undefined ? undefined : hold.get(type)
             if (held && type !== undefined) {
               hold.delete(type)
+              const waiting = (queued = [text])
               held.caught()
-              return void held.until.then(() => client.send(text))
+              return void held.until.then(() => {
+                queued = undefined
+                for (const text of waiting) pass(text)
+              })
             }
-            client.send(text)
-            saw(text)
+            pass(text)
           })
           upstream.addEventListener("close", (event) => client.close(event.code === 1006 || event.code === 1005 ? 1000 : event.code, event.reason))
         },
@@ -126,8 +136,9 @@ export async function lineTo(serverUrl: string) {
       return new Promise<void>((lost) => lose.set(type, lost))
     },
     // The reply to the next command of this type is held back until `until`
-    // settles, while everything else the server sends goes on through.
-    // Settles once the reply has reached the line and is being held.
+    // settles, and so is everything the server sends after it on that
+    // connection, as on a slow network: a WebSocket keeps its messages in
+    // order. Settles once the reply has reached the line and is being held.
     holdReplyTo(type: string, until: Promise<unknown>) {
       return new Promise<void>((caught) => hold.set(type, { until, caught }))
     },

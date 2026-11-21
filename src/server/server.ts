@@ -38,13 +38,14 @@ type Admitted = { token: string; device: string }
 
 // What the server keeps for each connection: who it is, the sessions it has
 // opened, how many sessions it is opening right now, the sessions it is
-// opening by their id right now, and the questions it was sent while
-// opening that are still waiting, by id, with their session.
+// opening by their id right now, each with its events held back until the
+// reply has been sent, and the questions it was sent while opening that
+// are still waiting, by id, with their session.
 type Connection = Admitted & {
   unsubscribe: () => void
   sessions: Set<string>
   opening: number
-  joining: Set<string>
+  joining: Map<string, EvieEvent[]>
   openingQuestions: Map<string, string>
 }
 
@@ -181,7 +182,7 @@ export function startServer(options: ServerOptions): EvieServer {
         // refused never reaches the core.
         const admitted = admit(request, server.port!)
         if (admitted instanceof Response) return admitted
-        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {}, sessions: new Set(), opening: 0, joining: new Set(), openingQuestions: new Map() } })) return undefined
+        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {}, sessions: new Set(), opening: 0, joining: new Map(), openingQuestions: new Map() } })) return undefined
         return new Response("Connect here with a WebSocket.", { status: 400 })
       }
       if (path === PATHS.check) {
@@ -200,6 +201,10 @@ export function startServer(options: ServerOptions): EvieServer {
           // is kept track of until it is answered: see `close`.
           if (event.type === "question" && !socket.data.sessions.has(event.session)) socket.data.openingQuestions.set(event.body.id, event.session)
           if (event.type === "answer") socket.data.openingQuestions.delete(event.body.id)
+          // Held back while the session is being opened by its id: see
+          // `message`. Not a question or an answer, which opening it can wait on.
+          const held = socket.data.joining.get(event.session)
+          if (held && event.type !== "question" && event.type !== "answer") return void held.push(event)
           send(socket, { event })
         })
       },
@@ -210,30 +215,36 @@ export function startServer(options: ServerOptions): EvieServer {
         // A client that sends something else has a bug. Its connection is
         // closed, saying why, and nothing else is touched.
         if (!message) return socket.close(1007, 'Each message must be JSON of the form { "id": ..., "command": ... }')
-        const opening = message.command.type === "open_session"
-        if (opening) socket.data.opening += 1
+        const open = message.command.type === "open_session" ? message.command : undefined
+        if (open) socket.data.opening += 1
         // A session opened by its id, as a client catching up does, is sent
         // to this connection from now, before the core reads where it
-        // stands, so that every event after that reading reaches the client.
-        // A session already open is read in the same step it is handed the
-        // command. One opened again is read once it is open, so the events
-        // of its opening are sent both as they happen and in the reply, and
-        // the client skips the second by their numbers.
-        const joining = message.command.type === "open_session" ? message.command.session : undefined
-        if (joining !== undefined) socket.data.joining.add(joining)
+        // stands, so that no event falls between that reading and the reply.
+        // Until the reply is sent its events are held back, so that what
+        // reaches the client before the reply is in it, and what comes after
+        // is new. A session already open is read in the same step it is
+        // handed the command. One opened again is read once it is open, so
+        // the events of its opening are in the reply and also come after it,
+        // and the client skips the second by their numbers.
+        const joining = open?.session
+        if (joining !== undefined && !socket.data.joining.has(joining)) socket.data.joining.set(joining, [])
         try {
           const reply = await replyTo(socket.data.device, message)
           // The session opened is learned from the reply, before the reply is
           // sent, so the client is sent its events from then on.
-          if (opening && "result" in reply) {
+          if (open && "result" in reply) {
             const { session } = reply.result as Commands["open_session"]["output"]
             socket.data.sessions.add(session)
             openedHere.add(session)
           }
           send(socket, reply)
         } finally {
-          if (opening) socket.data.opening -= 1
-          if (joining !== undefined) socket.data.joining.delete(joining)
+          if (open) socket.data.opening -= 1
+          if (joining !== undefined) {
+            const held = socket.data.joining.get(joining) ?? []
+            socket.data.joining.delete(joining)
+            for (const event of held) send(socket, { event })
+          }
         }
       },
       close(socket) {

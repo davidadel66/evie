@@ -603,7 +603,7 @@ test("when the line drops part way through a reply that uses a tool, the termina
   for (const piece of ["Hel", "world", "lookup", "found it", "Do"]) expect(printed.split(piece)).toHaveLength(2)
 })
 
-test("live events that reach the client before what it missed are held back, and shown after it", async () => {
+test("what is written while the reply with what was missed is on its way is shown once, after it", async () => {
   const carryOn = gate()
   const finish = gate()
   const release = gate()
@@ -623,11 +623,11 @@ test("live events that reach the client before what it missed are held back, and
       carryOn.open()
       await writingDo
       // What the client missed is held up on its way back, as by a slow
-      // network, while the end of the reply goes past it.
+      // network, while the reply is written to its end.
       const caught = line.holdReplyTo("open_session", release.opened)
       line.mend()
       await caught
-      const ended = line.passedOn('"turn_end"')
+      const ended = nextEvent(served.run, "turn_end")
       finish.open()
       await ended
       release.open()
@@ -767,6 +767,68 @@ test("a question whether to trust the project, refused because the line dropped 
   expect(printed).toContain("Hi.")
 })
 
+test("a session continued by its folder is caught up on at once, so what is written while the server learns which session it is is shown, and nothing twice", async () => {
+  const more = gate()
+  const rest = gate()
+  const served = await serveEvie([piecemealModel([["Work", "ing", more.opened, " and", rest.opened, " done."]])])
+  cleanups.push(served.stop)
+  // Another client leaves the session with its reply part written.
+  const left = await served.connect()
+  const { session } = await left.send({ type: "open_session", folder: served.run.projectFolder })
+  const writing = written(served.run, "ing")
+  await left.send({ type: "send_message", session, text: "do the work" })
+  await writing
+  await left.close()
+
+  // The core, with the reply going on in the moment between its reading
+  // where a session opened by its folder stands and the server learning
+  // which session that is.
+  let gapped = false
+  const core: Evie = {
+    async send(command) {
+      const reply = await served.run.evie.send(command)
+      if (command.type === "open_session" && command.folder !== undefined && !gapped) {
+        gapped = true
+        const writingMore = written(served.run, " and")
+        more.open()
+        await writingMore
+      }
+      return reply
+    },
+    subscribe: (listener) => served.run.evie.subscribe(listener),
+    close: () => served.run.evie.close(),
+  }
+  const server = startServer({ evie: core, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+  cleanups.push(() => server.stop())
+  const line = await lineTo(server.url)
+  cleanups.push(line.stop)
+  // The reply is slow to reach the terminal, and the rest is written meanwhile.
+  const release = gate()
+  const caught = line.holdReplyTo("open_session", release.opened)
+  const meanwhile = (async () => {
+    await caught
+    const ended = nextEvent(served.run, "turn_end")
+    rest.open()
+    await ended
+    release.open()
+  })()
+  const client = await connect({ url: line.url, token: served.token })
+  cleanups.push(() => client.close())
+  let printed = ""
+  await runTerminal({
+    evie: client,
+    folder: served.run.projectFolder,
+    resume: true,
+    lines: (async function* () {
+      await meanwhile
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("[note] A turn is still running in this session. Ctrl-C stops it.\nWorking and done.\n")
+  for (const piece of ["Work", " and", " done."]) expect(printed.split(piece)).toHaveLength(2)
+})
+
 test("a client closed while its line is down stops trying, and a command waiting for the line fails, saying so", async () => {
   const { served, line, connect } = await serveOverALine([scriptedProvider([]).plugin])
   let dropped = 0
@@ -838,7 +900,7 @@ test("a command sent again while it is still being carried out waits for it, and
   expect(runs).toBe(1)
 })
 
-test("a session opened by its id is sent to the client from before the core reads where it stands, so no event falls in between", async () => {
+test("a session opened by its id is sent to the client from the moment the core is asked, so no event falls in between, and those events follow the reply", async () => {
   const served = await serveEvie([scriptedProvider([]).plugin])
   cleanups.push(served.stop)
   // Stands for the core sending an event of the session in the very step it
@@ -865,12 +927,14 @@ test("a session opened by its id is sent to the client from before the core read
   cleanups.push(() => server.stop())
   const client = await connect({ url: server.url, token: served.token })
   cleanups.push(() => client.close())
-  const heard: EvieEvent[] = []
-  client.subscribe((event) => heard.push(event))
+  const heard: string[] = []
+  client.subscribe((event) => event.type === "assistant_delta" && heard.push(event.text))
+  const delta = nextEvent({ evie: client }, "assistant_delta")
 
-  await client.send({ type: "open_session", session: served.run.session })
+  await client.send({ type: "open_session", session: served.run.session }).then(() => heard.push("the reply"))
+  await delta
 
-  expect(heard).toEqual([{ type: "assistant_delta", session: served.run.session, text: "just then" }])
+  expect(heard).toEqual(["the reply", "just then"])
 })
 
 test("a background job the server stopped when it was stopped is shown as stopped once the client is back, and a pipe waiting for it leaves", async () => {

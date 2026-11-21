@@ -71,11 +71,12 @@ type Seen = {
   // For a session the owner opened: whether it was opened as one that
   // shows questions, so that it is opened the same way after a drop.
   openAs?: { questions: boolean }
-  // While catching up on the session: its live events, held back until
-  // what was missed has been passed on.
-  held: EvieEvent[] | undefined
-  // Questions and answers passed on while the session's events were held
-  // back, which were not held because opening the session can wait on one.
+  // True while the client is catching up on the session. The server sends
+  // the reply after every event it describes, so what arrives meanwhile is
+  // in it, and is not passed on as it comes (see `onEvent`).
+  behind: boolean
+  // Questions and answers passed on as they came all the same while the
+  // client was catching up, since opening the session can wait on one.
   early: Set<number>
 }
 
@@ -128,7 +129,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   }
   const seenOf = (session: string): Seen => {
     let seen = sessions.get(session)
-    if (!seen) sessions.set(session, (seen = { seq: 0, shown: "", jobs: new Map(), held: undefined, early: new Set() }))
+    if (!seen) sessions.set(session, (seen = { seq: 0, shown: "", jobs: new Map(), behind: false, early: new Set() }))
     return seen
   }
   const isNew = (seen: Seen, event: StoredEvent) => event.seq > seen.seq && !seen.early.has(event.seq)
@@ -156,26 +157,27 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     if (rest !== "") passOn({ type: "assistant_delta", session, text: rest })
   }
 
-  // A live event from the server.
+  // A live event from the server. While the client catches up on its
+  // session it is in the reply on its way, with one exception: a question,
+  // or its answer, is passed on at once, since opening a session again can
+  // wait on one, such as whether to trust its project.
   function onEvent(event: EvieEvent) {
     const seen = sessions.get(event.session)
-    if (!seen?.held) return passOn(event)
-    // A question is passed on at once: opening a session again can wait on
-    // one, such as whether to trust its project.
-    if (event.type === "question" || event.type === "answer") {
-      if (isNew(seen, event)) {
-        seen.early.add(event.seq)
-        deliver(event)
-      }
-      return
+    if (!seen?.behind) return passOn(event)
+    if ((event.type === "question" || event.type === "answer") && isNew(seen, event)) {
+      seen.early.add(event.seq)
+      deliver(event)
     }
-    seen.held.push(event)
   }
 
   // The reply to a session the owner opened.
   function onOpened(command: Waiting, output: Opened) {
     const input = command.message.command as OpenInput
     const seen = seenOf(output.session)
+    // A session opened by its folder, or to continue, is sent to this line
+    // only once the server has learned which it is, a moment after the core
+    // read where it stands, so what happened in that moment is caught up on.
+    const unsent = !seen.openAs && input.session === undefined
     if (seen.openAs) seen.openAs.questions ||= input.questions === true
     else {
       seen.openAs = { questions: input.questions === true }
@@ -192,25 +194,26 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     // What lies between is caught up on, as when the server answers a
     // command sent again from its memory of a moment before the line
     // dropped, and refused that question when it did.
-    if (socket && (command.resent || seen.seq < output.lastSeq)) void catchUp(output.session, socket)
+    if (socket && (unsent || command.resent || seen.seq < output.lastSeq)) void catchUp(output.session, socket)
   }
 
   // Asks the server for what was missed in a session since the last event
-  // passed on, and passes it on, then the live events held back meanwhile.
-  // When the line drops first, it passes nothing on: the client catches up
-  // afresh on the next line.
+  // passed on, and passes it on. Live events follow the reply. When the
+  // line drops first, it passes nothing on: the client catches up afresh on
+  // the next line.
   async function catchUp(session: string, line: WebSocket): Promise<void> {
     const seen = seenOf(session)
-    seen.held = []
+    // One under way already covers it.
+    if (seen.behind) return
+    seen.behind = true
     const reply = await ask(line, {
       type: "open_session",
       session,
       after: seen.seq,
       ...(seen.openAs?.questions && { questions: true }),
     })
+    seen.behind = false
     if (!reply) return
-    const held = seen.held ?? []
-    seen.held = undefined
     // A session that could not be opened again, as when its project's
     // plugins fail to load, is left as it is: a command sent to it says why.
     if ("result" in reply) {
@@ -233,7 +236,6 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       passOnText(session, output.replySoFar ?? "")
       seen.seq = Math.max(seen.seq, output.lastSeq)
     }
-    for (const event of held) passOn(event)
     for (const seq of seen.early) seen.seq = Math.max(seen.seq, seq)
     seen.early.clear()
   }
@@ -296,9 +298,6 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   function dropped(reason: string) {
     socket = undefined
     rejoining = false
-    // What was held back is in the log, or in the reply so far, and comes
-    // again when the client catches up afresh.
-    for (const seen of sessions.values()) seen.held = undefined
     for (const [id, command] of waiting) {
       if (!command.own) continue
       waiting.delete(id)
