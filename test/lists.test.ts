@@ -130,12 +130,13 @@ test("a session with nothing said in it is listed, with no name, while a questio
   const question = await asked
 
   const listed = await run.evie.send({ type: "list_sessions" })
+  const sent = summaries(run)
   await run.evie.send({ type: "answer_question", session: question.session, id: question.body.id, choice: "Yes" })
   await opening
 
   const summary = { session: question.session, project: run.project!.id, name: null, state: "needs_you" as const, lastActive: question.time }
   expect(listed).toEqual([summary])
-  expect(summaries(run)).toEqual([{ type: "summary", ...summary }])
+  expect(sent).toEqual([{ type: "summary", ...summary }])
 })
 
 test("a session's name is the opening words of its first message, cut at a word's end when its first line is long", async () => {
