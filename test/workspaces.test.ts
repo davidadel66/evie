@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
-import { loadSettingsFiles } from "../src/index.ts"
+import { loadSettingsFiles, type Plugin } from "../src/index.ts"
 import { git } from "./support/git.ts"
 import { nextEvent, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
@@ -27,12 +27,12 @@ async function start() {
 }
 
 // Evie started the way `evie serve` starts it, with its settings files, whose
-// global one lists no plugins.
-async function startWithSettings() {
+// global one lists no plugins. `plugins` are loaded as well.
+async function startWithSettings(plugins: Plugin[] = []) {
   const home = await tempFolder("evie-home-")
   await writeFile(join(home, "evie.json"), JSON.stringify({ plugins: [] }))
   const settings = await loadSettingsFiles({ env: { EVIE_HOME: home } })
-  const run = await startEvie([scriptedProvider([]).plugin], { home, projectSettings: settings.projectSettings, trust: settings.trust })
+  const run = await startEvie([scriptedProvider([]).plugin, ...plugins], { home, projectSettings: settings.projectSettings, trust: settings.trust })
   cleanups.push(run.stop)
   const globalFile = async () => JSON.parse(await readFile(join(home, "evie.json"), "utf8"))
   return { run, home, globalFile }
@@ -46,7 +46,7 @@ test("new_project makes the folder when it is missing, with a .evie/evie.json th
 
   const made = await run.evie.send({ type: "new_project", folder })
 
-  expect(made).toEqual({ project: { id: expect.any(String), name: "finances", folder }, madeFolder: true, trusted: false })
+  expect(made).toEqual({ project: { id: expect.any(String), name: "finances", folder }, madeFolder: true, trusted: false, syncs: false })
   expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ sync: "private" })
   expect(await run.evie.send({ type: "list_projects" })).toContainEqual(made.project)
 })
@@ -58,7 +58,7 @@ test("new_project takes a folder that is already there, and a name of the owner'
 
   const made = await run.evie.send({ type: "new_project", folder, name: "  Family finances " })
 
-  expect(made).toEqual({ project: { id: expect.any(String), name: "Family finances", folder }, madeFolder: false, trusted: false })
+  expect(made).toEqual({ project: { id: expect.any(String), name: "Family finances", folder }, madeFolder: false, trusted: false, syncs: false })
   expect(await readFile(join(folder, "budget.csv"), "utf8")).toBe("rent,1000\n")
 })
 
@@ -66,7 +66,7 @@ test("a project new_project makes is trusted, so its own settings are used witho
   const { run, globalFile } = await startWithSettings()
   const folder = join(await tempFolder("evie-place-"), "notes")
 
-  expect((await run.evie.send({ type: "new_project", folder })).trusted).toBe(true)
+  expect(await run.evie.send({ type: "new_project", folder })).toMatchObject({ trusted: true, syncs: false })
   const opened = await run.evie.send({ type: "open_session", folder, questions: true })
 
   expect(await globalFile()).toEqual({ plugins: [], trust: [folder] })
@@ -212,7 +212,7 @@ test("a folder whose .evie/ already holds something, such as a skill, is made a 
 
   const made = await run.evie.send({ type: "new_project", folder })
 
-  expect(made).toMatchObject({ project: { folder }, madeFolder: false, trusted: false })
+  expect(made).toMatchObject({ project: { folder }, madeFolder: false, trusted: false, syncs: false })
   expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ sync: "private" })
   expect(await globalFile()).toEqual({ plugins: [] })
   const asked = nextEvent(run, "question")
@@ -254,4 +254,15 @@ test("a repository that commits its .evie/ on purpose is left alone", async () =
   await run.evie.send({ type: "open_session", folder: repository })
 
   expect(await readFile(join(repository, ".git", "info", "exclude"), "utf8")).not.toContain("/.evie/")
+})
+
+test("new_project says the project's .evie folder is backed up only when the sync plugin is loaded and the project trusted", async () => {
+  // Stands for the sync plugin, which it is known by.
+  const { run } = await startWithSettings([{ name: "sync", setup() {} }])
+  const place = await tempFolder("evie-place-")
+  await mkdir(join(place, "cloned", ".evie"), { recursive: true })
+  await writeFile(join(place, "cloned", ".evie", "notes.md"), "theirs\n")
+
+  expect(await run.evie.send({ type: "new_project", folder: join(place, "fresh") })).toMatchObject({ trusted: true, syncs: true })
+  expect(await run.evie.send({ type: "new_project", folder: join(place, "cloned") })).toMatchObject({ trusted: false, syncs: false })
 })

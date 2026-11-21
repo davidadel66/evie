@@ -267,14 +267,19 @@ evie new ~/finances "Finances"   # or named as you say
 
 The folder is made when it is missing. Evie makes `.evie/evie.json` in it,
 registers the project, and trusts it (see "Trusting a project"), so its
-own settings are used without asking. A folder that is already a project,
-that already has a `.evie/evie.json`, that is inside a git repository
-other than at its top, or that is in Evie's data folder is refused. Then
-run `evie` in that folder to start working there.
+own settings are used without asking. When its `.evie` folder already
+held files, such as skills that came with a cloned repository, the
+project is made but not trusted, and its first session asks. A folder
+that is already a project, that already has a `.evie/evie.json`, that is
+inside a git repository other than at its top, or that is in Evie's data
+folder is refused. `evie new` says whether the project is trusted and
+whether its `.evie` folder is backed up. Then run `evie` in that folder
+to start working there.
 
 **Kept out of the project's own git.** When a project's folder is a git
 repository, Evie adds `/.evie/` to the repository's local exclude list,
-`.git/info/exclude`, each time a session opens there. Git reads that list
+`.git/info/exclude`, each time a session opens there, unless the
+repository already commits something in `.evie/` on purpose. Git reads that list
 the way it reads a `.gitignore`, but it is never committed, so a code
 repository never commits what Evie keeps in it, and nothing the
 repository commits is changed.
@@ -299,7 +304,9 @@ goes is a setting in its own `.evie/evie.json`:
   GitHub still says it is private; otherwise nothing is pushed. A minute
   after Evie last changed something in the `.evie` folder, and once an
   hour, what changed is committed and pushed, without asking: the setting
-  is your permission. `/sync` does it at once and says how it went.
+  is your permission. Every project is looked at once an hour from when
+  the server starts, whether or not it has been opened. `/sync` does it
+  at once and says how it went.
 - `"none"`, or no setting, keeps it on this computer.
 
 `evie new` starts a project as `"private"`. Like the rest of a project's
@@ -709,6 +716,18 @@ host.on("before_tool", (call) => {
 Hooks run in the order their plugins are listed. Each is told the session,
 its project and the conversation so far. `host.project` says which project
 the plugin is being set up for.
+
+A plugin with work of its own over time, such as the `sync` plugin's
+hourly backups, can also have a `start` function. The server calls it
+once it is listening, with every project and a signal that fires when the
+server stops:
+
+```ts
+start({ projects, signal }) {
+  const timer = setInterval(() => { /* look at each of projects */ }, 60 * 60_000)
+  signal.addEventListener("abort", () => clearInterval(timer))
+}
+```
 
 The built-in plugins in `src/plugins/` use exactly this interface, and are
 the best examples to read.

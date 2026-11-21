@@ -183,6 +183,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
 
   const questions = createQuestions({ log, emit })
   let closed = false
+  // Fires when Evie stops, for the work plugins started.
+  const stopping = new AbortController()
   // Job output goes beside the tool output that was too long to show.
   const jobs = createJobs({
     outputFolder: join(home, "tool-output"),
@@ -630,7 +632,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
         )
       })
     }
-    return { project, madeFolder, trusted }
+    // Backed up only when its setting counts and a plugin is there to act
+    // on it: the sync plugin, known by its name.
+    const syncs = trusted && options.plugins.some((plugin) => plugin.name === "sync")
+    return { project, madeFolder, trusted, syncs }
   }
 
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
@@ -731,9 +736,17 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       // Each on its own, so that one that cannot be opened again, such as
       // one whose project has gone, does not hold up the others.
       await Promise.all([...left].map((session) => reopen(session).catch(() => {})))
+      for (const plugin of options.plugins) {
+        try {
+          plugin.start?.({ projects: projects.list(), signal: stopping.signal })
+        } catch (cause) {
+          throw new Error(`The plugin "${plugin.name}" could not start its work: ${cause instanceof Error ? cause.message : String(cause)}`)
+        }
+      }
     },
     async close(how = {}) {
       closed = true
+      stopping.abort()
       clearInterval(quietCheck)
       if (how.restart) {
         // Nothing more is written from here: the log is left as a crash

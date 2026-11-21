@@ -78,8 +78,16 @@ async function standInGitHub() {
 // With `dataFolderInside`, the project's .evie folder is Evie's data folder,
 // as it is for a project at the home folder.
 // `scriptFor` makes the model's replies once the project folder is known.
+// `pushes` stands in for `git push`, when given.
 async function start(
-  options: { setting?: "private" | "none" | undefined; script?: ScriptedReply[]; after?: number; every?: number; dataFolderInside?: true } = {},
+  options: {
+    setting?: "private" | "none" | undefined
+    script?: ScriptedReply[]
+    after?: number
+    every?: number
+    dataFolderInside?: true
+    pushes?: (signal: AbortSignal | undefined) => Promise<Ran>
+  } = {},
   scriptFor?: (projectFolder: string) => Promise<ScriptedReply[]>,
 ) {
   const setting = "setting" in options ? options.setting : "private"
@@ -97,9 +105,11 @@ async function start(
     setting: async () => setting,
     after: options.after ?? 60_000,
     every: options.every ?? 60 * 60_000,
-    run: async (command, cwd) => {
+    run: async (command, cwd, signal) => {
       commands.push(command)
-      return command[0] === "gh" ? github.gh(command.slice(1)) : ran(command, cwd)
+      if (command[0] === "gh") return github.gh(command.slice(1))
+      if (options.pushes && command.includes("push")) return options.pushes(signal)
+      return ran(command, cwd)
     },
     signal: stopped.signal,
   })
@@ -351,4 +361,35 @@ test("a .evie folder that holds what a data folder holds, as a copy of one does,
     expect(await syncNow()).toStartWith(`Could not sync ${evieFolder}: It holds ${marker}, as an Evie data folder does, and a data folder, with its keys and state, is never synced.`)
     expect(commands).toEqual([])
   }
+})
+
+// ---- Work across every project, and stopping ------------------------------------------------
+
+test("once Evie is the only one running, every project is synced hourly, not only those opened since it started", async () => {
+  const { run, github } = await start({ every: 100 })
+  const folder = join(await tempFolder("evie-place-"), "ledger")
+  await run.evie.send({ type: "new_project", folder })
+
+  await run.evie.resumeWork()
+  await commitsReach(github, "evie-ledger", 1)
+
+  expect((await github.commits("evie-ledger"))[0]!.files).toEqual(["evie.json"])
+})
+
+test("a push under way is stopped when Evie stops", async () => {
+  let started = false
+  const { run, syncNow } = await start({
+    pushes: (signal) =>
+      new Promise((resolve) => {
+        started = true
+        signal?.addEventListener("abort", () => resolve({ code: 143, stdout: "", stderr: "stopped" }))
+      }),
+  })
+  await run.evie.resumeWork()
+
+  const syncing = syncNow()
+  while (!started) await Bun.sleep(10)
+  await run.evie.close()
+
+  expect(await syncing).toStartWith("Could not sync")
 })

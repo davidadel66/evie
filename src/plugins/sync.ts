@@ -30,9 +30,11 @@ export type SyncOptions = {
   // sync whatever happens, in milliseconds: a minute and an hour unless given.
   after?: number
   every?: number
-  // Runs a command, `git` or `gh`, in a folder. Replaceable, so tests never reach GitHub.
-  run?: (command: string[], cwd: string) => Promise<Ran>
-  // Stops the timers, for good.
+  // Runs a command, `git` or `gh`, in a folder, stopping it when the signal
+  // fires. Replaceable, so tests never reach GitHub.
+  run?: (command: string[], cwd: string, signal: AbortSignal | undefined) => Promise<Ran>
+  // Stops the timers and any command running, for good. Evie's own signal
+  // is added when it starts the plugin's work.
   signal?: AbortSignal
 }
 
@@ -60,16 +62,20 @@ type Step = (name: string, command: string[]) => Promise<string>
 export function sync(options: SyncOptions): Plugin {
   const after = options.after ?? 60_000
   const every = options.every ?? 60 * 60_000
-  const run = options.run ?? runCommand
   const data = options.dataFolder ?? dataFolder({})
   const states = new Map<string, State>()
 
-  options.signal?.addEventListener("abort", () => {
-    for (const state of states.values()) {
-      clearTimeout(state.soon)
-      clearInterval(state.hourly)
-    }
-  })
+  // Stopping, for good: the timers end, and so does any command running.
+  let stopped = options.signal
+  const whenStopped = (signal: AbortSignal | undefined) =>
+    signal?.addEventListener("abort", () => {
+      for (const state of states.values()) {
+        clearTimeout(state.soon)
+        clearInterval(state.hourly)
+      }
+    })
+  whenStopped(stopped)
+  const run = (command: string[], cwd: string) => (options.run ?? runCommand)(command, cwd, stopped)
 
   // One try at a time for each project: a try asked for while one is under
   // way waits for it. Why the last one failed is kept until one does not.
@@ -209,6 +215,13 @@ export function sync(options: SyncOptions): Plugin {
 
   return {
     name: "sync",
+    // Every project syncs hourly from now, not only those opened since Evie
+    // started, and what runs is stopped when Evie stops.
+    start({ projects, signal }) {
+      stopped = stopped ? AbortSignal.any([stopped, signal]) : signal
+      whenStopped(signal)
+      for (const project of projects) stateOf(project)
+    },
     setup(host) {
       const project = host.project
       host.commands.add({
@@ -224,7 +237,7 @@ export function sync(options: SyncOptions): Plugin {
       const state = stateOf(project)
       // Each change puts the try off again, so a burst of changes is one commit.
       host.on("after_tool", (call) => {
-        if (options.signal?.aborted || !changesEvie(call, project.folder)) return
+        if (stopped?.aborted || !changesEvie(call, project.folder)) return
         clearTimeout(state.soon)
         state.soon = setTimeout(() => void attempt(state), after)
         state.soon.unref()
@@ -236,7 +249,7 @@ export function sync(options: SyncOptions): Plugin {
     let state = states.get(project.id)
     if (!state) {
       const made: State = { project, queue: Promise.resolve(), problem: undefined }
-      if (!options.signal?.aborted) made.hourly = setInterval(() => void attempt(made), every).unref()
+      if (!stopped?.aborted) made.hourly = setInterval(() => void attempt(made), every).unref()
       states.set(project.id, (state = made))
     }
     return state
@@ -301,11 +314,13 @@ function repositoryName(project: Project): string {
 }
 
 // Runs a command, never waiting for a password to be typed, and for at most
-// two minutes, so a network that has gone cannot hold a try up for ever.
-async function runCommand(command: string[], cwd: string): Promise<Ran> {
+// two minutes, so a network that has gone cannot hold a try up for ever. It
+// is stopped when the signal fires.
+async function runCommand(command: string[], cwd: string, signal: AbortSignal | undefined): Promise<Ran> {
   try {
     const child = Bun.spawn(command, {
       cwd,
+      ...(signal && { signal }),
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1" },
       stdin: "ignore",
       stdout: "pipe",
@@ -313,7 +328,10 @@ async function runCommand(command: string[], cwd: string): Promise<Ran> {
       timeout: 2 * 60_000,
     })
     const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
-    if (child.signalCode !== null) return { code: code || 1, stdout, stderr: `${stderr.trim()} It took more than two minutes, so it was stopped.`.trim() }
+    if (child.signalCode !== null) {
+      const why = signal?.aborted ? "Evie was stopping, so it was stopped." : "It took more than two minutes, so it was stopped."
+      return { code: code || 1, stdout, stderr: `${stderr.trim()} ${why}`.trim() }
+    }
     return { code, stdout, stderr }
   } catch (cause) {
     return { code: 127, stdout: "", stderr: `${command[0]} could not be started: is it installed, and on the PATH Evie's server runs with? (${cause instanceof Error ? cause.message : String(cause)})` }
