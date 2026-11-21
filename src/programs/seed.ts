@@ -1,5 +1,5 @@
 import { mkdir, rm, writeFile } from "node:fs/promises"
-import { dirname, join } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { openStore } from "../core/store.ts"
 import { ask, createEvie, dataFolder, files, jobs, shell, subagents, type Plugin, type Settings } from "../index.ts"
 import { scriptedProvider, type ScriptedReply } from "../plugins/scripted.ts"
@@ -12,9 +12,11 @@ import { fail, print, reason } from "./common.ts"
 // key and costs nothing. A folder that already has sessions is refused, so
 // made-up sessions can never be mixed in with real ones.
 
-// The made-up projects, each a few files made into a git repository, in
-// this folder inside the data folder.
-const PROJECTS_FOLDER = "seed-projects"
+// The made-up projects, each a few files made into a git repository. They
+// are kept beside the data folder, in a folder of the same name with "-seed"
+// added, such as ~/.evie-dev-seed for ~/.evie-dev: the tools are kept out of
+// the data folder, so they could not work in a project inside it.
+const projectsFolder = (home: string) => `${resolve(home)}-seed`
 const PROJECTS: Record<string, Record<string, string>> = {
   "recipe-box": {
     "README.md": "# Recipe box\n\nThe family's recipes, one Markdown file each, and a small site to browse them.\n\nRun the tests with `npm test`.\n",
@@ -258,13 +260,13 @@ export async function seed(env: Settings) {
     )
   }
 
-  for (const [name, contents] of Object.entries(PROJECTS)) await makeProject(join(home, PROJECTS_FOLDER, name), contents).catch(fail)
+  for (const [name, contents] of Object.entries(PROJECTS)) await makeProject(join(projectsFolder(home), name), contents).catch(fail)
   for (const seeded of SESSIONS) await seedSession(env, home, seeded).catch((cause) => fail(`The made-up session "${seeded.kind}" did not go as scripted: ${reason(cause)}`))
 
   const width = Math.max(...SESSIONS.map((seeded) => seeded.kind.length))
   print(
     `Seeded ${home} with made-up data, made by a scripted model at no cost:\n` +
-      `  projects, in ${join(home, PROJECTS_FOLDER)}: ${Object.keys(PROJECTS).join(", ")}\n` +
+      `  projects, in ${projectsFolder(home)}: ${Object.keys(PROJECTS).join(", ")}\n` +
       `  sessions:\n` +
       SESSIONS.map((seeded) => `    ${seeded.kind.padEnd(width)}   ${seeded.project ?? "no project"}\n`).join(""),
   )
@@ -354,7 +356,7 @@ async function seedSession(env: Settings, home: string, seeded: Seeded) {
     })
 
   try {
-    const folder = seeded.project && join(home, PROJECTS_FOLDER, seeded.project)
+    const folder = seeded.project && join(projectsFolder(home), seeded.project)
     session = (await evie.send({ type: "open_session", questions: true, ...(folder && { folder }) })).session
     await seeded.run({
       async say(text, turns = 1) {

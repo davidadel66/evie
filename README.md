@@ -671,7 +671,9 @@ agent, is shared with the everyday Evie.
 for trying out a development copy or a client without your real ones: a
 plain conversation, tool calls, a question answered and one still waiting,
 a background job, a subagent, and a compacted conversation. The projects
-are small git repositories in `seed-projects` in the data folder. Every
+are small git repositories beside the data folder, in a folder of the same
+name with `-seed` added, such as `~/.evie-dev-seed`: the tools are kept out
+of the data folder, so they could not work in a project inside it. Every
 session is made by running real turns through Evie against a scripted
 stand-in for the model, so it needs no key and costs nothing. The question
 still waiting is left as a server that is stopped all at once leaves one,

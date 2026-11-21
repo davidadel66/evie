@@ -4,6 +4,7 @@ import { existsSync } from "node:fs"
 import { mkdtemp, readdir, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { createGuard } from "../src/plugins/guard.ts"
 
 // `evie seed`, run as the owner runs it: a process of its own, with a
 // temporary data folder, no key and nothing of the real environment but the path.
@@ -15,9 +16,12 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
+// A temporary data folder. The seed puts its projects beside it, in the
+// same name with "-seed" added, which goes with it.
 async function tempFolder() {
   const folder = await realpath(await mkdtemp(join(tmpdir(), "evie-seed-")))
   cleanups.push(() => rm(folder, { recursive: true, force: true }))
+  cleanups.push(() => rm(`${folder}-seed`, { recursive: true, force: true }))
   return folder
 }
 
@@ -66,11 +70,16 @@ test("evie seed fills an empty data folder with made-up projects and sessions of
   const db = new Database(join(home, "evie.db"), { readonly: true })
   cleanups.push(async () => db.close())
 
-  // The projects are git repositories that the seed made in the data folder,
-  // and the sessions are in them.
-  const made = (await readdir(join(home, "seed-projects"))).map((name) => join(home, "seed-projects", name))
+  // The projects are git repositories that the seed made beside the data
+  // folder, where the guard lets the tools work in them, and the sessions
+  // are in them.
+  const made = (await readdir(`${home}-seed`)).map((name) => join(`${home}-seed`, name))
   expect(made.length).toBeGreaterThanOrEqual(2)
-  for (const folder of made) expect(existsSync(join(folder, ".git"))).toBe(true)
+  const guard = createGuard({ dataFolder: home })
+  for (const folder of made) {
+    expect(existsSync(join(folder, ".git"))).toBe(true)
+    expect(guard({ id: "1", name: "read", input: { path: "README.md" } }, folder)).toBeUndefined()
+  }
   const projects = db.query<{ folder: string }, []>("SELECT folder FROM project").all()
   expect(projects.map((project) => project.folder).sort()).toEqual(made.sort())
 
