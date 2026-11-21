@@ -168,8 +168,13 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     jobRunning: (session) => jobs.list(session).some((job) => job.status === "running"),
     emit: deliver,
   })
-  // It is no reason on its own to keep the process running.
-  const quietCheck = setInterval(() => summaries.look(), options.quietCheckEvery ?? 60 * 60_000).unref()
+  // It is no reason on its own to keep the process running. A look that
+  // fails, as while the database is busy, must not stop Evie: the next tries again.
+  const quietCheck = setInterval(() => {
+    try {
+      summaries.look()
+    } catch {}
+  }, options.quietCheckEvery ?? 60 * 60_000).unref()
 
   // Starts the turn loop of a session and lists the session as open. Used
   // for a session a client opens and for a subagent alike: they differ only

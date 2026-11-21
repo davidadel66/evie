@@ -378,6 +378,22 @@ test("the core looks every so often for sessions that a week of quiet has settle
   ])
 })
 
+test("a look for settled sessions that fails, as when the database cannot be read, is no error: the next look tries again", async () => {
+  const { run } = await start([{ text: ["ok"] }], [], { quietCheckEvery: 5 })
+  await say(run, "hi")
+  const db = new Database(join(run.home, "evie.db"))
+  cleanups.push(async () => db.close())
+  // Another handle on the database takes away a column the summaries are read from, for long enough to be looked at several times.
+  db.run("ALTER TABLE session RENAME COLUMN parent TO parent_gone")
+  await Bun.sleep(40)
+  db.run("ALTER TABLE session RENAME COLUMN parent_gone TO parent")
+  const settled = new Promise<void>((resolve) => run.evie.subscribe((event) => event.type === "summary" && event.state === "settled" && resolve()))
+
+  setSystemTime(new Date(stored(run.events).at(-1)!.time + 7 * DAY))
+
+  await settled
+})
+
 test("a summary that cannot be worked out is skipped, the turn whose event it would describe goes on, and the next change sends one", async () => {
   const { run } = await start([{ text: ["Read it."] }, { text: ["Still here."] }])
   // Another handle on the database takes away a column the summaries are
