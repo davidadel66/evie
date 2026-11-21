@@ -17,6 +17,11 @@ export type ServerOptions = {
   // Web pages, besides Evie's own address, that may connect, such as
   // http://localhost:5173. Any other page a browser has open is refused.
   origins?: readonly string[]
+  // How often, in milliseconds, open connections are checked against the
+  // tokens, so that one whose token was taken back is closed even while it
+  // sends nothing. A token is taken back by `evie token remove`, in another
+  // process, so the server cannot be told; it looks.
+  recheckEvery?: number
 }
 
 export type EvieServer = {
@@ -30,7 +35,18 @@ export type EvieServer = {
 // and the name of its device.
 type Connection = { token: string; device: string; unsubscribe: () => void }
 
+// The close code for a connection whose token was taken back. Codes from
+// 4000 are the application's own.
+const TAKEN_BACK = 4001
+
 export function startServer(options: ServerOptions): EvieServer {
+  const connections = new Set<ServerWebSocket<Connection>>()
+  // Closes the connection if its token has been taken back, and says whether it is still let in.
+  const stillLetIn = (socket: ServerWebSocket<Connection>) => {
+    if (options.tokens.check(socket.data.token) !== undefined) return true
+    socket.close(TAKEN_BACK, "This device's token was taken back")
+    return false
+  }
   const listed = (options.origins ?? []).map((origin) => new URL(origin).origin)
 
   // Who is asking: the device whose token the request carries, or the
@@ -76,9 +92,12 @@ export function startServer(options: ServerOptions): EvieServer {
       // Every connection is sent every event of every session, as the
       // terminal was when it ran the core itself.
       open(socket) {
+        connections.add(socket)
         socket.data.unsubscribe = options.evie.subscribe((event) => send(socket, { event }))
       },
       async message(socket, text) {
+        // A command is carried out only while its device is still let in.
+        if (!stillLetIn(socket)) return
         const message = JSON.parse(String(text)) as ClientMessage
         try {
           send(socket, { reply: message.id, result: await options.evie.send(message.command) })
@@ -87,14 +106,20 @@ export function startServer(options: ServerOptions): EvieServer {
         }
       },
       close(socket) {
+        connections.delete(socket)
         socket.data.unsubscribe()
       },
     },
   })
 
+  const recheck = setInterval(() => {
+    for (const socket of connections) stillLetIn(socket)
+  }, options.recheckEvery ?? 3000)
+
   return {
     url: `http://${options.host}:${server.port}`,
     async stop() {
+      clearInterval(recheck)
       await server.stop(true)
     },
   }

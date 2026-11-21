@@ -1,5 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
+import { join } from "node:path"
+import { openStore } from "../src/core/store.ts"
 import { connect } from "../src/index.ts"
+import { createTokens } from "../src/server/tokens.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
 
@@ -11,14 +14,14 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
-async function served(options: Parameters<typeof serveEvie>[1] = {}) {
+async function start(options: Parameters<typeof serveEvie>[1] = {}) {
   const served = await serveEvie([scriptedProvider([]).plugin], options)
   cleanups.push(served.stop)
   return served
 }
 
 test("a connection with no token, or with one that is not a token, is refused before it opens, and the client says why", async () => {
-  const { server } = await served()
+  const { server } = await start()
 
   expect((await fetch(`${server.url}/ws`)).status).toBe(401)
   expect((await fetch(`${server.url}/ws`, { headers: { Authorization: "Bearer not-a-token" } })).status).toBe(401)
@@ -49,7 +52,7 @@ function opens(url: string, headers: Record<string, string>) {
 }
 
 test("a web page from another address is refused, even with a good token", async () => {
-  const { server, token } = await served()
+  const { server, token } = await start()
   const fromElsewhere = { Authorization: `Bearer ${token}`, Origin: "http://somewhere.example" }
 
   expect(await opens(server.url, fromElsewhere)).toBe(false)
@@ -58,7 +61,7 @@ test("a web page from another address is refused, even with a good token", async
 })
 
 test("Evie's own page, and a page the owner listed, are let in", async () => {
-  const { server, token } = await served({ origins: ["http://localhost:5173/"] })
+  const { server, token } = await start({ origins: ["http://localhost:5173/"] })
   const port = new URL(server.url).port
 
   for (const origin of [`http://127.0.0.1:${port}`, `http://localhost:${port}`, "http://localhost:5173"]) {
@@ -66,4 +69,43 @@ test("Evie's own page, and a page the owner listed, are let in", async () => {
   }
   // A client that is not a browser sends no Origin, and needs only its token.
   expect(await opens(server.url, { Authorization: `Bearer ${token}` })).toBe(true)
+})
+
+// Takes a token back the way `evie token remove` does: from a database
+// handle of its own, while the server holds the database open.
+function takeBack(home: string, name: string) {
+  const db = openStore(join(home, "evie.db"))
+  try {
+    return createTokens(db).remove(name)
+  } finally {
+    db.close()
+  }
+}
+
+test("a token taken back is refused from then on and its open connection is closed, while other devices carry on", async () => {
+  const served = await start({ recheckEvery: 20 })
+  const phone = served.tokens.add("phone")
+  if (!("secret" in phone)) throw new Error(phone.refused)
+  let dropped: string | undefined
+  await served.connect({ onDrop: (reason) => (dropped = reason) })
+  const phoneClient = await served.connect({ token: phone.secret })
+
+  expect(takeBack(served.run.home, "test device")).toBe(true)
+  while (dropped === undefined) await Bun.sleep(5)
+
+  expect(dropped).toBe("This device's token was taken back")
+  await expect(served.connect()).rejects.toThrow("did not accept the token")
+  const opened = await phoneClient.send({ type: "open_session", folder: served.run.projectFolder })
+  expect(opened.session).toBeString()
+})
+
+test("a command sent with a token that was just taken back is not carried out", async () => {
+  const served = await start({ recheckEvery: 60_000 })
+  const client = await served.connect()
+
+  takeBack(served.run.home, "test device")
+
+  await expect(client.send({ type: "open_session", folder: served.run.projectFolder })).rejects.toThrow(
+    "The connection to Evie was lost before it answered: This device's token was taken back.",
+  )
 })
