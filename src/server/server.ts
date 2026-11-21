@@ -118,7 +118,9 @@ export function startServer(options: ServerOptions): EvieServer {
   // and gives back what sends them, to be called once the reply has been
   // sent. When the connection opens the session again before the first open
   // is answered, they are held until the last reply is sent, since the
-  // client can still be catching up from that one.
+  // client can still be catching up from that one. When no open of it
+  // succeeded, and the connection does not have it open from before, they
+  // are dropped: the connection is sent nothing more of that session.
   function holdBack(socket: ServerWebSocket<Connection>, session: string): () => void {
     const joining = socket.data.joining.get(session) ?? { opens: 0, held: [] }
     socket.data.joining.set(session, joining)
@@ -127,6 +129,7 @@ export function startServer(options: ServerOptions): EvieServer {
       joining.opens -= 1
       if (joining.opens > 0) return
       socket.data.joining.delete(session)
+      if (!socket.data.sessions.has(session)) return
       for (const event of joining.held) send(socket, { event })
     }
   }

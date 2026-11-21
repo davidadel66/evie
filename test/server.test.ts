@@ -1190,6 +1190,42 @@ test("a session opened by its id is sent to the client from the moment the core 
   expect(heard).toEqual(["the reply", "just then"])
 })
 
+test("a session that fails to open by its id has the events held back meanwhile dropped, since the connection does not have it open", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  // Stands for the core sending an event of the session as it is asked to
+  // open it, and then failing, as when its project's plugins fail to load.
+  const listeners = new Set<(event: EvieEvent) => void>()
+  const core: Evie = {
+    send(command) {
+      if (command.type !== "open_session" || command.session === undefined) return served.run.evie.send(command)
+      for (const listener of listeners) listener({ type: "assistant_delta", session: command.session, text: "not for this client" })
+      return Promise.reject(new Error("The project's plugins could not be loaded."))
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+      const stop = served.run.evie.subscribe(listener)
+      return () => {
+        listeners.delete(listener)
+        stop()
+      }
+    },
+    close: () => served.run.evie.close(),
+  }
+  const server = startServer({ evie: core, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+  cleanups.push(() => server.stop())
+  const own = await ownLine(server.url, served.token)
+
+  expect(await own.send({ id: "open", command: { type: "open_session", session: served.run.session, after: 0 } })).toEqual({
+    reply: "open",
+    error: "The project's plugins could not be loaded.",
+  })
+  // Anything sent after the reply to the open comes before the reply to this.
+  await own.send({ id: "after", command: { type: "cancel", session: served.run.session } })
+
+  expect(own.heard.map((message) => ("reply" in message ? message.reply : "event" in message ? message.event.type : "other"))).toEqual(["open", "after"])
+})
+
 test("a background job the server stopped when it was stopped is shown as stopped once the client is back, and a pipe waiting for it leaves", async () => {
   const home = await tempFolder("evie-home-")
   const projectFolder = await tempFolder("evie-project-")
