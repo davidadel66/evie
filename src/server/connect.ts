@@ -21,7 +21,11 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   socketAddress.protocol = address.protocol === "https:" ? "wss:" : "ws:"
   const socket =
     options.token === undefined ? new WebSocket(socketAddress) : new WebSocket(socketAddress, { headers: { Authorization: `Bearer ${options.token}` } })
-  await new Promise<void>((resolve) => socket.addEventListener("open", () => resolve(), { once: true }))
+  const opened = await new Promise<boolean>((resolve) => {
+    socket.addEventListener("open", () => resolve(true), { once: true })
+    socket.addEventListener("close", () => resolve(false), { once: true })
+  })
+  if (!opened) throw new Error(await whyRefused(address, options.token))
 
   // Commands sent that have not been answered yet, by id.
   const waiting = new Map<string, { resolve(result: unknown): void; reject(error: Error): void }>()
@@ -81,4 +85,29 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       await closed
     },
   }
+}
+
+// A WebSocket that is refused tells the client only that it failed, so the
+// server is asked why over plain HTTP, and the answer is put in words for
+// the owner.
+async function whyRefused(address: URL, token: string | undefined): Promise<string> {
+  const where = address.origin
+  let status: number
+  try {
+    const response = await fetch(new URL(PATHS.check, address), {
+      headers: token === undefined ? {} : { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
+    })
+    status = response.status
+  } catch {
+    return `No Evie server is running at ${where}. Start it with \`evie serve\`.`
+  }
+  if (status === 401 && token === undefined) return `The Evie server at ${where} asks for a token, and none was given.`
+  if (status === 401) {
+    return (
+      `The Evie server at ${where} did not accept the token. If it was taken back, make a new one on the server's ` +
+      `computer with \`evie token add <name>\`; this computer's own token is made again when \`evie serve\` restarts.`
+    )
+  }
+  return `Could not connect to the Evie server at ${where} (it answered ${status}).`
 }

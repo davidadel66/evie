@@ -23,18 +23,36 @@ export type EvieServer = {
   stop(): Promise<void>
 }
 
-// What the server keeps for each connection.
-type Connection = { unsubscribe: () => void }
+// What the server keeps for each connection: the token it was opened with
+// and the name of its device.
+type Connection = { token: string; device: string; unsubscribe: () => void }
 
 export function startServer(options: ServerOptions): EvieServer {
+  // Who is asking: the device whose token the request carries, or the
+  // answer that refuses it.
+  function admit(request: Request): { token: string; device: string } | Response {
+    const token = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]
+    const device = token === undefined ? undefined : options.tokens.check(token)
+    if (token === undefined || device === undefined) return new Response("This needs a token that Evie accepts.", { status: 401 })
+    return { token, device }
+  }
+
   const server = Bun.serve<Connection>({
     hostname: options.host,
     port: options.port,
     fetch(request, server) {
       const path = new URL(request.url).pathname
       if (path === PATHS.socket) {
-        if (server.upgrade(request, { data: { unsubscribe: () => {} } })) return undefined
+        // Checked before the WebSocket opens, so a connection that is
+        // refused never reaches the core.
+        const admitted = admit(request)
+        if (admitted instanceof Response) return admitted
+        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {} } })) return undefined
         return new Response("Connect here with a WebSocket.", { status: 400 })
+      }
+      if (path === PATHS.check) {
+        const admitted = admit(request)
+        return admitted instanceof Response ? admitted : new Response("This token is accepted.")
       }
       return new Response("Not found.", { status: 404 })
     },
