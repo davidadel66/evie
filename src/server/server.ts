@@ -38,6 +38,8 @@ type Connection = { token: string; device: string; unsubscribe: () => void }
 // The close code for a connection whose token was taken back. Codes from
 // 4000 are the application's own.
 const TAKEN_BACK = 4001
+// The browser's cookie that holds its token.
+const COOKIE = "evie_token"
 
 export function startServer(options: ServerOptions): EvieServer {
   const connections = new Set<ServerWebSocket<Connection>>()
@@ -49,24 +51,47 @@ export function startServer(options: ServerOptions): EvieServer {
   }
   const listed = (options.origins ?? []).map((origin) => new URL(origin).origin)
 
-  // Who is asking: the device whose token the request carries, or the
-  // answer that refuses it.
-  //
   // Any web page open in a browser can try to reach a server on the same
-  // computer, and the browser sends it the cookie too. But a browser always
-  // says which page is asking, in `Origin`, so a page other than Evie's own
-  // or one the owner listed is refused. A client that is not a browser sends
-  // no `Origin`, and needs only its token.
-  function admit(request: Request, port: number): { token: string; device: string } | Response {
+  // computer, and the browser sends Evie's cookie with it. But a browser
+  // always says which page is asking, in `Origin`, so a page other than
+  // Evie's own or one the owner listed is refused. A client that is not a
+  // browser sends no `Origin`, and needs only its token.
+  function refusedPage(request: Request, port: number): Response | undefined {
     const origin = request.headers.get("origin")
     const own = [`http://127.0.0.1:${port}`, `http://localhost:${port}`, `http://${options.host}:${port}`]
-    if (origin !== null && !own.includes(origin) && !listed.includes(origin)) {
-      return new Response("Connections from this page are not allowed.", { status: 403 })
-    }
-    const token = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]
+    if (origin === null || own.includes(origin) || listed.includes(origin)) return undefined
+    return new Response("Connections from this page are not allowed.", { status: 403 })
+  }
+
+  // The device a token belongs to, or the answer that refuses it.
+  function deviceFor(token: string | undefined): { token: string; device: string } | Response {
     const device = token === undefined ? undefined : options.tokens.check(token)
     if (token === undefined || device === undefined) return new Response("This needs a token that Evie accepts.", { status: 401 })
     return { token, device }
+  }
+
+  // Who is asking: the device whose token the request carries, in the
+  // `Authorization` header or the browser's cookie, or the answer that
+  // refuses it.
+  function admit(request: Request, port: number): { token: string; device: string } | Response {
+    const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]
+    const cookie = new Bun.CookieMap(request.headers.get("cookie") ?? "").get(COOKIE) ?? undefined
+    return refusedPage(request, port) ?? deviceFor(bearer ?? cookie)
+  }
+
+  // A browser trades its token for a cookie. The cookie holds the token
+  // itself, so taking the token back ends the cookie too. The page's scripts
+  // cannot read it (HttpOnly), and the browser sends it only with requests
+  // that Evie's own pages make (SameSite=Strict), and over HTTPS only when
+  // Evie is reached over HTTPS (Secure).
+  async function login(request: Request, port: number): Promise<Response> {
+    const refused = refusedPage(request, port)
+    if (refused) return refused
+    const body = (await request.json().catch(() => undefined)) as { token?: unknown } | undefined
+    const admitted = deviceFor(typeof body?.token === "string" ? body.token : undefined)
+    if (admitted instanceof Response) return admitted
+    const secure = new URL(request.url).protocol === "https:" ? "; Secure" : ""
+    return new Response(null, { status: 204, headers: { "Set-Cookie": `${COOKIE}=${admitted.token}; HttpOnly; SameSite=Strict; Path=/${secure}` } })
   }
 
   const server = Bun.serve<Connection>({
@@ -86,6 +111,7 @@ export function startServer(options: ServerOptions): EvieServer {
         const admitted = admit(request, server.port!)
         return admitted instanceof Response ? admitted : new Response("This token is accepted.")
       }
+      if (path === PATHS.login && request.method === "POST") return login(request, server.port!)
       return new Response("Not found.", { status: 404 })
     },
     websocket: {
