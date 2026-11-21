@@ -372,7 +372,9 @@ test("saved output older than seven days is deleted, and so is a folder left emp
   expect(await left(folder)).toEqual(["mixed-session", "mixed-session/call_2.txt", "mixed-session/job-1.log"])
 })
 
-test("a missing folder, or a file that cannot be deleted, does not stop the rest being tidied", async () => {
+// Root can delete from a folder it may not write to, so there the file could
+// not be kept from being deleted.
+test.skipIf(process.getuid?.() === 0)("a missing folder, or a file that cannot be deleted, does not stop the rest being tidied", async () => {
   const folder = await savedOutput({ "locked/call_1.txt": 8, "open/call_1.txt": 8 })
   // A file is deleted from its folder, so this one's cannot be.
   await chmod(join(folder, "locked"), 0o500)
