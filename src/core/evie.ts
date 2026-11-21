@@ -445,11 +445,15 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // its jobs left are taken back, each picked up by the plugin of its kind;
   // and a message that was waiting when Evie last stopped is answered.
   function carryOn(session: string, opened: Open, { records, moved, cut, cutAt }: Left): void {
+    // A turn left stopped is the owner's to carry on, so the jobs taken back
+    // with it are told of when they end without starting a turn.
+    let leftStopped = cut === "asking"
     if (cut === "asking") opened.loop.tell(STOPPED_ASKING)
     if (cut === "working") {
       const recent = Date.now() - cutAt <= CUT_OFF_WITHIN
       const again = recent && restartsOf(session) < MOST_RESTARTS
       opened.loop.tell(!recent ? STOPPED_LONG_AGO : again ? RESTARTED : STOPPED_AGAIN, again)
+      leftStopped = !again
     }
     for (const record of records) {
       // Work a call was waiting on that ended within its call never became a job.
@@ -464,7 +468,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       } catch (cause) {
         work = lost(record, cause instanceof Error ? cause.message : String(cause))
       }
-      jobs.adopt(record, work)
+      jobs.adopt(record, work, !leftStopped)
     }
     // A turn carried on takes the message in itself.
     if (!opened.loop.busy()) opened.loop.wake()

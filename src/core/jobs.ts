@@ -24,7 +24,8 @@ export type Jobs = {
   // told the end of, in every session or in one.
   left(session?: string): JobRecord[]
   // Takes back a job an earlier run left, with the work that picks it up.
-  adopt(record: JobRecord, work: JobWork): Job
+  // Without `wake`, its ending is told without starting a turn.
+  adopt(record: JobRecord, work: JobWork, wake: boolean): Job
   // Gives back the number and files of work left that never became a job.
   release(record: JobRecord): void
   // The session's jobs, oldest first, the ended ones included.
@@ -50,7 +51,8 @@ export type Jobs = {
   background(session: string): number
 }
 
-type Running = { job: Job; work: JobWork; record: JobRecord; stoppedBy?: "owner" | "model" | "closing" }
+// `quiet` is a job whose ending does not start a turn.
+type Running = { job: Job; work: JobWork; record: JobRecord; stoppedBy?: "owner" | "model" | "closing"; quiet?: true }
 
 // The name of a job's output file, in its session's folder. Its record and
 // any file its plugin keeps beside it share the name, with other endings.
@@ -131,11 +133,11 @@ export function createJobs(options: {
   const announce = (job: Job) => options.emit({ type: "job", session: job.session, job: { ...job } })
 
   // From here the work is a job: listed, told of when it ends, and stopped by the closing.
-  function track(record: JobRecord, work: JobWork): Job {
+  function track(record: JobRecord, work: JobWork, wake = true): Job {
     const { id, session } = record
     delete record.inCall
     const job: Job = { id, session, kind: record.kind, title: record.title, status: "running", started: record.started, outputFile: record.outputFile }
-    const running: Running = { job, work, record }
+    const running: Running = { job, work, record, ...(!wake && { quiet: true as const }) }
     ofSession(session).push(running)
     save(record)
     announce(job)
@@ -157,7 +159,7 @@ export function createJobs(options: {
       // dealt with even if the turn that started it is long over. It counts
       // as told only once its note is in the log, so a restart before then
       // leaves it to be told by the next start.
-      safely(() => options.tell(session, `Background job ${id} (${job.title}) ${how}.\n\n${result}`, running.stoppedBy === undefined, () => told(record)))
+      safely(() => options.tell(session, `Background job ${id} (${job.title}) ${how}.\n\n${result}`, running.stoppedBy === undefined && !running.quiet, () => told(record)))
     }
     work.done.then(
       (result) => settle("finished", result),
@@ -244,8 +246,8 @@ export function createJobs(options: {
       return found
     },
 
-    adopt(record, work) {
-      return track({ ...record, keep: { ...record.keep } }, work)
+    adopt(record, work, wake) {
+      return track({ ...record, keep: { ...record.keep } }, work, wake)
     },
 
     release,

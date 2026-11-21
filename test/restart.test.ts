@@ -594,3 +594,26 @@ test("a subagent cut off while waiting for an answer is left stopped, and the tu
   expect(notes(second.run, session)[0]).toBe(RESTARTED)
   expect(of(second.run, session).filter((event) => event.type === "answer")).toMatchObject([{ body: { choice: null } }])
 })
+
+test("a job picked up in a session left stopped is told when it ends, without starting a turn", async () => {
+  const { startAgain } = await machine()
+  const first = await startAgain(
+    [{ text: [], calls: [{ name: "shell", input: { command: "sleep 0.5; echo done", background: true } }] }, { text: [], calls: [{ name: "ask", input: { question: "Deploy too?", choices: ["yes", "no"] } }] }],
+    [shell(), ask()],
+    { questions: true },
+  )
+  const session = first.run.session
+  const asked = until(first.run, (event) => event.type === "question")
+  await first.run.evie.send({ type: "send_message", session, text: "build it" })
+  await asked
+  await first.restart()
+
+  const second = await startAgain([], [shell(), ask()])
+  const told = until(second.run, (event) => event.type === "note" && event.session === session && event.body.text.startsWith("Background job 1"))
+  await second.run.evie.resumeWork()
+  await told
+  await Bun.sleep(100)
+
+  expect(second.model.requests).toEqual([])
+  expect(of(second.run, session).filter((event) => event.type === "turn_start")).toEqual([])
+})
