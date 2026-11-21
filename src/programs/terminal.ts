@@ -1,6 +1,6 @@
 import { createInterface } from "node:readline"
-import { connect, createLiveInput, dataFolder, runTerminal, type Settings } from "../index.ts"
-import { readOwnToken } from "../server/tokens.ts"
+import { connect, ConnectError, createLiveInput, dataFolder, runTerminal, type Settings } from "../index.ts"
+import { ownTokenFile, readOwnToken } from "../server/tokens.ts"
 import { loadServerSettings } from "../settings-files.ts"
 import { EXIT_CODES, fail, print } from "./common.ts"
 
@@ -10,13 +10,7 @@ import { EXIT_CODES, fail, print } from "./common.ts"
 // computer's own.
 export async function terminal(env: Settings, args: string[]) {
   const serverSettings = await loadServerSettings({ env }).catch(fail)
-  const token =
-    env.EVIE_TOKEN?.trim() ||
-    (await readOwnToken(dataFolder(env)).catch(fail)) ||
-    fail(
-      "There is no token for this computer yet. `evie serve` makes one the first time it starts. To reach a server " +
-        "on another computer, set EVIE_TOKEN to a token made there with `evie token add <name>`.",
-    )
+  const { token, own } = await tokenFor(env, serverSettings.address)
   // Puts the terminal back as it was, when the live input line has taken it over.
   let restore = () => {}
   const evie = await connect({
@@ -29,7 +23,16 @@ export async function terminal(env: Settings, args: string[]) {
       console.error(`\n[error] The connection to the Evie server was lost: ${reason}. \`evie --continue\` carries on with this session.`)
       process.exit(1)
     },
-  }).catch(fail)
+  }).catch((cause) => {
+    // Taken back, or made by a server whose data folder has since changed.
+    if (own && cause instanceof ConnectError && cause.reason === "token") {
+      fail(
+        `The Evie server at ${new URL(serverSettings.address).origin} refused this computer's token. Removing ` +
+          `${ownTokenFile(dataFolder(env))} and starting \`evie serve\` again makes a new one.`,
+      )
+    }
+    return fail(cause)
+  })
 
   // Leaving stops nothing in the server: being told to stop, or the terminal
   // window closing, closes the connection only.
@@ -116,4 +119,27 @@ export async function terminal(env: Settings, args: string[]) {
     await evie.close()
   }
   if (problem !== undefined) fail(problem)
+}
+
+// The names a client on this computer reaches its own server by.
+const THIS_COMPUTER = ["127.0.0.1", "localhost", "[::1]"]
+
+// The token to connect with: `EVIE_TOKEN`, or else this computer's own, which
+// `evie serve` saved in the data folder. `own` says it is the latter. This
+// computer's token is sent only to a server on this computer, so that it
+// never reaches another.
+async function tokenFor(env: Settings, address: string): Promise<{ token: string; own: boolean }> {
+  const given = env.EVIE_TOKEN?.trim()
+  if (given) return { token: given, own: false }
+  const elsewhere = Boolean(env.EVIE_SERVER?.trim()) && !THIS_COMPUTER.includes(new URL(address).hostname)
+  if (elsewhere) {
+    fail(
+      "EVIE_SERVER names another computer, so this computer's own token is not sent to it. Set EVIE_TOKEN to a token " +
+        "made with `evie token add <name>` on the server's computer.",
+    )
+  }
+  const own = await readOwnToken(dataFolder(env)).catch(fail)
+  return own === undefined
+    ? fail("No Evie server has run on this computer yet. Start one with `evie serve`, which also makes this computer's token.")
+    : { token: own, own: true }
 }

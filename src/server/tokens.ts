@@ -55,18 +55,22 @@ function createTokens(db: Database): Tokens {
 const OWN_NAME = "this computer"
 const OWN_FILE = "server-token"
 
-// Makes this computer's token when it has none that works: the file is
-// missing, or holds a token that was taken back. Called when the server
-// starts.
+// The file that holds this computer's token.
+export const ownTokenFile = (home: string) => join(home, OWN_FILE)
+
+// Makes this computer's token the first time the server starts, which is
+// when there is no token file. A token taken back stays taken back, and the
+// file is left as it is; removing the file makes a new token at the next
+// start, in place of any left under this computer's name. Called when the
+// server starts.
 export async function ensureOwnToken(tokens: Tokens, home: string): Promise<void> {
-  const saved = await readOwnToken(home)
-  if (saved !== undefined && tokens.check(saved) !== undefined) return
+  if ((await readOwnToken(home)) !== undefined) return
   tokens.remove(OWN_NAME)
   const made = tokens.add(OWN_NAME)
   if ("refused" in made) throw new Error(made.refused)
   // Written beside the file, readable by the owner only, and then moved into
   // place, so the secret is never in a file others can read.
-  const file = join(home, OWN_FILE)
+  const file = ownTokenFile(home)
   await rm(`${file}.new`, { force: true })
   await writeFile(`${file}.new`, `${made.secret}\n`, { mode: 0o600 })
   await rename(`${file}.new`, file)
@@ -76,7 +80,7 @@ export async function ensureOwnToken(tokens: Tokens, home: string): Promise<void
 // A file that is there and cannot be read is a problem to report, not to
 // pass over.
 export async function readOwnToken(home: string): Promise<string | undefined> {
-  const file = join(home, OWN_FILE)
+  const file = ownTokenFile(home)
   let text: string
   try {
     text = await readFile(file, "utf8")

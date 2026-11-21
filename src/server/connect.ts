@@ -12,10 +12,23 @@ export type ConnectOptions = {
   onDrop?: (reason: string) => void
 }
 
+// Why a connection could not be made. The message says it in words for the
+// owner; `reason` says it for a program that has more to add, such as which
+// token it sent.
+export class ConnectError extends Error {
+  constructor(
+    message: string,
+    readonly reason: "no server" | "token" | "page" | "other",
+  ) {
+    super(message)
+  }
+}
+
 // Connects to Evie's server and returns the same client interface the core
 // gives, `send`, `subscribe` and `close`, carried over one WebSocket. A
 // client written for the core works over it unchanged. Closing it closes
 // the connection only: the server, and anything running in it, carry on.
+// When the connection is refused, it rejects with a `ConnectError`.
 export async function connect(options: ConnectOptions): Promise<Evie> {
   const address = new URL(options.url)
   const socketAddress = new URL(PATHS.socket, address)
@@ -27,7 +40,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     socket.addEventListener("open", () => resolve(true), { once: true })
     socket.addEventListener("close", () => resolve(false), { once: true })
   })
-  if (!opened) throw new Error(await whyRefused(address, headers))
+  if (!opened) throw await whyRefused(address, headers)
 
   // Commands sent that have not been answered yet, by id.
   const waiting = new Map<string, { resolve(result: unknown): void; reject(error: Error): void }>()
@@ -92,7 +105,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 // A WebSocket that is refused tells the client only that it failed, so the
 // server is asked why over plain HTTP, and the answer is put in words for
 // the owner.
-async function whyRefused(address: URL, headers: Record<string, string> | undefined): Promise<string> {
+async function whyRefused(address: URL, headers: Record<string, string> | undefined): Promise<ConnectError> {
   const where = address.origin
   let status: number
   try {
@@ -102,15 +115,18 @@ async function whyRefused(address: URL, headers: Record<string, string> | undefi
     })
     status = response.status
   } catch {
-    return `No Evie server is running at ${where}. Start it with \`evie serve\`.`
+    return new ConnectError(`No Evie server is running at ${where}. Start it with \`evie serve\`.`, "no server")
   }
-  if (status === 401 && headers === undefined) return `The Evie server at ${where} asks for a token, and none was given.`
+  if (status === 401 && headers === undefined) return new ConnectError(`The Evie server at ${where} asks for a token, and none was given.`, "token")
   if (status === 401) {
-    return (
+    return new ConnectError(
       `The Evie server at ${where} did not accept the token. If it was taken back, make a new one on the server's ` +
-      `computer with \`evie token add <name>\`; this computer's own token is made again when \`evie serve\` restarts.`
+        `computer with \`evie token add <name>\`.`,
+      "token",
     )
   }
-  if (status === 403) return `The Evie server at ${where} does not let this page connect. Add its address to "origins" under "server" in evie.json.`
-  return `Could not connect to the Evie server at ${where} (it answered ${status}).`
+  if (status === 403) {
+    return new ConnectError(`The Evie server at ${where} does not let this page connect. Add its address to "origins" under "server" in evie.json.`, "page")
+  }
+  return new ConnectError(`Could not connect to the Evie server at ${where} (it answered ${status}).`, "other")
 }

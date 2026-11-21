@@ -127,7 +127,7 @@ test("another device connects with EVIE_SERVER and a token of its own, until the
   expect(refused.stderr).toContain(`The Evie server at http://127.0.0.1:${port} did not accept the token.`)
 })
 
-test("this computer's token is kept when the server starts again, and made anew once it has been taken back", async () => {
+test("this computer's token is kept when the server starts again, stays taken back once taken back, and is made anew when its file is removed", async () => {
   const port = await freePort()
   const home = await homeWith(port, ["Still here."])
   const project = await tempFolder("evie-project-")
@@ -144,9 +144,40 @@ test("this computer's token is kept when the server starts again, and made anew 
   expect(await ownToken()).toBe(first)
 
   expect((await evie(["token", "remove", "this computer"], { home })).code).toBe(0)
+  await restart()
+  expect(await ownToken()).toBe(first)
+  const server = await serve(home)
+  const refused = await evie([], { home, cwd: project, input: "hello\n" })
+  expect(refused.code).toBe(1)
+  expect(refused.stderr).toContain(
+    `The Evie server at http://127.0.0.1:${port} refused this computer's token. Removing ${join(home, "server-token")} and ` +
+      "starting `evie serve` again makes a new one.",
+  )
+
+  server.kill("SIGTERM")
+  await server.exited
+  await rm(join(home, "server-token"))
   await serve(home)
   expect(await ownToken()).not.toBe(first)
   expect((await evie([], { home, cwd: project, input: "hello\n" })).stdout).toContain("Still here.")
+})
+
+test("this computer's token is sent only to a server on this computer", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, ["Hello, this computer."])
+  const project = await tempFolder("evie-project-")
+  await serve(home)
+
+  const here = await evie([], { home, cwd: project, input: "hello\n", env: { EVIE_SERVER: `127.0.0.1:${port}` } })
+  expect(here.stdout).toContain("Hello, this computer.")
+
+  // An address that never resolves, so nothing is sent anywhere.
+  const elsewhere = await evie([], { home, cwd: project, input: "hello\n", env: { EVIE_SERVER: "evie-server.invalid:3843" } })
+  expect(elsewhere.code).toBe(1)
+  expect(elsewhere.stderr).toContain(
+    "EVIE_SERVER names another computer, so this computer's own token is not sent to it. Set EVIE_TOKEN to a token " +
+      "made with `evie token add <name>` on the server's computer.",
+  )
 })
 
 test("evie serve with a server setting it cannot use stops, and says which", async () => {
@@ -184,13 +215,13 @@ test("when the server stops in the middle of a turn, evie says the connection wa
   expect(await new Response(client.stderr).text()).toContain("[error] The connection to the Evie server was lost")
 })
 
-test("evie on a computer with no token yet says how to get one", async () => {
+test("evie on a computer where no server has run yet says to start one", async () => {
   const home = await tempFolder("evie-home-")
 
   const said = await evie([], { home, input: "hello\n" })
 
   expect(said.code).toBe(1)
-  expect(said.stderr).toContain("There is no token for this computer yet. `evie serve` makes one the first time it starts.")
+  expect(said.stderr).toContain("No Evie server has run on this computer yet. Start one with `evie serve`, which also makes this computer's token.")
 })
 
 // ---- evie token ------------------------------------------------------------------------------

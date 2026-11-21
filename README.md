@@ -126,7 +126,9 @@ computer: the server can run commands, and any web page open in a browser
 can try to reach it. The first time the server starts, it makes a token
 named "this computer" and saves it in `server-token` in the data folder,
 where only your user can read it. `evie` on this computer uses it, with
-nothing to set up.
+nothing to set up, and sends it to no other server. Once taken back it
+stays taken back; to make a new one, remove `server-token` and start
+`evie serve` again.
 
 Each other device gets a token of its own, so that one can be taken back
 without the others:
