@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process"
-import { closeSync, fstatSync, openSync, readFileSync, readSync } from "node:fs"
+import { closeSync, fstatSync, openSync, readFileSync, readSync, renameSync } from "node:fs"
 import { constants, homedir } from "node:os"
+import { dirname, join } from "node:path"
 import { EndNotKnown } from "../core/jobs.ts"
+import { safeName } from "../core/tools.ts"
 import type { JobRecord, JobWork, Plugin, Tool } from "../core/types.ts"
 import { resolvePath, statOrMissing } from "./files/paths.ts"
 
@@ -24,7 +26,8 @@ const DEFAULT_TIMEOUT_SECONDS = 120
 const LONGEST_TIMEOUT_SECONDS = 60 * 60
 // How much of what a command printed is read for its result. Anything over
 // the limit shown to the model is saved to a file by the shared tool
-// handling; this only stops a runaway command from using up memory.
+// handling. A command that printed more than this has its output file kept
+// instead, and only the end of it is shown.
 const MAX_COLLECTED_BYTES = 5 * 1024 * 1024
 
 export function shell(): Plugin {
@@ -137,10 +140,22 @@ const shellTool: Tool = {
       return handOver(`The command did not finish within ${seconds} second${seconds === 1 ? "" : "s"}, so it was moved to the background, where it is still running.`)
     }
     // It ended within its call, so it never became a job: what it printed is
-    // the call's result, and its files go.
+    // the call's result, and its files go. Output too long to read whole is
+    // kept under the call's name, as other long output is, for a week.
     const printed = endOf(reserved.outputFile, MAX_COLLECTED_BYTES)
+    if (!printed.cut) {
+      reserved.release()
+      return describe(first, printed, given)
+    }
+    const kept = join(dirname(reserved.outputFile), `${safeName(context.callId)}.log`)
+    let where = `The full output is saved at ${kept}. Read that file with offset and limit to see more.`
+    try {
+      renameSync(reserved.outputFile, kept)
+    } catch (cause) {
+      where = `The full output could not be kept (${cause instanceof Error ? cause.message : String(cause)}).`
+    }
     reserved.release()
-    return describe(first, printed, given)
+    return `${describe(first, printed, given, MOST_TOLD)}\n\n[${where}]`
   },
 }
 
@@ -178,7 +193,7 @@ function describe(ended: Ended, printed: Printed, timeout: number | undefined, m
   if (most !== undefined && (output.length > most || printed.cut)) {
     output = output.slice(-most)
     notes.push(`[Only the end of the output is shown.]`)
-  } else if (printed.cut) notes.push("[Some output was dropped: the command printed more than 5 MiB.]")
+  }
   if (ended.how === "timeout") {
     notes.push(`[Stopped: the command ran past its timeout of ${timeout} second${timeout === 1 ? "" : "s"}.]`)
   } else if (ended.how === "cancelled") {

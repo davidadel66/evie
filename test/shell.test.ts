@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { realpath } from "node:fs/promises"
+import { readFile, realpath } from "node:fs/promises"
 import { homedir } from "node:os"
 import { shell } from "../src/index.ts"
 import { toolProject } from "./support/tool-project.ts"
@@ -85,4 +85,15 @@ test("a command that leaves something running is waited for until all it started
   expect(await call("shell", { command: "sleep 30 & echo early", timeout: 1 })).toStartWith(
     "The command did not finish within 1 second, so it was moved to the background, where it is still running. It is background job 1,",
   )
+})
+
+test("a command that prints more than 5 MiB shows its end, and keeps all of it in a file it names", async () => {
+  const { call } = await project()
+
+  const result = await call("shell", { command: "yes 0123456789 | head -c 6000000; echo; echo the very end" })
+
+  expect(result).toContain("\nthe very end\n\n[Only the end of the output is shown.]\n\n[The full output is saved at ")
+  const kept = /The full output is saved at (\S+)\. Read that file/.exec(result)![1]!
+  expect((await readFile(kept, "utf8")).length).toBe(6000000 + "\nthe very end\n".length)
+  expect(result).not.toContain("[Output cut:")
 })
