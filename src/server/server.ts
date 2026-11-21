@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun"
-import type { Evie } from "../core/types.ts"
+import type { Commands, Evie, EvieEvent } from "../core/types.ts"
 import type { Tokens } from "./tokens.ts"
 import { PATHS, type ClientMessage, type ServerMessage } from "./wire.ts"
 
@@ -31,9 +31,10 @@ export type EvieServer = {
   stop(): Promise<void>
 }
 
-// What the server keeps for each connection: the token it was opened with
-// and the name of its device.
-type Connection = { token: string; device: string; unsubscribe: () => void }
+// What the server keeps for each connection: the token it was opened with,
+// the name of its device, the sessions it has opened, and how many sessions
+// it is opening right now.
+type Connection = { token: string; device: string; unsubscribe: () => void; sessions: Set<string>; opening: number }
 
 // The close code for a connection whose token was taken back. Codes from
 // 4000 are the application's own.
@@ -43,6 +44,21 @@ const COOKIE = "evie_token"
 
 export function startServer(options: ServerOptions): EvieServer {
   const connections = new Set<ServerWebSocket<Connection>>()
+  // Every session a client has opened through this server, whether or not
+  // that client is still connected.
+  const openedHere = new Set<string>()
+
+  // Which events a connection is sent: those of the sessions it has opened.
+  // A session can ask a question before it is open, such as whether to trust
+  // its project, so while a connection is opening one it is also sent the
+  // questions and answers of sessions that no client has opened here yet.
+  // Two clients opening sessions at the same moment can each be sent the
+  // other's opening question. That is accepted: it needs both to be opening
+  // at once, and a question from a session already open never goes astray.
+  function sentTo(connection: Connection, event: EvieEvent): boolean {
+    if (connection.sessions.has(event.session)) return true
+    return connection.opening > 0 && (event.type === "question" || event.type === "answer") && !openedHere.has(event.session)
+  }
   // Closes the connection if its token has been taken back, and says whether it is still let in.
   const stillLetIn = (socket: ServerWebSocket<Connection>) => {
     if (options.tokens.check(socket.data.token) !== undefined) return true
@@ -104,7 +120,7 @@ export function startServer(options: ServerOptions): EvieServer {
         // refused never reaches the core.
         const admitted = admit(request, server.port!)
         if (admitted instanceof Response) return admitted
-        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {} } })) return undefined
+        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {}, sessions: new Set(), opening: 0 } })) return undefined
         return new Response("Connect here with a WebSocket.", { status: 400 })
       }
       if (path === PATHS.check) {
@@ -115,11 +131,11 @@ export function startServer(options: ServerOptions): EvieServer {
       return new Response("Not found.", { status: 404 })
     },
     websocket: {
-      // Every connection is sent every event of every session, as the
-      // terminal was when it ran the core itself.
       open(socket) {
         connections.add(socket)
-        socket.data.unsubscribe = options.evie.subscribe((event) => send(socket, { event }))
+        socket.data.unsubscribe = options.evie.subscribe((event) => {
+          if (sentTo(socket.data, event)) send(socket, { event })
+        })
       },
       async message(socket, text) {
         // A command is carried out only while its device is still let in.
@@ -128,10 +144,22 @@ export function startServer(options: ServerOptions): EvieServer {
         // A client that sends something else has a bug. Its connection is
         // closed, saying why, and nothing else is touched.
         if (!message) return socket.close(1007, 'Each message must be JSON of the form { "id": ..., "command": ... }')
+        const opening = message.command.type === "open_session"
+        if (opening) socket.data.opening += 1
         try {
-          send(socket, { reply: message.id, result: await options.evie.send(message.command) })
+          const result = await options.evie.send(message.command)
+          // The session opened is learned from the reply, before the reply is
+          // sent, so the client is sent its events from then on.
+          if (opening) {
+            const { session } = result as Commands["open_session"]["output"]
+            socket.data.sessions.add(session)
+            openedHere.add(session)
+          }
+          send(socket, { reply: message.id, result })
         } catch (cause) {
           send(socket, { reply: message.id, error: cause instanceof Error ? cause.message : String(cause) })
+        } finally {
+          if (opening) socket.data.opening -= 1
         }
       },
       close(socket) {

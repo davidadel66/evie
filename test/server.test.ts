@@ -1,5 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
-import { runTerminal, type Evie, type Plugin } from "../src/index.ts"
+import { mkdtemp, realpath, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { runTerminal, type Evie, type EvieEvent, type Plugin } from "../src/index.ts"
 import { nextEvent, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
@@ -99,9 +102,10 @@ test("Ctrl-C stops the turn in progress over the network", async () => {
   expect(printed).toContain("Thinking\n[cancelled]\n")
 })
 
-test("a question reaches the terminal over the network, and the number typed answers it", async () => {
+// A deploy tool that asks the owner before it runs, and the answers it was given.
+function asksBeforeDeploy() {
   const answers: (string | null)[] = []
-  const asksFirst: Plugin = {
+  const plugin: Plugin = {
     name: "asks-before-deploy",
     setup(host) {
       host.tools.add({ name: "deploy", description: "Deploys.", inputSchema: { type: "object" }, run: async () => "deployed" })
@@ -112,7 +116,19 @@ test("a question reaches the terminal over the network, and the number typed ans
       })
     },
   }
-  const model = scriptedProvider([{ text: [], calls: [{ name: "deploy", input: {} }] }, { text: ["Done."] }])
+  return { plugin, answers }
+}
+const callsDeploy = (): ScriptedReply[] => [{ text: [], calls: [{ name: "deploy", input: {} }] }, { text: ["Done."] }]
+
+async function tempFolder(prefix: string) {
+  const folder = await realpath(await mkdtemp(join(tmpdir(), prefix)))
+  cleanups.push(() => rm(folder, { recursive: true, force: true }))
+  return folder
+}
+
+test("a question reaches the terminal over the network, and the number typed answers it", async () => {
+  const { plugin: asksFirst, answers } = asksBeforeDeploy()
+  const model = scriptedProvider(callsDeploy())
   const served = await serveEvie([model.plugin, asksFirst])
   cleanups.push(served.stop)
   let printed = ""
@@ -179,6 +195,43 @@ test("--continue over the network carries on the last session of the project", a
     { role: "user", text: "first" },
     { role: "user", text: "second" },
   ])
+})
+
+// ---- Which events each client is sent ------------------------------------------------------
+
+test("a client opening a session is sent its own opening question, and never a question from another client's session", async () => {
+  const trusted = await tempFolder("evie-project-")
+  const served = await serveEvie([scriptedProvider(callsDeploy()).plugin, asksBeforeDeploy().plugin], {
+    // Opening this project stops to ask whether to trust it, as a project with a settings file of its own does.
+    projectSettings: async (project, { ask }) => {
+      if (project.folder === trusted) await ask({ text: "Trust this project?", choices: ["Yes", "No"] })
+      return []
+    },
+  })
+  cleanups.push(served.stop)
+  const first = await served.connect()
+  const second = await served.connect()
+  const secondSaw: EvieEvent[] = []
+  second.subscribe((event) => secondSaw.push(event))
+  const { session: firstSession } = await first.send({ type: "open_session", folder: served.run.projectFolder, questions: true })
+
+  // The second client starts opening its project, which stops to ask.
+  const trustAsked = nextEvent({ evie: second }, "question")
+  const opening = second.send({ type: "open_session", folder: trusted, questions: true })
+  const trust = await trustAsked
+  // While it is still opening, the first client's turn asks a question of its own.
+  const deployAsked = nextEvent({ evie: first }, "question")
+  await first.send({ type: "send_message", session: firstSession, text: "ship it" })
+  const deploy = await deployAsked
+  await second.send({ type: "answer_question", session: trust.session, id: trust.body.id, choice: "Yes" })
+  const { session: secondSession } = await opening
+  const firstEnded = nextEvent({ evie: first }, "turn_end")
+  await first.send({ type: "answer_question", session: firstSession, id: deploy.body.id, choice: "Yes" })
+  await firstEnded
+
+  expect(trust).toMatchObject({ session: secondSession, body: { text: "Trust this project?" } })
+  expect(deploy.body.text).toBe("Deploy to production?")
+  expect(secondSaw.filter((event) => event.session === firstSession)).toEqual([])
 })
 
 // ---- Leaving, and losing the connection ------------------------------------------------

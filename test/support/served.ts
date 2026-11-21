@@ -1,6 +1,6 @@
 import { join } from "node:path"
 import { openStore } from "../../src/core/store.ts"
-import { connect, startServer, type ConnectOptions, type Plugin } from "../../src/index.ts"
+import { connect, startServer, type ConnectOptions, type EvieOptions, type Plugin } from "../../src/index.ts"
 import { createTokens } from "../../src/server/tokens.ts"
 import { startEvie } from "./harness.ts"
 
@@ -9,8 +9,11 @@ export type Served = Awaited<ReturnType<typeof serveEvie>>
 // Starts Evie behind its server on a free port, with one device token made,
 // as `evie serve` and `evie token add` would. Tokens are made through a
 // database handle of their own, the way the token commands open it.
-export async function serveEvie(plugins: Plugin[], options: { origins?: string[]; recheckEvery?: number; questions?: boolean } = {}) {
-  const run = await startEvie(plugins, { ...(options.questions && { questions: true }) })
+export async function serveEvie(
+  plugins: Plugin[],
+  options: { origins?: string[]; recheckEvery?: number; questions?: boolean; projectSettings?: NonNullable<EvieOptions["projectSettings"]> } = {},
+) {
+  const run = await startEvie(plugins, { ...(options.questions && { questions: true }), ...(options.projectSettings && { projectSettings: options.projectSettings }) })
   const db = openStore(join(run.home, "evie.db"))
   const tokens = createTokens(db)
   const made = tokens.add("test device")
