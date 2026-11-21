@@ -10,7 +10,7 @@ import { createProjects } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
 import { createSummaries } from "./summaries.ts"
-import type { Ask, Children, Commands, Evie, EvieEvent, Host, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
+import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
 
 export type EvieOptions = {
   // Settings from the environment. `EVIE_HOME` names the data folder.
@@ -53,7 +53,7 @@ export function dataFolder(env: Record<string, string | undefined>): string {
 //
 // Evie is not started in a project. A client opens a session, which belongs
 // to a project or to none, and one Evie serves every open session.
-export async function createEvie(options: EvieOptions): Promise<Evie> {
+export async function createEvie(options: EvieOptions): Promise<Core> {
   // Each project has a plugin host of its own, built the first time a session
   // opens in it: the global plugins, then the project's own. The general
   // session's host has the global plugins alone, and is built now, so that a
@@ -157,8 +157,10 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
 
   // Each session open in this process: its turn loop, its project and that
   // project's plugin host. `canAnswer` says whether its client shows questions.
-  // `parent` is the session that started this one as a subagent.
-  type Open = { loop: Loop; project: Project | null; host: Host; notices: string[]; model: string; canAnswer: boolean; parent?: string }
+  // `parent` is the session that started this one as a subagent, and
+  // `children` are its own subagents, as its tools are given them; `child`
+  // opens one of them, if it is not open yet.
+  type Open = { loop: Loop; project: Project | null; host: Host; notices: string[]; model: string; canAnswer: boolean; parent?: string; children: Children; child(id: string): Open }
   const sessions = new Map<string, Open>()
 
   const summaries = createSummaries({
@@ -183,7 +185,8 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     const { session, project, scope, model, parent } = given
     const as = parent === undefined ? { readOnly: false } : projects.startedAs(session)
     const maxTokens = scope.maxTokens ?? options.maxTokens
-    const opened: Open = { project, host: scope.host, notices: scope.notices, model, canAnswer: given.canAnswer, ...(parent !== undefined && { parent }) } as Open
+    const { children, child } = childrenOf(session, project, scope)
+    const opened: Open = { project, host: scope.host, notices: scope.notices, model, canAnswer: given.canAnswer, children, child, ...(parent !== undefined && { parent }) } as Open
     opened.loop = createLoop({
       session,
       project,
@@ -206,11 +209,12 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
           : questions.ask(parent, { ...question, text: `A subagent asks: ${question.text}` }, { canAnswer: sessions.get(parent)?.canAnswer ?? false, signal }),
       jobs: {
         start: (work) => jobs.start(session, work),
+        reserve: (work) => jobs.reserve(session, work),
         list: () => jobs.list(session),
         stop: (id) => jobs.stop(session, id, "model"),
         whileWaiting: (asked) => jobs.whileWaiting(session, asked),
       },
-      children: childrenOf(session, project, scope),
+      children,
       ...(parent !== undefined && { parent }),
       ...(as.agent !== undefined && { agent: as.agent }),
       ...(as.readOnly && { readOnly: true }),
@@ -219,25 +223,27 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     return opened
   }
 
-  // A session's subagents, as its tools are given them.
-  function childrenOf(session: string, project: Project | null, scope: Scope): Children {
+  // A session's subagents, as its tools are given them, and what opens one.
+  function childrenOf(session: string, project: Project | null, scope: Scope): { children: Children; child(id: string): Open } {
     // One of this session's subagents, opened again if Evie has been
     // stopped since it was started.
     const child = (id: string): Open => {
       if (projects.parentOf(id) !== session) throw new Error(`"${id}" is not a subagent of this session.`)
       const open = sessions.get(id)
       if (open) return open
-      settleUnfinished(id)
+      const left = settleLeft(id)
       // It carries on with the model it was given, which its log records.
       const parentModel = currentModel(log.events(session), sessions.get(session)!.model)
-      return startLoop({ session: id, project, scope, model: currentModel(log.events(id), parentModel), canAnswer: false, parent: session })
+      const opened = startLoop({ session: id, project, scope, model: currentModel(log.events(id), parentModel), canAnswer: false, parent: session })
+      carryOn(opened, left)
+      return opened
     }
     const send = (id: string, text: string) => {
       const { loop } = child(id)
       inbox.add(id, { text })
       loop.wake()
     }
-    return {
+    const children: Children = {
       async start(input) {
         if (closed) throw new Error("Evie is closing.")
         if (projects.parentOf(session) !== undefined) throw new Error("A subagent cannot start subagents of its own.")
@@ -285,9 +291,13 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         loop.cancel()
       },
     }
+    return { children, child }
   }
 
-  async function openSession(input: Commands["open_session"]["input"]): Promise<Commands["open_session"]["output"]> {
+  // `resuming` is for a session opened to pick up work left in it, with no
+  // client yet: its questions wait for the owner, though one asked while it
+  // opens, which no client could be shown, is refused.
+  async function openSession(input: Commands["open_session"]["input"], resuming = false): Promise<Commands["open_session"]["output"]> {
     if (input.project !== undefined && input.folder !== undefined) {
       throw new Error("Open a session with a project or a folder, not both.")
     }
@@ -348,11 +358,10 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     // clients continuing the same session at once cannot both start it.
     const openAfter = alreadyOpen()
     if (last !== undefined && openAfter) return join(last, openAfter)
-    if (last !== undefined) settleUnfinished(last)
+    const left = last !== undefined ? settleLeft(last) : undefined
 
-    const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer })
-    // A message that was waiting when Evie last stopped is answered now.
-    if (last !== undefined) opened.loop.wake()
+    const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer: canAnswer || resuming })
+    if (left) carryOn(opened, left)
     return { ...whereItIs(sessionId(), input.after), project, resumed: last !== undefined, notices }
   }
 
@@ -378,40 +387,91 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     }
   }
 
+  // What an earlier run of Evie left in a session that is opening in this
+  // process for the first time: the records of its jobs not yet dealt with,
+  // and the calls of a turn it cut off that were waiting on one of them.
+  type Left = { records: JobRecord[]; moved: Set<string> }
+
+  // Closes off a turn the session's last run cut off, before the session
+  // opens, so the conversation is one a model will accept again. A call that
+  // was waiting on work that may become a job, such as a command, is told
+  // the work carries on as a job.
+  function settleLeft(session: string): Left {
+    const records = jobs.left(session)
+    const waitedOn = new Map(records.flatMap((record) => (record.inCall && record.call !== undefined ? [[record.call, record]] : [])))
+    const moved = settleUnfinished(session, (call) => {
+      const record = waitedOn.get(call)
+      return (
+        record &&
+        `Evie restarted while this was running, so it was moved to the background, where it carries on as job ${record.id}, ` +
+          `and its output is being written to ${record.outputFile}. You will be told when it ends, with its output. Do not start another copy while it is running.`
+      )
+    })
+    return { records, moved }
+  }
+
+  // Once the session is open: its jobs left are taken back, each picked up
+  // by the plugin of its kind, and a message that was waiting when Evie
+  // last stopped is answered.
+  function carryOn(opened: Open, { records, moved }: Left): void {
+    for (const record of records) {
+      // Work a call was waiting on that ended within its call never became a job.
+      if (record.inCall && !moved.has(record.call ?? "")) {
+        jobs.release(record)
+        continue
+      }
+      const kind = opened.host.jobKinds.list().find((each) => each.name === record.kind)
+      let work: JobWork
+      try {
+        work = kind ? kind.resume(record, { children: opened.children }) : lost(record, `No plugin loaded now picks up work of the kind "${record.kind}".`)
+      } catch (cause) {
+        work = lost(record, cause instanceof Error ? cause.message : String(cause))
+      }
+      jobs.adopt(record, work)
+    }
+    opened.loop.wake()
+  }
+
+  // Work left that cannot be picked up again.
+  const lost = (record: JobRecord, why: string): JobWork => ({
+    kind: record.kind,
+    title: record.title,
+    done: Promise.reject(new Error(`Evie restarted while it was running, and could not pick it up again: ${why}`)),
+    stop: () => {},
+  })
+
   // If Evie was stopped in the middle of a turn, the log ends with a turn
   // that never finished, and perhaps tool calls with no result or a question
   // with no answer. This closes them off, so the conversation is one a model
-  // will accept again and no question is left looking open.
-  function settleUnfinished(session: string): void {
+  // will accept again and no question is left looking open. `resultOf` gives
+  // a call's result when there is more to say than that it has none.
+  // Returns the calls given such a result.
+  function settleUnfinished(session: string, resultOf: (call: string) => string | undefined): Set<string> {
     const answered = new Set(log.events(session).flatMap((event) => (event.type === "answer" ? [event.body.id] : [])))
     for (const event of log.events(session)) {
       if (event.type === "question" && !answered.has(event.body.id)) emit(log.append(session, "answer", { id: event.body.id, choice: null }))
     }
-    settleUnfinishedTurn(session)
-  }
-
-  function settleUnfinishedTurn(session: string): void {
+    const given = new Set<string>()
     const events = log.events(session)
     const started = events.findLastIndex((event) => event.type === "turn_start")
-    if (started === -1) return
+    if (started === -1) return given
     const turn = events.slice(started)
-    if (turn.some((event) => event.type === "turn_end")) return
+    if (turn.some((event) => event.type === "turn_end")) return given
 
-    const answered = new Set(turn.flatMap((event) => (event.type === "tool_result" ? [event.body.callId] : [])))
+    const done = new Set(turn.flatMap((event) => (event.type === "tool_result" ? [event.body.callId] : [])))
     const asked = turn.flatMap((event) => (event.type === "assistant_message" ? (event.body.toolCalls ?? []) : []))
     const closing = db.transaction(() => [
       ...asked
-        .filter((call) => !answered.has(call.id))
-        .map((call) =>
-          log.append(session, "tool_result", {
-            callId: call.id,
-            name: call.name,
-            text: "Evie stopped before this tool finished, so it has no result.",
-          }),
-        ),
+        .filter((call) => !done.has(call.id))
+        .map((call) => {
+          const text = resultOf(call.id)
+          if (text !== undefined) given.add(call.id)
+          return log.append(session, "tool_result", { callId: call.id, name: call.name, text: text ?? "Evie stopped before this tool finished, so it has no result." })
+        }),
       log.append(session, "turn_end", { reason: "error", error: "Evie stopped while this turn was running." }),
     ])()
     for (const event of closing) emit(event)
+    return given
   }
 
   function open(session: string): Open {
@@ -504,6 +564,18 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
     return { text }
   }
 
+  // Opens a session again in this process, to pick up what was left in it.
+  // A subagent's is opened by the session that started it, which is opened first.
+  async function reopen(session: string): Promise<void> {
+    const parent = projects.parentOf(session)
+    if (parent === undefined) {
+      await openSession({ session }, true)
+      return
+    }
+    await reopen(parent)
+    open(parent).child(session)
+  }
+
   return {
     async send(command) {
       // Each branch returns what its command promises; the cast tells the
@@ -542,9 +614,22 @@ export async function createEvie(options: EvieOptions): Promise<Evie> {
         listeners.delete(listener)
       }
     },
-    async close() {
+    async resumeWork() {
+      const left = new Set([...log.cutOff(), ...jobs.left().map((record) => record.session)])
+      // Each on its own, so that one that cannot be opened again, such as
+      // one whose project has gone, does not hold up the others.
+      await Promise.all([...left].map((session) => reopen(session).catch(() => {})))
+    },
+    async close(how = {}) {
       closed = true
       clearInterval(quietCheck)
+      if (how.restart) {
+        // Nothing more is written from here: the log is left as a crash
+        // would leave it, for the next start to pick up.
+        jobs.leave()
+        db.close()
+        return
+      }
       // A question still open is refused, which lets whatever asked it finish.
       questions.refuseAll()
       // Jobs are marked and noted as stopped by the closing first, while

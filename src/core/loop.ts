@@ -398,7 +398,7 @@ export function createLoop(options: LoopOptions): Loop {
           try {
             result = await runToolCall(call, {
               tools: offered,
-              context: { signal, folder, ask, jobs: options.jobs, children: options.children },
+              context: { signal, callId: call.id, folder, ask, jobs: options.jobs, children: options.children },
               before: (checked) => hooks.beforeTool(checked, context()),
               after: (checked, output) => hooks.afterTool(checked, output, context()),
               outputFolder: join(outputFolder, session),
