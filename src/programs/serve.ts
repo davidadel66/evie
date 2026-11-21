@@ -1,14 +1,15 @@
+import { existsSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { keepOutputTidy } from "../core/tools.ts"
 import { createEvie, dataFolder, loadSettingsFiles, startServer, type EvieServer, type Settings } from "../index.ts"
 import { ensureOwnToken, openTokens } from "../server/tokens.ts"
 import { loadServerSettings } from "../settings-files.ts"
-import { EXIT_CODES, fail, print, reason, type StopSignal } from "./common.ts"
+import { EXIT_CODES, fail, print, reason, STOP_FOR_GOOD, type StopSignal } from "./common.ts"
 
 // `evie serve`: starts the core with the plugins the settings list, and
 // serves it until told to stop. The first time, it makes this computer's
-// token. Once it is listening, it tidies away tool output older than a week,
-// and again each day while it runs.
+// token. Once it is listening, it picks up the work an earlier run left, and
+// tidies away tool output older than a week, and again each day while it runs.
 export async function serve(env: Settings) {
   const settings = await loadSettingsFiles({ env }).catch(fail)
   const serverSettings = await loadServerSettings({ env }).catch(fail)
@@ -46,22 +47,32 @@ export async function serve(env: Settings) {
   }
   print(`evie serve · listening on ${server.url}\n`)
   // Only now, so that a second `evie serve`, which cannot have the port,
-  // never touches the folder of the one already running.
+  // never touches the folder or the work of the one already running.
   const stopTidying = keepOutputTidy(join(home, "tool-output"))
+  void evie.resumeWork()
 
-  // Being told to stop closes Evie properly: turns are stopped, and so is any
-  // command left running in the background. Each step is taken even when the
-  // one before it fails, so the core is closed whatever happens to the
-  // listener. Told again while that is under way, it stops at once.
+  // Stopped for good, with Ctrl-C or with the file that says so, Evie is
+  // closed properly: turns are stopped, and so is any command left running
+  // in the background. Stopped any other way, as when the login service is
+  // restarted, its work is left as it is for the next start to pick up.
+  // Each step is taken even when the one before it fails, so the core is
+  // closed whatever happens to the listener. Told again while that is under
+  // way, it stops at once.
   let stopping = false
   for (const [signal, code] of Object.entries(EXIT_CODES) as [StopSignal, number][]) {
     process.on(signal, () => {
       if (stopping) process.exit(code)
       stopping = true
       stopTidying()
+      const forGood = signal === "SIGINT" || existsSync(join(home, STOP_FOR_GOOD))
+      try {
+        rmSync(join(home, STOP_FOR_GOOD), { force: true })
+      } catch {
+        // Left as it is: the next stop is for good too.
+      }
       void server
         .stop()
-        .finally(() => evie.close())
+        .finally(() => evie.close(forGood ? {} : { restart: true }))
         .finally(() => tokens.close())
         .catch((cause) => console.error(`Evie did not stop cleanly: ${reason(cause)}`))
         .finally(() => process.exit(code))
