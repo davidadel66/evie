@@ -228,6 +228,30 @@ test("when the server stops in the middle of a turn, evie says the connection wa
   expect(await new Response(client.stderr).text()).toContain("[error] The connection to the Evie server was lost")
 })
 
+test("evie in a real terminal that is told to stop puts the terminal back as it was", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  const project = await tempFolder("evie-project-")
+  await serve(home)
+  // Whether the terminal shows what is typed. It is off while Evie draws
+  // its own input line, and the bit is the same on Linux and macOS.
+  const ECHO = 0o10
+
+  for (const [signal, code] of [["SIGTERM", 143], ["SIGHUP", 129]] as const) {
+    let printed = ""
+    const terminal = new Bun.Terminal({ cols: 80, rows: 24, data: (_terminal, data) => (printed += new TextDecoder().decode(data)) })
+    cleanups.push(async () => terminal.close())
+    const client = Bun.spawn([process.execPath, CLI], { cwd: project, env: { PATH: process.env.PATH ?? "", HOME: home, EVIE_HOME: home }, terminal })
+    while (!printed.includes("evie · ")) await Bun.sleep(10)
+    expect(terminal.localFlags & ECHO).toBe(0)
+
+    client.kill(signal)
+
+    expect(await client.exited).toBe(code)
+    expect(terminal.localFlags & ECHO).toBe(ECHO)
+  }
+})
+
 test("evie on a computer where no server has run yet says to start one", async () => {
   // On a port of its own, where nothing listens.
   const home = await homeWith(await freePort(), [])
