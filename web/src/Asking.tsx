@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Button } from "./components/ui/button.tsx"
-import { choiceForKey, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, releaseAt, shownQuestion, type Asked, type Guard } from "./questions.ts"
+import { choiceForKey, freshGuard, type KeyFocus, guardCleared, guardReleases, guardSees, guardTyped, releaseAt, shownQuestion, type Asked, type Guard } from "./questions.ts"
 
 // The questions evie asks, answered in place in the conversation, as part
 // of its reply, as the Session view drawing has them: the question, its
@@ -74,11 +74,10 @@ export function QuestionText({ text }: { text: string }) {
 // has one: the question in bold, its choices as round buttons under it,
 // the first the main one and the others secondary, and under them that
 // evie needs the owner. A key from 1 to 9 picks a choice while the focus is
-// not in a text box, as T3 Code's do; in the box, a number sent picks it
-// too, as in the terminal, and the owner's own words sent are the answer
-// when it takes them. A permission prompt looks the same, and only a click
-// answers it: words sent from the box refuse it, and go to evie as what to
-// do instead.
+// on nothing or in the empty message box, as T3 Code's keys do; the
+// owner's own words sent from the box are the answer when it takes them.
+// A permission prompt looks the same, and only a click answers it: words
+// sent from the box refuse it, and go to evie as what to do instead.
 export function QuestionPrompt({ question, count, answer }: { question: Asked; count: string | undefined; answer: Answer }) {
   const [refused, setRefused] = useState<string>()
   useEffect(() => setRefused(undefined), [question.id])
@@ -87,10 +86,8 @@ export function QuestionPrompt({ question, count, answer }: { question: Asked; c
   useEffect(() => {
     if (!keys) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
-      const target = event.target as HTMLElement | null
-      if (target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="menu"], [role="dialog"], [role="listbox"]')) return
-      const choice = choiceForKey(event.key, question)
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return
+      const choice = choiceForKey(event.key, question, focusOf(event.target))
       if (choice === undefined) return
       event.preventDefault()
       void pick(choice)
@@ -122,4 +119,13 @@ export function QuestionPrompt({ question, count, answer }: { question: Asked; c
       <NeedsYou count={count} />
     </section>
   )
+}
+
+// Where the focus is as a key is pressed, for the keys 1 to 9: on nothing,
+// in the message box, which marks itself, empty or with something typed,
+// or anywhere else, as on a button or a row of the work log.
+function focusOf(target: EventTarget | null): KeyFocus {
+  if (!(target instanceof HTMLElement) || target === document.body || target === document.documentElement) return "nothing"
+  if (target instanceof HTMLTextAreaElement && target.dataset.messageBox !== undefined) return target.value === "" ? "empty box" : "typed box"
+  return "elsewhere"
 }

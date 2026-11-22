@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import type { EventBodies } from "../src/core/types.ts"
 import type { Item } from "../web/src/transcript.ts"
-import { answerTyped, asAsked, choiceForKey, sendDoes, sendWithFiles, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, refusingChoice, releaseAt, shownQuestion } from "../web/src/questions.ts"
+import { answerTyped, asAsked, boxPlaceholder, choiceForKey, sendDoes, sendWithFiles, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, refusingChoice, releaseAt, shownQuestion } from "../web/src/questions.ts"
 
 // The questions evie asks, as the message box shows them, apart from its
 // screen: when one shows, and where.
@@ -69,12 +69,17 @@ test("what is sent from the box while a question waits answers it as the termina
   expect(answerTyped("  ", asked("q1", { freeText: true }))).toBeUndefined()
 })
 
-test("the keys 1 to 9 pick the choice with that number", () => {
-  expect(choiceForKey("1", asked("q1"))).toBe("North bed")
-  expect(choiceForKey("2", asked("q1"))).toBe("South bed")
-  expect(choiceForKey("3", asked("q1"))).toBeUndefined()
-  expect(choiceForKey("0", asked("q1"))).toBeUndefined()
-  expect(choiceForKey("a", asked("q1"))).toBeUndefined()
+test("the keys 1 to 9 pick the choice with that number, while the focus is on nothing or in the message box with nothing typed in it", () => {
+  expect(choiceForKey("1", asked("q1"), "nothing")).toBe("North bed")
+  expect(choiceForKey("2", asked("q1"), "empty box")).toBe("South bed")
+  expect(choiceForKey("3", asked("q1"), "nothing")).toBeUndefined()
+  expect(choiceForKey("0", asked("q1"), "nothing")).toBeUndefined()
+  expect(choiceForKey("a", asked("q1"), "nothing")).toBeUndefined()
+  // Never on a button or a row of the work log, nor in a box with something typed.
+  expect(choiceForKey("1", asked("q1"), "elsewhere")).toBeUndefined()
+  expect(choiceForKey("1", asked("q1"), "typed box")).toBeUndefined()
+  // Nor for a permission prompt, which only a click answers.
+  expect(choiceForKey("1", permission("p1"), "nothing")).toBeUndefined()
 })
 
 test("sending from the box answers the question showing when the words answer it, as the terminal takes a line; otherwise a slash and a word runs a command, and anything else is a message", () => {
@@ -87,9 +92,9 @@ test("sending from the box answers the question showing when the words answer it
 })
 
 test("while a question with choices only waits, words or a number it has no choice for are not sent: the owner is asked to pick one, as the terminal asks again", () => {
-  expect(sendDoes("Hold on", asked("q1"))).toEqual({ refuse: "Pick one of the choices, 1 to 2." })
-  expect(sendDoes("3", asked("q1"))).toEqual({ refuse: "Pick one of the choices, 1 to 2." })
-  expect(sendDoes("3", asked("q1", { freeText: true }))).toEqual({ refuse: "Pick one of the choices, 1 to 2, or write your own answer." })
+  expect(sendDoes("Hold on", asked("q1"))).toEqual({ refuse: "Pick one of the choices above." })
+  expect(sendDoes("3", asked("q1"))).toEqual({ refuse: "Pick one of the choices above." })
+  expect(sendDoes("3", asked("q1", { freeText: true }))).toEqual({ refuse: "Pick one of the choices above, or write your own answer." })
 })
 
 test("while a permission prompt waits, words sent decline it with its refusing choice and go to evie as a message, so that it does that instead, as T3 Code's do", () => {
@@ -108,7 +113,7 @@ test("files attached go with a message, which then needs no words; a command or 
   expect(sendWithFiles("/compact", undefined, 1)).toEqual(notTaken)
   expect(sendWithFiles("2", asked("q1"), 1)).toEqual(notTaken)
   expect(sendWithFiles("", asked("q1"), 1)).toEqual({ refuse: "Answer the question first. Files attached go with a message." })
-  expect(sendWithFiles("Hold on", asked("q1"), 1)).toEqual({ refuse: "Pick one of the choices, 1 to 2." })
+  expect(sendWithFiles("Hold on", asked("q1"), 1)).toEqual({ refuse: "Pick one of the choices above." })
   // With none attached, sending does what it always does.
   expect(sendWithFiles("   ", undefined, 0)).toBeUndefined()
   expect(sendWithFiles("/compact", undefined, 0)).toEqual({ run: { name: "compact", args: "" } })
@@ -122,4 +127,16 @@ test("a question waiting is left out where it was asked, since it shows where it
   ]
   expect(asAsked(items, [asked("q2")])).toEqual([items[0]!, { ...items[1]!, waiting: false } as Item])
   expect(asAsked(items, [])).toEqual([items[0]!, { ...items[1]!, waiting: false } as Item, { ...items[2]!, waiting: false } as Item])
+})
+
+test("the message box's placeholder says what sending does: with a permission prompt waiting in a session, says no and what to do instead; with a question that takes words, answers it; otherwise as the session stands", () => {
+  const session = { session: true, working: false, mentions: true }
+  expect(boxPlaceholder(permission("p1"), session)).toBe("Send a message to say no, and what to do instead")
+  expect(boxPlaceholder(asked("q1", { freeText: true }), session)).toBe("Your own answer")
+  expect(boxPlaceholder(asked("q1"), session)).toBe("Ask anything. @ files, / commands")
+  expect(boxPlaceholder(undefined, { ...session, working: true })).toBe("Tell evie more as it works. Escape stops it")
+  expect(boxPlaceholder(undefined, { ...session, mentions: false })).toBe("Ask anything. / commands")
+  // A draft runs no commands until it has started, and a permission prompt there is answered by a click.
+  expect(boxPlaceholder(permission("p1"), { session: false, working: false, mentions: true })).toBe("Ask anything. @ files")
+  expect(boxPlaceholder(undefined, { session: false, working: false, mentions: false })).toBe("Ask anything")
 })

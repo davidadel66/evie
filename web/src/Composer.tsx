@@ -8,7 +8,7 @@ import { ArrowUpBold, Check, File as FileIcon, Paperclip, StopFill, X } from "./
 import { cn } from "./lib/utils.ts"
 import { makersOf, searchModels, type Model } from "./models.ts"
 import { whenAsked, windowOver } from "./page-requests.ts"
-import { sendWithFiles } from "./questions.ts"
+import { boxPlaceholder, sendWithFiles } from "./questions.ts"
 import { label, onMac, pressed } from "./shortcuts.ts"
 import { useWide } from "./wide.ts"
 import { Spinner } from "./Spinner.tsx"
@@ -282,21 +282,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
 
   // At phone width, one row until tapped, as T3 Code's, unless there is more to show.
   const collapsed = !wide && !focused && !text.includes("\n") && !picking && !meterOpen
-  const permission = shown?.question.kind === "permission"
-  const placeholder =
-    permission && conversation !== undefined
-      ? "Send a message to say no, and what to do instead"
-      : !permission && shown?.question.freeText
-        ? "Your own answer, or a number"
-        : working
-          ? "Tell evie more as it works. Escape stops it"
-          : conversation === undefined
-            ? mentions === undefined
-              ? "Ask anything"
-              : "Ask anything. @ files"
-            : mentions === undefined
-              ? "Ask anything. / commands"
-              : "Ask anything. @ files, / commands"
+  const placeholder = boxPlaceholder(shown?.question, { session: conversation !== undefined, working, mentions: mentions !== undefined })
   const menuId = "composer-menu"
   const filesId = "composer-files"
   const collapsedNow = collapsed && attached.length === 0
@@ -381,6 +367,8 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
               <span className="sr-only">Message evie</span>
               <textarea
                 ref={box}
+                // The keys 1 to 9 pick a question's choice while this is empty.
+                data-message-box=""
                 rows={1}
                 value={text}
                 placeholder={placeholder}

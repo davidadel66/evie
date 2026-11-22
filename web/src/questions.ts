@@ -69,8 +69,20 @@ export function answerTyped(typed: string, question: Asked): string | undefined 
   return question.freeText && text !== "" ? text : undefined
 }
 
-// The choice a key from 1 to 9 picks.
-export const choiceForKey = (key: string, question: Asked): string | undefined => (/^[1-9]$/.test(key) ? question.choices[Number(key) - 1] : undefined)
+// Where the focus is as a key is pressed: on nothing, in the message box
+// with nothing typed in it, or with something typed, or anywhere else, as
+// on a button or a row of the work log.
+export type KeyFocus = "nothing" | "empty box" | "typed box" | "elsewhere"
+
+// The choice a key from 1 to 9 picks, as T3 Code's keys do, though the
+// choices show no numbers, as drawn: only with the focus on nothing or in
+// the empty message box, so that a key meant for a button, a row or the
+// text is never taken; and never for a permission prompt, which only a
+// click answers.
+export function choiceForKey(key: string, question: Asked, focus: KeyFocus): string | undefined {
+  if (question.kind === "permission" || (focus !== "nothing" && focus !== "empty box") || !/^[1-9]$/.test(key)) return undefined
+  return question.choices[Number(key) - 1]
+}
 
 // What sending from the box does, with the question showing, if one is.
 // While a permission prompt waits, words decline it, with its refusing
@@ -92,7 +104,7 @@ export function sendDoes(typed: string, showing: Asked | undefined): SendDoes | 
     const answer = answerTyped(text, showing)
     if (answer !== undefined) return { answer }
     if (command) return { run: command }
-    return { refuse: `Pick one of the choices, 1 to ${showing.choices.length}${showing.freeText ? ", or write your own answer" : ""}.` }
+    return { refuse: `Pick one of the choices above${showing.freeText ? ", or write your own answer" : ""}.` }
   }
   return command ? { run: command } : { message: text }
 }
@@ -121,4 +133,19 @@ export function sendWithFiles(typed: string, showing: Asked | undefined, files: 
 export function asAsked(items: readonly Item[], waiting: readonly Asked[]): Item[] {
   const open = new Set(waiting.map((question) => question.id))
   return items.flatMap((item) => (item.kind !== "question" || !item.waiting ? [item] : open.has(item.id) ? [] : [{ ...item, waiting: false }]))
+}
+
+// What the message box says while empty: what sending from it does now.
+// With a permission prompt waiting in a session, words say no and what to
+// do instead, as T3 Code's box says; with a question that takes the
+// owner's words, they answer it; otherwise, what the box takes: what to
+// tell evie as it works, or what to ask, and whether the project's files
+// can be named with @ and, once the session has started, commands run
+// with /.
+export function boxPlaceholder(showing: Asked | undefined, box: { session: boolean; working: boolean; mentions: boolean }): string {
+  if (showing?.kind === "permission" && box.session) return "Send a message to say no, and what to do instead"
+  if (showing !== undefined && showing.kind !== "permission" && showing.freeText) return "Your own answer"
+  if (box.working) return "Tell evie more as it works. Escape stops it"
+  if (!box.session) return box.mentions ? "Ask anything. @ files" : "Ask anything"
+  return box.mentions ? "Ask anything. @ files, / commands" : "Ask anything. / commands"
 }
