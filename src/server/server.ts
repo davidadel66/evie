@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto"
 import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent, type StorageFiles } from "../core/types.ts"
 import { keptFileAt, typeOfFile } from "../plugins/show/files.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
+import { shikiAddress, shikiRoute } from "./shiki-files.ts"
 import { fileRoute } from "./variants.ts"
 import type { WebApp } from "./web-app.ts"
 import { DROPPED, hostInAddress, onThisComputer, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
@@ -635,12 +636,15 @@ const cookieIn = (request: Request, port: number) => new Bun.CookieMap(request.h
 // file's name carries a hash of its contents, so a browser may keep it for
 // good; the page is asked for afresh each time, so a new version is seen.
 // Each is sent compressed to a browser that can read it: see `fileRoute`.
-function appRoutes(app: WebApp | undefined): Record<string, HTMLBundle | ((request: Request) => Response)> {
+// Built, the page loads Shiki's grammars and themes, which colour a diff,
+// from Shiki's own files, which are not built in: see `shikiRoute`.
+function appRoutes(app: WebApp | undefined): Record<string, HTMLBundle | ((request: Request) => Response | Promise<Response>)> {
   if (!app) return {}
   if (!("files" in app)) return { [PATHS.page]: app.page, [PATHS.signIn]: app.page }
-  const routes: Record<string, (request: Request) => Response> = {}
+  const routes: Record<string, (request: Request) => Response | Promise<Response>> = {}
   for (const [path, file] of Object.entries(app.files)) routes[path] = fileRoute(file, "public, max-age=31536000, immutable")
   for (const path of [PATHS.page, PATHS.signIn]) routes[path] = fileRoute(app.page, "no-cache")
+  routes[`${shikiAddress()}*`] = shikiRoute()
   return routes
 }
 

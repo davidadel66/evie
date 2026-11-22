@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { brotliDecompressSync, gunzipSync } from "node:zlib"
 import { connect, startServer } from "../src/index.ts"
+import { shikiAddress } from "../src/server/shiki-files.ts"
 import { openTokens, OWN_NAME } from "../src/server/tokens.ts"
 import { buildWebApp, type WebApp } from "../src/server/web-app.ts"
 import { loadServerSettings } from "../src/settings-files.ts"
@@ -326,7 +327,11 @@ test("the web app's script is sent with brotli, gzip or as it is, as the browser
   const { server } = await start({ app })
   const page = new TextDecoder().decode(app.page.identity)
   const script = page.match(/<script[^>]* src="([^"]+)"/)![1]!
-  const small = Object.entries(app.files).find(([, file]) => file.identity.length <= 1024)![0]
+  // A file under 1 KB: since Shiki's grammars are not built in, the build
+  // may make none, so one of Shiki's own, which only names another.
+  const small = `${shikiAddress()}langs/as3.mjs`
+  const smallText = await Bun.file(Bun.resolveSync("@shikijs/langs/as3", import.meta.dir)).text()
+  expect(smallText.length).toBeLessThanOrEqual(1024)
 
   // The bytes as sent, without fetch reading them.
   const asked = (path: string, headers: Record<string, string>) => fetch(`${server.url}${path}`, { headers, decompress: false })
@@ -367,7 +372,7 @@ test("the web app's script is sent with brotli, gzip or as it is, as the browser
   // A file under 1 KB is sent as it is, to anyone.
   const tiny = await asked(small, { "Accept-Encoding": "br" })
   expect([tiny.headers.get("content-encoding"), tiny.headers.get("vary")]).toEqual([null, null])
-  expect(await tiny.text()).toBe(new TextDecoder().decode(app.files[small]!.identity))
+  expect(await tiny.text()).toBe(smallText)
 })
 
 test("the page is asked for afresh on each visit, and its script and any chunks it preloads are kept for good", async () => {
