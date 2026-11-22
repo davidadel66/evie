@@ -103,9 +103,7 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
   let started: number | undefined
   let firstRun: Steps | undefined
   let ended = false
-  // When each of the turn's own questions waited for the owner's answer,
-  // from when it was asked until it was answered, which is not work.
-  let waits: [number, number][] = []
+  // The turn's own questions, of which one waiting means it is not thinking.
   const ownQuestions = new Set<string>()
   const calls = new Map<string, Call>()
   const folder = view.folder !== undefined ? { folder: view.folder } : {}
@@ -145,7 +143,6 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
       started = event.time
       firstRun = undefined
       ended = false
-      waits = []
       ownQuestions.clear()
     }
     if (event.type === "user_message") {
@@ -180,14 +177,9 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
       add(item, event.time)
     }
     // Once answered, the choices go, and the answer is the owner's message.
-    // The time waited is taken off the turn's work only when the question
-    // was read too, and was the turn's own.
     if (event.type === "answer") {
       const asked = questions.get(event.body.id)
-      if (asked) {
-        asked.item.waiting = false
-        if (ownQuestions.has(event.body.id)) waits.push([asked.time, event.time])
-      }
+      if (asked) asked.item.waiting = false
       if (event.body.choice === null) add({ key, turn, kind: "note", text: "Not answered." }, event.time)
       else add({ key, turn, kind: "owner", text: event.body.choice }, event.time)
     }
@@ -198,8 +190,9 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
     if (event.type === "compaction") add({ key, turn, kind: "note", text: COMPACTED, more: event.body.summary }, event.time)
     if (event.type === "turn_end") {
       ended = true
-      // How long it worked is known only when its start was read.
-      const ms = started === undefined ? undefined : Math.max(0, event.time - started - waited(waits))
+      // How long it worked, from its start to its end, as T3 Code counts
+      // it, waits for the owner included, is known only when its start was read.
+      const ms = started === undefined ? undefined : Math.max(0, event.time - started)
       if (firstRun && ms !== undefined) worked.set(firstRun, { ms, stopped: event.body.reason === "cancelled" })
       ends.set(turn, { seq: event.seq, completed: event.body.reason === "completed", ...(ms !== undefined && { ms }) })
       if (event.body.reason === "error") add({ key, turn, kind: "failed", error: event.body.error ?? "The turn failed." }, event.time)
@@ -313,19 +306,6 @@ const SHORT = 80
 function shortOf(result: string): string {
   const first = result.split("\n").map((line) => line.trim()).find((line) => line !== "") ?? ""
   return first.length > SHORT ? `${first.slice(0, SHORT)}…` : first
-}
-
-// How long a turn waited, in all, for answers: each time it waited, and
-// those that overlapped, as two questions waiting at once, only once.
-function waited(waits: readonly [number, number][]): number {
-  let total = 0
-  let reached = -Infinity
-  for (const [from, to] of [...waits].sort((a, b) => a[0] - b[0])) {
-    const start = Math.max(from, reached)
-    if (to > start) total += to - start
-    reached = Math.max(reached, to)
-  }
-  return total
 }
 
 // A call's input, read once from what the model wrote, as each is kept by

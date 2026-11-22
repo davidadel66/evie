@@ -243,34 +243,29 @@ test("the turn running now is known by when it started, from its start's time, a
   expect(runningSince(view(fixingTheReadme().slice(3, 8), { turnRunning: true, earlier: true }))).toBeUndefined()
 })
 
-test("how long a turn worked leaves out the time it waited for answers to its own questions, once each where two waited at once", () => {
+test("how long a turn worked is the time from its start to its end, as T3 Code counts it, the time it waited for answers included, so it never drops as the turn ends", () => {
   const events = session(
     event("turn_start", {}, 1_000_000),
     event("user_message", { text: "Plan the beds" }, 1_000_000),
     event("question", { id: "q1", text: "North or south?", choices: ["North", "South"] }, 1_001_000),
-    event("question", { id: "q2", text: "A subagent asks: today?", choices: ["Yes", "No"], asker: "s2" }, 1_002_000),
     event("answer", { id: "q1", choice: "North" }, 1_061_000),
-    event("answer", { id: "q2", choice: "Yes" }, 1_062_000),
     event("assistant_message", { text: "", toolCalls: [{ id: "c0", name: "write", arguments: '{"path":"beds.md"}' }] }, 1_063_000),
     event("tool_result", { callId: "c0", name: "write", text: "Wrote beds.md." }, 1_064_000),
     event("assistant_message", { text: "Planned." }, 1_070_000),
     event("turn_end", { reason: "completed" }, 1_070_000),
-    // A question of an earlier turn left with no answer, as after a restart.
+    // Stopped by the owner after a question waited too.
     event("turn_start", {}, 2_000_000),
     event("user_message", { text: "Again" }, 2_000_000),
-    event("question", { id: "q3", text: "Which?", choices: ["A", "B"] }, 2_001_000),
-    event("turn_end", { reason: "error", error: "evie stopped." }, 2_002_000),
-    event("turn_start", {}, 3_000_000),
-    event("user_message", { text: "Once more" }, 3_000_000),
-    event("assistant_message", { text: "", toolCalls: [{ id: "c1", name: "read", arguments: '{"path":"a.ts"}' }] }, 3_001_000),
-    event("tool_result", { callId: "c1", name: "read", text: "a" }, 3_002_000),
-    event("assistant_message", { text: "Done." }, 3_004_500),
-    event("turn_end", { reason: "completed" }, 3_004_500),
+    event("assistant_message", { text: "Checking.", toolCalls: [{ id: "c1", name: "read", arguments: '{"path":"a.ts"}' }] }, 2_001_000),
+    event("question", { id: "q2", text: "Which?", choices: ["A", "B"] }, 2_002_000),
+    event("answer", { id: "q2", choice: "A" }, 2_062_000),
+    event("tool_result", { callId: "c1", name: "read", text: "a" }, 2_063_000),
+    event("turn_end", { reason: "cancelled" }, 2_065_000),
   )
 
-  const folds = transcriptOf(view(events)).flatMap((item) => (item.kind === "fold" ? [item.label] : []))
-  // 70s, less the one 61s wait both questions were part of; and 4.5s, with nothing from the earlier turn's question.
-  expect(folds).toEqual(["Worked for 9s", "Worked for 4.5s"])
+  const items = transcriptOf(view(events))
+  expect(items.flatMap((item) => (item.kind === "fold" ? [item.label] : []))).toEqual(["Worked for 1m 10s"])
+  expect(items.flatMap((item) => (item.kind === "steps" && item.worked !== undefined ? [item.worked] : []))).toEqual(["You stopped after 1m 5s"])
 })
 
 test("a reply cut short, a turn stopped or failed, a compaction and a note to evie are each said in quiet words, as the terminal says them, with more to open", () => {
@@ -336,7 +331,7 @@ const askingFirst = (choice: string | null) =>
     event("turn_end", { reason: "completed" }, 1_066_000),
   )
 
-test("a question shows its choices while it waits; answered, the answer is the owner's message, and the minute spent waiting is not counted as work", () => {
+test("a question shows its choices while it waits; answered, the answer is the owner's message, and the turn's time includes the minute it waited", () => {
   expect(read(transcriptOf(view(askingFirst(null).slice(0, 4), { turnRunning: true })))).toEqual([
     "owner 1: Add a way to mark a plant as watered.",
     "reply 1: One thing to settle first.",
@@ -347,7 +342,7 @@ test("a question shows its choices while it waits; answered, the answer is the o
   // Folded once the turn has ended, the question and its answer stay outside, after the fold's line.
   expect(read(transcriptOf(view(askingFirst("Just the day"))))).toEqual([
     "owner 1: Add a way to mark a plant as watered.",
-    "fold 1: Worked for 6s (reply 1: One thing to settle first. | steps 1: Asked you a question [ask] | steps 1: Edited src/plants.ts [edit])",
+    "fold 1: Worked for 1m 6s (reply 1: One thing to settle first. | steps 1: Asked you a question [ask] | steps 1: Edited src/plants.ts [edit])",
     "question 1: Should watering record the time as well as the day?",
     "owner 1: Just the day",
     "reply 1: Done: only the day is kept.",

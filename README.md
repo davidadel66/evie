@@ -384,9 +384,10 @@ nothing said in it yet, or a draft, says "What should evie do?":
   calls, a row says Thinking.
 - **Once a turn has completed**, everything before its final reply folds
   into one quiet line, such as "Worked for 48s" or "Worked for 3.4s",
-  which opens to show it in order. The time it waited for your answers to
-  its questions is left out. A question and its answer, and notes, stay
-  outside the fold. A turn that was stopped, failed or had a reply cut
+  which opens to show it in order: the time from its start to its end, as
+  T3 Code counts it, waits for your answers included, so it never drops as
+  the turn ends. A question and its answer, and notes, stay outside the
+  fold. A turn that was stopped, failed or had a reply cut
   short is not folded, and its first run says how long it worked, or
   "You stopped after …".
 - **Notes** say in quiet words what else happened: a compaction, with its
