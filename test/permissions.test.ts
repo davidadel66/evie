@@ -1,8 +1,10 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { existsSync } from "node:fs"
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
+import { homedir, tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { loadSettingsFiles, permissions, type PermissionsOptions, type Plugin, type Rule } from "../src/index.ts"
+import { actsOf, effectFor } from "../src/plugins/permissions/rules.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedCall, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -46,7 +48,10 @@ async function start(options: PermissionsOptions = {}, client: { questions?: boo
   const tools = standIns()
   const script: ScriptedReply[] = []
   const model = scriptedProvider(script)
-  const run = await startEvie([model.plugin, tools.plugin, permissions(options)], client)
+  // Its own data folder, so that no test touches that of whoever runs it.
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  const run = await startEvie([model.plugin, tools.plugin, permissions({ dataFolder: home, ...options })], { ...client, home })
   cleanups.push(run.stop)
 
   const asked: { text: string; choices: string[] }[] = []
@@ -288,7 +293,7 @@ test("/mode shows the mode and changes it, for that session only", async () => {
   const other = await run.evie.send({ type: "open_session", folder, questions: true })
 
   expect((await mode("")).text).toStartWith("The mode is manual.")
-  expect((await mode("auto")).text).toBe("The mode is now auto.")
+  expect((await mode("auto")).text).toBe("The mode is now auto, for this session. New sessions start in manual, the default.")
   expect((await mode("yolo")).text).toStartWith('There is no mode "yolo".')
   await attempt(edit("src/app.ts"))
   await attempt(edit("src/app.ts"), NO, other.session)
@@ -578,7 +583,7 @@ test("an always answer for a file outside the project covers that folder and no 
 test("a link inside the project that points outside it counts as outside", async () => {
   const outside = await realpath(await mkdtemp(join(tmpdir(), "evie-outside-")))
   cleanups.push(() => rm(outside, { recursive: true, force: true }))
-  const { attempt, asked, folder } = await start({ mode: "auto" })
+  const { attempt, asked, folder } = await start()
   await symlink(outside, join(folder, "linked"))
 
   await attempt(edit("linked/file.txt"), NO)
@@ -705,7 +710,8 @@ test("in auto mode more ways of publishing, deploying and writing outside the pr
     "pnpm dlx vercel",
     "http POST example.com/hook",
     "tar -xf a.tar -C../..",
-    "make -C../other clean",
+    // The project is in the temp folder here, so the other folder is named from the home folder.
+    "make -C ~/other clean",
     "echo x>/etc/x",
     "cd && rm -rf build",
   ]
@@ -761,4 +767,213 @@ test("a rule written with a path that goes through a link still matches", async 
   expect(await attempt(read(join(holder, "link", "a.txt")))).toStartWith("Not allowed: one of the owner's rules denies this.")
   expect(await attempt(shell(`cat ${join(holder, "link", "a.txt")}`))).toStartWith("Not allowed: one of the owner's rules denies this.")
   expect(asked).toEqual([])
+})
+
+// ---- Auto mode: anything but what is dangerous ---------------------------------------------------
+
+test("in auto mode any command runs without asking, wherever it reads, and so do the tools that read, show aside", async () => {
+  const { attempt, asked, folder } = await start({ mode: "auto" })
+  const commands = [
+    "cat /tmp/evie-tc.log | tr '{}' '()'",
+    "bun run typecheck > /tmp/x.log 2>&1",
+    "cat ~/Documents/notes.txt",
+    "ls -la /etc",
+    "git -C ~/other log --oneline",
+    "cd /tmp/evie-work && make",
+    "git ls-files | xargs wc -l",
+    "find -L . -name '*.tmp' -delete",
+    "rm -rf /tmp/evie-work/build",
+    `echo hi > ${join(tmpdir(), "evie-note.txt")}`,
+    "cd /tmp/evie-work && rm -rf build",
+    "mv build/a.txt .",
+    "cp ~/Documents/notes.txt notes.txt",
+    "git checkout -- src/app.ts",
+    "sed -i '' 's/a/b/' notes.txt",
+    "sed -n 's/a/b/p' ~/notes.txt",
+    "perl -pi -e 's/a/b/' /tmp/evie-work/notes.txt",
+  ]
+  for (const command of commands) expect(await attempt(shell(command))).toBe("done")
+  for (const call of [
+    read("/somewhere/else/notes.md"),
+    { name: "grep", input: { pattern: "x", path: "/another/place" } },
+    edit("/tmp/evie-notes.md"),
+    edit(join(tmpdir(), "evie-x.txt")),
+  ]) {
+    expect(await attempt(call)).toBe("done")
+  }
+  expect(asked).toEqual([])
+  expect(folder).toBeDefined()
+})
+
+test("in auto mode the dangerous is still asked about: sending, deleting or overwriting outside the project and the temp folder, and changing the system", async () => {
+  const { attempt, asked, ran, folder } = await start({ mode: "auto" })
+  await symlink("/usr", join(folder, "sys"))
+  const calls = [
+    shell("rm ~/Documents/x"),
+    shell("mv a ~/b"),
+    shell("echo hi > ~/x"),
+    shell("date >> ~/log.txt"),
+    shell("date | tee -a ~/log.txt"),
+    shell("cp notes.txt ~/notes.txt"),
+    shell("cp -t ~/backup a.txt b.txt"),
+    shell("rmdir ~/empty"),
+    shell("unlink ~/x"),
+    shell("shred ~/x"),
+    shell("truncate -s 0 ~/x"),
+    shell("dd if=a.img of=~/b.img"),
+    shell("find ~/old -name '*.log' -delete"),
+    shell("git -C ~/other checkout -- a.txt"),
+    shell("cd ~/other && git restore a.txt"),
+    shell("git restore a.txt", "/somewhere/else"),
+    shell("tar -xzf a.tgz -C ~/x"),
+    shell('rm "$f"'),
+    shell("sed -i '' 's/a/b/' ~/notes.txt"),
+    shell("sed --in-place=.bak -e 's/a/b/' ~/notes.txt"),
+    shell("perl -pi -e 's/a/b/' ~/notes.txt"),
+    // A link in the project that leads outside it, and the temp folder, is followed.
+    shell("rm sys/x"),
+    shell("git push"),
+    shell("doas ls"),
+    shell("defaults write com.apple.dock autohide -bool true"),
+    shell("launchctl load ~/Library/LaunchAgents/x.plist"),
+    shell("pmset sleepnow"),
+    // A command that names a place outside, or runs in one, and is not known to change only files inside.
+    shell('bash -c "rm -rf ~/Documents"'),
+    shell("find ~/old | xargs rm"),
+    shell("timeout 5 rm ~/x"),
+    shell("\\rm ~/x"),
+    shell("env -C ~/x rm -rf build"),
+    shell("find ~/old -exec /bin/rm {} \\;"),
+    shell("ln -sf ~/dotfiles/zshrc ~/.zshrc"),
+    shell("chmod -R 755 ~/x"),
+    shell("curl -o ~/x https://example.com/x"),
+    shell("wget -O ~/x https://example.com/x"),
+    shell("unzip -o a.zip -d ~/x"),
+    shell("tar -cf ~/out.tar src"),
+    shell("install -m 755 tool ~/bin/tool"),
+    shell("git -C ~/x checkout ."),
+    shell("git -C ~/x stash drop"),
+    shell("git -C ~/x branch -D old"),
+    shell("git -C ~/x commit -m wip"),
+    shell("perl -ne 'print' ~/notes.txt"),
+    shell("cd '/etc' && rm -f hosts"),
+    shell("find -L ~/old -delete"),
+    shell("find -name '*.log' -delete", "/somewhere/else"),
+    shell("scutil --set HostName box"),
+    edit("/somewhere/else/hosts"),
+    // A file shown is copied into the project, whose files are backed up, so showing one from outside asks in every mode.
+    { name: "show", input: { paths: ["/somewhere/else/plot.png"] } },
+  ]
+  for (const call of calls) expect(await attempt(call, NO)).toStartWith("The owner said no to this.")
+  expect(asked).toHaveLength(calls.length)
+  expect(ran).toEqual([])
+})
+
+test("sudo is one the mode asks about in auto, and the guard blocks it before that, as it blocks the private folders", async () => {
+  const { attempt, asked, folder } = await start({ mode: "auto" })
+  const [act] = actsOf({ id: "1", name: "shell", input: { command: "sudo ls" } }, folder)
+  expect(effectFor(act!, [], "auto", folder)).toBe("ask")
+
+  expect(await attempt(shell("sudo ls"))).toStartWith("Blocked by the guard:")
+  expect(await attempt(shell("cat ~/.ssh/id_rsa"))).toStartWith("Blocked by the guard:")
+  expect(await attempt(read(join(homedir(), ".ssh", "id_rsa")))).toStartWith("Blocked by the guard:")
+  expect(asked).toEqual([])
+})
+
+test("in auto mode the owner's rules still decide first, and one that allows a kind of command never makes auto ask", async () => {
+  const { attempt, asked } = await start({
+    mode: "auto",
+    rules: [
+      { action: "shell", match: "cat *", effect: "allow" },
+      { action: "shell", match: "git push *", effect: "allow" },
+      { action: "shell", match: "ls *", effect: "ask" },
+    ],
+  })
+
+  expect(await attempt(shell("cat ~/Documents/notes.txt"))).toBe("done")
+  expect(await attempt(shell("git push origin dev"))).toBe("done")
+  expect(await attempt(shell("ls"), NO)).toStartWith("The owner said no to this.")
+  expect(asked).toHaveLength(1)
+})
+
+test("an always answer offered for a command outside the project allows that command the next time", async () => {
+  const manual = await start()
+  await manual.attempt(shell("cat /etc/hosts"), always)
+  expect(manual.asked[0]?.choices[1]).toBe('Always in this project: allow exactly the command "cat /etc/hosts"')
+  expect(await manual.attempt(shell("cat /etc/hosts"))).toBe("done")
+  expect(manual.asked).toHaveLength(1)
+
+  const auto = await start({ mode: "auto" })
+  await auto.attempt(shell("rm ~/Documents/old.txt"), always)
+  expect(await auto.attempt(shell("rm ~/Documents/old.txt"))).toBe("done")
+  expect(auto.asked).toHaveLength(1)
+})
+
+test("a mode set with /mode is kept for that session when evie starts again, and goes when the session is deleted", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  const folder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(folder, { recursive: true, force: true }))
+
+  const first = await startEvie([scriptedProvider([]).plugin, permissions({ dataFolder: home })], { home, projectFolder: folder })
+  await first.evie.send({ type: "run_command", session: first.session, name: "mode", args: "auto" })
+  await first.stop()
+
+  const tools = standIns()
+  const again = await startEvie([scriptedProvider([{ text: [], calls: [edit("src/app.ts")] }, { text: ["ok"] }]).plugin, tools.plugin, permissions({ dataFolder: home })], { home, projectFolder: folder })
+  cleanups.push(again.stop)
+  await again.evie.send({ type: "open_session", session: first.session })
+  const modeOf = async (session: string) => (await again.evie.send({ type: "run_command", session, name: "mode", args: "" })).text
+  expect(await modeOf(first.session)).toStartWith("The mode is auto.")
+  expect(await modeOf(again.session)).toStartWith("The mode is manual.")
+  // Nobody can be asked in this session, so in manual the edit would be refused.
+  await say(again, "go", first.session)
+  expect(tools.ran).toEqual(["edit src/app.ts"])
+
+  const kept = await Array.fromAsync(new Bun.Glob("**").scan({ cwd: home, onlyFiles: true }))
+  expect(kept.filter((file) => file.includes(first.session))).toHaveLength(1)
+  await again.evie.send({ type: "delete_session", session: first.session })
+  expect(kept.filter((file) => file.includes(first.session)).every((file) => !existsSync(join(home, file)))).toBe(true)
+})
+
+test("in auto mode reading the owner's credentials asks, by the read tools or by any command, and one in the project is as before", async () => {
+  const { attempt, asked } = await start({ mode: "auto" })
+  const calls = [
+    read(join(homedir(), ".netrc")),
+    read(join(homedir(), ".config", "gcloud", "application_default_credentials.json")),
+    { name: "grep", input: { pattern: "token", path: join(homedir(), ".azure") } },
+    shell("cat ~/.npmrc"),
+    shell("cat ~/.pypirc ~/.git-credentials"),
+    shell("cat ~/.config/git/credentials"),
+    shell("grep oauth ~/.config/gh/hosts.yml"),
+    shell("cat $HOME/.docker/config.json"),
+    shell("cat ~/.kube/config"),
+    shell("security find-generic-password -s github -w"),
+    shell("security find-internet-password -s example.com"),
+  ]
+  for (const call of calls) expect(await attempt(call, NO)).toStartWith("The owner said no to this.")
+  expect(asked).toHaveLength(calls.length)
+
+  expect(await attempt(shell("cat .env .npmrc"))).toBe("done")
+  expect(await attempt(read(".netrc"))).toBe("done")
+  expect(asked).toHaveLength(calls.length)
+})
+
+test("a mode set with /mode wins over its file, which is read once, and a mode that could not be saved leaves no stale file", async () => {
+  const { run, mode, attempt } = await start()
+  const file = join(run.home, "modes", run.session)
+  expect((await mode("auto")).text).toStartWith("The mode is now auto, for this session.")
+  await writeFile(file, "read-only")
+  expect((await mode("")).text).toStartWith("The mode is auto.")
+  expect(await attempt(edit("src/app.ts"))).toBe("done")
+
+  // The file can no longer be written, so the mode holds only until evie stops, and the old file goes.
+  await chmod(file, 0o400)
+  expect((await mode("manual")).text).toStartWith("The mode is now manual, for this session until evie stops, since it could not be saved.")
+  expect(existsSync(file)).toBe(false)
+})
+
+test("/mode names the setting that gave the default, when one did", async () => {
+  const { run } = await withSettings({ permissions: { mode: "auto" } })
+  const reply = await run.evie.send({ type: "run_command", session: run.session, name: "mode", args: "manual" })
+  expect(reply.text).toBe('The mode is now manual, for this session. New sessions start in auto, which "permissions.mode" in evie.json sets.')
 })

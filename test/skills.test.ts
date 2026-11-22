@@ -175,7 +175,7 @@ test("a command may run a script from the owner's skills, with their say-so, and
     name: "shell-stand-in",
     setup: (host) => host.tools.add({ name: "shell", description: "A stand-in.", inputSchema: { type: "object" }, run: async (input) => (ran.push(String(input.command)), "ran") }),
   }
-  const { run, script, mine, home, lastResult } = await start([], { plugins: (data) => [shellStandIn, permissions({ mode: "auto", dataFolder: data })], questions: true })
+  const { run, script, mine, home, lastResult } = await start([], { plugins: (data) => [shellStandIn, permissions({ mode: "manual", dataFolder: data })], questions: true })
   await writeSkill(mine, "release", RELEASE, { "scripts/tag.sh": "git tag v1\n" })
   const asked: string[] = []
   run.evie.subscribe((event) => {
@@ -190,7 +190,7 @@ test("a command may run a script from the owner's skills, with their say-so, and
   }
   const tag = join(mine, "release", "scripts", "tag.sh")
 
-  // The script is outside the project, so it is asked about even in auto mode.
+  // The script is outside the project, so in manual mode it is asked about.
   expect(await shell(`sh ${tag}`)).toBe("ran")
   expect(asked).toHaveLength(1)
   const escapes = [

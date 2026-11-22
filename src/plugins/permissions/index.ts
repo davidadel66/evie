@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs"
+import { mkdir, rm, writeFile } from "node:fs/promises"
+import { join } from "node:path"
 import type { Plugin } from "../../core/types.ts"
 import { dataFolder } from "../../core/evie.ts"
 import { createGuard, isDefinition, isSavedOutput } from "../guard.ts"
@@ -13,6 +16,10 @@ import { MODES, actsOf, alwaysRule, effectFor, questionFor, type Mode, type Rule
 //      owner's remembered "always" answers. A rule that denies always wins;
 //      otherwise the last one that matches decides.
 //   3. With no rule, the session's mode decides (see rules.ts).
+//
+// A mode set with /mode is kept in a small file for the session in the
+// data folder, so that it holds when evie starts again. The file goes when
+// the session is deleted.
 //
 // When the answer is to ask and nobody can be asked, the call is denied.
 
@@ -39,7 +46,20 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
   // This plugin asks before each write to the owner's agents and skills, so the guard may let them through.
   const blockedByGuard = createGuard({ ...(options.dataFolder !== undefined && { dataFolder: options.dataFolder }), definitionsCanBeWritten: true })
   const startsIn = options.mode ?? "manual"
+  const newSessions = options.mode === undefined ? "New sessions start in manual, the default." : `New sessions start in ${options.mode}, which "permissions.mode" in evie.json sets.`
   const data = options.dataFolder ?? dataFolder({})
+  const keptIn = join(data, "modes")
+  // A session's id is the name of its file, so one that could not be is never used.
+  const fileOf = (session: string) => (/^[\w-]+$/.test(session) ? join(keptIn, session) : undefined)
+  const kept = (session: string): Mode | undefined => {
+    const file = fileOf(session)
+    try {
+      const mode = file === undefined ? "" : readFileSync(file, "utf8").trim()
+      return MODES.includes(mode as Mode) ? (mode as Mode) : undefined
+    } catch {
+      return undefined
+    }
+  }
 
   return {
     name: "permissions",
@@ -48,8 +68,13 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
       const key = folder ?? "general"
       // Shared by every session in this project, and added to by "always" answers.
       const remembered: Rule[] = [...(options.remembered?.[key] ?? [])]
-      // The mode of each session that has changed it.
+      // The mode of each session, read from its file the first time it is
+      // needed and changed by /mode. What is here wins over the file.
       const modes = new Map<string, Mode>()
+      const ownMode = (session: string): Mode => {
+        if (!modes.has(session)) modes.set(session, kept(session) ?? startsIn)
+        return modes.get(session)!
+      }
       // A subagent has no mode the owner sets. It works in auto, so that it
       // is not asking about every step from the background; or read-only,
       // when the session that started it was read-only at the time. Which
@@ -58,9 +83,9 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
       // subagent does not become free to change things because its starter
       // left read-only. It does become read-only at once if its starter does.
       const subagentModes = new Map<string, Mode>()
-      const forSubagent = (parent: string): Mode => ((modes.get(parent) ?? startsIn) === "read-only" ? "read-only" : "auto")
+      const forSubagent = (parent: string): Mode => (ownMode(parent) === "read-only" ? "read-only" : "auto")
       const modeOf = (session: string, parent?: string): Mode => {
-        if (parent === undefined) return modes.get(session) ?? startsIn
+        if (parent === undefined) return ownMode(session)
         if (!subagentModes.has(session)) subagentModes.set(session, forSubagent(parent))
         return forSubagent(parent) === "read-only" ? "read-only" : subagentModes.get(session)!
       }
@@ -68,13 +93,29 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
       host.commands.add({
         name: "mode",
         description: "Show or change how freely evie may act: read-only, manual or auto.",
-        run(args, context) {
+        async run(args, context) {
           const wanted = args.trim()
-          if (wanted === "") return `The mode is ${modeOf(context.session)}. ${ABOUT}`
-          if (!MODES.includes(wanted as Mode)) return `There is no mode "${wanted}". ${ABOUT}`
+          if (wanted === "") return `The mode is ${modeOf(context.session)}. ${ABOUT} ${newSessions}`
+          if (!MODES.includes(wanted as Mode)) return `There is no mode "${wanted}". ${ABOUT} ${newSessions}`
           modes.set(context.session, wanted as Mode)
-          return `The mode is now ${wanted}.`
+          const file = fileOf(context.session)
+          const saved =
+            file !== undefined &&
+            (await mkdir(keptIn, { recursive: true })
+              .then(() => writeFile(file, wanted))
+              // A file that could not be written over would give the old mode when evie starts again.
+              .then(
+                () => true,
+                () => rm(file, { force: true }).then(() => false, () => false),
+              ))
+          return `The mode is now ${wanted}, for this session${saved ? "" : " until evie stops, since it could not be saved"}. ${newSessions}`
         },
+      })
+
+      host.on("session_deleted", async (session) => {
+        modes.delete(session)
+        const file = fileOf(session)
+        if (file !== undefined) await rm(file, { force: true })
       })
 
       host.on("before_tool", async (call, context) => {
@@ -161,4 +202,6 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
 
 const ABOUT =
   "The modes are: read-only, which changes nothing; manual, which asks before every change and every command; and " +
-  "auto, which works freely inside the project and asks before reaching outside it. Change it with /mode and a name."
+  "auto, which reads anywhere and works freely in the project and the temp folder, and asks before what is " +
+  "dangerous: sending or publishing, changing anything outside them, reading your credentials, and changing the " +
+  "system. Change it for this session with /mode and a name."

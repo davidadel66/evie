@@ -8,13 +8,18 @@
 // Sets quoted text aside while a command is taken apart, so that `rg "a|b"`
 // is one command and not two. Only text the shell would not run is set
 // aside: single quotes, and double quotes with no `$` or backtick in them.
-function setQuotesAside(command: string): { text: string; putBack(text: string): string } {
+//
+// `unquote` puts it back with the quotes taken off, as the shell would read
+// it, and takes off double quotes that hold a `$` too. A quote left open
+// stays, so the word cannot be read as a place.
+function setQuotesAside(command: string): { text: string; putBack(text: string): string; unquote(text: string): string } {
   const quoted: string[] = []
   const text = command.replace(/\\\n/g, " ").replace(/'[^']*'|"[^"$`\\]*"/g, (found) => {
     quoted.push(found)
     return `\u0000${quoted.length - 1}\u0000`
   })
-  return { text, putBack: (piece) => piece.replace(/\u0000(\d+)\u0000/g, (_all, index: string) => quoted[Number(index)]!) }
+  const back = (piece: string, bare: boolean) => piece.replace(/\u0000(\d+)\u0000/g, (_all, index: string) => (bare ? quoted[Number(index)]!.slice(1, -1) : quoted[Number(index)]!))
+  return { text, putBack: (piece) => back(piece, false), unquote: (piece) => back(piece.replace(/"([^"'`\\]*)"/g, "$1"), true) }
 }
 
 // The commands in a command line: the pieces between `&&`, `||`, `;`, `|`,
@@ -43,7 +48,8 @@ const GIT_TAKES_VALUE = ["-C", "-c", "--git-dir", "--work-tree", "--namespace", 
 //              command does, so it is not known to be harmless
 //   `byPath`   the program was named by a path, such as ./ls, so it is not
 //              known to be the usual program of that name
-export function plainWords(part: string): { words: string[]; altered: boolean; byPath: boolean } {
+//   `gitIn`    the folders git was told to work in, by `-C` or `--work-tree`
+export function plainWords(part: string): { words: string[]; altered: boolean; byPath: boolean; gitIn: string[] } {
   let words = part.replace(/^[({\s]+/, "").split(/\s+/).filter((word) => word !== "")
   let altered = false
   while (words.length > 0) {
@@ -57,16 +63,20 @@ export function plainWords(part: string): { words: string[]; altered: boolean; b
   }
   const byPath = words[0]?.includes("/") ?? false
   if (byPath) words = [words[0]!.slice(words[0]!.lastIndexOf("/") + 1), ...words.slice(1)]
+  const gitIn: string[] = []
   if (words[0] === "git") {
     // `git -C folder push` and `git -c name=value push` are still a push.
     let at = 1
     while (words[at]?.startsWith("-")) {
-      if (!["--no-pager", "-P"].includes(words[at]!)) altered = true
-      at += GIT_TAKES_VALUE.includes(words[at]!) ? 2 : 1
+      const option = words[at]!
+      if (!["--no-pager", "-P"].includes(option)) altered = true
+      if ((option === "-C" || option === "--work-tree") && words[at + 1] !== undefined) gitIn.push(words[at + 1]!)
+      else if (option.startsWith("--work-tree=")) gitIn.push(option.slice("--work-tree=".length))
+      at += GIT_TAKES_VALUE.includes(option) ? 2 : 1
     }
     words = ["git", ...words.slice(at)]
   }
-  return { words: words.map((word) => word.replace(/[)}]+$/, "")).filter((word) => word !== ""), altered, byPath }
+  return { words: words.map((word) => word.replace(/[)}]+$/, "")).filter((word) => word !== ""), altered, byPath, gitIn }
 }
 
 // Tools whose first argument says what they do, so a rule names both words.
@@ -160,6 +170,138 @@ const RUNNER = /^(npx|bunx|pnpx|(pnpm|yarn) dlx|bun x|(npm|pnpm) exec)( -\S+)* /
 export function isOutwardFacing(part: string): boolean {
   const plain = plainWords(part).words.join(" ").replace(RUNNER, "")
   return OUTWARD.some((pattern) => pattern.test(plain))
+}
+
+// Commands that run as another user or change the computer's own settings.
+// In auto mode these are asked about.
+const SYSTEM: RegExp[] = [
+  /^(sudo|doas|su|pkexec)\b/,
+  /^(launchctl|systemsetup|networksetup|pmset|nvram|csrutil|diskutil|spctl|fdesetup|softwareupdate|dscl|kextload|kextunload|systemctl|chsh|passwd|shutdown|reboot|halt|poweroff)\b/,
+  /^defaults (write|delete|import|rename)\b/,
+  /^scutil --set\b/,
+  /^sysctl\b.* (-w\b|\S+=)/,
+  /^crontab\b(?! -l\b)/,
+]
+
+export function changesSystem(part: string): boolean {
+  const plain = plainWords(part).words.join(" ").replace(RUNNER, "")
+  return SYSTEM.some((pattern) => pattern.test(plain))
+}
+
+// The commands that delete, move or overwrite files, each with what it does
+// that to, from its words after the name. `files` are the files themselves;
+// `folders` are where files land or are changed, as where `cp` copies to or
+// where `git clean` runs, with "." for the folder the command runs in.
+// `unnamed` says it changes files it does not name, such as `xargs rm`.
+// Undefined when it may change more than its words tell, as `perl` without
+// `-i` may. Writing a command's output to a file, with `>` or `>>`, is one more.
+type Overwrites = { files: string[]; folders: string[]; unnamed?: true }
+const NONE: Overwrites = { files: [], folders: [] }
+// The values given to an option: `-t dir`, `-tdir`, `--target-directory dir` or `--target-directory=dir`.
+function valuesOf(words: string[], short: string, long: string): string[] {
+  return words.flatMap((word, at) => {
+    if (word === short || word === long) return [words[at + 1] ?? ""]
+    if (word.startsWith(`${long}=`)) return [word.slice(long.length + 1)]
+    return word.startsWith(short) && !word.startsWith("--") && word.length > short.length ? [word.slice(short.length)] : []
+  })
+}
+// The name of a program as it would be run: `/bin/rm` and `\rm` are rm.
+const programOf = (word: string | undefined) => (word ?? "").replace(/^\\/, "").replace(/^.*\//, "")
+// An editor that changes files in place, as `sed -i` and `perl -i` do,
+// changes the files it names. Its script is the word after an option that
+// takes one, such as `-e`, or else its first word, which names no file.
+const inPlace =
+  (takesScript: RegExp, otherwise: Overwrites | undefined) =>
+  (_args: string[], words: string[]): Overwrites | undefined => {
+    if (!words.some((word) => /^-[a-zA-Z]*i/.test(word) || word.startsWith("--in-place"))) return otherwise
+    const named = words.filter((word, at) => word !== "" && !word.startsWith("-") && !(at > 0 && takesScript.test(words[at - 1]!)))
+    return { files: words.some((word) => takesScript.test(word)) ? named : named.slice(1), folders: [] }
+  }
+const OVERWRITES: Record<string, (args: string[], words: string[], gitIn: string[]) => Overwrites | undefined> = {
+  ...Object.fromEntries(["rm", "rmdir", "unlink", "shred", "truncate", "tee"].map((name) => [name, (args: string[]) => ({ files: args, folders: [] })])),
+  mv: (args, words) => {
+    const into = valuesOf(words, "-t", "--target-directory")
+    return into.length > 0 ? { files: args.filter((arg) => !into.includes(arg)), folders: into } : { files: args.slice(0, -1), folders: args.slice(-1) }
+  },
+  cp: (args, words) => {
+    const into = valuesOf(words, "-t", "--target-directory")
+    return { files: [], folders: into.length > 0 ? into : args.length > 1 ? args.slice(-1) : [] }
+  },
+  sed: inPlace(/^(-[a-zA-Z]*[ef]|--expression|--file)$/, NONE),
+  perl: inPlace(/^-[a-zA-Z]*[eE]$/, undefined),
+  dd: (_args, words) => ({ files: words.filter((word) => word.startsWith("of=")).map((word) => word.slice(3)), folders: [] }),
+  find: (_args, words) => {
+    // Options that come before the places it starts from.
+    let from = 0
+    while (["-L", "-H", "-P", "-E", "-X", "-s", "-x", "-f"].includes(words[from] ?? "")) from += 1
+    const end = words.findIndex((word, at) => at >= from && /^[-(!]/.test(word))
+    const starts = words.slice(from, end === -1 ? words.length : end)
+    // Deleting, or running for each file anything that does more than look.
+    const changes = words.includes("-delete") || words.some((word, at) => /^-(exec|execdir|ok|okdir)$/.test(word) && !isReadOnly(words.slice(at + 1).join(" ")))
+    if (!changes) return NONE
+    return starts.length > 0 ? { files: [], folders: starts } : { files: [], folders: [], unnamed: true }
+  },
+  // What xargs runs is given files that cannot be told from its words.
+  xargs: (_args, words) => {
+    const runs = words.findIndex((word) => !word.startsWith("-") && !/^\d+$/.test(word))
+    if (runs === -1 || isReadOnly(words.slice(runs).join(" "))) return NONE
+    return Object.hasOwn(OVERWRITES, programOf(words[runs])) ? { files: [], folders: [], unnamed: true } : undefined
+  },
+  tar: (_args, words) => {
+    const short = words.filter((word, at) => (at === 0 && /^[a-zA-Z]+$/.test(word)) || /^-[a-zA-Z]/.test(word)).map((word) => word.replace(/^-/, ""))
+    const has = (letter: RegExp, long: string[]) => words.some((word) => long.includes(word)) || short.some((word) => letter.test(word))
+    if (has(/x/, ["--extract", "--get"])) {
+      const into = valuesOf(words, "-C", "--directory")
+      return { files: [], folders: into.length > 0 ? into : ["."] }
+    }
+    // Making an archive writes the file named after `f`.
+    if (has(/[cruA]/, ["--create", "--append", "--update", "--catenate"])) {
+      const archive = words.flatMap((word, at) => ((at === 0 || word.startsWith("-")) && /^-?[a-zA-Z]*f$/.test(word) ? [words[at + 1] ?? ""] : []))
+      return { files: [...archive, ...valuesOf(words, "--file", "--file")], folders: [] }
+    }
+    return has(/t/, ["--list"]) ? NONE : undefined
+  },
+  // git changes the folder it works in with anything but looking, and may write any place it names.
+  git: (args, words, gitIn) => (isReadOnly(["git", ...words].join(" ")) ? NONE : { files: [], folders: [...(gitIn.length > 0 ? gitIn : ["."]), ...args.slice(1)] }),
+}
+
+// What a command deletes, moves or overwrites, as written. `known` says
+// whether that is all it changes: it is one of the commands above, or only
+// looks apart from where it writes its output. In auto mode one that
+// changes files outside the project and the temp folder is asked about.
+export function overwrittenBy(part: string): Overwrites & { known: boolean } {
+  const { text, putBack, unquote } = setQuotesAside(part)
+  const redirected: string[] = []
+  // A redirect to a file writes it. Sending one stream to another does not.
+  const bare = text
+    .replace(/\d*>&\d+/g, " ")
+    .replace(/(?:&|\d*)>>?\|?\s*([^\s<>|&;()]+)/g, (_all, target: string) => {
+      redirected.push(unquote(target))
+      return " "
+    })
+    .replace(/\d*<<?-?\s*\S+/g, " ")
+  const { words, gitIn } = plainWords(bare)
+  const [name = "", ...rest] = words.map(unquote)
+  const found = Object.hasOwn(OVERWRITES, name) ? OVERWRITES[name]!(rest.filter((word) => !word.startsWith("-")), rest, gitIn.map(unquote)) : undefined
+  // `{a,b}` names each of a and b.
+  const each = (places: string[]) => places.flatMap((place) => place.split(/[{},]/)).filter((place) => place !== "")
+  return {
+    files: each([...(found?.files ?? []), ...redirected]),
+    folders: each(found?.folders ?? []),
+    ...(found?.unnamed && { unnamed: true as const }),
+    known: found !== undefined || isReadOnly(putBack(bare)),
+  }
+}
+
+// Where a `cd` or `pushd` goes, as written with its quotes taken off: "~"
+// for the home folder and "-" for wherever it was last. Undefined for any
+// other command.
+export function cdTarget(part: string): string | undefined {
+  const { text, unquote } = setQuotesAside(part)
+  const { words } = plainWords(text)
+  if (words[0] !== "cd" && words[0] !== "pushd") return undefined
+  const to = words.slice(1).find((word) => word === "-" || !word.startsWith("-"))
+  return to === undefined ? "~" : unquote(to)
 }
 
 // Every piece of a command that could name a place on disk: its words, the
