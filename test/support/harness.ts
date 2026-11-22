@@ -24,6 +24,8 @@ export async function startEvie(
     quietCheckEvery?: number
     // Settings from the environment besides the data folder, such as HOME.
     env?: Record<string, string>
+    // What opens a project's folder, in place of the computer's own.
+    openFolder?: NonNullable<EvieOptions["openFolder"]>
     // Open the session as a client that shows questions and answers them.
     questions?: boolean
   } = {},
@@ -44,6 +46,7 @@ export async function startEvie(
     ...(options.syncSetting && { syncSetting: options.syncSetting }),
     ...(options.compaction && { compaction: options.compaction }),
     ...(options.quietCheckEvery !== undefined && { quietCheckEvery: options.quietCheckEvery }),
+    ...(options.openFolder && { openFolder: options.openFolder }),
   }).catch(async (error) => {
     await remove()
     throw error

@@ -167,7 +167,7 @@ async function git(folder: string, args: string[], options: { input?: Uint8Array
   if (done.code !== 0) throw new Error(done.stderr.trim() || `git ${args[0]} stopped with code ${done.code}.`)
   return done.stdout
 }
-const DIFF_SAFE = ["--no-ext-diff", "--no-textconv"]
+export const DIFF_SAFE = ["--no-ext-diff", "--no-textconv"]
 
 const lines = (said: Buffer) => said.toString("utf8").split("\0").filter((each) => each !== "")
 
@@ -262,7 +262,9 @@ async function withFilters(folder: string, paths: string[]): Promise<Set<string>
 }
 
 // The commit the folder's work is on, or for a repository with no commits
-// yet, the empty tree.
+// yet, the empty tree, which git 2.46 no longer knows without its being
+// written, so it is written once. The diff is read when it is opened; the
+// session details' Changes row, read as it changes, writes nothing.
 async function head(folder: string): Promise<string> {
   try {
     return (await git(folder, ["rev-parse", "--verify", "-q", "HEAD"])).toString().trim()
@@ -314,9 +316,19 @@ async function baseOf(folder: string, given: string | undefined, pullRequestBase
 export async function readBranch(project: Project | null, given: string | undefined, pullRequestBase: () => Promise<string | undefined> = async () => undefined): Promise<Commands["read_changes"]["output"]> {
   const folder = await inRepository(project)
   if (typeof folder !== "string") return unavailable(folder.unavailable)
+  const start = await branchStart(folder, given, pullRequestBase)
+  if ("unavailable" in start) return unavailable(start.unavailable)
+  return { files: await sinceCommit(folder, start.from), base: start.base }
+}
+
+// Where a branch's changes are counted from: where it left the branch it
+// is compared with, picked as baseOf picks it, or why it cannot be. The
+// diff and the session details' Changes row both start here, so that they
+// agree.
+export async function branchStart(folder: string, given: string | undefined, pullRequestBase: () => Promise<string | undefined> = async () => undefined): Promise<{ base: string; from: string } | Unavailable> {
   const found = await baseOf(folder, given, pullRequestBase)
-  if ("unavailable" in found) return unavailable(found.unavailable)
+  if ("unavailable" in found) return found
   const from = await git(folder, ["merge-base", found.ref, "HEAD"]).then((said) => said.toString().trim(), () => undefined)
-  if (from === undefined) return unavailable(`This branch and ${found.base} have no commit in common to compare from.`)
-  return { files: await sinceCommit(folder, from), base: found.base }
+  if (from === undefined) return { unavailable: `This branch and ${found.base} have no commit in common to compare from.` }
+  return { base: found.base, from }
 }
