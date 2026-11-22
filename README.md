@@ -130,9 +130,10 @@ In your shell:
 
 | Command | What it does |
 |---|---|
-| `evie serve` | Runs the server. Leave it running; every client talks to it. |
+| `evie serve` | Runs the server, which also serves the web app. Leave it running; every client talks to it. |
 | `evie` | Starts the terminal client in the project of the folder you are in. |
 | `evie -c` (or `--continue`) | Carries on the last session of this project, joining it if it is still running. |
+| `evie web` | Opens the web app in your browser, signed in. `--print` prints the sign-in link instead. |
 | `evie new <folder> [name]` | Makes a project in a folder, backed up to a private GitHub repository. See "Workspaces". |
 | `evie token add <name>` | Makes a token for another device, and prints it once. |
 | `evie token list` | Lists the devices' tokens and when each was made. |
@@ -194,6 +195,43 @@ These work whether or not the server is running. On the other device, set
 or just `my-mac.local`, and `EVIE_TOKEN` to its token. The server listens on this computer only
 unless `host` under `server` in `evie.json` says otherwise, and the
 connection is not encrypted, so only change that on a network you trust.
+
+### The web app
+
+The server also serves a web app, at its own address. Open it signed in
+with:
+
+```sh
+evie web           # opens the web app in your browser, signed in
+evie web --print   # prints the sign-in link instead, to open by hand
+```
+
+`evie web` asks the server for a sign-in link, which works once, within
+five minutes, and opens it with `open` on a Mac or `xdg-open` elsewhere.
+The page trades the link's code for a cookie, and takes the code out of the
+address bar. Each browser signed in this way gets a token of its own, named
+`browser` and the day (UTC), such as `browser 2026-11-21`, or
+`browser 2026-11-21 (2)` for a second one that day. `evie token list` shows
+them, and `evie token remove "browser 2026-11-21"` signs that browser out at
+once. The cookie lasts 400 days, the longest a browser keeps one, and the
+page's scripts cannot read it.
+
+On another device, such as a phone, open the server's address and paste a
+token made for that device with `evie token add phone`. The server must be
+listening where the device can reach it (see above), and a page reached by
+any name other than `127.0.0.1` or `localhost` must be listed under
+`origins`, or the server refuses it:
+
+```json
+{ "server": { "host": "0.0.0.0", "origins": ["http://my-mac.local:3843"] } }
+```
+
+For now the page is the empty frame of its three columns: the list of
+sessions, the conversation and the project card come next. A light at the
+top says whether it is connected. While the line is down it says
+Reconnecting, and it catches up by itself once the line is back. A menu
+beside it picks one of three themes, Dusk, Moss and Oxblood, which the
+browser remembers.
 
 ### Keeping the server running
 
@@ -756,6 +794,9 @@ the best examples to read.
 - **The server carries them over the network.** `evie serve` runs the core
   and passes commands and events over one WebSocket, as JSON in the core's
   own shapes. It is in `src/server/`; `wire.ts` holds the messages.
+- **The web app is one more client.** It is in `web/`, and connects
+  through the same network client as the terminal, from
+  `web/src/connection.ts`, which keeps the connection apart from the screens.
 - **A turn is a loop.** The model is asked, the tools it asks for are run,
   and it is asked again with the results, until it answers without asking
   for a tool.
@@ -775,6 +816,55 @@ bun run check   # the type check and the tests
 
 The tests drive Evie the way a client does, with a scripted stand-in for the
 model, so they need no key and no network.
+
+### Working on the web app
+
+The web app is in `web/`: a React page, styled with Tailwind, bundled by
+Bun's own bundler. There is no build step. `evie serve` builds the page in
+memory as it starts, which takes a few milliseconds, and serves it.
+
+To work on it, start a development server in the repository's folder:
+
+```sh
+cd /path/to/the/development/checkout
+EVIE_HOME="$HOME/.evie-dev" bun src/cli.ts serve --dev
+```
+
+With `--dev`, Bun bundles the page again on each request, and updates the
+open page as its files are saved.
+
+Two questions were settled by trying them:
+
+- **A component keeps its state when its file is edited.** Bun's
+  development server applies React Fast Refresh: an edited component is
+  swapped into the open page without reloading it, and what was on screen,
+  such as an open menu, stays as it was. This holds for files whose exports
+  are all components. Editing any other file, such as `connection.ts` or
+  `theme.ts`, reloads the page. The connection is kept across an update, so
+  saving a file opens no second one.
+- **Tailwind is built by `evie serve` itself, with no build script.** It
+  calls `Bun.build` on `web/index.html` with Tailwind's plugin,
+  `bun-plugin-tailwind`, handed over in code, and serves the result from
+  memory, minified. Bun's other way, handing the page to `Bun.serve` with
+  `development: false`, bundles on the first request, but takes its plugins
+  only from a `bunfig.toml` in the folder the server was started in. A login
+  service is not started in the repository's folder, so the page would be
+  served without Tailwind. For the same reason the stylesheet names its own
+  folder for Tailwind to scan for class names (`source(".")`), since
+  Tailwind otherwise scans the folder the server was started in. `--dev`
+  does use Bun's development server, which reads the plugin from the
+  repository's `bunfig.toml`: that is why it must be started there.
+
+The design system's tokens are copied from its `tokens.json`: the colours
+into `web/src/tokens.css`, one set per theme, and the rest into Tailwind's
+theme in `web/src/styles.css`. Tailwind's own defaults are cleared, so each
+class names a token, such as `bg-bg-side`, `text-text-muted`,
+`text-caption` or `p-7`. The fonts, Geist and Geist Mono, are carried in
+the stylesheet, so the page asks no other site for anything.
+
+`bunfig.toml` also stops `bun install` from installing peer dependencies.
+The Tailwind plugin names Bun itself as one, and a second Bun in
+`node_modules` would then be the one `bun run check` uses.
 
 ### How changes are checked and released
 
@@ -866,7 +956,8 @@ remove `evie.db` and `server-token` from it, and its `-seed` folder, first.
 
 ## What comes next
 
-- A web client, with a workspace for each project.
+- The rest of the web client: the list of sessions, the conversation, the
+  project card, and a workspace for each project.
 - Scheduled work, memory, voice and a phone app.
 
 ## Credits
@@ -880,6 +971,10 @@ credited here, and its licence notice is kept with the code.
   format and the way the `patch` tool finds lines, in
   `src/plugins/files/patch.ts`, rewritten from Rust. The licence and Codex's
   notice are in `LICENSES/`.
+
+The web app's fonts are [Geist and Geist Mono](https://github.com/vercel/geist-font)
+(SIL Open Font License 1.1), from the `@fontsource-variable` packages. The
+licence is in `LICENSES/`.
 
 ## Licence
 
