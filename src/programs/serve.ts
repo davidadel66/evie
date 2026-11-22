@@ -52,6 +52,7 @@ export async function serve(env: Settings, args: string[] = []) {
     plugins: settings.plugins,
     projectSettings: settings.projectSettings,
     trust: settings.trust,
+    syncSetting: settings.syncSetting,
     settingsFile: settings.file,
     settings: editor,
     ...(settings.model !== undefined && { model: settings.model }),

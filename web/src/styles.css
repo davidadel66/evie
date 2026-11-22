@@ -125,6 +125,14 @@
   /* A project's icon tile in a session row, and the icon on it. */
   --spacing-tile-row: 18px;
   --spacing-tile-row-icon: 12px;
+  /* A project's tile in the workspace header and in the workspace strip;
+     the icon on the strip's is icon-md. */
+  --spacing-tile-header: 28px;
+  --spacing-tile-strip: 44px;
+  /* The project icon picker: six 40px columns, as many as the colours, and
+     the tallest its icons grow before they scroll. */
+  --spacing-icon-picker: 280px;
+  --spacing-icon-grid: 220px;
   /* The widest the session list's project filter grows, beside the search. */
   --spacing-project-filter: 128px;
   /* The message box: the tallest its text grows before it scrolls; the

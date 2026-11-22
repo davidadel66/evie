@@ -193,8 +193,21 @@ const noChanges = { subscribe: () => () => {}, state: () => NONE_LISTED }
 // the message box, whose first message starts it. While it starts, the
 // message shows as the owner's, and a question asked as the session opens,
 // such as whether to trust its project, is answered in place. Once its
-// conversation has been read, the page moves to the session.
-export function Draft({ connection, sessions, project, where }: { connection: Connection; sessions: Sessions; project: string | null; where: string }) {
+// conversation has been read, the page moves to the session, or does what
+// `moved` says instead, as a workspace's side chat does.
+export function Draft({
+  connection,
+  sessions,
+  project,
+  where,
+  moved,
+}: {
+  connection: Connection
+  sessions: Sessions
+  project: string | null
+  where: string
+  moved?: (session: string) => void
+}) {
   const [opened, setOpened] = useState<{ key: string; draft: OpenedDraft }>()
   const key = `${project}`
   useEffect(() => {
@@ -203,16 +216,16 @@ export function Draft({ connection, sessions, project, where }: { connection: Co
     return () => draft.close()
   }, [connection, sessions, key])
   if (opened?.key !== key) return null
-  return <Drafting key={key} draft={opened.draft} where={where} />
+  return <Drafting key={key} draft={opened.draft} where={where} moved={moved ?? ((session) => location.replace(addressOf({ session })))} />
 }
 
-function Drafting({ draft, where }: { draft: OpenedDraft; where: string }) {
+function Drafting({ draft, where, moved }: { draft: OpenedDraft; where: string; moved(session: string): void }) {
   const state = useSyncExternalStore(draft.subscribe, draft.state)
   const asking = useAsking(state.waiting)
   const { shown } = asking
   async function start(text: string) {
     if (state.starting !== undefined) return "The session is starting. Send this once it has."
-    const started = await draft.start(text, (session) => location.replace(addressOf({ session })))
+    const started = await draft.start(text, moved)
     return "problem" in started ? started.problem : undefined
   }
   return (
