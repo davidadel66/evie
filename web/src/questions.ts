@@ -1,4 +1,4 @@
-import type { EventBodies } from "../../src/core/types.ts"
+import { MESSAGE_LIMIT, MESSAGE_TOO_LONG, type EventBodies } from "../../src/core/types.ts"
 import { commandIn } from "./composer.ts"
 import type { Item } from "./transcript.ts"
 
@@ -116,6 +116,8 @@ export function sendDoes(typed: string, showing: Asked | undefined): SendDoes | 
 // and nothing is sent.
 export function sendWithFiles(typed: string, showing: Asked | undefined, files: number): SendDoes | undefined {
   const does = sendDoes(typed, showing)
+  // A message too long to send stays in the box, as evie would refuse it.
+  if (does !== undefined && "message" in does && new TextEncoder().encode(does.message).length > MESSAGE_LIMIT) return { refuse: MESSAGE_TOO_LONG }
   if (files === 0) return does
   if (does === undefined) {
     if (showing?.kind === "permission") return { decline: refusingChoice(showing), message: "" }

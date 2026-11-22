@@ -22,8 +22,8 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
-async function start(script: ScriptedReply[] = []) {
-  const served = await serveEvie([scriptedProvider(script).plugin])
+async function start(script: ScriptedReply[] = [], options: Parameters<typeof serveEvie>[1] = {}) {
+  const served = await serveEvie([scriptedProvider(script).plugin], options)
   cleanups.push(served.stop)
   const connection = openConnection({ url: served.server.url, token: served.token, firstWait: 10 })
   cleanups.push(() => connection.close())
@@ -143,6 +143,52 @@ test("when the line drops and comes back, what was missed is caught up on, each 
   expect(caughtUp.replySoFar).toBe("")
   expect(seqs(now)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
   expect(transcriptOf(now).map((item) => ("text" in item ? item.text : item.kind))).toEqual(["First", "Half way", "Stopped. The reply was cut short.", "Second", "Done."])
+})
+
+test("a catch-up of megabytes, which comes in pages, shows every event missed once, in order, though more were missed than the latest page of history holds", async () => {
+  // Replies of 200 KiB, five to a page of the catch-up. Compaction is put
+  // off, so that the model is asked for nothing but the replies.
+  const replies = Array.from({ length: 20 }, (_, at) => String(at % 10).repeat(200 * 1024))
+  const { served, connection } = await start(replies.map((text) => ({ text: [text] })), { compaction: { ceiling: 1_000_000_000 } })
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+  const port = Number(new URL(served.server.url).port)
+
+  await served.server.stop()
+  while (connection.state().status !== "reconnecting") await Bun.sleep(5)
+  // Twenty turns of four events each, about 4 MB, while the line is down.
+  for (let at = 1; at <= 20; at++) await say(served.run, `Message ${at}`)
+  const again = startServer({ evie: served.run.evie, tokens: served.tokens, host: "127.0.0.1", port })
+  cleanups.push(() => again.stop())
+
+  await until(conversation, (state) => state.events.length >= 80 && connection.state().status === "connected")
+  await Bun.sleep(50)
+  const now = conversation.state()
+  expect(seqs(now)).toEqual(Array.from({ length: 80 }, (_, at) => at + 1))
+  expect(now.replySoFar).toBe("")
+  // Each message and each reply once, in turn.
+  expect(transcriptOf(now).flatMap((item) => ("text" in item ? [item.text.slice(0, 10)] : []))).toEqual(
+    replies.flatMap((reply, at) => [`Message ${at + 1}`, reply.slice(0, 10)]),
+  )
+})
+
+test("a session of large events opens on its latest megabyte of history, and reading earlier reaches every event", async () => {
+  const replies = Array.from({ length: 12 }, (_, at) => String(at % 10).repeat(400 * 1024))
+  const { served, connection } = await start(replies.map((text) => ({ text: [text] })), { compaction: { ceiling: 1_000_000_000 } })
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`)
+
+  const conversation = open(connection, served.run.session)
+  const opened = await until(conversation, (state) => state.opened)
+  // Two replies of 400 KiB fit in a page, a third does not.
+  expect(seqs(opened)).toEqual([40, 41, 42, 43, 44, 45, 46, 47, 48])
+  expect(opened.earlier).toBe(true)
+
+  while (conversation.state().earlier) {
+    conversation.readEarlier()
+    const before = conversation.state().events.length
+    await until(conversation, (state) => state.events.length > before || !state.earlier)
+  }
+  expect(seqs(conversation.state())).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
 })
 
 test("a session that cannot be opened, as one that is not there, says why in words for the owner", async () => {

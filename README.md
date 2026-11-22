@@ -97,8 +97,8 @@ Type a message and press Enter.
   in, with its conversation. It first shows the end of the earlier
   conversation, as it looked when it happened: your messages, Evie's
   replies, and a line for each tool Evie used and what came back. A long
-  session shows its last 50 events, with a line saying how many earlier
-  ones are left out.
+  session shows its last 50 events, or fewer when they come to more than
+  about 1 MB, with a line saying how many earlier ones are left out.
 - **`/model`** shows which model is in use. `/model` and a name switches to
   another in the middle of a session.
 - **`/mode`** shows how freely Evie may act, and `/mode auto`, `/mode manual`
@@ -167,7 +167,10 @@ server is started again, `evie` says so and connects again by itself, then
 shows what it missed, without repeating anything. So does a device the
 server cannot send to fast enough: once more than 16 MB waits to be sent to
 it, the server closes its connection rather than leave a message out, and
-it catches up the same way. When it cannot catch up,
+it catches up the same way. What was missed comes in pages of about 1 MB,
+each asked for once the one before has arrived, so that a slow line, such
+as a phone's after a long session, catches up a page at a time instead of
+waiting on one large reply. When it cannot catch up,
 as when the project's plugins fail to load as the server opens the session
 again, it says that some of what happened may be missing, and why. A
 message or command it had sent when the line dropped is sent again, and
@@ -494,7 +497,9 @@ under it, and works as T3 Code's does:
 - **Files are attached** with the paperclip, by pasting them, or by dropping
   them on the box. Each shows as a chip above the text, an image with a
   small thumbnail, until it is sent or taken off. A file can be at most
-  10 MB. A message with files needs no words, but a command or an answer
+  10 MB, and a message's own text at most 1 MB: a longer text stays in the
+  box, which says to attach it as a file instead, and `evie` in a terminal
+  says the same. A message with files needs no words, but a command or an answer
   to a question takes no files. When the message is sent, it shows at
   once with its files, as Sending, while each file goes to the server,
   signed in as the page is, and is kept (see "Attachments"). A message

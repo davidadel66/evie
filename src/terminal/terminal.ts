@@ -98,6 +98,17 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   // leaving, since another client can share the session and answer it, with
   // one exception: a question asked while its session opens (see answeringDuring).
   let ended = false
+  // Sends a message, and says whether it went. One evie refuses, as a
+  // message too long to send, is said why and starts nothing.
+  const sent = (to: string, text: string) =>
+    evie.send({ type: "send_message", session: to, text }).then(
+      () => true,
+      (cause: unknown) => {
+        line(`[error] ${cause instanceof Error ? cause.message : String(cause)}`)
+        return false
+      },
+    )
+
   // Takes a typed line as the answer to the question that is waiting.
   const answer = async (typed: string) => {
     if (!asked) return
@@ -109,7 +120,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
         line("[That line was typed before the question appeared, so it was sent as a message, not taken as the answer.]")
         unanswered += 1
         idle = false
-        await evie.send({ type: "send_message", session, text: typed })
+        if (!(await sent(session, typed))) unanswered -= 1
       } else if (typed !== "") {
         line("[That line was typed before the question appeared, so it was not taken as the answer.]")
       }
@@ -422,7 +433,10 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       }
       unanswered += 1
       idle = false
-      await evie.send({ type: "send_message", session: openedSession, text })
+      if (await sent(openedSession, text)) continue
+      unanswered -= 1
+      idle = true
+      showPrompt()
     }
     ended = true
     // The turn in progress is waited for. So are background jobs, when asked:

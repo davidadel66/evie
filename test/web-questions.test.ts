@@ -140,3 +140,12 @@ test("the message box's placeholder says what sending does: with a permission pr
   expect(boxPlaceholder(permission("p1"), { session: false, working: false, mentions: true })).toBe("Ask anything. @ files")
   expect(boxPlaceholder(undefined, { session: false, working: false, mentions: false })).toBe("Ask anything")
 })
+
+test("a message of more than 1 MB of text is not sent: it stays in the box, which says to attach it as a file", () => {
+  const refused = { refuse: "This message is longer than the 1 MB a message can hold. Attach the text as a file instead: a file attached can be up to 10 MB, and evie reads it from there." }
+
+  expect(sendWithFiles("x".repeat(1024 * 1024 + 1), undefined, 0)).toEqual(refused)
+  // Two bytes a letter, so half as many letters are too many.
+  expect(sendWithFiles("é".repeat(512 * 1024 + 1), undefined, 1)).toEqual(refused)
+  expect(sendWithFiles("é".repeat(512 * 1024), undefined, 0)).toEqual({ message: "é".repeat(512 * 1024) })
+})

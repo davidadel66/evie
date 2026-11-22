@@ -11,6 +11,7 @@ import {
   startServer,
   type ClientMessage,
   type Command,
+  type Commands,
   type ConnectOptions,
   type Evie,
   type EvieEvent,
@@ -1699,6 +1700,274 @@ test("a catch-up that asks a question, has it answered, and then fails says that
   expect(printed.split("Said while the line was down.")).toHaveLength(2)
   expect(printed.split("[question] Trust this project?")).toHaveLength(4)
   expect(printed.split("[answered] Yes")).toHaveLength(4)
+})
+
+// ---- Catching up in pages ------------------------------------------------------------------
+
+const KiB = 1024
+// Replies of 400 KiB, as when evie writes large files: two fit in a page of
+// a catch-up, a third does not. Compaction is put off, so that the model is
+// asked for nothing but the replies.
+const largeReplies = (count: number): ScriptedReply[] => Array.from({ length: count }, (_, at) => ({ text: [String(at % 10).repeat(400 * KiB)] }))
+const largeSession = { compaction: { ceiling: 1_000_000_000 } }
+// The numbers each catch-up a client sent through the line asked from, in turn.
+const catchUpsFrom = (line: Awaited<ReturnType<typeof lineTo>>) =>
+  line.commands().flatMap((command) => (command.type === "open_session" && command.after !== undefined ? [command.after] : []))
+
+test("a catch-up of several megabytes arrives in several pages, each asked for from the last event of the one before, with every event once, in order", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider(largeReplies(12)).plugin], largeSession)
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: number[] = []
+  client.subscribe((event) => "seq" in event && seen.push(event.seq))
+
+  await line.cut()
+  // Twelve turns of four events each, nearly 5 MB, while the line is down.
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  line.mend()
+  // Sent once the line is back and the client has caught up.
+  await client.send({ type: "read_history", session, limit: 1 })
+
+  expect(seen).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+  // Each page ends before a third reply would go in: at 10, 18, 26, 34 and 42.
+  expect(catchUpsFrom(line)).toEqual([0, 10, 18, 26, 34, 42])
+})
+
+test("where the session stands is passed on once, from the last page: the reply being written comes after every event missed", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...largeReplies(12), { hang: true, text: ["Half way"] }]).plugin], largeSession)
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: (number | string)[] = []
+  client.subscribe((event) => {
+    if ("seq" in event) seen.push(event.seq)
+    else if (event.type === "assistant_delta" && event.text === "Half way") seen.push(event.text)
+  })
+
+  await line.cut()
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  const writing = written(served.run, "Half way")
+  await served.run.evie.send({ type: "send_message", session, text: "One more" })
+  await writing
+  line.mend()
+  await client.send({ type: "read_history", session, limit: 1 })
+
+  // Each page read the reply so far, but it is passed on once, after the
+  // last page: twelve turns, then the turn being written, 49 and 50.
+  expect(seen).toEqual([...Array.from({ length: 50 }, (_, at) => at + 1), "Half way"])
+  await served.run.evie.send({ type: "cancel", session })
+})
+
+test("when the line drops part way through the pages, the catch-up starts again from the last event received, and nothing is lost or shown twice", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider(largeReplies(12)).plugin], largeSession)
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: number[] = []
+  client.subscribe((event) => "seq" in event && seen.push(event.seq))
+
+  await line.cut()
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  // The first page arrives, and the line drops as the second comes back.
+  const firstPage = line.passedOn('"more":true')
+  line.mend()
+  await firstPage
+  await line.loseReplyTo("open_session")
+  line.mend()
+  await client.send({ type: "read_history", session, limit: 1 })
+
+  expect(seen).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+  // The first page ended at 10, so the second was asked for from there, and again once the line was back.
+  expect(catchUpsFrom(line)).toEqual([0, 10, 10, 18, 26, 34, 42])
+})
+
+test("a message whose reply was lost is sent again once the pages have all come, answered, and carried out once", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider(largeReplies(12)).plugin], largeSession)
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: number[] = []
+  client.subscribe((event) => "seq" in event && seen.push(event.seq))
+
+  const lost = line.loseReplyTo("send_message")
+  const sent = client.send({ type: "send_message", session, text: "Message 1" })
+  await lost
+  await turnsEnded(served.run, 1)
+  for (let at = 2; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  line.mend()
+
+  await sent
+  expect(seen).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+  // The message's turn_start and user_message came before its reply was lost.
+  expect(catchUpsFrom(line)).toEqual([2, 10, 18, 26, 34, 42])
+  // Answered from the server's memory, not carried out again.
+  expect(stored(served.run.events).filter((event) => event.type === "user_message").map((event) => event.body.text)).toEqual(
+    Array.from({ length: 12 }, (_, at) => `Message ${at + 1}`),
+  )
+})
+
+test("a job that ended while the line was down is passed on once, before the first page's events, though the pages take several replies", async () => {
+  const work = backgroundWork()
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...startsWork(), { text: ["The build passed."] }, ...largeReplies(12)]).plugin, work.plugin], largeSession)
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: string[] = []
+  client.subscribe((event) => {
+    if (event.type === "job") seen.push(`job ${event.job.status}`)
+    else if ("seq" in event) seen.push(`${event.seq}`)
+  })
+  await say(served.run, "build it", session)
+  // Answered after the turn's events, which come first on the line.
+  await client.send({ type: "read_history", session, limit: 1 })
+  const before = seen.length
+
+  await line.cut()
+  work.finish("All passed.")
+  await turnsEnded(served.run, 2)
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  line.mend()
+  await client.send({ type: "read_history", session, limit: 1 })
+
+  const caughtUp = seen.slice(before)
+  expect(caughtUp[0]).toBe("job finished")
+  expect(caughtUp.filter((each) => each.startsWith("job"))).toEqual(["job finished"])
+  expect(catchUpsFrom(line).length).toBeGreaterThan(1)
+})
+
+test("an open given a number to catch up from is answered with every event after it, though the server sends them in pages", async () => {
+  const { served, connect } = await serveOverALine([scriptedProvider(largeReplies(12)).plugin], largeSession)
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`)
+  const client = await connect()
+
+  const opened = await client.send({ type: "open_session", session: served.run.session, after: 0 })
+
+  expect(opened.more).toBeUndefined()
+  expect(opened.events?.map((event) => event.seq)).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+  expect(opened.lastSeq).toBe(48)
+})
+
+test("an open sent as the line comes back waits for every page of the catch-up, and is given the turn running and the question waiting as the last page reads them", async () => {
+  const deploy = asksBeforeDeploy()
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...largeReplies(12), ...callsDeploy()]).plugin, deploy.plugin], largeSession)
+  let opening: Promise<Commands["open_session"]["output"]> | undefined
+  const client: Evie = await connect({ onBack: () => void (opening = client.send({ type: "open_session", folder: served.run.projectFolder, continue: true, questions: true })) })
+  await client.send({ type: "open_session", session: served.run.session, questions: true })
+
+  await line.cut()
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`)
+  const asked = nextEvent(served.run, "question")
+  await served.run.evie.send({ type: "send_message", session: served.run.session, text: "deploy" })
+  await asked
+  line.mend()
+  while (opening === undefined) await Bun.sleep(5)
+  const opened = await opening
+
+  expect(catchUpsFrom(line).length).toBeGreaterThan(1)
+  expect(opened).toMatchObject({ session: served.run.session, turnRunning: true, lastSeq: 52 })
+  expect(opened.openQuestions.map((question) => question.text)).toEqual(["Deploy to production?"])
+  await client.send({ type: "answer_question", session: served.run.session, id: opened.openQuestions[0]!.id, choice: "No" })
+})
+
+test("an event and a question written between two pages of a catch-up are each passed on once", async () => {
+  let paused = () => {}
+  const pausing = new Promise<void>((resolve) => (paused = resolve))
+  const resume = gate()
+  // The second page is read only once the test says.
+  const core = (evie: Evie): Evie => ({
+    ...evie,
+    send: (async (command: Command) => {
+      if (command.type === "open_session" && command.after === 10) {
+        paused()
+        await resume.opened
+      }
+      return evie.send(command)
+    }) as Evie["send"],
+  })
+  const deploy = asksBeforeDeploy()
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...largeReplies(12), ...callsDeploy()]).plugin, deploy.plugin], { ...largeSession, core })
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", session: served.run.session, questions: true })
+  const seen: number[] = []
+  client.subscribe((event) => "seq" in event && seen.push(event.seq))
+
+  await line.cut()
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  line.mend()
+  await pausing
+  // Between the first page and the second: a message, the reply asking for the tool, and its question.
+  const asked = nextEvent(served.run, "question")
+  await served.run.evie.send({ type: "send_message", session, text: "deploy" })
+  const question = await asked
+  resume.open()
+  await client.send({ type: "read_history", session, limit: 1 })
+
+  expect([...seen].sort((a, b) => a - b)).toEqual(Array.from({ length: 52 }, (_, at) => at + 1))
+  // The question came as it was asked, ahead of the events numbered before it.
+  expect(seen.indexOf(52)).toBeLessThan(seen.indexOf(11))
+  await client.send({ type: "answer_question", session, id: question.body.id, choice: "No" })
+})
+
+test("a stop sent while a catch-up is still coming in pages is carried out at once, not after the last page", async () => {
+  const resume = gate()
+  let paused = () => {}
+  const pausing = new Promise<void>((resolve) => (paused = resolve))
+  const core = (evie: Evie): Evie => ({
+    ...evie,
+    send: (async (command: Command) => {
+      if (command.type === "open_session" && command.after === 10) {
+        paused()
+        await resume.opened
+      }
+      return evie.send(command)
+    }) as Evie["send"],
+  })
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...largeReplies(12), { hang: true, text: ["Working"] }]).plugin], { ...largeSession, core })
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", session: served.run.session })
+  const seen: number[] = []
+  client.subscribe((event) => "seq" in event && seen.push(event.seq))
+
+  await line.cut()
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  const working = written(served.run, "Working")
+  await served.run.evie.send({ type: "send_message", session, text: "Work on" })
+  await working
+  line.mend()
+  await pausing
+  const stopped = client.send({ type: "cancel", session })
+
+  expect(await Promise.race([stopped.then(() => "stopped"), Bun.sleep(1000).then(() => "held back")])).toBe("stopped")
+  resume.open()
+  await client.send({ type: "read_history", session, limit: 1 })
+  // Twelve turns, then the one stopped: its start, its message, the reply cut short and its end.
+  expect(seen).toEqual(Array.from({ length: 52 }, (_, at) => at + 1))
+})
+
+test("a page that says more follow but holds no events ends the catch-up, saying some events may be missing, and the session is still heard from", async () => {
+  let faulty = true
+  // A server with a fault: its first page of a catch-up says more follow, with no events.
+  const core = (evie: Evie): Evie => ({
+    ...evie,
+    send: (async (command: Command) => {
+      const result = await evie.send(command)
+      if (!faulty || command.type !== "open_session" || command.after === undefined) return result
+      faulty = false
+      return { ...(result as object), events: [], more: true }
+    }) as Evie["send"],
+  })
+  const { served, line, connect } = await serveOverALine([scriptedProvider([{ text: ["Hi."] }, { text: ["Again."] }]).plugin], { core })
+  const missing: string[] = []
+  const client = await connect({ onMissing: (note) => missing.push(note) })
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: string[] = []
+  client.subscribe((event) => event.type === "assistant_message" && seen.push(event.body.text))
+
+  await line.cut()
+  await say(served.run, "hello", session)
+  line.mend()
+  await client.send({ type: "read_history", session, limit: 1 })
+  await say(served.run, "again", session)
+  while (seen.length === 0) await Bun.sleep(5)
+
+  expect(missing).toEqual([expect.stringMatching(/^Catching up on the session .+ failed, so some of its events may be missing here\./)])
+  expect(seen).toEqual(["Again."])
 })
 
 // ---- Lists and summaries ------------------------------------------------------------------
