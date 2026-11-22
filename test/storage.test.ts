@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdir, mkdtemp, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { startEvie, type Run } from "./support/harness.ts"
+import { registeredEarlier, startEvie, type Run } from "./support/harness.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 
 // A workspace's Storage: the files in its project's .evie folder, listed a
@@ -148,23 +148,26 @@ test("a .evie that is itself a link to another folder is refused, since the fold
 test("Storage refuses a .evie folder that is evie's data folder, holds it, or is inside it, since the data folder holds the keys", async () => {
   const place = await tempFolder("evie-place-")
   const refused = "This project's .evie folder is, holds, or is inside evie's data folder, which holds its keys, so Storage does not show it."
-  // A project at the folder above the data folder, as one at the home folder is above ~/.evie.
-  const above = await startEvie([scriptedProvider([]).plugin], { home: join(place, ".evie"), projectFolder: place })
+  // Evie never makes a project at such a folder now, but one an earlier evie
+  // made there is still refused. A project at the folder above the data
+  // folder, as one at the home folder is above ~/.evie.
+  const above = await startEvie([scriptedProvider([]).plugin], { home: join(place, ".evie") })
   cleanups.push(above.stop)
+  const atPlace = registeredEarlier(above.home, place)
   await writeFile(join(place, ".evie", ".env"), "OPENROUTER_API_KEY=made-up\n")
-  await expect(above.evie.send({ type: "list_storage", project: above.project!.id })).rejects.toThrow(refused)
-  await expect(above.evie.send({ type: "read_storage", project: above.project!.id, path: ".env" })).rejects.toThrow(refused)
+  await expect(above.evie.send({ type: "list_storage", project: atPlace.id })).rejects.toThrow(refused)
+  await expect(above.evie.send({ type: "read_storage", project: atPlace.id, path: ".env" })).rejects.toThrow(refused)
 
   // One whose .evie holds the data folder, and one inside the data folder.
   const holder = await tempFolder("evie-holder-")
-  const holding = await startEvie([scriptedProvider([]).plugin], { home: join(holder, ".evie", "data"), projectFolder: holder })
+  const holding = await startEvie([scriptedProvider([]).plugin], { home: join(holder, ".evie", "data") })
   cleanups.push(holding.stop)
-  await expect(holding.evie.send({ type: "list_storage", project: holding.project!.id })).rejects.toThrow(refused)
+  await expect(holding.evie.send({ type: "list_storage", project: registeredEarlier(holding.home, holder).id })).rejects.toThrow(refused)
   const home = await tempFolder("evie-home-")
   await mkdir(join(home, "kept", ".evie"), { recursive: true })
-  const within = await startEvie([scriptedProvider([]).plugin], { home, projectFolder: join(home, "kept") })
+  const within = await startEvie([scriptedProvider([]).plugin], { home })
   cleanups.push(within.stop)
-  await expect(within.evie.send({ type: "list_storage", project: within.project!.id })).rejects.toThrow(refused)
+  await expect(within.evie.send({ type: "list_storage", project: registeredEarlier(home, join(home, "kept")).id })).rejects.toThrow(refused)
 })
 
 test("the .evie folder's own git repository is refused at any depth of path, and a folder is named the same however it is written", async () => {

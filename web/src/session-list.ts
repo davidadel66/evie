@@ -20,10 +20,9 @@ export function groupSessions(sessions: readonly SessionSummary[]): Groups {
 export const titleOf = (session: SessionSummary) => session.name ?? "New session"
 
 // The sessions a search keeps: those whose title and project's name,
-// together, have every word of it in them, in any case, as the Session
-// view drawing's search does, so that a project's name narrows the list
-// to it. `projectName` names a project by its id, or for null "No
-// project", or gives nothing for one not listed yet.
+// together, have every word of it in them, in any case, so that a project's
+// name narrows the list to it. `projectName` names a project by its id, or
+// for null "No project", or gives nothing for one not listed yet.
 export function filterSessions(sessions: readonly SessionSummary[], search: string, projectName: (project: string | null) => string | undefined): SessionSummary[] {
   const words = search.toLowerCase().split(/\s+/).filter((word) => word !== "")
   return sessions.filter((session) => {

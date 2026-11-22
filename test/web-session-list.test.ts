@@ -58,7 +58,7 @@ test("a search keeps the sessions whose name has every word of it, in any case a
   expect(ids(filterSessions(sessions, "", nameOf))).toEqual(["plants", "soup", "unnamed"])
 })
 
-test("a search matches the project's name as well as the session's, as the Session view drawing's does, so it narrows the list to a project", () => {
+test("a search matches the project's name as well as the session's, so it narrows the list to a project", () => {
   const sessions = [summary("beds", "active", 1, "p1", "Plan the beds"), summary("cake", "active", 2, "p2", "Apple cake"), summary("general", "active", 3, null, "Back up SQLite")]
 
   expect(ids(filterSessions(sessions, "recipe", nameOf))).toEqual(["cake"])
