@@ -981,9 +981,14 @@ to start working there.
 
 Running `evie` in a folder makes it a project too, or the git repository
 it is in, but never one that is, holds or is inside Evie's data folder,
-such as the home folder, which holds `~/.evie`: a project there would take
-Evie's own settings file for its own. The session started there belongs to
-no project, and says so as it opens.
+such as the home folder, which holds `~/.evie`, nor one whose `.evie` is a
+link to such a folder: a project there would take Evie's own settings file
+for its own. The session started there belongs to no project, and says so
+as it opens; `evie -c` there starts a new one. A folder inside a home
+folder kept in git is a project once it has a git repository of its own.
+A project an earlier Evie made at such a folder is no project now: its
+sessions open with no project and say why, and none can be moved into it.
+Nothing of it is deleted.
 
 **Kept out of the project's own git.** When a project's folder is a git
 repository, Evie adds `/.evie/` to the repository's local exclude list,

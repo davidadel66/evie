@@ -2,8 +2,8 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
-import { loadSettingsFiles } from "../src/index.ts"
-import { say, startEvie, stored, type Run } from "./support/harness.ts"
+import { loadSettingsFiles, type Plugin } from "../src/index.ts"
+import { registeredEarlier, say, sessionMadeEarlier, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 
 const cleanups: (() => Promise<void>)[] = []
@@ -144,13 +144,13 @@ test("a command Evie does not know is refused", async () => {
 // Evie started the way `evie serve` starts it, with its settings files, its
 // data folder `.evie` in a folder that stands for the owner's home folder,
 // as `~/.evie` is in a real one, unless `dataFolder` says where it is.
-async function startAtHome(dataFolder?: (home: string) => string) {
+async function startAtHome(dataFolder?: (home: string) => string, script: Parameters<typeof scriptedProvider>[0] = []) {
   const home = await realpath(await tempFolder("evie-owner-"))
   const data = dataFolder?.(home) ?? join(home, ".evie")
   await mkdir(data, { recursive: true })
   await writeFile(join(data, "evie.json"), JSON.stringify({ plugins: [] }))
   const settings = await loadSettingsFiles({ env: { EVIE_HOME: data } })
-  const run: Run = await startEvie([scriptedProvider([]).plugin], { home: data, projectSettings: settings.projectSettings, trust: settings.trust, syncSetting: settings.syncSetting })
+  const run: Run = await startEvie([scriptedProvider(script).plugin], { home: data, projectSettings: settings.projectSettings, trust: settings.trust, syncSetting: settings.syncSetting })
   cleanups.push(run.stop)
   const open = (folder: string) => run.evie.send({ type: "open_session", folder, questions: true })
   const projects = async () => (await run.evie.send({ type: "list_projects" })).map((project) => project.folder)
@@ -199,10 +199,97 @@ test("a folder in a git repository whose top holds the data folder, as a home fo
 
   expect(opened.project).toBeNull()
   expect(opened.notices).toEqual([
-    `The git repository at ${home}, which ${join(home, "notes")} is in, holds evie's data folder, ${data}, where evie keeps its own settings and state, ` +
-      "so it is never made a project. This session belongs to no project.",
+    `${join(home, "notes")} belongs to the git repository at ${home}. ${home} holds evie's data folder, ${data}, where evie keeps its own settings ` +
+      `and state, so it is never made a project. To make ${join(home, "notes")} a project of its own, give it a git repository of its own, ` +
+      "with git init there. This session belongs to no project.",
   ])
   expect(await projects()).not.toContain(home)
+  // A folder that could not be a project even with a repository of its own is not offered one.
+  await mkdir(join(data, "undo"), { recursive: true })
+  expect((await open(join(data, "undo"))).notices).toEqual([
+    `${join(data, "undo")} belongs to the git repository at ${home}. ${home} holds evie's data folder, ${data}, where evie keeps its own settings ` +
+      "and state, so it is never made a project. This session belongs to no project.",
+  ])
+})
+
+test("a folder whose .evie folder is a link to the data folder, into it, or to a folder holding it, is never made a project", async () => {
+  const { home, data, open, projects } = await startAtHome()
+  await mkdir(join(data, "undo"), { recursive: true })
+  const place = await realpath(await tempFolder("evie-place-"))
+  const cases: [string, string, string][] = [
+    ["to-data", data, "is evie's data folder"],
+    ["into-data", join(data, "undo"), `is inside evie's data folder, ${data}`],
+    ["to-home", home, `holds evie's data folder, ${data}`],
+  ]
+  for (const [name, target, how] of cases) {
+    await mkdir(join(place, name))
+    await symlink(target, join(place, name, ".evie"))
+
+    const opened = await open(join(place, name))
+
+    expect(opened.project).toBeNull()
+    expect(opened.notices).toEqual([
+      `The .evie folder of ${join(place, name)} leads to ${target}, which ${how}, where evie keeps its own settings and state, so ${join(place, name)} ` +
+        "is never made a project. This session belongs to no project.",
+    ])
+  }
+  expect((await projects()).filter((folder) => folder.startsWith(place))).toEqual([])
+})
+
+test("a project an earlier evie made at the home folder is no project now: its sessions, and new ones opened by its id, belong to no project, say why once, and never read evie's own settings file as the project's", async () => {
+  const { run, home, data } = await startAtHome()
+  const earlier = registeredEarlier(data, home)
+  const session = sessionMadeEarlier(data, earlier.id)
+  const note = notAProject(home, `holds evie's data folder, ${data}`)
+
+  const byProject = await run.evie.send({ type: "open_session", project: earlier.id, questions: true })
+  const bySession = await run.evie.send({ type: "open_session", session, questions: true })
+
+  expect(byProject.project).toBeNull()
+  expect(byProject.notices).toEqual([note])
+  expect(bySession.project).toBeNull()
+  expect(bySession.notices).toEqual([note])
+  expect(run.events.filter((event) => event.type === "question")).toEqual([])
+  // Nothing is deleted: the project is still listed.
+  expect((await run.evie.send({ type: "list_projects" })).map((project) => project.id)).toContain(earlier.id)
+})
+
+test("plugins starting their work over time are never given a project an earlier evie made at the home folder", async () => {
+  const home = await realpath(await tempFolder("evie-owner-"))
+  const data = join(home, ".evie")
+  const given: string[][] = []
+  const watching: Plugin = { name: "watching", setup() {}, start: ({ projects }) => void given.push(projects.map((project) => project.folder)) }
+  const run: Run = await startEvie([scriptedProvider([]).plugin, watching], { home: data })
+  cleanups.push(run.stop)
+  registeredEarlier(data, home)
+
+  await run.evie.resumeWork()
+
+  expect(given).toEqual([[run.project!.folder]])
+})
+
+test("a session is never moved into a project an earlier evie made at the home folder, and is told why", async () => {
+  const { run, home, data } = await startAtHome(undefined, [{ text: ["Hi."] }])
+  const earlier = registeredEarlier(data, home)
+  await say(run, "hello")
+
+  await expect(run.evie.send({ type: "move_session", session: run.session, project: earlier.id })).rejects.toThrow(
+    `${home} holds evie's data folder, ${data}, where evie keeps its own settings and state, so it is never made a project. A session cannot be moved into it.`,
+  )
+  expect((await run.evie.send({ type: "open_session", session: run.session })).project?.id).toBe(run.project!.id)
+})
+
+test("evie -c in the home folder starts a new session there, with no project and the note, rather than carrying on the last session that had none", async () => {
+  const { run, home, data } = await startAtHome(undefined, [{ text: ["Hi."] }])
+  const general = await run.evie.send({ type: "open_session" })
+  await say(run, "hello", general.session)
+
+  const continued = await run.evie.send({ type: "open_session", folder: home, continue: true, questions: true })
+
+  expect(continued.session).not.toBe(general.session)
+  expect(continued.resumed).toBe(false)
+  expect(continued.project).toBeNull()
+  expect(continued.notices).toEqual([notAProject(home, `holds evie's data folder, ${data}`)])
 })
 
 test("with EVIE_HOME set elsewhere, the folder that holds it is never a project, and the home folder is a project as any other folder is", async () => {

@@ -113,3 +113,17 @@ export function registeredEarlier(home: string, folder: string): Project {
   }
   return project
 }
+
+// Makes a session in a project, by its id, in the database of the data
+// folder `home`, as an earlier evie could have in a project registered as
+// above. Gives back the session's id.
+export function sessionMadeEarlier(home: string, project: string): string {
+  const session = crypto.randomUUID()
+  const db = new Database(join(home, "evie.db"))
+  try {
+    db.query("INSERT INTO session (id, project, created, parent, agent, read_only) VALUES (?, ?, ?, NULL, NULL, 0)").run(session, project, Date.now())
+  } finally {
+    db.close()
+  }
+  return session
+}

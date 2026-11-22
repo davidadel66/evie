@@ -10,6 +10,7 @@ import {
   runTerminal,
   startServer,
   type ClientMessage,
+  type Command,
   type ConnectOptions,
   type Evie,
   type EvieEvent,
@@ -441,6 +442,35 @@ test("a pipe that joins a session leaves when its input ends, saying a question 
   await shows.send({ type: "answer_question", session, id: questionsAsked(served.run.events)[0]!.body.id, choice: "Yes" })
   expect(await ended).toMatchObject({ session, body: { reason: "completed" } })
   expect(deploy.answers).toEqual(["Yes"])
+})
+
+test("a pipe that leaves a question waiting checks on it by asking where its own session stands, by its id, so it never opens another", async () => {
+  const deploy = asksBeforeDeploy()
+  const served = await serveEvie([scriptedProvider([{ text: ["Hi."] }, ...callsDeploy()]).plugin, deploy.plugin])
+  cleanups.push(served.stop)
+  const shows = await served.connect()
+  const { session } = await shows.send({ type: "open_session", folder: served.run.projectFolder, questions: true })
+  await say({ evie: shows, session }, "hello")
+  const client = await served.connect()
+  const opens: Command[] = []
+  const send = ((command: Command) => {
+    if (command.type === "open_session") opens.push(command)
+    return client.send(command)
+  }) as Evie["send"]
+
+  await runTerminal({
+    evie: { ...client, send },
+    folder: served.run.projectFolder,
+    resume: true,
+    questions: false,
+    waitForJobs: true,
+    lines: (async function* () {
+      yield "ship it"
+    })(),
+    write: () => {},
+  })
+
+  expect(opens.slice(1)).toEqual([{ type: "open_session", session }])
 })
 
 test("when one of two terminals on a session stops typing, the question waiting in it is left for the other to answer", async () => {

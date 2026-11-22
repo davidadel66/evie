@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, shell, sync, type Plugin } from "../src/index.ts"
 import { git, ran } from "./support/git.ts"
-import { registeredEarlier, say, startEvie } from "./support/harness.ts"
+import { say, startEvie } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
 // The sync plugin with a stand-in for GitHub: `gh` is answered here, and
@@ -75,8 +75,10 @@ async function standInGitHub() {
 // Evie with the file tools, the shell and the sync plugin, and a project
 // whose .evie folder holds its settings and syncs as `setting` says, which
 // is "private" unless given, and nothing when given as undefined.
-// With `dataFolderInside`, the project's .evie folder is evie's data folder,
-// as it is for a project at the home folder that an earlier evie made.
+// With `dataFolderInside`, the plugin is told that the project's .evie
+// folder is evie's data folder, as it is for a project at the home folder.
+// Evie itself, which never opens such a project as one, keeps its state
+// elsewhere, so that the plugin's own check is the one tried.
 // `scriptFor` makes the model's replies once the project folder is known.
 // `pushes` stands in for `git push`, when given.
 async function start(
@@ -93,7 +95,7 @@ async function start(
   const setting = "setting" in options ? options.setting : "private"
   const github = await standInGitHub()
   const projectFolder = await tempFolder("evie-project-")
-  const home = options.dataFolderInside ? join(projectFolder, ".evie") : await tempFolder("evie-home-")
+  const home = await tempFolder("evie-home-")
   await mkdir(join(projectFolder, ".evie"), { recursive: true })
   await writeFile(join(projectFolder, ".evie", "evie.json"), JSON.stringify(setting === undefined ? {} : { sync: setting }))
   // Every command the plugin runs, in order.
@@ -101,7 +103,7 @@ async function start(
   const stopped = new AbortController()
   cleanups.push(() => stopped.abort())
   const plugin: Plugin = sync({
-    dataFolder: home,
+    dataFolder: options.dataFolderInside ? join(projectFolder, ".evie") : home,
     setting: async () => setting,
     after: options.after ?? 60_000,
     every: options.every ?? 60 * 60_000,
@@ -117,12 +119,8 @@ async function start(
   const run = await startEvie([model.plugin, files(), shell(), plugin], { home, projectFolder })
   cleanups.push(run.stop)
   const evieFolder = join(projectFolder, ".evie")
-  // Evie never makes a project at the folder above its data folder now, so
-  // the project is one an earlier evie made there, opened by its id.
-  const project = options.dataFolderInside ? registeredEarlier(home, projectFolder) : run.project!
-  const session = options.dataFolderInside ? (await run.evie.send({ type: "open_session", project: project.id })).session : run.session
-  const syncNow = async () => (await run.evie.send({ type: "run_command", session, name: "sync", args: "" })).text
-  return { run, github, projectFolder, evieFolder, commands, syncNow, name: `evie-${project.name.toLowerCase()}` }
+  const syncNow = async () => (await run.evie.send({ type: "run_command", session: run.session, name: "sync", args: "" })).text
+  return { run, github, projectFolder, evieFolder, commands, syncNow, name: `evie-${run.project!.name.toLowerCase()}` }
 }
 
 // ---- The first sync ------------------------------------------------------------------------------
