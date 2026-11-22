@@ -219,11 +219,9 @@ function NameField({ title, save, cancel }: { title: string; save(typed: string)
 // The session's name as the conversation's header shows it. A double-click
 // types it in place, as in T3 Code, with the same rules as in its row.
 // `said` is told why a name was not taken, or with nothing that there is
-// nothing to say.
-// `small` is the side chat's, a heading among the workspace's columns
-// rather than the page's title. The command palette's Rename this session renames
-// it here, and so does F2 when the list is out of sight.
-export function HeaderName({ title, rename, said, small = false }: { title: string; rename(name: string): Promise<string | undefined>; said(note: string | undefined): void; small?: boolean }) {
+// nothing to say. The command palette's Rename this session renames it
+// here, and so does F2 when the list is out of sight.
+export function HeaderName({ title, rename, said }: { title: string; rename(name: string): Promise<string | undefined>; said(note: string | undefined): void }) {
   const [editing, setEditing] = useState(false)
   useEffect(() => whenAsked("rename", () => setEditing(true)), [])
   const [saving, setSaving] = useState<string>()
@@ -238,9 +236,8 @@ export function HeaderName({ title, rename, said, small = false }: { title: stri
     setSaving(undefined)
   }
   if (editing) return <NameField title={shown} save={save} cancel={() => setEditing(false)} />
-  const Heading = small ? "h2" : "h1"
   return (
-    <Heading
+    <h1
       onDoubleClick={() => {
         said(undefined)
         setEditing(true)
@@ -248,7 +245,7 @@ export function HeaderName({ title, rename, said, small = false }: { title: stri
       className="min-w-0 flex-1 truncate text-label text-text"
     >
       {shown}
-    </Heading>
+    </h1>
   )
 }
 

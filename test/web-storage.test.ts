@@ -43,24 +43,24 @@ async function until(storage: Storage, ready: (state: StorageState) => boolean) 
 
 const names = (state: StorageState, folder: string) => state.folders.get(folder)?.entries?.map((entry) => entry.name)
 
-test("once connected, Storage lists the top of the .evie folder, and a folder opens in place, listed as it opens, and closes again", async () => {
+test("once connected, Storage lists the whole .evie folder, every folder open, and a folder folds and opens again", async () => {
   const { connection, evieFolder, project } = await start()
-  await mkdir(join(evieFolder, "files"), { recursive: true })
+  await mkdir(join(evieFolder, "files", "menus"), { recursive: true })
   await writeFile(join(evieFolder, "evie.json"), "{}\n")
   await writeFile(join(evieFolder, "files", "notes.md"), "# Beds\n")
+  await writeFile(join(evieFolder, "files", "menus", "winter.md"), "# Soups\n")
   const storage = storageOf(connection, project)
 
-  const top = await until(storage, (state) => state.folders.get("")?.entries !== undefined)
-  expect(names(top, "")).toEqual(["files", "evie.json"])
-  expect(top.open.has("files")).toBe(false)
+  const tree = await until(storage, (state) => state.folders.get("files/menus")?.entries !== undefined)
+  expect(names(tree, "")).toEqual(["files", "evie.json"])
+  expect(names(tree, "files")).toEqual(["menus", "notes.md"])
+  expect(names(tree, "files/menus")).toEqual(["winter.md"])
+  expect(tree.closed.size).toBe(0)
 
   storage.toggle("files")
-  const opened = await until(storage, (state) => state.folders.get("files")?.entries !== undefined)
-  expect(opened.open.has("files")).toBe(true)
-  expect(names(opened, "files")).toEqual(["notes.md"])
-
+  expect(storage.state().closed.has("files")).toBe(true)
   storage.toggle("files")
-  expect(storage.state().open.has("files")).toBe(false)
+  expect(storage.state().closed.has("files")).toBe(false)
 })
 
 test("a file is read to be shown, and one Storage cannot show says why, in the server's words", async () => {
@@ -85,8 +85,6 @@ test("when the line comes back after a drop, what is open in Storage is listed a
   const { served, connection, evieFolder, project } = await start()
   await mkdir(join(evieFolder, "files"), { recursive: true })
   const storage = storageOf(connection, project)
-  await until(storage, (state) => state.folders.get("")?.entries !== undefined)
-  storage.toggle("files")
   await until(storage, (state) => state.folders.get("files")?.entries !== undefined)
   const port = Number(new URL(served.server.url).port)
 
