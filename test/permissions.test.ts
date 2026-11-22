@@ -15,7 +15,7 @@ afterEach(async () => {
 // a file or runs a command: each only records that it ran.
 function standIns() {
   const ran: string[] = []
-  const names = ["read", "grep", "glob", "write", "edit", "patch", "shell", "web_fetch", "deploy"]
+  const names = ["read", "grep", "glob", "write", "edit", "patch", "shell", "web_fetch", "deploy", "show"]
   const plugin: Plugin = {
     name: "stand-ins",
     setup(host) {
@@ -25,7 +25,7 @@ function standIns() {
           description: `A stand-in for ${name}.`,
           inputSchema: { type: "object" },
           run: async (input) => {
-            ran.push(`${name} ${input.command ?? input.path ?? input.url ?? ""}`.trim())
+            ran.push(`${name} ${input.command ?? input.path ?? input.url ?? (Array.isArray(input.paths) ? input.paths.join(" ") : "")}`.trim())
             return "done"
           },
         })
@@ -229,6 +229,44 @@ test("in auto mode Evie works freely inside the project and asks before reaching
     "Let evie change /somewhere/else/hosts, which is outside the project?",
   ])
   expect(ran).toHaveLength(8)
+})
+
+const showing = (...paths: string[]): ScriptedCall => ({ name: "show", input: { paths } })
+
+test("show is reading each file it is given: a file inside the project is shown without a question in every mode, and one from elsewhere asks first, naming it, as a read does", async () => {
+  const { attempt, asked, ran, mode, folder } = await start()
+  const inside = [showing("out/chart.png", join(folder, "docs", "guide.md"))]
+  for (const each of ["read-only", "manual", "auto"]) {
+    await mode(each)
+    expect(await attempt(inside[0]!)).toBe("done")
+  }
+  expect(asked).toEqual([])
+
+  for (const each of ["manual", "auto"]) {
+    await mode(each)
+    expect(await attempt(showing("out/chart.png", "/somewhere/else/plot.png"), YES)).toBe("done")
+    expect(asked.at(-1)?.text).toBe("Let evie show you /somewhere/else/plot.png, which is outside the project? A copy is kept in Storage.")
+  }
+  expect(await attempt(showing("/somewhere/else/plot.png"), NO)).toStartWith("The owner said no to this")
+  await mode("read-only")
+  expect(await attempt(showing("/somewhere/else/plot.png"))).toStartWith("Not allowed: evie is in read-only mode")
+
+  expect(asked).toHaveLength(3)
+  expect(ran).toEqual([
+    "show out/chart.png " + join(folder, "docs", "guide.md"),
+    "show out/chart.png " + join(folder, "docs", "guide.md"),
+    "show out/chart.png " + join(folder, "docs", "guide.md"),
+    "show out/chart.png /somewhere/else/plot.png",
+    "show out/chart.png /somewhere/else/plot.png",
+  ])
+})
+
+test("a rule that denies reading a file stops show from showing it too", async () => {
+  const { attempt, asked, ran } = await start({ mode: "auto", rules: [{ action: "read", match: "*.secret.png", effect: "deny" }] })
+
+  expect(await attempt(showing("out/chart.png", "out/keys.secret.png"))).toStartWith("Not allowed:")
+  expect(asked).toEqual([])
+  expect(ran).toEqual([])
 })
 
 test("in read-only mode nothing is changed and nothing is asked", async () => {

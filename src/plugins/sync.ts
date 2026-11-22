@@ -365,10 +365,11 @@ const STOPS_A_PUSH = [
 // helper that only clears those set before it does, so an empty one is let be.
 const EMPTY_IS_NONE = /^(credential\.(.+\.)?helper|core\.sshcommand|core\.askpass|core\.gitproxy|remote\..+\.proxy|http\.(.+\.)?proxy)$/
 // Whether a tool call may have changed something in the project's `.evie/`
-// folder: a file tool that names a file in it, or any command, since what a
-// command changes cannot be told from its text.
+// folder: a file tool that names a file in it; any command, since what a
+// command changes cannot be told from its text; or showing a file, which
+// keeps a copy there.
 function changesEvie(call: CheckedToolCall, folder: string): boolean {
-  if (call.name === "shell") return true
+  if (call.name === "shell" || call.name === "show") return true
   if (!FILE_TOOLS.includes(call.name)) return false
   const named = call.name === "patch" ? patchFiles(String(call.input.patchText ?? "")) : typeof call.input.path === "string" ? [call.input.path] : []
   const evie = realPath(join(folder, ".evie"))
