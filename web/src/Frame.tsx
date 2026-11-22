@@ -3,6 +3,8 @@ import { useCardShortcut } from "./card-shown.ts"
 import { connectionLine, type Connection, type ConnectionState } from "./connection.ts"
 import { Conversation, Draft, Placeholder } from "./Conversation.tsx"
 import { startedHere } from "./conversation.ts"
+import { useDiffShortcut } from "./diff-shown.ts"
+import { DiffPlace } from "./DiffPanel.tsx"
 import { CardButton, CardPlace } from "./ProjectCard.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
@@ -22,6 +24,7 @@ import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 // workspace in the address, the workspace view instead.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
+  useDiffShortcut()
   const workspace = useWorkspacePlace()
   if (workspace !== undefined) return <WorkspaceView place={workspace} state={state} connection={connection} sessions={sessions} />
   return (
@@ -42,6 +45,7 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
         <OpenSession connection={connection} sessions={sessions} />
       </main>
 
+      <DiffPlace connection={connection} sessions={sessions} />
       <CardPlace connection={connection} sessions={sessions} />
     </div>
   )

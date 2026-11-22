@@ -11,6 +11,7 @@ import { guard } from "./plugins/guard.ts"
 import { instructions } from "./plugins/instructions.ts"
 import { jobs } from "./plugins/jobs.ts"
 import { models } from "./plugins/models/index.ts"
+import { github } from "./plugins/github.ts"
 import { naming } from "./plugins/naming.ts"
 import { openrouter } from "./plugins/openrouter.ts"
 import { MODES, permissions, type Mode, type Rule } from "./plugins/permissions/index.ts"
@@ -158,10 +159,11 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   web: (_options, context) => web({ env: context.env }),
   sync: (_options, context) => sync({ dataFolder: context.home, setting: context.syncSetting }),
   naming: (options) => naming(typeof options.model === "string" && options.model.trim() !== "" ? { model: options.model.trim() } : {}),
+  github: () => github(),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
 // `undo` comes after `permissions`, so a call that is refused is not recorded.
-const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "naming", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "naming", "github", "openrouter"]
 
 // The permissions plugin as the settings describe it. A project's own mode
 // wins over the global one, and its rules come after the global ones.

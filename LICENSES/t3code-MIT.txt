@@ -1,5 +1,9 @@
-The prompt that names sessions, in src/plugins/naming.ts, is adapted from T3 Code's prompt for naming threads
-(https://github.com/pingdotgg/t3code, packages/provider-core/src/server/textGenerationPrompts.ts).
+Parts of evie are adapted from T3 Code (https://github.com/pingdotgg/t3code):
+
+- The prompt that names sessions, in src/plugins/naming.ts, from T3 Code's prompt
+  for naming threads (packages/provider-core/src/server/textGenerationPrompts.ts).
+- How a pull request's checks are read and summed up, in the github plugin,
+  src/plugins/github.ts, and in web/src/pull-request.ts.
 
 MIT License
 

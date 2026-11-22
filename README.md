@@ -420,7 +420,24 @@ The project card, on the right, is the selected session's:
   and the git branch it is on, kept current as the session list keeps it,
   or "No branch" in a repository on none of its own, or "Not a git
   repository". A session with no project says so.
-- **Changes:** Commit, Push and Pull request each send evie a request in
+- **The branch's pull request,** when it has one, as T3 Code shows it: its
+  number and state in words (Open, Draft, Merged or Closed); its title,
+  which opens it on GitHub; and its checks summed up, such as "2 of 5
+  failing", which open a menu of each check, with how it stands and a link
+  to its details, each check's state drawn as a Status: a check and Passed,
+  a cross and Failed, the spinner and Running. The `github` plugin reads it
+  with the GitHub CLI, `gh pr view`, in the project's folder, as `gh` is
+  signed in on the server's computer, when the card opens and each minute
+  while the page is shown. With no `gh`, one not signed in, or the plugin
+  not loaded, nothing is shown. `gh` is given only the server's path, home,
+  settings and temporary folders, language and its own `GH_` and `GITHUB_`
+  settings: no git settings and no keys. Only https links are kept, for
+  the pull request and its checks. The page only reads it: nothing on
+  GitHub is changed from it.
+- **Changes:** how many files the session has changed, with the lines
+  added and removed, from before its first change to now, and Open diff,
+  which opens the diff on the whole session. Without the undo plugin, it
+  says that changes are not kept here. Commit, Push and Pull request each send evie a request in
   words, as a message in the session, such as "Commit the changes in this
   session with a short message."; evie carries it out as it would if you had
   typed it, and asks before pushing, as it always does. A request sent
@@ -450,6 +467,84 @@ right of the middle column's header, or with Cmd+Option+B (Ctrl+Alt+B
 elsewhere), and the browser remembers which. At 980px wide or narrower the
 same button opens it as a sheet over the page, from the right, which goes
 once something is picked.
+
+What evie changed is shown as diffs, as T3 Code shows them:
+
+- **In the conversation,** a completed turn that changed files with evie's
+  file tools ends with one quiet line, such as "3 changed files +12 −4",
+  which opens to list them, and Open diff, which opens the diff on that
+  turn. A file in the list opens it at that file. The counts leave out a
+  file whose lines were not counted, such as a binary one, which shows
+  none.
+- **The diff** opens from that line, from the project card's Open diff, or
+  with Cmd+D (Ctrl+D elsewhere), which also closes it. At desktop width it
+  is a column beside the conversation, in the project card's place, and
+  wider than the card, since a diff needs the room; closing it brings the
+  card back. At 980px wide or narrower it fills the screen, with a way back
+  at its top left.
+- **The menu at its top** picks what to compare: the latest turn; each turn
+  that changed files, newest first, with when it ended; the whole session,
+  each file from before the session first changed it to now; and in a git
+  project, Uncommitted, every change since the last commit, and This
+  branch, the branch against the branch it is merged into: its pull
+  request's base when it has one, which the server asks the `github`
+  plugin for, and otherwise the repository's main branch. Both include
+  files git does not track and does not ignore, and count changes as git
+  does: a file taken out of git is removed, though it is still in the
+  folder, and a submodule moved to another commit says "Submodule
+  changed". In a folder known not to be in git, both are listed but cannot
+  be picked, and say why; when that is not known, the server is asked, and
+  what it says is shown in words.
+- **Each file** has a header that stays at the top while the file scrolls
+  past, and folds the file when pressed. A file that is binary, or too
+  large to show, says so instead of a diff, and so does one whose contents
+  are no longer known, as when it has been changed outside evie since the
+  turn and no copy of what the turn left is kept. One comparison reads at
+  most 300 files, a few at a time; the files past them are listed, as not
+  compared. A file is drawn up to 3,000 lines, after which it says it is
+  too large to show in full. A diff is drawn stacked or side by side, which
+  the browser remembers; at phone width it is stacked. Lines added and
+  removed lie on a wash of green and red, with a + or − at the start of
+  each; nothing else in the panel is coloured.
+- **The file tree** beside the diff lists its files by folder; a file in
+  it scrolls to that file. It can be hidden, which the browser remembers.
+- **The changes by turn come from undo's copies,** which it keeps of each
+  file before a turn's file tools change it. What a turn left in a file is
+  the file as it is now, or the copy the next turn that changed it kept.
+  A turn undone is gone from the list, with its copies. Without the undo
+  plugin, the turns' changes are not kept, and the diff says so. What a
+  shell command changed is not in a turn's changes; in a git project it is
+  in Uncommitted. A turn that has ended changes no more, so what it changed
+  is worked out once and kept; the whole session's files are worked out
+  only when the project card asks for them, and lines are compared on a
+  thread of the server's own, so that a long comparison holds nothing up.
+- **A repository is read without running anything it names.** A
+  repository's own settings can name commands for git to run, and one just
+  cloned is not to be trusted with that. Every git that evie runs, in its
+  core and its built-in plugins (`src/core/git.ts`), is given settings that
+  turn each of them off, through its environment (`GIT_CONFIG_COUNT`),
+  which git reads over every settings file: the file system monitor
+  (`core.fsmonitor`); hooks (`core.hooksPath`, and no index written,
+  `GIT_OPTIONAL_LOCKS`, which would run one); the pager; an external diff
+  (`diff.external`, and `--no-ext-diff` for a diff driver's command); text
+  conversion (`--no-textconv`); signing (`commit.gpgSign`,
+  `tag.gpgSign`); upkeep in the background (`gc.auto`,
+  `maintenance.auto`); and for a command that reads the folder's files,
+  every filter its settings name, whose clean, smudge and process commands
+  are each set to none, whatever the filter's name. Nor does git reach
+  another computer: no transport (`protocol.allow`), no fetching of what a
+  partial clone lacks (`GIT_NO_LAZY_FETCH`), no credential helper, ssh
+  command or password program (`credential.helper`, `core.sshCommand`,
+  `core.askPass`), and never a prompt (`GIT_TERMINAL_PROMPT`). The git
+  that `gh` runs is given the same. The one exception is the sync plugin's
+  push to its private backup repository, which keeps the transports,
+  credential helper and ssh command the settings have, and everything else
+  above. The files themselves are read by the server, not through git, and
+  the size of each is looked at first: one over 1 MB is never read. A file
+  git filters, as git-lfs does, is not compared, since its filter is not
+  run, and says "Filtered file, changes not shown". One answer spends at
+  most 20 seconds comparing lines, and one file at most 15: the files left
+  say they took too long, and are not compared.
 
 **A workspace** is a project's home, opened from its icon or name in the
 session list or the project card. The page then has three other columns:
@@ -900,7 +995,7 @@ the per-model settings and the permissions.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the fourteen built-in ones load:
+a list, the fifteen built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
@@ -908,7 +1003,7 @@ a list, the fourteen built-in ones load:
 | `shell` | `shell` |
 | `jobs` | `job_stop`, and the `/jobs` and `/background` commands |
 | `permissions` | The rules that allow, deny or ask before a tool runs, and the `/mode` command |
-| `undo` | The copies kept of files before they are changed, and the `/undo` command |
+| `undo` | The copies kept of files before they are changed, the `/undo` command, and what each turn changed, for the web app's diffs |
 | `models` | What each model family is given, and the `/model` command |
 | `ask` | `ask`, the model's way to put a question to you |
 | `subagents` | `subagent` and `subagent_send` |
@@ -917,6 +1012,7 @@ a list, the fourteen built-in ones load:
 | `web` | `web_search` and `web_fetch` |
 | `sync` | The backing up of a project's `.evie` folder, and the `/sync` command |
 | `naming` | A name for each session, written by a small model from its first message |
+| `github` | The pull request of a project's branch, read with the GitHub CLI for the web app's project card and diffs |
 | `openrouter` | The connection to models through OpenRouter |
 
 ```json
@@ -935,6 +1031,7 @@ a list, the fourteen built-in ones load:
     "web",
     "sync",
     "naming",
+    "github",
     "openrouter",
     { "use": "/path/to/my-plugin.ts", "options": { "greeting": "hi" } }
   ]
@@ -1044,7 +1141,7 @@ from there: under the login service that environment holds just the data
 folder and `PATH`, which is why `evie service install` names only the
 built-in plugins' keys.
 
-Through the host a plugin can add to four lists:
+Through the host a plugin can add to six lists:
 
 | List | What an entry is |
 |---|---|
@@ -1052,6 +1149,8 @@ Through the host a plugin can add to four lists:
 | `host.providers` | A way to reach a model |
 | `host.profiles` | What one family of models is given: a system prompt and its tools for changing files |
 | `host.commands` | A command you type starting with a slash, such as `/model`. A command can tell the model something with `context.tell`, which adds a note to the conversation |
+| `host.pullRequests` | What reads the pull request of the branch a folder is on: `read(folder)` gives it, or null when there is none or it cannot ask. The `github` plugin adds one, with the GitHub CLI; the first one added is used |
+| `host.changes` | What keeps the files each turn changed, so that a client can show them as diffs: `turns(session)` gives each turn that changed files, with what each file held before the turn and what the turn left in it. `undo` adds one, from the copies it keeps; the first one added is used |
 
 It can also attach to *hooks*, moments where a plugin's code runs:
 
@@ -1228,12 +1327,20 @@ A few values the design system's board does not name are named once in
 | `composer-menu` | 320px | The tallest the `/` menu and the model picker above the message box are, as T3 Code's |
 | `picker-makers` | 144px | The model picker's column of makers |
 | `job-output` | 240px | The tallest a background job's output grows in the project card before it scrolls |
+| `diff-tree` | 240px | The file tree beside a diff |
 | `radius-tile` | 25% | A project's icon tile's corners, a quarter of its size at any size |
 | `default-transition-duration` | 150ms | How long a change takes, such as a group's caret turning |
 | `default-transition-timing-function` | `cubic-bezier(0.4, 0, 0.2, 1)` | How it eases |
 
 The strokes, `line-width` (1px) and `indicator-width` (2px, for the focus
 ring), are the board's, kept beside the colours in `tokens.css`.
+
+The board names no colours for a diff's lines. `diff-added` and
+`diff-removed`, in `tokens.css`, are its own muted green and red, the values
+Done and Failed have, and each has one job: a line added or removed lies
+on the board's 18% tint of its colour, as a project's icon lies on its own,
+and the + or − at the line's start is in it. Counts such as "+3 −2" are
+quiet words, in `text-muted`, wherever they are shown.
 
 `bunfig.toml` also stops `bun install` from installing peer dependencies.
 The Tailwind plugin names Bun itself as one, and a second Bun in
@@ -1345,8 +1452,10 @@ credited here, and its licence notice is kept with the code.
   `src/plugins/files/patch.ts`, rewritten from Rust. The licence and Codex's
   notice are in `LICENSES/`.
 - [T3 Code](https://github.com/pingdotgg/t3code) (MIT): the prompt that
-  names sessions, in `src/plugins/naming.ts`, rewritten in evie's words.
-  Its licence is in `LICENSES/`.
+  names sessions, in `src/plugins/naming.ts`, rewritten in evie's words;
+  and how a pull request's checks are read and summed up, in
+  `src/plugins/github.ts` and `web/src/pull-request.ts`. The web app's
+  layout follows T3 Code's. Its licence is in `LICENSES/`.
 
 The web app's fonts are [Geist and Geist Mono](https://github.com/vercel/geist-font)
 (SIL Open Font License 1.1), from the `@fontsource-variable` packages. Its

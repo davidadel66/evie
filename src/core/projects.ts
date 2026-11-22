@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite"
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
+import { runGit, runGitSync } from "./git.ts"
 import { NOT_ACTIVITY } from "./log.ts"
 import type { Project, ProjectColour } from "./types.ts"
 
@@ -95,20 +96,18 @@ export function keepEvieOutOfGit(folder: string): void {
 const EXCLUDED = "/.evie/"
 
 // Whether the repository at this folder commits anything in its `.evie/`.
+// Git runs none of the commands a repository's settings can name (git.ts).
 function tracksEvie(folder: string): boolean {
-  try {
-    const asked = Bun.spawnSync(["git", "ls-files", "--", ".evie"], { cwd: folder, stdin: "ignore", stdout: "pipe", stderr: "ignore" })
-    return asked.exitCode === 0 && asked.stdout.toString().trim() !== ""
-  } catch {
-    return false
-  }
+  const asked = runGitSync(folder, ["ls-files", "--", ".evie"])
+  return asked.code === 0 && asked.stdout.toString().trim() !== ""
 }
 
 // Whether a project's folder is in a git work tree, at its top or below it,
 // as git itself says: true or false, or undefined when git cannot be asked
 // or does not answer within a second. A folder with no `.git` in it or
-// above it is not, and git is not asked. Git's own settings in the
-// server's environment are left out, as for the branch.
+// above it is not, and git is not asked. Git runs none of the commands a
+// repository's settings can name, nor its own settings in the server's
+// environment (git.ts).
 export async function inGit(folder: string): Promise<boolean | undefined> {
   if (!existsSync(folder)) return false
   let above = folder
@@ -116,36 +115,25 @@ export async function inGit(folder: string): Promise<boolean | undefined> {
     if (dirname(above) === above) return false
     above = dirname(above)
   }
-  try {
-    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")))
-    const asked = Bun.spawn(["git", "rev-parse", "--is-inside-work-tree"], { cwd: folder, env, stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 1000 })
-    const [said, problem, code] = await Promise.all([new Response(asked.stdout).text(), new Response(asked.stderr).text(), asked.exited])
-    if (code === 0) return said.trim() === "true"
-    return problem.includes("not a git repository") ? false : undefined
-  } catch {
-    return undefined
-  }
+  const asked = await runGit(folder, ["rev-parse", "--is-inside-work-tree"], { timeout: 1000 })
+  if (asked.code === 0) return asked.stdout.toString().trim() === "true"
+  return asked.stderr.includes("not a git repository") ? false : undefined
 }
 
 // The git branch a project's folder is on, as git itself says, or
 // undefined when the folder is not the top of a repository, as one inside
 // another repository is not, is on no branch, as with a commit checked out
 // by itself, or git cannot be asked. A repository with no commits yet is on
-// its branch all the same. Git is asked about the folder alone: git's own
-// settings in the server's environment, such as GIT_DIR, which would point
-// it elsewhere, are left out. It is one small process, given up on after a
-// second, so that a list of projects is never held up by one of them.
+// its branch all the same. Git is asked about the folder alone, as git.ts
+// runs it: git's own settings in the server's environment, such as
+// GIT_DIR, which would point it elsewhere, are left out. It is one small
+// process, given up on after a second, so that a list of projects is never
+// held up by one of them.
 export async function branchOf(folder: string): Promise<string | undefined> {
-  try {
-    if (!existsSync(join(folder, ".git"))) return undefined
-    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")))
-    const asked = Bun.spawn(["git", "symbolic-ref", "--short", "-q", "HEAD"], { cwd: folder, env, stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: 1000 })
-    const [said, code] = await Promise.all([new Response(asked.stdout).text(), asked.exited])
-    const branch = said.trim()
-    return code === 0 && branch !== "" ? branch : undefined
-  } catch {
-    return undefined
-  }
+  if (!existsSync(join(folder, ".git"))) return undefined
+  const asked = await runGit(folder, ["symbolic-ref", "--short", "-q", "HEAD"], { timeout: 1000 })
+  const branch = asked.stdout.toString().trim()
+  return asked.code === 0 && branch !== "" ? branch : undefined
 }
 
 // A folder as it really is, links resolved, whether or not it exists yet:

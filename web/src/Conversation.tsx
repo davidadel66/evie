@@ -1,5 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { PermissionPrompt, useAsking } from "./Asking.tsx"
+import { TurnChangedFiles } from "./ChangedFiles.tsx"
+import { holdChanges, type Changes } from "./changes.ts"
 import { asAsked } from "./questions.ts"
 import { Button } from "./components/ui/button.tsx"
 import { Composer } from "./Composer.tsx"
@@ -21,14 +23,18 @@ import { sizeWords } from "./workspace.ts"
 // kept there as new text comes; one who has scrolled up is left where they
 // are, and offered a way back down.
 export function Conversation({ connection, session }: { connection: Connection; session: string }) {
-  const [opened, setOpened] = useState<{ session: string; conversation: Opened }>()
+  const [opened, setOpened] = useState<{ session: string; conversation: Opened; changes: Changes }>()
   useEffect(() => {
     const held = holdConversation(connection, session)
-    setOpened({ session, conversation: held.conversation })
-    return held.release
+    const changes = holdChanges(connection, session)
+    setOpened({ session, conversation: held.conversation, changes: changes.changes })
+    return () => {
+      changes.release()
+      held.release()
+    }
   }, [connection, session])
   if (opened?.session !== session) return null
-  return <Reading key={session} conversation={opened.conversation} />
+  return <Reading key={session} conversation={opened.conversation} changes={opened.changes} />
 }
 
 // How near the bottom, in pixels, counts as at the bottom, so that a
@@ -39,15 +45,17 @@ const ANCHORS = 5
 
 // A conversation as it reads, the session's own, with its message box, or
 // one of its subagents', which is read only: it has no box, since nothing
-// is said in a subagent's conversation from the page.
-export function Reading({ conversation, readOnly = false }: { conversation: Opened; readOnly?: boolean }) {
+// is said in a subagent's conversation from the page. With `changes`, each
+// completed turn that changed files ends with them.
+export function Reading({ conversation, readOnly = false, changes }: { conversation: Opened; readOnly?: boolean; changes?: Changes }) {
   const state = useSyncExternalStore(conversation.subscribe, conversation.state)
   const { events, earlier, replySoFar, turnRunning, jobs, pending, notes } = state
+  const changed = useSyncExternalStore(changes?.subscribe ?? noChanges.subscribe, changes?.state ?? noChanges.state).listed?.turns
   // A question waiting is shown where it is answered, at the end or docked
   // above the box, so it is left out where it was asked until it is answered.
   const items = useMemo(
-    () => asAsked(transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, pending, notes }), state.waiting),
-    [events, earlier, replySoFar, turnRunning, jobs, pending, notes, state.waiting],
+    () => asAsked(transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, pending, notes }, changed), state.waiting),
+    [events, earlier, replySoFar, turnRunning, jobs, pending, notes, changed, state.waiting],
   )
   const asking = useAsking(state.waiting)
   const { shown } = asking
@@ -180,6 +188,11 @@ export function Reading({ conversation, readOnly = false }: { conversation: Open
   )
 }
 
+// For a conversation shown without its changes, as a subagent's is: the
+// same state each time it is asked for, as React needs.
+const NONE_LISTED = { listed: undefined, problem: undefined }
+const noChanges = { subscribe: () => () => {}, state: () => NONE_LISTED }
+
 // A draft of a new session, in the middle column: where it will start, and
 // the message box, whose first message starts it. While it starts, the
 // message shows as the owner's, and a question asked as the session opens,
@@ -279,6 +292,8 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
     // A question as it was asked. One waiting is drawn where it is answered.
     case "question":
       return <p className="text-label break-words whitespace-pre-wrap text-text">{item.text}</p>
+    case "changes":
+      return <TurnChangedFiles turn={item.number} files={item.files} />
     case "failed":
       return (
         <div className="text-caption">
