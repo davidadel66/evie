@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite"
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
+import { NOT_ACTIVITY } from "./log.ts"
 import type { Project } from "./types.ts"
 
 // Projects and the sessions that belong to them. A project is found by its
@@ -21,7 +22,7 @@ export type Projects = {
   // reading only.
   createSession(project: Project | null, parent?: string, as?: { agent?: string; readOnly?: boolean }): string
   // The session used last in a project, or the last general session: the
-  // one with the newest event, settling and naming aside. Undefined when
+  // one with the newest event, settling, naming and moving aside. Undefined when
   // none has had a conversation. A subagent's session is never the answer:
   // it is not the owner's to carry on.
   lastSession(project: Project | null): string | undefined
@@ -222,10 +223,10 @@ export function createProjects(db: Database): Projects {
   // `IS` compares with null as well as with an id. Only a session the owner
   // has said something in counts: one that holds nothing but a question
   // asked while it was opening is not a conversation to carry on. Settling
-  // a session by hand, or bringing it back, and naming it, are not using
-  // it, so they are left out, as they are from a session's activity.
+  // a session by hand, or bringing it back, naming it and moving it are not
+  // using it, so they are left out, as they are from a session's activity.
   const lastUsed = db.query<{ id: string }, [string | null]>(
-    `SELECT session.id FROM session JOIN event ON event.session = session.id AND event.type NOT IN ('settled', 'named')
+    `SELECT session.id FROM session JOIN event ON event.session = session.id AND NOT ${NOT_ACTIVITY}
      WHERE session.project IS ?
        AND session.parent IS NULL
        AND session.id IN (SELECT session FROM event WHERE type = 'user_message')

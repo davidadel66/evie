@@ -33,14 +33,15 @@ export type EventBodies = {
   // The owner set the session aside, or with false brought it back. It is
   // not activity in the session, and the model is not shown it.
   settled: { settled: boolean }
-  // The session was given a name, as a list of sessions shows it: by the
-  // owner, or by evie, through a plugin that names sessions. evie names a
-  // session only while it has no name, so the owner's is never replaced.
-  // It is not activity in the session, and the model is not shown it.
-  named: { name: string; by: "owner" | "evie" }
+  // The session was given a name, as a list of sessions shows it, by the
+  // owner or by a plugin that names sessions. The latest is its name. A
+  // plugin names a session only while it has no name, so the owner's is
+  // never replaced. It is not activity in the session, and the model is not
+  // shown it.
+  named: { name: string }
   // The owner moved the session from one project to another, by their ids,
   // or with null into or out of none. It is followed by a note telling the
-  // model where it now works.
+  // model where it now works. Neither is activity in the session.
   moved: { from: string | null; to: string | null }
 }
 
@@ -91,8 +92,8 @@ export type SessionState = "needs_you" | "working" | "active" | "settled"
 // One line of a list of sessions. `project` is the id of its project, null
 // for a general session. `name` is the latest it was given, or until it is
 // given one, the opening words of its first message, null until it has one.
-// `lastActive` is the time of its latest stored event, settling and naming
-// aside, or when it was made if it has none.
+// `lastActive` is the time of its latest stored event, settling, naming and
+// moving aside, or when it was made if it has none.
 export type SessionSummary = { session: string; project: string | null; name: string | null; state: SessionState; lastActive: number }
 
 // A session's summary, sent when it is first listed and whenever its
@@ -668,7 +669,8 @@ export type Commands = {
   }
   // Names a session, as the owner calls it, as a `named` event in its log.
   // It can be renamed at any time, open or not, but not a subagent's, which
-  // is not listed. The name is kept on one line, and a blank one is refused.
+  // is not listed. The name is kept on one line, and a blank one, or one
+  // over 80 characters, is refused.
   // A name the owner gives is never replaced by one evie writes.
   rename_session: {
     input: { session: string; name: string }

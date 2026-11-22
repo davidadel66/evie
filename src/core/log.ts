@@ -20,6 +20,12 @@ export type EventLog = {
 
 type EventRow = { session: string; seq: number; type: string; body: string; time: number }
 
+// The events that are not activity in a session, as an SQL condition on a
+// row of the event table named `event`: the owner settling it or bringing
+// it back, naming it, and moving it, with the note that tells the model of
+// the move, which is the event straight after it.
+export const NOT_ACTIVITY = `(event.type IN ('settled', 'named', 'moved') OR (event.type = 'note' AND EXISTS (SELECT 1 FROM event AS move WHERE move.session = event.session AND move.seq = event.seq - 1 AND move.type = 'moved')))`
+
 export function createEventLog(db: Database): EventLog {
   const nextSeq = db.query<{ seq: number }, [string]>(
     "SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM event WHERE session = ?",

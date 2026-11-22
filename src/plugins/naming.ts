@@ -98,12 +98,11 @@ export function naming(options: NamingOptions = {}): Plugin {
 }
 
 // The name as the model wrote it, without what a small model adds around
-// it: a label, quotes, or a full stop at the end.
+// it: marks such as quotes or asterisks, a label inside or outside them, as
+// in `**Title:** Fix login`, and a full stop at the end.
 function tidy(written: string): string {
   const line = written.trim().split("\n")[0] ?? ""
-  return line
-    .replace(/^(name|title)\s*:\s*/i, "")
-    .replace(/^["'`*]+|["'`*]+$/g, "")
-    .replace(/[.!?:;,]+$/, "")
-    .trim()
+  const unmarked = (text: string) => text.replace(/^["'`*_\s]+|["'`*_\s]+$/g, "")
+  const unlabelled = unmarked(line).replace(/^(name|title)\s*:\s*/i, "")
+  return unmarked(unmarked(unlabelled).replace(/[.!?:;,]+$/, ""))
 }

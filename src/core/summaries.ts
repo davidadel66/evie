@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite"
+import { NOT_ACTIVITY } from "./log.ts"
 import type { SessionState, SessionSummary, SummaryEvent } from "./types.ts"
 
 // Summaries: one line for each session, for a client to list sessions by
@@ -35,12 +36,12 @@ type Row = {
   id: string
   project: string | null
   created: number
-  // When its latest event was stored, settling and naming aside, which are
-  // not activity, or null when it has none.
+  // When its latest event was stored, settling, naming and moving aside,
+  // which are not activity, or null when it has none.
   active: number | null
-  // The body of its latest event, naming aside, when that is the owner
-  // settling it, or bringing it back, after anything else happened in it,
-  // and when that was.
+  // The body of its latest event, naming and moving aside, when that is the
+  // owner settling it, or bringing it back, after anything else happened in
+  // it, and when that was.
   hand: string | null
   handTime: number | null
   // The body of its first message, or null when it has none.
@@ -52,9 +53,9 @@ type Row = {
 }
 
 const COLUMNS = `session.id, session.project, session.created,
-  (SELECT time FROM event WHERE event.session = session.id AND type NOT IN ('settled', 'named') ORDER BY seq DESC LIMIT 1) AS active,
-  (SELECT CASE type WHEN 'settled' THEN body END FROM event WHERE event.session = session.id AND type != 'named' ORDER BY seq DESC LIMIT 1) AS hand,
-  (SELECT CASE type WHEN 'settled' THEN time END FROM event WHERE event.session = session.id AND type != 'named' ORDER BY seq DESC LIMIT 1) AS handTime,
+  (SELECT time FROM event WHERE event.session = session.id AND NOT ${NOT_ACTIVITY} ORDER BY seq DESC LIMIT 1) AS active,
+  (SELECT CASE type WHEN 'settled' THEN body END FROM event WHERE event.session = session.id AND (type = 'settled' OR NOT ${NOT_ACTIVITY}) ORDER BY seq DESC LIMIT 1) AS hand,
+  (SELECT CASE type WHEN 'settled' THEN time END FROM event WHERE event.session = session.id AND (type = 'settled' OR NOT ${NOT_ACTIVITY}) ORDER BY seq DESC LIMIT 1) AS handTime,
   (SELECT body FROM event WHERE event.session = session.id AND type = 'user_message' ORDER BY seq LIMIT 1) AS first,
   (SELECT body FROM event WHERE event.session = session.id AND type = 'named' ORDER BY seq DESC LIMIT 1) AS named,
   (SELECT type FROM event WHERE event.session = session.id AND type IN ('turn_start', 'turn_end') ORDER BY seq DESC LIMIT 1) AS turn`

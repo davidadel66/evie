@@ -97,6 +97,9 @@ function movedNote(from: Project | null, to: Project | null): string {
 
 const reasonOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause)).replace(/\.*$/, ".")
 
+// The longest a session's name can be, in characters: a name is a few words.
+const LONGEST_NAME = 80
+
 // A session's name as it is kept: on one line, with no spaces at its ends.
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
 
@@ -631,7 +634,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     if (closed || typeof text !== "string" || projects.projectOf(session) === undefined) return
     const name = oneLine(text)
     if (name === "" || log.events(session).some((event) => event.type === "named")) return
-    emit(log.append(session, "named", { name, by: "evie" }))
+    emit(log.append(session, "named", { name }))
   }
 
   // Written to the log, where the session's state is read from. Any session
@@ -653,7 +656,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     if (typeof input.name !== "string") throw new Error("`name` is the session's new name, and must be text.")
     const name = oneLine(input.name)
     if (name === "") throw new Error("A session's name cannot be blank. Give it a name of a few words.")
-    emit(log.append(input.session, "named", { name, by: "owner" }))
+    if (name.length > LONGEST_NAME) throw new Error(`A session's name can be at most ${LONGEST_NAME} characters, and this one has ${name.length}. Give it a shorter name.`)
+    emit(log.append(input.session, "named", { name }))
   }
 
   async function moveSession(input: Commands["move_session"]["input"]): Promise<void> {

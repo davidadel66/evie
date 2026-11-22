@@ -72,7 +72,7 @@ test("after the owner's first message a small model names the session in the bac
   expect(await nameOf(run)).toBe("Plan which vegetables go in which beds this spring")
   const named = nextEvent(run, "named")
   naming.open()
-  expect((await named).body).toEqual({ name: "Spring vegetable beds", by: "evie" })
+  expect((await named).body).toEqual({ name: "Spring vegetable beds" })
   expect(await nameOf(run)).toBe("Spring vegetable beds")
   // A summary told every client of the new name.
   expect(run.events.findLast((event) => event.type === "summary")).toMatchObject({ session: run.session, name: "Spring vegetable beds" })
@@ -129,7 +129,7 @@ test("the owner can rename a session at any time, and a name the small model wri
   await Bun.sleep(20)
 
   expect(await nameOf(run)).toBe("Garden beds")
-  expect(stored(run.events).flatMap((event) => (event.type === "named" ? [event.body] : []))).toEqual([{ name: "Garden beds", by: "owner" }])
+  expect(stored(run.events).flatMap((event) => (event.type === "named" ? [event.body] : []))).toEqual([{ name: "Garden beds" }])
 
   // And again later, over a name the model gave.
   await run.evie.send({ type: "rename_session", session: run.session, name: "Beds for spring" })
@@ -150,7 +150,7 @@ test("a name is not activity in the session: it keeps its place in the list, and
   expect(await run.evie.send({ type: "list_sessions" })).toEqual([{ ...before, name: "Garden beds", state: "settled" }])
 })
 
-test("a blank name, a session that is not there, and a subagent's session are refused", async () => {
+test("a blank name, a name over 80 characters, a session that is not there, and a subagent's session are refused", async () => {
   const { run, asked } = await start([{ text: [], calls: [{ name: "delegate", input: {} }] }, { text: ["Looked."] }, { text: ["Started it."] }], answers("Spring vegetable beds"), [naming(), delegate])
   await say(run, "Plan which vegetables go in which beds this spring")
   const child = stored(run.events).find((event) => event.type === "tool_result")!.body as { text: string }
@@ -159,6 +159,11 @@ test("a blank name, a session that is not there, and a subagent's session are re
   await expect(run.evie.send({ type: "rename_session", session: run.session, name: " \n " })).rejects.toThrow("cannot be blank")
   await expect(run.evie.send({ type: "rename_session", session: "no-such-session", name: "Beds" })).rejects.toThrow('There is no session with the id "no-such-session"')
   await expect(run.evie.send({ type: "rename_session", session: run.session, name: 7 as never })).rejects.toThrow("must be text")
+  // A name is a few words: one of 80 characters is taken, and one longer is refused.
+  await run.evie.send({ type: "rename_session", session: run.session, name: "b".repeat(80) })
+  await expect(run.evie.send({ type: "rename_session", session: run.session, name: "b".repeat(81) })).rejects.toThrow(
+    "A session's name can be at most 80 characters, and this one has 81. Give it a shorter name.",
+  )
   await expect(run.evie.send({ type: "rename_session", session: child.text, name: "Beds" })).rejects.toThrow("is a subagent's")
   // Nor is a subagent's session named by the small model: only the owner's session was.
   expect(asked).toHaveLength(1)
@@ -175,4 +180,17 @@ test("a name that arrives once the session has been deleted is dropped", async (
 
   expect(await run.evie.send({ type: "list_sessions" })).toEqual([])
   expect(run.events.some((event) => event.type === "named")).toBe(false)
+})
+
+test("what a small model adds around a name is taken off: marks, a label inside or outside them, quotes and a full stop", async () => {
+  for (const [written, name] of [
+    ["**Title:** Fix the login page", "Fix the login page"],
+    ['Name: "Spring vegetable beds".', "Spring vegetable beds"],
+    ["`Garden beds`\nThis names the subject.", "Garden beds"],
+  ]) {
+    const { run } = await start([{ text: ["Noted."] }], answers(written!))
+    const named = nextEvent(run, "named")
+    await say(run, "Plan which vegetables go in which beds this spring")
+    expect((await named).body.name).toBe(name!)
+  }
 })

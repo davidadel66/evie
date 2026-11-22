@@ -182,3 +182,21 @@ test("a session can only be moved into a project that is there, and a subagent's
   await expect(run.evie.send({ type: "move_session", session: child, project: null })).rejects.toThrow("is a subagent's")
   await expect(run.evie.send({ type: "move_session", session: "no-such-session", project: null })).rejects.toThrow('There is no session with the id "no-such-session"')
 })
+
+test("a move is not activity: a session settled by hand stays settled and keeps its place, and is not the one --continue carries on, though the model is still told", async () => {
+  const { run, model, other } = await start([{ text: ["Noted."] }, { text: ["Noted there."] }, { text: ["Carried on."] }])
+  await say(run, "Plan the beds for spring")
+  await Bun.sleep(5)
+  const there = (await run.evie.send({ type: "open_session", folder: other.folder })).session
+  await say(run, "Sort the seed packets", there)
+  await run.evie.send({ type: "settle_session", session: run.session, settled: true })
+  const before = (await run.evie.send({ type: "list_sessions" })).find((each) => each.session === run.session)!
+  await Bun.sleep(5)
+
+  await run.evie.send({ type: "move_session", session: run.session, project: other.id })
+
+  expect((await run.evie.send({ type: "list_sessions" })).find((each) => each.session === run.session)).toEqual({ ...before, project: other.id })
+  expect((await run.evie.send({ type: "open_session", folder: other.folder, continue: true })).session).toBe(there)
+  await say(run, "Carry on in the new project")
+  expect(model.requests.at(-1)!.messages.some((message) => message.role === "user" && message.text.startsWith("[Note from Evie: The owner moved this session"))).toBe(true)
+})
