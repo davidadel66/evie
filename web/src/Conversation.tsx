@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { QuestionPrompt, QuestionText, useAsking } from "./Asking.tsx"
 import { TurnChangedFiles } from "./ChangedFiles.tsx"
 import { holdChanges, type Changes } from "./changes.ts"
@@ -9,15 +9,15 @@ import type { Connection } from "./connection.ts"
 import { holdConversation, openDraft, type Conversation as Opened, type Draft as OpenedDraft, type Outgoing } from "./conversation.ts"
 import type { ShownAttachment } from "./attachments.ts"
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog.tsx"
-import { CaretRight, File as FileIcon, FileText, Globe, Hammer, MagnifyingGlass, NotePencil, Robot, TerminalWindow, Wrench, ChatsCircle } from "./icons.tsx"
+import { CaretRight, ChatsCircle, File as FileIcon, FileText, Globe, Hammer, Lightbulb, MagnifyingGlass, NotePencil, Robot, TerminalWindow, Wrench, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { renderMarkdown } from "./markdown.ts"
 import { addressOf } from "./address.ts"
 import type { Sessions } from "./sessions.ts"
 import { Spinner } from "./Spinner.tsx"
-import { transcriptOf, type Call, type Item } from "./transcript.ts"
+import { runningSince, transcriptOf, type Call, type Item } from "./transcript.ts"
 import type { StepKind } from "./step-words.ts"
-import { workedSeconds, workingFor } from "./work-log.ts"
+import { serverNow, workingFor } from "./work-log.ts"
 import { sizeWords } from "./workspace.ts"
 
 // The conversation of the session selected, in the middle column: its
@@ -170,7 +170,7 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
               ) : (
                 turnRunning && (
                   <div className={items.length > 0 ? "mt-2" : ""}>
-                    <RunningLine stopping={state.stopping} {...(!readOnly && { stop: () => conversation.stop() })} />
+                    <RunningLine since={runningSince(state)} stopping={state.stopping} {...(!readOnly && { stop: () => conversation.stop() })} />
                   </div>
                 )
               )}
@@ -305,8 +305,8 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
       return <Markdown text={item.text} className="text-text" />
     case "steps":
       return <WorkRun item={item} shown={shown} show={show} />
-    case "working":
-      return <WorkingHead item={item} />
+    case "thinking":
+      return <ThinkingRow />
     case "fold":
       return <Fold item={item} shown={shown} show={show} />
     case "note":
@@ -438,42 +438,47 @@ function Fold({ item, shown, show }: { item: Extract<Item, { kind: "fold" }> } &
   )
 }
 
-// The head of the turn running now, as T3 Code's: how long it has worked,
-// counting up each second, over a rule. While a question waits, the time
-// stands where it was asked. A turn begun before the page read says only
-// that it is working.
-function WorkingHead({ item }: { item: Extract<Item, { kind: "working" }> }) {
-  const counting = item.started !== undefined && item.waitingSince === undefined
-  const now = useNow(counting)
-  const words =
-    item.started === undefined ? "Working" : workingFor(workedSeconds({ started: item.started, waited: item.waited, ...(item.waitingSince !== undefined && { waitingSince: item.waitingSince }) }, now))
-  return <p className="flex min-h-work-row items-center border-b border-line pt-1 pb-2 text-body text-text-muted tabular-nums">{words}</p>
-}
-
-// The time now, again each second while `ticking`.
+// The time now on the server's clock, again each second while `ticking`.
 function useNow(ticking: boolean) {
-  const [now, setNow] = useState(Date.now)
+  const [now, setNow] = useState(serverNow)
   useEffect(() => {
     if (!ticking) return
-    setNow(Date.now())
-    const timer = setInterval(() => setNow(Date.now()), 1000)
+    setNow(serverNow())
+    const timer = setInterval(() => setNow(serverNow()), 1000)
     return () => clearInterval(timer)
   }, [ticking])
   return now
 }
 
 // While a turn runs, under the conversation, as the Session view drawing
-// has it: the word Working in a caption, and a quiet Stop, which says
-// Stopping until the turn has ended. A subagent's has no Stop.
-function RunningLine({ stopping, stop }: { stopping: boolean; stop?: () => void }) {
+// has it, its one sign that evie is working: how long the turn has worked,
+// counting up each second on the server's clock, as T3 Code's timer does,
+// also while a question waits, and a quiet Stop, which says Stopping until
+// the turn has ended. A turn begun before the page read says only Working,
+// and a subagent's has no Stop.
+function RunningLine({ since, stopping, stop }: { since: number | undefined; stopping: boolean; stop?: () => void }) {
+  const now = useNow(since !== undefined && !stopping)
   return (
-    <p className="flex items-center gap-2 text-caption text-text-muted">
-      <span>{stopping ? "Stopping…" : "Working"}</span>
+    <p className="flex items-center gap-2 text-caption text-text-muted tabular-nums">
+      <span>{stopping ? "Stopping…" : since === undefined ? "Working" : workingFor(now - since)}</span>
       {stop !== undefined && !stopping && (
         <Button variant="quiet" onClick={stop} className="px-2 text-caption font-semibold text-text">
           Stop
         </Button>
       )}
+    </p>
+  )
+}
+
+// The turn running now between its steps, as T3 Code's work log says it:
+// Thinking, with a light sweeping across it.
+function ThinkingRow() {
+  return (
+    <p className="flex min-h-work-row min-w-0 items-center gap-1.5 text-body text-text-muted">
+      <span className="flex w-work-row shrink-0 justify-center">
+        <Lightbulb className="size-icon-sm" />
+      </span>
+      <span className="live-shine">Thinking</span>
     </p>
   )
 }
@@ -495,17 +500,47 @@ const KIND_ICON: Record<StepKind | "mixed", typeof FileText> = {
 // One row of the work log, as T3 Code's: a 24px row with an icon for what
 // was done and one sentence, cut short with an ellipsis, and a caret at
 // its end that opens what is under it. While what it says is being done,
-// a light sweeps across its words.
-function WorkRow({ kind, label, live, open, toggle }: { kind: StepKind | "mixed"; label: string; live: boolean; open: boolean; toggle(): void }) {
+// a light sweeps across its words. A call that failed has a red ✕, and a
+// row shows when it happened while the pointer is over it.
+function WorkRow({ kind, label, live, open, toggle, failed = false, time }: { kind: StepKind | "mixed"; label: string; live: boolean; open: boolean; toggle(): void; failed?: boolean; time?: number }) {
   const Icon = KIND_ICON[kind]
   return (
-    <button type="button" aria-expanded={open} onClick={toggle} className="flex min-h-work-row w-full min-w-0 items-center gap-1.5 rounded-md text-left text-body text-text-muted hover:text-text">
+    <button type="button" aria-expanded={open} onClick={toggle} className="group flex min-h-work-row w-full min-w-0 items-center gap-1.5 rounded-md text-left text-body text-text-muted hover:text-text">
       <span className="flex w-work-row shrink-0 justify-center">
         <Icon className="size-icon-sm" />
       </span>
       <span className={cn("min-w-0 flex-1 truncate", live && "live-shine")}>{label}</span>
+      {time !== undefined && <time className="hidden shrink-0 text-caption tabular-nums group-hover:inline">{clockWords(time)}</time>}
+      {failed && (
+        <span className="flex shrink-0 text-status-failed">
+          <X className="size-icon-xs" />
+          <span className="sr-only">tool call failed</span>
+        </span>
+      )}
       <Caret open={open} />
     </button>
+  )
+}
+
+// A time of day as a row shows it on hover, in the browser's own way, such as "14:05" or "2:05 PM".
+const clockWords = (time: number) => new Date(time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+
+// An opened run's rows, as T3 Code's: no taller than min(18rem, 50dvh),
+// then they scroll, fading out at an edge with more past it.
+function RunRows({ children }: { children: ReactNode }) {
+  const list = useRef<HTMLOListElement>(null)
+  const [edges, setEdges] = useState({ top: false, bottom: false })
+  const measure = () => {
+    const box = list.current
+    if (!box) return
+    const next = { top: box.scrollTop > 1, bottom: box.scrollHeight - box.scrollTop - box.clientHeight > 1 }
+    setEdges((was) => (was.top === next.top && was.bottom === next.bottom ? was : next))
+  }
+  useLayoutEffect(measure)
+  return (
+    <ol ref={list} onScroll={measure} className={cn("flex max-h-work-group flex-col overflow-y-auto", edges.top && edges.bottom ? "fade-both" : edges.top ? "fade-top" : edges.bottom && "fade-bottom")}>
+      {children}
+    </ol>
   )
 }
 
@@ -519,13 +554,9 @@ function WorkRun({ item, shown, show }: { item: Extract<Item, { kind: "steps" }>
   const ids = item.calls.map((call) => `line:${call.id}`)
   const open = ids.some((id) => shown.has(id))
   const toggle = () => show(ids, !open)
-  const rows = (
-    <ol className="flex flex-col">
-      {item.calls.map((call) => (
-        <CallRow key={call.id} call={call} open={shown.has(`call:${call.id}`)} toggle={() => show([`call:${call.id}`], !shown.has(`call:${call.id}`))} />
-      ))}
-    </ol>
-  )
+  const callRow = (call: Call, label: string) => <CallRow key={call.id} call={call} label={label} open={shown.has(`call:${call.id}`)} toggle={() => show([`call:${call.id}`], !shown.has(`call:${call.id}`))} />
+  // Opened under a row that says what the running call is doing, the call is listed by what it works on alone.
+  const rows = <RunRows>{item.calls.map((call) => callRow(call, call.running ? call.target : call.sentence))}</RunRows>
   if (item.worked !== undefined) {
     return (
       <div className="flex flex-col">
@@ -537,7 +568,8 @@ function WorkRun({ item, shown, show }: { item: Extract<Item, { kind: "steps" }>
       </div>
     )
   }
-  if (item.calls.length === 1) return rows
+  // A run of one call is its row, which says, while it runs, what the run says.
+  if (item.calls.length === 1) return <ol className="flex flex-col">{callRow(item.calls[0]!, item.label)}</ol>
   const running = item.calls.find((call) => call.running)
   const kinds = new Set(item.calls.map((call) => call.kind))
   const kind = running?.kind ?? (kinds.size === 1 ? item.calls[0]!.kind : "mixed")
@@ -552,10 +584,10 @@ function WorkRun({ item, shown, show }: { item: Extract<Item, { kind: "steps" }>
 // One tool call, on a row of the work log, which opens to its result as
 // stored, under the sentence, as T3 Code's does: in code, and scrolling
 // past a height.
-function CallRow({ call, open, toggle }: { call: Call; open: boolean; toggle: () => void }) {
+function CallRow({ call, label, open, toggle }: { call: Call; label: string; open: boolean; toggle: () => void }) {
   return (
     <li className="flex min-w-0 flex-col">
-      <WorkRow kind={call.kind} label={call.sentence} live={call.running} open={open} toggle={toggle} />
+      <WorkRow kind={call.kind} label={label} live={call.running} open={open} toggle={toggle} failed={call.failed} time={call.time} />
       {open &&
         (call.result !== undefined && call.result !== "" ? (
           <pre className="ml-7 max-h-call-result overflow-auto py-1 font-mono text-code break-words whitespace-pre-wrap text-text-muted">{call.result}</pre>

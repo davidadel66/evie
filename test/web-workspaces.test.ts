@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test"
 import type { SessionSummary } from "../src/core/types.ts"
-import { addressAsOpened, selectedIn } from "../web/src/address.ts"
+import { addressAsOpened, lookedAt, selectedIn } from "../web/src/address.ts"
 import { PROJECT_ICONS, searchIcons } from "../web/src/project-icons.ts"
 import { lookOf } from "../web/src/project-look.ts"
 import { projectColour } from "../web/src/session-list.ts"
-import { addressOfWorkspace, chatAddress, latestSession, needsYou, sessionsOf, sizeWords, suggestedFolder, workspaceIn } from "../web/src/workspace.ts"
+import { addressOfWorkspace, chatAddress, chatShown, latestSession, needsYou, newChat, sessionStatus, sessionsOf, setChatShown, sizeWords, suggestedFolder, workspaceIn } from "../web/src/workspace.ts"
 
 // The workspace view's rules, apart from its screen: where the owner is,
 // kept in the address; the project's icon and colour; the icons to pick
@@ -74,6 +74,14 @@ test("a workspace needs the owner while a session in it waits for an answer", ()
   expect(needsYou(sessions, "p2")).toBe(false)
 })
 
+test("a session in the Sessions tab says Needs you, Working or Done in words, and otherwise how long ago it was active", () => {
+  const now = 10 * 60 * 60_000
+  expect(sessionStatus(summary("asking", "p1", "needs_you", now), now)).toEqual({ words: "Needs you", tone: "needs" })
+  expect(sessionStatus(summary("busy", "p1", "working", now), now)).toEqual({ words: "Working", tone: "muted" })
+  expect(sessionStatus(summary("old", "p1", "settled", 0), now)).toEqual({ words: "Done", tone: "done" })
+  expect(sessionStatus(summary("recent", "p1", "active", now - 60 * 60_000), now)).toEqual({ words: "1h", tone: "muted" })
+})
+
 test("a new workspace's folder is suggested in the home folder, named after it, never as the home folder or the one above", () => {
   expect(suggestedFolder("Family finances")).toBe("~/Family finances")
   expect(suggestedFolder(" a/b ")).toBe("~/a-b")
@@ -93,4 +101,42 @@ test("a file's size is said in bytes, then in KB and MB to one place, as Storage
   expect(sizeWords(1024)).toBe("1 KB")
   expect(sizeWords(1536)).toBe("1.5 KB")
   expect(sizeWords(1024 * 1024 * 3.25)).toBe("3.3 MB")
+})
+
+// A stand-in for the browser's storage, for as long as `run` runs.
+function inBrowser(run: (kept: Map<string, string>) => void) {
+  const kept = new Map<string, string>()
+  const page = globalThis as unknown as { localStorage?: unknown }
+  page.localStorage = { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) }
+  try {
+    run(kept)
+  } finally {
+    delete page.localStorage
+    setChatShown(true)
+  }
+}
+
+test("the side chat hidden is remembered in this browser, and New session in a workspace shows it, though the address is on a new chat already", () => {
+  inBrowser((kept) => {
+    setChatShown(false)
+    expect(chatShown()).toBe(false)
+    expect(kept.get("evie.side-chat")).toBe("hidden")
+
+    expect(newChat("#workspace=p1&tab=storage&chat=new")).toBe("#workspace=p1&tab=storage&chat=new")
+    expect(chatShown()).toBe(true)
+    expect(kept.get("evie.side-chat")).toBe("shown")
+    expect(newChat("#workspace=p1&tab=sessions&chat=s1")).toBe("#workspace=p1&tab=sessions&chat=new")
+    expect(newChat("#session=s1")).toBeUndefined()
+  })
+})
+
+test("while the side chat is hidden, nothing in it is being looked at", () => {
+  inBrowser(() => {
+    setChatShown(false)
+    expect(lookedAt("#workspace=p1&tab=sessions&chat=s2")).toBeUndefined()
+    expect(lookedAt("#workspace=p1&tab=sessions&chat=new")).toBeUndefined()
+    expect(lookedAt("#session=s1")).toEqual({ session: "s1", subagent: false })
+    setChatShown(true)
+    expect(lookedAt("#workspace=p1&tab=sessions&chat=s2")).toEqual({ session: "s2", subagent: false })
+  })
 })

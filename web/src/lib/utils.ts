@@ -40,6 +40,7 @@ export const NAMED_SIZES = [
   "sign-in-column",
   "conversation",
   "call-result",
+  "work-group",
   "menu",
   "dialog",
   "diff-tree",

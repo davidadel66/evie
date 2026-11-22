@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import type { EventBodies, Job, StoredEvent, StoredEventType } from "../src/core/types.ts"
-import { transcriptOf, workedFor, type Item, type View } from "../web/src/transcript.ts"
+import { runningSince, transcriptOf, workedFor, type Item, type View } from "../web/src/transcript.ts"
+import { durationWords } from "../web/src/work-log.ts"
 
 // How a conversation reads in the web app, apart from its screen: the
 // session's stored events, the reply being written and its jobs, turned
@@ -27,7 +28,7 @@ function read(items: Item[]): string[] {
   return items.map((item) => {
     if (item.kind === "owner" || item.kind === "reply") return `${item.kind} ${item.turn}: ${item.text}${item.kind === "reply" && item.streaming ? " (streaming)" : ""}`
     if (item.kind === "steps") return `steps ${item.turn}: ${item.worked ?? item.label} [${item.calls.map((call) => call.name).join(", ")}]`
-    if (item.kind === "working") return `working ${item.turn}`
+    if (item.kind === "thinking") return `thinking ${item.turn}`
     if (item.kind === "question") return `question ${item.turn}: ${item.text}${item.waiting ? ` (waiting: ${item.choices.join(" / ")})` : ""}`
     if (item.kind === "failed") return `failed ${item.turn}: ${item.error}`
     if (item.kind === "fold") return `fold ${item.turn}: ${item.label} (${read(item.items).join(" | ")})`
@@ -112,10 +113,11 @@ test("a turn that was stopped, failed, or had a reply cut short is not folded, a
     )
   const lines = (events: StoredEvent[]) => read(transcriptOf(view(events)))
 
+  // Stopped by the owner, it says so, as T3 Code's does.
   expect(lines(ending([event("turn_end", { reason: "cancelled" }, 1_010_000)]))).toEqual([
     "owner 1: Check the tests",
     "reply 1: Running them.",
-    "steps 1: Worked for 10s [shell]",
+    "steps 1: You stopped after 10s [shell]",
     "note 1: Stopped.",
   ])
   expect(lines(ending([event("turn_end", { reason: "error", error: "OpenRouter answered 502." }, 1_010_000)])).slice(2)).toEqual(["steps 1: Worked for 10s [shell]", "failed 1: OpenRouter answered 502."])
@@ -135,11 +137,27 @@ test("each call in the steps is one sentence of what it did, with its kind, its 
   const calls = unfolded(transcriptOf(view(fixingTheReadme()))).flatMap((item) => (item.kind === "steps" ? item.calls : []))
 
   expect(calls).toEqual([
-    { id: "c1", name: "read", kind: "read", sentence: "Read README.md", input: "README.md", result: "\n1: # Recipe box\n2: Run the tests with `npm test`.", short: "1: # Recipe box", running: false },
-    { id: "c2", name: "edit", kind: "edit", sentence: "Edited README.md", input: "README.md", result: "Edited README.md (1 replacement).", short: "Edited README.md (1 replacement).", running: false },
-    { id: "c3", name: "shell", kind: "command", sentence: "Ran git diff --stat", input: "git diff --stat", result: " README.md | 2 +-", short: "README.md | 2 +-", running: false },
-    { id: "c4", name: "read", kind: "read", sentence: "Read package.json", input: "package.json", result: `${"x".repeat(120)}\nmore`, short: `${"x".repeat(80)}…`, running: false },
-    { id: "c5", name: "shell", kind: "command", sentence: "Ran bun test", input: "bun test", result: "", short: "", running: false },
+    { id: "c1", name: "read", kind: "read", sentence: "Read README.md", target: "README.md", input: "README.md", fields: { path: "README.md" }, time: 1_002_000, result: "\n1: # Recipe box\n2: Run the tests with `npm test`.", short: "1: # Recipe box", running: false, failed: false },
+    { id: "c2", name: "edit", kind: "edit", sentence: "Edited README.md", target: "README.md", input: "README.md", fields: { path: "README.md", oldString: "`npm test`", newString: "`bun test`" }, time: 1_010_000, result: "Edited README.md (1 replacement).", short: "Edited README.md (1 replacement).", running: false, failed: false },
+    { id: "c3", name: "shell", kind: "command", sentence: "Ran git diff --stat", target: "git diff --stat", input: "git diff --stat", fields: { command: "git diff\n  --stat" }, time: 1_020_000, result: " README.md | 2 +-", short: "README.md | 2 +-", running: false, failed: false },
+    { id: "c4", name: "read", kind: "read", sentence: "Read package.json", target: "package.json", input: "package.json", fields: { path: "package.json" }, time: 1_020_000, result: `${"x".repeat(120)}\nmore`, short: `${"x".repeat(80)}…`, running: false, failed: false },
+    { id: "c5", name: "shell", kind: "command", sentence: "Ran bun test", target: "bun test", input: "bun test", fields: { command: "bun test" }, time: 1_040_000, result: "", short: "", running: false, failed: false },
+  ])
+})
+
+test("a call whose result says it failed is marked failed, and one the owner refused too", () => {
+  const events = session(
+    event("turn_start", {}),
+    event("user_message", { text: "Run the tests" }),
+    event("assistant_message", { text: "", toolCalls: [{ id: "c1", name: "shell", arguments: '{"command":"bun test"}' }, { id: "c2", name: "shell", arguments: '{"command":"git push"}' }] }),
+    event("tool_result", { callId: "c1", name: "shell", text: "2 tests failed\n\n[Exit status: 1]" }),
+    event("tool_result", { callId: "c2", name: "shell", text: "The owner said no to this. Do not try another way to do the same thing. Ask what they would like instead." }),
+  )
+
+  const calls = transcriptOf(view(events)).flatMap((item) => (item.kind === "steps" ? item.calls : []))
+  expect(calls.map((call) => [call.sentence, call.failed])).toEqual([
+    ["Ran bun test", true],
+    ["Ran git push", true],
   ])
 })
 
@@ -153,9 +171,9 @@ test("a run of one call says that call's sentence, a run of several counts them 
     event("turn_end", { reason: "cancelled" }),
   )
 
-  expect(read(transcriptOf(view(events, { folder: "/home/me/evie" })))[1]).toBe("steps 1: Worked for 5s [read]")
+  expect(read(transcriptOf(view(events, { folder: "/home/me/evie" })))[1]).toBe("steps 1: You stopped after 5s [read]")
   const run = transcriptOf(view(events, { folder: "/home/me/evie" }))[1]
-  expect(run).toMatchObject({ kind: "steps", label: "Read src/auth.ts", worked: "Worked for 5s" })
+  expect(run).toMatchObject({ kind: "steps", label: "Read src/auth.ts", worked: "You stopped after 5s" })
 })
 
 test("a fold, and a line of steps in it, keep their keys when the page before is read, even when the turn began on that page; without its start, the fold names the tools", () => {
@@ -177,11 +195,16 @@ test("while a turn runs, the run being worked on says what its running call is d
 
   const calling = transcriptOf(view(fixingTheReadme().slice(0, 8), { turnRunning: true }))
   expect(read(calling).slice(1)).toEqual([
-    "working 1",
     "reply 1: I'll read the README first.",
     "steps 1: Read 1 file and changed 1 file [read, edit]",
     "reply 1: The README says `npm test`, but package.json runs the tests with Bun.",
     "steps 1: Reading package.json [shell, read]",
+  ])
+  // The running call's own row is what it works on, which the run's row already says it is doing.
+  const run = calling.at(-1)
+  expect(run?.kind === "steps" && run.calls.map((call) => [call.sentence, call.target])).toEqual([
+    ["Ran git diff --stat", "git diff --stat"],
+    ["Reading package.json", "package.json"],
   ])
   expect(callsOf(calling)).toEqual([
     ["read", false],
@@ -195,32 +218,59 @@ test("while a turn runs, the run being worked on says what its running call is d
   expect(callsOf(writing).every(([, running]) => running === false)).toBe(true)
 })
 
-test("a running turn has a head under the owner's message, as T3 Code's says it is working, whatever it is doing; an ended one has none", () => {
+test("a running turn that is neither writing nor carrying out a call, nor waiting for an answer, is thinking, as T3 Code says it, at its end", () => {
   const asked = session(event("turn_start", {}), event("user_message", { text: "Tell me a joke" }))
 
-  expect(read(transcriptOf(view(asked, { turnRunning: true })))).toEqual(["owner 1: Tell me a joke", "working 1"])
-  expect(read(transcriptOf(view(asked, { turnRunning: true, replySoFar: "Why did" })))).toEqual(["owner 1: Tell me a joke", "working 1", "reply 1: Why did (streaming)"])
+  expect(read(transcriptOf(view(asked, { turnRunning: true })))).toEqual(["owner 1: Tell me a joke", "thinking 1"])
+  expect(read(transcriptOf(view(asked, { turnRunning: true, replySoFar: "Why did" })))).toEqual(["owner 1: Tell me a joke", "reply 1: Why did (streaming)"])
   expect(read(transcriptOf(view(asked, { turnRunning: false })))).toEqual(["owner 1: Tell me a joke"])
-  // Between a call's result and evie's next words, it is still working.
+  // Between a call's result and evie's next words, it thinks.
   expect(read(transcriptOf(view(fixingTheReadme().slice(0, 4), { turnRunning: true })))).toEqual([
     "owner 1: The README gives the wrong command for running the tests. Can you fix it?",
-    "working 1",
     "reply 1: I'll read the README first.",
     "steps 1: Read README.md [read]",
+    "thinking 1",
   ])
-  // A message sent while it works, not yet taken in, comes after the head.
-  expect(read(transcriptOf(view(asked, { turnRunning: true, pending: [{ text: "A short one" }] })))).toEqual(["owner 1: Tell me a joke", "working 1", "owner 1: A short one"])
-  // Begun before the page read, the head is at the top, with no start to count from.
-  const midway = transcriptOf(view(fixingTheReadme().slice(3, 8), { turnRunning: true, earlier: true }))
-  expect(midway[0]).toEqual({ key: "working", turn: 0, kind: "working", waited: 0 })
+  // A message sent while it works, not yet taken in, comes after.
+  expect(read(transcriptOf(view(asked, { turnRunning: true, pending: [{ text: "A short one" }] })))).toEqual(["owner 1: Tell me a joke", "thinking 1", "owner 1: A short one"])
+  // While a question waits, it is not thinking.
+  expect(read(transcriptOf(view(askingFirst(null).slice(0, 4), { turnRunning: true }))).includes("thinking 1")).toBe(false)
 })
 
-test("a running turn's head says when it started and how long it has waited for the owner's answers, and while a question waits, since when", () => {
-  const head = (items: Item[]) => items.find((item) => item.kind === "working")
+test("the turn running now is known by when it started, from its start's time, and none is when no turn runs or its start was not read", () => {
+  expect(runningSince(view(fixingTheReadme().slice(0, 8), { turnRunning: true }))).toBe(1_000_000)
+  expect(runningSince(view(fixingTheReadme(), { turnRunning: false }))).toBeUndefined()
+  expect(runningSince(view(fixingTheReadme().slice(3, 8), { turnRunning: true, earlier: true }))).toBeUndefined()
+})
 
-  expect(head(transcriptOf(view(fixingTheReadme().slice(0, 8), { turnRunning: true })))).toEqual({ key: "working", turn: 1, kind: "working", started: 1_000_000, waited: 0 })
-  expect(head(transcriptOf(view(askingFirst(null).slice(0, 4), { turnRunning: true })))).toMatchObject({ started: 1_000_000, waited: 0, waitingSince: 1_002_000 })
-  expect(head(transcriptOf(view(askingFirst("Just the day").slice(0, 8), { turnRunning: true })))).toEqual({ key: "working", turn: 1, kind: "working", started: 1_000_000, waited: 60_000 })
+test("how long a turn worked leaves out the time it waited for answers to its own questions, once each where two waited at once", () => {
+  const events = session(
+    event("turn_start", {}, 1_000_000),
+    event("user_message", { text: "Plan the beds" }, 1_000_000),
+    event("question", { id: "q1", text: "North or south?", choices: ["North", "South"] }, 1_001_000),
+    event("question", { id: "q2", text: "A subagent asks: today?", choices: ["Yes", "No"], asker: "s2" }, 1_002_000),
+    event("answer", { id: "q1", choice: "North" }, 1_061_000),
+    event("answer", { id: "q2", choice: "Yes" }, 1_062_000),
+    event("assistant_message", { text: "", toolCalls: [{ id: "c0", name: "write", arguments: '{"path":"beds.md"}' }] }, 1_063_000),
+    event("tool_result", { callId: "c0", name: "write", text: "Wrote beds.md." }, 1_064_000),
+    event("assistant_message", { text: "Planned." }, 1_070_000),
+    event("turn_end", { reason: "completed" }, 1_070_000),
+    // A question of an earlier turn left with no answer, as after a restart.
+    event("turn_start", {}, 2_000_000),
+    event("user_message", { text: "Again" }, 2_000_000),
+    event("question", { id: "q3", text: "Which?", choices: ["A", "B"] }, 2_001_000),
+    event("turn_end", { reason: "error", error: "evie stopped." }, 2_002_000),
+    event("turn_start", {}, 3_000_000),
+    event("user_message", { text: "Once more" }, 3_000_000),
+    event("assistant_message", { text: "", toolCalls: [{ id: "c1", name: "read", arguments: '{"path":"a.ts"}' }] }, 3_001_000),
+    event("tool_result", { callId: "c1", name: "read", text: "a" }, 3_002_000),
+    event("assistant_message", { text: "Done." }, 3_004_500),
+    event("turn_end", { reason: "completed" }, 3_004_500),
+  )
+
+  const folds = transcriptOf(view(events)).flatMap((item) => (item.kind === "fold" ? [item.label] : []))
+  // 70s, less the one 61s wait both questions were part of; and 4.5s, with nothing from the earlier turn's question.
+  expect(folds).toEqual(["Worked for 9s", "Worked for 4.5s"])
 })
 
 test("a reply cut short, a turn stopped or failed, a compaction and a note to evie are each said in quiet words, as the terminal says them, with more to open", () => {
@@ -289,16 +339,15 @@ const askingFirst = (choice: string | null) =>
 test("a question shows its choices while it waits; answered, the answer is the owner's message, and the minute spent waiting is not counted as work", () => {
   expect(read(transcriptOf(view(askingFirst(null).slice(0, 4), { turnRunning: true })))).toEqual([
     "owner 1: Add a way to mark a plant as watered.",
-    "working 1",
     "reply 1: One thing to settle first.",
-    "steps 1: Asking a question [ask]",
+    "steps 1: Asking you a question [ask]",
     "question 1: Should watering record the time as well as the day? (waiting: Just the day / The day and the time)",
   ])
 
   // Folded once the turn has ended, the question and its answer stay outside, after the fold's line.
   expect(read(transcriptOf(view(askingFirst("Just the day"))))).toEqual([
     "owner 1: Add a way to mark a plant as watered.",
-    "fold 1: Worked for 6s (reply 1: One thing to settle first. | steps 1: Asked a question [ask] | steps 1: Edited src/plants.ts [edit])",
+    "fold 1: Worked for 6s (reply 1: One thing to settle first. | steps 1: Asked you a question [ask] | steps 1: Edited src/plants.ts [edit])",
     "question 1: Should watering record the time as well as the day?",
     "owner 1: Just the day",
     "reply 1: Done: only the day is kept.",
@@ -364,7 +413,7 @@ test("a page that begins part way through a turn shows the calls whose results i
   const events = inTheBackground().slice(3)
 
   expect(read(transcriptOf(view(events, { earlier: true, jobs: [job("finished", 1_019_000)] })))).toEqual([
-    "fold 0: Ran 1 command (steps 0: Ran a command [shell])",
+    "fold 0: Ran a command (steps 0: Ran a command [shell])",
     "reply 0: They are running in the background.",
     "note 0: Background job 1 finished after 16s: sh scripts/slow-tests.sh",
     "note 1: Note to evie: Background job 1 (sh scripts/slow-tests.sh) has finished.",
@@ -372,9 +421,17 @@ test("a page that begins part way through a turn shows the calls whose results i
   ])
 })
 
-test("how long a turn worked is said in seconds, then minutes and seconds, then hours and minutes", () => {
-  expect([workedFor(1), workedFor(48), workedFor(60), workedFor(125), workedFor(3599)]).toEqual(["Worked for 1s", "Worked for 48s", "Worked for 1m", "Worked for 2m 5s", "Worked for 59m 59s"])
-  expect([workedFor(3600), workedFor(3780), workedFor(7265)]).toEqual(["Worked for 1h", "Worked for 1h 3m", "Worked for 2h 1m"])
+test("how long a turn worked is said as T3 Code says a duration: milliseconds below a second, tenths below ten, then seconds, minutes and hours", () => {
+  expect([850, 3400, 5000, 48_000, 59_600, 60_000, 125_000].map(workedFor)).toEqual([
+    "Worked for 850ms",
+    "Worked for 3.4s",
+    "Worked for 5s",
+    "Worked for 48s",
+    "Worked for 1m 0s",
+    "Worked for 1m 0s",
+    "Worked for 2m 5s",
+  ])
+  expect([3_600_000, 3_603_000, 3_780_000, 7_265_000].map(durationWords)).toEqual(["1h", "1h 3s", "1h 3m 0s", "2h 1m 5s"])
 })
 
 test("the owner's message shows what was attached to it: an image by the address it is fetched from, any other file by its name and size", () => {

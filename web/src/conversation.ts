@@ -3,6 +3,7 @@ import type { MenuItem } from "./composer.ts"
 import type { Connection } from "./connection.ts"
 import type { Model } from "./models.ts"
 import type { Pending, View } from "./transcript.ts"
+import { heard } from "./work-log.ts"
 
 // The conversation of the session open in the web app's middle column,
 // apart from its screen, which is told it and redrawn as it changes. The
@@ -226,6 +227,8 @@ export function openConversation(connection: Connection, session: string): Conve
   // stored whole once it is done, or ends with its turn or a compaction.
   function hear(event: Exclude<EvieEvent, { type: "summary" | "deleted" }>) {
     if (event.type === "assistant_delta") return set({ replySoFar: state.replySoFar + event.text })
+    // A stored event, as it comes, tells how far the server's clock is from this page's.
+    if ("time" in event) heard(event.time)
     if (event.type === "job") return set({ jobs: [...state.jobs.filter((job) => job.id !== event.job.id), event.job] })
     const ends = event.type === "assistant_message" || event.type === "turn_end" || event.type === "compaction"
     // What changes the conversation's size or model has them read again.

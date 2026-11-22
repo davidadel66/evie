@@ -83,7 +83,8 @@ export function recentSessions(sessions: readonly SessionSummary[], open: string
 // the one the owner is looking at: the session view's, or a workspace's
 // side chat's. Settling and moving it wait while it works or waits; what
 // acts on its own conversation does not apply while one of its subagents'
-// is open; and Pick a model applies to a draft too.
+// is open; and Pick a model applies to a draft too. The side chat is a small
+// chat, which neither renames its session nor picks its model.
 export type PaletteFacts = {
   workspace: boolean
   looking: "session" | "subagent" | "draft" | "none"
@@ -106,9 +107,9 @@ export function paletteActions(facts: PaletteFacts): PaletteAction[] {
     "theme",
     ...(workspace ? [] : (["list", "card", "diff"] as const)),
     ...(session && (state === "active" || state === "settled") ? (["settle", "move"] as const) : []),
-    ...(own ? (["rename"] as const) : []),
+    ...(own && !workspace ? (["rename"] as const) : []),
     ...(own && !facts.compacting ? (["compact"] as const) : []),
     ...(own && facts.turnRunning && !facts.stopping ? (["stop"] as const) : []),
-    ...(own || looking === "draft" ? (["model"] as const) : []),
+    ...((own || looking === "draft") && !workspace ? (["model"] as const) : []),
   ]
 }

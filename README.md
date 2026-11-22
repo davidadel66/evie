@@ -599,7 +599,7 @@ they cannot be changed yet.
 | Mod+D | Open or close the diff |
 | Mod+Shift+M | Pick a model |
 | Escape | Stop evie, in the message box |
-| F2 | Rename the session: in the list while it is shown, and otherwise in the header over its conversation, as in a workspace's side chat |
+| F2 | Rename the session: in the list while it is shown, and otherwise in the header over its conversation |
 
 Most browsers open a new window on Mod+N, and a Mac's browsers move
 between tabs on Mod+Shift+[ and ], before the page hears of them, so
@@ -619,7 +619,8 @@ new session, here or in a project; the previous and next session; the
 settings; the theme; showing and hiding the list, the card and the diff;
 settling the session or bringing it back, moving it, and renaming it; and
 Compact now, Stop and Pick a model, while they apply. In a workspace they
-are those of its side chat's session, and it has no list, card or diff. A
+are those of its side chat's session, but for renaming it and picking its
+model, which the small chat does not do, and it has no list, card or diff. A
 session opens it, and a project opens its workspace, with its folder
 beside it, cut at its start. A row
 with a list of its own, such as the theme or Move to, opens it in the
@@ -661,35 +662,53 @@ round itself, so that a finger finds it although it looks small.
 **A workspace** is a project's home, opened from its icon or name in the
 session list or the project card. The page then has three other columns:
 
-- **The strip,** on the left: a tile for every workspace, the one open
-  ringed in its colour, and a dot on any with a session waiting for you
-  (its name says Needs you). Above them, the way back to the sessions;
-  below them, New workspace.
-- **The workspace,** with its header in one row: its icon and name, then
-  Storage, Sessions and Memory, which is to come and says Later. Its
-  dashboards will be tabs there too. Pressing the icon or the name opens a
-  picker of its icon and colour: the six project colours, and a search
-  over about sixty of Phosphor's icons that suit a project. A colour
+- **The strip,** on the left: the way back to the session list, a line,
+  then a tile for every workspace, the one open with a line in its colour
+  on its own edge, and a dot on any with a session waiting for you (its
+  name says Needs you). Below them, Add a workspace, a dashed tile, and at
+  the bottom, the settings.
+- **The workspace,** with its header in one row: its icon and name, its
+  dashboards as tabs after them once there are dashboards, then Storage,
+  Sessions and Memory, which is to come and says Later, and at the end the
+  button that hides and shows the side chat. Pressing the icon or the name
+  opens a picker of its icon and colour: the six project colours, and a
+  search over about sixty of Phosphor's icons that suit a project. A colour
   applies at once; an icon applies and closes the picker. Both are kept in
   evie's database, and every tile on the page shows them.
-- **Sessions** lists the project's sessions. Picking one shows it in the
-  side chat.
-- **Storage** lists the files in the project's `.evie` folder, with their
-  size and how long ago they changed, a folder opening in place under its
-  own row, up to 500 to a folder, and says whether the folder is backed
-  up. A text file or an image opens in the workspace, read only. The server
-  reads only inside the `.evie` folder: a path that leaves it, by `..` or
-  through a link, is refused, and so are the folder's own git repository
-  and a file over 1 MB. So is the whole of a `.evie` that is itself a link
-  to another folder, or that is, holds, or is inside evie's data folder,
-  which holds your keys, as for a project at your home folder.
-  The files attached to messages are here, under `attachments/`.
-- **The side chat,** on the right, shows the session picked, or until one
-  is, the workspace's latest, or a new session in its project when it has
-  none, with the message box. Its header starts a new session there, and
-  opens the session in the session view.
-- **New workspace**, in the strip, in the New session button's menu, and
-  in a session list with nothing in it yet, asks for a name, a folder,
+- **Sessions** lists the project's sessions, each with Needs you, Working,
+  Done or how long ago it was active. Picking one opens it in the session
+  view.
+- **Storage** lists the files in the project's `.evie` folder as a tree,
+  every folder open, each row with its icon, its name and how long ago it
+  changed, up to 500 to a folder; a folder folds by its row's caret. At
+  its foot it says whether the folder is backed up. A text file or an
+  image opens in the workspace, read only. The server reads only
+  inside the `.evie` folder: a path that leaves it, by `..` or through a
+  link, is refused, and so are the folder's own git repository and a file
+  over 1 MB. So is the whole of a `.evie` that is itself a link to another
+  folder, or that is, holds, or is inside evie's data folder, which holds
+  your keys, as for a project at your home folder. The files attached to
+  messages are here, under `attachments/`.
+- **The side chat,** on the right, is a small chat with evie about the
+  workspace. Its header says evie over the chat's title, with New chat,
+  Open this chat full size, which opens it in the session view, and Close
+  the chat. It shows the conversation in short: your messages, evie's
+  words, and each run of evie's work as one quiet line in plain words, as
+  T3 Code's work log says it ("Edited usage.html", "Read 2 files and ran
+  1 command"), with background work finishing and other notes the same
+  way; notes written for the model are left out. A command such as
+  /compact shows a line while it runs. A question waits at its end, its
+  first choice the main one, and while evie works a line says so, with
+  Stop. Under it is a small box, where Enter sends and Escape stops evie.
+  Scrolling up reads the earlier conversation. It shows the session the
+  address keeps, or until one is kept, the workspace's latest, or a new
+  chat in its project when it has none; New chat, or New session from the
+  keys or the palette, starts a new one there. Hidden, it stays hidden in
+  this browser until the header's button or New session shows it again,
+  and while it is hidden nothing in it counts as looked at.
+- **New workspace**, from Add a workspace in the strip, New workspace… in
+  the New session button's menu, or a session list with nothing in it yet,
+  asks for a name, a folder,
   suggested in your home folder as `~/` and the name, and whether to back
   up its `.evie` folder to a private repository (see "Workspaces"). A
   folder already there, such as a code repository, is added as a project
@@ -697,11 +716,11 @@ session list or the project card. The page then has three other columns:
 
 The address keeps where you are, as `#workspace=<project id>&tab=storage`,
 with `&chat=<session id>` for the side chat's session and `&file=<path>`
-for a file open in Storage. At phone width the strip is a row of tiles at
-the top, the header stays one row, with the workspace's name cut down to
-96px at the least, and its tabs scrolling sideways after it, and the side
-chat stacks below the workspace. The side chat's session is renamed in its
-header, by a double-click, F2 or the command palette.
+for a file open in Storage. Where the workspace and the side chat no
+longer fit side by side, under 880px beside the strip, as on a phone or
+an upright tablet, the strip stays a column on the left and the side chat
+stacks below the workspace, a screen high. The header stays one row: the
+name is cut down to 96px at the least, and then the tabs scroll sideways.
 
 ### Attachments
 
@@ -1496,8 +1515,8 @@ layout's own breakpoint, where the session view's columns stack, is
 |---|---|---|
 | `control` | 32px; 36px below 640px | Buttons, text boxes and icon buttons; the settings' pages; the send button |
 | `control-sm` | 28px; 32px below 640px | Small buttons: the paperclip, the buttons that show and hide the list and the card, a row's `···`, a notice's; the items of a menu, the palette, the `/` and `@` menus and the model picker |
-| `row-height` | 32px | A row in a list: a file in Storage, a session in a workspace, a file's header in the diff, a line of the project card |
-| `work-row` | 24px | A row of a turn's work log: a run of calls, each call, Working for, Worked for, a note; and the column its icon sits in |
+| `row-height` | 32px | A row in a list: a file in Storage, a file's header in the diff, a line of the project card; at the least, a session in a workspace |
+| `work-row` | 24px | A row of a turn's work log: a run of calls, each call, Thinking, Worked for, a note; and the column its icon sits in |
 | `header-height` | 52px | Every column's header: the list's, the conversation's, the card's, the diff's, a workspace's and its side chat's |
 | `gutter` | 20px; 12px below 640px | The page's side padding: the conversation, the message box, a workspace, the sign-in page |
 | `touch-min` | 44px | The least a finger aims at: on a touch screen, each button reaches this far round itself, unseen |
@@ -1505,9 +1524,9 @@ layout's own breakpoint, where the session view's columns stack, is
 | `icon-caret` | 14px | The caret that opens a turn's work or a note, as T3 Code's |
 | `icon-sm` | 16px | Icons beside text, in rows and the palette |
 | `icon-control` | 16px; 18px below 640px | An icon on a button or a menu item, and a form's checkbox |
-| `icon-md` | 20px | The icon on a workspace's tile in the strip, and on the strip's own buttons |
+| `icon-md` | 20px | The icon on a workspace's tile in the strip, and on the strip's way back |
 | `rail-width` | 64px | The strip of workspace tiles |
-| `tile-strip` | 44px | A workspace's tile in the strip, and the strip's back and New workspace buttons |
+| `tile-strip` | 44px | A workspace's tile in the strip, and the strip's way back, Add a workspace and settings buttons |
 | `tile-header` | 28px | A project's tile in a workspace's header |
 | `tile-row` | 18px | A project's icon tile in a session row, the conversation's header and the project card |
 | `row-inset` | 10px | Between a session row's edge and its words, so they start 18px from the list's edge, as drawn and as T3 Code's |
@@ -1518,6 +1537,7 @@ layout's own breakpoint, where the session view's columns stack, is
 | `card-sheet` | `min(88vw, 448px)` | The width of the project card as a sheet over the page, at 980px or narrower |
 | `conversation` | 736px | The widest the conversation and the message box are, as T3 Code's |
 | `call-result` | 256px | The tallest a tool call's result grows in the work log before it scrolls, as T3 Code's |
+| `work-group` | `min(288px, 50dvh)` | The tallest an opened run of calls grows before its rows scroll, as T3 Code's |
 | `palette` | 576px | The widest the command palette is, as T3 Code's |
 | `palette-list` | `min(420px, 60dvh)` | The tallest the palette's rows grow before they scroll, as T3 Code's |
 | `notice` | `min(360px, calc(100vw - 32px))` | The width of a notice at the top of the page |
@@ -1530,6 +1550,7 @@ layout's own breakpoint, where the session view's columns stack, is
 | `settings-field` | 200px | A text box beside a setting |
 | `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle of an empty page |
 | `workspace-name` | 96px | The least a workspace's name keeps in its header before its tabs scroll sideways |
+| `workspace-columns` | 880px | A container width: the least room beside the strip for a workspace and its side chat side by side |
 | `icon-picker` | 230px; 254px below 640px | The project icon picker: six 32px columns (36px below 640px), their gaps, its padding and its line |
 | `icon-grid` | 220px | The tallest the picker's icons grow before they scroll |
 | `composer-text` | 208px | The tallest the message box's text grows before it scrolls, as T3 Code's |

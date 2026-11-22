@@ -91,7 +91,8 @@ test("a draft offers Pick a model, and with nothing open, only what needs no ses
   expect(paletteActions({ ...idle, looking: "none" })).toEqual(["new", "new in", "previous", "next", "settings", "theme", "list", "card", "diff"])
 })
 
-test("in a workspace, which has no list, card or diff, the actions are those of the side chat's session", () => {
-  expect(paletteActions({ ...idle, workspace: true })).toEqual(["new", "new in", "settings", "theme", "settle", "move", "rename", "compact", "model"])
-  expect(paletteActions({ ...idle, workspace: true, looking: "draft" })).toEqual(["new", "new in", "settings", "theme", "model"])
+test("in a workspace, which has no list, card or diff, the actions are those of the side chat's session, but for renaming it and picking its model, which its small chat does not do", () => {
+  expect(paletteActions({ ...idle, workspace: true })).toEqual(["new", "new in", "settings", "theme", "settle", "move", "compact"])
+  expect(paletteActions({ ...idle, workspace: true, turnRunning: true })).toEqual(["new", "new in", "settings", "theme", "settle", "move", "compact", "stop"])
+  expect(paletteActions({ ...idle, workspace: true, looking: "draft" })).toEqual(["new", "new in", "settings", "theme"])
 })

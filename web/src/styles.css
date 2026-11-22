@@ -150,6 +150,9 @@
      scrolls, as T3 Code's. */
   --spacing-conversation: 736px;
   --spacing-call-result: 256px;
+  /* The tallest an opened run of calls grows before its rows scroll, as
+     T3 Code's. */
+  --spacing-work-group: min(288px, 50dvh);
   /* Buttons and text boxes are 32px tall, as T3 Code's; small buttons,
      and the items of a menu, the palette or a picker, are 28px, as T3
      Code's are; each 4px taller below 640px. A menu is at
@@ -188,6 +191,11 @@
   /* The least a workspace's name keeps in its header, cut with an
      ellipsis, before its tabs scroll sideways instead. */
   --spacing-workspace-name: 96px;
+  /* The least room, beside the strip, for a workspace and its side chat
+     side by side, as drawn: the workspace at 520px and the chat at 360px.
+     Narrower, the side chat stacks below the workspace. A container query,
+     @workspace-columns, since it is the room beside the strip that counts. */
+  --container-workspace-columns: 880px;
   /* The message box: the tallest its text grows before it scrolls; the
      tallest the / menu and the model picker above it are, as T3 Code's;
      and the picker's column of makers. */
@@ -309,4 +317,16 @@
       calc(100% + 3 * var(--spacing-work-row)) 0,
       0 0;
   }
+}
+
+/* A list that scrolls fades out at an edge with more past it, as T3 Code's
+   opened runs of calls do: over 12px, the spacing step space-3. */
+@utility fade-top {
+  mask-image: linear-gradient(to bottom, transparent, black var(--spacing-3));
+}
+@utility fade-bottom {
+  mask-image: linear-gradient(to top, transparent, black var(--spacing-3));
+}
+@utility fade-both {
+  mask-image: linear-gradient(to bottom, transparent, black var(--spacing-3), black calc(100% - var(--spacing-3)), transparent);
 }
