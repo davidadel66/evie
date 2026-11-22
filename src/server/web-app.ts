@@ -4,12 +4,14 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import page from "../../web/index.html"
 import type { Built } from "./build-web-app.ts"
+import { ENCODINGS, variantsOf, type Variants } from "./variants.ts"
 
 // The web app, for the server to serve: its page, and the files the page
 // loads, each by the path it is served at. The page is either built already,
 // or in development Bun's own import of it, which Bun bundles again on each
-// request and updates in the open browser as its files change.
-export type WebApp = { page: Blob; files: Record<string, Blob> } | { page: HTMLBundle }
+// request and updates in the open browser as its files change. Built, each
+// file comes as it is and compressed: see `Variants`.
+export type WebApp = { page: Variants; files: Record<string, Variants> } | { page: HTMLBundle }
 
 // The web app as it is built, with Bun's metafile, which names each file
 // built (by the path it was written at, such as `./chunk-1a2b3c4d.js`), the
@@ -17,7 +19,7 @@ export type WebApp = { page: Blob; files: Record<string, Blob> } | { page: HTMLB
 // the chunks each imports. The page is finished from it as it is built, so
 // the server is handed the page and its files without it: about 0.8 MB of
 // JSON it has no more use for, and would keep for as long as it runs.
-export type BuiltWebApp = { page: Blob; files: Record<string, Blob>; metafile: BuildMetafile }
+export type BuiltWebApp = { page: Variants; files: Record<string, Variants>; metafile: BuildMetafile }
 
 // The page Bun's bundler starts from: it follows the page's script and
 // stylesheet, and everything they import.
@@ -33,7 +35,7 @@ const TEMPORARY = "evie-web-app-"
 // is no build step. Bun's bundler keeps its working memory, about 300 MB, for
 // as long as the process that ran it lives, so the build runs in a process
 // of its own, which exits once it is done, and the server keeps only the
-// files built.
+// files built. That process compresses them too, for the same reason.
 //
 // That process is the same Bun as the server, whatever `bun` the path
 // finds. It is started in the repository's folder, whatever folder the
@@ -62,19 +64,34 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
     })
     const [problem, code] = await Promise.all([new Response(child.stderr).text(), child.exited])
     if (code !== 0) throw new Error(problem.trim() || `The web app's build stopped with ${child.signalCode ?? `exit code ${code}`}, saying nothing.`)
-    // Each file, by the path it is served at, cut from the one file the
-    // build wrote them all into, in the order of its list.
+    // Each file's variants, by the path it is served at, cut from the one
+    // file the build wrote them all into, in the order of its list. Each is
+    // a view of the bytes read, not a copy: copying them, as into a Blob of
+    // its own, left the server holding about 19 MB more for good.
     const built: Built = await Bun.file(list).json()
     const bytes = await Bun.file(all).bytes()
-    const files: Record<string, Blob> = {}
+    const files: Record<string, Variants> = {}
     let at = 0
-    for (const file of built.files) {
-      files[servedAt(file.path)] = new Blob([bytes.subarray(at, at + file.size)], { type: file.type })
-      at += file.size
+    for (const { path, type, tag, sizes } of built.files) {
+      const file: Partial<Variants> = { type, tag }
+      for (const encoding of ENCODINGS) {
+        const size = sizes[encoding]
+        if (size === undefined) continue
+        file[encoding] = bytes.subarray(at, at + size)
+        at += size
+      }
+      files[servedAt(path)] = file as Variants
     }
+    // A file cut in the wrong place would be kept by browsers for good,
+    // under a name that says it never changes.
+    if (at !== bytes.length) throw new Error(`The web app's build listed ${at} bytes of files and wrote ${bytes.length}.`)
     const { "/index.html": builtPage, ...loaded } = files
     if (!builtPage) throw new Error("Bun's bundler built the web app without its page.")
-    const page = new Blob([withHeadLinks(await builtPage.text(), headLinks(built.metafile))], { type: builtPage.type })
+    // The page as it is served is finished here, so it is compressed here
+    // too: the build's variants are of the page before. It is a few KB,
+    // which costs the server about 2.6 MB of the compressor's memory.
+    const finished = withHeadLinks(new TextDecoder().decode(builtPage.identity), headLinks(built.metafile))
+    const page = await variantsOf(new TextEncoder().encode(finished), builtPage.type)
     return { page, files: loaded, metafile: built.metafile }
   } finally {
     await Promise.all([rm(folder, { recursive: true, force: true }), tidying])
