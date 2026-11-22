@@ -26,7 +26,7 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
         <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-7">
           <span className="text-title text-text">evie</span>
           <div className="ml-auto">
-            <Settings />
+            <Settings connection={connection} />
           </div>
         </header>
         <ConnectionLine state={state} />
