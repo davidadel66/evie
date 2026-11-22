@@ -92,12 +92,24 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
       return now
     })
   const drawn = useRef<{ key: string; top: number }[]>([])
-  // Where the conversation was scrolled to when last told, to know the owner
-  // scrolling up from the conversation growing below them; and the frame
-  // asked for to keep the owner at the bottom, while it waits.
+  // Where the conversation was last scrolled to, by the owner or to keep
+  // them at the bottom, to know the owner scrolling up from the conversation
+  // growing below them; and the frame asked for to keep the owner at the
+  // bottom, while it waits, which is let go with the conversation it was
+  // asked for.
   const lastTop = useRef(0)
   const following = useRef(0)
-  useEffect(() => () => cancelAnimationFrame(following.current), [])
+  useLayoutEffect(
+    () => () => {
+      cancelAnimationFrame(following.current)
+      following.current = 0
+    },
+    [conversation],
+  )
+  const toBottom = (box: HTMLDivElement) => {
+    box.scrollTop = box.scrollHeight
+    lastTop.current = box.scrollTop
+  }
 
   // Within half a screen of the top, the page before is read.
   const readIfNearTop = () => {
@@ -121,7 +133,7 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
   function toLatest() {
     const box = scroller.current!
     stuck.current = true
-    box.scrollTop = box.scrollHeight
+    toBottom(box)
     setScrolledUp(false)
   }
 
@@ -141,7 +153,7 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
         following.current = 0
         const box = scroller.current
         if (!box || !stuck.current) return
-        box.scrollTop = box.scrollHeight
+        toBottom(box)
         readIfNearTop()
       })
       return
@@ -158,7 +170,7 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
     const box = scroller.current
     if (!box || !content.current) return
     const watch = new ResizeObserver(() => {
-      if (stuck.current) box.scrollTop = box.scrollHeight
+      if (stuck.current) toBottom(box)
     })
     watch.observe(content.current)
     watch.observe(box)
