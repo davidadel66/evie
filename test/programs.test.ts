@@ -156,7 +156,7 @@ test("evie serve runs Evie, and evie in a project folder sends it a message and 
   expect(await server.exited).toBe(143)
   const after = await evie([], { home, cwd: project, input: "hello\n" })
   expect(after.code).toBe(1)
-  expect(after.stderr).toContain(`No Evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.`)
+  expect(after.stderr).toContain(`No evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.`)
 })
 
 test("another device connects with EVIE_SERVER and a token of its own, until the token is taken back", async () => {
@@ -176,7 +176,7 @@ test("another device connects with EVIE_SERVER and a token of its own, until the
   expect((await evie(["token", "remove", "phone"], { home })).code).toBe(0)
   const refused = await evie([], { home: device, input: "hello\n", env: reach })
   expect(refused.code).toBe(1)
-  expect(refused.stderr).toContain(`The Evie server at http://127.0.0.1:${port} did not accept the token.`)
+  expect(refused.stderr).toContain(`The evie server at http://127.0.0.1:${port} did not accept the token.`)
 })
 
 test("this computer's token is kept when the server starts again, stays taken back once taken back, and is made anew when its file is removed", async () => {
@@ -375,7 +375,7 @@ test("evie run from a pipe or a script gives up when the server stays down, sayi
   await terminal.shows(DROPPED)
 
   expect(await terminal.exited()).toBe(1)
-  expect(terminal.printed.err).toBe(`No Evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
+  expect(terminal.printed.err).toBe(`No evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
 })
 
 test("when this computer's token is taken back while the connection is down, evie stops trying, and says why", async () => {
@@ -474,6 +474,68 @@ test("evie new with no folder says how it is used", async () => {
 
   expect(said.code).toBe(1)
   expect(said.stderr).toBe("Usage:\n  evie new <folder> [name]   make a project in a folder, made when it is missing, named after it unless a name is given\n")
+})
+
+// ---- evie web --------------------------------------------------------------------------------
+
+test("evie serve serves the web app, and evie web --print prints a sign-in link whose code signs a browser in once", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  await serve(home)
+  const page = `http://127.0.0.1:${port}`
+
+  expect((await fetch(page)).headers.get("content-type")).toStartWith("text/html")
+  const printed = await evie(["web", "--print"], { home })
+
+  expect(printed.stderr).toBe("")
+  expect(printed.code).toBe(0)
+  const code = new RegExp(`^${page}/sign-in#code=([\\w-]{43})\n$`).exec(printed.stdout)?.[1]
+  expect(code).toBeString()
+  const login = () => fetch(`${page}/login`, { method: "POST", headers: { Origin: page, "Content-Type": "application/json" }, body: JSON.stringify({ code }) })
+  expect((await login()).status).toBe(204)
+  expect((await login()).status).toBe(401)
+})
+
+test("evie web with the server stopped says no server is running, and how to start one", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  const server = await serve(home)
+  server.kill("SIGTERM")
+  await server.exited
+
+  const said = await evie(["web", "--print"], { home })
+
+  expect(said.code).toBe(1)
+  expect(said.stdout).toBe("")
+  expect(said.stderr).toBe(`No evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
+})
+
+test("evie web on another device, with a token of its own, says to open the server's address in a browser there and paste the token", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  await serve(home)
+  const made = await evie(["token", "add", "phone"], { home })
+  const secret = /^ {2}(\S{43})$/m.exec(made.stdout)![1]!
+  const device = await tempFolder("evie-device-")
+
+  const said = await evie(["web"], { home: device, env: { EVIE_SERVER: `127.0.0.1:${port}`, EVIE_TOKEN: secret } })
+
+  expect(said.code).toBe(1)
+  expect(said.stdout).toBe("")
+  expect(said.stderr).toBe(
+    `\`evie web\` works on the computer evie's server runs on. Here, open http://127.0.0.1:${port} in a browser and paste this device's token.\n`,
+  )
+})
+
+test("evie serve --dev started outside the repository's folder says where to start it, since Bun reads the Tailwind plugin from there", async () => {
+  const home = await homeWith(await freePort(), [])
+
+  const said = await evie(["serve", "--dev"], { home })
+
+  expect(said.code).toBe(1)
+  expect(said.stderr).toBe(
+    `Start \`evie serve --dev\` in the repository's folder, ${join(import.meta.dir, "..")}: Bun takes the web app's Tailwind plugin from the bunfig.toml there.\n`,
+  )
 })
 
 // ---- evie token ------------------------------------------------------------------------------

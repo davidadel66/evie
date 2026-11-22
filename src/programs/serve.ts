@@ -1,8 +1,9 @@
-import { existsSync, rmSync } from "node:fs"
+import { existsSync, realpathSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { keepOutputTidy } from "../core/tools.ts"
 import { createEvie, dataFolder, loadSettingsFiles, startServer, type EvieServer, type Settings } from "../index.ts"
 import { ensureOwnToken, openTokens } from "../server/tokens.ts"
+import type { WebApp } from "../server/web-app.ts"
 import { loadServerSettings } from "../settings-files.ts"
 import { EXIT_CODES, fail, print, reason, STOP_FOR_GOOD, type StopSignal } from "./common.ts"
 
@@ -16,10 +17,22 @@ function forgetStopForGood(home: string) {
 }
 
 // `evie serve`: starts the core with the plugins the settings list, and
-// serves it until told to stop. The first time, it makes this computer's
-// token. Once it is listening, it picks up the work an earlier run left, and
-// tidies away tool output older than a week, and again each day while it runs.
-export async function serve(env: Settings) {
+// serves it until told to stop, with the web app. The first time, it makes
+// this computer's token. Once it is listening, it picks up the work an
+// earlier run left, and tidies away tool output older than a week, and
+// again each day while it runs.
+//
+// `--dev` is for working on the web app: it is bundled again on each
+// request, and the open page is updated as its files are saved. It needs
+// the server started in the repository's folder, for its bunfig.toml.
+export async function serve(env: Settings, args: string[] = []) {
+  if (args.some((arg) => arg !== "--dev")) fail("Usage:\n  evie serve         run Evie's server\n  evie serve --dev   run it with the web app rebuilt as it changes")
+  // Working on the web app, its module is needed at once, and a failure to
+  // load it is for the developer to see.
+  const development = args.includes("--dev") ? await import("../server/web-app.ts") : undefined
+  if (development && realpathSync(process.cwd()) !== realpathSync(development.REPOSITORY)) {
+    fail(`Start \`evie serve --dev\` in the repository's folder, ${development.REPOSITORY}: Bun takes the web app's Tailwind plugin from the bunfig.toml there.`)
+  }
   const settings = await loadSettingsFiles({ env }).catch(fail)
   const serverSettings = await loadServerSettings({ env }).catch(fail)
   const evie = await createEvie({
@@ -45,9 +58,20 @@ export async function serve(env: Settings) {
     return closeAndFail(`This computer's token could not be made: ${reason(cause)}`)
   })
 
+  // The web app is built before the server listens, which takes a moment.
+  const built = development ? { app: development.webAppForDevelopment() } : await builtWebApp()
+  if ("problem" in built) console.error(built.problem)
+
   let server: EvieServer
   try {
-    server = startServer({ evie, tokens, host: serverSettings.host, port: serverSettings.port, origins: serverSettings.origins })
+    server = startServer({
+      evie,
+      tokens,
+      host: serverSettings.host,
+      port: serverSettings.port,
+      origins: serverSettings.origins,
+      ...("app" in built && { app: built.app }),
+    })
   } catch (cause) {
     tokens.close()
     return closeAndFail(
@@ -60,6 +84,7 @@ export async function serve(env: Settings) {
   // it would make its next restart a stop for good.
   forgetStopForGood(home)
   print(`evie serve · listening on ${server.url}\n`)
+  if (development) print("The web app is bundled from its source on each request, and updated in the browser as it changes.\n")
   // Only now, so that a second `evie serve`, which cannot have the port,
   // never touches the folder or the work of the one already running.
   const stopTidying = keepOutputTidy(join(home, "tool-output"))
@@ -88,5 +113,20 @@ export async function serve(env: Settings) {
         .catch((cause) => console.error(`Evie did not stop cleanly: ${reason(cause)}`))
         .finally(() => process.exit(code))
     })
+  }
+}
+
+// The web app, built, or why it could not be. Its module is loaded only
+// here, so the terminal client never loads the bundler's plugins, and a
+// module that cannot be loaded, as when a package is missing, is treated as
+// a build that failed: the server goes on without the page, since the
+// terminal and every other client still work. `load` is for tests.
+export async function builtWebApp(
+  load: () => Promise<{ buildWebApp(): Promise<WebApp> }> = () => import("../server/web-app.ts"),
+): Promise<{ app: WebApp } | { problem: string }> {
+  try {
+    return { app: await (await load()).buildWebApp() }
+  } catch (cause) {
+    return { problem: `The web app could not be built, so it is not served:\n${reason(cause)}` }
   }
 }

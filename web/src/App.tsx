@@ -1,0 +1,15 @@
+import { useSyncExternalStore } from "react"
+import type { Connection } from "./connection.ts"
+import { Frame } from "./Frame.tsx"
+import { SignIn } from "./SignIn.tsx"
+
+// The web app: the sign-in page while the browser is signed out, and the
+// frame of the three columns otherwise, redrawn as the connection changes.
+// Until the server's first answer it is a blank page, so that a browser not
+// signed in does not see the frame for a moment before the sign-in page.
+export function App({ connection }: { connection: Connection }) {
+  const state = useSyncExternalStore(connection.subscribe, connection.state)
+  if (state.status === "connecting" && state.reason === undefined) return <div className="min-h-dvh bg-bg" />
+  if (state.status === "signed out") return <SignIn connection={connection} state={state} />
+  return <Frame state={state} />
+}

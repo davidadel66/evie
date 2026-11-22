@@ -1,0 +1,11 @@
+{
+  // The web app runs in a browser, so it is checked against the browser's
+  // own types as well as Bun's, which the network client it shares with the
+  // terminal is written for.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx"
+  },
+  "include": ["."]
+}

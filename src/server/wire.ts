@@ -25,8 +25,18 @@ export type ServerMessage = { reply: string; result?: unknown } | { reply: strin
 // Where things are on the server. `socket` is the WebSocket. `check` answers
 // over plain HTTP whether a token would be let in, since a WebSocket that is
 // refused tells the client only that it failed. `login` trades a token for
-// a cookie, for a browser.
-export const PATHS = { socket: "/ws", check: "/check", login: "/login" } as const
+// a cookie, for a browser, or the code of a sign-in link for one. A device
+// with a token asks `signInLink` for such a link, as `evie web` does.
+// `page` is the web app, which is also served at `signIn`, the address a
+// sign-in link opens.
+export const PATHS = {
+  socket: "/ws",
+  check: "/check",
+  login: "/login",
+  signInLink: "/sign-in-link",
+  page: "/",
+  signIn: "/sign-in",
+} as const
 
 // The close code for a connection whose token was taken back. Codes from
 // 4000 are the application's own. A client closed with it stops trying.
