@@ -48,13 +48,14 @@ export function useLook(project: string): Look {
 // A project icon by its name, from the set the owner picks from, in the
 // colour of the text around it; one not in the set is drawn as a folder.
 // Any but the folder waits for the set's drawings (see ICON_SET), drawn
-// empty, at its size, until they are here.
+// empty, at its size, until they are here; drawn while they are not, as
+// after they could not be fetched, it asks for them again.
 export function IconGlyph({ icon, className }: { icon: string; className?: string }) {
   const set = useSyncExternalStore(ICON_SET.subscribe, ICON_SET.loaded)
   const own = icon !== DEFAULT_ICON
   useEffect(() => {
-    if (own) ICON_SET.preload()
-  }, [own])
+    if (own && set === undefined) ICON_SET.preload()
+  })
   const drawn = !own ? FOLDER : set === undefined ? undefined : (set.PROJECT_ICONS.find((each) => each.name === icon) ?? FOLDER)
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" {...(className !== undefined && { className })}>

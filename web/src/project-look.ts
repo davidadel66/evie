@@ -114,7 +114,10 @@ function ownIconsSeen(): boolean {
     return false
   }
 }
+let ownIconsKept: boolean | undefined
 function rememberOwnIcons(seen: boolean) {
+  if (ownIconsKept === seen) return
+  ownIconsKept = seen
   try {
     if (seen) localStorage.setItem(OWN_ICONS, "yes")
     else localStorage.removeItem(OWN_ICONS)

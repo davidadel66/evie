@@ -44,7 +44,7 @@ test("a module that could not be fetched is fetched again the next time it is as
     return { name: "card" }
   })
 
-  expect(screen.load()).rejects.toThrow("offline")
+  await expect(screen.load()).rejects.toThrow("offline")
   await Bun.sleep(0)
   screen.preload()
   await Bun.sleep(0)
