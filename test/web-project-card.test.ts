@@ -312,7 +312,7 @@ test("the lineage shows six rows at first, as T3 Code's, then offers twelve more
   expect(lineageWindow(rows.slice(0, 6), LINEAGE_FIRST)).toEqual({ shown: rows.slice(0, 6), more: undefined })
 })
 
-test("the session above a subagent says in one word that it needs you, is working, or is waiting on its subagents", () => {
+test("the session above a subagent says Needs you, Working or Waiting, as it needs you, is working, or is waiting on its subagents", () => {
   expect(parentWord({ needsYou: true, turnRunning: true, subagentsWorking: true })).toBe("Needs you")
   expect(parentWord({ needsYou: false, turnRunning: true, subagentsWorking: true })).toBe("Working")
   expect(parentWord({ needsYou: false, turnRunning: false, subagentsWorking: true })).toBe("Waiting")

@@ -289,8 +289,9 @@ function chip(path: string): HTMLElement {
 }
 
 // The parts the element holds, and where its caret is, counted as
-// `shownOf` counts. `clean` says it holds only the words and chips it was
-// drawn with.
+// `shownOf` counts. `clean` says the element has the shape `draw` gives
+// it: at its top level only text with no non-breaking space, chips, and
+// the one line break `draw` puts at the very end, with nothing nested.
 // What else the browser may put in it is read as words: a line break as
 // one, and a block, as a line of its own.
 function readBox(root: HTMLElement): { parts: Part[]; caret: number; clean: boolean } {
@@ -349,7 +350,9 @@ function selection(root: HTMLElement): { start: number; end: number } | undefine
 }
 
 // How far a place in the element is from its start, counted as `shownOf`
-// counts, in the element as it is now.
+// counts, over its children as `draw` lays them out: a text by its length,
+// a chip as one, the line break `draw` puts at the end as none, and any
+// other child by its text. A place inside a child counts as its end.
 function offsetOf(root: HTMLElement, node: Node, offset: number): number {
   let at = 0
   for (const [index, child] of [...root.childNodes].entries()) {

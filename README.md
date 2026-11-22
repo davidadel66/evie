@@ -656,10 +656,11 @@ What evie changed is shown as diffs, as T3 Code shows them:
   left plain. A line added or removed lies on a faint green or red, with a
   bar of that colour at its edge, dashed for one removed.
 - **A file with no diff to draw** is listed after the others, saying why:
-  binary, too large to show, filtered, a submodule changed, changed
-  outside evie with no copy kept of what the turn left, or not compared.
-  One comparison reads at most 300 files, a few at a time; the files past
-  them are listed, as not compared.
+  the file is, or was, empty; binary; too large to show; filtered; a
+  submodule changed; changed outside evie, with no copy kept of what the
+  turn left; or not compared, because it took too long, or because one
+  comparison reads at most 300 files, a few at a time, and it was past
+  them.
 - **The file tree** beside the diff lists its files by folder; a file in
   it scrolls to that file. It is as wide as you drag its edge, and can be
   hidden, which the browser remembers. At phone width it takes the diff's
