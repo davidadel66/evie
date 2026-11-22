@@ -11,6 +11,7 @@ import {
   startServer,
   type ClientMessage,
   type Command,
+  type Commands,
   type ConnectOptions,
   type Evie,
   type EvieEvent,
@@ -1840,6 +1841,67 @@ test("an open given a number to catch up from is answered with every event after
   expect(opened.more).toBeUndefined()
   expect(opened.events?.map((event) => event.seq)).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
   expect(opened.lastSeq).toBe(48)
+})
+
+test("an open sent as the line comes back waits for every page of the catch-up, and is given the turn running and the question waiting as the last page reads them", async () => {
+  const deploy = asksBeforeDeploy()
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...largeReplies(12), ...callsDeploy()]).plugin, deploy.plugin], largeSession)
+  let opening: Promise<Commands["open_session"]["output"]> | undefined
+  const client: Evie = await connect({ onBack: () => void (opening = client.send({ type: "open_session", folder: served.run.projectFolder, continue: true, questions: true })) })
+  await client.send({ type: "open_session", session: served.run.session, questions: true })
+
+  await line.cut()
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`)
+  const asked = nextEvent(served.run, "question")
+  await served.run.evie.send({ type: "send_message", session: served.run.session, text: "deploy" })
+  await asked
+  line.mend()
+  while (opening === undefined) await Bun.sleep(5)
+  const opened = await opening
+
+  expect(catchUpsFrom(line).length).toBeGreaterThan(1)
+  expect(opened).toMatchObject({ session: served.run.session, turnRunning: true, lastSeq: 52 })
+  expect(opened.openQuestions.map((question) => question.text)).toEqual(["Deploy to production?"])
+  await client.send({ type: "answer_question", session: served.run.session, id: opened.openQuestions[0]!.id, choice: "No" })
+})
+
+test("an event and a question written between two pages of a catch-up are each passed on once", async () => {
+  let paused = () => {}
+  const pausing = new Promise<void>((resolve) => (paused = resolve))
+  const resume = gate()
+  // The second page is read only once the test says.
+  const core = (evie: Evie): Evie => ({
+    ...evie,
+    send: (async (command: Command) => {
+      if (command.type === "open_session" && command.after === 10) {
+        paused()
+        await resume.opened
+      }
+      return evie.send(command)
+    }) as Evie["send"],
+  })
+  const deploy = asksBeforeDeploy()
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...largeReplies(12), ...callsDeploy()]).plugin, deploy.plugin], { ...largeSession, core })
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", session: served.run.session, questions: true })
+  const seen: number[] = []
+  client.subscribe((event) => "seq" in event && seen.push(event.seq))
+
+  await line.cut()
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  line.mend()
+  await pausing
+  // Between the first page and the second: a message, the reply asking for the tool, and its question.
+  const asked = nextEvent(served.run, "question")
+  await served.run.evie.send({ type: "send_message", session, text: "deploy" })
+  const question = await asked
+  resume.open()
+  await client.send({ type: "read_history", session, limit: 1 })
+
+  expect([...seen].sort((a, b) => a - b)).toEqual(Array.from({ length: 52 }, (_, at) => at + 1))
+  // The question came as it was asked, ahead of the events numbered before it.
+  expect(seen.indexOf(52)).toBeLessThan(seen.indexOf(11))
+  await client.send({ type: "answer_question", session, id: question.body.id, choice: "No" })
 })
 
 test("a page that says more follow but holds no events ends the catch-up, saying some events may be missing, and the session is still heard from", async () => {
