@@ -33,6 +33,16 @@ export type EventBodies = {
   // The owner set the session aside, or with false brought it back. It is
   // not activity in the session, and the model is not shown it.
   settled: { settled: boolean }
+  // The session was given a name, as a list of sessions shows it, by the
+  // owner or by a plugin that names sessions. The latest is its name. A
+  // plugin names a session only while it has no name, so the owner's is
+  // never replaced. It is not activity in the session, and the model is not
+  // shown it.
+  named: { name: string }
+  // The owner moved the session from one project to another, by their ids,
+  // or with null into or out of none. It is followed by a note telling the
+  // model where it now works. Neither is activity in the session.
+  moved: { from: string | null; to: string | null }
 }
 
 // Something Evie asks the owner, with the answers to choose from. With
@@ -66,7 +76,7 @@ export type DeltaEvent = { type: "assistant_delta"; session: string; text: strin
 // A job started or ended. Sent to clients, never stored.
 export type JobEvent = { type: "job"; session: string; job: Job }
 
-export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent
+export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent | DeletedEvent
 
 // ---- Sessions in a list ---------------------------------------------------------
 
@@ -80,9 +90,10 @@ export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent
 export type SessionState = "needs_you" | "working" | "active" | "settled"
 
 // One line of a list of sessions. `project` is the id of its project, null
-// for a general session. `name` is the opening words of its first message,
-// null until it has one. `lastActive` is the time of its latest stored
-// event, settling aside, or when it was made if it has none.
+// for a general session. `name` is the latest it was given, or until it is
+// given one, the opening words of its first message, null until it has one.
+// `lastActive` is the time of its latest stored event, settling, naming and
+// moving aside, or when it was made if it has none.
 export type SessionSummary = { session: string; project: string | null; name: string | null; state: SessionState; lastActive: number }
 
 // A session's summary, sent when it is first listed and whenever its
@@ -90,6 +101,11 @@ export type SessionSummary = { session: string; project: string | null; name: st
 // Sent to clients, never stored. Evie's server sends it to every client,
 // whatever sessions it has open, so that each can keep a list of sessions.
 export type SummaryEvent = { type: "summary" } & SessionSummary
+
+// A session was deleted for good, with its subagents. Sent to clients,
+// never stored, and like a summary to every client, so that each can drop
+// it from its list of sessions.
+export type DeletedEvent = { type: "deleted"; session: string }
 
 // ---- The request to a model ---------------------------------------------------
 
@@ -455,6 +471,11 @@ export type HookContext = {
   // and whether it is held to reading only.
   agent?: string
   readOnly?: true
+  // Names the session, as a list of sessions shows it, for a plugin that
+  // names sessions. It can be called at any time, as when a name written in
+  // the background arrives. It does nothing once the session has a name,
+  // the owner's or one given before, or has been deleted, or Evie has closed.
+  name(text: string): void
 }
 
 // A tool call after its input has been checked and repaired.
@@ -472,6 +493,12 @@ export type Hooks = {
   before_tool(call: CheckedToolCall, context: HookContext): { deny: string } | void | Promise<{ deny: string } | void>
   // After a tool has run. Return changed result text, or nothing to leave it.
   after_tool(call: CheckedToolCall, text: string, context: HookContext): string | void | Promise<string | void>
+  // After a session has been deleted for good: a plugin that keeps files
+  // for a session in the data folder removes this one's. It is told of
+  // each of the session's subagents too, which are deleted with it. The
+  // global plugins are told, and those of each project the session ran in
+  // whose plugins are set up already: none is set up just to be told.
+  session_deleted(session: string): void | Promise<void>
 }
 
 // The only way a plugin adds anything to Evie. Each project has a host of its
@@ -813,6 +840,39 @@ export type Commands = {
   restart_server: {
     input: { started: number }
     output: void
+  }
+  // Names a session, as the owner calls it, as a `named` event in its log.
+  // It can be renamed at any time, open or not, but not a subagent's, which
+  // is not listed. The name is kept on one line, and a blank one, or one
+  // over 80 characters, is refused.
+  // A name the owner gives is never replaced by one evie writes.
+  rename_session: {
+    input: { session: string; name: string }
+    output: void
+  }
+  // Moves a session into a project, out of one with `project` null, or
+  // between two, with its subagents, as a `moved` event in its log and a
+  // note telling the model which project and folder it now works in. An
+  // open session runs in the new project, with its plugins, from its next
+  // turn; setting them up can ask whether to trust the project. It is
+  // refused while anything runs in the session: a turn, a question waiting
+  // for an answer, a background job or a subagent. Moving a session to the
+  // project it is in does nothing. Not a subagent's, which moves with it.
+  move_session: {
+    input: { session: string; project: string | null }
+    output: void
+  }
+  // Deletes a session for good: its events, its subagents' sessions, and
+  // the files evie and its plugins keep for them in the data folder, such
+  // as saved tool output, background jobs' records and undo's copies. Every
+  // client is sent a `deleted` event. It is refused while anything runs in
+  // the session, or while it is opening, as a move is. Not a subagent's,
+  // which goes with its session. `leftOver` says, a sentence each, what
+  // could not be removed once the session was gone, naming the folder or
+  // the plugin; it is empty when everything went.
+  delete_session: {
+    input: { session: string }
+    output: { leftOver: string[] }
   }
 }
 

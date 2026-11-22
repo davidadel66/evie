@@ -138,6 +138,9 @@ export function undo(options: UndoOptions = {}): Plugin {
         if (record.files.length > 0) await save(folder, record)
       })
 
+      // A session deleted for good takes its copies with it.
+      host.on("session_deleted", (session) => rm(join(root, session), { recursive: true, force: true }))
+
       // What each turn changed, for a client to show as diffs: each file's
       // copy from before the turn, and what the turn left in it. That is
       // the file as it is now, while it still holds what the turn left, or

@@ -1,6 +1,9 @@
-How evie reads how a pull request's checks stand, in src/core/pull-request.ts,
-and how the web app sums them up, in web/src/pull-request.ts, are adapted from
-T3 Code (https://github.com/pingdotgg/t3code).
+Parts of evie are adapted from T3 Code (https://github.com/pingdotgg/t3code):
+
+- The prompt that names sessions, in src/plugins/naming.ts, from T3 Code's prompt
+  for naming threads (packages/provider-core/src/server/textGenerationPrompts.ts).
+- How a pull request's checks are read and summed up, in src/core/pull-request.ts
+  and web/src/pull-request.ts.
 
 MIT License
 

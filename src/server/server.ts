@@ -361,6 +361,11 @@ export function startServer(options: ServerOptions): EvieServer {
             const joining = socket.data.joining.get(event.session)
             return joining ? void joining.held.push(event) : send(socket, { event })
           }
+          // So does a session's deletion, after which nothing more of it is sent.
+          if (event.type === "deleted") {
+            socket.data.sessions.delete(event.session)
+            return send(socket, { event })
+          }
           if (!sentTo(socket.data, event)) return
           // A question sent while opening, from a session not yet opened here,
           // is kept track of until it is answered: see `close`.

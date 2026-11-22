@@ -210,6 +210,11 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   // list of sessions lists them again when the line is back (see `onBack`).
   function onEvent(event: EvieEvent) {
     if (event.type === "summary") return deliver(event)
+    // So is a session's deletion, which also comes for every session.
+    if (event.type === "deleted") {
+      sessions.delete(event.session)
+      return deliver(event)
+    }
     const seen = sessions.get(event.session)
     if (!seen?.behind) return passOn(event)
     if ((event.type === "question" || event.type === "answer") && isNew(seen, event)) {

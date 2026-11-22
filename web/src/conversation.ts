@@ -117,7 +117,8 @@ export function openConversation(connection: Connection, session: string): Conve
     // they come, so that a question the open waits on is shown.
     let joined = false
     unhear = evie.subscribe((event) => {
-      if (on !== evie || event.type === "summary" || event.session !== session) return
+      // Not a session's line in the list, nor its deletion, which the list follows.
+      if (on !== evie || event.type === "summary" || event.type === "deleted" || event.session !== session) return
       if (joined) hear(event)
       else if (event.type === "question" || event.type === "answer") set({ events: merged(state.events, [event]), waiting: waitingAfter(state.waiting, event) })
     })
@@ -205,7 +206,7 @@ export function openConversation(connection: Connection, session: string): Conve
 
   // An event of the session, as it comes. The reply being written is
   // stored whole once it is done, or ends with its turn or a compaction.
-  function hear(event: Exclude<EvieEvent, { type: "summary" }>) {
+  function hear(event: Exclude<EvieEvent, { type: "summary" | "deleted" }>) {
     if (event.type === "assistant_delta") return set({ replySoFar: state.replySoFar + event.text })
     if (event.type === "job") return set({ jobs: [...state.jobs.filter((job) => job.id !== event.job.id), event.job] })
     const ends = event.type === "assistant_message" || event.type === "turn_end" || event.type === "compaction"
