@@ -107,8 +107,10 @@ export function headLinks(metafile: BuildMetafile): HeadLink[] {
 // What is imported with `import()`, such as the diff view and what only it
 // uses, loads when it is needed, so it is not linked.
 //
-// Bun 1.4.0 adds no such links. A later Bun's `modulePreload` option, on by
-// default, may write them itself; `withHeadLinks` then adds none again.
+// Bun 1.4.0 adds no such links. Bun 1.4.5 leaves nothing to link: it folds
+// what the script would import at once into the script itself, so the list
+// is empty. Its `modulePreload` option, on by default, writes such links
+// itself where there are any; `withHeadLinks` then adds none again.
 function chunkPreloads(metafile: BuildMetafile): HeadLink[] {
   const { outputs } = metafile
   // The page's own scripts: the outputs built from the same file as the page.
