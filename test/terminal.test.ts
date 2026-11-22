@@ -332,3 +332,45 @@ test("with a frame clock, streamed replies pace across frames and flush cleanly 
   // The buffered reply was split across at least two writes (one paced slice + the flush on cancel).
   expect(writes.filter((text) => "Thinking about the beds by the fence.".includes(text) && text !== "\n").length).toBeGreaterThanOrEqual(2)
 })
+
+test("with a frame clock, a fast completed reply still glides out across frames before printing the next prompt", async () => {
+  const model = scriptedProvider([{ text: ["A short fast reply."] }])
+  const run = await startEvie([model.plugin])
+  stop = run.stop
+  let pending: (() => void) | undefined
+  const slices: string[] = []
+  let printed = ""
+
+  const running = runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    lines: (async function* () {
+      yield "hi"
+      // Wait for the fast reply to arrive and buffer. Even though the turn
+      // already finished on the server, the pacer keeps gliding until drained.
+      while (!pending) await Bun.sleep(5)
+      await Bun.sleep(20)
+      expect(printed).not.toContain("A short fast reply.")
+      while (pending) {
+        const apply = pending
+        pending = undefined
+        apply()
+      }
+    })(),
+    write: (text) => {
+      if ("A short fast reply.".includes(text) && text !== "\n") slices.push(text)
+      printed += text
+    },
+    frame: (apply) => {
+      pending = apply
+      return () => {
+        if (pending === apply) pending = undefined
+      }
+    },
+  })
+  await running
+
+  expect(slices.length).toBeGreaterThan(2)
+  expect(slices.join("")).toBe("A short fast reply.")
+  expect(printed).toContain("A short fast reply.\n\n› ")
+})

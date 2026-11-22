@@ -153,8 +153,16 @@ const keptQueues = new Map<string, Queue>()
 // from a browser, as in tests, a frame is taken to come every 16 ms.
 export type { NextFrame }
 
-// The browser's frames, which Bun has none of outside a page.
-const browser = globalThis as { requestAnimationFrame?(apply: () => void): number; cancelAnimationFrame?(frame: number): void }
+// The browser's frames and page visibility, which Bun has none of outside a page.
+const browser = globalThis as {
+  requestAnimationFrame?(apply: () => void): number
+  cancelAnimationFrame?(frame: number): void
+  document?: {
+    visibilityState?: string
+    addEventListener(type: string, listener: () => void): void
+    removeEventListener(type: string, listener: () => void): void
+  }
+}
 const nextFrame: NextFrame =
   browser.requestAnimationFrame !== undefined
     ? (apply) => {
@@ -175,22 +183,42 @@ export function openConversation(connection: Connection, session: string, frame:
   // The reply's pieces come in uneven bursts from the model, faster than
   // the screen is drawn, and each change draws the conversation again.
   // The pacer smooths them out at one slice per frame, keeping the rhythm
-  // calm while catching up on larger bursts. Every other change takes any
-  // remaining buffered pieces first, so that the conversation changes in
-  // the order its events came: the stored reply, or the turn's end, never
-  // comes before the pieces that came ahead of it.
+  // calm while catching up on larger bursts.
+  //
+  // When a plain final reply finishes on the server (`assistant_message`
+  // with no tool calls and not interrupted) while buffered text is still
+  // gliding out, we hold that event (and the following completed `turn_end`)
+  // until the pacer finishes draining, so short or fast replies still glide
+  // smoothly instead of popping onto the screen all at once. Any other
+  // session event, stop, new message, or hidden tab snaps immediately.
+  type NonDeltaEvent = Exclude<EvieEvent, { type: "summary" | "deleted" | "assistant_delta" }>
+  let heldEnd: NonDeltaEvent[] = []
+  const tabHidden = () => browser.document?.visibilityState === "hidden"
+  function set(next: Partial<ConversationState>) {
+    state = { ...state, ...next }
+    for (const listener of [...listeners]) listener()
+  }
+  function setWithBuffered(next: Partial<ConversationState>) {
+    const pieces = pacer.take()
+    set({ ...(pieces !== "" && { replySoFar: state.replySoFar + pieces }), ...next })
+  }
+  function flushHeld() {
+    if (heldEnd.length === 0) return
+    const queued = heldEnd
+    heldEnd = []
+    for (const event of queued) applyEvent(event)
+  }
   const pacer = createStreamPacer({
     frame,
     emit(piece) {
-      state = { ...state, replySoFar: state.replySoFar + piece }
-      for (const listener of [...listeners]) listener()
+      if (heldEnd.length > 0 && !pacer.pending()) return flushHeld()
+      set({ replySoFar: state.replySoFar + piece })
     },
   })
-  function set(next: Partial<ConversationState>) {
-    const pieces = pacer.take()
-    state = { ...state, ...(pieces !== "" && { replySoFar: state.replySoFar + pieces }), ...next }
-    for (const listener of [...listeners]) listener()
+  const onVisibility = () => {
+    if (tabHidden()) flushHeld()
   }
+  browser.document?.addEventListener("visibilitychange", onVisibility)
 
   // The client the session is open on. A connection made again after the
   // browser was signed out is a new client, on which it is opened again.
@@ -218,6 +246,8 @@ export function openConversation(connection: Connection, session: string, frame:
 
   async function join(evie: Evie) {
     unhear()
+    pacer.clear()
+    heldEnd = []
     on = evie
     failed = undefined
     settled = false
@@ -277,7 +307,8 @@ export function openConversation(connection: Connection, session: string, frame:
       const opened = await evie.send({ type: "open_session", session, questions: true })
       const page = await evie.send({ type: "read_history", session, before: opened.lastSeq + 1 })
       if (on !== evie || connection.state().status !== "connected") return
-      set({ events: merged(state.events, page.events), turnRunning: opened.turnRunning })
+      flushHeld()
+      setWithBuffered({ events: merged(state.events, page.events), turnRunning: opened.turnRunning })
       settle(page.events)
     } catch {
       // Tried again when the line next comes back.
@@ -358,21 +389,38 @@ export function openConversation(connection: Connection, session: string, frame:
   // stored whole once it is done, or ends with its turn or a compaction.
   // Its pieces arrive in uneven bursts and are paced onto the screen by
   // `pacer`, one slice per frame, so the conversation draws at most once
-  // a frame while streaming smoothly. A hidden tab, which draws no frames,
-  // reveals them once it is shown, or flushes them with the next other
-  // change, which takes them first.
+  // a frame while streaming smoothly. A plain final reply holds its stored
+  // `assistant_message` and `turn_end` until the pacer drains so fast
+  // replies still glide out smoothly.
   function hear(event: Exclude<EvieEvent, { type: "summary" | "deleted" }>) {
     if (event.type === "assistant_delta") {
+      if (heldEnd.length > 0) flushHeld()
       pacer.push(event.text)
       return
     }
+    if (event.type === "assistant_message") {
+      const plainFinal = !event.body.interrupted && !(event.body.toolCalls && event.body.toolCalls.length > 0)
+      if (plainFinal && pacer.pending() && !tabHidden()) {
+        heldEnd.push(event)
+        return
+      }
+    }
+    if (event.type === "turn_end" && heldEnd.length > 0 && event.body.reason === "completed" && pacer.pending() && !tabHidden()) {
+      heldEnd.push(event)
+      return
+    }
+    flushHeld()
+    applyEvent(event)
+  }
+
+  function applyEvent(event: NonDeltaEvent) {
     // A stored event, as it comes, tells how far the server's clock is from this page's.
     if ("time" in event) heard(event.time)
-    if (event.type === "job") return set({ jobs: [...state.jobs.filter((job) => job.id !== event.job.id), event.job] })
+    if (event.type === "job") return setWithBuffered({ jobs: [...state.jobs.filter((job) => job.id !== event.job.id), event.job] })
     const ends = event.type === "assistant_message" || event.type === "turn_end" || event.type === "compaction"
     // What changes the conversation's size or model has them read again.
     if (MEASURED.has(event.type) && on !== undefined) measure(on)
-    set({
+    setWithBuffered({
       events: merged(state.events, [event]),
       ...(event.type === "model_changed" && { model: event.body.model }),
       ...(event.type === "moved" && { project: event.body.to }),
@@ -461,6 +509,7 @@ export function openConversation(connection: Connection, session: string, frame:
     },
     tryAgain,
     async send(text, options) {
+      flushHeld()
       const files = options?.files ?? []
       const shown: Pending = { text, ...(files.length > 0 && { files: files.map((each) => each.file) }) }
       const failed = (problem: string) => {
@@ -507,6 +556,7 @@ export function openConversation(connection: Connection, session: string, frame:
       return given
     },
     stop() {
+      flushHeld()
       if (on === undefined || !state.turnRunning) return
       set({ stopping: true })
       // A stop that cannot be sent leaves the turn running, and the owner can ask again.
@@ -554,8 +604,10 @@ export function openConversation(connection: Connection, session: string, frame:
       unhear()
       on = undefined
       clearTimeout(releasing)
+      browser.document?.removeEventListener("visibilitychange", onVisibility)
       // Pieces not applied yet are of a conversation no longer shown.
       pacer.clear()
+      heldEnd = []
       // What is still queued is kept, held, for when the session is opened again.
       if (state.queue.items.length > 0) keptQueues.set(session, { ...leaveQueue(state.queue), inFlight: undefined })
     },

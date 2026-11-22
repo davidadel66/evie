@@ -30,6 +30,8 @@ export type StreamPacerOptions = {
 export type StreamPacer = {
   // Adds newly received text to the buffer and schedules a frame if needed.
   push(text: string): void
+  // Whether buffered text is still waiting to be revealed.
+  pending(): boolean
   // Cancels any pending frame, clears the buffer, and returns whatever had
   // not been revealed yet (without calling `emit`). Callers that need the
   // rest applied ahead of another event can take it in one step.
@@ -41,8 +43,8 @@ export type StreamPacer = {
   clear(): void
 }
 
-const DEFAULT_CHARS_PER_SECOND = 110
-const DEFAULT_CATCH_UP_MS = 260
+const DEFAULT_CHARS_PER_SECOND = 75
+const DEFAULT_CATCH_UP_MS = 400
 // Nominal frame duration (60Hz) used for the first frame after idle, and
 // limits on elapsed time between frames so a brief hitch neither stalls
 // nor dumps an entire backlog in one jump.
@@ -114,6 +116,7 @@ export function createStreamPacer(options: StreamPacerOptions): StreamPacer {
       buffer += text
       schedule()
     },
+    pending: () => buffer !== "",
     take() {
       cancel()
       const rest = buffer

@@ -69,8 +69,8 @@ test("scales up smoothly when a large backlog builds up so it catches up quickly
 
   const frames = 1 + c.drain(16)
   expect(slices.join("")).toBe(big)
-  // Drains within roughly a couple of seconds, not 18+ seconds at baseline speed.
-  expect(frames).toBeLessThan(120)
+  // Drains within roughly a few seconds, not 25+ seconds at baseline speed.
+  expect(frames).toBeLessThan(180)
 })
 
 test("reveals at the same real-time speed on 60Hz and 120Hz displays", () => {
