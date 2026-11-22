@@ -322,7 +322,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     const output = reply.result as Opened
     // Jobs' events are not stored, so each job that has changed is passed
     // on, before the last page's events, since the turns missed are often
-    // Evie dealing with a job that ended. One missing from the list ran in
+    // evie dealing with a job that ended. One missing from the list ran in
     // the server before it was stopped for good and started again, which
     // stopped it.
     if (seen.told) {

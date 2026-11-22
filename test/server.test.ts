@@ -1704,7 +1704,7 @@ test("a catch-up that asks a question, has it answered, and then fails says that
 // ---- Catching up in pages ------------------------------------------------------------------
 
 const KiB = 1024
-// Replies of 400 KiB, as when Evie writes large files: two fit in a page of
+// Replies of 400 KiB, as when evie writes large files: two fit in a page of
 // a catch-up, a third does not. Compaction is put off, so that the model is
 // asked for nothing but the replies.
 const largeReplies = (count: number): ScriptedReply[] => Array.from({ length: count }, (_, at) => ({ text: [String(at % 10).repeat(400 * KiB)] }))

@@ -244,7 +244,7 @@ test("a session opened by its id is joined as it is, with the events after the n
   ])
 })
 
-// A session with replies this large in it, one per turn, as when Evie
+// A session with replies this large in it, one per turn, as when evie
 // writes large files: its log runs to megabytes. Compaction is put off, so
 // that the scripted model is asked for nothing but the replies.
 async function largeSession(replies: string[]) {
