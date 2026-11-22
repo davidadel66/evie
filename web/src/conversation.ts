@@ -1,7 +1,8 @@
 import type { Commands, EventBodies, Evie, EvieEvent, StoredEvent } from "../../src/core/types.ts"
-import type { MenuItem } from "./composer.ts"
 import type { Connection } from "./connection.ts"
 import type { Model } from "./models.ts"
+import { commandIn, type MenuItem } from "./composer.ts"
+import { afterTurn, doneInFlight, editQueued, leaveQueue, NO_QUEUE, queueMessage, reachedSession, releaseQueue, removeQueued, saveQueued, sendFailed, sendQueuedNow, stopEditing, type Queue, type Queued } from "./queue.ts"
 import type { Pending, View } from "./transcript.ts"
 import { heard } from "./work-log.ts"
 
@@ -38,6 +39,9 @@ export type ConversationState = Required<Omit<View, "folder">> & {
   // The session's project, by its id, or null for none, once opened; kept
   // current as the session is moved.
   project: string | null | undefined
+  // The messages the owner queued while evie works, each sent as a turn of
+  // its own once the turn before it has finished (see queue.ts).
+  queue: Queue
 }
 
 export type GivenBack = { text: string; problem: string; files?: readonly Outgoing[] }
@@ -89,6 +93,27 @@ export type Conversation = {
   // its provider offers. Fail, saying why, when they cannot be listed.
   listCommands(): Promise<MenuItem[]>
   listModels(): Promise<Model[]>
+  // Queues a message while evie works, to be sent as a turn of its own
+  // once the turn running has finished, rather than steering it, one at a
+  // time, as queue.ts says. A message queued is the page's until it is
+  // sent: the page keeps it, held, when the session is closed, and the
+  // session's conversation opened again has it.
+  queue(text: string, files: readonly Outgoing[]): void
+  // Takes a queued message off the queue.
+  unqueue(key: number): void
+  // Sends a queued message at once, as `send` does: into the turn running,
+  // or as a turn of its own. Gives back why it could not be sent, when it
+  // goes back to the front of the queue, which is held.
+  sendQueuedNow(key: number): Promise<string | undefined>
+  // Marks a queued message as being edited in the box, which keeps its
+  // place and is not sent meanwhile; then saves it with its new words and
+  // files, or leaves it as it was.
+  editQueued(key: number): void
+  saveQueued(key: number, text: string, files: readonly Outgoing[]): void
+  stopEditing(): void
+  // The owner left the session: an edit is given up, and the queue held,
+  // so that nothing is sent while the owner cannot see it.
+  leave(): void
   // Stops following the session. It stays open in evie.
   close(): void
   // The files of the session's project the owner can mention with @. Fails,
@@ -96,10 +121,34 @@ export type Conversation = {
   listFiles(): Promise<Commands["list_files"]["output"]>
 }
 
-const FRESH: ConversationState = { opened: false, readingEarlier: false, stopping: false, waiting: [], running: [], givenBack: undefined, model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [], project: undefined }
+const FRESH: ConversationState = {
+  opened: false,
+  readingEarlier: false,
+  stopping: false,
+  waiting: [],
+  running: [],
+  givenBack: undefined,
+  model: undefined,
+  context: undefined,
+  problem: undefined,
+  events: [],
+  earlier: false,
+  replySoFar: "",
+  turnRunning: false,
+  jobs: [],
+  pending: [],
+  notes: [],
+  project: undefined,
+  queue: NO_QUEUE,
+}
+
+// The queues of sessions whose conversation was closed with messages in
+// them, held, until it is opened again in this page.
+const keptQueues = new Map<string, Queue>()
 
 export function openConversation(connection: Connection, session: string): Conversation {
-  let state = FRESH
+  let state: ConversationState = { ...FRESH, queue: keptQueues.get(session) ?? NO_QUEUE }
+  keptQueues.delete(session)
   const listeners = new Set<() => void>()
   function set(next: Partial<ConversationState>) {
     state = { ...state, ...next }
@@ -121,14 +170,24 @@ export function openConversation(connection: Connection, session: string): Conve
   // Settles once the message sent last has been sent, or could not be.
   let inOrder: Promise<void> = Promise.resolve()
   let lastSeq = 0
+  // Whether the session stands here as it does in evie: opened and read
+  // after a join, or after the line came back, until which nothing is let
+  // go from the queue; the number of the last turn end the queue was told
+  // of; and the last event known as a message was let go, after which its
+  // arriving shows it reached the session.
+  let settled = false
+  let turnEndTold = 0
+  let letGoAfter = 0
 
   async function join(evie: Evie) {
     unhear()
     on = evie
     failed = undefined
+    settled = false
     // What the owner sent and the session has not taken in yet is still on
-    // its way, and what was said in this page is still where it was said.
-    set({ ...FRESH, pending: state.pending, notes: state.notes, givenBack: state.givenBack })
+    // its way, what was said in this page is still where it was said, and
+    // what was queued is still queued.
+    set({ ...FRESH, pending: state.pending, notes: state.notes, givenBack: state.givenBack, queue: state.queue })
     // Until the open is answered, the session's events are in its answer:
     // the server holds back those that come after it until it is sent. A
     // question and its answer are not held back, since the open can wait on
@@ -164,10 +223,45 @@ export function openConversation(connection: Connection, session: string): Conve
   async function readLatest(evie: Evie) {
     try {
       const page = await evie.send({ type: "read_history", session, before: lastSeq + 1 })
-      if (on === evie) set({ opened: true, events: merged(page.events, state.events), earlier: page.earlier })
+      if (on !== evie) return
+      set({ opened: true, events: merged(page.events, state.events), earlier: page.earlier })
+      settle(page.events)
     } catch (cause) {
       if (on === evie) fail(`The conversation could not be read: ${wordsOf(cause)}`, () => void readLatest(evie))
     }
+  }
+
+  // Once the line is back after a drop, the session is opened again and its
+  // latest page read, as it stands now, before anything is let go from the
+  // queue: the client passes on what was missed by itself, in order, but a
+  // turn's end among it says nothing of a turn started after it.
+  async function reopen(evie: Evie) {
+    try {
+      const opened = await evie.send({ type: "open_session", session, questions: true })
+      const page = await evie.send({ type: "read_history", session, before: opened.lastSeq + 1 })
+      if (on !== evie || connection.state().status !== "connected") return
+      set({ events: merged(state.events, page.events), turnRunning: opened.turnRunning })
+      settle(page.events)
+    } catch {
+      // Tried again when the line next comes back.
+    }
+  }
+
+  // The session read as it stands: the queue is told how the last turn it
+  // was not told of ended, as when it ended while the line was down, and a
+  // message in flight that the session has is no longer; then it may go on.
+  function settle(events: readonly StoredEvent[]) {
+    let queue = state.queue
+    const inFlight = queue.inFlight
+    if (inFlight !== undefined && events.some((event) => event.type === "user_message" && event.seq > letGoAfter && event.body.text === inFlight.text)) queue = reachedSession(queue, inFlight.text)
+    const end = events.findLast((event) => event.type === "turn_end")
+    if (end?.type === "turn_end" && end.seq > turnEndTold) {
+      turnEndTold = end.seq
+      if (end.body.reason !== "completed") queue = afterTurn(queue, end.body.reason).queue
+    }
+    set({ queue })
+    settled = true
+    release()
   }
 
   function readEarlier(evie: Evie, before: number) {
@@ -242,7 +336,55 @@ export function openConversation(connection: Connection, session: string): Conve
       ...(ends && { replySoFar: "" }),
       ...(event.type === "turn_start" && { turnRunning: true }),
       ...(event.type === "turn_end" && { turnRunning: false, stopping: false }),
+      ...(event.type === "user_message" && { queue: reachedSession(state.queue, event.body.text) }),
     })
+    // A turn's end the queue has not been told of, while the session stands
+    // as read: one stopped, or failed, holds it; then it may go on, a
+    // moment later, so that a message another page sent at the same time
+    // has started its turn first.
+    if (event.type === "turn_end" && settled && event.seq > turnEndTold) {
+      turnEndTold = event.seq
+      if (event.body.reason !== "completed") set({ queue: afterTurn(state.queue, event.body.reason).queue })
+      releaseSoon()
+    }
+  }
+
+  // The queue as it is after a change, and the message it lets go, sent:
+  // on its way before the queue is told, so that it is never in neither.
+  function applyQueue(after: { queue: Queue; send?: Queued }) {
+    if (after.send !== undefined) {
+      letGoAfter = state.events.at(-1)?.seq ?? 0
+      void sendQueued(after.send)
+    }
+    set({ queue: after.queue })
+  }
+
+  // A message from the queue, sent: one that is a command, with no files,
+  // is run, as one typed would be. One that could not be sent goes back to
+  // the front of the queue, which is held, and a note says why.
+  async function sendQueued(item: Queued): Promise<string | undefined> {
+    const command = item.files.length === 0 ? commandIn(item.text) : undefined
+    if (command !== undefined) {
+      await api.run(command.name, command.args)
+      set({ queue: doneInFlight(state.queue) })
+      releaseSoon()
+      return undefined
+    }
+    const problem = await api.send(item.text, { files: item.files })
+    if (problem !== undefined) {
+      set({ queue: sendFailed(state.queue, item) })
+      note(`The queued message could not be sent: ${problem}`)
+    }
+    return problem
+  }
+  // The first message of the queue let go, when it may go on.
+  function release() {
+    applyQueue(releaseQueue(state.queue, { turnRunning: state.turnRunning, opened: settled }))
+  }
+  let releasing: ReturnType<typeof setTimeout> | undefined
+  function releaseSoon() {
+    clearTimeout(releasing)
+    releasing = setTimeout(release, SETTLE)
   }
 
   // Opened once connected, and on the new client after signing in again.
@@ -252,14 +394,16 @@ export function openConversation(connection: Connection, session: string): Conve
     const now = connection.state()
     const back = now.status === "connected" && status !== "connected"
     status = now.status
-    if (now.status !== "connected") return
+    // While the line is down, the session may change unseen.
+    if (now.status !== "connected") return void (settled = false)
     if (now.evie !== on) void join(now.evie)
     else if (back && failed !== undefined) tryAgain()
+    else if (back) void reopen(now.evie)
   }
   const unfollow = connection.subscribe(follow)
   follow()
 
-  return {
+  const api: Conversation = {
     state: () => state,
     subscribe(listener) {
       listeners.add(listener)
@@ -364,6 +508,9 @@ export function openConversation(connection: Connection, session: string): Conve
       unfollow()
       unhear()
       on = undefined
+      clearTimeout(releasing)
+      // What is still queued is kept, held, for when the session is opened again.
+      if (state.queue.items.length > 0) keptQueues.set(session, { ...leaveQueue(state.queue), inFlight: undefined })
     },
     async listFiles() {
       if (on === undefined) throw new Error(NOT_CONNECTED)
@@ -371,7 +518,36 @@ export function openConversation(connection: Connection, session: string): Conve
       if (state.project === null) throw new Error("This session is in no project, so it has no files to mention.")
       return on.send({ type: "list_files", project: state.project })
     },
+    queue(text, files) {
+      set({ queue: queueMessage(state.queue, text, files) })
+    },
+    unqueue(key) {
+      set({ queue: removeQueued(state.queue, key) })
+    },
+    async sendQueuedNow(key) {
+      const now = sendQueuedNow(state.queue, key)
+      if (now === undefined) return undefined
+      letGoAfter = state.events.at(-1)?.seq ?? 0
+      const sending = sendQueued(now.send)
+      set({ queue: now.queue })
+      return sending
+    },
+    editQueued(key) {
+      set({ queue: editQueued(state.queue, key) })
+    },
+    saveQueued(key, text, files) {
+      set({ queue: saveQueued(state.queue, key, text, files) })
+      releaseSoon()
+    },
+    stopEditing() {
+      set({ queue: stopEditing(state.queue) })
+      releaseSoon()
+    },
+    leave() {
+      set({ queue: leaveQueue(state.queue) })
+    },
   }
+  return api
 }
 
 // Two runs of a session's events as one, in order, each event once.
@@ -407,6 +583,11 @@ function without(list: readonly string[], item: string): string[] {
 const NO_LONGER_KEPT = /is not a file kept for this session/
 
 const NOT_CONNECTED = "Not connected to evie's server yet. Wait until it is connected, and send it again."
+
+// How long after a turn's end the queue waits before it lets a message go,
+// in milliseconds, so that a message sent from another page at the same
+// moment has started its turn, and the queue's waits for it.
+const SETTLE = 250
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
 
 // ---- A draft of a new session ----------------------------------------------------

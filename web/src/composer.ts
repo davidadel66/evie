@@ -159,11 +159,132 @@ export function rankFiles(paths: readonly string[], typed: string): string[] {
     .map(({ path }) => path)
 }
 
-// The box once a file is picked: an @ and its path in place of what was
-// typed, with a space after it, and where the caret goes, after the space.
-export function putMention(text: string, mention: { from: number; query: string }, caret: number, path: string): { text: string; caret: number } {
-  const filled = `${text.slice(0, mention.from)}@${path} `
-  return { text: `${filled}${text.slice(caret).replace(/^ /, "")}`, caret: filled.length }
+// ---- The text, with its files as chips --------------------------------------------------
+
+// What is in the box: words, and the files named in them, each drawn as a
+// chip in the text, as T3 Code's mention chips are, and sent as an @ and
+// its path, as `@src/app.ts`. Nothing else is sent for one: evie reads the
+// file with its tools.
+export type Part = { text: string } | { file: string }
+
+// A chip, as the caret and the menus count it: one character, the one
+// that stands for an object in text, which no command or @ word can have.
+export const CHIP = "\uFFFC"
+
+// The message the box sends.
+export const textOf = (parts: readonly Part[]): string => parts.map((part) => ("file" in part ? `@${part.file}` : part.text)).join("")
+
+// The box as the caret and the menus read it, each chip one character.
+export const shownOf = (parts: readonly Part[]): string => parts.map((part) => ("file" in part ? CHIP : part.text)).join("")
+
+// Text put in the box, as a message brought back with Up: an @ at the start
+// of a word, with what follows it up to a space or the end, is a chip, as
+// T3 Code reads its prompt's mentions.
+export function partsOf(text: string): Part[] {
+  const parts: Part[] = []
+  let at = 0
+  for (const found of text.matchAll(/(^|\s)@([^\s@"]+)(?=\s|$)/g)) {
+    const start = found.index + found[1]!.length
+    parts.push({ text: text.slice(at, start) }, { file: found[2]! })
+    at = start + 1 + found[2]!.length
+  }
+  parts.push({ text: text.slice(at) })
+  return tidied(parts)
+}
+
+// The box with the stretch from `from` to `to`, counted as `shownOf` counts,
+// replaced by `put`, and where the caret goes: after what was put.
+export function replaced(parts: readonly Part[], from: number, to: number, put: readonly Part[]): { parts: Part[]; caret: number } {
+  const before: Part[] = []
+  const after: Part[] = []
+  let at = 0
+  for (const part of parts) {
+    const length = "file" in part ? 1 : part.text.length
+    if ("file" in part) {
+      if (at + 1 <= from) before.push(part)
+      else if (at >= to) after.push(part)
+    } else {
+      if (at < from) before.push({ text: part.text.slice(0, from - at) })
+      if (at + length > to) after.push({ text: part.text.slice(Math.max(0, to - at)) })
+    }
+    at += length
+  }
+  const head = tidied([...before, ...put])
+  return { parts: tidied([...head, ...after]), caret: shownOf(head).length }
+}
+
+// The box once a file is picked from the @ menu: its chip in place of the
+// @ and what was typed after it, with a space after it, and the caret
+// after the space.
+export function pickFile(parts: readonly Part[], mention: { from: number; query: string }, caret: number, path: string): { parts: Part[]; caret: number } {
+  const after = shownOf(parts).slice(caret)
+  const end = after.startsWith(" ") ? caret + 1 : caret
+  return replaced(parts, mention.from, end, [{ file: path }, { text: " " }])
+}
+
+// The stretch from `from` to `to`, counted as `shownOf` counts, as parts:
+// what is copied or cut, which as text says its files as @ and their paths,
+// so that pasted back, they are chips again.
+export function sliceOf(parts: readonly Part[], from: number, to: number): Part[] {
+  const out: Part[] = []
+  let at = 0
+  for (const part of parts) {
+    if ("file" in part) {
+      if (at >= from && at < to) out.push(part)
+      at += 1
+    } else {
+      const piece = part.text.slice(Math.max(0, from - at), Math.max(0, to - at))
+      if (piece !== "") out.push({ text: piece })
+      at += part.text.length
+    }
+  }
+  return tidied(out)
+}
+
+// The box at a moment: its parts and where its caret is.
+export type Snapshot = { parts: Part[]; caret: number }
+
+// The box's own undo history, since the browser's cannot undo a chip put
+// in: the box as it was before each change, and as it was before each
+// undo, for Redo; and the last change, so that typing runs into one step.
+export type History = { past: Snapshot[]; future: Snapshot[]; last?: { kind: Change; at: number } }
+export type Change = "typing" | "deleting" | "paste" | "cut" | "drop" | "line" | "chip" | "command"
+export const NO_HISTORY: History = { past: [], future: [] }
+
+// How long after the last key typing or deleting still runs into its step,
+// in milliseconds, and how many steps are kept.
+const TYPING_RUNS = 1000
+const STEPS = 100
+
+// The history with the box as it was before a change of `kind`, at `at`.
+// A change forgets what was undone.
+export function recorded(history: History, before: Snapshot, kind: Change, at: number): History {
+  const runsOn = (kind === "typing" || kind === "deleting") && history.last?.kind === kind && at - history.last.at < TYPING_RUNS
+  return { past: runsOn ? history.past : [...history.past, before].slice(-STEPS), future: [], last: { kind, at } }
+}
+
+// The box one step back, with `now` kept for Redo, or nothing to undo.
+export function undone(history: History, now: Snapshot): { history: History; to: Snapshot } | undefined {
+  const to = history.past.at(-1)
+  return to === undefined ? undefined : { history: { past: history.past.slice(0, -1), future: [...history.future, now] }, to }
+}
+
+// The box one step forward again, or nothing to redo.
+export function redone(history: History, now: Snapshot): { history: History; to: Snapshot } | undefined {
+  const to = history.future.at(-1)
+  return to === undefined ? undefined : { history: { past: [...history.past, now], future: history.future.slice(0, -1) }, to }
+}
+
+// Parts with no empty words, and words side by side as one.
+function tidied(parts: readonly Part[]): Part[] {
+  const out: Part[] = []
+  for (const part of parts) {
+    const last = out.at(-1)
+    if ("text" in part && part.text === "") continue
+    if ("text" in part && last !== undefined && "text" in last) out[out.length - 1] = { text: last.text + part.text }
+    else out.push(part)
+  }
+  return out
 }
 
 // ---- Attachments ----------------------------------------------------------------------
@@ -179,3 +300,26 @@ export function attachable<File extends { name: string; size: number }>(files: r
     problem: large.length === 0 ? undefined : `${list} ${large.length === 1 ? "is" : "are"} larger than the ${ATTACHMENT_LIMIT / 1024 / 1024} MB a file attached can be.`,
   }
 }
+
+// ---- The box's one action -------------------------------------------------------------
+
+// What the round button at the box's end does, as T3 Code's: Send, off
+// while there is nothing to send; while evie works with nothing to send,
+// Stop, in its place; with something, steering the turn, or with mod held,
+// queueing it; while a queued message is edited, saving it. For a moment
+// after a send, it stays Send, off, as T3 Code's guard keeps it, so that a
+// second click, as the box empties and evie works, stops nothing.
+export function primaryOf(box: { editing: boolean; working: boolean; empty: boolean; modHeld: boolean; justSent: boolean }): { does: "send" | "steer" | "queue" | "stop" | "update"; disabled: boolean } {
+  if (box.editing) return { does: "update", disabled: false }
+  if (box.justSent && box.empty) return { does: "send", disabled: true }
+  if (box.working) return box.empty ? { does: "stop", disabled: false } : { does: box.modHeld ? "queue" : "steer", disabled: false }
+  return { does: "send", disabled: box.empty }
+}
+
+// Whether a key is one an input method takes, as the Enter that confirms
+// what is being composed in Japanese or Chinese: while composing, or as
+// Safari says it, with keyCode 229, or just after the composition ended,
+// which Safari tells before the key.
+export const confirmsInput = (key: { isComposing: boolean; keyCode: number }, endedAt: number | undefined, now: number): boolean =>
+  key.isComposing || key.keyCode === 229 || (endedAt !== undefined && now - endedAt < COMPOSITION_ENDS)
+const COMPOSITION_ENDS = 100

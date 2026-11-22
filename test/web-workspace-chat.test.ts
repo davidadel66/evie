@@ -3,6 +3,7 @@ import type { SessionSummary } from "../src/core/types.ts"
 import { ask, files } from "../src/index.ts"
 import { openConnection } from "../web/src/connection.ts"
 import { openConversation, type Conversation, type ConversationState } from "../web/src/conversation.ts"
+import { NO_QUEUE } from "../web/src/queue.ts"
 import type { Item } from "../web/src/transcript.ts"
 import { stepKind, stepWords } from "../web/src/step-words.ts"
 import { chatLines, chatTitle, fullSize, givenBackWords, sideChatOf } from "../web/src/workspace-chat.ts"
@@ -102,7 +103,7 @@ test("a turn in the side chat shows as the owner's message, one quiet line for e
 })
 
 // A conversation that has been opened, with nothing in it yet.
-const opened: ConversationState = { opened: true, readingEarlier: false, stopping: false, waiting: [], running: [], givenBack: undefined, model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [], project: "p1" }
+const opened: ConversationState = { opened: true, readingEarlier: false, stopping: false, waiting: [], running: [], givenBack: undefined, model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [], project: "p1", queue: NO_QUEUE }
 
 test("each command running from the side chat shows as a quiet line at its end, until it has run", () => {
   expect(sideChatOf({ ...opened, running: ["compact", "sync"] })).toEqual([

@@ -10,7 +10,7 @@ import { toggleList, useListShown } from "./list-shown.ts"
 import { ask, newSession } from "./page-requests.ts"
 import { paletteActions, rankGroups, recentSessions, type Group, type PaletteAction, type Searched } from "./palette.ts"
 import { ProjectGlyph } from "./ProjectIcon.tsx"
-import { select, useAddress } from "./selection.ts"
+import { openSettings, select, useAddress } from "./selection.ts"
 import { ageWords, titleOf } from "./session-list.ts"
 import type { Sessions } from "./sessions.ts"
 import { addressOfWorkspace, workspaceIn } from "./workspace.ts"
@@ -136,7 +136,7 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
     }),
     previous: () => ({ id: "previous", title: "Previous session", keywords: ["above", "up"], shortcut: "previous session", run: () => void ask("previous session") }),
     next: () => ({ id: "next", title: "Next session", keywords: ["below", "down"], shortcut: "next session", run: () => void ask("next session") }),
-    settings: () => ({ id: "settings", title: "Open settings", keywords: ["preferences", "keys", "plugins", "instructions", "notifications"], icon: <GearSix />, takesFocus: true, run: () => void ask("settings") }),
+    settings: () => ({ id: "settings", title: "Open settings", keywords: ["preferences", "keys", "plugins", "instructions", "notifications"], icon: <GearSix />, takesFocus: true, run: () => openSettings() }),
     theme: () => ({
       id: "theme",
       title: "Theme",
