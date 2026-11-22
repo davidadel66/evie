@@ -286,6 +286,22 @@
   --spacing-attachment-shown: 160px;
   --spacing-image-open: min(90vw, 1200px);
   --spacing-image-open-height: 80dvh;
+  /* A file evie shows, in its frame under the reply: the
+     frame's header; the tallest an image grows, and a PDF's height; the
+     least an SVG's checkerboard is; the height a Markdown document is cut
+     at, and the fade over its cut edge. Full screen fits an image within
+     92% of the window's width, less the room for previous and next, and
+     86% of its height, less the room for Back and the caption, as T3
+     Code's does; its previous and next buttons are 40px. */
+  --spacing-shown-header: 36px;
+  --spacing-shown: 480px;
+  --spacing-shown-svg: 200px;
+  --spacing-shown-drawing: calc(var(--spacing-shown) - 2 * var(--spacing-6));
+  --spacing-shown-cut: 320px;
+  --spacing-shown-fade: 64px;
+  --spacing-full-width: calc(92vw - 96px);
+  --spacing-full-height: min(86vh, calc(100vh - 160px));
+  --spacing-full-nav: 40px;
   /* Phone width, as T3 Code's sidebar has it, is below this: the session
      view's columns stack, the message box is one row until tapped, the
      settings and the diff fill the screen, and a workspace's columns
@@ -424,6 +440,52 @@
 }
 @utility fade-both {
   mask-image: linear-gradient(to bottom, transparent, black var(--spacing-3), black calc(100% - var(--spacing-3)), transparent);
+}
+
+/* What an SVG shown is drawn on: a checkerboard of the ground
+   and the text a little over it, in 16px squares, or 24px full screen,
+   so that a drawing's own transparency shows. */
+@utility checkerboard {
+  background: repeating-conic-gradient(color-mix(in srgb, var(--text) 7%, var(--bg)) 0 25%, var(--bg) 0 50%) 50% / 16px 16px;
+}
+@utility checkerboard-large {
+  background: repeating-conic-gradient(color-mix(in srgb, var(--text) 7%, var(--bg)) 0 25%, var(--bg) 0 50%) 50% / 24px 24px;
+}
+
+/* A Markdown document evie shows: tighter than a reply, its
+   first heading a page title, the next ones a title, and code on a tint,
+   each piece spaced by its own margins. It wins over the classes the
+   Markdown is drawn with (markdown.ts), which are a reply's. */
+@utility shown-document {
+  font-size: var(--text-body);
+  line-height: var(--text-prose--line-height);
+  & h1 {
+    margin: 0 0 var(--spacing-1\.5);
+    font-size: var(--text-page-title);
+    line-height: var(--text-page-title--line-height);
+  }
+  & h2,
+  & h3,
+  & h4 {
+    margin: var(--spacing-4\.5) 0 var(--spacing-1);
+    font-size: var(--text-title);
+    line-height: var(--text-title--line-height);
+  }
+  & p,
+  & ul,
+  & ol,
+  & pre,
+  & blockquote {
+    margin: 0 0 var(--spacing-2);
+  }
+  & li + li {
+    margin-top: var(--spacing-0\.5);
+  }
+  & :not(pre) > code {
+    padding: 1px var(--spacing-1);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+  }
 }
 
 /* A drawer tucked into the message box's top edge shows only what is

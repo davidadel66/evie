@@ -81,6 +81,23 @@ export async function readStorage(project: string, path: string, dataFolder: str
   return { ...shown, kind: "text", text }
 }
 
+// A file of a project's Storage to give to the page, by its path inside
+// the `.evie/` folder: where it really is, or nothing when it is not there,
+// or is anywhere that `readStorage` refuses, which includes a link into the
+// folder's own git repository. What the file is, and so whether it may be
+// given, is for the one giving it to decide.
+export async function storageFileAt(project: string, path: string, dataFolder: string): Promise<string | undefined> {
+  let at: string
+  let evie: string | undefined
+  try {
+    evie = ownEvie(project, dataFolder)
+    at = await real(evie, inside(path, "file"), path, "file")
+  } catch {
+    return undefined
+  }
+  return relative(evie!, at).split(sep)[0] === OWN_GIT ? undefined : at
+}
+
 // The project's `.evie/` folder as it really is, or nothing when there is
 // none yet. One that is a link, or that is, holds, or is inside the data
 // folder, or would be once made, is refused, saying why. It is the one rule

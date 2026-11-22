@@ -33,7 +33,10 @@ export type ServerMessage = { reply: string; result?: unknown } | { reply: strin
 // sign-in link opens. `attachments` takes in a file attached to a message,
 // sent as the body of a POST, and named in the address as
 // `?session=<id>&name=<file name>`, and gives back the attachment as JSON;
-// and gives one back, for `GET ?session=<id>&path=<its path>`.
+// and gives one back, for `GET ?session=<id>&path=<its path>`. `storage`
+// gives a Storage file to the page, to draw it: one in a project's `.evie`
+// folder, for `GET ?project=<id>&path=<its path inside it>`, or one kept
+// for a session with no project, for `GET ?session=<id>&path=<its full path>`.
 export const PATHS = {
   socket: "/ws",
   check: "/check",
@@ -42,6 +45,7 @@ export const PATHS = {
   page: "/",
   signIn: "/sign-in",
   attachments: "/attachments",
+  storage: "/storage",
 } as const
 
 // The close code for a connection whose token was taken back. Codes from

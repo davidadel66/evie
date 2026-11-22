@@ -7,6 +7,7 @@ import { join } from "node:path"
 import { brotliDecompressSync, gunzipSync } from "node:zlib"
 import { builtWebApp } from "../src/programs/serve.ts"
 import { buildWebApp, headLinks, withHeadLinks } from "../src/server/web-app.ts"
+import { DIFF_WORKER_META } from "../web/src/diff-view.ts"
 
 // The web app as `evie serve` builds it when it starts: by Bun's bundler, in
 // a process of its own, with Tailwind's plugin.
@@ -31,20 +32,27 @@ test("the build hands over its metafile, which names the page's script by its pa
   const script = [...text(app.page.identity).matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
   const entries = Object.entries(app.metafile.outputs).filter(([path, output]) => output.entryPoint === "web/index.html" && path.endsWith(".js"))
   expect(entries.map(([path]) => path.replace(/^\./, ""))).toEqual(script)
-  const imports = entries[0]![1].imports.filter((each) => each.kind === "import-statement")
+  // Each chunk it imports, at once or by import(). How many of each depends
+  // on Bun: 1.4.0 puts the code the page shares with the diff view in chunks
+  // of their own, which the page imports at once; 1.4.5 puts that code in
+  // the page's script, which then imports only the diff view, by import().
+  const imports = entries[0]![1].imports.filter((each) => each.kind === "import-statement" || each.kind === "dynamic-import")
   expect(imports.length).toBeGreaterThan(0)
   for (const each of imports) expect(Object.keys(app.files)).toContain(each.path.replace(/^\./, ""))
 })
 
-test("every file the web app builds over 1 KB, the diff library's worker among them, is kept compressed with brotli and with gzip, each of which decodes to the file", async () => {
+test("every file the web app builds over 1 KB, the diff's worker and what it imports among them, is kept compressed with brotli and with gzip, each of which decodes to the file", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
 
-  // The worker is built, though the metafile does not list it.
-  const worker = Object.keys(app.files).find((path) => /^\/worker-portable-[^/]+\.js$/.test(path))
+  // The worker is built, and the largest file it imports to start.
+  const worker = Object.keys(app.metafile.outputs).find((path) => app.metafile.outputs[path]!.entryPoint === "web/src/diff-worker.ts")
   expect(worker).toBeDefined()
-  expect(Object.keys(app.metafile.outputs).map((path) => path.replace(/^\./, ""))).not.toContain(worker)
-  const files = [app.page, ...Object.values(app.files)]
+  const imported = app.metafile.outputs[worker!]!.imports.map((each) => each.path.replace(/^\./, ""))
+  const largest = imported.toSorted((a, b) => app.files[b]!.identity.length - app.files[a]!.identity.length)[0]
+  expect(app.files[largest!]!.identity.length).toBeGreaterThan(1024)
+  // The fonts are compressed already, and are sent as they are: see the fonts' test.
+  const files = [app.page, ...Object.values(app.files)].filter((file) => !file.type.startsWith("font/"))
   for (const file of files) {
     const plain = file.identity
     if (plain.length <= 1024) {
@@ -54,7 +62,39 @@ test("every file the web app builds over 1 KB, the diff library's worker among t
     expect(brotliDecompressSync(file.br!)).toEqual(Buffer.from(plain))
     expect(gunzipSync(file.gzip!)).toEqual(Buffer.from(plain))
   }
-  expect(app.files[worker!]!.br!.length).toBeLessThan(app.files[worker!]!.identity.length / 2)
+  expect(app.files[largest!]!.br!.length).toBeLessThan(app.files[largest!]!.identity.length / 2)
+})
+
+test("the page names the diff's worker in its head, a module built beside it under a name that changes with what it holds, which it does not load until a diff is drawn; to start, the worker loads a few KB, with no WebAssembly, and the library's 1.3 MB portable worker is not built", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const page = text(app.page.identity)
+  const outputs = app.metafile.outputs
+
+  // Named in the head by the meta tag the diff view reads.
+  const meta = page.match(new RegExp(`<meta name="${DIFF_WORKER_META}" content="([^"]+)">`))
+  expect(meta).not.toBeNull()
+  expect(page.indexOf(meta![0])).toBeLessThan(page.indexOf("</head>"))
+  const address = meta![1]!
+  expect(address).toMatch(/^\/diff-worker-[a-z0-9]+\.js$/)
+  expect(outputs[`.${address}`]?.entryPoint).toBe("web/src/diff-worker.ts")
+  expect(Object.keys(app.files)).toContain(address)
+  // Not fetched with the page, by a link or a script.
+  expect(page).not.toMatch(new RegExp(`(?:src|href)="${address}"`))
+
+  // The worker and every file it imports before it runs.
+  const start = new Set<string>()
+  const follow = (path: string) => {
+    if (start.has(path)) return
+    start.add(path)
+    for (const each of outputs[path]!.imports) if (each.kind === "import-statement") follow(each.path)
+  }
+  follow(`.${address}`)
+  const files = [...start].map((path) => app.files[path.replace(/^\./, "")]!)
+  expect(files.reduce((bytes, file) => bytes + file.identity.length, 0)).toBeLessThan(64 * 1024)
+  // An inlined WebAssembly program starts with "\0asm", "AGFzbQ" in base64.
+  for (const file of files) expect(text(file.identity)).not.toMatch(/WebAssembly|AGFzbQ/)
+  expect(Object.keys(app.files).filter((path) => path.includes("worker-portable"))).toEqual([])
 })
 
 test("the page has one modulepreload link for each chunk its script imports, and for each chunk those import, so the browser fetches them alongside the script; none for what it imports only when needed, such as the diff view", async () => {
@@ -74,8 +114,11 @@ test("the page has one modulepreload link for each chunk its script imports, and
   }
   const scripts = Object.keys(outputs).filter((path) => outputs[path]!.entryPoint === "web/index.html" && path.endsWith(".js"))
   for (const script of scripts) follow(script)
+  // None on Bun 1.4.5, whose script imports no chunk at once: the code the
+  // page shares with what it loads later is in the script itself. The page
+  // then has no such links at all. The next test checks the links on a
+  // metafile of its own, whatever Bun builds.
   const expected = [...imported].map((path) => path.replace(/^\./, "")).sort()
-  expect(expected.length).toBeGreaterThan(0)
 
   const page = text(app.page.identity)
   const links = [...page.matchAll(/<link\b[^>]*>/g)].map((match) => match[0]).filter((tag) => /\brel="?modulepreload"?[\s/>]/.test(tag))
@@ -85,15 +128,17 @@ test("the page has one modulepreload link for each chunk its script imports, and
   for (const path of named) expect(Object.keys(app.files)).toContain(path)
   // In the head, where the browser finds them as it reads the page's start.
   for (const tag of links) expect(page.indexOf(tag)).toBeLessThan(page.indexOf("</head>"))
-  // What the script loads with `import()`, as the diff view, is left to load when it is needed.
-  const later = scripts.flatMap((script) => outputs[script]!.imports.filter((each) => each.kind === "dynamic-import" && !imported.has(each.path)))
+  // What the script, or a chunk it imports, loads with `import()`, as the
+  // diff view, is left to load when it is needed.
+  const later = [...scripts, ...imported].flatMap((script) => outputs[script]!.imports.filter((each) => each.kind === "dynamic-import" && !imported.has(each.path)))
   expect(later.length).toBeGreaterThan(0)
   for (const each of later) expect(named).not.toContain(each.path.replace(/^\./, ""))
 })
 
-test("the page is given each of its links once, before </head>: one it has already, as a later Bun may write itself, is not added again, and a comment is not the page's own", () => {
+test("the page is given each of its links once, and the address of the diff's worker, before </head>: one it has already, as a later Bun may write itself, is not added again, and a comment is not the page's own", () => {
   // A page whose script imports two chunks, one of them importing a third,
-  // and loads a fourth with `import()`.
+  // and loads a fourth with `import()`; and the diff's worker, built beside
+  // it, which imports a chunk of its own.
   const output = (imports: [string, "import-statement" | "dynamic-import"][], entryPoint?: string) => ({
     bytes: 1,
     inputs: {},
@@ -112,19 +157,32 @@ test("the page is given each of its links once, before </head>: one it has alrea
       "./chunk-c.js": output([]),
       "./chunk-later.js": output([["./chunk-only-later.js", "import-statement"]]),
       "./chunk-only-later.js": output([]),
+      "./diff-worker-1a2b3c4d.js": output([["./chunk-worker.js", "import-statement"]], "web/src/diff-worker.ts"),
+      "./chunk-worker.js": output([]),
     },
   }
-  const links = headLinks(metafile)
-  expect(links.map((link) => link.href).sort()).toEqual(["/chunk-a.js", "/chunk-b.js", "/chunk-c.js"])
-  expect(links.every((link) => link.rel === "modulepreload")).toBe(true)
+  // The fonts' links, which do not come from the metafile, have a test of their own.
+  const links = headLinks(metafile).filter((tag) => !("rel" in tag) || tag.rel !== "preload")
+  expect(links).toEqual([
+    { rel: "modulepreload", href: "/chunk-a.js", crossorigin: "" },
+    { rel: "modulepreload", href: "/chunk-c.js", crossorigin: "" },
+    { rel: "modulepreload", href: "/chunk-b.js", crossorigin: "" },
+    { name: DIFF_WORKER_META, content: "/diff-worker-1a2b3c4d.js" },
+  ])
 
   // The bundler's link for chunk b, written in its own way, and a comment
-  // that names chunk a and the end of the head, which are not the page's own.
+  // that names chunk a, the worker and the end of the head, which are not
+  // the page's own.
   const page =
-    '<!doctype html><html><head><title>evie</title><!-- Before </head>, as <link rel="modulepreload" href="/chunk-a.js"> --><link crossorigin rel="prefetch modulepreload" href=./chunk-b.js><script type="module" crossorigin src="/chunk-page.js"></script></head><body></body></html>'
+    `<!doctype html><html><head><meta charset="utf-8"><title>evie</title><!-- Before </head>, as <link rel="modulepreload" href="/chunk-a.js"> and <meta name="${DIFF_WORKER_META}" content="/diff-worker-1a2b3c4d.js"> --><link crossorigin rel="prefetch modulepreload" href=./chunk-b.js><script type="module" crossorigin src="/chunk-page.js"></script></head><body></body></html>`
   const finished = withHeadLinks(page, links)
 
-  expect(finished).toBe(page.replace("</head><body>", '<link rel="modulepreload" href="/chunk-a.js" crossorigin><link rel="modulepreload" href="/chunk-c.js" crossorigin></head><body>'))
+  expect(finished).toBe(
+    page.replace(
+      "</head><body>",
+      `<link rel="modulepreload" href="/chunk-a.js" crossorigin><link rel="modulepreload" href="/chunk-c.js" crossorigin><meta name="${DIFF_WORKER_META}" content="/diff-worker-1a2b3c4d.js"></head><body>`,
+    ),
+  )
   // Finished again, it is the same page.
   expect(withHeadLinks(finished, links)).toBe(finished)
 })
@@ -187,7 +245,7 @@ test("a build that fails names the file and the line, evie serve goes on without
 
 test("a temporary folder left by a server stopped while it built is removed by the next build, and one still being built into is not", async () => {
   await inFolder("evie-left-build-", async (folder) => {
-    await writeFile(join(folder, "index.html"), '<!doctype html><html><body><script type="module" src="./main.ts"></script></body></html>\n')
+    await writeFile(join(folder, "index.html"), '<!doctype html><html><head></head><body><script type="module" src="./main.ts"></script></body></html>\n')
     await writeFile(join(folder, "main.ts"), 'console.log("evie")\n')
     const temporary = join(folder, "temporary")
     // Left two hours ago, as by Ctrl-C while the server started; another
@@ -209,24 +267,122 @@ test("the web app builds into a page whose script and stylesheet are built besid
 
   const page = text(app.page.identity)
   // The empty icon, `data:,`, is carried in the page and loads nothing. Beside
-  // its script and stylesheet, it preloads the chunks its script imports.
+  // its script and stylesheet, it preloads the chunks its script imports and
+  // the fonts English text is drawn in.
   const loads = [...page.matchAll(/(?:src|href)="(?!data:,")([^"]+)"/g)].map((match) => match[1]!)
   const scripts = [...page.matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
   const preloads = [...page.matchAll(/<link\b[^>]*\bmodulepreload\b[^>]*\bhref="([^"]+)"/g)].map((match) => match[1]!)
+  const fonts = [...page.matchAll(/<link\b[^>]*\brel="preload"[^>]*\bhref="([^"]+)"/g)].map((match) => match[1]!)
   const styles = loads.filter((path) => path.endsWith(".css"))
-  expect([scripts.length, styles.length]).toEqual([1, 1])
-  expect(loads.sort()).toEqual([...scripts, ...preloads, ...styles].sort())
+  expect([scripts.length, styles.length, fonts.length]).toEqual([1, 1, 2])
+  expect(loads.sort()).toEqual([...scripts, ...preloads, ...fonts, ...styles].sort())
   expect([...scripts, ...preloads].every((path) => path.endsWith(".js"))).toBe(true)
+  expect(fonts.every((path) => path.startsWith("/fonts/") && path.endsWith(".woff2"))).toBe(true)
   for (const path of loads) expect(Object.keys(app.files)).toContain(path)
 
   const style = text(app.files[styles[0]!]!.identity)
   const script = text(app.files[scripts[0]!]!.identity)
-  // The fonts are evie's own, carried in the stylesheet, not fetched from Google.
-  expect(style).toMatch(/@font-face\{font-family:Geist;[^}]*url\(data:font\/woff2/)
-  expect(style).toMatch(/@font-face\{font-family:Geist Mono;[^}]*url\(data:font\/woff2/)
+  // The fonts are evie's own, served beside the page, not fetched from Google.
+  expect(style).toMatch(/@font-face\{font-family:Geist;[^}]*url\(\/fonts\//)
+  expect(style).toMatch(/@font-face\{font-family:Geist Mono;[^}]*url\(\/fonts\//)
   for (const text of [page, style]) expect(text).not.toMatch(/(?:url\(|src="|href=")https?:/)
   // React's production build, minified: its development build warns about this.
   expect(script).not.toContain("Download the React DevTools")
+})
+
+// The four font files, Geist and Geist Mono for the Latin and the extended
+// Latin alphabets, as their packages have them, each with the address it is
+// served at: its name, with its package's version.
+async function fontFiles(): Promise<{ address: string; latin: boolean; bytes: Uint8Array }[]> {
+  const names = [
+    ["geist", "geist-latin-wght-normal"],
+    ["geist", "geist-latin-ext-wght-normal"],
+    ["geist-mono", "geist-mono-latin-wght-normal"],
+    ["geist-mono", "geist-mono-latin-ext-wght-normal"],
+  ] as const
+  return Promise.all(
+    names.map(async ([font, name]) => {
+      const folder = join(import.meta.dir, "..", "node_modules", "@fontsource-variable", font)
+      const { version } = (await Bun.file(join(folder, "package.json")).json()) as { version: string }
+      return { address: `/fonts/${name}-${version}.woff2`, latin: !name.includes("latin-ext"), bytes: await Bun.file(join(folder, "files", `${name}.woff2`)).bytes() }
+    }),
+  )
+}
+
+test("the stylesheet carries no font of its own: it names each Geist and Geist Mono file by an address with its package's version, and each is served beside the page as its package has it", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const style = text(Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.identity)
+  const fonts = await fontFiles()
+
+  expect(style).not.toContain("data:font")
+  const faces = style.match(/@font-face\{[^}]*\}/g) ?? []
+  expect(faces.map((face) => face.match(/src:url\(([^)]+)\)/)?.[1]).sort()).toEqual(fonts.map((font) => font.address).sort())
+  // Each is drawn in once it has come, and until then the text is drawn in
+  // a fallback font, rather than not at all; each is fetched only for the
+  // letters it has.
+  for (const face of faces) expect(face).toMatch(/font-display:swap;.*;unicode-range:U\+/)
+  for (const font of fonts) {
+    const file = app.files[font.address]
+    expect(file?.type).toBe("font/woff2")
+    expect(file?.identity).toEqual(font.bytes)
+    // A font is compressed already, so it is kept only as it is.
+    expect([file?.br, file?.gzip]).toEqual([undefined, undefined])
+  }
+})
+
+test("the page preloads the two Latin fonts, which English text is drawn in, as a font is fetched, and not the extended Latin ones, which are fetched only for a letter of theirs", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const page = text(app.page.identity)
+  const fonts = await fontFiles()
+
+  const preloads = [...page.matchAll(/<link\b[^>]*\brel="preload"[^>]*>/g)].map((match) => match[0])
+  // `crossorigin`, since the browser fetches every font that way, and uses
+  // what it preloaded only when it was fetched in the same way.
+  const latin = fonts.filter((font) => font.latin).map((font) => `<link rel="preload" href="${font.address}" as="font" type="font/woff2" crossorigin>`)
+  expect(preloads.sort()).toEqual(latin.sort())
+  for (const tag of preloads) expect(page.indexOf(tag)).toBeLessThan(page.indexOf("</head>"))
+})
+
+test("a stylesheet that names a font the server does not serve, as one of an older version of its package, fails the build, naming the file and the line", async () => {
+  await inFolder("evie-old-font-", async (folder) => {
+    await writeFile(join(folder, "index.html"), '<!doctype html><html><head><link rel="stylesheet" href="./fonts.css"></head><body></body></html>\n')
+    await writeFile(join(folder, "fonts.css"), '@font-face {\n  font-family: "Geist";\n  src: url("/fonts/geist-latin-wght-normal-5.0.0.woff2") format("woff2");\n}\n')
+    const temporary = join(folder, "temporary")
+    await mkdir(temporary)
+
+    const built = await builtWebApp(async () => ({ buildWebApp: () => buildWebApp({ page: join(folder, "index.html"), temporary }) }))
+
+    const file = join(await realpath(folder), "fonts.css")
+    expect(built).toEqual({ problem: `The web app could not be built, so it is not served:\n${file}:3: Could not resolve: "/fonts/geist-latin-wght-normal-5.0.0.woff2"` })
+  })
+})
+
+test("for evie serve --dev, Bun's bundler takes the fonts' plugin from bunfig.toml, and puts each font the stylesheet names into it, as it bundles the page", async () => {
+  // As `evie serve --dev` serves the page: Bun's import of it, bundled on
+  // request, by a Bun started in the repository's folder.
+  const serving = Bun.spawn(
+    [
+      process.execPath,
+      "-e",
+      `const { webAppForDevelopment } = await import(${JSON.stringify(join(import.meta.dir, "..", "src", "server", "web-app.ts"))})\n` +
+        "const server = Bun.serve({ port: 0, development: true, routes: { '/': webAppForDevelopment().page } })\n" +
+        "const page = await (await fetch(server.url)).text()\n" +
+        "const styles = await Promise.all([...page.matchAll(/<link[^>]*rel=\"stylesheet\"[^>]*href=\"([^\"]+)\"/g)].map(async (match) => (await fetch(new URL(match[1], server.url))).text()))\n" +
+        "console.log(JSON.stringify(styles))\n" +
+        "server.stop(true)\n",
+    ],
+    { cwd: join(import.meta.dir, ".."), stdout: "pipe", stderr: "pipe" },
+  )
+  const [said, problem, code] = await Promise.all([new Response(serving.stdout).text(), new Response(serving.stderr).text(), serving.exited])
+
+  // Bun says on stderr how long it took to bundle the page, so what it says
+  // is shown only when it fails.
+  expect({ code, problem: code === 0 ? "" : problem }).toEqual({ code: 0, problem: "" })
+  const style = (JSON.parse(said) as string[]).join("\n")
+  for (const family of ["Geist", "Geist Mono"]) expect(style).toMatch(new RegExp(`font-family: "?${family}"?;[^}]*url\\("?data:font/woff2`))
+  expect(style).not.toContain("/fonts/")
 })
 
 test("the stylesheet holds the design system's colours for each of its three themes, and the screens' classes name them", async () => {
@@ -346,8 +502,8 @@ test("the screens opened rarely or later, and the drawings of every icon but the
 
   // Words of the settings, the command palette, the session details, the
   // right panel, the workspace view, its side chat and storage, the icon
-  // picker, and an icon's name.
-  for (const words of ["Restart to apply", "Command palette", "Choose what to show", "The diff view could not be loaded", "This workspace is not in the list", "Ask evie to change something here", "Backed up privately", "No matching icon", "cooking-pot"]) {
+  // picker, an icon's name, and the viewers of the files evie shows.
+  for (const words of ["Restart to apply", "Command palette", "Choose what to show", "The diff view could not be loaded", "This workspace is not in the list", "Ask evie to change something here", "Backed up privately", "No matching icon", "cooking-pot", "Expanded image preview", "in the browser's PDF view"]) {
     expect({ words, first: firstScript.includes(words), later: laterScripts.includes(words) }).toEqual({ words, first: false, later: true })
   }
 })

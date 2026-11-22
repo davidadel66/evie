@@ -1,5 +1,7 @@
 import type { ChangedFile, Job, StoredEvent, TurnChanges } from "../../src/core/types.ts"
+import { shownFiles } from "../../src/plugins/show/record.ts"
 import { shownAttachment, type ShownAttachment } from "./attachments.ts"
+import { shownOf, type Shown } from "./shown.ts"
 import { fieldsOf, liveWords, runWords, stepFailed, stepKind, stepTarget, stepWords, type StepKind } from "./step-words.ts"
 import { durationWords } from "./work-log.ts"
 
@@ -16,7 +18,9 @@ import { durationWords } from "./work-log.ts"
 // said in this page and kept nowhere, such as what a command said, each
 // at the time of the session's last event when it was said. `folder` is
 // the session's project's, when the page knows it, which the work log
-// names the files in it from.
+// names the files in it from. `project` is the session's project now, by
+// its id, or null for none, which the files it showed in Storage are
+// fetched from, or the one it was in when it showed them.
 export type View = {
   events: readonly StoredEvent[]
   earlier: boolean
@@ -26,6 +30,7 @@ export type View = {
   pending?: readonly Pending[]
   notes?: readonly PageNote[]
   folder?: string
+  project?: string | null | undefined
 }
 export type PageNote = { key: string; time: number; text: string }
 export type Pending = { text: string; files?: readonly File[] }
@@ -82,6 +87,9 @@ export type Item = { key: string; turn: number } & (
   // The files a completed turn changed, after its final reply, with the
   // turn's number in the session, for the diff panel to open on.
   | { kind: "changes"; number: number; files: ChangedFile[] }
+  // A file evie showed with the show tool: under its reply for the turn,
+  // in the order shown, outside the fold, before what ends the turn.
+  | { kind: "shown"; file: Shown }
 )
 
 type Steps = Extract<Item, { kind: "steps" }>
@@ -116,6 +124,16 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
   const cut = new Set<number>()
   // When each item happened, to place each job's start and end among them.
   const times = new Map<Item, number>()
+  // The files each turn showed, in order, placed at its end once it has all been read.
+  const shown = new Map<number, Item[]>()
+  // The project the session was in at each event, by the event's number:
+  // the one it is in now, or before a move, the one it was moved from.
+  const projectAt = new Map<number, string | null | undefined>()
+  let project = view.project
+  for (const event of view.events.toReversed()) {
+    projectAt.set(event.seq, project)
+    if (event.type === "moved") project = event.body.from
+  }
   const add = (item: Item, time: number) => {
     items.push(item)
     times.set(item, time)
@@ -169,6 +187,13 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
         runAt(event.time).calls.push(call)
       }
       Object.assign(call, resultOf(event))
+      if (event.body.name === "show") {
+        const files = shownFiles(event.body.details).map((file, at): Item => {
+          const key = `shown-${event.body.callId}-${at}`
+          return { key, turn, kind: "shown", file: shownOf(file, key, event.session, projectAt.get(event.seq)) }
+        })
+        shown.set(turn, [...(shown.get(turn) ?? []), ...files])
+      }
     }
     if (event.type === "question") {
       const item: Asked = { key, turn, kind: "question", id: event.body.id, text: event.body.text, choices: event.body.choices, waiting: true }
@@ -251,6 +276,13 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
     const item: Item = { key: line.key, turn: items[place - 1]?.turn ?? 0, kind: "note", text: line.text }
     items.splice(place, 0, item)
     times.set(item, line.time)
+  }
+  // Each turn's files shown go at its end, before what ends it: what its
+  // end says, the files it changed, and what is still to come.
+  for (const [number, files] of shown) {
+    const end = ends.get(number)?.seq
+    const ending = (item: Item) => item.key === `e${end}` || item.key === `changes-${end}` || item.kind === "thinking" || item.key.startsWith("pending")
+    items.splice(items.findLastIndex((item) => item.turn === number && !ending(item)) + 1, 0, ...files)
   }
   return folded(items, ends, cut)
 }

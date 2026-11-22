@@ -16,6 +16,7 @@ import { naming } from "./plugins/naming.ts"
 import { openrouter } from "./plugins/openrouter.ts"
 import { MODES, permissions, type Mode, type Rule } from "./plugins/permissions/index.ts"
 import { shell } from "./plugins/shell.ts"
+import { show } from "./plugins/show/index.ts"
 import { skills } from "./plugins/skills.ts"
 import { subagents } from "./plugins/subagents.ts"
 import { sync } from "./plugins/sync.ts"
@@ -159,11 +160,12 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   web: (_options, context) => web({ env: context.env }),
   sync: (_options, context) => sync({ dataFolder: context.home, setting: context.syncSetting }),
   naming: (options) => naming(typeof options.model === "string" && options.model.trim() !== "" ? { model: options.model.trim() } : {}),
+  show: (_options, context) => show({ dataFolder: context.home }),
   github: () => github(),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
 // `undo` comes after `permissions`, so a call that is refused is not recorded.
-const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "naming", "github", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "naming", "show", "github", "openrouter"]
 
 // The permissions plugin as the settings describe it. A project's own mode
 // wins over the global one, and its rules come after the global ones.

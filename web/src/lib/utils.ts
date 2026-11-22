@@ -76,6 +76,15 @@ export const NAMED_SIZES = [
   "attachment-shown",
   "image-open",
   "image-open-height",
+  "shown-header",
+  "shown",
+  "shown-svg",
+  "shown-drawing",
+  "shown-cut",
+  "shown-fade",
+  "full-width",
+  "full-height",
+  "full-nav",
 ] as const
 
 // Joins class names, as every shadcn/ui part does, so that a class passed

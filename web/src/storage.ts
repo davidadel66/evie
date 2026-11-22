@@ -1,5 +1,6 @@
 import type { Evie, StorageEntry, StorageFile } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
+import { storageShown } from "./shown.ts"
 
 // A workspace's Storage, apart from its screen: the files in its project's
 // `.evie` folder, as a tree that starts with every folder open, listed a
@@ -18,8 +19,11 @@ export type StorageState = {
   folders: ReadonlyMap<string, FolderListing>
   // The folders the owner has folded.
   closed: ReadonlySet<string>
-  // The file being shown, as read, or why it could not be, or neither while it is read.
-  file?: { path: string; read?: StorageFile; problem?: string }
+  // The file being shown: `framed` when it is of a kind evie shows and the
+  // server gives it, for the frame it is shown in under a reply to draw
+  // itself; or as read, or why it could not be; or none of these while it
+  // is looked at.
+  file?: { path: string; read?: StorageFile; problem?: string; framed?: true }
 }
 
 export type Storage = {
@@ -64,11 +68,23 @@ export function openStorage(connection: Connection, project: string): Storage {
   }
 
   // Only the latest file asked for is shown, however the reads come back.
+  // A file of a kind evie shows, which the server gives, is drawn by its
+  // frame, which fetches it whole, so it is not read here too; one it does
+  // not give, as when its bytes are not of the kind its name says, is read
+  // as any file is.
   let asked = 0
   function read(path: string) {
-    const evie = clientOf()
     const ask = ++asked
     set({ file: { path } })
+    const shown = storageShown(project, path)
+    if (shown?.address === undefined) return readOver(path, ask)
+    connection.fetchFile(shown.address, "HEAD").then(
+      (answer) => !closed && ask === asked && (answer.ok ? set({ file: { path, framed: true } }) : readOver(path, ask)),
+      () => !closed && ask === asked && readOver(path, ask),
+    )
+  }
+  function readOver(path: string, ask: number) {
+    const evie = clientOf()
     if (evie === undefined) return
     evie.send({ type: "read_storage", project, path }).then(
       (read) => !closed && ask === asked && set({ file: { path, read } }),
