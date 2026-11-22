@@ -79,9 +79,13 @@
   --spacing-session-list: 288px;
   --spacing-project-card: 320px;
   --spacing-sign-in-column: 400px;
-  /* The Menu's items are 40px rows, and the menu at least this wide. */
-  --spacing-menu-item: 40px;
+  /* Buttons are at least 40px tall, and so are a menu's items; a menu is
+     at least this wide. */
+  --spacing-control: 40px;
   --spacing-menu: 176px;
+  /* A project's icon tile in a session row, and the icon on it. */
+  --spacing-tile-row: 18px;
+  --spacing-tile-row-icon: 12px;
   /* Below this width, the columns stack. */
   --breakpoint-wide: 960px;
 }

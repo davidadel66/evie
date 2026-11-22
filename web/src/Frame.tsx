@@ -1,7 +1,8 @@
 import { useState } from "react"
+import { Button } from "./components/ui/button.tsx"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import { ConnectionLight } from "./ConnectionLight.tsx"
 import type { ConnectionState } from "./connection.ts"
-import { Menu } from "./Menu.tsx"
 import { applyTheme, rememberedTheme, THEMES, type Theme } from "./theme.ts"
 import { Words } from "./Words.tsx"
 
@@ -48,25 +49,31 @@ function ThemeMenu() {
   const [theme, setTheme] = useState<Theme>(rememberedTheme)
   const name = THEMES.find((each) => each.id === theme)!.name
   return (
-    <Menu
-      label={`Theme: ${name}`}
-      button={
-        <>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="quiet" aria-label={`Theme: ${name}`}>
           <Swatch theme={theme} />
           {name}
-        </>
-      }
-      items={THEMES.map((each) => ({
-        key: each.id,
-        label: each.name,
-        leading: <Swatch theme={each.id} />,
-        current: each.id === theme,
-        choose() {
-          applyTheme(each.id)
-          setTheme(each.id)
-        },
-      }))}
-    />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuRadioGroup
+          value={theme}
+          onValueChange={(chosen) => {
+            const picked = THEMES.find((each) => each.id === chosen)!.id
+            applyTheme(picked)
+            setTheme(picked)
+          }}
+        >
+          {THEMES.map((each) => (
+            <DropdownMenuRadioItem key={each.id} value={each.id}>
+              <Swatch theme={each.id} />
+              {each.name}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
