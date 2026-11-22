@@ -76,17 +76,18 @@ export type SettingsFiles = {
   // Stops trusting a project, by its folder, as answering no does.
   untrust(folder: string): Promise<void>
   // The global plugins as the global file listed them when it was read,
-  // each by the name or the path it is given by.
+  // each by the name or the path it is given by, the ones under
+  // "addPlugins" last.
   listed: string[]
-  // The global file as it is now: the plugins it lists, so named, and the
-  // project folders it trusts.
-  now(): Promise<{ plugins: string[]; trust: string[] }>
-  // Adds a plugin to the end of the global list, by a built-in plugin's
-  // name or a plugin file's path, once it has loaded as it does when Evie
-  // starts; or takes one off the list. With no list in the file, the
-  // built-in plugins are the list.
-  addPlugin(name: string): Promise<void>
-  removePlugin(name: string): Promise<void>
+  // The global file as it is now: the plugins it lists, so named, the ones
+  // under "addPlugins" among them, and the project folders it trusts.
+  now(): Promise<{ plugins: string[]; added: string[]; trust: string[] }>
+  // Adds a plugin file to "addPlugins", by its path, or takes one off it.
+  // The list of plugins, or the built-in one when the file gives none, is
+  // left as it is. Checking that the server would start with the plugin is
+  // for the caller.
+  addPlugin(path: string): Promise<void>
+  removePlugin(path: string): Promise<void>
   // Where the project's `.evie/` folder syncs, by its own settings file,
   // read each time it is asked; undefined when the file sets nothing, or
   // the project is not trusted.
@@ -107,6 +108,9 @@ type SettingsFile = {
   // What a model can read, for a model whose limit is not known or is wrong.
   contextLimits?: Record<string, number>
   plugins?: Entry[]
+  // Plugin files loaded after the list, by their paths: the ones the
+  // settings window adds, which leaves the list as it is.
+  addPlugins?: string[]
   // How freely Evie may act: the mode sessions start in, the rules, and the
   // owner's remembered "always" answers for each project. A project's own
   // file can set `mode` and `rules`.
@@ -172,7 +176,10 @@ function permissionsFor(context: Context, own: { mode?: Mode; rules?: Rule[] }):
 const TRUST = "Yes, trust this project"
 const DO_NOT_TRUST = "No, ignore its settings file"
 
-export async function loadSettingsFiles(options: { env: Settings }): Promise<SettingsFiles> {
+// `adding` are plugin files to load after the ones the global file lists,
+// as if it listed them under "addPlugins", to check that the server would
+// start with them.
+export async function loadSettingsFiles(options: { env: Settings; adding?: string[] }): Promise<SettingsFiles> {
   const home = dataFolder(options.env)
   const globalFile = join(home, "evie.json")
   const global = (await readSettingsFile(globalFile)) ?? {}
@@ -187,8 +194,10 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
   // Asked each time it matters, since a project can be trusted while Evie runs.
   const context: Context = { env: options.env, home, globalFile, permissions: global.permissions ?? {}, trusted: (folder) => trusted.has(folder), syncSetting }
 
+  const added = [...(global.addPlugins ?? []), ...(options.adding ?? [])]
+  if (options.adding) checkSettings({ ...global, addPlugins: added }, globalFile)
   const plugins: Plugin[] = []
-  for (const entry of global.plugins ?? DEFAULT) plugins.push(await load(entry, home, context))
+  for (const entry of [...(global.plugins ?? DEFAULT), ...added]) plugins.push(await load(entry, home, context))
 
   // The environment wins over both files.
   const fromEnv = {
@@ -200,23 +209,25 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
 
   return {
     file: globalFile,
-    listed: (global.plugins ?? DEFAULT).map(nameOf),
+    listed: [...(global.plugins ?? DEFAULT).map(nameOf), ...(global.addPlugins ?? [])],
     async now() {
       const settings = (await readSettingsFile(globalFile)) ?? {}
-      return { plugins: (settings.plugins ?? DEFAULT).map(nameOf), trust: [...folders(settings.trust)] }
+      const added = settings.addPlugins ?? []
+      return { plugins: [...(settings.plugins ?? DEFAULT).map(nameOf), ...added], added, trust: [...folders(settings.trust)] }
     },
-    addPlugin: (name) =>
-      update(globalFile, async (settings) => {
-        const list = settings.plugins ?? DEFAULT
-        if (list.some((entry) => nameOf(entry) === name)) throw new Error(`"${name}" is in the list of plugins in ${globalFile} already.`)
-        await load(name, home, context)
-        settings.plugins = [...list, name]
-      }),
-    removePlugin: (name) =>
+    addPlugin: (path) =>
       update(globalFile, (settings) => {
-        const list = settings.plugins ?? DEFAULT
-        if (!list.some((entry) => nameOf(entry) === name)) throw new Error(`"${name}" is not in the list of plugins in ${globalFile}.`)
-        settings.plugins = list.filter((entry) => nameOf(entry) !== name)
+        const listed = [...(settings.plugins ?? DEFAULT).map(nameOf), ...(settings.addPlugins ?? [])]
+        if (listed.includes(path)) throw new Error(`"${path}" is in the list of plugins in ${globalFile} already.`)
+        settings.addPlugins = [...(settings.addPlugins ?? []), path]
+      }),
+    removePlugin: (path) =>
+      update(globalFile, (settings) => {
+        if (!settings.addPlugins?.includes(path)) {
+          throw new Error(`"${path}" was not added from the settings window, so it is left as it is. It is taken off "plugins" in ${globalFile} by hand.`)
+        }
+        settings.addPlugins = settings.addPlugins.filter((added) => added !== path)
+        if (settings.addPlugins.length === 0) delete settings.addPlugins
       }),
     async untrust(folder) {
       await remember(globalFile, "untrusted", folder)
@@ -466,6 +477,7 @@ function checkSettings(parsed: unknown, file: string): SettingsFile {
   const isEntry = (item: unknown) =>
     typeof item === "string" || (typeof item === "object" && item !== null && typeof (item as { use?: unknown }).use === "string")
   listOf("plugins", isEntry, 'plugin names, paths, or { "use": ..., "options": ... } entries')
+  listOf("addPlugins", (item) => typeof item === "string" && looksLikePath(item), "paths to plugin files")
   listOf("trust", (item) => typeof item === "string", "project folders")
   listOf("untrusted", (item) => typeof item === "string", "project folders")
   listOf("disable", (item) => typeof item === "string", "plugin names")

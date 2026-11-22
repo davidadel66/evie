@@ -156,64 +156,71 @@ test("a key set where .env is a link to a file elsewhere is written to that file
 
 // ---- Plugins ---------------------------------------------------------------------------------
 
-test("a plugin is added to evie.json's list by its name or its file's path, and taken off again; each says whether the server loaded it", async () => {
+// A plugin file that adds a tool of the given name.
+const toolPlugin = (name: string, tool = name) =>
+  `export default { name: ${JSON.stringify(name)}, setup(host) { host.tools.add({ name: ${JSON.stringify(tool)}, description: "A tool.", inputSchema: { type: "object" }, run: async () => "ok" }) } }`
+
+test("a plugin file is added by its path to addPlugins, and taken off again; the list says whether the server loaded each, and built-ins stay", async () => {
   const greeter = join(await tempFolder("evie-plugins-"), "greeter.ts")
-  await writeFile(greeter, 'export default { name: "greeter", setup() {} }')
-  const { run, home } = await start({ settings: { plugins: ["ask", "files"], model: "made-up/model" } })
+  await writeFile(greeter, toolPlugin("greeter"))
+  const { run, home } = await start({ settings: { plugins: ["openrouter", "files"], model: "made-up/model" } })
   const file = async () => JSON.parse(await readFile(join(home, "evie.json"), "utf8"))
-
   expect((await run.evie.send({ type: "read_settings" })).plugins).toEqual([
-    { name: "ask", listed: true, loaded: true },
-    { name: "files", listed: true, loaded: true },
+    { name: "openrouter", listed: true, loaded: true, added: false },
+    { name: "files", listed: true, loaded: true, added: false },
   ])
 
-  await run.evie.send({ type: "change_settings", addPlugin: "web" })
   const added = await run.evie.send({ type: "change_settings", addPlugin: greeter })
-  expect(await file()).toEqual({ plugins: ["ask", "files", "web", greeter], model: "made-up/model" })
-  expect(added.plugins.slice(2)).toEqual([
-    { name: "web", listed: true, loaded: false },
-    { name: greeter, listed: true, loaded: false },
-  ])
+  expect(await file()).toEqual({ plugins: ["openrouter", "files"], model: "made-up/model", addPlugins: [greeter] })
+  expect(added.plugins[2]).toEqual({ name: greeter, listed: true, loaded: false, added: true })
   expect(added.restart).toBe(true)
 
-  // One taken off stays loaded until the server starts again.
-  const removed = await run.evie.send({ type: "change_settings", removePlugin: "files" })
-  expect((await file()).plugins).toEqual(["ask", "web", greeter])
-  expect(removed.plugins).toEqual([
-    { name: "ask", listed: true, loaded: true },
-    { name: "web", listed: true, loaded: false },
-    { name: greeter, listed: true, loaded: false },
-    { name: "files", listed: false, loaded: true },
+  const refused = await run.evie.send({ type: "change_settings", removePlugin: "files" }).catch((cause: Error) => cause.message)
+  expect(refused).toBe(`"files" was not added from the settings window, so it is left as it is. It is taken off "plugins" in ${join(home, "evie.json")} by hand.`)
+
+  const removed = await run.evie.send({ type: "change_settings", removePlugin: greeter })
+  expect(await file()).toEqual({ plugins: ["openrouter", "files"], model: "made-up/model" })
+  expect(removed.restart).toBe(false)
+})
+
+test("with no list in evie.json, a plugin file added goes after the built-in ones, which are not written out", async () => {
+  const greeter = join(await tempFolder("evie-plugins-"), "greeter.ts")
+  await writeFile(greeter, toolPlugin("greeter"))
+  const { run, home } = await start({ settings: { model: "made-up/model" } })
+
+  const added = await run.evie.send({ type: "change_settings", addPlugin: greeter })
+
+  expect(JSON.parse(await readFile(join(home, "evie.json"), "utf8"))).toEqual({ model: "made-up/model", addPlugins: [greeter] })
+  expect(added.plugins.map((plugin) => plugin.name)).toEqual([
+    ...["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "openrouter"],
+    greeter,
   ])
 })
 
-test("with no list in evie.json, a plugin is added to the built-in ones, or taken off them", async () => {
-  const { run, home } = await start({ settings: { model: "made-up/model" } })
-
-  await run.evie.send({ type: "change_settings", removePlugin: "web" })
-
-  const listed = JSON.parse(await readFile(join(home, "evie.json"), "utf8")).plugins
-  expect(listed).toEqual(["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "sync", "openrouter"])
-})
-
-test("a plugin that would not load when the server starts is refused with the words starting it would give, and nothing is written", async () => {
+test("a plugin is checked in a fresh process, with the plugins the server would load, before it is added; one that would stop it starting is refused with the words it would give", async () => {
   const folder = await tempFolder("evie-plugins-")
+  const clashing = join(folder, "clashing.ts")
+  await writeFile(clashing, toolPlugin("clashing", "read"))
   const notAPlugin = join(folder, "not-a-plugin.ts")
   await writeFile(notAPlugin, "export default 42")
-  const { run, home } = await start({ settings: { plugins: ["ask"] } })
+  const { run, home } = await start({ settings: { plugins: ["openrouter", "files"] } })
   const before = await readFile(join(home, "evie.json"), "utf8")
   const refused = (change: Record<string, unknown>) =>
     run.evie.send({ type: "change_settings", ...change } as never).then(
       () => "accepted",
       (cause: Error) => cause.message,
     )
-  for (const entry of ["nonesuch", join(folder, "missing.ts"), notAPlugin]) {
-    const said = await refused({ addPlugin: entry })
-    expect(said).not.toBe("accepted")
-    expect(said).toBe(await startingSays({ plugins: [entry] }))
-  }
-  expect(await refused({ addPlugin: "ask" })).toBe(`"ask" is in the list of plugins in ${join(home, "evie.json")} already.`)
-  expect(await refused({ removePlugin: "shell" })).toBe(`"shell" is not in the list of plugins in ${join(home, "evie.json")}.`)
+
+  expect(await refused({ addPlugin: clashing })).toBe('The plugin "clashing" could not be set up: A tool named "read" is already registered.')
+  expect(await refused({ addPlugin: join(folder, "missing.ts") })).toStartWith(`The plugin "${join(folder, "missing.ts")}" could not be loaded:`)
+  expect(await refused({ addPlugin: notAPlugin })).toBe(
+    `The file ${notAPlugin} does not export a plugin. Its default export must be an object with a name and a setup function, or a function that returns one.`,
+  )
+  expect(await refused({ addPlugin: "guard" })).toBe(`In ${join(home, "evie.json")}, "addPlugins" must be a list of paths to plugin files.`)
+  expect(await refused({ addPlugin: "files" })).toBe(`"files" is in the list of plugins in ${join(home, "evie.json")} already.`)
+  expect(await refused({ removePlugin: "/made/up/never-added.ts" })).toBe(
+    `"/made/up/never-added.ts" was not added from the settings window, so it is left as it is. It is taken off "plugins" in ${join(home, "evie.json")} by hand.`,
+  )
   expect(await readFile(join(home, "evie.json"), "utf8")).toBe(before)
 })
 
@@ -319,14 +326,26 @@ test("a restart is asked of the server named by when it started, once the comman
   expect(restarts).toHaveLength(1)
 })
 
-test("a restart is refused, saying why, when the settings files would stop the server starting again", async () => {
-  const { run, home, restarts } = await start()
+test("a restart is refused, saying why, when the server would not start again, as a fresh process finds by setting its plugins up", async () => {
+  const greeter = join(await tempFolder("evie-plugins-"), "greeter.ts")
+  await writeFile(greeter, toolPlugin("greeter"))
+  const { run, home, restarts } = await start({ settings: { plugins: ["openrouter"], addPlugins: [greeter] } })
   const { started } = await run.evie.send({ type: "read_settings" })
+  const restart = () => run.evie.send({ type: "restart_server", started }).catch((cause: Error) => cause.message)
+  const not = "evie's server was not restarted, since it would not start again."
+
   await writeFile(join(home, "evie.json"), JSON.stringify({ plugins: ["nonesuch"] }))
+  expect(await restart()).toBe(`${not} ${await startingSays({ plugins: ["nonesuch"] })}`)
 
-  const refused = await run.evie.send({ type: "restart_server", started }).catch((cause: Error) => cause.message)
+  // No plugin there registers a provider.
+  await writeFile(join(home, "evie.json"), JSON.stringify({ plugins: ["ask"] }))
+  expect(await restart()).toBe(`${not} No provider is registered. Load a plugin that registers one.`)
 
-  expect(refused).toBe(`evie's server was not restarted, since it would not start again. ${await startingSays({ plugins: ["nonesuch"] })}`)
+  // A plugin file broken since the server loaded it, which this process still has as it was.
+  await writeFile(join(home, "evie.json"), JSON.stringify({ plugins: ["openrouter"], addPlugins: [greeter] }))
+  await writeFile(greeter, 'throw new Error("broken since")')
+  expect(await restart()).toStartWith(`${not} The plugin "${greeter}" could not be loaded: broken since`)
+
   await Bun.sleep(20)
   expect(restarts).toEqual([])
 })

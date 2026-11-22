@@ -89,9 +89,9 @@ test("a change the server refuses gives back its words, and the settings stay as
   const settings = follow(server.url, made.secret)
   const before = (await until(settings, (state) => state.view !== undefined)).view
 
-  const said = await settings.change({ addPlugin: "nonesuch" })
+  const said = await settings.change({ addPlugin: "/made/up/missing.ts" })
 
-  expect(said).toStartWith('There is no built-in plugin named "nonesuch".')
+  expect(said).toStartWith('The plugin "/made/up/missing.ts" could not be loaded:')
   expect(settings.state().view).toBe(before)
 })
 
@@ -125,9 +125,10 @@ test("each setting says in words how it stands, and when a change to it waits fo
     note: "The environment evie's server runs in sets it too, and wins over this. Clearing it here does not unset it there.",
   })
 
-  expect(pluginState({ name: "web", listed: true, loaded: true })).toEqual({ word: "Loaded" })
-  expect(pluginState({ name: "web", listed: true, loaded: false })).toEqual({ word: "Not loaded yet", note: "Loads once evie's server starts again." })
-  expect(pluginState({ name: "web", listed: false, loaded: true })).toEqual({ word: "Removed", note: "Still loaded until evie's server starts again." })
+  const plugin = { name: "/made/up/greeter.ts", listed: true, loaded: true, added: true }
+  expect(pluginState(plugin)).toEqual({ word: "Loaded" })
+  expect(pluginState({ ...plugin, loaded: false })).toEqual({ word: "Not loaded yet", note: "Loads once evie's server starts again." })
+  expect(pluginState({ ...plugin, listed: false })).toEqual({ word: "Removed", note: "Still loaded until evie's server starts again." })
 
   const project = { id: "p1", name: "garden", folder: "/made/up/garden", trusted: true, pending: false }
   expect(projectState(project)).toEqual({ word: "Trusted" })

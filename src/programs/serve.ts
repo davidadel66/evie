@@ -3,6 +3,7 @@ import { existsSync, realpathSync, rmSync } from "node:fs"
 import { constants } from "node:os"
 import { join } from "node:path"
 import { keepOutputTidy } from "../core/tools.ts"
+import { setUpPlugins } from "../core/evie.ts"
 import { createEvie, dataFolder, loadSettingsFiles, startServer, type EvieServer, type Settings } from "../index.ts"
 import { ensureOwnToken, openTokens } from "../server/tokens.ts"
 import type { WebApp } from "../server/web-app.ts"
@@ -30,7 +31,13 @@ function forgetStopForGood(home: string) {
 // request, and the open page is updated as its files are saved. It needs
 // the server started in the repository's folder, for its bunfig.toml.
 export async function serve(env: Settings, args: string[] = []) {
-  if (args.some((arg) => arg !== "--dev")) fail("Usage:\n  evie serve         run Evie's server\n  evie serve --dev   run it with the web app rebuilt as it changes")
+  if (args[0] === "--check") return check(env, args.slice(1))
+  if (args.some((arg) => arg !== "--dev")) {
+    fail(
+      "Usage:\n  evie serve           run Evie's server\n  evie serve --dev     run it with the web app rebuilt as it changes\n" +
+        "  evie serve --check   check that it would start, without starting it",
+    )
+  }
   // Working on the web app, its module is needed at once, and a failure to
   // load it is for the developer to see.
   const development = args.includes("--dev") ? await import("../server/web-app.ts") : undefined
@@ -178,6 +185,18 @@ async function watchOver(): Promise<never> {
     })
     if (code !== RESTART) process.exit(code)
   }
+}
+
+// `evie serve --check`, and the paths of plugin files to add: whether the
+// server would start with its settings as they are, and with those plugins
+// added, without starting it. The settings files are loaded and the plugins
+// set up together, as `evie serve` does, and nothing else is opened. What
+// would stop it is printed, and it exits with an error.
+async function check(env: Settings, adding: string[]) {
+  const settings = await loadSettingsFiles({ env, ...(adding.length > 0 && { adding }) }).catch(fail)
+  await loadServerSettings({ env }).catch(fail)
+  await setUpPlugins(settings.plugins, null).catch(fail)
+  process.exit(0)
 }
 
 // The web app, built, or why it could not be. Its module is loaded only

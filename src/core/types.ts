@@ -478,18 +478,20 @@ export type ListedProject = Project & { branch?: string }
 // sets; each says only whether the file sets it (`inFile`) and whether the
 // server's own environment does (`environment`), which wins over the file,
 // never its value. `keysPrivate` says only the owner's user can read the
-// file, or there is none yet. `plugins` are the ones `evie.json` lists, each by the name
-// or path it is given by, with whether it is `listed` there now and whether
-// it was `loaded` when the server started. `instructions` is the text of
-// the owner's instruction file, empty when there is none. `projects` are
-// every project, each with whether its own settings are trusted. A setting
-// that is `pending` has been changed, and the change applies once the
-// server starts again; `restart` says that some change waits for that.
-// `started` is when this server started, which names it to `restart_server`.
+// file, or there is none yet. `plugins` are the ones `evie.json` lists,
+// each by the name or path it is given by, with whether it is `listed`
+// there now, whether it was `loaded` when the server started, and whether
+// it was `added` from a settings window, under "addPlugins", which only
+// such a window takes off. `instructions` is the text of the owner's
+// instruction file, empty when there is none. `projects` are every
+// project, each with whether its own settings are trusted. A setting that
+// is `pending` has been changed, and the change applies once the server
+// starts again; `restart` says that some change waits for that. `started`
+// is when this server started, which names it to `restart_server`.
 export type SettingsView = {
   keys: { name: string; about?: string; inFile: boolean; environment: boolean; pending: boolean }[]
   keysPrivate: boolean
-  plugins: { name: string; listed: boolean; loaded: boolean }[]
+  plugins: { name: string; listed: boolean; loaded: boolean; added: boolean }[]
   instructions: string
   projects: (Project & { trusted: boolean; pending: boolean })[]
   restart: boolean
@@ -497,9 +499,8 @@ export type SettingsView = {
 }
 
 // One change to the settings: a key set to a value, or cleared with null;
-// a plugin added to the list, by a built-in plugin's name or a plugin
-// file's path, or taken off it; the owner's instruction file saved; or a
-// project, by its id, trusted or not.
+// a plugin file added, by its path, or one so added taken off again; the
+// owner's instruction file saved; or a project, by its id, trusted or not.
 export type SettingsChange =
   | { key: string; value: string | null }
   | { addPlugin: string }

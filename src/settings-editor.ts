@@ -3,8 +3,8 @@ import { join } from "node:path"
 import { dataFolder } from "./core/evie.ts"
 import type { Project, SettingsEditor, SettingsView } from "./core/types.ts"
 import { ownInstructionsFile } from "./plugins/instructions.ts"
-import { loadServerSettings, loadSettingsFiles, type SettingsFiles } from "./settings-files.ts"
-import { keysInFile, keyValueProblem, loadSettings, replaceFile, writeKey, type Settings } from "./settings.ts"
+import type { SettingsFiles } from "./settings-files.ts"
+import { keysInFile, keyValueProblem, replaceFile, writeKey, type Settings } from "./settings.ts"
 
 // What the settings window reads and changes, for the server: the keys in
 // the data folder's `.env`, the plugins `evie.json` lists, the owner's
@@ -23,6 +23,25 @@ export type SettingsEditorOptions = {
   files: SettingsFiles
   // Stops the server and starts it again.
   restart: () => void
+  // Whether the server would start, with these plugin files added: what
+  // would stop it, in words, or nothing. A fresh `evie serve --check` when
+  // left out, which tests can stand in for.
+  check?: (adding: string[]) => Promise<string | undefined>
+}
+
+// The `evie` command, run to check the settings in a fresh process.
+const CLI = join(import.meta.dir, "cli.ts")
+
+// Checks the settings as the server will load them when it starts again, in
+// a process of its own: `evie serve --check`, which loads the settings files
+// and sets the plugins up together, as starting does, with no port and no
+// sessions. A process of its own loads each plugin file as it is now, where
+// this one keeps each as it was first loaded, and leaves nothing behind.
+async function checkInFreshProcess(environment: Settings, adding: string[]): Promise<string | undefined> {
+  const env = Object.fromEntries(Object.entries(environment).filter((entry): entry is [string, string] => entry[1] !== undefined))
+  const run = Bun.spawn([process.execPath, CLI, "serve", "--check", ...adding], { env, stdin: "ignore", stdout: "ignore", stderr: "pipe" })
+  const [said, code] = await Promise.all([new Response(run.stderr).text(), run.exited])
+  return code === 0 ? undefined : said.trim() || `The check stopped with exit code ${code}, saying nothing.`
 }
 
 export function settingsEditor(options: SettingsEditorOptions): SettingsEditor {
@@ -64,11 +83,27 @@ export function settingsEditor(options: SettingsEditorOptions): SettingsEditor {
     await writeKey(home, name, given)
   }
 
+  const check = options.check ?? ((adding: string[]) => checkInFreshProcess(options.environment, adding))
+
   // The plugins listed now, in order, then any loaded when the server
   // started that are no longer listed.
   async function plugins(): Promise<SettingsView["plugins"]> {
-    const listed = (await options.files.now()).plugins
-    return [...new Set([...listed, ...options.files.listed])].map((name) => ({ name, listed: listed.includes(name), loaded: options.files.listed.includes(name) }))
+    const { plugins: listed, added } = await options.files.now()
+    return [...new Set([...listed, ...options.files.listed])].map((name) => ({
+      name,
+      listed: listed.includes(name),
+      loaded: options.files.listed.includes(name),
+      added: added.includes(name),
+    }))
+  }
+
+  // A plugin file is added once the server is known to start with it.
+  async function addPlugin(path: string) {
+    const { file } = options.files
+    if ((await options.files.now()).plugins.includes(path)) throw new Error(`"${path}" is in the list of plugins in ${file} already.`)
+    const problem = await check([path])
+    if (problem !== undefined) throw new Error(problem)
+    await options.files.addPlugin(path)
   }
 
   // A plugin is named by text, which a client that is not type-checked may not send.
@@ -124,7 +159,7 @@ export function settingsEditor(options: SettingsEditorOptions): SettingsEditor {
     },
     async change(change, projects) {
       if ("key" in change) return setKey(change.key, change.value)
-      if ("addPlugin" in change) return options.files.addPlugin(pluginName(change.addPlugin))
+      if ("addPlugin" in change) return addPlugin(pluginName(change.addPlugin))
       if ("removePlugin" in change) return options.files.removePlugin(pluginName(change.removePlugin))
       if ("instructions" in change) return saveInstructions(change.instructions)
       if ("project" in change) return trustProject(change.project, change.trusted, projects)
@@ -132,18 +167,13 @@ export function settingsEditor(options: SettingsEditorOptions): SettingsEditor {
         'A change is one of: { "key": ..., "value": ... }, { "addPlugin": ... }, { "removePlugin": ... }, { "instructions": ... } or { "project": ..., "trusted": ... }.',
       )
     },
-    // The settings are loaded first, as the server will load them when it
+    // The settings are checked first, as the server will load them when it
     // starts again, so that one that would not start is not stopped. It is
     // stopped only once this command's reply has gone out.
     async restart(asked) {
       if (asked !== started) return
-      try {
-        const env = await loadSettings(options.environment)
-        await loadSettingsFiles({ env })
-        await loadServerSettings({ env })
-      } catch (cause) {
-        throw new Error(`evie's server was not restarted, since it would not start again. ${cause instanceof Error ? cause.message : String(cause)}`)
-      }
+      const problem = await check([])
+      if (problem !== undefined) throw new Error(`evie's server was not restarted, since it would not start again. ${problem}`)
       setTimeout(options.restart, 0)
     },
   }
