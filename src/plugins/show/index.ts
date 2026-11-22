@@ -1,4 +1,4 @@
-import { closeSync, openSync, readSync, realpathSync } from "node:fs"
+import { closeSync, constants, openSync, readSync, realpathSync } from "node:fs"
 import { copyFile, stat } from "node:fs/promises"
 import { basename, isAbsolute, join, relative, sep } from "node:path"
 import { folderAt, numbered, today } from "../../core/attachments.ts"
@@ -38,8 +38,10 @@ export function show(options: ShowOptions = {}): Plugin {
     } catch {
       return own
     }
-    const project = evie ?? realOrNothing(folder)
-    return project === undefined ? own : { root: evie ?? join(project, ".evie"), project: true }
+    if (evie !== undefined) return { root: evie, project: true }
+    // A project's `.evie` folder not made yet is made where the project really is.
+    const project = realOrNothing(folder)
+    return project === undefined ? own : { root: join(project, ".evie"), project: true }
   }
   const tool: Tool = {
     name: "show",
@@ -69,14 +71,21 @@ export function show(options: ShowOptions = {}): Plugin {
       const storage = storageFor(context.session, context.folder)
       const told = (path: string) => (storage.project ? `.evie/${relative(storage.root, path)}` : path)
       const shown: Showing[] = []
-      for (const file of checked as Checked[]) {
-        if (inStorage(file.real, storage.root)) {
-          shown.push({ path: told(file.real), type: file.type, size: file.size })
-          continue
+      try {
+        for (const file of checked as Checked[]) {
+          if (inStorage(file.real, storage.root)) {
+            shown.push({ path: told(file.real), type: file.type, size: file.size })
+            continue
+          }
+          const day = await folderAt(storage.project ? join(storage.root, "shown") : storage.root, today(), () => new LinkOut())
+          const kept = await copyInto(day, basename(file.absolute), file.real)
+          shown.push({ path: told(kept), type: file.type, size: file.size, from: file.named })
         }
-        const day = await folderAt(storage.project ? join(storage.root, "shown") : storage.root, today(), refuseLink)
-        const kept = await copyInto(day, basename(file.absolute), file.real)
-        shown.push({ path: told(kept), type: file.type, size: file.size, from: file.named })
+      } catch (cause) {
+        // A folder that leads elsewhere, or the file system refusing, such
+        // as no room or no permission, is a failure the model can act on.
+        if (cause instanceof LinkOut || (cause instanceof Error && typeof (cause as { code?: unknown }).code === "string")) return `Not shown: ${cause.message}`
+        throw cause
       }
       return shownText(shown)
     },
@@ -135,19 +144,26 @@ function headOf(path: string, size: number): Uint8Array {
 }
 
 // Copies a file into a folder under its own name, or with a number when
-// that name is taken, never replacing a file there. Gives back the copy's path.
+// that name is taken: copying fails when a name is taken, so that no file
+// there is replaced. Gives back the copy's path.
 async function copyInto(folder: string, name: string, from: string): Promise<string> {
   for (let count = 1; ; count++) {
     const path = join(folder, count === 1 ? name : numbered(name, count))
     try {
-      await copyFile(from, path, COPY_EXCL)
+      await copyFile(from, path, constants.COPYFILE_EXCL)
       return path
     } catch (cause) {
       if ((cause as { code?: string }).code !== "EEXIST") throw cause
     }
   }
 }
-const refuseLink = () => new Error("The folder shown files are kept in leads through a link to somewhere else, so nothing is shown there. Remove the link, and show it again.")
+// Why nothing is kept in a folder that leads through a link: what it leads
+// to is not the workspace's.
+class LinkOut extends Error {
+  constructor() {
+    super("The folder shown files are kept in leads through a link to somewhere else, so nothing is shown there. Remove the link, and show it again.")
+  }
+}
 
 function realOrNothing(path: string): string | undefined {
   try {
@@ -156,6 +172,3 @@ function realOrNothing(path: string): string | undefined {
     return undefined
   }
 }
-
-// Copying fails when the name is taken, so that no file is replaced.
-const COPY_EXCL = 1

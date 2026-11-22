@@ -209,3 +209,16 @@ test("the guard keeps show out of private folders, as it keeps the file tools, b
   expect(await call([kept], session)).toBe(`Shown to the owner under your reply:\n- ${JSON.stringify(kept)} (image/png, 33 bytes), already in Storage`)
   expect(await call([kept], other)).toStartWith(`Blocked by the guard: ${kept} is in a private folder.`)
 })
+
+test("a shown folder that leads through a link elsewhere is refused, saying what to do, and nothing is written through it", async () => {
+  setSystemTime(new Date(2026, 10, 22, 9, 30))
+  const { call, put, folder } = await start()
+  const elsewhere = await realpath(await mkdtemp(join(tmpdir(), "evie-elsewhere-")))
+  cleanups.push(() => rm(elsewhere, { recursive: true, force: true }))
+  await put("out/chart.png", png())
+  await mkdir(join(folder, ".evie"))
+  await symlink(elsewhere, join(folder, ".evie", "shown"))
+
+  expect(await call(["out/chart.png"])).toBe("Not shown: The folder shown files are kept in leads through a link to somewhere else, so nothing is shown there. Remove the link, and show it again.")
+  expect(await readdir(elsewhere)).toEqual([])
+})
