@@ -4,8 +4,12 @@
 // the words Phosphor tags each with, to search them by. Each path is drawn
 // on a 256 by 256 grid in the colour of the text around it, the lighter
 // half of the duotone at the opacity given.
+//
+// Every drawing but the folder's, which is in project-look.ts, is in this
+// file alone, which the page loads later (see ICON_SET there): once a
+// project has an icon of its own, or the picker opens.
 
-export type ProjectIconData = { name: string; words: readonly string[]; paths: readonly { d: string; opacity?: number }[] }
+import { FOLDER, type ProjectIconData } from "./project-look.ts"
 
 // The icons matching a search, in the order a list shows them: every word
 // of the search starts a word of the icon's name or of its tags. Those
@@ -22,11 +26,8 @@ export function searchIcons(query: string): ProjectIconData[] {
     .map(({ icon }) => icon)
 }
 
-// The icon a project is drawn with until the owner picks one.
-export const DEFAULT_ICON = "folder"
-
 export const PROJECT_ICONS: readonly ProjectIconData[] = [
-  { name: "folder", words: ["folder","directory","directories","files","folders"], paths: [{ d: "M128,80H32V56a8,8,0,0,1,8-8H92.69a8,8,0,0,1,5.65,2.34Z", opacity: 0.2 }, { d: "M216,72H131.31L104,44.69A15.86,15.86,0,0,0,92.69,40H40A16,16,0,0,0,24,56V200.62A15.4,15.4,0,0,0,39.38,216H216.89A15.13,15.13,0,0,0,232,200.89V88A16,16,0,0,0,216,72ZM92.69,56l16,16H40V56ZM216,200H40V88H216Z" }] },
+  FOLDER,
   { name: "archive", words: ["archive","saved","saving","archived","archiving","archival","downloaded","downloading"], paths: [{ d: "M216,96v96a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V96Z", opacity: 0.2 }, { d: "M224,48H32A16,16,0,0,0,16,64V88a16,16,0,0,0,16,16v88a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V104a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48ZM208,192H48V104H208ZM224,88H32V64H224V88ZM96,136a8,8,0,0,1,8-8h48a8,8,0,0,1,0,16H104A8,8,0,0,1,96,136Z" }] },
   { name: "briefcase", words: ["briefcase","suitcase","valise","baggage","folders","portfolio"], paths: [{ d: "M224,118.31V200a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V118.31h0A191.14,191.14,0,0,0,128,144,191.08,191.08,0,0,0,224,118.31Z", opacity: 0.2 }, { d: "M104,112a8,8,0,0,1,8-8h32a8,8,0,0,1,0,16H112A8,8,0,0,1,104,112ZM232,72V200a16,16,0,0,1-16,16H40a16,16,0,0,1-16-16V72A16,16,0,0,1,40,56H80V48a24,24,0,0,1,24-24h48a24,24,0,0,1,24,24v8h40A16,16,0,0,1,232,72ZM96,56h64V48a8,8,0,0,0-8-8H104a8,8,0,0,0-8,8ZM40,72v41.62A184.07,184.07,0,0,0,128,136a184,184,0,0,0,88-22.39V72ZM216,200V131.63A200.25,200.25,0,0,1,128,152a200.19,200.19,0,0,1-88-20.36V200H216Z" }] },
   { name: "house", words: ["house","homes","buildings","places","locations"], paths: [{ d: "M216,120v96H152V152H104v64H40V120a8,8,0,0,1,2.34-5.66l80-80a8,8,0,0,1,11.32,0l80,80A8,8,0,0,1,216,120Z", opacity: 0.2 }, { d: "M219.31,108.68l-80-80a16,16,0,0,0-22.62,0l-80,80A15.87,15.87,0,0,0,32,120v96a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V160h32v56a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V120A15.87,15.87,0,0,0,219.31,108.68ZM208,208H160V152a8,8,0,0,0-8-8H104a8,8,0,0,0-8,8v56H48V120l80-80,80,80Z" }] },

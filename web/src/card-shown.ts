@@ -94,8 +94,9 @@ function subscribe(listener: () => void) {
 media?.addEventListener("change", () => set({ phone: !media.matches }))
 subscribeShown(() => set({ panel: diffShown().open }))
 
-// Where the card is now, redrawn as it changes.
-export const useCardShown = () => useSyncExternalStore(subscribe, () => snapshot)
+// Where the card is now, and the same redrawn as it changes.
+export const cardShown = () => snapshot
+export const useCardShown = () => useSyncExternalStore(subscribe, cardShown)
 
 // The conversation's column's size, as the card measures it, which decides
 // whether a pinned card has the room to sit beside it, and how much of it shows.
