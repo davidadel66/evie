@@ -37,7 +37,9 @@ export type SettingItem = { id: string; title: string; page: SettingsPage; terms
 
 // Every setting there is: the browser's own, and once the server has said
 // what it keeps, each key, plugin and project, in the order of their pages.
-export function settingItems(view: SettingsView | undefined): SettingItem[] {
+// A plugin file is added only on the computer evie runs on, `here`, so only
+// there is the row that adds one.
+export function settingItems(view: SettingsView | undefined, here: boolean): SettingItem[] {
   return [
     { id: "theme", title: "Theme", page: "appearance", terms: ["colours colors dark dusk moss oxblood look"] },
     { id: "notifications", title: "Notifications and sound", page: "notifications", terms: ["system alert finished failed needs you"] },
@@ -45,7 +47,7 @@ export function settingItems(view: SettingsView | undefined): SettingItem[] {
     { id: "instructions", title: "Your instructions", page: "instructions", terms: ["AGENTS.md prompt how evie works"] },
     ...(view?.keys ?? []).map((key): SettingItem => ({ id: `key:${key.name}`, title: key.name, page: "keys", terms: [key.about ?? "", "secret .env"] })),
     ...(view?.plugins ?? []).map((plugin): SettingItem => ({ id: `plugin:${plugin.name}`, title: plugin.name, page: "plugins", terms: ["loaded"] })),
-    ...(view === undefined ? [] : [{ id: "add-plugin", title: "Add a plugin file", page: "plugins", terms: ["path load"] } satisfies SettingItem]),
+    ...(view === undefined || !here ? [] : [{ id: "add-plugin", title: "Add a plugin file", page: "plugins", terms: ["path load"] } satisfies SettingItem]),
     ...(view?.projects ?? []).map((project): SettingItem => ({ id: `project:${project.id}`, title: project.name, page: "projects", terms: [project.folder, "trusted"] })),
   ]
 }

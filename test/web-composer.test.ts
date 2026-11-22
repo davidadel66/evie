@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { ATTACHMENT_LIMIT } from "../src/core/types.ts"
-import { attachable, CHIP, commandIn, contextMeter, earlierMessages, mentionAt, menuKey, partsOf, pickFile, rankCommands, rankFiles, recallStep, replaced, shownOf, slashAt, textOf, type Part } from "../web/src/composer.ts"
+import { attachable, CHIP, commandIn, confirmsInput, contextMeter, earlierMessages, mentionAt, menuKey, NO_HISTORY, partsOf, pickFile, primaryOf, rankCommands, rankFiles, recallStep, recorded, redone, replaced, shownOf, slashAt, sliceOf, textOf, undone, type Part } from "../web/src/composer.ts"
 
 // The message box's rules, apart from its screen: the menu a slash opens,
 // and how it is filtered and ranked as the owner types.
@@ -168,4 +168,54 @@ test("a file larger than the limit is not attached, and the box says which and w
   expect(attachable([small, large])).toEqual({ taken: [small], problem: "video.mov is larger than the 10 MB a file attached can be." })
   expect(attachable([large, huge]).problem).toBe("video.mov and disk.img are larger than the 10 MB a file attached can be.")
   expect(attachable([{ name: "exact.bin", size: ATTACHMENT_LIMIT }]).taken).toHaveLength(1)
+})
+
+test("a stretch of the box copied or cut is its words and its files as @ and their paths, so that pasted back, the files are chips again", () => {
+  const parts: Part[] = [{ text: "Read " }, { file: "recipes/apple-cake.md" }, { text: " now" }]
+  expect(textOf(sliceOf(parts, 0, 6))).toBe("Read @recipes/apple-cake.md")
+  expect(textOf(sliceOf(parts, 3, 7))).toBe("d @recipes/apple-cake.md ")
+  expect(sliceOf(parts, 5, 6)).toEqual([{ file: "recipes/apple-cake.md" }])
+  expect(partsOf(textOf(sliceOf(parts, 5, 6)))).toEqual([{ file: "recipes/apple-cake.md" }])
+})
+
+test("the box's one action: Send; while evie works with nothing to send, Stop; with words, steering or, with mod held, queueing; and for a moment after a send, Send, off, so that a second click stops nothing", () => {
+  const box = { editing: false, working: false, empty: true, modHeld: false, justSent: false }
+  expect(primaryOf(box)).toEqual({ does: "send", disabled: true })
+  expect(primaryOf({ ...box, empty: false })).toEqual({ does: "send", disabled: false })
+  expect(primaryOf({ ...box, working: true })).toEqual({ does: "stop", disabled: false })
+  expect(primaryOf({ ...box, working: true, empty: false })).toEqual({ does: "steer", disabled: false })
+  expect(primaryOf({ ...box, working: true, empty: false, modHeld: true })).toEqual({ does: "queue", disabled: false })
+  expect(primaryOf({ ...box, working: true, justSent: true })).toEqual({ does: "send", disabled: true })
+  expect(primaryOf({ ...box, working: true, editing: true })).toEqual({ does: "update", disabled: false })
+})
+
+test("Enter that confirms what an input method is composing, as for Japanese or Chinese, does not send: while composing, as Safari's keyCode 229 says, or just after", () => {
+  expect(confirmsInput({ isComposing: false, keyCode: 13 }, undefined, 1000)).toBe(false)
+  expect(confirmsInput({ isComposing: true, keyCode: 13 }, undefined, 1000)).toBe(true)
+  expect(confirmsInput({ isComposing: false, keyCode: 229 }, undefined, 1000)).toBe(true)
+  // Safari ends the composition before the Enter's key comes.
+  expect(confirmsInput({ isComposing: false, keyCode: 13 }, 990, 1000)).toBe(true)
+  expect(confirmsInput({ isComposing: false, keyCode: 13 }, 500, 1000)).toBe(false)
+})
+
+test("the box's own undo history: each change is a step, typing runs into one, Undo goes back a step and Redo forward again, and a change after an undo forgets what was undone", () => {
+  const at = (text: string) => ({ parts: partsOf(text), caret: text.length })
+  let history = recorded(NO_HISTORY, at(""), "typing", 0)
+  // Typing within a moment of the last is one step.
+  history = recorded(history, at("a"), "typing", 100)
+  history = recorded(history, at("ab"), "paste", 200)
+  history = recorded(history, at("ab pasted"), "line", 300)
+
+  const one = undone(history, at("ab pasted\n"))!
+  expect(textOf(one.to.parts)).toBe("ab pasted")
+  const two = undone(one.history, one.to)!
+  expect(textOf(two.to.parts)).toBe("ab")
+  const three = undone(two.history, two.to)!
+  expect(textOf(three.to.parts)).toBe("")
+  expect(undone(three.history, three.to)).toBeUndefined()
+
+  const again = redone(three.history, three.to)!
+  expect(textOf(again.to.parts)).toBe("ab")
+  // A change after an undo forgets what was undone.
+  expect(redone(recorded(two.history, two.to, "paste", 400), at("ab x"))).toBeUndefined()
 })

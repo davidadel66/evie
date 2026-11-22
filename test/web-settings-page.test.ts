@@ -52,7 +52,7 @@ const VIEW: SettingsView = {
   restart: false,
   started: 1,
 }
-const titles = (query: string) => searchSettings(settingItems(VIEW), query).map((item) => `${item.title} (${item.page})`)
+const titles = (query: string) => searchSettings(settingItems(VIEW, true), query).map((item) => `${item.title} (${item.page})`)
 
 test("the search finds every setting, those of the browser and those the server keeps, each with the page it is on; nothing typed finds nothing", () => {
   expect(titles("")).toEqual([])
@@ -62,7 +62,7 @@ test("the search finds every setting, those of the browser and those the server 
   expect(titles("garden")).toEqual(["Garden planner (projects)"])
   expect(titles("agents.md")).toEqual(["Your instructions (instructions)"])
   // Before the server has said, its own settings are not there to find.
-  expect(searchSettings(settingItems(undefined), "github")).toEqual([])
+  expect(searchSettings(settingItems(undefined, true), "github")).toEqual([])
 })
 
 test("a title that is what was typed comes first, then one that starts with it, then one with it in it, then a match in what the setting is about or its page", () => {
@@ -77,4 +77,9 @@ test("every word typed must be found, in any case and without minding accents", 
   expect(titles("dusk THÈME")).toEqual(["Theme (appearance)"])
   expect(titles("sound system")).toEqual(["Notifications and sound (notifications)"])
   expect(titles("sound nothing")).toEqual([])
+})
+
+test("a plugin file can be added only on the computer evie runs on, so only there is Add a plugin file found", () => {
+  expect(searchSettings(settingItems(VIEW, true), "add a plugin").map((item) => item.title)).toEqual(["Add a plugin file"])
+  expect(searchSettings(settingItems(VIEW, false), "add a plugin")).toEqual([])
 })

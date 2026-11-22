@@ -38,10 +38,17 @@ export function openSettings(page: SettingsPage = SETTINGS_PAGES[0]) {
 export const showSettingsPage = (page: SettingsPage) => replaceAddress(withSettings(location.hash, page))
 
 // Closes the settings: back to where they were opened from, or, opened by
-// their address, to what is open under them.
+// their address, to what is open under them. Asked again before the page
+// has gone back, as by Escape pressed twice, it goes back no further.
+let goingBack = false
 export function closeSettings() {
-  if ((history.state as { settingsOpened?: boolean } | null)?.settingsOpened === true) history.back()
-  else replaceAddress(withSettings(location.hash, undefined))
+  if (goingBack) return
+  const state = history.state as { settingsOpened?: boolean } | null
+  if (state?.settingsOpened !== true) return replaceAddress(withSettings(location.hash, undefined))
+  goingBack = true
+  history.replaceState({ ...state, settingsOpened: false }, "")
+  addEventListener("popstate", () => (goingBack = false), { once: true })
+  history.back()
 }
 
 // The address changed in place, keeping the step of history it is on, and

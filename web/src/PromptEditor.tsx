@@ -1,21 +1,29 @@
-import { useEffect, useLayoutEffect, useRef, type ClipboardEvent, type KeyboardEvent, type RefObject } from "react"
-import { replaced, shownOf, type Part } from "./composer.ts"
+import { useEffect, useLayoutEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react"
+import { confirmsInput, NO_HISTORY, partsOf, recorded, redone, replaced, shownOf, sliceOf, textOf, undone, type Change, type History, type Part, type Snapshot } from "./composer.ts"
 import { FILE_OUTLINE } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
+import { onMac } from "./shortcuts.ts"
 
 // The message box's text, as T3 Code's prompt editor: words, with each
 // file named in them a chip, its icon and its name, which the caret steps
 // over and Backspace takes off whole. It is an editable element of plain
 // text and chips, and nothing else: whatever the browser puts in it, as a
 // pasted page's styles, is read back as words and chips and drawn again.
+// Copied, cut or dragged, a chip is its @ and its path, so that pasted or
+// dropped back it is a chip again. It keeps an undo history of its own, in
+// which each change is a step, since the browser's cannot undo a chip put
+// in, and Mod+Z and Mod+Shift+Z go through it.
 //
 // `box` is what to draw: each time its `drawn` changes, the element is
-// drawn from its parts, with the caret where it says. What the owner types
-// is read back into parts and told to `changed`, and where the caret moves
-// to `moved`, without drawing the element again, so that typing, as with
-// an input method, is the browser's own.
+// drawn from its parts, with the caret where it says; as a step of the
+// undo history when `undoable` says so, such as a chip picked, and
+// otherwise as a fresh start, such as the box emptied as a message is
+// sent. What the owner types is read back into parts and told to
+// `changed`, and where the caret moves to `moved`, without drawing the
+// element again, so that typing, as with an input method, is the
+// browser's own.
 
-export type Box = { parts: Part[]; caret: number; drawn: number }
+export type Box = { parts: Part[]; caret: number; drawn: number; undoable?: boolean }
 
 type Props = {
   ref: RefObject<HTMLDivElement | null>
@@ -27,6 +35,7 @@ type Props = {
   placeholder: string
   // Files pasted, which the box attaches.
   pasted(files: File[]): void
+  // A key the box is to act on: not one an input method takes, nor undo or redo.
   onKeyDown(event: KeyboardEvent<HTMLDivElement>): void
   onFocus(): void
   onBlur(): void
@@ -36,26 +45,86 @@ type Props = {
 }
 
 export function PromptEditor({ ref, box, changed, moved, oneRow, placeholder, pasted, onKeyDown, onFocus, onBlur, label, menu }: Props) {
-  const parts = useRef(box.parts)
-  parts.current = box.parts
+  // The box as last drawn or read, and its undo history.
+  const known = useRef<Snapshot>({ parts: box.parts, caret: box.caret })
+  const history = useRef<History>(NO_HISTORY)
+  // When an input method last finished composing, and whether a drag
+  // within the box has just taken its words out to put them back.
+  const composedAt = useRef<number>(undefined)
+  const moving = useRef(false)
+  // The latest `changed`, for the handlers set up once.
+  const tell = useRef(changed)
+  tell.current = changed
+
   // Drawn from the parts when asked, with the caret placed if the box has the focus.
   useLayoutEffect(() => {
     const root = ref.current
     if (!root) return
-    draw(root, box.parts)
-    if (document.activeElement === root) place(root, box.caret)
+    history.current = box.undoable === true ? recorded(history.current, known.current, "chip", Date.now()) : NO_HISTORY
+    show(root, { parts: box.parts, caret: box.caret })
   }, [box.drawn])
 
-  // A new line, and text dropped, are put in by the box itself, as words,
-  // and the browser's own formatting is refused.
+  // The element and what is known of it, as a snapshot says.
+  function show(root: HTMLElement, to: Snapshot) {
+    draw(root, to.parts)
+    if (document.activeElement === root) place(root, to.caret)
+    known.current = to
+  }
+  // A change the box makes itself, as a step of the history.
+  function apply(root: HTMLElement, kind: Change, to: Snapshot) {
+    history.current = recorded(history.current, known.current, kind, Date.now())
+    show(root, to)
+    tell.current(to.parts, to.caret)
+  }
+  // Parts put in place of what is selected, or where `at` says.
+  function put(root: HTMLElement, kind: Change, parts: Part[], at?: number) {
+    const range = at !== undefined ? { start: at, end: at } : (selection(root) ?? { start: known.current.caret, end: known.current.caret })
+    const next = replaced(known.current.parts, range.start, range.end, parts)
+    apply(root, kind, next)
+  }
+  function step(root: HTMLElement, back: boolean) {
+    const moved = back ? undone(history.current, known.current) : redone(history.current, known.current)
+    if (moved === undefined) return
+    history.current = moved.history
+    show(root, moved.to)
+    tell.current(moved.to.parts, moved.to.caret)
+  }
+
+  // What the browser would put in itself: a new line, and text dropped,
+  // the box puts in as words; typing and deleting are the browser's, each
+  // a step of the history, typing running into one; undo and redo go
+  // through the box's own history; formatting is refused.
   useEffect(() => {
     const root = ref.current
     if (!root) return
     const before = (event: InputEvent) => {
-      if (event.inputType === "insertParagraph" || event.inputType === "insertLineBreak") {
+      const kind = event.inputType
+      if (kind === "insertParagraph" || kind === "insertLineBreak") {
         event.preventDefault()
-        put(root, "\n")
-      } else if (event.inputType.startsWith("format") || event.inputType === "insertFromDrop") event.preventDefault()
+        put(root, "line", [{ text: "\n" }])
+      } else if (kind === "historyUndo" || kind === "historyRedo") {
+        event.preventDefault()
+        step(root, kind === "historyUndo")
+      } else if (kind === "deleteByDrag") {
+        // Words dragged within the box: taken out by the browser, and put
+        // back where they are dropped, as one step.
+        history.current = recorded(history.current, known.current, "drop", Date.now())
+        moving.current = true
+      } else if (kind === "insertFromDrop") {
+        event.preventDefault()
+        const text = event.dataTransfer?.getData("text/plain") ?? ""
+        const target = event.getTargetRanges()[0]
+        const at = target !== undefined && root.contains(target.startContainer) ? offsetOf(root, target.startContainer, target.startOffset) : undefined
+        const parts = partsOf(text.replace(/\r\n?/g, "\n"))
+        if (moving.current) {
+          moving.current = false
+          const next = replaced(known.current.parts, at ?? known.current.caret, at ?? known.current.caret, parts)
+          show(root, next)
+          tell.current(next.parts, next.caret)
+        } else if (text !== "") put(root, "drop", parts, at)
+      } else if (kind.startsWith("format")) event.preventDefault()
+      else if (kind.startsWith("delete")) history.current = recorded(history.current, { ...known.current, caret: selection(root)?.start ?? known.current.caret }, "deleting", Date.now())
+      else if (kind.startsWith("insert")) history.current = recorded(history.current, { ...known.current, caret: selection(root)?.start ?? known.current.caret }, "typing", Date.now())
     }
     root.addEventListener("beforeinput", before)
     return () => root.removeEventListener("beforeinput", before)
@@ -66,26 +135,54 @@ export function PromptEditor({ ref, box, changed, moved, oneRow, placeholder, pa
     if (!root) return
     const selected = () => {
       const at = selection(root)
-      if (at !== undefined) moved(at.start)
+      if (at === undefined) return
+      known.current = { ...known.current, caret: at.start }
+      moved(at.start)
     }
     document.addEventListener("selectionchange", selected)
     return () => document.removeEventListener("selectionchange", selected)
   }, [moved])
 
-  // Words put in place of what is selected, and the box drawn again.
-  function put(root: HTMLDivElement, text: string) {
-    const at = selection(root) ?? { start: shownOf(parts.current).length, end: shownOf(parts.current).length }
-    const next = replaced(parts.current, at.start, at.end, [{ text }])
-    draw(root, next.parts)
-    place(root, next.caret)
-    changed(next.parts, next.caret)
+  // What is selected, as text with each chip its @ and its path.
+  function selectedText(root: HTMLElement): string | undefined {
+    const at = selection(root)
+    return at === undefined || at.start === at.end ? undefined : textOf(sliceOf(known.current.parts, at.start, at.end))
   }
-
+  function onCopy(event: ClipboardEvent<HTMLDivElement>) {
+    const text = selectedText(event.currentTarget)
+    if (text === undefined) return
+    event.preventDefault()
+    event.clipboardData.setData("text/plain", text)
+  }
+  function onCut(event: ClipboardEvent<HTMLDivElement>) {
+    const text = selectedText(event.currentTarget)
+    if (text === undefined) return
+    event.preventDefault()
+    event.clipboardData.setData("text/plain", text)
+    put(event.currentTarget, "cut", [])
+  }
   function onPaste(event: ClipboardEvent<HTMLDivElement>) {
     event.preventDefault()
     if (event.clipboardData.files.length > 0) return pasted([...event.clipboardData.files])
     const text = event.clipboardData.getData("text/plain")
-    if (text !== "") put(event.currentTarget, text.replace(/\r\n?/g, "\n"))
+    if (text !== "") put(event.currentTarget, "paste", partsOf(text.replace(/\r\n?/g, "\n")))
+  }
+  // Words dragged out of the box carry their chips as @ and their paths.
+  function onDragStart(event: DragEvent<HTMLDivElement>) {
+    const text = selectedText(event.currentTarget)
+    if (text !== undefined) event.dataTransfer.setData("text/plain", text)
+  }
+  function keyDown(event: KeyboardEvent<HTMLDivElement>) {
+    // A key an input method takes, as the Enter that confirms what is
+    // being composed, is the input method's.
+    if (confirmsInput(event.nativeEvent, composedAt.current, Date.now())) return
+    const mod = onMac() ? event.metaKey : event.ctrlKey
+    const key = event.key.toLowerCase()
+    if (mod && !event.altKey && (key === "z" || (key === "y" && !onMac()))) {
+      event.preventDefault()
+      return step(event.currentTarget, key === "z" && !event.shiftKey)
+    }
+    onKeyDown(event)
   }
 
   const empty = box.parts.length === 0
@@ -119,10 +216,15 @@ export function PromptEditor({ ref, box, changed, moved, oneRow, placeholder, pa
             draw(root, read.parts)
             place(root, read.caret)
           }
+          known.current = { parts: read.parts, caret: read.caret }
           changed(read.parts, read.caret)
         }}
+        onCompositionEnd={() => (composedAt.current = Date.now())}
+        onCopy={onCopy}
+        onCut={onCut}
         onPaste={onPaste}
-        onKeyDown={onKeyDown}
+        onDragStart={onDragStart}
+        onKeyDown={keyDown}
         onFocus={onFocus}
         onBlur={onBlur}
         className={cn(
@@ -137,10 +239,19 @@ export function PromptEditor({ ref, box, changed, moved, oneRow, placeholder, pa
 // ---- The element and the parts ----------------------------------------------------------
 
 // The element drawn from the parts: each word as text, each file as its
-// chip. A line break at the very end is followed by one the browser draws,
-// without which the empty line after it would not show.
+// chip, with a place for the caret, an empty word, on both sides of every
+// chip, so that the caret can be put before or after one at either end of
+// the box, in any browser. A line break at the very end is followed by one
+// the browser draws, without which the empty line after it would not show.
 function draw(root: HTMLElement, parts: readonly Part[]) {
-  const nodes: Node[] = parts.map((part) => ("file" in part ? chip(part.file) : document.createTextNode(part.text)))
+  const nodes: Node[] = []
+  for (const part of parts) {
+    if ("file" in part) {
+      if (!(nodes.at(-1) instanceof Text)) nodes.push(document.createTextNode(""))
+      nodes.push(chip(part.file))
+    } else nodes.push(document.createTextNode(part.text))
+  }
+  if (nodes.length > 0 && !(nodes.at(-1) instanceof Text)) nodes.push(document.createTextNode(""))
   if (shownOf(parts).endsWith("\n")) {
     const tail = document.createElement("br")
     tail.dataset.tail = ""
@@ -151,13 +262,16 @@ function draw(root: HTMLElement, parts: readonly Part[]) {
 
 // A file as a chip in the text, as T3 Code's: the file's icon and its
 // name, in the text's colour and a heavier weight, its whole path on
-// hover. It is one thing, which the caret steps over.
+// hover, and named "File @path" to a screen reader. It is one thing,
+// which the caret steps over.
 function chip(path: string): HTMLElement {
   const made = document.createElement("span")
   made.dataset.file = path
   made.contentEditable = "false"
   made.spellcheck = false
   made.title = path
+  made.setAttribute("role", "img")
+  made.setAttribute("aria-label", `File @${path}`)
   made.className = "inline-flex max-w-full items-baseline gap-0.5 align-baseline font-medium text-text"
   const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg")
   icon.setAttribute("viewBox", "0 0 256 256")
@@ -248,7 +362,8 @@ function offsetOf(root: HTMLElement, node: Node, offset: number): number {
 
 const lengthOf = (node: Node): number => (node instanceof Text ? node.data.length : node instanceof HTMLElement && node.dataset.file !== undefined ? 1 : node instanceof HTMLBRElement && node.dataset.tail !== undefined ? 0 : (node.textContent?.length ?? 0))
 
-// The caret put at a place in the element, counted as `shownOf` counts.
+// The caret put at a place in the element, counted as `shownOf` counts: in
+// a word wherever there is one there, as the empty ones beside each chip.
 function place(root: HTMLElement, caret: number) {
   const chosen = getSelection()
   if (chosen === null) return

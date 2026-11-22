@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { Shown } from "./Asking.tsx"
 import { Button } from "./components/ui/button.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
-import { attachable, contextMeter, earlierMessages, mentionAt, menuKey, partsOf, pickFile, rankCommands, rankFiles, recallStep, replaced, shownOf, slashAt, textOf, type MenuItem, type Part, type Recalled } from "./composer.ts"
+import { attachable, contextMeter, earlierMessages, mentionAt, menuKey, partsOf, pickFile, primaryOf, rankCommands, rankFiles, recallStep, replaced, shownOf, slashAt, textOf, type MenuItem, type Part, type Recalled } from "./composer.ts"
 import type { Conversation, ConversationState, Outgoing } from "./conversation.ts"
 import { ArrowBendUpRight, ArrowUpBold, Check, File as FileIcon, ListPlus, Paperclip, StopFill, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
@@ -70,6 +70,10 @@ const attachedOf = (files: readonly Outgoing[]): Attached[] => files.map((file) 
 // The model, as the menu lists it: picking it opens the picker, as in T3 Code.
 const MODEL: MenuItem = { name: "model", description: "Pick the model this session uses" }
 
+// How long the box's button stays Send, off, after a send, in
+// milliseconds, as T3 Code's guard after a click.
+const SENT_GUARD = 500
+
 export function Composer({ conversation, state, model, shown, answer, asking, send, mentions, floats }: Props) {
   const [box, setBox] = useState<Box>({ parts: [], caret: 0, drawn: 0 })
   const [problem, setProblem] = useState<string>()
@@ -107,7 +111,21 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   const editing = state?.queue.editing
 
   // The box with new parts, drawn, the caret at its end or where given.
-  const put = (parts: Part[], at = shownOf(parts).length) => setBox((was) => ({ parts, caret: at, drawn: was.drawn + 1 }))
+  // As a step of the box's undo history, when it is a change made in it,
+  // such as a chip picked; otherwise as a fresh start, as when it is sent.
+  const put = (parts: Part[], at = shownOf(parts).length, undoable = false) => setBox((was) => ({ parts, caret: at, drawn: was.drawn + 1, undoable }))
+  // For a moment after a send, the box's button stays Send, off, so that
+  // a second click, as the box empties and evie works, is not a Stop.
+  const [justSent, setJustSent] = useState(false)
+  useEffect(() => {
+    if (!justSent) return
+    const timer = setTimeout(() => setJustSent(false), SENT_GUARD)
+    return () => clearTimeout(timer)
+  }, [justSent])
+  // Left, as when the owner moves to another session, an edit of a queued
+  // message is given up and the queue held, so that nothing is sent while
+  // the owner cannot see it.
+  useEffect(() => () => conversation?.leave(), [conversation])
   const moved = useCallback((at: number) => setBox((was) => (was.caret === at ? was : { ...was, caret: at })), [])
 
   // How tall it floats, told as it changes.
@@ -214,7 +232,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     const end = typed.slice(caret).startsWith(" ") ? caret + 1 : caret
     // The /model typed goes, and the picker opens in its place.
     const next = replaced(box.parts, slash.from, end, item.name === MODEL.name ? [] : [{ text: `/${item.name} ` }])
-    put(next.parts, next.caret)
+    put(next.parts, next.caret, true)
     if (item.name === MODEL.name) setPicking(true)
   }
 
@@ -230,12 +248,14 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   function chooseFile(path: string) {
     if (mention === undefined) return
     const next = pickFile(box.parts, mention, caret, path)
-    put(next.parts, next.caret)
+    put(next.parts, next.caret, true)
   }
 
   // Sends what is in the box, as `alternate` says: with mod held while
-  // evie works, a message is queued rather than steering the turn.
+  // evie works, a message is queued rather than steering the turn, but for
+  // while a question waits, which it answers or declines, as Enter does.
   async function submit(alternate: boolean) {
+    if (justSent && text.trim() === "" && attached.length === 0) return
     if (editing !== undefined && conversation !== undefined) {
       asking.cleared()
       return conversation.saveQueued(editing, text.trim(), attached)
@@ -252,7 +272,8 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     setRecalled(undefined)
     put([])
     setAttached([])
-    if ("message" in does && conversation !== undefined && dispatchOf({ working, alternate }) === "queue") return conversation.queue(does.message, files)
+    setJustSent(true)
+    if ("message" in does && conversation !== undefined && dispatchOf({ working, alternate, asked: shown !== undefined }) === "queue") return conversation.queue(does.message, files)
     const restore = (refused: string | undefined) => {
       if (refused === undefined) return
       setProblem(refused)
@@ -304,6 +325,16 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
       event.preventDefault()
       conversation?.stopEditing()
       return
+    }
+    // Alt and Up edits the last message queued, as T3 Code's, while no
+    // question waits and none is being edited.
+    if (event.key === "ArrowUp" && event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+      const last = state?.queue.items.at(-1)
+      if (last !== undefined && editing === undefined && shown === undefined) {
+        event.preventDefault()
+        conversation?.editQueued(last.key)
+        return
+      }
     }
     if (pressed(event.nativeEvent, onMac()) === "stop" && working && state?.stopping === false) {
       event.preventDefault()
@@ -451,8 +482,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
               </div>
             )}
             <PrimaryAction
-              does={editing !== undefined ? "update" : working && empty ? "stop" : working ? (modHeld ? "queue" : "steer") : "send"}
-              disabled={editing === undefined && empty}
+              {...primaryOf({ editing: editing !== undefined, working, empty, modHeld, justSent })}
               stopping={state?.stopping === true}
               stop={() => conversation?.stop()}
               submit={(event) => void submit(onMac() ? event.metaKey : event.ctrlKey)}

@@ -178,6 +178,7 @@ export function openSubagent(connection: Connection, session: string, options: {
     editQueued() {},
     saveQueued() {},
     stopEditing() {},
+    leave() {},
   }
 }
 

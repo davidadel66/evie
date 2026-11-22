@@ -12,7 +12,7 @@ import { ArrowUUpLeft, Bell, CaretDown, CaretRight, FolderSimple, GearSix, Key, 
 import { cn } from "./lib/utils.ts"
 import { keyState, onThisComputer, openServerSettings, pluginState, projectState, type ServerSettings, type Standing } from "./server-settings.ts"
 import { Spinner } from "./Spinner.tsx"
-import { keepNotices, NOTICE_DEFAULTS, rememberedNotices, type NoticeMode, type NoticeSettings } from "./notices.ts"
+import { keepNotices, NOTICE_DEFAULTS, noticeChoice, rememberedNotices, type NoticeMode, type NoticeSettings } from "./notices.ts"
 import { closeSettings, openSettings, showSettingsPage, useAddress } from "./selection.ts"
 import { PAGE_NAMES, searchSettings, SETTINGS_GROUPS, settingItems, type SettingItem, type SettingsPage as Page } from "./settings-page.ts"
 import { onMac } from "./shortcuts.ts"
@@ -110,7 +110,7 @@ function Window({ page, settings }: { page: Page; settings: ServerSettings }) {
     <div className="relative flex min-h-0 flex-1">
       <Pages
         page={page}
-        items={settingItems(view)}
+        items={settingItems(view, here)}
         go={(item) => {
           showSettingsPage(item.page)
           setFound(item.id)
@@ -479,23 +479,27 @@ export function Swatch({ theme }: { theme: Theme }) {
 // What evie tells the owner, and how, in this browser, as T3 Code's
 // notifications: when a session needs them, or a turn finishes or fails.
 // The system's notifications are off until the owner turns them on, and the
-// browser is asked to allow them only then. Notices in the page are a
-// switch of their own, on until turned off. Each has its reset.
+// browser is asked to allow them only then; a choice of them is kept only
+// once it does, as T3 Code's, and otherwise the row says what to do.
+// Notices in the page are a switch of their own, on until turned off. Each
+// has its reset.
 function Notifications() {
   const [settings, setSettings] = useState<NoticeSettings>(rememberedNotices)
   const [allowed, setAllowed] = useState(permission)
+  const [refused, setRefused] = useState<string>()
   const keep = (next: NoticeSettings) => {
     keepNotices(next)
     setSettings(next)
   }
   async function choose(mode: NoticeMode) {
-    keep({ ...settings, mode })
     // In the click that chose it, so that the browser lets it play.
     unlockSound(mode)
-    if ((mode === "on" || mode === "both") && typeof Notification === "function" && Notification.permission === "default") {
-      await Notification.requestPermission().catch(() => {})
-      setAllowed(permission())
-    }
+    if ((mode === "on" || mode === "both") && permission() === "default") await Notification.requestPermission().catch(() => {})
+    const now = permission()
+    setAllowed(now)
+    const choice = noticeChoice(mode, now)
+    setRefused(choice.keep ? undefined : choice.why)
+    if (choice.keep) keep({ ...settings, mode })
   }
   const system = settings.mode === "on" || settings.mode === "both"
   return (
@@ -506,7 +510,7 @@ function Notifications() {
           id="notifications"
           label="Notifications and sound"
           title="Notifications and sound"
-          about="Told by the system while this window is behind others, and by a sound, if you choose one. Nothing is said of the session you are looking at."
+          about={refused ?? "Told by the system while this window is behind others, and by a sound, if you choose one. Nothing is said of the session you are looking at."}
           {...(system && allowed !== "granted" && { standing: PERMISSION[allowed] })}
           {...(settings.mode !== NOTICE_DEFAULTS.mode && { reset: { label: `Reset notifications to ${MODE_NAMES[NOTICE_DEFAULTS.mode]}`, reset: () => void choose(NOTICE_DEFAULTS.mode) } })}
           control={<Choice label="Notifications" value={settings.mode} choices={(Object.keys(MODE_NAMES) as NoticeMode[]).map((mode) => ({ value: mode, name: MODE_NAMES[mode] }))} choose={(mode) => void choose(mode)} />}

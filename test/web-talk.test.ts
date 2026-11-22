@@ -525,6 +525,7 @@ test("an upload the server does not take in time fails, saying so; the message c
 
 const queued = (state: ConversationState) => state.queue.items.map((item) => item.text)
 const turnEnds = (state: ConversationState) => state.events.filter((event) => event.type === "turn_end").length
+const ownMessages = (state: ConversationState) => state.events.flatMap((event) => (event.type === "user_message" ? [event.body.text] : []))
 
 test("a message queued while evie works waits in the page, not steering the turn, and is sent as a turn of its own once the turn has finished", async () => {
   const { served, connection, model } = await start([...asking(), { text: ["Watered."] }], { plugins: [ask()] })
@@ -545,51 +546,129 @@ test("a message queued while evie works waits in the page, not steering the turn
   expect(model.requests).toHaveLength(3)
 })
 
-test("a turn stopped holds the queue, whose messages wait until one is sent by hand, at once", async () => {
-  const { served, connection, model } = await start([{ hang: true, text: ["Thinking about the beds"] }, { text: ["Watered."] }])
+test("a turn stopped holds the queue: a turn the box starts and finishes leaves it held, and only a message sent from it by hand lets it go on", async () => {
+  const { served, connection, model } = await start([{ hang: true, text: ["Thinking about the beds"] }, { text: ["Hello."] }, { text: ["Watered."] }, { text: ["Weeded."] }])
   const conversation = open(connection, served.run.session)
   await until(conversation, (state) => state.opened)
   await conversation.send("Plan the beds")
   await until(conversation, (state) => state.replySoFar === "Thinking about the beds")
   conversation.queue("Then water them", [])
+  conversation.queue("Then weed the paths", [])
 
   conversation.stop()
-  const stopped = await until(conversation, (state) => !state.turnRunning)
-  await Bun.sleep(50)
-  expect(queued(stopped)).toEqual(["Then water them"])
-  expect(conversation.state().queue.held).toBe(true)
-  expect(model.requests).toHaveLength(1)
+  await until(conversation, (state) => !state.turnRunning && turnEnds(state) === 1)
+  expect(conversation.state().queue.held).toBe("stopped")
 
-  await conversation.sendQueuedNow(stopped.queue.items[0]!.key)
-  const sent = await until(conversation, (state) => turnEnds(state) === 2)
+  // A turn started from the box, which finishes, lets nothing go.
+  await conversation.send("Hello there")
+  await until(conversation, (state) => turnEnds(state) === 2)
+  await Bun.sleep(400)
+  expect(queued(conversation.state())).toEqual(["Then water them", "Then weed the paths"])
+  expect(conversation.state().queue.held).toBe("stopped")
+  expect(model.requests).toHaveLength(2)
+
+  // Sent by hand, the first goes, and the second after its turn.
+  await conversation.sendQueuedNow(conversation.state().queue.items[0]!.key)
+  const sent = await until(conversation, (state) => turnEnds(state) === 4)
   expect(sent.queue.items).toEqual([])
-  expect(said(sent).slice(-2)).toEqual(["Then water them", "Watered."])
+  expect(ownMessages(sent).slice(-2)).toEqual(["Then water them", "Then weed the paths"])
 })
 
-test("a queued message edited in the box is sent as it was saved, and the page keeps the session open while it has messages queued", async () => {
+test("a queued message edited into a command runs as the command when its turn comes, as one typed would", async () => {
+  const { served, connection } = await start([...asking()], { plugins: [ask(), models()] })
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+  await conversation.send("Plan the beds")
+  const { waiting } = await until(conversation, (state) => state.waiting.length === 1)
+  conversation.queue("Then say which model", [])
+  const key = conversation.state().queue.items[0]!.key
+  conversation.editQueued(key)
+  conversation.saveQueued(key, "/model", [])
+
+  await conversation.answer(waiting[0]!.id, "South bed")
+  const ran = await until(conversation, (state) => said(state).includes("The model is test/model (profile: default)."))
+  expect(ownMessages(ran)).not.toContain("/model")
+  expect(ran.queue.items).toEqual([])
+})
+
+test("leaving the session gives up an edit and holds its queue, which the page keeps, held, for when the owner comes back; nothing is sent meanwhile", async () => {
   const { served, connection, model } = await start([...asking(), { text: ["Watered."] }], { plugins: [ask()] })
   const held = holdConversation(connection, served.run.session)
   const { conversation } = held
   await until(conversation, (state) => state.opened)
   await conversation.send("Plan the beds")
   const { waiting } = await until(conversation, (state) => state.waiting.length === 1)
-  conversation.queue("Then water", [])
-  const key = conversation.state().queue.items[0]!.key
-  conversation.editQueued(key)
-  expect(conversation.state().queue.editing).toBe(key)
-  conversation.saveQueued(key, "Then water them well", [])
+  conversation.queue("Then water them", [])
+  conversation.editQueued(conversation.state().queue.items[0]!.key)
 
-  // Let go of by the page, as when the owner moves to another session.
+  conversation.leave()
   held.release()
-  const watching = open(connection, served.run.session)
-  await until(watching, (state) => state.opened)
-  await conversation.answer(waiting[0]!.id, "South bed")
-  const done = await until(watching, (state) => turnEnds(state) === 2)
-  expect(said(done).slice(-2)).toEqual(["Then water them well", "Watered."])
-  expect(model.requests).toHaveLength(3)
+  // Answered elsewhere, as in a terminal, the turn finishes.
+  await served.run.evie.send({ type: "answer_question", session: served.run.session, id: waiting[0]!.id, choice: "South bed" })
+  while (!(await served.run.evie.send({ type: "read_history", session: served.run.session, before: 1000 })).events.some((event) => event.type === "turn_end")) await Bun.sleep(5)
+  await Bun.sleep(400)
+  expect(model.requests).toHaveLength(2)
 
-  // Once the queue is empty, nothing holds it, and it is closed.
-  const again = holdConversation(connection, served.run.session)
-  cleanups.push(async () => again.release())
-  expect(again.conversation).not.toBe(conversation)
+  const back = holdConversation(connection, served.run.session)
+  cleanups.push(async () => back.release())
+  expect(back.conversation).not.toBe(conversation)
+  const returned = await until(back.conversation, (state) => state.opened)
+  expect(queued(returned)).toEqual(["Then water them"])
+  expect(returned.queue.held).toBe("left")
+  expect(returned.queue.editing).toBeUndefined()
+
+  await back.conversation.sendQueuedNow(returned.queue.items[0]!.key)
+  await until(back.conversation, (state) => turnEnds(state) === 2)
+  expect(model.requests).toHaveLength(3)
+})
+
+// Stops the server in front of a session, so that the page's line drops,
+// does what is given meanwhile, and starts it again on its port.
+async function whileDown(served: Awaited<ReturnType<typeof start>>["served"], connection: ReturnType<typeof openConnection>, meanwhile: () => Promise<void>) {
+  const port = Number(new URL(served.server.url).port)
+  await served.server.stop()
+  while (connection.state().status !== "reconnecting") await Bun.sleep(5)
+  await meanwhile()
+  const again = startServer({ evie: served.run.evie, tokens: served.tokens, host: "127.0.0.1", port })
+  cleanups.push(() => again.stop())
+}
+
+test("a turn that finished while the line was down lets the queue go on once the session is open again, one message at a time", async () => {
+  const { served, connection, model } = await start([{ text: ["Planned."] }, { text: ["Watered."] }, { text: ["Weeded."] }])
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+  conversation.queue("Then water them", [])
+  conversation.queue("Then weed the paths", [])
+
+  await whileDown(served, connection, async () => {
+    await served.run.evie.send({ type: "send_message", session: served.run.session, text: "Plan the beds" })
+    while (!(await served.run.evie.send({ type: "read_history", session: served.run.session, before: 1000 })).events.some((event) => event.type === "turn_end")) await Bun.sleep(5)
+  })
+
+  // Once back, one goes; the next waits for its turn to end.
+  const first = await until(conversation, (state) => ownMessages(state).includes("Then water them"))
+  expect(ownMessages(first)).not.toContain("Then weed the paths")
+  const done = await until(conversation, (state) => turnEnds(state) === 3)
+  expect(ownMessages(done)).toEqual(["Plan the beds", "Then water them", "Then weed the paths"])
+  expect(model.requests).toHaveLength(3)
+})
+
+test("a turn stopped while the line was down holds the queue once the session is open again, as the last turn's end that was read says", async () => {
+  const { served, connection, model } = await start([{ hang: true, text: ["Thinking"] }])
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+  await conversation.send("Plan the beds")
+  await until(conversation, (state) => state.replySoFar === "Thinking")
+  conversation.queue("Then water them", [])
+
+  await whileDown(served, connection, async () => {
+    await served.run.evie.send({ type: "cancel", session: served.run.session })
+    while (!(await served.run.evie.send({ type: "read_history", session: served.run.session, before: 1000 })).events.some((event) => event.type === "turn_end")) await Bun.sleep(5)
+  })
+
+  const back = await until(conversation, (state) => connection.state().status === "connected" && !state.turnRunning && turnEnds(state) === 1)
+  await Bun.sleep(400)
+  expect(conversation.state().queue.held).toBe("stopped")
+  expect(queued(back)).toEqual(["Then water them"])
+  expect(model.requests).toHaveLength(1)
 })

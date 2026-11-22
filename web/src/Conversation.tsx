@@ -178,7 +178,7 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
                   </div>
                 )
               )}
-              {!readOnly && state.queue.items.length > 0 && <QueuedMessages conversation={conversation} queue={state.queue} turnRunning={turnRunning} />}
+              {!readOnly && state.queue.items.length > 0 && <QueuedMessages conversation={conversation} queue={state.queue} turnRunning={turnRunning} asked={shown !== undefined} />}
             </div>
           </div>
         </div>

@@ -97,3 +97,12 @@ export function keepNotices(settings: NoticeSettings) {
     // Not kept: the next visit starts as the defaults are.
   }
 }
+
+// Whether a choice of how the owner is told is kept, as the browser stands
+// once asked: one that shows the system's notifications only when it
+// allows them, as T3 Code's, and otherwise not, with what to do instead.
+export function noticeChoice(mode: NoticeMode, allowed: "default" | "denied" | "granted" | "none"): { keep: true } | { keep: false; why: string } {
+  if ((mode !== "on" && mode !== "both") || allowed === "granted") return { keep: true }
+  if (allowed === "none") return { keep: false, why: "This browser shows them only for a page at a secure address, such as this computer's own. Sound only is still there." }
+  return { keep: false, why: "Allow notifications in your browser or system settings, then choose this again. Sound only is still there." }
+}
