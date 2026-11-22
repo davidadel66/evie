@@ -12,7 +12,7 @@ import type { ShownAttachment } from "./attachments.ts"
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog.tsx"
 import { CaretRight, ChatsCircle, File as FileIcon, FileText, Globe, Hammer, Lightbulb, MagnifyingGlass, NotePencil, Robot, TerminalWindow, Wrench, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
-import { renderMarkdown } from "./markdown.ts"
+import { markdownBlocks, renderMarkdown } from "./markdown.ts"
 import { addressOf } from "./address.ts"
 import type { Sessions } from "./sessions.ts"
 import { Spinner } from "./Spinner.tsx"
@@ -311,7 +311,7 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
         </>
       )
     case "reply":
-      return <Markdown text={item.text} className="text-text" />
+      return <Markdown text={item.text} streaming={item.streaming} className="text-text" />
     case "steps":
       return <WorkRun item={item} shown={shown} show={show} />
     case "thinking":
@@ -395,10 +395,27 @@ function Attachments({ attachments, spaced }: { attachments: ShownAttachment[]; 
 
 // A reply, or a piece of one, drawn from its Markdown. Drawn again only
 // when its text changes, so that a reply streaming in does not draw every
-// reply above it again.
-const Markdown = memo(function Markdown({ text, className }: { text: string; className: string }) {
-  const drawn = useMemo(() => renderMarkdown(text), [text])
-  return <div className={`text-prose break-words [&>*+*]:mt-3 ${className}`}>{drawn}</div>
+// reply above it again. A reply still streaming is drawn by its blocks, so
+// that each piece reads again only the last block, which is still open,
+// and not the whole reply so far. Once the turn has ended, the reply is the
+// one stored, drawn from one reading of the whole.
+const Markdown = memo(function Markdown({ text, streaming = false, className }: { text: string; streaming?: boolean; className: string }) {
+  // The blocks the reply was cut into at its last piece, which the next cut
+  // starts from. Kept across draws only to save work: each cut checks that
+  // the reply still starts with them.
+  const cut = useRef<string[]>([])
+  if (streaming) cut.current = markdownBlocks(text, cut.current)
+  return (
+    <div className={`text-prose break-words [&>*+*]:mt-3 ${className}`}>
+      {streaming ? cut.current.map((block, at) => <MarkdownBlock key={at} text={block} />) : <MarkdownBlock text={text} />}
+    </div>
+  )
+})
+
+// Markdown drawn as it is, again only when it changes. Its elements are
+// the box's own children, as if they were drawn with the blocks around them.
+const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
+  return renderMarkdown(text)
 })
 
 // Working, as the design system says it: the word, with a small spinner,
