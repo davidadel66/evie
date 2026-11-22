@@ -16,7 +16,6 @@ import {
   keepView,
   showTab,
   showTree,
-  toggleDiff,
   useDiffShown,
   viewOf,
   wentToFile,
@@ -37,7 +36,6 @@ import {
   GitDiff,
   GitPullRequest,
   Rows,
-  SidebarRight,
   TreeView,
   X,
   XCircle,
@@ -59,26 +57,12 @@ import { Spinner } from "./Spinner.tsx"
 // session, and in a git project the uncommitted work and the branch, under
 // T3 Code's compact toolbar. The diff itself is drawn by the diff view,
 // loaded the first time the panel shows one.
+//
+// The page loads this file later, once it is idle or the panel is first
+// opened (see screens.ts); the button in the conversation's header that
+// shows and hides the panel is in Frame.tsx.
 
 const DiffView = lazy(() => import("./DiffView.tsx"))
-
-// The button in the conversation's header that shows and hides the panel,
-// raised while it is shown.
-export function PanelButton() {
-  const shown = useDiffShown()
-  return (
-    <button
-      type="button"
-      aria-label="Show or hide the right panel"
-      aria-pressed={shown.open}
-      title={`Right panel (${keyLabel("diff", onMac())})`}
-      onClick={toggleDiff}
-      className={cn("flex size-control-sm shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-text/8 hover:text-text", shown.open && "bg-surface-raised text-text")}
-    >
-      <SidebarRight className="size-icon-sm" />
-    </button>
-  )
-}
 
 // Where the panel is, as the window's width puts it, redrawn as it changes.
 function usePlace(): PanelPlace {
