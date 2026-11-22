@@ -231,10 +231,11 @@ any name other than `127.0.0.1` or `localhost` must be listed under
 
 The page has three columns: the list of sessions, the conversation and the
 project card. For now the project card is empty, and a conversation can be
-read but not yet written in. A light at the top says whether it is connected.
-While the line is down it says Reconnecting, and it catches up by itself
-once the line is back. A menu beside it picks one of three themes, Dusk,
-Moss and Oxblood, which the browser remembers.
+read but not yet written in. While the page is connected, nothing says so;
+while the line is down, one quiet line under the name at the top says
+Reconnecting, and why, and the page catches up by itself once the line is
+back. The gear beside the name opens the settings, where the theme is
+picked: one of Dusk, Moss and Oxblood, which the browser remembers.
 
 The list shows every session you have said something in, kept current as
 they change, and listed again when the line comes back:
@@ -935,6 +936,7 @@ A few values the design system's board does not name are named once in
 | `call-name` | 48px | The room a tool call's name takes in a turn's steps, as the board's Message draws them |
 | `control` | 40px | The height of buttons and menu items, which the board's Button and Menu give in words |
 | `menu` | 176px | The narrowest a menu is |
+| `dialog` | 400px | The widest a dialog is, such as the settings window |
 | `tile-row` | 18px | A project's icon tile in a session row, which the board's WorkspaceIcon gives in words |
 | `tile-row-icon` | 12px | The icon on that tile, as the board's SessionRow draws it |
 | `project-filter` | 128px | The widest the session list's project filter grows |

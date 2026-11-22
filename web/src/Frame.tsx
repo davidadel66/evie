@@ -1,14 +1,12 @@
-import { useState, useSyncExternalStore } from "react"
-import { Button } from "./components/ui/button.tsx"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
-import { ConnectionLight } from "./ConnectionLight.tsx"
-import type { Connection, ConnectionState } from "./connection.ts"
+import { useSyncExternalStore } from "react"
+import { connectionLine, type Connection, type ConnectionState } from "./connection.ts"
 import { Conversation, Placeholder } from "./Conversation.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import { SessionList } from "./SessionList.tsx"
 import type { Sessions } from "./sessions.ts"
-import { applyTheme, rememberedTheme, THEMES, type Theme } from "./theme.ts"
+import { Settings } from "./Settings.tsx"
+import { Spinner } from "./Spinner.tsx"
 import { Words } from "./Words.tsx"
 
 // The page once signed in: the session list, the conversation and the
@@ -19,19 +17,14 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
   return (
     <div className="flex min-h-dvh flex-col wide:h-dvh wide:flex-row">
       <aside aria-label="Sessions" className="flex flex-col bg-bg-side wide:w-session-list wide:shrink-0">
-        {/* The theme button's own padding brings its words to the page's 28px edge. */}
+        {/* The settings button's own padding brings its icon near the page's 28px edge. */}
         <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-7">
           <span className="text-title text-text">evie</span>
-          <ConnectionLight state={state} />
           <div className="ml-auto">
-            <ThemeMenu />
+            <Settings />
           </div>
         </header>
-        {"reason" in state && state.reason !== undefined && (
-          <p className="px-7 pb-3 text-caption text-status-working">
-            <Words text={state.reason} />
-          </p>
-        )}
+        <ConnectionLine state={state} />
         <SessionList sessions={sessions} />
       </aside>
 
@@ -71,47 +64,25 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
   )
 }
 
-// The theme picker: Dusk, Moss or Oxblood, remembered in this browser.
-function ThemeMenu() {
-  const [theme, setTheme] = useState<Theme>(rememberedTheme)
-  const name = THEMES.find((each) => each.id === theme)!.name
+// Nothing while connected. While the line is not up, one quiet line, as
+// Working is said, with why, until it is back.
+function ConnectionLine({ state }: { state: ConnectionState }) {
+  const line = connectionLine(state)
+  if (line === undefined) return null
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="quiet" aria-label={`Theme: ${name}`}>
-          <Swatch theme={theme} />
-          {name}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuRadioGroup
-          value={theme}
-          onValueChange={(chosen) => {
-            const picked = THEMES.find((each) => each.id === chosen)!.id
-            applyTheme(picked)
-            setTheme(picked)
-          }}
-        >
-          {THEMES.map((each) => (
-            <DropdownMenuRadioItem key={each.id} value={each.id}>
-              <Swatch theme={each.id} />
-              {each.name}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
-// A theme in small: its ground and its accent, taken from the theme itself.
-function Swatch({ theme }: { theme: Theme }) {
-  return (
-    <span
-      aria-hidden="true"
-      data-theme={theme}
-      className="size-icon-sm shrink-0 rounded-full border border-line"
-      style={{ background: "linear-gradient(135deg, var(--bg) 50%, var(--accent) 50%)" }}
-    />
+    <p role="status" className="flex items-start gap-2 px-7 pb-3 text-caption text-text-muted">
+      <span className="flex h-lh items-center">
+        <Spinner />
+      </span>
+      <span>
+        {line.word}
+        {line.reason !== undefined && (
+          <>
+            {". "}
+            <Words text={line.reason} />
+          </>
+        )}
+      </span>
+    </p>
   )
 }

@@ -17,6 +17,16 @@ export type ConnectionState =
   | { status: "reconnecting"; reason: string }
   | { status: "signed out"; reason?: string }
 
+// What the one quiet line under the header says while the page is not
+// connected: the word, as Working is said, and why, when there is a why.
+// While connected, and when signed out, which has a page of its own, there
+// is no line.
+export function connectionLine(state: ConnectionState): { word: string; reason?: string } | undefined {
+  if (state.status === "connecting") return { word: "Connecting", ...(state.reason !== undefined && { reason: state.reason }) }
+  if (state.status === "reconnecting") return { word: "Reconnecting", reason: state.reason }
+  return undefined
+}
+
 export type ConnectionOptions = {
   // The server's address: the page's own, in a browser.
   url: string

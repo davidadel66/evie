@@ -1,7 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
 import { startServer } from "../src/index.ts"
 import { openTokens } from "../src/server/tokens.ts"
-import { openConnection, type Connection, type ConnectionState, type ConnectionOptions } from "../web/src/connection.ts"
+import type { Evie } from "../src/core/types.ts"
+import { connectionLine, openConnection, type Connection, type ConnectionState, type ConnectionOptions } from "../web/src/connection.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
 
@@ -171,4 +172,15 @@ test("signing in gives up when the server does not answer in time, and says so",
   await until(connection, "signed out")
 
   expect(await connection.signIn({ token: "a-token" })).toBe("evie's server did not answer in time. Check that `evie serve` is running, and try again.")
+})
+
+test("the line under the header says nothing while connected or signed out, and while the line is not up, the word and why", () => {
+  const dropped = "The connection to evie's server dropped: the server went away."
+  const away = "No evie server is running at http://127.0.0.1:3843. Start it with `evie serve`."
+
+  expect(connectionLine({ status: "connected", evie: {} as Evie })).toBeUndefined()
+  expect(connectionLine({ status: "signed out", reason: "This browser was signed out: its token was taken back." })).toBeUndefined()
+  expect(connectionLine({ status: "connecting" })).toEqual({ word: "Connecting" })
+  expect(connectionLine({ status: "connecting", reason: away })).toEqual({ word: "Connecting", reason: away })
+  expect(connectionLine({ status: "reconnecting", reason: dropped })).toEqual({ word: "Reconnecting", reason: dropped })
 })
