@@ -1,5 +1,5 @@
 import type { ChangedFile, Job, StoredEvent, TurnChanges } from "../../src/core/types.ts"
-import { shownIn } from "../../src/plugins/show/record.ts"
+import { shownIn, type ShownFile } from "../../src/plugins/show/record.ts"
 import { shownAttachment, type ShownAttachment } from "./attachments.ts"
 import { shownOf, type Shown } from "./shown.ts"
 import { fieldsOf, liveWords, runWords, stepFailed, stepKind, stepTarget, stepWords, type StepKind } from "./step-words.ts"
@@ -186,9 +186,9 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
         call = callOf(event.body.callId, event.body.name, undefined, event.time)
         runAt(event.time).calls.push(call)
       }
-      Object.assign(call, { result: event.body.text, short: shortOf(event.body.text), failed: stepFailed(event.body.text) })
+      Object.assign(call, resultOf(event))
       if (event.body.name === "show") {
-        const files = shownIn(event.body.text).map((file, at): Item => ({ key: `shown-${event.body.callId}-${at}`, turn, kind: "shown", file: shownOf(file, event.session, projectAt.get(event.seq)) }))
+        const files = shownFilesOf(event).map((file, at): Item => ({ key: `shown-${event.body.callId}-${at}`, turn, kind: "shown", file: shownOf(file, event.session, projectAt.get(event.seq)) }))
         shown.set(turn, [...(shown.get(turn) ?? []), ...files])
       }
     }
@@ -329,6 +329,33 @@ function folded(items: Item[], ends: Map<number, { seq: number; completed: boole
   return out
 }
 
+
+// A call's result as stored, with it in short and whether it says the call
+// failed, worked out once for each result, as each call's input is read
+// once below, and for the same reason: the conversation is drawn again for
+// every piece of a reply streaming in, and a long session holds hundreds of
+// results, each up to many kilobytes. Each is kept by its event, which stays
+// the same object while the page holds it, and is let go with it.
+const examined = new WeakMap<StoredEvent, { result: string; short: string; failed: boolean }>()
+function resultOf(event: Extract<StoredEvent, { type: "tool_result" }>): { result: string; short: string; failed: boolean } {
+  const kept = examined.get(event)
+  if (kept !== undefined) return kept
+  const result = event.body.text
+  const made = { result, short: shortOf(result), failed: stepFailed(result) }
+  examined.set(event, made)
+  return made
+}
+
+// The files a show call's result names, read once for each result, as
+// each result is examined once above.
+const shownRead = new WeakMap<StoredEvent, ShownFile[]>()
+function shownFilesOf(event: Extract<StoredEvent, { type: "tool_result" }>): ShownFile[] {
+  const kept = shownRead.get(event)
+  if (kept !== undefined) return kept
+  const made = shownIn(event.body.text)
+  shownRead.set(event, made)
+  return made
+}
 
 // A call's result in short: its first line with anything on it, cut short.
 const SHORT = 80
