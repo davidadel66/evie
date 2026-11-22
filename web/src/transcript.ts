@@ -191,3 +191,11 @@ function inputOf(written: string): string {
   return oneLine(typeof text === "string" ? text : written)
 }
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
+
+// What a turn's line of steps says once the turn has ended: how long it
+// worked, in its two largest units.
+export function workedFor(seconds: number): string {
+  const [hours, minutes, rest] = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60]
+  const words = hours > 0 ? [`${hours}h`, minutes > 0 ? `${minutes}m` : ""] : minutes > 0 ? [`${minutes}m`, rest > 0 ? `${rest}s` : ""] : [`${rest}s`]
+  return `Worked for ${words.filter((word) => word !== "").join(" ")}`
+}

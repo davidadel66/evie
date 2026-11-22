@@ -2,7 +2,8 @@ import { useState, useSyncExternalStore } from "react"
 import { Button } from "./components/ui/button.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import { ConnectionLight } from "./ConnectionLight.tsx"
-import type { ConnectionState } from "./connection.ts"
+import type { Connection, ConnectionState } from "./connection.ts"
+import { Conversation, Placeholder } from "./Conversation.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import { SessionList } from "./SessionList.tsx"
@@ -11,10 +12,10 @@ import { applyTheme, rememberedTheme, THEMES, type Theme } from "./theme.ts"
 import { Words } from "./Words.tsx"
 
 // The page once signed in: the session list, the conversation and the
-// project card, in three columns, which stack at phone width. The
-// conversation and the project card hold, for now, a note of what will go
-// there.
-export function Frame({ state, sessions }: { state: ConnectionState; sessions: Sessions }) {
+// project card, in three columns, which stack at phone width, where the
+// conversation is a screen high. The project card holds, for now, a note
+// of what will go there.
+export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   return (
     <div className="flex min-h-dvh flex-col wide:h-dvh wide:flex-row">
       <aside aria-label="Sessions" className="flex flex-col bg-bg-side wide:w-session-list wide:shrink-0">
@@ -34,8 +35,8 @@ export function Frame({ state, sessions }: { state: ConnectionState; sessions: S
         <SessionList sessions={sessions} />
       </aside>
 
-      <main className="flex flex-1 flex-col items-center justify-center gap-2 bg-bg px-7 py-8 text-center">
-        <OpenSession sessions={sessions} />
+      <main className="flex h-dvh min-w-0 flex-1 flex-col bg-bg">
+        <OpenSession connection={connection} sessions={sessions} />
       </main>
 
       <aside aria-label="Project" className="flex flex-col border-t border-line bg-bg wide:w-project-card wide:shrink-0 wide:border-t-0 wide:border-l">
@@ -48,43 +49,24 @@ export function Frame({ state, sessions }: { state: ConnectionState; sessions: S
   )
 }
 
-// The middle column, for now: the selected session's title, where its
-// conversation will be, or for a draft, where the new session will start.
-function OpenSession({ sessions }: { sessions: Sessions }) {
+// The middle column: the selected session's conversation, under its name,
+// or for a draft, where the new session will start.
+function OpenSession({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
-  if (selected === undefined) {
-    return (
-      <>
-        <h1 className="text-page-title text-text">No session open</h1>
-        <p className="max-w-sign-in-column text-body text-text-muted">The conversation will be here: your messages, evie's replies and the steps it took.</p>
-      </>
-    )
-  }
+  if (selected === undefined) return <Placeholder title="No session open" text="The conversation will be here: your messages, evie's replies and the steps it took." />
   if ("draft" in selected) {
     const project = list.projects.find((each) => each.id === selected.draft)
     const where = selected.draft === null ? "with no project" : `in ${project?.name ?? "its project"}`
-    return (
-      <>
-        <h1 className="text-page-title text-text">New session</h1>
-        <p className="max-w-sign-in-column text-body text-text-muted">A new session {where} starts when its first message is sent.</p>
-      </>
-    )
+    return <Placeholder title="New session" text={`A new session ${where} starts when its first message is sent.`} />
   }
-  if (!list.listed) return null
   const session = list.sessions.find((each) => each.session === selected.session)
-  if (session === undefined) {
-    return (
-      <>
-        <h1 className="text-page-title text-text">Not in the list</h1>
-        <p className="max-w-sign-in-column text-body text-text-muted">Nothing has been said in this session yet, or it is no longer there.</p>
-      </>
-    )
-  }
   return (
     <>
-      <h1 className="max-w-sign-in-column text-page-title text-text">{titleOf(session)}</h1>
-      <p className="max-w-sign-in-column text-body text-text-muted">Its conversation will be shown here.</p>
+      <header className="flex h-header-height shrink-0 items-center px-7">
+        <h1 className="truncate text-title text-text">{session === undefined ? "" : titleOf(session)}</h1>
+      </header>
+      <Conversation connection={connection} session={selected.session} />
     </>
   )
 }

@@ -21,7 +21,7 @@ function blocks(tokens: Token[]): ReactNode[] {
         return []
       case "heading": {
         const heading = token as Tokens.Heading
-        return [h(HEADINGS[heading.depth - 1] ?? "h6", { key, className: heading.depth <= 2 ? "text-title text-text" : "text-label text-text" }, inline(heading.tokens))]
+        return [h(HEADINGS[heading.depth - 1] ?? "h6", { key, className: heading.depth <= 2 ? "text-title" : "text-label" }, inline(heading.tokens))]
       }
       case "paragraph":
         return [h("p", { key }, inline((token as Tokens.Paragraph).tokens))]

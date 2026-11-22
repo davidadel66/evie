@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { EventBodies, Job, StoredEvent, StoredEventType } from "../src/core/types.ts"
-import { transcriptOf, type Item, type View } from "../web/src/transcript.ts"
+import { transcriptOf, workedFor, type Item, type View } from "../web/src/transcript.ts"
 
 // How a conversation reads in the web app, apart from its screen: the
 // session's stored events, the reply being written and its jobs, turned
@@ -248,4 +248,9 @@ test("a page that begins part way through a turn shows the calls whose results i
     "note 1: Note to evie: Background job 1 (sh scripts/slow-tests.sh) has finished.",
     "reply 1: All 12 passed.",
   ])
+})
+
+test("how long a turn worked is said in seconds, then minutes and seconds, then hours and minutes", () => {
+  expect([workedFor(1), workedFor(48), workedFor(60), workedFor(125), workedFor(3599)]).toEqual(["Worked for 1s", "Worked for 48s", "Worked for 1m", "Worked for 2m 5s", "Worked for 59m 59s"])
+  expect([workedFor(3600), workedFor(3780), workedFor(7265)]).toEqual(["Worked for 1h", "Worked for 1h 3m", "Worked for 2h 1m"])
 })

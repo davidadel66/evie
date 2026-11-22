@@ -18,6 +18,8 @@ export const NAMED_SIZES = [
   "session-list",
   "project-card",
   "sign-in-column",
+  "conversation",
+  "call-name",
   "menu",
 ] as const
 

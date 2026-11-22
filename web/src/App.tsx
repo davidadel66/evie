@@ -13,5 +13,5 @@ export function App({ connection, sessions }: { connection: Connection; sessions
   const state = useSyncExternalStore(connection.subscribe, connection.state)
   if (state.status === "connecting" && state.reason === undefined) return <div className="min-h-dvh bg-bg" />
   if (state.status === "signed out") return <SignIn connection={connection} state={state} />
-  return <Frame state={state} sessions={sessions} />
+  return <Frame state={state} connection={connection} sessions={sessions} />
 }
