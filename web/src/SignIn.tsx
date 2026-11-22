@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from "react"
-import { ConnectionLight } from "./ConnectionLight.tsx"
 import type { Connection, ConnectionState } from "./connection.ts"
 import { Words } from "./Words.tsx"
 
@@ -24,10 +23,7 @@ export function SignIn({ connection, state }: { connection: Connection; state: E
   return (
     <main className="flex min-h-dvh justify-center bg-bg px-7 py-8 wide:items-center">
       <div className="flex w-full max-w-sign-in-column flex-col gap-6">
-        <div className="flex items-center gap-3">
-          <span className="text-title text-text">evie</span>
-          <ConnectionLight state={state} />
-        </div>
+        <span className="text-title text-text">evie</span>
 
         <div className="flex flex-col gap-3">
           <h1 className="text-page-title text-text">Sign in</h1>

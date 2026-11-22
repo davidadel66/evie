@@ -230,11 +230,12 @@ any name other than `127.0.0.1` or `localhost` must be listed under
 ```
 
 The page has three columns: the list of sessions, the conversation and the
-project card. For now only the list is filled in; the conversation and the
-project card come next. A light at the top says whether it is connected.
-While the line is down it says Reconnecting, and it catches up by itself
-once the line is back. A menu beside it picks one of three themes, Dusk,
-Moss and Oxblood, which the browser remembers.
+project card. For now the project card is empty, and a conversation can be
+read but not yet written in. While the page is connected, nothing says so;
+while the line is down, one quiet line under the name at the top says
+Reconnecting, and why, and the page catches up by itself once the line is
+back. The gear beside the name opens the settings, where the theme is
+picked: one of Dusk, Moss and Oxblood, which the browser remembers.
 
 The list shows every session you have said something in, kept current as
 they change, and listed again when the line comes back:
@@ -263,6 +264,30 @@ they change, and listed again when the line comes back:
 - **What is selected** is kept in the page's address, as `#session=<id>`,
   or for a draft `#draft=<project id>` or `#draft=none`, so a reload or a
   bookmark opens on it.
+
+The middle column shows the selected session's conversation, joining it as
+it stands, even while a reply is being written:
+
+- **Your messages** are on the right; **evie's replies** are on the page,
+  drawn from Markdown (headings, lists, code, links and tables). HTML in a
+  reply is shown as the text it is, an image is linked to rather than
+  loaded, and only a web or mail address is a link.
+- **A reply streams in** as it is written.
+- **While a turn runs**, it shows in the order things happen: evie's
+  words where it wrote them, and each run of tools it used between them as
+  one quiet line, which opens to list each call with its result in short;
+  each call opens to its whole result.
+- **Once a turn has completed**, everything before its final reply folds
+  into one quiet line, such as "Worked for 48s", which opens to show it in
+  order. A question and its answer, and notes, stay outside the fold. A
+  turn that was stopped, failed or had a reply cut short is not folded.
+- **Notes** say in quiet words what else happened: a compaction, with its
+  summary to open; a note evie was told; a reply cut short; a turn that
+  failed or was stopped; a question and your answer; and a background
+  job's start and end.
+- **The latest page** of the conversation is shown first, and earlier ones
+  as you scroll up. While you are at the bottom, new text keeps you there;
+  scrolled up, you stay where you are, with a way back down.
 
 ### Keeping the server running
 
@@ -912,8 +937,11 @@ A few values the design system's board does not name are named once in
 | `session-list` | 288px | The width of the session list |
 | `project-card` | 320px | The width of the project card |
 | `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle |
+| `conversation` | 740px | The widest the conversation is, which the board's Message gives in words |
+| `call-name` | 48px | The room a tool call's name takes in a turn's steps, as the board's Message draws them |
 | `control` | 40px | The height of buttons and menu items, which the board's Button and Menu give in words |
 | `menu` | 176px | The narrowest a menu is |
+| `dialog` | 400px | The widest a dialog is, such as the settings window |
 | `tile-row` | 18px | A project's icon tile in a session row, which the board's WorkspaceIcon gives in words |
 | `tile-row-icon` | 12px | The icon on that tile, as the board's SessionRow draws it |
 | `project-filter` | 128px | The widest the session list's project filter grows |
