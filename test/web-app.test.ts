@@ -32,7 +32,11 @@ test("the build hands over its metafile, which names the page's script by its pa
   const script = [...text(app.page.identity).matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
   const entries = Object.entries(app.metafile.outputs).filter(([path, output]) => output.entryPoint === "web/index.html" && path.endsWith(".js"))
   expect(entries.map(([path]) => path.replace(/^\./, ""))).toEqual(script)
-  const imports = entries[0]![1].imports.filter((each) => each.kind === "import-statement")
+  // Each chunk it imports, at once or by import(). How many of each depends
+  // on Bun: 1.4.0 puts the code the page shares with the diff view in chunks
+  // of their own, which the page imports at once; 1.4.5 puts that code in
+  // the page's script, which then imports only the diff view, by import().
+  const imports = entries[0]![1].imports.filter((each) => each.kind === "import-statement" || each.kind === "dynamic-import")
   expect(imports.length).toBeGreaterThan(0)
   for (const each of imports) expect(Object.keys(app.files)).toContain(each.path.replace(/^\./, ""))
 })
@@ -109,8 +113,11 @@ test("the page has one modulepreload link for each chunk its script imports, and
   }
   const scripts = Object.keys(outputs).filter((path) => outputs[path]!.entryPoint === "web/index.html" && path.endsWith(".js"))
   for (const script of scripts) follow(script)
+  // None on Bun 1.4.5, whose script imports no chunk at once: the code the
+  // page shares with what it loads later is in the script itself. The page
+  // then has no such links at all. The next test checks the links on a
+  // metafile of its own, whatever Bun builds.
   const expected = [...imported].map((path) => path.replace(/^\./, "")).sort()
-  expect(expected.length).toBeGreaterThan(0)
 
   const page = text(app.page.identity)
   const links = [...page.matchAll(/<link\b[^>]*>/g)].map((match) => match[0]).filter((tag) => /\brel="?modulepreload"?[\s/>]/.test(tag))
@@ -120,8 +127,9 @@ test("the page has one modulepreload link for each chunk its script imports, and
   for (const path of named) expect(Object.keys(app.files)).toContain(path)
   // In the head, where the browser finds them as it reads the page's start.
   for (const tag of links) expect(page.indexOf(tag)).toBeLessThan(page.indexOf("</head>"))
-  // What the script loads with `import()`, as the diff view, is left to load when it is needed.
-  const later = scripts.flatMap((script) => outputs[script]!.imports.filter((each) => each.kind === "dynamic-import" && !imported.has(each.path)))
+  // What the script, or a chunk it imports, loads with `import()`, as the
+  // diff view, is left to load when it is needed.
+  const later = [...scripts, ...imported].flatMap((script) => outputs[script]!.imports.filter((each) => each.kind === "dynamic-import" && !imported.has(each.path)))
   expect(later.length).toBeGreaterThan(0)
   for (const each of later) expect(named).not.toContain(each.path.replace(/^\./, ""))
 })
@@ -394,8 +402,8 @@ test("the screens opened rarely or later, and the drawings of every icon but the
 
   // Words of the settings, the command palette, the session details, the
   // right panel, the workspace view, its side chat and storage, the icon
-  // picker, and an icon's name.
-  for (const words of ["Restart to apply", "Command palette", "Choose what to show", "The diff view could not be loaded", "This workspace is not in the list", "Ask evie to change something here", "Backed up privately", "No matching icon", "cooking-pot"]) {
+  // picker, an icon's name, and the viewers of the files evie shows.
+  for (const words of ["Restart to apply", "Command palette", "Choose what to show", "The diff view could not be loaded", "This workspace is not in the list", "Ask evie to change something here", "Backed up privately", "No matching icon", "cooking-pot", "Expanded image preview", "in the browser's PDF view"]) {
     expect({ words, first: firstScript.includes(words), later: laterScripts.includes(words) }).toEqual({ words, first: false, later: true })
   }
 })

@@ -145,13 +145,13 @@ function isKept(path: string, size?: number): boolean {
 // A folder for the day inside `root`, made when it is missing, as `root`
 // is and the folders above it, up to the first that is there. Each is made
 // one at a time, and one that is a link, or not a folder, is refused before
-// anything is made inside it.
-async function folderAt(root: string, day: string): Promise<string> {
+// anything is made inside it, with the error `refuse` makes. The show
+// tool makes its folders in the same way.
+export async function folderAt(root: string, day: string, refuse = () => new Error("This project's .evie/attachments folder leads through a link to somewhere else, so nothing is attached there. Remove the link, and attach it again.")): Promise<string> {
   const folder = join(root, day)
   const missing: string[] = []
   let there = folder
   for (; realOrNothing(there) === undefined; there = dirname(there)) missing.unshift(there)
-  const refuse = () => new Error("This project's .evie/attachments folder leads through a link to somewhere else, so nothing is attached there. Remove the link, and attach it again.")
   if (realOrNothing(there) !== there) throw refuse()
   for (const each of missing) await mkdir(each).catch((cause: { code?: string }) => (cause.code === "EEXIST" ? undefined : Promise.reject(cause)))
   if (realOrNothing(folder) !== folder || !lstatSync(folder).isDirectory()) throw refuse()
@@ -240,13 +240,13 @@ export function pictureIn(bytes: Uint8Array): { type: string; width: number; hei
 }
 
 // Today's date where evie runs, as the owner reads it, such as 2026-11-22.
-function today(): string {
+export function today(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
 }
 
 // A name with a number before its ending, as `plan-2.pdf`.
-function numbered(name: string, count: number): string {
+export function numbered(name: string, count: number): string {
   const ending = extname(name)
   return `${name.slice(0, name.length - ending.length)}-${count}${ending}`
 }

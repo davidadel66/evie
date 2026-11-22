@@ -14,7 +14,7 @@ import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "
 import { createQuestions } from "./questions.ts"
 import { createAttachments } from "./attachments.ts"
 import { listProjectFiles } from "./project-files.ts"
-import { listStorage, readStorage } from "./storage.ts"
+import { listStorage, readStorage, storageFileAt } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
 import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider, SettingsEditor } from "./types.ts"
@@ -1096,6 +1096,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
 
   return {
     attachments,
+    storage: {
+      async open(id, path) {
+        const project = typeof id === "string" ? projects.get(id) : undefined
+        return project && typeof path === "string" ? storageFileAt(project.folder, path, home) : undefined
+      },
+    },
     async send(command) {
       // Each branch returns what its command promises; the cast tells the
       // compiler so, since it cannot follow the command's type through.

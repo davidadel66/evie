@@ -1,13 +1,14 @@
 import { lstat, mkdir, readdir, rmdir, unlink, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { jobOfFile } from "./jobs.ts"
-import type { CheckedToolCall, Tool, ToolCall, ToolContext } from "./types.ts"
+import type { CheckedToolCall, Json, Tool, ToolCall, ToolContext, ToolOutput } from "./types.ts"
 
 // What every tool call goes through, whichever tool it is for: find the
 // tool, check and repair the input, ask the plugins, run it, let the plugins
-// see the result, and cap the output. The result
-// is always text for the model. A problem the model can fix is returned as
-// that text; only a bug in a tool throws.
+// see the result, and cap the output. The result is text for the model,
+// with any details the tool gave for clients, which the hooks and the cap
+// leave as they are. A problem the model can fix is returned as that text;
+// only a bug in a tool throws.
 
 // Thrown when the turn was cancelled before a tool got to run.
 export class CancelledBeforeStart extends Error {}
@@ -30,35 +31,36 @@ export type ToolRunOptions = {
   outputFolder: string
 }
 
-export async function runToolCall(call: ToolCall, options: ToolRunOptions): Promise<string> {
+export async function runToolCall(call: ToolCall, options: ToolRunOptions): Promise<{ text: string; details?: Json }> {
   const tool = options.tools.find((candidate) => candidate.name === call.name)
   if (!tool) {
     const names = options.tools.map((candidate) => candidate.name).join(", ") || "none"
-    return `There is no tool named "${call.name}". The tools are: ${names}.`
+    return { text: `There is no tool named "${call.name}". The tools are: ${names}.` }
   }
 
   const parsed = parseInput(call.arguments)
-  if (typeof parsed === "string") return `The input for ${tool.name} ${parsed} Send the call again with the input as one JSON object.`
+  if (typeof parsed === "string") return { text: `The input for ${tool.name} ${parsed} Send the call again with the input as one JSON object.` }
 
   const problems = repairAndCheck(parsed, tool.inputSchema)
   if (problems.length > 0) {
-    return `The input for ${tool.name} is not right: ${problems.join("; ")}. Send the call again with the input fixed.`
+    return { text: `The input for ${tool.name} is not right: ${problems.join("; ")}. Send the call again with the input fixed.` }
   }
 
   const checked: CheckedToolCall = { id: call.id, name: tool.name, input: parsed }
   const denied = await options.before(checked)
-  if (denied !== undefined) return denied
+  if (denied !== undefined) return { text: denied }
   // The turn may have been cancelled while the hooks ran.
   if (options.context.signal.aborted) throw new CancelledBeforeStart()
 
-  let output: string
+  let output: ToolOutput
   try {
     output = await tool.run(parsed, options.context)
   } catch (cause) {
     throw new Error(`The tool "${tool.name}" broke: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
-  output = await options.after(checked, output)
-  return capOutput(output, join(options.outputFolder, `${safeName(call.id)}.txt`), tool.longOutput === "end" ? "end" : "start")
+  const { text, details } = typeof output === "string" ? { text: output } : output
+  const capped = await capOutput(await options.after(checked, text), join(options.outputFolder, `${safeName(call.id)}.txt`), tool.longOutput === "end" ? "end" : "start")
+  return { text: capped, ...(details !== undefined && { details }) }
 }
 
 // ---- The input ------------------------------------------------------------------

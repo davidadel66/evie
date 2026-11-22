@@ -19,8 +19,8 @@ export const MODES = ["read-only", "manual", "auto"] as const
 export type Mode = (typeof MODES)[number]
 
 // One rule. `action` is what kind of thing is being done: "read" (read, grep,
-// glob), "edit" (write, edit, patch), "shell", "web", or the name of any
-// other tool. `match` is a pattern for what it is done to, and without it
+// glob, and show, for each file it shows), "edit" (write, edit, patch),
+// "shell", "web", or the name of any other tool. `match` is a pattern for what it is done to, and without it
 // the rule covers every such action.
 //
 // For read and edit the pattern is a path. `*` stands for anything within
@@ -87,6 +87,12 @@ export function actsOf(call: CheckedToolCall, folder: string | null): Act[] {
   const text = (value: unknown) => (typeof value === "string" ? value : "")
 
   if (READ_TOOLS.includes(call.name)) return [path("read", text(call.input.path) || ".", call.name !== "read")]
+  // Showing a file reads it, and keeps a copy in Storage for the owner: it
+  // is held to the rules for reading each file it is given.
+  if (call.name === "show") {
+    const given = Array.isArray(call.input.paths) ? call.input.paths.map(text).filter((each) => each !== "") : []
+    return given.length > 0 ? given.map((each) => path("read", each)) : [path("read", ".")]
+  }
   if (call.name === "patch") {
     const files = patchFiles(text(call.input.patchText))
     // A patch in which no file can be found is not let through as harmless.
@@ -232,6 +238,13 @@ export function questionFor(call: CheckedToolCall, asking: readonly Act[], folde
   if (call.name === "shell") {
     const where = typeof call.input.workdir === "string" && call.input.workdir !== "" ? `\n(in ${call.input.workdir})` : ""
     return `Run this command?\n\n  ${String(call.input.command).trim().split("\n").join("\n  ")}${where}`
+  }
+  if (call.name === "show") {
+    const files = [...new Set(asking.map((act) => shown(act.target, folder)))]
+    const outside = asking.some((act) => !act.inside) ? ", which is outside the project" : ""
+    return files.length === 1
+      ? `Let evie show you ${files[0]}${outside}? A copy is kept in Storage.`
+      : `Let evie show you these files${outside && " from outside the project"}? A copy of each is kept in Storage.\n\n  ${files.join("\n  ")}`
   }
   if (asking[0]?.kind === "path") {
     const doing = asking[0].action === "read" ? "read" : "change"

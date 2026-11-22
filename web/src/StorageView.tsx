@@ -3,16 +3,20 @@ import type { ListedProject, StorageEntry } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 import { CaretLeft, CaretRight, File, FileImage, Folder } from "./icons.tsx"
 import { ageWords } from "./session-list.ts"
+import { ShownFrame } from "./Shown.tsx"
+import { storageShown } from "./shown.ts"
 import { openStorage, type Storage, type StorageState } from "./storage.ts"
 import { addressOfWorkspace, sizeWords, type WorkspacePlace } from "./workspace.ts"
 
 // The workspace's Storage tab: the files in its project's .evie folder,
-// the files attached to messages among them, in its attachments folder, as
-// a tree of rows, every folder open at first: each row with its icon, its
-// name and how long ago it changed, a folder's entries under its row, a
-// step further in. A folder folds by its caret, as T3 Code's trees do. At
-// its foot, whether the folder is backed up. A file opens in the
-// workspace, read only, in place of the tree.
+// the files attached to messages among them, in its attachments folder,
+// and what evie showed, in its shown folder, as a tree of rows, every
+// folder open at first: each row with its icon, its name and how long ago
+// it changed, a folder's entries under its row, a step further in. A
+// folder folds by its caret, as T3 Code's trees do. At its foot, whether
+// the folder is backed up. A file opens in the workspace, read only, in
+// place of the tree: one of a kind evie shows in the frame it is shown in
+// under a reply, any other as its text or picture.
 export function StorageView({ connection, project, place, now }: { connection: Connection; project: ListedProject; place: WorkspacePlace; now: number }) {
   const [storage, setStorage] = useState<{ project: string; storage: Storage }>()
   useEffect(() => {
@@ -29,7 +33,7 @@ function Shown({ storage, project, place, now }: { storage: Storage; project: Li
   useEffect(() => storage.show(place.file), [storage, place.file])
   const { file: _, ...here } = place
   const back = addressOfWorkspace({ ...here, tab: "storage" })
-  if (place.file !== undefined) return <FileShown state={state} path={place.file} back={back} now={now} />
+  if (place.file !== undefined) return <FileShown state={state} path={place.file} back={back} now={now} project={project.id} />
   const top = state.folders.get("")
   return (
     <section aria-label="Storage" className="flex flex-col px-gutter py-5">
@@ -38,7 +42,7 @@ function Shown({ storage, project, place, now }: { storage: Storage; project: Li
       ) : top?.entries === undefined ? (
         <Listing />
       ) : top.entries.length === 0 ? (
-        <Quiet>Nothing in the .evie folder yet. What evie keeps for this workspace, and the files attached to messages, will be here.</Quiet>
+        <Quiet>Nothing in the .evie folder yet. What evie keeps for this workspace, the files attached to messages and what evie shows you will be here.</Quiet>
       ) : (
         <ul className="flex flex-col">
           <Entries entries={top.entries} depth={0} state={state} storage={storage} place={place} now={now} />
@@ -107,9 +111,15 @@ const indentOf = (depth: number) => ({ paddingLeft: `${depth * 24}px` })
 
 // A file open in the workspace, read only: its path, size and when it
 // changed, and its text, or the image, with the way back to the list.
-function FileShown({ state, path, back, now }: { state: StorageState; path: string; back: string; now: number }) {
+function FileShown({ state, path, back, now, project }: { state: StorageState; path: string; back: string; now: number; project: string }) {
   const file = state.file?.path === path ? state.file : undefined
   const read = file?.read
+  // A file of a kind evie shows, which the server gives, opens in the frame
+  // it is shown in under a reply, drawn by the same viewer, fetched whole;
+  // its size and age are its folder's listing's, as it is not read here.
+  const shown = file?.framed ? storageShown(project, path) : undefined
+  const listed = state.folders.get(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "")?.entries?.find((entry) => entry.path === path)
+  const facts = read ?? (shown !== undefined && listed?.kind === "file" ? listed : undefined)
   return (
     <div className="flex min-w-0 flex-col">
       <div className="flex min-h-row-height items-center gap-2 border-b border-line py-1 pr-gutter wide:pl-2">
@@ -120,14 +130,16 @@ function FileShown({ state, path, back, now }: { state: StorageState; path: stri
         <span title={path} className="min-w-0 flex-1 truncate font-mono text-code text-text">
           {path}
         </span>
-        {read !== undefined && (
+        {facts !== undefined && (
           <span className="shrink-0 text-caption text-text-muted">
-            {sizeWords(read.size)} · {ageWords(read.changed, now)}
+            {sizeWords(facts.size)} · {ageWords(facts.changed, now)}
           </span>
         )}
       </div>
       <div className="px-gutter py-4">
-        {file?.problem !== undefined ? (
+        {shown !== undefined ? (
+          <ShownFrame file={shown} inStorage />
+        ) : file?.problem !== undefined ? (
           <p className="text-body break-words text-text-muted">{file.problem}</p>
         ) : read === undefined ? (
           <p className="flex min-h-control items-center text-body text-text-muted">Reading the file</p>
