@@ -1,4 +1,5 @@
 import type { Job, StoredEvent } from "../../src/core/types.ts"
+import { shownAttachment, type ShownAttachment } from "./attachments.ts"
 
 // How a conversation reads in the web app, apart from its screen: a
 // session's stored events, with the reply being written and its jobs,
@@ -31,7 +32,8 @@ export type Call = { id: string; name: string; input: string; result?: string; s
 // `turn` is the number of the turn it belongs to, counted in what has been
 // read, so that the page can space turns apart.
 export type Item = { key: string; turn: number } & (
-  | { kind: "owner"; text: string }
+  // `attachments` are the files attached to the owner's message, when it has any.
+  | { kind: "owner"; text: string; attachments?: ShownAttachment[] }
   | { kind: "reply"; text: string; streaming: boolean }
   // A run of tool calls with nothing said between them, as one line, and
   // what that line says: Working while one of them is, how long the turn
@@ -103,7 +105,10 @@ export function transcriptOf(view: View): Item[] {
       ended = false
       waited = 0
     }
-    if (event.type === "user_message") add({ key, turn, kind: "owner", text: event.body.text }, event.time)
+    if (event.type === "user_message") {
+      const attached = (event.body.attachments ?? []).map((each) => shownAttachment(event.session, each))
+      add({ key, turn, kind: "owner", text: event.body.text, ...(attached.length > 0 && { attachments: attached }) }, event.time)
+    }
     if (event.type === "assistant_message") {
       if (event.body.text !== "") add({ key, turn, kind: "reply", text: event.body.text, streaming: false }, event.time)
       if (event.body.interrupted && event.body.text !== "") {

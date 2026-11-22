@@ -5,7 +5,10 @@ import { Button } from "./components/ui/button.tsx"
 import { Composer } from "./Composer.tsx"
 import type { Connection } from "./connection.ts"
 import { holdConversation, openDraft, type Conversation as Opened, type Draft as OpenedDraft } from "./conversation.ts"
-import { CaretRight } from "./icons.tsx"
+import type { ShownAttachment } from "./attachments.ts"
+import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog.tsx"
+import { fileSize } from "./composer.ts"
+import { CaretRight, File as FileIcon } from "./icons.tsx"
 import { renderMarkdown } from "./markdown.ts"
 import { addressOf } from "./address.ts"
 import type { Sessions } from "./sessions.ts"
@@ -169,7 +172,8 @@ export function Reading({ conversation, readOnly = false }: { conversation: Open
           shown={shown}
           answer={conversation.answer}
           asking={asking}
-          send={(text) => conversation.send(text)}
+          send={(text, files) => conversation.send(text, { files })}
+          mentions={state.project ? conversation.listFiles : undefined}
         />
       )}
     </div>
@@ -203,16 +207,16 @@ export function Draft({
     return () => draft.close()
   }, [connection, sessions, key])
   if (opened?.key !== key) return null
-  return <Drafting key={key} draft={opened.draft} where={where} moved={moved ?? ((session) => location.replace(addressOf({ session })))} />
+  return <Drafting key={key} draft={opened.draft} where={where} moved={moved ?? ((session) => location.replace(addressOf({ session })))} inProject={project !== null} />
 }
 
-function Drafting({ draft, where, moved }: { draft: OpenedDraft; where: string; moved(session: string): void }) {
+function Drafting({ draft, where, moved, inProject }: { draft: OpenedDraft; where: string; moved(session: string): void; inProject: boolean }) {
   const state = useSyncExternalStore(draft.subscribe, draft.state)
   const asking = useAsking(state.waiting)
   const { shown } = asking
-  async function start(text: string) {
+  async function start(text: string, files: readonly File[]) {
     if (state.starting !== undefined) return "The session is starting. Send this once it has."
-    const started = await draft.start(text, moved)
+    const started = await draft.start(text, moved, files)
     return "problem" in started ? started.problem : undefined
   }
   return (
@@ -230,7 +234,14 @@ function Drafting({ draft, where, moved }: { draft: OpenedDraft; where: string; 
         )}
       </div>
       {/* The model picked here is the session's from its first message. */}
-      <Composer model={{ current: state.model, list: draft.listModels, pick: async (model) => (draft.pick(model), undefined) }} shown={shown} answer={draft.answer} asking={asking} send={start} />
+      <Composer
+        model={{ current: state.model, list: draft.listModels, pick: async (model) => (draft.pick(model), undefined) }}
+        shown={shown}
+        answer={draft.answer}
+        asking={asking}
+        send={start}
+        mentions={inProject ? draft.listFiles : undefined}
+      />
     </div>
   )
 }
@@ -251,7 +262,12 @@ type Shown = { shown: ReadonlySet<string>; show: (ids: string[], open: boolean) 
 function Drawn({ item, shown, show }: { item: Item } & Shown) {
   switch (item.kind) {
     case "owner":
-      return <p className="max-w-4/5 self-end rounded-lg bg-surface-raised px-4 py-2 text-body break-words whitespace-pre-wrap text-text">{item.text}</p>
+      return (
+        <>
+          {item.text !== "" && <p className="max-w-4/5 self-end rounded-lg bg-surface-raised px-4 py-2 text-body break-words whitespace-pre-wrap text-text">{item.text}</p>}
+          {item.attachments !== undefined && <Attachments attachments={item.attachments} spaced={item.text !== ""} />}
+        </>
+      )
     case "reply":
       return <Markdown text={item.text} className="text-text" />
     case "steps":
@@ -271,6 +287,46 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
         </div>
       )
   }
+}
+
+// The files attached to the owner's message, under it: an image as a
+// thumbnail that opens full size, any other file as its name and size.
+function Attachments({ attachments, spaced }: { attachments: ShownAttachment[]; spaced: boolean }) {
+  const [opened, setOpened] = useState<ShownAttachment>()
+  const images = attachments.filter((each) => each.address !== undefined)
+  const others = attachments.filter((each) => each.address === undefined)
+  return (
+    <div className={`flex max-w-4/5 flex-col items-end gap-2 self-end ${spaced ? "mt-2" : ""}`}>
+      {images.length > 0 && (
+        <ul aria-label="Images attached" className="flex flex-wrap justify-end gap-2">
+          {images.map((each) => (
+            <li key={each.path}>
+              <button type="button" onClick={() => setOpened(each)} aria-label={`Open ${each.name}`} title={each.name} className="block overflow-hidden rounded-md">
+                <img src={each.address} alt={each.name} loading="lazy" className="max-h-attachment-shown max-w-attachment-shown object-contain" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {others.length > 0 && (
+        <ul aria-label="Files attached" className="flex flex-col items-end">
+          {others.map((each) => (
+            <li key={each.path} title={each.path} className="flex min-h-control max-w-full items-center gap-2 text-caption text-text-muted">
+              <FileIcon className="size-icon-sm shrink-0" />
+              <span className="min-w-0 truncate text-text">{each.name}</span>
+              <span className="shrink-0">{fileSize(each.size)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Dialog open={opened !== undefined} onOpenChange={(open) => !open && setOpened(undefined)}>
+        <DialogContent className="max-w-image-open gap-3 p-3">
+          <DialogTitle className="truncate text-caption text-text-muted">{opened?.name}</DialogTitle>
+          {opened !== undefined && <img src={opened.address} alt={opened.name} className="mx-auto max-h-image-open-height max-w-full object-contain" />}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
 }
 
 // A reply, or a piece of one, drawn from its Markdown. Drawn again only

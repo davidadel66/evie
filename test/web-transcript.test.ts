@@ -339,3 +339,25 @@ test("how long a turn worked is said in seconds, then minutes and seconds, then 
   expect([workedFor(1), workedFor(48), workedFor(60), workedFor(125), workedFor(3599)]).toEqual(["Worked for 1s", "Worked for 48s", "Worked for 1m", "Worked for 2m 5s", "Worked for 59m 59s"])
   expect([workedFor(3600), workedFor(3780), workedFor(7265)]).toEqual(["Worked for 1h", "Worked for 1h 3m", "Worked for 2h 1m"])
 })
+
+test("the owner's message shows what was attached to it: an image by the address it is fetched from, any other file by its name and size", () => {
+  const photo = { path: "/p/.evie/attachments/2026-11-22/photo.png", name: "photo.png", type: "image/png", size: 1200 }
+  const plan = { path: "/p/.evie/attachments/2026-11-22/plan.pdf", name: "plan.pdf", type: "application/pdf", size: 2_200_000 }
+  const drawing = { path: "/p/.evie/attachments/2026-11-22/drawing.svg", name: "drawing.svg", type: "image/svg+xml", size: 900 }
+  const events = session(event("turn_start", {}), event("user_message", { text: "What are these?", attachments: [photo, plan, drawing] }))
+
+  const [owner] = transcriptOf(view(events))
+
+  expect(owner).toEqual({
+    key: "e2",
+    turn: 1,
+    kind: "owner",
+    text: "What are these?",
+    attachments: [
+      { ...photo, address: `/attachments?session=s1&path=${encodeURIComponent(photo.path)}` },
+      plan,
+      // Only an image a browser draws, and never runs, is fetched to be shown.
+      drawing,
+    ],
+  })
+})

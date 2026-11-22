@@ -373,3 +373,66 @@ test("a draft's first message that cannot be sent once the page has moved to the
   expect(conversation.takeGivenBack()).toBeUndefined()
   expect(conversation.state().givenBack).toBeUndefined()
 })
+
+// ---- Files ---------------------------------------------------------------------------
+
+const file = (name: string, text: string, type = "text/plain") => new File([text], name, { type })
+
+test("a message sent with files sends each to the server first, and the message the session records carries them", async () => {
+  const { served, connection, model } = await start([{ text: ["Seen."] }])
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+
+  expect(await conversation.send("Read these", { files: [file("plan.txt", "Beds.\n"), file("notes.txt", "Water.\n")] })).toBeUndefined()
+
+  const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
+  const message = replied.events.find((event) => event.type === "user_message")
+  expect(message?.type === "user_message" && message.body.attachments?.map(({ name, type, size }) => ({ name, type, size }))).toEqual([
+    { name: "plan.txt", type: "text/plain", size: 6 },
+    { name: "notes.txt", type: "text/plain", size: 7 },
+  ])
+  expect(model.requests[0]?.messages[0]?.text).toContain("[Attached: plan.txt (text/plain, 6 bytes), kept at ")
+})
+
+test("a file the server refuses stops the message, which is not sent, and says why", async () => {
+  const { served, connection, model } = await start([{ text: ["Seen."] }])
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+
+  const refused = await conversation.send("Read this", { files: [file("plan.txt", "Beds.\n"), file("..", "x")] })
+
+  expect(refused).toBe('".." is not a plain file name. A file is attached by its name alone, such as "plan.pdf".')
+  expect(conversation.state().pending).toEqual([])
+  await Bun.sleep(20)
+  expect(model.requests).toHaveLength(0)
+})
+
+test("a conversation knows its session's project and lists the project's files for @; one with no project has none to list", async () => {
+  const { served, connection } = await start()
+  await Bun.write(`${served.run.projectFolder}/plan.md`, "Beds.\n")
+  const conversation = open(connection, served.run.session)
+  const opened = await until(conversation, (state) => state.opened)
+
+  expect(opened.project).toBe(served.run.project!.id)
+  expect(await conversation.listFiles()).toEqual({ files: ["plan.md"], more: false })
+
+  const general = open(connection, (await served.run.evie.send({ type: "open_session" })).session)
+  expect((await until(general, (state) => state.opened)).project).toBeNull()
+  await expect(general.listFiles()).rejects.toThrow("This session is in no project, so it has no files to mention.")
+})
+
+test("a draft's first message carries its files, and a draft in a project lists the project's files", async () => {
+  const { served, connection } = await start([{ text: ["Seen."] }])
+  await Bun.write(`${served.run.projectFolder}/plan.md`, "Beds.\n")
+  const { draft: started } = await draft(connection, served.run.project!.id)
+
+  expect(await started.listFiles()).toEqual({ files: ["plan.md"], more: false })
+  const result = await started.start("Read this", () => {}, [file("plan.txt", "Beds.\n")])
+  if (!("session" in result)) throw new Error(result.problem)
+  const conversation = takeStarted(result.session)!
+  cleanups.push(async () => conversation.close())
+
+  const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
+  const message = replied.events.find((event) => event.type === "user_message")
+  expect(message?.type === "user_message" && message.body.attachments?.map((each) => each.name)).toEqual(["plan.txt"])
+})

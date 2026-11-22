@@ -1,6 +1,9 @@
+import { ATTACHMENT_LIMIT } from "../../src/core/types.ts"
+
 // The message box's rules, apart from its screen: the menu a slash opens,
 // how it is ranked and moved through, what a message that is a command
-// says, and bringing back the owner's earlier messages. They follow T3
+// says, and bringing back the owner's earlier messages; the menu of the
+// project's files an @ opens, and the files attached. They follow T3
 // Code's message box, which the owner chose as the model for evie's.
 
 // A command or a skill as the menu lists it.
@@ -110,4 +113,76 @@ function tokens(count: number): string {
   if (count < 10_000) return short(count / 1000, "k")
   if (count < 1_000_000) return `${Math.round(count / 1000)}k`
   return short(count / 1_000_000, "M")
+}
+
+// ---- @ mentions ---------------------------------------------------------------------
+
+// Where the @ the caret is in begins, and what has been typed after it up
+// to the caret, when the caret is in a word that starts with one: at the
+// start of the box, or after a space or a new line. An @ inside a word,
+// as in an email address, opens no menu.
+export function mentionAt(text: string, caret: number): { from: number; query: string } | undefined {
+  const before = text.slice(0, caret)
+  const from = Math.max(before.lastIndexOf(" "), before.lastIndexOf("\n"), before.lastIndexOf("\t")) + 1
+  if (before[from] !== "@") return undefined
+  return { from, query: before.slice(from + 1) }
+}
+
+// How many files the menu shows at once: the owner types more to narrow it.
+const FILES_SHOWN = 50
+
+// The project's files that have what was typed, in any case, ranked as
+// the commands are: an exact name or path first, then a name or a path
+// that starts with it, then one with a word in its path that starts with
+// it, then one with it anywhere in its path. Within each, the shorter path
+// first, then the order they were listed in. With nothing typed, the first
+// of them as listed.
+export function rankFiles(paths: readonly string[], typed: string): string[] {
+  const query = typed.trim().toLowerCase()
+  if (query === "") return paths.slice(0, FILES_SHOWN)
+  const tierOf = (path: string): number | undefined => {
+    const full = path.toLowerCase()
+    const name = full.slice(full.lastIndexOf("/") + 1)
+    if (name === query || full === query) return 0
+    if (name.startsWith(query) || full.startsWith(query)) return 1
+    if (full.split(/[/._ -]/).some((word) => word.startsWith(query))) return 2
+    if (full.includes(query)) return 3
+    return undefined
+  }
+  return paths
+    .flatMap((path, at) => {
+      const tier = tierOf(path)
+      return tier === undefined ? [] : [{ path, tier, at }]
+    })
+    .sort((a, b) => a.tier - b.tier || a.path.length - b.path.length || a.at - b.at)
+    .slice(0, FILES_SHOWN)
+    .map(({ path }) => path)
+}
+
+// The box once a file is picked: an @ and its path in place of what was
+// typed, with a space after it, and where the caret goes, after the space.
+export function putMention(text: string, mention: { from: number; query: string }, caret: number, path: string): { text: string; caret: number } {
+  const filled = `${text.slice(0, mention.from)}@${path} `
+  return { text: `${filled}${text.slice(caret).replace(/^ /, "")}`, caret: filled.length }
+}
+
+// ---- Attachments ----------------------------------------------------------------------
+
+// The files that can be attached, and why the others cannot, in words: a
+// file larger than the limit is not, as the server would refuse it.
+export function attachable<File extends { name: string; size: number }>(files: readonly File[]): { taken: File[]; problem: string | undefined } {
+  const large = files.filter((file) => file.size > ATTACHMENT_LIMIT)
+  const named = large.map((file) => file.name)
+  const list = named.length > 1 ? `${named.slice(0, -1).join(", ")} and ${named.at(-1)}` : named[0]
+  return {
+    taken: files.filter((file) => file.size <= ATTACHMENT_LIMIT),
+    problem: large.length === 0 ? undefined : `${list} ${large.length === 1 ? "is" : "are"} larger than the ${ATTACHMENT_LIMIT / 1024 / 1024} MB a file attached can be.`,
+  }
+}
+
+// A file's size in short: 4 bytes, 120 KB, 2.1 MB.
+export function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} byte${bytes === 1 ? "" : "s"}`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1).replace(/\.0$/, "")} MB`
 }

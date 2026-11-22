@@ -144,6 +144,13 @@
   /* The tallest a background job's output grows in the project card
      before it scrolls. */
   --spacing-job-output: 240px;
+  /* Files attached: the thumbnail in a chip above the message box's text,
+     the largest an image attached shows in the conversation, and the
+     largest it shows opened, within the page. */
+  --spacing-attachment-chip: 32px;
+  --spacing-attachment-shown: 160px;
+  --spacing-image-open: min(90vw, 1200px);
+  --spacing-image-open-height: 80dvh;
   /* Below this width, the columns stack. */
   --breakpoint-wide: 960px;
 }

@@ -35,6 +35,10 @@ export const NAMED_SIZES = [
   "settings-height",
   "settings-pages",
   "settings-field",
+  "attachment-chip",
+  "attachment-shown",
+  "image-open",
+  "image-open-height",
 ] as const
 
 // Joins class names, as every shadcn/ui part does, so that a class passed
