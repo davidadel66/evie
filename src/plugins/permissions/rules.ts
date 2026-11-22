@@ -1,9 +1,9 @@
-import { homedir } from "node:os"
+import { homedir, tmpdir } from "node:os"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import type { CheckedToolCall } from "../../core/types.ts"
 import { patchFiles } from "../files/paths.ts"
 import { followLinks } from "../guard.ts"
-import { isOutwardFacing, isReadOnly, leavesForHome, partsOf, placesIn, plainWords, startOf } from "./shell.ts"
+import { changesSystem, isOutwardFacing, isReadOnly, leavesForHome, overwrittenBy, partsOf, placesIn, plainWords, startOf } from "./shell.ts"
 
 // The rules of the permissions plugin: what a tool call is about to do, and
 // whether that is allowed, denied, or needs the owner's say-so. This file
@@ -14,7 +14,11 @@ export type Effect = "allow" | "deny" | "ask"
 // The three ways of working. A mode is what happens when no rule matches.
 //   read-only  nothing is changed, and nothing is asked
 //   manual     reading is free; every change and every command is asked about
-//   auto       free inside the project; asks before reaching outside it
+//   auto       reading is free anywhere, and changing files inside the
+//              project and the temp folder; any command runs, except the
+//              dangerous ones, which are asked about: those that send or
+//              publish, delete or overwrite files elsewhere, or change the
+//              system
 export const MODES = ["read-only", "manual", "auto"] as const
 export type Mode = (typeof MODES)[number]
 
@@ -46,6 +50,9 @@ export type Act = {
   folder?: boolean
   // For a command: the files it names, in full.
   names?: string[]
+  // For a command: whether it deletes, moves or overwrites files outside
+  // the project and the temp folder, or may.
+  writesOutside?: boolean
 }
 
 const READ_TOOLS = ["read", "grep", "glob"]
@@ -62,6 +69,49 @@ export function isInside(folder: string | null, absolute: string): boolean {
   if (folder === null) return false
   const within = relative(folder, absolute)
   return within === "" || (!within.startsWith("..") && !isAbsolute(within))
+}
+
+// The system's temp folder, by each name it goes by, with links followed.
+const TEMP = [...new Set(["/tmp", "/private/tmp", tmpdir(), process.env.TMPDIR ?? ""].filter((folder) => folder !== "").flatMap((folder) => [resolve(folder), followLinks(resolve(folder))]))]
+// `itself` says whether the folder itself counts, and not only what is in it.
+const isTemp = (absolute: string, itself = true) => TEMP.some((folder) => isInside(folder, absolute) && (itself || absolute !== folder))
+
+// Where a file that a command deletes, moves or overwrites is, in full,
+// with the command run in `runsIn`, which is null when that cannot be told:
+// "nowhere" for the places that are not files, and "unknown" when it cannot
+// be told, which is treated as outside.
+function whereWritten(place: string, runsIn: string | null): string {
+  if (["/dev/null", "/dev/stdout", "/dev/stderr"].includes(place)) return "nowhere"
+  if (/^~[^/]/.test(place)) return "unknown"
+  const expanded = expandHome(place).replace(/^(\$TMPDIR\b|\$\{TMPDIR\})/, (found) => process.env.TMPDIR || found)
+  if (/[$`]/.test(expanded) || (runsIn === null && !isAbsolute(expanded))) return "unknown"
+  return fullPath(expanded, runsIn)
+}
+
+// Whether a command line deletes, moves or overwrites files outside the
+// project and the temp folder, judged one command at a time. A command
+// after a `cd` is judged as if run both where the line started and where
+// it went, since a `cd` inside brackets does not last.
+function writesOutsideIn(parts: string[], runsIn: string, folder: string | null): boolean[] {
+  const places: (string | null)[] = [runsIn]
+  return parts.map((part) => {
+    const { words } = plainWords(part)
+    if (words[0] === "cd" || words[0] === "pushd") {
+      const to = words.slice(1).find((word) => word === "-" || !word.startsWith("-"))
+      for (const from of [...places]) {
+        const there = to === undefined || to === "~" ? homedir() : to === "-" ? "unknown" : whereWritten(to, from)
+        places.push(there === "unknown" || there === "nowhere" ? null : there)
+      }
+      return false
+    }
+    const { files, folders } = overwrittenBy(part)
+    const safe = (place: string, itself: boolean) =>
+      places.every((from) => {
+        const at = whereWritten(place, from)
+        return at === "nowhere" || (at !== "unknown" && ((isInside(folder, at) && (itself || at !== folder)) || isTemp(at, itself)))
+      })
+    return !files.every((file) => safe(file, false)) || !folders.every((place) => safe(place, true))
+  })
 }
 
 // Where a word of a command points, in full: "nowhere" for the places that
@@ -111,7 +161,8 @@ export function actsOf(call: CheckedToolCall, folder: string | null): Act[] {
     // outside it or names a place outside it. Once one command in the line
     // has changed folder to somewhere outside, so have the ones after it.
     const left = !isInside(folder, runsIn ?? homedir()) || judged.some(({ part, outside }) => leavesForHome(part) || (outside && /^(cd|pushd)$/.test(plainWords(part).words[0] ?? "")))
-    return judged.map(({ part, names, outside }) => ({ action: "shell", target: part, inside: !left && !outside, kind: "command", names }))
+    const writes = writesOutsideIn(parts, runsIn ?? homedir(), folder)
+    return judged.map(({ part, names, outside }, at) => ({ action: "shell", target: part, inside: !left && !outside, kind: "command", names, writesOutside: writes[at]! }))
   }
   if (WEB_TOOLS.includes(call.name)) return [{ action: "web", target: text(call.input.url) || text(call.input.query), kind: "other" }]
   return [{ action: call.name, target: "", kind: "other" }]
@@ -167,12 +218,13 @@ function byMode(act: Act, mode: Mode): Effect {
   // work. In read-only mode a subagent is read-only too, so starting one
   // changes nothing. Giving a subagent more work is the same as starting one.
   if (act.action === "subagent" || act.action === "subagent_send") return mode === "manual" ? "ask" : "allow"
-  if (act.action === "read") return act.inside ? "allow" : "ask"
-  if (act.action === "edit") return mode === "auto" && act.inside ? "allow" : "ask"
+  if (act.action === "read") return act.inside || mode === "auto" ? "allow" : "ask"
+  if (act.action === "edit") return mode === "auto" && (act.inside || isTemp(act.target, false)) ? "allow" : "ask"
   if (act.action === "shell") {
-    if (isReadOnly(act.target)) return act.inside ? "allow" : "ask"
-    if (mode === "manual") return "ask"
-    return act.inside && !isOutwardFacing(act.target) ? "allow" : "ask"
+    // The dangerous ones: what leaves the computer, what deletes or
+    // overwrites files elsewhere, and what changes the system.
+    if (mode === "auto") return isOutwardFacing(act.target) || act.writesOutside || changesSystem(act.target) ? "ask" : "allow"
+    return act.inside && isReadOnly(act.target) ? "allow" : "ask"
   }
   // A tool the plugin knows nothing about.
   return mode === "auto" ? "allow" : "ask"
@@ -203,8 +255,8 @@ export function effectFor(act: Act, rules: readonly Rule[], mode: Mode, folder: 
   let effect = decides?.effect ?? byMode(act, mode)
   // A rule that allows a kind of command was not written, or answered, with
   // reaching outside the project in mind. Only a rule for exactly this
-  // command allows that.
-  if (act.kind === "command" && effect === "allow" && decides && act.inside === false && decides.match?.trim() !== act.target) effect = "ask"
+  // command allows that; for any other, the mode decides.
+  if (act.kind === "command" && effect === "allow" && decides && act.inside === false && decides.match?.trim() !== act.target) effect = byMode(act, mode)
   if (mode !== "read-only") return effect
   const changes = act.action === "edit" || (act.action === "shell" && !isReadOnly(act.target)) || !KNOWN.includes(act.action)
   return changes || effect === "ask" ? "deny" : effect
@@ -223,7 +275,8 @@ export function alwaysRule(act: Act, folder: string | null): { rule: Rule; label
     return { rule: { action: act.action, match: join(parent, "*"), effect: "allow" }, label: `${doing} files directly in ${parent}` }
   }
   if (act.kind === "command") {
-    const start = startOf(act.target)
+    // Outside the project only a rule for exactly the command allows it.
+    const start = act.inside === false ? undefined : startOf(act.target)
     if (start === undefined) return { rule: { action: "shell", match: act.target, effect: "allow" }, label: `exactly the command "${act.target}"` }
     return { rule: { action: "shell", match: `${start} *`, effect: "allow" }, label: `commands that start with "${start}"` }
   }
@@ -256,14 +309,14 @@ export function questionFor(call: CheckedToolCall, asking: readonly Act[], folde
     const task = String(call.input.task ?? "").trim()
     return (
       `Let evie start a subagent (${String(call.input.description ?? "a task")}${typeof call.input.agent === "string" && call.input.agent.trim() !== "" ? `, as the agent "${call.input.agent.trim()}"` : ""})? It works without asking before each ` +
-      `step: it may change files and run commands inside the project.\n\n  ${task.length > 400 ? `${task.slice(0, 400)}…` : task}`
+      `step, as in auto mode: it may change files in the project and run commands, and asks only before what is dangerous.\n\n  ${task.length > 400 ? `${task.slice(0, 400)}…` : task}`
     )
   }
   if (call.name === "subagent_send") {
     const message = String(call.input.message ?? "").trim()
     return (
-      "Let evie give its subagent more work? It works without asking before each step: it may change files and run " +
-      `commands inside the project.\n\n  ${message.length > 400 ? `${message.slice(0, 400)}…` : message}`
+      "Let evie give its subagent more work? It works without asking before each step, as in auto mode: it may change " +
+      `files in the project and run commands, and asks only before what is dangerous.\n\n  ${message.length > 400 ? `${message.slice(0, 400)}…` : message}`
     )
   }
   const input = JSON.stringify(call.input)

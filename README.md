@@ -102,7 +102,8 @@ Type a message and press Enter.
 - **`/model`** shows which model is in use. `/model` and a name switches to
   another in the middle of a session.
 - **`/mode`** shows how freely Evie may act, and `/mode auto`, `/mode manual`
-  or `/mode read-only` changes it for the session. See "Permissions".
+  or `/mode read-only` changes it for the session, which keeps it when evie
+  starts again. See "Permissions".
 - **`/undo`** puts files back as they were before Evie's last turn that
   changed any. Run it again to go back a turn further. It covers what the
   `write`, `edit` and `patch` tools changed. It does not undo what a shell
@@ -1166,9 +1167,26 @@ What happens without a rule depends on the mode:
 |---|---|---|---|---|
 | `read-only` | Allowed | Denied | Only ones that just look, such as `ls` and `git status` | Denied |
 | `manual` | Allowed | Asks | Asks, except ones that just look | Asks |
-| `auto` | Allowed | Allowed | Allowed, except ones that send, publish or deploy, which ask | Asks |
+| `auto` | Allowed | Allowed | Allowed, except the dangerous ones below, which ask | Reading is allowed; changing a file asks, except in the temp folder |
 
-Sessions start in `manual`. `/mode` changes the mode for the session.
+In `auto` mode evie runs any command, wherever it reads, and asks only
+before the dangerous ones:
+
+- ones that leave the computer or act for you online: pushes, publishing,
+  `gh` changes, POSTs, `ssh` and its kin, deploys and cloud tools;
+- ones that delete, move or overwrite files outside the project and the
+  temp folder (`/tmp` and `$TMPDIR`), with links followed: `rm`, `rmdir`,
+  `unlink`, `shred`, `truncate`, `mv`, `cp` onto a file, `>`, `>>` or
+  `tee` to a file, `dd`, `find … -delete`, `tar` extracting, and `git
+  clean`, `reset --hard`, `checkout --` or `restore` run in another folder;
+- `sudo` and its kin, and ones that change system settings, such as
+  `launchctl`, `defaults write`, `pmset`, `diskutil` and `shutdown`.
+
+What is refused in every mode stays refused in `auto`, `sudo` among it.
+
+Sessions start in `manual`, or in the mode that `permissions.mode` in
+`evie.json` sets. `/mode` changes the mode for the session it is typed in,
+and the session keeps it when evie starts again.
 
 Rules go in `evie.json`, and are looked at before the mode:
 
@@ -1205,7 +1223,9 @@ that denies reading or changing a file also stops a command that names it.
 A rule that denies always wins. Otherwise the last rule that matches
 decides. In `read-only` mode no rule can allow a change.
 
-An "Always in this project" answer is saved as a rule in the global
+An "Always" answer for a command that reaches outside the project allows
+exactly that command, since a rule for a kind of command does not reach
+outside it. An "Always in this project" answer is saved as a rule in the global
 `evie.json`, under `permissions.projects` and the project's folder. A
 trusted project's own `.evie/evie.json` can set `mode` and `rules` for that
 project; its rules come after the global ones.
