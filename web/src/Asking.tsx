@@ -57,8 +57,9 @@ function NeedsYou({ count }: { count: string | undefined }) {
 }
 
 // A question's text: its first paragraph as the question, and what follows,
-// such as a command or the files it would change, as code.
-function QuestionText({ text }: { text: string }) {
+// such as a command or the files it would change, as code. The same once
+// it has been answered.
+export function QuestionText({ text }: { text: string }) {
   const [question = "", ...rest] = text.split(/\n\s*\n/)
   const detail = rest.join("\n\n").replace(/^ {2}/gm, "")
   return (

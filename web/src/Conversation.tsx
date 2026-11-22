@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
-import { QuestionPrompt, useAsking } from "./Asking.tsx"
+import { QuestionPrompt, QuestionText, useAsking } from "./Asking.tsx"
 import { TurnChangedFiles } from "./ChangedFiles.tsx"
 import { holdChanges, type Changes } from "./changes.ts"
 import { asAsked } from "./questions.ts"
@@ -313,7 +313,7 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
       return <Note text={item.text} {...(item.more !== undefined && { more: item.more })} />
     // A question as it was asked. One waiting is drawn where it is answered.
     case "question":
-      return <p className="text-label break-words whitespace-pre-wrap text-text">{item.text}</p>
+      return <QuestionText text={item.text} />
     case "changes":
       return <TurnChangedFiles turn={item.number} files={item.files} />
     case "failed":

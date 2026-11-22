@@ -137,10 +137,6 @@
   /* The project card as a sheet over the page, at 980px or narrower: about
      88% of the screen, and no wider than T3 Code's right panel. */
   --spacing-card-sheet: min(88vw, 448px);
-  /* The session list as a sheet over the page, at 767px or narrower: the
-     screen but for a strip to tap beside it, as T3 Code's sidebar, and no
-     wider than the card's sheet. */
-  --spacing-list-sheet: min(calc(100vw - 12px), 448px);
   /* The command palette: as wide as T3 Code's, and its rows at most this
      tall before they scroll. */
   --spacing-palette: 576px;
@@ -192,8 +188,6 @@
   /* The least a workspace's name keeps in its header, cut with an
      ellipsis, before its tabs scroll sideways instead. */
   --spacing-workspace-name: 96px;
-  /* The widest the session list's project filter grows, beside the search. */
-  --spacing-project-filter: 128px;
   /* The message box: the tallest its text grows before it scrolls; the
      tallest the / menu and the model picker above it are, as T3 Code's;
      and the picker's column of makers. */
@@ -213,8 +207,9 @@
   --spacing-image-open: min(90vw, 1200px);
   --spacing-image-open-height: 80dvh;
   /* Phone width, as T3 Code's sidebar has it, is below this: the session
-     list is a sheet, the message box is one row until tapped, the settings
-     window and the diff fill the screen, and a workspace's columns stack.
+     view's columns stack, the message box is one row until tapped, the
+     settings window and the diff fill the screen, and a workspace's
+     columns stack.
      wide.ts gives the same width to the page's code. */
   --breakpoint-wide: 768px;
 }
