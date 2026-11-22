@@ -286,7 +286,7 @@
   --spacing-attachment-shown: 160px;
   --spacing-image-open: min(90vw, 1200px);
   --spacing-image-open-height: 80dvh;
-  /* A file evie shows, in its frame under the reply, as drawn: the
+  /* A file evie shows, in its frame under the reply: the
      frame's header; the tallest an image grows, and a PDF's height; the
      least an SVG's checkerboard is; the height a Markdown document is cut
      at, and the fade over its cut edge. Full screen fits an image within
@@ -442,7 +442,7 @@
   mask-image: linear-gradient(to bottom, transparent, black var(--spacing-3), black calc(100% - var(--spacing-3)), transparent);
 }
 
-/* What an SVG shown is drawn on, as drawn: a checkerboard of the ground
+/* What an SVG shown is drawn on: a checkerboard of the ground
    and the text a little over it, in 16px squares, or 24px full screen,
    so that a drawing's own transparency shows. */
 @utility checkerboard {
@@ -452,7 +452,7 @@
   background: repeating-conic-gradient(color-mix(in srgb, var(--text) 7%, var(--bg)) 0 25%, var(--bg) 0 50%) 50% / 24px 24px;
 }
 
-/* A Markdown document evie shows, as drawn: tighter than a reply, its
+/* A Markdown document evie shows: tighter than a reply, its
    first heading a page title, the next ones a title, and code on a tint,
    each piece spaced by its own margins. It wins over the classes the
    Markdown is drawn with (markdown.ts), which are a reply's. */

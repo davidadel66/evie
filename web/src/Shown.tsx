@@ -8,10 +8,9 @@ import { isImage, viewerOf, type Shown, type Viewer } from "./shown.ts"
 import { addressOfWorkspace } from "./workspace.ts"
 
 // A file evie showed, drawn under its reply in a frame like the
-// changed-files card, as drawn on the Evie Web UI canvas: a 36px header
-// with the kind's icon, the file's name and the folder it is kept in, then
-// full screen, open in Storage and download; under it, the file, drawn by
-// the viewer of its kind. Storage opens a file in the same frame. Full
+// changed-files card: a 36px header with the kind's icon, the file's name
+// and the folder it is kept in, then full screen, open in Storage and
+// download; under it, the file, drawn by the viewer of its kind. Storage opens a file in the same frame. Full
 // screen moves through every image shown in the session, with a count and
 // zoom, after T3 Code's expanded image view (MIT licence, notice in
 // LICENSES/t3code-MIT.txt).
@@ -35,7 +34,10 @@ const KINDS: Record<Viewer, Kind> = {
   markdown: { icon: KindMarkdown, verb: "Read", Frame: MarkdownFrame, Full: MarkdownFull },
 }
 
-export function ShownFrame({ file, inStorage = false }: { file: Shown; inStorage?: boolean }) {
+// In Storage already, a file has no Open in Storage.
+export function ShownFrame({ file: given, inStorage = false }: { file: Shown; inStorage?: boolean }) {
+  const { storage: _, ...outside } = given
+  const file: Shown = inStorage ? outside : given
   const gallery = useContext(ShownGallery)
   const [full, setFull] = useState(false)
   const viewer = viewerOf(file.type)
@@ -58,10 +60,10 @@ export function ShownFrame({ file, inStorage = false }: { file: Shown; inStorage
             <FullScreen className="size-icon-row" />
           </FrameButton>
         )}
-        <FileActions file={inStorage ? { ...file, storage: undefined } : file} look="frame" />
+        <FileActions file={file} look="frame" />
       </figcaption>
       <div className="mx-1 pb-1">{kind !== undefined && file.address !== undefined ? <kind.Frame file={file} address={file.address} open={open} /> : <Unavailable />}</div>
-      {full && <FullScreenView file={file} gallery={gallery} close={() => setFull(false)} />}
+      {full && <FullScreenView file={file} gallery={inStorage ? [] : gallery} close={() => setFull(false)} />}
     </figure>
   )
 }
@@ -79,7 +81,7 @@ function FrameButton({ label, title, onClick, children }: { label: string; title
 
 // Open in Storage, for a file in a project's Storage, and Download, in the
 // frame's header or over full screen.
-function FileActions({ file, look, onLeave }: { file: Omit<Shown, "storage"> & { storage?: Shown["storage"] | undefined }; look: "frame" | "full"; onLeave?: () => void }) {
+function FileActions({ file, look, onLeave }: { file: Shown; look: "frame" | "full"; onLeave?: () => void }) {
   const style = look === "frame" ? FRAME_BUTTON : FULL_BUTTON
   return (
     <>
@@ -100,7 +102,7 @@ function FileActions({ file, look, onLeave }: { file: Omit<Shown, "storage"> & {
 // A file that cannot be drawn, in quiet words.
 function Unavailable({ dark = false }: { dark?: boolean }) {
   return (
-    <p role="alert" className={cn("flex min-h-control items-center justify-center rounded-chip px-3 py-2 text-center text-caption", dark ? "text-[rgba(255,255,255,0.8)]" : "text-text-muted")}>
+    <p className={cn("flex min-h-control items-center justify-center rounded-chip px-3 py-2 text-center text-caption", dark ? "text-[rgba(255,255,255,0.8)]" : "text-text-muted")}>
       This file could not be shown. It may have been moved or deleted.
     </p>
   )
@@ -120,8 +122,8 @@ function ImageFrame({ file, address, open }: ViewerProps) {
 
 // An SVG, drawn as an image, so that no script in it runs, on a
 // checkerboard, so that its own transparency shows, at its own width: the
-// width it names, or with none, as a browser draws one, 300px, as the
-// logo is drawn. It opens full screen.
+// width it names, or with none, 300px, as a browser draws one. It opens
+// full screen.
 function SvgFrame({ file, address, open }: ViewerProps) {
   const [failed, setFailed] = useState(false)
   const [width, setWidth] = useState<number>()
@@ -155,8 +157,9 @@ function PdfFull({ file, address }: { file: Shown; address: string }) {
   return <iframe src={address} title={`${file.name}, in the browser's PDF view`} className="block h-full-height w-full-width rounded-md border-0 shadow-float" />
 }
 
-// A Markdown document, fetched and drawn as a reply is, on the ground, cut
-// at 320px with a fade and Show all when it is longer, which opens to the
+// A Markdown document, fetched and drawn from its Markdown as a reply is,
+// nothing in it as HTML, in a document's own look on the ground; cut at
+// 320px with a fade and Show all when it is longer, which opens to the
 // whole of it and Show less.
 function MarkdownFrame({ file, address }: ViewerProps) {
   const read = useText(address)
@@ -228,7 +231,7 @@ function useText(address: string): { text?: string; failed?: true } {
 
 // ---- Full screen ----------------------------------------------------------------
 
-// A file full screen, over a dark veil, as drawn: Back at the top left;
+// A file full screen, over a dark veil: Back at the top left;
 // Open in Storage and Download at the top right; and under the file its
 // name. An image is one of the session's, which previous and next move
 // through, with its place among them, and it zooms: a click zooms in where
