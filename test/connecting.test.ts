@@ -389,16 +389,21 @@ test("a font is sent as it is, whatever the browser accepts, is kept for good, a
   }
 })
 
-test("the page, with its links to the chunks its script imports, is asked for afresh on each visit, and the chunks it names are kept for good", async () => {
+test("the page is asked for afresh on each visit, and its script and any chunks it preloads are kept for good", async () => {
   const app = await webApp()
   const { server } = await start({ app })
 
   for (const path of ["/", "/sign-in"]) {
     const answer = await fetch(`${server.url}${path}`)
     expect(answer.headers.get("cache-control")).toBe("no-cache")
-    const preloads = [...(await answer.text()).matchAll(/<link\b[^>]*\bmodulepreload\b[^>]*>/g)].map((match) => match[0].match(/\bhref="?([^"\s>]+)/)![1]!)
-    expect(preloads.length).toBeGreaterThan(0)
-    for (const chunk of preloads) {
+    const page = await answer.text()
+    // Its script, and the chunks it preloads. Bun 1.4.0 builds a script that
+    // imports chunks at once, each preloaded; Bun 1.4.5 one that imports
+    // none, so the page preloads nothing.
+    const script = [...page.matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
+    const preloads = [...page.matchAll(/<link\b[^>]*\bmodulepreload\b[^>]*>/g)].map((match) => match[0].match(/\bhref="?([^"\s>]+)/)![1]!)
+    expect(script.length).toBe(1)
+    for (const chunk of [...script, ...preloads]) {
       const kept = await fetch(new URL(chunk, `${server.url}${path}`))
       expect([kept.status, kept.headers.get("cache-control")]).toEqual([200, "public, max-age=31536000, immutable"])
     }
