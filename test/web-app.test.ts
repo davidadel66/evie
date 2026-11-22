@@ -66,7 +66,7 @@ test("the page has one modulepreload link for each chunk its script imports, and
   for (const each of later) expect(named).not.toContain(each.path.replace(/^\./, ""))
 })
 
-test("the page is given each of its links once, before </head>: one it has already, as a later Bun may write itself, is not added again", () => {
+test("the page is given each of its links once, before </head>: one it has already, as a later Bun may write itself, is not added again, and a comment is not the page's own", () => {
   // A page whose script imports two chunks, one of them importing a third,
   // and loads a fourth with `import()`.
   const output = (imports: [string, "import-statement" | "dynamic-import"][], entryPoint?: string) => ({
@@ -93,17 +93,13 @@ test("the page is given each of its links once, before </head>: one it has alrea
   expect(links.map((link) => link.href).sort()).toEqual(["/chunk-a.js", "/chunk-b.js", "/chunk-c.js"])
   expect(links.every((link) => link.rel === "modulepreload")).toBe(true)
 
-  // The bundler's link for chunk b, written in its own way.
-  const page = '<!doctype html><html><head><title>evie</title><link crossorigin rel=modulepreload href="./chunk-b.js"><script type="module" crossorigin src="/chunk-page.js"></script></head><body></body></html>'
+  // The bundler's link for chunk b, written in its own way, and a comment
+  // that names chunk a and the end of the head, which are not the page's own.
+  const page =
+    '<!doctype html><html><head><title>evie</title><!-- Before </head>, as <link rel="modulepreload" href="/chunk-a.js"> --><link crossorigin rel="prefetch modulepreload" href=./chunk-b.js><script type="module" crossorigin src="/chunk-page.js"></script></head><body></body></html>'
   const finished = withHeadLinks(page, links)
 
-  const preloads = [...finished.matchAll(/<link\b[^>]*\bmodulepreload\b[^>]*>/g)].map((match) => match[0])
-  expect(preloads).toEqual([
-    '<link crossorigin rel=modulepreload href="./chunk-b.js">',
-    '<link rel="modulepreload" href="/chunk-a.js" crossorigin>',
-    '<link rel="modulepreload" href="/chunk-c.js" crossorigin>',
-  ])
-  expect(finished).toEndWith('<link rel="modulepreload" href="/chunk-c.js" crossorigin></head><body></body></html>')
+  expect(finished).toBe(page.replace("</head><body>", '<link rel="modulepreload" href="/chunk-a.js" crossorigin><link rel="modulepreload" href="/chunk-c.js" crossorigin></head><body>'))
   // Finished again, it is the same page.
   expect(withHeadLinks(finished, links)).toBe(finished)
 })
@@ -190,12 +186,16 @@ test("the web app builds into a page whose script and stylesheet are built besid
   // The empty icon, `data:,`, is carried in the page and loads nothing. Beside
   // its script and stylesheet, it preloads the chunks its script imports.
   const loads = [...page.matchAll(/(?:src|href)="(?!data:,")([^"]+)"/g)].map((match) => match[1]!)
-  expect([...new Set(loads.map((path) => path.split(".").pop()))].sort()).toEqual(["css", "js"])
-  expect(loads.filter((path) => path.endsWith(".css"))).toHaveLength(1)
+  const scripts = [...page.matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
+  const preloads = [...page.matchAll(/<link\b[^>]*\bmodulepreload\b[^>]*\bhref="([^"]+)"/g)].map((match) => match[1]!)
+  const styles = loads.filter((path) => path.endsWith(".css"))
+  expect([scripts.length, styles.length]).toEqual([1, 1])
+  expect(loads.sort()).toEqual([...scripts, ...preloads, ...styles].sort())
+  expect([...scripts, ...preloads].every((path) => path.endsWith(".js"))).toBe(true)
   for (const path of loads) expect(Object.keys(app.files)).toContain(path)
 
-  const style = await app.files[loads.find((path) => path.endsWith(".css"))!]!.text()
-  const script = await app.files[page.match(/<script[^>]* src="([^"]+)"/)![1]!]!.text()
+  const style = await app.files[styles[0]!]!.text()
+  const script = await app.files[scripts[0]!]!.text()
   // The fonts are evie's own, carried in the stylesheet, not fetched from Google.
   expect(style).toMatch(/@font-face\{font-family:Geist;[^}]*url\(data:font\/woff2/)
   expect(style).toMatch(/@font-face\{font-family:Geist Mono;[^}]*url\(data:font\/woff2/)

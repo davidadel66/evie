@@ -130,21 +130,29 @@ function chunkPreloads(metafile: BuildMetafile): HeadLink[] {
 }
 
 // The page with each link added just before `</head>`, but for one it has
-// already: one with the same `rel` and the same address, however it is
-// written, as the bundler may write it itself.
+// already: one of the same kind (`rel`) for the same address, however it is
+// written, as the bundler may write it itself. What is in a comment is not
+// the page's own.
 export function withHeadLinks(page: string, links: HeadLink[]): string {
-  // Addresses compared as the page resolves them, so `./chunk.js` is `/chunk.js`.
-  const key = (link: { rel?: string; href?: string }) => `${link.rel?.toLowerCase()} ${URL.parse(link.href ?? "", "http://page/")?.href ?? link.href}`
-  const had = new Set([...page.matchAll(/<link\b([^>]*)>/gi)].map((match) => key(attributesOf(match[1]!))))
+  // Each kind a link is, with its address as the page resolves it, so
+  // `./chunk.js` is `/chunk.js`.
+  const kinds = (link: { rel?: string; href?: string }) => {
+    const address = URL.parse(link.href ?? "", "http://page/")?.href ?? link.href
+    return (link.rel ?? "").toLowerCase().split(/\s+/).filter(Boolean).map((rel) => `${rel} ${address}`)
+  }
+  // The page's links and the end of its head, in order, with each comment
+  // passed over whole.
+  const found = [...page.matchAll(/<!--[\s\S]*?-->|<link\b([^>]*)>|<\/head\s*>/gi)]
+  const had = new Set(found.flatMap((match) => (match[1] === undefined ? [] : kinds(attributesOf(match[1])))))
   const added: HeadLink[] = []
   for (const link of links) {
-    if (had.has(key(link))) continue
-    had.add(key(link))
+    if (kinds(link).every((kind) => had.has(kind))) continue
+    for (const kind of kinds(link)) had.add(kind)
     added.push(link)
   }
   if (added.length === 0) return page
-  const end = page.indexOf("</head>")
-  if (end === -1) throw new Error("The built page has no </head> to add its links before.")
+  const end = found.find((match) => /^<\/head/i.test(match[0]))?.index
+  if (end === undefined) throw new Error("The built page has no </head> to add its links before.")
   return page.slice(0, end) + added.map(tagOf).join("") + page.slice(end)
 }
 
