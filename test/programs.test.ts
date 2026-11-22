@@ -345,7 +345,9 @@ test("evie with a server running but this computer's token file gone says the fi
 
 // ---- When the line to the server drops ----------------------------------------------------
 
-const DROPPED = "[note] The connection to Evie's server dropped. Trying again…"
+// With why, as the client was told it: Bun's server, stopped, closes its
+// connections saying "Connection ended".
+const DROPPED = "[note] The connection to Evie's server dropped: Connection ended. Trying again…"
 const BACK = "[note] Connected to Evie's server again."
 
 test("when evie serve is stopped and started again, evie connects again by itself, saying so, and the next line is answered in the same session", async () => {

@@ -309,15 +309,15 @@ export function cardDensity(room: number, measured: { full: number; compact: num
   return "essential"
 }
 
-// Which of the card's rows and sections show, as its drawing has them: the
-// workspace, with the project and its folder, Undo while there is something
-// to undo, and in a folder not in git the session's own changes, from
-// undo's copies, while they are kept; version control, in a git
+// Which of the card's rows and sections show, in this order, top to bottom:
+// the workspace, with the project and its folder, Undo while there is
+// something to undo, and in a folder not in git the session's own changes,
+// from undo's copies, while they are kept; version control, in a git
 // repository, with the branch and its pull request, the git button and the
 // changes; the lineage, while the session has a parent or subagents; and
 // background work, while a job is listed. Each shows while its item is
-// chosen, has something to show, and fits the density; with none, the
-// card offers its menu instead.
+// chosen, has something to show, and fits the density; with none, the card
+// offers its menu instead.
 export function sectionsShown(shown: Shown, has: { undo: boolean; git: boolean; sessionChanges: boolean; related: boolean; jobs: boolean }, density: Density) {
   const rows = {
     project: shown.workspace && density === "full",

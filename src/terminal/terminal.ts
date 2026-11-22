@@ -427,9 +427,11 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
         // A question can be refused the moment it is asked, when no client
         // that shows questions has opened the session, and over the network
         // the refusal arrives just after the question. A reply comes after
-        // every event sent before it, so asking where the session stands, as
-        // `evie -c` does, lets that refusal arrive first.
-        await evie.send({ type: "open_session", folder: options.folder, continue: true }).catch(() => {})
+        // every event sent before it, so asking where the session stands, by
+        // its id, lets that refusal arrive first. By its folder it could open
+        // another, as in a folder that is no project's, where carrying on
+        // starts a new session.
+        await evie.send({ type: "open_session", session: openedSession }).catch(() => {})
         if (questionWaiting()) {
           line("[note] A question is waiting for an answer. `evie -c` in a terminal comes back to it.")
           break

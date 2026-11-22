@@ -103,8 +103,8 @@ export function ProjectGlyph({ project }: { project: string }) {
   return <IconGlyph icon={icon} className={COLOUR[colour]} />
 }
 
-// The tile of a session with no project, as the Session view drawing has
-// it: as big as a project's, empty, with a dashed outline.
+// The tile of a session with no project: as big as a project's, 18px
+// square, empty, with a dashed outline in the quiet text colour.
 export function NoProjectTile() {
   return <span aria-hidden="true" className="size-tile-row shrink-0 rounded-tile border border-dashed border-text-muted" />
 }
