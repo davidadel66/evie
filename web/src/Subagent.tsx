@@ -7,6 +7,7 @@ import { Reading } from "./Conversation.tsx"
 import { CaretLeft } from "./icons.tsx"
 import { subagentsOf } from "./project-card.ts"
 import { CardButton, StateWord } from "./ProjectCard.tsx"
+import { ListButton } from "./SessionList.tsx"
 import { openSubagent, type Subagent } from "./subagent.ts"
 
 // A subagent's conversation in the middle column, read only, under a
@@ -64,7 +65,8 @@ function Opened({
 
   return (
     <>
-      <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-7">
+      <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-4">
+        <ListButton />
         <h1 className="min-w-0 flex-1 truncate text-title text-text">{found?.name ?? "Subagent"}</h1>
         {found && <StateWord status={found.status} />}
         <CardButton />

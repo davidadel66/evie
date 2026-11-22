@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { ListedProject, SessionState, SessionSummary } from "../../src/core/types.ts"
-import { addressOf } from "./address.ts"
+import { addressOf, selectedIn } from "./address.ts"
 import { startedHere } from "./conversation.ts"
 import { Button } from "./components/ui/button.tsx"
 import {
@@ -14,12 +14,15 @@ import {
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu.tsx"
 import { Input } from "./components/ui/input.tsx"
-import { CaretDown, CaretRight, MagnifyingGlass, Plus } from "./icons.tsx"
+import { CaretDown, CaretRight, MagnifyingGlass, Plus, SidebarLeft } from "./icons.tsx"
+import { toggleList, useListShown } from "./list-shown.ts"
 import { ProjectGlyph } from "./ProjectIcon.tsx"
 import { select, useSelected } from "./selection.ts"
-import { deletedSelection, filterSessions, groupSessions, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, titleOf, type Filter, type OpenGroups } from "./session-list.ts"
+import { besides, deletedSelection, filterSessions, groupSessions, inListOrder, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, titleOf, type Filter, type OpenGroups } from "./session-list.ts"
 import { DeleteDialog, DraftRow, SessionRow } from "./SessionRow.tsx"
 import type { Sessions } from "./sessions.ts"
+import { whenAsked, windowOver } from "./page-requests.ts"
+import { label as keyLabel, onMac, pressed } from "./shortcuts.ts"
 
 // The session list, in the left column: a new session, a search and a
 // project filter above the sessions, which are grouped with those that
@@ -68,7 +71,7 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
   // as in T3 Code, when its row is in sight.
   useEffect(() => {
     function renameOnF2(event: KeyboardEvent) {
-      if (event.key !== "F2" || event.defaultPrevented) return
+      if (pressed(event, onMac()) !== "rename" || event.defaultPrevented) return
       const focused = document.activeElement
       const typing = focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement || (focused instanceof HTMLElement && focused.isContentEditable)
       // A row's link, which has no session when it is a draft's.
@@ -107,6 +110,41 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
   }
 
   const groups = groupSessions(filterSessions(list.sessions, filter))
+
+  // The shortcuts that move through the list, as T3 Code's: a new session
+  // where New session makes one, the session above or below the selected
+  // one, and the first nine shown. The palette's New session asks for one too.
+  const order = inListOrder(groups, open)
+  const startNew = () => select({ draft: lookingAt })
+  const moves = useRef({ order, startNew })
+  moves.current = { order, startNew }
+  useEffect(() => {
+    const mac = onMac()
+    function move(event: KeyboardEvent) {
+      const command = pressed(event, mac)
+      if (command === undefined || event.defaultPrevented || windowOver() !== undefined) return
+      const { order, startNew } = moves.current
+      // As the address has it now, which a key pressed straight after
+      // another can be ahead of the list's drawing.
+      const now = selectedIn(location.hash)
+      if (command === "new session") startNew()
+      else if (command === "previous session" || command === "next session") {
+        const to = besides(order, now !== undefined && "session" in now ? now.session : undefined, command === "previous session" ? "previous" : "next")
+        if (to !== undefined) select({ session: to })
+      } else if (/^session \d$/.test(command)) {
+        const to = order[Number(command.slice(-1)) - 1]
+        if (to !== undefined) select({ session: to })
+      } else return
+      event.preventDefault()
+    }
+    addEventListener("keydown", move)
+    const unask = whenAsked("new session", () => moves.current.startNew())
+    return () => {
+      removeEventListener("keydown", move)
+      unask()
+    }
+  }, [])
+
   const rows = (shown: SessionSummary[]) => (
     <ul className="flex flex-col gap-1">
       {shown.map((session) => (
@@ -193,6 +231,19 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
       </div>
       <DeleteDialog session={deleting} close={() => setDeleting(undefined)} remove={remove} />
     </div>
+  )
+}
+
+// The button at the left of the middle column's header that shows and
+// hides the session list: its column at desktop width, its sheet at phone width.
+export function ListButton() {
+  const shown = useListShown()
+  const open = shown.wide ? shown.column : shown.sheet
+  const label = open ? "Hide the session list" : "Show the session list"
+  return (
+    <Button variant="icon" aria-label={label} aria-expanded={open} title={`${label} (${keyLabel("session list", onMac())})`} onClick={toggleList}>
+      <SidebarLeft />
+    </Button>
   )
 }
 

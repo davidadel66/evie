@@ -15,6 +15,7 @@ import {
 } from "./components/ui/dropdown-menu.tsx"
 import { Check, DotsThree } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
+import { whenAsked } from "./page-requests.ts"
 import { ProjectGlyph, ProjectIcon } from "./ProjectIcon.tsx"
 import { ageWords, nameFieldKey, nameToSave, titleOf } from "./session-list.ts"
 import { Spinner } from "./Spinner.tsx"
@@ -222,6 +223,8 @@ function NameField({ title, save, cancel, size = "text-label" }: { title: string
 // nothing to say.
 export function HeaderName({ title, rename, said }: { title: string; rename(name: string): Promise<string | undefined>; said(note: string | undefined): void }) {
   const [editing, setEditing] = useState(false)
+  // The command palette's Rename this session renames it here.
+  useEffect(() => whenAsked("rename", () => setEditing(true)), [])
   const [saving, setSaving] = useState<string>()
   const shown = saving ?? title
   async function save(typed: string) {

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import type { SessionState, SessionSummary } from "../src/core/types.ts"
 import { addressAsOpened, addressOf, selectedIn } from "../web/src/address.ts"
 import { refreshWhileShown } from "../web/src/refresh.ts"
-import { ageWords, deletedSelection, filterSessions, groupSessions, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove } from "../web/src/session-list.ts"
+import { ageWords, besides, deletedSelection, filterSessions, groupSessions, inListOrder, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove } from "../web/src/session-list.ts"
 
 // The session list's own rules, apart from its screen: how sessions are
 // grouped and ordered, and found by search and by project, and how a
@@ -199,4 +199,22 @@ test("a selected session that has been deleted is found, and so is one whose sub
   expect(deletedSelection({ session: "s2" }, ["s1"])).toBeUndefined()
   expect(deletedSelection({ draft: null }, ["s1"])).toBeUndefined()
   expect(deletedSelection(undefined, ["s1"])).toBeUndefined()
+})
+
+test("the sessions in the list's order, for the shortcuts that move through it, are those shown: the top, then each open group's", () => {
+  const groups = groupSessions([summary("a", "active", 1), summary("b", "working", 2), summary("c", "settled", 3), summary("d", "needs_you", 4)])
+  expect(inListOrder(groups, { working: true, settled: false })).toEqual(["d", "a", "b"])
+  expect(inListOrder(groups, { working: false, settled: true })).toEqual(["d", "a", "c"])
+})
+
+test("the previous and next session are the ones above and below the selected one, none past either end, nor from one not shown, and with none selected the last and the first, as in T3 Code", () => {
+  const order = ["a", "b", "c"]
+  expect(besides(order, "b", "previous")).toBe("a")
+  expect(besides(order, "b", "next")).toBe("c")
+  expect(besides(order, "a", "previous")).toBeUndefined()
+  expect(besides(order, "c", "next")).toBeUndefined()
+  expect(besides(order, undefined, "previous")).toBe("c")
+  expect(besides(order, undefined, "next")).toBe("a")
+  expect(besides(order, "not shown", "next")).toBeUndefined()
+  expect(besides([], undefined, "next")).toBeUndefined()
 })

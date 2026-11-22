@@ -143,3 +143,20 @@ export function keepOpenGroups(groups: OpenGroups) {
     // Not kept: the next visit opens them as they start.
   }
 }
+
+// The sessions shown, in the list's order, by their ids: the top ones,
+// then those of each group that is open. mod+1 to mod+9 jump to the first
+// nine, and the previous and next session are moved to through them.
+export function inListOrder(groups: Groups, open: OpenGroups): string[] {
+  return [...groups.top, ...(open.working ? groups.working : []), ...(open.settled ? groups.settled : [])].map((each) => each.session)
+}
+
+// The session above or below `current` in `order`, as T3 Code moves
+// through its threads: none past either end, nor from a session not shown,
+// and with none selected, as with a draft, the last or the first.
+export function besides(order: readonly string[], current: string | undefined, direction: "previous" | "next"): string | undefined {
+  if (current === undefined) return direction === "previous" ? order.at(-1) : order[0]
+  const at = order.indexOf(current)
+  if (at === -1) return undefined
+  return order[direction === "previous" ? at - 1 : at + 1]
+}

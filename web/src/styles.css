@@ -104,6 +104,17 @@
   /* The project card as a sheet over the page, at 980px or narrower: about
      88% of the screen, and no wider than T3 Code's right panel. */
   --spacing-card-sheet: min(88vw, 448px);
+  /* The session list as a sheet over the page, at 767px or narrower: the
+     screen but for a strip to tap beside it, as T3 Code's sidebar, and no
+     wider than the card's sheet. */
+  --spacing-list-sheet: min(calc(100vw - 12px), 448px);
+  /* The command palette: as wide as T3 Code's, and its rows at most this
+     tall before they scroll. */
+  --spacing-palette: 576px;
+  --spacing-palette-list: min(448px, 60dvh);
+  /* A notice floating at the top of the page, within the page's 16px sides
+     at phone width. */
+  --spacing-notice: min(360px, calc(100vw - 32px));
   --spacing-sign-in-column: 400px;
   /* The conversation in the middle column, at most this wide, and the room
      a tool call's name takes in a turn's steps, as the board's Message
@@ -136,8 +147,12 @@
   /* The tallest a background job's output grows in the project card
      before it scrolls. */
   --spacing-job-output: 240px;
-  /* Below this width, the columns stack. */
+  /* Below this width, the message box is one row until tapped, and the
+     settings window fills the screen. */
   --breakpoint-wide: 960px;
+  /* Below this width, the session list is a sheet over the page, as T3
+     Code's sidebar is below it. */
+  --breakpoint-list: 768px;
 }
 
 /* The colours, by the theme's names, so that a class takes its value from
@@ -174,6 +189,14 @@
     font-family: var(--font-sans);
     font-size: var(--text-body);
     line-height: var(--text-body--line-height);
+  }
+
+  /* At phone width, where a finger aims, every button and menu item is at
+     least as tall as the board's touch-min. */
+  @media (width < 768px) {
+    :root {
+      --spacing-control: var(--spacing-touch-min);
+    }
   }
 
   /* Every control shows the same 2px ring when focused from the keyboard. */

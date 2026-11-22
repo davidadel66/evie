@@ -8,7 +8,9 @@ import type { Conversation, ConversationState } from "./conversation.ts"
 import { ArrowUpBold, Check, StopFill } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { makersOf, searchModels, type Model } from "./models.ts"
+import { whenAsked } from "./page-requests.ts"
 import { sendDoes } from "./questions.ts"
+import { label, onMac, pressed } from "./shortcuts.ts"
 import { Spinner } from "./Spinner.tsx"
 
 // The message box at the bottom of the conversation, to the board's
@@ -103,16 +105,21 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   useEffect(() => {
     if (wide) box.current?.focus()
   }, [])
-  // mod+shift+M opens the model picker, as in T3 Code.
+  // mod+shift+M opens the model picker, as in T3 Code, and so does Pick a
+  // model in the command palette.
   useEffect(() => {
+    const mac = onMac()
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "m") {
-        event.preventDefault()
-        setPicking(true)
-      }
+      if (pressed(event, mac) !== "model") return
+      event.preventDefault()
+      setPicking(true)
     }
     document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
+    const unpick = whenAsked("pick model", () => setPicking(true))
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      unpick()
+    }
   }, [])
   // A message that could not be sent on the box's behalf, such as a draft's
   // first, comes back into the box, with why, unless the owner has typed since.
@@ -187,7 +194,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
       void submit()
       return
     }
-    if (event.key === "Escape" && working && state?.stopping === false) {
+    if (pressed(event.nativeEvent, onMac()) === "stop" && working && state?.stopping === false) {
       event.preventDefault()
       conversation?.stop()
       return
@@ -334,7 +341,7 @@ function StopButton({ stopping, stop }: { stopping: boolean; stop(): void }) {
     )
   }
   return (
-    <Button variant="secondary" aria-label="Stop" title="Stop (Escape)" onClick={stop} className="size-control rounded-full p-0">
+    <Button variant="secondary" aria-label="Stop" title={`Stop (${label("stop", onMac())})`} onClick={stop} className="size-control rounded-full p-0">
       <StopFill className="size-icon-sm" />
     </Button>
   )
@@ -349,7 +356,7 @@ function ModelName({ model, toggle }: { model: string | undefined; toggle(): voi
       variant="quiet"
       onClick={toggle}
       data-picker-toggle=""
-      title={`${model}. Pick another with /model or ${MOD}+Shift+M`}
+      title={`${model}. Pick another with /model or ${label("model", onMac())}`}
       aria-label={`Model: ${model}. Pick another`}
       className="min-w-0 px-2 text-caption"
     >
@@ -357,7 +364,6 @@ function ModelName({ model, toggle }: { model: string | undefined; toggle(): voi
     </Button>
   )
 }
-const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"
 
 // How full the conversation is, as a share of the size at which evie
 // compacts it by itself, in words; its menu says the sizes and compacts it

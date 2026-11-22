@@ -12,6 +12,7 @@ import { CaretRight, Check, SidebarRight, X } from "./icons.tsx"
 import { backgroundJobs, branchWords, gitWhyNot, stateWord, subagentsOf, undoWhyNot, type CardFacts, type Subagent } from "./project-card.ts"
 import { ProjectIcon } from "./ProjectIcon.tsx"
 import { select, useSelected } from "./selection.ts"
+import { label as keyLabel, onMac } from "./shortcuts.ts"
 import type { Sessions } from "./sessions.ts"
 import { Spinner } from "./Spinner.tsx"
 
@@ -50,9 +51,8 @@ export function CardButton() {
   const shown = useCardShown()
   const open = shown.wide ? shown.column : shown.sheet
   const label = open ? "Hide the project card" : "Show the project card"
-  const keys = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘⌥B" : "Ctrl+Alt+B"
   return (
-    <Button variant="icon" aria-label={label} aria-pressed={open} title={`${label} (${keys})`} onClick={toggleCard}>
+    <Button variant="icon" aria-label={label} aria-pressed={open} title={`${label} (${keyLabel("card", onMac())})`} onClick={toggleCard}>
       <SidebarRight />
     </Button>
   )
