@@ -3,6 +3,8 @@ import { useCardShortcut } from "./card-shown.ts"
 import { connectionLine, type Connection, type ConnectionState } from "./connection.ts"
 import { Conversation, Draft, Placeholder } from "./Conversation.tsx"
 import { startedHere } from "./conversation.ts"
+import { useDiffShortcut } from "./diff-shown.ts"
+import { DiffPlace } from "./DiffPanel.tsx"
 import { CardButton, CardPlace } from "./ProjectCard.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
@@ -19,6 +21,7 @@ import { Words } from "./Words.tsx"
 // is a sheet over the page, opened from the session's header.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
+  useDiffShortcut()
   return (
     <div className="flex min-h-dvh flex-col wide:h-dvh wide:flex-row">
       <aside aria-label="Sessions" className="flex flex-col bg-bg-side wide:w-session-list wide:shrink-0">
@@ -37,6 +40,7 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
         <OpenSession connection={connection} sessions={sessions} />
       </main>
 
+      <DiffPlace connection={connection} sessions={sessions} />
       <CardPlace connection={connection} sessions={sessions} />
     </div>
   )

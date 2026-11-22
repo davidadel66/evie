@@ -1,5 +1,5 @@
-The way evie reads how a pull request's checks stand, in src/core/pull-request.ts,
-and parts of the web app's diff panel and pull request row, are adapted from
+How evie reads how a pull request's checks stand, in src/core/pull-request.ts,
+and how the web app sums them up, in web/src/pull-request.ts, are adapted from
 T3 Code (https://github.com/pingdotgg/t3code).
 
 MIT License

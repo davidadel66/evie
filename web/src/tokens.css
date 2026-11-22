@@ -60,6 +60,11 @@
   --project-plum: #8e6888;
   --chart-bar: var(--accent);
   --chart-current: var(--text);
+  /* Lines a diff adds and removes. The board names no colours for them, so
+     they are its own muted green and red, as Done and Failed have them,
+     each beside the + or − that also says it. */
+  --diff-added: var(--status-done);
+  --diff-removed: var(--status-failed);
 }
 
 /* The strokes: every divider is a line, and the focus ring and the line

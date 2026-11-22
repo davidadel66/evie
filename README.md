@@ -335,7 +335,18 @@ The project card, on the right, is the selected session's:
   and the git branch it is on, kept current as the session list keeps it,
   or "No branch" in a repository on none of its own, or "Not a git
   repository". A session with no project says so.
-- **Changes:** Commit, Push and Pull request each send evie a request in
+- **The branch's pull request,** when it has one, as T3 Code shows it: its
+  number and state in words (Open, Draft, Merged or Closed); its title,
+  which opens it on GitHub; and its checks summed up, such as "2 of 5
+  failing", which open a menu of each check, with how it stands and a link
+  to its details. The server reads it with the GitHub CLI, `gh pr view`,
+  in the project's folder, as `gh` is signed in on the server's computer,
+  when the card opens and each minute while the page is shown. With no
+  `gh`, or one not signed in, nothing is shown. The page only reads it:
+  nothing on GitHub is changed from it.
+- **Changes:** how many files the session has changed, with the lines
+  added and removed, from before its first change to now, and Open diff,
+  which opens the diff on the whole session. Commit, Push and Pull request each send evie a request in
   words, as a message in the session, such as "Commit the changes in this
   session with a short message."; evie carries it out as it would if you had
   typed it, and asks before pushing, as it always does. A request sent
@@ -365,6 +376,43 @@ right of the middle column's header, or with Cmd+Option+B (Ctrl+Alt+B
 elsewhere), and the browser remembers which. At 980px wide or narrower the
 same button opens it as a sheet over the page, from the right, which goes
 once something is picked.
+
+What evie changed is shown as diffs, as T3 Code shows them:
+
+- **In the conversation,** a completed turn that changed files with evie's
+  file tools ends with one quiet line, such as "3 changed files +12 −4",
+  which opens to list them, and Open diff, which opens the diff on that
+  turn. A file in the list opens it at that file.
+- **The diff** opens from that line, from the project card's Open diff, or
+  with Cmd+D (Ctrl+D elsewhere), which also closes it. At desktop width it
+  is a column beside the conversation, in the project card's place, and
+  wider than the card, since a diff needs the room; closing it brings the
+  card back. At 980px wide or narrower it fills the screen, with a way back
+  at its top left.
+- **The menu at its top** picks what to compare: the latest turn; each turn
+  that changed files, newest first, with when it ended; the whole session,
+  each file from before the session first changed it to now; and in a git
+  project, Uncommitted, every change since the last commit, and This
+  branch, the branch against the branch it is merged into: its pull
+  request's base when it has one, and otherwise the repository's main
+  branch. Both include files git does not track and does not ignore.
+- **Each file** has a header that stays at the top while the file scrolls
+  past, and folds the file when pressed. A file that is binary, or too
+  large to show, says so instead of a diff, and so does one whose contents
+  are no longer known, as when it has been changed outside evie since the
+  turn and no copy of what the turn left is kept. A diff is drawn stacked
+  or side by side, which the browser remembers; at phone width it is
+  stacked. Lines added and removed lie on a faint wash of green and red,
+  with a + or − beside each.
+- **The file tree** beside the diff lists its files by folder; a file in
+  it scrolls to that file. It can be hidden, which the browser remembers.
+- **The changes by turn come from undo's copies,** which it keeps of each
+  file before a turn's file tools change it. What a turn left in a file is
+  the file as it is now, or the copy the next turn that changed it kept.
+  A turn undone is gone from the list, with its copies. Without the undo
+  plugin, the turns' changes are not kept, and the diff says so. What a
+  shell command changed is not in a turn's changes; in a git project it is
+  in Uncommitted.
 
 ### Keeping the server running
 
@@ -743,7 +791,7 @@ a list, the thirteen built-in ones load:
 | `shell` | `shell` |
 | `jobs` | `job_stop`, and the `/jobs` and `/background` commands |
 | `permissions` | The rules that allow, deny or ask before a tool runs, and the `/mode` command |
-| `undo` | The copies kept of files before they are changed, and the `/undo` command |
+| `undo` | The copies kept of files before they are changed, the `/undo` command, and what each turn changed, for the web app's diffs |
 | `models` | What each model family is given, and the `/model` command |
 | `ask` | `ask`, the model's way to put a question to you |
 | `subagents` | `subagent` and `subagent_send` |
@@ -845,7 +893,7 @@ export default (options) => ({
 })
 ```
 
-Through the host a plugin can add to four lists:
+Through the host a plugin can add to five lists:
 
 | List | What an entry is |
 |---|---|
@@ -853,6 +901,7 @@ Through the host a plugin can add to four lists:
 | `host.providers` | A way to reach a model |
 | `host.profiles` | What one family of models is given: a system prompt and its tools for changing files |
 | `host.commands` | A command you type starting with a slash, such as `/model`. A command can tell the model something with `context.tell`, which adds a note to the conversation |
+| `host.changes` | What keeps the files each turn changed, so that a client can show them as diffs: `turns(session)` gives each turn that changed files, with what each file held before the turn and what the turn left in it. `undo` adds one, from the copies it keeps; the first one added is used |
 
 It can also attach to three *hooks*, moments in the loop where a plugin's
 code runs:
@@ -1027,12 +1076,19 @@ A few values the design system's board does not name are named once in
 | `composer-menu` | 320px | The tallest the `/` menu and the model picker above the message box are, as T3 Code's |
 | `picker-makers` | 144px | The model picker's column of makers |
 | `job-output` | 240px | The tallest a background job's output grows in the project card before it scrolls |
+| `diff-tree` | 240px | The file tree beside a diff |
 | `radius-tile` | 25% | A project's icon tile's corners, a quarter of its size at any size |
 | `default-transition-duration` | 150ms | How long a change takes, such as a group's caret turning |
 | `default-transition-timing-function` | `cubic-bezier(0.4, 0, 0.2, 1)` | How it eases |
 
 The strokes, `line-width` (1px) and `indicator-width` (2px, for the focus
 ring), are the board's, kept beside the colours in `tokens.css`.
+
+The board names no colours for a diff's lines. `diff-added` and
+`diff-removed`, in `tokens.css`, are its own muted green and red, the ones
+Done and Failed use, and a line added or removed lies on a 14% wash of
+its colour, as a project's icon lies on a tint of its own. Each line keeps
+its + or −, so the colour is never all that says it.
 
 `bunfig.toml` also stops `bun install` from installing peer dependencies.
 The Tailwind plugin names Bun itself as one, and a second Bun in
@@ -1143,6 +1199,10 @@ credited here, and its licence notice is kept with the code.
   format and the way the `patch` tool finds lines, in
   `src/plugins/files/patch.ts`, rewritten from Rust. The licence and Codex's
   notice are in `LICENSES/`.
+- [T3 Code](https://github.com/pingdotgg/t3code) (MIT): how a pull
+  request's checks are read and summed up, in `src/core/pull-request.ts` and
+  `web/src/pull-request.ts`. The web app's layout follows T3 Code's. The
+  licence is in `LICENSES/`.
 
 The web app's fonts are [Geist and Geist Mono](https://github.com/vercel/geist-font)
 (SIL Open Font License 1.1), from the `@fontsource-variable` packages. Its

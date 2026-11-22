@@ -130,6 +130,8 @@
   /* The tallest a background job's output grows in the project card
      before it scrolls. */
   --spacing-job-output: 240px;
+  /* The file tree beside a diff. */
+  --spacing-diff-tree: 240px;
   /* Below this width, the columns stack. */
   --breakpoint-wide: 960px;
 }
@@ -159,6 +161,12 @@
   --color-project-plum: var(--project-plum);
   --color-chart-bar: var(--chart-bar);
   --color-chart-current: var(--chart-current);
+  --color-diff-added: var(--diff-added);
+  --color-diff-removed: var(--diff-removed);
+  /* A line added or removed lies on a faint wash of its colour, as a
+     project's icon lies on a tint of its own. */
+  --color-diff-added-line: color-mix(in srgb, var(--diff-added) 14%, transparent);
+  --color-diff-removed-line: color-mix(in srgb, var(--diff-removed) 14%, transparent);
 }
 
 @layer base {
