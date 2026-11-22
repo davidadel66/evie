@@ -15,8 +15,9 @@ const MODELS = "https://openrouter.ai/api/v1/models"
 // a network failure can use the same words.
 const TOO_LONG = /context (length|window)|maximum context|too many tokens|prompt is too long|input token count|maximum number of tokens|reduce the length/i
 const REFUSED = [400, 413]
-// How long the list of models may take to arrive.
+// How long the list of models may take to arrive, and how long it is kept.
 const LIST_TIMEOUT = 10_000
+const LIST_KEPT = 60 * 60_000
 const RETRIES = 3
 // How long a reply may be, in tokens, unless the settings say otherwise.
 // Without a limit OpenRouter reserves the model's maximum, and refuses the
@@ -32,6 +33,7 @@ export type OpenRouterOptions = {
   // Stand-ins for the network and the clock, for tests.
   fetch?: typeof globalThis.fetch
   sleep?: (milliseconds: number, signal: AbortSignal) => Promise<void>
+  now?: () => number
 }
 
 export function openrouter(options: OpenRouterOptions): Plugin {
@@ -55,22 +57,46 @@ const failed = (error: string, status?: number): Chunk => ({
 export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
   const send = options.fetch ?? globalThis.fetch
   const sleep = options.sleep ?? wait
-  // What each model can read, fetched from OpenRouter's list once and kept.
-  let limits: Promise<Map<string, number> | undefined> | undefined
+  const now = options.now ?? Date.now
+  // OpenRouter's list of models, with what each can read, fetched and kept
+  // for an hour, so that new models appear while the server stays up. A
+  // fetch that failed, or a reply that is not a list, as an error reply, is
+  // not kept, so the next call tries again.
+  type Listed = { id: string; name: string; limit?: number }
+  let listing: { list: Promise<Listed[] | undefined>; at: number } | undefined
+  async function list(): Promise<Listed[] | undefined> {
+    if (listing === undefined || now() - listing.at >= LIST_KEPT) listing = { list: fetchList(), at: now() }
+    const kept = listing
+    const listed = await kept.list
+    if (!listed && listing === kept) listing = undefined
+    return listed
+  }
+  async function fetchList(): Promise<Listed[] | undefined> {
+    try {
+      const response = await send(MODELS, { signal: AbortSignal.timeout(LIST_TIMEOUT) })
+      if (!response.ok) return undefined
+      const body = (await response.json()) as { data?: unknown }
+      if (!Array.isArray(body.data)) return undefined
+      return (body.data as { id?: unknown; name?: unknown; context_length?: unknown }[]).flatMap(({ id, name, context_length: limit }) =>
+        typeof id === "string" && id !== "" ? [{ id, name: typeof name === "string" && name !== "" ? name : id, ...(typeof limit === "number" && limit > 0 && { limit }) }] : [],
+      )
+    } catch {
+      return undefined
+    }
+  }
 
   return {
     name: "openrouter",
 
+    // If the list cannot be fetched, the limit is simply not known.
     async contextLimit(model) {
-      limits ??= send(MODELS, { signal: AbortSignal.timeout(LIST_TIMEOUT) })
-        .then((response) => response.json() as Promise<{ data?: { id?: string; context_length?: number }[] }>)
-        .then((body) => new Map((body.data ?? []).flatMap((entry) => (entry.id && entry.context_length ? [[entry.id, entry.context_length] as const] : []))))
-        // If the list cannot be fetched, the limit is simply not known.
-        .catch(() => undefined)
-      const list = await limits
-      // A failed fetch is not kept, so the next call tries again.
-      if (!list) limits = undefined
-      return list?.get(model)
+      return (await list())?.find((entry) => entry.id === model)?.limit
+    },
+
+    async models() {
+      const listed = await list()
+      if (!listed) throw new Error("OpenRouter's list of models could not be fetched. Check the network, and try again.")
+      return listed.map(({ id, name }) => ({ id, name }))
     },
 
     async *stream(request, signal) {
