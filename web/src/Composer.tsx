@@ -272,7 +272,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     const onFirstLine = !text.slice(0, area.selectionStart).includes("\n")
     const onLastLine = !text.slice(area.selectionEnd).includes("\n")
     if ((event.key === "ArrowUp" && onFirstLine) || (event.key === "ArrowDown" && onLastLine)) {
-      const sent = [...(state?.events ?? []).flatMap((each) => (each.type === "user_message" ? [each.body.text] : [])), ...(state?.pending ?? []), ...(state?.sending ?? []).map((each) => each.text)]
+      const sent = [...(state?.events ?? []).flatMap((each) => (each.type === "user_message" ? [each.body.text] : [])), ...(state?.pending ?? []).map((each) => each.text)]
       const step = recallStep(event.key === "ArrowUp" ? "back" : "forward", earlierMessages(sent), recalled, text)
       if (step === undefined) return
       event.preventDefault()

@@ -208,7 +208,7 @@ test("a git button sends evie its request as the owner's message, shown at once,
   await until(conversation, (state) => state.opened)
 
   const sent = request(conversation, "commit")
-  expect(conversation.state().pending).toEqual([REQUESTS.commit])
+  expect(conversation.state().pending).toEqual([{ text: REQUESTS.commit }])
   expect(await sent).toBeUndefined()
   const answered = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
   expect(said(answered)).toEqual(["Commit the changes in this session with a short message.", "Committed as 1a2b3c: Add the notes."])

@@ -2,7 +2,7 @@ import type { Commands, EventBodies, Evie, EvieEvent, StoredEvent } from "../../
 import type { MenuItem } from "./composer.ts"
 import type { Connection } from "./connection.ts"
 import type { Model } from "./models.ts"
-import type { View } from "./transcript.ts"
+import type { Pending, View } from "./transcript.ts"
 
 // The conversation of the session open in the web app's middle column,
 // apart from its screen, which is told it and redrawn as it changes. The
@@ -37,12 +37,7 @@ export type ConversationState = Required<View> & {
   // The session's project, by its id, or null for none, once opened; kept
   // current as the session is moved.
   project: string | null | undefined
-  // The owner's messages with files on their way, as `pending` holds those
-  // without, until the session has them.
-  sending: readonly Sending[]
 }
-
-export type Sending = { text: string; files: readonly File[] }
 
 export type GivenBack = { text: string; problem: string; files?: readonly Outgoing[] }
 
@@ -100,7 +95,7 @@ export type Conversation = {
   listFiles(): Promise<Commands["list_files"]["output"]>
 }
 
-const FRESH: ConversationState = { opened: false, readingEarlier: false, stopping: false, waiting: [], running: [], givenBack: undefined, model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [], project: undefined, sending: [] }
+const FRESH: ConversationState = { opened: false, readingEarlier: false, stopping: false, waiting: [], running: [], givenBack: undefined, model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [], project: undefined }
 
 export function openConversation(connection: Connection, session: string): Conversation {
   let state = FRESH
@@ -132,7 +127,7 @@ export function openConversation(connection: Connection, session: string): Conve
     failed = undefined
     // What the owner sent and the session has not taken in yet is still on
     // its way, and what was said in this page is still where it was said.
-    set({ ...FRESH, pending: state.pending, sending: state.sending, notes: state.notes, givenBack: state.givenBack })
+    set({ ...FRESH, pending: state.pending, notes: state.notes, givenBack: state.givenBack })
     // Until the open is answered, the session's events are in its answer:
     // the server holds back those that come after it until it is sent. A
     // question and its answer are not held back, since the open can wait on
@@ -239,8 +234,7 @@ export function openConversation(connection: Connection, session: string): Conve
       events: merged(state.events, [event]),
       ...(event.type === "model_changed" && { model: event.body.model }),
       ...(event.type === "moved" && { project: event.body.to }),
-      ...(event.type === "user_message" &&
-        (event.body.attachments === undefined ? { pending: without(state.pending, event.body.text) } : { sending: withoutSending(state.sending, event.body.text) })),
+      ...(event.type === "user_message" && { pending: withoutMessage(state.pending, event.body.text) }),
       ...((event.type === "question" || event.type === "answer") && { waiting: waitingAfter(state.waiting, event) }),
       ...(ends && { replySoFar: "" }),
       ...(event.type === "turn_start" && { turnRunning: true }),
@@ -276,23 +270,37 @@ export function openConversation(connection: Connection, session: string): Conve
     tryAgain,
     async send(text, options) {
       const files = options?.files ?? []
-      const shown: Sending = { text, files: files.map((each) => each.file) }
-      const gone = () => (files.length === 0 ? { pending: without(state.pending, text) } : { sending: state.sending.filter((each) => each !== shown) })
+      const shown: Pending = { text, ...(files.length > 0 && { files: files.map((each) => each.file) }) }
       const failed = (problem: string) => {
-        set({ ...gone(), ...(options?.giveBack && { givenBack: { text, problem, ...(files.length > 0 && { files }) } }) })
+        set({ pending: state.pending.filter((each) => each !== shown), ...(options?.giveBack && { givenBack: { text, problem, ...(files.length > 0 && { files }) } }) })
         return problem
       }
       const evie = on
       if (evie === undefined) return failed(NOT_CONNECTED)
-      set(files.length === 0 ? { pending: [...state.pending, text] } : { sending: [...state.sending, shown] })
+      set({ pending: [...state.pending, shown] })
       // Messages go in the order they were sent, though one waits on its files.
       const before = inOrder
       let done = () => {}
       inOrder = new Promise<void>((resolve) => (done = resolve))
-      try {
+      const upload = async () => {
         for (const each of files) if (each.path === undefined) each.path = (await connection.upload(session, each.file)).path
+      }
+      const message = () => evie.send({ type: "send_message", session, text, ...(files.length > 0 && { attachments: files.map((each) => each.path!) }) })
+      try {
+        // Files the server took on an earlier try, kept as they were then.
+        const keptBefore = files.filter((each) => each.path !== undefined)
+        await upload()
         await before
-        await evie.send({ type: "send_message", session, text, ...(files.length > 0 && { attachments: files.map((each) => each.path!) }) })
+        try {
+          await message()
+        } catch (cause) {
+          // A file kept on an earlier try but since gone, as when the
+          // session moved, is sent again from the box, once.
+          if (keptBefore.length === 0 || !NO_LONGER_KEPT.test(wordsOf(cause))) throw cause
+          for (const each of keptBefore) delete each.path
+          await upload()
+          await message()
+        }
         return undefined
       } catch (cause) {
         return failed(wordsOf(cause))
@@ -379,17 +387,21 @@ function waitingAfter(waiting: readonly EventBodies["question"][], event: Extrac
   return waiting.some((question) => question.id === event.body.id) ? [...waiting] : [...waiting, event.body]
 }
 
-// The owner's messages with files on their way, less the first that says `text`.
-function withoutSending(sending: readonly Sending[], text: string): Sending[] {
-  const at = sending.findIndex((each) => each.text === text)
-  return at === -1 ? [...sending] : [...sending.slice(0, at), ...sending.slice(at + 1)]
-}
-
-// The owner's messages on their way, less the first that is `text`.
-function without(pending: readonly string[], text: string): string[] {
-  const at = pending.indexOf(text)
+// The owner's messages on their way, less the first that says `text`.
+function withoutMessage(pending: readonly Pending[], text: string): Pending[] {
+  const at = pending.findIndex((each) => each.text === text)
   return at === -1 ? [...pending] : [...pending.slice(0, at), ...pending.slice(at + 1)]
 }
+
+// A list less the first that is `item`.
+function without(list: readonly string[], item: string): string[] {
+  const at = list.indexOf(item)
+  return at === -1 ? [...list] : [...list.slice(0, at), ...list.slice(at + 1)]
+}
+
+// How the server says a file named by a message is no longer one kept for
+// its session.
+const NO_LONGER_KEPT = /is not a file kept for this session/
 
 const NOT_CONNECTED = "Not connected to evie's server yet. Wait until it is connected, and send it again."
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))

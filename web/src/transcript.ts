@@ -9,7 +9,8 @@ import { shownAttachment, type ShownAttachment } from "./attachments.ts"
 // earliest read so far; whether there are earlier ones; the reply being
 // written now, as far as it has come; whether a turn is running; and its
 // background jobs. `pending` are the owner's messages sent from this page
-// that the session has not taken in yet, in the order sent. `notes` are
+// that the session has not taken in yet, in the order sent, each with the
+// files on their way with it. `notes` are
 // said in this page and kept nowhere, such as what a command said, each
 // at the time of the session's last event when it was said.
 export type View = {
@@ -18,12 +19,11 @@ export type View = {
   replySoFar: string
   turnRunning: boolean
   jobs: readonly Job[]
-  pending?: readonly string[]
-  // The owner's messages with files on their way, which come after `pending`.
-  sending?: readonly { text: string; files: readonly File[] }[]
+  pending?: readonly Pending[]
   notes?: readonly PageNote[]
 }
 export type PageNote = { key: string; time: number; text: string }
+export type Pending = { text: string; files?: readonly File[] }
 
 // One tool call: its name, a short form of its input, and its result as
 // stored, once it has one, with that result in short. `running` while it is
@@ -185,8 +185,9 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
   if (view.replySoFar !== "") add({ key: "streaming", turn, kind: "reply", text: view.replySoFar, streaming: true }, Infinity)
   // The owner's messages the session has not taken in yet come last, as
   // they will: a turn takes them in at its next step.
-  for (const [at, text] of (view.pending ?? []).entries()) add({ key: `pending${at}`, turn, kind: "owner", text }, Infinity)
-  for (const [at, { text, files }] of (view.sending ?? []).entries()) add({ key: `sending${at}`, turn, kind: "owner", text, sending: files }, Infinity)
+  for (const [at, { text, files }] of (view.pending ?? []).entries()) {
+    add({ key: `pending${at}`, turn, kind: "owner", text, ...(files !== undefined && files.length > 0 && { sending: files }) }, Infinity)
+  }
   // Each run is known by its last call, which reading the page before does
   // not change, and says what it is.
   for (const item of items) {

@@ -1,7 +1,9 @@
 import { afterEach, expect, test } from "bun:test"
 import { readdir } from "node:fs/promises"
 import { join } from "node:path"
-import { ask, models, startServer, type Command, type Evie, type EvieOptions, type Plugin } from "../src/index.ts"
+import { ask, models, startServer, type Attachments, type Command, type Evie, type EvieOptions, type Plugin } from "../src/index.ts"
+import { openTokens } from "../src/server/tokens.ts"
+import { startEvie } from "./support/harness.ts"
 import { openConnection } from "../web/src/connection.ts"
 import { openConversation, openDraft, takeStarted, type Conversation, type ConversationState, type Draft, type DraftState, type Outgoing } from "../web/src/conversation.ts"
 import { openSessions } from "../web/src/sessions.ts"
@@ -51,7 +53,7 @@ test("a message sent from the box shows at once as the owner's, until the sessio
 
   const sending = conversation.send("Plan the beds")
   expect(said(conversation.state())).toEqual(["Plan the beds"])
-  expect(conversation.state().pending).toEqual(["Plan the beds"])
+  expect(conversation.state().pending).toEqual([{ text: "Plan the beds" }])
   expect(await sending).toBeUndefined()
 
   const replied = await until(conversation, (state) => !state.turnRunning && state.events.some((event) => event.type === "turn_end"))
@@ -412,7 +414,6 @@ test("a file the server refuses stops the message, which is not sent, and says w
 
   expect(refused).toBe('".." is not a plain file name. A file is attached by its name alone, such as "plan.pdf".')
   expect(conversation.state().pending).toEqual([])
-  expect(conversation.state().sending).toEqual([])
   await Bun.sleep(20)
   expect(model.requests).toHaveLength(0)
 
@@ -434,14 +435,20 @@ test("a message with files shows at once with them, as sending, until the sessio
   const photo = file("photo.png", "x", "image/png")
 
   const sending = conversation.send("Look", { files: [{ file: photo }] })
-  expect(conversation.state().sending).toEqual([{ text: "Look", files: [photo] }])
-  expect(conversation.state().pending).toEqual([])
-  expect(transcriptOf(conversation.state()).at(-1)).toMatchObject({ kind: "owner", text: "Look", sending: [photo] })
+  const after = conversation.send("And this")
+  // One list of what is on its way, in the order it was sent.
+  expect(conversation.state().pending).toEqual([{ text: "Look", files: [photo] }, { text: "And this" }])
+  expect(transcriptOf(conversation.state()).slice(-2)).toMatchObject([
+    { kind: "owner", text: "Look", sending: [photo] },
+    { kind: "owner", text: "And this" },
+  ])
   expect(await sending).toBeUndefined()
+  expect(await after).toBeUndefined()
 
   const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
-  expect(replied.sending).toEqual([])
-  expect(transcriptOf(replied).filter((item) => item.kind === "owner")).toHaveLength(1)
+  expect(replied.pending).toEqual([])
+  const owners = transcriptOf(replied).filter((item) => item.kind === "owner")
+  expect(owners.map((item) => item.kind === "owner" && item.text)).toEqual(["Look", "And this"])
 })
 
 test("a conversation knows its session's project and lists the project's files for @; one with no project has none to list", async () => {
@@ -472,4 +479,44 @@ test("a draft's first message carries its files, and a draft in a project lists 
   const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
   const message = replied.events.find((event) => event.type === "user_message")
   expect(message?.type === "user_message" && message.body.attachments?.map((each) => each.name)).toEqual(["plan.txt"])
+})
+
+test("a file kept for the message but since gone is sent again from the box, once, and the message goes with it", async () => {
+  const { served, connection } = await start([{ text: ["Seen."] }])
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+  const plan: Outgoing = { file: file("plan.txt", "Beds.\n"), path: join(served.run.projectFolder, ".evie", "attachments", "gone", "plan.txt") }
+
+  expect(await conversation.send("Read this", { files: [plan] })).toBeUndefined()
+
+  const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
+  const message = replied.events.find((event) => event.type === "user_message")
+  expect(message?.type === "user_message" && message.body.attachments?.map((each) => each.name)).toEqual(["plan.txt"])
+  expect(plan.path).toContain(today())
+})
+
+test("an upload the server does not take in time fails, saying so; the message comes back, and the next is not held by it", async () => {
+  const run = await startEvie([scriptedProvider([{ text: ["Noted."] }]).plugin])
+  cleanups.push(run.stop)
+  const tokens = await openTokens(run.home)
+  cleanups.push(async () => tokens.close())
+  const made = tokens.add("test device")
+  if (!("secret" in made)) throw new Error(made.refused)
+  // A server that takes files in and never answers.
+  const stalls: Attachments = { save: () => new Promise(() => {}), refusal: () => undefined, open: async () => undefined }
+  const server = startServer({ evie: run.evie, tokens, host: "127.0.0.1", port: 0, attachments: stalls })
+  cleanups.push(() => server.stop())
+  const connection = openConnection({ url: server.url, token: made.secret, firstWait: 10, uploadWithin: 200 })
+  cleanups.push(() => connection.close())
+  const conversation = open(connection, run.session)
+  await until(conversation, (state) => state.opened)
+
+  const stalled = conversation.send("Read this", { files: [{ file: file("plan.txt", "Beds.\n") }], giveBack: true })
+  const next = conversation.send("Something else")
+
+  expect(await stalled).toBe("plan.txt could not be sent: evie's server did not take it in time. Send it again.")
+  expect(conversation.takeGivenBack()?.files?.map((each) => each.file.name)).toEqual(["plan.txt"])
+  expect(await next).toBeUndefined()
+  const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
+  expect(replied.events.filter((event) => event.type === "user_message").map((event) => event.type === "user_message" && event.body.text)).toEqual(["Something else"])
 })

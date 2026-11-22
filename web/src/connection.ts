@@ -41,6 +41,9 @@ export type ConnectionOptions = {
   // left out.
   firstWait?: number
   answerWithin?: number
+  // For tests: how long a file attached may take to be sent, two minutes
+  // when left out.
+  uploadWithin?: number
 }
 
 export type Connection = {
@@ -157,7 +160,7 @@ export function openConnection(options: ConnectionOptions): Connection {
       closing.abort()
       await evie?.close()
     },
-    upload: (session, file) => uploadFile(options.url, options.token, session, file),
+    upload: (session, file) => uploadFile(options.url, options.token, session, file, options.uploadWithin),
   }
 }
 

@@ -49,13 +49,13 @@ const ANCHORS = 5
 // completed turn that changed files ends with them.
 export function Reading({ conversation, readOnly = false, changes }: { conversation: Opened; readOnly?: boolean; changes?: Changes }) {
   const state = useSyncExternalStore(conversation.subscribe, conversation.state)
-  const { events, earlier, replySoFar, turnRunning, jobs, pending, notes, sending } = state
+  const { events, earlier, replySoFar, turnRunning, jobs, pending, notes } = state
   const changed = useSyncExternalStore(changes?.subscribe ?? noChanges.subscribe, changes?.state ?? noChanges.state).listed?.turns
   // A question waiting is shown where it is answered, at the end or docked
   // above the box, so it is left out where it was asked until it is answered.
   const items = useMemo(
-    () => asAsked(transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, pending, notes, sending }, changed), state.waiting),
-    [events, earlier, replySoFar, turnRunning, jobs, pending, notes, sending, changed, state.waiting],
+    () => asAsked(transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, pending, notes }, changed), state.waiting),
+    [events, earlier, replySoFar, turnRunning, jobs, pending, notes, changed, state.waiting],
   )
   const asking = useAsking(state.waiting)
   const { shown } = asking
