@@ -1125,6 +1125,9 @@ credited here, and its licence notice is kept with the code.
   format and the way the `patch` tool finds lines, in
   `src/plugins/files/patch.ts`, rewritten from Rust. The licence and Codex's
   notice are in `LICENSES/`.
+- [T3 Code](https://github.com/pingdotgg/t3code) (MIT): the prompt that
+  names sessions, in `src/plugins/naming.ts`, rewritten in evie's words.
+  Its licence is in `LICENSES/`.
 
 The web app's fonts are [Geist and Geist Mono](https://github.com/vercel/geist-font)
 (SIL Open Font License 1.1), from the `@fontsource-variable` packages. Its

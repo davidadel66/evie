@@ -8,8 +8,9 @@ import type { HookContext, Plugin, Provider } from "../core/types.ts"
 // is given up, says nothing to the owner, and is not tried again. A session
 // is named once, and never over a name the owner gave it.
 //
-// The prompt follows the one T3 Code (MIT licence) names its threads with,
-// rewritten in evie's words.
+// The prompt is adapted from the one T3 Code names its threads with,
+// rewritten in evie's words. T3 Code's licence (MIT) is in
+// LICENSES/t3code-MIT.txt.
 
 export type NamingOptions = {
   // The model that writes the names.
