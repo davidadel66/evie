@@ -87,10 +87,17 @@
   --spacing-session-list: 288px;
   --spacing-project-card: 320px;
   --spacing-sign-in-column: 400px;
+  /* The conversation in the middle column, at most this wide, and the room
+     a tool call's name takes in a turn's steps, as the board's Message
+     draws them. */
+  --spacing-conversation: 740px;
+  --spacing-call-name: 48px;
   /* Buttons are at least 40px tall, and so are a menu's items; a menu is
      at least this wide. */
   --spacing-control: 40px;
   --spacing-menu: 176px;
+  /* The widest a dialog, such as the settings window, is. */
+  --spacing-dialog: 400px;
   /* A project's icon tile in a session row, and the icon on it. */
   --spacing-tile-row: 18px;
   --spacing-tile-row-icon: 12px;
