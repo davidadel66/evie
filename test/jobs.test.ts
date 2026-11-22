@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, readFile, realpath, rm } from "node:fs/promises"
+import { appendFile, mkdtemp, readFile, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, jobs, permissions, runTerminal, shell, type EvieEvent, type Job, type Plugin } from "../src/index.ts"
@@ -283,6 +283,54 @@ test("the model may read a job's output file, though it is in Evie's data folder
     await say(run, "read the database")
     expect(lastResult(run)).toStartWith("Blocked by the guard:")
   }
+})
+
+// ---- A job's output, for a client ---------------------------------------------------------------
+
+test("a client reads a job's output so far, then what it has written since, and only the latest part of a great deal", async () => {
+  const background = backgroundWork()
+  const { run } = await start([{ text: [], calls: [startWork("the build")] }, { text: ["Started."] }], [background.plugin])
+  await say(run, "build it")
+  const file = background.work[0]!.job!.outputFile
+  const read = (after?: number) => run.evie.send({ type: "read_job_output", session: run.session, id: "1", ...(after !== undefined && { after }) })
+
+  expect(await read()).toEqual({ text: "", from: 0, to: 0 })
+  await appendFile(file, "compiling\n")
+  expect(await read()).toEqual({ text: "compiling\n", from: 0, to: 10 })
+  await appendFile(file, "linking ✓\n")
+  expect(await read(10)).toEqual({ text: "linking ✓\n", from: 10, to: 22 })
+  expect(await read(22)).toEqual({ text: "", from: 22, to: 22 })
+
+  // Half of a character written so far is left for the next read.
+  const check = Buffer.from("✓")
+  await appendFile(file, check.subarray(0, 1))
+  expect(await read(22)).toEqual({ text: "", from: 22, to: 22 })
+  await appendFile(file, check.subarray(1))
+  expect(await read(22)).toEqual({ text: "✓", from: 22, to: 25 })
+
+  // More than 64 KiB since the last read: only its last 64 KiB, from the
+  // first character that starts in them, and `from` says where that is.
+  await appendFile(file, `${"é".repeat(40_000)}end!\n`)
+  const long = await read(25)
+  expect(long.to).toBe(25 + 80_005)
+  expect(long.from).toBe(long.to - 65_535)
+  expect(long.text).toBe(`${"é".repeat(32_765)}end!\n`)
+  expect((await read()).from).toBe(long.from)
+})
+
+test("output that cannot be read, as when its file has gone, is a failure the client can tell from no output", async () => {
+  const background = backgroundWork()
+  const { run } = await start([{ text: [], calls: [startWork("the build")] }, { text: ["Started."] }], [background.plugin])
+  await say(run, "build it")
+  await rm(background.work[0]!.job!.outputFile)
+
+  await expect(run.evie.send({ type: "read_job_output", session: run.session, id: "1" })).rejects.toThrow("The output of job 1 could not be read:")
+})
+
+test("reading the output of a job the session does not have says so", async () => {
+  const { run } = await start([], [])
+  await expect(run.evie.send({ type: "read_job_output", session: run.session, id: "3" })).rejects.toThrow("This session has had no job 3 since Evie last started.")
+  await expect(run.evie.send({ type: "read_job_output", session: run.session, id: "1", after: -1 })).rejects.toThrow("`after` is where the last read ended")
 })
 
 // ---- The terminal ---------------------------------------------------------------------------------

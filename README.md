@@ -230,10 +230,9 @@ any name other than `127.0.0.1` or `localhost` must be listed under
 ```
 
 The page has three columns: the list of sessions, the conversation and the
-project card. For now the project card is empty. While the page is connected, nothing says so;
-while the line is down, one quiet line under the name at the top says
-Reconnecting, and why, and the page catches up by itself once the line is
-back. The gear beside the name opens the settings, where the theme is
+project card. While the page is connected, nothing says so; while the
+line is down, one quiet line under the name at the top says Reconnecting,
+and why, and the page catches up by itself once the line is back. The gear beside the name opens the settings, where the theme is
 picked: one of Dusk, Moss and Oxblood, which the browser remembers.
 
 The list shows every session you have said something in, kept current as
@@ -328,6 +327,44 @@ The message box at the bottom of the conversation works as T3 Code's does:
   full the conversation is, as a share of the size at which evie compacts
   it by itself. Its menu gives both sizes, and Compact now.
 - **At phone width** the box is one row until you tap it.
+
+The project card, on the right, is the selected session's:
+
+- **Its project:** the project's icon and name, its folder, cut at its
+  start when it is long, so that its end shows, and whole when pointed at;
+  and the git branch it is on, kept current as the session list keeps it,
+  or "No branch" in a repository on none of its own, or "Not a git
+  repository". A session with no project says so.
+- **Changes:** Commit, Push and Pull request each send evie a request in
+  words, as a message in the session, such as "Commit the changes in this
+  session with a short message."; evie carries it out as it would if you had
+  typed it, and asks before pushing, as it always does. A request sent
+  keeps the three off until evie starts on it, so it is sent once. Undo
+  last change runs `/undo`, and what it says is a quiet note in the
+  conversation, as the terminal shows it; like the terminal's, the note is
+  not kept, so it is gone once the session is opened again. Each button is
+  disabled while it does not apply, and a line under it says why: the
+  session still opening, no project, a folder not in a git repository, or
+  evie working on a turn. With a subagent's conversation open, a press goes
+  back to the session's own first, so that what it says is in view.
+- **Subagents:** each subagent the session has started, newest first, with
+  its name and how its latest round of work stands, in a word (Working,
+  Done, Failed or Stopped), and Stop while it works. One with no round
+  since evie's server last started says Ended. Picking one opens its
+  conversation in the middle, read only, under its name, with a line below
+  that leads back to the session; while it works, what it adds is read
+  every second.
+- **Background jobs:** each job the session has run in the background since
+  evie's server last started, as `/jobs` lists them, with its command and
+  how it stands, and Stop while it runs, which is `/jobs stop`. One opens
+  to its output, which keeps up while it runs, and stays open when the job
+  ends. Ended jobs fold away under their count.
+
+At desktop width the card can be hidden and shown with the button at the
+right of the middle column's header, or with Cmd+Option+B (Ctrl+Alt+B
+elsewhere), and the browser remembers which. At 980px wide or narrower the
+same button opens it as a sheet over the page, from the right, which goes
+once something is picked.
 
 ### Keeping the server running
 
@@ -976,6 +1013,7 @@ A few values the design system's board does not name are named once in
 |---|---|---|
 | `session-list` | 288px | The width of the session list |
 | `project-card` | 320px | The width of the project card |
+| `card-sheet` | `min(88vw, 448px)` | The width of the project card as a sheet over the page, at 980px or narrower |
 | `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle |
 | `conversation` | 740px | The widest the conversation is, which the board's Message gives in words |
 | `call-name` | 48px | The room a tool call's name takes in a turn's steps, as the board's Message draws them |
@@ -988,6 +1026,7 @@ A few values the design system's board does not name are named once in
 | `composer-text` | 240px | The tallest the message box's text grows before it scrolls |
 | `composer-menu` | 320px | The tallest the `/` menu and the model picker above the message box are, as T3 Code's |
 | `picker-makers` | 144px | The model picker's column of makers |
+| `job-output` | 240px | The tallest a background job's output grows in the project card before it scrolls |
 | `radius-tile` | 25% | A project's icon tile's corners, a quarter of its size at any size |
 | `default-transition-duration` | 150ms | How long a change takes, such as a group's caret turning |
 | `default-transition-timing-function` | `cubic-bezier(0.4, 0, 0.2, 1)` | How it eases |
@@ -1089,7 +1128,7 @@ remove `evie.db` and `server-token` from it, and its `-seed` folder, first.
 
 ## What comes next
 
-- The rest of the web client: the conversation, the project card, and a
+- The rest of the web client: the changes and their diffs, and a
   workspace for each project.
 - Scheduled work, memory, voice and a phone app.
 

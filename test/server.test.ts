@@ -1563,7 +1563,7 @@ test("over the network, a client lists projects and sessions, settles a session,
   const page = await client.send({ type: "read_history", session, limit: 2 })
 
   const events = stored(served.run.events)
-  expect(projects).toEqual([project!])
+  expect(projects).toEqual([{ ...project!, git: false }])
   expect(sessions).toEqual([{ session, project: project!.id, name: "What is the capital of France?", state: "settled", lastActive: events.at(-2)!.time }])
   expect(page).toEqual({ events: events.slice(-2), earlier: true })
   expect(page.events.map((event) => event.type)).toEqual(["turn_end", "settled"])

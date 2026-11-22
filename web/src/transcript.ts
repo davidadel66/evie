@@ -180,9 +180,9 @@ export function transcriptOf(view: View): Item[] {
     item.label = item.running ? "Working" : seconds !== undefined ? workedFor(seconds) : usedTools(item.calls)
   }
 
-  // Each job's start, and its end once it has ended, where it happened,
-  // after whatever came before it. One from before the first event read is
-  // left for when the page before is read.
+  // Each job's start, and its end once it has ended, and what a command
+  // said, where it happened, after whatever came before it. One from before
+  // the first event read is left for when the page before is read.
   const from = view.earlier ? (view.events[0]?.time ?? Infinity) : -Infinity
   const lines = view.jobs.flatMap((job) => {
     const start = { key: `job${job.id}`, time: job.started, text: `Background job ${job.id} started: ${job.title}` }

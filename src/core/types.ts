@@ -169,6 +169,9 @@ export type Job = {
   started: number
   ended?: number
   outputFile: string
+  // The session doing the work, for a round of a subagent's: a client can
+  // read its conversation with `read_history`.
+  subagent?: string
 }
 
 // What a tool hands over when it puts work in the background.
@@ -186,6 +189,8 @@ export type JobWork = {
   // What the job's record keeps for the work's plugin, to pick the work up
   // again after Evie restarts, such as the id of a subagent.
   keep?: Record<string, unknown>
+  // The session doing the work, when it is a subagent's round of work.
+  subagent?: string
 }
 
 // A job number taken for work a tool call waits on, before it is a job: its
@@ -255,6 +260,10 @@ export type Children = {
   busy(child: string): boolean
   // Stops what the subagent is doing.
   stop(child: string): void
+  // The subagent's name, as a list of subagents gives it: the opening words
+  // of its task. Null for a session that is not one of this session's
+  // subagents.
+  name(child: string): string | null
 }
 
 // ---- Tools --------------------------------------------------------------------
@@ -461,8 +470,10 @@ export type Project = { id: string; name: string; folder: string }
 
 // A project as a list of projects shows it: with the git branch its folder
 // is on, read when the list is asked for, and left out when the folder is
-// not in a git repository or is on no branch.
-export type ListedProject = Project & { branch?: string }
+// not the top of a git repository or is on no branch; and `git`, whether
+// its folder is in a git work tree at all, at its top or below it, left out
+// when git could not tell in time.
+export type ListedProject = Project & { branch?: string; git?: boolean }
 
 // ---- The client interface -------------------------------------------------------
 
@@ -609,6 +620,27 @@ export type Commands = {
   list_models: {
     input: { session?: string }
     output: { id: string; name: string }[]
+  }
+  // A background job's output so far, as its work wrote it to its output
+  // file: from byte `after`, where the last read ended, to the end, or
+  // without it from the start. At most the last 64 KiB are given, from the
+  // first character that starts in them; `from` and `to` say which bytes
+  // of the file the text is, so a `from` past `after` means some were
+  // skipped. A character not yet written whole is left for the next read.
+  // The jobs are those `open_session` lists: the ones since Evie last started.
+  // Output that cannot be read, as when its file has gone, is an error.
+  read_job_output: {
+    input: { session: string; id: string; after?: number }
+    output: { text: string; from: number; to: number }
+  }
+  // The subagents a session has started, as stored, since it began, newest
+  // first: each one's session, whose conversation `read_history` reads; its
+  // name, the opening words of its task, as a session is named by its first
+  // message; and when it was started. How each stands is in the session's
+  // jobs, while this run of Evie has them.
+  list_subagents: {
+    input: { session: string }
+    output: { session: string; name: string | null; started: number }[]
   }
 }
 
