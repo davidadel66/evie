@@ -38,3 +38,14 @@ export function checksSummary(checks: readonly Check[]): string {
 export function checkLook(state: Check["state"]): "done" | "failed" | "working" | "quiet" {
   return state === "passed" ? "done" : state === "failed" ? "failed" : state === "running" ? "working" : "quiet"
 }
+
+// What Fix asks evie, as a message in the session, as T3 Code's Fix hands
+// the failing checks to a thread: the checks failing on the branch's pull
+// request while it is open, by name. Nothing while none fails.
+export function fixRequest(pull: Pick<PullRequest, "number" | "title" | "state" | "checks">): string | undefined {
+  if (pull.state !== "open" && pull.state !== "draft") return undefined
+  const failing = pull.checks.filter((check) => check.state === "failed" || check.state === "cancelled").map((check) => check.name)
+  if (failing.length === 0) return undefined
+  const names = failing.length === 1 ? failing[0] : `${failing.slice(0, -1).join(", ")} and ${failing.at(-1)}`
+  return `Fix the failing checks on pull request #${pull.number}, "${pull.title}": ${names}. Read what each one says, fix what made it fail, then commit the fix and push it.`
+}

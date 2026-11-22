@@ -8,6 +8,7 @@ import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
 import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
+import { readGitStatus } from "./git-status.ts"
 import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
 import { createAttachments } from "./attachments.ts"
@@ -1101,6 +1102,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await readStorage(projectFor(command.project).folder, command.path, home)) as Output
         case "list_files":
           return (await listProjectFiles(projectFor(command.project).folder, { dataFolder: home })) as Output
+        case "read_git_status":
+          return (await readGitStatus(projectFor(command.project), typeof command.base === "string" ? command.base : undefined)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

@@ -519,6 +519,37 @@ export type PullRequestReader = {
   read(folder: string): Promise<PullRequest | null>
 }
 
+// How a project's git branch stands, as the web app's session details
+// read it, after T3 Code's git status: what its git button offers, and
+// what its Changes row sums.
+export type GitStatus = {
+  // The branch the folder is on, left out on none, as with a commit
+  // checked out by itself.
+  branch?: string
+  // Whether the folder holds work not yet committed: changes git sees,
+  // staged or not, and files it neither tracks nor ignores.
+  uncommitted: boolean
+  // Whether the repository has a remote to push to.
+  remote: boolean
+  // How many commits the branch is ahead of its upstream and behind it,
+  // left out when it has none, or the one it had has gone.
+  upstream?: { ahead: number; behind: number }
+  // The repository's main branch, the one its remote names as its own, or
+  // else main or master; whether the folder is on it; and how many commits
+  // the branch has that it does not, as the remote has it when it has it.
+  // Left out when there is none.
+  main?: { name: string; on: boolean; ahead: number }
+  // The lines the Changes row sums, as `read_changes` counts them: on a
+  // branch, from where it left the branch it is compared with, which
+  // `against` names, to the files as they are now; on the main branch, or
+  // when there is none to compare with, the work not yet committed, with
+  // `against` null.
+  changes: { against: string | null; added: number; removed: number }
+  // The repository's own branches, the latest committed to first, at most
+  // twenty, for the owner to ask evie to switch to.
+  branches: string[]
+}
+
 // ---- Hooks --------------------------------------------------------------------
 
 // What every hook is told about the moment it runs in.
@@ -1021,6 +1052,17 @@ export type Commands = {
   list_files: {
     input: { project: string }
     output: { files: string[]; more: boolean }
+  }
+  // How a project's git branch stands, read from its folder now, for the
+  // web app's session details: its git button and its Changes row (see
+  // GitStatus). A branch's changes are counted against `base`, as the diff
+  // panel is given its pull request's base, or without it, or when there
+  // is no such branch, against the main branch. Null when the folder is
+  // not in a git repository. Reading only: git is run as the core runs it,
+  // reaching no other computer, so the upstream is as the last fetch left it.
+  read_git_status: {
+    input: { project: string; base?: string }
+    output: GitStatus | null
   }
 }
 
