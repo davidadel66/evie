@@ -561,11 +561,16 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
+// Bun's WebSocket takes headers, to send a token with. A browser's takes
+// none, and needs none, since it sends its cookie instead. Named this way,
+// the client type-checks against both.
+type WithHeaders = new (address: URL, options: { headers: Record<string, string> }) => WebSocket
+
 // Opens a WebSocket to the server, or says why it could not.
 async function openSocket(address: URL, headers: Record<string, string> | undefined, signal: AbortSignal | undefined): Promise<WebSocket> {
   const socketAddress = new URL(PATHS.socket, address)
   socketAddress.protocol = address.protocol === "https:" ? "wss:" : "ws:"
-  const socket = headers === undefined ? new WebSocket(socketAddress) : new WebSocket(socketAddress, { headers })
+  const socket = headers === undefined ? new WebSocket(socketAddress) : new (WebSocket as unknown as WithHeaders)(socketAddress, { headers })
   let giveUp = () => {}
   const outcome = await new Promise<"open" | "refused" | "gave up">((resolve) => {
     giveUp = () => resolve("gave up")
