@@ -96,7 +96,7 @@ test("a change to a file is asked about, and a yes lets that one change through"
 
   expect(asked).toHaveLength(2)
   expect(asked[0]).toEqual({
-    text: "Let Evie change src/app.ts?",
+    text: "Let evie change src/app.ts?",
     choices: ["Yes, once", "Always in this project: allow changing files inside the project", "No"],
   })
   expect(ran).toEqual(["edit src/app.ts", "edit src/app.ts"])
@@ -108,7 +108,7 @@ test("a permission prompt says it is one, so that a client can show it as one, a
   await attempt(edit("src/app.ts"), YES)
 
   const question = stored(run.events).find((event) => event.type === "question")
-  expect(question?.body).toEqual({ id: expect.any(String), text: "Let Evie change src/app.ts?", choices: [YES, "Always in this project: allow changing files inside the project", NO], freeText: true, kind: "permission" })
+  expect(question?.body).toEqual({ id: expect.any(String), text: "Let evie change src/app.ts?", choices: [YES, "Always in this project: allow changing files inside the project", NO], freeText: true, kind: "permission" })
 })
 
 test("a no stops the call, and the model is told why", async () => {
@@ -155,7 +155,7 @@ test("reading or changing a file outside the project is asked about", async () =
   await attempt(read("/somewhere/else/notes.md"), YES)
   await attempt(edit("../sibling/file.ts"), always)
 
-  expect(asked[0]?.text).toBe("Let Evie read /somewhere/else/notes.md, which is outside the project?")
+  expect(asked[0]?.text).toBe("Let evie read /somewhere/else/notes.md, which is outside the project?")
   expect(asked[1]?.choices[1]).toStartWith("Always in this project: allow changing files directly in ")
 })
 
@@ -167,7 +167,7 @@ test("a patch is judged by every file it names", async () => {
   await attempt(patch("src/a.ts", "/somewhere/else/hosts", "README.md"), YES)
 
   expect(asked).toHaveLength(1)
-  expect(asked[0]?.text).toBe("Let Evie change these files outside the project?\n\n  /somewhere/else/hosts\n  README.md")
+  expect(asked[0]?.text).toBe("Let evie change these files outside the project?\n\n  /somewhere/else/hosts\n  README.md")
   expect(folder).toBeDefined()
 })
 
@@ -226,7 +226,7 @@ test("in auto mode Evie works freely inside the project and asks before reaching
     "git push origin dev",
     "gh pr create --fill",
     "curl -X POST https://example.com/hook -d ok",
-    "Let Evie change /somewhere/else/hosts, which is outside the project?",
+    "Let evie change /somewhere/else/hosts, which is outside the project?",
   ])
   expect(ran).toHaveLength(8)
 })
@@ -266,7 +266,7 @@ test("a tool the plugin knows nothing about is asked about in manual mode", asyn
   await attempt({ name: "deploy", input: { target: "production" } })
 
   expect(asked).toEqual([
-    { text: 'Let Evie use the tool deploy?\n\n  {"target":"production"}', choices: ["Yes, once", "Always in this project: allow the tool deploy", "No"] },
+    { text: 'Let evie use the tool deploy?\n\n  {"target":"production"}', choices: ["Yes, once", "Always in this project: allow the tool deploy", "No"] },
   ])
 })
 
@@ -423,7 +423,7 @@ test("a patch whose file lines are indented is judged like any other", async () 
   const readOnly = await start({ mode: "read-only" })
 
   await manual.attempt(patch("/somewhere/else/x.txt"), NO)
-  expect(manual.asked[0]?.text).toBe("Let Evie change /somewhere/else/x.txt, which is outside the project?")
+  expect(manual.asked[0]?.text).toBe("Let evie change /somewhere/else/x.txt, which is outside the project?")
   expect(await readOnly.attempt(patch("src/x.txt"))).toStartWith("Not allowed: Evie is in read-only mode")
   expect(await manual.attempt(patch("~/.ssh/authorized_keys"))).toStartWith("Blocked by the guard:")
   // A patch in which no file can be found is not waved through.
@@ -545,7 +545,7 @@ test("a link inside the project that points outside it counts as outside", async
 
   await attempt(edit("linked/file.txt"), NO)
 
-  expect(asked[0]?.text).toBe(`Let Evie change ${join(outside, "file.txt")}, which is outside the project?`)
+  expect(asked[0]?.text).toBe(`Let evie change ${join(outside, "file.txt")}, which is outside the project?`)
 })
 
 test("a rule that denies is not got round by writing the same thing another way", async () => {

@@ -324,7 +324,7 @@ const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator
 // now. Its colour does not change: the board gives a colour no such job,
 // so a state is said in words, as Compacting.
 function ContextMeter({ conversation, state }: { conversation: Conversation; state: ConversationState }) {
-  if (state.running === "compact") {
+  if (state.running.includes("compact")) {
     return (
       <span role="status" className="flex h-control items-center gap-2 px-2 text-status-working">
         <Spinner />

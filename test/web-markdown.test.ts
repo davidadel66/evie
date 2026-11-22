@@ -48,3 +48,8 @@ test("every named character is the character it names, outside code, and one tha
     "<p>© 2026 — … été →  &amp;&lt;b&gt; &amp;notathing; <code>&amp;copy;</code></p>",
   )
 })
+
+test("a task list's boxes are drawn as boxes, in a tight list and in a loose one, whose items are paragraphs", () => {
+  expect(page("- [x] water\n- [ ] weed")).toBe('<ul><li><input type="checkbox" disabled="" checked=""/>water</li><li><input type="checkbox" disabled=""/>weed</li></ul>')
+  expect(page("- [x] water\n\n- [ ] weed")).toBe('<ul><li><p><input type="checkbox" disabled="" checked=""/>water</p></li><li><p><input type="checkbox" disabled=""/>weed</p></li></ul>')
+})

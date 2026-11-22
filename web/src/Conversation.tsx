@@ -137,11 +137,11 @@ function Reading({ conversation }: { conversation: Opened }) {
                   <Drawn item={item} shown={opens} show={show} />
                 </div>
               ))}
-              {state.running !== undefined && state.running !== "compact" && (
-                <div className={items.length > 0 ? "mt-4" : ""}>
-                  <Working words={`Running /${state.running}`} />
+              {state.running.filter((name) => name !== "compact").map((name, at) => (
+                <div key={`${name}${at}`} className={items.length > 0 || at > 0 ? "mt-4" : ""}>
+                  <Working words={`Running /${name}`} />
                 </div>
-              )}
+              ))}
               {shown?.place === "inline" && (
                 <div data-item="permission" className={items.length > 0 ? "mt-6" : ""}>
                   <PermissionPrompt question={shown.question} count={shown.count} answer={conversation.answer} />

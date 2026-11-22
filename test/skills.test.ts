@@ -263,3 +263,27 @@ test("a client can list the commands it can run in a session, each with what it 
     { name: "release", description: "How to cut a release of this project.", kind: "skill" },
   ])
 })
+
+test("a command whose names cannot be listed is still listed, without them, and the other commands' names are kept", async () => {
+  const broken: Plugin = {
+    name: "broken",
+    setup: (host) =>
+      host.commands.add({
+        name: "notes",
+        description: "Opens a note.",
+        run: () => "",
+        names: async () => {
+          throw new Error("the notes folder could not be read")
+        },
+      }),
+  }
+  const { run, mine } = await start([], { plugins: () => [broken] })
+  await writeSkill(mine, "release", RELEASE)
+
+  expect(await run.evie.send({ type: "list_commands", session: run.session })).toEqual([
+    { name: "skills", description: "List your skills. To start one, type a slash and its name, with anything you want to add." },
+    { name: "notes", description: "Opens a note." },
+    { name: "compact", description: "Replace the older part of the conversation with a summary, to save room." },
+    { name: "release", description: "How to cut a release of this project.", kind: "skill" },
+  ])
+})

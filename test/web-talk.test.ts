@@ -39,7 +39,7 @@ async function until(conversation: Conversation, ready: (state: ConversationStat
 }
 
 // What the page draws, in short: each item's text, or its kind.
-const said = (state: ConversationState) => transcriptOf(state).map((item) => (item.kind === "owner" && item.sending ? `${item.text} (sending)` : "text" in item ? item.text : item.kind))
+const said = (state: ConversationState) => transcriptOf(state).map((item) => ("text" in item ? item.text : item.kind))
 const types = (state: ConversationState) => state.events.map((event) => event.type)
 
 test("a message sent from the box shows at once as the owner's, until the session has it, and evie's reply follows", async () => {
@@ -48,7 +48,8 @@ test("a message sent from the box shows at once as the owner's, until the sessio
   await until(conversation, (state) => state.opened)
 
   const sending = conversation.send("Plan the beds")
-  expect(said(conversation.state())).toEqual(["Plan the beds (sending)"])
+  expect(said(conversation.state())).toEqual(["Plan the beds"])
+  expect(conversation.state().pending).toEqual(["Plan the beds"])
   expect(await sending).toBeUndefined()
 
   const replied = await until(conversation, (state) => !state.turnRunning && state.events.some((event) => event.type === "turn_end"))
@@ -145,11 +146,11 @@ test("a command run from the box shows its text as a quiet note where it was run
   await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
 
   const running = conversation.run("model", "")
-  expect(conversation.state().running).toBe("model")
+  expect(conversation.state().running).toEqual(["model"])
   await running
   await conversation.run("nothing", "at all")
   const ran = conversation.state()
-  expect(ran.running).toBeUndefined()
+  expect(ran.running).toEqual([])
   expect(said(ran)).toEqual(["Plan the beds", "Noted.", "The model is test/model (profile: default).", 'There is no command "/nothing". The commands are: /model, /compact.'])
   expect(ran.events.map((event) => event.type)).toEqual(["turn_start", "user_message", "assistant_message", "turn_end"])
 
@@ -282,4 +283,20 @@ test("a draft left while its session starts still sends the first message, so no
   expect(takeStarted(result.session)).toBeUndefined()
   while (!sessions.state().sessions.some((each) => each.session === result.session)) await Bun.sleep(5)
   expect(sessions.state().sessions.find((each) => each.session === result.session)?.name).toBe("Plan the beds")
+})
+
+test("while two commands run, the first to finish leaves the other running", async () => {
+  let finish = () => {}
+  const held = new Promise<void>((resolve) => (finish = resolve))
+  const slow: Plugin = { name: "slow", setup: (host) => host.commands.add({ name: "slow", description: "Takes its time.", run: async () => (await held, "Slow, done.") }) }
+  const { served, connection } = await start([], { plugins: [models(), slow] })
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+
+  const slowly = conversation.run("slow", "")
+  await conversation.run("model", "")
+  expect(conversation.state().running).toEqual(["slow"])
+  finish()
+  await slowly
+  expect(conversation.state().running).toEqual([])
 })

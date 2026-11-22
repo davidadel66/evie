@@ -44,7 +44,7 @@ function blocks(tokens: Token[]): ReactNode[] {
         return [h("ol", { key, className: "list-decimal pl-6", ...(list.start !== "" && list.start !== 1 && { start: list.start }) }, items)]
       }
       case "checkbox":
-        return [h("input", { key, type: "checkbox", checked: (token as Tokens.Checkbox).checked, disabled: true, className: "mr-2 align-middle" })]
+        return [checkbox(token as Tokens.Checkbox, key)]
       case "table": {
         const table = token as Tokens.Table
         const cell = (tag: "th" | "td", cell: Tokens.TableCell, at: number) =>
@@ -101,6 +101,9 @@ function inline(tokens: Token[] | undefined): ReactNode[] {
       }
       case "br":
         return h("br", { key })
+      // A task list's box, which in a loose list starts the item's paragraph.
+      case "checkbox":
+        return checkbox(token as Tokens.Checkbox, key)
       case "html":
         return (token as Tokens.Tag).text
       default:
@@ -108,6 +111,9 @@ function inline(tokens: Token[] | undefined): ReactNode[] {
     }
   })
 }
+
+// A task list's box, ticked or not, which cannot be changed here.
+const checkbox = (token: Tokens.Checkbox, key: number) => h("input", { key, type: "checkbox", checked: token.checked, disabled: true, className: "mr-2 align-middle" })
 
 // A link that opens in a new tab, only to a web or mail address. Any other
 // address, such as a script's or a path in the project, which would open

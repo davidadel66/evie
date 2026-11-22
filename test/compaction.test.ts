@@ -409,3 +409,11 @@ test("reading how full the conversation is needs the session open, and with a mo
   expect(await run.evie.send({ type: "read_context", session: run.session })).toEqual({ model: "test/model", size: 0, compactsAt: 5000 })
   expect(run.evie.send({ type: "read_context", session: "no-such-session" })).rejects.toThrow('The session "no-such-session" is not open.')
 })
+
+test("reading how full the conversation is does not wait on a limit lookup that never answers: past two seconds, the ceiling decides for this answer", async () => {
+  const { run } = await start([], { ceiling: 5000, lookUpLimit: () => new Promise(() => {}) })
+
+  const asked = Date.now()
+  expect(await run.evie.send({ type: "read_context", session: run.session })).toEqual({ model: "test/model", size: 0, compactsAt: 5000 })
+  expect(Date.now() - asked).toBeLessThan(3000)
+})

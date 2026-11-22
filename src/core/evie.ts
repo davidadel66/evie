@@ -44,6 +44,10 @@ export type EvieOptions = {
   quietCheckEvery?: number
 }
 
+// How long reading how full a conversation is waits for a model's limit to
+// be looked up before answering without it.
+const LOOK_UP_WITHIN = 2000
+
 // How many events a page of a session's history holds, unless it asks for
 // another number, and the most it can ask for.
 const PAGE = 50
@@ -692,7 +696,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   async function readContext(input: Commands["read_context"]["input"]): Promise<Commands["read_context"]["output"]> {
     const { loop, model: startedWith } = open(input.session)
     const model = currentModel(log.events(input.session), startedWith)
-    return { model, ...(await loop.measure()) }
+    return { model, ...(await loop.measure(AbortSignal.timeout(LOOK_UP_WITHIN))) }
   }
 
   // A name a slash can reach, as the terminal reads one: a letter, then
@@ -704,7 +708,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const own = new Set(commands.map((command) => command.name))
     const listed: Commands["list_commands"]["output"] = commands.map(({ name, description }) => ({ name, description }))
     for (const command of commands) {
-      for (const each of (await command.names?.()) ?? []) {
+      // A command whose names cannot be listed, as when a folder cannot be
+      // read, is listed without them, so the others are still offered.
+      const names = await Promise.resolve(command.names?.()).catch(() => undefined)
+      for (const each of names ?? []) {
         // A command's own name wins over a name another covers, so the slash would not reach this one.
         if (own.has(each.name) || !SLASH_NAME.test(each.name) || listed.some((other) => other.name === each.name)) continue
         listed.push({ name: each.name, description: each.description, ...(each.kind !== undefined && { kind: each.kind }) })

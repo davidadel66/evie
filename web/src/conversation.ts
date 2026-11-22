@@ -20,8 +20,8 @@ export type ConversationState = Required<View> & {
   stopping: boolean
   // The questions waiting for the owner's answer, oldest first.
   waiting: EventBodies["question"][]
-  // The command being run, by its name, while it runs.
-  running: string | undefined
+  // The commands being run, by name, in the order they were run.
+  running: readonly string[]
   // The model the session uses, and how full its conversation is, once
   // they have been read; read again as the conversation changes.
   model: string | undefined
@@ -72,7 +72,7 @@ export type Conversation = {
   close(): void
 }
 
-const FRESH: ConversationState = { opened: false, readingEarlier: false, stopping: false, waiting: [], running: undefined, model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [] }
+const FRESH: ConversationState = { opened: false, readingEarlier: false, stopping: false, waiting: [], running: [], model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [] }
 
 export function openConversation(connection: Connection, session: string): Conversation {
   let state = FRESH
@@ -270,13 +270,13 @@ export function openConversation(connection: Connection, session: string): Conve
     },
     async run(name, args) {
       if (on === undefined) return note(NOT_CONNECTED)
-      set({ running: name })
+      set({ running: [...state.running, name] })
       try {
         note((await on.send({ type: "run_command", session, name, args })).text)
       } catch (cause) {
         note(wordsOf(cause))
       } finally {
-        set({ running: undefined })
+        set({ running: without(state.running, name) })
       }
     },
     async setModel(model) {

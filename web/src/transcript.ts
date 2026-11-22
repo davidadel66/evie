@@ -31,8 +31,7 @@ export type Call = { id: string; name: string; input: string; result?: string; s
 // `turn` is the number of the turn it belongs to, counted in what has been
 // read, so that the page can space turns apart.
 export type Item = { key: string; turn: number } & (
-  // `sending` while the session has not taken it in yet.
-  | { kind: "owner"; text: string; sending?: true }
+  | { kind: "owner"; text: string }
   | { kind: "reply"; text: string; streaming: boolean }
   // A run of tool calls with nothing said between them, as one line, and
   // what that line says: Working while one of them is, how long the turn
@@ -170,7 +169,7 @@ export function transcriptOf(view: View): Item[] {
   if (view.replySoFar !== "") add({ key: "streaming", turn, kind: "reply", text: view.replySoFar, streaming: true }, Infinity)
   // The owner's messages the session has not taken in yet come last, as
   // they will: a turn takes them in at its next step.
-  for (const [at, text] of (view.pending ?? []).entries()) add({ key: `pending${at}`, turn, kind: "owner", text, sending: true }, Infinity)
+  for (const [at, text] of (view.pending ?? []).entries()) add({ key: `pending${at}`, turn, kind: "owner", text }, Infinity)
   // Each run is known by its last call, which reading the page before does
   // not change, and says what it is.
   for (const item of items) {
