@@ -615,13 +615,19 @@ What evie changed is shown as diffs, as T3 Code shows them:
   turn. A file in the list opens it at that file. The counts leave out a
   file whose lines were not counted, such as a binary one, which shows
   none.
-- **The diff** opens from that line, from the session details' Changes, or
-  with Cmd+D (Ctrl+D elsewhere), which also closes it. At desktop width it
-  is a column beside the conversation. At phone width it fills the screen, with a way back
-  at its top left.
-- **The menu at its top** picks what to compare: the latest turn; each turn
-  that changed files, newest first, with when it ended; the whole session,
-  each file from before the session first changed it to now; and in a git
+- **The diff** is a tab of the right panel, beside a tab for the branch's
+  pull request when it has one. It opens from that line, from the session
+  details' Changes, from the button at the right of the conversation's
+  header, or with Cmd+D (Ctrl+D elsewhere), which also closes it. In a
+  window wider than 980px it is a column beside the conversation, 540px at
+  first and as wide as you drag its left edge, which the browser remembers;
+  in a narrower one it is a sheet over the page from the right.
+- **Its toolbar** holds, on the left, the menu that picks what to compare,
+  and on the right the lines added and removed, Refresh, stacked or side by
+  side, wrapping long lines, the file tree, and Close.
+- **The menu** picks what to compare: the latest turn; each turn that
+  changed files, newest first, with when it ended; the whole session, each
+  file from before the session first changed it to now; and in a git
   project, Uncommitted, every change since the last commit, and This
   branch, the branch against the branch it is merged into: its pull
   request's base when it has one, which the server asks the `github`
@@ -633,18 +639,31 @@ What evie changed is shown as diffs, as T3 Code shows them:
   be picked, and say why; when that is not known, the server is asked, and
   what it says is shown in words.
 - **Each file** has a header that stays at the top while the file scrolls
-  past, and folds the file when pressed. A file that is binary, or too
-  large to show, says so instead of a diff, and so does one whose contents
-  are no longer known, as when it has been changed outside evie since the
-  turn and no copy of what the turn left is kept. One comparison reads at
-  most 300 files, a few at a time; the files past them are listed, as not
-  compared. A file is drawn up to 3,000 lines, after which it says it is
-  too large to show in full. A diff is drawn stacked or side by side, which
-  the browser remembers; at phone width it is stacked. Lines added and
-  removed lie on a wash of green and red, with a + or − at the start of
-  each; nothing else in the panel is coloured.
+  past: a caret, an icon for how it changed, its path, and the lines it
+  removed and added. Pressing it folds or opens the file. Every file starts
+  folded but the one the diff was opened at, or else the first with a
+  diff. The server sends each change with three unchanged lines around
+  it; the lines between are folded under a band that says how many.
+  Pressed, the band opens them, once the server has sent the file's whole
+  contents, before and after (`read_file_sides`); a file changed since its
+  diff was read says so above the diff, and to refresh it, instead.
+- **It is drawn as T3 Code draws it,** with the same library,
+  `@pierre/diffs`, which the page loads the first time it shows a diff:
+  only the lines in sight are drawn, stacked or side by side, which the
+  browser remembers, and always stacked at phone width, with long lines
+  wrapped or scrolled sideways. The code is coloured by its language, in
+  workers apart from the page, and a line longer than 1,000 characters is
+  left plain. A line added or removed lies on a faint green or red, with a
+  bar of that colour at its edge, dashed for one removed.
+- **A file with no diff to draw** is listed after the others, saying why:
+  binary, too large to show, filtered, a submodule changed, changed
+  outside evie with no copy kept of what the turn left, or not compared.
+  One comparison reads at most 300 files, a few at a time; the files past
+  them are listed, as not compared.
 - **The file tree** beside the diff lists its files by folder; a file in
-  it scrolls to that file. It can be hidden, which the browser remembers.
+  it scrolls to that file. It is as wide as you drag its edge, and can be
+  hidden, which the browser remembers. At phone width it takes the diff's
+  place while it shows.
 - **The changes by turn come from undo's copies,** which it keeps of each
   file before a turn's file tools change it. What a turn left in a file is
   the file as it is now, or the copy the next turn that changed it kept.
@@ -1711,12 +1730,15 @@ the board's, as are the colours. A change, such as a caret turning, takes
 150ms (`default-transition-duration`) and eases on `cubic-bezier(0.4, 0,
 0.2, 1)` (`default-transition-timing-function`), Tailwind's own values.
 
-The board names no colours for a diff's lines. `diff-added` and
-`diff-removed`, in `tokens.css`, are its own muted green and red, the values
-Done and Failed have, and each has one job: a line added or removed lies
-on the board's 18% tint of its colour, as a project's icon lies on its own,
-and the + or − at the line's start is in it. Counts such as "+3 −2" are
-quiet words, in `text-muted`, wherever they are shown.
+The design system's tokens name no colours for a diff's lines.
+`diff-added` and `diff-removed`, in `tokens.css`, are evie's own muted
+green and red, the values Done and Failed have, and they mark only lines
+added and removed (`diff-view.ts`): such a line lies on 11% of its colour,
+its line number's column on 18%, with a 4px bar of the colour at its edge,
+dashed for a line removed, and its number is the colour mixed with the
+text. The code's own colours are lighter tints of the project colours, the
+`syntax-` tokens. Counts such as "+3 −2" are in the same green and red,
+and a count of nothing is quiet, in `text-muted`.
 
 `bunfig.toml` also stops `bun install` from installing peer dependencies.
 The Tailwind plugin names Bun itself as one, and a second Bun in
