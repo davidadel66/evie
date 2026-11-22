@@ -314,7 +314,7 @@ test("the web app's page is served to anyone at the server's own address and at 
   expect((await fetch(`${server.url}/nothing-here`)).status).toBe(404)
 })
 
-test("the page, with its links to the chunks its script imports, is asked for afresh on each visit, and the chunks it names are kept for good", async () => {
+test("the page is asked for afresh on each visit, and its script and any chunks it preloads are kept for good", async () => {
   const app = await webApp()
   const { server } = await start({ app })
 

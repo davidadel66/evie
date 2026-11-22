@@ -348,8 +348,8 @@ test("evie with a server running but this computer's token file gone says the fi
 // With why, as the client was told it. The words are Bun's own, and differ
 // between its versions: a Bun 1.4.0 server, stopped, ends its connections
 // without a word, which Bun 1.4.0's client calls "Connection ended"; a Bun
-// 1.4.5 server closes each one saying "Server closed". So any reason will do.
-const DROPPED = /\[note\] The connection to Evie's server dropped: [^\n]+\. Trying again…\n/
+// 1.4.5 server closes each one saying "Server closed". Either will do.
+const DROPPED = /\[note\] The connection to Evie's server dropped: (?:Connection ended|Server closed)\. Trying again…\n/
 const BACK = /\[note\] Connected to Evie's server again\.\n/
 
 test("when evie serve is stopped and started again, evie connects again by itself, saying so, and the next line is answered in the same session", async () => {

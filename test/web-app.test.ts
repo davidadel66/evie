@@ -55,7 +55,8 @@ test("the page has one modulepreload link for each chunk its script imports, and
   for (const script of scripts) follow(script)
   // None on Bun 1.4.5, whose script imports no chunk at once: the code the
   // page shares with what it loads later is in the script itself. The page
-  // then has no such links at all.
+  // then has no such links at all. The next test checks the links on a
+  // metafile of its own, whatever Bun builds.
   const expected = [...imported].map((path) => path.replace(/^\./, "")).sort()
 
   const page = await app.page.text()
