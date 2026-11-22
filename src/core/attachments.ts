@@ -1,6 +1,7 @@
-import { lstatSync, realpathSync } from "node:fs"
+import { closeSync, lstatSync, openSync, readSync, realpathSync } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
-import { dirname, extname, isAbsolute, join, relative, sep } from "node:path"
+import { basename, dirname, extname, isAbsolute, join, relative, sep } from "node:path"
+import { ownEvie } from "./storage.ts"
 import { ATTACHMENT_LIMIT, type Attachment, type Attachments, type Project, type StoredEvent } from "./types.ts"
 
 // The files the owner attaches to messages. In a project they are kept in
@@ -14,12 +15,17 @@ import { ATTACHMENT_LIMIT, type Attachment, type Attachments, type Project, type
 // holds or is inside the data folder, which holds evie's keys.
 //
 // A file is never replaced: a name taken already that day gets a number,
-// as `plan-2.pdf`. Each is kept at its path as it really is, with every
-// link followed, and nothing is written through a link.
+// as `plan-2.pdf`. Square brackets in a name are kept as round ones, so
+// that a name cannot close the line the model is told it in. Each is kept
+// at its path as it really is, with every link followed, and nothing is
+// written through a link. What a file is comes from its bytes, never from
+// what a browser said: a PNG, JPEG, GIF or WebP picture by its signature,
+// and anything else is a plain file, by its name's ending, never an image.
 
-// What the core does with them besides: `check` takes the attachments a
-// message names, as a client sent them, and gives back what the message
-// records of them, refusing any that is not a file kept for the session.
+// What the core does with them besides: `check` takes the paths of the
+// files a message names, as a client sent them, and gives back what the
+// message records of each, read from the file itself, refusing any that is
+// not a file kept for the session.
 // `image` gives an attachment's bytes, in base64, when it is an image a
 // model can be shown, or nothing.
 export type AttachmentStore = Attachments & {
@@ -44,33 +50,37 @@ export function createAttachments(options: {
   // A session's events, in which its messages record what was attached.
   events(session: string): readonly StoredEvent[]
 }): AttachmentStore {
-  // The folder a session's files are kept in now.
+  // The folder a session's files are kept in now: its project's own
+  // `.evie` folder, by the rule Storage keeps to, or the data folder's.
   function rootFor(session: string): string {
     const project = options.projectOf(session)
     if (project === undefined) throw new Error(`There is no session with the id "${session}".`)
-    const data = realOrNothing(options.home) ?? options.home
-    const own = join(data, "attachments", session)
+    const own = join(realOrNothing(options.home) ?? options.home, "attachments", session)
     if (project === null) return own
+    let evie: string | undefined
+    try {
+      evie = ownEvie(project.folder, options.home)
+    } catch {
+      return own
+    }
+    if (evie !== undefined) return join(evie, "attachments")
     const folder = realOrNothing(project.folder)
     if (folder === undefined) throw new Error(`This session's project folder, ${project.folder}, is not there, so nothing can be attached in it.`)
-    const evie = join(folder, ".evie")
-    const real = realOrNothing(evie)
-    if (real !== undefined && real !== evie) return own
-    if (within(evie, data) || within(data, evie)) return own
-    return join(evie, "attachments")
+    return join(folder, ".evie", "attachments")
   }
 
   return {
-    async save(session, name, type, bytes) {
+    async save(session, name, bytes) {
       if (!plain(name)) throw new Error(`${JSON.stringify(name)} is not a plain file name. A file is attached by its name alone, such as "plan.pdf".`)
       if (bytes.byteLength > ATTACHMENT_LIMIT) throw new Error(`${name} is larger than the ${ATTACHMENT_LIMIT / 1024 / 1024} MB a file attached can be.`)
       const root = rootFor(session)
       const day = await folderAt(root, today())
+      const kept = name.replaceAll("[", "(").replaceAll("]", ")")
       for (let count = 1; ; count++) {
-        const path = join(day, count === 1 ? name : numbered(name, count))
+        const path = join(day, count === 1 ? kept : numbered(kept, count))
         try {
           await writeFile(path, bytes, { flag: "wx" })
-          return { path, name, type: typeOf(type), size: bytes.byteLength }
+          return { path, name: basename(path), type: kindOf(path, bytes), size: bytes.byteLength }
         } catch (cause) {
           if ((cause as { code?: string }).code !== "EEXIST") throw cause
         }
@@ -93,15 +103,13 @@ export function createAttachments(options: {
     // they were sent.
     check(session, given) {
       if (given === undefined) return undefined
-      if (!Array.isArray(given)) throw new Error("`attachments` are the files kept for the session that go with the message, as the attachments route gave them back.")
+      if (!Array.isArray(given) || !given.every((path) => typeof path === "string")) {
+        throw new Error("`attachments` are the paths of files kept for the session that go with the message, as the attachments route gave them back.")
+      }
       const root = rootFor(session)
-      return given.map((each: Partial<Attachment> | null) => {
-        const { path, name, type, size } = each ?? {}
-        if (typeof path !== "string" || typeof name !== "string" || typeof type !== "string" || typeof size !== "number") {
-          throw new Error("Each attachment has the `path`, `name`, `type` and `size` the attachments route gave back for it.")
-        }
-        if (!within(path, root) || !isKept(path, size)) throw new Error(`${name} is not a file kept for this session, so it cannot go with the message. Attach it again.`)
-        return { path, name, type, size }
+      return given.map((path: string) => {
+        if (!within(path, root) || !isKept(path)) throw new Error(`${path} is not a file kept for this session, so it cannot go with the message. Attach it again.`)
+        return { path, name: basename(path), type: kindOf(path, opening(path)), size: lstatSync(path).size }
       })
     },
   }
@@ -140,11 +148,71 @@ async function folderAt(root: string, day: string): Promise<string> {
 const plain = (name: string) =>
   typeof name === "string" && name !== "." && name !== ".." && name.trim() !== "" && name.length <= 200 && !/[/\\\x00-\x1f\x7f]/.test(name)
 
-// A file's type as it was sent, such as "image/png", without anything after
-// it; one that is not a type is a file of no known type.
-function typeOf(sent: string): string {
-  const type = sent.split(";")[0]!.trim().toLowerCase()
-  return /^[\w.+-]+\/[\w.+-]+$/.test(type) ? type : "application/octet-stream"
+// What a file is: a picture of a kind a model can be shown, by its bytes,
+// or else a plain file, by its name's ending, but never an image, since
+// its bytes say it is not one of those.
+function kindOf(path: string, bytes: Uint8Array): string {
+  const picture = pictureIn(bytes)
+  if (picture !== undefined) return picture.type
+  const byName = Bun.file(path).type.split(";")[0]!.trim()
+  return byName === "" || byName.startsWith("image/") ? "application/octet-stream" : byName
+}
+
+// The first bytes of a file, enough to say what picture it is and its size.
+function opening(path: string): Uint8Array {
+  const bytes = new Uint8Array(OPENING)
+  const file = openSync(path, "r")
+  try {
+    return bytes.subarray(0, readSync(file, bytes, 0, OPENING, 0))
+  } finally {
+    closeSync(file)
+  }
+}
+const OPENING = 64 * 1024
+
+// A picture's kind and its size in pixels, read from the opening of its
+// file: PNG, JPEG, GIF and WebP, as each one's format says. Anything else
+// is no picture of these.
+export function pictureIn(bytes: Uint8Array): { type: string; width: number; height: number } | undefined {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const text = (at: number, length: number) => String.fromCharCode(...bytes.subarray(at, at + length))
+  const has = (length: number) => bytes.byteLength >= length
+  if (has(24) && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, at) => bytes[at] === byte) && text(12, 4) === "IHDR") {
+    return { type: "image/png", width: view.getUint32(16), height: view.getUint32(20) }
+  }
+  if (has(10) && (text(0, 6) === "GIF87a" || text(0, 6) === "GIF89a")) {
+    return { type: "image/gif", width: view.getUint16(6, true), height: view.getUint16(8, true) }
+  }
+  if (has(30) && text(0, 4) === "RIFF" && text(8, 4) === "WEBP") {
+    const chunk = text(12, 4)
+    const three = (at: number) => bytes[at]! | (bytes[at + 1]! << 8) | (bytes[at + 2]! << 16)
+    if (chunk === "VP8X") return { type: "image/webp", width: three(24) + 1, height: three(27) + 1 }
+    if (chunk === "VP8L" && bytes[20] === 0x2f) {
+      const bits = view.getUint32(21, true)
+      return { type: "image/webp", width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 }
+    }
+    if (chunk === "VP8 " && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) {
+      return { type: "image/webp", width: view.getUint16(26, true) & 0x3fff, height: view.getUint16(28, true) & 0x3fff }
+    }
+    return undefined
+  }
+  if (has(4) && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    // The segments after the start, each a marker and its length, up to a
+    // frame, which gives the size.
+    for (let at = 2; at + 9 <= bytes.byteLength; ) {
+      if (bytes[at] !== 0xff) return undefined
+      const marker = bytes[at + 1]!
+      if (marker === 0xff) {
+        at += 1
+        continue
+      }
+      const frame = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
+      if (frame) return { type: "image/jpeg", width: view.getUint16(at + 7), height: view.getUint16(at + 5) }
+      at += 2 + view.getUint16(at + 2)
+    }
+    return undefined
+  }
+  return undefined
 }
 
 // Today's date where evie runs, as the owner reads it, such as 2026-11-22.

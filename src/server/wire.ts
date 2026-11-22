@@ -31,7 +31,7 @@ export type ServerMessage = { reply: string; result?: unknown } | { reply: strin
 // with a token asks `signInLink` for such a link, as `evie web` does.
 // `page` is the web app, which is also served at `signIn`, the address a
 // sign-in link opens. `attachments` takes in a file attached to a message,
-// sent as the body of a POST with its type, and named in the address as
+// sent as the body of a POST, and named in the address as
 // `?session=<id>&name=<file name>`, and gives back the attachment as JSON;
 // and gives one back, for `GET ?session=<id>&path=<its path>`.
 export const PATHS = {

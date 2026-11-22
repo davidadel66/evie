@@ -617,9 +617,12 @@ with its tools; a session switched to such a model is given the paths of
 its earlier images too.
 
 The server takes a file at `POST /attachments?session=<id>&name=<file
-name>`, with the file as the body and its type as `Content-Type`, from a
-client signed in as for the WebSocket, and answers with the attachment as
-JSON. `GET /attachments?session=<id>&path=<its path>` gives back an image
+name>`, with the file as the body, from a client signed in as for the
+WebSocket, and answers with the attachment as JSON. What a file is comes
+from its bytes, not from what the browser says: a PNG, JPEG, GIF or WebP
+picture by its signature, and anything else is a plain file, never an
+image. A message names its files by the paths the server gave back, and
+the server reads each one's name, kind and size from the file itself. `GET /attachments?session=<id>&path=<its path>` gives back an image
 attached to one of the session's messages, to show it; nothing else.
 
 ### Keeping the server running

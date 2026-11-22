@@ -271,7 +271,7 @@ export function openConversation(connection: Connection, session: string): Conve
       set({ pending: [...state.pending, text] })
       try {
         const attachments = []
-        for (const file of files) attachments.push(await connection.upload(session, file))
+        for (const file of files) attachments.push((await connection.upload(session, file)).path)
         await evie.send({ type: "send_message", session, text, ...(attachments.length > 0 && { attachments }) })
         return undefined
       } catch (cause) {

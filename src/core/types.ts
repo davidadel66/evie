@@ -67,12 +67,13 @@ export type Attachment = { path: string; name: string; type: string; size: numbe
 // in over HTTP and to show them. `save` keeps a file attached in a session
 // and gives back what a message records of it: in its project's `.evie/`
 // folder, under the day, or with no project in the data folder, under the
-// session. A name taken already gets a number, so no file is replaced. It
-// refuses a name that is not a plain file name, and a file larger than
-// the limit. `open` finds a file recorded on one of the session's
-// messages, to show it, or nothing when there is none such.
+// session. What the file is comes from its bytes. A name taken already
+// gets a number, so no file is replaced. It refuses a name that is not a
+// plain file name, and a file larger than the limit. `open` finds a file
+// recorded on one of the session's messages, to show it, or nothing when
+// there is none such.
 export type Attachments = {
-  save(session: string, name: string, type: string, bytes: Uint8Array): Promise<Attachment>
+  save(session: string, name: string, bytes: Uint8Array): Promise<Attachment>
   open(session: string, path: string): Promise<{ file: string; type: string } | undefined>
 }
 
@@ -749,10 +750,12 @@ export type Commands = {
       replySoFar?: string
     }
   }
-  // `attachments` are files kept for the session by `Attachments.save`,
-  // which the message records; any other path is refused.
+  // `attachments` are the paths of files kept for the session by
+  // `Attachments.save`, which the message records, each with its name,
+  // what it is and its size, as read from the file; any other path is
+  // refused.
   send_message: {
-    input: { session: string; text: string; attachments?: Attachment[] }
+    input: { session: string; text: string; attachments?: string[] }
     output: void
   }
   // Stops the session's turn in progress. Does nothing when it is idle.

@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs"
 import { readdir, readFile, realpath, stat } from "node:fs/promises"
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import type { StorageEntry, StorageFile } from "./types.ts"
@@ -82,19 +83,30 @@ export async function readStorage(project: string, path: string, dataFolder: str
 
 // The project's `.evie/` folder as it really is, or nothing when there is
 // none yet. One that is a link, or that is, holds, or is inside the data
-// folder, is refused, saying why.
-export async function ownEvie(project: string, dataFolder: string): Promise<string | undefined> {
-  const folder = await realOrNothing(project)
+// folder, or would be once made, is refused, saying why. It is the one rule
+// for what is a project's own: attachments are kept by it too. It reads at
+// once, not in steps, for a caller that must not wait.
+export function ownEvie(project: string, dataFolder: string): string | undefined {
+  const folder = realNow(project)
   if (folder === undefined) return undefined
   const evie = join(folder, ".evie")
-  const target = await realOrNothing(evie)
-  if (target === undefined) return undefined
-  if (target !== evie) throw new Error(`This project's .evie folder is a link to ${target}, so Storage does not show it: it shows only a .evie folder of the project's own.`)
-  const data = (await realOrNothing(dataFolder)) ?? dataFolder
+  const data = realNow(dataFolder) ?? dataFolder
   if (within(evie, data) || within(data, evie)) {
     throw new Error("This project's .evie folder is, holds, or is inside evie's data folder, which holds its keys, so Storage does not show it.")
   }
+  const target = realNow(evie)
+  if (target === undefined) return undefined
+  if (target !== evie) throw new Error(`This project's .evie folder is a link to ${target}, so Storage does not show it: it shows only a .evie folder of the project's own.`)
   return evie
+}
+
+// A path with its links resolved, at once, or nothing when it leads nowhere.
+function realNow(path: string): string | undefined {
+  try {
+    return realpathSync(path)
+  } catch {
+    return undefined
+  }
 }
 
 // A path named inside the `.evie/` folder, written plainly: with slashes,

@@ -25,7 +25,7 @@ export async function uploadFile(url: string, token: string | undefined, session
     answer = await fetch(new URL(`${PATHS.attachments}?${new URLSearchParams({ session, name: file.name })}`, url), {
       method: "POST",
       body: file,
-      headers: { ...(token !== undefined && { Authorization: `Bearer ${token}` }), ...(file.type !== "" && { "Content-Type": file.type }) },
+      headers: token === undefined ? {} : { Authorization: `Bearer ${token}` },
     })
   } catch {
     throw new Error(`${file.name} could not be sent: evie's server could not be reached. Send it again once it is connected.`)

@@ -72,7 +72,13 @@ function ownerMessage(body: EventBodies["user_message"], images: ReadonlyMap<str
   const attached = body.attachments ?? []
   if (attached.length === 0) return { role: "user", text: body.text }
   const shown = attached.filter((each) => images.has(each.path))
-  const lines = attached.map((each) => `[Attached: ${each.name} (${each.type}, ${sizeIn(each.size)}), kept at ${each.path}. ${howShown(each, images)}]`)
+  // The name and the path are quoted, so that nothing in them can start a
+  // line of its own; the name, which a client chose, loses any square
+  // bracket too, so that it cannot close the line it is in.
+  const quoted = (text: string) => JSON.stringify(text)
+  const lines = attached.map(
+    (each) => `[Attached: ${quoted(each.name.replaceAll("[", "(").replaceAll("]", ")"))} (${each.type}, ${sizeIn(each.size)}), kept at ${quoted(each.path)}. ${howShown(each, images)}]`,
+  )
   return {
     role: "user",
     text: [...(body.text === "" ? [] : [body.text, ""]), ...lines].join("\n"),

@@ -343,7 +343,7 @@ export function startServer(options: ServerOptions): EvieServer {
     const bytes = await bodyWithin(request, ATTACHMENT_LIMIT)
     if (bytes === undefined) return new Response(`${name} is larger than the ${ATTACHMENT_LIMIT / 1024 / 1024} MB a file attached can be.`, { status: 413 })
     try {
-      return Response.json(await options.attachments.save(session, name, request.headers.get("content-type") ?? "", bytes))
+      return Response.json(await options.attachments.save(session, name, bytes))
     } catch (cause) {
       return new Response(cause instanceof Error ? cause.message : String(cause), { status: 400 })
     }

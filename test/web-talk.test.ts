@@ -391,7 +391,7 @@ test("a message sent with files sends each to the server first, and the message 
     { name: "plan.txt", type: "text/plain", size: 6 },
     { name: "notes.txt", type: "text/plain", size: 7 },
   ])
-  expect(model.requests[0]?.messages[0]?.text).toContain("[Attached: plan.txt (text/plain, 6 bytes), kept at ")
+  expect(model.requests[0]?.messages[0]?.text).toContain(`[Attached: "plan.txt" (text/plain, 6 bytes), kept at "`)
 })
 
 test("a file the server refuses stops the message, which is not sent, and says why", async () => {
