@@ -40,6 +40,14 @@ export type EventBodies = {
   // never replaced. It is not activity in the session, and the model is not
   // shown it.
   named: { name: string }
+  // The git branch the session's project is on, read as each turn starts
+  // and as it ends, and written once git has answered, among the turn's
+  // events or just after its end, when it is not the one the session last
+  // recorded since it was last moved, if it was: the branch the session
+  // works on, as a list of sessions shows it. With no `branch`, the project
+  // is on none, as with a commit checked out by itself, or git could not
+  // say. The model is not shown it.
+  branch: { branch?: string }
   // The owner moved the session from one project to another, by their ids,
   // or with null into or out of none. It is followed by a note telling the
   // model where it now works. Neither is activity in the session.
@@ -124,11 +132,15 @@ export type SessionState = "needs_you" | "working" | "active" | "settled"
 // for a general session. `name` is the latest it was given, or until it is
 // given one, the opening words of its first message, null until it has one.
 // `lastActive` is the time of its latest stored event, settling, naming and
-// moving aside, or when it was made if it has none.
-export type SessionSummary = { session: string; project: string | null; name: string | null; state: SessionState; lastActive: number }
+// moving aside, or when it was made if it has none. `branch` is the git
+// branch it last recorded its project on, as a turn started or ended, and
+// none until it has recorded one, when its project was last on none, or
+// since it was moved.
+export type SessionSummary = { session: string; project: string | null; name: string | null; state: SessionState; lastActive: number; branch?: string }
 
 // A session's summary, sent when it is first listed and whenever its
-// state, name or latest activity changes, after the event that changed it.
+// state, name, latest activity or branch changes, after the event that
+// changed it.
 // Sent to clients, never stored. Evie's server sends it to every client,
 // whatever sessions it has open, so that each can keep a list of sessions.
 export type SummaryEvent = { type: "summary" } & SessionSummary

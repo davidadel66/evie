@@ -61,8 +61,9 @@ export function chatLines(items: readonly Item[]): ChatLine[] {
         if (item.text.startsWith(NOTE_TO_EVIE)) return []
         if (key.startsWith("job")) return key.endsWith("-end") ? [{ key, kind: "step", text: / failed after /.test(item.text) ? "Background work failed" : "Background work finished" }] : []
         return [{ key, kind: "step", text: item.text }]
-      // The run's own line says what it changed.
+      // The run's own line says what it changed, and the chat says at its end that evie is working.
       case "changes":
+      case "thinking":
         return []
       case "failed":
         return [{ key, kind: "failed", text: item.error }]

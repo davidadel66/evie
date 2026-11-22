@@ -14,6 +14,7 @@ import {
   triggerSize,
 } from "./compaction.ts"
 import { ONLY_THE_CORE_WRITES, buildRequest, type ShownImages } from "./request-builder.ts"
+import { branchOf } from "./projects.ts"
 import { CancelledBeforeStart, runToolCall } from "./tools.ts"
 import type { HookRunner } from "./host.ts"
 import type { Attachment, EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, ToolContext, Usage } from "./types.ts"
@@ -96,6 +97,13 @@ export type Loop = {
 export function currentModel(events: readonly StoredEvent[], startedWith: string): string {
   const switched = events.findLast((event) => event.type === "model_changed")
   return switched?.type === "model_changed" ? switched.body.model : startedWith
+}
+
+// The branch a session last recorded as a turn started, since it was last
+// moved, if it was, or nothing: the branch a list of sessions shows it on.
+function recordedBranch(events: readonly StoredEvent[]): string | undefined {
+  const last = events.findLast((event) => event.type === "branch" || event.type === "moved")
+  return last?.type === "branch" ? (last.body.branch ?? undefined) : undefined
 }
 
 // The most images a request carries, and the most base64 they come to
@@ -283,6 +291,35 @@ export function createLoop(options: LoopOptions): Loop {
 
   // ---- Turns --------------------------------------------------------------------
 
+  // The branch the project is on, read as a turn starts and as it ends,
+  // beside the turn's work rather than before it, and recorded once git has
+  // answered, when it is not the one the session last recorded: with none
+  // when the project is on no branch, or git could not say. A read that
+  // answers after a later one has been recorded is let go, and so is one
+  // that answers once the session has been moved or deleted, which the log
+  // tells. Stopping the loop waits for the reads, so that one answering as
+  // Evie closes is still recorded.
+  let reads = 0
+  let lastRecorded = 0
+  const branchReads = new Set<Promise<void>>()
+  function readBranch() {
+    if (folder === null) return
+    const read = ++reads
+    const from = log.events(session).at(-1)?.seq ?? 0
+    const reading: Promise<void> = branchOf(folder)
+      .then((branch) => {
+        if (read < lastRecorded) return
+        const events = log.events(session)
+        if (events.length === 0 || events.some((event) => event.type === "moved" && event.seq > from)) return
+        lastRecorded = read
+        if (branch !== recordedBranch(events)) emit(log.append(session, "branch", branch === undefined ? {} : { branch }))
+      })
+      // The log cannot be written now: the next turn reads the branch again.
+      .catch(() => {})
+      .finally(() => branchReads.delete(reading))
+    branchReads.add(reading)
+  }
+
   async function run() {
     try {
       while (!stopped && turnWanted()) await turn()
@@ -329,6 +366,7 @@ export function createLoop(options: LoopOptions): Loop {
       return events
     })
     for (const event of started) emit(event)
+    readBranch()
 
     try {
       // One pass of this loop is one step.
@@ -532,6 +570,7 @@ export function createLoop(options: LoopOptions): Loop {
       // A note that is to wake the model is left for the turn that follows.
       writeNotes("quiet")
       emit(log.append(session, "turn_end", error === undefined ? { reason } : { reason, error }))
+      readBranch()
     }
   }
 
@@ -600,6 +639,7 @@ export function createLoop(options: LoopOptions): Loop {
       stopped = true
       cancel?.abort()
       await running
+      await Promise.all(branchReads)
     },
   }
 }

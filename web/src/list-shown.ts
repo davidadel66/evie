@@ -1,14 +1,20 @@
 import { panel } from "./panel.ts"
 import { WIDE } from "./wide.ts"
 
-// Where the session list is, and whether it is shown, as T3 Code's sidebar:
-// at desktop width the column on the left, which the owner can hide and
-// show, with the button at the left of the middle column's header or mod+B,
-// and this browser remembers which; at 767px or narrower a sheet that
-// slides over the page from the left, opened from the same button, which
-// goes once a session is picked in it.
+// Where the session list is, and whether it is shown: at desktop width the
+// column on the left, which the owner can hide and show, with the button
+// at the left of the middle column's header or mod+B, and this browser
+// remembers which; at 767px or narrower, at the top of the page, with the
+// conversation stacked under it, as the Session view drawing has the
+// columns stack, where the same button and keys scroll up to it.
 const list = panel({ wide: WIDE, key: "evie.list" })
 
 export const useListShown = list.use
-export const toggleList = list.toggle
-export const closeListSheet = list.closeSheet
+
+// The list's element on the page, which the page scrolls to.
+export const LIST_ID = "session-list"
+
+export function toggleList() {
+  if (typeof matchMedia !== "function" || matchMedia(WIDE).matches) list.toggle()
+  else document.getElementById(LIST_ID)?.scrollIntoView({ block: "start" })
+}
