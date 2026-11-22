@@ -31,11 +31,14 @@ export type Conversation = {
   readEarlier(): void
   // Tries again what failed: opening the session, or reading a page of it.
   tryAgain(): void
+  // Shows what a command run from the page said, as undo, as a quiet note
+  // where it was said. It is not stored, as in the terminal.
+  note(text: string): void
   // Stops following the session. It stays open in evie.
   close(): void
 }
 
-const FRESH: ConversationState = { opened: false, readingEarlier: false, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [] }
+const FRESH: ConversationState = { opened: false, readingEarlier: false, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], notes: [] }
 
 export function openConversation(connection: Connection, session: string): Conversation {
   let state = FRESH
@@ -159,6 +162,12 @@ export function openConversation(connection: Connection, session: string): Conve
       readEarlier(on, first)
     },
     tryAgain,
+    // Said now, or as the last event read, when the browser's clock is behind the server's.
+    note(text) {
+      const notes = state.notes ?? []
+      const time = Math.max(Date.now(), state.events.at(-1)?.time ?? 0)
+      set({ notes: [...notes, { key: `said${notes.length + 1}`, time, text }] })
+    },
     close() {
       unfollow()
       unhear()
@@ -168,10 +177,36 @@ export function openConversation(connection: Connection, session: string): Conve
 }
 
 // Two runs of a session's events as one, in order, each event once.
-function merged(...runs: readonly (readonly StoredEvent[])[]): StoredEvent[] {
+export function merged(...runs: readonly (readonly StoredEvent[])[]): StoredEvent[] {
   const bySeq = new Map<number, StoredEvent>()
   for (const run of runs) for (const event of run) bySeq.set(event.seq, event)
   return [...bySeq.values()].sort((a, b) => a.seq - b.seq)
 }
 
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
+
+// A session's conversation is followed once on a connection however many
+// parts of the page show it, such as the middle column and the project
+// card, which can go on showing a session while the middle column reads
+// one of its subagents. Each holds it while it shows it; once none does, it
+// is closed.
+const held = new WeakMap<Connection, Map<string, { conversation: Conversation; holders: number }>>()
+
+export function holdConversation(connection: Connection, session: string): { conversation: Conversation; release(): void } {
+  const open = held.get(connection) ?? held.set(connection, new Map()).get(connection)!
+  const entry = open.get(session) ?? { conversation: openConversation(connection, session), holders: 0 }
+  open.set(session, entry)
+  entry.holders += 1
+  let released = false
+  return {
+    conversation: entry.conversation,
+    release() {
+      if (released) return
+      released = true
+      entry.holders -= 1
+      if (entry.holders > 0) return
+      open.delete(session)
+      entry.conversation.close()
+    },
+  }
+}

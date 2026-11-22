@@ -82,6 +82,21 @@
     }
   }
 
+  /* The project card sliding over the page from the right at phone width,
+     and away again, as long as any change takes. */
+  --animate-slide-in: slide-in 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --animate-slide-out: slide-out 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  @keyframes slide-in {
+    from {
+      transform: translateX(100%);
+    }
+  }
+  @keyframes slide-out {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
   /* Sizes of the layout that the design system's board does not name yet,
      set here once, by a name each: w-session-list, max-w-sign-in-column. */
   --spacing-session-list: 288px;
@@ -103,6 +118,9 @@
   --spacing-tile-row-icon: 12px;
   /* The widest the session list's project filter grows, beside the search. */
   --spacing-project-filter: 128px;
+  /* The tallest a background job's output grows in the project card
+     before it scrolls. */
+  --spacing-job-output: 240px;
   /* Below this width, the columns stack. */
   --breakpoint-wide: 960px;
 }

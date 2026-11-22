@@ -314,6 +314,15 @@ test("a background job's start and end are said where they happened, as the term
   expect(said("unknown", 1_008_000).at(-1)).toBe("note 1: Background job 1 ended (how is not known) after 5s: sh scripts/slow-tests.sh")
 })
 
+test("what a command run from the page said, which is not stored, is a quiet note where it was said", () => {
+  const notes = [{ key: "said1", time: 1_010_000, text: "Removed, because the turn created it: notes.md." }]
+  expect(read(transcriptOf(view(inTheBackground(), { jobs: [job("finished", 1_019_000)], notes }))).slice(2, 5)).toEqual([
+    "note 1: Background job 1 started: sh scripts/slow-tests.sh",
+    "reply 1: They are running in the background.",
+    "note 1: Removed, because the turn created it: notes.md.",
+  ])
+})
+
 test("a page that begins part way through a turn shows the calls whose results it has, but not how long the turn worked, and a job from before the page is left for the page before", () => {
   const events = inTheBackground().slice(3)
 

@@ -1,7 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { Button } from "./components/ui/button.tsx"
 import type { Connection } from "./connection.ts"
-import { openConversation, type Conversation as Opened } from "./conversation.ts"
+import { holdConversation, type Conversation as Opened } from "./conversation.ts"
 import { CaretRight } from "./icons.tsx"
 import { renderMarkdown } from "./markdown.ts"
 import { Spinner } from "./Spinner.tsx"
@@ -15,9 +15,9 @@ import { transcriptOf, type Call, type Item } from "./transcript.ts"
 export function Conversation({ connection, session }: { connection: Connection; session: string }) {
   const [opened, setOpened] = useState<{ session: string; conversation: Opened }>()
   useEffect(() => {
-    const conversation = openConversation(connection, session)
-    setOpened({ session, conversation })
-    return () => conversation.close()
+    const held = holdConversation(connection, session)
+    setOpened({ session, conversation: held.conversation })
+    return held.release
   }, [connection, session])
   if (opened?.session !== session) return null
   return <Reading key={session} conversation={opened.conversation} />
@@ -29,10 +29,11 @@ const AT_BOTTOM = 32
 // How many of the first items are remembered to keep the owner's place.
 const ANCHORS = 5
 
-function Reading({ conversation }: { conversation: Opened }) {
+// A conversation as it reads, the session's own or one of its subagents'.
+export function Reading({ conversation }: { conversation: Opened }) {
   const state = useSyncExternalStore(conversation.subscribe, conversation.state)
-  const { events, earlier, replySoFar, turnRunning, jobs } = state
-  const items = useMemo(() => transcriptOf({ events, earlier, replySoFar, turnRunning, jobs }), [events, earlier, replySoFar, turnRunning, jobs])
+  const { events, earlier, replySoFar, turnRunning, jobs, notes } = state
+  const items = useMemo(() => transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, ...(notes && { notes }) }), [events, earlier, replySoFar, turnRunning, jobs, notes])
 
   const scroller = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)

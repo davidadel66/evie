@@ -230,8 +230,8 @@ any name other than `127.0.0.1` or `localhost` must be listed under
 ```
 
 The page has three columns: the list of sessions, the conversation and the
-project card. For now the project card is empty, and a conversation can be
-read but not yet written in. While the page is connected, nothing says so;
+project card. For now a conversation can be read but not yet written in.
+While the page is connected, nothing says so;
 while the line is down, one quiet line under the name at the top says
 Reconnecting, and why, and the page catches up by itself once the line is
 back. The gear beside the name opens the settings, where the theme is
@@ -288,6 +288,36 @@ it stands, even while a reply is being written:
 - **The latest page** of the conversation is shown first, and earlier ones
   as you scroll up. While you are at the bottom, new text keeps you there;
   scrolled up, you stay where you are, with a way back down.
+
+The project card, on the right, is the selected session's:
+
+- **Its project:** the project's icon and name, its folder, with `~` for a
+  home folder, and the git branch it is on, kept current as the session
+  list keeps it. A session with no project says so.
+- **Changes:** Commit, Push and Pull request each send evie a request in
+  words, as a message in the session, such as "Commit the changes in this
+  session with a short message."; evie carries it out as it would if you had
+  typed it, and asks before pushing, as it always does. Undo last change
+  runs `/undo`, and what it says is a quiet note in the conversation, as
+  the terminal shows it; like the terminal's, the note is not kept, so it
+  is gone once the session is opened again. Each button is disabled while
+  it does not apply, and a line under it says why: no project, a folder
+  that is not a git repository, or evie working on a turn.
+- **Subagents:** each of the session's subagents, newest first, with its
+  name and how its latest round of work stands, in a word (Working, Done,
+  Failed or Stopped), and Stop while it works. Picking one opens its
+  conversation in the middle, read only, under a header that leads back to
+  the session; while it works, what it adds is read every second.
+- **Background jobs:** each job the session has run in the background,
+  with its command and how it stands, and Stop while it runs, which is
+  `/jobs stop`. One opens to its output, which keeps up while it runs.
+  Ended jobs fold away under their count.
+
+The card lists the subagents and jobs since evie's server last started,
+as `/jobs` does. At desktop width it can be hidden and shown with the
+button at the right of the session's header, or with Cmd+Option+B
+(Ctrl+Alt+B elsewhere), and the browser remembers which. At phone width
+the same button opens it as a sheet over the page, from the right.
 
 ### Keeping the server running
 
@@ -945,6 +975,7 @@ A few values the design system's board does not name are named once in
 | `tile-row` | 18px | A project's icon tile in a session row, which the board's WorkspaceIcon gives in words |
 | `tile-row-icon` | 12px | The icon on that tile, as the board's SessionRow draws it |
 | `project-filter` | 128px | The widest the session list's project filter grows |
+| `job-output` | 240px | The tallest a background job's output grows in the project card before it scrolls |
 | `radius-tile` | 25% | A project's icon tile's corners, a quarter of its size at any size |
 | `default-transition-duration` | 150ms | How long a change takes, such as a group's caret turning |
 | `default-transition-timing-function` | `cubic-bezier(0.4, 0, 0.2, 1)` | How it eases |
@@ -1046,8 +1077,8 @@ remove `evie.db` and `server-token` from it, and its `-seed` folder, first.
 
 ## What comes next
 
-- The rest of the web client: the conversation, the project card, and a
-  workspace for each project.
+- The rest of the web client: writing in the conversation, the changes and
+  their diffs, and a workspace for each project.
 - Scheduled work, memory, voice and a phone app.
 
 ## Credits

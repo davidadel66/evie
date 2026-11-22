@@ -15,6 +15,7 @@ export const NAMED_SIZES = [
   "tile-row",
   "tile-row-icon",
   "project-filter",
+  "job-output",
   "session-list",
   "project-card",
   "sign-in-column",

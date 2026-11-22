@@ -6,15 +6,19 @@ import type { Job, StoredEvent } from "../../src/core/types.ts"
 
 // What the page knows of a session: its stored events, in order, from the
 // earliest read so far; whether there are earlier ones; the reply being
-// written now, as far as it has come; whether a turn is running; and its
-// background jobs.
+// written now, as far as it has come; whether a turn is running; its
+// background jobs; and what commands the page ran said, which is not stored.
 export type View = {
   events: readonly StoredEvent[]
   earlier: boolean
   replySoFar: string
   turnRunning: boolean
   jobs: readonly Job[]
+  notes?: readonly Said[]
 }
+
+// Something a command run from the page said, such as undo, and when.
+export type Said = { key: string; time: number; text: string }
 
 // One tool call: its name, a short form of its input, and its result as
 // stored, once it has one, with that result in short. `running` while it is
@@ -170,9 +174,9 @@ export function transcriptOf(view: View): Item[] {
     item.label = item.running ? "Working" : seconds !== undefined ? workedFor(seconds) : usedTools(item.calls)
   }
 
-  // Each job's start, and its end once it has ended, where it happened,
-  // after whatever came before it. One from before the first event read is
-  // left for when the page before is read.
+  // Each job's start, and its end once it has ended, and what a command
+  // said, where it happened, after whatever came before it. One from before
+  // the first event read is left for when the page before is read.
   const from = view.earlier ? (view.events[0]?.time ?? Infinity) : -Infinity
   const lines = view.jobs.flatMap((job) => {
     const start = { key: `job${job.id}`, time: job.started, text: `Background job ${job.id} started: ${job.title}` }
@@ -182,7 +186,7 @@ export function transcriptOf(view: View): Item[] {
     const took = Math.max(0, Math.round((ended - job.started) / 1000))
     return [start, { key: `job${job.id}-end`, time: ended, text: `Background job ${job.id} ${how} after ${took}s: ${job.title}` }]
   })
-  for (const line of lines.filter((each) => each.time >= from).sort((a, b) => a.time - b.time)) {
+  for (const line of [...lines, ...(view.notes ?? [])].filter((each) => each.time >= from).sort((a, b) => a.time - b.time)) {
     const at = items.findIndex((item) => times.get(item)! > line.time)
     const place = at === -1 ? items.length : at
     const item: Item = { key: line.key, turn: items[place - 1]?.turn ?? 0, kind: "note", text: line.text }
