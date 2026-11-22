@@ -16,12 +16,18 @@ export async function serveEvie(
     recheckEvery?: number
     keepaliveEvery?: number
     questions?: boolean
+    // A project folder to use in place of a new temporary one. The caller removes it.
+    projectFolder?: string
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
     app?: WebApp
     signInCodeLasts?: number
   } = {},
 ) {
-  const run = await startEvie(plugins, { ...(options.questions && { questions: true }), ...(options.projectSettings && { projectSettings: options.projectSettings }) })
+  const run = await startEvie(plugins, {
+    ...(options.questions && { questions: true }),
+    ...(options.projectFolder && { projectFolder: options.projectFolder }),
+    ...(options.projectSettings && { projectSettings: options.projectSettings }),
+  })
   const tokens = await openTokens(run.home)
   const made = tokens.add("test device")
   if (!("secret" in made)) throw new Error(made.refused)
