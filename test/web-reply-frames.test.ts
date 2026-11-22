@@ -37,7 +37,7 @@ function frames() {
       for (const apply of now) apply()
     },
     // Draws frames until nothing is waiting for one.
-    drain(limit = 500) {
+    drain(limit = 2000) {
       let drawn = 0
       while (asked.size > 0 && drawn < limit) {
         this.draw()
@@ -163,26 +163,70 @@ test("pieces that arrive between frames reveal smoothly, at most once per frame,
   expect(conversation.state().replySoFar).toBe("Thinking about the beds by the fence")
 })
 
-test("an event after pieces not applied yet applies them first, in the same change, so the conversation changes in the order its events came", async () => {
+test("an event after pieces not applied yet applies them first, while a plain final reply finishes gliding out before settling", async () => {
   const { connection, say } = standIn()
   const frame = frames()
   const conversation = open(connection, SESSION, frame.next)
   await until(conversation, (state) => state.opened)
   const seen = changes(conversation)
 
+  // A non-ending event (such as a job) flushes buffered pieces first so events stay in order.
   say(piece("Thinking "), piece("about"), job("running"))
   expect(seen.map((state) => [state.replySoFar, state.jobs.length])).toEqual([["Thinking about", 1]])
 
-  // The stored reply ends the pieces before it, which are not applied after it.
+  // A plain final reply holds assistant_message and completed turn_end while the remaining text glides out.
   say(piece(" the beds."), reply("Thinking about the beds."), end())
-  expect(seen.slice(1).map((state) => [state.replySoFar, state.events.at(-1)!.type, state.turnRunning])).toEqual([
+  expect(conversation.state().turnRunning).toBe(true)
+  expect(frame.waiting()).toBe(1)
+
+  // Drawing frames glides out the remaining text, then commits assistant_message and turn_end in order.
+  frame.drain()
+  const tail = seen.slice(1)
+  expect(tail.some((state) => state.replySoFar.length > "Thinking about".length)).toBe(true)
+  expect(tail.slice(-2).map((state) => [state.replySoFar, state.events.at(-1)!.type, state.turnRunning])).toEqual([
     ["", "assistant_message", true],
     ["", "turn_end", false],
   ])
   expect(frame.waiting()).toBe(0)
+  const settledCount = seen.length
   frame.draw()
-  expect(seen.length).toBe(3)
+  expect(seen.length).toBe(settledCount)
   expect(said(conversation.state())).toEqual(["Plan the beds", "Background job j1 started: bun test", "Thinking about the beds."])
+})
+
+test("a reply with tool calls or an interrupted reply snaps immediately without waiting to drain", async () => {
+  const { connection, say } = standIn()
+  const frame = frames()
+  const conversation = open(connection, SESSION, frame.next)
+  await until(conversation, (state) => state.opened)
+  const seen = changes(conversation)
+
+  say(piece("Let me check."), {
+    type: "assistant_message",
+    session: SESSION,
+    seq: 4,
+    time: 400,
+    body: { text: "Let me check.", toolCalls: [{ id: "c1", name: "read", arguments: "{}" }] },
+  })
+  expect(seen.map((state) => [state.replySoFar, state.events.at(-1)!.type])).toEqual([["", "assistant_message"]])
+  expect(frame.waiting()).toBe(0)
+
+  say(piece("Stopped mid-thought"), {
+    type: "assistant_message",
+    session: SESSION,
+    seq: 5,
+    time: 500,
+    body: { text: "Stopped mid-thought", interrupted: true },
+  }, {
+    type: "turn_end",
+    session: SESSION,
+    seq: 6,
+    time: 600,
+    body: { reason: "cancelled" },
+  })
+  expect(conversation.state().turnRunning).toBe(false)
+  expect(conversation.state().replySoFar).toBe("")
+  expect(frame.waiting()).toBe(0)
 })
 
 test("however the frames fall, the conversation goes through the states it would piece by piece, fewer of them, and ends the same", async () => {
@@ -206,6 +250,8 @@ test("however the frames fall, the conversation goes through the states it would
   })
 
   expect(together.length).toBeLessThan(piecewise.length / 4)
+  everyEvent.drain()
+  nowAndThen.drain()
   const shown = (seen: ConversationState[]) => seen.map((state) => JSON.stringify([state.replySoFar, state.events.length, state.jobs, state.turnRunning]))
   const all = shown(piecewise)
   let from = 0
@@ -238,13 +284,13 @@ test("a hidden tab, which draws no frames, loses nothing: what came applies once
   frame.drain()
   expect(conversation.state().replySoFar).toBe(text.join(""))
 
-  // Hidden again until the turn has ended: the reply is as stored, and nothing is left to apply.
-  const beforeEnd = seen.length
+  // Shown again after a plain final reply arrived: draining finishes gliding and settles to the stored reply.
   say(piece("The end."), reply(`${text.join("")}The end.`), end())
-  frame.draw()
+  frame.drain()
   expect(conversation.state().replySoFar).toBe("")
+  expect(conversation.state().turnRunning).toBe(false)
   expect(said(conversation.state())).toEqual(["Plan the beds", `${text.join("")}The end.`])
-  expect(seen.length).toBe(beforeEnd + 2)
+  expect(frame.waiting()).toBe(0)
 })
 
 test("pieces not applied yet stay with their own session's conversation: switching to another shows none of them there, and the one left is not changed after", async () => {
