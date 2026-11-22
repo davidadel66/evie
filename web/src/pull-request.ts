@@ -1,0 +1,33 @@
+import type { PullRequest } from "../../src/core/types.ts"
+
+// How the project card says how a branch's pull request stands, in words:
+// its state, and its checks summed up, as T3 Code's pull request row says
+// them. The summary's wording is adapted from T3 Code's
+// `summarizePullRequestChecks` (MIT licence, notice in LICENSES/t3code-MIT.txt).
+
+type Check = PullRequest["checks"][number]
+
+export function pullRequestWord(state: PullRequest["state"]): string {
+  return { open: "Open", draft: "Draft", merged: "Merged", closed: "Closed" }[state]
+}
+
+export function checkWord(state: Check["state"]): string {
+  return { passed: "Passed", failed: "Failed", running: "Running", waiting: "Awaiting action", cancelled: "Cancelled", skipped: "Skipped", neutral: "Neutral" }[state]
+}
+
+// The checks in one line, by what most needs looking at: those failing,
+// a cancelled one among them; those waiting for someone to act; those
+// still running; or how many passed.
+export function checksSummary(checks: readonly Check[]): string {
+  if (checks.length === 0) return "No checks"
+  const count = (...states: Check["state"][]) => checks.filter((check) => states.includes(check.state)).length
+  const of = (some: number, word: string) => `${some} of ${checks.length} ${word}`
+  const failing = count("failed", "cancelled")
+  if (failing > 0) return of(failing, "failing")
+  const waiting = count("waiting")
+  if (waiting > 0) return `${waiting} awaiting action`
+  const running = count("running")
+  if (running > 0) return of(running, "running")
+  const passed = count("passed")
+  return passed === checks.length ? "All checks passed" : of(passed, "passing")
+}
