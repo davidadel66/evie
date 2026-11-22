@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ask, models, show, startServer, type Attachments, type Command, type Evie, type EvieOptions, type Plugin } from "../src/index.ts"
 import { openTokens } from "../src/server/tokens.ts"
-import { startEvie } from "./support/harness.ts"
+import { startEvie, stored } from "./support/harness.ts"
 import { openConnection } from "../web/src/connection.ts"
 import { holdConversation, openConversation, openDraft, takeStarted, type Conversation, type ConversationState, type Draft, type DraftState, type Outgoing } from "../web/src/conversation.ts"
 import { openSessions } from "../web/src/sessions.ts"
@@ -696,4 +696,43 @@ test("a file evie shows is drawn under its reply once the turn has ended, and th
   const fetched = await fetch(new URL(shown.file.address!, served.server.url), { headers: { Authorization: `Bearer ${served.token}` } })
   expect([fetched.status, fetched.headers.get("content-type")]).toEqual([200, "image/png"])
   expect([...new Uint8Array(await fetched.arrayBuffer())]).toEqual([...png])
+})
+
+test("the files evie showed are drawn again after the page reloads, and after the line drops and comes back, with one shown meanwhile", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  const script: ScriptedReply[] = [
+    { text: [], calls: [{ name: "show", input: { paths: ["out/chart.png"] } }] },
+    { text: ["Here is the chart."] },
+    { text: [], calls: [{ name: "show", input: { paths: ["out/guide.md"] } }] },
+    { text: ["And the guide."] },
+  ]
+  const { served, connection } = await start(script, { plugins: [show({ dataFolder: home })], home })
+  await mkdir(join(served.run.projectFolder, "out"))
+  await writeFile(join(served.run.projectFolder, "out", "chart.png"), new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 4, 0, 0, 0, 3]))
+  await writeFile(join(served.run.projectFolder, "out", "guide.md"), "# Guide\n")
+  const turnsEnded = (count: number) => (state: ConversationState) => !state.turnRunning && state.events.filter((event) => event.type === "turn_end").length === count
+  const shownNames = (state: ConversationState) => transcriptOf(state).flatMap((item) => (item.kind === "shown" ? [item.file.name] : []))
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+  await conversation.send("Draw the chart")
+  await until(conversation, turnsEnded(1))
+
+  // The page reloaded: a new connection reads the session from its history.
+  const reloaded = openConnection({ url: served.server.url, token: served.token, firstWait: 10 })
+  cleanups.push(() => reloaded.close())
+  const read = await until(open(reloaded, served.run.session), (state) => state.opened && turnsEnded(1)(state))
+  expect(shownNames(read)).toEqual(["chart.png"])
+  expect(read.events.find((event) => event.type === "tool_result")?.body).toMatchObject({ details: { files: [{ storage: "project", path: expect.stringMatching(/^shown\/\d{4}-\d{2}-\d{2}\/chart\.png$/), type: "image/png" }] } })
+
+  // The line drops, evie shows another file meanwhile, and the line comes back.
+  const port = Number(new URL(served.server.url).port)
+  await served.server.stop()
+  while (connection.state().status !== "reconnecting") await Bun.sleep(5)
+  await served.run.evie.send({ type: "send_message", session: served.run.session, text: "And the guide" })
+  while (stored(served.run.events).filter((event) => event.type === "turn_end").length < 2) await Bun.sleep(5)
+  const again = startServer({ evie: served.run.evie, tokens: served.tokens, host: "127.0.0.1", port, storage: served.run.evie.storage, dataFolder: home })
+  cleanups.push(() => again.stop())
+
+  expect(shownNames(await until(conversation, turnsEnded(2)))).toEqual(["chart.png", "guide.md"])
 })
