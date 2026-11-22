@@ -208,9 +208,11 @@ evie web --print   # prints the sign-in link instead, to open by hand
 
 `evie web` asks the server for a sign-in link, which works once, within
 five minutes, and opens it with `open` on a Mac or `xdg-open` elsewhere.
+Only this computer's own token can ask for one, so `evie web` works on the
+server's computer.
 The page trades the link's code for a cookie, and takes the code out of the
 address bar. Each browser signed in this way gets a token of its own, named
-`browser` and the day (UTC), such as `browser 2026-11-21`, or
+`browser` and the day, such as `browser 2026-11-21`, or
 `browser 2026-11-21 (2)` for a second one that day. A browser signed in
 already keeps its token when `evie web` opens it again. `evie token list`
 shows them, and `evie token remove "browser 2026-11-21"` signs that browser

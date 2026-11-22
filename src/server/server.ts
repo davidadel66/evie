@@ -1,7 +1,7 @@
 import type { HTMLBundle, ServerWebSocket } from "bun"
 import { randomBytes } from "node:crypto"
 import type { Commands, Evie, EvieEvent } from "../core/types.ts"
-import type { Tokens } from "./tokens.ts"
+import { OWN_NAME, type Tokens } from "./tokens.ts"
 import type { WebApp } from "./web-app.ts"
 import { hostInAddress, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
 
@@ -207,24 +207,35 @@ export function startServer(options: ServerOptions): EvieServer {
   // `Authorization` header or the browser's cookie, or the answer that
   // refuses it.
   function admit(request: Request, port: number): Admitted | Response {
-    const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]
-    return refusedPage(request, port) ?? deviceFor(bearer ?? cookieIn(request))
+    return refusedPage(request, port) ?? deviceFor(bearerIn(request) ?? cookieIn(request))
   }
 
-  // A device with a token asks for a link that signs a browser in, as
-  // `evie web` does. The link opens the web app at the address the device
-  // reached the server at, with a code that works once, for a few minutes.
-  // The code is in the address's fragment, after #, which a browser never
-  // sends to a server, and the page wipes it from the address bar.
+  // This computer asks for a link that signs a browser in, as `evie web`
+  // does, with its own token: a browser's cookie, or another device's token,
+  // could otherwise make tokens for browsers anywhere. The link opens the
+  // web app at the address this computer reached the server at, with a code
+  // that works once, for a few minutes. The code is in the address's
+  // fragment, after #, which a browser never sends to a server, and the page
+  // wipes it from the address bar.
   function signInLink(request: Request, port: number): Response {
-    const admitted = admit(request, port)
+    const admitted = refusedPage(request, port) ?? deviceFor(bearerIn(request))
     if (admitted instanceof Response) return admitted
+    if (admitted.device !== OWN_NAME) {
+      return new Response(
+        "Only this computer's own token can ask for a sign-in link. On another device, open evie's address in a browser and paste a token made for that device.",
+        { status: 403 },
+      )
+    }
     const now = Date.now()
     for (const [code, until] of codes) if (until <= now) codes.delete(code)
     const code = randomBytes(32).toString("base64url")
     codes.set(code, now + (options.signInCodeLasts ?? SIGN_IN_CODE_LASTS))
     const link = new URL(PATHS.signIn, request.url)
     link.hash = `code=${code}`
+    // A server listening on every address, as 0.0.0.0, is reached at it by
+    // this computer, but a browser does not open it; this computer's own
+    // address is the same server.
+    if (WILDCARDS.includes(link.hostname)) link.hostname = "127.0.0.1"
     return Response.json({ link: link.href })
   }
 
@@ -234,7 +245,8 @@ export function startServer(options: ServerOptions): EvieServer {
   // used leaves no token behind. The code is used up only once the token is
   // made: a token that cannot be made just now leaves it to be tried again.
   // A browser signed in already, as when `evie web` is run again, keeps the
-  // token it has, so that each browser has one.
+  // token it has, so that each browser has one; when its token cannot be
+  // checked just now, it is told to try again, not made another.
   function signedInBrowser(code: string, cookie: string | undefined): Admitted | Response {
     const until = codes.get(code)
     if (until === undefined || until <= Date.now()) {
@@ -242,11 +254,12 @@ export function startServer(options: ServerOptions): EvieServer {
       return new Response("This sign-in link has been used already or has expired. Run `evie web` for a new one.", { status: 401 })
     }
     const already = cookie === undefined ? undefined : deviceFor(cookie)
+    if (already instanceof Response && already.status === 503) return already
     if (already !== undefined && !(already instanceof Response)) {
       codes.delete(code)
       return already
     }
-    const day = new Date().toISOString().slice(0, 10)
+    const day = localDay()
     try {
       for (let count = 1; ; count++) {
         const device = count === 1 ? `browser ${day}` : `browser ${day} (${count})`
@@ -396,6 +409,18 @@ export function startServer(options: ServerOptions): EvieServer {
 }
 
 const send = (socket: ServerWebSocket<Connection>, message: ServerMessage) => socket.send(JSON.stringify(message))
+
+// The token in the request's `Authorization` header, if it carries one.
+const bearerIn = (request: Request) => /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]
+
+// Addresses that mean every address of this computer, as a URL writes them.
+const WILDCARDS = ["0.0.0.0", "[::]"]
+
+// Today's date where the server runs, as the owner reads it, such as 2026-11-21.
+function localDay() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+}
 
 // The token in the browser's cookie, if the request carries one.
 const cookieIn = (request: Request) => new Bun.CookieMap(request.headers.get("cookie") ?? "").get(COOKIE) ?? undefined

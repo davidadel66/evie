@@ -17,7 +17,10 @@ export async function web(env: Settings, args: string[]) {
       ].join("\n"),
     )
   }
-  const { address, token, why } = await reachServer(env)
+  const { address, token, own, why } = await reachServer(env)
+  // The server gives sign-in links to this computer only: a browser
+  // elsewhere signs in with a token of its own.
+  if (!own) fail(`\`evie web\` works on the computer evie's server runs on. Here, open ${address} in a browser and paste this device's token.`)
   const link = await signInLink(new URL(address), token).catch((cause) => fail(why(cause)))
   if (args.includes("--print")) return print(`${link}\n`)
 

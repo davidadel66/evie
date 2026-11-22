@@ -510,6 +510,23 @@ test("evie web with the server stopped says no server is running, and how to sta
   expect(said.stderr).toBe(`No Evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
 })
 
+test("evie web on another device, with a token of its own, says to open the server's address in a browser there and paste the token", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  await serve(home)
+  const made = await evie(["token", "add", "phone"], { home })
+  const secret = /^ {2}(\S{43})$/m.exec(made.stdout)![1]!
+  const device = await tempFolder("evie-device-")
+
+  const said = await evie(["web"], { home: device, env: { EVIE_SERVER: `127.0.0.1:${port}`, EVIE_TOKEN: secret } })
+
+  expect(said.code).toBe(1)
+  expect(said.stdout).toBe("")
+  expect(said.stderr).toBe(
+    `\`evie web\` works on the computer evie's server runs on. Here, open http://127.0.0.1:${port} in a browser and paste this device's token.\n`,
+  )
+})
+
 test("evie serve --dev started outside the repository's folder says where to start it, since Bun reads the Tailwind plugin from there", async () => {
   const home = await homeWith(await freePort(), [])
 
