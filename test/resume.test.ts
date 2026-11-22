@@ -284,6 +284,66 @@ test("a catch-up of many megabytes is answered in pages of at most about 1 MB of
   for (const page of pages) expect(page).toMatchObject({ session: run.session, lastSeq: 48, turnRunning: false })
 })
 
+// Counts the rows evie reads from its database, through every statement
+// made from now on, until `stop` is called.
+function countRowsRead() {
+  let rows = 0
+  const { query, prepare } = Database.prototype
+  // The same statement is handed out again for the same SQL, and counted once.
+  const counted = new WeakSet<object>()
+  const counting = (make: Database["query"]) =>
+    function (this: Database, ...args: Parameters<Database["query"]>) {
+      const statement = make.apply(this, args)
+      if (counted.has(statement)) return statement
+      counted.add(statement)
+      const { all, get, iterate } = statement
+      statement.all = (...values) => {
+        const found = all.apply(statement, values)
+        rows += found.length
+        return found
+      }
+      statement.get = (...values) => {
+        const found = get.apply(statement, values)
+        if (found !== null) rows += 1
+        return found
+      }
+      statement.iterate = function* (...values) {
+        for (const row of iterate.apply(statement, values)) {
+          rows += 1
+          yield row
+        }
+      }
+      return statement
+    } as Database["query"]
+  Database.prototype.query = counting(query)
+  Database.prototype.prepare = counting(prepare)
+  const stop = async () => {
+    Database.prototype.query = query
+    Database.prototype.prepare = prepare
+  }
+  cleanups.push(stop)
+  return { rows: () => rows, stop }
+}
+
+test("each page of a catch-up reads only its own part of the log, not the whole of it", async () => {
+  const counter = countRowsRead()
+  const run = await largeSession(Array.from({ length: 12 }, (_, at) => String(at % 10).repeat(400 * KiB)))
+
+  const read: { events: number; rows: number }[] = []
+  for (let from = 0; ; ) {
+    const before = counter.rows()
+    const page = await run.evie.send({ type: "open_session", session: run.session, after: from })
+    read.push({ events: page.events!.length, rows: counter.rows() - before })
+    if (!page.more) break
+    from = page.events!.at(-1)!.seq
+  }
+  await counter.stop()
+
+  // The log holds 48 events; a page reads its own, the one after them, and a few rows besides.
+  expect(read.length).toBe(6)
+  for (const page of read) expect(page.rows).toBeLessThanOrEqual(page.events + 6)
+})
+
 test("an event larger than a page goes in a page of its own", async () => {
   const run = await largeSession(["Short.", "x".repeat(1536 * KiB), "Short again."])
 

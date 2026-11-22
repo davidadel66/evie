@@ -17,7 +17,7 @@ import { listProjectFiles } from "./project-files.ts"
 import { listStorage, readStorage } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
-import { CATCH_UP_PAGE, type Ask, type Children, type Commands, type Core, type EvieEvent, type Host, type JobRecord, type JobWork, type Plugin, type Project, type ProjectSettings, type Provider, type SettingsEditor, type StoredEvent } from "./types.ts"
+import { CATCH_UP_PAGE, type Ask, type Children, type Commands, type Core, type EvieEvent, type Host, type JobRecord, type JobWork, type Plugin, type Project, type ProjectSettings, type Provider, type SettingsEditor } from "./types.ts"
 
 type Cut = "none" | "asking" | "working"
 
@@ -132,21 +132,6 @@ function movedNote(from: Project | null, to: Project | null): string {
 }
 
 const reasonOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause)).replace(/\.*$/, ".")
-
-// The events after `after`, in order, as many as fit in a catch-up's page,
-// measured as they are sent, and whether more follow. An event larger than
-// a page goes in a page of its own, so that every page moves the client on.
-function pageAfter(events: readonly StoredEvent[], after: number): { events: StoredEvent[]; more: boolean } {
-  const page: StoredEvent[] = []
-  let size = 0
-  for (const event of events) {
-    if (event.seq <= after) continue
-    size += Buffer.byteLength(JSON.stringify(event))
-    if (size > CATCH_UP_PAGE && page.length > 0) return { events: page, more: true }
-    page.push(event)
-  }
-  return { events: page, more: false }
-}
 
 // The longest a session's name can be, in characters: a name is a few words.
 const LONGEST_NAME = 80
@@ -533,19 +518,20 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // in it, as in one another client left running, the questions it is still
   // waiting on, its jobs, and the reply being written. A turn is running
   // when the log's last turn has not ended. With `after`, the events after
-  // that number too, a page of them: see `pageAfter`.
+  // that number too, as many as fit in a catch-up's page, and whether more
+  // follow. An event larger than a page goes in a page of its own, so that
+  // every page moves the client on. Only the page's own events are read.
   // All of it is read in one step, with nothing waited for in between, so it
   // describes a single moment: every event emitted later is sent as it happens.
   function whereItIs(session: string, after?: number) {
-    const events = log.events(session)
-    const turnRunning = events.findLastIndex((event) => event.type === "turn_start") > events.findLastIndex((event) => event.type === "turn_end")
+    const latest = log.latest(session)
     const replySoFar = sessions.get(session)?.loop.replySoFar() ?? ""
-    const page = after === undefined ? undefined : pageAfter(events, after)
+    const page = after === undefined ? undefined : log.after(session, after, CATCH_UP_PAGE)
     return {
       session,
-      turnRunning,
+      turnRunning: latest.turnRunning,
       openQuestions: questions.waiting(session),
-      lastSeq: events.at(-1)?.seq ?? 0,
+      lastSeq: latest.seq,
       jobs: jobs.list(session),
       ...(page && { events: page.events }),
       ...(page?.more && { more: true as const }),
