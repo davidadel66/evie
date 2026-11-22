@@ -1,16 +1,16 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { ListedProject, StorageEntry } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
-import { CaretLeft, CaretRight, File, FileImage, FolderSimple } from "./icons.tsx"
+import { CaretLeft, File, FileImage, FolderSimple } from "./icons.tsx"
 import { ageWords } from "./session-list.ts"
 import { openStorage, type Storage, type StorageState } from "./storage.ts"
 import { addressOfWorkspace, sizeWords, type WorkspacePlace } from "./workspace.ts"
 
-// The workspace's Storage tab: the files in its project's .evie folder, as
-// a list of rows, a folder opening in place under its own row, and whether
-// the folder is backed up. A file opens in the workspace, read only, in
-// place of the list. The files attached to messages are here, in the
-// folder's attachments folder.
+// The workspace's Storage tab: the files in its project's .evie folder,
+// the files attached to messages among them, in its attachments folder, as
+// a tree of rows: each with its icon, its name and how long ago it changed,
+// a folder's entries opening in place under its row, a step further in. A
+// file opens in the workspace, read only, in place of the tree.
 export function StorageView({ connection, project, place, now }: { connection: Connection; project: ListedProject; place: WorkspacePlace; now: number }) {
   const [storage, setStorage] = useState<{ project: string; storage: Storage }>()
   useEffect(() => {
@@ -19,10 +19,10 @@ export function StorageView({ connection, project, place, now }: { connection: C
     return () => opened.close()
   }, [connection, project.id])
   if (storage?.project !== project.id) return null
-  return <Shown storage={storage.storage} project={project} place={place} now={now} />
+  return <Shown storage={storage.storage} place={place} now={now} />
 }
 
-function Shown({ storage, project, place, now }: { storage: Storage; project: ListedProject; place: WorkspacePlace; now: number }) {
+function Shown({ storage, place, now }: { storage: Storage; place: WorkspacePlace; now: number }) {
   const state = useSyncExternalStore(storage.subscribe, storage.state)
   useEffect(() => storage.show(place.file), [storage, place.file])
   const { file: _, ...here } = place
@@ -30,49 +30,37 @@ function Shown({ storage, project, place, now }: { storage: Storage; project: Li
   if (place.file !== undefined) return <FileShown state={state} path={place.file} back={back} now={now} />
   const top = state.folders.get("")
   return (
-    <div className="flex flex-col gap-8 px-gutter py-4">
-      <section aria-label="Files" className="flex flex-col">
-        <div className="flex items-baseline justify-between gap-4 px-3 pb-2 text-caption text-text-muted">
-          <h2>Files in .evie</h2>
-          <span>{project.syncs ? "Backed up privately" : "Kept on this computer"}</span>
-        </div>
-        {top?.problem !== undefined ? (
-          <Quiet>{top.problem}</Quiet>
-        ) : top?.entries === undefined ? (
-          <Listing />
-        ) : top.entries.length === 0 ? (
-          <Quiet>Nothing in the .evie folder yet. What evie keeps for this workspace will be here.</Quiet>
-        ) : (
-          <ul className="flex flex-col">
-            <Entries entries={top.entries} depth={0} state={state} storage={storage} place={place} now={now} />
-            <More count={top.more ?? 0} indent={0} />
-          </ul>
-        )}
-      </section>
-    </div>
+    <section aria-label="Storage" className="flex flex-col px-gutter py-5">
+      {top?.problem !== undefined ? (
+        <Quiet>{top.problem}</Quiet>
+      ) : top?.entries === undefined ? (
+        <Listing />
+      ) : top.entries.length === 0 ? (
+        <Quiet>Nothing in the .evie folder yet. What evie keeps for this workspace, and the files attached to messages, will be here.</Quiet>
+      ) : (
+        <ul className="flex flex-col">
+          <Entries entries={top.entries} depth={0} state={state} storage={storage} place={place} now={now} />
+          <More count={top.more ?? 0} indent={0} />
+        </ul>
+      )}
+    </section>
   )
 }
 
-// The rows of a folder's entries, each folder's own entries under it while it is open.
+// The rows of a folder's entries, each folder's own entries under it while
+// it is open. A folder opens and closes as its row is picked.
 function Entries({ entries, depth, state, storage, place, now }: { entries: StorageEntry[]; depth: number; state: StorageState; storage: Storage; place: WorkspacePlace; now: number }) {
-  // Each level in by one more step of the icon and its gap.
-  const indent = { paddingLeft: `${12 + depth * 24}px` }
+  const indent = indentOf(depth)
   return entries.map((entry) => {
-    const details = (
-      <span className="flex shrink-0 items-center gap-4 text-caption text-text-muted">
-        {entry.kind === "file" && <span className="font-mono text-code">{sizeWords(entry.size)}</span>}
-        <span className="min-w-8 text-right">{ageWords(entry.changed, now)}</span>
-      </span>
-    )
+    const age = <span className="shrink-0 text-caption text-text-muted">{ageWords(entry.changed, now)}</span>
     if (entry.kind === "file") {
       const Icon = /\.(png|jpe?g|gif|webp|svg)$/i.test(entry.name) ? FileImage : File
       return (
         <li key={entry.path}>
-          <a href={addressOfWorkspace({ ...place, tab: "storage", file: entry.path })} style={indent} className="flex h-row-height items-center gap-2 border-t border-line pr-3">
-            <span className="size-icon-sm shrink-0" />
+          <a href={addressOfWorkspace({ ...place, tab: "storage", file: entry.path })} style={indent} className="flex h-row-height items-center gap-2 border-t border-line">
             <Icon className="size-icon-sm shrink-0 text-text-muted" />
-            <span className="min-w-0 flex-1 truncate text-body font-medium text-text">{entry.name}</span>
-            {details}
+            <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{entry.name}</span>
+            {age}
           </a>
         </li>
       )
@@ -81,11 +69,10 @@ function Entries({ entries, depth, state, storage, place, now }: { entries: Stor
     const inside = state.folders.get(entry.path)
     return (
       <li key={entry.path} className="flex flex-col">
-        <button type="button" aria-expanded={open} onClick={() => storage.toggle(entry.path)} style={indent} className="flex h-row-height items-center gap-2 border-t border-line pr-3 text-left">
-          <CaretRight className={`size-icon-sm shrink-0 text-text-muted transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
+        <button type="button" aria-expanded={open} onClick={() => storage.toggle(entry.path)} style={indent} className="flex h-row-height items-center gap-2 border-t border-line text-left">
           <FolderSimple className="size-icon-sm shrink-0 text-text-muted" />
-          <span className="min-w-0 flex-1 truncate text-body font-medium text-text">{entry.name}</span>
-          {details}
+          <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{entry.name}</span>
+          {age}
         </button>
         {open && (
           <ul className="flex flex-col">
@@ -107,6 +94,9 @@ function Entries({ entries, depth, state, storage, place, now }: { entries: Stor
     )
   })
 }
+
+// Each level in by one step: the icon and its gap, and as much again.
+const indentOf = (depth: number) => ({ paddingLeft: `${depth * 24}px` })
 
 // A file open in the workspace, read only: its path, size and when it
 // changed, and its text, or the image, with the way back to the list.
@@ -146,9 +136,9 @@ function FileShown({ state, path, back, now }: { state: StorageState; path: stri
 
 // A folder being listed, in quiet words: at the top, or as a row of an open folder.
 function Listing({ indent }: { indent?: number }) {
-  if (indent === undefined) return <p className="flex h-row-height items-center border-t border-line px-3 text-caption text-text-muted">Listing</p>
+  if (indent === undefined) return <p className="text-caption text-text-muted">Listing</p>
   return (
-    <li style={{ paddingLeft: `${12 + indent * 24}px` }} className="flex h-row-height items-center border-t border-line text-caption text-text-muted">
+    <li style={indentOf(indent)} className="flex h-row-height items-center border-t border-line text-caption text-text-muted">
       Listing
     </li>
   )
@@ -161,9 +151,9 @@ function More({ count, indent }: { count: number; indent: number }) {
 }
 
 function Quiet({ children, indent }: { children: ReactNode; indent?: number }) {
-  if (indent === undefined) return <p className="border-t border-line px-3 pt-3 text-caption break-words text-text-muted">{children}</p>
+  if (indent === undefined) return <p className="text-caption break-words text-text-muted">{children}</p>
   return (
-    <li style={{ paddingLeft: `${12 + indent * 24}px` }} className="flex min-h-row-height items-center border-t border-line pr-3 text-caption break-words text-text-muted">
+    <li style={indentOf(indent)} className="flex min-h-row-height items-center border-t border-line text-caption break-words text-text-muted">
       {children}
     </li>
   )

@@ -1,5 +1,5 @@
 import type { SessionSummary } from "../../src/core/types.ts"
-import { groupSessions } from "./session-list.ts"
+import { ageWords, groupSessions } from "./session-list.ts"
 
 // The workspace view's rules, apart from its screen. A workspace is a
 // project's home: a strip of every workspace, the workspace itself with
@@ -54,6 +54,18 @@ export function sessionsOf(sessions: readonly SessionSummary[], project: string)
 // owner picks another, or undefined when it has none.
 export function latestSession(sessions: readonly SessionSummary[], project: string): SessionSummary | undefined {
   return sessions.filter((each) => each.project === project).sort((a, b) => b.lastActive - a.lastActive)[0]
+}
+
+// What a session's row in the Sessions tab says on its right, and in which
+// colour: Needs you in the colour of what waits for the owner, Working in
+// quiet words, Done in its own green once the session has settled, and
+// otherwise how long ago it was active.
+export type SessionStatus = { words: string; tone: "needs" | "done" | "muted" }
+export function sessionStatus(session: SessionSummary, now: number): SessionStatus {
+  if (session.state === "needs_you") return { words: "Needs you", tone: "needs" }
+  if (session.state === "working") return { words: "Working", tone: "muted" }
+  if (session.state === "settled") return { words: "Done", tone: "done" }
+  return { words: ageWords(session.lastActive, now), tone: "muted" }
 }
 
 // Whether a session in the project is waiting for an answer from the owner.

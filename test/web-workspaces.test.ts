@@ -4,7 +4,7 @@ import { addressAsOpened, selectedIn } from "../web/src/address.ts"
 import { PROJECT_ICONS, searchIcons } from "../web/src/project-icons.ts"
 import { lookOf } from "../web/src/project-look.ts"
 import { projectColour } from "../web/src/session-list.ts"
-import { addressOfWorkspace, chatAddress, latestSession, needsYou, sessionsOf, sizeWords, suggestedFolder, workspaceIn } from "../web/src/workspace.ts"
+import { addressOfWorkspace, chatAddress, latestSession, needsYou, sessionStatus, sessionsOf, sizeWords, suggestedFolder, workspaceIn } from "../web/src/workspace.ts"
 
 // The workspace view's rules, apart from its screen: where the owner is,
 // kept in the address; the project's icon and colour; the icons to pick
@@ -72,6 +72,14 @@ test("a workspace needs the owner while a session in it waits for an answer", ()
 
   expect(needsYou(sessions, "p1")).toBe(true)
   expect(needsYou(sessions, "p2")).toBe(false)
+})
+
+test("a session in the Sessions tab says Needs you, Working or Done in words, and otherwise how long ago it was active", () => {
+  const now = 10 * 60 * 60_000
+  expect(sessionStatus(summary("asking", "p1", "needs_you", now), now)).toEqual({ words: "Needs you", tone: "needs" })
+  expect(sessionStatus(summary("busy", "p1", "working", now), now)).toEqual({ words: "Working", tone: "muted" })
+  expect(sessionStatus(summary("old", "p1", "settled", 0), now)).toEqual({ words: "Done", tone: "done" })
+  expect(sessionStatus(summary("recent", "p1", "active", now - 60 * 60_000), now)).toEqual({ words: "1h", tone: "muted" })
 })
 
 test("a new workspace's folder is suggested in the home folder, named after it, never as the home folder or the one above", () => {

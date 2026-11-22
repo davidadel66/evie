@@ -6,7 +6,7 @@ import { keptLook, onLooks, type Look } from "./project-look.ts"
 import { addressOfWorkspace } from "./workspace.ts"
 
 // The classes of each project colour: the icon in the colour, its tile, an
-// 18% tint of it, and the ring around the selected workspace's tile.
+// 18% tint of it, and the line on the edge of the selected workspace's tile.
 // Written out whole, so that Tailwind finds each.
 export const COLOUR: Record<ProjectColour, string> = {
   moss: "text-project-moss",
@@ -24,13 +24,13 @@ const TILE: Record<ProjectColour, string> = {
   slate: "bg-project-slate/18",
   plum: "bg-project-plum/18",
 }
-const RING: Record<ProjectColour, string> = {
-  moss: "ring-project-moss",
-  mustard: "ring-project-mustard",
-  maroon: "ring-project-maroon",
-  rust: "ring-project-rust",
-  slate: "ring-project-slate",
-  plum: "ring-project-plum",
+const EDGE: Record<ProjectColour, string> = {
+  moss: "border-project-moss",
+  mustard: "border-project-mustard",
+  maroon: "border-project-maroon",
+  rust: "border-project-rust",
+  slate: "border-project-slate",
+  plum: "border-project-plum",
 }
 // A swatch of each colour, as the icon picker offers them.
 export const SWATCH: Record<ProjectColour, string> = {
@@ -70,8 +70,8 @@ const SIZES = {
 
 // A project's icon on its tile: the icon in the project's colour on an 18%
 // tint of it. The tile's corners are a quarter of its size, so that it
-// never becomes round. In the strip, the selected workspace's is ringed in
-// its colour. `look` draws it as it would be, as the picker shows a choice.
+// never becomes round. In the strip, the selected workspace's has a line
+// in its colour on its own edge. `look` draws it as it would be, as the picker shows a choice.
 export function ProjectTile({ project, size, selected = false, look }: { project: string; size: keyof typeof SIZES; selected?: boolean; look?: Look }) {
   const kept = useLook(project)
   const { icon, colour } = look ?? kept
@@ -83,7 +83,7 @@ export function ProjectTile({ project, size, selected = false, look }: { project
         SIZES[size],
         TILE[colour],
         COLOUR[colour],
-        selected && `ring-(length:--indicator-width) ring-offset-(length:--indicator-width) ring-offset-bg-side ${RING[colour]}`,
+        selected && `border-(length:--indicator-width) ${EDGE[colour]}`,
       )}
     >
       <IconGlyph icon={icon} />
