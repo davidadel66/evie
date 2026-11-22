@@ -168,7 +168,7 @@ function SessionDiff({ connection, session, project, narrow }: { connection: Con
           <DropdownMenuTrigger asChild>
             <Button variant="secondary" aria-label={`Compare: ${label}`} className="min-w-0 gap-1 px-3">
               <span className="truncate">{label}</span>
-              <CaretDown className="size-icon-sm text-text-muted" />
+              <CaretDown className="size-icon-control text-text-muted" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">

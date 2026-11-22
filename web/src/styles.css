@@ -6,7 +6,8 @@
 /* Tailwind's theme holds the design system's tokens and nothing else, so
    that each class names one: bg-bg-side, text-text-muted, text-caption,
    p-7, rounded-md, shadow-float. The colours are copied from its
-   tokens.json; the sizes are T3 Code's, at every width, phone included. */
+   tokens.json; the sizes are T3 Code's, at every width, phone included,
+   where T3 Code's controls grow a step (set at the end). */
 @theme {
   --*: initial;
 
@@ -23,14 +24,23 @@
   /* A reply and the owner's message, on T3 Code's looser line for reading. */
   --text-prose: 14px;
   --text-prose--line-height: 1.625;
-  /* What is typed into a text box or the message box. At phone width it
-     is 16px, set below, so that iOS does not zoom the page in when one is
-     tapped, as T3 Code's are. */
+  /* What is typed into a text box or the message box. Below 640px it is
+     16px, so that iOS does not zoom the page in when one is tapped, as T3
+     Code's are. */
   --text-field: 14px;
   --text-field--line-height: 1.625;
+  /* The words on a button or a menu item, and a field's label: 16px
+     below 640px, as T3 Code's. */
+  --text-control: 14px;
+  --text-control--line-height: 20px;
   --text-label: 14px;
   --text-label--line-height: 20px;
   --text-label--font-weight: 600;
+  /* A reply's second heading, between a title and a page's title. */
+  --text-heading: 18px;
+  --text-heading--line-height: 24px;
+  --text-heading--font-weight: 600;
+  --text-heading--letter-spacing: -0.01em;
   --text-title: 16px;
   --text-title--line-height: 24px;
   --text-title--font-weight: 600;
@@ -49,9 +59,10 @@
 
   /* The spacing steps, and nothing between them, so that p-1 is space-1
      (4px) and p-7 is space-7 (28px), and a class off the scale, such as
-     p-9, is not made at all. */
+     p-9, is not made at all. A 4px grid, with T3 Code's one half step. */
   --spacing-0: 0px;
   --spacing-1: 4px;
+  --spacing-1\.5: 6px;
   --spacing-2: 8px;
   --spacing-3: 12px;
   --spacing-4: 16px;
@@ -66,13 +77,17 @@
   --spacing-header-height: 52px;
   --spacing-rail-width: 64px;
   --spacing-side-chat-width: 360px;
-  /* The page's side padding: 20px, and 12px at phone width, set below. */
+  /* The page's side padding: 20px, and 12px below 640px. */
   --spacing-gutter: 20px;
   /* The least a finger aims at: on a touch screen, a button reaches this
      far round itself, unseen, as T3 Code's do. */
   --spacing-touch-min: 44px;
   --spacing-icon-xs: 12px;
+  /* The caret that opens a turn's work, as T3 Code's. */
+  --spacing-icon-caret: 14px;
   --spacing-icon-sm: 16px;
+  /* An icon on a button or a menu item: 18px below 640px. */
+  --spacing-icon-control: 16px;
   --spacing-icon-md: 20px;
 
   --radius-sm: 4px;
@@ -140,8 +155,8 @@
   --spacing-conversation: 736px;
   --spacing-call-name: 48px;
   /* Buttons and text boxes are 32px tall, as T3 Code's; small buttons,
-     such as the chips under the message box's text, and the items of a
-     menu, the palette or a picker, are 28px, as T3 Code's are. A menu is at
+     and the items of a menu, the palette or a picker, are 28px, as T3
+     Code's are; each 4px taller below 640px. A menu is at
      least this wide, and one of sentences, such as the context meter's, at
      most this wide, at least 16px from the screen's sides at phone width. */
   --spacing-control: 32px;
@@ -153,7 +168,7 @@
   /* The settings window: the widest it is, its height, kept within the
      page's, its column of pages, and a text box beside a setting. */
   --spacing-settings: 720px;
-  --spacing-settings-height: min(600px, calc(100dvh - 56px));
+  --spacing-settings-height: min(600px, calc(100dvh - 32px));
   --spacing-settings-pages: 176px;
   --spacing-settings-field: 200px;
   /* A project's icon tile in a session row, and the icon on it. */
@@ -164,8 +179,9 @@
   --spacing-tile-header: 28px;
   --spacing-tile-strip: 44px;
   /* The project icon picker: six 32px columns, as many as the colours, the
-     gaps between them, its padding and its line; and the tallest its icons
-     grow before they scroll. */
+     gaps between them, its padding and its line, and wider below 640px,
+     where the columns are 36px; and the tallest its icons grow before they
+     scroll. */
   --spacing-icon-picker: 230px;
   --spacing-icon-grid: 220px;
   /* The least a workspace's name keeps in its header, cut with an
@@ -240,14 +256,23 @@
     line-height: var(--text-body--line-height);
   }
 
-  /* At phone width the sizes stay as dense as at desktop width, as T3
-     Code's do, but for two: the page's side padding is narrower, and what
-     is typed into a text box is 16px, below which iOS zooms the page in
-     when a text box is tapped. */
-  @media (width < 768px) {
+  /* Below 640px, T3 Code's own breakpoint for its sizes, its controls grow
+     a step, as T3 Code's do: buttons and text boxes to 36px, small buttons
+     and menu items to 32px, their words to 16px and their icons to 18px.
+     What is typed into a text box is 16px too, below which iOS zooms the
+     page in when one is tapped, and the page's side padding is narrower.
+     Text, rows, headers and the work log stay as they are. The layout's
+     own breakpoint, for the sheets, is wide's 768px. */
+  @media (width < 640px) {
     :root {
+      --spacing-control: 36px;
+      --spacing-control-sm: 32px;
+      --spacing-icon-control: 18px;
+      --spacing-icon-picker: 254px;
       --spacing-gutter: 12px;
       --text-field: 16px;
+      --text-control: 16px;
+      --text-control--line-height: 24px;
     }
   }
 

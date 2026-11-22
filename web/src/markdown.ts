@@ -12,9 +12,8 @@ export function renderMarkdown(text: string): ReactNode[] {
 }
 
 const HEADINGS = ["h1", "h2", "h3", "h4", "h5", "h6"] as const
-// Each heading's text style, near T3 Code's 20, 18, 16 and 14px: a top
-// heading a page's title, the next two a section's, the rest a label.
-const HEADING_SIZES = ["text-page-title", "text-title", "text-title"] as const
+// Each heading's text style, at T3 Code's 20, 18, 16 and 14px.
+const HEADING_SIZES = ["text-page-title", "text-heading", "text-title"] as const
 const ALIGN = { left: "text-left", center: "text-center", right: "text-right" }
 
 function blocks(tokens: Token[]): ReactNode[] {

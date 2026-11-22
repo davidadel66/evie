@@ -1,8 +1,10 @@
 // Adapted from shadcn/ui's button (MIT licence, notice in
 // LICENSES/shadcn-ui-MIT.txt), with the design system's kinds of button in
 // place of shadcn's: primary, secondary, quiet and icon. Every button is
-// 32px tall, as T3 Code's, unless it is given a smaller size, and shows
-// the focus ring when focused from the keyboard. On a touch screen it
+// 32px tall, as T3 Code's, unless it is given a smaller size, with 14px
+// words and 16px icons (icon-control, which an icon in a button names),
+// all a step larger below 640px, as T3 Code's are. It shows the focus ring
+// when focused from the keyboard. On a touch screen it
 // reaches an unseen 44px round itself, as T3 Code's buttons do, so that a
 // finger finds it although it looks small.
 import { cva, type VariantProps } from "class-variance-authority"
@@ -15,12 +17,12 @@ const buttonVariants = cva(
     variants: {
       variant: {
         // One on a screen at most.
-        primary: "h-control bg-text px-3 text-label text-bg",
-        secondary: "h-control bg-surface-raised px-3 text-label text-text",
+        primary: "h-control bg-text px-3 text-control font-semibold text-bg",
+        secondary: "h-control bg-surface-raised px-3 text-control font-semibold text-text",
         // For actions inside rows and headers.
-        quiet: "h-control px-3 text-body text-text-muted hover:text-text",
-        // A 16px icon in a square, named by an aria-label.
-        icon: "size-control text-text-muted hover:text-text [&>svg]:size-icon-sm",
+        quiet: "h-control px-3 text-control text-text-muted hover:text-text",
+        // An icon in a square, named by an aria-label.
+        icon: "size-control text-text-muted hover:text-text [&>svg]:size-icon-control",
       },
     },
     defaultVariants: { variant: "secondary" },

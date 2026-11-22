@@ -37,7 +37,7 @@ export function SignIn({ connection, state }: { connection: Connection; state: E
         </div>
 
         <form onSubmit={submit} className="flex flex-col gap-3">
-          <label htmlFor="token" className="text-label text-text">
+          <label htmlFor="token" className="text-control font-semibold text-text">
             Token
           </label>
           <input
@@ -57,7 +57,7 @@ export function SignIn({ connection, state }: { connection: Connection; state: E
           <button
             type="submit"
             disabled={signingIn}
-            className="h-control rounded-md bg-text px-3 text-label text-bg disabled:bg-transparent disabled:text-text-muted"
+            className="h-control rounded-md bg-text px-3 text-control font-semibold text-bg disabled:bg-transparent disabled:text-text-muted"
           >
             {signingIn ? "Signing in…" : "Sign in"}
           </button>

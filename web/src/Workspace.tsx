@@ -125,7 +125,7 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
 function Header({ project, place, connection, sessions }: { project: ListedProject; place: WorkspacePlace; connection: Connection; sessions: Sessions }) {
   return (
     <header className="flex h-header-height shrink-0 items-center gap-4 border-b border-line px-gutter wide:gap-6">
-      <h1 className="flex flex-1 text-title text-text">
+      <h1 className="flex flex-1 text-label text-text">
         <IconPicker connection={connection} sessions={sessions} project={project}>
           <button type="button" title="Pick its icon and colour" className="-ml-2 flex h-control items-center gap-2 rounded-md px-2">
             <ProjectTile project={project.id} size="header" />

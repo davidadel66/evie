@@ -92,13 +92,13 @@ function Form({ connection, sessions, made }: { connection: Connection; sessions
       }}
     >
       <div className="flex flex-col gap-1">
-        <label htmlFor={ids.name} className="text-label text-text">
+        <label htmlFor={ids.name} className="text-control font-semibold text-text">
           Name
         </label>
         <Input id={ids.name} autoFocus autoComplete="off" placeholder="Finances" value={name} onChange={(event) => setName(event.target.value)} />
       </div>
       <div className="flex flex-col gap-1">
-        <label htmlFor={ids.folder} className="text-label text-text">
+        <label htmlFor={ids.folder} className="text-control font-semibold text-text">
           Folder
         </label>
         <Input
@@ -115,8 +115,8 @@ function Form({ connection, sessions, made }: { connection: Connection; sessions
           Made when it is missing. A folder already there, such as a code repository, is added as it is.
         </p>
       </div>
-      <label className="flex min-h-control items-center gap-3 text-body text-text">
-        <input type="checkbox" checked={backUp} onChange={(event) => setBackUp(event.target.checked)} className="size-icon-sm shrink-0 accent-text" />
+      <label className="flex min-h-control items-center gap-3 text-control text-text">
+        <input type="checkbox" checked={backUp} onChange={(event) => setBackUp(event.target.checked)} className="size-icon-control shrink-0 accent-text" />
         Back up its .evie folder to a private repository on your GitHub account
       </label>
       {problem !== undefined && (

@@ -66,13 +66,18 @@ test("the spacing scale has only the design system's steps and named sizes, so a
   }
 })
 
-test("what is typed into a text box is 14px, as T3 Code's, and 16px at phone width, so that iOS does not zoom the page in when one is tapped", async () => {
+test("below 640px the controls grow a step, as T3 Code's, and what is typed into a text box is 16px, so that iOS does not zoom the page in when one is tapped", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
   const style = await Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.text()
 
-  expect(style).toMatch(/--text-field:14px;/)
-  expect(style).toMatch(/@media \(max-width:767\.9+px\)\{:root\{[^}]*--text-field:16px[;}]/)
+  for (const desktop of ["--spacing-control:32px", "--spacing-control-sm:28px", "--spacing-icon-control:16px", "--text-control:14px", "--text-field:14px", "--spacing-gutter:20px"]) {
+    expect(style).toContain(`${desktop};`)
+  }
+  const phone = style.match(/@media \(max-width:639\.9+px\)\{:root\{([^}]*)\}\}/)?.[1]?.split(";")
+  expect(phone).toEqual(expect.arrayContaining(["--spacing-control:36px", "--spacing-control-sm:32px", "--spacing-icon-control:18px", "--text-control:16px", "--text-field:16px", "--spacing-gutter:12px"]))
+  // The text, the rows and the headers keep their sizes.
+  expect(phone?.some((each) => /--(text-(body|caption|label)|spacing-(row-height|work-row|header-height))/.test(each))).toBe(false)
   expect(style).toContain(".text-field{font-size:var(--text-field);")
 })
 

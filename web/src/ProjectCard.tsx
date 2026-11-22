@@ -430,7 +430,7 @@ function Checks({ checks }: { checks: PullRequest["checks"] }) {
       <DropdownMenuTrigger asChild>
         <Button variant="quiet" aria-label={`Checks: ${summary}`} className={`-ml-3 gap-1 ${failing ? "text-status-failed hover:text-status-failed" : ""}`}>
           {summary}
-          <CaretDown className="size-icon-sm" />
+          <CaretDown className="size-icon-control" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-w-card-sheet">

@@ -384,7 +384,7 @@ function Working({ words }: { words: string }) {
 
 // A caret that turns as what it opens opens.
 function Caret({ open }: { open: boolean }) {
-  return <CaretRight className={`size-icon-xs shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
+  return <CaretRight className={`size-icon-caret shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
 }
 
 // A completed turn's work before its final reply, as one quiet line that
@@ -439,7 +439,7 @@ function StepsLine({ calls, label, running, shown, show }: { calls: Call[]; labe
 function CallRow({ call, open, toggle }: { call: Call; open: boolean; toggle: () => void }) {
   return (
     <li className="flex min-w-0 flex-col">
-      <button type="button" aria-expanded={open} onClick={toggle} className="flex min-h-work-row w-full min-w-0 items-center py-1 text-left">
+      <button type="button" aria-expanded={open} onClick={toggle} className="flex min-h-work-row w-full min-w-0 items-center text-left">
         <span className="flex w-full min-w-0 items-start gap-3">
           <span className="min-w-call-name shrink-0 font-mono text-code text-text-muted">{call.name}</span>
           <span className="flex min-w-0 flex-1 flex-col">

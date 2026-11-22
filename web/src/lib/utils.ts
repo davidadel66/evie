@@ -12,7 +12,9 @@ export const NAMED_SIZES = [
   "gutter",
   "touch-min",
   "icon-xs",
+  "icon-caret",
   "icon-sm",
+  "icon-control",
   "icon-md",
   "control",
   "control-sm",
@@ -60,7 +62,7 @@ export const NAMED_SIZES = [
 const merge = extendTailwindMerge({
   extend: {
     theme: {
-      text: ["caption", "body", "prose", "field", "label", "title", "page-title", "figure", "code"],
+      text: ["caption", "body", "prose", "field", "control", "label", "heading", "title", "page-title", "figure", "code"],
       spacing: [...NAMED_SIZES],
       shadow: ["float"],
       radius: ["tile"],

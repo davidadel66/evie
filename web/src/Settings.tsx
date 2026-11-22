@@ -112,7 +112,7 @@ function Pages({ page, choose }: { page: Page; choose: (page: Page) => void }) {
           <DropdownMenuTrigger asChild>
             <Button aria-label={`Page: ${page}`} className="w-full justify-between">
               {page}
-              <CaretDown className="size-icon-sm text-text-muted" />
+              <CaretDown className="size-icon-control text-text-muted" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -207,7 +207,7 @@ function Appearance() {
                 <Button aria-label={`Theme: ${name}`}>
                   <Swatch theme={theme} />
                   {name}
-                  <CaretDown className="size-icon-sm text-text-muted" />
+                  <CaretDown className="size-icon-control text-text-muted" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -277,7 +277,7 @@ function Notifications() {
             <DropdownMenuTrigger asChild>
               <Button aria-label={`Notifications: ${MODE_NAMES[settings.mode]}`}>
                 {MODE_NAMES[settings.mode]}
-                <CaretDown className="size-icon-sm text-text-muted" />
+                <CaretDown className="size-icon-control text-text-muted" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

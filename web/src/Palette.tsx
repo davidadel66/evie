@@ -252,7 +252,7 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
   let at = -1
   return (
     <div className="flex min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-1">
+      <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
         {view === undefined ? (
           <MagnifyingGlass className="size-icon-sm shrink-0 text-text-muted" />
         ) : (
@@ -280,7 +280,7 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
         />
       </div>
       <div ref={listBox} id="palette-rows" role="listbox" aria-label="Results" className="flex max-h-palette-list min-h-0 flex-col overflow-y-auto p-2">
-        {rows.length === 0 && <p className="flex min-h-control items-center px-2 text-caption text-text-muted">{view === undefined ? "No matching command, session or project." : "Nothing matches."}</p>}
+        {rows.length === 0 && <p className="flex min-h-control-sm items-center px-2 text-caption text-text-muted">{view === undefined ? "No matching command, session or project." : "Nothing matches."}</p>}
         {groups.map((group) => (
           <div key={group.name} role="group" aria-label={group.name} className="flex flex-col">
             <p className="px-2 pt-2 pb-1 text-caption text-text-muted">{group.name}</p>
@@ -301,7 +301,7 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
                   className={cn("flex h-control-sm shrink-0 cursor-default items-center gap-2 rounded-sm px-2 [&>svg]:size-icon-sm [&>svg]:shrink-0", place === highlight && "bg-surface-raised")}
                 >
                   {row.icon ?? <span aria-hidden="true" className="size-icon-sm shrink-0" />}
-                  <span className="min-w-0 truncate text-body text-text">{row.title}</span>
+                  <span className="min-w-0 truncate text-control text-text">{row.title}</span>
                   {row.detail !== undefined && row.detail !== "" && <span className="min-w-0 flex-1 truncate text-caption text-text-muted">{row.detail}</span>}
                   {row.folder !== undefined && <FolderPath folder={row.folder} className="flex-1 text-text-muted" />}
                   <span className="ml-auto flex shrink-0 items-center gap-2 text-caption text-text-muted">

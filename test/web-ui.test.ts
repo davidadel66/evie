@@ -23,7 +23,7 @@ test("the joiner knows every named size in Tailwind's theme", async () => {
   expect<string[]>([...NAMED_SIZES].sort()).toEqual(named.sort())
 })
 
-test("every text box in the web app takes the field size for its text, which is 16px at phone width", async () => {
+test("every text box in the web app takes the field size for its text, which is 16px below 640px", async () => {
   const folder = join(import.meta.dir, "..", "web", "src")
   const files = (await readdir(folder, { recursive: true })).filter((file) => file.endsWith(".tsx"))
   const boxes: { where: string; tag: string }[] = []
@@ -41,8 +41,8 @@ test("every text box in the web app takes the field size for its text, which is 
     const classes = tag.match(/className=(?:"([^"]*)"|\{cn\("([^"]*)")/)
     const own = classes?.[1] ?? classes?.[2] ?? ""
     // Input, the shared part, has the size itself; given classes must not change it.
-    const size = own.match(/\btext-(caption|body|prose|label|title|page-title|figure|code)\b/)
-    expect({ where, size: size?.[0] }).toEqual({ where, size: undefined })
+    const size = own.match(/(?:^|\s)(text-(caption|body|prose|control|label|heading|title|page-title|figure|code))(?=\s|$)/)
+    expect({ where, size: size?.[1] }).toEqual({ where, size: undefined })
     if (!tag.startsWith("<Input")) expect({ where, field: own.includes("text-field") }).toEqual({ where, field: true })
   }
 })

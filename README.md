@@ -630,11 +630,13 @@ mode with a sound readies it at once. Everything is read from what the server se
 page already, and for a turn's end, the session's latest events, so the
 server does nothing more for it.
 
-At phone width the page is as dense as at desktop width, as T3 Code's
-is. What is typed into a text box or the message box is 16px there, so
-that the phone does not zoom the page in when one is tapped, and on a touch
-screen each button reaches an unseen 44px round itself, so that a finger
-finds it although it looks small.
+Below 640px wide, as on a phone, the controls grow a step, as T3 Code's
+do: buttons and text boxes are 36px tall, small buttons and menu items
+32px, their words 16px and their icons 18px. What is typed into a text box
+or the message box is 16px there too, so that the phone does not zoom the
+page in when one is tapped. The text, the rows and the headers stay as at
+desktop width. On a touch screen each button also reaches an unseen 44px
+round itself, so that a finger finds it although it looks small.
 
 **A workspace** is a project's home, opened from its icon or name in the
 session list or the project card. The page then has three other columns:
@@ -1409,7 +1411,8 @@ The design system's colours are copied from its `tokens.json` into
 `web/src/tokens.css`, one set per theme. Its sizes follow T3 Code's
 density, at every width, phone included: 14px text, 12px details, 28 to
 32px controls and 24px rows in a turn's work log, where the board first
-had 15px text and 40 to 44px controls. Its fonts, Geist and Geist Mono, and
+had 15px text and 40 to 44px controls; below 640px, T3 Code's own
+breakpoint for its sizes, its controls grow a step, as T3 Code's do. Its fonts, Geist and Geist Mono, and
 its three themes are its own. The sizes are in Tailwind's theme in
 `web/src/styles.css`. Tailwind's own defaults are cleared, so each class
 names a token, such as `bg-bg-side`, `text-text-muted`, `text-caption` or
@@ -1417,21 +1420,28 @@ names a token, such as `bg-bg-side`, `text-text-muted`, `text-caption` or
 such as `p-9`, is not made at all. The fonts are carried in the
 stylesheet, so the page asks no other site for anything.
 
-Below 768px, phone width, every size stays as it is but two: the page's
-side padding, `gutter`, is 12px, and the text typed into a text box,
-`field`, is 16px, below which iOS zooms the page in when a text box is
-tapped. A test checks that every text box in the web app takes `field`.
+Below 640px, the sizes of the controls change, and nothing else: `control`
+is 36px, `control-sm` 32px, the words on a button or menu item (`control`
+text) 16px and its icon (`icon-control`) 18px, as T3 Code's are. The text
+typed into a text box, `field`, is 16px, below which iOS zooms the page in
+when a text box is tapped, and the page's side padding, `gutter`, is 12px.
+Text, rows, headers, chips and the work log keep their sizes, as T3 Code's
+do. A test checks that every text box in the web app takes `field`. The
+layout's own breakpoint, where the list and the card become sheets, is
+768px (`wide`), as T3 Code's sidebar's is.
 
 **Text.** Sans-serif (Geist) but for `code`, in Geist Mono:
 
 | Name | Size and line | Weight | For |
 |---|---|---|---|
 | `caption` | 12px on 16px | 400 | Details beside or under a title: a project's name, a branch, an age; a menu's heading; notes and refusals |
-| `body` | 14px on 20px | 400 | List rows, quiet buttons, a turn's work log, paragraphs, menu items |
+| `body` | 14px on 20px | 400 | List rows, a turn's work log, paragraphs |
 | `prose` | 14px on 1.625 (about 23px) | 400 | A reply and the owner's message, on T3 Code's looser line for reading |
-| `field` | 14px on 1.625; 16px at phone width | 400 | What is typed into a text box, the message box or a search |
-| `label` | 14px on 20px | 600 | Titles: a session's in the list and in a header, a setting's, a question's; buttons; the name `evie` at the top |
-| `title` | 16px on 24px, −0.01em | 600 | A workspace's name in its header, a settings page's title, a reply's second and third headings |
+| `field` | 14px on 1.625; 16px below 640px | 400 | What is typed into a text box, the message box or a search |
+| `control` | 14px on 20px; 16px on 24px below 640px | 400 | The words on a button, a chip, a menu item or a row of the palette, and a form's labels, which take semibold |
+| `label` | 14px on 20px | 600 | Titles: a session's in the list and in a header, a workspace's, a setting's, a question's; the name `evie` at the top |
+| `heading` | 18px on 24px, −0.01em | 600 | A reply's second heading |
+| `title` | 16px on 24px, −0.01em | 600 | A settings page's title, a reply's third heading |
 | `page-title` | 20px on 28px, −0.01em | 600 | The one title of a dialog, the settings window or an empty page; a reply's top heading |
 | `figure` | 24px on 32px, −0.02em | 600 | Big numbers on dashboards, when there are any |
 | `code` | 13px on 20px | 400 | File paths, commands, diffs and tool calls |
@@ -1441,13 +1451,14 @@ tapped. A test checks that every text box in the web app takes `field`.
 | Name | Value | For |
 |---|---|---|
 | `space-1` | 4px | Between a label and its value; inside a menu, around its items |
+| `space-1.5` | 6px | T3 Code's one half step: above and below a menu's heading; the room a row's `···` reaches into |
 | `space-2` | 8px | Between an icon and its text; a menu item's sides; between a turn's steps; the session list's sides |
 | `space-3` | 12px | Inside small controls; the sides of a row and a header; a setting's top and bottom |
 | `space-4` | 16px | Inside the message box; between turns; above and below the conversation |
 | `space-5` | 20px | Where a column's text starts: the name at the top of the list, the project card's rows; a list's indent in a reply; under the message box at desktop width |
 | `space-6` | 24px | Inside a dialog and the settings window; between tabs |
-| `space-7` | 28px | In the scale, though nothing uses it now that the page's side padding is `gutter` |
-| `space-8` | 32px | Between a setting and its control; between sections; above and below an empty page's words |
+| `space-7` | 28px | The height of a chip under the message box's text, at every width, as T3 Code's |
+| `space-8` | 32px | Between a setting and its control; between sections; above and below an empty page's words; the stop button, at every width |
 
 **Corners:**
 
@@ -1463,15 +1474,17 @@ tapped. A test checks that every text box in the web app takes `field`.
 
 | Name | Value | For |
 |---|---|---|
-| `control` | 32px | Buttons, text boxes and icon buttons; the settings' pages; the send and stop buttons |
-| `control-sm` | 28px | Small buttons: the chips under the message box's text, the buttons that show and hide the list and the card, a row's `···`, a notice's; the items of a menu, the palette, the `/` and `@` menus and the model picker |
+| `control` | 32px; 36px below 640px | Buttons, text boxes and icon buttons; the settings' pages; the send button |
+| `control-sm` | 28px; 32px below 640px | Small buttons: the paperclip, the buttons that show and hide the list and the card, a row's `···`, a notice's; the items of a menu, the palette, the `/` and `@` menus and the model picker |
 | `row-height` | 32px | A row in a list: a file in Storage, a session in a workspace, a file's header in the diff, a line of the project card |
 | `work-row` | 24px | A row of a turn's work log: a run of calls, each call, Working, Worked for, a note |
 | `header-height` | 52px | Every column's header: the list's, the conversation's, the card's, the diff's, a workspace's and its side chat's |
-| `gutter` | 20px; 12px at phone width | The page's side padding: the conversation, the message box, a workspace, the sign-in page |
+| `gutter` | 20px; 12px below 640px | The page's side padding: the conversation, the message box, a workspace, the sign-in page |
 | `touch-min` | 44px | The least a finger aims at: on a touch screen, each button reaches this far round itself, unseen |
-| `icon-xs` | 12px | Small marks beside text: the caret that opens a group or a turn's steps, the spinner, the square in Stop |
-| `icon-sm` | 16px | Icons beside text, in menus and in icon buttons |
+| `icon-xs` | 12px | Small marks beside text: the caret that opens a group of the list, the spinner, the square in Stop |
+| `icon-caret` | 14px | The caret that opens a turn's work or a note, as T3 Code's |
+| `icon-sm` | 16px | Icons beside text, in rows and the palette |
+| `icon-control` | 16px; 18px below 640px | An icon on a button or a menu item, and a form's checkbox |
 | `icon-md` | 20px | The icon on a workspace's tile in the strip, and on the strip's own buttons |
 | `rail-width` | 64px | The strip of workspace tiles |
 | `tile-strip` | 44px | A workspace's tile in the strip, and the strip's back and New workspace buttons |
@@ -1492,13 +1505,13 @@ tapped. A test checks that every text box in the web app takes `field`.
 | `menu-wide` | `min(400px, calc(100vw - 32px))` | The widest a menu of sentences grows, such as the context meter's |
 | `dialog` | 512px | The widest a dialog is, as T3 Code's |
 | `settings` | 720px | The widest the settings window is |
-| `settings-height` | `min(600px, calc(100dvh - 56px))` | The settings window's height |
+| `settings-height` | `min(600px, calc(100dvh - 32px))` | The settings window's height, 16px within the page's top and bottom |
 | `settings-pages` | 176px | The settings window's column of pages |
 | `settings-field` | 200px | A text box beside a setting |
 | `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle of an empty page |
 | `workspace-name` | 96px | The least a workspace's name keeps in its header before its tabs scroll sideways |
 | `project-filter` | 128px | The widest the session list's project filter grows |
-| `icon-picker` | 230px | The project icon picker: six 32px columns, their gaps, its padding and its line |
+| `icon-picker` | 230px; 254px below 640px | The project icon picker: six 32px columns (36px below 640px), their gaps, its padding and its line |
 | `icon-grid` | 220px | The tallest the picker's icons grow before they scroll |
 | `composer-text` | 208px | The tallest the message box's text grows before it scrolls, as T3 Code's |
 | `composer-menu` | 288px | The tallest the `/` and `@` menus and the model picker above the message box are, as T3 Code's |

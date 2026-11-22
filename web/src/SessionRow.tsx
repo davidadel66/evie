@@ -187,7 +187,7 @@ function Row({
 // The session's name, typed in place of its title, as in T3 Code: Enter or
 // leaving the field saves it, and Escape gives it up. It starts with the
 // whole name chosen, to be typed over. Its text is a text box's, in the
-// title's weight.
+// title's weight and on the title's line, so the row does not grow.
 function NameField({ title, save, cancel }: { title: string; save(typed: string): void; cancel(): void }) {
   const [typed, setTyped] = useState(title)
   // Enter and Escape end the edit, and the field then loses the focus as
@@ -211,7 +211,7 @@ function NameField({ title, save, cancel }: { title: string; save(typed: string)
         else cancel()
       }}
       onBlur={() => !ended.current && save(typed)}
-      className="relative z-10 -mx-1 min-w-0 flex-1 rounded-md bg-transparent px-1 text-field font-semibold text-text focus-visible:outline-offset-0"
+      className="relative z-10 -mx-1 min-w-0 flex-1 rounded-md bg-transparent px-1 text-field leading-(--text-label--line-height) font-semibold text-text focus-visible:outline-offset-0"
     />
   )
 }
@@ -318,7 +318,7 @@ function RowMenu({
           variant="icon"
           aria-label={`Actions for ${title}`}
           className={cn(
-            "relative z-10 -my-1 -mr-2 size-control-sm",
+            "relative z-10 -my-1.5 -mr-2 size-control-sm",
             !selected &&
               "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100",
           )}

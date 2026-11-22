@@ -435,7 +435,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
                 </Button>
               )}
               {!collapsedNow && (
-                <div className="flex min-w-0 items-center text-body text-text-muted">
+                <div className="flex min-w-0 items-center gap-1 text-body text-text-muted">
                   <ModelName model={model.current} toggle={() => setPicking((open) => !open)} />
                   {conversation && state && <ContextMeter conversation={conversation} state={state} opened={setMeterOpen} />}
                 </div>
@@ -452,7 +452,8 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   )
 }
 
-// Stop, as T3 Code's: a round button with a small square in it, beside Send. Once
+// Stop, as T3 Code's: a round 32px button, at every width, with a small
+// square in it, beside Send. Once
 // pressed, it says Stopping until the turn has ended.
 function StopButton({ stopping, stop }: { stopping: boolean; stop(): void }) {
   if (stopping) {
@@ -464,14 +465,15 @@ function StopButton({ stopping, stop }: { stopping: boolean; stop(): void }) {
     )
   }
   return (
-    <Button variant="secondary" aria-label="Stop" title={`Stop (${label("stop", onMac())})`} onClick={stop} className="size-control rounded-full p-0">
+    <Button variant="secondary" aria-label="Stop" title={`Stop (${label("stop", onMac())})`} onClick={stop} className="size-8 rounded-full p-0">
       <StopFill className="size-icon-xs" />
     </Button>
   )
 }
 
-// The model's name, the part of its id after the maker's, as a small
-// button, as T3 Code's chips are, which opens the picker, and closes it again.
+// The model's name, the part of its id after the maker's, as a chip, as T3
+// Code's: 28px tall at every width, its words a button's, which opens the
+// picker, and closes it again.
 function ModelName({ model, toggle }: { model: string | undefined; toggle(): void }) {
   if (model === undefined) return null
   return (
@@ -481,7 +483,7 @@ function ModelName({ model, toggle }: { model: string | undefined; toggle(): voi
       data-picker-toggle=""
       title={`${model}. Pick another with /model or ${label("model", onMac())}`}
       aria-label={`Model: ${model}. Pick another`}
-      className="h-control-sm min-w-0 px-2 text-body"
+      className="h-7 min-w-0 px-2 text-control"
     >
       <span className="truncate">{model.slice(model.indexOf("/") + 1)}</span>
     </Button>
@@ -495,7 +497,7 @@ function ModelName({ model, toggle }: { model: string | undefined; toggle(): voi
 function ContextMeter({ conversation, state, opened }: { conversation: Conversation; state: ConversationState; opened(open: boolean): void }) {
   if (state.running.includes("compact")) {
     return (
-      <span role="status" className="flex h-control-sm items-center gap-2 px-2 text-status-working">
+      <span role="status" className="flex h-7 items-center gap-2 px-2 text-status-working">
         <Spinner />
         Compacting
       </span>
@@ -513,7 +515,7 @@ function MeterMenu({ conversation, meter, opened }: { conversation: Conversation
   return (
     <DropdownMenu onOpenChange={opened}>
       <DropdownMenuTrigger asChild>
-        <Button variant="quiet" aria-label={`Context ${meter.percent} full`} className="h-control-sm min-w-control-sm px-2 text-body">
+        <Button variant="quiet" aria-label={`Context ${meter.percent} full`} className="h-7 min-w-7 px-2 text-control">
           {meter.percent}
         </Button>
       </DropdownMenuTrigger>

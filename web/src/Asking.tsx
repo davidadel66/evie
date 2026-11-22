@@ -103,7 +103,7 @@ export function PermissionPrompt({ question, count, answer, redirect }: { questi
             <DropdownMenuTrigger asChild>
               <Button variant="quiet" className="gap-1">
                 More
-                <CaretDown className="size-icon-sm" />
+                <CaretDown className="size-icon-control" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-w-menu-wide">
