@@ -251,6 +251,7 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
             `runs with your full permissions, and it can switch off protections such as the guard. It can also have its ` +
             `.evie folder backed up to a private repository on your GitHub account. Use it?`,
           choices: [TRUST, DO_NOT_TRUST],
+          kind: "permission",
         })
         // Written down first: an answer that could not be saved does not count.
         if (answer === TRUST) {

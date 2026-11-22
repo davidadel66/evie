@@ -298,6 +298,60 @@ test("a list that could not be fetched is fetched again the next time, and the f
   expect(fake.calls.map((call) => call.canBeStopped)).toEqual([true, true])
 })
 
+test("the models OpenRouter offers are listed from the same list, fetched once with the limits, each by its id and name", async () => {
+  const fake = fakeOpenRouter([
+    { status: 200, body: JSON.stringify({ data: [{ id: "some/model", name: "Some: Model", context_length: 200000 }, { id: "other/model", context_length: 8000 }, { name: "No id" }] }) },
+  ])
+  const provider = createOpenRouterProvider({ env: { OPENROUTER_API_KEY: KEY }, fetch: fake.fetch, sleep: fake.sleep })
+
+  expect(await provider.models?.()).toEqual([
+    { id: "some/model", name: "Some: Model" },
+    { id: "other/model", name: "other/model" },
+  ])
+  expect(await provider.contextLimit?.("other/model")).toBe(8000)
+  expect(fake.calls).toHaveLength(1)
+})
+
+test("when the list of models cannot be fetched, listing them says why, and the next listing fetches it again", async () => {
+  const fake = fakeOpenRouter([{ networkError: "fetch failed" }, { status: 200, body: JSON.stringify({ data: [{ id: "some/model", name: "Some: Model" }] }) }])
+  const provider = createOpenRouterProvider({ env: { OPENROUTER_API_KEY: KEY }, fetch: fake.fetch, sleep: fake.sleep })
+
+  expect(provider.models?.()).rejects.toThrow("OpenRouter's list of models could not be fetched. Check the network, and try again.")
+  await Bun.sleep(1)
+  expect(await provider.models?.()).toEqual([{ id: "some/model", name: "Some: Model" }])
+})
+
+test("an error reply, or one without a list, is no list: it is not kept, and the next asking fetches it again", async () => {
+  const fake = fakeOpenRouter([
+    { status: 429, body: JSON.stringify({ error: { code: 429, message: "Rate limited" } }) },
+    { status: 200, body: JSON.stringify({ error: { message: "Something went wrong" } }) },
+    { status: 200, body: JSON.stringify({ data: [{ id: "some/model", name: "Some: Model", context_length: 200000 }] }) },
+  ])
+  const provider = createOpenRouterProvider({ env: { OPENROUTER_API_KEY: KEY }, fetch: fake.fetch, sleep: fake.sleep })
+
+  expect(provider.models?.()).rejects.toThrow("OpenRouter's list of models could not be fetched.")
+  await Bun.sleep(1)
+  expect(await provider.contextLimit?.("some/model")).toBeUndefined()
+  expect(await provider.contextLimit?.("some/model")).toBe(200000)
+  expect(fake.calls).toHaveLength(3)
+})
+
+test("the list is kept for an hour, then fetched again, so that new models appear", async () => {
+  const fake = fakeOpenRouter([
+    { status: 200, body: JSON.stringify({ data: [{ id: "some/model", name: "Some: Model" }] }) },
+    { status: 200, body: JSON.stringify({ data: [{ id: "some/model", name: "Some: Model" }, { id: "new/model", name: "New: Model" }] }) },
+  ])
+  let now = 1_000_000
+  const provider = createOpenRouterProvider({ env: { OPENROUTER_API_KEY: KEY }, fetch: fake.fetch, sleep: fake.sleep, now: () => now })
+
+  expect((await provider.models?.())?.map((model) => model.id)).toEqual(["some/model"])
+  now += 60 * 60_000 - 1
+  expect((await provider.models?.())?.map((model) => model.id)).toEqual(["some/model"])
+  now += 1
+  expect((await provider.models?.())?.map((model) => model.id)).toEqual(["some/model", "new/model"])
+  expect(fake.calls).toHaveLength(2)
+})
+
 test("a reply that carries no token counts reports none", async () => {
   const { chunks } = await ask([ok(text("Hello"), finish("stop"), DONE)])
 

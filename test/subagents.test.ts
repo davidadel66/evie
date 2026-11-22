@@ -311,7 +311,7 @@ test("in manual mode starting a subagent is asked about, and that answer covers 
   await turns(run, 2)
 
   expect(asked).toEqual([
-    "Let Evie start a subagent (look into it)? It works without asking before each step: it may change files and run commands inside the project.\n\n  Tidy the notes.",
+    "Let evie start a subagent (look into it)? It works without asking before each step: it may change files and run commands inside the project.\n\n  Tidy the notes.",
   ])
   expect(edits.ran).toEqual(["notes.md"])
 })
@@ -332,7 +332,7 @@ test("what a subagent still has to ask is put to the owner in the session that s
   })
   await say(auto.run, "go")
   await turns(auto.run, 2)
-  expect(asked).toEqual([{ session: auto.run.session, text: "A subagent asks: Let Evie change /somewhere/else/notes.md, which is outside the project?" }])
+  expect(asked).toEqual([{ session: auto.run.session, text: "A subagent asks: Let evie change /somewhere/else/notes.md, which is outside the project?" }])
   expect(edits.ran).toEqual([])
 
   const readOnly = await start(
@@ -386,8 +386,8 @@ test("a subagent's mode is settled when it is given work: more work in manual mo
   expect(await send("Try again.")).toStartWith("The message was sent")
   await turns(run, 5)
   expect(asked).toEqual([
-    "Let Evie give its subagent more work? It works without asking before each step: it may change files and run commands inside the project.",
-    "Let Evie give its subagent more work? It works without asking before each step: it may change files and run commands inside the project.",
+    "Let evie give its subagent more work? It works without asking before each step: it may change files and run commands inside the project.",
+    "Let evie give its subagent more work? It works without asking before each step: it may change files and run commands inside the project.",
   ])
   expect(edits.ran).toEqual(["notes.md"])
 

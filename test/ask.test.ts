@@ -256,6 +256,8 @@ test("opening a project that has its own settings file asks whether to trust it"
       "backed up to a private repository on your GitHub account. Use it?",
   )
   expect(question.body.choices).toEqual(["Yes, trust this project", "No, ignore its settings file"])
+  // It asks whether evie may use the file, so a client can show it as a permission prompt.
+  expect(question.body.kind).toBe("permission")
   // The question is in the log of the session that was opening.
   expect(question.session).toBe(opened.session)
   expect(opened.notices).toEqual([])

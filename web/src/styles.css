@@ -109,6 +109,12 @@
   --spacing-tile-row-icon: 12px;
   /* The widest the session list's project filter grows, beside the search. */
   --spacing-project-filter: 128px;
+  /* The message box: the tallest its text grows before it scrolls; the
+     tallest the / menu and the model picker above it are, as T3 Code's;
+     and the picker's column of makers. */
+  --spacing-composer-text: 240px;
+  --spacing-composer-menu: 320px;
+  --spacing-picker-makers: 144px;
   /* Below this width, the columns stack. */
   --breakpoint-wide: 960px;
 }

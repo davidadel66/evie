@@ -63,6 +63,11 @@ export type Loop = {
   cancel(): void
   // Compacts the conversation now, on request, and says what happened.
   compactNow(): Promise<string>
+  // How big the conversation is now, in tokens, and the size at which it is
+  // compacted by itself, as the loop measures them before each request. A
+  // model's limit still being looked up when the signal fires is left
+  // unknown for this answer, and the ceiling decides.
+  measure(signal: AbortSignal): Promise<{ size: number; compactsAt: number }>
   // Whether a turn, or a compaction, is in progress.
   busy(): boolean
   // The text of the reply the model is writing now, as far as it has got,
@@ -480,6 +485,13 @@ export function createLoop(options: LoopOptions): Loop {
         writeNotes("quiet")
         if (!stopped && turnWanted()) this.wake()
       }
+    },
+    async measure(signal) {
+      const events = log.events(session)
+      // The model's limit is looked up as a request would look it up, and
+      // kept for the next; a lookup that fails leaves the ceiling to decide.
+      const compactsAt = await triggerFor(currentModel(events, model), signal)
+      return { size: sizeOf(events), compactsAt }
     },
     busy() {
       return active
