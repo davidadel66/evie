@@ -48,7 +48,7 @@ test("new_project makes the folder when it is missing, with a .evie/evie.json th
 
   expect(made).toEqual({ project: { id: expect.any(String), name: "finances", folder }, madeFolder: true, trusted: false, syncs: false })
   expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ sync: "private" })
-  expect(await run.evie.send({ type: "list_projects" })).toContainEqual(made.project)
+  expect(await run.evie.send({ type: "list_projects" })).toContainEqual({ ...made.project, git: false })
 })
 
 test("new_project takes a folder that is already there, and a name of the owner's choosing", async () => {
@@ -102,7 +102,7 @@ test("new_project refuses Evie's data folder, anything inside it, and a folder w
     `The .evie folder of ${above} is, or holds, Evie's data folder, ${home}. Choose another folder for the project.`,
   )
   expect(await exists(join(home, "projects"))).toBe(false)
-  expect(await run.evie.send({ type: "list_projects" })).toEqual([run.project!])
+  expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...run.project!, git: false }])
 
   // A data folder kept inside a project's .evie folder.
   const deeper = await tempFolder("evie-above-")
@@ -123,7 +123,7 @@ test("new_project refuses a folder with Evie settings of its own, which it would
   )
   expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ plugins: ["./theirs.ts"] })
   expect(await globalFile()).toEqual({ plugins: [] })
-  expect(await run.evie.send({ type: "list_projects" })).toEqual([run.project!])
+  expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...run.project!, git: false }])
 })
 
 test("new_project refuses a path that is not a full one, a file, a blank name, and a folder inside a git repository", async () => {
@@ -143,7 +143,7 @@ test("new_project refuses a path that is not a full one, a file, a blank name, a
   )
   expect(await exists(join(place, "new"))).toBe(false)
   expect(await exists(join(place, "repository", "docs"))).toBe(false)
-  expect(await run.evie.send({ type: "list_projects" })).toEqual([run.project!])
+  expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...run.project!, git: false }])
 })
 
 // ---- Keeping .evie/ out of the project's own git --------------------------------------------
@@ -231,7 +231,7 @@ test("new_project refuses a folder whose .evie is a file, before making anything
     `${join(folder, ".evie")} is a file. Evie keeps what it adds to a project in a folder of that name, so move the file elsewhere, then make the project.`,
   )
   expect(await readFile(join(folder, ".evie"), "utf8")).toBe("not a folder")
-  expect(await run.evie.send({ type: "list_projects" })).toEqual([run.project!])
+  expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...run.project!, git: false }])
 })
 
 test("a folder inside the data folder whose name starts with two dots is still inside it", async () => {

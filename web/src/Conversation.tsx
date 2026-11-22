@@ -4,7 +4,7 @@ import { asAsked } from "./questions.ts"
 import { Button } from "./components/ui/button.tsx"
 import { Composer } from "./Composer.tsx"
 import type { Connection } from "./connection.ts"
-import { openConversation, openDraft, takeStarted, type Conversation as Opened, type Draft as OpenedDraft } from "./conversation.ts"
+import { holdConversation, openDraft, type Conversation as Opened, type Draft as OpenedDraft } from "./conversation.ts"
 import { CaretRight } from "./icons.tsx"
 import { renderMarkdown } from "./markdown.ts"
 import { addressOf } from "./address.ts"
@@ -20,10 +20,9 @@ import { transcriptOf, type Call, type Item } from "./transcript.ts"
 export function Conversation({ connection, session }: { connection: Connection; session: string }) {
   const [opened, setOpened] = useState<{ session: string; conversation: Opened }>()
   useEffect(() => {
-    // One this page has just started from a draft is opened already.
-    const conversation = takeStarted(session) ?? openConversation(connection, session)
-    setOpened({ session, conversation })
-    return () => conversation.close()
+    const held = holdConversation(connection, session)
+    setOpened({ session, conversation: held.conversation })
+    return held.release
   }, [connection, session])
   if (opened?.session !== session) return null
   return <Reading key={session} conversation={opened.conversation} />
@@ -35,7 +34,10 @@ const AT_BOTTOM = 32
 // How many of the first items are remembered to keep the owner's place.
 const ANCHORS = 5
 
-function Reading({ conversation }: { conversation: Opened }) {
+// A conversation as it reads, the session's own, with its message box, or
+// one of its subagents', which is read only: it has no box, since nothing
+// is said in a subagent's conversation from the page.
+export function Reading({ conversation, readOnly = false }: { conversation: Opened; readOnly?: boolean }) {
   const state = useSyncExternalStore(conversation.subscribe, conversation.state)
   const { events, earlier, replySoFar, turnRunning, jobs, pending, notes } = state
   // A question waiting is shown where it is answered, at the end or docked
@@ -159,15 +161,17 @@ function Reading({ conversation }: { conversation: Opened }) {
           </div>
         )}
       </div>
-      <Composer
-        conversation={conversation}
-        state={state}
-        model={{ current: state.model, list: conversation.listModels, pick: conversation.setModel }}
-        shown={shown}
-        answer={conversation.answer}
-        asking={asking}
-        send={(text) => conversation.send(text)}
-      />
+      {!readOnly && (
+        <Composer
+          conversation={conversation}
+          state={state}
+          model={{ current: state.model, list: conversation.listModels, pick: conversation.setModel }}
+          shown={shown}
+          answer={conversation.answer}
+          asking={asking}
+          send={(text) => conversation.send(text)}
+        />
+      )}
     </div>
   )
 }
