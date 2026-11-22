@@ -45,8 +45,9 @@ export const STOP_FOR_GOOD = "stop-for-good"
 // failed, in words. The server is at the address in the settings, or
 // `EVIE_SERVER`; the token is `EVIE_TOKEN`, or this computer's own. When the
 // server refused this computer's own token, that was taken back, or made by
-// a server whose data folder has since changed, and the way to a new one is given.
-export async function reachServer(env: Settings): Promise<{ address: string; token: string; why(cause: unknown): string }> {
+// a server whose data folder has since changed, and the way to a new one is
+// given. `own` says the token is this computer's own.
+export async function reachServer(env: Settings): Promise<{ address: string; token: string; own: boolean; why(cause: unknown): string }> {
   const { address } = await loadServerSettings({ env }).catch(fail)
   const { token, own } = await tokenFor(env, address)
   const why = (cause: unknown) =>
@@ -54,7 +55,7 @@ export async function reachServer(env: Settings): Promise<{ address: string; tok
       ? `The Evie server at ${new URL(address).origin} refused this computer's token. Removing ` +
         `${ownTokenFile(dataFolder(env))} and starting \`evie serve\` again makes a new one.`
       : reason(cause)
-  return { address, token, why }
+  return { address, token, own, why }
 }
 
 // The names a client on this computer reaches its own server by.

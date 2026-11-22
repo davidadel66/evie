@@ -1,0 +1,130 @@
+/* Only the files in this folder are scanned for class names, whatever
+   folder the server is started in. */
+@import "tailwindcss" source(".");
+@import "./tokens.css";
+
+/* Tailwind's theme holds the design system's tokens and nothing else, so
+   that each class names one: bg-bg-side, text-text-muted, text-caption,
+   p-7, rounded-md, shadow-float. The values are copied from its tokens.json. */
+@theme {
+  --*: initial;
+
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --text-caption: 13px;
+  --text-caption--line-height: 18px;
+  --text-body: 15px;
+  --text-body--line-height: 21px;
+  --text-label: 15px;
+  --text-label--line-height: 21px;
+  --text-label--font-weight: 600;
+  --text-title: 17px;
+  --text-title--line-height: 22px;
+  --text-title--font-weight: 600;
+  --text-title--letter-spacing: -0.01em;
+  --text-page-title: 22px;
+  --text-page-title--line-height: 28px;
+  --text-page-title--font-weight: 600;
+  --text-page-title--letter-spacing: -0.01em;
+  --text-figure: 28px;
+  --text-figure--line-height: 32px;
+  --text-figure--font-weight: 600;
+  --text-figure--letter-spacing: -0.02em;
+  /* With font-mono. */
+  --text-code: 13px;
+  --text-code--line-height: 18px;
+
+  /* The spacing steps, and nothing between them, so that p-1 is space-1
+     (4px) and p-7 is space-7 (28px), and a class off the scale, such as
+     p-5, is not made at all. */
+  --spacing-0: 0px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-7: 28px;
+  --spacing-8: 32px;
+
+  /* The fixed sizes, by their names: h-row-height, h-header-height. */
+  --spacing-row-height: 44px;
+  --spacing-header-height: 56px;
+  --spacing-rail-width: 64px;
+  --spacing-side-chat-width: 360px;
+  --spacing-touch-min: 44px;
+  --spacing-icon-sm: 16px;
+  --spacing-icon-md: 20px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  /* The small spinner beside the word Working. */
+  --animate-spin: spin 1s linear infinite;
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Sizes of the layout that the design system's board does not name yet,
+     set here once, by a name each: w-session-list, max-w-sign-in-column. */
+  --spacing-session-list: 288px;
+  --spacing-project-card: 320px;
+  --spacing-sign-in-column: 400px;
+  /* The Menu's items are 40px rows, and the menu at least this wide. */
+  --spacing-menu-item: 40px;
+  --spacing-menu: 176px;
+  /* Below this width, the columns stack. */
+  --breakpoint-wide: 960px;
+}
+
+/* The colours, by the theme's names, so that a class takes its value from
+   whichever theme the element is in. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-side: var(--bg-side);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-focus-ring: var(--focus-ring);
+  --color-status-needs: var(--status-needs);
+  --color-status-working: var(--status-working);
+  --color-status-done: var(--status-done);
+  --color-status-failed: var(--status-failed);
+  --color-project-moss: var(--project-moss);
+  --color-project-mustard: var(--project-mustard);
+  --color-project-maroon: var(--project-maroon);
+  --color-project-rust: var(--project-rust);
+  --color-project-slate: var(--project-slate);
+  --color-project-plum: var(--project-plum);
+  --color-chart-bar: var(--chart-bar);
+  --color-chart-current: var(--chart-current);
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+
+  /* Every control shows the same 2px ring when focused from the keyboard. */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}
