@@ -17,8 +17,8 @@ import { addressOf } from "./address.ts"
 import type { Sessions } from "./sessions.ts"
 import { Spinner } from "./Spinner.tsx"
 import { runningSince, transcriptOf, type Call, type Item } from "./transcript.ts"
-import { ShownFrame, ShownGallery } from "./Shown.tsx"
-import { galleryOf } from "./shown.ts"
+import { ShownLater } from "./ShownLater.tsx"
+import { galleryOf, ShownGallery } from "./shown.ts"
 import type { StepKind } from "./step-words.ts"
 import { serverNow, workingFor } from "./work-log.ts"
 import { sizeWords } from "./workspace.ts"
@@ -371,7 +371,7 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
     case "changes":
       return <TurnChangedFiles turn={item.number} files={item.files} />
     case "shown":
-      return <ShownFrame file={item.file} />
+      return <ShownLater file={item.file} />
     case "failed":
       return (
         <div className="text-body">

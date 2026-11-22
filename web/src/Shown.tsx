@@ -1,10 +1,10 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { createContext, useContext, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type KeyboardEvent, type ReactNode, type Ref } from "react"
+import { useContext, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type KeyboardEvent, type ReactNode, type Ref } from "react"
 import { flushSync } from "react-dom"
 import { Back, CaretDown, Download, FullScreen, InStorage, KindImage, KindMarkdown, KindPdf, KindVector, Next, Previous } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { renderMarkdown } from "./markdown.ts"
-import { isImage, placeIn, stepFrom, viewerOf, type Shown, type Viewer } from "./shown.ts"
+import { isImage, placeIn, ShownGallery, stepFrom, viewerOf, type Shown, type Viewer } from "./shown.ts"
 import { addressOfWorkspace } from "./workspace.ts"
 
 // A file evie showed, drawn under its reply in a frame like the
@@ -14,10 +14,6 @@ import { addressOfWorkspace } from "./workspace.ts"
 // screen moves through every image shown in the session, with a count and
 // zoom, after T3 Code's expanded image view (MIT licence, notice in
 // LICENSES/t3code-MIT.txt).
-
-// The images shown in the conversation, in order, which full screen moves
-// through. Without it, full screen shows the one file.
-export const ShownGallery = createContext<readonly Shown[]>([])
 
 // What a viewer is given: the file, the address it is fetched from, and a
 // way to open it full screen.

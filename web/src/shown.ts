@@ -1,3 +1,4 @@
+import { createContext } from "react"
 import { typeByName } from "../../src/plugins/show/kinds.ts"
 import type { ShownFile } from "../../src/plugins/show/record.ts"
 import { PATHS } from "../../src/server/wire.ts"
@@ -74,6 +75,11 @@ export function stepFrom(images: readonly Shown[], key: string, by: number): str
   if (at === -1) return key
   return images[(((at + by) % images.length) + images.length) % images.length]!.key
 }
+
+// The images shown in the conversation, in order, which full screen moves
+// through, as the conversation gives them to each file's frame. Without
+// it, full screen shows the one file.
+export const ShownGallery = createContext<readonly Shown[]>([])
 
 // Every image shown among what the page draws, in order, for full screen
 // to move through.

@@ -60,8 +60,9 @@ test("the page has one modulepreload link for each chunk its script imports, and
   for (const path of named) expect(Object.keys(app.files)).toContain(path)
   // In the head, where the browser finds them as it reads the page's start.
   for (const tag of links) expect(page.indexOf(tag)).toBeLessThan(page.indexOf("</head>"))
-  // What the script loads with `import()`, as the diff view, is left to load when it is needed.
-  const later = scripts.flatMap((script) => outputs[script]!.imports.filter((each) => each.kind === "dynamic-import" && !imported.has(each.path)))
+  // What the script, or a chunk it imports, loads with `import()`, as the
+  // diff view, is left to load when it is needed.
+  const later = [...scripts, ...imported].flatMap((script) => outputs[script]!.imports.filter((each) => each.kind === "dynamic-import" && !imported.has(each.path)))
   expect(later.length).toBeGreaterThan(0)
   for (const each of later) expect(named).not.toContain(each.path.replace(/^\./, ""))
 })
@@ -321,8 +322,8 @@ test("the screens opened rarely or later, and the drawings of every icon but the
 
   // Words of the settings, the command palette, the session details, the
   // right panel, the workspace view, its side chat and storage, the icon
-  // picker, and an icon's name.
-  for (const words of ["Restart to apply", "Command palette", "Choose what to show", "The diff view could not be loaded", "This workspace is not in the list", "Ask evie to change something here", "Backed up privately", "No matching icon", "cooking-pot"]) {
+  // picker, an icon's name, and the viewers of the files evie shows.
+  for (const words of ["Restart to apply", "Command palette", "Choose what to show", "The diff view could not be loaded", "This workspace is not in the list", "Ask evie to change something here", "Backed up privately", "No matching icon", "cooking-pot", "Expanded image preview", "in the browser's PDF view"]) {
     expect({ words, first: firstScript.includes(words), later: laterScripts.includes(words) }).toEqual({ words, first: false, later: true })
   }
 })
