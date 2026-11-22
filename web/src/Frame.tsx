@@ -53,11 +53,15 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
     const where = selected.draft === null ? "with no project" : `in ${project?.name ?? "its project"}`
     return <Placeholder title="New session" text={`A new session ${where} starts when its first message is sent.`} />
   }
+  // A session is opened once the list shows it is one: until the list is
+  // read, nothing is shown, and one the list does not have is not opened.
+  if (!list.listed) return null
   const session = list.sessions.find((each) => each.session === selected.session)
+  if (session === undefined) return <Placeholder title="This session is not in the list" text="Nothing has been said in it yet, or it is no longer there." />
   return (
     <>
-      <header className="flex h-header-height shrink-0 items-center px-7">
-        <h1 className="truncate text-title text-text">{session === undefined ? "" : titleOf(session)}</h1>
+      <header className="flex h-header-height shrink-0 items-center border-b border-line px-7">
+        <h1 className="truncate text-title text-text">{titleOf(session)}</h1>
       </header>
       <Conversation connection={connection} session={selected.session} />
     </>
@@ -65,24 +69,29 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
 }
 
 // Nothing while connected. While the line is not up, one quiet line, as
-// Working is said, with why, until it is back.
+// Working is said, with why, until it is back. The status region is always
+// on the page, and only its words come and go, so that a screen reader,
+// which listens to a region already there, says them.
 function ConnectionLine({ state }: { state: ConnectionState }) {
   const line = connectionLine(state)
-  if (line === undefined) return null
   return (
-    <p role="status" className="flex items-start gap-2 px-7 pb-3 text-caption text-text-muted">
-      <span className="flex h-lh items-center">
-        <Spinner />
-      </span>
-      <span>
-        {line.word}
-        {line.reason !== undefined && (
-          <>
-            {". "}
-            <Words text={line.reason} />
-          </>
-        )}
-      </span>
-    </p>
+    <div role="status">
+      {line !== undefined && (
+        <p className="flex items-start gap-2 px-7 pb-3 text-caption text-text-muted">
+          <span className="flex h-lh items-center">
+            <Spinner />
+          </span>
+          <span>
+            {line.word}
+            {line.reason !== undefined && (
+              <>
+                {". "}
+                <Words text={line.reason} />
+              </>
+            )}
+          </span>
+        </p>
+      )}
+    </div>
   )
 }

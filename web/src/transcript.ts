@@ -17,12 +17,9 @@ export type View = {
 }
 
 // One tool call: its name, a short form of its input, and its result as
-// stored, once it has one. `running` while it is being carried out.
-export type Call = { id: string; name: string; input: string; result?: string; running: boolean }
-
-// What a turn's line of steps opens to: each call, and what evie wrote
-// between them.
-export type Step = { kind: "call"; call: Call } | { kind: "said"; text: string }
+// stored, once it has one, with that result in short. `running` while it is
+// being carried out.
+export type Call = { id: string; name: string; input: string; result?: string; short?: string; running: boolean }
 
 // One thing the page draws. `key` stays the same as more is read, and
 // `turn` is the number of the turn it belongs to, counted in what has been
@@ -30,9 +27,11 @@ export type Step = { kind: "call"; call: Call } | { kind: "said"; text: string }
 export type Item = { key: string; turn: number } & (
   | { kind: "owner"; text: string }
   | { kind: "reply"; text: string; streaming: boolean }
-  // A turn's tool calls, as one line: `running` while the turn is, and
-  // `seconds`, once it has ended, how long it worked.
-  | { kind: "steps"; steps: Step[]; running: boolean; seconds: number }
+  // A run of tool calls with nothing said between them, as one line, and
+  // what that line says: Working while one of them is, how long the turn
+  // worked on the turn's first run once it has ended, or else which tools
+  // the run used.
+  | { kind: "steps"; calls: Call[]; label: string; running: boolean }
   // Something said in quiet words, with `more` to open, in Markdown.
   | { kind: "note"; text: string; more?: string }
   | { kind: "question"; text: string; choices: string[]; waiting: boolean }
@@ -50,62 +49,58 @@ const COMPACTED = "The conversation was getting long, so its earlier part is now
 export function transcriptOf(view: View): Item[] {
   const items: Item[] = []
   let turn = 0
-  // The turn being read: its line of steps, once it has a call, and when it
-  // started, which for a turn begun before the first event read is that event.
-  let steps: Steps | undefined
+  // The turn being read: when it started, if its start has been read; its
+  // first run of calls, which says how long it worked; and whether it has
+  // ended. One begun before the first event read has not, until its end is read.
   let started: number | undefined
-  // Whether the turn being read has ended. One begun before the first event
-  // read has not, until its end is read.
+  let firstRun: Steps | undefined
   let ended = false
   // How long the turn has waited for the owner's answers, which is not
   // counted as work.
   let waited = 0
   const calls = new Map<string, Call>()
   const questions = new Map<string, { item: Asked; time: number }>()
+  const worked = new Map<Steps, number>()
   // When each item happened, to place each job's start and end among them.
   const times = new Map<Item, number>()
   const add = (item: Item, time: number) => {
     items.push(item)
     times.set(item, time)
   }
-  const stepsAt = (key: string, time: number) => {
-    if (steps) return steps
-    steps = { key, turn, kind: "steps", steps: [], running: false, seconds: 0 }
-    add(steps, time)
-    return steps
+  // The run a call joins: the last thing drawn, when it is a run of this
+  // turn's, or a new one.
+  const runAt = (time: number): Steps => {
+    const last = items.at(-1)
+    if (last?.kind === "steps" && last.turn === turn) return last
+    const run: Steps = { key: "", turn, kind: "steps", calls: [], label: "", running: false }
+    firstRun ??= run
+    add(run, time)
+    return run
   }
   for (const event of view.events) {
     const key = `e${event.seq}`
-    started ??= event.time
     if (event.type === "turn_start") {
       turn += 1
-      steps = undefined
       started = event.time
+      firstRun = undefined
       ended = false
       waited = 0
     }
     if (event.type === "user_message") add({ key, turn, kind: "owner", text: event.body.text }, event.time)
     if (event.type === "assistant_message") {
-      const asked = event.body.toolCalls ?? []
-      // A reply that asks for tools is part of the turn's steps; the one
-      // that asks for none is what evie says.
-      if (asked.length === 0 && event.body.text !== "") add({ key, turn, kind: "reply", text: event.body.text, streaming: false }, event.time)
+      if (event.body.text !== "") add({ key, turn, kind: "reply", text: event.body.text, streaming: false }, event.time)
       if (event.body.interrupted && event.body.text !== "") add({ key: `${key}-cut`, turn, kind: "note", text: CUT_SHORT }, event.time)
-      if (asked.length > 0) {
-        const line = stepsAt(`s${event.seq}`, event.time)
-        if (event.body.text !== "") line.steps.push({ kind: "said", text: event.body.text })
-        for (const call of asked) {
-          const made: Call = { id: call.id, name: call.name, input: inputOf(call.arguments), running: false }
-          calls.set(call.id, made)
-          line.steps.push({ kind: "call", call: made })
-        }
+      for (const call of event.body.toolCalls ?? []) {
+        const made: Call = { id: call.id, name: call.name, input: inputOf(call.arguments), running: false }
+        calls.set(call.id, made)
+        runAt(event.time).calls.push(made)
       }
     }
     if (event.type === "tool_result") {
       const call = calls.get(event.body.callId)
-      if (call) call.result = event.body.text
+      if (call) Object.assign(call, { result: event.body.text, short: shortOf(event.body.text) })
       // A call asked for on a page not read yet is known by its result.
-      else stepsAt(`s${event.seq}`, event.time).steps.push({ kind: "call", call: { id: event.body.callId, name: event.body.name, input: "", result: event.body.text, running: false } })
+      else runAt(event.time).calls.push({ id: event.body.callId, name: event.body.name, input: "", result: event.body.text, short: shortOf(event.body.text), running: false })
     }
     if (event.type === "question") {
       const item: Asked = { key, turn, kind: "question", text: event.body.text, choices: event.body.choices, waiting: true }
@@ -113,6 +108,8 @@ export function transcriptOf(view: View): Item[] {
       add(item, event.time)
     }
     // Once answered, the choices go, and the answer is the owner's message.
+    // The time waited is taken off the turn's work only when the question
+    // was read too.
     if (event.type === "answer") {
       const asked = questions.get(event.body.id)
       if (asked) {
@@ -129,7 +126,8 @@ export function transcriptOf(view: View): Item[] {
     if (event.type === "compaction") add({ key, turn, kind: "note", text: COMPACTED, more: event.body.summary }, event.time)
     if (event.type === "turn_end") {
       ended = true
-      if (steps) steps.seconds = secondsBetween(started + waited, event.time)
+      // How long it worked is known only when its start was read.
+      if (firstRun && started !== undefined) worked.set(firstRun, secondsBetween(started + waited, event.time))
       if (event.body.reason === "error") add({ key, turn, kind: "failed", error: event.body.error ?? "The turn failed." }, event.time)
       // A turn stopped as its reply was being written says both at once.
       const last = items.at(-1)
@@ -137,16 +135,25 @@ export function transcriptOf(view: View): Item[] {
       else if (event.body.reason === "cancelled") add({ key, turn, kind: "note", text: "Stopped." }, event.time)
     }
   }
-  // The turn running now is the last one. It works on the first of its
-  // calls with no result, or, with no calls yet and nothing written, on
-  // its first step.
+  // The turn running now is the last one. It works on the first call of its
+  // latest run that has no result; or, with none and nothing being written,
+  // on its next step, said at the end.
   if (view.turnRunning && !ended) {
-    const working = steps ?? (view.replySoFar === "" ? stepsAt("working", Infinity) : undefined)
-    if (working) working.running = true
-    const next = working?.steps.find((step) => step.kind === "call" && step.call.result === undefined)
-    if (next?.kind === "call") next.call.running = true
+    const latest = items.findLast((item): item is Steps => item.kind === "steps" && item.turn === turn)
+    const next = latest?.calls.find((call) => call.result === undefined)
+    if (latest && next) {
+      latest.running = next.running = true
+    } else if (view.replySoFar === "") add({ key: "working", turn, kind: "steps", calls: [], label: "Working", running: true }, Infinity)
   }
   if (view.replySoFar !== "") add({ key: "streaming", turn, kind: "reply", text: view.replySoFar, streaming: true }, Infinity)
+  // Each run is known by its last call, which reading the page before does
+  // not change, and says what it is.
+  for (const item of items) {
+    if (item.kind !== "steps" || item.key === "working") continue
+    item.key = `s-${item.calls.at(-1)!.id}`
+    const seconds = worked.get(item)
+    item.label = item.running ? "Working" : seconds !== undefined ? workedFor(seconds) : `Used ${listed([...new Set(item.calls.map((call) => call.name))])}`
+  }
 
   // Each job's start, and its end once it has ended, where it happened,
   // after whatever came before it. One from before the first event read is
@@ -168,6 +175,16 @@ export function transcriptOf(view: View): Item[] {
     times.set(item, line.time)
   }
   return items
+}
+
+// Words in a list: "a", "a and b", "a, b and c".
+const listed = (words: string[]) => (words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`)
+
+// A call's result in short: its first line with anything on it, cut short.
+const SHORT = 80
+function shortOf(result: string): string {
+  const first = result.split("\n").map((line) => line.trim()).find((line) => line !== "") ?? ""
+  return first.length > SHORT ? `${first.slice(0, SHORT)}…` : first
 }
 
 // How long, in whole seconds, from one time to another, and at least one.

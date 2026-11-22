@@ -1,3 +1,4 @@
+import { decodeHTMLStrict } from "entities/decode"
 import { Lexer, type Token, type Tokens } from "marked"
 import { Fragment, createElement as h, type ReactNode } from "react"
 
@@ -38,7 +39,7 @@ function blocks(tokens: Token[]): ReactNode[] {
         return [h("hr", { key, className: "border-t border-line" })]
       case "list": {
         const list = token as Tokens.List
-        const items = list.items.map((item, at) => h("li", { key: at, className: "pl-1 [&+li]:mt-1" }, blocks(item.tokens)))
+        const items = list.items.map((item, at) => h("li", { key: at, className: "pl-1 [&+li]:mt-1 [&>*+*]:mt-2" }, blocks(item.tokens)))
         if (!list.ordered) return [h("ul", { key, className: "list-disc pl-6" }, items)]
         return [h("ol", { key, className: "list-decimal pl-6", ...(list.start !== "" && list.start !== 1 && { start: list.start }) }, items)]
       }
@@ -121,8 +122,8 @@ function linkTo(href: string, words: ReactNode, key: number): ReactNode {
   return h("a", { key, href, target: "_blank", rel: "noreferrer", className: "underline decoration-text-muted underline-offset-2 hover:decoration-text" }, words)
 }
 
-// Text as the lexer gives it, with the few named characters a reply is
-// likely to write, such as &amp;, made back into the characters they name.
-// The lexer makes numbered ones, such as &#65;, back itself.
-const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " }
-const words = (text: string) => text.replace(/&(amp|lt|gt|quot|apos|nbsp);/g, (_, name: string) => NAMED[name]!)
+// Text as the lexer gives it, with each named character, such as &amp; or
+// &mdash;, made back into the one it names, as a browser would, but as
+// text: what it makes is never read as HTML. The lexer makes numbered ones,
+// such as &#65;, back itself, and leaves code as it was written.
+const words = (text: string) => decodeHTMLStrict(text)

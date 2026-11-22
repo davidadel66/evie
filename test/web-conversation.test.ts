@@ -1,9 +1,13 @@
 import { afterEach, expect, test } from "bun:test"
-import { startServer } from "../src/index.ts"
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { startServer, type Command, type Evie, type EvieOptions } from "../src/index.ts"
+import { openTokens } from "../src/server/tokens.ts"
 import { openConnection } from "../web/src/connection.ts"
 import { openConversation, type Conversation, type ConversationState } from "../web/src/conversation.ts"
 import { transcriptOf } from "../web/src/transcript.ts"
-import { say } from "./support/harness.ts"
+import { say, startEvie, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
 
@@ -24,6 +28,31 @@ async function start(script: ScriptedReply[] = []) {
   const connection = openConnection({ url: served.server.url, token: served.token, firstWait: 10 })
   cleanups.push(() => connection.close())
   return { served, connection }
+}
+
+// Starts the server in front of a core whose commands pass through `refuse`,
+// which can make one fail, as a server with a fault would. The connection
+// is to that server; `restart` stops it and starts it again on its port.
+async function startRefusing(script: ScriptedReply[], refuse: (command: Command) => boolean) {
+  const served = await serveEvie([scriptedProvider(script).plugin])
+  cleanups.push(served.stop)
+  const core = served.run.evie
+  const evie: Evie = {
+    send: (command) => (refuse(command) ? Promise.reject(new Error("The event log could not be read.")) : core.send(command)) as never,
+    subscribe: (listener) => core.subscribe(listener),
+    close: async () => {},
+  }
+  let server = startServer({ evie, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+  cleanups.push(() => server.stop())
+  const connection = openConnection({ url: server.url, token: served.token, firstWait: 10 })
+  cleanups.push(() => connection.close())
+  async function restart() {
+    const port = Number(new URL(server.url).port)
+    await server.stop()
+    while (connection.state().status !== "reconnecting") await Bun.sleep(5)
+    server = startServer({ evie, tokens: served.tokens, host: "127.0.0.1", port })
+  }
+  return { served, connection, restart }
 }
 
 // Opens the conversation of a session on a connection.
@@ -123,4 +152,114 @@ test("a session that cannot be opened, as one that is not there, says why in wor
   const failed = await until(conversation, (state) => state.problem !== undefined)
   expect(failed.problem).toBe('This session could not be opened: There is no session with the id "no-such-session".')
   expect(failed.opened).toBe(false)
+})
+
+// A project that asks whether to trust it each time its plugins are set up,
+// as one with a settings file of its own does until the owner decides.
+const asksTrust: NonNullable<EvieOptions["projectSettings"]> = async (_project, { ask }) => {
+  const answer = await ask({ text: "Trust this project?", choices: ["Yes", "No"] })
+  return { plugins: [], ...(answer !== "Yes" && { forNow: true as const }) }
+}
+
+test("a session not running in the server, whose project asks to be trusted, opened from the page leaves the question waiting and shows it, and so does opening it again after the server is started again", async () => {
+  const home = await mkdtemp(join(tmpdir(), "evie-home-"))
+  const projectFolder = await mkdtemp(join(tmpdir(), "evie-project-"))
+  cleanups.push(() => rm(projectFolder, { recursive: true, force: true }), () => rm(home, { recursive: true, force: true }))
+  const tokens = await openTokens(home)
+  cleanups.push(async () => tokens.close())
+  const made = tokens.add("test device")
+  if (!("secret" in made)) throw new Error(made.refused)
+  // The session is made in one run of evie; the next sets its project up again when it is opened.
+  const first = await startEvie([scriptedProvider([{ text: ["Noted."] }]).plugin], { home, projectFolder, projectSettings: asksTrust })
+  await say(first, "Plan the beds")
+  await first.stop()
+  const serve = async (port = 0) => {
+    const run = await startEvie([scriptedProvider([]).plugin], { home, projectFolder, projectSettings: asksTrust })
+    const server = startServer({ evie: run.evie, tokens, host: "127.0.0.1", port })
+    return { run, server, async stop() { await server.stop(); await run.stop() } }
+  }
+  let served = await serve()
+  cleanups.push(() => served.stop())
+  const connection = openConnection({ url: served.server.url, token: made.secret, firstWait: 10 })
+  cleanups.push(() => connection.close())
+  const said = (state: ConversationState) => transcriptOf(state).map((item) => (item.kind === "question" ? `${item.text}${item.waiting ? " (waiting)" : ""}` : "text" in item ? item.text : item.kind))
+  const waiting = (state: ConversationState) => transcriptOf(state).some((item) => item.kind === "question" && item.waiting)
+  const answerIt = (run: typeof served.run) => {
+    const question = stored(run.events).findLast((event) => event.type === "question" && event.session === first.session)!
+    return run.evie.send({ type: "answer_question", session: first.session, id: question.type === "question" ? question.body.id : "", choice: "Yes" })
+  }
+
+  const conversation = open(connection, first.session)
+  const asking = await until(conversation, (state) => state.events.some((event) => event.type === "question"))
+  await Bun.sleep(100)
+  expect(conversation.state().opened).toBe(false)
+  expect(waiting(conversation.state())).toBe(true)
+  expect(asking.problem).toBeUndefined()
+
+  await answerIt(served.run)
+  const opened = await until(conversation, (state) => state.opened)
+  // The first run's own opening, by a client that shows no questions, was refused.
+  expect(said(opened)).toEqual(["Trust this project?", "Not answered.", "Plan the beds", "Noted.", "Trust this project?", "Yes"])
+
+  const port = Number(new URL(served.server.url).port)
+  await served.stop()
+  served = await serve(port)
+  await until(conversation, waiting)
+  await Bun.sleep(100)
+  expect(waiting(conversation.state())).toBe(true)
+  await answerIt(served.run)
+  const again = await until(conversation, (state) => !waiting(state) && state.events.filter((event) => event.type === "answer").length === 3)
+  expect(said(again)).toEqual(["Trust this project?", "Not answered.", "Plan the beds", "Noted.", "Trust this project?", "Yes", "Trust this project?", "Yes"])
+})
+
+test("when its latest page cannot be read, the conversation says why, is not taken for empty, and reads it again when the line comes back, or when asked to", async () => {
+  let failing = true
+  const { served, connection, restart } = await startRefusing([{ text: ["Noted."] }], (command) => command.type === "read_history" && failing)
+  await say(served.run, "Plan the beds")
+
+  const conversation = open(connection, served.run.session)
+  const failed = await until(conversation, (state) => state.problem !== undefined)
+  expect(failed.problem).toBe("The conversation could not be read: The event log could not be read.")
+  expect(failed.opened).toBe(false)
+
+  failing = false
+  await restart()
+  const read = await until(conversation, (state) => state.opened)
+  expect(read.problem).toBeUndefined()
+  expect(transcriptOf(read).map((item) => ("text" in item ? item.text : item.kind))).toEqual(["Plan the beds", "Noted."])
+
+  // Asked to, as by a Try again button.
+  failing = true
+  const second = open(connection, served.run.session)
+  await until(second, (state) => state.problem !== undefined)
+  failing = false
+  second.tryAgain()
+  expect((await until(second, (state) => state.opened)).problem).toBeUndefined()
+})
+
+test("when the page before cannot be read, it is not read again by itself, however often it is asked for, until the owner says to try again", async () => {
+  // Only the page before the latest one fails, until it is allowed.
+  let allowed = false
+  const { served, connection } = await startRefusing(replies(14), (command) => command.type === "read_history" && command.before !== undefined && command.before < 50 && !allowed)
+  for (let at = 1; at <= 14; at++) await say(served.run, `Message ${at}`)
+  let asked = 0
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+
+  conversation.readEarlier()
+  const failed = await until(conversation, (state) => state.problem !== undefined && !state.readingEarlier)
+  expect(failed.problem).toBe("The earlier conversation could not be read: The event log could not be read.")
+  for (let at = 0; at < 20; at++) {
+    conversation.readEarlier()
+    if (conversation.state().readingEarlier) asked += 1
+    await Bun.sleep(1)
+  }
+  expect(asked).toBe(0)
+  expect(conversation.state().earlier).toBe(true)
+
+  allowed = true
+  conversation.tryAgain()
+  const whole = await until(conversation, (state) => !state.earlier)
+  expect(whole.problem).toBeUndefined()
+  expect(whole.events.length).toBe(56)
 })

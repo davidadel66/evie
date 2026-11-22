@@ -42,3 +42,9 @@ test("only a web or mail address is a link; an image is never loaded, only linke
   expect(page("![a chart](https://example.com/c.png) ![bad](javascript:x)")).toBe('<p><a href="https://example.com/c.png" target="_blank" rel="noreferrer">a chart</a> bad</p>')
   expect(page("Tom &amp; Jerry &lt;3")).toBe("<p>Tom &amp; Jerry &lt;3</p>")
 })
+
+test("every named character is the character it names, outside code, and one that names nothing stays as written", () => {
+  expect(page("&copy; 2026 &mdash; &hellip; &eacute;t&eacute; &rarr; &nbsp;&amp;&lt;b&gt; &notathing; `&copy;`")).toBe(
+    "<p>© 2026 — … été →  &amp;&lt;b&gt; &amp;notathing; <code>&amp;copy;</code></p>",
+  )
+})

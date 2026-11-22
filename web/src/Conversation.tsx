@@ -5,7 +5,7 @@ import { openConversation, type Conversation as Opened } from "./conversation.ts
 import { CaretRight } from "./icons.tsx"
 import { renderMarkdown } from "./markdown.ts"
 import { Spinner } from "./Spinner.tsx"
-import { transcriptOf, workedFor, type Call, type Item, type Step } from "./transcript.ts"
+import { transcriptOf, type Call, type Item } from "./transcript.ts"
 
 // The conversation of the session selected, in the middle column: its
 // latest page, with earlier pages read as the owner scrolls up to them,
@@ -41,6 +41,17 @@ function Reading({ conversation }: { conversation: Opened }) {
   // something is added above them, such as the page before.
   const stuck = useRef(true)
   const [scrolledUp, setScrolledUp] = useState(false)
+  // What the owner has opened: a line of steps, by its calls, so that it
+  // stays open as the page before is read and as calls join it, and a
+  // call's result, by the call.
+  const [shown, setShown] = useState<ReadonlySet<string>>(new Set())
+  const show = (ids: string[], open: boolean) =>
+    setShown((was) => {
+      const now = new Set(was)
+      for (const id of ids) if (open) now.add(id)
+      else now.delete(id)
+      return now
+    })
   const drawn = useRef<{ key: string; top: number }[]>([])
 
   // Within half a screen of the top, the page before is read.
@@ -79,7 +90,6 @@ function Reading({ conversation }: { conversation: Opened }) {
   })
   // What grows by itself, as a reply rewrapping when the window is resized,
   // or a line of steps opened at the bottom.
-  const failed = !state.opened && state.problem !== undefined
   useEffect(() => {
     const box = scroller.current
     if (!box || !content.current) return
@@ -89,9 +99,8 @@ function Reading({ conversation }: { conversation: Opened }) {
     watch.observe(content.current)
     watch.observe(box)
     return () => watch.disconnect()
-  }, [failed])
+  }, [])
 
-  if (failed) return <Placeholder title="Could not open this session" text={state.problem!} />
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       {/* The browser's own anchoring is off, since this keeps the owner's place itself. */}
@@ -99,12 +108,20 @@ function Reading({ conversation }: { conversation: Opened }) {
         <div ref={content} className="px-7 py-8">
           <div className="mx-auto flex max-w-conversation flex-col">
             {state.readingEarlier && <Working words="Reading the earlier conversation" />}
-            {state.problem !== undefined && <p className="mb-4 text-body text-text-muted">{state.problem}</p>}
-            {!state.opened && <Working words="Opening the session" />}
-            {state.opened && items.length === 0 && <p className="text-body text-text-muted">Nothing has been said in this session yet.</p>}
+            {/* What failed is tried again only when asked, or when the line comes back. */}
+            {state.problem !== undefined && (
+              <div className="mb-4 flex flex-col items-start">
+                <p className="text-body break-words text-text-muted">{state.problem}</p>
+                <Button variant="quiet" onClick={() => conversation.tryAgain()} className="-ml-3">
+                  Try again
+                </Button>
+              </div>
+            )}
+            {!state.opened && state.problem === undefined && <Working words="Opening the session" />}
+            {state.opened && state.problem === undefined && items.length === 0 && <p className="text-body text-text-muted">Nothing has been said in this session yet.</p>}
             {items.map((item, at) => (
               <div key={item.key} data-item={item.key} className={`flex flex-col ${at === 0 ? "" : item.turn !== items[at - 1]!.turn ? "mt-6" : "mt-4"}`}>
-                <Drawn item={item} />
+                <Drawn item={item} shown={shown} show={show} />
               </div>
             ))}
           </div>
@@ -132,14 +149,17 @@ export function Placeholder({ title, text }: { title: string; text: string }) {
   )
 }
 
-function Drawn({ item }: { item: Item }) {
+// Which lines and results the owner has opened, and how to open or close them.
+type Shown = { shown: ReadonlySet<string>; show: (ids: string[], open: boolean) => void }
+
+function Drawn({ item, shown, show }: { item: Item } & Shown) {
   switch (item.kind) {
     case "owner":
       return <p className="max-w-4/5 self-end rounded-lg bg-surface-raised px-4 py-2 text-body break-words whitespace-pre-wrap text-text">{item.text}</p>
     case "reply":
       return <Markdown text={item.text} className="text-text" />
     case "steps":
-      return <StepsLine steps={item.steps} running={item.running} seconds={item.seconds} />
+      return <StepsLine calls={item.calls} label={item.label} running={item.running} shown={shown} show={show} />
     case "note":
       return <Note text={item.text} {...(item.more !== undefined && { more: item.more })} />
     case "question":
@@ -163,7 +183,7 @@ function Drawn({ item }: { item: Item }) {
       )
     case "failed":
       return (
-        <div className="text-body">
+        <div className="text-caption">
           <p className="text-status-failed">Failed</p>
           <p className="break-words text-text-muted">{item.error}</p>
         </div>
@@ -194,49 +214,48 @@ function Caret({ open }: { open: boolean }) {
   return <CaretRight className={`size-icon-sm shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
 }
 
-// A turn's tool calls as one quiet line, which opens to list each call.
-function StepsLine({ steps, running, seconds }: { steps: Step[]; running: boolean; seconds: number }) {
-  const [open, setOpen] = useState(false)
-  if (steps.length === 0) return <Working words="Working" />
+// A run of tool calls as one quiet line, which opens to list each call.
+function StepsLine({ calls, label, running, shown, show }: { calls: Call[]; label: string; running: boolean } & Shown) {
+  if (calls.length === 0) return <Working words={label} />
+  const ids = calls.map((call) => `line:${call.id}`)
+  const open = ids.some((id) => shown.has(id))
   return (
     <div className="flex flex-col">
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className={`flex min-h-control items-center gap-2 self-start text-body hover:text-text ${running ? "text-status-working" : "text-text-muted"}`}>
+      <button type="button" aria-expanded={open} onClick={() => show(ids, !open)} className={`flex min-h-control items-center gap-2 self-start text-body hover:text-text ${running ? "text-status-working" : "text-text-muted"}`}>
         {running && <Spinner />}
-        {running ? "Working" : workedFor(seconds)}
+        {label}
         <Caret open={open} />
       </button>
       {open && (
         <ol className="flex flex-col border-l border-line pl-3">
-          {steps.map((step, at) =>
-            step.kind === "call" ? (
-              <CallRow key={step.call.id} call={step.call} />
-            ) : (
-              <li key={at} className="py-2">
-                <Markdown text={step.text} className="text-text-muted" />
-              </li>
-            ),
-          )}
+          {calls.map((call) => (
+            <CallRow key={call.id} call={call} open={shown.has(`call:${call.id}`)} toggle={() => show([`call:${call.id}`], !shown.has(`call:${call.id}`))} />
+          ))}
         </ol>
       )}
     </div>
   )
 }
 
-// One tool call: its name and a short form of its input, which opens to
-// its result as stored.
-function CallRow({ call }: { call: Call }) {
-  const [open, setOpen] = useState(false)
+// One tool call: its name, a short form of its input, and its result in
+// short, which opens to its result as stored.
+function CallRow({ call, open, toggle }: { call: Call; open: boolean; toggle: () => void }) {
   return (
     <li className="flex min-w-0 flex-col">
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex min-h-control w-full min-w-0 items-center gap-3 text-left font-mono text-code text-text hover:text-text-muted">
-        <span className="min-w-call-name shrink-0 text-text-muted">{call.name}</span>
-        <span className="min-w-0 truncate">{call.input}</span>
-        {call.running && (
-          <span className="ml-auto flex shrink-0 items-center gap-2 font-sans text-caption text-status-working">
-            <Spinner />
-            Working
+      <button type="button" aria-expanded={open} onClick={toggle} className="flex min-h-control w-full min-w-0 items-center py-1 text-left">
+        <span className="flex w-full min-w-0 items-start gap-3">
+          <span className="min-w-call-name shrink-0 font-mono text-code text-text-muted">{call.name}</span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate font-mono text-code text-text">{call.input}</span>
+            {call.short !== undefined && call.short !== "" && <span className="truncate text-caption text-text-muted">{call.short}</span>}
           </span>
-        )}
+          {call.running && (
+            <span className="flex shrink-0 items-center gap-2 text-caption text-status-working">
+              <Spinner />
+              Working
+            </span>
+          )}
+        </span>
       </button>
       {open &&
         (call.result !== undefined ? (
