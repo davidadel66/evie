@@ -6,6 +6,10 @@ import type { Chunk, Key, Message, Plugin, Provider, Request, Usage } from "../c
 // The wire format is OpenRouter's chat completions API, checked against its
 // documentation on 2026-11-17:
 // https://openrouter.ai/docs/api-reference/overview
+// Images go in the owner's message as image parts after its text, each a
+// base64 data address, as that page and the guide to images say, checked
+// on 2026-11-22:
+// https://openrouter.ai/docs/guides/overview/multimodal/image-understanding
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 const MODELS = "https://openrouter.ai/api/v1/models"
@@ -62,11 +66,13 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
   const send = options.fetch ?? globalThis.fetch
   const sleep = options.sleep ?? wait
   const now = options.now ?? Date.now
-  // OpenRouter's list of models, with what each can read, fetched and kept
-  // for an hour, so that new models appear while the server stays up. A
-  // fetch that failed, or a reply that is not a list, as an error reply, is
-  // not kept, so the next call tries again.
-  type Listed = { id: string; name: string; limit?: number }
+  // OpenRouter's list of models, with what each can read, and whether it
+  // takes images, as the input it takes says, fetched and kept for an hour,
+  // so that new models appear while the server stays up. A fetch that
+  // failed, or a reply that is not a list, as an error reply, is not kept,
+  // so the next call tries again. The list's fields are as documented on
+  // 2026-11-22: https://openrouter.ai/docs/guides/overview/models
+  type Listed = { id: string; name: string; limit?: number; images?: true }
   let listing: { list: Promise<Listed[] | undefined>; at: number } | undefined
   async function list(): Promise<Listed[] | undefined> {
     if (listing === undefined || now() - listing.at >= LIST_KEPT) listing = { list: fetchList(), at: now() }
@@ -81,9 +87,12 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
       if (!response.ok) return undefined
       const body = (await response.json()) as { data?: unknown }
       if (!Array.isArray(body.data)) return undefined
-      return (body.data as { id?: unknown; name?: unknown; context_length?: unknown }[]).flatMap(({ id, name, context_length: limit }) =>
-        typeof id === "string" && id !== "" ? [{ id, name: typeof name === "string" && name !== "" ? name : id, ...(typeof limit === "number" && limit > 0 && { limit }) }] : [],
-      )
+      type Entry = { id?: unknown; name?: unknown; context_length?: unknown; architecture?: { input_modalities?: unknown } }
+      return (body.data as Entry[]).flatMap(({ id, name, context_length: limit, architecture }) => {
+        if (typeof id !== "string" || id === "") return []
+        const images = Array.isArray(architecture?.input_modalities) && architecture.input_modalities.includes("image")
+        return [{ id, name: typeof name === "string" && name !== "" ? name : id, ...(typeof limit === "number" && limit > 0 && { limit }), ...(images && { images: true as const }) }]
+      })
     } catch {
       return undefined
     }
@@ -95,6 +104,11 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
     // If the list cannot be fetched, the limit is simply not known.
     async contextLimit(model) {
       return (await list())?.find((entry) => entry.id === model)?.limit
+    },
+
+    // If the list cannot be fetched, the model is told where each image is.
+    async takesImages(model) {
+      return (await list())?.find((entry) => entry.id === model)?.images === true
     },
 
     async models() {
@@ -190,7 +204,14 @@ function toBody(request: Request, limit: number) {
 function toWireMessage(message: Message) {
   switch (message.role) {
     case "user":
-      return { role: "user", content: message.text }
+      if (!message.images || message.images.length === 0) return { role: "user", content: message.text }
+      return {
+        role: "user",
+        content: [
+          { type: "text", text: message.text },
+          ...message.images.map((image) => ({ type: "image_url", image_url: { url: `data:${image.type};base64,${image.data}` } })),
+        ],
+      }
     case "assistant":
       if (!message.toolCalls) return { role: "assistant", content: message.text }
       return {

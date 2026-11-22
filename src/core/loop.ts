@@ -16,7 +16,7 @@ import {
 import { ONLY_THE_CORE_WRITES, buildRequest } from "./request-builder.ts"
 import { CancelledBeforeStart, runToolCall } from "./tools.ts"
 import type { HookRunner } from "./host.ts"
-import type { EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, ToolContext, Usage } from "./types.ts"
+import type { Attachment, EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, ToolContext, Usage } from "./types.ts"
 
 export type LoopOptions = {
   session: string
@@ -48,6 +48,9 @@ export type LoopOptions = {
   children: ToolContext["children"]
   // Names the session, as hooks are given it.
   name: HookContext["name"]
+  // An attached file's bytes, in base64, when it is an image a model can
+  // be shown, or nothing.
+  image?(attachment: Attachment): Promise<string | undefined>
   // The session that started this one as a subagent, when one did.
   parent?: string
   // For a subagent: the named agent it is, and whether it only reads.
@@ -146,6 +149,27 @@ export function createLoop(options: LoopOptions): Loop {
   // There is work for a turn: a message from the owner, or a note the model is to be woken for.
   const turnWanted = () => inbox.waiting(session) || waitingNotes.some((note) => note.wake)
 
+  // ---- Images ---------------------------------------------------------------------
+
+  // The images attached in a conversation that its model is shown, by their
+  // path: none, unless its provider says the model takes images, which is
+  // asked only when there is an image to show. Read again for each request,
+  // so that a model switched to that takes none is given their paths.
+  async function imagesIn(events: readonly StoredEvent[], modelName: string, signal: AbortSignal): Promise<Map<string, string>> {
+    const shown = new Map<string, string>()
+    const attached = conversationOf(events).kept.flatMap((event) => (event.type === "user_message" ? (event.body.attachments ?? []) : []))
+    const pictures = attached.filter((each) => each.type.startsWith("image/"))
+    if (pictures.length === 0 || !options.image || !provider.takesImages) return shown
+    const cancelled = new Promise<false>((resolve) => signal.addEventListener("abort", () => resolve(false), { once: true }))
+    const takes = await Promise.race([provider.takesImages(modelName).catch(() => false), cancelled])
+    if (!takes) return shown
+    for (const each of pictures) {
+      const data = await options.image(each)
+      if (data !== undefined) shown.set(each.path, data)
+    }
+    return shown
+  }
+
   // ---- Compaction ---------------------------------------------------------------
 
   const ceiling = options.compaction?.ceiling ?? DEFAULT_CEILING
@@ -182,7 +206,7 @@ export function createLoop(options: LoopOptions): Loop {
     // was written later than some of what it sits in front of, so it is
     // placed by hand, not found by its position in the log.
     const old = [...(earlier ? [earlier] : []), ...kept.filter((event) => event.seq < keepFrom)]
-    const base = await hooks.beforeRequest(buildRequest(modelName, old, host.tools.list(), maxTokens), {
+    const base = await hooks.beforeRequest(buildRequest(modelName, old, host.tools.list(), maxTokens, await imagesIn(old, modelName, signal)), {
       session,
       project,
       events,
@@ -308,7 +332,8 @@ export function createLoop(options: LoopOptions): Loop {
         }
 
         const events = log.events(session)
-        const request = await hooks.beforeRequest(buildRequest(currentModel(events, model), events, host.tools.list(), maxTokens), context())
+        const modelNow = currentModel(events, model)
+        const request = await hooks.beforeRequest(buildRequest(modelNow, events, host.tools.list(), maxTokens, await imagesIn(events, modelNow, signal)), context())
         // Only the tools the hooks left in the request can be called in this step.
         const offered = host.tools.list().filter((tool) => request.tools.some((left) => left.name === tool.name))
         // A message that arrived while the request was being put together

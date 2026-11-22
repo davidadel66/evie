@@ -204,13 +204,16 @@ export function followLinks(absolute: string): string {
   }
 }
 
-// True for a path inside the folder where one session's output is saved:
-// tool output that was too long to show, and the output of its background
-// jobs. Links are followed, so nothing outside it can be reached through it.
+// True for a path inside a folder where one session's own files are kept
+// in the data folder: tool output that was too long to show, and the output
+// of its background jobs; and the files the owner attached to its messages
+// with no project to keep them in. Links are followed, so nothing outside
+// them can be reached through them.
 export function isSavedOutput(data: string, session: string, path: string): boolean {
-  const saved = followLinks(resolve(data, "tool-output", session))
-  const inside = relative(saved, followLinks(resolve(path)))
-  return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
+  return ["tool-output", "attachments"].some((kind) => {
+    const inside = relative(followLinks(resolve(data, kind, session)), followLinks(resolve(path)))
+    return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
+  })
 }
 
 // True for a path inside the owner's agents or skills in the data folder.

@@ -2,8 +2,9 @@ import { afterEach, expect, setSystemTime, test } from "bun:test"
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ATTACHMENT_LIMIT } from "../src/core/types.ts"
-import { startEvie, stored, type Run } from "./support/harness.ts"
+import { ATTACHMENT_LIMIT, type Attachment } from "../src/core/types.ts"
+import { files, permissions } from "../src/index.ts"
+import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie, type Served } from "./support/served.ts"
 
@@ -18,8 +19,8 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
-async function start(script: ScriptedReply[] = [{ text: ["Seen."] }]): Promise<Run & { model: ReturnType<typeof scriptedProvider> }> {
-  const model = scriptedProvider(script)
+async function start(script: ScriptedReply[] = [{ text: ["Seen."] }], images?: (model: string) => boolean): Promise<Run & { model: ReturnType<typeof scriptedProvider> }> {
+  const model = scriptedProvider(script, { ...(images && { images }) })
   const run = await startEvie([model.plugin])
   cleanups.push(run.stop)
   return { ...run, model }
@@ -87,6 +88,70 @@ test("nothing is written through a link: an attachments folder that leads elsewh
   const kept = await run.evie.attachments.save(run.session, "plan.txt", "text/plain", bytes("x"))
   expect(kept.path).toBe(join(await realpath(run.home), "attachments", run.session, "2026-11-22", "plan.txt"))
   expect(await readdir(outside)).toEqual([])
+})
+
+// ---- What the model is shown ----------------------------------------------------------
+
+// Four bytes standing for a picture; what is in them does not matter here.
+const PICTURE = new Uint8Array([137, 80, 78, 71])
+
+test("an image goes to a model that takes images as an image in the owner's message, and any other file by its path, for the model to read", async () => {
+  const run = await start([{ text: ["A seedling."] }], (model) => model === "test/model")
+  const photo = await run.evie.attachments.save(run.session, "photo.png", "image/png", PICTURE)
+  const plan = await run.evie.attachments.save(run.session, "plan.txt", "text/plain", bytes("Beds.\n"))
+
+  await say(run, "What is this?", run.session, [photo, plan])
+
+  expect(run.model.requests[0]?.messages).toEqual([
+    {
+      role: "user",
+      text:
+        "What is this?\n\n" +
+        `[Attached: photo.png (image/png, 4 bytes), kept at ${photo.path}. It is shown below.]\n` +
+        `[Attached: plan.txt (text/plain, 6 bytes), kept at ${plan.path}. Read it with your tools to see what it holds.]`,
+      images: [{ type: "image/png", data: Buffer.from(PICTURE).toString("base64") }],
+    },
+  ])
+})
+
+test("a model that does not take images is given an image's path instead, and so are the images before it once the session switches to one", async () => {
+  const run = await start([{ text: ["A seedling."] }, { text: ["Still a seedling."] }], (model) => model === "test/model")
+  const photo = await run.evie.attachments.save(run.session, "photo.png", "image/png", PICTURE)
+  await say(run, "", run.session, [photo])
+  await run.evie.send({ type: "set_model", session: run.session, model: "test/words-only" })
+
+  await say(run, "And now?")
+
+  const notShown = `[Attached: photo.png (image/png, 4 bytes), kept at ${photo.path}. It cannot be shown to you as an image here, so only its path is given.]`
+  expect(run.model.requests[0]?.messages[0]).toEqual({ role: "user", text: `[Attached: photo.png (image/png, 4 bytes), kept at ${photo.path}. It is shown below.]`, images: [{ type: "image/png", data: "iVBORw==" }] })
+  expect(run.model.requests[1]?.messages).toEqual([
+    { role: "user", text: notShown },
+    { role: "assistant", text: "A seedling." },
+    { role: "user", text: "And now?" },
+  ])
+})
+
+test("with no project, the model may read the files attached in its own session, and not another session's; deleting the session deletes them", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  const script: ScriptedReply[] = []
+  const run = await startEvie([scriptedProvider(script).plugin, files(), permissions({ mode: "auto", dataFolder: home })], { home })
+  cleanups.push(run.stop)
+  const { session } = await run.evie.send({ type: "open_session" })
+  const other = (await run.evie.send({ type: "open_session" })).session
+  const plan = await run.evie.attachments.save(session, "plan.txt", "text/plain", bytes("Beds.\n"))
+  const read = async (from: string) => {
+    script.push({ text: [], calls: [{ name: "read", input: { path: plan.path } }] }, { text: ["Read."] })
+    await say(run, "Read it", from)
+    return stored(run.events).findLast((event) => event.type === "tool_result")!.body.text
+  }
+
+  expect(await read(session)).toBe("1: Beds.")
+  expect(await read(other)).toStartWith("Blocked by the guard:")
+
+  await run.evie.send({ type: "delete_session", session })
+  expect(await Bun.file(plan.path).exists()).toBe(false)
+  expect(await readdir(join(home, "attachments"))).toEqual([])
 })
 
 // ---- The upload route ----------------------------------------------------------------
@@ -173,4 +238,29 @@ test("an upload is refused when its name would leave the attachments folder, or 
   expect(await Bun.file(join(projectFolder, ".evie", "evie.json")).exists()).toBe(false)
   expect(await Bun.file(join(projectFolder, ".evie", "attachments", "2026-11-22", "huge.bin")).exists()).toBe(false)
   expect((await upload(served, "no-such-session", "plan.txt", "x")).status).toBe(400)
+})
+
+test("an image attached to a message is given back to a signed-in client to show, and nothing else is", async () => {
+  const served = await serve()
+  const { session } = served.run
+  const photo = (await (await upload(served, session, "photo.png", PICTURE, { type: "image/png" })).json()) as Attachment
+  const page = (await (await upload(served, session, "page.html", "<script>alert(1)</script>", { type: "text/html" })).json()) as Attachment
+  const unsent = (await (await upload(served, session, "later.png", PICTURE, { type: "image/png" })).json()) as Attachment
+  await served.run.evie.send({ type: "send_message", session, text: "", attachments: [photo, page] })
+  await Bun.sleep(0)
+  const fetchBack = (path: string, token: string | null = served.token) =>
+    fetch(`${served.server.url}/attachments?${new URLSearchParams({ session, path })}`, { headers: token === null ? {} : { Authorization: `Bearer ${token}` } })
+
+  const shown = await fetchBack(photo.path)
+  expect(shown.status).toBe(200)
+  expect(shown.headers.get("content-type")).toBe("image/png")
+  expect(shown.headers.get("x-content-type-options")).toBe("nosniff")
+  expect([...new Uint8Array(await shown.arrayBuffer())]).toEqual([...PICTURE])
+
+  expect((await fetchBack(photo.path, null)).status).toBe(401)
+  // Only an image is given back, so that a page attached cannot run as evie's own.
+  expect((await fetchBack(page.path)).status).toBe(404)
+  // A file kept but not on any message, and one never kept, are not either.
+  expect((await fetchBack(unsent.path)).status).toBe(404)
+  expect((await fetchBack(join(served.run.home, "evie.db"))).status).toBe(404)
 })

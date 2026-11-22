@@ -109,7 +109,10 @@ const REMEMBERED = 200
 // Commands that only read, whose replies can be large, such as a file read
 // from a workspace's Storage: they are not remembered, so they take none of
 // the places. Carried out again, they change nothing.
-const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage"])
+const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage", "list_files"])
+// The images an attachment is given back as, to show: those a browser
+// draws and never runs.
+const SHOWN = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 // How long the code in a sign-in link works: long enough for the browser to
 // open, short enough that a link left in a browser's history is of no use.
 const SIGN_IN_CODE_LASTS = 5 * 60_000
@@ -346,6 +349,23 @@ export function startServer(options: ServerOptions): EvieServer {
     }
   }
 
+  // An image attached to one of a session's messages, given back to a
+  // signed-in client to show. Only an image of a kind a browser draws, and
+  // never runs, is given back, and the browser is told not to take it for
+  // anything else, so that a page attached cannot run as evie's own.
+  async function attachment(request: Request, port: number): Promise<Response> {
+    const admitted = admit(request, port)
+    if (admitted instanceof Response) return admitted
+    const asked = new URL(request.url).searchParams
+    const session = asked.get("session")
+    const path = asked.get("path")
+    const found = options.attachments && session !== null && path !== null ? await options.attachments.open(session, path) : undefined
+    if (found === undefined || !SHOWN.includes(found.type)) return new Response("There is no image attached there to show.", { status: 404 })
+    return new Response(Bun.file(found.file), {
+      headers: { "Content-Type": found.type, "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox", "Cache-Control": "private, max-age=86400" },
+    })
+  }
+
   const server = Bun.serve<Connection>({
     hostname: options.host,
     port: options.port,
@@ -374,6 +394,7 @@ export function startServer(options: ServerOptions): EvieServer {
         return admitted instanceof Response ? admitted : new Response("This token is accepted.")
       }
       if (path === PATHS.attachments && request.method === "POST") return attach(request, server.port!)
+      if (path === PATHS.attachments && request.method === "GET") return attachment(request, server.port!)
       if (path === PATHS.login && request.method === "POST") return login(request, server.port!)
       if (path === PATHS.signInLink && request.method === "POST") return signInLink(request, server.port!)
       return new Response("Not found.", { status: 404 })

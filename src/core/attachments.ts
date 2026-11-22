@@ -1,7 +1,7 @@
 import { lstatSync, realpathSync } from "node:fs"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { dirname, extname, isAbsolute, join, relative, sep } from "node:path"
-import { ATTACHMENT_LIMIT, type Attachment, type Attachments, type Project } from "./types.ts"
+import { ATTACHMENT_LIMIT, type Attachment, type Attachments, type Project, type StoredEvent } from "./types.ts"
 
 // The files the owner attaches to messages. In a project they are kept in
 // its `.evie/attachments/` folder, under the day they came, such as
@@ -20,9 +20,20 @@ import { ATTACHMENT_LIMIT, type Attachment, type Attachments, type Project } fro
 // What the core does with them besides: `check` takes the attachments a
 // message names, as a client sent them, and gives back what the message
 // records of them, refusing any that is not a file kept for the session.
+// `image` gives an attachment's bytes, in base64, when it is an image a
+// model can be shown, or nothing.
 export type AttachmentStore = Attachments & {
   check(session: string, given: unknown): Attachment[] | undefined
+  image(attachment: Attachment): Promise<string | undefined>
 }
+
+// The images a model can be shown, by their type, as OpenRouter lists them:
+// https://openrouter.ai/docs/guides/overview/multimodal/image-understanding
+export const IMAGE_TYPES: readonly string[] = ["image/png", "image/jpeg", "image/webp", "image/gif"]
+// The largest image a model is shown as one: one whose bytes in base64 are
+// at most 5 MB, the most some of the models take. A larger one is given by
+// its path, so that it cannot make every request of the session fail.
+export const IMAGE_LIMIT = (5 * 1024 * 1024 * 3) / 4
 
 export function createAttachments(options: {
   // The data folder.
@@ -30,6 +41,8 @@ export function createAttachments(options: {
   // The project a session is in now, null for none, or undefined for a
   // session there is not.
   projectOf(session: string): Project | null | undefined
+  // A session's events, in which its messages record what was attached.
+  events(session: string): readonly StoredEvent[]
 }): AttachmentStore {
   // The folder a session's files are kept in now.
   function rootFor(session: string): string {
@@ -63,8 +76,18 @@ export function createAttachments(options: {
         }
       }
     },
-    async open() {
-      return undefined
+    async open(session, path) {
+      if (options.projectOf(session) === undefined) return undefined
+      const recorded = options
+        .events(session)
+        .flatMap((event) => (event.type === "user_message" ? (event.body.attachments ?? []) : []))
+        .find((each) => each.path === path)
+      return recorded !== undefined && isKept(path, recorded.size) ? { file: path, type: recorded.type } : undefined
+    },
+    async image(attachment) {
+      if (!IMAGE_TYPES.includes(attachment.type) || attachment.size > IMAGE_LIMIT || !isKept(attachment.path, attachment.size)) return undefined
+      const bytes = await readFile(attachment.path).catch(() => undefined)
+      return bytes !== undefined && bytes.byteLength <= IMAGE_LIMIT ? bytes.toString("base64") : undefined
     },
     // Read at once, not in steps, so that messages are taken in the order
     // they were sent.

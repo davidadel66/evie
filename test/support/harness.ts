@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createEvie, type Evie, type EvieEvent, type EvieOptions, type Plugin, type StoredEvent } from "../../src/index.ts"
+import { createEvie, type Attachment, type Evie, type EvieEvent, type EvieOptions, type Plugin, type StoredEvent } from "../../src/index.ts"
 
 export type Run = Awaited<ReturnType<typeof startEvie>>
 
@@ -65,8 +65,9 @@ export async function startEvie(
   }
 }
 
-// Sends a message to a session and waits until the turn it starts has ended.
-export async function say(run: { evie: Evie; session: string }, text: string, session = run.session) {
+// Sends a message to a session, with any files attached to it, and waits
+// until the turn it starts has ended.
+export async function say(run: { evie: Evie; session: string }, text: string, session = run.session, attachments?: Attachment[]) {
   const ended = new Promise<void>((resolve) => {
     const stop = run.evie.subscribe((event) => {
       if (event.type === "turn_end" && event.session === session) {
@@ -75,7 +76,7 @@ export async function say(run: { evie: Evie; session: string }, text: string, se
       }
     })
   })
-  await run.evie.send({ type: "send_message", session, text })
+  await run.evie.send({ type: "send_message", session, text, ...(attachments && { attachments }) })
   await ended
 }
 

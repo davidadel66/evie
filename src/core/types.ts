@@ -137,10 +137,14 @@ export type DeletedEvent = { type: "deleted"; session: string }
 // model wrote it: JSON text that has not been checked yet.
 export type ToolCall = { id: string; name: string; arguments: string }
 
+// `images` go with an owner's message to a model that takes images, after
+// its text, each as its type, such as "image/png", and its bytes in base64.
 export type Message =
-  | { role: "user"; text: string }
+  | { role: "user"; text: string; images?: Image[] }
   | { role: "assistant"; text: string; toolCalls?: ToolCall[] }
   | { role: "tool"; callId: string; text: string }
+
+export type Image = { type: string; data: string }
 
 export type ToolDefinition = {
   name: string
@@ -191,6 +195,9 @@ export type Provider = {
   // The models the provider offers, each by the id a request names it by
   // and the name it is shown by. Fails, saying why, when they cannot be listed.
   models?(): Promise<{ id: string; name: string }[]>
+  // Whether a model can be sent images. Without it, or when it says no or
+  // fails, the model is told where each image is kept instead.
+  takesImages?(model: string): Promise<boolean>
 }
 
 // ---- Jobs ---------------------------------------------------------------------
@@ -870,6 +877,15 @@ export type Commands = {
   read_storage: {
     input: { project: string; path: string }
     output: StorageFile
+  }
+  // The files of a project the owner can mention with @, by their paths
+  // from its folder, with slashes: in a git repository the files git lists,
+  // tracked or not, but not those it ignores, and elsewhere every file, the
+  // nearest first; never git's own folder or node_modules. At most 10,000
+  // are walked, and `more` says there were more.
+  list_files: {
+    input: { project: string }
+    output: { files: string[]; more: boolean }
   }
 }
 
