@@ -120,10 +120,9 @@ export function headLinks(metafile: BuildMetafile): HeadLink[] {
 }
 
 // A `preload` link for each font the page asks for as it starts: see
-// `FONTS`. They come before the chunks' links, so that the browser asks
-// for them first: it asks a server for only six files at once, and the
-// fonts are needed as soon as the script draws text, where the script
-// needs each chunk only once it has the rest of itself. `crossorigin`,
+// `FONTS`. They come before the chunks' links, so that the browser, which
+// asks a server for only six files at once, does not leave them waiting
+// behind the chunks: they must have come by the time text is drawn. `crossorigin`,
 // since the browser fetches every font that way, and uses what it
 // preloaded only when it was fetched in the same way.
 function fontPreloads(): HeadLink[] {
