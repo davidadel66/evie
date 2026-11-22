@@ -161,6 +161,35 @@ test("a call whose result says it failed is marked failed, and one the owner ref
   ])
 })
 
+test("each tool result is examined once, for its short form and whether it failed, however often the conversation is drawn again as a reply streams in", () => {
+  // A result that counts how often its text is read.
+  let reads = 0
+  const examined = (text: string) => ({
+    callId: "c1",
+    name: "shell",
+    get text() {
+      reads += 1
+      return text
+    },
+  })
+  const events = session(
+    event("turn_start", {}),
+    event("user_message", { text: "Run the tests" }),
+    event("assistant_message", { text: "", toolCalls: [{ id: "c1", name: "shell", arguments: '{"command":"bun test"}' }] }),
+    event("tool_result", examined("\n  2 tests failed\nmore\n\n[Exit status: 1]")),
+  )
+
+  const drawn = ["", "All", "All tests", "All tests ran."].map((replySoFar) => transcriptOf(view(events, { turnRunning: true, replySoFar })))
+  expect(reads).toBe(1)
+  for (const items of drawn) {
+    const [call] = items.flatMap((item) => (item.kind === "steps" ? item.calls : []))
+    expect(call).toMatchObject({ result: "\n  2 tests failed\nmore\n\n[Exit status: 1]", short: "2 tests failed", failed: true })
+  }
+  // The same result read again, as a new page from the server, is examined again.
+  transcriptOf(view(session(...events.map((each): Made => [each.type, each.body, each.time]))))
+  expect(reads).toBe(2)
+})
+
 test("a run of one call says that call's sentence, a run of several counts them by kind, and a path is from the project's folder when the page knows it", () => {
   const events = session(
     event("turn_start", {}),
