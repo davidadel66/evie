@@ -12,7 +12,7 @@ import { closeListSheet, toggleList, useListShown } from "./list-shown.ts"
 import { Notices } from "./Notices.tsx"
 import { Palette } from "./Palette.tsx"
 import { useDiffShortcut } from "./diff-shown.ts"
-import { DiffPlace } from "./DiffPanel.tsx"
+import { PanelButton, RightPanel } from "./DiffPanel.tsx"
 import { CardButton, CardLane, CardPlace } from "./ProjectCard.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
@@ -82,7 +82,7 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
         <CardPlace connection={connection} sessions={sessions} />
       </main>
 
-      <DiffPlace connection={connection} sessions={sessions} />
+      <RightPanel connection={connection} sessions={sessions} />
     </div>
   )
 }
@@ -210,8 +210,8 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
 }
 
 // The middle column's header: the button that shows and hides the session
-// list, the session's name, when there is one to show, and the button that
-// shows and hides the session details. A name that can be renamed is typed in
+// list, the session's name, when there is one to show, and the buttons that
+// show and hide the session details and the right panel. A name that can be renamed is typed in
 // place after a double-click, and why a name was not taken is said on a
 // line under the header. At phone width, the line that says the connection
 // is down is under it too.
@@ -229,6 +229,7 @@ function Top({ title, rename }: { title?: string; rename?(name: string): Promise
           <HeaderName title={title} rename={rename} said={setNote} />
         )}
         <CardButton />
+        <PanelButton />
       </header>
       <ConnectionUnderHeader />
       <div role="status">{note !== undefined && <p className="px-gutter pt-3 text-caption text-text-muted">{note}</p>}</div>

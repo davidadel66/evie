@@ -110,9 +110,10 @@ const COOKIE_LASTS = 400 * 24 * 60 * 60
 // each reply kept is small.
 const REMEMBERED = 200
 // Commands that only read, whose replies can be large, such as a file read
-// from a workspace's Storage: they are not remembered, so they take none of
-// the places. Carried out again, they change nothing.
-const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage", "list_files"])
+// from a workspace's Storage, or a diff, which carries whole files: they are
+// not remembered, so they take none of the places. Carried out again, they
+// change nothing.
+const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage", "list_files", "read_changes"])
 // The images an attachment is given back as, to show: those a browser
 // draws and never runs.
 const SHOWN = ["image/png", "image/jpeg", "image/gif", "image/webp"]

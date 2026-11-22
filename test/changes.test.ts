@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { chmod, mkdir, mkdtemp, readdir, realpath, rm, truncate, unlink, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import type { FileDiff } from "../src/core/types.ts"
 import { files, undo, type Plugin } from "../src/index.ts"
 import { git } from "./support/git.ts"
 import { say, startEvie, stored } from "./support/harness.ts"
@@ -57,6 +58,22 @@ test("a turn's changed files are listed with how many lines each added and remov
 
   const read = await run.evie.send({ type: "read_changes", session: run.session, of: "turn", turn: 1 })
   expect(read.files).toEqual([{ path: "notes.md", status: "changed", added: 1, removed: 1, patch: "@@ -1,3 +1,3 @@\n one\n-two\n+2\n three\n" }])
+})
+
+test("a file's diff carries the whole file around its changes, so that the page can show the unchanged lines between them when asked, whatever is compared", async () => {
+  const numbered = (change: (line: number) => string) => Array.from({ length: 12 }, (_, at) => `${change(at + 1)}\n`).join("")
+  const { run, projectFolder } = await start(turn(edit("notes.md", "line 2\n", "two\n"), edit("notes.md", "line 11\n", "eleven\n")), { "notes.md": numbered((line) => `line ${line}`) }, { git: true })
+  await git(["checkout", "-q", "-b", "feature"], projectFolder)
+  await say(run, "change it")
+
+  const lines = Array.from({ length: 12 }, (_, at) => at + 1).flatMap((line) => (line === 2 ? ["-line 2", "+two"] : line === 11 ? ["-line 11", "+eleven"] : [` line ${line}`]))
+  const whole: FileDiff[] = [{ path: "notes.md", status: "changed", added: 2, removed: 2, patch: `@@ -1,12 +1,12 @@\n${lines.join("\n")}\n` }]
+  expect((await run.evie.send({ type: "read_changes", session: run.session, of: "turn", turn: 1 })).files).toEqual(whole)
+  expect((await run.evie.send({ type: "read_changes", session: run.session, of: "session" })).files).toEqual(whole)
+  expect((await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })).files).toEqual(whole)
+  expect((await run.evie.send({ type: "read_changes", session: run.session, of: "branch" })).files).toEqual(whole)
+  // Only counted, as when the changes are listed, the lines are not sent.
+  expect((await run.evie.send({ type: "list_changes", session: run.session, whole: true })).session).toEqual([{ path: "notes.md", status: "changed", added: 2, removed: 2 }])
 })
 
 test("a file a turn added, one it removed and one it changed each say so, with their lines", async () => {

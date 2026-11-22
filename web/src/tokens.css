@@ -60,11 +60,26 @@
   --project-plum: #8e6888;
   --chart-bar: var(--accent);
   --chart-current: var(--text);
-  /* Lines a diff adds and removes, and nothing else: the wash under each,
-     and the + or − at its start. The board names no colours for them, so
-     they are its own muted green and red, the values Done and Failed have. */
+  /* Lines a diff adds and removes, and nothing else: the bar at each one's
+     edge and its counts, and, mixed with the ground in the diff view
+     (diff-view.ts), the wash under it, its line number's column and the
+     number itself. The board names no colours for them, so they are its own
+     muted green and red, the values Done and Failed have, as the owner's
+     drawing of the diff has them. */
   --diff-added: var(--status-done);
   --diff-removed: var(--status-failed);
+  /* A file changed, in the diff's file headers: the project slate. */
+  --diff-changed: var(--project-slate);
+  /* A diff's syntax colours, as the owner's drawing has them: lighter tints
+     of the project colours, which read on the dark ground. Headings and
+     names in mustard, keywords and a list's marks in rust, links and types
+     in slate, addresses and strings in moss, code and constants in plum;
+     comments and punctuation are muted, the rest is text. */
+  --syntax-mustard: #c9a96a;
+  --syntax-rust: #d08a6a;
+  --syntax-slate: #9db4c8;
+  --syntax-moss: #a9b884;
+  --syntax-plum: #c09aba;
 }
 
 /* The strokes: every divider is a line, and the focus ring and the line
