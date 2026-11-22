@@ -157,8 +157,9 @@ export function openConversation(connection: Connection, session: string): Conve
 
   // The model and how full the conversation is are read one request at a
   // time: asked for again while one is out, they are read once more after
-  // it, so that none applied is older than one applied before it. One that
-  // cannot be read leaves what was read before, until the next.
+  // it, on the client the session is open on then, so that none applied is
+  // older than one applied before it. One that cannot be read leaves what
+  // was read before, until the next.
   let measuring = false
   let measureAgain = false
   function measure(evie: Evie) {
@@ -175,9 +176,9 @@ export function openConversation(connection: Connection, session: string): Conve
       )
       .finally(() => {
         measuring = false
-        if (!measureAgain || on !== evie) return
+        if (!measureAgain || on === undefined) return
         measureAgain = false
-        measure(evie)
+        measure(on)
       })
   }
 
