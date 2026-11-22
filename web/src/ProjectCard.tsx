@@ -1,16 +1,22 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
-import type { Job, ListedProject } from "../../src/core/types.ts"
+import type { Job, ListedProject, PullRequest } from "../../src/core/types.ts"
 import { addressOf } from "./address.ts"
-import { followOutput, followSubagents, request, stopJob, undo, type Following, type Lineage } from "./card.ts"
+import { followOutput, followPullRequest, followSubagents, request, stopJob, undo, type Following, type Lineage } from "./card.ts"
 import { closeSheet, toggleCard, useCardShown } from "./card-shown.ts"
+import { Counts } from "./ChangedFiles.tsx"
+import { holdChanges, type Changes as SessionChanges } from "./changes.ts"
 import { Button } from "./components/ui/button.tsx"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
+import { sessionLine } from "./diff.ts"
+import { openDiff, useDiffShown } from "./diff-shown.ts"
 import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet.tsx"
 import type { Connection } from "./connection.ts"
 import { holdConversation, startedHere, type Conversation } from "./conversation.ts"
 import { FolderPath } from "./FolderPath.tsx"
-import { CaretRight, Check, SidebarRight, X } from "./icons.tsx"
+import { ArrowSquareOut, CaretDown, CaretRight, Check, SidebarRight, X } from "./icons.tsx"
 import { backgroundJobs, branchWords, gitWhyNot, stateWord, subagentsOf, undoWhyNot, type CardFacts, type Subagent } from "./project-card.ts"
 import { ProjectIcon } from "./ProjectIcon.tsx"
+import { checkLook, checksSummary, checkWord, pullRequestWord } from "./pull-request.ts"
 import { addressOfWorkspace } from "./workspace.ts"
 import { select, useSelected } from "./selection.ts"
 import type { Sessions } from "./sessions.ts"
@@ -24,12 +30,14 @@ import { Spinner } from "./Spinner.tsx"
 // right panel is, which goes once something is picked in it or elsewhere.
 export function CardPlace({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const shown = useCardShown()
+  const diff = useDiffShown()
   const selected = useSelected()
   useEffect(() => {
     if (!shown.wide) closeSheet()
   }, [selected])
   if (shown.wide) {
-    if (!shown.column) return null
+    // The diff panel, while it is open, is in the card's place.
+    if (!shown.column || diff.open) return null
     return (
       <aside aria-label="Project" className="flex w-project-card shrink-0 flex-col border-l border-line bg-bg">
         <ProjectCard connection={connection} sessions={sessions} />
@@ -69,7 +77,7 @@ function ProjectCard({ connection, sessions }: { connection: Connection; session
     return (
       <Body>
         <Header projectId={selected.draft} project={projectOf(selected.draft)} />
-        <Where projectId={selected.draft} project={projectOf(selected.draft)} />
+        <Where connection={connection} projectId={selected.draft} project={projectOf(selected.draft)} />
         <p className="px-7 pt-4 text-caption text-text-muted">The rest is shown once the session's first message is sent.</p>
       </Body>
     )
@@ -121,9 +129,10 @@ function Header({ projectId, project, title }: { projectId: string | null; proje
   )
 }
 
-// Where the project is: its folder, and the branch it is on, as rows. A
-// session with no project has none, which the header says.
-function Where({ projectId, project }: { projectId: string | null; project: ListedProject | null | undefined }) {
+// Where the project is: its folder, and the branch it is on, as rows, and
+// the branch's pull request, when it has one. A session with no project
+// has none, which the header says.
+function Where({ connection, projectId, project }: { connection: Connection; projectId: string | null; project: ListedProject | null | undefined }) {
   if (projectId === null) return null
   if (project == null) return <p className="border-t border-line px-7 pt-4 text-caption text-text-muted">The project's details have not been read yet.</p>
   const branch = branchWords(project)
@@ -139,6 +148,7 @@ function Where({ projectId, project }: { projectId: string | null; project: List
           {branch.text}
         </dd>
       </Row>
+      {project.branch !== undefined && <PullRequestRow key={`${project.id} ${project.branch}`} connection={connection} project={project.id} />}
     </dl>
   )
 }
@@ -183,12 +193,15 @@ function SessionCard({
   projectId: string | null
   project: ListedProject | null | undefined
 }) {
-  const [followed, setFollowed] = useState<{ conversation: Conversation; lineage: Lineage }>()
+  const [followed, setFollowed] = useState<{ conversation: Conversation; lineage: Lineage; changes: SessionChanges }>()
   useEffect(() => {
     const held = holdConversation(connection, session)
     const lineage = followSubagents(connection, session)
-    setFollowed({ conversation: held.conversation, lineage })
+    // With the whole session's files, which the card sums up.
+    const changes = holdChanges(connection, session, { whole: true })
+    setFollowed({ conversation: held.conversation, lineage, changes: changes.changes })
     return () => {
+      changes.release()
       held.release()
       lineage.close()
     }
@@ -196,7 +209,7 @@ function SessionCard({
   return (
     <Body>
       <Header projectId={projectId} project={project} />
-      <Where projectId={projectId} project={project} />
+      <Where connection={connection} projectId={projectId} project={project} />
       {followed && <Live connection={connection} {...followed} session={session} opened={opened} project={project} />}
     </Body>
   )
@@ -206,6 +219,7 @@ function Live({
   connection,
   conversation,
   lineage,
+  changes,
   session,
   opened,
   project,
@@ -213,6 +227,7 @@ function Live({
   connection: Connection
   conversation: Conversation
   lineage: Lineage
+  changes: SessionChanges
   session: string
   opened: string | undefined
   project: ListedProject | null | undefined
@@ -236,7 +251,7 @@ function Live({
 
   return (
     <>
-      <Changes conversation={conversation} session={session} opened={opened} facts={facts} />
+      <Changes conversation={conversation} changes={changes} session={session} opened={opened} facts={facts} />
       {subagents.length > 0 && (
         <Section title="Subagents" {...withCount(working(subagents.filter((each) => each.status === "running").length))}>
           {refusal}
@@ -268,11 +283,13 @@ const REQUEST_WAIT = 5000
 // first, so that what it says is in view.
 function Changes({
   conversation,
+  changes,
   session,
   opened,
   facts,
 }: {
   conversation: Conversation
+  changes: SessionChanges
   session: string
   opened: string | undefined
   facts: Omit<CardFacts, "requested">
@@ -313,6 +330,7 @@ function Changes({
   }
   return (
     <Section title="Changes">
+      <SessionChanged changes={changes} />
       {/* Each button's own padding brings its word to the card's 28px edge. */}
       <div className="flex flex-wrap gap-2">
         {(["commit", "push", "pull request"] as const).map((kind) => (
@@ -338,6 +356,141 @@ function Changes({
       )}
     </Section>
   )
+}
+
+// What the session has changed, in one row, as T3 Code's details card
+// says it: how many files, and lines added and removed, from before its
+// first change to now; and Open diff, which opens the diff panel on the
+// whole session.
+function SessionChanged({ changes }: { changes: SessionChanges }) {
+  const { listed } = useSyncExternalStore(changes.subscribe, changes.state)
+  const line = sessionLine(listed)
+  const keys = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘D" : "Ctrl+D"
+  return (
+    <div className="mb-3 flex min-h-row-height items-center gap-2 border-t border-b border-line pl-3">
+      <span className="min-w-0 flex-1 py-2 text-body text-text-muted">{typeof line === "string" ? line : line.files}</span>
+      {typeof line !== "string" && <Counts added={line.added} removed={line.removed} />}
+      <Button variant="quiet" title={`Open the diff (${keys})`} onClick={() => openDiff({ scope: "session" })}>
+        Open diff
+      </Button>
+    </div>
+  )
+}
+
+// The branch's pull request, as T3 Code's details card shows it: its title,
+// which opens it on GitHub; its number and state in words; and its checks
+// summed up, which open a menu of each check, with how it stands and a
+// link to its details. Read when the card opens and each minute while it
+// is shown. Nothing is shown when there is none, or the server cannot ask
+// GitHub.
+function PullRequestRow({ connection, project }: { connection: Connection; project: string }) {
+  const [followed, setFollowed] = useState<ReturnType<typeof followPullRequest>>()
+  useEffect(() => {
+    const following = followPullRequest(connection, project, { window, shown: () => document.visibilityState === "visible" })
+    setFollowed(following)
+    return following.close
+  }, [connection, project])
+  const pull = useSyncExternalStore(followed?.subscribe ?? noPull.subscribe, followed?.state ?? noPull.state)
+  if (pull == null) return null
+  return (
+    <div className="flex flex-col border-t border-line px-3 pt-2 pb-1">
+      <div className="flex min-h-control items-center justify-between gap-4">
+        <dt className="shrink-0 text-body font-medium text-text-muted">Pull request</dt>
+        <dd className="shrink-0 text-body text-text">
+          #{pull.number} <span className="text-text-muted">·</span> {pullRequestWord(pull.state)}
+        </dd>
+      </div>
+      <dd>
+        {/* The server gives only an https link, and none for any other. */}
+        {pull.url !== undefined ? (
+          <a href={pull.url} target="_blank" rel="noreferrer" title={`Open pull request #${pull.number} on GitHub`} className="flex min-h-control items-start gap-2 py-2 text-body font-medium text-text hover:underline">
+            <span className="line-clamp-2 min-w-0 flex-1 break-words">{pull.title}</span>
+            <ArrowSquareOut className="mt-1 size-icon-sm shrink-0 text-text-muted" />
+            <span className="sr-only">(opens GitHub)</span>
+          </a>
+        ) : (
+          <p className="line-clamp-2 py-2 text-body font-medium break-words text-text">{pull.title}</p>
+        )}
+      </dd>
+      {pull.checks.length > 0 && (
+        <dd>
+          <Checks checks={pull.checks} />
+        </dd>
+      )}
+    </div>
+  )
+}
+const noPull = { subscribe: () => () => {}, state: () => undefined }
+
+function Checks({ checks }: { checks: PullRequest["checks"] }) {
+  const summary = checksSummary(checks)
+  const failing = checks.some((check) => check.state === "failed" || check.state === "cancelled")
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="quiet" aria-label={`Checks: ${summary}`} className={`-ml-3 gap-1 ${failing ? "text-status-failed hover:text-status-failed" : ""}`}>
+          {summary}
+          <CaretDown className="size-icon-sm" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-w-card-sheet">
+        <DropdownMenuLabel>{summary}</DropdownMenuLabel>
+        {checks.map((check, at) => {
+          const row = (
+            <>
+              <span className="min-w-0 flex-1 truncate">{check.name}</span>
+              <CheckState state={check.state} />
+              {check.url !== undefined && <ArrowSquareOut className="text-text-muted" />}
+            </>
+          )
+          return check.url !== undefined ? (
+            <DropdownMenuItem key={at} asChild className="gap-3">
+              <a href={check.url} target="_blank" rel="noreferrer" title={`${check.name}: open its details`}>
+                {row}
+              </a>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem key={at} disabled className="gap-3">
+              {row}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+// How a check stands, as the design system's Status draws a state: passed
+// with a check, in Done's colour; failed with its mark, in Failed's;
+// running with the spinner, as Working; the rest in quiet words.
+function CheckState({ state }: { state: PullRequest["checks"][number]["state"] }) {
+  const look = checkLook(state)
+  const word = checkWord(state)
+  if (look === "done") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-caption text-status-done">
+        <Check className="size-icon-sm" />
+        {word}
+      </span>
+    )
+  }
+  if (look === "failed") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-caption text-status-failed">
+        <X className="size-icon-sm" />
+        {word}
+      </span>
+    )
+  }
+  if (look === "working") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-caption text-status-working">
+        <Spinner />
+        {word}
+      </span>
+    )
+  }
+  return <span className="shrink-0 text-caption text-text-muted">{word}</span>
 }
 
 // How a job or a subagent stands, in its word, as the design system's

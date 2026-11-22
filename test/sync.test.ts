@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, shell, sync, type Plugin } from "../src/index.ts"
@@ -105,11 +105,11 @@ async function start(
     setting: async () => setting,
     after: options.after ?? 60_000,
     every: options.every ?? 60 * 60_000,
-    run: async (command, cwd, signal) => {
+    run: async (command, cwd, signal, env) => {
       commands.push(command)
       if (command[0] === "gh") return github.gh(command.slice(1))
       if (options.pushes && command.includes("push")) return options.pushes(signal)
-      return ran(command, cwd)
+      return ran(command, cwd, env)
     },
     signal: stopped.signal,
   })
@@ -151,6 +151,36 @@ test("a later /sync commits and pushes what changed, and with nothing changed, p
   expect(await syncNow()).toBe(`Nothing to sync: ${evieFolder} has not changed since it was last pushed.`)
   expect(pushes()).toBe(before)
   expect(await github.commits(name)).toHaveLength(2)
+})
+
+test("syncing runs none of the commands the .evie folder's own git settings name, and pushes all the same", async () => {
+  const { github, evieFolder, syncNow, name } = await start()
+  await syncNow()
+  const noted = await tempFolder("evie-ran-")
+  const command = join(noted, "noted")
+  await writeFile(command, `#!/bin/sh\ntouch "${noted}/$1"\ncat\n`)
+  await chmod(command, 0o755)
+  await mkdir(join(noted, "hooks"))
+  for (const hook of ["pre-commit", "commit-msg", "post-commit", "pre-push", "post-index-change"]) {
+    await writeFile(join(noted, "hooks", hook), `#!/bin/sh\ntouch "${noted}/hook-${hook}"\n`)
+    await chmod(join(noted, "hooks", hook), 0o755)
+  }
+  const settings: [string, string][] = [
+    ["core.fsmonitor", `${command} fsmonitor`],
+    ["core.hooksPath", join(noted, "hooks")],
+    ["filter.evil.clean", `${command} clean`],
+    ["filter.evil.process", `${command} process`],
+    ["filter.evil.required", "true"],
+    ["commit.gpgSign", "true"],
+    ["gpg.program", `${command} gpg`],
+  ]
+  for (const [setting, value] of settings) await git(["--git-dir", join(evieFolder, ".git"), "config", setting, value], evieFolder)
+  await writeFile(join(evieFolder, ".gitattributes"), "* filter=evil\n")
+  await writeFile(join(evieFolder, "notes.md"), "notes\n")
+
+  expect(await syncNow()).toBe(`Pushed the changes in ${evieFolder} to ${name} on GitHub.`)
+  expect(await github.commits(name)).toHaveLength(2)
+  expect((await readdir(noted)).filter((each) => each !== "noted" && each !== "hooks")).toEqual([])
 })
 
 test("the repository is named evie- and the project's name in lower case, with spaces and other characters made into dashes", async () => {

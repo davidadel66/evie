@@ -1,7 +1,8 @@
-import type { Evie } from "../../src/core/types.ts"
+import type { Evie, PullRequest } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 import type { Conversation } from "./conversation.ts"
 import { joinOutput, REQUESTS, type Listed, type Output } from "./project-card.ts"
+import { refreshWhileShown } from "./refresh.ts"
 
 // The project card's work with evie's server, apart from its screen: undo,
 // the git buttons' requests, stopping a job, following a job's output, and
@@ -169,6 +170,70 @@ export function followSubagents(connection: Connection, session: string): Lineag
     close() {
       closed = true
       unfollow()
+    },
+  }
+}
+
+// A project's pull request, as last read, by the project's id: the diff
+// panel compares the branch with the pull request's base.
+const pullRequests = new Map<string, PullRequest | null>()
+export const pullRequestOf = (project: string) => pullRequests.get(project)
+
+// How often the pull request is read again while the card is shown, in
+// milliseconds: its checks change as they run.
+const PULL_REQUEST_EVERY = 60_000
+
+// Follows a project's pull request: read once connected, and again each
+// minute while the page is shown, when the window has the focus back, and
+// when the line comes back. Until it is first read it is undefined; null
+// says there is none, or that gh cannot be asked on the server. One that
+// could not be read keeps what was read before.
+export type FollowedPullRequest = {
+  state(): PullRequest | null | undefined
+  subscribe(listener: () => void): () => void
+  close(): void
+}
+
+// `page` is the window, and whether the page is shown, as the clock asks.
+export function followPullRequest(connection: Connection, project: string, page: { window: EventTarget; shown(): boolean; every?: number }): FollowedPullRequest {
+  let state: PullRequest | null | undefined = pullRequests.get(project)
+  const listeners = new Set<() => void>()
+  let closed = false
+  let reading = false
+  async function read() {
+    const evie = clientOf(connection)
+    if (closed || reading || evie === undefined) return
+    reading = true
+    try {
+      const read = await evie.send({ type: "read_pull_request", project })
+      pullRequests.set(project, read)
+      if (closed) return
+      state = read
+      for (const listener of [...listeners]) listener()
+    } catch {
+      // Kept as it was, and read again at the next turn of the clock.
+    } finally {
+      reading = false
+    }
+  }
+  let status = connection.state().status
+  const unfollow = connection.subscribe(() => {
+    const now = connection.state().status
+    if (now === "connected" && status !== "connected") void read()
+    status = now
+  })
+  const stop = refreshWhileShown(() => void read(), { window: page.window, shown: page.shown, every: page.every ?? PULL_REQUEST_EVERY })
+  void read()
+  return {
+    state: () => state,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => void listeners.delete(listener)
+    },
+    close() {
+      closed = true
+      unfollow()
+      stop()
     },
   }
 }

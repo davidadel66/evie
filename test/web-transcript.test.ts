@@ -30,6 +30,7 @@ function read(items: Item[]): string[] {
     if (item.kind === "question") return `question ${item.turn}: ${item.text}${item.waiting ? ` (waiting: ${item.choices.join(" / ")})` : ""}`
     if (item.kind === "failed") return `failed ${item.turn}: ${item.error}`
     if (item.kind === "fold") return `fold ${item.turn}: ${item.label} (${read(item.items).join(" | ")})`
+    if (item.kind === "changes") return `changes ${item.turn}: ${item.files.map((file) => file.path).join(", ")}`
     return `note ${item.turn}: ${item.text}`
   })
 }
@@ -338,4 +339,29 @@ test("a page that begins part way through a turn shows the calls whose results i
 test("how long a turn worked is said in seconds, then minutes and seconds, then hours and minutes", () => {
   expect([workedFor(1), workedFor(48), workedFor(60), workedFor(125), workedFor(3599)]).toEqual(["Worked for 1s", "Worked for 48s", "Worked for 1m", "Worked for 2m 5s", "Worked for 59m 59s"])
   expect([workedFor(3600), workedFor(3780), workedFor(7265)]).toEqual(["Worked for 1h", "Worked for 1h 3m", "Worked for 2h 1m"])
+})
+
+test("a completed turn that changed files ends with its changed files, after its reply, and a turn stopped part way does not", () => {
+  const events = session(
+    event("turn_start", {}),
+    event("user_message", { text: "Fix the typo" }),
+    event("assistant_message", { text: "", toolCalls: [{ id: "c1", name: "edit", arguments: '{"path":"README.md"}' }] }),
+    event("tool_result", { callId: "c1", name: "edit", text: "Edited README.md." }),
+    event("assistant_message", { text: "Fixed it." }),
+    event("turn_end", { reason: "completed" }),
+    event("turn_start", {}),
+    event("user_message", { text: "And the other one" }),
+    event("assistant_message", { text: "", toolCalls: [{ id: "c2", name: "edit", arguments: '{"path":"NOTES.md"}' }] }),
+    event("tool_result", { callId: "c2", name: "edit", text: "Edited NOTES.md." }),
+    event("turn_end", { reason: "cancelled" }),
+  )
+  const files = [{ path: "README.md", status: "changed" as const, added: 1, removed: 1 }]
+  const changes = [
+    { turn: 1, start: 1, end: 6, time: 0, files },
+    { turn: 2, start: 7, end: 11, time: 0, files: [{ path: "NOTES.md", status: "changed" as const, added: 2, removed: 0 }] },
+  ]
+
+  const items = transcriptOf(view(events), changes)
+  expect(items.map((item) => item.kind)).toEqual(["owner", "fold", "reply", "changes", "owner", "steps", "note"])
+  expect(items[3]).toMatchObject({ kind: "changes", turn: 1, number: 1, files })
 })
