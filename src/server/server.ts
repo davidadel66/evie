@@ -407,6 +407,22 @@ export function startServer(options: ServerOptions): EvieServer {
       return new Response("Not found.", { status: 404 })
     },
     websocket: {
+      // What the server sends is compressed for a client that offers
+      // permessage-deflate, as browsers and Bun's own WebSocket do. A client
+      // that does not is sent plain text. Each connection has a compressor
+      // of its own that keeps what it sent in its window, so that the pieces
+      // of a streamed reply, each a few letters in the same envelope, go as
+      // pointers back to the piece before: a reply of 561 pieces moves about
+      // 9 KB in place of 57 KB. The compressor Bun shares between every
+      // connection, which `perMessageDeflate: true` gives, starts afresh
+      // with each message, which barely shrinks such small ones.
+      // "dedicated" asks for zlib's largest window, 32 KB, at 256 KB of
+      // memory a connection. Bun 1.4.0 gives every size its smallest
+      // compressor instead, with a window of 512 bytes: enough for the
+      // pieces, but it finds few of the repeats in a page of history. Bun
+      // 1.4.5 gives the window asked for. What clients send, small
+      // commands, needs only the shared decompressor.
+      perMessageDeflate: { compress: "dedicated", decompress: true },
       open(socket) {
         connections.add(socket)
         socket.data.unsubscribe = options.evie.subscribe((event) => {
@@ -526,8 +542,13 @@ export function startServer(options: ServerOptions): EvieServer {
 // events back until Bun says it has drained would keep a second queue
 // beside Bun's, with no limit of its own, where Bun's has one: once it is
 // past it, the next message is dropped, which closes the connection as above.
+//
+// Each message is compressed where its connection allows it, but for a
+// keepalive: 18 bytes, sent to every connection, idle or not, that would
+// gain nothing from it.
 export function send(socket: Pick<ServerWebSocket<unknown>, "send" | "close" | "readyState">, message: ServerMessage) {
-  if (socket.send(JSON.stringify(message)) !== 0 || "keepalive" in message || socket.readyState !== WebSocket.OPEN) return
+  const keepalive = "keepalive" in message
+  if (socket.send(JSON.stringify(message), !keepalive) !== 0 || keepalive || socket.readyState !== WebSocket.OPEN) return
   socket.close(DROPPED, DROPPED_WORDS)
 }
 // Why, for the client to tell the owner: "The connection to evie's server
