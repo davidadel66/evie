@@ -1,20 +1,24 @@
 import { useSyncExternalStore } from "react"
+import { useCardShortcut } from "./card-shown.ts"
 import { connectionLine, type Connection, type ConnectionState } from "./connection.ts"
 import { Conversation, Draft, Placeholder } from "./Conversation.tsx"
 import { startedHere } from "./conversation.ts"
+import { CardButton, CardPlace } from "./ProjectCard.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import { SessionList } from "./SessionList.tsx"
 import type { Sessions } from "./sessions.ts"
 import { Settings } from "./Settings.tsx"
 import { Spinner } from "./Spinner.tsx"
+import { SubagentView } from "./Subagent.tsx"
 import { Words } from "./Words.tsx"
 
 // The page once signed in: the session list, the conversation and the
-// project card, in three columns, which stack at phone width, where the
-// conversation is a screen high. The project card holds, for now, a note
-// of what will go there.
+// project card, in three columns. At phone width the list and the
+// conversation stack, the conversation a screen high, and the project card
+// is a sheet over the page, opened from the session's header.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
+  useCardShortcut()
   return (
     <div className="flex min-h-dvh flex-col wide:h-dvh wide:flex-row">
       <aside aria-label="Sessions" className="flex flex-col bg-bg-side wide:w-session-list wide:shrink-0">
@@ -33,41 +37,64 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
         <OpenSession connection={connection} sessions={sessions} />
       </main>
 
-      <aside aria-label="Project" className="flex flex-col border-t border-line bg-bg wide:w-project-card wide:shrink-0 wide:border-t-0 wide:border-l">
-        <header className="flex h-header-height shrink-0 items-center px-7">
-          <h2 className="text-title text-text">Project</h2>
-        </header>
-        <p className="px-7 pb-6 text-caption text-text-muted">The open session's project will be shown here: its folder, its branch and what has changed.</p>
-      </aside>
+      <CardPlace connection={connection} sessions={sessions} />
     </div>
   )
 }
 
 // The middle column: the selected session's conversation, under its name,
-// or for a draft, where the new session will start.
+// or one of its subagents', or for a draft, where the new session will
+// start. Whatever it shows, its header has the button that shows and hides
+// the project card.
 function OpenSession({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
-  if (selected === undefined) return <Placeholder title="No session open" text="The conversation will be here: your messages, evie's replies and the steps it took." />
+  if (selected === undefined) return <Empty title="No session open" text="The conversation will be here: your messages, evie's replies and the steps it took." />
   if ("draft" in selected) {
     const project = list.projects.find((each) => each.id === selected.draft)
     const where = selected.draft === null ? "with no project" : `in ${project?.name ?? "its project"}`
-    return <Draft connection={connection} sessions={sessions} project={selected.draft} where={where} />
+    return (
+      <>
+        <Top />
+        <Draft connection={connection} sessions={sessions} project={selected.draft} where={where} />
+      </>
+    )
   }
   // A session is opened once the list shows it is one: until the list is
   // read, nothing is shown, and one the list does not have is not opened,
   // unless this page has just started it, and its first message is on its way.
-  if (!list.listed) return null
+  if (!list.listed) return <Top />
   const session = list.sessions.find((each) => each.session === selected.session)
   if (session === undefined && startedHere(selected.session) === undefined) {
-    return <Placeholder title="This session is not in the list" text="Nothing has been said in it yet, or it is no longer there." />
+    return <Empty title="This session is not in the list" text="Nothing has been said in it yet, or it is no longer there." />
   }
+  const title = session === undefined ? "New session" : titleOf(session)
+  if (selected.subagent !== undefined) return <SubagentView connection={connection} parent={selected.session} parentTitle={title} subagent={selected.subagent} />
   return (
     <>
-      <header className="flex h-header-height shrink-0 items-center border-b border-line px-7">
-        <h1 className="truncate text-title text-text">{session === undefined ? "New session" : titleOf(session)}</h1>
-      </header>
+      <Top title={title} />
       <Conversation connection={connection} session={selected.session} />
+    </>
+  )
+}
+
+// The middle column's header: the session's name, when there is one to
+// show, and the button that shows and hides the project card.
+function Top({ title }: { title?: string }) {
+  return (
+    <header className="flex h-header-height shrink-0 items-center gap-3 border-b border-line pr-4 pl-7">
+      {title === undefined ? <span className="flex-1" /> : <h1 className="min-w-0 flex-1 truncate text-title text-text">{title}</h1>}
+      <CardButton />
+    </header>
+  )
+}
+
+// The middle column with nothing to read in it, which says why below the header.
+function Empty({ title, text }: { title: string; text: string }) {
+  return (
+    <>
+      <Top />
+      <Placeholder title={title} text={text} />
     </>
   )
 }

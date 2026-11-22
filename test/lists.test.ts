@@ -173,7 +173,10 @@ test("every project is listed, by name", async () => {
 
   const listed = await run.evie.send({ type: "list_projects" })
 
-  expect(listed).toEqual([other, run.project!])
+  expect(listed).toEqual([
+    { ...other, git: false },
+    { ...run.project!, git: false },
+  ])
 })
 
 test("a project in a git repository is listed with the branch it is on as it is asked for, and one that is not with none", async () => {
@@ -188,9 +191,12 @@ test("a project in a git repository is listed with the branch it is on as it is 
   await git(["checkout", "-q", "-b", "fix/rows"], folder)
   const then = await run.evie.send({ type: "list_projects" })
 
-  expect(first).toEqual([{ ...repository, branch: "feat/lists" }, run.project!])
+  expect(first).toEqual([
+    { ...repository, branch: "feat/lists", git: true },
+    { ...run.project!, git: false },
+  ])
   expect(first[1]).not.toHaveProperty("branch")
-  expect(then[0]).toEqual({ ...repository, branch: "fix/rows" })
+  expect(then[0]).toEqual({ ...repository, branch: "fix/rows", git: true })
 })
 
 test("a repository with no commits yet is listed on its branch, one with a commit checked out by itself on none, and a folder that has gone on none", async () => {
@@ -252,6 +258,41 @@ test("a project whose folder is inside another repository, below its top, is lis
   const listed = await run.evie.send({ type: "list_projects" })
 
   expect(listed.find((project) => project.id === inside.id)).not.toHaveProperty("branch")
+})
+
+test("whether a project's folder is in a git work tree is said apart from its branch: at the top, on a commit by itself, or below the top of another repository", async () => {
+  const { run } = await start([])
+  const made = async (name: string) => {
+    const folder = await realpath(await mkdtemp(join(tmpdir(), name)))
+    cleanups.push(() => rm(folder, { recursive: true, force: true }))
+    return folder
+  }
+  const top = await made("a-top-")
+  await git(["init", "-q", "-b", "main"], top)
+  const detached = await made("b-detached-")
+  await git(["init", "-q", "-b", "main"], detached)
+  await git(["commit", "-q", "--allow-empty", "-m", "First"], detached)
+  await git(["checkout", "-q", "--detach"], detached)
+  // The folder above this project becomes a repository after the project is made.
+  const outer = await made("c-outer-")
+  const inside = join(outer, "inside")
+  await mkdir(inside)
+  const plain = await made("d-plain-")
+  for (const folder of [top, detached, inside, plain]) await run.evie.send({ type: "open_session", folder })
+  await git(["init", "-q", "-b", "outer-branch"], outer)
+
+  const listed = await run.evie.send({ type: "list_projects" })
+  const said = (folder: string) => {
+    const project = listed.find((each) => each.folder === folder)!
+    return { git: project.git, branch: project.branch }
+  }
+
+  expect([top, detached, inside, plain].map(said)).toEqual([
+    { git: true, branch: "main" },
+    { git: true, branch: undefined },
+    { git: true, branch: undefined },
+    { git: false, branch: undefined },
+  ])
 })
 
 // ---- A session's state ------------------------------------------------------------------------
