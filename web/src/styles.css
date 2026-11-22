@@ -453,6 +453,42 @@
   background: repeating-conic-gradient(color-mix(in srgb, var(--text) 7%, var(--bg)) 0 25%, var(--bg) 0 50%) 50% / 24px 24px;
 }
 
+/* A Markdown document evie shows, as drawn: tighter than a reply, its
+   first heading a page title, the next ones a title, and code on a tint,
+   each piece spaced by its own margins. It wins over the classes the
+   Markdown is drawn with (markdown.ts), which are a reply's. */
+@utility shown-document {
+  font-size: var(--text-body);
+  line-height: var(--text-prose--line-height);
+  & h1 {
+    margin: 0 0 var(--spacing-1\.5);
+    font-size: var(--text-page-title);
+    line-height: var(--text-page-title--line-height);
+  }
+  & h2,
+  & h3,
+  & h4 {
+    margin: var(--spacing-4\.5) 0 var(--spacing-1);
+    font-size: var(--text-title);
+    line-height: var(--text-title--line-height);
+  }
+  & p,
+  & ul,
+  & ol,
+  & pre,
+  & blockquote {
+    margin: 0 0 var(--spacing-2);
+  }
+  & li + li {
+    margin-top: var(--spacing-0\.5);
+  }
+  & :not(pre) > code {
+    padding: 1px var(--spacing-1);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+  }
+}
+
 /* A drawer tucked into the message box's top edge shows only what is
    above the box: its foot, under the box's glass, is left out, so that
    the two read as one piece, as T3 Code's do. */

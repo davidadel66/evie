@@ -46,11 +46,13 @@ export function ShownFrame({ file, inStorage = false }: { file: Shown; inStorage
     <figure aria-label={`Shown by evie: ${file.name}`} className="mt-1 rounded-md bg-text/4">
       <figcaption className="flex h-shown-header min-w-0 items-center gap-2 pr-1 pl-3 text-caption">
         <Icon className="size-icon-row shrink-0 text-text-muted" />
-        <span className="min-w-0 shrink truncate font-medium text-text">{file.name}</span>
-        <span title={file.path} className="min-w-0 shrink-[999] truncate font-mono text-text-muted">
-          {file.folder}
+        {/* The name stays whole while it fits, and the folder gives way first. */}
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="max-w-full shrink-0 truncate font-medium text-text">{file.name}</span>
+          <span title={file.path} className="min-w-0 truncate font-mono text-text-muted">
+            {file.folder}
+          </span>
         </span>
-        <span className="flex-1" />
         {kind !== undefined && file.address !== undefined && (
           <FrameButton label={`${kind.verb} ${file.name} full screen`} title="Full screen" onClick={open}>
             <FullScreen className="size-icon-row" />
@@ -117,9 +119,12 @@ function ImageFrame({ file, address, open }: ViewerProps) {
 }
 
 // An SVG, drawn as an image, so that no script in it runs, on a
-// checkerboard, so that its own transparency shows. It opens full screen.
+// checkerboard, so that its own transparency shows, at its own width: the
+// width it names, or with none, as a browser draws one, 300px, as the
+// logo is drawn. It opens full screen.
 function SvgFrame({ file, address, open }: ViewerProps) {
   const [failed, setFailed] = useState(false)
+  const [width, setWidth] = useState<number>()
   if (failed) return <Unavailable />
   return (
     <button
@@ -129,14 +134,22 @@ function SvgFrame({ file, address, open }: ViewerProps) {
       onClick={open}
       className="checkerboard flex max-h-shown min-h-shown-svg w-full cursor-zoom-in items-center justify-center overflow-hidden rounded-chip p-6"
     >
-      <img src={address} alt={file.name} onError={() => setFailed(true)} className="max-h-shown-drawing max-w-[80%]" />
+      <img
+        src={address}
+        alt={file.name}
+        onLoad={(event) => setWidth(event.currentTarget.naturalWidth || undefined)}
+        onError={() => setFailed(true)}
+        style={width === undefined ? undefined : { width }}
+        className="max-h-shown-drawing max-w-[80%] object-contain"
+      />
     </button>
   )
 }
 
-// A PDF, in the browser's own PDF view, 480px tall.
+// A PDF, in the browser's own PDF view, 480px tall, without its list of
+// pages, which Chrome would open beside them in a frame this wide.
 function PdfFrame({ file, address }: ViewerProps) {
-  return <iframe src={address} title={`${file.name}, in the browser's PDF view`} className="block h-shown w-full rounded-chip border-0" />
+  return <iframe src={`${address}#navpanes=0`} title={`${file.name}, in the browser's PDF view`} className="block h-shown w-full rounded-chip border-0" />
 }
 function PdfFull({ file, address }: { file: Shown; address: string }) {
   return <iframe src={address} title={`${file.name}, in the browser's PDF view`} className="block h-full-height w-full-width rounded-md border-0 shadow-float" />
@@ -161,7 +174,7 @@ function MarkdownFrame({ file, address }: ViewerProps) {
   return (
     <>
       <div className="relative rounded-chip bg-bg">
-        <div id={id} ref={box} aria-label={file.name} className={cn("overflow-hidden px-5 pt-4 pb-1 text-prose break-words text-text [&>*+*]:mt-3", !open && "max-h-shown-cut")}>
+        <div id={id} ref={box} aria-label={file.name} className={cn("shown-document overflow-hidden px-5 pt-4 pb-1 break-words text-text", !open && "max-h-shown-cut")}>
           {drawn ?? <p className="text-caption text-text-muted">Reading {file.name}</p>}
         </div>
         {!open && long && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-shown-fade rounded-b-chip" style={{ background: "linear-gradient(to bottom, transparent, var(--bg))" }} />}
@@ -188,7 +201,7 @@ function MarkdownFull({ file, address }: { file: Shown; address: string }) {
   const drawn = useMemo(() => (read.text === undefined ? undefined : renderMarkdown(read.text)), [read.text])
   if (read.failed) return <Unavailable dark />
   return (
-    <div aria-label={file.name} tabIndex={0} className="h-full-height w-full-width max-w-conversation overflow-y-auto overscroll-contain rounded-md bg-bg px-6 py-5 text-prose break-words text-text shadow-float [&>*+*]:mt-3">
+    <div aria-label={file.name} tabIndex={0} className="shown-document h-full-height w-full-width max-w-conversation overflow-y-auto overscroll-contain rounded-md bg-bg px-6 py-5 break-words text-text shadow-float">
       {drawn}
     </div>
   )
