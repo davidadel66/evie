@@ -196,6 +196,28 @@ test("a further message to a subagent that has finished builds on its conversati
   expect(notes(run)[1]).toContain("Background job 2 (subagent: look into it) has finished.\n\nIts report:\n\ncreateSession is on line 80.")
 })
 
+test("each round of a subagent's work is a job that names the subagent's session, so that a client can read its conversation", async () => {
+  const { run, parent, call } = await start(
+    [{ calls: [hand("Find the session code.")] }, { text: "Started." }, { text: "Got it." }],
+    [{ text: "It is in projects.ts." }, { text: "createSession is on line 80." }],
+  )
+  await say(run, "go")
+  await turns(run, 2)
+  const child = childId(run)
+  const sent = call("subagent_send", { id: child, message: "Which line?" })
+  parent.push({ text: "Line 80, then." })
+  await sent
+  await turns(run, 4)
+
+  const told = run.events.flatMap((event) => (event.type === "job" ? [`${event.job.id} ${event.job.status} ${event.job.subagent}`] : []))
+  expect(told).toEqual([`1 running ${child}`, `1 finished ${child}`, `2 running ${child}`, `2 finished ${child}`])
+  const { jobs: listed } = await run.evie.send({ type: "open_session", session: run.session })
+  expect(listed.map((job) => [job.id, job.subagent])).toEqual([
+    ["1", child],
+    ["2", child],
+  ])
+})
+
 test("a message to a subagent that is still working joins what it is doing, and one report follows", async () => {
   // A tool the subagent waits in until the test lets it go, so the message arrives while it works.
   let release = () => {}
@@ -278,6 +300,40 @@ test("evie --continue reopens the owner's session and never a subagent's, and a 
   expect(second.requests.child[0]?.messages.map((message) => message.text)).toEqual(["Find it.", "It is in a.ts.", "Which line?"])
   // It carries on with the model it was given, not the main agent's.
   expect(second.requests.child[0]?.model).toBe("other/model")
+})
+
+test("a session's subagents are listed from what is stored, newest first, each named by its task's opening words, after a restart too, when its later rounds are named the same way", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  const projectFolder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(projectFolder, { recursive: true, force: true }))
+  const first = await start(
+    [{ calls: [hand("Find where sessions are made.\nLook in src/core first.")] }, { calls: [hand("Read the tests.", { description: "the tests" })] }, { text: "Two started." }, { text: "One." }, { text: "Two." }],
+    [{ text: "In projects.ts." }, { text: "They are in test/." }],
+    [],
+    { home, projectFolder },
+  )
+  await say(first.run, "go")
+  const ended = () => first.run.events.filter((event) => event.type === "job" && event.job.status === "finished").length
+  while (ended() < 2) await until(first.run, (event) => event.type === "job")
+  const [older, newer] = [...new Set(ofChildren(first.run).map((event) => event.session))] as [string, string]
+  const listed = await first.run.evie.send({ type: "list_subagents", session: first.run.session })
+  expect(listed.map(({ session, name }) => ({ session, name }))).toEqual([
+    { session: newer, name: "Read the tests." },
+    { session: older, name: "Find where sessions are made." },
+  ])
+  expect(listed[0]!.started).toBeGreaterThanOrEqual(listed[1]!.started)
+  expect(await first.run.evie.send({ type: "list_subagents", session: older })).toEqual([])
+  await first.run.evie.close()
+
+  const second = await start([], [{ text: "On line 80." }], [], { home, projectFolder })
+  const continued = await second.run.evie.send({ type: "open_session", folder: projectFolder, continue: true })
+  expect(await second.run.evie.send({ type: "list_subagents", session: continued.session })).toEqual(listed)
+  second.parent.push({ calls: [{ name: "subagent_send", input: { id: older, message: "Which line?" } }] }, { text: "Asked." }, { text: "Line 80." })
+  await say(second.run, "ask it", continued.session)
+  while (!second.run.events.some((event) => event.type === "job" && event.job.status !== "running")) await until(second.run, (event) => event.type === "job")
+  const round = second.run.events.find((event) => event.type === "job")
+  expect(round?.type === "job" && round.job.title).toBe("subagent: Find where sessions are made.")
+  await expect(second.run.evie.send({ type: "list_subagents", session: "no-such-session" })).rejects.toThrow('There is no session with the id "no-such-session".')
 })
 
 // ---- Permissions ---------------------------------------------------------------------------------------------

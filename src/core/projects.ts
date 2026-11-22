@@ -34,8 +34,10 @@ export type Projects = {
   parentOf(session: string): string | undefined
   // What a subagent's session was started as.
   startedAs(session: string): { agent?: string; readOnly: boolean }
-  // The sessions this one started as subagents.
-  childrenOf(session: string): string[]
+  // The subagents a session has started, newest first: each one's session,
+  // when it was made, and the text of its task, its first message, or null
+  // before it has one.
+  subagentsOf(session: string): { id: string; created: number; task: string | null }[]
   // Puts a session and its subagents in another project, or with null in none.
   move(session: string, project: string | null): void
   // Takes a session away, which is being deleted.
@@ -91,6 +93,29 @@ function tracksEvie(folder: string): boolean {
     return asked.exitCode === 0 && asked.stdout.toString().trim() !== ""
   } catch {
     return false
+  }
+}
+
+// Whether a project's folder is in a git work tree, at its top or below it,
+// as git itself says: true or false, or undefined when git cannot be asked
+// or does not answer within a second. A folder with no `.git` in it or
+// above it is not, and git is not asked. Git's own settings in the
+// server's environment are left out, as for the branch.
+export async function inGit(folder: string): Promise<boolean | undefined> {
+  if (!existsSync(folder)) return false
+  let above = folder
+  while (!existsSync(join(above, ".git"))) {
+    if (dirname(above) === above) return false
+    above = dirname(above)
+  }
+  try {
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")))
+    const asked = Bun.spawn(["git", "rev-parse", "--is-inside-work-tree"], { cwd: folder, env, stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 1000 })
+    const [said, problem, code] = await Promise.all([new Response(asked.stdout).text(), new Response(asked.stderr).text(), asked.exited])
+    if (code === 0) return said.trim() === "true"
+    return problem.includes("not a git repository") ? false : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -190,6 +215,10 @@ export function createProjects(db: Database): Projects {
   const sessionRow = db.query<{ project: string | null; parent: string | null; agent: string | null; read_only: number | null }, [string]>(
     "SELECT project, parent, agent, read_only FROM session WHERE id = ?",
   )
+  const children = db.query<{ id: string; created: number; first: string | null }, [string]>(
+    `SELECT id, created, (SELECT body FROM event WHERE event.session = session.id AND type = 'user_message' ORDER BY seq LIMIT 1) AS first
+     FROM session WHERE parent = ? ORDER BY created DESC, rowid DESC`,
+  )
   // `IS` compares with null as well as with an id. Only a session the owner
   // has said something in counts: one that holds nothing but a question
   // asked while it was opening is not a conversation to carry on. Settling
@@ -205,7 +234,6 @@ export function createProjects(db: Database): Projects {
      LIMIT 1`,
   )
 
-  const children = db.query<{ id: string }, [string]>("SELECT id FROM session WHERE parent = ? ORDER BY created")
   const moveRows = db.query("UPDATE session SET project = ? WHERE id = ? OR parent = ?")
   const removeRow = db.query("DELETE FROM session WHERE id = ?")
 
@@ -270,8 +298,8 @@ export function createProjects(db: Database): Projects {
       return lastUsed.get(project?.id ?? null)?.id
     },
 
-    childrenOf(session) {
-      return children.all(session).map((row) => row.id)
+    subagentsOf(session) {
+      return children.all(session).map(({ id, created, first }) => ({ id, created, task: textOf(first) }))
     },
 
     move(session, project) {
@@ -281,5 +309,18 @@ export function createProjects(db: Database): Projects {
     remove(session) {
       removeRow.run(session)
     },
+  }
+}
+
+// The text of a stored message's body, or null when it has none, as a
+// damaged database could hold.
+function textOf(body: string | null): string | null {
+  if (body === null) return null
+  try {
+    const parsed: unknown = JSON.parse(body)
+    const text = typeof parsed === "object" && parsed !== null ? (parsed as { text?: unknown }).text : undefined
+    return typeof text === "string" ? text : null
+  } catch {
+    return null
   }
 }

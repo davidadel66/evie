@@ -75,7 +75,7 @@ test("once connected, every session is listed, and every project with the branch
   const listed = await until(sessions, (state) => state.listed && state.projects.length > 0)
 
   expect(listed.sessions).toEqual([{ session: served.run.session, project: served.run.project!.id, name: "Plan the beds for spring", state: "active", lastActive: expect.any(Number) }])
-  expect(listed.projects).toEqual([served.run.project!])
+  expect(listed.projects).toEqual([{ ...served.run.project!, git: false }])
   expect(listed.problem).toBeUndefined()
 })
 
@@ -124,7 +124,10 @@ test("a session in a project made since the list was listed brings that project 
   await say(served.run, "Sort the seed packets", opened.session)
 
   const known = await until(sessions, (state) => state.projects.length === 2)
-  expect(known.projects).toEqual([opened.project!, served.run.project!])
+  expect(known.projects).toEqual([
+    { ...opened.project!, git: false },
+    { ...served.run.project!, git: false },
+  ])
 })
 
 test("a session is settled from the list and brought back, and one that is working is not settled, with the server's reason", async () => {
@@ -173,7 +176,10 @@ test("the projects are listed one request at a time, and once more for every ask
 
   expect(askedWhileLate).toBe(1)
   expect(asked).toBe(2)
-  expect(sessions.state().projects).toEqual([opened.project!, served.run.project!])
+  expect(sessions.state().projects).toEqual([
+    { ...opened.project!, git: false },
+    { ...served.run.project!, git: false },
+  ])
 })
 
 test("a summary that comes while the sessions are being listed wins over the list's older line for its session, and a session it brings stays", async () => {

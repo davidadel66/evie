@@ -158,8 +158,9 @@ const NAME_LENGTH = 60
 
 // A session's name until it is given one: the opening words of its first
 // message, from its first line, cut at a word's end with an ellipsis when
-// that line is long. None when the message's text is not text.
-function nameOf(text: unknown): string | null {
+// that line is long. None when the message's text is not text. A
+// subagent is named the same way, from its task.
+export function nameOf(text: unknown): string | null {
   if (typeof text !== "string") return null
   const first = text.trim().split("\n")[0]!.trim()
   if (first === "") return null

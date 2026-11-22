@@ -3,14 +3,14 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
-import { createJobs, EndNotKnown } from "./jobs.ts"
+import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
 import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
-import { branchOf, createProjects, keepEvieOutOfGit, makeProject } from "./projects.ts"
+import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
-import { createSummaries } from "./summaries.ts"
+import { createSummaries, nameOf } from "./summaries.ts"
 import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
 
 type Cut = "none" | "asking" | "working"
@@ -353,6 +353,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
         inbox.take(id)
         loop.cancel()
       },
+      name: (id) => {
+        const found = projects.subagentsOf(session).find((each) => each.id === id)
+        return found === undefined ? null : nameOf(found.task)
+      },
     }
     return { children, child }
   }
@@ -678,7 +682,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     }
     // The session's loop, and its subagents', are let go: idle, they stop
     // at once. A subagent opens again in the new project when it is next used.
-    const family = [input.session, ...projects.childrenOf(input.session)]
+    const family = [input.session, ...subagentsOf(input.session)]
     const stopped = family.flatMap((id) => {
       const each = sessions.get(id)
       sessions.delete(id)
@@ -702,7 +706,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     listedSession(input.session, "Delete")
     refuseWhileRunning(input.session, "deleted")
     const project = projects.projectOf(input.session)!
-    const family = [input.session, ...projects.childrenOf(input.session)]
+    const family = [input.session, ...subagentsOf(input.session)]
     const stopped = family.flatMap((id) => {
       const each = sessions.get(id)
       sessions.delete(id)
@@ -747,9 +751,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     if (sessions.get(session)?.loop.busy()) return "a turn is running in it"
     const job = jobs.list(session).find((each) => each.status === "running")
     if (job) return job.kind === "subagent" ? `a subagent it started is working (job ${job.id}, ${job.title})` : `its background job ${job.id} (${job.title}) is running`
-    const busy = projects.childrenOf(session).some((child) => sessions.get(child)?.loop.busy() || jobs.list(child).some((each) => each.status === "running"))
+    const busy = subagentsOf(session).some((child) => sessions.get(child)?.loop.busy() || jobs.list(child).some((each) => each.status === "running"))
     return busy ? "a subagent it started is working" : undefined
   }
+
+  // The ids of the sessions a session started as subagents.
+  const subagentsOf = (session: string) => projects.subagentsOf(session).map((each) => each.id)
 
   // Checks that a session is one the owner can act on from a list of
   // sessions: one that is there, and not a subagent's, which is not listed.
@@ -767,12 +774,33 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, limit)
   }
 
-  // Each project's branch is read now, from its folder, all at once.
+  // A job's output is read from its file, for the jobs this run of Evie knows.
+  async function readJobOutput(input: Commands["read_job_output"]["input"]): Promise<Commands["read_job_output"]["output"]> {
+    if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
+    if (input.after !== undefined && (!Number.isInteger(input.after) || input.after < 0)) {
+      throw new Error("`after` is where the last read ended, as its `to` gave it: a whole number of bytes, from 0.")
+    }
+    const job = jobs.list(input.session).find((each) => each.id === input.id)
+    if (!job) throw new Error(`This session has had no job ${String(input.id)} since Evie last started.`)
+    try {
+      return await readOutput(job.outputFile, input.after)
+    } catch (cause) {
+      throw new Error(`The output of job ${job.id} could not be read: ${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
+  function listSubagents(input: Commands["list_subagents"]["input"]): Commands["list_subagents"]["output"] {
+    if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
+    return projects.subagentsOf(input.session).map(({ id, created, task }) => ({ session: id, name: nameOf(task), started: created }))
+  }
+
+  // Each project's branch, and whether its folder is in a git work tree,
+  // are read now, from its folder, all at once.
   async function listProjects(): Promise<Commands["list_projects"]["output"]> {
     return Promise.all(
       projects.list().map(async (project) => {
-        const branch = await branchOf(project.folder)
-        return branch === undefined ? project : { ...project, branch }
+        const [branch, git] = await Promise.all([branchOf(project.folder), inGit(project.folder)])
+        return { ...project, ...(branch !== undefined && { branch }), ...(git !== undefined && { git }) }
       }),
     )
   }
@@ -935,6 +963,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await listCommands(command)) as Output
         case "list_models":
           return (await listModels(command)) as Output
+        case "read_job_output":
+          return (await readJobOutput(command)) as Output
+        case "list_subagents":
+          return listSubagents(command) as Output
         case "rename_session":
           return renameSession(command) as Output
         case "move_session":

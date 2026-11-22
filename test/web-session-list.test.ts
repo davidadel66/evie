@@ -95,6 +95,14 @@ test("the selected session is kept after # in the address, and an address naming
   expect(selectedIn("#session=")).toBeUndefined()
 })
 
+test("a subagent of the selected session opened in the middle is kept in the address beside it", () => {
+  expect(addressOf({ session: "s1", subagent: "c1" })).toBe("#session=s1&subagent=c1")
+  expect(selectedIn("#session=s1&subagent=c1")).toEqual({ session: "s1", subagent: "c1" })
+  expect(selectedIn("#session=s1&subagent=")).toEqual({ session: "s1" })
+  expect(selectedIn("#subagent=c1")).toBeUndefined()
+  expect(addressAsOpened("#session=s1&subagent=c1&code=abc")).toBe("/#session=s1&subagent=c1")
+})
+
 test("a new session not yet started is a draft, kept in the address by its project, or by none", () => {
   expect(addressOf({ draft: "p1" })).toBe("#draft=p1")
   expect(addressOf({ draft: null })).toBe("#draft=none")
