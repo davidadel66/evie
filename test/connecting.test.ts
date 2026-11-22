@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { connect, startServer } from "../src/index.ts"
 import { openTokens } from "../src/server/tokens.ts"
+import { buildWebApp, type WebApp } from "../src/server/web-app.ts"
 import { loadServerSettings } from "../src/settings-files.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
@@ -199,6 +200,7 @@ test("a token check that fails, such as with the database busy, keeps the connec
         if (failing) throw new Error("database is locked")
         return served.tokens.check(secret)
       },
+      add: served.tokens.add,
     },
     host: "127.0.0.1",
     port: 0,
@@ -228,6 +230,7 @@ test("a token that cannot be checked, such as with the database busy, is answere
       check: () => {
         throw new Error("database is locked")
       },
+      add: served.tokens.add,
     },
     host: "127.0.0.1",
     port: 0,
@@ -263,8 +266,9 @@ test("a browser trades its token for a cookie its scripts cannot read, and the W
   expect(answer.status).toBe(204)
   const [cookie, ...flags] = answer.headers.get("set-cookie")!.split("; ")
   expect(cookie).toBe(`evie_token=${token}`)
-  // Over plain http there is no Secure flag; the browser would not keep the cookie.
-  expect(flags.sort()).toEqual(["HttpOnly", "Path=/", "SameSite=Strict"])
+  // Over plain http there is no Secure flag; the browser would not keep the
+  // cookie. It lasts 400 days, the longest a browser keeps one.
+  expect(flags.sort()).toEqual(["HttpOnly", "Max-Age=34560000", "Path=/", "SameSite=Strict"])
   expect(await opens(server.url, { Origin: page, Cookie: cookie! })).toBe(true)
 })
 
@@ -278,4 +282,114 @@ test("a login with a token that is not one, or from another page, sets no cookie
   expect([wrong.status, elsewhere.status]).toEqual([401, 403])
   expect([wrong.headers.get("set-cookie"), elsewhere.headers.get("set-cookie")]).toEqual([null, null])
   expect(await opens(server.url, { Origin: page, Cookie: "evie_token=not-a-token" })).toBe(false)
+})
+
+// ---- The web app ----------------------------------------------------------------------------
+
+// The web app, built once for the tests that serve it.
+let built: Promise<WebApp> | undefined
+const webApp = () => (built ??= buildWebApp())
+
+test("the web app's page is served to anyone at the server's own address and at /sign-in, with the files it loads", async () => {
+  const app = await webApp()
+  if (!("files" in app)) throw new Error("the web app was not built")
+  const { server } = await start({ app })
+
+  for (const path of ["/", "/sign-in"]) {
+    const answer = await fetch(`${server.url}${path}`)
+    expect(answer.status).toBe(200)
+    expect(answer.headers.get("content-type")).toStartWith("text/html")
+    expect(await answer.text()).toBe(await app.page.text())
+  }
+  for (const [path, file] of Object.entries(app.files)) {
+    const answer = await fetch(`${server.url}${path}`)
+    expect(answer.status).toBe(200)
+    expect(answer.headers.get("content-type")).toBe(file.type)
+    expect(await answer.text()).toBe(await file.text())
+  }
+  // Everything else still needs a token.
+  expect((await fetch(`${server.url}/ws`)).status).toBe(401)
+  expect((await fetch(`${server.url}/nothing-here`)).status).toBe(404)
+})
+
+// Asks for a sign-in link, as `evie web` does, with the headers given.
+const signInLink = (url: string, headers: Record<string, string>) => fetch(`${url}/sign-in-link`, { method: "POST", headers })
+
+// The code in a sign-in link, which is at /sign-in on the server's own address.
+async function codeIn(answer: Response, url: string) {
+  expect(answer.status).toBe(200)
+  const { link } = (await answer.json()) as { link: string }
+  const code = new RegExp(`^${url}/sign-in#code=([\\w-]{43})$`).exec(link)?.[1]
+  if (code === undefined) throw new Error(`not a sign-in link: ${link}`)
+  return code
+}
+
+test("a device with a token asks for a sign-in link, and its code signs a browser in once, with a token of the browser's own", async () => {
+  const { server, token, tokens } = await start()
+  const page = `http://127.0.0.1:${new URL(server.url).port}`
+  const code = await codeIn(await signInLink(server.url, { Authorization: `Bearer ${token}` }), server.url)
+
+  const first = await login(server.url, page, { code })
+
+  expect(first.status).toBe(204)
+  const cookie = first.headers.get("set-cookie")!.split("; ")[0]!
+  expect(await opens(server.url, { Origin: page, Cookie: cookie })).toBe(true)
+  // Named for the day it signed in, so that it can be taken back alone.
+  const day = new Date().toISOString().slice(0, 10)
+  expect(tokens.list().map((made) => made.name)).toEqual(["test device", `browser ${day}`])
+  expect(tokens.check(cookie.replace("evie_token=", ""))).toBe(`browser ${day}`)
+
+  const again = await login(server.url, page, { code })
+  expect(again.status).toBe(401)
+  expect(again.headers.get("set-cookie")).toBeNull()
+  expect(await again.text()).toBe("This sign-in link has been used already or has expired. Run `evie web` for a new one.")
+})
+
+test("the code in a sign-in link stops working after its few minutes, and makes no token", async () => {
+  const { server, token, tokens } = await start({ signInCodeLasts: 30 })
+  const page = `http://127.0.0.1:${new URL(server.url).port}`
+  const code = await codeIn(await signInLink(server.url, { Authorization: `Bearer ${token}` }), server.url)
+
+  await Bun.sleep(60)
+
+  const late = await login(server.url, page, { code })
+  expect(late.status).toBe(401)
+  expect(late.headers.get("set-cookie")).toBeNull()
+  expect(tokens.list().map((made) => made.name)).toEqual(["test device"])
+})
+
+test("a sign-in link is refused to a client with no token, and to a page from another address, which cannot use a code either", async () => {
+  const { server, token } = await start()
+  const page = `http://127.0.0.1:${new URL(server.url).port}`
+  const bearer = { Authorization: `Bearer ${token}` }
+
+  expect((await signInLink(server.url, {})).status).toBe(401)
+  expect((await signInLink(server.url, { Authorization: "Bearer not-a-token" })).status).toBe(401)
+  expect((await signInLink(server.url, { ...bearer, Origin: "http://somewhere.example" })).status).toBe(403)
+
+  // A code brought by another site's page is refused, and is not used up.
+  const code = await codeIn(await signInLink(server.url, bearer), server.url)
+  const elsewhere = await login(server.url, "http://somewhere.example", { code })
+  expect(elsewhere.status).toBe(403)
+  expect(elsewhere.headers.get("set-cookie")).toBeNull()
+  expect((await login(server.url, page, { code })).status).toBe(204)
+})
+
+test("two browsers signed in on the same day each have a token of their own, and one is taken back alone", async () => {
+  const served = await start({ recheckEvery: 20 })
+  const { server, token, tokens } = served
+  const page = `http://127.0.0.1:${new URL(server.url).port}`
+  const signIn = async () => {
+    const code = await codeIn(await signInLink(server.url, { Authorization: `Bearer ${token}` }), server.url)
+    return (await login(server.url, page, { code })).headers.get("set-cookie")!.split("; ")[0]!
+  }
+
+  const laptop = await signIn()
+  const phone = await signIn()
+
+  const day = new Date().toISOString().slice(0, 10)
+  expect(tokens.list().map((made) => made.name)).toEqual(["test device", `browser ${day}`, `browser ${day} (2)`])
+  expect(await takeBack(served.run.home, `browser ${day}`)).toBe(true)
+  expect(await opens(server.url, { Origin: page, Cookie: laptop })).toBe(false)
+  expect(await opens(server.url, { Origin: page, Cookie: phone })).toBe(true)
 })

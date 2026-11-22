@@ -1,6 +1,8 @@
-import type { ServerWebSocket } from "bun"
+import type { HTMLBundle, ServerWebSocket } from "bun"
+import { randomBytes } from "node:crypto"
 import type { Commands, Evie, EvieEvent } from "../core/types.ts"
 import type { Tokens } from "./tokens.ts"
+import type { WebApp } from "./web-app.ts"
 import { hostInAddress, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
 
 // Evie's server. It is a client of the core, as the terminal was: it uses
@@ -9,8 +11,9 @@ import { hostInAddress, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessag
 export type ServerOptions = {
   // The core. The server never closes it; whoever started it does.
   evie: Evie
-  // The devices' tokens, to check each connection against.
-  tokens: Pick<Tokens, "check">
+  // The devices' tokens, to check each connection against, and to make one
+  // for each browser that signs in with a sign-in link.
+  tokens: Pick<Tokens, "check" | "add">
   // Where to listen. Port 0 takes any free port.
   host: string
   port: number
@@ -26,6 +29,12 @@ export type ServerOptions = {
   // its client can tell a quiet line from a dead one. Every 15 seconds when
   // left out, which is for tests to change.
   keepaliveEvery?: number
+  // The web app, served to anyone, since the page and its files hold no
+  // secrets: what it shows comes over the WebSocket, which needs a token.
+  app?: WebApp
+  // How long, in milliseconds, the code in a sign-in link works. Five
+  // minutes when left out, which is for tests to change.
+  signInCodeLasts?: number
 }
 
 export type EvieServer = {
@@ -58,14 +67,20 @@ type Joining = { opens: number; held: EvieEvent[] }
 // The reply to a command a device sent, and whether it has settled.
 type Remembered = { reply: Promise<ServerMessage>; settled: boolean }
 
-// The browser's cookie that holds its token.
+// The browser's cookie that holds its token, and how long the browser keeps
+// it, in seconds: 400 days, the longest browsers allow. Taking the token
+// back still signs the browser out at once.
 const COOKIE = "evie_token"
+const COOKIE_LASTS = 400 * 24 * 60 * 60
 // How many of each device's commands the server remembers the replies to,
 // to answer the same command sent again after the line dropped. There is no
 // time limit, since a laptop can sleep all night with a command unanswered.
 // A device sends far fewer commands than this while its line is down, and
 // each reply kept is small.
 const REMEMBERED = 200
+// How long the code in a sign-in link works: long enough for the browser to
+// open, short enough that a link left in a browser's history is of no use.
+const SIGN_IN_CODE_LASTS = 5 * 60_000
 
 export function startServer(options: ServerOptions): EvieServer {
   const connections = new Set<ServerWebSocket<Connection>>()
@@ -77,6 +92,9 @@ export function startServer(options: ServerOptions): EvieServer {
   // reached it sends the command again with the same id, and is answered
   // from here, or waits for the first one to finish, so it is carried out once.
   const replies = new Map<string, Map<string, Remembered>>()
+  // The code in each sign-in link not yet used, with the time it stops
+  // working. It is kept in memory only: a link outlives no restart.
+  const codes = new Map<string, number>()
 
   function replyTo(device: string, message: ClientMessage): Promise<ServerMessage> {
     const carryOut = () =>
@@ -194,24 +212,74 @@ export function startServer(options: ServerOptions): EvieServer {
     return refusedPage(request, port) ?? deviceFor(bearer ?? cookie)
   }
 
-  // A browser trades its token for a cookie. The cookie holds the token
-  // itself, so taking the token back ends the cookie too. The page's scripts
-  // cannot read it (HttpOnly), and the browser sends it only with requests
-  // that Evie's own pages make (SameSite=Strict), and over HTTPS only when
-  // Evie is reached over HTTPS (Secure).
+  // A device with a token asks for a link that signs a browser in, as
+  // `evie web` does. The link opens the web app at the address the device
+  // reached the server at, with a code that works once, for a few minutes.
+  // The code is in the address's fragment, after #, which a browser never
+  // sends to a server, and the page wipes it from the address bar.
+  function signInLink(request: Request, port: number): Response {
+    const admitted = admit(request, port)
+    if (admitted instanceof Response) return admitted
+    const now = Date.now()
+    for (const [code, until] of codes) if (until <= now) codes.delete(code)
+    const code = randomBytes(32).toString("base64url")
+    codes.set(code, now + (options.signInCodeLasts ?? SIGN_IN_CODE_LASTS))
+    const link = new URL(PATHS.signIn, request.url)
+    link.hash = `code=${code}`
+    return Response.json({ link: link.href })
+  }
+
+  // A browser that brings the code of a sign-in link is given a token of its
+  // own, named for the day, so that each browser can be taken back alone
+  // with `evie token remove`. The token is made only now, so a link never
+  // used leaves no token behind. The code is used up only once the token is
+  // made: a token that cannot be made just now leaves it to be tried again.
+  function signedInBrowser(code: string): Admitted | Response {
+    const until = codes.get(code)
+    if (until === undefined || until <= Date.now()) {
+      codes.delete(code)
+      return new Response("This sign-in link has been used already or has expired. Run `evie web` for a new one.", { status: 401 })
+    }
+    const day = new Date().toISOString().slice(0, 10)
+    try {
+      for (let count = 1; ; count++) {
+        const device = count === 1 ? `browser ${day}` : `browser ${day} (${count})`
+        const made = options.tokens.add(device)
+        if ("refused" in made) continue
+        codes.delete(code)
+        return { token: made.secret, device }
+      }
+    } catch {
+      return new Response("The browser's token could not be made just now. Try again.", { status: 503 })
+    }
+  }
+
+  // A browser trades its token, or the code of a sign-in link, for a cookie.
+  // The cookie holds the token itself, so taking the token back ends the
+  // cookie too. The page's scripts cannot read it (HttpOnly), and the
+  // browser sends it only with requests that Evie's own pages make
+  // (SameSite=Strict), and over HTTPS only when Evie is reached over HTTPS
+  // (Secure).
   async function login(request: Request, port: number): Promise<Response> {
     const refused = refusedPage(request, port)
     if (refused) return refused
-    const body = (await request.json().catch(() => undefined)) as { token?: unknown } | undefined
-    const admitted = deviceFor(typeof body?.token === "string" ? body.token : undefined)
+    const body = (await request.json().catch(() => undefined)) as { token?: unknown; code?: unknown } | undefined
+    const admitted = typeof body?.code === "string" ? signedInBrowser(body.code) : deviceFor(typeof body?.token === "string" ? body.token : undefined)
     if (admitted instanceof Response) return admitted
     const secure = new URL(request.url).protocol === "https:" ? "; Secure" : ""
-    return new Response(null, { status: 204, headers: { "Set-Cookie": `${COOKIE}=${admitted.token}; HttpOnly; SameSite=Strict; Path=/${secure}` } })
+    return new Response(null, {
+      status: 204,
+      headers: { "Set-Cookie": `${COOKIE}=${admitted.token}; Max-Age=${COOKIE_LASTS}; HttpOnly; SameSite=Strict; Path=/${secure}` },
+    })
   }
 
   const server = Bun.serve<Connection>({
     hostname: options.host,
     port: options.port,
+    routes: appRoutes(options.app),
+    // Only while working on the web app, which Bun then bundles on each
+    // request. Otherwise an error is answered without the details of Evie's code.
+    development: options.app !== undefined && !("files" in options.app),
     fetch(request, server) {
       const path = new URL(request.url).pathname
       if (path === PATHS.socket) {
@@ -227,6 +295,7 @@ export function startServer(options: ServerOptions): EvieServer {
         return admitted instanceof Response ? admitted : new Response("This token is accepted.")
       }
       if (path === PATHS.login && request.method === "POST") return login(request, server.port!)
+      if (path === PATHS.signInLink && request.method === "POST") return signInLink(request, server.port!)
       return new Response("Not found.", { status: 404 })
     },
     websocket: {
@@ -320,6 +389,20 @@ export function startServer(options: ServerOptions): EvieServer {
 }
 
 const send = (socket: ServerWebSocket<Connection>, message: ServerMessage) => socket.send(JSON.stringify(message))
+
+// Where the web app is served: its page, at its own address and at the
+// address a sign-in link opens, and each file the page loads. A built
+// file's name carries a hash of its contents, so a browser may keep it for
+// good; the page is asked for afresh each time, so a new version is seen.
+function appRoutes(app: WebApp | undefined): Record<string, Response | HTMLBundle> {
+  if (!app) return {}
+  if (!("files" in app)) return { [PATHS.page]: app.page, [PATHS.signIn]: app.page }
+  const served = (file: Blob, cache: string) => new Response(file, { headers: { "Content-Type": file.type, "Cache-Control": cache } })
+  const routes: Record<string, Response> = {}
+  for (const [path, file] of Object.entries(app.files)) routes[path] = served(file, "public, max-age=31536000, immutable")
+  for (const path of [PATHS.page, PATHS.signIn]) routes[path] = served(app.page, "no-cache")
+  return routes
+}
 
 // A message from a client, when it has the shape of one. Whether the command
 // is one the core knows is for the core to say, in its reply.

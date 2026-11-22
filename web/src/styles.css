@@ -1,0 +1,4 @@
+/* Only the files in this folder are scanned for class names, whatever
+   folder the server is started in. */
+@import "tailwindcss" source(".");
+@import "./fonts.css";

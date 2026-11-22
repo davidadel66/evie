@@ -1,5 +1,6 @@
 import { connect, startServer, type ConnectOptions, type EvieOptions, type Plugin } from "../../src/index.ts"
 import { openTokens } from "../../src/server/tokens.ts"
+import type { WebApp } from "../../src/server/web-app.ts"
 import { startEvie } from "./harness.ts"
 
 export type Served = Awaited<ReturnType<typeof serveEvie>>
@@ -16,6 +17,8 @@ export async function serveEvie(
     keepaliveEvery?: number
     questions?: boolean
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
+    app?: WebApp
+    signInCodeLasts?: number
   } = {},
 ) {
   const run = await startEvie(plugins, { ...(options.questions && { questions: true }), ...(options.projectSettings && { projectSettings: options.projectSettings }) })
@@ -30,6 +33,8 @@ export async function serveEvie(
     ...(options.origins && { origins: options.origins }),
     ...(options.recheckEvery !== undefined && { recheckEvery: options.recheckEvery }),
     ...(options.keepaliveEvery !== undefined && { keepaliveEvery: options.keepaliveEvery }),
+    ...(options.app && { app: options.app }),
+    ...(options.signInCodeLasts !== undefined && { signInCodeLasts: options.signInCodeLasts }),
   })
   const clients: { close(): Promise<void> }[] = []
   return {
