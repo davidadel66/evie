@@ -1,13 +1,99 @@
 import { expect, test } from "bun:test"
 import tailwind from "bun-plugin-tailwind"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, realpath, rm, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { builtWebApp } from "../src/programs/serve.ts"
 import { buildWebApp } from "../src/server/web-app.ts"
 
 // The web app as `evie serve` builds it when it starts: by Bun's bundler, in
-// memory, with Tailwind's plugin.
+// a process of its own, with Tailwind's plugin.
+
+// A new empty folder, removed once the test is done with it.
+async function inFolder<T>(prefix: string, use: (folder: string) => Promise<T>): Promise<T> {
+  const folder = await mkdtemp(join(tmpdir(), prefix))
+  try {
+    return await use(folder)
+  } finally {
+    await rm(folder, { recursive: true, force: true })
+  }
+}
+
+test("the build hands over its metafile, which names the page's script by its path in the repository, and each chunk it imports is a file built beside it", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+
+  const script = [...(await app.page.text()).matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
+  const entries = Object.entries(app.metafile.outputs).filter(([path, output]) => output.entryPoint === "web/index.html" && path.endsWith(".js"))
+  expect(entries.map(([path]) => path.replace(/^\./, ""))).toEqual(script)
+  const imports = entries[0]![1].imports.filter((each) => each.kind === "import-statement")
+  expect(imports.length).toBeGreaterThan(0)
+  for (const each of imports) expect(Object.keys(app.files)).toContain(each.path.replace(/^\./, ""))
+})
+
+test("a server started in another folder, with another bun first on its path, builds the web app with its own Bun, and leaves nothing in the temporary folder", async () => {
+  await inFolder("evie-elsewhere-", async (elsewhere) => {
+    // A bun that only fails, first on the path of a Bun started in this
+    // folder, which builds the web app as the server does.
+    await mkdir(join(elsewhere, "bin"))
+    await writeFile(join(elsewhere, "bin", "bun"), "#!/bin/sh\necho 'not the Bun that runs the server' >&2\nexit 1\n")
+    await chmod(join(elsewhere, "bin", "bun"), 0o755)
+    const temporary = join(elsewhere, "temporary")
+    await mkdir(temporary)
+    await writeFile(
+      join(elsewhere, "build.ts"),
+      `const { buildWebApp } = await import(${JSON.stringify(join(import.meta.dir, "..", "src", "server", "web-app.ts"))})\n` +
+        `const app = await buildWebApp({ temporary: ${JSON.stringify(temporary)} })\n` +
+        "const pages = Object.values(app.metafile.outputs).map((output) => output.entryPoint).filter((path) => path?.endsWith('index.html'))\n" +
+        "console.log(JSON.stringify({ page: await app.page.text(), pages: [...new Set(pages)] }))\n",
+    )
+
+    const server = Bun.spawn([process.execPath, "build.ts"], { cwd: elsewhere, env: { ...process.env, PATH: `${join(elsewhere, "bin")}:${process.env.PATH}` }, stdout: "pipe", stderr: "pipe" })
+    const [said, problem, code] = await Promise.all([new Response(server.stdout).text(), new Response(server.stderr).text(), server.exited])
+
+    expect({ code, problem }).toEqual({ code: 0, problem: "" })
+    const built = JSON.parse(said) as { page: string; pages: string[] }
+    expect(built.page).toContain('<script type="module"')
+    // Named from the repository, where the build was started.
+    expect(built.pages).toEqual(["web/index.html"])
+    expect(await readdir(temporary)).toEqual([])
+  })
+})
+
+test("a build that fails names the file and the line, evie serve goes on without the page, and nothing is left in the temporary folder", async () => {
+  await inFolder("evie-broken-page-", async (folder) => {
+    await writeFile(join(folder, "index.html"), '<!doctype html><html><body><script type="module" src="./main.tsx"></script></body></html>\n')
+    await writeFile(join(folder, "main.tsx"), "const shown = (1 +\nconsole.log(shown)\n")
+    const temporary = join(folder, "temporary")
+    await mkdir(temporary)
+
+    const built = await builtWebApp(async () => ({ buildWebApp: () => buildWebApp({ page: join(folder, "index.html"), temporary }) }))
+
+    // The bundler names the file by its real path: on macOS the temporary
+    // folder is reached through a link.
+    const file = join(await realpath(folder), "main.tsx")
+    expect(built).toEqual({ problem: `The web app could not be built, so it is not served:\n${file}:2: Expected ")" but found end of file` })
+    expect(await readdir(temporary)).toEqual([])
+  })
+})
+
+test("a temporary folder left by a server stopped while it built is removed by the next build, and one still being built into is not", async () => {
+  await inFolder("evie-left-build-", async (folder) => {
+    await writeFile(join(folder, "index.html"), '<!doctype html><html><body><script type="module" src="./main.ts"></script></body></html>\n')
+    await writeFile(join(folder, "main.ts"), 'console.log("evie")\n')
+    const temporary = join(folder, "temporary")
+    // Left two hours ago, as by Ctrl-C while the server started; another
+    // server's, building now; and a folder that is not a build's.
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    for (const name of ["evie-web-app-left", "evie-web-app-building", "something-else"]) await mkdir(join(temporary, name, "files"), { recursive: true })
+    for (const name of ["evie-web-app-left", "something-else"]) await utimes(join(temporary, name), twoHoursAgo, twoHoursAgo)
+
+    const app = await buildWebApp({ page: join(folder, "index.html"), temporary })
+
+    expect("files" in app).toBe(true)
+    expect((await readdir(temporary)).sort()).toEqual(["evie-web-app-building", "something-else"])
+  })
+})
 
 test("the web app builds into a page whose script and stylesheet are built beside it, and that asks no other site for anything", async () => {
   const app = await buildWebApp()
