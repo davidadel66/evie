@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { FileDiff } from "../../src/core/types.ts"
 import { drawable } from "./diff.ts"
-import { CodeView, holdPool, sidesLoader, viewerItems, viewerOptions, WorkerPoolContext, type CodeViewHandle, type ReadSides } from "./diff-view.ts"
+import { CodeView, DIFF_WORKER_META, holdPool, sidesLoader, viewerItems, viewerOptions, WorkerPoolContext, type CodeViewHandle, type ReadSides } from "./diff-view.ts"
 import { cn } from "./lib/utils.ts"
 
 // The diff's screen, in the right panel: the files' diffs as T3 Code's
@@ -38,7 +38,7 @@ const RESTORE_TRIES = 20
 export default function DiffView({ files, layout, wrap, folded, fold, goTo, wentTo, scroll, scrolled, read, failed }: DiffViewProps) {
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null)
   const scroller = useRef<HTMLDivElement>(null)
-  const [pool] = useState(holdPool)
+  const [pool] = useState(() => holdPool(document.querySelector<HTMLMetaElement>(`meta[name="${DIFF_WORKER_META}"]`)?.content))
   useEffect(() => pool.release, [pool])
   const [drawn, notes] = useMemo(() => [files.filter(drawable), files.filter((file) => !drawable(file))], [files])
   const items = useMemo(() => viewerItems(drawn, folded), [drawn, folded])

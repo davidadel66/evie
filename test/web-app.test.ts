@@ -7,6 +7,7 @@ import { join } from "node:path"
 import { brotliDecompressSync, gunzipSync } from "node:zlib"
 import { builtWebApp } from "../src/programs/serve.ts"
 import { buildWebApp, headLinks, withHeadLinks } from "../src/server/web-app.ts"
+import { DIFF_WORKER_META } from "../web/src/diff-view.ts"
 
 // The web app as `evie serve` builds it when it starts: by Bun's bundler, in
 // a process of its own, with Tailwind's plugin.
@@ -36,14 +37,16 @@ test("the build hands over its metafile, which names the page's script by its pa
   for (const each of imports) expect(Object.keys(app.files)).toContain(each.path.replace(/^\./, ""))
 })
 
-test("every file the web app builds over 1 KB, the diff library's worker among them, is kept compressed with brotli and with gzip, each of which decodes to the file", async () => {
+test("every file the web app builds over 1 KB, the diff's worker and what it imports among them, is kept compressed with brotli and with gzip, each of which decodes to the file", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
 
-  // The worker is built, though the metafile does not list it.
-  const worker = Object.keys(app.files).find((path) => /^\/worker-portable-[^/]+\.js$/.test(path))
+  // The worker is built, and the largest file it imports to start.
+  const worker = Object.keys(app.metafile.outputs).find((path) => app.metafile.outputs[path]!.entryPoint === "web/src/diff-worker.ts")
   expect(worker).toBeDefined()
-  expect(Object.keys(app.metafile.outputs).map((path) => path.replace(/^\./, ""))).not.toContain(worker)
+  const imported = app.metafile.outputs[worker!]!.imports.map((each) => each.path.replace(/^\./, ""))
+  const largest = imported.toSorted((a, b) => app.files[b]!.identity.length - app.files[a]!.identity.length)[0]
+  expect(app.files[largest!]!.identity.length).toBeGreaterThan(1024)
   const files = [app.page, ...Object.values(app.files)]
   for (const file of files) {
     const plain = file.identity
@@ -54,7 +57,39 @@ test("every file the web app builds over 1 KB, the diff library's worker among t
     expect(brotliDecompressSync(file.br!)).toEqual(Buffer.from(plain))
     expect(gunzipSync(file.gzip!)).toEqual(Buffer.from(plain))
   }
-  expect(app.files[worker!]!.br!.length).toBeLessThan(app.files[worker!]!.identity.length / 2)
+  expect(app.files[largest!]!.br!.length).toBeLessThan(app.files[largest!]!.identity.length / 2)
+})
+
+test("the page names the diff's worker in its head, a module built beside it under a name that changes with what it holds, which it does not load until a diff is drawn; to start, the worker loads a few KB, with no WebAssembly, and the library's 1.3 MB portable worker is not built", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const page = text(app.page.identity)
+  const outputs = app.metafile.outputs
+
+  // Named in the head by the meta tag the diff view reads.
+  const meta = page.match(new RegExp(`<meta name="${DIFF_WORKER_META}" content="([^"]+)">`))
+  expect(meta).not.toBeNull()
+  expect(page.indexOf(meta![0])).toBeLessThan(page.indexOf("</head>"))
+  const address = meta![1]!
+  expect(address).toMatch(/^\/diff-worker-[a-z0-9]+\.js$/)
+  expect(outputs[`.${address}`]?.entryPoint).toBe("web/src/diff-worker.ts")
+  expect(Object.keys(app.files)).toContain(address)
+  // Not fetched with the page, by a link or a script.
+  expect(page).not.toMatch(new RegExp(`(?:src|href)="${address}"`))
+
+  // The worker and every file it imports before it runs.
+  const start = new Set<string>()
+  const follow = (path: string) => {
+    if (start.has(path)) return
+    start.add(path)
+    for (const each of outputs[path]!.imports) if (each.kind === "import-statement") follow(each.path)
+  }
+  follow(`.${address}`)
+  const files = [...start].map((path) => app.files[path.replace(/^\./, "")]!)
+  expect(files.reduce((bytes, file) => bytes + file.identity.length, 0)).toBeLessThan(64 * 1024)
+  // An inlined WebAssembly program starts with "\0asm", "AGFzbQ" in base64.
+  for (const file of files) expect(text(file.identity)).not.toMatch(/WebAssembly|AGFzbQ/)
+  expect(Object.keys(app.files).filter((path) => path.includes("worker-portable"))).toEqual([])
 })
 
 test("the page has one modulepreload link for each chunk its script imports, and for each chunk those import, so the browser fetches them alongside the script; none for what it imports only when needed, such as the diff view", async () => {
@@ -91,9 +126,10 @@ test("the page has one modulepreload link for each chunk its script imports, and
   for (const each of later) expect(named).not.toContain(each.path.replace(/^\./, ""))
 })
 
-test("the page is given each of its links once, before </head>: one it has already, as a later Bun may write itself, is not added again, and a comment is not the page's own", () => {
+test("the page is given each of its links once, and the address of the diff's worker, before </head>: one it has already, as a later Bun may write itself, is not added again, and a comment is not the page's own", () => {
   // A page whose script imports two chunks, one of them importing a third,
-  // and loads a fourth with `import()`.
+  // and loads a fourth with `import()`; and the diff's worker, built beside
+  // it, which imports a chunk of its own.
   const output = (imports: [string, "import-statement" | "dynamic-import"][], entryPoint?: string) => ({
     bytes: 1,
     inputs: {},
@@ -112,19 +148,31 @@ test("the page is given each of its links once, before </head>: one it has alrea
       "./chunk-c.js": output([]),
       "./chunk-later.js": output([["./chunk-only-later.js", "import-statement"]]),
       "./chunk-only-later.js": output([]),
+      "./diff-worker-1a2b3c4d.js": output([["./chunk-worker.js", "import-statement"]], "web/src/diff-worker.ts"),
+      "./chunk-worker.js": output([]),
     },
   }
   const links = headLinks(metafile)
-  expect(links.map((link) => link.href).sort()).toEqual(["/chunk-a.js", "/chunk-b.js", "/chunk-c.js"])
-  expect(links.every((link) => link.rel === "modulepreload")).toBe(true)
+  expect(links).toEqual([
+    { rel: "modulepreload", href: "/chunk-a.js", crossorigin: "" },
+    { rel: "modulepreload", href: "/chunk-c.js", crossorigin: "" },
+    { rel: "modulepreload", href: "/chunk-b.js", crossorigin: "" },
+    { name: DIFF_WORKER_META, content: "/diff-worker-1a2b3c4d.js" },
+  ])
 
   // The bundler's link for chunk b, written in its own way, and a comment
-  // that names chunk a and the end of the head, which are not the page's own.
+  // that names chunk a, the worker and the end of the head, which are not
+  // the page's own.
   const page =
-    '<!doctype html><html><head><title>evie</title><!-- Before </head>, as <link rel="modulepreload" href="/chunk-a.js"> --><link crossorigin rel="prefetch modulepreload" href=./chunk-b.js><script type="module" crossorigin src="/chunk-page.js"></script></head><body></body></html>'
+    `<!doctype html><html><head><meta charset="utf-8"><title>evie</title><!-- Before </head>, as <link rel="modulepreload" href="/chunk-a.js"> and <meta name="${DIFF_WORKER_META}" content="/diff-worker-1a2b3c4d.js"> --><link crossorigin rel="prefetch modulepreload" href=./chunk-b.js><script type="module" crossorigin src="/chunk-page.js"></script></head><body></body></html>`
   const finished = withHeadLinks(page, links)
 
-  expect(finished).toBe(page.replace("</head><body>", '<link rel="modulepreload" href="/chunk-a.js" crossorigin><link rel="modulepreload" href="/chunk-c.js" crossorigin></head><body>'))
+  expect(finished).toBe(
+    page.replace(
+      "</head><body>",
+      `<link rel="modulepreload" href="/chunk-a.js" crossorigin><link rel="modulepreload" href="/chunk-c.js" crossorigin><meta name="${DIFF_WORKER_META}" content="/diff-worker-1a2b3c4d.js"></head><body>`,
+    ),
+  )
   // Finished again, it is the same page.
   expect(withHeadLinks(finished, links)).toBe(finished)
 })

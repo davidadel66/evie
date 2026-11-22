@@ -1,11 +1,7 @@
-/// <reference path="./diff-worker.d.ts" />
 import type { CodeViewDiffItem, FileDiffContentsLoader, FileDiffMetadata } from "@pierre/diffs"
 import { processFile, registerCustomTheme } from "@pierre/diffs"
 import type { CodeViewReactOptions } from "@pierre/diffs/react"
 import { getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton, type WorkerPoolManager } from "@pierre/diffs/worker"
-// The library's worker, a script of its own, which the bundler serves as a
-// file beside the page; the page loads it only when a diff is drawn.
-import workerScript from "@pierre/diffs/worker/worker-portable.js" with { type: "file" }
 import type { FileDiff } from "../../src/core/types.ts"
 
 // The one module that knows T3 Code's own diff library, @pierre/diffs
@@ -250,30 +246,74 @@ const TOKENIZE_LONGEST_LINE = 1000
 // The workers that colour the code, as T3 Code's: a few, by how many cores
 // the computer has, so that colouring a large file does not hold up the
 // page. They start when the first diff is drawn, and stop half a minute
-// after the last diff on the page has gone. Should they fail to start, the
-// library colours on the page itself.
+// after the last diff on the page has gone. Should they fail to start, or
+// the page name no worker, the library colours on the page itself.
+//
+// Each runs the library's own small worker, `diff-worker.ts`, a module the
+// server builds beside the page, with which it shares its files: it loads
+// a few KB to start, and the rest as it first needs it. The page reads the
+// language of each file and the theme, and hands them to the workers, so a
+// worker never fetches Shiki's grammars itself. The bundler does not follow
+// `new Worker(...)`, so the server names the worker's built file in the
+// page's head, in the meta tag `DIFF_WORKER_META`, and the page hands its
+// address here as `worker`. A page bundled as it is asked for, by
+// `evie serve --dev`, names none.
+export const DIFF_WORKER_META = "evie-diff-worker"
 const POOL_IDLE = 30_000
 let held = 0
 let idle: ReturnType<typeof setTimeout> | undefined
-export function holdPool(): { pool: WorkerPoolManager | undefined; release(): void } {
+// The pool while it is kept, and the workers started for it that it has
+// not taken yet.
+let kept: { pool: WorkerPoolManager; ahead: Worker[] } | undefined
+export function holdPool(worker: string | undefined): { pool: WorkerPoolManager | undefined; release(): void } {
   clearTimeout(idle)
   held += 1
-  const cores = typeof navigator === "undefined" ? 4 : Math.max(1, navigator.hardwareConcurrency || 4)
-  const pool =
-    typeof Worker === "undefined"
-      ? undefined
-      : getOrCreateWorkerPoolSingleton({
-          poolOptions: { workerFactory: () => new Worker(workerScript), poolSize: Math.max(2, Math.min(6, Math.floor(cores / 2))), totalASTLRUCacheSize: 240 },
-          highlighterOptions: { theme: THEME, preferredHighlighter: "shiki-js", tokenizeMaxLineLength: TOKENIZE_LONGEST_LINE, lineDiffType: "none" },
-        })
+  if (kept === undefined && worker && typeof Worker !== "undefined") kept = poolOf(worker)
   let released = false
   return {
-    pool,
+    pool: kept?.pool,
     release() {
       if (released) return
       released = true
       held -= 1
-      if (held === 0) idle = setTimeout(terminateWorkerPoolSingleton, POOL_IDLE)
+      if (held === 0) idle = setTimeout(letGo, POOL_IDLE)
     },
   }
+}
+
+// The pool, with its workers started as it is made. The library starts
+// them only once the page has read the theme, which on a phone's network
+// is two round trips later, and each then takes two more to fetch the
+// files it starts with, one importing the other: started at once, they
+// have them by the time the pool asks. A worker that has failed to start
+// by then, as when its file is gone, is started again for the pool, which
+// then learns of its failure and colours on the page.
+function poolOf(address: string): { pool: WorkerPoolManager; ahead: Worker[] } {
+  const cores = typeof navigator === "undefined" ? 4 : Math.max(1, navigator.hardwareConcurrency || 4)
+  const size = Math.max(2, Math.min(6, Math.floor(cores / 2)))
+  const start = () => new Worker(address, { type: "module" })
+  const failed = new WeakSet<Worker>()
+  const ahead = Array.from({ length: size }, () => {
+    const each = start()
+    each.addEventListener("error", () => failed.add(each))
+    return each
+  })
+  const taken = () => {
+    const each = ahead.shift()
+    if (each !== undefined && !failed.has(each)) return each
+    each?.terminate()
+    return start()
+  }
+  const pool = getOrCreateWorkerPoolSingleton({
+    poolOptions: { workerFactory: taken, poolSize: size, totalASTLRUCacheSize: 240 },
+    highlighterOptions: { theme: THEME, preferredHighlighter: "shiki-js", tokenizeMaxLineLength: TOKENIZE_LONGEST_LINE, lineDiffType: "none" },
+  })
+  return { pool, ahead }
+}
+
+// Stops the pool's workers, and any it did not take.
+function letGo() {
+  terminateWorkerPoolSingleton()
+  for (const each of kept?.ahead.splice(0) ?? []) each.terminate()
+  kept = undefined
 }
