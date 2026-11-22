@@ -22,8 +22,9 @@ export type ConnectOptions = {
   // when any reach the client, are passed on as before.
   onMissing?: (note: string) => void
   // Called when the client stops for good without `close` being called,
-  // because the server took this device's token back, or refuses it or the
-  // page, or because the line stayed down past `giveUpAfter`, with why.
+  // because the server took this device's token back, or refuses it, or
+  // refuses the page three times in a row, or because the line stayed down
+  // past `giveUpAfter`, with why.
   // Commands still waiting fail, and so does any sent after.
   onEnd?: (cause: ConnectError) => void
   // How long, in milliseconds, to go on trying after the line drops, for a
@@ -109,6 +110,11 @@ const LONGEST_WAIT = 10_000
 // How long a try to connect again may take before it is given up on, for a
 // server that takes the connection but never answers.
 const CONNECT_TIMEOUT = 10_000
+// A page let in once is refused on connecting again only when the server's
+// settings changed, so a refusal then is more likely a busy server failing
+// to take the connection. The client takes it as the page refused only
+// after this many in a row.
+const PAGE_REFUSALS = 3
 // A line can die without closing, as when a laptop sleeps or changes
 // network. The server sends a keepalive every 15 seconds, so a line that
 // has carried nothing for three times that long is taken to have dropped.
@@ -408,6 +414,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   }
 
   async function tryAgain() {
+    let pageRefusals = 0
     for (let wait = options.firstWait ?? FIRST_WAIT; ; wait = Math.min(wait * 2, LONGEST_WAIT)) {
       await pause(wait, stopping.signal)
       if (stopping.signal.aborted) return
@@ -418,7 +425,9 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
         if (!(cause instanceof ConnectError)) throw cause
         if (stopping.signal.aborted) return
         // A refusal that trying again will not change.
-        if (cause.reason === "token" || cause.reason === "page") return end(cause)
+        if (cause.reason === "token") return end(cause)
+        pageRefusals = cause.reason === "page" ? pageRefusals + 1 : 0
+        if (pageRefusals === PAGE_REFUSALS) return end(cause)
         down = cause
         continue
       }

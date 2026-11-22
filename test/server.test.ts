@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   connect,
+  ConnectError,
   runTerminal,
   startServer,
   type ClientMessage,
@@ -1588,4 +1589,60 @@ test("over the network, a command whose field is read as text is refused when th
   // A turn the message had started would be under way by now.
   await Bun.sleep(20)
   expect(stored(served.run.events)).toEqual([])
+})
+
+// A server that lets the client in, and then, after the line drops, refuses
+// its WebSocket the given number of times while still accepting its token,
+// as a busy server can when it fails to take a connection.
+function refusingAfterADrop() {
+  const lines = new Set<import("bun").ServerWebSocket<unknown>>()
+  let refusals = 0
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(request, server) {
+      if (new URL(request.url).pathname === "/check") return new Response("This token is accepted.")
+      if (refusals > 0) {
+        refusals--
+        return new Response("Connections from this page are not allowed.", { status: 403 })
+      }
+      if (server.upgrade(request)) return
+      return new Response("Not a WebSocket.", { status: 400 })
+    },
+    websocket: { open: (line) => void lines.add(line), close: (line) => void lines.delete(line), message: () => {} },
+  })
+  cleanups.push(async () => server.stop(true))
+  return {
+    url: `http://127.0.0.1:${server.port}`,
+    dropThenRefuse(times: number) {
+      refusals = times
+      for (const line of lines) line.close(1001, "going away")
+    },
+  }
+}
+
+test("a client whose WebSocket is refused once or twice as it connects again, while its token is still accepted, keeps trying, and is back", async () => {
+  const server = refusingAfterADrop()
+  let back = 0
+  const ended: ConnectError[] = []
+  const client = await connect({ url: server.url, token: "a-token", firstWait: 5, onBack: () => back++, onEnd: (cause) => ended.push(cause) })
+  cleanups.push(() => client.close())
+
+  server.dropThenRefuse(2)
+  while (back === 0 && ended.length === 0) await Bun.sleep(5)
+
+  expect(ended).toEqual([])
+  expect(back).toBe(1)
+})
+
+test("a client whose WebSocket is refused three times in a row as it connects again, while its token is accepted, stops, saying the page is not let in", async () => {
+  const server = refusingAfterADrop()
+  const ended: ConnectError[] = []
+  const client = await connect({ url: server.url, token: "a-token", firstWait: 5, onEnd: (cause) => ended.push(cause) })
+  cleanups.push(() => client.close())
+
+  server.dropThenRefuse(Infinity)
+  while (ended.length === 0) await Bun.sleep(5)
+
+  expect(ended.map((cause) => cause.reason)).toEqual(["page"])
 })
