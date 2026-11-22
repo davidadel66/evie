@@ -273,9 +273,11 @@ it stands, even while a reply is being written:
   reply is shown as the text it is, an image is linked to rather than
   loaded, and only a web or mail address is a link.
 - **A reply streams in** as it is written.
-- **The tools a turn used** are one quiet line, such as "Worked for 48s",
-  which opens to list each call and what evie wrote between them; each
-  call opens to its result.
+- **The tools evie used** between the things it says are one quiet line
+  for each run of them, which opens to list each call with its result in
+  short; each call opens to its whole result. The turn's first such line
+  says how long the turn worked, such as "Worked for 48s"; the others say
+  which tools they used.
 - **Notes** say in quiet words what else happened: a compaction, with its
   summary to open; a note evie was told; a reply cut short; a turn that
   failed or was stopped; a question and your answer; and a background
