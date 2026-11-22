@@ -1,7 +1,9 @@
 import type { HTMLBundle, ServerWebSocket } from "bun"
 import { randomBytes } from "node:crypto"
-import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent } from "../core/types.ts"
+import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent, type StorageFiles } from "../core/types.ts"
+import { keptFileAt, typeOfFile } from "../plugins/show/files.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
+import { shikiAddress, shikiRoute } from "./shiki-files.ts"
 import { fileRoute } from "./variants.ts"
 import type { WebApp } from "./web-app.ts"
 import { DROPPED, hostInAddress, onThisComputer, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
@@ -44,6 +46,12 @@ export type ServerOptions = {
   // What keeps the files attached to messages, which a signed-in client
   // sends over HTTP. Without it, the attachments route refuses them.
   attachments?: Attachments
+  // What finds a project's Storage files, for the storage route to give to
+  // the page, to draw them. Without it, the route has none of them to give.
+  storage?: StorageFiles
+  // The data folder, where the show tool keeps what a session with no
+  // project shows. Without it, the storage route gives none of those.
+  dataFolder?: string
 }
 
 export type EvieServer = {
@@ -374,6 +382,39 @@ export function startServer(options: ServerOptions): EvieServer {
     })
   }
 
+  // A Storage file, given to a signed-in client to draw, as the show tool's
+  // files are drawn and Storage opens them: one in a project's `.evie`
+  // folder, by its path inside it, or one the show tool kept for a session
+  // with no project, by its full path. Only a file of a kind evie shows
+  // (the show plugin's list, which is the route's too) is given, as that
+  // kind, and the browser is told not to take it for anything else, nor to
+  // load or run anything in it, nor to let a page of another site frame it.
+  // Every kind but a PDF is also sandboxed, as a page of no site at all.
+  // A PDF is drawn by the browser's own viewer, which a sandbox can keep
+  // from drawing, as WebKit's keeps plugins from running; and with no
+  // script, style or connection let in, and the type held to PDF, its
+  // document has nothing to run as evie's page. An SVG is drawn as an
+  // image, which never runs its scripts. A file can change in Storage, so
+  // the browser asks again each time it is drawn anew.
+  async function storageFile(request: Request, port: number): Promise<Response> {
+    const admitted = admit(request, port)
+    if (admitted instanceof Response) return admitted
+    const asked = new URL(request.url).searchParams
+    const [project, session, path] = [asked.get("project"), asked.get("session"), asked.get("path")]
+    if (path === null || (project === null) === (session === null)) return new Response("Name the file, as /storage?project=<id>&path=<its path in .evie>, or /storage?session=<id>&path=<its full path>.", { status: 400 })
+    const file = project !== null ? await options.storage?.open(project, path) : options.dataFolder !== undefined ? await keptFileAt(options.dataFolder, session!, path) : undefined
+    const type = file === undefined ? undefined : await typeOfFile(file)
+    if (file === undefined || type === undefined) return new Response("There is no file there that evie shows.", { status: 404 })
+    return new Response(Bun.file(file), {
+      headers: {
+        "Content-Type": type.startsWith("text/") ? `${type}; charset=utf-8` : type,
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": type === "application/pdf" ? "default-src 'none'; frame-ancestors 'self'" : "default-src 'none'; frame-ancestors 'self'; sandbox",
+        "Cache-Control": "private, no-cache",
+      },
+    })
+  }
+
   const server = Bun.serve<Connection>({
     hostname: options.host,
     port: options.port,
@@ -403,6 +444,7 @@ export function startServer(options: ServerOptions): EvieServer {
       }
       if (path === PATHS.attachments && request.method === "POST") return attach(request, server.port!)
       if (path === PATHS.attachments && request.method === "GET") return attachment(request, server.port!)
+      if (path === PATHS.storage && (request.method === "GET" || request.method === "HEAD")) return storageFile(request, server.port!)
       if (path === PATHS.login && request.method === "POST") return login(request, server.port!)
       if (path === PATHS.signInLink && request.method === "POST") return signInLink(request, server.port!)
       return new Response("Not found.", { status: 404 })
@@ -594,12 +636,15 @@ const cookieIn = (request: Request, port: number) => new Bun.CookieMap(request.h
 // file's name carries a hash of its contents, so a browser may keep it for
 // good; the page is asked for afresh each time, so a new version is seen.
 // Each is sent compressed to a browser that can read it: see `fileRoute`.
-function appRoutes(app: WebApp | undefined): Record<string, HTMLBundle | ((request: Request) => Response)> {
+// Built, the page loads Shiki's grammars and themes, which colour a diff,
+// from Shiki's own files, which are not built in: see `shikiRoute`.
+function appRoutes(app: WebApp | undefined): Record<string, HTMLBundle | ((request: Request) => Response | Promise<Response>)> {
   if (!app) return {}
   if (!("files" in app)) return { [PATHS.page]: app.page, [PATHS.signIn]: app.page }
-  const routes: Record<string, (request: Request) => Response> = {}
+  const routes: Record<string, (request: Request) => Response | Promise<Response>> = {}
   for (const [path, file] of Object.entries(app.files)) routes[path] = fileRoute(file, "public, max-age=31536000, immutable")
   for (const path of [PATHS.page, PATHS.signIn]) routes[path] = fileRoute(app.page, "no-cache")
+  routes[`${shikiAddress()}*`] = shikiRoute()
   return routes
 }
 

@@ -111,3 +111,14 @@ test("a patch to three files counts as three files changed", () => {
   const lines = ["*** Begin Patch", "*** Update File: a.ts", "*** Update File: b.ts", "*** Add File: c.ts", "*** End Patch"].join("\n")
   expect(runWords([whole("patch", { patchText: lines }), whole("shell", { command: "bun test" })])).toBe("Changed 3 files and ran 1 command")
 })
+
+test("a show call names what it showed, the first and how many more past two, counts its files in a run, and failed when nothing could be shown", () => {
+  expect(stepWords(whole("show", { paths: ["out/chart.png"] }))).toBe("Showed out/chart.png")
+  expect(stepWords(whole("show", { paths: ["/p/design/logo.svg", "/p/out/card.pdf"] }), { folder: "/p" })).toBe("Showed design/logo.svg and out/card.pdf")
+  expect(stepWords(whole("show", { paths: ["a.png", "b.svg", "c.md"] }), { running: true })).toBe("Showing a.png +2 more")
+  expect(stepWords({ name: "show", input: "" })).toBe("Showed a file")
+  expect(stepKind("show")).toBe("show")
+  expect(runWords([whole("show", { paths: ["a.png", "b.svg"] }), whole("write", { path: "c.md" }), whole("show", { paths: ["c.md"] })])).toBe("Showed 3 files and changed 1 file")
+  expect(stepFailed("Not shown: notes.txt is not a kind of file evie can show.")).toBe(true)
+  expect(stepFailed('Shown to the owner under your reply:\n- ".evie/shown/2026-11-22/a.png" (image/png, 33 bytes), already in Storage')).toBe(false)
+})

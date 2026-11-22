@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { brotliDecompressSync, gunzipSync } from "node:zlib"
 import { connect, startServer } from "../src/index.ts"
+import { shikiAddress } from "../src/server/shiki-files.ts"
 import { openTokens, OWN_NAME } from "../src/server/tokens.ts"
 import { buildWebApp, type WebApp } from "../src/server/web-app.ts"
 import { loadServerSettings } from "../src/settings-files.ts"
@@ -326,7 +327,11 @@ test("the web app's script is sent with brotli, gzip or as it is, as the browser
   const { server } = await start({ app })
   const page = new TextDecoder().decode(app.page.identity)
   const script = page.match(/<script[^>]* src="([^"]+)"/)![1]!
-  const small = Object.entries(app.files).find(([, file]) => file.identity.length <= 1024)![0]
+  // A file under 1 KB: since Shiki's grammars are not built in, the build
+  // may make none, so one of Shiki's own, which only names another.
+  const small = `${shikiAddress()}langs/as3.mjs`
+  const smallText = await Bun.file(Bun.resolveSync("@shikijs/langs/as3", import.meta.dir)).text()
+  expect(smallText.length).toBeLessThanOrEqual(1024)
 
   // The bytes as sent, without fetch reading them.
   const asked = (path: string, headers: Record<string, string>) => fetch(`${server.url}${path}`, { headers, decompress: false })
@@ -367,19 +372,43 @@ test("the web app's script is sent with brotli, gzip or as it is, as the browser
   // A file under 1 KB is sent as it is, to anyone.
   const tiny = await asked(small, { "Accept-Encoding": "br" })
   expect([tiny.headers.get("content-encoding"), tiny.headers.get("vary")]).toEqual([null, null])
-  expect(await tiny.text()).toBe(new TextDecoder().decode(app.files[small]!.identity))
+  expect(await tiny.text()).toBe(smallText)
 })
 
-test("the page, with its links to the chunks its script imports, is asked for afresh on each visit, and the chunks it names are kept for good", async () => {
+test("a font is sent as it is, whatever the browser accepts, is kept for good, and answers 304 to the tag of what the browser has", async () => {
+  const app = await webApp()
+  if (!("files" in app)) throw new Error("the web app was not built")
+  const { server } = await start({ app })
+  const page = new TextDecoder().decode(app.page.identity)
+  const style = page.match(/<link rel="stylesheet"[^>]* href="([^"]+)"/)![1]!
+  const fonts = [...new TextDecoder().decode(app.files[style]!.identity).matchAll(/url\((\/fonts\/[^)]+)\)/g)].map((match) => match[1]!)
+  expect(fonts.length).toBe(4)
+
+  for (const font of fonts) {
+    const answer = await fetch(`${server.url}${font}`, { headers: { "Accept-Encoding": "gzip, deflate, br, zstd" }, decompress: false })
+    expect([answer.status, answer.headers.get("content-type"), answer.headers.get("content-encoding"), answer.headers.get("vary")]).toEqual([200, "font/woff2", null, null])
+    expect(answer.headers.get("cache-control")).toBe("public, max-age=31536000, immutable")
+    expect(Buffer.from(await answer.arrayBuffer())).toEqual(Buffer.from(app.files[font]!.identity))
+    const again = await fetch(`${server.url}${font}`, { headers: { "If-None-Match": answer.headers.get("etag")! } })
+    expect([again.status, await again.text()]).toEqual([304, ""])
+  }
+})
+
+test("the page is asked for afresh on each visit, and its script and any chunks it preloads are kept for good", async () => {
   const app = await webApp()
   const { server } = await start({ app })
 
   for (const path of ["/", "/sign-in"]) {
     const answer = await fetch(`${server.url}${path}`)
     expect(answer.headers.get("cache-control")).toBe("no-cache")
-    const preloads = [...(await answer.text()).matchAll(/<link\b[^>]*\bmodulepreload\b[^>]*>/g)].map((match) => match[0].match(/\bhref="?([^"\s>]+)/)![1]!)
-    expect(preloads.length).toBeGreaterThan(0)
-    for (const chunk of preloads) {
+    const page = await answer.text()
+    // Its script, and the chunks it preloads. Bun 1.4.0 builds a script that
+    // imports chunks at once, each preloaded; Bun 1.4.5 one that imports
+    // none, so the page preloads nothing.
+    const script = [...page.matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
+    const preloads = [...page.matchAll(/<link\b[^>]*\bmodulepreload\b[^>]*>/g)].map((match) => match[0].match(/\bhref="?([^"\s>]+)/)![1]!)
+    expect(script.length).toBe(1)
+    for (const chunk of [...script, ...preloads]) {
       const kept = await fetch(new URL(chunk, `${server.url}${path}`))
       expect([kept.status, kept.headers.get("cache-control")]).toEqual([200, "public, max-age=31536000, immutable"])
     }

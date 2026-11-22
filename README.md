@@ -1778,7 +1778,7 @@ The repository has two long-lived branches:
 - **Every change is its own branch and pull request into `dev`.** The
   change is reviewed before it is merged.
 - **GitHub runs the check on every pull request** and on every push to `dev`
-  and `main`. It is `.github/workflows/check.yml`: it sets up Bun 1.4.0
+  and `main`. It is `.github/workflows/check.yml`: it sets up Bun 1.4.5
   and ripgrep, which the search tools run, and then runs `bun run check`,
   the type check and every test. A pull request whose check fails is not
   merged.

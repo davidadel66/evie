@@ -10,13 +10,15 @@ import type { Connection } from "./connection.ts"
 import { holdConversation, openDraft, type Conversation as Opened, type Draft as OpenedDraft, type Outgoing } from "./conversation.ts"
 import type { ShownAttachment } from "./attachments.ts"
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog.tsx"
-import { CaretRight, ChatsCircle, File as FileIcon, FileText, Globe, Hammer, Lightbulb, MagnifyingGlass, NotePencil, Robot, TerminalWindow, Wrench, X } from "./icons.tsx"
+import { CaretRight, ChatsCircle, File as FileIcon, FileImage, FileText, Globe, Hammer, Lightbulb, MagnifyingGlass, NotePencil, Robot, TerminalWindow, Wrench, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { markdownBlocks, renderMarkdown } from "./markdown.ts"
 import { addressOf } from "./address.ts"
 import type { Sessions } from "./sessions.ts"
 import { Spinner } from "./Spinner.tsx"
 import { runningSince, transcriptOf, type Call, type Item } from "./transcript.ts"
+import { ShownLater } from "./ShownLater.tsx"
+import { galleryOf, ShownGallery } from "./shown.ts"
 import type { StepKind } from "./step-words.ts"
 import { serverNow, workingFor } from "./work-log.ts"
 import { sizeWords } from "./workspace.ts"
@@ -62,10 +64,13 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
   const changed = useSyncExternalStore(changes?.subscribe ?? noChanges.subscribe, changes?.state ?? noChanges.state).listed?.turns
   // A question waiting is shown where it is answered, at the end, so it is
   // left out where it was asked until it is answered.
+  const { project } = state
   const items = useMemo(
-    () => asAsked(transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, pending, notes, ...(folder !== undefined && { folder }) }, changed), state.waiting),
-    [events, earlier, replySoFar, turnRunning, jobs, pending, notes, changed, state.waiting, folder],
+    () => asAsked(transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, pending, notes, project, ...(folder !== undefined && { folder }) }, changed), state.waiting),
+    [events, earlier, replySoFar, turnRunning, jobs, pending, notes, project, changed, state.waiting, folder],
   )
+  // Every image shown in the session, which full screen moves through.
+  const gallery = useMemo(() => galleryOf(items), [items])
   const asking = useAsking(state.waiting)
   const { shown } = asking
   // How tall the message box floats over the conversation's end, which
@@ -195,11 +200,13 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
               )}
               {!state.opened && state.problem === undefined && <Working words="Opening the session" />}
               {state.opened && state.problem === undefined && items.length === 0 && shown === undefined && <Headline />}
-              {items.map((item, at) => (
-                <div key={item.key} data-item={item.key} className={`flex flex-col ${at === 0 ? "" : item.turn !== items[at - 1]!.turn ? "mt-4" : "mt-2"}`}>
-                  <Drawn item={item} shown={opens} show={show} />
-                </div>
-              ))}
+              <ShownGallery.Provider value={gallery}>
+                {items.map((item, at) => (
+                  <div key={item.key} data-item={item.key} className={`flex flex-col ${at === 0 ? "" : item.turn !== items[at - 1]!.turn ? "mt-4" : "mt-2"}`}>
+                    <Drawn item={item} shown={opens} show={show} />
+                  </div>
+                ))}
+              </ShownGallery.Provider>
               {state.running.filter((name) => name !== "compact").map((name, at) => (
                 <div key={`${name}${at}`} className={items.length > 0 || at > 0 ? "mt-2" : ""}>
                   <Working words={`Running /${name}`} />
@@ -363,6 +370,8 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
       return <QuestionText text={item.text} />
     case "changes":
       return <TurnChangedFiles turn={item.number} files={item.files} />
+    case "shown":
+      return <ShownLater file={item.file} />
     case "failed":
       return (
         <div className="text-body">
@@ -558,6 +567,7 @@ const KIND_ICON: Record<StepKind | "mixed", typeof FileText> = {
   web: Globe,
   agent: Robot,
   question: ChatsCircle,
+  show: FileImage,
   other: Wrench,
   mixed: Hammer,
 }

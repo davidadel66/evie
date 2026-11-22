@@ -86,6 +86,8 @@ export async function serve(env: Settings, args: string[] = []) {
       origins: serverSettings.origins,
       ...("app" in built && { app: built.app }),
       attachments: evie.attachments,
+      storage: evie.storage,
+      dataFolder: home,
     })
   } catch (cause) {
     tokens.close()

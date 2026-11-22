@@ -3,6 +3,7 @@ import { existsSync, lstatSync, realpathSync } from "node:fs"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { dataFolder } from "../core/evie.ts"
 import type { CheckedToolCall, Plugin } from "../core/types.ts"
+import { ownShownFolder } from "./show/files.ts"
 
 // The built-in guard. It stops the most clearly destructive commands before
 // they run, and keeps the tools out of a few private folders.
@@ -55,7 +56,9 @@ export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall,
     // A skill can hold scripts, so a command may name a file in the owner's
     // skills, where something asks the owner before it runs.
     const skills = options.definitionsCanBeWritten ? data : undefined
-    const reason = call.name === "shell" ? shellReason(call, privateFolders, folder, skills) : fileReason(call, privateFolders, folder)
+    // What a session showed with no project to keep it in, it may show again.
+    const shownAgain = (path: string) => call.name === "show" && session !== undefined && isAbsolute(path) && isSavedOutput(data, session, path, parent)
+    const reason = call.name === "shell" ? shellReason(call, privateFolders, folder, skills) : fileReason(call, privateFolders, folder, shownAgain)
     if (reason === undefined) return undefined
     return `Blocked by the guard: ${reason} The command was not run. If the owner wants this done, they can run it themselves.`
   }
@@ -167,6 +170,8 @@ const FILE_TOOLS = [...READ_TOOLS, "write", "edit", "patch"]
 function filesNamed(call: CheckedToolCall): string[] {
   const paths: string[] = []
   if (typeof call.input.path === "string") paths.push(call.input.path)
+  // The show tool names its files in a list.
+  if (Array.isArray(call.input.paths)) paths.push(...call.input.paths.filter((path): path is string => typeof path === "string"))
   // A patch names its files inside its text.
   if (typeof call.input.patchText === "string") {
     // The patch tool reads each line with the space around it taken off.
@@ -177,9 +182,9 @@ function filesNamed(call: CheckedToolCall): string[] {
   return paths
 }
 
-function fileReason(call: CheckedToolCall, privateFolders: string[], projectFolder: string): string | undefined {
+function fileReason(call: CheckedToolCall, privateFolders: string[], projectFolder: string, allowed: (path: string) => boolean = () => false): string | undefined {
   const paths = filesNamed(call)
-  const found = paths.find((path) => insidePrivate(path, privateFolders, projectFolder))
+  const found = paths.find((path) => !allowed(path) && insidePrivate(path, privateFolders, projectFolder))
   return found === undefined ? undefined : `${found} is in a private folder.`
 }
 
@@ -209,14 +214,15 @@ export function followLinks(absolute: string): string {
 // True for a path inside a folder where one session's own files are kept
 // in the data folder: tool output that was too long to show, and the output
 // of its background jobs; and the files the owner attached to its messages
-// with no project to keep them in, or to those of `parent`, the session
-// that started it as a subagent. Links are followed, so nothing outside
-// them can be reached through them; and a folder of attachments that is
-// itself a link, or is in one, is no allowance at all, since what it
-// leads to is not the session's.
+// with no project to keep them in, and the files the show tool kept for
+// it, or those of `parent`, the session that started it as a subagent.
+// Links are followed, so nothing outside them can be reached through them;
+// and a folder of attachments or of files shown that is itself a link, or
+// is in one, is no allowance at all, since what it leads to is not the session's.
 export function isSavedOutput(data: string, session: string, path: string, parent?: string): boolean {
-  const attached = (owner: string) => (isLink(resolve(data, "attachments")) || isLink(resolve(data, "attachments", owner)) ? [] : [resolve(data, "attachments", owner)])
-  const folders = [resolve(data, "tool-output", session), ...attached(session), ...(parent === undefined ? [] : attached(parent))]
+  const kept = (owner: string) =>
+    [resolve(data, "attachments", owner), resolve(ownShownFolder(data, owner))].filter((folder) => !isLink(dirname(folder)) && !isLink(folder))
+  const folders = [resolve(data, "tool-output", session), ...kept(session), ...(parent === undefined ? [] : kept(parent))]
   return folders.some((folder) => {
     const inside = relative(followLinks(folder), followLinks(resolve(path)))
     return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))

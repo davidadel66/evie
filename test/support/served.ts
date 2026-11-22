@@ -27,9 +27,13 @@ export async function serveEvie(
     // What the server is given in place of the core, made from it, such as
     // one that answers a command wrongly, as a server with a fault would.
     core?: (evie: Evie) => Evie
+    // A data folder to use in place of a new temporary one, for a plugin
+    // made with it. The caller removes it.
+    home?: string
   } = {},
 ) {
   const run = await startEvie(plugins, {
+    ...(options.home && { home: options.home }),
     ...(options.questions && { questions: true }),
     ...(options.compaction && { compaction: options.compaction }),
     ...(options.projectFolder && { projectFolder: options.projectFolder }),
@@ -50,6 +54,8 @@ export async function serveEvie(
     ...(options.app && { app: options.app }),
     ...(options.signInCodeLasts !== undefined && { signInCodeLasts: options.signInCodeLasts }),
     attachments: run.evie.attachments,
+    storage: run.evie.storage,
+    dataFolder: run.home,
   })
   const clients: { close(): Promise<void> }[] = []
   return {

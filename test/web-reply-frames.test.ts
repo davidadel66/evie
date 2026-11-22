@@ -88,6 +88,7 @@ function standIn() {
     upload: async () => {
       throw new Error("The stand-in takes no files.")
     },
+    fetchFile: async () => new Response("The stand-in gives no files.", { status: 404 }),
   }
   return {
     connection,
