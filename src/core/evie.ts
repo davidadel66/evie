@@ -72,23 +72,23 @@ const LONGEST_PAGE = 500
 // and on one task for a subagent, so that a turn that itself stops the
 // server cannot keep it restarting.
 const RESTARTED =
-  "Evie's server restarted while you were working, and your turn was cut short. Carry on from where you left off. A " +
+  "evie's server restarted while you were working, and your turn was cut short. Carry on from where you left off. A " +
   "command or other action you started may have finished, or may still be running: before you repeat one that " +
   "changes something, check that it did not take effect and is not still running, and if you cannot tell, say so " +
   "rather than repeat it."
 const STOPPED_ASKING =
-  "Evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the " +
+  "evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the " +
   "question went unanswered. It is left for the owner to carry on."
 const STOPPED_UNTRUSTED =
-  "Evie's server restarted while you were working, and this project's own settings file has not yet been trusted or " +
+  "evie's server restarted while you were working, and this project's own settings file has not yet been trusted or " +
   "refused, so the turn was left stopped rather than carried on without it. The owner can carry on with `evie -c` in " +
   "the project, which asks about the file first."
 const STOPPED_LONG_AGO =
-  "Evie's server restarted while you were working, and this turn was cut off more than an hour ago, so it was left " +
+  "evie's server restarted while you were working, and this turn was cut off more than an hour ago, so it was left " +
   "stopped rather than carried on now. It is left for the owner to carry on."
 const CUT_OFF_WITHIN = 60 * 60_000
 const STOPPED_AGAIN =
-  "Evie's server restarted while you were working, and this turn had already been carried on after three restarts, " +
+  "evie's server restarted while you were working, and this turn had already been carried on after three restarts, " +
   "so it was left stopped, in case it is what stops the server."
 const MOST_RESTARTS = 3
 const RESTARTS_WINDOW = 5 * 60_000
@@ -332,7 +332,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     }
     const children: Children = {
       async start(input) {
-        if (closed) throw new Error("Evie is closing.")
+        if (closed) throw new Error("evie is closing.")
         if (projects.parentOf(session) !== undefined) throw new Error("A subagent cannot start subagents of its own.")
         const model = input.model?.trim() || currentModel(log.events(session), sessions.get(session)!.model)
         const id = projects.createSession(project, session, {
@@ -346,7 +346,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
         return id
       },
       async send(id, text) {
-        if (closed) throw new Error("Evie is closing.")
+        if (closed) throw new Error("evie is closing.")
         send(id, text)
       },
       async whenIdle(id) {
@@ -443,7 +443,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     if (last !== undefined) markOpening(last, 1)
     try {
       const scope = await scopeFor(project, (question) => questions.ask(sessionId(), question, { canAnswer }))
-      if (closed) throw new Error("Evie was closed while the session was opening.")
+      if (closed) throw new Error("evie was closed while the session was opening.")
       const { notices } = scope
       // A project's own model wins over the global one.
       const model = scope.model ?? options.model
@@ -524,7 +524,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       const record = waitedOn.get(call)
       return (
         record &&
-        `Evie restarted while this was running, so it was moved to the background, where it carries on as job ${record.id}, ` +
+        `evie restarted while this was running, so it was moved to the background, where it carries on as job ${record.id}, ` +
           `and its output is being written to ${record.outputFile}. You will be told when it ends, with its output. Do not start another copy while it is running.`
       )
     })
@@ -583,7 +583,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     kind: record.kind,
     title: record.title,
     done: Promise.reject(
-      new EndNotKnown(`Evie restarted while it was running, and could not pick it up again: ${why.replace(/\.*$/, ".")} Check whether it took effect, and run it again only if it did not.`),
+      new EndNotKnown(`evie restarted while it was running, and could not pick it up again: ${why.replace(/\.*$/, ".")} Check whether it took effect, and run it again only if it did not.`),
     ),
     stop: () => {},
   })
@@ -623,9 +623,9 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
         .map((call) => {
           const text = resultOf(call.id)
           if (text !== undefined) given.add(call.id)
-          return log.append(session, "tool_result", { callId: call.id, name: call.name, text: text ?? "Evie stopped before this tool finished, so it has no result." })
+          return log.append(session, "tool_result", { callId: call.id, name: call.name, text: text ?? "evie stopped before this tool finished, so it has no result." })
         }),
-      log.append(session, "turn_end", { reason: "error", error: "Evie stopped while this turn was running." }),
+      log.append(session, "turn_end", { reason: "error", error: "evie stopped while this turn was running." }),
     ])()
     for (const event of closing) emit(event)
     return { given, cut: asking ? "asking" : "working", cutAt }
@@ -718,7 +718,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     if (open) {
       if (to) keepEvieOutOfGit(to.folder)
       scope = await scopeFor(to, (question) => questions.ask(input.session, question, { canAnswer: open.canAnswer }))
-      if (closed) throw new Error("Evie was closed while the session was being moved.")
+      if (closed) throw new Error("evie was closed while the session was being moved.")
       const now = projects.projectOf(input.session)
       if (now === undefined) throw new Error("This session was deleted while it was being moved.")
       if (now?.id !== from?.id) throw new Error("This session was moved elsewhere while it was being moved. Look at where it is now, and move it again.")
@@ -835,7 +835,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       throw new Error("`after` is where the last read ended, as its `to` gave it: a whole number of bytes, from 0.")
     }
     const job = jobs.list(input.session).find((each) => each.id === input.id)
-    if (!job) throw new Error(`This session has had no job ${String(input.id)} since Evie last started.`)
+    if (!job) throw new Error(`This session has had no job ${String(input.id)} since evie last started.`)
     try {
       return await readOutput(job.outputFile, input.after)
     } catch (cause) {
@@ -902,7 +902,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       await options.trust!(project.folder).catch((cause) => {
         throw new Error(
           `The project "${project.name}" was made at ${project.folder}, but could not be trusted: ` +
-            `${(cause instanceof Error ? cause.message : String(cause)).replace(/\.*$/, ".")} Evie asks whether to trust it when a session first opens there.`,
+            `${(cause instanceof Error ? cause.message : String(cause)).replace(/\.*$/, ".")} evie asks whether to trust it when a session first opens there.`,
         )
       })
     }
@@ -1004,7 +1004,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   }
 
   function editor(): SettingsEditor {
-    if (!options.settings) throw new Error("This Evie has no settings to change: it was started without them.")
+    if (!options.settings) throw new Error("This evie has no settings to change: it was started without them.")
     return options.settings
   }
 

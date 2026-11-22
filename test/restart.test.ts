@@ -160,7 +160,7 @@ test("a job no plugin loaded now can pick up again is told as ended in a way not
   await woken
 
   expect(notes(second.run, session)).toEqual([
-    "Background job 1 (sleep 0.5) has ended, and how it ended is not known.\n\nEvie restarted while it was running, and could not " +
+    "Background job 1 (sleep 0.5) has ended, and how it ended is not known.\n\nevie restarted while it was running, and could not " +
       'pick it up again: no plugin loaded now picks up work of the kind "shell". Check whether it took effect, and run it again only if it did not.',
   ])
 })
@@ -214,7 +214,7 @@ test("a job handed over while Evie closes for good is told as stopped, and not t
   await started
   await first.quit()
 
-  expect(notes(first.run, session)).toEqual(["Background job 1 (late work) was stopped because Evie was closed. Start it again if it is still needed."])
+  expect(notes(first.run, session)).toEqual(["Background job 1 (late work) was stopped because evie was closed. Start it again if it is still needed."])
   const second = await startAgain([], [late])
   await second.run.evie.resumeWork()
   await Bun.sleep(200)
@@ -255,7 +255,7 @@ test("a job whose plugin fails to pick it up is told so in whole sentences", asy
   await woken
 
   expect(notes(second.run, session)).toEqual([
-    "Background job 1 (fragile work) has ended, and how it ended is not known.\n\nEvie restarted while it was running, and could " +
+    "Background job 1 (fragile work) has ended, and how it ended is not known.\n\nevie restarted while it was running, and could " +
       "not pick it up again: its server has gone. Check whether it took effect, and run it again only if it did not.",
   ])
 })
@@ -288,7 +288,7 @@ test("a background command that went while no Evie was running, without saying h
 
   expect(notes(second.run, session)).toEqual([
     `Background job 1 (sleep 30 & ps -o pgid= -p $$ | tr -d ' '; wait) has ended, and how it ended is not known.\n\n${group}\n\n` +
-      "[Evie restarted while it was running, and it has since gone without leaving its exit status. Check whether it took " +
+      "[evie restarted while it was running, and it has since gone without leaving its exit status. Check whether it took " +
       `effect, and run it again only if it did not.]\n\nThe full output is in ${file}.`,
   ])
   expect(await ended).toMatchObject({ job: { id: "1", status: "unknown" } })
@@ -339,7 +339,7 @@ test("a command a call was waiting on when Evie restarted becomes a background j
 
   const results = of(second.run, session).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))
   expect(results).toEqual([
-    "Evie restarted while this was running, so it was moved to the background, where it carries on as job 1, " +
+    "evie restarted while this was running, so it was moved to the background, where it carries on as job 1, " +
       `and its output is being written to ${file}. You will be told when it ends, with its output. Do not start another copy while it is running.`,
   ])
   expect(notes(second.run, session).at(-1)).toBe(`Background job 1 (echo started; sleep 0.6; echo finished) has finished.\n\nstarted\nfinished\n\nThe full output is in ${file}.`)
@@ -379,7 +379,7 @@ test("a command picked up again whose start time cannot be read is still watched
 // ---- Turns cut off ------------------------------------------------------------------------------
 
 const RESTARTED =
-  "Evie's server restarted while you were working, and your turn was cut short. Carry on from where you left off. A " +
+  "evie's server restarted while you were working, and your turn was cut short. Carry on from where you left off. A " +
   "command or other action you started may have finished, or may still be running: before you repeat one that " +
   "changes something, check that it did not take effect and is not still running, and if you cannot tell, say so " +
   "rather than repeat it."
@@ -403,7 +403,7 @@ test("a turn of the owner's session cut off by a restart is closed off and carri
   await carriedOn
 
   expect(of(second.run, session).map((event) => event.type)).toEqual(["turn_end", "turn_start", "note", "assistant_message", "turn_end"])
-  expect(of(second.run, session)[0]).toMatchObject({ body: { reason: "error", error: "Evie stopped while this turn was running." } })
+  expect(of(second.run, session)[0]).toMatchObject({ body: { reason: "error", error: "evie stopped while this turn was running." } })
   expect(second.model.requests[0]?.messages).toEqual([
     { role: "user", text: "find the bug" },
     { role: "user", text: `[Note from Evie: ${RESTARTED}]` },
@@ -418,7 +418,7 @@ function happenedEarlier(home: string, session: string, minutes: number) {
 }
 
 const LONG_AGO =
-  "Evie's server restarted while you were working, and this turn was cut off more than an hour ago, so it was left " +
+  "evie's server restarted while you were working, and this turn was cut off more than an hour ago, so it was left " +
   "stopped rather than carried on now. It is left for the owner to carry on."
 
 test("a turn cut off within the last hour is carried on, and one cut off longer ago is left stopped, with a note", async () => {
@@ -460,7 +460,7 @@ test("a turn is carried on after at most three restarts in five minutes, and the
 
   expect(last.model.requests).toEqual([])
   expect(notes(last.run, session)).toEqual([
-    "Evie's server restarted while you were working, and this turn had already been carried on after three restarts, so it was left stopped, in case it is what stops the server.",
+    "evie's server restarted while you were working, and this turn had already been carried on after three restarts, so it was left stopped, in case it is what stops the server.",
   ])
   expect(await last.run.evie.send({ type: "list_sessions" })).toMatchObject([{ session, state: "active" }])
 })
@@ -481,7 +481,7 @@ test("a turn cut off while it was waiting for an answer is left stopped, with a 
   expect(second.model.requests).toEqual([])
   expect(of(second.run, session).map((event) => event.type)).toEqual(["answer", "tool_result", "turn_end", "note"])
   expect(notes(second.run, session)).toEqual([
-    "Evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the question went unanswered. It is left for the owner to carry on.",
+    "evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the question went unanswered. It is left for the owner to carry on.",
   ])
 })
 
@@ -610,7 +610,7 @@ test("a subagent's turn cut off within the last hour is carried on, and one cut 
     expect(secondModel.requests.child).toHaveLength(minutes === 59 ? 1 : 0)
     expect(notes(second.run, child)).toEqual([minutes === 59 ? RESTARTED : LONG_AGO])
     expect(notes(second.run, session)[0]).toStartWith(
-      minutes === 59 ? "Background job 1 (subagent: look into it) has finished." : "Background job 1 (subagent: look into it) failed.\n\nIt failed: Evie stopped while this turn was running.\n\n",
+      minutes === 59 ? "Background job 1 (subagent: look into it) has finished." : "Background job 1 (subagent: look into it) failed.\n\nIt failed: evie stopped while this turn was running.\n\n",
     )
   }
 })
@@ -647,7 +647,7 @@ test("a subagent cut off while waiting for an answer is left stopped, and the tu
 
   expect(secondModel.requests.child).toEqual([])
   expect(notes(second.run, child)).toEqual([
-    "Evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the question went unanswered. It is left for the owner to carry on.",
+    "evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the question went unanswered. It is left for the owner to carry on.",
   ])
   expect(notes(second.run, session)[0]).toBe(RESTARTED)
   expect(of(second.run, session).filter((event) => event.type === "answer")).toMatchObject([{ body: { choice: null } }])
@@ -691,7 +691,7 @@ test("a session in a project not yet trusted or refused is closed off at start, 
 
   expect(second.model.requests).toEqual([])
   expect(notes(second.run, session)).toEqual([
-    "Evie's server restarted while you were working, and this project's own settings file has not yet been trusted or " +
+    "evie's server restarted while you were working, and this project's own settings file has not yet been trusted or " +
       "refused, so the turn was left stopped rather than carried on without it. The owner can carry on with `evie -c` in " +
       "the project, which asks about the file first.",
   ])
@@ -729,9 +729,9 @@ test("a subagent is carried on after at most three restarts on its task, and the
 
   expect(lastModel.requests.child).toEqual([])
   expect(notes(last.run, child)).toEqual([
-    "Evie's server restarted while you were working, and this turn had already been carried on after three restarts, so it was left stopped, in case it is what stops the server.",
+    "evie's server restarted while you were working, and this turn had already been carried on after three restarts, so it was left stopped, in case it is what stops the server.",
   ])
-  expect(notes(last.run, session)[0]).toStartWith("Background job 1 (subagent: look into it) failed.\n\nIt failed: Evie stopped while this turn was running.")
+  expect(notes(last.run, session)[0]).toStartWith("Background job 1 (subagent: look into it) failed.\n\nIt failed: evie stopped while this turn was running.")
 })
 
 test("a subagent's question left open is closed when the session it asked through opens, though nothing picks the subagent up", async () => {
@@ -768,6 +768,6 @@ test("a subagent's question left open is closed when the session it asked throug
   await second.run.evie.resumeWork()
   expect(secondModel.requests.child).toEqual([])
   expect(notes(second.run, child)).toEqual([
-    "Evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the question went unanswered. It is left for the owner to carry on.",
+    "evie's server restarted while this turn was waiting for an answer to a question, so the turn was stopped and the question went unanswered. It is left for the owner to carry on.",
   ])
 })

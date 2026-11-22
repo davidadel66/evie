@@ -1,4 +1,4 @@
-import { addressOfWorkspace, workspaceIn } from "./workspace.ts"
+import { addressOfWorkspace, NEW_CHAT, workspaceIn } from "./workspace.ts"
 
 // The page's address: what is selected in the list is kept after # in it,
 // so that a reload, a bookmark or a second tab opens on it. That is a
@@ -41,4 +41,18 @@ export function addressAsOpened(hash: string): string {
   if (workspace !== undefined) return `/${addressOfWorkspace(workspace)}`
   const selected = selectedIn(hash)
   return `/${selected === undefined ? "" : addressOf(selected)}`
+}
+
+// What the owner is looking at, as an address has it: in the session view,
+// the session open, or one of its subagents' conversations, or a draft; in
+// a workspace, the session in its side chat, or a new one there.
+export function lookedAt(hash: string): { session: string; subagent: boolean } | { draft: true } | undefined {
+  const workspace = workspaceIn(hash)
+  if (workspace !== undefined) {
+    if (workspace.chat === undefined) return undefined
+    return workspace.chat === NEW_CHAT ? { draft: true } : { session: workspace.chat, subagent: false }
+  }
+  const selected = selectedIn(hash)
+  if (selected === undefined) return undefined
+  return "draft" in selected ? { draft: true } : { session: selected.session, subagent: selected.subagent !== undefined }
 }

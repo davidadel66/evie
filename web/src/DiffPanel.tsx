@@ -2,7 +2,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { Commands, FileDiff, ListedProject } from "../../src/core/types.ts"
 import { pullRequestOf } from "./card.ts"
-import { useCardShown } from "./card-shown.ts"
+import { useWide } from "./wide.ts"
 import { holdChanges, type Changes, type ChangesState } from "./changes.ts"
 import { Counts } from "./ChangedFiles.tsx"
 import { Button } from "./components/ui/button.tsx"
@@ -23,11 +23,11 @@ import { Spinner } from "./Spinner.tsx"
 // file tree beside the diff, which can be hidden, scrolls to a file. A diff
 // is drawn stacked or side by side, as this browser remembers. At desktop
 // width it is a column beside the conversation, in the project card's
-// place, and wider than the card, since a diff needs the room; at 980px or
-// narrower it fills the screen, with a way back.
+// place, and wider than the card, since a diff needs the room; at phone
+// width it fills the screen, with a way back.
 export function DiffPlace({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const shown = useDiffShown()
-  const { wide } = useCardShown()
+  const wide = useWide()
   const selected = useSelected()
   // Another session's turns are not this one's: it opens on its latest.
   const session = selected !== undefined && "session" in selected ? selected.session : undefined

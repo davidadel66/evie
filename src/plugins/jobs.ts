@@ -27,11 +27,11 @@ export function jobs(): Plugin {
 
       host.commands.add({
         name: "background",
-        description: "Move the command Evie is waiting on to the background, so it carries on with other work.",
+        description: "Move the command evie is waiting on to the background, so it carries on with other work.",
         run(_args, context) {
           const moved = context.jobs.background()
-          if (moved === 0) return context.busy ? "Evie is not waiting on anything that can be moved to the background." : "Nothing is running. This is for when Evie is waiting on a long command."
-          return "Moved to the background. Evie carries on, and is told when it finishes."
+          if (moved === 0) return context.busy ? "evie is not waiting on anything that can be moved to the background." : "Nothing is running. This is for when evie is waiting on a long command."
+          return "Moved to the background. evie carries on, and is told when it finishes."
         },
       })
 

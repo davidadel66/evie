@@ -189,7 +189,7 @@ export function createJobs(options: {
   function stopForClosing(running: Running) {
     const { job, work, record } = running
     running.stoppedBy = "closing"
-    safely(() => options.tell(job.session, `Background job ${job.id} (${job.title}) was stopped because Evie was closed. Start it again if it is still needed.`, false, () => told(record)))
+    safely(() => options.tell(job.session, `Background job ${job.id} (${job.title}) was stopped because evie was closed. Start it again if it is still needed.`, false, () => told(record)))
     safely(() => work.stop())
   }
 

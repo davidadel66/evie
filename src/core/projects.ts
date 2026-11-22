@@ -188,12 +188,12 @@ export async function makeProject(
   if (root !== folder) {
     throw new Error(`${given} is inside the git repository at ${root}, so it belongs to that repository's project. Make the project at the repository's own folder instead.`)
   }
-  if (within(folder, data)) throw new Error(`${given} is in Evie's data folder, ${dataFolder}, where Evie keeps its own state. Choose a folder outside it.`)
+  if (within(folder, data)) throw new Error(`${given} is in evie's data folder, ${dataFolder}, where evie keeps its own state. Choose a folder outside it.`)
   // As it really is, since a .evie that is a link counts where it leads.
-  if (within(data, realFolder(join(folder, ".evie")))) throw new Error(`The .evie folder of ${given} is, or holds, Evie's data folder, ${dataFolder}. Choose another folder for the project.`)
+  if (within(data, realFolder(join(folder, ".evie")))) throw new Error(`The .evie folder of ${given} is, or holds, evie's data folder, ${dataFolder}. Choose another folder for the project.`)
   const evie = join(folder, ".evie")
   if (existsSync(evie) && !statSync(evie).isDirectory()) {
-    throw new Error(`${evie} is a file. Evie keeps what it adds to a project in a folder of that name, so move the file elsewhere, then make the project.`)
+    throw new Error(`${evie} is a file. evie keeps what it adds to a project in a folder of that name, so move the file elsewhere, then make the project.`)
   }
   const settingsFile = join(evie, "evie.json")
   const already = projects.list().find((project) => project.folder === folder)
@@ -201,7 +201,7 @@ export async function makeProject(
   // Settings that came with the folder, as in a repository cloned from
   // someone else, are not to be trusted without the owner reading them.
   if (existsSync(settingsFile)) {
-    throw new Error(`${given} already has Evie settings of its own, ${settingsFile}. Open a session there with \`evie\` instead, which asks whether to trust them.`)
+    throw new Error(`${given} already has evie settings of its own, ${settingsFile}. Open a session there with \`evie\` instead, which asks whether to trust them.`)
   }
 
   const madeFolder = !existsSync(folder)
@@ -319,7 +319,7 @@ export function createProjects(db: Database): Projects {
       if (!row) return undefined
       if (row.project === null) return null
       const project = byId.get(row.project)
-      if (!project) throw new Error(`The session "${session}" belongs to the project "${row.project}", which is missing from Evie's database.`)
+      if (!project) throw new Error(`The session "${session}" belongs to the project "${row.project}", which is missing from evie's database.`)
       return project
     },
 

@@ -81,9 +81,9 @@ export function openStore(path: string, migrations: readonly Migration[] = MIGRA
     const applied = db.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version ?? 0
     if (applied > migrations.length) {
       throw new Error(
-        `The database at ${path} was written by a newer version of Evie ` +
-          `(its tables are at version ${applied}; this Evie understands up to ${migrations.length}). ` +
-          `Update Evie to open it.`,
+        `The database at ${path} was written by a newer version of evie ` +
+          `(its tables are at version ${applied}; this evie understands up to ${migrations.length}). ` +
+          `Update evie to open it.`,
       )
     }
     for (let step = applied; step < migrations.length; step++) {

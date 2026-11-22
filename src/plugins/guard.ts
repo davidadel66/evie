@@ -93,7 +93,7 @@ const RULES: { matches: RegExp; reason: string }[] = [
   { matches: /\bdd\b[^;&|]*\bof=\/dev\//, reason: "this writes straight onto a disk." },
   { matches: /\bdiskutil\s+(erase|partition|zero|secureerase|reformat)/i, reason: "this erases a disk." },
   { matches: new RegExp(`${STARTS}(shutdown|reboot|halt|poweroff)\\b`), reason: "this stops the machine." },
-  { matches: new RegExp(`${STARTS}sudo\\b`), reason: "this runs as administrator, which nothing Evie does should need." },
+  { matches: new RegExp(`${STARTS}sudo\\b`), reason: "this runs as administrator, which nothing evie does should need." },
   { matches: /\bch(mod|own)\s+(-\S*R\S*|--recursive)\b[^;&|]*\s(\/|~\/?|\$HOME\/?|\$\{HOME\}\/?)(\s|$)/, reason: "this changes permissions across the whole machine or home folder." },
   { matches: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/, reason: "this is a fork bomb, which freezes the machine." },
 ]

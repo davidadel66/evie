@@ -75,7 +75,7 @@ async function standInGitHub() {
 // Evie with the file tools, the shell and the sync plugin, and a project
 // whose .evie folder holds its settings and syncs as `setting` says, which
 // is "private" unless given, and nothing when given as undefined.
-// With `dataFolderInside`, the project's .evie folder is Evie's data folder,
+// With `dataFolderInside`, the project's .evie folder is evie's data folder,
 // as it is for a project at the home folder.
 // `scriptFor` makes the model's replies once the project folder is known.
 // `pushes` stands in for `git push`, when given.
@@ -284,7 +284,7 @@ test("a try that fails never fails the turn: it is kept, /sync says why, and the
 
   expect(run.events.findLast((event) => event.type === "turn_end")).toMatchObject({ body: { reason: "completed" } })
   const failed = `\`gh repo create\` failed: ${notLoggedIn}.`
-  expect(await syncNow()).toBe(`Could not sync ${evieFolder}: ${failed} It is tried again a minute after Evie next changes something there, and every hour.`)
+  expect(await syncNow()).toBe(`Could not sync ${evieFolder}: ${failed} It is tried again a minute after evie next changes something there, and every hour.`)
 
   github.failWith(undefined)
   expect(await syncNow()).toBe(`Made the private GitHub repository ${name} for ${evieFolder}, and pushed what it holds there. The try before this one had failed: ${failed}`)
@@ -314,7 +314,7 @@ test("a project set to none, or with no setting, is never pushed, and /sync says
 test("a .evie folder that is Evie's data folder, as for a project at the home folder, is never synced", async () => {
   const { evieFolder, commands, syncNow } = await start({ dataFolderInside: true })
 
-  expect(await syncNow()).toStartWith(`Could not sync ${evieFolder}: It is Evie's data folder, which holds its keys and state, and is never synced.`)
+  expect(await syncNow()).toStartWith(`Could not sync ${evieFolder}: It is evie's data folder, which holds its keys and state, and is never synced.`)
   expect(commands).toEqual([])
 })
 
@@ -327,8 +327,8 @@ test("a remote Evie did not set up itself is never pushed to, and /sync says how
   await git(["remote", "add", "origin", join(github.folder, "somewhere-else.git")], evieFolder)
 
   expect(await syncNow()).toStartWith(
-    `Could not sync ${evieFolder}: Its git repository has a remote, origin, that Evie did not set up, ${join(github.folder, "somewhere-else.git")}, ` +
-      `so nothing was pushed. To have Evie make a private repository for it instead, remove that remote: git -C ${evieFolder} remote remove origin.`,
+    `Could not sync ${evieFolder}: Its git repository has a remote, origin, that evie did not set up, ${join(github.folder, "somewhere-else.git")}, ` +
+      `so nothing was pushed. To have evie make a private repository for it instead, remove that remote: git -C ${evieFolder} remote remove origin.`,
   )
   expect(await github.commits("somewhere-else")).toEqual([])
 })
@@ -378,7 +378,7 @@ test("a push refused because the repository has commits this one does not says t
   expect(await syncNow()).toBe(
     `Could not sync ${evieFolder}: The repository ${name} on GitHub has commits that ${evieFolder} does not, as when another computer ` +
       "has synced to it, so the push was refused and nothing there was overwritten. To bring them in, run " +
-      `git -C ${evieFolder} pull --no-rebase origin main, then /sync. It is tried again a minute after Evie next changes something there, and every hour.`,
+      `git -C ${evieFolder} pull --no-rebase origin main, then /sync. It is tried again a minute after evie next changes something there, and every hour.`,
   )
   expect((await github.commits(name)).map((commit) => commit.subject)).toEqual(["From elsewhere", "Sync from evie"])
 })
@@ -388,7 +388,7 @@ test("a .evie folder that holds what a data folder holds, as a copy of one does,
     const { evieFolder, commands, syncNow } = await start()
     await writeFile(join(evieFolder, marker), "stands for a data folder's own file\n")
 
-    expect(await syncNow()).toStartWith(`Could not sync ${evieFolder}: It holds ${marker}, as an Evie data folder does, and a data folder, with its keys and state, is never synced.`)
+    expect(await syncNow()).toStartWith(`Could not sync ${evieFolder}: It holds ${marker}, as an evie data folder does, and a data folder, with its keys and state, is never synced.`)
     expect(commands).toEqual([])
   }
 })

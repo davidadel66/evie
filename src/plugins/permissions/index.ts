@@ -67,7 +67,7 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
 
       host.commands.add({
         name: "mode",
-        description: "Show or change how freely Evie may act: read-only, manual or auto.",
+        description: "Show or change how freely evie may act: read-only, manual or auto.",
         run(args, context) {
           const wanted = args.trim()
           if (wanted === "") return `The mode is ${modeOf(context.session)}. ${ABOUT}`
@@ -105,7 +105,7 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
           return {
             deny:
               mode === "read-only"
-                ? "Not allowed: Evie is in read-only mode, so nothing outside reading the project can be done. Do not try " +
+                ? "Not allowed: evie is in read-only mode, so nothing outside reading the project can be done. Do not try " +
                   "another way. Tell the owner what you would do; they can change the mode with /mode."
                 : "Not allowed: one of the owner's rules denies this. Do not try another way to do the same thing. Tell the owner what you wanted to do.",
           }

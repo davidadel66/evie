@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { ListedProject, SessionState, SessionSummary } from "../../src/core/types.ts"
-import { addressOf } from "./address.ts"
+import { addressOf, selectedIn } from "./address.ts"
 import { startedHere } from "./conversation.ts"
 import { Button } from "./components/ui/button.tsx"
 import {
@@ -14,14 +14,17 @@ import {
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu.tsx"
 import { Input } from "./components/ui/input.tsx"
-import { CaretDown, CaretRight, MagnifyingGlass, Plus } from "./icons.tsx"
+import { CaretDown, CaretRight, MagnifyingGlass, Plus, SidebarLeft } from "./icons.tsx"
+import { toggleList, useListShown } from "./list-shown.ts"
 import { ProjectGlyph } from "./ProjectIcon.tsx"
 import { select, useSelected } from "./selection.ts"
-import { deletedSelection, filterSessions, groupSessions, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, titleOf, type Filter, type OpenGroups } from "./session-list.ts"
+import { besides, deletedSelection, filterSessions, groupSessions, inListOrder, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, titleOf, type Filter, type OpenGroups } from "./session-list.ts"
 import { DeleteDialog, DraftRow, SessionRow } from "./SessionRow.tsx"
 import type { Connection } from "./connection.ts"
 import { NewWorkspace } from "./NewWorkspace.tsx"
 import type { Sessions } from "./sessions.ts"
+import { ask, whenAsked, windowOver } from "./page-requests.ts"
+import { label as keyLabel, onMac, pressed } from "./shortcuts.ts"
 
 // The session list, in the left column: a new session, a search and a
 // project filter above the sessions, which are grouped with those that
@@ -68,19 +71,25 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
     if (next !== open) setGroups(next)
   }, [selectedSession, selectedState])
 
-  // F2 renames the row that has the focus, or else the selected session,
-  // as in T3 Code, when its row is in sight.
+  // F2 renames, as in T3 Code: while the list is shown, the row that has
+  // the focus, or else the selected session's, when its row is in sight;
+  // with the list hidden, or the row not in it, the selected session in
+  // the header above its conversation.
+  const listShown = useListShown()
+  const listInSight = useRef(false)
+  listInSight.current = listShown.wide ? listShown.column : listShown.sheet
   useEffect(() => {
     function renameOnF2(event: KeyboardEvent) {
-      if (event.key !== "F2" || event.defaultPrevented) return
+      if (pressed(event, onMac()) !== "rename" || event.defaultPrevented || windowOver() !== undefined) return
       const focused = document.activeElement
       const typing = focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement || (focused instanceof HTMLElement && focused.isContentEditable)
       // A row's link, which has no session when it is a draft's.
       const focusedRow = focused instanceof HTMLAnchorElement && focused.dataset.row !== undefined ? (focused.dataset.session ?? null) : undefined
-      const session = renamedByF2({ ...(focusedRow !== undefined && { focusedRow }), typing }, selectedSession)
-      if (session === undefined || document.querySelector(`a[data-session="${CSS.escape(session)}"]`) === null) return
+      const renamed = renamedByF2({ ...(focusedRow !== undefined && { focusedRow }), typing, listShown: listInSight.current }, selectedSession)
+      if (renamed === undefined) return
       event.preventDefault()
-      setEditing(session)
+      if ("row" in renamed && document.querySelector(`a[data-session="${CSS.escape(renamed.row)}"]`) !== null) setEditing(renamed.row)
+      else ask("rename")
     }
     addEventListener("keydown", renameOnF2)
     return () => removeEventListener("keydown", renameOnF2)
@@ -111,6 +120,41 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
   }
 
   const groups = groupSessions(filterSessions(list.sessions, filter))
+
+  // The session above or below the selected one, by its shortcut or from
+  // the palette, as T3 Code moves through its threads; and a new session
+  // where New session makes one, which the page asks for.
+  const order = inListOrder(groups, open)
+  const startNew = () => select({ draft: lookingAt })
+  const moves = useRef({ order, startNew })
+  moves.current = { order, startNew }
+  useEffect(() => {
+    const mac = onMac()
+    // As the address has it now, which a key pressed straight after
+    // another can be ahead of the list's drawing.
+    function step(direction: "previous" | "next") {
+      const now = selectedIn(location.hash)
+      const to = besides(moves.current.order, now !== undefined && "session" in now ? now.session : undefined, direction)
+      if (to !== undefined) select({ session: to })
+    }
+    function onKey(event: KeyboardEvent) {
+      const command = pressed(event, mac)
+      if ((command !== "previous session" && command !== "next session") || event.defaultPrevented || windowOver() !== undefined) return
+      event.preventDefault()
+      step(command === "previous session" ? "previous" : "next")
+    }
+    addEventListener("keydown", onKey)
+    const stops = [
+      whenAsked("new session", () => moves.current.startNew()),
+      whenAsked("previous session", () => step("previous")),
+      whenAsked("next session", () => step("next")),
+    ]
+    return () => {
+      removeEventListener("keydown", onKey)
+      for (const stop of stops) stop()
+    }
+  }, [])
+
   const rows = (shown: SessionSummary[]) => (
     <ul className="flex flex-col gap-1">
       {shown.map((session) => (
@@ -206,6 +250,19 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
   )
 }
 
+// The button at the left of the middle column's header that shows and
+// hides the session list: its column at desktop width, its sheet at phone width.
+export function ListButton() {
+  const shown = useListShown()
+  const open = shown.wide ? shown.column : shown.sheet
+  const label = open ? "Hide the session list" : "Show the session list"
+  return (
+    <Button variant="icon" aria-label={label} aria-expanded={open} title={`${label} (${keyLabel("session list", onMac())})`} onClick={toggleList}>
+      <SidebarLeft />
+    </Button>
+  )
+}
+
 // A group at the bottom of the list, under a heading that opens and closes it.
 function Group({ name, count, open, toggle, children }: { name: string; count: number; open: boolean; toggle(): void; children: ReactNode }) {
   return (
@@ -244,7 +301,7 @@ function NewSession({
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary" className="px-3" aria-label="New session in another project">
+          <Button variant="secondary" className="min-w-control px-3" aria-label="New session in another project">
             <CaretDown className="size-icon-sm" />
           </Button>
         </DropdownMenuTrigger>

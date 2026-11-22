@@ -94,7 +94,7 @@ const shellTool: Tool = {
     if (running.unwritable !== undefined) {
       reserved.release()
       return (
-        `The command was not run: Evie could not write its output file in ${dirname(reserved.outputFile)}, the folder where ` +
+        `The command was not run: evie could not write its output file in ${dirname(reserved.outputFile)}, the folder where ` +
         `it keeps what tools print (${running.unwritable}). Tell the owner that this folder cannot be written to: no command can run until it can.`
       )
     }
@@ -211,7 +211,7 @@ function describe(ended: Ended, printed: Printed, timeout: number | undefined, m
     notes.push(`[The command could not be started: ${ended.problem}]`)
   } else if (ended.how === "unknown") {
     notes.push(
-      "[Evie restarted while it was running, and it has since gone without leaving its exit status. Check whether it " +
+      "[evie restarted while it was running, and it has since gone without leaving its exit status. Check whether it " +
         "took effect, and run it again only if it did not.]",
     )
   } else if (ended.signal) {

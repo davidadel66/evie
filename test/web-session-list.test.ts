@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test"
 import type { SessionState, SessionSummary } from "../src/core/types.ts"
-import { addressAsOpened, addressOf, selectedIn } from "../web/src/address.ts"
+import { addressAsOpened, addressOf, lookedAt, selectedIn } from "../web/src/address.ts"
 import { refreshWhileShown } from "../web/src/refresh.ts"
-import { ageWords, deletedSelection, filterSessions, groupSessions, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove } from "../web/src/session-list.ts"
+import { ageWords, besides, deletedSelection, filterSessions, groupSessions, inListOrder, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove } from "../web/src/session-list.ts"
 
 // The session list's own rules, apart from its screen: how sessions are
 // grouped and ordered, and found by search and by project, and how a
@@ -184,13 +184,21 @@ test("in a row's name field, Enter saves and Escape gives up, and a key that is 
   expect(nameFieldKey("Enter", true)).toBeUndefined()
 })
 
-test("F2 renames the row that has the keyboard's focus, or else the selected session, but not a draft's row, nor while the owner types in a field", () => {
-  expect(renamedByF2({ focusedRow: "s2", typing: false }, "s1")).toBe("s2")
-  expect(renamedByF2({ typing: false }, "s1")).toBe("s1")
+test("F2 renames, while the list is shown, the row that has the keyboard's focus, or else the selected session, but not a draft's row, nor while the owner types in a field", () => {
+  const shown = { typing: false, listShown: true }
+  expect(renamedByF2({ ...shown, focusedRow: "s2" }, "s1")).toEqual({ row: "s2" })
+  expect(renamedByF2(shown, "s1")).toEqual({ row: "s1" })
   // A draft's row has the focus: it has no session to rename.
-  expect(renamedByF2({ focusedRow: null, typing: false }, "s1")).toBeUndefined()
-  expect(renamedByF2({ typing: true }, "s1")).toBeUndefined()
-  expect(renamedByF2({ typing: false }, undefined)).toBeUndefined()
+  expect(renamedByF2({ ...shown, focusedRow: null }, "s1")).toBeUndefined()
+  expect(renamedByF2({ ...shown, typing: true }, "s1")).toBeUndefined()
+  expect(renamedByF2(shown, undefined)).toBeUndefined()
+})
+
+test("with the list hidden, as in its sheet at phone width, F2 renames the selected session in the header, which is in sight", () => {
+  const hidden = { typing: false, listShown: false }
+  expect(renamedByF2(hidden, "s1")).toEqual({ header: true })
+  expect(renamedByF2({ ...hidden, typing: true }, "s1")).toBeUndefined()
+  expect(renamedByF2(hidden, undefined)).toBeUndefined()
 })
 
 test("a selected session that has been deleted is found, and so is one whose subagent's conversation is open, so the page can let it go", () => {
@@ -199,4 +207,32 @@ test("a selected session that has been deleted is found, and so is one whose sub
   expect(deletedSelection({ session: "s2" }, ["s1"])).toBeUndefined()
   expect(deletedSelection({ draft: null }, ["s1"])).toBeUndefined()
   expect(deletedSelection(undefined, ["s1"])).toBeUndefined()
+})
+
+test("the sessions in the list's order, for the shortcuts that move through it, are those shown: the top, then each open group's", () => {
+  const groups = groupSessions([summary("a", "active", 1), summary("b", "working", 2), summary("c", "settled", 3), summary("d", "needs_you", 4)])
+  expect(inListOrder(groups, { working: true, settled: false })).toEqual(["d", "a", "b"])
+  expect(inListOrder(groups, { working: false, settled: true })).toEqual(["d", "a", "c"])
+})
+
+test("the previous and next session are the ones above and below the selected one, none past either end, nor from one not shown, and with none selected the last and the first, as in T3 Code", () => {
+  const order = ["a", "b", "c"]
+  expect(besides(order, "b", "previous")).toBe("a")
+  expect(besides(order, "b", "next")).toBe("c")
+  expect(besides(order, "a", "previous")).toBeUndefined()
+  expect(besides(order, "c", "next")).toBeUndefined()
+  expect(besides(order, undefined, "previous")).toBe("c")
+  expect(besides(order, undefined, "next")).toBe("a")
+  expect(besides(order, "not shown", "next")).toBeUndefined()
+  expect(besides([], undefined, "next")).toBeUndefined()
+})
+
+test("what the owner is looking at is the session view's session, draft or subagent, or in a workspace, its side chat's session or new session", () => {
+  expect(lookedAt("#session=s1")).toEqual({ session: "s1", subagent: false })
+  expect(lookedAt("#session=s1&subagent=a1")).toEqual({ session: "s1", subagent: true })
+  expect(lookedAt("#draft=p1")).toEqual({ draft: true })
+  expect(lookedAt("#workspace=p1&tab=sessions&chat=s2")).toEqual({ session: "s2", subagent: false })
+  expect(lookedAt("#workspace=p1&tab=storage&chat=new")).toEqual({ draft: true })
+  expect(lookedAt("#workspace=p1&tab=sessions")).toBeUndefined()
+  expect(lookedAt("")).toBeUndefined()
 })

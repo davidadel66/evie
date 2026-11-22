@@ -236,10 +236,20 @@ project card. While the page is connected, nothing says so; while the
 line is down, one quiet line under the name at the top says Reconnecting,
 and why, and the page catches up by itself once the line is back.
 
+The list can be hidden and shown with the button at the left of the
+middle column's header, or with Cmd+B (Ctrl+B elsewhere), and the browser
+remembers which. At 767px wide or narrower, as on a phone, the same button
+opens the list as a sheet over the page, from the left, which goes once a
+session is picked in it, or with Escape or a tap beside it; the
+Reconnecting line is then under the session's header.
+
 The gear beside the name opens the settings, with a page each for:
 
 - **Appearance:** the theme, one of Dusk, Moss and Oxblood, which the
   browser remembers.
+- **Notifications:** how evie tells you when a session needs you, or a
+  turn finishes or fails (see "Notifications" below), which the browser
+  remembers.
 - **Keys:** the keys the loaded plugins read from `.env` (see
   "Settings"), each with what it is for and only whether it is set. A new
   value is written to the file, readable by you only, and is never shown
@@ -396,7 +406,9 @@ The message box at the bottom of the conversation works as T3 Code's does:
 - **Under the text**, the model's name, which opens the picker too, and how
   full the conversation is, as a share of the size at which evie compacts
   it by itself. Its menu gives both sizes, and Compact now.
-- **At phone width** the box is one row until you tap it.
+- **At phone width**, 767px wide or narrower as throughout the page, the
+  box is one row until you tap it, and the model picker's makers are a row
+  above its models that scrolls sideways.
 - **An @** at the start of a word, in a session in a project, opens a menu
   of the project's files, narrowed and ranked as you type, as the slash
   menu is, with the same keys. Picking one puts `@` and its path in the
@@ -484,7 +496,7 @@ What evie changed is shown as diffs, as T3 Code shows them:
   with Cmd+D (Ctrl+D elsewhere), which also closes it. At desktop width it
   is a column beside the conversation, in the project card's place, and
   wider than the card, since a diff needs the room; closing it brings the
-  card back. At 980px wide or narrower it fills the screen, with a way back
+  card back. At phone width it fills the screen, with a way back
   at its top left.
 - **The menu at its top** picks what to compare: the latest turn; each turn
   that changed files, newest first, with when it ended; the whole session,
@@ -550,6 +562,77 @@ What evie changed is shown as diffs, as T3 Code shows them:
   most 20 seconds comparing lines, and one file at most 15: the files left
   say they took too long, and are not compared.
 
+**Shortcuts** work as T3 Code's, wherever the focus is, but for Escape and
+F2, which belong to the message box and the conversation, and wait while
+a window such as the settings is open. "Mod" is Cmd on a Mac and Ctrl
+elsewhere. They are one table, in `web/src/shortcuts.ts`, which the
+page's handlers, the command palette and the buttons' titles all read;
+they cannot be changed yet.
+
+| Keys | What they do |
+|---|---|
+| Mod+K | Open or close the command palette |
+| Mod+Shift+O, or Mod+N | A new session: where New session makes one, or in a workspace, in its side chat |
+| Mod+Alt+[ and ], or Mod+Shift+[ and ] | The session above or below in the list, in the session view |
+| Mod+B | Show or hide the session list, in the session view |
+| Mod+Alt+B | Show or hide the project card |
+| Mod+D | Open or close the diff |
+| Mod+Shift+M | Pick a model |
+| Escape | Stop evie, in the message box |
+| F2 | Rename the session: in the list while it is shown, and otherwise in the header over its conversation, as in a workspace's side chat |
+
+Most browsers open a new window on Mod+N, and a Mac's browsers move
+between tabs on Mod+Shift+[ and ], before the page hears of them, so
+the first keys in the table are the ones the browser always passes on,
+and T3 Code's work where it passes them on too, as in a window of its own.
+Mod and a digit is left to the browser, which moves between its tabs with
+it, as T3 Code leaves it outside its desktop app. On a phone, with no
+keyboard, the palette shows no keys.
+
+**The command palette**, Mod+K, works as T3 Code's. It opens on the
+actions and the twelve sessions last active, and what you type searches
+the actions, every session and every project: a name that is what you
+typed first, then one that starts with it, then a word that starts with
+each word typed, then one with it inside a word, and on an equal match, a
+command before a session. Each row shows its shortcut. The actions are a
+new session, here or in a project; the previous and next session; the
+settings; the theme; showing and hiding the list, the card and the diff;
+settling the session or bringing it back, moving it, and renaming it; and
+Compact now, Stop and Pick a model, while they apply. In a workspace they
+are those of its side chat's session, and it has no list, card or diff. A
+session opens it, and a project opens its workspace, with its folder
+beside it, cut at its start. A row
+with a list of its own, such as the theme or Move to, opens it in the
+palette, and Backspace in an empty search goes back. Up and Down move,
+Enter runs the row raised, and Escape closes it.
+
+**Notifications** work as T3 Code's. evie tells you when a session comes
+to need you, as when a question or a permission prompt waits ("Needs
+you"), and when a turn finishes ("Finished") or fails ("Failed", with what
+went wrong), with the session's name:
+
+- **With the window in front,** a notice of another session shows at the
+  top of the page, with Open. A notice that a session needs you stays
+  until it no longer does; the others go after a few seconds.
+- **With the window behind others,** the system's notification says it,
+  if you have turned them on, and clicking it opens the session.
+- **Of the session you are looking at,** nothing is said.
+
+In the settings, Notifications are Off at first, or Notifications, Sound
+only, or Notifications with sound; the browser is asked to allow them only
+when you turn them on. A browser shows them only for a page at a secure
+address, such as `127.0.0.1` on this computer, so not over plain `http`
+from another device. Notices in the page are a switch of their own, on
+until you turn them off. The system's notifications are silent, and
+evie's own sound plays only in the modes that have one, as T3 Code's;
+browsers let a page play a sound only once it has been used, so choosing a
+mode with a sound readies it at once. Everything is read from what the server sends every
+page already, and for a turn's end, the session's latest events, so the
+server does nothing more for it.
+
+At phone width, every button and menu item is at least 44px tall, the
+board's size for a finger.
+
 **A workspace** is a project's home, opened from its icon or name in the
 session list or the project card. The page then has three other columns:
 
@@ -590,8 +673,10 @@ session list or the project card. The page then has three other columns:
 The address keeps where you are, as `#workspace=<project id>&tab=storage`,
 with `&chat=<session id>` for the side chat's session and `&file=<path>`
 for a file open in Storage. At phone width the strip is a row of tiles at
-the top, the tabs scroll sideways, and the side chat stacks below the
-workspace.
+the top, the header stays one row, with the workspace's name cut down to
+96px at the least, and its tabs scrolling sideways after it, and the side
+chat stacks below the workspace. The side chat's session is renamed in its
+header, by a double-click, F2 or the command palette.
 
 ### Attachments
 
@@ -1334,10 +1419,15 @@ A few values the design system's board does not name are named once in
 | `session-list` | 288px | The width of the session list |
 | `project-card` | 320px | The width of the project card |
 | `card-sheet` | `min(88vw, 448px)` | The width of the project card as a sheet over the page, at 980px or narrower |
+| `list-sheet` | `min(calc(100vw - 12px), 448px)` | The width of the session list as a sheet over the page, at 767px or narrower, as T3 Code's sidebar |
+| `palette` | 576px | The widest the command palette is, as T3 Code's |
+| `palette-list` | `min(448px, 60dvh)` | The tallest the palette's rows grow before they scroll |
+| `notice` | `min(360px, calc(100vw - 32px))` | The width of a notice at the top of the page |
+| `workspace-name` | 96px | The least a workspace's name keeps in its header before its tabs scroll sideways |
 | `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle |
 | `conversation` | 740px | The widest the conversation is, which the board's Message gives in words |
 | `call-name` | 48px | The room a tool call's name takes in a turn's steps, as the board's Message draws them |
-| `control` | 40px | The height of buttons and menu items, which the board's Button and Menu give in words |
+| `control` | 40px | The height of buttons and menu items, which the board's Button and Menu give in words; below 768px, the board's `touch-min`, 44px |
 | `menu` | 176px | The narrowest a menu is |
 | `dialog` | 400px | The widest a dialog is, such as the settings window |
 | `tile-row` | 18px | A project's icon tile in a session row, which the board's WorkspaceIcon gives in words |
@@ -1473,9 +1563,10 @@ credited here, and its licence notice is kept with the code.
   notice are in `LICENSES/`.
 - [T3 Code](https://github.com/pingdotgg/t3code) (MIT): the prompt that
   names sessions, in `src/plugins/naming.ts`, rewritten in evie's words;
-  and how a pull request's checks are read and summed up, in
-  `src/plugins/github.ts` and `web/src/pull-request.ts`. The web app's
-  layout follows T3 Code's. Its licence is in `LICENSES/`.
+  how a pull request's checks are read and summed up, in
+  `src/plugins/github.ts` and `web/src/pull-request.ts`; and how a key
+  pressed is matched to a shortcut, in `web/src/shortcuts.ts`. The web
+  app's layout follows T3 Code's. Its licence is in `LICENSES/`.
 
 The web app's fonts are [Geist and Geist Mono](https://github.com/vercel/geist-font)
 (SIL Open Font License 1.1), from the `@fontsource-variable` packages. Its

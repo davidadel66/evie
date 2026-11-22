@@ -1,47 +1,83 @@
-import { useState, useSyncExternalStore } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { useCardShortcut } from "./card-shown.ts"
-import { connectionLine, type Connection, type ConnectionState } from "./connection.ts"
+import { Button } from "./components/ui/button.tsx"
+import type { Connection, ConnectionState } from "./connection.ts"
+import { ConnectionLine, ConnectionUnderHeader } from "./ConnectionLine.tsx"
+import { ConnectionShown } from "./connection-shown.ts"
 import { Conversation, Draft, Placeholder } from "./Conversation.tsx"
 import { startedHere } from "./conversation.ts"
+import { X } from "./icons.tsx"
+import { cn } from "./lib/utils.ts"
+import { closeListSheet, toggleList, useListShown } from "./list-shown.ts"
+import { Notices } from "./Notices.tsx"
+import { Palette } from "./Palette.tsx"
 import { useDiffShortcut } from "./diff-shown.ts"
 import { DiffPlace } from "./DiffPanel.tsx"
 import { CardButton, CardPlace } from "./ProjectCard.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
-import { SessionList } from "./SessionList.tsx"
+import { ListButton, SessionList } from "./SessionList.tsx"
 import { HeaderName } from "./SessionRow.tsx"
 import type { Sessions } from "./sessions.ts"
 import { Settings } from "./Settings.tsx"
-import { Spinner } from "./Spinner.tsx"
+import { newSession, windowOver } from "./page-requests.ts"
+import { onMac, pressed } from "./shortcuts.ts"
 import { SubagentView } from "./Subagent.tsx"
-import { Words } from "./Words.tsx"
+import { workspaceIn } from "./workspace.ts"
 import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 
 // The page once signed in: the session list, the conversation and the
-// project card, in three columns. At phone width the list and the
-// conversation stack, the conversation a screen high, and the project card
-// is a sheet over the page, opened from the session's header. With a
-// workspace in the address, the workspace view instead.
+// project card, in three columns, as T3 Code lays them out. At 767px or
+// narrower the list is a sheet over the page from the left, and at 980px
+// or narrower the card is one from the right, each opened from a button in
+// the session's header. With a workspace in the address, the workspace
+// view instead. The command palette and the notices float over either.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
   useDiffShortcut()
+  const [palette, setPalette] = useState(false)
+  useFrameShortcuts(() => setPalette((open) => !open))
   const workspace = useWorkspacePlace()
-  if (workspace !== undefined) return <WorkspaceView place={workspace} state={state} connection={connection} sessions={sessions} />
   return (
-    <div className="flex min-h-dvh flex-col wide:h-dvh wide:flex-row">
-      <aside aria-label="Sessions" className="flex flex-col bg-bg-side wide:w-session-list wide:shrink-0">
+    <ConnectionShown.Provider value={state}>
+      {workspace !== undefined ? (
+        <>
+          <WorkspaceView place={workspace} state={state} connection={connection} sessions={sessions} />
+          <Settings connection={connection} button={false} />
+        </>
+      ) : (
+        <SessionView state={state} connection={connection} sessions={sessions} />
+      )}
+      <Palette connection={connection} sessions={sessions} open={palette} close={() => setPalette(false)} />
+      <Notices connection={connection} sessions={sessions} />
+    </ConnectionShown.Provider>
+  )
+}
+
+// The session view's three columns.
+function SessionView({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
+  const list = useListShown()
+  const sheetOpen = !list.wide && list.sheet
+  return (
+    <div className="flex h-dvh">
+      <ListPlace>
         {/* The settings button's own padding brings its icon near the page's 28px edge. */}
         <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-7">
           <span className="text-title text-text">evie</span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center">
             <Settings connection={connection} />
+            {!list.wide && (
+              <Button variant="icon" aria-label="Close the session list" onClick={closeListSheet}>
+                <X />
+              </Button>
+            )}
           </div>
         </header>
-        <ConnectionLine state={state} />
+        {list.wide && <ConnectionLine state={state} />}
         <SessionList connection={connection} sessions={sessions} />
-      </aside>
+      </ListPlace>
 
-      <main className="flex h-dvh min-w-0 flex-none flex-col bg-bg wide:flex-1">
+      <main inert={sheetOpen} className="flex min-w-0 flex-1 flex-col bg-bg">
         <OpenSession connection={connection} sessions={sessions} />
       </main>
 
@@ -49,6 +85,88 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
       <CardPlace connection={connection} sessions={sessions} />
     </div>
   )
+}
+
+// The session list's place: the column on the left, which the owner can
+// hide, or at phone width a sheet over the page from the left, as T3
+// Code's sidebar. The list is kept on the page while hidden, so that what
+// it is narrowed to, and the shortcuts that move through it, hold. While
+// the sheet is open the page behind it cannot be reached; a tap outside
+// it, Escape, or following any link in it, as to a session, even the one
+// open, closes it, and the focus goes back where it was.
+function ListPlace({ children }: { children: ReactNode }) {
+  const shown = useListShown()
+  const selected = useSelected()
+  const place = useRef<HTMLElement>(null)
+  const sheet = !shown.wide
+  const open = sheet && shown.sheet
+  useEffect(() => closeListSheet(), [selected])
+  useEffect(() => {
+    if (!open) return
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+    place.current?.focus()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return
+      event.preventDefault()
+      closeListSheet()
+    }
+    addEventListener("keydown", onKey)
+    return () => {
+      removeEventListener("keydown", onKey)
+      if (before?.isConnected) before.focus()
+    }
+  }, [open])
+  return (
+    <>
+      {open && <div aria-hidden="true" onClick={closeListSheet} className="fixed inset-0 z-40" />}
+      <aside
+        ref={place}
+        aria-label="Sessions"
+        tabIndex={-1}
+        {...(open && { role: "dialog", "aria-modal": true })}
+        inert={sheet && !open}
+        hidden={!sheet && !shown.column}
+        onClick={(event) => open && event.target instanceof Element && event.target.closest("a[href]") !== null && closeListSheet()}
+        className={cn(
+          "flex flex-col outline-none",
+          sheet
+            ? "fixed inset-y-0 left-0 z-50 w-list-sheet border-r border-line bg-surface shadow-float transition-[translate,visibility] motion-reduce:transition-none"
+            : "w-session-list shrink-0 bg-bg-side",
+          sheet && !open && "invisible -translate-x-full",
+        )}
+      >
+        {children}
+      </aside>
+    </>
+  )
+}
+
+// The shortcuts of the frame itself: mod+K opens and closes the command
+// palette; mod+shift+O makes a new session, wherever the owner is; and
+// mod+B shows and hides the session list, in the session view, which has
+// one. While another window is open over the page, such as the settings,
+// they wait.
+function useFrameShortcuts(togglePalette: () => void) {
+  useEffect(() => {
+    const mac = onMac()
+    const onKey = (event: KeyboardEvent) => {
+      const command = pressed(event, mac)
+      if (command === undefined || event.defaultPrevented) return
+      const over = windowOver()
+      if (command === "palette" && (over === undefined || over === "palette")) {
+        event.preventDefault()
+        togglePalette()
+      } else if (command === "new session" && over === undefined) {
+        event.preventDefault()
+        newSession()
+      } else if (command === "session list" && over === undefined && workspaceIn(location.hash) === undefined) {
+        event.preventDefault()
+        toggleList()
+      }
+    }
+    addEventListener("keydown", onKey)
+    return () => removeEventListener("keydown", onKey)
+  }, [togglePalette])
 }
 
 // The middle column: the selected session's conversation, under its name,
@@ -87,15 +205,18 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
   )
 }
 
-// The middle column's header: the session's name, when there is one to
-// show, and the button that shows and hides the project card. A name that
-// can be renamed is typed in place after a double-click, and why a name was
-// not taken is said on a line under the header.
+// The middle column's header: the button that shows and hides the session
+// list, the session's name, when there is one to show, and the button that
+// shows and hides the project card. A name that can be renamed is typed in
+// place after a double-click, and why a name was not taken is said on a
+// line under the header. At phone width, the line that says the connection
+// is down is under it too.
 function Top({ title, rename }: { title?: string; rename?(name: string): Promise<string | undefined> }) {
   const [note, setNote] = useState<string>()
   return (
     <>
-      <header className="flex h-header-height shrink-0 items-center gap-3 border-b border-line pr-4 pl-7">
+      <header className="flex h-header-height shrink-0 items-center gap-3 border-b border-line pr-4 pl-4">
+        <ListButton />
         {title === undefined ? (
           <span className="flex-1" />
         ) : rename === undefined ? (
@@ -105,6 +226,7 @@ function Top({ title, rename }: { title?: string; rename?(name: string): Promise
         )}
         <CardButton />
       </header>
+      <ConnectionUnderHeader />
       <div role="status">{note !== undefined && <p className="px-7 pt-3 text-caption text-text-muted">{note}</p>}</div>
     </>
   )
@@ -117,33 +239,5 @@ function Empty({ title, text }: { title: string; text: string }) {
       <Top />
       <Placeholder title={title} text={text} />
     </>
-  )
-}
-
-// Nothing while connected. While the line is not up, one quiet line, as
-// Working is said, with why, until it is back. The status region is always
-// on the page, and only its words come and go, so that a screen reader,
-// which listens to a region already there, says them.
-export function ConnectionLine({ state }: { state: ConnectionState }) {
-  const line = connectionLine(state)
-  return (
-    <div role="status">
-      {line !== undefined && (
-        <p className="flex items-start gap-2 px-7 pb-3 text-caption text-text-muted">
-          <span className="flex h-lh items-center">
-            <Spinner />
-          </span>
-          <span>
-            {line.word}
-            {line.reason !== undefined && (
-              <>
-                {". "}
-                <Words text={line.reason} />
-              </>
-            )}
-          </span>
-        </p>
-      )}
-    </div>
   )
 }
