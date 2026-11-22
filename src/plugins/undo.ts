@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs"
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { dataFolder } from "../core/evie.ts"
-import type { CheckedToolCall, HookContext, Plugin } from "../core/types.ts"
+import type { CheckedToolCall, HookContext, KeptFile, KeptTurn, Plugin } from "../core/types.ts"
 import { patchFiles } from "./files/paths.ts"
 
 // The built-in undo plugin. `/undo` puts files back as they were before
@@ -136,6 +136,44 @@ export function undo(options: UndoOptions = {}): Plugin {
           kept.after = (await stateOf(kept.path)).mark
         }
         if (record.files.length > 0) await save(folder, record)
+      })
+
+      // What each turn changed, for a client to show as diffs: each file's
+      // copy from before the turn, and what the turn left in it. That is
+      // the file as it is now, while it still holds what the turn left, or
+      // else the copy a later turn kept of it before changing it, when that
+      // copy is what this turn left. Otherwise it is not known. A turn
+      // undone is gone, with its copies.
+      host.changes.add({
+        name: "undo",
+        async turns(session) {
+          const numbers = (await readdir(join(root, session)).catch(() => [] as string[])).map(Number).filter(Number.isInteger).sort((a, b) => a - b)
+          const kept = await Promise.all(numbers.map(async (turn) => ({ turn, folder: turnFolder(session, turn), record: await load(turnFolder(session, turn)) })))
+          const copyOf = async (folder: string, file: Kept) => (file.copy === undefined ? null : await readFile(join(folder, file.copy)).catch(() => undefined))
+          const turns: KeptTurn[] = []
+          for (const [at, { turn, folder, record }] of kept.entries()) {
+            const files: KeptFile[] = []
+            for (const file of record.files) {
+              if (file.after === file.before) continue
+              const before = file.before === UNKNOWN ? undefined : await copyOf(folder, file)
+              files.push({ path: file.path, before, after: await leftBy(file, kept.slice(at + 1)) })
+            }
+            if (files.length > 0) turns.push({ turn, files })
+          }
+          return turns
+
+          async function leftBy(file: Kept, later: typeof kept): Promise<Uint8Array | null | undefined> {
+            if (file.after === ABSENT) return null
+            if (file.after === undefined || file.after === UNKNOWN) return undefined
+            const now = await stateOf(file.path)
+            if (now.mark === file.after) return now.contents
+            for (const { folder, record } of later) {
+              const next = record.files.find((each) => each.path === file.path && each.before === file.after)
+              if (next) return copyOf(folder, next)
+            }
+            return undefined
+          }
+        },
       })
 
       host.commands.add({

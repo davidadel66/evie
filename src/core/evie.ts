@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import { listChanges, readBranch, readSession, readTurn, readUncommitted } from "./changes.ts"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
@@ -8,6 +9,7 @@ import { createEventLog } from "./log.ts"
 import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "./projects.ts"
+import { readPullRequest } from "./pull-request.ts"
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
@@ -650,6 +652,27 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return projects.subagentsOf(input.session).map(({ id, created, task }) => ({ session: id, name: nameOf(task), started: created }))
   }
 
+  // What an open session's turns changed, from what its plugins keep of
+  // them, such as undo's copies, and with git, what its project's
+  // repository holds that is not committed, or on its branch.
+  async function readChanges(input: Commands["read_changes"]["input"]): Promise<Commands["read_changes"]["output"]> {
+    const { host, project } = open(input.session)
+    const keeper = host.changes.list()[0]
+    switch (input.of) {
+      case "turn":
+        if (!Number.isInteger(input.turn) || input.turn < 1) throw new Error("`turn` is the number of a turn in the session, from 1.")
+        return { files: await readTurn(keeper, input.session, input.turn, project) }
+      case "session":
+        return { files: await readSession(keeper, input.session, project) }
+      case "uncommitted":
+        return { files: await readUncommitted(project) }
+      case "branch":
+        return readBranch(project, input.base)
+      default:
+        throw new Error("`of` is what to compare: \"turn\", \"session\", \"uncommitted\" or \"branch\".")
+    }
+  }
+
   // Each project's branch, and whether its folder is in a git work tree,
   // are read now, from its folder, all at once.
   async function listProjects(): Promise<Commands["list_projects"]["output"]> {
@@ -823,6 +846,17 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await readJobOutput(command)) as Output
         case "list_subagents":
           return listSubagents(command) as Output
+        case "list_changes": {
+          const { host, project } = open(command.session)
+          return (await listChanges(host.changes.list()[0], command.session, log.events(command.session), project)) as Output
+        }
+        case "read_changes":
+          return (await readChanges(command)) as Output
+        case "read_pull_request": {
+          const project = projects.get(command.project)
+          if (!project) throw new Error(`There is no project with the id "${String(command.project)}".`)
+          return (await readPullRequest(project)) as Output
+        }
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

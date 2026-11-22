@@ -43,6 +43,7 @@ export async function createHost(
     profiles: createRegistry("model profile"),
     commands: createRegistry("command"),
     jobKinds: createRegistry("job kind"),
+    changes: createRegistry("change keeper"),
   } satisfies Omit<Host, "on">
 
   // Every plugin shares the same lists, but each is handed its own copy of
