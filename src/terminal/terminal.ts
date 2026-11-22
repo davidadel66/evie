@@ -1,4 +1,5 @@
 import type { Evie, EventBodies, EvieEvent, ToolCall } from "../core/types.ts"
+import { shownIn } from "../plugins/show/record.ts"
 
 export type TerminalOptions = {
   // The client interface. The terminal uses nothing else of Evie.
@@ -181,9 +182,16 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       showNextCall()
     }
     if (event.type === "tool_result") {
+      // A file evie showed, which the web app draws, is named here on a
+      // line of its own, with the folder it is kept in.
+      const shown = event.body.name === "show" ? shownIn(event.body.text) : []
+      for (const file of shown) {
+        const cut = file.path.lastIndexOf("/") + 1
+        line(`  ⎿ Shown ${file.path.slice(cut)}, in ${file.path.slice(0, cut)}`)
+      }
       const lines = event.body.text.split("\n")
       const more = lines.length > 1 ? ` (+${lines.length - 1} more lines)` : ""
-      line(`  ⎿ ${shorten(lines[0] ?? "", 100)}${more}`)
+      if (shown.length === 0) line(`  ⎿ ${shorten(lines[0] ?? "", 100)}${more}`)
       showNextCall()
     }
     if (event.type === "compaction") line("[The conversation was getting long, so its earlier part is now a summary.]")

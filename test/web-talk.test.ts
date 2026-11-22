@@ -1,7 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
-import { readdir } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ask, models, startServer, type Attachments, type Command, type Evie, type EvieOptions, type Plugin } from "../src/index.ts"
+import { ask, models, show, startServer, type Attachments, type Command, type Evie, type EvieOptions, type Plugin } from "../src/index.ts"
 import { openTokens } from "../src/server/tokens.ts"
 import { startEvie } from "./support/harness.ts"
 import { openConnection } from "../web/src/connection.ts"
@@ -671,4 +672,28 @@ test("a turn stopped while the line was down holds the queue once the session is
   expect(conversation.state().queue.held).toBe("stopped")
   expect(queued(back)).toEqual(["Then water them"])
   expect(model.requests).toHaveLength(1)
+})
+
+test("a file evie shows is drawn under its reply once the turn has ended, and the address the page fetches it from gives it to the signed-in page", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  const script: ScriptedReply[] = [{ text: ["Drawing it."], calls: [{ name: "show", input: { paths: ["out/chart.png"] } }] }, { text: ["Here is the chart."] }]
+  const { served, connection } = await start(script, { plugins: [show({ dataFolder: home })], home })
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 4, 0, 0, 0, 3])
+  await mkdir(join(served.run.projectFolder, "out"))
+  await writeFile(join(served.run.projectFolder, "out", "chart.png"), png)
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+
+  await conversation.send("Draw the chart")
+  const ended = await until(conversation, (state) => !state.turnRunning && state.events.some((event) => event.type === "turn_end"))
+  const items = transcriptOf(ended)
+
+  expect(items.map((item) => item.kind)).toEqual(["owner", "fold", "reply", "shown"])
+  const shown = items.at(-1)
+  if (shown?.kind !== "shown") throw new Error("Nothing was shown.")
+  expect(shown.file).toMatchObject({ name: "chart.png", type: "image/png", storage: { project: served.run.project!.id } })
+  const fetched = await fetch(new URL(shown.file.address!, served.server.url), { headers: { Authorization: `Bearer ${served.token}` } })
+  expect([fetched.status, fetched.headers.get("content-type")]).toEqual([200, "image/png"])
+  expect([...new Uint8Array(await fetched.arrayBuffer())]).toEqual([...png])
 })

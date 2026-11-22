@@ -48,6 +48,30 @@ export function shownOf(file: ShownFile, session: string, project: string | null
 // folder, by its full path.
 export const addressOf = (asked: { project: string; path: string } | { session: string; path: string }) => `${PATHS.storage}?${new URLSearchParams(asked)}`
 
+// The type a file in Storage is shown as, from its name's ending, before
+// it is fetched: the route reads its kind again from its bytes, and gives
+// nothing for bytes of no kind evie shows.
+const BY_ENDING: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  pdf: "application/pdf",
+  md: "text/markdown",
+  markdown: "text/markdown",
+}
+
+// A file of a project's Storage, by its path inside the `.evie` folder,
+// as Storage opens it with the viewer of its kind, or nothing when its
+// name names no kind evie shows, which Storage reads as it reads any file.
+export function storageShown(project: string, path: string): Shown | undefined {
+  const type = BY_ENDING[path.slice(path.lastIndexOf(".") + 1).toLowerCase()]
+  if (type === undefined || !path.includes(".")) return undefined
+  return shownOf({ path: `.evie/${path}`, type }, "", project)
+}
+
 // Every image shown among what the page draws, in order, for full screen
 // to move through.
 export function galleryOf(items: readonly { kind: string; file?: Shown }[]): Shown[] {

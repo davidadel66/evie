@@ -208,3 +208,26 @@ export const PencilSimple = icon(<path d="M227.31,73.37,182.63,28.68a16,16,0,0,0
 export const ArrowUUpLeft = icon(<path d="M232,144a64.07,64.07,0,0,1-64,64H80a8,8,0,0,1,0-16h88a48,48,0,0,0,0-96H51.31l34.35,34.34a8,8,0,0,1-11.32,11.32l-48-48a8,8,0,0,1,0-11.32l48-48A8,8,0,0,1,85.66,45.66L51.31,80H168A64.07,64.07,0,0,1,232,144Z" />)
 
 export const Scroll = icon(<path d="M96,104a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H104A8,8,0,0,1,96,104Zm8,40h64a8,8,0,0,0,0-16H104a8,8,0,0,0,0,16Zm128,48a32,32,0,0,1-32,32H88a32,32,0,0,1-32-32V64a16,16,0,0,0-32,0c0,5.74,4.83,9.62,4.88,9.66h0A8,8,0,0,1,24,88a7.89,7.89,0,0,1-4.79-1.61h0C18.05,85.54,8,77.61,8,64A32,32,0,0,1,40,32H176a32,32,0,0,1,32,32V168h8a8,8,0,0,1,4.8,1.6C222,170.46,232,178.39,232,192ZM96.26,173.48A8.07,8.07,0,0,1,104,168h88V64a16,16,0,0,0-16-16H67.69A31.71,31.71,0,0,1,72,64V192a16,16,0,0,0,32,0c0-5.74-4.83-9.62-4.88-9.66A7.82,7.82,0,0,1,96.26,173.48ZM216,192a12.58,12.58,0,0,0-3.23-8h-94a26.92,26.92,0,0,1,1.21,8,31.82,31.82,0,0,1-4.29,16H200A16,16,0,0,0,216,192Z" />)
+
+// The icons of a file evie shows, and of its frame and full screen, drawn
+// for them on the Evie Web UI canvas rather than taken from Phosphor: thin
+// strokes on a 16px grid, which take the colour of the text around them.
+function stroked(path: string, width = 1.25) {
+  return function Icon({ className }: { className?: string }) {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...(className !== undefined && { className })}>
+        <path d={path} />
+      </svg>
+    )
+  }
+}
+export const KindImage = stroked("M2.5 2.5h11v11h-11z M2.5 10.75l3.25-3.25 3 3 2-2 2.75 2.75 M11.25 5.5a.75.75 0 1 1-1.5 0a.75.75 0 1 1 1.5 0")
+export const KindVector = stroked("M4.5 4.5h7v7h-7z M2.5 2.5h2v2h-2z M11.5 2.5h2v2h-2z M2.5 11.5h2v2h-2z M11.5 11.5h2v2h-2z")
+export const KindPdf = stroked("M4 1.5h5.5l3 3v10H4z M9.5 1.5v3h3 M6 8.5h4.5 M6 11h4.5")
+export const KindMarkdown = stroked("M1.5 3.5h13v9h-13z M4 10.5v-5l2 2.5 2-2.5v5 M11.5 5.5v5 M10 9l1.5 1.5L13 9")
+export const FullScreen = stroked("M2.5 6V2.5H6 M10 2.5h3.5V6 M13.5 10v3.5H10 M6 13.5H2.5V10")
+export const InStorage = stroked("M1.75 4.25a1 1 0 0 1 1-1h3.1l1.5 1.5h5.9a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H2.75a1 1 0 0 1-1-1z")
+export const Download = stroked("M8 2.5v8 M4.75 7.25L8 10.5l3.25-3.25 M2.5 13.5h11")
+export const Back = stroked("M13 8H3 M7 4L3 8l4 4", 1.5)
+export const Previous = stroked("M10 3.5L5.5 8l4.5 4.5", 1.5)
+export const Next = stroked("M6 3.5L10.5 8 6 12.5", 1.5)
