@@ -18,6 +18,7 @@ export async function startEvie(
     projectFolder?: string
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
     trust?: NonNullable<EvieOptions["trust"]>
+    settings?: NonNullable<EvieOptions["settings"]>
     compaction?: NonNullable<EvieOptions["compaction"]>
     quietCheckEvery?: number
     // Open the session as a client that shows questions and answers them.
@@ -36,6 +37,7 @@ export async function startEvie(
     plugins,
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
     ...(options.trust && { trust: options.trust }),
+    ...(options.settings && { settings: options.settings }),
     ...(options.compaction && { compaction: options.compaction }),
     ...(options.quietCheckEvery !== undefined && { quietCheckEvery: options.quietCheckEvery }),
   }).catch(async (error) => {

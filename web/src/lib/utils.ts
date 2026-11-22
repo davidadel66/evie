@@ -28,6 +28,10 @@ export const NAMED_SIZES = [
   "menu",
   "dialog",
   "diff-tree",
+  "settings",
+  "settings-height",
+  "settings-pages",
+  "settings-field",
 ] as const
 
 // Joins class names, as every shadcn/ui part does, so that a class passed

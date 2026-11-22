@@ -12,6 +12,7 @@ import { openDiff, useDiffShown } from "./diff-shown.ts"
 import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet.tsx"
 import type { Connection } from "./connection.ts"
 import { holdConversation, startedHere, type Conversation } from "./conversation.ts"
+import { FolderPath } from "./FolderPath.tsx"
 import { ArrowSquareOut, CaretDown, CaretRight, Check, SidebarRight, X } from "./icons.tsx"
 import { backgroundJobs, branchWords, gitWhyNot, stateWord, subagentsOf, undoWhyNot, type CardFacts, type Subagent } from "./project-card.ts"
 import { ProjectIcon } from "./ProjectIcon.tsx"
@@ -128,9 +129,8 @@ function Where({ connection, projectId, project }: { connection: Connection; pro
   return (
     <dl className="flex flex-col px-4">
       <Row label="Folder">
-        {/* Cut at its start, so that the end of the path, the project's own folder, shows. */}
-        <dd title={project.folder} dir="rtl" className="min-w-0 truncate font-mono text-code text-text">
-          <bdi dir="ltr">{project.folder}</bdi>
+        <dd className="min-w-0">
+          <FolderPath folder={project.folder} className="text-text" />
         </dd>
       </Row>
       <Row label="Branch">
