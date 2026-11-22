@@ -6,10 +6,10 @@ import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
-import { branchOf, createProjects, keepEvieOutOfGit, makeProject } from "./projects.ts"
+import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
-import { createSummaries } from "./summaries.ts"
+import { createSummaries, nameOf } from "./summaries.ts"
 import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
 
 type Cut = "none" | "asking" | "working"
@@ -327,6 +327,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
         inbox.take(id)
         loop.cancel()
       },
+      name: (id) => {
+        const found = projects.subagentsOf(session).find((each) => each.id === id)
+        return found === undefined ? null : nameOf(found.task)
+      },
     }
     return { children, child }
   }
@@ -626,15 +630,25 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     }
     const job = jobs.list(input.session).find((each) => each.id === input.id)
     if (!job) throw new Error(`This session has had no job ${String(input.id)} since Evie last started.`)
-    return readOutput(job.outputFile, input.after)
+    try {
+      return await readOutput(job.outputFile, input.after)
+    } catch (cause) {
+      throw new Error(`The output of job ${job.id} could not be read: ${cause instanceof Error ? cause.message : String(cause)}`)
+    }
   }
 
-  // Each project's branch is read now, from its folder, all at once.
+  function listSubagents(input: Commands["list_subagents"]["input"]): Commands["list_subagents"]["output"] {
+    if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
+    return projects.subagentsOf(input.session).map(({ id, created, task }) => ({ session: id, name: nameOf(task), started: created }))
+  }
+
+  // Each project's branch, and whether its folder is in a git work tree,
+  // are read now, from its folder, all at once.
   async function listProjects(): Promise<Commands["list_projects"]["output"]> {
     return Promise.all(
       projects.list().map(async (project) => {
-        const branch = await branchOf(project.folder)
-        return branch === undefined ? project : { ...project, branch }
+        const [branch, git] = await Promise.all([branchOf(project.folder), inGit(project.folder)])
+        return { ...project, ...(branch !== undefined && { branch }), ...(git !== undefined && { git }) }
       }),
     )
   }
@@ -743,6 +757,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await newProject(command)) as Output
         case "read_job_output":
           return (await readJobOutput(command)) as Output
+        case "list_subagents":
+          return listSubagents(command) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

@@ -302,6 +302,40 @@ test("evie --continue reopens the owner's session and never a subagent's, and a 
   expect(second.requests.child[0]?.model).toBe("other/model")
 })
 
+test("a session's subagents are listed from what is stored, newest first, each named by its task's opening words, after a restart too, when its later rounds are named the same way", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  const projectFolder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(projectFolder, { recursive: true, force: true }))
+  const first = await start(
+    [{ calls: [hand("Find where sessions are made.\nLook in src/core first.")] }, { calls: [hand("Read the tests.", { description: "the tests" })] }, { text: "Two started." }, { text: "One." }, { text: "Two." }],
+    [{ text: "In projects.ts." }, { text: "They are in test/." }],
+    [],
+    { home, projectFolder },
+  )
+  await say(first.run, "go")
+  const ended = () => first.run.events.filter((event) => event.type === "job" && event.job.status === "finished").length
+  while (ended() < 2) await until(first.run, (event) => event.type === "job")
+  const [older, newer] = [...new Set(ofChildren(first.run).map((event) => event.session))] as [string, string]
+  const listed = await first.run.evie.send({ type: "list_subagents", session: first.run.session })
+  expect(listed.map(({ session, name }) => ({ session, name }))).toEqual([
+    { session: newer, name: "Read the tests." },
+    { session: older, name: "Find where sessions are made." },
+  ])
+  expect(listed[0]!.started).toBeGreaterThanOrEqual(listed[1]!.started)
+  expect(await first.run.evie.send({ type: "list_subagents", session: older })).toEqual([])
+  await first.run.evie.close()
+
+  const second = await start([], [{ text: "On line 80." }], [], { home, projectFolder })
+  const continued = await second.run.evie.send({ type: "open_session", folder: projectFolder, continue: true })
+  expect(await second.run.evie.send({ type: "list_subagents", session: continued.session })).toEqual(listed)
+  second.parent.push({ calls: [{ name: "subagent_send", input: { id: older, message: "Which line?" } }] }, { text: "Asked." }, { text: "Line 80." })
+  await say(second.run, "ask it", continued.session)
+  while (!second.run.events.some((event) => event.type === "job" && event.job.status !== "running")) await until(second.run, (event) => event.type === "job")
+  const round = second.run.events.find((event) => event.type === "job")
+  expect(round?.type === "job" && round.job.title).toBe("subagent: Find where sessions are made.")
+  await expect(second.run.evie.send({ type: "list_subagents", session: "no-such-session" })).rejects.toThrow('There is no session with the id "no-such-session".')
+})
+
 // ---- Permissions ---------------------------------------------------------------------------------------------
 
 // A stand-in for the edit tool, which only records that it ran.

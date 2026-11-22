@@ -254,6 +254,10 @@ export type Children = {
   busy(child: string): boolean
   // Stops what the subagent is doing.
   stop(child: string): void
+  // The subagent's name, as a list of subagents gives it: the opening words
+  // of its task. Null for a session that is not one of this session's
+  // subagents.
+  name(child: string): string | null
 }
 
 // ---- Tools --------------------------------------------------------------------
@@ -456,8 +460,10 @@ export type Project = { id: string; name: string; folder: string }
 
 // A project as a list of projects shows it: with the git branch its folder
 // is on, read when the list is asked for, and left out when the folder is
-// not in a git repository or is on no branch.
-export type ListedProject = Project & { branch?: string }
+// not the top of a git repository or is on no branch; and `git`, whether
+// its folder is in a git work tree at all, at its top or below it, left out
+// when git could not tell in time.
+export type ListedProject = Project & { branch?: string; git?: boolean }
 
 // ---- The client interface -------------------------------------------------------
 
@@ -586,9 +592,19 @@ export type Commands = {
   // of the file the text is, so a `from` past `after` means some were
   // skipped. A character not yet written whole is left for the next read.
   // The jobs are those `open_session` lists: the ones since Evie last started.
+  // Output that cannot be read, as when its file has gone, is an error.
   read_job_output: {
     input: { session: string; id: string; after?: number }
     output: { text: string; from: number; to: number }
+  }
+  // The subagents a session has started, as stored, since it began, newest
+  // first: each one's session, whose conversation `read_history` reads; its
+  // name, the opening words of its task, as a session is named by its first
+  // message; and when it was started. How each stands is in the session's
+  // jobs, while this run of Evie has them.
+  list_subagents: {
+    input: { session: string }
+    output: { session: string; name: string | null; started: number }[]
   }
 }
 

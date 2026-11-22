@@ -117,7 +117,10 @@ export function subagents(options: SubagentsOptions = {}): Plugin {
           },
         }
       }
-      const follow = (child: string, context: ToolContext) => context.jobs.start(round(child, context.children, `subagent: ${started.get(child) ?? child}`))
+      // A round is listed by what its subagent was started as, or, for one
+      // started before Evie last restarted, by its name, from its task.
+      const follow = (child: string, context: ToolContext) =>
+        context.jobs.start(round(child, context.children, `subagent: ${started.get(child) ?? context.children.name(child) ?? child}`))
       // A round an earlier run of Evie left, which the core has carried on.
       host.jobKinds.add({ name: "subagent", resume: (job, { children }) => round(String(job.keep.child), children, job.title) })
 

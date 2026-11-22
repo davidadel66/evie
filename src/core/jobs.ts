@@ -1,4 +1,5 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { stat } from "node:fs/promises"
 import { join } from "node:path"
 import type { EvieEvent, Job, JobRecord, JobWork, ReservedJob } from "./types.ts"
 
@@ -317,19 +318,13 @@ const OUTPUT_READ = 64 * 1024
 
 // A job's output from byte `after` of its file, or from the start, as the
 // `read_job_output` command gives it: the last 64 KiB at most, in whole
-// characters. A file that is not there, or shorter than `after`, as when
-// the work replaced it, is read from its start.
+// characters. A file shorter than `after`, as when the work began it
+// again, is read from its start. A file that cannot be read, as one that
+// has gone, throws, so that a client keeps what it has read.
 export async function readOutput(file: string, after = 0): Promise<{ text: string; from: number; to: number }> {
-  let bytes: Uint8Array
-  let from: number
-  try {
-    const whole = Bun.file(file)
-    const size = whole.size
-    from = Math.max(after <= size ? after : 0, size - OUTPUT_READ)
-    bytes = await whole.slice(from, size).bytes()
-  } catch {
-    return { text: "", from: 0, to: 0 }
-  }
+  const { size } = await stat(file)
+  const from = Math.max(after <= size ? after : 0, size - OUTPUT_READ)
+  const bytes = await Bun.file(file).slice(from, size).bytes()
   // A cut can fall inside a character: the part of one at the start is
   // left out, and one not yet written whole at the end is left for later.
   let start = 0

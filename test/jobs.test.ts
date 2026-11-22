@@ -318,6 +318,15 @@ test("a client reads a job's output so far, then what it has written since, and 
   expect((await read()).from).toBe(long.from)
 })
 
+test("output that cannot be read, as when its file has gone, is a failure the client can tell from no output", async () => {
+  const background = backgroundWork()
+  const { run } = await start([{ text: [], calls: [startWork("the build")] }, { text: ["Started."] }], [background.plugin])
+  await say(run, "build it")
+  await rm(background.work[0]!.job!.outputFile)
+
+  await expect(run.evie.send({ type: "read_job_output", session: run.session, id: "1" })).rejects.toThrow("The output of job 1 could not be read:")
+})
+
 test("reading the output of a job the session does not have says so", async () => {
   const { run } = await start([], [])
   await expect(run.evie.send({ type: "read_job_output", session: run.session, id: "3" })).rejects.toThrow("This session has had no job 3 since Evie last started.")
