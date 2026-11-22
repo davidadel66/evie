@@ -3,11 +3,10 @@ import { Button } from "./components/ui/button.tsx"
 import { choiceForKey, freshGuard, type KeyFocus, guardCleared, guardReleases, guardSees, guardTyped, releaseAt, shownQuestion, type Asked, type Guard } from "./questions.ts"
 
 // The questions evie asks, answered in place in the conversation, as part
-// of its reply, as the Session view drawing has them: the question, its
-// choices as buttons under it, the first the main one, and under them that
-// evie needs the owner. A permission prompt is drawn the same way. One
-// shows at a time; one that arrives while the owner is typing waits until
-// they stop.
+// of its reply, at its end: the question, its choices as buttons under it,
+// the first the main one, and under them that evie needs the owner. A
+// permission prompt is drawn the same way. One shows at a time; one that
+// arrives while the owner is typing waits until they stop.
 
 export type Shown = ReturnType<typeof shownQuestion>
 
@@ -45,8 +44,9 @@ export function useAsking(waiting: readonly Asked[]): { shown: Shown; typed(): v
 // What answering does: gives back why the server would not take it, or nothing.
 type Answer = (id: string, choice: string | null) => Promise<string | undefined>
 
-// The question waits with no time limit, as the board's Question says: a
-// dot and the words in the colour for what needs the owner.
+// That the question waits, with no time limit: a small dot and the words
+// "Needs you. Waiting for your answer", in the colour for what needs the
+// owner.
 function NeedsYou({ count }: { count: string | undefined }) {
   return (
     <p className="mt-4 flex items-center gap-2 text-caption text-status-needs">
@@ -70,14 +70,14 @@ export function QuestionText({ text }: { text: string }) {
   )
 }
 
-// A question at the end of the conversation, as the Session view drawing
-// has one: the question in bold, its choices as round buttons under it,
-// the first the main one and the others secondary, and under them that
-// evie needs the owner. A key from 1 to 9 picks a choice while the focus is
-// on nothing or in the empty message box, as T3 Code's keys do; the
-// owner's own words sent from the box are the answer when it takes them.
-// A permission prompt looks the same, and only a click answers it: words
-// sent from the box refuse it, and go to evie as what to do instead.
+// A question at the end of the conversation: the question in bold, its
+// choices as round buttons under it, the first the main one and the others
+// secondary, and under them that evie needs the owner. A key from 1 to 9
+// picks a choice while the focus is on nothing or in the empty message box,
+// as T3 Code's keys do; the owner's own words sent from the box are the
+// answer when it takes them. A permission prompt looks the same, and only a
+// click answers it: words sent from the box refuse it, and go to evie as
+// what to do instead.
 export function QuestionPrompt({ question, count, answer }: { question: Asked; count: string | undefined; answer: Answer }) {
   const [refused, setRefused] = useState<string>()
   useEffect(() => setRefused(undefined), [question.id])

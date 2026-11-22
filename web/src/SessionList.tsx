@@ -16,12 +16,12 @@ import { ask, whenAsked, windowOver } from "./page-requests.ts"
 import { label as keyLabel, onMac, pressed } from "./shortcuts.ts"
 import { addressOfWorkspace } from "./workspace.ts"
 
-// The top of the session list, as the Session view drawing has it: evie's
-// name, then the Workspaces button, which opens the workspace view, the
-// New session button, and the settings button given. Workspaces opens the
-// workspace of the project being looked at, or with no project at all,
-// the New workspace dialog; until the projects have been listed, which it
-// is not yet known, it waits.
+// The top of the session list, one row in the list's header: evie's name,
+// filling the room, then the Workspaces button, which opens the workspace
+// view, the New session button, and the settings button given. Workspaces
+// opens the workspace of the project being looked at, or with no project at
+// all, the New workspace dialog; until the projects have been listed, which
+// it is not yet known, it waits.
 export function ListTop({ connection, sessions, settings }: { connection: Connection; sessions: Sessions; settings: ReactNode }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
@@ -217,7 +217,7 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <NewWorkspace connection={connection} sessions={sessions} open={making} onOpenChange={setMaking} />
-      {/* A bare field, as the drawing has it: a magnifier and the words typed. */}
+      {/* A bare field, with no box around it: a magnifier and the words typed. */}
       <label className="flex h-control shrink-0 items-center gap-2 px-row-inset text-text-muted">
         <MagnifyingGlass className="size-icon-sm shrink-0" />
         <span className="sr-only">Search sessions</span>
@@ -260,7 +260,7 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
           </Button>
         )}
         {rows(groups.top)}
-        {/* At the bottom of the column, as the drawing pins them, below the rows when the list is long. */}
+        {/* Pinned to the bottom of the column, or below the rows when the list is longer than the column. */}
         {groups.working.length + groups.settled.length > 0 && (
           <div className="mt-auto flex flex-col gap-1 pt-6">
             {groups.working.length > 0 && (
@@ -302,9 +302,8 @@ export function ListButton() {
 }
 
 // A group at the bottom of the list, under a heading that opens and closes
-// it, as the Session view drawing has one: its name on the left, its count
-// and a caret at the right end. A row of the list, as T3 Code's, so it does
-// not grow below 640px.
+// it: its name on the left, its count and a caret at the right end. A row
+// of the list, as T3 Code's, so it does not grow below 640px.
 function Group({ name, count, open, toggle, children }: { name: string; count: number; open: boolean; toggle(): void; children: ReactNode }) {
   return (
     <section aria-label={name} className="flex flex-col gap-1">

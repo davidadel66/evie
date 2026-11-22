@@ -114,15 +114,15 @@ export function DraftRow({ project, listed, href }: { project: string | null; li
   return <Row project={project} listed={listed} title="New session" branch={listed?.branch} href={href} selected />
 }
 
-// A row in three short lines, as the Session view drawing has it: the
-// project's tile and name, or for none an empty tile and "No project",
-// with the state or how long ago the session was active; its title, ending
-// in an ellipsis when cut, and its menu's button in a space of its own;
-// and the session's own branch, the one it last worked on, left out when
-// it has none. The whole row is the link that selects it, and a
-// double-click on it edits its name, when it has one to edit; while it is
-// edited, a field takes the link's place. The selected row is raised. A
-// note, such as why the server refused, goes on a line under it.
+// A row in three short lines, one under another: the project's tile and
+// name, or for none an empty tile and "No project", with the state or how
+// long ago the session was active; its title, ending in an ellipsis when
+// cut, and its menu's button in a space of its own; and the session's own
+// branch, the one it last worked on, left out when it has none. The whole
+// row is the link that selects it, and a double-click on it edits its name,
+// when it has one to edit; while it is edited, a field takes the link's
+// place. The selected row is raised. A note, such as why the server
+// refused, goes on a line under it.
 function Row({
   project,
   listed,
@@ -253,9 +253,9 @@ export function HeaderName({ title, rename, said }: { title: string; rename(name
   )
 }
 
-// The state in words where the owner is needed or evie is at work, as the
-// Session view drawing has them, and otherwise how long ago the session
-// was active.
+// The state in words, Needs you or Working, each in its colour, where the
+// owner is needed or evie is at work, and otherwise how long ago the
+// session was active, in the row's quiet words.
 function State({ session, now }: { session: SessionSummary; now: number }) {
   if (session.state === "needs_you") return <span className="shrink-0 text-status-needs">Needs you</span>
   if (session.state === "working") return <span className="shrink-0 text-status-working">Working</span>

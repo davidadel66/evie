@@ -142,7 +142,7 @@ test("with nothing to commit, the git button pushes commits ahead of the upstrea
   const ahead = { ...branchStatus, upstream: { ahead: 2, behind: 0 } }
   expect(gitAction(ahead, openPull)).toEqual({ label: "Push", request: "push" })
   expect(gitAction({ ...ahead, main: { name: "main", on: true, ahead: 2 } }, null)).toEqual({ label: "Push", request: "push" })
-  // T3 Code's "Push & create PR", in the four words the drawing has.
+  // T3 Code's "Push & create PR", in four words, which say it commits first.
   expect(gitAction(ahead, null)).toEqual({ label: "Commit, push & PR", request: "commit, push and pull request" })
   // A branch never pushed counts what it has that main does not.
   expect(gitAction(without(branchStatus, "upstream"), null)).toEqual({ label: "Commit, push & PR", request: "commit, push and pull request" })
@@ -254,7 +254,7 @@ test("what the card shows is the default but for what this browser was told othe
   expect(isDefaultShown({ ...everything, undo: false })).toBe(false)
 })
 
-test("pinned, the card stays beside the conversation while it has the room, and otherwise stays open floating over it, as drawn; unpinned, it opens from the header; at phone width it is a sheet", () => {
+test("pinned, the card stays beside the conversation while it has the room, and otherwise stays open floating over it; unpinned, it opens from the header; at phone width it is a sheet", () => {
   const room = { phone: false, pinned: true, height: 960 }
   // The conversation's width at a 1440px and a 1100px wide page, with the 256px session list beside it.
   expect(cardPlace({ ...room, width: 1440 - 256 })).toBe("inline")
@@ -312,7 +312,7 @@ test("the lineage shows six rows at first, as T3 Code's, then offers twelve more
   expect(lineageWindow(rows.slice(0, 6), LINEAGE_FIRST)).toEqual({ shown: rows.slice(0, 6), more: undefined })
 })
 
-test("the session above a subagent says it needs you, is working, or is waiting on its subagents, as drawn", () => {
+test("the session above a subagent says in one word that it needs you, is working, or is waiting on its subagents", () => {
   expect(parentWord({ needsYou: true, turnRunning: true, subagentsWorking: true })).toBe("Needs you")
   expect(parentWord({ needsYou: false, turnRunning: true, subagentsWorking: true })).toBe("Working")
   expect(parentWord({ needsYou: false, turnRunning: false, subagentsWorking: true })).toBe("Waiting")

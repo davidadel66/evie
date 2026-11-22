@@ -289,7 +289,8 @@ function chip(path: string): HTMLElement {
 }
 
 // The parts the element holds, and where its caret is, counted as
-// `shownOf` counts. `clean` says it holds only words and chips, as drawn.
+// `shownOf` counts. `clean` says it holds only the words and chips it was
+// drawn with.
 // What else the browser may put in it is read as words: a line break as
 // one, and a block, as a line of its own.
 function readBox(root: HTMLElement): { parts: Part[]; caret: number; clean: boolean } {
@@ -348,7 +349,7 @@ function selection(root: HTMLElement): { start: number; end: number } | undefine
 }
 
 // How far a place in the element is from its start, counted as `shownOf`
-// counts, in the element as drawn.
+// counts, in the element as it is now.
 function offsetOf(root: HTMLElement, node: Node, offset: number): number {
   let at = 0
   for (const [index, child] of [...root.childNodes].entries()) {
