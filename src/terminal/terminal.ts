@@ -1,3 +1,4 @@
+import { createStreamPacer, type NextFrame } from "../client/stream-pacer.ts"
 import type { Evie, EventBodies, EvieEvent, ToolCall } from "../core/types.ts"
 import { shownFiles } from "../plugins/show/record.ts"
 
@@ -36,6 +37,9 @@ export type TerminalOptions = {
   // Called once with a function that prints a note of the caller's own on a
   // line of its own, such as that the connection to the server dropped.
   onNote?: (show: (text: string) => void) => void
+  // Frame clock for pacing streamed replies smoothly in an interactive
+  // terminal. Left out, pieces print immediately (as for pipes and tests).
+  frame?: NextFrame
 }
 
 const PROMPT = "\n› "
@@ -60,16 +64,27 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
 
   // Whether the last thing printed left the cursor part way along a line.
   let midLine = false
-  const write = (text: string) => {
+  const emitRaw = (text: string) => {
     if (text === "") return
     options.write(text)
     midLine = !text.endsWith("\n")
+  }
+  // When given a frame clock, streamed reply pieces are paced smoothly and
+  // flushed before any other output (tool calls, questions, notes, prompt,
+  // or turn end) so lines never interleave.
+  const pacer = options.frame ? createStreamPacer({ frame: options.frame, emit: emitRaw }) : undefined
+  const write = (text: string) => {
+    pacer?.flush()
+    emitRaw(text)
   }
   // Shown when Evie is ready for the next message: a blank line, then the
   // prompt unless the input line draws its own.
   const showPrompt = () => write(options.prompt === false ? "\n" : PROMPT)
   // Prints text on a line of its own.
-  const line = (text: string) => write(`${midLine ? "\n" : ""}${text}\n`)
+  const line = (text: string) => {
+    pacer?.flush()
+    emitRaw(`${midLine ? "\n" : ""}${text}\n`)
+  }
   options.onNote?.((text) => line(`[note] ${text}`))
 
   // The lines typed are read one at a time, here and nowhere else, because
@@ -180,7 +195,12 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   // answered: as they happened, the owner's typing and the question waiting
   // for an answer showed them.
   const draw = (event: EvieEvent, earlier = false) => {
-    if (event.type === "assistant_delta") write(event.text)
+    if (event.type === "assistant_delta") {
+      if (pacer) pacer.push(event.text)
+      else emitRaw(event.text)
+      return
+    }
+    pacer?.flush()
     if (earlier && event.type === "user_message") write(`${midLine ? "\n" : ""}${PROMPT}${event.body.text}\n`)
     if (earlier && event.type === "question") line(`[question] ${event.body.text}`)
     if (earlier && event.type === "answer") line(answered(event.body.choice))
@@ -466,6 +486,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     }
   } finally {
     stop()
+    pacer?.flush()
     write("\n")
   }
 }

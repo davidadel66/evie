@@ -289,3 +289,46 @@ test("a file evie shows is named on one line, with the folder it is kept in", as
   const day = /shown\/(\d{4}-\d{2}-\d{2})\//.exec(printed)?.[1]
   expect(printed).toContain(`⏺ show {"paths":["chart.md","notes.md"]}\n  ⎿ Shown chart.md, in .evie/shown/${day}/\n  ⎿ Shown notes.md, in .evie/shown/${day}/\nHere.\n`)
 })
+
+test("with a frame clock, streamed replies pace across frames and flush cleanly before a tool call or turn end", async () => {
+  const model = scriptedProvider([{ hang: true, text: ["Thinking about the beds by the fence."] }])
+  const run = await startEvie([model.plugin])
+  stop = run.stop
+  let pending: (() => void) | undefined
+  let interrupt = (): string => "not set"
+  const writes: string[] = []
+  let printed = ""
+
+  const running = runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    lines: (async function* () {
+      yield "plan"
+      // Wait for the delta to buffer before stepping frames, then cancel to force a flush.
+      while (!pending) await Bun.sleep(5)
+      const beforeStep = printed
+      const apply = pending
+      pending = undefined
+      apply()
+      expect(printed.length).toBeGreaterThan(beforeStep.length)
+      expect(printed).not.toContain("Thinking about the beds by the fence.")
+      interrupt()
+    })(),
+    write: (text) => {
+      writes.push(text)
+      printed += text
+    },
+    frame: (apply) => {
+      pending = apply
+      return () => {
+        if (pending === apply) pending = undefined
+      }
+    },
+    onInterrupt: (handler) => (interrupt = handler),
+  })
+  await running
+
+  expect(printed).toContain("Thinking about the beds by the fence.\n[cancelled]\n")
+  // The buffered reply was split across at least two writes (one paced slice + the flush on cancel).
+  expect(writes.filter((text) => "Thinking about the beds by the fence.".includes(text) && text !== "\n").length).toBeGreaterThanOrEqual(2)
+})

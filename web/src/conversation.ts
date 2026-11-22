@@ -1,3 +1,4 @@
+import { createStreamPacer, type NextFrame } from "../../src/client/stream-pacer.ts"
 import type { Commands, EventBodies, Evie, EvieEvent, StoredEvent } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 import type { Model } from "./models.ts"
@@ -150,7 +151,7 @@ const keptQueues = new Map<string, Queue>()
 // and calls `apply` then; gives back a way to stop waiting. A tab that is
 // hidden draws no frames, so it waits until the tab is shown again. Away
 // from a browser, as in tests, a frame is taken to come every 16 ms.
-export type NextFrame = (apply: () => void) => () => void
+export type { NextFrame }
 
 // The browser's frames, which Bun has none of outside a page.
 const browser = globalThis as { requestAnimationFrame?(apply: () => void): number; cancelAnimationFrame?(frame: number): void }
@@ -165,30 +166,30 @@ const nextFrame: NextFrame =
         return () => clearTimeout(timer)
       }
 
-// `frame` waits for the next frame, which the reply's pieces are applied at;
-// tests pass one that draws frames when told.
+// `frame` waits for the next frame, which the reply's pieces are revealed
+// at by the pacer; tests pass one that draws frames when told.
 export function openConversation(connection: Connection, session: string, frame: NextFrame = nextFrame): Conversation {
   let state: ConversationState = { ...FRESH, queue: keptQueues.get(session) ?? NO_QUEUE }
   keptQueues.delete(session)
   const listeners = new Set<() => void>()
-  // The pieces of the reply that came since the last frame, not applied
-  // yet, and the wait for the next frame, which applies them (`hear`).
-  // Every other change applies them first, so that the conversation
-  // changes in the order its events came: the stored reply, or the turn's
-  // end, never comes before the pieces that came ahead of it.
-  let unapplied = ""
-  let waiting: (() => void) | undefined
+  // The reply's pieces come in uneven bursts from the model, faster than
+  // the screen is drawn, and each change draws the conversation again.
+  // The pacer smooths them out at one slice per frame, keeping the rhythm
+  // calm while catching up on larger bursts. Every other change takes any
+  // remaining buffered pieces first, so that the conversation changes in
+  // the order its events came: the stored reply, or the turn's end, never
+  // comes before the pieces that came ahead of it.
+  const pacer = createStreamPacer({
+    frame,
+    emit(piece) {
+      state = { ...state, replySoFar: state.replySoFar + piece }
+      for (const listener of [...listeners]) listener()
+    },
+  })
   function set(next: Partial<ConversationState>) {
-    const pieces = unapplied
-    unapplied = ""
-    waiting?.()
-    waiting = undefined
+    const pieces = pacer.take()
     state = { ...state, ...(pieces !== "" && { replySoFar: state.replySoFar + pieces }), ...next }
     for (const listener of [...listeners]) listener()
-  }
-  function applyPieces() {
-    waiting = undefined
-    if (unapplied !== "") set({})
   }
 
   // The client the session is open on. A connection made again after the
@@ -355,18 +356,14 @@ export function openConversation(connection: Connection, session: string, frame:
 
   // An event of the session, as it comes. The reply being written is
   // stored whole once it is done, or ends with its turn or a compaction.
-  // Its pieces come faster than the screen is drawn, as fast as a hundred
-  // a second, and each change draws the conversation again: so the pieces
-  // that come between two frames are kept, and applied together at the
-  // next frame, which draws the conversation once. Nothing shows between
-  // frames, so they show no later than when each was drawn by itself.
-  // OpenCode's client does the same, every 16 ms. A hidden tab, which
-  // draws no frames, applies them once it is shown, or with the next
-  // other change, which applies them first.
+  // Its pieces arrive in uneven bursts and are paced onto the screen by
+  // `pacer`, one slice per frame, so the conversation draws at most once
+  // a frame while streaming smoothly. A hidden tab, which draws no frames,
+  // reveals them once it is shown, or flushes them with the next other
+  // change, which takes them first.
   function hear(event: Exclude<EvieEvent, { type: "summary" | "deleted" }>) {
     if (event.type === "assistant_delta") {
-      unapplied += event.text
-      if (unapplied !== "" && waiting === undefined) waiting = frame(applyPieces)
+      pacer.push(event.text)
       return
     }
     // A stored event, as it comes, tells how far the server's clock is from this page's.
@@ -558,9 +555,7 @@ export function openConversation(connection: Connection, session: string, frame:
       on = undefined
       clearTimeout(releasing)
       // Pieces not applied yet are of a conversation no longer shown.
-      waiting?.()
-      waiting = undefined
-      unapplied = ""
+      pacer.clear()
       // What is still queued is kept, held, for when the session is opened again.
       if (state.queue.items.length > 0) keptQueues.set(session, { ...leaveQueue(state.queue), inFlight: undefined })
     },
