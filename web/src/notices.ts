@@ -75,15 +75,18 @@ export function shownAs(facts: { session: string; lookingAt: string | undefined;
 const KEY = "evie.notifications"
 const MODES: readonly NoticeMode[] = ["off", "on", "sound", "both"]
 
-// As this browser last kept them: system notifications off, as in T3
-// Code, and notices in the page on. A browser can refuse to keep anything,
-// as in a private window, and then they are as they start.
+// How they start, which the settings' resets go back to: system
+// notifications off, as in T3 Code, and notices in the page on.
+export const NOTICE_DEFAULTS: NoticeSettings = { mode: "off", inApp: true }
+
+// As this browser last kept them, or as they start. A browser can refuse
+// to keep anything, as in a private window, and then they are as they start.
 export function rememberedNotices(): NoticeSettings {
   try {
     const kept = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<NoticeSettings>
-    return { mode: MODES.includes(kept.mode as NoticeMode) ? kept.mode! : "off", inApp: kept.inApp !== false }
+    return { mode: MODES.includes(kept.mode as NoticeMode) ? kept.mode! : NOTICE_DEFAULTS.mode, inApp: typeof kept.inApp === "boolean" ? kept.inApp : NOTICE_DEFAULTS.inApp }
   } catch {
-    return { mode: "off", inApp: true }
+    return { ...NOTICE_DEFAULTS }
   }
 }
 
@@ -93,4 +96,13 @@ export function keepNotices(settings: NoticeSettings) {
   } catch {
     // Not kept: the next visit starts as the defaults are.
   }
+}
+
+// Whether a choice of how the owner is told is kept, as the browser stands
+// once asked: one that shows the system's notifications only when it
+// allows them, as T3 Code's, and otherwise not, with what to do instead.
+export function noticeChoice(mode: NoticeMode, allowed: "default" | "denied" | "granted" | "none"): { keep: true } | { keep: false; why: string } {
+  if ((mode !== "on" && mode !== "both") || allowed === "granted") return { keep: true }
+  if (allowed === "none") return { keep: false, why: "This browser shows them only for a page at a secure address, such as this computer's own. Sound only is still there." }
+  return { keep: false, why: "Allow notifications in your browser or system settings, then choose this again. Sound only is still there." }
 }

@@ -122,10 +122,10 @@ export function QuestionPrompt({ question, count, answer }: { question: Asked; c
 }
 
 // Where the focus is as a key is pressed, for the keys 1 to 9: on nothing,
-// in the message box, which marks itself, empty or with something typed,
-// or anywhere else, as on a button or a row of the work log.
+// in the message box, which marks itself, and whether it is empty, or with
+// something typed, or anywhere else, as on a button or a row of the work log.
 function focusOf(target: EventTarget | null): KeyFocus {
   if (!(target instanceof HTMLElement) || target === document.body || target === document.documentElement) return "nothing"
-  if (target instanceof HTMLTextAreaElement && target.dataset.messageBox !== undefined) return target.value === "" ? "empty box" : "typed box"
+  if (target.dataset.messageBox !== undefined) return target.dataset.empty !== undefined ? "empty box" : "typed box"
   return "elsewhere"
 }

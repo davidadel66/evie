@@ -9,8 +9,8 @@ import { IconPicker } from "./IconPicker.tsx"
 import { GearSix, List, Plus, SidebarRight } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { NewWorkspace } from "./NewWorkspace.tsx"
-import { ask } from "./page-requests.ts"
 import { ProjectTile } from "./ProjectIcon.tsx"
+import { openSettings } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import type { SessionList, Sessions } from "./sessions.ts"
 import { Later, StorageView } from "./StorageView.tsx"
@@ -127,8 +127,8 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
           <Plus />
         </button>
       </NewWorkspace>
-      {/* The settings window, which the frame keeps on the page. */}
-      <Button variant="icon" aria-label="Settings" title="Settings" onClick={() => ask("settings")} className="mt-auto size-tile-strip">
+      {/* The settings page, which the frame keeps on the page. */}
+      <Button variant="icon" aria-label="Settings" title="Settings" onClick={() => openSettings()} className="mt-auto size-tile-strip">
         <GearSix />
       </Button>
     </nav>

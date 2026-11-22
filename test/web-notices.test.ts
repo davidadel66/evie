@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { SessionState, SessionSummary, StoredEvent } from "../src/core/types.ts"
-import { latestTurnEnd, shownAs, watchSessions } from "../web/src/notices.ts"
+import { latestTurnEnd, noticeChoice, shownAs, watchSessions } from "../web/src/notices.ts"
 
 // Notifications, as T3 Code's: which change in the sessions' summaries
 // makes which notice, and when one is skipped.
@@ -74,4 +74,14 @@ test("with the window behind others, a notice is the system's, of any session, w
   expect(shownAs({ ...away, session: "b", settings: { mode: "sound", inApp: true } })).toEqual({ inPage: false, system: false, sound: true })
   expect(shownAs({ ...away, session: "b", settings: { mode: "off", inApp: true } })).toEqual({ inPage: false, system: false, sound: false })
   expect(shownAs({ ...away, allowed: false, session: "b", settings: { mode: "on", inApp: true } })).toEqual({ inPage: false, system: false, sound: false })
+})
+
+test("notifications that the system shows are kept only once the browser allows them, as T3 Code's; otherwise the choice is not kept, and says what to do", () => {
+  expect(noticeChoice("on", "granted")).toEqual({ keep: true })
+  expect(noticeChoice("both", "granted")).toEqual({ keep: true })
+  expect(noticeChoice("off", "denied")).toEqual({ keep: true })
+  expect(noticeChoice("sound", "none")).toEqual({ keep: true })
+  expect(noticeChoice("on", "denied")).toEqual({ keep: false, why: "Allow notifications in your browser or system settings, then choose this again. Sound only is still there." })
+  expect(noticeChoice("both", "default")).toEqual({ keep: false, why: "Allow notifications in your browser or system settings, then choose this again. Sound only is still there." })
+  expect(noticeChoice("on", "none")).toEqual({ keep: false, why: "This browser shows them only for a page at a secure address, such as this computer's own. Sound only is still there." })
 })

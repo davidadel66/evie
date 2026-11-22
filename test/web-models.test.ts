@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { makersOf, searchModels } from "../web/src/models.ts"
+import { makersOf, modelName, searchModels } from "../web/src/models.ts"
 
 // The model picker's rules, apart from its screen: the models a session's
 // provider offers, grouped by the company that makes them, and searched.
@@ -44,4 +44,11 @@ test("a search covers every maker: each word typed is in a model's id or name, i
   expect(searchModels(MODELS, "mini gpt").map((model) => model.id)).toEqual(["openai/gpt-5.2-mini"])
   expect(searchModels(MODELS, "L").map((model) => model.id)).toEqual(["local-thing", "anthropic/claude-sonnet-5", "anthropic/claude-haiku-5.5"])
   expect(searchModels(MODELS, "nothing like it")).toEqual([])
+})
+
+test("the model chip shows the model's own name, as the provider lists it, without its maker's; one not listed, or before the list has come, by its id after the maker's", () => {
+  expect(modelName(MODELS, "anthropic/claude-haiku-5.5")).toBe("Claude Haiku 5.5")
+  expect(modelName(MODELS, "local-thing")).toBe("local-thing")
+  expect(modelName(MODELS, "mistral/large-3")).toBe("large-3")
+  expect(modelName(undefined, "anthropic/claude-haiku-5.5")).toBe("claude-haiku-5.5")
 })
