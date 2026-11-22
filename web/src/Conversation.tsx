@@ -4,9 +4,9 @@ import { TurnChangedFiles } from "./ChangedFiles.tsx"
 import { holdChanges, type Changes } from "./changes.ts"
 import { asAsked } from "./questions.ts"
 import { Button } from "./components/ui/button.tsx"
-import { Composer } from "./Composer.tsx"
+import { Composer, FileChip } from "./Composer.tsx"
 import type { Connection } from "./connection.ts"
-import { holdConversation, openDraft, type Conversation as Opened, type Draft as OpenedDraft } from "./conversation.ts"
+import { holdConversation, openDraft, type Conversation as Opened, type Draft as OpenedDraft, type Outgoing } from "./conversation.ts"
 import type { ShownAttachment } from "./attachments.ts"
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog.tsx"
 import { CaretRight, File as FileIcon } from "./icons.tsx"
@@ -49,13 +49,13 @@ const ANCHORS = 5
 // completed turn that changed files ends with them.
 export function Reading({ conversation, readOnly = false, changes }: { conversation: Opened; readOnly?: boolean; changes?: Changes }) {
   const state = useSyncExternalStore(conversation.subscribe, conversation.state)
-  const { events, earlier, replySoFar, turnRunning, jobs, pending, notes } = state
+  const { events, earlier, replySoFar, turnRunning, jobs, pending, notes, sending } = state
   const changed = useSyncExternalStore(changes?.subscribe ?? noChanges.subscribe, changes?.state ?? noChanges.state).listed?.turns
   // A question waiting is shown where it is answered, at the end or docked
   // above the box, so it is left out where it was asked until it is answered.
   const items = useMemo(
-    () => asAsked(transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, pending, notes }, changed), state.waiting),
-    [events, earlier, replySoFar, turnRunning, jobs, pending, notes, changed, state.waiting],
+    () => asAsked(transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, pending, notes, sending }, changed), state.waiting),
+    [events, earlier, replySoFar, turnRunning, jobs, pending, notes, sending, changed, state.waiting],
   )
   const asking = useAsking(state.waiting)
   const { shown } = asking
@@ -227,7 +227,7 @@ function Drafting({ draft, where, moved, inProject }: { draft: OpenedDraft; wher
   const state = useSyncExternalStore(draft.subscribe, draft.state)
   const asking = useAsking(state.waiting)
   const { shown } = asking
-  async function start(text: string, files: readonly File[]) {
+  async function start(text: string, files: readonly Outgoing[]) {
     if (state.starting !== undefined) return "The session is starting. Send this once it has."
     const started = await draft.start(text, moved, files)
     return "problem" in started ? started.problem : undefined
@@ -279,6 +279,7 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
         <>
           {item.text !== "" && <p className="max-w-4/5 self-end rounded-lg bg-surface-raised px-4 py-2 text-body break-words whitespace-pre-wrap text-text">{item.text}</p>}
           {item.attachments !== undefined && <Attachments attachments={item.attachments} spaced={item.text !== ""} />}
+          {item.sending !== undefined && <SendingFiles files={item.sending} spaced={item.text !== ""} />}
         </>
       )
     case "reply":
@@ -302,6 +303,24 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
         </div>
       )
   }
+}
+
+// The files of the owner's message on its way, under it, each as the box
+// showed it, and the word Sending, with the small spinner Working has.
+function SendingFiles({ files, spaced }: { files: readonly File[]; spaced: boolean }) {
+  return (
+    <ul aria-label="Files sending" className={`flex max-w-4/5 flex-wrap justify-end gap-x-4 self-end ${spaced ? "mt-2" : ""}`}>
+      {files.map((file, at) => (
+        <li key={at} className="flex h-control min-w-0 items-center gap-2">
+          <FileChip file={file} />
+        </li>
+      ))}
+      <li className="flex h-control items-center gap-2 text-caption text-status-working">
+        <Spinner />
+        Sending
+      </li>
+    </ul>
+  )
 }
 
 // The files attached to the owner's message, under it: an image as a
@@ -336,7 +355,7 @@ function Attachments({ attachments, spaced }: { attachments: ShownAttachment[]; 
       )}
       <Dialog open={opened !== undefined} onOpenChange={(open) => !open && setOpened(undefined)}>
         <DialogContent className="max-w-image-open gap-3 p-3">
-          <DialogTitle className="truncate text-caption text-text-muted">{opened?.name}</DialogTitle>
+          <DialogTitle className="truncate">{opened?.name}</DialogTitle>
           {opened !== undefined && <img src={opened.address} alt={opened.name} className="mx-auto max-h-image-open-height max-w-full object-contain" />}
         </DialogContent>
       </Dialog>

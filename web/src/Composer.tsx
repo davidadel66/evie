@@ -4,7 +4,7 @@ import { DockedQuestion } from "./Asking.tsx"
 import { Button } from "./components/ui/button.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import { attachable, contextMeter, earlierMessages, mentionAt, menuKey, putMention, rankCommands, rankFiles, recallStep, slashAt, type MenuItem, type Recalled } from "./composer.ts"
-import type { Conversation, ConversationState } from "./conversation.ts"
+import type { Conversation, ConversationState, Outgoing } from "./conversation.ts"
 import { ArrowUpBold, Check, File as FileIcon, Paperclip, StopFill, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { makersOf, searchModels, type Model } from "./models.ts"
@@ -42,14 +42,16 @@ type Props = {
   asking: { typed(): void; cleared(): void }
   // Sends a message, with the files attached to it. Gives back why it
   // could not be sent, when the text and the files go back into the box.
-  send(text: string, files: readonly File[]): Promise<string | undefined>
+  // A file the server took on a try that failed keeps where it is kept,
+  // and is not sent again.
+  send(text: string, files: readonly Outgoing[]): Promise<string | undefined>
   // The files of the session's project, which an @ picks from. A session
   // with no project has none, and no @ menu.
   mentions?: (() => Promise<{ files: string[]; more: boolean }>) | undefined
 }
 
 // A file attached in the box, until it is sent.
-type Attached = { key: number; file: File }
+type Attached = Outgoing & { key: number }
 let attachedCount = 0
 
 // The model, as the menu lists it: picking it opens the picker, as in T3 Code.
@@ -153,7 +155,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     const back = conversation.takeGivenBack()
     if (back === undefined) return
     setText((now) => (now === "" ? back.text : now))
-    if (back.files !== undefined) attach(back.files)
+    if (back.files !== undefined) setAttached((now) => [...now, ...back.files!.map((each) => ({ ...each, key: (attachedCount += 1) }))])
     setProblem(back.problem)
   }, [state?.givenBack, conversation])
 
@@ -197,7 +199,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     if ("refuse" in does) return setProblem(does.refuse)
     const was = text
     const wasAttached = attached
-    const files = attached.map((each) => each.file)
+    const files = attached
     asking.cleared()
     setProblem(undefined)
     setRecalled(undefined)
@@ -259,7 +261,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     const onFirstLine = !text.slice(0, area.selectionStart).includes("\n")
     const onLastLine = !text.slice(area.selectionEnd).includes("\n")
     if ((event.key === "ArrowUp" && onFirstLine) || (event.key === "ArrowDown" && onLastLine)) {
-      const sent = [...(state?.events ?? []).flatMap((each) => (each.type === "user_message" ? [each.body.text] : [])), ...(state?.pending ?? [])]
+      const sent = [...(state?.events ?? []).flatMap((each) => (each.type === "user_message" ? [each.body.text] : [])), ...(state?.pending ?? []), ...(state?.sending ?? []).map((each) => each.text)]
       const step = recallStep(event.key === "ArrowUp" ? "back" : "forward", earlierMessages(sent), recalled, text)
       if (step === undefined) return
       event.preventDefault()
@@ -730,20 +732,17 @@ function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
   )
 }
 
-// The files attached in the box, as chips above the text, as T3 Code's: an
-// image with a small thumbnail, any other file with its icon, each with
-// its name and size, and a button that takes it off.
+// The files attached in the box, as chips above the text, as T3 Code's,
+// drawn on the box itself, with no box of their own: an image's small
+// thumbnail, or any other file's icon, its name and size, and a button
+// that takes it off.
 function AttachedFiles({ attached, remove }: { attached: Attached[]; remove(key: number): void }) {
   return (
-    <ul aria-label="Files to send" className="-ml-2 flex flex-wrap gap-2 pb-1">
+    <ul aria-label="Files to send" className="flex flex-wrap gap-x-4 pb-1">
       {attached.map(({ key, file }) => (
-        <li key={key} className="flex h-control max-w-full min-w-0 items-center gap-2 rounded-md bg-surface-raised pl-1">
-          {file.type.startsWith("image/") ? <Thumbnail file={file} /> : <FileIcon className="mx-2 size-icon-sm shrink-0 text-text-muted" />}
-          <span className="min-w-0 truncate text-caption text-text" title={file.name}>
-            {file.name}
-          </span>
-          <span className="shrink-0 text-caption text-text-muted">{sizeWords(file.size)}</span>
-          <Button variant="icon" aria-label={`Remove ${file.name}`} onClick={() => remove(key)} className="[&>svg]:size-icon-sm">
+        <li key={key} className="flex h-control max-w-full min-w-0 items-center gap-2">
+          <FileChip file={file} />
+          <Button variant="icon" aria-label={`Remove ${file.name}`} onClick={() => remove(key)} className="-ml-2 [&>svg]:size-icon-sm">
             <X />
           </Button>
         </li>
@@ -752,8 +751,22 @@ function AttachedFiles({ attached, remove }: { attached: Attached[]; remove(key:
   )
 }
 
+// A file in the browser as a chip shows it: an image's thumbnail, or any
+// other file's icon, then its name and size.
+export function FileChip({ file }: { file: File }) {
+  return (
+    <>
+      {file.type.startsWith("image/") ? <Thumbnail file={file} /> : <FileIcon className="size-icon-sm shrink-0 text-text-muted" />}
+      <span className="min-w-0 truncate text-caption text-text" title={file.name}>
+        {file.name}
+      </span>
+      <span className="shrink-0 text-caption text-text-muted">{sizeWords(file.size)}</span>
+    </>
+  )
+}
+
 // A small picture of an image attached, read from the file in the browser
-// until it is sent.
+// until it is sent, with the corners of the design system's smaller things.
 function Thumbnail({ file }: { file: File }) {
   const [address, setAddress] = useState<string>()
   useEffect(() => {
@@ -761,7 +774,7 @@ function Thumbnail({ file }: { file: File }) {
     setAddress(made)
     return () => URL.revokeObjectURL(made)
   }, [file])
-  return <span className="size-attachment-chip shrink-0 overflow-hidden rounded-sm bg-surface">{address !== undefined && <img src={address} alt="" className="size-full object-cover" />}</span>
+  return <span className="size-attachment-chip shrink-0 overflow-hidden rounded-sm">{address !== undefined && <img src={address} alt="" className="size-full object-cover" />}</span>
 }
 
 // The menu an @ opens, just above the box, as T3 Code's: the project's

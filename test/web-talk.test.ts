@@ -1,7 +1,9 @@
 import { afterEach, expect, test } from "bun:test"
+import { readdir } from "node:fs/promises"
+import { join } from "node:path"
 import { ask, models, startServer, type Command, type Evie, type EvieOptions, type Plugin } from "../src/index.ts"
 import { openConnection } from "../web/src/connection.ts"
-import { openConversation, openDraft, takeStarted, type Conversation, type ConversationState, type Draft, type DraftState } from "../web/src/conversation.ts"
+import { openConversation, openDraft, takeStarted, type Conversation, type ConversationState, type Draft, type DraftState, type Outgoing } from "../web/src/conversation.ts"
 import { openSessions } from "../web/src/sessions.ts"
 import { transcriptOf } from "../web/src/transcript.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
@@ -377,13 +379,18 @@ test("a draft's first message that cannot be sent once the page has moved to the
 // ---- Files ---------------------------------------------------------------------------
 
 const file = (name: string, text: string, type = "text/plain") => new File([text], name, { type })
+// Today's date, as attachments are kept under it.
+const today = () => {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+}
 
 test("a message sent with files sends each to the server first, and the message the session records carries them", async () => {
   const { served, connection, model } = await start([{ text: ["Seen."] }])
   const conversation = open(connection, served.run.session)
   await until(conversation, (state) => state.opened)
 
-  expect(await conversation.send("Read these", { files: [file("plan.txt", "Beds.\n"), file("notes.txt", "Water.\n")] })).toBeUndefined()
+  expect(await conversation.send("Read these", { files: [{ file: file("plan.txt", "Beds.\n") }, { file: file("notes.txt", "Water.\n") }] })).toBeUndefined()
 
   const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
   const message = replied.events.find((event) => event.type === "user_message")
@@ -399,12 +406,42 @@ test("a file the server refuses stops the message, which is not sent, and says w
   const conversation = open(connection, served.run.session)
   await until(conversation, (state) => state.opened)
 
-  const refused = await conversation.send("Read this", { files: [file("plan.txt", "Beds.\n"), file("..", "x")] })
+  const plan: Outgoing = { file: file("plan.txt", "Beds.\n") }
+  const bad: Outgoing = { file: file("..", "x") }
+  const refused = await conversation.send("Read this", { files: [plan, bad] })
 
   expect(refused).toBe('".." is not a plain file name. A file is attached by its name alone, such as "plan.pdf".')
   expect(conversation.state().pending).toEqual([])
+  expect(conversation.state().sending).toEqual([])
   await Bun.sleep(20)
   expect(model.requests).toHaveLength(0)
+
+  // What was sent before the refusal is kept with the file, and sent again
+  // with the message, not uploaded a second time.
+  // Read as a value: Bun's toMatchObject with a matcher in it changes what it is given.
+  expect(plan.path).toEndWith("/plan.txt")
+  expect(await conversation.send("Read this", { files: [plan] })).toBeUndefined()
+  const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
+  const message = replied.events.find((event) => event.type === "user_message")
+  expect(message?.type === "user_message" && message.body.attachments?.map((each) => each.name)).toEqual(["plan.txt"])
+  expect(await readdir(join(served.run.projectFolder, ".evie", "attachments", today()))).toEqual(["plan.txt"])
+})
+
+test("a message with files shows at once with them, as sending, until the session has it", async () => {
+  const { served, connection } = await start([{ text: ["Seen."] }])
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+  const photo = file("photo.png", "x", "image/png")
+
+  const sending = conversation.send("Look", { files: [{ file: photo }] })
+  expect(conversation.state().sending).toEqual([{ text: "Look", files: [photo] }])
+  expect(conversation.state().pending).toEqual([])
+  expect(transcriptOf(conversation.state()).at(-1)).toMatchObject({ kind: "owner", text: "Look", sending: [photo] })
+  expect(await sending).toBeUndefined()
+
+  const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
+  expect(replied.sending).toEqual([])
+  expect(transcriptOf(replied).filter((item) => item.kind === "owner")).toHaveLength(1)
 })
 
 test("a conversation knows its session's project and lists the project's files for @; one with no project has none to list", async () => {
@@ -427,7 +464,7 @@ test("a draft's first message carries its files, and a draft in a project lists 
   const { draft: started } = await draft(connection, served.run.project!.id)
 
   expect(await started.listFiles()).toEqual({ files: ["plan.md"], more: false })
-  const result = await started.start("Read this", () => {}, [file("plan.txt", "Beds.\n")])
+  const result = await started.start("Read this", () => {}, [{ file: file("plan.txt", "Beds.\n") }])
   if (!("session" in result)) throw new Error(result.problem)
   const conversation = takeStarted(result.session)!
   cleanups.push(async () => conversation.close())

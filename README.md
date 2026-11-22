@@ -402,15 +402,19 @@ The message box at the bottom of the conversation works as T3 Code's does:
   menu is, with the same keys. Picking one puts `@` and its path in the
   message, such as `@src/app.ts`, and evie reads it with its tools. The
   files are those git lists, tracked or not, but not those it ignores, or
-  outside git every file; never `.git` or `node_modules`, and at most
-  10,000 of them.
+  outside git every file; never `.git`, `node_modules`, the `.evie`
+  folder, evie's data folder or a folder of keys such as `.ssh`, and at
+  most 10,000 of them; the menu says when there are more.
 - **Files are attached** with the paperclip, by pasting them, or by dropping
   them on the box. Each shows as a chip above the text, an image with a
   small thumbnail, until it is sent or taken off. A file can be at most
   10 MB. A message with files needs no words, but a command or an answer
-  to a question takes no files. When the message is sent, each file goes
-  to the server first, signed in as the page is, and is kept (see
-  "Attachments").
+  to a question takes no files. When the message is sent, it shows at
+  once with its files, as Sending, while each file goes to the server,
+  signed in as the page is, and is kept (see "Attachments"). A message
+  that cannot be sent comes back to the box with its files, and those the
+  server already has are not sent again. A first message of files alone
+  names the session after them.
 
 The project card, on the right, is the selected session's:
 
@@ -607,6 +611,12 @@ A file attached to a message is kept where its session works:
 No file is ever replaced: a name taken already that day gets a number,
 such as `plan-2.pdf`. A name with a folder in it, a file over 10 MB, and a
 folder that leads through a link elsewhere are refused.
+
+A message keeps each file by its full path, so a session moved to another
+project still finds the files attached before the move. Moving a
+project's folder, though, leaves its earlier messages pointing where the
+files were: their thumbnails no longer show, and evie is told paths that
+are no longer there.
 
 The message records each file's path, name, type and size. When the
 session's model takes images, as OpenRouter's list of models says, an

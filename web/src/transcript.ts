@@ -19,6 +19,8 @@ export type View = {
   turnRunning: boolean
   jobs: readonly Job[]
   pending?: readonly string[]
+  // The owner's messages with files on their way, which come after `pending`.
+  sending?: readonly { text: string; files: readonly File[] }[]
   notes?: readonly PageNote[]
 }
 export type PageNote = { key: string; time: number; text: string }
@@ -33,7 +35,8 @@ export type Call = { id: string; name: string; input: string; result?: string; s
 // read, so that the page can space turns apart.
 export type Item = { key: string; turn: number } & (
   // `attachments` are the files attached to the owner's message, when it has any.
-  | { kind: "owner"; text: string; attachments?: ShownAttachment[] }
+  // `sending` are the files of a message on its way.
+  | { kind: "owner"; text: string; attachments?: ShownAttachment[]; sending?: readonly File[] }
   | { kind: "reply"; text: string; streaming: boolean }
   // A run of tool calls with nothing said between them, as one line, and
   // what that line says: Working while one of them is, how long the turn
@@ -183,6 +186,7 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
   // The owner's messages the session has not taken in yet come last, as
   // they will: a turn takes them in at its next step.
   for (const [at, text] of (view.pending ?? []).entries()) add({ key: `pending${at}`, turn, kind: "owner", text }, Infinity)
+  for (const [at, { text, files }] of (view.sending ?? []).entries()) add({ key: `sending${at}`, turn, kind: "owner", text, sending: files }, Infinity)
   // Each run is known by its last call, which reading the page before does
   // not change, and says what it is.
   for (const item of items) {

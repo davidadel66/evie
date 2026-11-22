@@ -33,6 +33,7 @@ const FRESH: ConversationState = {
   pending: [],
   notes: [],
   project: undefined,
+  sending: [],
 }
 
 // Nothing is said in a subagent's conversation from the page: it is shown
