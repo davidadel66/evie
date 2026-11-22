@@ -1,0 +1,63 @@
+/* The colours of evie's design system, copied from its tokens.json. A theme
+   is one set of values for the same names. Dusk is the default, on the page
+   itself; Moss and Oxblood replace it when the page's data-theme names one.
+   Any element can name a theme, as a swatch of it in the theme menu does. */
+
+:root,
+[data-theme="dusk"] {
+  --bg: #131312;
+  --bg-side: #0e0e0d;
+  --surface: #1a1a18;
+  --surface-raised: #242421;
+  --line: #2a2a27;
+  --text: #e8e4dc;
+  --text-muted: #9b968c;
+  --accent: #86965f;
+  --on-accent: #131312;
+  --status-needs: #bb6c73;
+}
+
+[data-theme="moss"] {
+  --bg: #111310;
+  --bg-side: #0d0f0c;
+  --surface: #181b16;
+  --surface-raised: #22261f;
+  --line: #262a22;
+  --text: #e4e2d6;
+  --text-muted: #979785;
+  --accent: #8a9a63;
+  --on-accent: #111310;
+  --status-needs: #bb6c73;
+}
+
+[data-theme="oxblood"] {
+  --bg: #141011;
+  --bg-side: #0f0c0d;
+  --surface: #1c1718;
+  --surface-raised: #271f20;
+  --line: #2d2425;
+  --text: #ebe1dc;
+  --text-muted: #a39490;
+  --accent: #b9666d;
+  --on-accent: #141011;
+  /* In Oxblood the maroon accent also marks what waits for the owner. */
+  --status-needs: var(--accent);
+}
+
+/* The same in every theme. Those that name another colour are set again
+   inside each element that names a theme, so they follow it. */
+:root,
+[data-theme] {
+  --focus-ring: var(--accent);
+  --status-working: var(--text-muted);
+  --status-done: #8aa36a;
+  --status-failed: #c96d63;
+  --project-moss: #7d8f5a;
+  --project-mustard: #a8954f;
+  --project-maroon: #a2525a;
+  --project-rust: #ad6a45;
+  --project-slate: #66849a;
+  --project-plum: #8e6888;
+  --chart-bar: var(--accent);
+  --chart-current: var(--text);
+}
