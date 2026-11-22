@@ -8,6 +8,8 @@ export const THEMES = [
 
 export type Theme = (typeof THEMES)[number]["id"]
 
+// Where this browser keeps the theme. The page's own script in index.html
+// reads it too, to set the theme before the page is first drawn.
 const KEY = "evie.theme"
 
 // The theme this browser was last set to, or Dusk. A browser can refuse to

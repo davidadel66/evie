@@ -1,7 +1,6 @@
 /* Only the files in this folder are scanned for class names, whatever
    folder the server is started in. */
 @import "tailwindcss" source(".");
-@import "./fonts.css";
 @import "./tokens.css";
 
 /* Tailwind's theme holds the design system's tokens and nothing else, so
@@ -39,9 +38,19 @@
   --text-code: 13px;
   --text-code--line-height: 18px;
 
-  /* The 4px grid: each step is a multiple of 4px, so p-1 is space-1 (4px),
-     p-7 is space-7 (28px), and h-10 is 40px. */
-  --spacing: 4px;
+  /* The spacing steps, and nothing between them, so that p-1 is space-1
+     (4px) and p-7 is space-7 (28px), and a class off the scale, such as
+     p-5, is not made at all. */
+  --spacing-0: 0px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-7: 28px;
+  --spacing-8: 32px;
+
+  /* The fixed sizes, by their names: h-row-height, h-header-height. */
   --spacing-row-height: 44px;
   --spacing-header-height: 56px;
   --spacing-rail-width: 64px;
@@ -57,7 +66,23 @@
 
   --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
 
-  /* Not a token: below this width, the columns stack. */
+  /* The small spinner beside the word Working. */
+  --animate-spin: spin 1s linear infinite;
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Sizes of the layout that the design system's board does not name yet,
+     set here once, by a name each: w-session-list, max-w-sign-in-column. */
+  --spacing-session-list: 288px;
+  --spacing-project-card: 320px;
+  --spacing-sign-in-column: 400px;
+  /* The Menu's items are 40px rows, and the menu at least this wide. */
+  --spacing-menu-item: 40px;
+  --spacing-menu: 176px;
+  /* Below this width, the columns stack. */
   --breakpoint-wide: 960px;
 }
 

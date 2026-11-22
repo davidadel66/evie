@@ -1,23 +1,28 @@
 import type { ConnectionState } from "./connection.ts"
 
-// How each state of the connection looks: always a word, with a dot beside
-// it. Olive is activity; maroon is only for what waits for the owner, which
-// signing in does.
-const LOOKS: Record<ConnectionState["status"], { word: string; dot: string; text: string }> = {
-  connecting: { word: "Connecting", dot: "bg-status-working", text: "text-status-working" },
-  connected: { word: "Connected", dot: "bg-accent", text: "text-text-muted" },
-  reconnecting: { word: "Reconnecting", dot: "bg-status-working", text: "text-status-working" },
-  "signed out": { word: "Signed out", dot: "bg-status-needs", text: "text-status-needs" },
-}
-
-// Whether the page is connected to evie's server. Pointed at, it says why
-// the line is down, or why the browser was signed out.
+// Whether the page is connected to evie's server, always in a word. Colour
+// is kept for what it means elsewhere: connecting and reconnecting look as
+// Working does, with a small spinner, and the rest is plain text.
 export function ConnectionLight({ state }: { state: ConnectionState }) {
-  const look = LOOKS[state.status]
+  if (state.status === "connected") {
+    return (
+      <span role="status" className="flex items-center gap-2 text-caption text-text-muted">
+        <span aria-hidden="true" className="size-2 rounded-full bg-text-muted" />
+        Connected
+      </span>
+    )
+  }
+  if (state.status === "signed out") {
+    return (
+      <span role="status" className="text-caption text-text">
+        Signed out
+      </span>
+    )
+  }
   return (
-    <span role="status" title={"reason" in state ? state.reason : undefined} className={`flex items-center gap-2 text-caption ${look.text}`}>
-      <span aria-hidden="true" className={`size-2 rounded-full ${look.dot}`} />
-      {look.word}
+    <span role="status" className="flex items-center gap-2 text-caption text-status-working">
+      <span aria-hidden="true" className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none" />
+      {state.status === "connecting" ? "Connecting" : "Reconnecting"}
     </span>
   )
 }

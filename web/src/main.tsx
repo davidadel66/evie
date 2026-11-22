@@ -2,9 +2,6 @@ import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { App } from "./App.tsx"
 import { openConnection } from "./connection.ts"
-import { applyTheme, rememberedTheme } from "./theme.ts"
-
-applyTheme(rememberedTheme())
 
 // A sign-in link opens the page with a code after # in its address. The
 // address is put back to the page's own at once, so that the code is not

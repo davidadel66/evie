@@ -65,7 +65,7 @@ export function Menu({ label, button, items }: { label: string; button: ReactNod
           role="menu"
           aria-label={label}
           onKeyDown={onKeyDown}
-          className="absolute top-full right-0 z-10 mt-1 flex min-w-44 flex-col rounded-md border border-line bg-surface p-2 shadow-float"
+          className="absolute top-full right-0 z-10 mt-1 flex min-w-menu flex-col rounded-md border border-line bg-surface p-2 shadow-float"
         >
           {items.map((item) => (
             <button
@@ -77,7 +77,7 @@ export function Menu({ label, button, items }: { label: string; button: ReactNod
                 item.choose()
                 close()
               }}
-              className="flex h-10 items-center gap-2 rounded-md px-3 text-left text-body text-text aria-checked:bg-surface-raised"
+              className="flex h-menu-item items-center gap-2 rounded-md px-3 text-left text-body text-text aria-checked:bg-surface-raised"
             >
               {item.leading}
               {item.label}

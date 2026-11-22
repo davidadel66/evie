@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>evie</title>
+    <script>
+      // The theme this browser picked, set before the page is first drawn,
+      // so that it does not open in Dusk for a moment. theme.ts keeps it.
+      try {
+        const theme = localStorage.getItem("evie.theme")
+        if (theme === "moss" || theme === "oxblood") document.documentElement.dataset.theme = theme
+      } catch {}
+    </script>
+    <link rel="stylesheet" href="./src/fonts.css" />
     <link rel="stylesheet" href="./src/styles.css" />
     <script type="module" src="./src/main.tsx"></script>
   </head>

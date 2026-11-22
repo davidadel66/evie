@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test"
+import tailwind from "bun-plugin-tailwind"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { builtWebApp } from "../src/programs/serve.ts"
 import { buildWebApp } from "../src/server/web-app.ts"
 
@@ -42,4 +46,32 @@ test("evie serve goes on without the web app when its module cannot be loaded, a
   const built = await builtWebApp(() => Promise.reject(new Error("Cannot find package 'bun-plugin-tailwind'")))
 
   expect(built).toEqual({ problem: "The web app could not be built, so it is not served:\nCannot find package 'bun-plugin-tailwind'" })
+})
+
+test("the spacing scale has only the design system's steps and named sizes, so a class off the scale is not made", async () => {
+  // A stylesheet beside the app's, asking Tailwind for classes as if a
+  // screen used them.
+  const folder = await mkdtemp(join(tmpdir(), "evie-classes-"))
+  try {
+    const sheet = join(folder, "classes.css")
+    const styles = join(import.meta.dir, "..", "web", "src", "styles.css")
+    await writeFile(sheet, `@import "${styles}";\n@source inline("p-1 p-7 p-8 w-session-list p-5 h-10 m-9");\n`)
+    const built = await Bun.build({ entrypoints: [sheet], plugins: [tailwind] })
+    const style = await built.outputs[0]!.text()
+
+    for (const made of ["p-1", "p-7", "p-8", "w-session-list"]) expect(style).toContain(`.${made} {`)
+    for (const offScale of ["p-5", "h-10", "m-9"]) expect(style).not.toContain(`.${offScale} {`)
+  } finally {
+    await rm(folder, { recursive: true, force: true })
+  }
+})
+
+test("the page puts itself in the theme this browser picked before it is first drawn", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const page = await app.page.text()
+
+  const themed = page.indexOf('localStorage.getItem("evie.theme")')
+  expect(themed).toBeGreaterThan(-1)
+  expect(themed).toBeLessThan(page.indexOf('rel="stylesheet"'))
 })

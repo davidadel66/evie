@@ -862,7 +862,10 @@ The design system's tokens are copied from its `tokens.json`: the colours
 into `web/src/tokens.css`, one set per theme, and the rest into Tailwind's
 theme in `web/src/styles.css`. Tailwind's own defaults are cleared, so each
 class names a token, such as `bg-bg-side`, `text-text-muted`,
-`text-caption` or `p-7`. The fonts, Geist and Geist Mono, are carried in
+`text-caption` or `p-7`, and its spacing scale holds only the design
+system's steps, so a class off it, such as `p-5`, is not made at all. The
+few sizes of the layout that the design system does not name yet, such as
+the width of the session list, are named once in `styles.css`. The fonts, Geist and Geist Mono, are carried in
 the stylesheet, so the page asks no other site for anything.
 
 `bunfig.toml` also stops `bun install` from installing peer dependencies.
