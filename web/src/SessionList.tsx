@@ -20,7 +20,8 @@ import { addressOfWorkspace } from "./workspace.ts"
 // name, then the Workspaces button, which opens the workspace view, the
 // New session button, and the settings button given. Workspaces opens the
 // workspace of the project being looked at, or with no project at all,
-// the New workspace dialog.
+// the New workspace dialog; until the projects have been listed, which it
+// is not yet known, it waits.
 export function ListTop({ connection, sessions, settings }: { connection: Connection; sessions: Sessions; settings: ReactNode }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
@@ -31,7 +32,11 @@ export function ListTop({ connection, sessions, settings }: { connection: Connec
   return (
     <header className="flex h-header-height shrink-0 items-center gap-0.5 pl-row-inset">
       <span className="flex-1 text-title text-text">evie</span>
-      {workspace !== undefined ? (
+      {!list.projectsListed ? (
+        <Button variant="icon" aria-label="Workspaces" title="Workspaces: the projects are being listed" disabled>
+          <SquaresFour />
+        </Button>
+      ) : workspace !== undefined ? (
         <a href={addressOfWorkspace({ workspace, tab: "sessions" })} aria-label="Workspaces" title="Workspaces" className={icon}>
           <SquaresFour />
         </a>
@@ -57,7 +62,7 @@ export function ListTop({ connection, sessions, settings }: { connection: Connec
 // top, until its first message is sent.
 export function SessionList({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
-  // Whether the New workspace dialog is open, from the New session menu or an empty list.
+  // Whether the New workspace dialog is open, from the empty list's New workspace… button.
   const [making, setMaking] = useState(false)
   const selected = useSelected()
   const [search, setSearch] = useState("")

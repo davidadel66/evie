@@ -13,8 +13,10 @@ import { Palette } from "./Palette.tsx"
 import { useDiffShortcut } from "./diff-shown.ts"
 import { DiffPlace } from "./DiffPanel.tsx"
 import { CardButton, CardPlace } from "./ProjectCard.tsx"
-import { NoProjectTile, ProjectTile } from "./ProjectIcon.tsx"
-import { useSelected } from "./selection.ts"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
+import { CaretDown } from "./icons.tsx"
+import { NoProjectTile, ProjectGlyph, ProjectTile } from "./ProjectIcon.tsx"
+import { select, useSelected } from "./selection.ts"
 import { projectLookedAt, titleOf } from "./session-list.ts"
 import { ListButton, ListTop, SessionList } from "./SessionList.tsx"
 import { HeaderName } from "./SessionRow.tsx"
@@ -68,7 +70,7 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
   }, [selected, list.wide])
   return (
     <div className="flex flex-col wide:h-dvh wide:flex-row">
-      <ListPlace>
+      <ListPlace picked={() => !list.wide && main.current?.scrollIntoView({ block: "start" })}>
         <ListTop connection={connection} sessions={sessions} settings={<Settings connection={connection} />} />
         {list.wide && <ConnectionLine state={state} />}
         <SessionList connection={connection} sessions={sessions} />
@@ -87,13 +89,15 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
 // The session list's place: the column on the left, with a line on its
 // right edge, which the owner can hide, or at phone width the top of the
 // page, as wide as it, with a line under it. The list is kept on the page
-// while hidden, so that the shortcuts that move through it hold.
-function ListPlace({ children }: { children: ReactNode }) {
+// while hidden, so that the shortcuts that move through it hold. A row
+// tapped is `picked`, even the one open, whose address does not change.
+function ListPlace({ picked, children }: { picked(): void; children: ReactNode }) {
   const shown = useListShown()
   return (
     <aside
       id={LIST_ID}
       aria-label="Sessions"
+      onClick={(event) => event.target instanceof Element && event.target.closest("a[data-row]") !== null && picked()}
       hidden={shown.wide && !shown.column}
       className={cn("flex flex-col bg-bg-side px-2 pb-2", shown.wide ? "w-session-list shrink-0 border-r border-line" : "border-b border-line")}
     >
@@ -132,20 +136,26 @@ function useFrameShortcuts(togglePalette: () => void) {
 
 // The middle column: the selected session's conversation, under its
 // project and name, or one of its subagents', or for a draft, the new
-// session that will start. With nothing open, the page is a draft in the
-// project of the latest session, as T3 Code opens one. Whatever it shows,
-// its header has the button that shows and hides the project card.
+// session that will start, in the project its header picks. With nothing
+// open, the page is a draft in the project of the latest session, as T3
+// Code opens one, fixed as the empty page first shows, so that another
+// session becoming the latest neither moves it nor loses what is typed.
+// Whatever it shows, its header has the button that shows and hides the
+// project card.
 function OpenSession({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
   const projectOf = (project: string | null) => list.projects.find((each) => each.id === project)
+  const empty = useRef<{ project: string | null }>(undefined)
+  if (selected !== undefined) empty.current = undefined
+  else if (list.listed) empty.current ??= { project: projectLookedAt(undefined, list.sessions) }
   if (selected === undefined || "draft" in selected) {
     // With nothing open, which project is not known until the list is read.
-    if (selected === undefined && !list.listed) return <Top />
-    const project = selected === undefined ? projectLookedAt(undefined, list.sessions) : selected.draft
+    if (empty.current === undefined && selected === undefined) return <Top />
+    const project = selected === undefined ? empty.current!.project : selected.draft
     return (
       <>
-        <Top project={{ id: project, listed: projectOf(project) }} title="New session" />
+        <Top project={{ id: project, listed: projectOf(project) }} title="New session" pick={{ projects: list.projects, choose: (to) => select({ draft: to }) }} />
         <Draft key={`${project}`} connection={connection} sessions={sessions} project={project} />
       </>
     )
@@ -178,20 +188,61 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
 // The middle column's header, as the Session view drawing has it: the
 // project's tile and its name, quiet, then the session's name; after the
 // button that shows and hides the session list, and before the one that
-// shows and hides the project card, on the right. A name that can be
-// renamed is typed in place after a double-click, and why a name was not
-// taken is said on a line under the header. At phone width, the line that
-// says the connection is down is under it too.
-function Top({ project, title, rename }: { project?: { id: string | null; listed: ListedProject | undefined }; title?: string; rename?(name: string): Promise<string | undefined> }) {
+// shows and hides the project card, on the right. For a draft, the project
+// is a menu to pick another, or none, as T3 Code's draft picks where a new
+// thread goes. A name that can be renamed is typed in place after a
+// double-click, and why a name was not taken is said on a line under the
+// header. At phone width, the line that says the connection is down is
+// under it too.
+function Top({
+  project,
+  title,
+  rename,
+  pick,
+}: {
+  project?: { id: string | null; listed: ListedProject | undefined }
+  title?: string
+  rename?(name: string): Promise<string | undefined>
+  pick?: { projects: readonly ListedProject[]; choose(project: string | null): void }
+}) {
   const [note, setNote] = useState<string>()
+  const named = project === undefined ? undefined : (
+    <>
+      {project.id === null ? <NoProjectTile /> : <ProjectTile project={project.id} size="row" />}
+      <span className="truncate">{project.id === null ? "No project" : (project.listed?.name ?? "")}</span>
+    </>
+  )
   return (
     <>
       <header className="flex h-header-height shrink-0 items-center gap-2 border-b border-line px-3">
         <ListButton />
         {project !== undefined && (
           <span className="flex min-w-0 shrink items-center gap-2 text-body text-text-muted">
-            {project.id === null ? <NoProjectTile /> : <ProjectTile project={project.id} size="row" />}
-            <span className="truncate">{project.id === null ? "No project" : (project.listed?.name ?? "")}</span>
+            {pick === undefined ? (
+              named
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" aria-label={`Start it in: ${project.id === null ? "No project" : (project.listed?.name ?? "its project")}`} className="flex min-w-0 items-center gap-2 rounded-md hover:text-text">
+                    {named}
+                    <CaretDown className="size-icon-xs shrink-0" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Start it in</DropdownMenuLabel>
+                  {pick.projects.map((each) => (
+                    <DropdownMenuItem key={each.id} current={each.id === project.id} onSelect={() => pick.choose(each.id)}>
+                      <ProjectGlyph project={each.id} />
+                      {each.name}
+                    </DropdownMenuItem>
+                  ))}
+                  {pick.projects.length > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuItem current={project.id === null} onSelect={() => pick.choose(null)}>
+                    No project
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <span aria-hidden="true">/</span>
           </span>
         )}

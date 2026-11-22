@@ -240,14 +240,14 @@ The list can be hidden and shown with the button at the left of the
 middle column's header, or with Cmd+B (Ctrl+B elsewhere), and the browser
 remembers which. At 767px wide or narrower, as on a phone, the columns
 stack: the list is at the top of the page and the conversation under it,
-a screen tall. Picking a session brings its conversation into sight, and
-the same button scrolls back up to the list; the Reconnecting line is
-then under the session's header.
+a screen tall. Picking a session, even the one open, brings its
+conversation into sight, and the same button scrolls back up to the list;
+the Reconnecting line is then under the session's header.
 
 At the top of the list, beside evie's name, the squares open the
 workspace view, on the workspace of the project you are looking at (or,
-with no workspace yet, the New workspace dialog), and the pencil starts a
-new session.
+with no workspace yet, the New workspace dialog; until the projects have
+been listed, it waits), and the pencil starts a new session.
 
 The gear beside the name opens the settings, with a page each for:
 
@@ -319,10 +319,12 @@ they change, and listed again when the line comes back:
   (below).
 - **New session** (the pencil) makes a draft of a new session, at the top
   of the list, in the project of the selected session or draft, or with
-  nothing open, of the latest session; the command palette's "New session
-  in a project…" makes one in another project, or in none. With nothing
-  open, the page is such a draft. Nothing is made on the server until its
-  first message is sent,
+  nothing open, of the latest session. In a draft, the project in the
+  header is a menu that starts it in another project, or in none, as does
+  the command palette's "New session in a project…". With nothing open,
+  the page is such a draft, in the project of the latest session as the
+  page first showed it. Nothing is made on the server until its first
+  message is sent,
   so a draft left unused leaves nothing behind. Pressed again, it comes
   back to the same draft. The first message starts the session, asking
   first whether to trust the project when evie needs to know, and the page
@@ -369,18 +371,24 @@ nothing said in it yet, or a draft, says "What should evie do?":
 - **A reply streams in** as it is written.
 - **The work log** is T3 Code's: each tool call is one row with an icon
   and a sentence, such as "Read src/auth.ts", "Edited README.md" or "Ran
-  bun test", which opens to its whole result. A run of several calls with
-  nothing said between them is one row counting them, such as "Read 2
-  files and ran 1 command", which opens to a row for each.
-- **While a turn runs**, a line under your message says "Working for
-  12s", counting up, though not while it waits for your answer; the call
-  being carried out says what it is doing, such as "Running bun test";
-  and a line at the end says Working, with a Stop.
+  bun test", which opens to its whole result, and shows when it happened
+  while the pointer is over it; a call that failed has a red ✕. A run of
+  several calls with nothing said between them is one row counting them,
+  such as "Read 2 files and ran 1 command", which opens to a row for each,
+  scrolling past a height. The words are the same as the workspace's side
+  chat's.
+- **While a turn runs**, a line at the end of the conversation says
+  "Working for 12s · Stop", counting up on the server's clock, also while
+  a question waits; a run being carried out says what it is doing, such
+  as "Running bun", and lists that call by the command alone; and between
+  calls, a row says Thinking.
 - **Once a turn has completed**, everything before its final reply folds
-  into one quiet line, such as "Worked for 48s", which opens to show it in
-  order. A question and its answer, and notes, stay outside the fold. A
-  turn that was stopped, failed or had a reply cut short is not folded,
-  and its first run says how long it worked.
+  into one quiet line, such as "Worked for 48s" or "Worked for 3.4s",
+  which opens to show it in order. The time it waited for your answers to
+  its questions is left out. A question and its answer, and notes, stay
+  outside the fold. A turn that was stopped, failed or had a reply cut
+  short is not folded, and its first run says how long it worked, or
+  "You stopped after …".
 - **Notes** say in quiet words what else happened: a compaction, with its
   summary to open; a note evie was told; a reply cut short; a turn that
   failed or was stopped; a question and your answer; and a background
@@ -400,9 +408,10 @@ The message box at the bottom of the conversation works as T3 Code's does:
 - **A question** shows at the end of the conversation, as part of evie's
   reply: the question, its choices as round buttons under it, the first
   the main one, and "Needs you. Waiting for your answer". The keys 1 to 9
-  pick one while the box does not have the focus, a number sent from the
-  box picks one, and your own words sent answer it when it takes them. Anything else is not sent: the box asks you to pick one of
-  the choices, as the terminal asks again. Several waiting are taken one at
+  pick one while the focus is on nothing or in the empty box, and your
+  own words sent answer it when it takes them. Anything else is not sent:
+  the box asks you to pick one of the choices above, as the terminal asks
+  again. Several waiting are taken one at
   a time, with a count such as
   1/3. A question that arrives while you are typing waits until you have
   not typed for a second and a half, so that a stray key cannot answer it.

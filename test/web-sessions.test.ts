@@ -182,6 +182,24 @@ test("the projects are listed one request at a time, and once more for every ask
   ])
 })
 
+test("the list says when the projects have been listed, so that no project is taken for none before they have come", async () => {
+  const late = gate()
+  const { connection } = await startHolding([], async (command, answer) => {
+    const answered = await answer()
+    if (command.type === "list_projects") await late.opened
+    return answered
+  })
+  const sessions = list(connection)
+  const before = await until(sessions, (state) => state.listed)
+
+  late.open()
+  const after = await until(sessions, (state) => state.projectsListed)
+
+  expect(before.projectsListed).toBe(false)
+  expect(before.projects).toEqual([])
+  expect(after.projects).toHaveLength(1)
+})
+
 test("a summary that comes while the sessions are being listed wins over the list's older line for its session, and a session it brings stays", async () => {
   // The first list is the sessions as they were when it was asked, and comes late.
   let asked = 0
