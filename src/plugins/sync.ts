@@ -1,7 +1,7 @@
 import { existsSync, realpathSync } from "node:fs"
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { dataFolder } from "../core/evie.ts"
-import { gitEnv } from "../core/git.ts"
+import { gitEnv, runGit } from "../core/git.ts"
 import type { CheckedToolCall, Plugin, Project } from "../core/types.ts"
 import { patchFiles } from "./files/paths.ts"
 
@@ -16,8 +16,9 @@ import { patchFiles } from "./files/paths.ts"
 // how it went.
 //
 // Before every push, the remote must be the repository Evie made, as its
-// git settings record, and GitHub must say it is private. A `.evie/` folder
-// that is, or looks like, an Evie data folder is never synced.
+// git settings record, and GitHub must say it is private. Nor may the
+// repository's own settings name a command that the push would run. A
+// `.evie/` folder that is, or looks like, an Evie data folder is never synced.
 //
 // A try that fails, as with no `gh`, `gh` not logged in, or no network,
 // never fails a turn: it is kept for `/sync` to tell, and the next try tries
@@ -139,6 +140,7 @@ export function sync(options: SyncOptions): Plugin {
     const git = (...args: string[]) => step(`git ${args[0]}`, ["git", `--git-dir=${gitDir}`, `--work-tree=${evie}`, ...args])
 
     if (!existsSync(gitDir)) await step("git init", ["git", "init", "--quiet", "--initial-branch=main", evie])
+    await refuseOwnCommands(gitDir, evie)
     // What changed, and how far the branch is ahead of what was last pushed:
     // all of it when it has never been pushed.
     const status = await git("status", "--porcelain=v2", "--branch", "--untracked-files=all")
@@ -268,6 +270,35 @@ export function sync(options: SyncOptions): Plugin {
     }
     return state
   }
+}
+
+// The settings that would have the push run a command of theirs: a
+// credential helper, for any address, an ssh command and a password
+// program, which the push alone keeps, so that the owner's own settings can
+// give it its credentials; and `include` and `includeIf`, which read
+// settings from another file, where anything could be named. Written as git
+// writes their names, in lower case but for the address in a credential's.
+const PUSH_RUNS = "^(credential\\.(.+\\.)?helper|core\\.sshcommand|core\\.askpass|include\\..+|includeif\\..+)$"
+
+// Ends the try when the `.evie/` folder's own repository names any of them
+// in its settings, which may have come with the project. Only that
+// repository's own settings file is read, as git itself reads it, and
+// reading it runs nothing; the owner's own settings are not looked at.
+async function refuseOwnCommands(gitDir: string, evie: string): Promise<void> {
+  const file = join(gitDir, "config")
+  const asked = await runGit(evie, [`--git-dir=${gitDir}`, "config", "--local", "--name-only", "-z", "--get-regexp", PUSH_RUNS])
+  // Git says 1 when the file names none of them, or there is no file.
+  if (asked.code === 1) return
+  if (asked.code !== 0) {
+    throw new Error(`Its git repository's own settings, ${file}, could not be read, so nothing was pushed: ${failure("git config", { ...asked, stdout: asked.stdout.toString("utf8") })}`)
+  }
+  const names = [...new Set(asked.stdout.toString("utf8").split("\0").filter((name) => name !== ""))]
+  const listed = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
+  throw new Error(
+    `Its git repository's own settings, ${file}, set ${listed}, which would have git run a command of theirs, or read settings from ` +
+      `another file, as it pushes, so nothing was pushed. The push takes its credentials from your own git settings, so remove ` +
+      `${names.length === 1 ? "that" : "them"} from the repository's settings, then /sync.`,
+  )
 }
 
 // Whether a tool call may have changed something in the project's `.evie/`

@@ -187,6 +187,46 @@ test("syncing runs none of the commands the .evie folder's own git settings name
   expect((await readdir(noted)).filter((each) => each !== "noted" && each !== "hooks")).toEqual([])
 })
 
+test("nothing is pushed while the .evie folder's own git settings name a credential helper, an ssh command, a password program, or more settings to read, and /sync says why", async () => {
+  const planted: [string, string, string][] = [
+    ["credential.helper", "!touch planted", "credential.helper"],
+    ["credential.https://github.com.helper", "!touch planted", "credential.https://github.com.helper"],
+    ["core.sshCommand", "touch planted; ssh", "core.sshcommand"],
+    ["core.askPass", "/tmp/planted", "core.askpass"],
+    ["include.path", "/tmp/planted.gitconfig", "include.path"],
+    ["includeIf.gitdir:/tmp/.path", "/tmp/planted.gitconfig", "includeif.gitdir:/tmp/.path"],
+  ]
+  for (const [setting, value, named] of planted) {
+    const { github, evieFolder, syncNow, name } = await start()
+    await syncNow()
+    await git(["--git-dir", join(evieFolder, ".git"), "config", setting, value], evieFolder)
+    await writeFile(join(evieFolder, "notes.md"), "notes\n")
+
+    expect(await syncNow()).toStartWith(
+      `Could not sync ${evieFolder}: Its git repository's own settings, ${join(evieFolder, ".git", "config")}, set ${named}, which would have git ` +
+        "run a command of theirs, or read settings from another file, as it pushes, so nothing was pushed. The push takes its credentials " +
+        "from your own git settings, so remove that from the repository's settings, then /sync.",
+    )
+    expect(await github.commits(name)).toHaveLength(1)
+  }
+})
+
+test("each of the .evie folder's own git settings that would stop a push is named, and once they are gone, the push goes through", async () => {
+  const { github, evieFolder, syncNow, name } = await start()
+  await syncNow()
+  const gitDir = join(evieFolder, ".git")
+  await git(["--git-dir", gitDir, "config", "core.sshCommand", "ssh -v"], evieFolder)
+  await git(["--git-dir", gitDir, "config", "include.path", "/tmp/planted.gitconfig"], evieFolder)
+  await writeFile(join(evieFolder, "notes.md"), "notes\n")
+
+  expect(await syncNow()).toContain(`set core.sshcommand and include.path, which would have git`)
+  expect(await syncNow()).toContain("so remove them from the repository's settings, then /sync.")
+  await git(["--git-dir", gitDir, "config", "--unset", "core.sshCommand"], evieFolder)
+  await git(["--git-dir", gitDir, "config", "--unset", "include.path"], evieFolder)
+  expect(await syncNow()).toStartWith(`Pushed the changes in ${evieFolder} to ${name} on GitHub. The try before this one had failed: `)
+  expect(await github.commits(name)).toHaveLength(2)
+})
+
 test("the repository is named evie- and the project's name in lower case, with spaces and other characters made into dashes", async () => {
   const { run, github, commands } = await start()
   const folder = join(await tempFolder("evie-place-"), "money")
