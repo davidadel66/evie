@@ -1,9 +1,11 @@
 import { useMemo, useSyncExternalStore } from "react"
 import { addressOf, selectedIn, settingsIn, withSettings, type Selected } from "./address.ts"
 import { SETTINGS_PAGES, type SettingsPage } from "./settings-page.ts"
+import { workspaceIn, type WorkspacePlace } from "./workspace.ts"
 
 // What is selected in the list, as the page's address keeps it: a session,
-// or a draft of a new one; and the settings page, open over it.
+// or a draft of a new one; the workspace open instead of the list; and the
+// settings page, open over either.
 
 // What the address selects now, redrawn as it changes: by a click on a
 // row's link, by the page itself, or by going back.
@@ -18,6 +20,20 @@ function onAddressChange(listener: () => void) {
   addEventListener("hashchange", listener)
   return () => removeEventListener("hashchange", listener)
 }
+
+// Where the owner is, when it is in a workspace, redrawn as the address
+// changes. Elsewhere, the address is remembered, for the workspace strip's
+// way back.
+export function useWorkspacePlace(): WorkspacePlace | undefined {
+  const hash = useAddress()
+  const place = useMemo(() => workspaceIn(hash), [hash])
+  if (place === undefined) sessionView = hash === "" ? "#" : hash
+  return place
+}
+// The session view's address as the owner last left it for a workspace,
+// or undefined when the page opened in one.
+let sessionView: string | undefined
+export const sessionViewLeft = () => sessionView
 
 // Selects a session or a draft, as following its row's link does.
 export function select(selected: Selected) {

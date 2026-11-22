@@ -235,3 +235,30 @@ test("the focus ring and the spinner's ring are drawn at the design system's ind
   expect(style).toContain(".border-\\(length\\:--indicator-width\\){border-style:var(--tw-border-style);border-width:var(--indicator-width)}")
   expect(style).not.toMatch(/\.border-2\{/)
 })
+
+test("the screens opened rarely or later, and the drawings of every icon but the folder, are not in the script the page loads first, but in files of their own", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const page = await app.page.text()
+
+  // The page's script and every file it imports before it runs: not those
+  // it imports with import(), which load when asked for.
+  const first = new Set<string>()
+  const follow = async (path: string) => {
+    if (first.has(path)) return
+    first.add(path)
+    const script = await app.files[path]!.text()
+    for (const match of script.matchAll(/\bimport\s*([^("'`;]*?)\s*["'](\/[^"']+\.js)["']/g)) await follow(match[2]!)
+  }
+  await follow(page.match(/<script type="module"[^>]*src="([^"]+)"/)![1]!)
+  const firstScript = (await Promise.all([...first].map((path) => app.files[path]!.text()))).join("\n")
+  const others = Object.entries(app.files).filter(([path]) => path.endsWith(".js") && !first.has(path))
+  const laterScripts = (await Promise.all(others.map(([, file]) => file.text()))).join("\n")
+
+  // Words of the settings, the command palette, the session details, the
+  // right panel, the workspace view, its side chat and storage, the icon
+  // picker, and an icon's name.
+  for (const words of ["Restart to apply", "Command palette", "Choose what to show", "The diff view could not be loaded", "This workspace is not in the list", "Ask evie to change something here", "Backed up privately", "No matching icon", "cooking-pot"]) {
+    expect({ words, first: firstScript.includes(words), later: laterScripts.includes(words) }).toEqual({ words, first: false, later: true })
+  }
+})
