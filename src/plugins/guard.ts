@@ -3,6 +3,7 @@ import { existsSync, lstatSync, realpathSync } from "node:fs"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { dataFolder } from "../core/evie.ts"
 import type { CheckedToolCall, Plugin } from "../core/types.ts"
+import { ownShownFolder } from "./show/files.ts"
 
 // The built-in guard. It stops the most clearly destructive commands before
 // they run, and keeps the tools out of a few private folders.
@@ -220,7 +221,7 @@ export function followLinks(absolute: string): string {
 // is in one, is no allowance at all, since what it leads to is not the session's.
 export function isSavedOutput(data: string, session: string, path: string, parent?: string): boolean {
   const kept = (owner: string) =>
-    ["attachments", "shown"].flatMap((what) => (isLink(resolve(data, what)) || isLink(resolve(data, what, owner)) ? [] : [resolve(data, what, owner)]))
+    [resolve(data, "attachments", owner), resolve(ownShownFolder(data, owner))].filter((folder) => !isLink(dirname(folder)) && !isLink(folder))
   const folders = [resolve(data, "tool-output", session), ...kept(session), ...(parent === undefined ? [] : kept(parent))]
   return folders.some((folder) => {
     const inside = relative(followLinks(folder), followLinks(resolve(path)))

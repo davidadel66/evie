@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { EventBodies, StoredEvent, StoredEventType, TurnChanges } from "../src/core/types.ts"
-import { shownText, type Showing } from "../src/plugins/show/record.ts"
+import { shownText, type ShownFile } from "../src/plugins/show/record.ts"
 import { galleryOf, viewerOf } from "../web/src/shown.ts"
 import { transcriptOf, type Item, type View } from "../web/src/transcript.ts"
 
@@ -16,19 +16,20 @@ function session(...made: Made[]): StoredEvent[] {
 const event = <Type extends StoredEventType>(type: Type, body: EventBodies[Type]): Made => [type, body]
 const view = (events: StoredEvent[], more: Partial<View> = {}): View => ({ events, replySoFar: "", turnRunning: false, jobs: [], earlier: false, project: "p1", ...more })
 
-// A show call, and its result naming the files shown.
+// A show call, and its result: its text for the model, and its details
+// naming the files shown, which the page reads.
 let calls = 0
-function showing(...files: Showing[]): Made[] {
+function showing(...files: ShownFile[]): Made[] {
   const id = `show${++calls}`
   return [
     event("assistant_message", { text: "", toolCalls: [{ id, name: "show", arguments: JSON.stringify({ paths: files.map((file) => file.from ?? file.path) }) }] }),
-    event("tool_result", { callId: id, name: "show", text: shownText(files) }),
+    event("tool_result", { callId: id, name: "show", text: shownText(files), details: { files } }),
   ]
 }
-const chart: Showing = { path: ".evie/shown/2026-11-22/chart.png", type: "image/png", size: 33, from: "out/chart.png" }
-const logo: Showing = { path: ".evie/shown/2026-11-22/logo.svg", type: "image/svg+xml", size: 82, from: "design/logo.svg" }
-const card: Showing = { path: ".evie/shown/2026-11-22/card.pdf", type: "application/pdf", size: 57, from: "out/card.pdf" }
-const guide: Showing = { path: ".evie/files/guide.md", type: "text/markdown", size: 29 }
+const chart: ShownFile = { storage: "project", path: "shown/2026-11-22/chart.png", type: "image/png", size: 33, from: "out/chart.png" }
+const logo: ShownFile = { storage: "project", path: "shown/2026-11-22/logo.svg", type: "image/svg+xml", size: 82, from: "design/logo.svg" }
+const card: ShownFile = { storage: "project", path: "shown/2026-11-22/card.pdf", type: "application/pdf", size: 57, from: "out/card.pdf" }
+const guide: ShownFile = { storage: "project", path: "files/guide.md", type: "text/markdown", size: 29 }
 
 // Each item as its kind and, for a file shown, its name.
 const read = (items: Item[]): string[] => items.map((item) => (item.kind === "shown" ? `shown ${item.turn}: ${item.file.name}` : item.kind === "fold" ? `fold ${item.turn} (${read(item.items).join(", ")})` : `${item.kind} ${item.turn}`))
@@ -60,21 +61,39 @@ test("while the turn runs, what it has shown so far is at its end; a turn stoppe
   expect(read(transcriptOf(view(failed)))).toEqual(["owner 1", "steps 1", "shown 1: chart.png", "failed 1"])
 })
 
-test("a show call that was refused shows nothing; a file is named by its name, its Storage folder, and fetched from Storage or the session's own files", () => {
+test("a show call that was refused shows nothing; a file is named by its name, its Storage folder, and fetched from Storage or the session's own files, all read from the call's details", () => {
   const events = session(
     event("turn_start", {}),
     event("user_message", { text: "Show me" }),
     event("assistant_message", { text: "", toolCalls: [{ id: "x", name: "show", arguments: '{"paths":["notes.txt"]}' }] }),
     event("tool_result", { callId: "x", name: "show", text: "Not shown: notes.txt is not a kind of file evie can show." }),
-    ...showing(guide, { path: "/data/shown/s1/2026-11-22/plot.png", type: "image/png", size: 40, from: "/tmp/plot.png" }),
+    // The text written for the model is never read for files: only the details are.
+    event("assistant_message", { text: "", toolCalls: [{ id: "y", name: "show", arguments: '{"paths":["a.png"]}' }] }),
+    event("tool_result", { callId: "y", name: "show", text: shownText([chart]) }),
+    ...showing(guide, { storage: "session", path: "/data/shown/s1/2026-11-22/plot.png", type: "image/png", size: 40, from: "/tmp/plot.png" }),
     event("assistant_message", { text: "Here." }),
     event("turn_end", { reason: "completed" }),
   )
   const shown = transcriptOf(view(events)).flatMap((item) => (item.kind === "shown" ? [item.file] : []))
 
   expect(shown).toEqual([
-    { path: ".evie/files/guide.md", type: "text/markdown", name: "guide.md", folder: ".evie/files/", address: "/storage?project=p1&path=files%2Fguide.md", storage: { project: "p1", path: "files/guide.md" } },
-    { path: "/data/shown/s1/2026-11-22/plot.png", type: "image/png", name: "plot.png", folder: "/data/shown/s1/2026-11-22/", address: "/storage?session=s1&path=%2Fdata%2Fshown%2Fs1%2F2026-11-22%2Fplot.png" },
+    {
+      key: expect.stringMatching(/^shown-show\d+-0$/),
+      path: ".evie/files/guide.md",
+      type: "text/markdown",
+      name: "guide.md",
+      folder: ".evie/files/",
+      address: "/storage?project=p1&path=files%2Fguide.md",
+      storage: { project: "p1", path: "files/guide.md" },
+    },
+    {
+      key: expect.stringMatching(/^shown-show\d+-1$/),
+      path: "/data/shown/s1/2026-11-22/plot.png",
+      type: "image/png",
+      name: "plot.png",
+      folder: "/data/shown/s1/2026-11-22/",
+      address: "/storage?session=s1&path=%2Fdata%2Fshown%2Fs1%2F2026-11-22%2Fplot.png",
+    },
   ])
 })
 

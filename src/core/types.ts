@@ -88,16 +88,14 @@ export type Attachments = {
   open(session: string, path: string): Promise<{ file: string; type: string } | undefined>
 }
 
-// What gives a Storage file to the page, for the server to send it, as
-// the show tool's files are drawn and Storage opens them: a file in a
-// project's `.evie` folder, by its path inside it, as Storage names it; or
-// one kept for a session in the data folder, by its full path, as the show
-// tool told it. `open` finds where the file really is, and the type it is
-// shown as, or nothing for any file that is not there, not of a kind evie
-// shows, or anywhere else: outside the `.evie` folder or through a link out
-// of it, in its own git repository, or kept for another session.
+// What finds a file of a project's Storage for the server to give to the
+// page, as the show tool's files are drawn and Storage opens them: by its
+// path inside the project's `.evie` folder, as Storage names it. `open`
+// gives where the file really is, or nothing for a file that is not there,
+// or is outside the `.evie` folder or through a link out of it, or in its
+// own git repository. Which files are given, and as what, the server decides.
 export type StorageFiles = {
-  open(asked: { project: string; path: string } | { session: string; path: string }): Promise<{ file: string; type: string } | undefined>
+  open(project: string, path: string): Promise<string | undefined>
 }
 
 // The largest file that can be attached: 10 MB, as T3 Code allows for an

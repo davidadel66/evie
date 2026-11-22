@@ -1,5 +1,5 @@
 import type { ChangedFile, Job, StoredEvent, TurnChanges } from "../../src/core/types.ts"
-import { shownIn, type ShownFile } from "../../src/plugins/show/record.ts"
+import { shownFiles } from "../../src/plugins/show/record.ts"
 import { shownAttachment, type ShownAttachment } from "./attachments.ts"
 import { shownOf, type Shown } from "./shown.ts"
 import { fieldsOf, liveWords, runWords, stepFailed, stepKind, stepTarget, stepWords, type StepKind } from "./step-words.ts"
@@ -188,7 +188,10 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
       }
       Object.assign(call, resultOf(event))
       if (event.body.name === "show") {
-        const files = shownFilesOf(event).map((file, at): Item => ({ key: `shown-${event.body.callId}-${at}`, turn, kind: "shown", file: shownOf(file, event.session, projectAt.get(event.seq)) }))
+        const files = shownFiles(event.body.details).map((file, at): Item => {
+          const key = `shown-${event.body.callId}-${at}`
+          return { key, turn, kind: "shown", file: shownOf(file, key, event.session, projectAt.get(event.seq)) }
+        })
         shown.set(turn, [...(shown.get(turn) ?? []), ...files])
       }
     }
@@ -343,17 +346,6 @@ function resultOf(event: Extract<StoredEvent, { type: "tool_result" }>): { resul
   const result = event.body.text
   const made = { result, short: shortOf(result), failed: stepFailed(result) }
   examined.set(event, made)
-  return made
-}
-
-// The files a show call's result names, read once for each result, as
-// each result is examined once above.
-const shownRead = new WeakMap<StoredEvent, ShownFile[]>()
-function shownFilesOf(event: Extract<StoredEvent, { type: "tool_result" }>): ShownFile[] {
-  const kept = shownRead.get(event)
-  if (kept !== undefined) return kept
-  const made = shownIn(event.body.text)
-  shownRead.set(event, made)
   return made
 }
 

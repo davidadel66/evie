@@ -1,7 +1,6 @@
 import { realpathSync } from "node:fs"
-import { open, readdir, readFile, realpath, stat } from "node:fs/promises"
+import { readdir, readFile, realpath, stat } from "node:fs/promises"
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path"
-import { KIND_HEAD, ownShownFolder, shownType } from "./shown.ts"
 import type { StorageEntry, StorageFile } from "./types.ts"
 
 // A workspace's Storage: what its project's `.evie/` folder holds, as a
@@ -83,11 +82,11 @@ export async function readStorage(project: string, path: string, dataFolder: str
 }
 
 // A file of a project's Storage to give to the page, by its path inside
-// the `.evie/` folder: where it really is, and the type it is shown as, or
-// nothing when it is not a file of a kind evie shows, or is anywhere that
-// `readStorage` refuses, which includes a link into the folder's own git
-// repository.
-export async function storageFileAt(project: string, path: string, dataFolder: string): Promise<{ file: string; type: string } | undefined> {
+// the `.evie/` folder: where it really is, or nothing when it is not there,
+// or is anywhere that `readStorage` refuses, which includes a link into the
+// folder's own git repository. What the file is, and so whether it may be
+// given, is for the one giving it to decide.
+export async function storageFileAt(project: string, path: string, dataFolder: string): Promise<string | undefined> {
   let at: string
   let evie: string | undefined
   try {
@@ -96,37 +95,7 @@ export async function storageFileAt(project: string, path: string, dataFolder: s
   } catch {
     return undefined
   }
-  if (relative(evie!, at).split(sep)[0] === OWN_GIT) return undefined
-  return shownFile(at)
-}
-
-// A file the show tool kept for a session in the data folder, by its full
-// path, as it told the model: where it really is, and the type it is shown
-// as, or nothing when it is anywhere but in the session's own folder, as
-// that folder really is, or is not a file of a kind evie shows. The folder
-// is refused as a whole when it, or the folder of every session's, is a link.
-export async function keptFileAt(session: string, path: string, dataFolder: string): Promise<{ file: string; type: string } | undefined> {
-  const data = realNow(dataFolder) ?? dataFolder
-  const own = ownShownFolder(data, session)
-  if (!isAbsolute(path) || realNow(join(data, "shown")) !== join(data, "shown") || realNow(own) !== own) return undefined
-  const at = await realOrNothing(path)
-  return at !== undefined && within(at, own) ? shownFile(at) : undefined
-}
-
-// A file, by where it really is, with the type it is shown as, read from
-// its opening, or nothing when it is not a file, or not of a kind evie shows.
-async function shownFile(at: string): Promise<{ file: string; type: string } | undefined> {
-  const facts = await stat(at).catch(() => undefined)
-  if (!facts?.isFile()) return undefined
-  const file = await open(at, "r")
-  try {
-    const head = new Uint8Array(Math.min(facts.size, KIND_HEAD))
-    const { bytesRead } = await file.read(head, 0, head.byteLength, 0)
-    const type = shownType(at, head.subarray(0, bytesRead))
-    return type === undefined ? undefined : { file: at, type }
-  } finally {
-    await file.close()
-  }
+  return relative(evie!, at).split(sep)[0] === OWN_GIT ? undefined : at
 }
 
 // The project's `.evie/` folder as it really is, or nothing when there is

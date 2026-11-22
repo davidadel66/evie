@@ -1,5 +1,5 @@
 import type { Evie, EventBodies, EvieEvent, ToolCall } from "../core/types.ts"
-import { shownIn } from "../plugins/show/record.ts"
+import { shownFiles } from "../plugins/show/record.ts"
 
 export type TerminalOptions = {
   // The client interface. The terminal uses nothing else of Evie.
@@ -184,10 +184,11 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     if (event.type === "tool_result") {
       // A file evie showed, which the web app draws, is named here on a
       // line of its own, with the folder it is kept in.
-      const shown = event.body.name === "show" ? shownIn(event.body.text) : []
+      const shown = event.body.name === "show" ? shownFiles(event.body.details) : []
       for (const file of shown) {
-        const cut = file.path.lastIndexOf("/") + 1
-        line(`  ⎿ Shown ${file.path.slice(cut)}, in ${file.path.slice(0, cut)}`)
+        const told = file.storage === "project" ? `.evie/${file.path}` : file.path
+        const cut = told.lastIndexOf("/") + 1
+        line(`  ⎿ Shown ${told.slice(cut)}, in ${told.slice(0, cut)}`)
       }
       const lines = event.body.text.split("\n")
       const more = lines.length > 1 ? ` (+${lines.length - 1} more lines)` : ""

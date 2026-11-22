@@ -35,7 +35,9 @@ async function start() {
     await writeFile(join(folder, name), bytes)
     return join(folder, name)
   }
-  return { run, home, folder, call, put }
+  // The details the last call gave, which the log keeps for clients.
+  const details = () => stored(run.events).findLast((event) => event.type === "tool_result")?.body.details
+  return { run, home, folder, call, put, details }
 }
 
 const bytes = (text: string) => new TextEncoder().encode(text)
@@ -53,7 +55,7 @@ const svg = () => bytes('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10
 
 test("a file's kind is read from its bytes, and a text kind's from its name: pictures, SVG, PDF and Markdown", async () => {
   setSystemTime(new Date(2026, 10, 22, 9, 30))
-  const { call, put } = await start()
+  const { call, put, details } = await start()
   await put("out/chart.png", png())
   await put("out/photo", jpeg())
   await put("design/logo.svg", svg())
@@ -66,13 +68,23 @@ test("a file's kind is read from its bytes, and a text kind's from its name: pic
     [
       "Shown to the owner under your reply, in this order:",
       '- ".evie/shown/2026-11-22/chart.png" (image/png, 33 bytes), copied from out/chart.png',
-      '- ".evie/shown/2026-11-22/photo" (image/jpeg, 23 bytes), copied from out/photo',
+      '- ".evie/shown/2026-11-22/photo.jpg" (image/jpeg, 23 bytes), copied from out/photo',
       '- ".evie/shown/2026-11-22/logo.svg" (image/svg+xml, 82 bytes), copied from design/logo.svg',
       '- ".evie/shown/2026-11-22/card.pdf" (application/pdf, 57 bytes), copied from out/card.pdf',
       '- ".evie/shown/2026-11-22/guide.md" (text/markdown, 29 bytes), copied from docs/guide.md',
       "Each copy stays as it is now. To show a later version, call show again.",
     ].join("\n"),
   )
+  // The same files, for clients, beside the text.
+  expect(details()).toEqual({
+    files: [
+      { storage: "project", path: "shown/2026-11-22/chart.png", type: "image/png", size: 33, from: "out/chart.png" },
+      { storage: "project", path: "shown/2026-11-22/photo.jpg", type: "image/jpeg", size: 23, from: "out/photo" },
+      { storage: "project", path: "shown/2026-11-22/logo.svg", type: "image/svg+xml", size: 82, from: "design/logo.svg" },
+      { storage: "project", path: "shown/2026-11-22/card.pdf", type: "application/pdf", size: 57, from: "out/card.pdf" },
+      { storage: "project", path: "shown/2026-11-22/guide.md", type: "text/markdown", size: 29, from: "docs/guide.md" },
+    ],
+  })
 })
 
 test("each call keeps a new copy under the day, so an earlier reply keeps the version it showed; a name taken gets a number", async () => {

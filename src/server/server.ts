@@ -1,6 +1,7 @@
 import type { HTMLBundle, ServerWebSocket } from "bun"
 import { randomBytes } from "node:crypto"
 import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent, type StorageFiles } from "../core/types.ts"
+import { keptFileAt, typeOfFile } from "../plugins/show/files.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
 import type { WebApp } from "./web-app.ts"
 import { DROPPED, hostInAddress, onThisComputer, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
@@ -43,9 +44,12 @@ export type ServerOptions = {
   // What keeps the files attached to messages, which a signed-in client
   // sends over HTTP. Without it, the attachments route refuses them.
   attachments?: Attachments
-  // What gives Storage's files to the page, to draw them. Without it, the
-  // storage route has none to give.
+  // What finds a project's Storage files, for the storage route to give to
+  // the page, to draw them. Without it, the route has none of them to give.
   storage?: StorageFiles
+  // The data folder, where the show tool keeps what a session with no
+  // project shows. Without it, the storage route gives none of those.
+  dataFolder?: string
 }
 
 export type EvieServer = {
@@ -377,24 +381,27 @@ export function startServer(options: ServerOptions): EvieServer {
   }
 
   // A Storage file, given to a signed-in client to draw, as the show tool's
-  // files are drawn and Storage opens them. Only a file of a kind evie
-  // shows is given, as that kind, and the browser is told not to take it
-  // for anything else, nor to run anything in it, nor to let a page of
-  // another site frame it. Chrome's own PDF view still draws a PDF sent so,
-  // framed or opened by itself, and an SVG is drawn as an image, which
-  // never runs its scripts. A file can change in Storage, so the browser
-  // asks again each time it is drawn anew.
+  // files are drawn and Storage opens them: one in a project's `.evie`
+  // folder, by its path inside it, or one the show tool kept for a session
+  // with no project, by its full path. Only a file of a kind evie shows
+  // (the show plugin's list, which is the route's too) is given, as that
+  // kind, and the browser is told not to take it for anything else, nor to
+  // run anything in it, nor to let a page of another site frame it. Chrome's
+  // own PDF view still draws a PDF sent so, framed or opened by itself, and
+  // an SVG is drawn as an image, which never runs its scripts. A file can
+  // change in Storage, so the browser asks again each time it is drawn anew.
   async function storageFile(request: Request, port: number): Promise<Response> {
     const admitted = admit(request, port)
     if (admitted instanceof Response) return admitted
     const asked = new URL(request.url).searchParams
     const [project, session, path] = [asked.get("project"), asked.get("session"), asked.get("path")]
     if (path === null || (project === null) === (session === null)) return new Response("Name the file, as /storage?project=<id>&path=<its path in .evie>, or /storage?session=<id>&path=<its full path>.", { status: 400 })
-    const found = await options.storage?.open(project !== null ? { project, path } : { session: session!, path })
-    if (found === undefined) return new Response("There is no file there that evie shows.", { status: 404 })
-    return new Response(Bun.file(found.file), {
+    const file = project !== null ? await options.storage?.open(project, path) : options.dataFolder !== undefined ? await keptFileAt(options.dataFolder, session!, path) : undefined
+    const type = file === undefined ? undefined : await typeOfFile(file)
+    if (file === undefined || type === undefined) return new Response("There is no file there that evie shows.", { status: 404 })
+    return new Response(Bun.file(file), {
       headers: {
-        "Content-Type": found.type.startsWith("text/") ? `${found.type}; charset=utf-8` : found.type,
+        "Content-Type": type.startsWith("text/") ? `${type}; charset=utf-8` : type,
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "default-src 'none'; frame-ancestors 'self'; sandbox",
         "Cache-Control": "private, no-cache",

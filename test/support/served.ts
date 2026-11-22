@@ -50,6 +50,7 @@ export async function serveEvie(
     ...(options.signInCodeLasts !== undefined && { signInCodeLasts: options.signInCodeLasts }),
     attachments: run.evie.attachments,
     storage: run.evie.storage,
+    dataFolder: run.home,
   })
   const clients: { close(): Promise<void> }[] = []
   return {

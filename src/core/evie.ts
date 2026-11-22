@@ -14,8 +14,7 @@ import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "
 import { createQuestions } from "./questions.ts"
 import { createAttachments } from "./attachments.ts"
 import { listProjectFiles } from "./project-files.ts"
-import { ownShownFolder } from "./shown.ts"
-import { keptFileAt, listStorage, readStorage, storageFileAt } from "./storage.ts"
+import { listStorage, readStorage, storageFileAt } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
 import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider, SettingsEditor } from "./types.ts"
@@ -818,8 +817,6 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       await rm(folder, { recursive: true, force: true }).catch((cause) => leftOver.push(`The saved output and job records in ${folder} could not be removed: ${reasonOf(cause)}`))
       const attached = join(home, "attachments", id)
       await rm(attached, { recursive: true, force: true }).catch((cause) => leftOver.push(`The files attached in ${attached} could not be removed: ${reasonOf(cause)}`))
-      const shown = ownShownFolder(home, id)
-      await rm(shown, { recursive: true, force: true }).catch((cause) => leftOver.push(`The files shown in ${shown} could not be removed: ${reasonOf(cause)}`))
       for (const scope of scopes) leftOver.push(...(await scope.hooks.sessionDeleted(id)))
     }
     return { leftOver: [...new Set(leftOver)] }
@@ -1100,12 +1097,9 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   return {
     attachments,
     storage: {
-      async open(asked) {
-        if ("project" in asked) {
-          const project = typeof asked.project === "string" ? projects.get(asked.project) : undefined
-          return project && typeof asked.path === "string" ? storageFileAt(project.folder, asked.path, home) : undefined
-        }
-        return projects.projectOf(asked.session) !== undefined && typeof asked.path === "string" ? keptFileAt(asked.session, asked.path, home) : undefined
+      async open(id, path) {
+        const project = typeof id === "string" ? projects.get(id) : undefined
+        return project && typeof path === "string" ? storageFileAt(project.folder, path, home) : undefined
       },
     },
     async send(command) {
