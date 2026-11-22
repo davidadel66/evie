@@ -66,3 +66,45 @@ function whole(old: string, now: string): { hunks: { oldStart: number; oldLines:
   const marked = [...lines.map((line) => sign + line), ...(ended ? [] : ["\\ No newline at end of file"])]
   return { hunks: [{ oldStart: 1, oldLines: old === "" ? 0 : lines.length, newStart: 1, newLines: old === "" ? lines.length : 0, lines: marked }] }
 }
+
+// The same, worked out on a thread of its own when lines have to be
+// compared, so that a long comparison does not hold up the server, whose
+// one thread serves every session. What needs no comparing, such as a
+// binary file, one too large, or one added or removed whole, is answered
+// here. Should the thread fail, the file is compared here instead.
+export async function compareApart(path: string, before: Uint8Array | null | undefined, after: Uint8Array | null | undefined, options: { patch: boolean }): Promise<FileDiff | undefined> {
+  const quick = before == null || after == null || before.length === 0 || after.length === 0 || before.length > LARGEST || after.length > LARGEST || isBinary(before) || isBinary(after)
+  if (quick || Buffer.from(before).equals(after)) return compare(path, before, after, options)
+  try {
+    return await onThread(path, before, after, options.patch)
+  } catch {
+    return compare(path, before, after, options)
+  }
+}
+
+let thread: Worker | undefined
+const waiting = new Map<number, { resolve(file: FileDiff | undefined): void; reject(cause: unknown): void }>()
+let asked = 0
+function onThread(path: string, before: Uint8Array, after: Uint8Array, patch: boolean): Promise<FileDiff | undefined> {
+  if (thread === undefined) {
+    const made = new Worker(new URL("./diff-worker.ts", import.meta.url).href)
+    // The thread is no reason on its own to keep the server running.
+    made.unref()
+    made.onmessage = (event: MessageEvent<{ id: number; file: FileDiff | undefined }>) => {
+      waiting.get(event.data.id)?.resolve(event.data.file)
+      waiting.delete(event.data.id)
+    }
+    made.onerror = (event) => {
+      // Every comparison waiting on it is made here instead, and the next starts a new thread.
+      thread = undefined
+      for (const each of waiting.values()) each.reject(event)
+      waiting.clear()
+    }
+    thread = made
+  }
+  const id = ++asked
+  return new Promise((resolve, reject) => {
+    waiting.set(id, { resolve, reject })
+    thread!.postMessage({ id, path, before, after, patch })
+  })
+}

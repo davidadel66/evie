@@ -23,7 +23,7 @@ export type Changes = {
 const NOT_CONNECTED = "Not connected to evie's server."
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
 
-function openChanges(connection: Connection, session: string, conversation: Conversation): Changes & { close(): void } {
+function openChanges(connection: Connection, session: string, conversation: Conversation): Changes & { close(): void; whole(wanted: boolean): void } {
   let state: ChangesState = { listed: undefined, problem: undefined }
   const listeners = new Set<() => void>()
   const set = (next: Partial<ChangesState>) => {
@@ -35,11 +35,17 @@ function openChanges(connection: Connection, session: string, conversation: Conv
     return now.status === "connected" ? now.evie : undefined
   }
 
-  // What the list was last read for: the client, and the number of the
-  // last event that can change it. Read one at a time, and once more after
-  // one asked for while another was out.
+  // What the list was last asked for: on which client, at the number of
+  // the last event that can change it, and whether with the whole
+  // session's files. It is asked for again only when one of them changes,
+  // or the line comes back, whether or not it could be read: one that
+  // failed is not asked for again as each word of a reply streams in.
+  // Read one at a time, and once more after one asked for while another
+  // was out.
   let readOn: Evie | undefined
   let readAt = -1
+  let readWhole = false
+  let wantWhole = false
   let listing = false
   let again = false
   async function list() {
@@ -47,7 +53,7 @@ function openChanges(connection: Connection, session: string, conversation: Conv
     const evie = client()
     if (closed || !now.opened || evie === undefined) return
     const at = now.events.findLast((event) => event.type === "turn_end" || event.type === "note")?.seq ?? 0
-    if (evie === readOn && at === readAt) return
+    if (evie === readOn && at === readAt && (readWhole || !wantWhole)) return
     if (listing) {
       again = true
       return
@@ -55,12 +61,13 @@ function openChanges(connection: Connection, session: string, conversation: Conv
     listing = true
     readOn = evie
     readAt = at
+    readWhole = wantWhole
     try {
-      const listed = await evie.send({ type: "list_changes", session })
+      const listed = await evie.send({ type: "list_changes", session, ...(wantWhole && { whole: true }) })
       if (!closed) set({ listed, problem: undefined })
     } catch (cause) {
-      // Tried again with the next turn's end, or when the line is back.
-      readOn = undefined
+      // What was listed before is kept, and the list is asked for again
+      // at the next turn's end, or when the line is back.
       if (!closed) set({ problem: `What changed could not be listed: ${wordsOf(cause)}` })
     } finally {
       listing = false
@@ -71,8 +78,15 @@ function openChanges(connection: Connection, session: string, conversation: Conv
     }
   }
   let closed = false
+  let status = connection.state().status
   const unfollow = conversation.subscribe(() => void list())
-  const unconnect = connection.subscribe(() => void list())
+  const unconnect = connection.subscribe(() => {
+    const now = connection.state().status
+    // Back after a drop: what was missed is listed again.
+    if (now === "connected" && status !== "connected") readOn = undefined
+    status = now
+    void list()
+  })
   void list()
 
   return {
@@ -97,25 +111,31 @@ function openChanges(connection: Connection, session: string, conversation: Conv
       unfollow()
       unconnect()
     },
+    whole(wanted) {
+      wantWhole = wanted
+      void list()
+    },
   }
 }
 
 // A session's changes are followed once on a connection however many parts
 // of the page show them: the conversation's changed-files lines, the
 // project card and the diff panel. Each holds them while it shows them;
-// once none does, they are no longer followed.
-const held = new WeakMap<Connection, Map<string, { changes: ReturnType<typeof openChanges>; release(): void; holders: number }>>()
+// once none does, they are no longer followed. The whole session's files
+// are listed while a holder asks for them (`whole`), as the card does.
+const held = new WeakMap<Connection, Map<string, { changes: ReturnType<typeof openChanges>; release(): void; holders: number; whole: number }>>()
 
-export function holdChanges(connection: Connection, session: string): { changes: Changes; release(): void } {
+export function holdChanges(connection: Connection, session: string, options: { whole?: boolean } = {}): { changes: Changes; release(): void } {
   const open = held.get(connection) ?? held.set(connection, new Map()).get(connection)!
   let entry = open.get(session)
   if (entry === undefined) {
     const conversation = holdConversation(connection, session)
-    entry = { changes: openChanges(connection, session, conversation.conversation), release: conversation.release, holders: 0 }
+    entry = { changes: openChanges(connection, session, conversation.conversation), release: conversation.release, holders: 0, whole: 0 }
     open.set(session, entry)
   }
   const kept = entry
   kept.holders += 1
+  if (options.whole && ++kept.whole === 1) kept.changes.whole(true)
   let released = false
   return {
     changes: kept.changes,
@@ -123,6 +143,7 @@ export function holdChanges(connection: Connection, session: string): { changes:
       if (released) return
       released = true
       kept.holders -= 1
+      if (options.whole && --kept.whole === 0) kept.changes.whole(false)
       if (kept.holders > 0) return
       open.delete(session)
       kept.changes.close()

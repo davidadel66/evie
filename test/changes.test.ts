@@ -100,7 +100,7 @@ test("the whole session runs from before each file's first change to the file as
     { path: "a.md", status: "changed", added: 1, removed: 1, patch: "@@ -1,1 +1,1 @@\n-1\n+4\n" },
     { path: "b.md", status: "added", added: 1, removed: 0, patch: "@@ -0,0 +1,1 @@\n+b\n" },
   ])
-  const listed = await run.evie.send({ type: "list_changes", session: run.session })
+  const listed = await run.evie.send({ type: "list_changes", session: run.session, whole: true })
   expect(listed.session).toEqual([
     { path: "a.md", status: "changed", added: 1, removed: 1 },
     { path: "b.md", status: "added", added: 1, removed: 0 },
@@ -140,7 +140,7 @@ test("without undo, nothing keeps the files turns change, and the list says so",
   const { run } = await start(turn(write("new.md", "fresh\n")), {}, { undo: false })
   await say(run, "make it")
 
-  expect(await run.evie.send({ type: "list_changes", session: run.session })).toEqual({ kept: false, latest: 1, turns: [], session: [] })
+  expect(await run.evie.send({ type: "list_changes", session: run.session, whole: true })).toEqual({ kept: false, latest: 1, turns: [], session: [] })
   expect(await run.evie.send({ type: "read_changes", session: run.session, of: "turn", turn: 1 })).toEqual({ files: [] })
 })
 
@@ -318,4 +318,35 @@ test("without a base, a branch is compared with the base of its pull request, as
 
   const read = await run.evie.send({ type: "read_changes", session: run.session, of: "branch" })
   expect(read.base).toBe("dev")
+})
+
+test("a finished turn's files are read and compared once, and the whole session only when it is asked for", async () => {
+  const read: number[] = []
+  let projectFolder = ""
+  const keeper: Plugin = {
+    name: "keeper",
+    setup(host) {
+      host.changes.add({
+        name: "keeper",
+        turns: async () => [{ turn: 1, paths: [join(projectFolder, "a.md")] }],
+        files: async (_session, turn) => {
+          read.push(turn)
+          return [{ path: join(projectFolder, "a.md"), before: Buffer.from("1\n"), after: Buffer.from("2\n") }]
+        },
+      })
+    },
+  }
+  const started = await start([{ text: ["Nothing to do."] }], { "a.md": "2\n" }, { undo: false, plugins: [keeper] })
+  projectFolder = started.projectFolder
+  const { run } = started
+  await say(run, "a turn")
+
+  const once = await run.evie.send({ type: "list_changes", session: run.session })
+  const twice = await run.evie.send({ type: "list_changes", session: run.session })
+  expect(twice.turns).toEqual(once.turns)
+  expect(once.turns[0]?.files).toEqual([{ path: "a.md", status: "changed", added: 1, removed: 1 }])
+  expect(read).toEqual([1])
+  // The whole session is left out until it is asked for.
+  expect(once.session).toBeUndefined()
+  expect((await run.evie.send({ type: "list_changes", session: run.session, whole: true })).session).toEqual([{ path: "a.md", status: "changed", added: 1, removed: 1 }])
 })

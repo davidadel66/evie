@@ -402,12 +402,15 @@ export type SlashCommand = {
 
 // What a plugin knows of the files a session's turns changed, such as undo
 // from the copies it keeps. `turns` gives each turn that changed any, by
-// its number in the session, counted from 1, oldest first.
+// its number in the session, counted from 1, oldest first, with the full
+// paths of the files it changed, and reads none of them. `files` gives one
+// turn's files, with what each held before the turn and what it left.
 export type ChangeKeeper = {
   name: string
   turns(session: string): Promise<KeptTurn[]>
+  files(session: string, turn: number): Promise<KeptFile[]>
 }
-export type KeptTurn = { turn: number; files: KeptFile[] }
+export type KeptTurn = { turn: number; paths: string[] }
 // A file a turn changed, by its full path: what it held before the turn,
 // and what the turn left in it. Each is null when there was no file, and
 // undefined when it is not known, as when the file has changed since and
@@ -800,13 +803,14 @@ export type Commands = {
   }
   // What an open session's turns changed with Evie's file tools: each turn
   // that changed a file, oldest first; `latest`, the number of its latest
-  // turn, 0 before it has one; and `session`, every file its turns changed,
-  // from before the first change to it to the file as it is now. `kept`
-  // says whether a plugin keeps the files turns change at all: without one,
+  // turn, 0 before it has one; and with `whole`, `session`, every file its
+  // turns changed, from before the first change to it to the file as it is
+  // now, which is worked out only when it is asked for. `kept` says
+  // whether a plugin keeps the files turns change at all: without one,
   // such as undo, nothing is listed.
   list_changes: {
-    input: { session: string }
-    output: { kept: boolean; latest: number; turns: TurnChanges[]; session: ChangedFile[] }
+    input: { session: string; whole?: boolean }
+    output: { kept: boolean; latest: number; turns: TurnChanges[]; session?: ChangedFile[] }
   }
   // The diff of what changed, for an open session: in one of its turns; in
   // the whole session, as `list_changes` gives it; or in its project's git

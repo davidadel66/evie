@@ -1,8 +1,8 @@
 import { lstat, readFile, readlink } from "node:fs/promises"
 import { isAbsolute, relative } from "node:path"
-import { compare } from "./diff.ts"
+import { compareApart } from "./diff.ts"
 import { inGit } from "./projects.ts"
-import type { ChangedFile, ChangeKeeper, Commands, FileDiff, KeptTurn, Project, StoredEvent } from "./types.ts"
+import type { ChangedFile, ChangeKeeper, Commands, FileDiff, Project, StoredEvent, TurnChanges } from "./types.ts"
 
 // What a session changed, as the `list_changes` and `read_changes` commands
 // give it: by turn and for the whole session, from the files a plugin
@@ -40,15 +40,6 @@ function turnsIn(events: readonly StoredEvent[]): { start: StoredEvent; end?: St
   return turns
 }
 
-// Every file the turns changed, each from what it held before the first
-// turn that changed it to what it holds now.
-async function sessionFiles(kept: readonly KeptTurn[], project: Project | null, options: { patch: boolean }): Promise<FileDiff[]> {
-  const first = new Map<string, Uint8Array | null | undefined>()
-  for (const { files } of kept) for (const file of files) if (!first.has(file.path)) first.set(file.path, file.before)
-  const files = await Promise.all([...first].map(async ([path, before]) => compare(shown(path, project), before, await contentsNow(path), options)))
-  return files.filter((file) => file !== undefined)
-}
-
 const summed = ({ patch: _, ...file }: FileDiff): ChangedFile => file
 
 // The most diff text one answer carries. The files past it are too large
@@ -63,28 +54,82 @@ function capped(files: FileDiff[]): FileDiff[] {
   })
 }
 
-export async function listChanges(keeper: ChangeKeeper | undefined, session: string, events: readonly StoredEvent[], project: Project | null): Promise<Commands["list_changes"]["output"]> {
-  const turns = turnsIn(events)
-  const kept = keeper === undefined ? [] : await keeper.turns(session)
-  const listed = kept.flatMap(({ turn, files }) => {
-    const known = turns[turn - 1]
-    if (known === undefined) return []
-    const changed = files.flatMap((file) => compare(shown(file.path, project), file.before, file.after, { patch: false }) ?? [])
-    if (changed.length === 0) return []
-    const { start, end } = known
-    return [{ turn, start: start.seq, ...(end !== undefined && { end: end.seq }), time: (end ?? start).time, files: changed }]
-  })
-  return { kept: keeper !== undefined, latest: turns.length, turns: listed, session: (await sessionFiles(kept, project, { patch: false })).map(summed) }
-}
+// A file past the most one comparison reads, listed by its path alone.
+const tooManyAt = (path: string): FileDiff => ({ path, status: "changed", added: 0, removed: 0, tooMany: true })
 
-export async function readTurn(keeper: ChangeKeeper | undefined, session: string, turn: number, project: Project | null): Promise<FileDiff[]> {
-  const kept = keeper === undefined ? [] : await keeper.turns(session)
-  const files = kept.find((each) => each.turn === turn)?.files ?? []
-  return capped(files.flatMap((file) => compare(shown(file.path, project), file.before, file.after, { patch: true }) ?? []))
-}
+// What the turns of sessions changed, from what a plugin keeps of them,
+// such as undo's copies. A turn that has ended changes no more, so what it
+// changed is worked out once and kept, for the sessions used last; the
+// turn running now is worked out each time it is asked for. A turn undone
+// is no longer kept by the plugin, and so no longer listed.
+export function createTurnChanges() {
+  type Kept = { paths: string; files: ChangedFile[] }
+  const sessions = new Map<string, Map<number, Kept>>()
+  // How many sessions' turns are kept.
+  const SESSIONS = 100
+  function keptFor(session: string): Map<number, Kept> {
+    const kept = sessions.get(session) ?? new Map<number, Kept>()
+    // The latest used goes last, so the first is the one used longest ago.
+    sessions.delete(session)
+    sessions.set(session, kept)
+    if (sessions.size > SESSIONS) sessions.delete(sessions.keys().next().value!)
+    return kept
+  }
 
-export async function readSession(keeper: ChangeKeeper | undefined, session: string, project: Project | null): Promise<FileDiff[]> {
-  return capped(await sessionFiles(keeper === undefined ? [] : await keeper.turns(session), project, { patch: true }))
+  // One turn's files, compared, with their diffs or only how many lines.
+  async function turnFiles(keeper: ChangeKeeper, session: string, turn: number, project: Project | null, options: { patch: boolean }): Promise<FileDiff[]> {
+    const files = await keeper.files(session, turn)
+    const compared = await fewAtOnce(files.slice(0, MOST_FILES), (file) => compareApart(shown(file.path, project), file.before, file.after, options))
+    return [...compared.filter((file) => file !== undefined), ...files.slice(MOST_FILES).map((file) => tooManyAt(shown(file.path, project)))]
+  }
+
+  // Every file the turns changed, each from what it held before the first
+  // turn that changed it to what it holds now.
+  async function sessionFiles(keeper: ChangeKeeper, session: string, project: Project | null, options: { patch: boolean }): Promise<FileDiff[]> {
+    const first = new Map<string, number>()
+    for (const { turn, paths } of await keeper.turns(session)) for (const path of paths) if (!first.has(path)) first.set(path, turn)
+    const paths = [...first.keys()]
+    const read = paths.slice(0, MOST_FILES)
+    const turns = new Map<number, Map<string, Uint8Array | null | undefined>>()
+    for (const turn of new Set(read.map((path) => first.get(path)!))) {
+      turns.set(turn, new Map((await keeper.files(session, turn)).map((file) => [file.path, file.before])))
+    }
+    const compared = await fewAtOnce(read, async (path) => compareApart(shown(path, project), turns.get(first.get(path)!)!.get(path), await contentsNow(path), options))
+    return [...compared.filter((file) => file !== undefined), ...paths.slice(MOST_FILES).map((path) => tooManyAt(shown(path, project)))]
+  }
+
+  return {
+    async list(keeper: ChangeKeeper | undefined, session: string, events: readonly StoredEvent[], project: Project | null, whole: boolean): Promise<Commands["list_changes"]["output"]> {
+      const turns = turnsIn(events)
+      const listed: TurnChanges[] = []
+      const kept = keptFor(session)
+      const present = keeper === undefined ? [] : await keeper.turns(session)
+      for (const { turn, paths } of present) {
+        const known = turns[turn - 1]
+        if (known === undefined) continue
+        const { start, end } = known
+        const key = paths.join("\0")
+        let files = kept.get(turn)?.paths === key ? kept.get(turn)!.files : undefined
+        if (files === undefined) {
+          files = (await turnFiles(keeper!, session, turn, project, { patch: false })).map(summed)
+          if (end !== undefined) kept.set(turn, { paths: key, files })
+        }
+        if (files.length > 0) listed.push({ turn, start: start.seq, ...(end !== undefined && { end: end.seq }), time: (end ?? start).time, files })
+      }
+      // Turns no longer kept, as when they are undone, are forgotten.
+      for (const turn of kept.keys()) if (!present.some((each) => each.turn === turn)) kept.delete(turn)
+      const output = { kept: keeper !== undefined, latest: turns.length, turns: listed }
+      if (!whole) return output
+      return { ...output, session: keeper === undefined ? [] : (await sessionFiles(keeper, session, project, { patch: false })).map(summed) }
+    },
+    async turn(keeper: ChangeKeeper | undefined, session: string, turn: number, project: Project | null): Promise<FileDiff[]> {
+      if (keeper === undefined || !(await keeper.turns(session)).some((each) => each.turn === turn)) return []
+      return capped(await turnFiles(keeper, session, turn, project, { patch: true }))
+    },
+    async session(keeper: ChangeKeeper | undefined, session: string, project: Project | null): Promise<FileDiff[]> {
+      return keeper === undefined ? [] : capped(await sessionFiles(keeper, session, project, { patch: true }))
+    },
+  }
 }
 
 // The most files one comparison reads and compares. Those past it are
@@ -175,7 +220,7 @@ async function sinceCommit(folder: string, commit: string): Promise<FileDiff[]> 
   const compared = await fewAtOnce(read, async (path): Promise<FileDiff | undefined> => {
     const { status, submodule } = files.get(path)!
     if (submodule) return { path, status, added: 0, removed: 0, unknown: true, submodule: true }
-    return compare(path, status === "added" ? null : committed.get(path), status === "removed" ? null : await contentsNow(`${folder}/${path}`), { patch: true })
+    return compareApart(path, status === "added" ? null : committed.get(path), status === "removed" ? null : await contentsNow(`${folder}/${path}`), { patch: true })
   })
   const tooMany = paths.slice(MOST_FILES).map((path): FileDiff => ({ path, status: files.get(path)!.status, added: 0, removed: 0, tooMany: true }))
   return capped([...compared.filter((file) => file !== undefined), ...tooMany])

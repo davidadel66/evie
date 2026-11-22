@@ -187,7 +187,8 @@ function SessionCard({
   useEffect(() => {
     const held = holdConversation(connection, session)
     const lineage = followSubagents(connection, session)
-    const changes = holdChanges(connection, session)
+    // With the whole session's files, which the card sums up.
+    const changes = holdChanges(connection, session, { whole: true })
     setFollowed({ conversation: held.conversation, lineage, changes: changes.changes })
     return () => {
       changes.release()

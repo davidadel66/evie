@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { listChanges, readBranch, readSession, readTurn, readUncommitted } from "./changes.ts"
+import { createTurnChanges, readBranch, readUncommitted } from "./changes.ts"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
@@ -838,15 +838,16 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // What an open session's turns changed, from what its plugins keep of
   // them, such as undo's copies, and with git, what its project's
   // repository holds that is not committed, or on its branch.
+  const turnChanges = createTurnChanges()
   async function readChanges(input: Commands["read_changes"]["input"]): Promise<Commands["read_changes"]["output"]> {
     const { host, project } = open(input.session)
     const keeper = host.changes.list()[0]
     switch (input.of) {
       case "turn":
         if (!Number.isInteger(input.turn) || input.turn < 1) throw new Error("`turn` is the number of a turn in the session, from 1.")
-        return { files: await readTurn(keeper, input.session, input.turn, project) }
+        return { files: await turnChanges.turn(keeper, input.session, input.turn, project) }
       case "session":
-        return { files: await readSession(keeper, input.session, project) }
+        return { files: await turnChanges.session(keeper, input.session, project) }
       case "uncommitted":
         return readUncommitted(project)
       case "branch":
@@ -1040,7 +1041,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return listSubagents(command) as Output
         case "list_changes": {
           const { host, project } = open(command.session)
-          return (await listChanges(host.changes.list()[0], command.session, log.events(command.session), project)) as Output
+          return (await turnChanges.list(host.changes.list()[0], command.session, log.events(command.session), project, command.whole === true)) as Output
         }
         case "read_changes":
           return (await readChanges(command)) as Output
