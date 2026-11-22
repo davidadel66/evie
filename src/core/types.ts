@@ -344,6 +344,10 @@ export type ToolContext = {
   signal: AbortSignal
   // The id of the tool call being run.
   callId: string
+  // The session the call is made in, for a tool that keeps something for
+  // it, as the show tool keeps the files it shows in a session with no
+  // project.
+  session: string
   // The folder of the session's project, or null in the general session,
   // which has no project.
   folder: string | null
