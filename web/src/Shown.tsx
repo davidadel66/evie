@@ -4,7 +4,7 @@ import { flushSync } from "react-dom"
 import { Back, CaretDown, Download, FullScreen, InStorage, KindImage, KindMarkdown, KindPdf, KindVector, Next, Previous } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { renderMarkdown } from "./markdown.ts"
-import { isImage, viewerOf, type Shown, type Viewer } from "./shown.ts"
+import { isImage, placeIn, stepFrom, viewerOf, type Shown, type Viewer } from "./shown.ts"
 import { addressOfWorkspace } from "./workspace.ts"
 
 // A file evie showed, drawn under its reply in a frame like the
@@ -238,16 +238,19 @@ function useText(address: string): { text?: string; failed?: true } {
 // it was clicked and back to fit, and while zoomed in, dragging or
 // scrolling moves around it. Escape, Back, or a click on the veil closes it.
 function FullScreenView({ file, gallery, close }: { file: Shown; gallery: readonly Shown[]; close(): void }) {
-  const images = isImage(file) && gallery.includes(file) ? gallery : [file]
-  const [at, setAt] = useState(Math.max(0, images.indexOf(file)))
+  // The image shown is held by its key, so that it stays shown as the
+  // gallery grows, as when the page before is read while it is open.
+  const [key, setKey] = useState(file.key)
+  const images = isImage(file) && gallery.some((image) => image.key === file.key) ? gallery : [file]
+  const current = images.find((image) => image.key === key) ?? file
+  const place = placeIn(images, current.key)
   const [zoomed, setZoomed] = useState(false)
   const zoomable = useRef<ZoomHandle>(null)
-  const current = images[((at % images.length) + images.length) % images.length]!
   const viewer = viewerOf(current.type)
   const Full = viewer === undefined ? undefined : KINDS[viewer].Full
-  const many = images.length > 1
+  const many = place.count > 1
   const move = (by: number) => {
-    setAt(at + by)
+    setKey(stepFrom(images, current.key, by))
     setZoomed(false)
   }
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -291,12 +294,12 @@ function FullScreenView({ file, gallery, close }: { file: Shown; gallery: readon
             ) : Full !== undefined ? (
               <Full file={current} address={current.address} />
             ) : (
-              <ZoomableImage key={`${at}:${current.address}`} ref={zoomable} file={current} address={current.address} onZoom={setZoomed} />
+              <ZoomableImage key={current.key} ref={zoomable} file={current} address={current.address} onZoom={setZoomed} />
             )}
             <p className="mt-2 flex max-w-full-width items-center gap-1.5 text-caption text-[rgba(255,255,255,0.8)]">
               <span aria-live="polite" aria-atomic="true" className="truncate">
                 {current.name}
-                {many ? ` (${images.indexOf(current) + 1}/${images.length})` : ""}
+                {many ? ` (${place.at}/${place.count})` : ""}
               </span>
               {isImage(current) && (
                 <>

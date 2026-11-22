@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import type { EventBodies, StoredEvent, StoredEventType, TurnChanges } from "../src/core/types.ts"
 import { shownText, type ShownFile } from "../src/plugins/show/record.ts"
-import { galleryOf, viewerOf } from "../web/src/shown.ts"
+import { galleryOf, placeIn, stepFrom, viewerOf, type Shown } from "../web/src/shown.ts"
 import { transcriptOf, type Item, type View } from "../web/src/transcript.ts"
 
 // What evie showed, as the page draws it, apart from its screen: each file
@@ -131,4 +131,20 @@ test("full screen moves through every image shown in the session, pictures and S
 
   expect(galleryOf(transcriptOf(view(events))).map((file) => file.name)).toEqual(["chart.png", "logo.svg"])
   expect(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml", "application/pdf", "text/markdown", "text/html"].map(viewerOf)).toEqual(["image", "image", "image", "image", "svg", "pdf", "markdown", undefined])
+})
+
+test("full screen keeps the image it shows by its key, so that a gallery that grows while it is open, as when the page before is read, does not move it", () => {
+  const image = (key: string): Shown => ({ key, path: `.evie/shown/${key}.png`, type: "image/png", name: `${key}.png`, folder: ".evie/shown/" })
+  const before = [image("b"), image("c")]
+  // The page before is read, and its images come first.
+  const grown = [image("a"), ...before, image("d")]
+
+  expect(placeIn(before, "c")).toEqual({ at: 2, count: 2 })
+  expect(placeIn(grown, "c")).toEqual({ at: 3, count: 4 })
+  expect(stepFrom(grown, "c", 1)).toBe("d")
+  expect(stepFrom(grown, "d", 1)).toBe("a")
+  expect(stepFrom(grown, "a", -1)).toBe("d")
+  // One no longer among them stands alone.
+  expect(placeIn(grown, "gone")).toEqual({ at: 1, count: 1 })
+  expect(stepFrom(grown, "gone", 1)).toBe("gone")
 })

@@ -61,6 +61,20 @@ export function storageShown(project: string, path: string): Shown | undefined {
   return type === undefined ? undefined : shownOf({ storage: "project", path, type, size: 0 }, `storage:${path}`, "", project)
 }
 
+// Where full screen stands in the images it moves through, by the key of
+// the one it shows, which holds as more are read: its place, counted from
+// 1, and how many there are; and the key of the one `by` places away,
+// round the ends. One no longer among them stands alone.
+export function placeIn(images: readonly Shown[], key: string): { at: number; count: number } {
+  const at = images.findIndex((image) => image.key === key)
+  return at === -1 ? { at: 1, count: 1 } : { at: at + 1, count: images.length }
+}
+export function stepFrom(images: readonly Shown[], key: string, by: number): string {
+  const at = images.findIndex((image) => image.key === key)
+  if (at === -1) return key
+  return images[(((at + by) % images.length) + images.length) % images.length]!.key
+}
+
 // Every image shown among what the page draws, in order, for full screen
 // to move through.
 export function galleryOf(items: readonly { kind: string; file?: Shown }[]): Shown[] {
