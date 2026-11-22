@@ -1,13 +1,14 @@
 import { expect, test } from "bun:test"
-import type { Job } from "../src/core/types.ts"
-import { backgroundJobs, branchWords, gitWhyNot, joinOutput, stateWord, subagentsOf, undoWhyNot } from "../web/src/project-card.ts"
+import type { GitStatus, Job } from "../src/core/types.ts"
+import { backgroundJobs, CARD_CLEARANCE, cardDensity, cardPlace, cardRoom, DETAILS_ITEMS, gitAction, gitMenu, gitWhyNot, isDefaultShown, joinOutput, keptChoices, LINEAGE_FIRST, LINEAGE_PAGE, lineageOf, lineageWindow, parentWord, sectionsShown, shownFrom, stateWord, subagentsOf, undoWhyNot } from "../web/src/project-card.ts"
 
-// The project card's rules, apart from its screen: how it says where the
-// project is, which of its actions apply and why not, and how it lists a
-// session's subagents and background jobs.
+// The session details' rules, apart from their screen: which of their
+// actions apply and why not, what the git button offers as the branch
+// stands, which sections show and where, and how they list a session's
+// subagents and background jobs.
 
 const repository = { id: "p1", name: "recipe-box", folder: "/Users/david/code/recipe-box", branch: "main", git: true }
-const idle = { connected: true, session: "open" as const, project: repository, turnRunning: false, requested: false }
+const idle = { connected: true, session: "open" as const, project: repository, turnRunning: false, requested: false, sending: false }
 
 test("commit, push and pull request apply in a git project while evie is not working, and say why not otherwise", () => {
   expect(gitWhyNot(idle)).toBeUndefined()
@@ -39,14 +40,6 @@ test("undo applies in any session while evie is not working, project or not", ()
   expect(undoWhyNot({ ...idle, project: null })).toBeUndefined()
   expect(undoWhyNot({ ...idle, turnRunning: true })).toBe("evie is working. Undo when it has finished.")
   expect(undoWhyNot({ ...idle, connected: false })).toBe("Not connected to evie's server.")
-})
-
-test("the branch row says the branch, or why there is none", () => {
-  const project = { id: "p1", name: "recipe-box", folder: "/code/recipe-box" }
-  expect(branchWords({ ...project, branch: "main", git: true })).toEqual({ text: "main", branch: true })
-  expect(branchWords({ ...project, git: true })).toEqual({ text: "No branch", branch: false })
-  expect(branchWords({ ...project, git: false })).toEqual({ text: "Not a git repository", branch: false })
-  expect(branchWords(project)).toEqual({ text: "Not known", branch: false })
 })
 
 const job = (id: string, status: Job["status"], extra: Partial<Job> = {}): Job => ({
@@ -83,10 +76,10 @@ test("a session's subagents are those stored, and any its jobs name that are not
     round("5", "stopped", "c3", "subagent: read the docs"),
   ]
   expect(subagentsOf(listed, jobs)).toEqual([
-    { session: "c3", name: "read the docs", status: "stopped", job: "5" },
+    { session: "c3", name: "read the docs", status: "stopped", job: "5", started: 5000 },
     { session: "c4", name: "Read the changelog.", status: "unknown" },
-    { session: "c2", name: "reviewer: look over the change", status: "failed", job: "3" },
-    { session: "c1", name: "find the tests", status: "running", job: "4" },
+    { session: "c2", name: "reviewer: look over the change", status: "failed", job: "3", started: 3000 },
+    { session: "c1", name: "find the tests", status: "running", job: "4", started: 4000 },
     { session: "c0", name: "One from before a restart.", status: "unknown" },
   ])
   expect(subagentsOf([{ session: "c5", name: null, started: 1 }], [])).toEqual([{ session: "c5", name: "Subagent", status: "unknown" }])
@@ -113,3 +106,234 @@ test("what is kept of a job's output is its latest 64 KiB of text, cut at a line
   expect(kept).toEqual({ text: `${"b".repeat(30_000)}\nc\n`, to: 70_004, cut: true })
 })
 
+
+// ---- The git button, as T3 Code's rule decides its label ------------------------
+
+// A feature branch with an upstream, level with it, a commit ahead of
+// main, with nothing to commit: the shape each case below changes.
+const branchStatus: GitStatus = {
+  branch: "feat/breads",
+  uncommitted: false,
+  remote: true,
+  upstream: { ahead: 0, behind: 0 },
+  main: { name: "main", on: false, ahead: 1 },
+  changes: { against: "main", added: 71, removed: 6 },
+  branches: ["feat/breads", "main"],
+}
+const openPull = { state: "open" } as const
+// A status without one of its fields, as when the branch has no upstream.
+function without(status: GitStatus, field: "upstream" | "branch"): GitStatus {
+  const { [field]: _left, ...rest } = status
+  return rest
+}
+
+test("with work to commit, the git button commits and pushes, and opens a pull request on a branch that has none", () => {
+  const dirty = { ...branchStatus, uncommitted: true }
+  expect(gitAction(dirty, null)).toEqual({ label: "Commit, push & PR", request: "commit, push and pull request" })
+  expect(gitAction(dirty, openPull)).toEqual({ label: "Commit & push", request: "commit and push" })
+  // On the main branch, no pull request is opened from it.
+  expect(gitAction({ ...dirty, main: { name: "main", on: true, ahead: 0 } }, null)).toEqual({ label: "Commit & push", request: "commit and push" })
+  // Behind its upstream, or with nowhere to push, it only commits.
+  expect(gitAction({ ...dirty, upstream: { ahead: 0, behind: 2 } }, openPull)).toEqual({ label: "Commit", request: "commit" })
+  expect(gitAction({ ...without(dirty, "upstream"), remote: false }, null)).toEqual({ label: "Commit", request: "commit" })
+})
+
+test("with nothing to commit, the git button pushes commits ahead of the upstream, and leads to a pull request on a branch that has none", () => {
+  const ahead = { ...branchStatus, upstream: { ahead: 2, behind: 0 } }
+  expect(gitAction(ahead, openPull)).toEqual({ label: "Push", request: "push" })
+  expect(gitAction({ ...ahead, main: { name: "main", on: true, ahead: 2 } }, null)).toEqual({ label: "Push", request: "push" })
+  // T3 Code's "Push & create PR", in the four words the drawing has.
+  expect(gitAction(ahead, null)).toEqual({ label: "Commit, push & PR", request: "commit, push and pull request" })
+  // A branch never pushed counts what it has that main does not.
+  expect(gitAction(without(branchStatus, "upstream"), null)).toEqual({ label: "Commit, push & PR", request: "commit, push and pull request" })
+  expect(gitAction({ ...without(branchStatus, "upstream"), main: { name: "main", on: false, ahead: 0 } }, null)).toEqual({
+    label: "Push",
+    request: "push",
+    why: "No commits to push.",
+  })
+  // Pushed, with commits main does not have and no pull request: T3 Code's "Create PR".
+  expect(gitAction(branchStatus, null)).toEqual({ label: "Commit, push & PR", request: "commit, push and pull request" })
+})
+
+test("when there is nothing the git button can do, it is off and says why, as T3 Code's does", () => {
+  const upToDate = "The branch is up to date. Nothing to do."
+  expect(gitAction(branchStatus, openPull)).toEqual({ label: "Commit", request: "commit", why: upToDate })
+  expect(gitAction({ ...branchStatus, main: { name: "main", on: true, ahead: 0 } }, null)).toEqual({ label: "Commit", request: "commit", why: upToDate })
+  expect(gitAction({ ...branchStatus, upstream: { ahead: 0, behind: 3 } }, null)).toEqual({ label: "Push", request: "push", why: "The branch is behind its remote. Pull before pushing." })
+  expect(gitAction({ ...branchStatus, upstream: { ahead: 1, behind: 3 } }, null)).toEqual({ label: "Push", request: "push", why: "The branch has gone apart from its remote. Rebase or merge first." })
+  expect(gitAction({ ...without(branchStatus, "upstream"), remote: false }, null)).toEqual({ label: "Push", request: "push", why: "The repository has no remote to push to." })
+  expect(gitAction({ ...without(branchStatus, "branch"), uncommitted: true }, null)).toEqual({ label: "Commit", request: "commit", why: "Check out a branch before committing or pushing." })
+  expect(gitAction(undefined, null)).toEqual({ label: "Commit", request: "commit", why: "Reading how the branch stands…" })
+})
+
+test("the git button's menu holds commit, push and a pull request, each off while it does not apply, saying why, and no pull request where one is open", () => {
+  const dirty = { ...branchStatus, uncommitted: true, upstream: { ahead: 1, behind: 0 } }
+  expect(gitMenu(dirty, null)).toEqual([
+    { label: "Commit", request: "commit" },
+    { label: "Push", request: "push" },
+    { label: "Create pull request", request: "pull request" },
+  ])
+  expect(gitMenu(dirty, openPull).map((item) => item.label)).toEqual(["Commit", "Push"])
+  expect(gitMenu(branchStatus, null)).toEqual([
+    { label: "Commit", request: "commit", why: "Nothing to commit: the folder has no changes." },
+    { label: "Push", request: "push", why: "No commits to push." },
+    { label: "Create pull request", request: "pull request" },
+  ])
+  const behind = gitMenu({ ...dirty, upstream: { ahead: 1, behind: 2 } }, null)
+  expect(behind.map((item) => item.why)).toEqual([undefined, "The branch is behind its remote. Pull before pushing.", "The branch is behind its remote. Pull before opening a pull request."])
+  // With nowhere to push, only a commit.
+  expect(gitMenu({ ...without(dirty, "upstream"), remote: false }, null)).toEqual([{ label: "Commit", request: "commit" }])
+  const detached = gitMenu(without(dirty, "branch"), null)
+  expect(detached.map((item) => item.why)).toEqual([undefined, "Check out a branch before pushing.", "Check out a branch before opening a pull request."])
+  expect(gitMenu({ ...branchStatus, main: { name: "main", on: false, ahead: 0 } }, null)[2]).toEqual({ label: "Create pull request", request: "pull request", why: "The branch has no commits that main does not." })
+  expect(gitMenu(undefined, null)).toEqual([])
+})
+
+// ---- What the card shows --------------------------------------------------------
+
+const everything = { workspace: true, undo: true, branch: true, git: true, changes: true, lineage: true, jobs: true }
+const full = { undo: true, git: true, sessionChanges: true, related: true, jobs: true }
+
+test("each section shows while one of its items is chosen and it has something to show, and none does when nothing would", () => {
+  const all = sectionsShown(everything, full, "full")
+  expect(all).toEqual({
+    project: true,
+    folder: true,
+    undo: true,
+    sessionChanges: false,
+    workspace: true,
+    branch: true,
+    gitButton: true,
+    changes: true,
+    versionControl: true,
+    lineage: true,
+    jobs: true,
+    nothing: false,
+  })
+  // A folder not in git has no version control, but the session's own changes, from undo's copies, when they are kept.
+  const plain = sectionsShown(everything, { ...full, git: false }, "full")
+  expect([plain.versionControl, plain.sessionChanges]).toEqual([false, true])
+  expect(sectionsShown(everything, { ...full, git: false, sessionChanges: false }, "full").sessionChanges).toBe(false)
+  expect(sectionsShown({ ...everything, changes: false }, { ...full, git: false }, "full").sessionChanges).toBe(false)
+  // No subagents, no lineage; no jobs, no background work.
+  expect(sectionsShown(everything, { ...full, related: false, jobs: false }, "full")).toMatchObject({ lineage: false, jobs: false })
+  // The workspace section holds the project and Undo, and shows for either.
+  expect(sectionsShown({ ...everything, workspace: false }, full, "full").workspace).toBe(true)
+  expect(sectionsShown({ ...everything, workspace: false }, { ...full, undo: false }, "full").workspace).toBe(false)
+  // Version control holds the branch, the git button and the changes, and shows for any of them.
+  expect(sectionsShown({ ...everything, branch: false, git: false }, full, "full").versionControl).toBe(true)
+  expect(sectionsShown({ ...everything, branch: false, git: false, changes: false }, full, "full").versionControl).toBe(false)
+  const none = { workspace: false, undo: false, branch: false, git: false, changes: false, lineage: false, jobs: false }
+  expect(sectionsShown(none, full, "full")).toMatchObject({ workspace: false, versionControl: false, lineage: false, jobs: false, nothing: true })
+})
+
+test("a card taller than its room drops to T3 Code's compact density, without the project, the git button, the lineage and background work, and to its essential one, without the folder too", () => {
+  expect(sectionsShown(everything, full, "compact")).toMatchObject({ project: false, folder: true, undo: true, branch: true, gitButton: false, changes: true, lineage: false, jobs: false })
+  expect(sectionsShown(everything, full, "essential")).toMatchObject({ project: false, folder: false, undo: true, branch: true, gitButton: false, changes: true, lineage: false, jobs: false })
+  // Each density as T3 Code picks it, by the heights measured of the full and the compact card: none measured yet counts as fitting.
+  expect(cardDensity(600, { full: 0, compact: 0 })).toBe("full")
+  expect(cardDensity(600, { full: 600, compact: 300 })).toBe("full")
+  expect(cardDensity(599, { full: 600, compact: 300 })).toBe("compact")
+  expect(cardDensity(299, { full: 600, compact: 0 })).toBe("compact")
+  expect(cardDensity(299, { full: 600, compact: 300 })).toBe("essential")
+})
+
+test("what the card shows is the default but for what this browser was told otherwise, and only what differs from the default is kept", () => {
+  expect(DETAILS_ITEMS.map((item) => item.label)).toEqual(["Project and folder", "Undo last change", "Branch and pull request", "Git actions", "Changes", "Lineage", "Background work"])
+  expect(shownFrom(undefined)).toEqual(everything)
+  expect(shownFrom('{"lineage":false}')).toEqual({ ...everything, lineage: false })
+  // What cannot be read, or names no item, is left out.
+  expect(shownFrom("not json")).toEqual(everything)
+  expect(shownFrom('{"servers":false,"jobs":"no"}')).toEqual(everything)
+
+  const kept = keptChoices({ ...everything, lineage: false, jobs: false })
+  expect(kept).toEqual({ lineage: false, jobs: false })
+  expect(shownFrom(JSON.stringify(kept))).toEqual({ ...everything, lineage: false, jobs: false })
+  expect(keptChoices(everything)).toEqual({})
+  expect(isDefaultShown(everything)).toBe(true)
+  expect(isDefaultShown({ ...everything, undo: false })).toBe(false)
+})
+
+test("pinned, the card stays beside the conversation while it has the room, and otherwise stays open floating over it, as drawn; unpinned, it opens from the header; at phone width it is a sheet", () => {
+  const room = { phone: false, pinned: true, height: 960 }
+  // The conversation's width at a 1440px and a 1100px wide page, with the 256px session list beside it.
+  expect(cardPlace({ ...room, width: 1440 - 256 })).toBe("inline")
+  expect(cardPlace({ ...room, width: 1101 - 256 })).toBe("inline")
+  expect(cardPlace({ ...room, width: 1100 - 256 })).toBe("over")
+  // The same page with the session list hidden has the room.
+  expect(cardPlace({ ...room, width: 1100 })).toBe("inline")
+  expect(cardPlace({ ...room, width: 1440 - 256, pinned: false })).toBe("popover")
+  expect(cardPlace({ ...room, width: 1100 - 256, pinned: false })).toBe("popover")
+  expect(cardPlace({ ...room, width: 390, phone: true })).toBe("sheet")
+  // What the conversation keeps clear beside a card in place: the card, the gap at its side, and room between.
+  expect(CARD_CLEARANCE).toBe(324)
+})
+
+test("the card does not pin in a column with less than 160px of room under its top, as T3 Code's does not: it opens from the header", () => {
+  // The column's height, less the card's 64px from its top and 12px from its foot.
+  expect(cardPlace({ width: 1184, phone: false, pinned: true, height: 64 + 160 + 12 })).toBe("inline")
+  expect(cardPlace({ width: 1184, phone: false, pinned: true, height: 64 + 159 + 12 })).toBe("popover")
+  expect(cardRoom(960)).toBe(960 - 76)
+})
+
+test("the lineage lists the subagents working, each with how long its round has run, and folds away those that have ended, and its heading counts those working", () => {
+  const now = 100_000
+  const subagents = [
+    { session: "c3", name: "Proofread naan.md", status: "running" as const, job: "5", started: now - 31_000 },
+    { session: "c2", name: "Check the roti quantities", status: "running" as const, job: "4", started: now - 72_400 },
+    { session: "c1", name: "Find a naan recipe to adapt", status: "finished" as const, job: "1", started: 1_000 },
+    { session: "c0", name: "One from before a restart", status: "unknown" as const },
+  ]
+  const shown = lineageOf(subagents, now)
+  expect(shown.heading).toBe("Lineage · 2 running")
+  expect(shown.running.map((each) => [each.name, each.state])).toEqual([
+    ["Proofread naan.md", "Working · 31s"],
+    ["Check the roti quantities", "Working · 1m 12s"],
+  ])
+  expect(shown.previous.map((each) => [each.name, each.state])).toEqual([
+    ["Find a naan recipe to adapt", "Done"],
+    ["One from before a restart", "Ended"],
+  ])
+  expect(lineageOf(subagents.slice(2), now).heading).toBe("Lineage")
+  expect(lineageOf([{ ...subagents[0]!, started: now - 3 * 3_600_000 - 5 * 60_000 }], now).running[0]!.state).toBe("Working · 3h 5m")
+})
+
+test("the lineage shows six rows at first, as T3 Code's, then offers twelve more at a time", () => {
+  const rows = Array.from({ length: 20 }, (_, at) => `agent ${at + 1}`)
+  expect(lineageWindow(rows, LINEAGE_FIRST)).toEqual({ shown: rows.slice(0, 6), more: "Show 12 more" })
+  expect(lineageWindow(rows, LINEAGE_FIRST + LINEAGE_PAGE)).toEqual({ shown: rows.slice(0, 18), more: "Show 2 more" })
+  expect(lineageWindow(rows.slice(0, 6), LINEAGE_FIRST)).toEqual({ shown: rows.slice(0, 6), more: undefined })
+})
+
+test("the session above a subagent says it needs you, is working, or is waiting on its subagents, as drawn", () => {
+  expect(parentWord({ needsYou: true, turnRunning: true, subagentsWorking: true })).toBe("Needs you")
+  expect(parentWord({ needsYou: false, turnRunning: true, subagentsWorking: true })).toBe("Working")
+  expect(parentWord({ needsYou: false, turnRunning: false, subagentsWorking: true })).toBe("Waiting")
+  expect(parentWord({ needsYou: false, turnRunning: false, subagentsWorking: false })).toBe("")
+})
+
+test("on a branch, the git button waits for the pull request to be read before it offers to open one, and where pull requests cannot be read it offers only to push", () => {
+  const dirty = { ...branchStatus, uncommitted: true }
+  expect(gitAction(dirty, undefined)).toEqual({ label: "Commit & push", request: "commit and push", why: "Reading the pull request…" })
+  // On the main branch it opens none, so it need not wait.
+  expect(gitAction({ ...dirty, main: { name: "main", on: true, ahead: 0 } }, undefined)).toEqual({ label: "Commit & push", request: "commit and push" })
+  // Behind its remote it only commits, pull request or not.
+  expect(gitAction({ ...dirty, upstream: { ahead: 0, behind: 2 } }, undefined)).toEqual({ label: "Commit", request: "commit" })
+  const cannot = { unavailable: "gh is not signed in on the computer evie runs on." }
+  expect(gitAction(dirty, cannot)).toEqual({ label: "Commit & push", request: "commit and push" })
+  expect(gitAction(branchStatus, cannot)).toEqual({ label: "Commit", request: "commit", why: "Pull requests cannot be read here: gh is not signed in on the computer evie runs on." })
+  expect(gitMenu(dirty, cannot)[2]).toEqual({ label: "Create pull request", request: "pull request", why: "Pull requests cannot be read here: gh is not signed in on the computer evie runs on." })
+  expect(gitMenu(dirty, undefined)[2]).toEqual({ label: "Create pull request", request: "pull request", why: "Reading the pull request…" })
+})
+
+test("a branch with no upstream has commits to push when no remote branch has them, as a main branch the remote has never had", () => {
+  const neverPushed = { ...without(branchStatus, "upstream"), branch: "main", main: { name: "main", on: true, ahead: 0 }, unpushed: 3 }
+  expect(gitAction(neverPushed, null)).toEqual({ label: "Push", request: "push" })
+  expect(gitMenu(neverPushed, null)[1]).toEqual({ label: "Push", request: "push" })
+  expect(gitAction({ ...neverPushed, unpushed: 0 }, null)).toEqual({ label: "Push", request: "push", why: "No commits to push." })
+})
+
+test("while a request is on its way, the git buttons wait for it", () => {
+  expect(gitWhyNot({ ...idle, sending: true })).toBe("Sending…")
+  expect(undoWhyNot({ ...idle, sending: true })).toBeUndefined()
+})

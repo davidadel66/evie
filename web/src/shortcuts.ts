@@ -29,7 +29,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { command: "previous session", keys: ["mod+alt+[", "mod+shift+["], does: "The session above in the list" },
   { command: "next session", keys: ["mod+alt+]", "mod+shift+]"], does: "The session below in the list" },
   { command: "session list", keys: ["mod+b"], does: "Show or hide the session list" },
-  { command: "card", keys: ["mod+alt+b"], does: "Show or hide the project card" },
+  { command: "card", keys: ["mod+alt+b"], does: "Show or hide session details" },
   { command: "diff", keys: ["mod+d"], does: "Open or close the diff" },
   { command: "model", keys: ["mod+shift+m"], does: "Pick a model" },
   { command: "stop", keys: ["escape"], does: "Stop evie, in the message box" },

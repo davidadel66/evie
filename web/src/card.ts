@@ -1,12 +1,13 @@
-import type { Evie, PullRequest } from "../../src/core/types.ts"
+import type { Evie, GitStatus, PullRequest } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 import type { Conversation } from "./conversation.ts"
 import { joinOutput, REQUESTS, type Listed, type Output } from "./project-card.ts"
 import { refreshWhileShown } from "./refresh.ts"
 
-// The project card's work with evie's server, apart from its screen: undo,
-// the git buttons' requests, stopping a job, following a job's output, and
-// listing the session's subagents.
+// The session details' work with evie's server, apart from their screen:
+// undo, the git buttons' requests, stopping a job, following a job's
+// output, listing the session's subagents, and following the branch's pull
+// request and how the branch stands.
 
 // The client to send on, while the page is connected.
 const clientOf = (connection: Connection): Evie | undefined => {
@@ -186,17 +187,19 @@ const PULL_REQUEST_EVERY = 60_000
 // Follows a project's pull request: read once connected, and again each
 // minute while the page is shown, when the window has the focus back, and
 // when the line comes back. Until it is first read it is undefined; null
-// says there is none, or that gh cannot be asked on the server. One that
-// could not be read keeps what was read before.
+// says the branch has none. One that could not be read keeps what was read
+// before; with nothing read before, it is unavailable, saying why, as where
+// gh is not signed in on the server.
+export type PullRequestState = PullRequest | null | undefined | { unavailable: string }
 export type FollowedPullRequest = {
-  state(): PullRequest | null | undefined
+  state(): PullRequestState
   subscribe(listener: () => void): () => void
   close(): void
 }
 
 // `page` is the window, and whether the page is shown, as the clock asks.
 export function followPullRequest(connection: Connection, project: string, page: { window: EventTarget; shown(): boolean; every?: number }): FollowedPullRequest {
-  let state: PullRequest | null | undefined = pullRequests.get(project)
+  let state: PullRequestState = pullRequests.get(project)
   const listeners = new Set<() => void>()
   let closed = false
   let reading = false
@@ -210,8 +213,11 @@ export function followPullRequest(connection: Connection, project: string, page:
       if (closed) return
       state = read
       for (const listener of [...listeners]) listener()
-    } catch {
+    } catch (cause) {
       // Kept as it was, and read again at the next turn of the clock.
+      if (closed || (state !== undefined && !("unavailable" in (state ?? {})))) return
+      state = { unavailable: wordsOf(cause) }
+      for (const listener of [...listeners]) listener()
     } finally {
       reading = false
     }
@@ -235,5 +241,94 @@ export function followPullRequest(connection: Connection, project: string, page:
       unfollow()
       stop()
     },
+  }
+}
+
+// How often how the branch stands is read again while the card is shown,
+// in milliseconds: a commit or a checkout made outside evie sends no event.
+const GIT_STATUS_EVERY = 60_000
+
+// Follows how a project's git branch stands: read once connected, again
+// when asked, as when a turn ends, when the window has the focus back, each
+// minute while the page is shown, and when the line comes back. A branch's
+// changes are counted against `base`, the branch's pull request's base as
+// the card last read it, as the diff panel compares them. Until it is first
+// read it is undefined, unless it was read before on this page, as when
+// the card is drawn again in another place; null says the folder is not in
+// git. One that could not be read keeps what was read before. One read at
+// a time, and once more after one asked for while another was out.
+export type FollowedGitStatus = {
+  state(): GitStatus | null | undefined
+  subscribe(listener: () => void): () => void
+  again(): void
+  close(): void
+}
+
+const gitStatuses = new Map<string, GitStatus | null>()
+
+export function followGitStatus(connection: Connection, project: string, page: { window: EventTarget; shown(): boolean; base(): string | undefined; every?: number }): FollowedGitStatus {
+  let state: GitStatus | null | undefined = gitStatuses.get(project)
+  const listeners = new Set<() => void>()
+  let closed = false
+  let reading = false
+  let asked = false
+  async function read() {
+    const evie = clientOf(connection)
+    if (closed || evie === undefined) return
+    if (reading) {
+      asked = true
+      return
+    }
+    reading = true
+    try {
+      const base = page.base()
+      const read = await evie.send({ type: "read_git_status", project, ...(base !== undefined && { base }) })
+      gitStatuses.set(project, read)
+      if (closed) return
+      state = read
+      for (const listener of [...listeners]) listener()
+    } catch {
+      // Kept as it was, and read again when next asked.
+    } finally {
+      reading = false
+      if (asked) {
+        asked = false
+        void read()
+      }
+    }
+  }
+  let status = connection.state().status
+  const unfollow = connection.subscribe(() => {
+    const now = connection.state().status
+    if (now === "connected" && status !== "connected") void read()
+    status = now
+  })
+  const stop = refreshWhileShown(() => void read(), { window: page.window, shown: page.shown, every: page.every ?? GIT_STATUS_EVERY })
+  void read()
+  return {
+    state: () => state,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => void listeners.delete(listener)
+    },
+    again: () => void read(),
+    close() {
+      closed = true
+      unfollow()
+      stop()
+    },
+  }
+}
+
+// Opens a project's folder on the computer evie runs on. Gives back why it
+// could not be, as from another device, or nothing.
+export async function openFolder(connection: Connection, project: string): Promise<string | undefined> {
+  const evie = clientOf(connection)
+  if (evie === undefined) return NOT_CONNECTED
+  try {
+    await evie.send({ type: "open_folder", project })
+    return undefined
+  } catch (cause) {
+    return wordsOf(cause)
   }
 }

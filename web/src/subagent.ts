@@ -3,7 +3,7 @@ import type { Connection } from "./connection.ts"
 import { merged, type Conversation, type ConversationState } from "./conversation.ts"
 
 // The conversation of one of the session's subagents, which the middle
-// column shows when the owner picks it in the project card, read only. A
+// column shows when the owner picks it in the session details, read only. A
 // subagent's session is not opened by itself, so its events are not sent
 // to the page: its latest page of history is read, earlier pages as the
 // owner scrolls up, and while it works, what it has added since, asked for

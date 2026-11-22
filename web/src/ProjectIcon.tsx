@@ -59,10 +59,11 @@ export function IconGlyph({ icon, className }: { icon: string; className?: strin
   )
 }
 
-// The sizes of a project's tile: beside its name in a session row and the
-// project card, in the workspace header, and in the workspace strip.
+// The sizes of a project's tile: beside its name in a session row, in the
+// session details, in the workspace header, and in the workspace strip.
 const SIZES = {
   row: "size-tile-row [&>svg]:size-tile-row-icon",
+  detail: "size-icon-sm [&>svg]:size-icon-xxs",
   header: "size-tile-header [&>svg]:size-icon-sm",
   strip: "size-tile-strip [&>svg]:size-icon-md",
 }

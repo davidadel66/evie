@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { chmod, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { github } from "../src/index.ts"
@@ -16,6 +16,10 @@ const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
+
+// The path the tests were started with, which each one's own path is made
+// from, whatever an earlier one in the same test set it to.
+const STARTED_PATH = process.env.PATH ?? ""
 
 // Evie in a project that is a git repository on a branch of its own, with
 // a stand-in `gh` that prints `answer` and stops with `code`, or with no
@@ -40,9 +44,20 @@ async function start(gh: { answer?: unknown; said?: string; code?: number } | "m
     )
     await chmod(join(bin, "gh"), 0o755)
   }
-  // Only the stand-in is on the path, so a real `gh` is never found.
+  // The stand-in comes first on the path, so a real `gh`, which a machine
+  // such as GitHub's runner may have, is never found before it. With none,
+  // the path holds only this folder, with git, which the plugin runs first,
+  // and nothing else, so that whatever the machine has installed, no `gh`
+  // is found at all.
   const path = process.env.PATH
-  process.env.PATH = `${bin}:/usr/bin:/bin`
+  if (gh === "missing") {
+    const real = Bun.which("git", { PATH: STARTED_PATH })
+    if (real === null) throw new Error("These tests need git on the path.")
+    await symlink(real, join(bin, "git"))
+    process.env.PATH = bin
+  } else {
+    process.env.PATH = `${bin}:${STARTED_PATH}`
+  }
   cleanups.push(async () => {
     process.env.PATH = path
   })
@@ -97,13 +112,19 @@ test("a draft, a merged and a closed pull request each say so", async () => {
   }
 })
 
-test("there is nothing to show when the branch has no pull request, gh is not signed in, or not installed", async () => {
+test("a branch with no pull request has none to show", async () => {
   const none = await start({ said: 'no pull requests found for branch "feature"', code: 1 })
   expect(await none.run.evie.send({ type: "read_pull_request", project: none.run.project!.id })).toBeNull()
+})
+
+test("where pull requests cannot be read, as with gh not signed in, not installed, or no remote on GitHub, the answer says why, so that it is not taken for a branch with none", async () => {
+  const read = (run: Awaited<ReturnType<typeof start>>["run"]) => run.evie.send({ type: "read_pull_request", project: run.project!.id })
   const signedOut = await start({ said: "To get started with GitHub CLI, please run:  gh auth login", code: 4 })
-  expect(await signedOut.run.evie.send({ type: "read_pull_request", project: signedOut.run.project!.id })).toBeNull()
+  await expect(read(signedOut.run)).rejects.toThrow("gh is not signed in on the computer evie runs on: run gh auth login there.")
   const missing = await start("missing")
-  expect(await missing.run.evie.send({ type: "read_pull_request", project: missing.run.project!.id })).toBeNull()
+  await expect(read(missing.run)).rejects.toThrow("The GitHub CLI, gh, is not installed on the computer evie runs on.")
+  const noRemote = await start({ said: "no git remotes found", code: 1 })
+  await expect(read(noRemote.run)).rejects.toThrow("This repository has no remote on GitHub.")
 })
 
 test("gh is not asked about a folder that is not in a git repository", async () => {
@@ -117,9 +138,9 @@ test("a pull request that could not be read for another reason, such as no netwo
   await expect(run.evie.send({ type: "read_pull_request", project: run.project!.id })).rejects.toThrow("The pull request could not be read: error connecting to api.github.com")
 })
 
-test("without the github plugin there is no pull request to read, and gh is not asked", async () => {
+test("without the github plugin, pull requests cannot be read, which the answer says, and gh is not asked", async () => {
   const { run, asked } = await start({ answer: PR }, { plugin: false })
-  expect(await run.evie.send({ type: "read_pull_request", project: run.project!.id })).toBeNull()
+  await expect(run.evie.send({ type: "read_pull_request", project: run.project!.id })).rejects.toThrow("No plugin reads pull requests: the github plugin is not loaded.")
   expect(await asked()).toBeUndefined()
 })
 

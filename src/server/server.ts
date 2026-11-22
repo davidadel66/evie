@@ -65,6 +65,9 @@ type Admitted = { token: string; device: string }
 const ONLY_HERE = ["key", "addPlugin", "removePlugin", "project"]
 const changesOnlyHere = (command: Command) => command.type === "change_settings" && ONLY_HERE.some((field) => field in command)
 const ONLY_HERE_WORDS = "Keys, plugins and trusted projects can be changed only on the computer evie runs on."
+// Opening a project's folder shows it on the computer evie runs on, which
+// is no use to another device, and is asked for only there.
+const OPEN_HERE_WORDS = "A project's folder can be opened only on the computer evie runs on."
 
 // The addresses of this computer itself, as a connection from it comes
 // from: 127.0.0.1, or any of 127.0.0.0/8, or ::1, written either way.
@@ -439,6 +442,7 @@ export function startServer(options: ServerOptions): EvieServer {
         // closed, saying why, and nothing else is touched.
         if (!message) return socket.close(1007, 'Each message must be JSON of the form { "id": ..., "command": ... }')
         if (!socket.data.here && changesOnlyHere(message.command)) return void send(socket, { reply: message.id, error: ONLY_HERE_WORDS })
+        if (!socket.data.here && message.command.type === "open_folder") return void send(socket, { reply: message.id, error: OPEN_HERE_WORDS })
         const open = message.command.type === "open_session" ? message.command : undefined
         if (open) socket.data.opening += 1
         // A session opened by its id, as a client catching up does, is sent

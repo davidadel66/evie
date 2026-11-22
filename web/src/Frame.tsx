@@ -12,7 +12,7 @@ import { Notices } from "./Notices.tsx"
 import { Palette } from "./Palette.tsx"
 import { useDiffShortcut } from "./diff-shown.ts"
 import { DiffPlace } from "./DiffPanel.tsx"
-import { CardButton, CardPlace } from "./ProjectCard.tsx"
+import { CardButton, CardLane, CardPlace } from "./ProjectCard.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import { CaretDown } from "./icons.tsx"
 import { NoProjectTile, ProjectGlyph, ProjectTile } from "./ProjectIcon.tsx"
@@ -28,14 +28,14 @@ import { SubagentView } from "./Subagent.tsx"
 import { workspaceIn } from "./workspace.ts"
 import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 
-// The page once signed in: the session list, the conversation and the
-// project card, in columns, as the Session view drawing lays them out. At
+// The page once signed in: the session list and the conversation, in
+// columns, as the Session view drawing lays them out, with the session
+// details floating at the conversation's top right, as T3 Code's do. At
 // 767px or narrower the columns stack, as the drawing has them: the list
-// at the top of the page, and the conversation under it, a screen tall. At
-// 980px or narrower the card is a sheet over the page from the right,
-// opened from a button in the session's header. With a workspace in the
-// address, the workspace view instead. The command palette and the
-// notices float over either.
+// at the top of the page, and the conversation under it, a screen tall.
+// The details open from a button in the session's header. With a
+// workspace in the address, the workspace view instead. The command
+// palette and the notices float over either.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
   useDiffShortcut()
@@ -76,12 +76,12 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
         <SessionList connection={connection} sessions={sessions} />
       </ListPlace>
 
-      <main ref={main} className="flex h-dvh min-w-0 flex-col bg-bg wide:h-auto wide:flex-1">
+      <main ref={main} className="relative flex h-dvh min-w-0 flex-col bg-bg wide:h-auto wide:flex-1">
         <OpenSession connection={connection} sessions={sessions} />
+        <CardPlace connection={connection} sessions={sessions} />
       </main>
 
       <DiffPlace connection={connection} sessions={sessions} />
-      <CardPlace connection={connection} sessions={sessions} />
     </div>
   )
 }
@@ -141,7 +141,7 @@ function useFrameShortcuts(togglePalette: () => void) {
 // Code opens one, fixed as the empty page first shows, so that another
 // session becoming the latest neither moves it nor loses what is typed.
 // Whatever it shows, its header has the button that shows and hides the
-// project card.
+// session details.
 function OpenSession({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
@@ -156,7 +156,9 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
     return (
       <>
         <Top project={{ id: project, listed: projectOf(project) }} title="New session" pick={{ projects: list.projects, choose: (to) => select({ draft: to }) }} />
-        <Draft key={`${project}`} connection={connection} sessions={sessions} project={project} />
+        <CardLane>
+          <Draft key={`${project}`} connection={connection} sessions={sessions} project={project} />
+        </CardLane>
       </>
     )
   }
@@ -180,7 +182,9 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
         title={title}
         {...(session !== undefined && { rename: (name: string) => sessions.rename(session.session, name) })}
       />
-      <Conversation connection={connection} session={selected.session} folder={projectOf(project)?.folder} />
+      <CardLane>
+        <Conversation connection={connection} session={selected.session} folder={projectOf(project)?.folder} />
+      </CardLane>
     </>
   )
 }
@@ -188,7 +192,7 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
 // The middle column's header, as the Session view drawing has it: the
 // project's tile and its name, quiet, then the session's name; after the
 // button that shows and hides the session list, and before the one that
-// shows and hides the project card, on the right. For a draft, the project
+// shows and hides the session details, on the right. For a draft, the project
 // is a menu to pick another, or none, as T3 Code's draft picks where a new
 // thread goes. A name that can be renamed is typed in place after a
 // double-click, and why a name was not taken is said on a line under the

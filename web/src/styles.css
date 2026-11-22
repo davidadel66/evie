@@ -56,16 +56,26 @@
   /* With font-mono. */
   --text-code: 13px;
   --text-code--line-height: 20px;
+  /* The rows of the session details, and the headings over their
+     sections, as T3 Code's details card has them. */
+  --text-detail: 13px;
+  --text-detail--line-height: 16px;
+  --text-detail-heading: 11px;
+  --text-detail-heading--line-height: 16px;
+  --text-detail-heading--font-weight: 500;
 
   /* The spacing steps, and nothing between them, so that p-1 is space-1
      (4px) and p-7 is space-7 (28px), and a class off the scale, such as
-     p-9, is not made at all. A 4px grid, with T3 Code's one half step. */
+     p-9, is not made at all. A 4px grid, with T3 Code's four half steps. */
   --spacing-0: 0px;
+  --spacing-0\.5: 2px;
   --spacing-1: 4px;
   --spacing-1\.5: 6px;
   --spacing-2: 8px;
+  --spacing-2\.5: 10px;
   --spacing-3: 12px;
   --spacing-4: 16px;
+  --spacing-4\.5: 18px;
   --spacing-5: 20px;
   --spacing-6: 24px;
   --spacing-7: 28px;
@@ -82,6 +92,9 @@
   /* The least a finger aims at: on a touch screen, a button reaches this
      far round itself, unseen, as T3 Code's do. */
   --spacing-touch-min: 44px;
+  /* The smallest icon: on a project's tile in the session details, and the
+     square of their Stop buttons. */
+  --spacing-icon-xxs: 11px;
   --spacing-icon-xs: 12px;
   /* The caret that opens a turn's work, as T3 Code's. */
   --spacing-icon-caret: 14px;
@@ -91,6 +104,9 @@
   --spacing-icon-md: 20px;
 
   --radius-sm: 4px;
+  /* A small control inside a row, as the session details' icon buttons,
+     their checks and Fix, as T3 Code's. */
+  --radius-chip: 6px;
   --radius-md: 8px;
   --radius-lg: 16px;
   --radius-full: 9999px;
@@ -130,11 +146,23 @@
 
   /* Sizes of the layout that the design system's board does not name yet,
      set here once, by a name each: w-session-list, max-w-sign-in-column.
-     The session list is as wide as T3 Code's sidebar, and the project card
-     as its details panel. */
+     The session list is as wide as T3 Code's sidebar, and the session
+     details as its details card. */
   --spacing-session-list: 256px;
-  --spacing-project-card: 280px;
-  /* The project card as a sheet over the page, at 980px or narrower: about
+  --spacing-details-card: 280px;
+  /* Where the session details float: 12px below the conversation's
+     header, and at most down to 12px above its foot; the room the
+     conversation keeps clear beside them when they are pinned there, the
+     card, the gap at its side and 32px between, as T3 Code's; and the menu
+     that chooses what they show. */
+  --spacing-details-top: calc(var(--spacing-header-height) + var(--spacing-3));
+  --spacing-details-height: calc(100% - var(--spacing-details-top) - var(--spacing-3));
+  --spacing-details-clear: 324px;
+  --spacing-details-menu: 236px;
+  /* Where a row's words start in the session details, past its icon: the
+     second line of a pull request's row. */
+  --spacing-detail-indent: 36px;
+  /* The session details as a sheet over the page, at phone width: about
      88% of the screen, and no wider than T3 Code's right panel. */
   --spacing-card-sheet: min(88vw, 448px);
   /* The command palette: as wide as T3 Code's, and its rows at most this
@@ -253,6 +281,14 @@
      as a project's icon does on its own. */
   --color-diff-added-line: color-mix(in srgb, var(--diff-added) 18%, transparent);
   --color-diff-removed-line: color-mix(in srgb, var(--diff-removed) 18%, transparent);
+}
+
+/* The session details' surface, as T3 Code's glass: the surface a little
+   clear, with what is under it blurred. */
+@utility details-glass {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.14);
+  backdrop-filter: blur(12px) saturate(1.14);
 }
 
 @layer base {

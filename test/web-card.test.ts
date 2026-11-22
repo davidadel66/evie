@@ -1,11 +1,13 @@
 import { afterEach, expect, test } from "bun:test"
-import { appendFile, mkdtemp, rm } from "node:fs/promises"
+import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, jobs, startServer, subagents, undo as undoPlugin, type Chunk, type Command, type Evie, type Job } from "../src/index.ts"
-import { followOutput, followSubagents, request, stopJob, undo, type Following, type Lineage } from "../web/src/card.ts"
+import type { GitStatus } from "../src/core/types.ts"
+import { followGitStatus, followOutput, followPullRequest, followSubagents, openFolder, request, stopJob, undo, type FollowedGitStatus, type Following, type Lineage } from "../web/src/card.ts"
 import { openConnection, type Connection } from "../web/src/connection.ts"
 import { holdConversation, type Conversation, type ConversationState } from "../web/src/conversation.ts"
+import { git } from "./support/git.ts"
 import { say } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
@@ -304,4 +306,71 @@ test("a subagent's conversation that could not read a page before carries on fol
   const done = await until(child, (state) => said(state).at(-1) === "They are in test/, one file a module.")
   expect(done.problem).toBeUndefined()
   expect(done.turnRunning).toBe(false)
+})
+
+async function untilStatus(following: FollowedGitStatus, ready: (status: GitStatus | null | undefined) => boolean) {
+  while (!ready(following.state())) await Bun.sleep(5)
+  return following.state()
+}
+
+test("how the project's branch stands is read once connected, again when asked, as when a turn ends, and when the window has the focus back, against the base the card knows", async () => {
+  const { served, connection } = await start([])
+  const folder = served.run.projectFolder
+  await git(["init", "-q", "-b", "main"], folder)
+  await writeFile(join(folder, "a.md"), "one\n")
+  await git(["add", "-A"], folder)
+  await git(["commit", "-q", "-m", "Start"], folder)
+  const page = new EventTarget()
+  let base: string | undefined
+  const following = followGitStatus(connection, served.run.project!.id, { window: page, shown: () => true, base: () => base })
+  cleanups.push(async () => following.close())
+
+  expect(await untilStatus(following, (status) => status !== undefined)).toMatchObject({ branch: "main", uncommitted: false, changes: { against: null } })
+  await writeFile(join(folder, "a.md"), "two\n")
+  following.again()
+  expect(await untilStatus(following, (status) => status?.uncommitted === true)).toMatchObject({ changes: { against: null, added: 1, removed: 1 } })
+
+  await git(["branch", "dev"], folder)
+  await git(["checkout", "-q", "-b", "feat/breads"], folder)
+  page.dispatchEvent(new Event("focus"))
+  expect(await untilStatus(following, (status) => status?.branch === "feat/breads")).toMatchObject({ changes: { against: "main" } })
+  base = "dev"
+  following.again()
+  await untilStatus(following, (status) => status?.changes.against === "dev")
+
+  // Followed again, as when the card is drawn again in another place, it starts from what was last read.
+  const again = followGitStatus(connection, served.run.project!.id, { window: page, shown: () => true, base: () => base })
+  cleanups.push(async () => again.close())
+  expect(again.state()).toMatchObject({ branch: "feat/breads", changes: { against: "dev" } })
+})
+
+test("a project whose folder is not in git has no git status", async () => {
+  const { served, connection } = await start([])
+  const following = followGitStatus(connection, served.run.project!.id, { window: new EventTarget(), shown: () => true, base: () => undefined })
+  cleanups.push(async () => following.close())
+  expect(await untilStatus(following, (status) => status !== undefined)).toBeNull()
+})
+
+test("where pull requests cannot be read, the card is told why, and does not take it for a branch with none", async () => {
+  const { served, connection } = await start([])
+  const following = followPullRequest(connection, served.run.project!.id, { window: new EventTarget(), shown: () => true })
+  cleanups.push(async () => following.close())
+  while (following.state() === undefined) await Bun.sleep(5)
+  expect(following.state()).toEqual({ unavailable: "No plugin reads pull requests: the github plugin is not loaded." })
+})
+
+test("the project's folder is opened on the computer evie runs on, and a folder that cannot be opened says why", async () => {
+  const opened: string[] = []
+  const served = await serveEvie([scriptedProvider([]).plugin], {
+    openFolder: async (folder) => {
+      if (opened.push(folder) > 1) throw new Error("The folder could not be opened: open stopped with code 1.")
+    },
+  })
+  cleanups.push(served.stop)
+  const connection = openConnection({ url: served.server.url, token: served.token, firstWait: 10 })
+  cleanups.push(async () => connection.close())
+  while (connection.state().status !== "connected") await Bun.sleep(5)
+  expect(await openFolder(connection, served.run.project!.id)).toBeUndefined()
+  expect(opened).toEqual([served.run.project!.folder])
+  expect(await openFolder(connection, served.run.project!.id)).toBe("The folder could not be opened: open stopped with code 1.")
 })
