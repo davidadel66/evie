@@ -11,7 +11,7 @@ import { addressOfWorkspace, sizeWords, type WorkspacePlace } from "./workspace.
 // The workspace's Storage tab: the files in its project's .evie folder,
 // the files attached to messages among them, in its attachments folder,
 // and what evie showed, in its shown folder, as a tree of rows, every
-// folder open, as drawn: each row with its icon, its name and how long ago
+// folder open at first: each row with its icon, its name and how long ago
 // it changed, a folder's entries under its row, a step further in. A
 // folder folds by its caret, as T3 Code's trees do. At its foot, whether
 // the folder is backed up. A file opens in the workspace, read only, in

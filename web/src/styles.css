@@ -126,7 +126,7 @@
 
   /* How long a change, such as a group's caret turning, takes, and how it
      eases: Tailwind's own values, which clearing its defaults left out. The
-     design system's board names none. */
+     design system's tokens name none. */
   --default-transition-duration: 150ms;
   --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -153,7 +153,7 @@
     }
   }
 
-  /* Sizes of the layout that the design system's board does not name yet,
+  /* Sizes of the layout that the design system's tokens do not name yet,
      set here once, by a name each: w-session-list, max-w-sign-in-column.
      The session list is as wide as T3 Code's sidebar, and the session
      details as its details card. */
@@ -229,8 +229,7 @@
   --spacing-settings-select: 224px;
   --spacing-settings-field: 200px;
   /* The room between a session row's edge and its words, so that they
-     start 18px from the list's edge, as in the Session view drawing and
-     T3 Code's sidebar. */
+     start 18px from the list's edge, as in T3 Code's sidebar. */
   --spacing-row-inset: 10px;
   /* A project's icon tile in a session row, and the icon on it, and in
      the conversation's header. */
@@ -250,12 +249,12 @@
      ellipsis, before its tabs scroll sideways instead. */
   --spacing-workspace-name: 96px;
   /* The least room, beside the strip, for a workspace and its side chat
-     side by side, as drawn: the workspace at 520px and the chat at 360px.
+     side by side: the workspace at 520px at least, and the chat at 360px.
      Narrower, the side chat stacks below the workspace. A container query,
      @workspace-columns, since it is the room beside the strip that counts. */
   --container-workspace-columns: 880px;
-  /* The message box: its text two lines tall at least, as drawn and as
-     T3 Code's, and the tallest it grows before it scrolls; the tallest the
+  /* The message box: its text two lines tall at least, as T3 Code's, and
+     the tallest it grows before it scrolls; the tallest the
      / and @ menus and the model picker above it are, as T3 Code's, and the
      picker's column of makers. The menus are drawers tucked into the
      box's top edge, as T3 Code's: this much narrower than it on each
@@ -342,7 +341,7 @@
 
 /* The message box's surface, and its drawers', floating over the
    conversation, which scrolls on under them, as T3 Code's glass: the
-   surface as drawn, a fifth clear, with what is under it blurred. */
+   surface colour, a fifth clear, with what is under it blurred by 12px. */
 @utility composer-glass {
   background: color-mix(in srgb, var(--surface) 80%, transparent);
   -webkit-backdrop-filter: blur(12px) saturate(1.14);

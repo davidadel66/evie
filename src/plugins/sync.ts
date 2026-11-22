@@ -16,8 +16,11 @@ import { patchFiles } from "./files/paths.ts"
 // how it went.
 //
 // Before every push, the remote must be the repository Evie made, as its
-// git settings record, and GitHub must say it is private. A `.evie/` folder
-// that is, or looks like, an Evie data folder is never synced.
+// git settings record, every address it pushes to must be that
+// repository's, and GitHub must say it is private. Nor may the
+// repository's own settings set any of those listed below (STOPS_A_PUSH).
+// A `.evie/` folder that is, or looks like, an Evie data folder is never
+// synced.
 //
 // A try that fails, as with no `gh`, `gh` not logged in, or no network,
 // never fails a turn: it is kept for `/sync` to tell, and the next try tries
@@ -139,6 +142,7 @@ export function sync(options: SyncOptions): Plugin {
     const git = (...args: string[]) => step(`git ${args[0]}`, ["git", `--git-dir=${gitDir}`, `--work-tree=${evie}`, ...args])
 
     if (!existsSync(gitDir)) await step("git init", ["git", "init", "--quiet", "--initial-branch=main", evie])
+    await refuseOwnSettings(gitDir, evie)
     // What changed, and how far the branch is ahead of what was last pushed:
     // all of it when it has never been pushed.
     const status = await git("status", "--porcelain=v2", "--branch", "--untracked-files=all")
@@ -181,6 +185,17 @@ export function sync(options: SyncOptions): Plugin {
           `To push there again, set it back: git -C ${evie} remote set-url origin ${there.url}.`,
       )
     }
+    // Every address the push goes to, which can be more than the one read
+    // above: a remote can have several, and the push goes to them all.
+    const pushesTo = await answer("remote", "get-url", "--push", "--all", "origin")
+    if (pushesTo === undefined) throw new Error("Where its remote, origin, pushes to could not be read, so nothing was pushed.")
+    const stray = pushesTo.split("\n").find((address) => ![there.url, there.sshUrl].map(plain).includes(plain(address)))
+    if (stray !== undefined) {
+      throw new Error(
+        `Its remote, origin, pushes to ${stray}, which is not the private repository evie made for it, ${name}, so nothing was pushed. ` +
+          `To push there alone again, take that address away: git -C ${evie} remote set-url --delete origin ${stray}.`,
+      )
+    }
     const pushed = await run(["git", `--git-dir=${gitDir}`, "push", "--quiet", "--set-upstream", "origin", "HEAD"], evie)
     if (pushed.code !== 0 && /\[rejected\]|fetch first|non-fast-forward/.test(pushed.stderr)) {
       throw new Error(
@@ -191,6 +206,33 @@ export function sync(options: SyncOptions): Plugin {
     if (pushed.code !== 0) throw new Error(failure("git push", pushed))
     if (made) return `Made the private GitHub repository ${name} for ${evie}, and pushed what it holds there.`
     return `Pushed the changes in ${evie} to ${name} on GitHub.`
+  }
+
+  // Ends the try when the `.evie/` folder's own repository sets any of the
+  // settings that stop a push (STOPS_A_PUSH). Only that repository's own
+  // settings file is read, as git itself reads it, and reading it runs
+  // nothing; the owner's own settings are not looked at.
+  async function refuseOwnSettings(gitDir: string, evie: string): Promise<void> {
+    const file = join(gitDir, "config")
+    const asked = await run(["git", `--git-dir=${gitDir}`, "config", "--local", "-z", "--get-regexp", `^(${STOPS_A_PUSH.join("|")})$`], evie)
+    // Git says 1 when the file sets none of them, or there is no file.
+    if (asked.code === 1) return
+    if (asked.code !== 0) throw new Error(`Its git repository's own settings, ${file}, could not be read, so nothing was pushed: ${failure("git config", asked)}`)
+    // Each is its name, then a line end and its value, unless it has none.
+    const set = asked.stdout.split("\0").flatMap((entry) => {
+      if (entry === "") return []
+      const end = entry.indexOf("\n")
+      const name = end === -1 ? entry : entry.slice(0, end)
+      return end !== -1 && entry.slice(end + 1) === "" && EMPTY_IS_NONE.test(name) ? [] : [name]
+    })
+    const names = [...new Set(set)]
+    if (names.length === 0) return
+    const listed = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
+    throw new Error(
+      `Its git repository's own settings, ${file}, set ${listed}, which would have git run a command of theirs, push somewhere else, or read ` +
+        `settings from elsewhere, as it pushes, so nothing was pushed. The push takes its credentials from your own git settings, so remove ` +
+        `${names.length === 1 ? "that" : "them"} from the repository's settings, then /sync.`,
+    )
   }
 
   // The repository on GitHub, by its name on the owner's account, when
@@ -270,6 +312,58 @@ export function sync(options: SyncOptions): Plugin {
   }
 }
 
+// The settings of the `.evie/` folder's own repository that stop a push,
+// since that repository may have come with the project, and a model can
+// write its settings file without asking. They are named as git writes
+// them, in lower case but for the part that names an address or a remote.
+// The push keeps the credential helper, ssh command and transports that
+// git's settings have, so that the owner's own settings can give it its
+// credentials; the rest of what the core turns off stays off (core/git.ts).
+const STOPS_A_PUSH = [
+  // Commands run as git pushes, or signs the push: a credential helper, for
+  // any address; the ssh command, the password program and the git
+  // protocol's proxy command; the programs run on the remote's side, which
+  // run here for a remote on this computer; a remote helper of its own; and
+  // pushes signed, with the programs that sign.
+  "credential\\.(.+\\.)?helper",
+  "core\\.sshcommand",
+  "core\\.askpass",
+  "core\\.gitproxy",
+  "remote\\..+\\.receivepack",
+  "remote\\..+\\.uploadpack",
+  "remote\\..+\\.vcs",
+  "push\\.gpgsign",
+  "gpg\\.program",
+  "gpg\\..+\\.program",
+  "gpg\\.ssh\\.defaultkeycommand",
+  // Somewhere else to push to, or another way there: another address to
+  // push to, addresses rewritten, a proxy, a name resolved to another
+  // address, or another transport allowed; and what would let a connection
+  // sent elsewhere pass unnoticed, its certificate unchecked or checked
+  // against other authorities.
+  "remote\\..+\\.pushurl",
+  "url\\..+\\.pushinsteadof",
+  "url\\..+\\.insteadof",
+  "protocol\\.allow",
+  "protocol\\..+\\.allow",
+  "remote\\..+\\.proxy",
+  "http\\.(.+\\.)?proxy",
+  "http\\.(.+\\.)?curloptresolve",
+  "http\\.(.+\\.)?sslverify",
+  "http\\.(.+\\.)?sslcainfo",
+  "http\\.(.+\\.)?sslcapath",
+  // Other repositories pushed too, with settings of their own: submodules.
+  "push\\.recursesubmodules",
+  "submodule\\.recurse",
+  // Settings read from elsewhere: another file, or the work tree's own,
+  // which `--local` does not read. Evie's own repository sets neither.
+  "include\\..+",
+  "includeif\\..+",
+  "extensions\\.worktreeconfig",
+]
+// Those of them that name nothing when they are empty, as a credential
+// helper that only clears those set before it does, so an empty one is let be.
+const EMPTY_IS_NONE = /^(credential\.(.+\.)?helper|core\.sshcommand|core\.askpass|core\.gitproxy|remote\..+\.proxy|http\.(.+\.)?proxy)$/
 // Whether a tool call may have changed something in the project's `.evie/`
 // folder: a file tool that names a file in it; any command, since what a
 // command changes cannot be told from its text; or showing a file, which

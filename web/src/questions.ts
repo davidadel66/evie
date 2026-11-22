@@ -3,9 +3,9 @@ import { commandIn } from "./composer.ts"
 import type { Item } from "./transcript.ts"
 
 // The questions evie asks, apart from their screen: when one shows, and
-// what the message box does while one waits. They show in the
-// conversation, as the Session view drawing has them, and the box works
-// with them as T3 Code's does.
+// what the message box does while one waits. They show at the end of the
+// conversation, as part of evie's reply, and the box works with them as
+// T3 Code's does.
 
 export type Asked = EventBodies["question"]
 
@@ -75,7 +75,7 @@ export function answerTyped(typed: string, question: Asked): string | undefined 
 export type KeyFocus = "nothing" | "empty box" | "typed box" | "elsewhere"
 
 // The choice a key from 1 to 9 picks, as T3 Code's keys do, though the
-// choices show no numbers, as drawn: only with the focus on nothing or in
+// choices show no numbers on the page: only with the focus on nothing or in
 // the empty message box, so that a key meant for a button, a row or the
 // text is never taken; and never for a permission prompt, which only a
 // click answers.

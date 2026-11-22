@@ -132,6 +132,12 @@ export async function lineTo(serverUrl: string) {
     mend() {
       if (!listening) listen()
     },
+    // Every connection through the line is closed, as the server closes one,
+    // with this code and reason. The line stays up, so a client can connect
+    // again at once.
+    close(code: number, reason: string) {
+      for (const client of clients) client.close(code, reason)
+    },
     // Every connection through the line goes silent at once, both ways,
     // without closing, as when a laptop wakes on another network and its
     // old connections are dead. New connections go through as usual.

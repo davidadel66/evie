@@ -10,6 +10,7 @@ import {
   runTerminal,
   startServer,
   type ClientMessage,
+  type Command,
   type ConnectOptions,
   type Evie,
   type EvieEvent,
@@ -22,7 +23,9 @@ import { lineTo } from "./support/line.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
 import { commandId } from "../src/server/connect.ts"
+import { send as sendMessage } from "../src/server/server.ts"
 import { openTokens } from "../src/server/tokens.ts"
+import { DROPPED } from "../src/server/wire.ts"
 
 // The terminal client run over the network: Evie behind its server, and the
 // terminal given the client that `connect` returns in place of Evie itself.
@@ -441,6 +444,35 @@ test("a pipe that joins a session leaves when its input ends, saying a question 
   expect(deploy.answers).toEqual(["Yes"])
 })
 
+test("a pipe that leaves a question waiting checks on it by asking where its own session stands, by its id, so it never opens another", async () => {
+  const deploy = asksBeforeDeploy()
+  const served = await serveEvie([scriptedProvider([{ text: ["Hi."] }, ...callsDeploy()]).plugin, deploy.plugin])
+  cleanups.push(served.stop)
+  const shows = await served.connect()
+  const { session } = await shows.send({ type: "open_session", folder: served.run.projectFolder, questions: true })
+  await say({ evie: shows, session }, "hello")
+  const client = await served.connect()
+  const opens: Command[] = []
+  const send = ((command: Command) => {
+    if (command.type === "open_session") opens.push(command)
+    return client.send(command)
+  }) as Evie["send"]
+
+  await runTerminal({
+    evie: { ...client, send },
+    folder: served.run.projectFolder,
+    resume: true,
+    questions: false,
+    waitForJobs: true,
+    lines: (async function* () {
+      yield "ship it"
+    })(),
+    write: () => {},
+  })
+
+  expect(opens.slice(1)).toEqual([{ type: "open_session", session }])
+})
+
 test("when one of two terminals on a session stops typing, the question waiting in it is left for the other to answer", async () => {
   const deploy = asksBeforeDeploy()
   const served = await serveEvie([scriptedProvider([{ text: ["Hi."] }, ...callsDeploy()]).plugin, deploy.plugin])
@@ -555,6 +587,86 @@ test("a message that is not a command closes that connection only, saying why, a
   expect((await closed).reason).toBe('Each message must be JSON of the form { "id": ..., "command": ... }')
   const client = await served.connect()
   expect((await client.send({ type: "open_session", folder: served.run.projectFolder })).session).toBeString()
+})
+
+// ---- A message the server cannot send -------------------------------------------------------
+
+// Stands for a connection's socket, answering each message sent as Bun's
+// does, in turn as `answers` says: with the number of bytes sent, with -1
+// for one queued while the client reads more slowly than the server sends,
+// or with 0 for one dropped. Past the answers given, every message is sent.
+// `readyState` is 1 while it is open, and 3 once it has closed.
+function standInSocket(answers: number[], readyState: 1 | 3 = 1) {
+  const sent: ServerMessage[] = []
+  const closed: { code: number | undefined; reason: string | undefined }[] = []
+  return {
+    sent,
+    closed,
+    readyState,
+    send(data: unknown) {
+      sent.push(JSON.parse(String(data)) as ServerMessage)
+      return answers.shift() ?? String(data).length
+    },
+    close(code?: number, reason?: string) {
+      closed.push({ code, reason })
+    },
+  }
+}
+
+// A stored event, as the server sends it.
+const noteEvent = (seq: number): ServerMessage => ({ event: { type: "note", session: "s", seq, time: seq, body: { text: `note ${seq}` } } })
+
+test("a message a connection drops closes that connection, saying why, so that its client connects again and catches up from the log", () => {
+  const socket = standInSocket([0])
+
+  sendMessage(socket, noteEvent(1))
+
+  expect(socket.closed).toEqual([{ code: DROPPED, reason: "a message to this device could not be sent, so it connects again and catches up" }])
+})
+
+test("a keepalive a connection drops leaves it open, since it carries nothing the client could miss", () => {
+  const socket = standInSocket([0])
+
+  sendMessage(socket, { keepalive: true })
+
+  expect(socket.closed).toEqual([])
+})
+
+test("a message dropped on a connection that has closed already closes nothing more", () => {
+  const socket = standInSocket([0], 3)
+
+  sendMessage(socket, noteEvent(1))
+
+  expect(socket.closed).toEqual([])
+})
+
+test("messages queued while a connection is backed up are kept, as is the connection: each is sent in order as the client reads", () => {
+  const socket = standInSocket([-1, -1, 40])
+  const events = [1, 2, 3].map(noteEvent)
+
+  for (const message of events) sendMessage(socket, message)
+
+  expect(socket.sent).toEqual(events)
+  expect(socket.closed).toEqual([])
+})
+
+test("a client whose connection the server closed because a message to it was dropped connects again, saying why, and is shown what it missed", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider([{ text: ["Hi."] }]).plugin])
+  const drops: string[] = []
+  let back = 0
+  const client = await connect({ onDrop: (reason) => drops.push(reason), onBack: () => back++ })
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: EvieEvent[] = []
+  client.subscribe((event) => seen.push(event))
+  const words = "a message to this device could not be sent, so it connects again and catches up"
+
+  line.close(DROPPED, words)
+  // The session goes on while the client is away.
+  await say(served.run, "hello", session)
+  while (back === 0 || !seen.some((event) => event.type === "turn_end")) await Bun.sleep(5)
+
+  expect(drops).toEqual([words])
+  expect(seen.flatMap((event) => (event.type === "assistant_message" ? [event.body.text] : []))).toEqual(["Hi."])
 })
 
 // ---- Catching up after the line drops ---------------------------------------------------------

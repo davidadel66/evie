@@ -63,8 +63,9 @@
   /* Lines a diff adds and removes, and nothing else: the bar at each one's
      edge and its counts, and, mixed with the ground in the diff view
      (diff-view.ts), the wash under it, its line number's column and the
-     number itself. The board names no colours for them, so they are its own
-     muted green and red, the values Done and Failed have. */
+     number itself. The design system's tokens name no colours for them, so
+     they are evie's own muted green and red, the values Done and Failed
+     have. */
   --diff-added: var(--status-done);
   --diff-removed: var(--status-failed);
   /* A diff's syntax colours: lighter tints of the project colours, which
