@@ -4,6 +4,7 @@ import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { Plugin } from "../src/index.ts"
+import { git } from "./support/git.ts"
 import { nextEvent, say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -173,6 +174,46 @@ test("every project is listed, by name", async () => {
   const listed = await run.evie.send({ type: "list_projects" })
 
   expect(listed).toEqual([other, run.project!])
+})
+
+test("a project in a git repository is listed with the branch it is on as it is asked for, and one that is not with none", async () => {
+  const { run } = await start([])
+  const folder = await realpath(await mkdtemp(join(tmpdir(), "a-repository-")))
+  cleanups.push(() => rm(folder, { recursive: true, force: true }))
+  await git(["init", "-q", "-b", "feat/lists"], folder)
+  await git(["commit", "-q", "--allow-empty", "-m", "First"], folder)
+  const repository = (await run.evie.send({ type: "open_session", folder })).project!
+
+  const first = await run.evie.send({ type: "list_projects" })
+  await git(["checkout", "-q", "-b", "fix/rows"], folder)
+  const then = await run.evie.send({ type: "list_projects" })
+
+  expect(first).toEqual([{ ...repository, branch: "feat/lists" }, run.project!])
+  expect(first[1]).not.toHaveProperty("branch")
+  expect(then[0]).toEqual({ ...repository, branch: "fix/rows" })
+})
+
+test("a repository with no commits yet is listed on its branch, one with a commit checked out by itself on none, and a folder that has gone on none", async () => {
+  const { run } = await start([])
+  const made = async (name: string) => {
+    const folder = await realpath(await mkdtemp(join(tmpdir(), name)))
+    cleanups.push(() => rm(folder, { recursive: true, force: true }))
+    return folder
+  }
+  const fresh = await made("a-fresh-")
+  await git(["init", "-q", "-b", "main"], fresh)
+  const detached = await made("b-detached-")
+  await git(["init", "-q", "-b", "main"], detached)
+  await git(["commit", "-q", "--allow-empty", "-m", "First"], detached)
+  await git(["checkout", "-q", "--detach"], detached)
+  const gone = await made("c-gone-")
+  await git(["init", "-q", "-b", "main"], gone)
+  for (const folder of [fresh, detached, gone]) await run.evie.send({ type: "open_session", folder })
+  await rm(gone, { recursive: true, force: true })
+
+  const listed = await run.evie.send({ type: "list_projects" })
+
+  expect(listed.map((project) => project.branch)).toEqual(["main", undefined, undefined, undefined])
 })
 
 // ---- A session's state ------------------------------------------------------------------------
