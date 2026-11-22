@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { builtWebApp } from "../src/programs/serve.ts"
 import { buildWebApp } from "../src/server/web-app.ts"
 
 // The web app as `evie serve` builds it when it starts: by Bun's bundler, in
@@ -35,4 +36,10 @@ test("the stylesheet holds the design system's colours for each of its three the
   // A class names a token, and takes its value from the theme it is in.
   expect(style).toContain(".bg-bg-side{background-color:var(--bg-side)}")
   expect(style).toContain(".text-text-muted{color:var(--text-muted)}")
+})
+
+test("evie serve goes on without the web app when its module cannot be loaded, as when a package is missing, and says why", async () => {
+  const built = await builtWebApp(() => Promise.reject(new Error("Cannot find package 'bun-plugin-tailwind'")))
+
+  expect(built).toEqual({ problem: "The web app could not be built, so it is not served:\nCannot find package 'bun-plugin-tailwind'" })
 })

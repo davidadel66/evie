@@ -23,6 +23,8 @@ export async function web(env: Settings, args: string[]) {
   if (!own) fail(`\`evie web\` works on the computer evie's server runs on. Here, open ${address} in a browser and paste this device's token.`)
   const link = await signInLink(new URL(address), token).catch((cause) => fail(why(cause)))
   if (args.includes("--print")) return print(`${link}\n`)
+  const byHand = `Open this link in a browser within five minutes; it works once:\n\n  ${link}\n`
+  if (process.platform === "win32") return print(`Opening a browser is not supported on Windows yet. ${byHand}`)
 
   const opener = process.platform === "darwin" ? "open" : "xdg-open"
   try {
@@ -31,7 +33,7 @@ export async function web(env: Settings, args: string[]) {
   } catch {
     // There is no such program here, as on a server with no desktop.
   }
-  print(`No browser could be opened with \`${opener}\`. Open this link in one within five minutes; it works once:\n\n  ${link}\n`)
+  print(`No browser could be opened with \`${opener}\`. ${byHand}`)
 }
 
 // Asks the server for a link that signs a browser in, with this device's token.
