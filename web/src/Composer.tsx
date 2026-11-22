@@ -17,9 +17,9 @@ import { Spinner } from "./Spinner.tsx"
 import { sizeWords } from "./workspace.ts"
 
 // The message box, floating over the end of the conversation, which
-// scrolls on under it, as T3 Code's does, and drawn as the Session view
-// drawing has it: the text two lines tall, then the paperclip on the left
-// and the model's name and Send on the right. It works as T3 Code's:
+// scrolls on under it, as T3 Code's does, laid out in two rows: the text,
+// two lines tall at least, then a row with the paperclip on the left and
+// the model's name and Send on the right. It works as T3 Code's:
 // Enter sends and Shift and Enter starts a new line; Up in an empty box
 // brings back the owner's earlier messages; a slash opens the menu of
 // commands and skills, and an @ the menu of the project's files, each a
@@ -532,13 +532,13 @@ function useModels(model: ModelChoice) {
   return models
 }
 
-// The one action of the box, round, as T3 Code's, in the drawn Send's
-// colour, which is the design system's main button's: Send, with the
-// drawn arrow; while evie works with something to send, the same steering
-// the turn, with T3 Code's arrow that turns, or with mod held, queueing it,
-// with T3 Code's list; while it works with nothing to send, Stop, in its
-// place, which stays, unable to be pressed again, until the turn has
-// ended; and while a queued message is edited, saving it.
+// The one action of the box, round, as T3 Code's, in the main button's
+// colours, filled with the text colour, its icon in the page's: Send, with
+// the bold arrow pointing up; while evie works with something to send, the
+// same steering the turn, with T3 Code's arrow that turns, or with mod
+// held, queueing it, with T3 Code's list; while it works with nothing to
+// send, Stop, in its place, which stays, unable to be pressed again, until
+// the turn has ended; and while a queued message is edited, saving it.
 function PrimaryAction({
   does,
   disabled,
@@ -576,8 +576,8 @@ function PrimaryAction({
 }
 
 // The model's name, as T3 Code's model chip shows it: its display name, as
-// its provider lists it, as a chip 28px tall at every width, in the drawn
-// quiet words, which opens the picker, and closes it again.
+// its provider lists it, as a chip 28px tall at every width, in quiet
+// words, which opens the picker, and closes it again.
 function ModelName({ model, models, toggle }: { model: string | undefined; models: readonly Model[] | undefined; toggle(): void }) {
   if (model === undefined) return null
   return (
@@ -596,8 +596,8 @@ function ModelName({ model, models, toggle }: { model: string | undefined; model
 
 // How full the conversation is, as a share of the size at which evie
 // compacts it by itself, in words; its menu says the sizes and compacts it
-// now. Its colour does not change: the board gives a colour no such job,
-// so a state is said in words, as Compacting.
+// now. Its colour does not change: none of evie's colours stands for how
+// full a conversation is, so a state is said in words, as Compacting.
 function ContextMeter({ conversation, state, opened }: { conversation: Conversation; state: ConversationState; opened(open: boolean): void }) {
   if (state.running.includes("compact")) {
     return (
