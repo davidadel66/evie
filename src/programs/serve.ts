@@ -1,6 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process"
 import { existsSync, realpathSync, rmSync } from "node:fs"
-import { constants } from "node:os"
 import { join } from "node:path"
 import { keepOutputTidy } from "../core/tools.ts"
 import { setUpPlugins } from "../core/evie.ts"
@@ -10,7 +8,7 @@ import type { WebApp } from "../server/web-app.ts"
 import { settingsEditor } from "../settings-editor.ts"
 import { loadServerSettings } from "../settings-files.ts"
 import { EXIT_CODES, fail, print, reason, STOP_FOR_GOOD, type StopSignal } from "./common.ts"
-import { LABEL } from "./service.ts"
+import { RESTART, startedAgainBy, watchFromHere, WATCHED_BY } from "./restart.ts"
 
 // Removes the file that says the server is to stop for good, if it is there.
 function forgetStopForGood(home: string) {
@@ -130,60 +128,19 @@ export async function serve(env: Settings, args: string[] = []) {
       stop(signal !== "SIGTERM" || existsSync(join(home, STOP_FOR_GOOD)), () => process.exit(code))
     })
   }
+  // Once stopped for a restart, whatever runs the server starts it again;
+  // run by hand, nothing does, so this process starts it, and watches over it.
+  const by = startedAgainBy({ ppid: process.ppid, env: process.env })
   restart = () => {
     if (stopping) return
     print("evie serve · starting again, as the settings window asked\n")
-    stop(false, startAgain)
+    stop(false, () => (by === undefined ? void watchFromHere() : process.exit(RESTART)))
   }
-}
-
-// The exit code of a server that stopped to be started again.
-const RESTART = 75
-// Set in the environment of an `evie serve` that another watches over, to
-// that one's process id.
-const WATCHED_BY = "EVIE_WATCHED_BY"
-
-// Once a restart has stopped the server, whatever runs it starts it again:
-// launchd, for the login service, which starts it again whenever it stops;
-// or the `evie serve` that started this one and watches over it. Run by
-// hand, there is nothing to, so this process does: see `watchOver`.
-// launchd is process 1, and names the service it starts in its
-// environment, which is checked too, since a process whose parent has gone
-// is given to process 1 as well.
-function startAgain(): void {
-  const byLoginService = process.ppid === 1 && process.env.XPC_SERVICE_NAME === LABEL
-  if (byLoginService || process.env[WATCHED_BY] === String(process.ppid)) process.exit(RESTART)
-  void watchOver()
-}
-
-// From now on this process only watches over a new `evie serve`, started
-// with the same arguments, in the same folder and printing to the same
-// place, and starts it again each time it stops for a restart. It passes
-// on each signal that stops a server, so Ctrl-C and closing the terminal
-// stop it as before, and it ends as that one ends, with its exit code. The
-// new one is in a process group of its own, so that the terminal's Ctrl-C
-// reaches it once, through this process.
-async function watchOver(): Promise<never> {
-  let current: ChildProcess | undefined
-  for (const signal of Object.keys(EXIT_CODES) as StopSignal[]) {
-    process.removeAllListeners(signal)
-    process.on(signal, () => current?.kill(signal))
-  }
-  for (;;) {
-    const started = spawn(process.execPath, process.argv.slice(1), {
-      stdio: ["ignore", "inherit", "inherit"],
-      detached: true,
-      env: { ...process.env, [WATCHED_BY]: String(process.pid) },
-    })
-    current = started
-    const code = await new Promise<number>((resolve) => {
-      started.on("exit", (code, signal) => resolve(code ?? 128 + (signal ? constants.signals[signal] : 0)))
-      started.on("error", (cause) => {
-        console.error(`evie serve could not be started again: ${reason(cause)}`)
-        resolve(1)
-      })
-    })
-    if (code !== RESTART) process.exit(code)
+  // A server watched over stops for good if its watcher goes, as when it is
+  // killed outright, so that it does not keep the port with no one to stop it.
+  if (by === "watcher") {
+    const watcher = Number(process.env[WATCHED_BY])
+    setInterval(() => process.ppid !== watcher && !stopping && stop(true, () => process.exit(0)), 1000).unref()
   }
 }
 

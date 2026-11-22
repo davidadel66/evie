@@ -6,7 +6,7 @@ import { loadSettings, loadSettingsFiles, startServer } from "../src/index.ts"
 import { openTokens } from "../src/server/tokens.ts"
 import { settingsEditor } from "../src/settings-editor.ts"
 import { openConnection } from "../web/src/connection.ts"
-import { keyState, openServerSettings, pluginState, projectState, type ServerSettings, type SettingsState } from "../web/src/server-settings.ts"
+import { keyState, onThisComputer, openServerSettings, pluginState, projectState, type ServerSettings, type SettingsState } from "../web/src/server-settings.ts"
 import { startEvie } from "./support/harness.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 
@@ -27,15 +27,16 @@ async function tempFolder(prefix: string) {
 }
 
 // Evie and its server on a data folder, as `evie serve` starts them, on
-// the port given or any free one. `restart` is what a restart asked for does.
-async function serveIn(home: string, port = 0, restart = () => {}) {
+// the port given or any free one. `restart` is what a restart asked for
+// does. `elsewhere` makes every connection one from another device.
+async function serveIn(home: string, port = 0, restart = () => {}, elsewhere = false) {
   const real = { EVIE_HOME: home }
   const env = await loadSettings(real)
   const files = await loadSettingsFiles({ env })
   const settings = settingsEditor({ env, environment: real, files, restart })
   const run = await startEvie([scriptedProvider([]).plugin, ...files.plugins], { home, settings, projectSettings: files.projectSettings, trust: files.trust })
   const tokens = await openTokens(home)
-  const server = startServer({ evie: run.evie, tokens, host: "127.0.0.1", port })
+  const server = startServer({ evie: run.evie, tokens, host: "127.0.0.1", port, ...(elsewhere && { fromThisComputer: () => false }) })
   let stopped = false
   const stop = async () => {
     if (stopped) return
@@ -133,4 +134,27 @@ test("each setting says in words how it stands, and when a change to it waits fo
   const project = { id: "p1", name: "garden", folder: "/made/up/garden", trusted: true, pending: false }
   expect(projectState(project)).toEqual({ word: "Trusted" })
   expect(projectState({ ...project, trusted: false, pending: true })).toEqual({ word: "Not trusted", note: "Its open sessions keep their settings until evie's server starts again." })
+})
+
+test("from another device, keys, plugin files and trusted projects are refused, saying where they can be changed; the instructions and a restart are not", async () => {
+  const home = await dataFolder()
+  const { tokens, server } = await serveIn(home, 0, () => {}, true)
+  const made = tokens.add("phone") as { secret: string }
+  const settings = follow(server.url, made.secret)
+  const { view } = await until(settings, (state) => state.view !== undefined)
+  const here = "Keys, plugins and trusted projects can be changed only on the computer evie runs on."
+
+  expect(await settings.change({ key: "OPENROUTER_API_KEY", value: "made-up" })).toBe(here)
+  expect(await settings.change({ addPlugin: "/made/up/plugin.ts" })).toBe(here)
+  expect(await settings.change({ removePlugin: "/made/up/plugin.ts" })).toBe(here)
+  expect(await settings.change({ project: "made-up", trusted: true })).toBe(here)
+  expect(settings.state().view).toBe(view)
+
+  expect(await settings.change({ instructions: "Answer briefly." })).toBeUndefined()
+  expect(settings.state().view!.instructions).toBe("Answer briefly.")
+})
+
+test("a page is on the computer evie runs on when its own address is", () => {
+  expect(["http://127.0.0.1:3843", "http://localhost:3843", "http://[::1]:3843"].map(onThisComputer)).toEqual([true, true, true])
+  expect(["http://my-mac.local:3843", "http://192.168.1.20:3843", "https://evie.example.com"].map(onThisComputer)).toEqual([false, false, false])
 })

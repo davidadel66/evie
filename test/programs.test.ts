@@ -111,10 +111,10 @@ function evieTyping(home: string, project: string, env: Record<string, string> =
 
 // Starts `evie serve` and resolves once it is listening. What it prints is
 // read for as long as it runs, so it never finds its output closed.
-async function serve(home: string) {
+async function serve(home: string, env: Record<string, string> = {}) {
   const run = Bun.spawn([process.execPath, CLI, "serve"], {
     cwd: home,
-    env: { PATH: process.env.PATH ?? "", HOME: home, EVIE_HOME: home },
+    env: { PATH: process.env.PATH ?? "", HOME: home, EVIE_HOME: home, ...env },
     stdout: "pipe",
     stderr: "pipe",
   })
@@ -723,4 +723,43 @@ test("evie serve run by hand starts again in its own place when a restart is ask
   expect(await server.exited).toBe(130)
   expect(groupThere(group)).toBe(false)
   expect(await fetch(`http://127.0.0.1:${port}/`).then(() => "answered", () => "nothing there")).toBe("nothing there")
+})
+
+// A client of the server in a data folder, connected with this computer's token.
+async function ownClient(home: string, port: number) {
+  const client = await connect({ url: `http://127.0.0.1:${port}`, token: (await readFile(join(home, "server-token"), "utf8")).trim(), firstWait: 50 })
+  cleanups.push(() => client.close())
+  return client
+}
+
+test("evie serve that something else starts again, as the login service does, stops for a restart by exiting with its own code", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  // Watched over by this test, which is its parent.
+  const server = await serve(home, { EVIE_WATCHED_BY: String(process.pid) })
+  const client = await ownClient(home, port)
+  const { started } = await client.send({ type: "read_settings" })
+
+  await client.send({ type: "restart_server", started })
+
+  expect(await server.exited).toBe(75)
+})
+
+test("a server started again by hand stops for good when the process watching over it is killed outright, freeing its port", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  const server = await serve(home)
+  const client = await ownClient(home, port)
+  const { started } = await client.send({ type: "read_settings" })
+  await client.send({ type: "restart_server", started })
+  let now = started
+  while (now === started) now = (await client.send({ type: "read_settings" })).started
+  await client.close()
+
+  server.kill("SIGKILL")
+
+  const answers = () => fetch(`http://127.0.0.1:${port}/`).then(() => true, () => false)
+  const until = Date.now() + 5000
+  while ((await answers()) && Date.now() < until) await Bun.sleep(50)
+  expect(await answers()).toBe(false)
 })
