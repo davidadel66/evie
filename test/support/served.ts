@@ -23,9 +23,13 @@ export async function serveEvie(
     signInCodeLasts?: number
     // What opens a project's folder, in place of the computer's own.
     openFolder?: NonNullable<EvieOptions["openFolder"]>
+    // A data folder to use in place of a new temporary one, for a plugin
+    // made with it. The caller removes it.
+    home?: string
   } = {},
 ) {
   const run = await startEvie(plugins, {
+    ...(options.home && { home: options.home }),
     ...(options.questions && { questions: true }),
     ...(options.projectFolder && { projectFolder: options.projectFolder }),
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
@@ -45,6 +49,8 @@ export async function serveEvie(
     ...(options.app && { app: options.app }),
     ...(options.signInCodeLasts !== undefined && { signInCodeLasts: options.signInCodeLasts }),
     attachments: run.evie.attachments,
+    storage: run.evie.storage,
+    dataFolder: run.home,
   })
   const clients: { close(): Promise<void> }[] = []
   return {

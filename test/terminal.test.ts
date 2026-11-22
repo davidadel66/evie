@@ -1,6 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
-import { basename } from "node:path"
-import { runTerminal, type Plugin } from "../src/index.ts"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { basename, join } from "node:path"
+import { runTerminal, show, type Plugin } from "../src/index.ts"
 import { say, startEvie } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -262,4 +264,28 @@ test("a session deleted from another client while the terminal has it open is sa
 
   expect(printed).toContain("Noted.")
   expect(printed).toContain("[note] This session was deleted from another client, so this terminal is done with it.")
+})
+
+test("a file evie shows is named on one line, with the folder it is kept in", async () => {
+  const model = scriptedProvider([{ text: ["Drawing it."], calls: [{ name: "show", input: { paths: ["chart.md", "notes.md"] } }] }, { text: ["Here."] }])
+  const home = await mkdtemp(join(tmpdir(), "evie-home-"))
+  const run = await startEvie([model.plugin, show({ dataFolder: home })], { home })
+  stop = async () => {
+    await run.stop()
+    await rm(home, { recursive: true, force: true })
+  }
+  await writeFile(join(run.projectFolder, "chart.md"), "# Chart\n")
+  await writeFile(join(run.projectFolder, "notes.md"), "# Notes\n")
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    lines: (async function* () {
+      yield "show me"
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  const day = /shown\/(\d{4}-\d{2}-\d{2})\//.exec(printed)?.[1]
+  expect(printed).toContain(`⏺ show {"paths":["chart.md","notes.md"]}\n  ⎿ Shown chart.md, in .evie/shown/${day}/\n  ⎿ Shown notes.md, in .evie/shown/${day}/\nHere.\n`)
 })

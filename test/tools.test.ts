@@ -72,6 +72,22 @@ test("when the model asks for a tool it runs, and the model is asked again with 
   ])
 })
 
+test("a tool may give details beside its text: the log keeps them for clients, the after_tool hooks see the text, and the model is sent the text alone", async () => {
+  const seen: string[] = []
+  const model = scriptedProvider([{ text: [], calls: [{ name: "echo", input: { text: "hello" } }] }, { text: ["Done."] }])
+  const tools = toolPlugin({ run: async (input) => ({ text: `You said: ${input.text}`, details: { said: String(input.text), times: 1 } }) })
+  const hooks: Plugin = { name: "hooks", setup: (host) => host.on("after_tool", (_call, text) => void seen.push(text)) }
+  const run = await startEvie([model.plugin, tools.plugin, hooks])
+  stop = run.stop
+
+  await say(run, "try the tool")
+
+  expect(stored(run.events).find((event) => event.type === "tool_result")?.body).toEqual({ callId: "call_1_0", name: "echo", text: "You said: hello", details: { said: "hello", times: 1 } })
+  expect(seen).toEqual(["You said: hello"])
+  expect(model.requests[1]?.messages.at(-1)).toEqual({ role: "tool", callId: "call_1_0", text: "You said: hello" })
+  expect(JSON.stringify(model.requests[1])).not.toContain("times")
+})
+
 test("tool calls in one step run one at a time, in the order asked", async () => {
   const order: string[] = []
   const { run } = await start(
