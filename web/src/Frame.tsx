@@ -119,8 +119,12 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
   useEffect(() => {
     if (!list.wide && selected !== undefined) main.current?.scrollIntoView({ block: "start" })
   }, [selected, list.wide])
+  // At desktop width the three columns are the whole page, exactly the
+  // window's height, and each scrolls inside itself. Nothing in them may
+  // make the page itself taller, or the page could be scrolled down past
+  // them, as an opened row in the work log could do.
   return (
-    <div className="flex flex-col wide:h-dvh wide:flex-row">
+    <div className="flex flex-col wide:h-dvh wide:flex-row wide:overflow-hidden">
       <ListPlace picked={() => !list.wide && main.current?.scrollIntoView({ block: "start" })}>
         <ListTop connection={connection} sessions={sessions} settings={<SettingsButton />} />
         {list.wide && <ConnectionLine state={state} />}
