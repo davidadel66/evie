@@ -14,14 +14,15 @@ import { ProjectTile } from "./ProjectIcon.tsx"
 import { titleOf } from "./session-list.ts"
 import type { SessionList, Sessions } from "./sessions.ts"
 import { Later, StorageView } from "./StorageView.tsx"
-import { addressOfWorkspace, NEW_CHAT, needsYou, sessionStatus, sessionsOf, workspaceIn, type SessionStatus, type WorkspacePlace, type WorkspaceTab } from "./workspace.ts"
-import { setChatShown, SideChat, useChatShown } from "./WorkspaceChat.tsx"
+import { addressOfWorkspace, NEW_CHAT, needsYou, sessionStatus, sessionsOf, setChatShown, workspaceIn, type SessionStatus, type WorkspacePlace, type WorkspaceTab } from "./workspace.ts"
+import { SideChat, useChatShown } from "./WorkspaceChat.tsx"
 
 // The workspace view: a project's home. The strip of every workspace on
 // the left, the workspace itself, with its header and the tab open, and
-// the side chat beside it, which the owner can hide. At phone width the
-// strip stays a column on the left, and the side chat stacks below the
-// workspace, a screen high.
+// the side chat beside it, which the owner can hide. Where the two no
+// longer fit side by side, as on a phone or an upright tablet, the strip
+// stays a column on the left, and the side chat stacks below the
+// workspace, a screen high, the two scrolling together.
 
 // Where the owner is, when it is in a workspace, redrawn as the address
 // changes. Elsewhere, the address is remembered, for the strip's way back.
@@ -44,40 +45,41 @@ export function WorkspaceView({ place, state, connection, sessions }: { place: W
   const project = list.projects.find((each) => each.id === place.workspace)
   const now = useMinute()
   const chatShown = useChatShown()
-  // A new chat, asked for from anywhere, as with the command palette's New session, is shown.
-  useEffect(() => {
-    if (place.chat === NEW_CHAT) setChatShown(true)
-  }, [place.chat])
   // Back to the session view as it was left, or to the side chat's session there.
   const chat = place.chat !== undefined && place.chat !== NEW_CHAT ? place.chat : undefined
   const back = sessionView ?? (chat !== undefined ? addressOf({ session: chat }) : "#")
   return (
-    <div className="flex min-h-dvh wide:h-dvh">
+    <div className="flex h-dvh">
       <Strip list={list} place={place} back={back} connection={connection} sessions={sessions} />
-      <div className="flex min-w-0 flex-1 flex-col wide:min-h-0 wide:flex-row">
-        <main className="flex min-w-0 flex-1 flex-col bg-bg wide:min-h-0">
-          {project === undefined ? (
-            <>
-              <header className="h-header-height shrink-0 border-b border-line" />
-              <ConnectionLine state={state} />
-              {/* Until the projects are listed, nothing is said. */}
-              {list.projects.length > 0 && <Placeholder title="This workspace is not in the list" text="Pick another in the strip, or make a new one there." />}
-            </>
-          ) : (
-            <>
-              <Header project={project} place={place} chatShown={chatShown} connection={connection} sessions={sessions} />
-              <ConnectionLine state={state} />
-              <div className="flex min-h-0 flex-1 flex-col wide:overflow-y-auto">
-                {place.tab === "storage" ? <StorageView connection={connection} project={project} place={place} now={now} /> : <SessionsTab list={list} place={place} now={now} />}
-              </div>
-            </>
-          )}
-        </main>
-        {chatShown && (
-          <aside aria-label="Chat with evie" className="flex h-dvh shrink-0 flex-col border-line bg-bg-side max-wide:border-t wide:h-auto wide:w-side-chat-width wide:border-l">
+      <div className="@container min-w-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-full flex-col @workspace-columns:h-full @workspace-columns:flex-row">
+          <main className="flex min-w-0 flex-1 flex-col bg-bg @workspace-columns:min-h-0">
+            {project === undefined ? (
+              <>
+                <header className="h-header-height shrink-0 border-b border-line" />
+                <ConnectionLine state={state} />
+                {/* Until the projects are listed, nothing is said. */}
+                {list.projects.length > 0 && <Placeholder title="This workspace is not in the list" text="Pick another in the strip, or make a new one there." />}
+              </>
+            ) : (
+              <>
+                <Header project={project} place={place} chatShown={chatShown} connection={connection} sessions={sessions} />
+                <ConnectionLine state={state} />
+                <div className="flex min-h-0 flex-1 flex-col @workspace-columns:overflow-y-auto">
+                  {place.tab === "storage" ? <StorageView connection={connection} project={project} place={place} now={now} /> : <SessionsTab list={list} place={place} now={now} />}
+                </div>
+              </>
+            )}
+          </main>
+          {/* Hidden, it stays on the page, so that a chat starting goes on starting. */}
+          <aside
+            aria-label="Chat with evie"
+            hidden={!chatShown}
+            className="flex h-dvh shrink-0 flex-col border-t border-line bg-bg-side @workspace-columns:h-auto @workspace-columns:w-side-chat-width @workspace-columns:border-t-0 @workspace-columns:border-l"
+          >
             {project !== undefined && <SideChat project={project} place={place} list={list} connection={connection} sessions={sessions} />}
           </aside>
-        )}
+        </div>
       </div>
     </div>
   )
@@ -87,11 +89,10 @@ export function WorkspaceView({ place, state, connection, sessions }: { place: W
 // tile for every workspace, the one open with a line in its colour on its
 // edge, each with a dot while a session in it needs the owner, then Add a
 // workspace as a dashed tile, and the settings at the bottom. Moving to
-// another workspace keeps the tab. It stays in sight as the page scrolls
-// at phone width.
+// another workspace keeps the tab.
 function Strip({ list, place, back, connection, sessions }: { list: SessionList; place: WorkspacePlace; back: string; connection: Connection; sessions: Sessions }) {
   return (
-    <nav aria-label="Workspaces" className="sticky top-0 flex h-dvh w-rail-width shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-line bg-bg-side py-2">
+    <nav aria-label="Workspaces" className="flex w-rail-width shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-line bg-bg-side py-2">
       <a href={back} aria-label="Back to the session list" title="Back to the session list" className={cn(buttonVariants({ variant: "icon" }), "size-tile-strip [&>svg]:size-icon-md")}>
         <List />
       </a>
@@ -137,24 +138,24 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
 // The workspace's header, in one row: its tile and name, which open the
 // picker of its icon and colour; its dashboards as tabs, none yet; Storage,
 // Sessions and Memory pinned to the right, Memory not yet there; and the
-// toggle that hides and shows the side chat. At phone width the name and
-// the toggle keep the first row, and the pinned tabs move to a row under
-// them, so that the name and every tab stay whole.
+// toggle that hides and shows the side chat. Where the row is short, the
+// name gives way, cut with an ellipsis, down to a width it always keeps,
+// and then the tabs scroll sideways. The open tab's line lies on the
+// header's own line.
 function Header({ project, place, chatShown, connection, sessions }: { project: ListedProject; place: WorkspacePlace; chatShown: boolean; connection: Connection; sessions: Sessions }) {
   const toggle = chatShown ? "Hide the chat" : "Show the chat"
   return (
-    <header className="flex shrink-0 flex-wrap items-stretch gap-x-6 border-b border-line pr-3 pl-gutter wide:h-header-height wide:flex-nowrap">
-      <h1 className="flex h-header-height min-w-0 flex-1 items-center wide:flex-initial">
+    <header className="flex h-header-height shrink-0 items-stretch gap-4 border-b border-line pr-3 pl-gutter @workspace-columns:gap-6">
+      <h1 className="flex flex-1 items-center">
         <IconPicker connection={connection} sessions={sessions} project={project}>
-          <button type="button" title="Pick its icon and colour" className="-ml-2 flex h-control min-w-0 items-center gap-2 rounded-md px-2">
+          <button type="button" title="Pick its icon and colour" className="-ml-2 flex h-control items-center gap-2 rounded-md px-2">
             <ProjectTile project={project.id} size="header" />
-            <span className="truncate text-title text-text">{project.name}</span>
+            <span className="min-w-workspace-name truncate text-title text-text">{project.name}</span>
           </button>
         </IconPicker>
       </h1>
       {/* A workspace's dashboards will be tabs here, after its name. */}
-      <div className="hidden flex-1 wide:block" />
-      <nav aria-label="Workspace" className="order-last flex h-control basis-full items-stretch gap-6 wide:order-none wide:h-auto wide:basis-auto">
+      <nav aria-label="Workspace" className="-mb-(--line-width) flex min-w-0 items-stretch gap-6 overflow-x-auto">
         <Tab name="Storage" tab="storage" place={place} />
         <Tab name="Sessions" tab="sessions" place={place} />
         <span aria-disabled="true" className="flex shrink-0 items-center gap-2 text-label text-text-muted">
@@ -162,7 +163,7 @@ function Header({ project, place, chatShown, connection, sessions }: { project: 
           <Later />
         </span>
       </nav>
-      <Button variant="icon" aria-label={toggle} title={toggle} onClick={() => setChatShown(!chatShown)} className="self-center">
+      <Button variant="icon" aria-label={toggle} title={toggle} onClick={() => setChatShown(!chatShown)} className="shrink-0 self-center">
         <SidebarRight />
       </Button>
     </header>

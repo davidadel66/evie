@@ -21,6 +21,38 @@ export type WorkspacePlace = { workspace: string; tab: WorkspaceTab; chat?: stri
 // ids are UUIDs.
 export const NEW_CHAT = "new"
 
+// Whether the side chat is shown. The owner hides it with its ×, or with
+// the toggle in the workspace's header, which shows it again, and New
+// session shows it too. This browser remembers which; one that keeps
+// nothing, as in a private window, shows it.
+const CHAT_SHOWN = "evie.side-chat"
+let shown: boolean | undefined
+const shownListeners = new Set<() => void>()
+export function chatShown(): boolean {
+  if (shown === undefined) {
+    try {
+      shown = localStorage.getItem(CHAT_SHOWN) !== "hidden"
+    } catch {
+      shown = true
+    }
+  }
+  return shown
+}
+export function setChatShown(next: boolean) {
+  const was = chatShown()
+  shown = next
+  try {
+    localStorage.setItem(CHAT_SHOWN, next ? "shown" : "hidden")
+  } catch {
+    // Not remembered: the next visit shows it.
+  }
+  if (was !== next) for (const listener of [...shownListeners]) listener()
+}
+export function onChatShown(listener: () => void): () => void {
+  shownListeners.add(listener)
+  return () => void shownListeners.delete(listener)
+}
+
 // The workspace an address's part after # is in, or undefined for none.
 // It opens on Sessions, until it has dashboards to open on.
 export function workspaceIn(hash: string): WorkspacePlace | undefined {
@@ -32,6 +64,16 @@ export function workspaceIn(hash: string): WorkspacePlace | undefined {
   const chat = named.get("chat")
   const file = named.get("file")
   return { workspace, tab, ...(chat !== null && chat !== "" && { chat }), ...(tab === "storage" && file !== null && file !== "" && { file }) }
+}
+
+// What New session does in a workspace, from the address's part after #:
+// shows the side chat, and gives back the address of a new chat in it,
+// which may be where the address is already. Elsewhere, nothing.
+export function newChat(hash: string): string | undefined {
+  const place = workspaceIn(hash)
+  if (place === undefined) return undefined
+  setChatShown(true)
+  return addressOfWorkspace({ ...place, chat: NEW_CHAT })
 }
 
 // The part after # for a place in a workspace.

@@ -1,16 +1,18 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { ListedProject, StorageEntry } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
-import { CaretLeft, File, FileImage, FolderSimple } from "./icons.tsx"
+import { CaretLeft, CaretRight, File, FileImage, Folder } from "./icons.tsx"
 import { ageWords } from "./session-list.ts"
 import { openStorage, type Storage, type StorageState } from "./storage.ts"
 import { addressOfWorkspace, sizeWords, type WorkspacePlace } from "./workspace.ts"
 
 // The workspace's Storage tab: the files in its project's .evie folder,
 // the files attached to messages among them, in its attachments folder, as
-// a tree of rows: each with its icon, its name and how long ago it changed,
-// a folder's entries opening in place under its row, a step further in. A
-// file opens in the workspace, read only, in place of the tree.
+// a tree of rows, every folder open, as drawn: each row with its icon, its
+// name and how long ago it changed, a folder's entries under its row, a
+// step further in. A folder folds by its caret, as T3 Code's trees do. At
+// its foot, whether the folder is backed up. A file opens in the
+// workspace, read only, in place of the tree.
 export function StorageView({ connection, project, place, now }: { connection: Connection; project: ListedProject; place: WorkspacePlace; now: number }) {
   const [storage, setStorage] = useState<{ project: string; storage: Storage }>()
   useEffect(() => {
@@ -19,10 +21,10 @@ export function StorageView({ connection, project, place, now }: { connection: C
     return () => opened.close()
   }, [connection, project.id])
   if (storage?.project !== project.id) return null
-  return <Shown storage={storage.storage} place={place} now={now} />
+  return <Shown storage={storage.storage} project={project} place={place} now={now} />
 }
 
-function Shown({ storage, place, now }: { storage: Storage; place: WorkspacePlace; now: number }) {
+function Shown({ storage, project, place, now }: { storage: Storage; project: ListedProject; place: WorkspacePlace; now: number }) {
   const state = useSyncExternalStore(storage.subscribe, storage.state)
   useEffect(() => storage.show(place.file), [storage, place.file])
   const { file: _, ...here } = place
@@ -43,12 +45,15 @@ function Shown({ storage, place, now }: { storage: Storage; place: WorkspacePlac
           <More count={top.more ?? 0} indent={0} />
         </ul>
       )}
+      <p className="border-t border-line pt-3 text-caption text-text-muted">{project.syncs ? "Backed up privately" : "Kept on this computer"}</p>
     </section>
   )
 }
 
 // The rows of a folder's entries, each folder's own entries under it while
-// it is open. A folder opens and closes as its row is picked.
+// it is open. A folder folds and opens again as its row is picked, its
+// caret turning; a file's row keeps the caret's room, so that the icons of
+// a level line up.
 function Entries({ entries, depth, state, storage, place, now }: { entries: StorageEntry[]; depth: number; state: StorageState; storage: Storage; place: WorkspacePlace; now: number }) {
   const indent = indentOf(depth)
   return entries.map((entry) => {
@@ -58,6 +63,7 @@ function Entries({ entries, depth, state, storage, place, now }: { entries: Stor
       return (
         <li key={entry.path}>
           <a href={addressOfWorkspace({ ...place, tab: "storage", file: entry.path })} style={indent} className="flex h-row-height items-center gap-2 border-t border-line">
+            <span aria-hidden="true" className="size-icon-caret shrink-0" />
             <Icon className="size-icon-sm shrink-0 text-text-muted" />
             <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{entry.name}</span>
             {age}
@@ -65,12 +71,13 @@ function Entries({ entries, depth, state, storage, place, now }: { entries: Stor
         </li>
       )
     }
-    const open = state.open.has(entry.path)
+    const open = !state.closed.has(entry.path)
     const inside = state.folders.get(entry.path)
     return (
       <li key={entry.path} className="flex flex-col">
         <button type="button" aria-expanded={open} onClick={() => storage.toggle(entry.path)} style={indent} className="flex h-row-height items-center gap-2 border-t border-line text-left">
-          <FolderSimple className="size-icon-sm shrink-0 text-text-muted" />
+          <CaretRight className={`size-icon-caret shrink-0 text-text-muted transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
+          <Folder className="size-icon-sm shrink-0 text-text-muted" />
           <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{entry.name}</span>
           {age}
         </button>

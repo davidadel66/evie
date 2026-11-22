@@ -1,5 +1,5 @@
 import { select } from "./selection.ts"
-import { addressOfWorkspace, NEW_CHAT, workspaceIn } from "./workspace.ts"
+import { newChat } from "./workspace.ts"
 
 // What the command palette and the shortcuts ask of a part of the page
 // that keeps its own state: the session list to start a new session where
@@ -36,10 +36,11 @@ export function windowOver(): "palette" | "other" | undefined {
 }
 
 // A new session, wherever the owner is: in a workspace, a new one in its
-// side chat, in its project; in the session view, where the list's New
-// session would make one, or with no list, a draft with no project.
+// side chat, in its project, with the side chat shown; in the session view,
+// where the list's New session would make one, or with no list, a draft
+// with no project.
 export function newSession() {
-  const workspace = workspaceIn(location.hash)
-  if (workspace !== undefined) location.hash = addressOfWorkspace({ ...workspace, chat: NEW_CHAT })
+  const chat = newChat(location.hash)
+  if (chat !== undefined) location.hash = chat
   else if (!ask("new session")) select({ draft: null })
 }

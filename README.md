@@ -659,9 +659,10 @@ session list or the project card. The page then has three other columns:
   Done or how long ago it was active. Picking one opens it in the session
   view.
 - **Storage** lists the files in the project's `.evie` folder as a tree,
-  each with its icon, its name and how long ago it changed, a folder
-  opening in place under its own row, up to 500 to a folder. A text file
-  or an image opens in the workspace, read only. The server reads only
+  every folder open, each row with its icon, its name and how long ago it
+  changed, up to 500 to a folder; a folder folds by its row's caret. At
+  its foot it says whether the folder is backed up. A text file or an
+  image opens in the workspace, read only. The server reads only
   inside the `.evie` folder: a path that leaves it, by `..` or through a
   link, is refused, and so are the folder's own git repository and a file
   over 1 MB. So is the whole of a `.evie` that is itself a link to another
@@ -669,17 +670,22 @@ session list or the project card. The page then has three other columns:
   your keys, as for a project at your home folder. The files attached to
   messages are here, under `attachments/`.
 - **The side chat,** on the right, is a small chat with evie about the
-  workspace. Its header says evie over the chat's title, with Open this
-  chat full size, which opens it in the session view, and Close the chat.
-  It shows the conversation in short: your messages, evie's words, and
-  each run of evie's work, a note or the files a turn changed as one quiet
-  line. A question waits at its end, its first choice the main one, and
-  while evie works a line says so, with Stop. Under it is a small box,
-  where Enter sends and Escape stops evie. It shows the session the
+  workspace. Its header says evie over the chat's title, with New chat,
+  Open this chat full size, which opens it in the session view, and Close
+  the chat. It shows the conversation in short: your messages, evie's
+  words, and each run of evie's work as one quiet line in plain words, as
+  T3 Code's work log says it ("Edited usage.html", "Read 2 files and ran
+  1 command"), with background work finishing and other notes the same
+  way; notes written for the model are left out. A command such as
+  /compact shows a line while it runs. A question waits at its end, its
+  first choice the main one, and while evie works a line says so, with
+  Stop. Under it is a small box, where Enter sends and Escape stops evie.
+  Scrolling up reads the earlier conversation. It shows the session the
   address keeps, or until one is kept, the workspace's latest, or a new
-  chat in its project when it has none; New session, from the keys or the
-  palette, starts a new one there. Hidden, it stays hidden in this browser
-  until the header's button shows it again.
+  chat in its project when it has none; New chat, or New session from the
+  keys or the palette, starts a new one there. Hidden, it stays hidden in
+  this browser until the header's button or New session shows it again,
+  and while it is hidden nothing in it counts as looked at.
 - **New workspace**, from Add a workspace in the strip, New workspace… in
   the New session button's menu, or a session list with nothing in it yet,
   asks for a name, a folder,
@@ -690,10 +696,11 @@ session list or the project card. The page then has three other columns:
 
 The address keeps where you are, as `#workspace=<project id>&tab=storage`,
 with `&chat=<session id>` for the side chat's session and `&file=<path>`
-for a file open in Storage. At phone width the strip stays a column on
-the left, the workspace's name and the side chat's button keep the
-header's first row, with the tabs on a row under them, and the side chat
-stacks below the workspace, a screen high.
+for a file open in Storage. Where the workspace and the side chat no
+longer fit side by side, under 880px beside the strip, as on a phone or
+an upright tablet, the strip stays a column on the left and the side chat
+stacks below the workspace, a screen high. The header stays one row: the
+name is cut down to 96px at the least, and then the tabs scroll sideways.
 
 ### Attachments
 
@@ -1522,6 +1529,7 @@ layout's own breakpoint, where the list and the card become sheets, is
 | `settings-field` | 200px | A text box beside a setting |
 | `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle of an empty page |
 | `workspace-name` | 96px | The least a workspace's name keeps in its header before its tabs scroll sideways |
+| `workspace-columns` | 880px | A container width: the least room beside the strip for a workspace and its side chat side by side |
 | `project-filter` | 128px | The widest the session list's project filter grows |
 | `icon-picker` | 230px; 254px below 640px | The project icon picker: six 32px columns (36px below 640px), their gaps, its padding and its line |
 | `icon-grid` | 220px | The tallest the picker's icons grow before they scroll |

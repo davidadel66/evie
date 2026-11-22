@@ -1,18 +1,17 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { ListedProject } from "../../src/core/types.ts"
 import { useAsking } from "./Asking.tsx"
-import { holdChanges, type Changes } from "./changes.ts"
 import { Button, buttonVariants } from "./components/ui/button.tsx"
 import type { Connection } from "./connection.ts"
 import { holdConversation, openDraft, startedHere, type Conversation, type Draft } from "./conversation.ts"
-import { ArrowsOut, ArrowUpBold, X } from "./icons.tsx"
+import { ArrowsOut, ArrowUpBold, Plus, X } from "./icons.tsx"
 import { renderMarkdown } from "./markdown.ts"
 import { sendDoes, type Asked } from "./questions.ts"
 import type { SessionList, Sessions } from "./sessions.ts"
 import { onMac, pressed } from "./shortcuts.ts"
 import { useWide } from "./wide.ts"
-import { addressOfWorkspace, chatAddress, latestSession, NEW_CHAT, type WorkspacePlace } from "./workspace.ts"
-import { chatTitle, fullSize, sideChatOf, type ChatLine } from "./workspace-chat.ts"
+import { addressOfWorkspace, chatAddress, chatShown, latestSession, NEW_CHAT, onChatShown, setChatShown, type WorkspacePlace } from "./workspace.ts"
+import { chatTitle, fullSize, givenBackWords, sideChatOf, type ChatLine } from "./workspace-chat.ts"
 
 // The workspace's side chat: a small chat with evie about the workspace,
 // beside it. Its header says "evie" over the chat's title, with the ways to
@@ -21,36 +20,12 @@ import { chatTitle, fullSize, sideChatOf, type ChatLine } from "./workspace-chat
 // box to write in. It shows the session the address keeps, or until one is
 // kept, the workspace's latest, or a new chat in its project when it has
 // none: kept in the address, so that another session becoming the latest
-// does not change it.
+// does not change it. New chat in its header starts a new one, as T3 Code
+// keeps New thread one click away. Hidden, it stays on the page, so that a
+// chat starting goes on starting.
 
-// Whether the side chat is shown. The owner hides it with its ×, or with
-// the toggle in the workspace's header, which shows it again, and this
-// browser remembers which. A browser that keeps nothing, as in a private
-// window, shows it.
-const KEY = "evie.side-chat"
-let shown = (() => {
-  try {
-    return localStorage.getItem(KEY) !== "hidden"
-  } catch {
-    return true
-  }
-})()
-const listeners = new Set<() => void>()
-export function setChatShown(next: boolean) {
-  if (next === shown) return
-  shown = next
-  try {
-    localStorage.setItem(KEY, next ? "shown" : "hidden")
-  } catch {
-    // Not remembered: the next visit shows it.
-  }
-  for (const listener of [...listeners]) listener()
-}
-const onShown = (listener: () => void) => {
-  listeners.add(listener)
-  return () => void listeners.delete(listener)
-}
-export const useChatShown = () => useSyncExternalStore(onShown, () => shown)
+// Whether the side chat is shown, redrawn as it changes.
+export const useChatShown = () => useSyncExternalStore(onChatShown, chatShown)
 
 export function SideChat({ project, place, list, connection, sessions }: { project: ListedProject; place: WorkspacePlace; list: SessionList; connection: Connection; sessions: Sessions }) {
   const latest = latestSession(list.sessions, project.id)?.session
@@ -60,6 +35,7 @@ export function SideChat({ project, place, list, connection, sessions }: { proje
   }, [place, list.listed, latest])
   const chat = place.chat
   if (chat === undefined) return <ChatHeader title="" />
+  const fresh = addressOfWorkspace({ ...place, chat: NEW_CHAT })
   if (chat === NEW_CHAT) {
     return (
       <>
@@ -72,33 +48,31 @@ export function SideChat({ project, place, list, connection, sessions }: { proje
   if (session === undefined && startedHere(chat) === undefined) {
     return (
       <>
-        <ChatHeader title="" />
-        {list.listed && (
-          <div className="flex flex-1 flex-col items-start gap-1 px-gutter py-4">
-            <p className="text-caption text-text-muted">This chat is not in the list. It may have been deleted.</p>
-            <a href={addressOfWorkspace({ ...place, chat: NEW_CHAT })} className="text-caption font-semibold text-text">
-              Start a new chat
-            </a>
-          </div>
-        )}
+        <ChatHeader title="" fresh={fresh} />
+        {list.listed && <p className="px-gutter py-4 text-caption text-text-muted">This chat is not in the list. It may have been deleted. New chat, above, starts another.</p>}
       </>
     )
   }
   return (
     <>
-      <ChatHeader title={chatTitle(session, project.name)} full={fullSize(chat, project.id)} />
+      <ChatHeader title={chatTitle(session, project.name)} fresh={fresh} full={fullSize(chat, project.id)} />
       <ChatSession key={chat} connection={connection} session={chat} />
     </>
   )
 }
 
-function ChatHeader({ title, full }: { title: string; full?: string }) {
+function ChatHeader({ title, fresh, full }: { title: string; fresh?: string; full?: string }) {
   return (
     <header className="flex h-header-height shrink-0 items-center gap-1 border-b border-line pr-2 pl-gutter">
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="text-label text-text">evie</span>
         <span className="truncate text-caption text-text-muted">{title}</span>
       </div>
+      {fresh !== undefined && (
+        <a href={fresh} aria-label="New chat" title="New chat" className={buttonVariants({ variant: "icon" })}>
+          <Plus />
+        </a>
+      )}
       {full !== undefined && (
         <a href={full} aria-label="Open this chat full size" title="Open this chat full size" className={buttonVariants({ variant: "icon" })}>
           <ArrowsOut />
@@ -111,27 +85,21 @@ function ChatHeader({ title, full }: { title: string; full?: string }) {
   )
 }
 
-// A session's chat, with its conversation and the turns that changed files
-// held while it shows.
+// A session's chat, with its conversation held while it shows.
 function ChatSession({ connection, session }: { connection: Connection; session: string }) {
-  const [opened, setOpened] = useState<{ session: string; conversation: Conversation; changes: Changes }>()
+  const [opened, setOpened] = useState<{ session: string; conversation: Conversation }>()
   useEffect(() => {
     const held = holdConversation(connection, session)
-    const changes = holdChanges(connection, session)
-    setOpened({ session, conversation: held.conversation, changes: changes.changes })
-    return () => {
-      changes.release()
-      held.release()
-    }
+    setOpened({ session, conversation: held.conversation })
+    return () => held.release()
   }, [connection, session])
   if (opened?.session !== session) return null
-  return <Talking conversation={opened.conversation} changes={opened.changes} />
+  return <Talking conversation={opened.conversation} />
 }
 
-function Talking({ conversation, changes }: { conversation: Conversation; changes: Changes }) {
+function Talking({ conversation }: { conversation: Conversation }) {
   const state = useSyncExternalStore(conversation.subscribe, conversation.state)
-  const changed = useSyncExternalStore(changes.subscribe, changes.state).listed?.turns
-  const lines = useMemo(() => sideChatOf(state, changed), [state, changed])
+  const lines = useMemo(() => sideChatOf(state), [state])
   const asking = useAsking(state.waiting)
   const { shown } = asking
   // A message that could not be sent on the box's behalf, as a new chat's
@@ -140,7 +108,7 @@ function Talking({ conversation, changes }: { conversation: Conversation; change
   useEffect(() => {
     if (state.givenBack === undefined) return
     const back = conversation.takeGivenBack()
-    if (back !== undefined) setGiven(back)
+    if (back !== undefined) setGiven({ text: back.text, problem: givenBackWords(back) })
   }, [state.givenBack, conversation])
 
   // What sending does, as the full message box does it: words answer the
@@ -159,7 +127,8 @@ function Talking({ conversation, changes }: { conversation: Conversation; change
 
   return (
     <>
-      <Lines lines={lines}>
+      <Lines lines={lines} readEarlier={() => conversation.readEarlier()}>
+        {state.readingEarlier && <Step text="Reading the earlier chat" />}
         {state.problem !== undefined ? (
           <div className="flex flex-col items-start">
             <p className="text-caption break-words text-text-muted">{state.problem}</p>
@@ -231,16 +200,37 @@ function Drafting({ draft, project }: { draft: Draft; project: string }) {
 
 // How near the bottom, in pixels, counts as at the bottom.
 const AT_BOTTOM = 32
+// How many of the first lines are remembered to keep the owner's place.
+const ANCHORS = 5
 
 // The chat's lines, then what ends them, kept at the bottom as they come
-// while the owner is there; one who has scrolled up is left where they are.
-function Lines({ lines, children }: { lines: ChatLine[]; children?: ReactNode }) {
+// while the owner is there; one who has scrolled up is left where they
+// are. Within half a screen of the top, the page before is read, with
+// `readEarlier`, and the owner's place is kept as it joins above, as the
+// full conversation keeps it.
+function Lines({ lines, readEarlier, children }: { lines: ChatLine[]; readEarlier?: () => void; children?: ReactNode }) {
   const scroller = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const stuck = useRef(true)
+  // Where the first few lines were as last drawn.
+  const drawn = useRef<{ key: string; top: number }[]>([])
+  const readIfNearTop = () => {
+    const box = scroller.current
+    if (box && readEarlier && box.scrollTop < box.clientHeight / 2) readEarlier()
+  }
+  // After each change, before it is shown: kept at the bottom, or moved by
+  // as far as the first of the lines drawn last time that is still there.
   useLayoutEffect(() => {
     const box = scroller.current
-    if (box && stuck.current) box.scrollTop = box.scrollHeight
+    if (!box) return
+    const placed = (key: string) => box.querySelector<HTMLElement>(`[data-line="${CSS.escape(key)}"]`)
+    if (stuck.current) box.scrollTop = box.scrollHeight
+    else {
+      const anchor = drawn.current.find((each) => placed(each.key) !== null)
+      if (anchor) box.scrollTop += placed(anchor.key)!.offsetTop - anchor.top
+    }
+    drawn.current = [...box.querySelectorAll<HTMLElement>("[data-line]")].slice(0, ANCHORS).map((each) => ({ key: each.dataset.line!, top: each.offsetTop }))
+    readIfNearTop()
   })
   // What grows by itself, as a reply rewrapping when the window is resized.
   useEffect(() => {
@@ -254,17 +244,21 @@ function Lines({ lines, children }: { lines: ChatLine[]; children?: ReactNode })
     return () => watch.disconnect()
   }, [])
   return (
+    // The browser's own anchoring is off, since this keeps the owner's place itself.
     <div
       ref={scroller}
       onScroll={() => {
         const box = scroller.current!
         stuck.current = box.scrollHeight - box.scrollTop - box.clientHeight <= AT_BOTTOM
+        readIfNearTop()
       }}
-      className="min-h-0 flex-1 overflow-y-auto"
+      className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
     >
-      <div ref={content} className="flex flex-col gap-3 px-gutter py-4">
+      <div ref={content} className="relative flex flex-col gap-3 px-gutter py-4">
         {lines.map((line) => (
-          <Line key={line.key} line={line} />
+          <div key={line.key} data-line={line.key} className="flex flex-col">
+            <Line line={line} />
+          </div>
         ))}
         {children}
       </div>
@@ -364,9 +358,14 @@ function ChatBox({ send, asking, given, stop }: { send(text: string): Promise<st
   const [problem, setProblem] = useState<string>()
   const box = useRef<HTMLTextAreaElement>(null)
   const wide = useWide()
-  // Focused as the chat opens, where there is a keyboard to type with.
+  // Focused as the chat opens, where there is a keyboard to type with and
+  // the box is in sight, as it is not when it is stacked below the
+  // workspace, which the page is not moved away from.
   useEffect(() => {
-    if (wide) box.current?.focus()
+    const area = box.current
+    if (!wide || area === null) return
+    const at = area.getBoundingClientRect()
+    if (at.height > 0 && at.bottom <= innerHeight) area.focus({ preventScroll: true })
   }, [])
   useEffect(() => {
     if (given === undefined) return
@@ -374,11 +373,13 @@ function ChatBox({ send, asking, given, stop }: { send(text: string): Promise<st
     setProblem(given.problem)
   }, [given])
   // It grows with its text, from two lines, up to a height, then scrolls.
+  // While the chat is hidden it has no height to measure, and keeps its
+  // two lines.
   useLayoutEffect(() => {
     const area = box.current
     if (!area) return
     area.style.height = "auto"
-    area.style.height = `${area.scrollHeight}px`
+    if (area.scrollHeight > 0) area.style.height = `${area.scrollHeight}px`
   }, [text])
 
   async function submit() {
@@ -433,7 +434,8 @@ function ChatBox({ send, asking, given, stop }: { send(text: string): Promise<st
             className="max-h-composer-text w-full resize-none overflow-y-auto bg-transparent text-field text-text outline-none placeholder:text-text-muted"
           />
         </label>
-        <Button type="submit" variant="primary" aria-label="Send" disabled={text.trim() === ""} className="size-control rounded-full p-0">
+        {/* Filled at all times, as drawn; with nothing to send it is dimmed. */}
+        <Button type="submit" variant="primary" aria-label="Send" disabled={text.trim() === ""} className="size-control rounded-full p-0 disabled:bg-text disabled:text-bg disabled:opacity-50">
           <ArrowUpBold className="size-icon-sm" />
         </Button>
       </form>
