@@ -7,14 +7,20 @@ import type { Job, StoredEvent } from "../../src/core/types.ts"
 // What the page knows of a session: its stored events, in order, from the
 // earliest read so far; whether there are earlier ones; the reply being
 // written now, as far as it has come; whether a turn is running; and its
-// background jobs.
+// background jobs. `pending` are the owner's messages sent from this page
+// that the session has not taken in yet, in the order sent. `notes` are
+// said in this page and kept nowhere, such as what a command said, each
+// at the time of the session's last event when it was said.
 export type View = {
   events: readonly StoredEvent[]
   earlier: boolean
   replySoFar: string
   turnRunning: boolean
   jobs: readonly Job[]
+  pending?: readonly string[]
+  notes?: readonly PageNote[]
 }
+export type PageNote = { key: string; time: number; text: string }
 
 // One tool call: its name, a short form of its input, and its result as
 // stored, once it has one, with that result in short. `running` while it is
@@ -25,7 +31,8 @@ export type Call = { id: string; name: string; input: string; result?: string; s
 // `turn` is the number of the turn it belongs to, counted in what has been
 // read, so that the page can space turns apart.
 export type Item = { key: string; turn: number } & (
-  | { kind: "owner"; text: string }
+  // `sending` while the session has not taken it in yet.
+  | { kind: "owner"; text: string; sending?: true }
   | { kind: "reply"; text: string; streaming: boolean }
   // A run of tool calls with nothing said between them, as one line, and
   // what that line says: Working while one of them is, how long the turn
@@ -161,6 +168,9 @@ export function transcriptOf(view: View): Item[] {
     } else if (view.replySoFar === "") add({ key: "working", turn, kind: "steps", calls: [], label: "Working", running: true }, Infinity)
   }
   if (view.replySoFar !== "") add({ key: "streaming", turn, kind: "reply", text: view.replySoFar, streaming: true }, Infinity)
+  // The owner's messages the session has not taken in yet come last, as
+  // they will: a turn takes them in at its next step.
+  for (const [at, text] of (view.pending ?? []).entries()) add({ key: `pending${at}`, turn, kind: "owner", text, sending: true }, Infinity)
   // Each run is known by its last call, which reading the page before does
   // not change, and says what it is.
   for (const item of items) {
@@ -182,7 +192,8 @@ export function transcriptOf(view: View): Item[] {
     const took = Math.max(0, Math.round((ended - job.started) / 1000))
     return [start, { key: `job${job.id}-end`, time: ended, text: `Background job ${job.id} ${how} after ${took}s: ${job.title}` }]
   })
-  for (const line of lines.filter((each) => each.time >= from).sort((a, b) => a.time - b.time)) {
+  // The notes said in this page go where they were said, in the same way.
+  for (const line of [...lines.filter((each) => each.time >= from), ...(view.notes ?? [])].sort((a, b) => a.time - b.time)) {
     const at = items.findIndex((item) => times.get(item)! > line.time)
     const place = at === -1 ? items.length : at
     const item: Item = { key: line.key, turn: items[place - 1]?.turn ?? 0, kind: "note", text: line.text }
