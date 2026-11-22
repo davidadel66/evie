@@ -26,7 +26,11 @@ test("the build hands over its metafile, which names the page's script by its pa
   const script = [...(await app.page.text()).matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
   const entries = Object.entries(app.metafile.outputs).filter(([path, output]) => output.entryPoint === "web/index.html" && path.endsWith(".js"))
   expect(entries.map(([path]) => path.replace(/^\./, ""))).toEqual(script)
-  const imports = entries[0]![1].imports.filter((each) => each.kind === "import-statement")
+  // Each chunk it imports, at once or by import(). How many of each depends
+  // on Bun: 1.4.0 puts the code the page shares with the diff view in chunks
+  // of their own, which the page imports at once; 1.4.5 puts that code in
+  // the page's script, which then imports only the diff view, by import().
+  const imports = entries[0]![1].imports.filter((each) => each.kind === "import-statement" || each.kind === "dynamic-import")
   expect(imports.length).toBeGreaterThan(0)
   for (const each of imports) expect(Object.keys(app.files)).toContain(each.path.replace(/^\./, ""))
 })

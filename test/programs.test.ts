@@ -91,8 +91,8 @@ function evieTyping(home: string, project: string, env: Record<string, string> =
       run.stdin.flush()
     },
     // Settles once this has been printed.
-    async shows(text: string) {
-      while (!printed.out.includes(text)) await Bun.sleep(10)
+    async shows(text: string | RegExp) {
+      while (typeof text === "string" ? !printed.out.includes(text) : !text.test(printed.out)) await Bun.sleep(10)
     },
     // Ends the input, and settles with the exit code once everything printed has been read.
     async ends() {
@@ -345,10 +345,12 @@ test("evie with a server running but this computer's token file gone says the fi
 
 // ---- When the line to the server drops ----------------------------------------------------
 
-// With why, as the client was told it: Bun's server, stopped, closes its
-// connections saying "Connection ended".
-const DROPPED = "[note] The connection to Evie's server dropped: Connection ended. Trying again…"
-const BACK = "[note] Connected to Evie's server again."
+// With why, as the client was told it. The words are Bun's own, and differ
+// between its versions: a Bun 1.4.0 server, stopped, ends its connections
+// without a word, which Bun 1.4.0's client calls "Connection ended"; a Bun
+// 1.4.5 server closes each one saying "Server closed". So any reason will do.
+const DROPPED = /\[note\] The connection to Evie's server dropped: [^\n]+\. Trying again…\n/
+const BACK = /\[note\] Connected to Evie's server again\.\n/
 
 test("when evie serve is stopped and started again, evie connects again by itself, saying so, and the next line is answered in the same session", async () => {
   const port = await freePort()
@@ -370,7 +372,7 @@ test("when evie serve is stopped and started again, evie connects again by itsel
 
   expect(await terminal.ends()).toBe(0)
   expect(terminal.printed.err).toBe("")
-  expect(terminal.printed.out).toContain(`${DROPPED}\n${BACK}\n`)
+  expect(terminal.printed.out).toMatch(new RegExp(DROPPED.source + BACK.source))
   expect(terminal.printed.out).toContain("Second reply.")
   const db = new Database(join(home, "evie.db"), { readonly: true })
   const said = db.query<{ session: string; body: string }, []>("SELECT session, body FROM event WHERE type = 'user_message' ORDER BY time").all()
