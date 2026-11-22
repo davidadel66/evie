@@ -76,6 +76,8 @@ export function followOutput(connection: Connection, session: string, id: string
     if (closed || reading || !due || evie === undefined) return
     reading = true
     due = false
+    // A read asked for early, as when the line comes back, takes the place of the one waiting.
+    clearTimeout(timer)
     const wasRunning = options.running()
     try {
       const answer = await evie.send({ type: "read_job_output", session, id, ...(state.output !== undefined && { after: state.output.to }) })
