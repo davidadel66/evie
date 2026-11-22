@@ -1,6 +1,6 @@
 import { afterEach, expect, setSystemTime, test } from "bun:test"
 import { Database } from "bun:sqlite"
-import { mkdtemp, realpath, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { Plugin } from "../src/index.ts"
@@ -214,6 +214,44 @@ test("a repository with no commits yet is listed on its branch, one with a commi
   const listed = await run.evie.send({ type: "list_projects" })
 
   expect(listed.map((project) => project.branch)).toEqual(["main", undefined, undefined, undefined])
+})
+
+test("a project's branch is its own folder's, whatever git settings the server was started with, as GIT_DIR pointing at another repository", async () => {
+  const made = async (name: string, branch: string) => {
+    const folder = await realpath(await mkdtemp(join(tmpdir(), name)))
+    cleanups.push(() => rm(folder, { recursive: true, force: true }))
+    await git(["init", "-q", "-b", branch], folder)
+    return folder
+  }
+  const elsewhere = await made("elsewhere-", "not-this-one")
+  const folder = await made("a-repository-", "feat/own")
+
+  // A server started with these set, as from a shell that exported them.
+  const projects = join(import.meta.dir, "..", "src", "core", "projects.ts")
+  const asked = Bun.spawn(["bun", "-e", `import { branchOf } from ${JSON.stringify(projects)}; console.log(await branchOf(${JSON.stringify(folder)}) ?? "none")`], {
+    env: { ...process.env, GIT_DIR: join(elsewhere, ".git"), GIT_WORK_TREE: elsewhere },
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  const [said, problem] = await Promise.all([new Response(asked.stdout).text(), new Response(asked.stderr).text(), asked.exited])
+
+  expect(problem).toBe("")
+  expect(said.trim()).toBe("feat/own")
+})
+
+test("a project whose folder is inside another repository, below its top, is listed with no branch", async () => {
+  const { run } = await start([])
+  // The project is made first, and the folder above it becomes a repository afterwards.
+  const outer = await realpath(await mkdtemp(join(tmpdir(), "an-outer-")))
+  cleanups.push(() => rm(outer, { recursive: true, force: true }))
+  const folder = join(outer, "inside")
+  await mkdir(folder)
+  const inside = (await run.evie.send({ type: "open_session", folder })).project!
+  await git(["init", "-q", "-b", "outer-branch"], outer)
+
+  const listed = await run.evie.send({ type: "list_projects" })
+
+  expect(listed.find((project) => project.id === inside.id)).not.toHaveProperty("branch")
 })
 
 // ---- A session's state ------------------------------------------------------------------------
