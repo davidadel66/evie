@@ -26,6 +26,7 @@ export async function serve(env: Settings) {
     env,
     plugins: settings.plugins,
     projectSettings: settings.projectSettings,
+    trust: settings.trust,
     settingsFile: settings.file,
     ...(settings.model !== undefined && { model: settings.model }),
     ...(settings.maxTokens !== undefined && { maxTokens: settings.maxTokens }),

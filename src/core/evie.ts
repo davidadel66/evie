@@ -6,7 +6,7 @@ import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
-import { createProjects } from "./projects.ts"
+import { createProjects, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
 import { createSummaries } from "./summaries.ts"
@@ -34,6 +34,10 @@ export type EvieOptions = {
   // called the first time a session opens in the project, and can ask the
   // owner a question, such as whether to trust the project.
   projectSettings?: (project: Project, context: { ask: Ask }) => ProjectSettings | readonly Plugin[] | Promise<ProjectSettings | readonly Plugin[]>
+  // Trusts a project's own settings, by its folder, as the owner answering
+  // yes to whether to trust them does. A project `new_project` makes is
+  // trusted this way.
+  trust?: (folder: string) => Promise<void>
   // How often, in milliseconds, sessions are looked at for any that a week
   // of quiet has settled, to send their summaries: nothing happens in a
   // session to tell of it. Once an hour when left out, which is for tests to change.
@@ -179,6 +183,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
 
   const questions = createQuestions({ log, emit })
   let closed = false
+  // Fires when Evie stops, for the work plugins started.
+  const stopping = new AbortController()
   // Job output goes beside the tool output that was too long to show.
   const jobs = createJobs({
     outputFolder: join(home, "tool-output"),
@@ -354,6 +360,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     } else if (input.folder !== undefined) {
       project = projects.forFolder(input.folder)
     }
+    // Checked each time, so a folder that has become a repository since is covered too.
+    if (project) keepEvieOutOfGit(project.folder)
 
     // Continuing: the session used last in this project, when there is one,
     // or the one named, which is opened in its own project the same way.
@@ -610,6 +618,26 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, limit)
   }
 
+  async function newProject(input: Commands["new_project"]["input"]): Promise<Commands["new_project"]["output"]> {
+    const { project, madeFolder, heldFiles } = await makeProject(projects, input, home)
+    keepEvieOutOfGit(project.folder)
+    // The project is made by now. Untrusted, it still works, and its first
+    // session asks whether to trust its settings file and what came with it.
+    const trusted = !heldFiles && options.trust !== undefined
+    if (trusted) {
+      await options.trust!(project.folder).catch((cause) => {
+        throw new Error(
+          `The project "${project.name}" was made at ${project.folder}, but could not be trusted: ` +
+            `${(cause instanceof Error ? cause.message : String(cause)).replace(/\.*$/, ".")} Evie asks whether to trust it when a session first opens there.`,
+        )
+      })
+    }
+    // Backed up only when its setting counts and a plugin is there to act
+    // on it: the sync plugin, known by its name.
+    const syncs = trusted && options.plugins.some((plugin) => plugin.name === "sync")
+    return { project, madeFolder, trusted, syncs }
+  }
+
   async function runCommand(input: Commands["run_command"]["input"]): Promise<Commands["run_command"]["output"]> {
     if (typeof input.name !== "string" || typeof input.args !== "string") {
       throw new Error("`name` is the command's name and `args` what was typed after it, and both must be text.")
@@ -690,6 +718,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return projects.list() as Output
         case "list_sessions":
           return summaries.list() as Output
+        case "new_project":
+          return (await newProject(command)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)
@@ -706,9 +736,17 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       // Each on its own, so that one that cannot be opened again, such as
       // one whose project has gone, does not hold up the others.
       await Promise.all([...left].map((session) => reopen(session).catch(() => {})))
+      for (const plugin of options.plugins) {
+        try {
+          plugin.start?.({ projects: projects.list(), signal: stopping.signal })
+        } catch (cause) {
+          throw new Error(`The plugin "${plugin.name}" could not start its work: ${cause instanceof Error ? cause.message : String(cause)}`)
+        }
+      }
     },
     async close(how = {}) {
       closed = true
+      stopping.abort()
       clearInterval(quietCheck)
       if (how.restart) {
         // Nothing more is written from here: the log is left as a crash
