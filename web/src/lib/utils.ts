@@ -11,6 +11,7 @@ export const NAMED_SIZES = [
   "side-chat-width",
   "gutter",
   "touch-min",
+  "icon-xxs",
   "icon-xs",
   "icon-caret",
   "icon-sm",
@@ -31,7 +32,12 @@ export const NAMED_SIZES = [
   "picker-makers",
   "job-output",
   "session-list",
-  "project-card",
+  "details-card",
+  "details-top",
+  "details-height",
+  "details-clear",
+  "details-menu",
+  "detail-indent",
   "card-sheet",
   "list-sheet",
   "palette",
@@ -62,10 +68,10 @@ export const NAMED_SIZES = [
 const merge = extendTailwindMerge({
   extend: {
     theme: {
-      text: ["caption", "body", "prose", "field", "control", "label", "heading", "title", "page-title", "figure", "code"],
+      text: ["caption", "body", "prose", "field", "control", "label", "heading", "title", "page-title", "figure", "code", "detail", "detail-heading"],
       spacing: [...NAMED_SIZES],
       shadow: ["float"],
-      radius: ["tile"],
+      radius: ["tile", "chip"],
     },
   },
 })

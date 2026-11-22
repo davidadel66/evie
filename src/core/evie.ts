@@ -1,6 +1,6 @@
 import { mkdir, rm } from "node:fs/promises"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { isAbsolute, join, relative, sep } from "node:path"
 import { createTurnChanges, readBranch, readUncommitted } from "./changes.ts"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
@@ -8,6 +8,8 @@ import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
 import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
+import { readGitStatus } from "./git-status.ts"
+import { openOnThisComputer } from "./open-folder.ts"
 import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
 import { createAttachments } from "./attachments.ts"
@@ -53,6 +55,9 @@ export type EvieOptions = {
   // of quiet has settled, to send their summaries: nothing happens in a
   // session to tell of it. Once an hour when left out, which is for tests to change.
   quietCheckEvery?: number
+  // What opens a project's folder on this computer: its file manager when
+  // left out, which is for tests to change.
+  openFolder?: (folder: string) => Promise<void>
 }
 
 // How long reading how full a conversation is waits for a model's limit to
@@ -874,6 +879,14 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     }
   }
 
+  // A folder written from the home folder, as `~/code/recipe-box`, or
+  // nothing when it is not inside it.
+  function fromHome(folder: string): string | undefined {
+    const inside = relative(options.env.HOME || homedir(), folder)
+    if (inside === "") return "~"
+    return inside.startsWith("..") || isAbsolute(inside) ? undefined : `~/${inside.split(sep).join("/")}`
+  }
+
   // Each project's branch, and whether its folder is in a git work tree,
   // are read now, from its folder, all at once.
   // Whether each is backed up is read from its settings file too: a file
@@ -887,7 +900,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return Promise.all(
       projects.list().map(async (project) => {
         const [branch, git, syncs] = await Promise.all([branchOf(project.folder), inGit(project.folder), backedUp(project)])
-        return { ...project, ...(branch !== undefined && { branch }), ...(git !== undefined && { git }), ...icons.get(project.id), ...(syncs !== undefined && { syncs }) }
+        const shown = fromHome(project.folder)
+        return { ...project, ...(branch !== undefined && { branch }), ...(git !== undefined && { git }), ...(shown !== undefined && { fromHome: shown }), ...icons.get(project.id), ...(syncs !== undefined && { syncs }) }
       }),
     )
   }
@@ -1078,7 +1092,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           if (!project) throw new Error(`There is no project with the id "${String(command.project)}".`)
           // The project's own plugins once a session has opened there, or else the global ones.
           const reader = (built.get(project.id) ?? built.get(null)!).host.pullRequests.list()[0]
-          return ((await reader?.read(project.folder)) ?? null) as Output
+          if (reader === undefined) throw new Error("No plugin reads pull requests: the github plugin is not loaded.")
+          return (await reader.read(project.folder)) as Output
         }
         case "read_settings":
           return (await editor().read(projects.list())) as Output
@@ -1101,6 +1116,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await readStorage(projectFor(command.project).folder, command.path, home)) as Output
         case "list_files":
           return (await listProjectFiles(projectFor(command.project).folder, { dataFolder: home })) as Output
+        case "open_folder":
+          return (await (options.openFolder ?? openOnThisComputer)(projectFor(command.project).folder)) as Output
+        case "read_git_status":
+          return (await readGitStatus(projectFor(command.project), typeof command.base === "string" ? command.base : undefined)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

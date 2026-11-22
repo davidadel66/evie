@@ -7,14 +7,14 @@ import { Reading } from "./Conversation.tsx"
 import { CaretLeft } from "./icons.tsx"
 import { subagentsOf } from "./project-card.ts"
 import { ConnectionUnderHeader } from "./ConnectionLine.tsx"
-import { CardButton, StateWord } from "./ProjectCard.tsx"
+import { CardButton, CardLane, StateWord } from "./ProjectCard.tsx"
 import { ListButton } from "./SessionList.tsx"
 import { openSubagent, type Subagent } from "./subagent.ts"
 
 // A subagent's conversation in the middle column, read only, under a
 // header that names it, with a line below that leads back to the session
 // that started it. Its name and how it stands come from that session's
-// subagents and jobs, which the project card follows too; its
+// subagents and jobs, which the session details follow too; its
 // conversation is read as it works.
 export function SubagentView({ connection, parent, parentTitle, subagent }: { connection: Connection; parent: string; parentTitle: string; subagent: string }) {
   const [followed, setFollowed] = useState<{ conversation: Conversation; lineage: Lineage }>()
@@ -80,7 +80,7 @@ function Opened({
         <CaretLeft className="size-icon-sm shrink-0" />
         <span className="min-w-0 truncate">Subagent of {parentTitle}</span>
       </a>
-      {child && <Reading conversation={child} readOnly />}
+      <CardLane>{child && <Reading conversation={child} readOnly />}</CardLane>
     </>
   )
 }

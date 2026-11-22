@@ -7,7 +7,7 @@
 // outside and after a choice, and gives focus back to its button.
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import type { ComponentProps } from "react"
-import { CaretRight } from "../../icons.tsx"
+import { CaretRight, Check } from "../../icons.tsx"
 import { cn } from "../../lib/utils.ts"
 
 function DropdownMenu(props: ComponentProps<typeof DropdownMenuPrimitive.Root>) {
@@ -60,6 +60,22 @@ function DropdownMenuRadioItem({ className, ...props }: ComponentProps<typeof Dr
   return <DropdownMenuPrimitive.RadioItem data-slot="dropdown-menu-radio-item" className={cn(ITEM, "data-[state=checked]:bg-surface-raised", className)} {...props} />
 }
 
+// One that is on or off, such as a section the session details show: a
+// check beside it while it is on, in a box of an icon's width, so that the
+// items' words line up either way.
+function DropdownMenuCheckboxItem({ className, children, ...props }: ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+  return (
+    <DropdownMenuPrimitive.CheckboxItem data-slot="dropdown-menu-checkbox-item" className={cn(ITEM, className)} {...props}>
+      <span aria-hidden="true" className="flex size-icon-control shrink-0 items-center justify-center">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <Check className="size-icon-caret" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownMenuPrimitive.CheckboxItem>
+  )
+}
+
 // A heading for the items below it, in a detail's size and colour.
 function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof DropdownMenuPrimitive.Label>) {
   return <DropdownMenuPrimitive.Label data-slot="dropdown-menu-label" className={cn("px-2 py-1.5 text-caption text-text-muted", className)} {...props} />
@@ -102,6 +118,7 @@ function DropdownMenuSubContent({ className, ...props }: ComponentProps<typeof D
 
 export {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
