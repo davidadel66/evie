@@ -61,9 +61,9 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
   return (
     <div className="flex h-dvh">
       <ListPlace>
-        {/* The settings button's own padding brings its icon near the page's 28px edge. */}
-        <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-7">
-          <span className="text-title text-text">evie</span>
+        {/* The settings button's own padding brings its icon as near the column's edge as the name. */}
+        <header className="flex h-header-height shrink-0 items-center gap-3 pr-3 pl-5">
+          <span className="text-label text-text">evie</span>
           <div className="ml-auto flex items-center">
             <Settings connection={connection} />
             {!list.wide && (
@@ -215,19 +215,19 @@ function Top({ title, rename }: { title?: string; rename?(name: string): Promise
   const [note, setNote] = useState<string>()
   return (
     <>
-      <header className="flex h-header-height shrink-0 items-center gap-3 border-b border-line pr-4 pl-4">
+      <header className="flex h-header-height shrink-0 items-center gap-2 border-b border-line px-3">
         <ListButton />
         {title === undefined ? (
           <span className="flex-1" />
         ) : rename === undefined ? (
-          <h1 className="min-w-0 flex-1 truncate text-title text-text">{title}</h1>
+          <h1 className="min-w-0 flex-1 truncate text-label text-text">{title}</h1>
         ) : (
           <HeaderName title={title} rename={rename} said={setNote} />
         )}
         <CardButton />
       </header>
       <ConnectionUnderHeader />
-      <div role="status">{note !== undefined && <p className="px-7 pt-3 text-caption text-text-muted">{note}</p>}</div>
+      <div role="status">{note !== undefined && <p className="px-gutter pt-3 text-caption text-text-muted">{note}</p>}</div>
     </>
   )
 }

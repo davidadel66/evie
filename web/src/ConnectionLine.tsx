@@ -14,7 +14,7 @@ export function ConnectionLine({ state }: { state: ConnectionState }) {
   return (
     <div role="status">
       {line !== undefined && (
-        <p className="flex items-start gap-2 px-7 pb-3 text-caption text-text-muted">
+        <p className="flex items-start gap-2 px-gutter pb-3 text-caption text-text-muted">
           <span className="flex h-lh items-center">
             <Spinner />
           </span>

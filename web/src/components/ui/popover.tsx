@@ -1,7 +1,7 @@
 // Adapted from shadcn/ui's popover (MIT licence, notice in
 // LICENSES/shadcn-ui-MIT.txt): only the parts the web app uses, styled to
 // the design system's Menu, as the project icon picker is. It floats, so it
-// has a surface: a 1px line, 10px corners, the floating shadow and 8px
+// has a surface: a 1px line, 8px corners, the floating shadow and 8px
 // padding. Radix closes it on Escape and on a click outside, and gives the
 // focus back to the button that opened it.
 import * as PopoverPrimitive from "@radix-ui/react-popover"

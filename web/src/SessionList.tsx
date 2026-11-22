@@ -185,7 +185,7 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-col gap-2 px-4 pb-3">
+      <div className="flex flex-col gap-2 px-2 pb-3">
         <NewSession projects={list.projects} lookingAt={lookingAt} start={(project) => select({ draft: project })} newWorkspace={() => setMaking(true)} />
         <NewWorkspace connection={connection} sessions={sessions} open={making} onOpenChange={setMaking} />
         <div className="flex gap-1">
@@ -204,7 +204,7 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-6">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-4">
         {[list.problem, list.projectsProblem].map(
           (problem) =>
             problem !== undefined && (
@@ -257,18 +257,19 @@ export function ListButton() {
   const open = shown.wide ? shown.column : shown.sheet
   const label = open ? "Hide the session list" : "Show the session list"
   return (
-    <Button variant="icon" aria-label={label} aria-expanded={open} title={`${label} (${keyLabel("session list", onMac())})`} onClick={toggleList}>
+    <Button variant="icon" aria-label={label} aria-expanded={open} title={`${label} (${keyLabel("session list", onMac())})`} onClick={toggleList} className="size-control-sm">
       <SidebarLeft />
     </Button>
   )
 }
 
-// A group at the bottom of the list, under a heading that opens and closes it.
+// A group at the bottom of the list, under a heading that opens and closes
+// it: a row of the list, as T3 Code's, so it does not grow below 640px.
 function Group({ name, count, open, toggle, children }: { name: string; count: number; open: boolean; toggle(): void; children: ReactNode }) {
   return (
     <section aria-label={name} className="mt-4 flex flex-col gap-1">
-      <Button variant="quiet" aria-expanded={open} onClick={toggle} className="justify-start text-caption">
-        <CaretRight className={`size-icon-sm transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
+      <Button variant="quiet" aria-expanded={open} onClick={toggle} className="h-row-height justify-start text-caption">
+        <CaretRight className={`size-icon-xs transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
         {name}
         <span>{count}</span>
       </Button>
@@ -296,13 +297,13 @@ function NewSession({
   return (
     <div className="flex gap-1">
       <Button variant="secondary" className="flex-1" title={`New session ${where}`} aria-label={`New session ${where}`} onClick={() => start(lookingAt)}>
-        <Plus className="size-icon-sm" />
+        <Plus className="size-icon-control" />
         New session
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary" className="min-w-control px-3" aria-label="New session in another project">
-            <CaretDown className="size-icon-sm" />
+          <Button variant="secondary" className="min-w-control px-2" aria-label="New session in another project">
+            <CaretDown className="size-icon-control" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -335,7 +336,7 @@ function ProjectFilter({ projects, project, choose }: { projects: ListedProject[
       <DropdownMenuTrigger asChild>
         <Button variant="quiet" aria-label={`Show sessions of: ${name}`} className="max-w-project-filter gap-1 px-3">
           <span className="truncate">{name}</span>
-          <CaretDown className="size-icon-sm" />
+          <CaretDown className="size-icon-control" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
