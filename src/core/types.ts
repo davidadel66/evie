@@ -12,8 +12,9 @@ export type EventBodies = {
   // `interrupted` marks a reply that was cut short by a cancel. `usage` is
   // the size of the request and the reply, as the provider counted them.
   assistant_message: { text: string; toolCalls?: ToolCall[]; interrupted?: true; usage?: Usage }
-  // The text the model reads for one tool call.
-  tool_result: { callId: string; name: string; text: string }
+  // The text the model reads for one tool call, and the tool's `details`,
+  // when it gave any, which only clients read (see ToolOutput).
+  tool_result: { callId: string; name: string; text: string; details?: Json }
   turn_end: { reason: "completed" | "error" | "cancelled"; error?: string }
   // The owner switched model. It applies from the next model request.
   model_changed: { model: string }
@@ -384,12 +385,21 @@ export type ToolContext = {
   children: Children
 }
 
+// Plain JSON, as the log keeps it.
+export type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
+
+// What a tool gives back: the text the model reads; or that text with
+// `details`, plain JSON that the log keeps beside the text for clients to
+// read, such as the files the show tool showed, and that is never sent to
+// the model.
+export type ToolOutput = string | { text: string; details?: Json }
+
 // Every tool has this one shape, built in or added by someone else. `run`
-// returns the text the model will read. A failure the model can act on is
+// returns the text the model will read, with any details for clients. A failure the model can act on is
 // returned as that text, worded so the model knows what to do next; `run`
 // throws only for a bug.
 export type Tool = ToolDefinition & {
-  run(input: Record<string, unknown>, context: ToolContext): Promise<string>
+  run(input: Record<string, unknown>, context: ToolContext): Promise<ToolOutput>
   // Which end of its output the model is shown when there is too much to
   // show it all: the start, as for a file the model reads on from, or the
   // end, as for a command, whose errors and summary come last. The start

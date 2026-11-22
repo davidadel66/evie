@@ -529,7 +529,7 @@ export function createLoop(options: LoopOptions): Loop {
             settleRest(index, "Cancelled: the turn was stopped before this tool ran.")
             break
           }
-          let result: string
+          let result: Awaited<ReturnType<typeof runToolCall>>
           try {
             result = await runToolCall(call, {
               tools: offered,
@@ -553,7 +553,7 @@ export function createLoop(options: LoopOptions): Loop {
             settleRest(index + 1, "Not run, because an earlier tool call in this step broke.")
             break
           }
-          emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: result }))
+          emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: result.text, ...(result.details !== undefined && { details: result.details }) }))
         }
         if (reason === "error") break
         if (signal.aborted) {
