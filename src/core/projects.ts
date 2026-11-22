@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite"
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
-import type { Project } from "./types.ts"
+import type { Project, ProjectColour } from "./types.ts"
 
 // Projects and the sessions that belong to them. A project is found by its
 // id; its folder is only where its files are today.
@@ -15,6 +15,13 @@ export type Projects = {
   get(id: string): Project | undefined
   // Every project, by name.
   list(): Project[]
+  // The icon and the colour the owner picked for each project that has
+  // them, by the project's id.
+  icons(): Map<string, { icon: string; colour: ProjectColour }>
+  // Keeps the icon and the colour the owner picked for a project. Throws,
+  // saying why, for a project that is not there, for an icon that is not
+  // named as Phosphor names its icons, and for a colour not one of the six.
+  setIcon(project: string, icon: string, colour: ProjectColour): void
   // Starts a session in a project, or the general session when there is
   // none. With `parent`, it is a subagent of that session.
   // `as` says which named agent a subagent is, and whether it is held to
@@ -153,16 +160,17 @@ const within = (folder: string, outer: string) => {
 
 // Makes a new project, as the `new_project` command asks: the folder when it
 // is missing, and its `.evie/evie.json`, which backs up its `.evie/` folder
-// to a private repository. It is registered at the folder as it really is.
+// to a private repository, unless it is asked to keep it on this computer.
+// It is registered at the folder as it really is.
 // Everything that would refuse it is checked before anything is made.
 // `heldFiles` says that its `.evie/` folder already held something, such as
 // skills or agents, which came with the folder and so are not to be trusted
 // without the owner reading them.
 export async function makeProject(
   projects: Projects,
-  input: { folder: string; name?: string },
+  input: { folder: string; name?: string; sync?: "private" | "none" },
   dataFolder: string,
-): Promise<{ project: Project; madeFolder: boolean; heldFiles: boolean }> {
+): Promise<{ project: Project; madeFolder: boolean; heldFiles: boolean; sync: "private" | "none" }> {
   // Checked here, since a client that is not type-checked can send anything.
   const given = input.folder
   if (typeof given !== "string" || !isAbsolute(given)) {
@@ -170,6 +178,10 @@ export async function makeProject(
   }
   if (input.name !== undefined && (typeof input.name !== "string" || input.name.trim() === "")) {
     throw new Error("`name` is the project's name, and must be text that is not blank.")
+  }
+  const sync = input.sync ?? "private"
+  if (sync !== "private" && sync !== "none") {
+    throw new Error('`sync` is where the project\'s .evie folder is backed up: "private", to a private repository, or "none", to keep it on this computer.')
   }
   if (existsSync(given) && !statSync(given).isDirectory()) throw new Error(`${given} is a file, not a folder.`)
   const folder = realFolder(given)
@@ -198,15 +210,24 @@ export async function makeProject(
   const madeFolder = !existsSync(folder)
   const heldFiles = existsSync(evie) && readdirSync(evie).length > 0
   await mkdir(evie, { recursive: true })
-  await writeFile(settingsFile, `${JSON.stringify({ sync: "private" }, null, 2)}\n`, { flag: "wx" })
-  return { project: projects.create(folder, input.name?.trim() ?? basename(folder)), madeFolder, heldFiles }
+  await writeFile(settingsFile, `${JSON.stringify({ sync }, null, 2)}\n`, { flag: "wx" })
+  return { project: projects.create(folder, input.name?.trim() ?? basename(folder)), madeFolder, heldFiles, sync }
 }
+
+// The six project colours, as the design system names them.
+const PROJECT_COLOURS: readonly ProjectColour[] = ["moss", "mustard", "maroon", "rust", "slate", "plum"]
+// An icon's name as Phosphor writes it: words of lower-case letters and
+// digits, joined by dashes, such as "cooking-pot".
+const ICON_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const LONGEST_ICON_NAME = 64
 
 export function createProjects(db: Database): Projects {
   const byFolder = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE folder = ?")
   const byId = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE id = ?")
   const all = db.query<Project, []>("SELECT id, name, folder FROM project ORDER BY name COLLATE NOCASE, created")
   const insertProject = db.query("INSERT INTO project (id, name, folder, created) VALUES (?, ?, ?, ?)")
+  const picked = db.query<{ id: string; icon: string; colour: string }, []>("SELECT id, icon, colour FROM project WHERE icon IS NOT NULL AND colour IS NOT NULL")
+  const updateIcon = db.query("UPDATE project SET icon = ?, colour = ? WHERE id = ?")
   const insertSession = db.query("INSERT INTO session (id, project, created, parent, agent, read_only) VALUES (?, ?, ?, ?, ?, ?)")
   const sessionRow = db.query<{ project: string | null; parent: string | null; agent: string | null; read_only: number | null }, [string]>(
     "SELECT project, parent, agent, read_only FROM session WHERE id = ?",
@@ -261,6 +282,25 @@ export function createProjects(db: Database): Projects {
 
     list() {
       return all.all()
+    },
+
+    icons() {
+      // A colour this Evie does not know, as one a later Evie could add,
+      // is left out with its icon, so the project is drawn as before.
+      const known = picked.all().filter((row) => PROJECT_COLOURS.includes(row.colour as ProjectColour))
+      return new Map(known.map((row) => [row.id, { icon: row.icon, colour: row.colour as ProjectColour }]))
+    },
+
+    setIcon(project, icon, colour) {
+      // Checked here, since a client that is not type-checked can send anything.
+      if (typeof icon !== "string" || icon.length > LONGEST_ICON_NAME || !ICON_NAME.test(icon)) {
+        throw new Error(`${JSON.stringify(icon)} is not the name of an icon. Give a Phosphor icon's name, in lower case with dashes, such as "folder" or "cooking-pot".`)
+      }
+      if (!PROJECT_COLOURS.includes(colour)) {
+        throw new Error(`${JSON.stringify(colour)} is not one of the project colours. Give one of: ${PROJECT_COLOURS.join(", ")}.`)
+      }
+      if (typeof project !== "string" || !byId.get(project)) throw new Error(`There is no project with the id ${JSON.stringify(project)}.`)
+      updateIcon.run(icon, colour, project)
     },
 
     createSession(project, startedBy, as) {

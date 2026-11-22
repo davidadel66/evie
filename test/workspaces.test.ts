@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { homedir, tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import { loadSettingsFiles, type Plugin } from "../src/index.ts"
 import { git } from "./support/git.ts"
@@ -32,7 +32,7 @@ async function startWithSettings(plugins: Plugin[] = []) {
   const home = await tempFolder("evie-home-")
   await writeFile(join(home, "evie.json"), JSON.stringify({ plugins: [] }))
   const settings = await loadSettingsFiles({ env: { EVIE_HOME: home } })
-  const run = await startEvie([scriptedProvider([]).plugin, ...plugins], { home, projectSettings: settings.projectSettings, trust: settings.trust })
+  const run = await startEvie([scriptedProvider([]).plugin, ...plugins], { home, projectSettings: settings.projectSettings, trust: settings.trust, syncSetting: settings.syncSetting })
   cleanups.push(run.stop)
   const globalFile = async () => JSON.parse(await readFile(join(home, "evie.json"), "utf8"))
   return { run, home, globalFile }
@@ -49,6 +49,26 @@ test("new_project makes the folder when it is missing, with a .evie/evie.json th
   expect(made).toEqual({ project: { id: expect.any(String), name: "finances", folder }, madeFolder: true, trusted: false, syncs: false })
   expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ sync: "private" })
   expect(await run.evie.send({ type: "list_projects" })).toContainEqual({ ...made.project, git: false })
+})
+
+test("a client is told the home folder of the computer Evie runs on, where it suggests a new project's folder", async () => {
+  const run = await start()
+
+  expect(await run.evie.send({ type: "read_home" })).toEqual({ folder: homedir() })
+})
+
+test("new_project keeps the project's .evie folder on this computer when asked to, and says it is not backed up", async () => {
+  const { run } = await startWithSettings([{ name: "sync", setup() {} }])
+  const folder = join(await tempFolder("evie-place-"), "diary")
+
+  const made = await run.evie.send({ type: "new_project", folder, sync: "none" })
+
+  expect(made).toMatchObject({ trusted: true, syncs: false })
+  expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ sync: "none" })
+  expect((await run.evie.send({ type: "list_projects" })).find((each) => each.id === made.project.id)).not.toHaveProperty("syncs")
+  await expect(run.evie.send({ type: "new_project", folder: join(folder, "..", "other"), sync: "public" as never })).rejects.toThrow(
+    '`sync` is where the project\'s .evie folder is backed up: "private", to a private repository, or "none", to keep it on this computer.',
+  )
 })
 
 test("new_project takes a folder that is already there, and a name of the owner's choosing", async () => {
@@ -265,4 +285,68 @@ test("new_project says the project's .evie folder is backed up only when the syn
 
   expect(await run.evie.send({ type: "new_project", folder: join(place, "fresh") })).toMatchObject({ trusted: true, syncs: true })
   expect(await run.evie.send({ type: "new_project", folder: join(place, "cloned") })).toMatchObject({ trusted: false, syncs: false })
+})
+
+// ---- A project's icon and colour ------------------------------------------------------------
+
+test("the owner picks a project's icon and colour, which every list of projects gives from then on, after Evie starts again too", async () => {
+  const home = await tempFolder("evie-home-")
+  const run = await startEvie([scriptedProvider([]).plugin], { home })
+  const project = run.project!
+
+  expect(await run.evie.send({ type: "set_project_icon", project: project.id, icon: "leaf", colour: "moss" })).toBeUndefined()
+  expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...project, git: false, icon: "leaf", colour: "moss" }])
+  await run.evie.send({ type: "set_project_icon", project: project.id, icon: "cooking-pot", colour: "rust" })
+  await run.evie.close()
+
+  const again = await startEvie([scriptedProvider([]).plugin], { home, projectFolder: run.projectFolder })
+  cleanups.push(async () => {
+    await again.stop()
+    await rm(run.projectFolder, { recursive: true, force: true })
+  })
+  expect(await again.evie.send({ type: "list_projects" })).toEqual([{ ...project, git: false, icon: "cooking-pot", colour: "rust" }])
+})
+
+test("a project's icon is given by its Phosphor name and its colour is one of the six, and anything else is refused, as is a project that is not there", async () => {
+  const run = await start()
+  const project = run.project!.id
+
+  await expect(run.evie.send({ type: "set_project_icon", project, icon: "Leaf Icon", colour: "moss" })).rejects.toThrow(
+    '"Leaf Icon" is not the name of an icon. Give a Phosphor icon\'s name, in lower case with dashes, such as "folder" or "cooking-pot".',
+  )
+  await expect(run.evie.send({ type: "set_project_icon", project, icon: "leaf", colour: "green" as never })).rejects.toThrow(
+    '"green" is not one of the project colours. Give one of: moss, mustard, maroon, rust, slate, plum.',
+  )
+  await expect(run.evie.send({ type: "set_project_icon", project: "no-such-project", icon: "leaf", colour: "moss" })).rejects.toThrow(
+    'There is no project with the id "no-such-project".',
+  )
+  expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...run.project!, git: false }])
+})
+
+// ---- Whether a project is backed up ---------------------------------------------------------
+
+test("a project is listed as backed up while its .evie folder syncs privately: it is trusted, its setting says so, and the sync plugin is loaded", async () => {
+  // Stands for the sync plugin, which it is known by.
+  const { run } = await startWithSettings([{ name: "sync", setup() {} }])
+  const place = await tempFolder("evie-place-")
+  await mkdir(join(place, "cloned", ".evie"), { recursive: true })
+  await writeFile(join(place, "cloned", ".evie", "notes.md"), "theirs\n")
+  const fresh = (await run.evie.send({ type: "new_project", folder: join(place, "fresh") })).project
+  const cloned = (await run.evie.send({ type: "new_project", folder: join(place, "cloned") })).project
+  const kept = (await run.evie.send({ type: "new_project", folder: join(place, "kept") })).project
+  await writeFile(join(kept.folder, ".evie", "evie.json"), JSON.stringify({ sync: "none" }))
+
+  const listed = await run.evie.send({ type: "list_projects" })
+
+  expect(listed.find((each) => each.id === fresh.id)).toEqual({ ...fresh, git: false, syncs: true })
+  expect(listed.find((each) => each.id === cloned.id)).toEqual({ ...cloned, git: false })
+  expect(listed.find((each) => each.id === kept.id)).toEqual({ ...kept, git: false })
+  expect(listed.find((each) => each.id === run.project!.id)).not.toHaveProperty("syncs")
+})
+
+test("without the sync plugin, no project is listed as backed up, whatever its setting", async () => {
+  const { run } = await startWithSettings()
+  const made = (await run.evie.send({ type: "new_project", folder: join(await tempFolder("evie-place-"), "fresh") })).project
+
+  expect((await run.evie.send({ type: "list_projects" })).find((each) => each.id === made.id)).toEqual({ ...made, git: false })
 })

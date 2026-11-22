@@ -472,8 +472,34 @@ export type Project = { id: string; name: string; folder: string }
 // is on, read when the list is asked for, and left out when the folder is
 // not the top of a git repository or is on no branch; and `git`, whether
 // its folder is in a git work tree at all, at its top or below it, left out
-// when git could not tell in time.
-export type ListedProject = Project & { branch?: string; git?: boolean }
+// when git could not tell in time. `icon` and `colour` are the ones the
+// owner picked for it, left out until picked. `syncs` says that its `.evie/`
+// folder is backed up to a private repository: the project is trusted, its
+// own settings say `"sync": "private"`, and the sync plugin is loaded. It
+// is left out otherwise.
+export type ListedProject = Project & { branch?: string; git?: boolean; icon?: string; colour?: ProjectColour; syncs?: true }
+
+// The six colours a project can be drawn in, by their names in the web UI's
+// design system, where each is a muted earthy tone.
+export type ProjectColour = "moss" | "mustard" | "maroon" | "rust" | "slate" | "plum"
+
+// ---- Storage --------------------------------------------------------------------
+
+// One thing in a project's `.evie/` folder, as a workspace's Storage lists
+// it: its name; its path inside that folder, with slashes, as a list of a
+// folder or a read of a file takes it; whether it is a file or a folder; a
+// file's size, in bytes; and when it last changed, in milliseconds since
+// 1970, as other times are given.
+export type StorageEntry =
+  | { name: string; path: string; kind: "file"; size: number; changed: number }
+  | { name: string; path: string; kind: "folder"; changed: number }
+
+// One file of a project's `.evie/` folder, as Storage shows it: as text, or
+// as an image, its bytes in base64 with their type, such as "image/png".
+export type StorageFile = { path: string; size: number; changed: number } & (
+  | { kind: "text"; text: string }
+  | { kind: "image"; type: string; data: string }
+)
 
 // ---- The client interface -------------------------------------------------------
 
@@ -576,7 +602,8 @@ export type Commands = {
   // Makes a new project at a folder, given by its full path: the folder
   // itself when it is missing, and a `.evie/evie.json` in it whose
   // `"sync": "private"` backs up the project's `.evie/` folder to a private
-  // repository. The project is registered, named after its folder unless
+  // repository, or with `sync: "none"`, whose `"sync": "none"` keeps it on
+  // this computer. The project is registered, named after its folder unless
   // `name` is given, and trusted, unless its `.evie/` folder already held
   // something, which its first session then asks about. `madeFolder` says
   // whether the folder was missing, `trusted` whether it is trusted, and
@@ -586,7 +613,7 @@ export type Commands = {
   // inside a git repository below its top, or is in Evie's data folder is
   // refused, and nothing is made.
   new_project: {
-    input: { folder: string; name?: string }
+    input: { folder: string; name?: string; sync?: "private" | "none" }
     output: { project: Project; madeFolder: boolean; trusted: boolean; syncs: boolean }
   }
   // Every session the owner has said something in, or that has asked a
@@ -641,6 +668,41 @@ export type Commands = {
   list_subagents: {
     input: { session: string }
     output: { session: string; name: string | null; started: number }[]
+  }
+  // Sets the icon and the colour a project is drawn with, as the owner
+  // picked them: `icon` is the name of an icon in the Phosphor set, in
+  // lower case with dashes, such as "folder" or "cooking-pot", and `colour`
+  // one of the six project colours. Both are kept in Evie's database, and
+  // `list_projects` gives them from then on. Which icons a client can draw
+  // is the client's: one it does not have is its to draw as it chooses.
+  set_project_icon: {
+    input: { project: string; icon: string; colour: ProjectColour }
+    output: void
+  }
+  // The home folder of the computer Evie runs on, by its full path, where a
+  // client suggests the folder of a new project, since it may run elsewhere.
+  read_home: {
+    input: Record<never, never>
+    output: { folder: string }
+  }
+  // What a folder in a project's `.evie/` folder holds, folders first, each
+  // by name: `folder` is its path inside the `.evie/` folder, such as
+  // "files", or the `.evie/` folder itself without one. The folder's own git
+  // repository, which backs it up, is left out, and so is anything a link
+  // leads out of the `.evie/` folder to. A folder outside it, by `..`, by a
+  // full path or through a link, is refused, and so is one that is not there.
+  list_storage: {
+    input: { project: string; folder?: string }
+    output: StorageEntry[]
+  }
+  // One file of a project's `.evie/` folder, by its path inside it: as text
+  // when it is text, in UTF-8, or as an image when its ending names one
+  // (.png, .jpg, .jpeg, .gif, .webp or .svg). A file larger than 1 MB is
+  // not sent, and neither is one that is neither, nor a folder, nor
+  // anything outside the `.evie/` folder, as for `list_storage`.
+  read_storage: {
+    input: { project: string; path: string }
+    output: StorageFile
   }
 }
 
