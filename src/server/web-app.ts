@@ -32,11 +32,12 @@ const TEMPORARY = "evie-web-app-"
 //
 // That process is the same Bun as the server, whatever `bun` the path
 // finds. It is started in the repository's folder, whatever folder the
-// server was started in, so that it takes no bunfig.toml or .env from there,
-// and the metafile names files by their paths in the repository. It writes
-// into a temporary folder, from which the files are read into memory, and
-// the folder is removed, whether the build worked or not. A build that fails
-// says why, each of the bundler's messages as `file:line: message`.
+// server was started in: Bun reads the repository's own bunfig.toml, and its
+// .env if it has one, and none from the server's folder, and the metafile
+// names files by their paths in the repository. It writes into a temporary
+// folder, from which the files are read into memory, and the folder is
+// removed, whether the build worked or not. A build that fails says why,
+// each of the bundler's messages as `file:line: message`.
 //
 // `page`, to build another page, and `temporary`, the folder the temporary
 // folder is made in, are for tests.
@@ -54,7 +55,7 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
       stderr: "pipe",
     })
     const [problem, code] = await Promise.all([new Response(child.stderr).text(), child.exited])
-    if (code !== 0) throw new Error(problem.trim() || `The web app's build stopped with exit code ${code}, saying nothing.`)
+    if (code !== 0) throw new Error(problem.trim() || `The web app's build stopped with ${child.signalCode ?? `exit code ${code}`}, saying nothing.`)
     // Each file, by the path it is served at, cut from the one file the
     // build wrote them all into, in the order of its list.
     const built: Built = await Bun.file(list).json()
@@ -75,8 +76,8 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
 
 // Removes the temporary folders that builds left behind. A server stopped
 // while it builds, as by Ctrl-C as it starts, stops before it can remove its
-// folder. A build takes about a second, so a folder untouched for an hour is
-// no build's still running, such as another server's.
+// folder. A build takes about half a second, so a folder untouched for an
+// hour is no build's still running, such as another server's.
 async function removeLeftFolders(temporary: string) {
   const hourAgo = Date.now() - 60 * 60 * 1000
   for (const name of await readdir(temporary).catch(() => [])) {
