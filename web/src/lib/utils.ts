@@ -5,13 +5,20 @@ import { extendTailwindMerge } from "tailwind-merge"
 // w-session-list. Kept the same as the theme in styles.css.
 export const NAMED_SIZES = [
   "row-height",
+  "work-row",
   "header-height",
   "rail-width",
   "side-chat-width",
+  "gutter",
   "touch-min",
+  "icon-xs",
+  "icon-caret",
   "icon-sm",
+  "icon-control",
   "icon-md",
   "control",
+  "control-sm",
+  "menu-wide",
   "tile-row",
   "tile-row-icon",
   "tile-header",
@@ -55,7 +62,7 @@ export const NAMED_SIZES = [
 const merge = extendTailwindMerge({
   extend: {
     theme: {
-      text: ["caption", "body", "label", "title", "page-title", "figure", "code"],
+      text: ["caption", "body", "prose", "field", "control", "label", "heading", "title", "page-title", "figure", "code"],
       spacing: [...NAMED_SIZES],
       shadow: ["float"],
       radius: ["tile"],

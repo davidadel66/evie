@@ -66,16 +66,16 @@ function Opened({
 
   return (
     <>
-      <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-4">
+      <header className="flex h-header-height shrink-0 items-center gap-2 px-3">
         <ListButton />
-        <h1 className="min-w-0 flex-1 truncate text-title text-text">{found?.name ?? "Subagent"}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-label text-text">{found?.name ?? "Subagent"}</h1>
         {found && <StateWord status={found.status} />}
         <CardButton />
       </header>
       <ConnectionUnderHeader />
       <a
         href={addressOf({ session: parentId })}
-        className="flex min-h-control shrink-0 items-center gap-1 border-b border-line px-7 pb-2 text-caption text-text-muted hover:text-text"
+        className="flex min-h-control shrink-0 items-center gap-1 border-b border-line px-gutter pb-2 text-caption text-text-muted hover:text-text"
       >
         <CaretLeft className="size-icon-sm shrink-0" />
         <span className="min-w-0 truncate">Subagent of {parentTitle}</span>

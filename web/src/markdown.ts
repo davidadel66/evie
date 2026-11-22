@@ -12,6 +12,8 @@ export function renderMarkdown(text: string): ReactNode[] {
 }
 
 const HEADINGS = ["h1", "h2", "h3", "h4", "h5", "h6"] as const
+// Each heading's text style, at T3 Code's 20, 18, 16 and 14px.
+const HEADING_SIZES = ["text-page-title", "text-heading", "text-title"] as const
 const ALIGN = { left: "text-left", center: "text-center", right: "text-right" }
 
 function blocks(tokens: Token[]): ReactNode[] {
@@ -22,7 +24,7 @@ function blocks(tokens: Token[]): ReactNode[] {
         return []
       case "heading": {
         const heading = token as Tokens.Heading
-        return [h(HEADINGS[heading.depth - 1] ?? "h6", { key, className: heading.depth <= 2 ? "text-title" : "text-label" }, inline(heading.tokens))]
+        return [h(HEADINGS[heading.depth - 1] ?? "h6", { key, className: HEADING_SIZES[heading.depth - 1] ?? "text-label" }, inline(heading.tokens))]
       }
       case "paragraph":
         return [h("p", { key }, inline((token as Tokens.Paragraph).tokens))]
@@ -40,15 +42,15 @@ function blocks(tokens: Token[]): ReactNode[] {
       case "list": {
         const list = token as Tokens.List
         const items = list.items.map((item, at) => h("li", { key: at, className: "pl-1 [&+li]:mt-1 [&>*+*]:mt-2" }, blocks(item.tokens)))
-        if (!list.ordered) return [h("ul", { key, className: "list-disc pl-6" }, items)]
-        return [h("ol", { key, className: "list-decimal pl-6", ...(list.start !== "" && list.start !== 1 && { start: list.start }) }, items)]
+        if (!list.ordered) return [h("ul", { key, className: "list-disc pl-5" }, items)]
+        return [h("ol", { key, className: "list-decimal pl-5", ...(list.start !== "" && list.start !== 1 && { start: list.start }) }, items)]
       }
       case "checkbox":
         return [checkbox(token as Tokens.Checkbox, key)]
       case "table": {
         const table = token as Tokens.Table
         const cell = (tag: "th" | "td", cell: Tokens.TableCell, at: number) =>
-          h(tag, { key: at, className: `border-b border-line px-2 py-1 ${tag === "th" ? "font-semibold" : ""} ${ALIGN[cell.align ?? "left"]}` }, inline(cell.tokens))
+          h(tag, { key: at, className: `border-b border-line px-3 py-2 ${tag === "th" ? "font-semibold" : ""} ${ALIGN[cell.align ?? "left"]}` }, inline(cell.tokens))
         return [
           h(
             "div",

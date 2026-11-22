@@ -55,15 +55,30 @@ test("the spacing scale has only the design system's steps and named sizes, so a
   try {
     const sheet = join(folder, "classes.css")
     const styles = join(import.meta.dir, "..", "web", "src", "styles.css")
-    await writeFile(sheet, `@import "${styles}";\n@source inline("p-1 p-7 p-8 w-session-list p-5 h-10 m-9");\n`)
+    await writeFile(sheet, `@import "${styles}";\n@source inline("p-1 p-5 p-7 p-8 w-session-list p-9 h-10 m-12");\n`)
     const built = await Bun.build({ entrypoints: [sheet], plugins: [tailwind] })
     const style = await built.outputs[0]!.text()
 
-    for (const made of ["p-1", "p-7", "p-8", "w-session-list"]) expect(style).toContain(`.${made} {`)
-    for (const offScale of ["p-5", "h-10", "m-9"]) expect(style).not.toContain(`.${offScale} {`)
+    for (const made of ["p-1", "p-5", "p-7", "p-8", "w-session-list"]) expect(style).toContain(`.${made} {`)
+    for (const offScale of ["p-9", "h-10", "m-12"]) expect(style).not.toContain(`.${offScale} {`)
   } finally {
     await rm(folder, { recursive: true, force: true })
   }
+})
+
+test("below 640px the controls grow a step, as T3 Code's, and what is typed into a text box is 16px, so that iOS does not zoom the page in when one is tapped", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const style = await Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.text()
+
+  for (const desktop of ["--spacing-control:32px", "--spacing-control-sm:28px", "--spacing-icon-control:16px", "--text-control:14px", "--text-field:14px", "--spacing-gutter:20px"]) {
+    expect(style).toContain(`${desktop};`)
+  }
+  const phone = style.match(/@media \(max-width:639\.9+px\)\{:root\{([^}]*)\}\}/)?.[1]?.split(";")
+  expect(phone).toEqual(expect.arrayContaining(["--spacing-control:36px", "--spacing-control-sm:32px", "--spacing-icon-control:18px", "--text-control:16px", "--text-field:16px", "--spacing-gutter:12px"]))
+  // The text, the rows and the headers keep their sizes.
+  expect(phone?.some((each) => /--(text-(body|caption|label)|spacing-(row-height|work-row|header-height))/.test(each))).toBe(false)
+  expect(style).toContain(".text-field{font-size:var(--text-field);")
 })
 
 test("the page puts itself in the theme this browser picked before it is first drawn", async () => {

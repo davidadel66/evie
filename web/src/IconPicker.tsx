@@ -61,13 +61,13 @@ export function IconPicker({ connection, sessions, project, children }: { connec
               onClick={() => colour !== look.colour && void pick({ icon: look.icon, colour }, false)}
               className="flex size-control items-center justify-center rounded-md aria-checked:bg-surface-raised"
             >
-              <span aria-hidden="true" className={cn("size-icon-md rounded-full", SWATCH[colour])} />
+              <span aria-hidden="true" className={cn("size-icon-sm rounded-full", SWATCH[colour])} />
             </button>
           ))}
         </div>
         <Input type="search" autoFocus aria-label="Search icons" placeholder="Search icons" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={onKeyDown} />
         {shown.length === 0 ? (
-          <p className="px-3 py-2 text-caption text-text-muted">No matching icon.</p>
+          <p className="px-2 py-2 text-caption text-text-muted">No matching icon.</p>
         ) : (
           <ul aria-label="Icons" className="grid max-h-icon-grid grid-cols-6 gap-1 overflow-y-auto">
             {shown.map((icon) => (
@@ -80,14 +80,14 @@ export function IconPicker({ connection, sessions, project, children }: { connec
                   onClick={() => void pick({ icon: icon.name, colour: look.colour }, true)}
                   className={cn("flex size-control items-center justify-center rounded-md hover:bg-surface-raised aria-pressed:bg-surface-raised", COLOUR[look.colour])}
                 >
-                  <IconGlyph icon={icon.name} className="size-icon-md" />
+                  <IconGlyph icon={icon.name} className="size-icon-sm" />
                 </button>
               </li>
             ))}
           </ul>
         )}
         {problem !== undefined && (
-          <p role="status" className="px-3 text-caption break-words text-text-muted">
+          <p role="status" className="px-2 text-caption break-words text-text-muted">
             {problem}
           </p>
         )}

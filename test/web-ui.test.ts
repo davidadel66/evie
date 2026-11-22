@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { readFile } from "node:fs/promises"
+import { readdir, readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { cn, NAMED_SIZES } from "../web/src/lib/utils.ts"
 
@@ -21,4 +21,28 @@ test("the joiner knows every named size in Tailwind's theme", async () => {
   const named = [...new Set([...styles.matchAll(/--spacing-([a-z][a-z-]*):/g)].map((match) => match[1]!))]
 
   expect<string[]>([...NAMED_SIZES].sort()).toEqual(named.sort())
+})
+
+test("every text box in the web app takes the field size for its text, which is 16px below 640px", async () => {
+  const folder = join(import.meta.dir, "..", "web", "src")
+  const files = (await readdir(folder, { recursive: true })).filter((file) => file.endsWith(".tsx"))
+  const boxes: { where: string; tag: string }[] = []
+  for (const file of files) {
+    const source = await readFile(join(folder, file), "utf8")
+    // Each text box is written as one self-closing element.
+    for (const match of source.matchAll(/<(input|textarea|Input)\b[\s\S]*?\/>/g)) {
+      if (/type="(checkbox|file)"|\bhidden\b/.test(match[0])) continue
+      boxes.push({ where: `${file}: ${match[0].slice(0, 60)}`, tag: match[0] })
+    }
+  }
+
+  expect(boxes.length).toBeGreaterThan(8)
+  for (const { where, tag } of boxes) {
+    const classes = tag.match(/className=(?:"([^"]*)"|\{cn\("([^"]*)")/)
+    const own = classes?.[1] ?? classes?.[2] ?? ""
+    // Input, the shared part, has the size itself; given classes must not change it.
+    const size = own.match(/(?:^|\s)(text-(caption|body|prose|control|label|heading|title|page-title|figure|code))(?=\s|$)/)
+    expect({ where, size: size?.[1] }).toEqual({ where, size: undefined })
+    if (!tag.startsWith("<Input")) expect({ where, field: own.includes("text-field") }).toEqual({ where, field: true })
+  }
 })

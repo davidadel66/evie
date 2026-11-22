@@ -61,7 +61,7 @@ export function CardButton() {
   const open = shown.wide ? shown.column : shown.sheet
   const label = open ? "Hide the project card" : "Show the project card"
   return (
-    <Button variant="icon" aria-label={label} aria-pressed={open} title={`${label} (${keyLabel("card", onMac())})`} onClick={toggleCard}>
+    <Button variant="icon" aria-label={label} aria-pressed={open} title={`${label} (${keyLabel("card", onMac())})`} onClick={toggleCard} className="size-control-sm">
       <SidebarRight />
     </Button>
   )
@@ -78,7 +78,7 @@ function ProjectCard({ connection, sessions }: { connection: Connection; session
       <Body>
         <Header projectId={selected.draft} project={projectOf(selected.draft)} />
         <Where connection={connection} projectId={selected.draft} project={projectOf(selected.draft)} />
-        <p className="px-7 pt-4 text-caption text-text-muted">The rest is shown once the session's first message is sent.</p>
+        <p className="px-5 pt-4 text-caption text-text-muted">The rest is shown once the session's first message is sent.</p>
       </Body>
     )
   }
@@ -96,13 +96,13 @@ function Empty({ text }: { text: string }) {
   return (
     <Body>
       <Header projectId={null} title="Project" />
-      {text !== "" && <p className="px-7 text-caption text-text-muted">{text}</p>}
+      {text !== "" && <p className="px-5 text-caption text-text-muted">{text}</p>}
     </Body>
   )
 }
 
 function Body({ children }: { children: ReactNode }) {
-  return <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-6">{children}</div>
+  return <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">{children}</div>
 }
 
 // The card's top row: the project's tile and name, or that there is none,
@@ -110,19 +110,19 @@ function Body({ children }: { children: ReactNode }) {
 function Header({ projectId, project, title }: { projectId: string | null; project?: ListedProject | null | undefined; title?: string }) {
   const name = title ?? (projectId === null ? "No project" : (project?.name ?? "Project"))
   return (
-    <header className="flex h-header-height shrink-0 items-center gap-2 pr-4 pl-7">
+    <header className="flex h-header-height shrink-0 items-center gap-2 pr-3 pl-5">
       {projectId === null ? (
-        <h2 className="min-w-0 flex-1 truncate text-title text-text">{name}</h2>
+        <h2 className="min-w-0 flex-1 truncate text-label text-text">{name}</h2>
       ) : (
         // The project's tile and name open its workspace.
-        <h2 className="flex min-w-0 flex-1 text-title text-text">
+        <h2 className="flex min-w-0 flex-1 text-label text-text">
           <a href={addressOfWorkspace({ workspace: projectId, tab: "sessions" })} title={`Open the ${name} workspace`} className="flex h-control min-w-0 items-center gap-2">
             <ProjectIcon project={projectId} />
             <span className="min-w-0 truncate">{name}</span>
           </a>
         </h2>
       )}
-      <Button variant="icon" aria-label="Hide the project card" onClick={toggleCard}>
+      <Button variant="icon" aria-label="Hide the project card" onClick={toggleCard} className="size-control-sm">
         <X />
       </Button>
     </header>
@@ -134,10 +134,10 @@ function Header({ projectId, project, title }: { projectId: string | null; proje
 // has none, which the header says.
 function Where({ connection, projectId, project }: { connection: Connection; projectId: string | null; project: ListedProject | null | undefined }) {
   if (projectId === null) return null
-  if (project == null) return <p className="border-t border-line px-7 pt-4 text-caption text-text-muted">The project's details have not been read yet.</p>
+  if (project == null) return <p className="border-t border-line px-5 pt-4 text-caption text-text-muted">The project's details have not been read yet.</p>
   const branch = branchWords(project)
   return (
-    <dl className="flex flex-col px-4">
+    <dl className="flex flex-col px-2">
       <Row label="Folder">
         <dd className="min-w-0">
           <FolderPath folder={project.folder} className="text-text" />
@@ -167,7 +167,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 // A section of the card, under a caption that says what it is.
 function Section({ title, count, children }: { title: string; count?: string; children: ReactNode }) {
   return (
-    <section aria-label={title} className="flex flex-col px-4 pt-6">
+    <section aria-label={title} className="flex flex-col px-2 pt-4">
       <h3 className="px-3 pb-2 text-caption text-text-muted">
         {title}
         {count !== undefined && ` · ${count}`}
@@ -331,7 +331,7 @@ function Changes({
   return (
     <Section title="Changes">
       <SessionChanged changes={changes} />
-      {/* Each button's own padding brings its word to the card's 28px edge. */}
+      {/* Each button's own padding brings its word to the card's 20px edge. */}
       <div className="flex flex-wrap gap-2">
         {(["commit", "push", "pull request"] as const).map((kind) => (
           <Button key={kind} disabled={gitWhy !== undefined || sending} aria-describedby={why === undefined ? undefined : gitNote} onClick={() => void ask(kind)} className="px-3">
@@ -430,7 +430,7 @@ function Checks({ checks }: { checks: PullRequest["checks"] }) {
       <DropdownMenuTrigger asChild>
         <Button variant="quiet" aria-label={`Checks: ${summary}`} className={`-ml-3 gap-1 ${failing ? "text-status-failed hover:text-status-failed" : ""}`}>
           {summary}
-          <CaretDown className="size-icon-sm" />
+          <CaretDown className="size-icon-control" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-w-card-sheet">

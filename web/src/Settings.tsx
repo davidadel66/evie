@@ -112,7 +112,7 @@ function Pages({ page, choose }: { page: Page; choose: (page: Page) => void }) {
           <DropdownMenuTrigger asChild>
             <Button aria-label={`Page: ${page}`} className="w-full justify-between">
               {page}
-              <CaretDown className="size-icon-sm text-text-muted" />
+              <CaretDown className="size-icon-control text-text-muted" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -148,10 +148,10 @@ function OnlyThere({ what }: { what: string }) {
 
 // One setting: its title, what it is for and how it stands on the left,
 // the control on the right, or below them in a narrow window. Rows are
-// divided by a line, with nothing around them.
+// divided by a line, with nothing around them, and spaced as T3 Code's.
 function Row({ title, about, standing, control, label }: { title: ReactNode; about?: ReactNode; standing?: Standing; control?: ReactNode; label: string }) {
   return (
-    <section aria-label={label} className="flex flex-col gap-3 border-t border-line py-4 @min-[440px]:flex-row @min-[440px]:items-center @min-[440px]:gap-6">
+    <section aria-label={label} className="flex flex-col gap-3 border-t border-line py-3 @min-[440px]:flex-row @min-[440px]:items-center @min-[440px]:gap-8">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <h4 className="text-label break-words text-text">{title}</h4>
         {about !== undefined && <div className="min-w-0 text-caption text-text-muted">{about}</div>}
@@ -170,7 +170,7 @@ function Row({ title, about, standing, control, label }: { title: ReactNode; abo
 // What the server said when it refused a change, under the row it was made in.
 function Refused({ words }: { words: string | undefined }) {
   return words === undefined ? null : (
-    <p role="alert" className="pb-4 text-body text-text">
+    <p role="alert" className="pb-3 text-body text-text">
       <Words text={words} />
     </p>
   )
@@ -207,7 +207,7 @@ function Appearance() {
                 <Button aria-label={`Theme: ${name}`}>
                   <Swatch theme={theme} />
                   {name}
-                  <CaretDown className="size-icon-sm text-text-muted" />
+                  <CaretDown className="size-icon-control text-text-muted" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -277,7 +277,7 @@ function Notifications() {
             <DropdownMenuTrigger asChild>
               <Button aria-label={`Notifications: ${MODE_NAMES[settings.mode]}`}>
                 {MODE_NAMES[settings.mode]}
-                <CaretDown className="size-icon-sm text-text-muted" />
+                <CaretDown className="size-icon-control text-text-muted" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -423,7 +423,7 @@ function KeyRow({ item, change }: { item: SettingsView["keys"][number]; change: 
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
                 onKeyDown={(event: KeyboardEvent) => event.key === "Enter" && save()}
-                className="min-w-0 flex-1 font-mono text-code [-webkit-text-security:disc] @min-[440px]:w-settings-field @min-[440px]:flex-none"
+                className="min-w-0 flex-1 font-mono [-webkit-text-security:disc] @min-[440px]:w-settings-field @min-[440px]:flex-none"
               />
               {value.trim() !== "" && (
                 <Button disabled={busy} onClick={save}>
@@ -498,7 +498,7 @@ function Plugins({ view, change }: { view: SettingsView; change: Change }) {
                   value={adding}
                   onChange={(event) => setAdding(event.target.value)}
                   onKeyDown={(event: KeyboardEvent) => event.key === "Enter" && void add()}
-                  className="min-w-0 flex-1 font-mono text-code @min-[440px]:w-settings-field @min-[440px]:flex-none"
+                  className="min-w-0 flex-1 font-mono @min-[440px]:w-settings-field @min-[440px]:flex-none"
                 />
                 {adding.trim() !== "" && (
                   <Button disabled={busy} onClick={() => void add()}>
@@ -552,7 +552,7 @@ function Instructions({ view, draft, settings }: { view: SettingsView; draft: st
             setSaved(false)
           }}
           rows={12}
-          className="w-full resize-y rounded-md border border-line bg-transparent p-3 text-body text-text placeholder:text-text-muted"
+          className="w-full resize-y rounded-md border border-line bg-transparent p-3 text-field text-text placeholder:text-text-muted"
           placeholder="Such as: answer briefly, and ask before changing anything outside the project."
         />
         <div className="flex min-h-control items-center justify-end gap-3">
