@@ -14,7 +14,8 @@ test("the web app builds into a page whose script and stylesheet are built besid
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
 
   const page = await app.page.text()
-  const loads = [...page.matchAll(/(?:src|href)="([^"]+)"/g)].map((match) => match[1]!)
+  // A `data:` address, such as the empty icon, is carried in the page and loads nothing.
+  const loads = [...page.matchAll(/(?:src|href)="(?!data:)([^"]+)"/g)].map((match) => match[1]!)
   expect(loads.map((path) => path.split(".").pop()).sort()).toEqual(["css", "js"])
   for (const path of loads) expect(Object.keys(app.files)).toContain(path)
 
@@ -89,6 +90,14 @@ test("the page puts itself in the theme this browser picked before it is first d
   const themed = page.indexOf('localStorage.getItem("evie.theme")')
   expect(themed).toBeGreaterThan(-1)
   expect(themed).toBeLessThan(page.indexOf('rel="stylesheet"'))
+})
+
+test("the page names an empty icon, so that the browser does not ask for /favicon.ico and get a 404 on every load", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const page = await app.page.text()
+
+  expect(page).toMatch(/<link rel="?icon"? href="?data:,"?\s*\/?>/)
 })
 
 test("a transition has a length and an easing, which Tailwind's cleared defaults left out, and none for someone who asks for less motion", async () => {
