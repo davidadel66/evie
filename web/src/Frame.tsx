@@ -29,9 +29,9 @@ import { SubagentView } from "./Subagent.tsx"
 import { workspaceIn } from "./workspace.ts"
 
 // The page once signed in: the session list and the conversation, in
-// columns, as the Session view drawing lays them out, with the session
-// details floating at the conversation's top right, as T3 Code's do. At
-// 767px or narrower the columns stack, as the drawing has them: the list
+// columns, the list on the left, 256px wide, and the conversation filling
+// the rest, with the session details floating at the conversation's top
+// right, as T3 Code's do. At 767px or narrower the columns stack: the list
 // at the top of the page, and the conversation under it, a screen tall.
 // The details open from a button in the session's header. With a
 // workspace in the address, the workspace view instead. The settings page,
@@ -240,8 +240,8 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
   )
 }
 
-// The middle column's header, as the Session view drawing has it: the
-// project's tile and its name, quiet, then the session's name; after the
+// The middle column's header, in one row: the project's tile and its name,
+// quiet, then the session's name; after the
 // button that shows and hides the session list, and before those that show
 // and hide the session details and the right panel, on the right. For a
 // draft, the project is a menu to pick another, or none, as T3 Code's draft

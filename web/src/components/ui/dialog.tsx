@@ -23,8 +23,8 @@ function DialogClose(props: ComponentProps<typeof DialogPrimitive.Close>) {
 }
 
 // A dialog with no description is named by its title alone. The layer
-// under it, which takes a click outside, is clear: the board gives no
-// colour to dim the page with.
+// under it, which takes a click outside, is clear: the page behind is not
+// dimmed, since none of evie's colours is for dimming it.
 function DialogContent({ className, ...props }: ComponentProps<typeof DialogPrimitive.Content>) {
   return (
     <DialogPrimitive.Portal>

@@ -117,6 +117,10 @@ export async function setUpPlugins(plugins: readonly Plugin[], project: Project 
 
 // What the model is told when the owner moves its session: the project and
 // folder it now works in, and where the files named before the move are.
+// Said of a session that opens with no project because the folder or the
+// project it was opened by is no project's.
+const NO_PROJECT = "This session belongs to no project."
+
 function movedNote(from: Project | null, to: Project | null): string {
   const moved = from === null ? `into the project "${to!.name}"` : to === null ? `out of the project "${from.name}"` : `from the project "${from.name}" into the project "${to.name}"`
   const now =
@@ -184,7 +188,11 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
 
   // `ask` is used only when the scope is built now, by the session that is
   // opening the project for the first time.
-  function scopeFor(project: Project | null, ask: Ask): Promise<Scope> {
+  function scopeFor(given: Project | null, ask: Ask): Promise<Scope> {
+    // A project at a folder that can never be one, which an earlier evie
+    // made, is set up as no project: its settings file, which can be evie's
+    // own, is never read as the project's.
+    const project = given !== null && projects.refusal(given) !== undefined ? null : given
     const key = project?.id ?? null
     let scope = scopes.get(key)
     if (!scope) {
@@ -209,7 +217,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   const db = openStore(join(home, "evie.db"))
   const log = createEventLog(db)
   const inbox = createInbox(db)
-  const projects = createProjects(db)
+  const projects = createProjects(db, home)
 
   const listeners = new Set<(event: EvieEvent) => void>()
   const deliver = (event: EvieEvent) => {
@@ -405,6 +413,18 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       throw new Error("`after` is the number of the last event seen in a session, so it is given only with `session`.")
     }
     let project: Project | null = null
+    // Why the folder given, or the project's, is no project's, as for evie's
+    // data folder or a folder holding it, such as the home folder: said
+    // once, as the session opens, which belongs to no project. A project an
+    // earlier evie made at such a folder is no project now, whichever way
+    // it is opened, and nothing of it is deleted.
+    let refused: string[] = []
+    const usable = (found: Project | null) => {
+      const why = found === null ? undefined : projects.refusal(found)
+      if (why === undefined) return found
+      refused = [`${why} ${NO_PROJECT}`]
+      return null
+    }
     if (input.session !== undefined) {
       const found = projects.projectOf(input.session)
       if (found === undefined) throw new Error(`There is no session with the id "${input.session}".`)
@@ -412,19 +432,25 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       // its questions and opens it again when needed.
       const parent = projects.parentOf(input.session)
       if (parent !== undefined) throw new Error(`The session "${input.session}" is a subagent's. Open the session that started it, "${parent}", instead.`)
-      project = found
+      project = usable(found)
     } else if (input.project !== undefined) {
-      project = projects.get(input.project) ?? null
-      if (!project) throw new Error(`There is no project with the id "${input.project}".`)
+      const found = projects.get(input.project)
+      if (!found) throw new Error(`There is no project with the id "${input.project}".`)
+      project = usable(found)
     } else if (input.folder !== undefined) {
-      project = projects.forFolder(input.folder)
+      const found = projects.forFolder(input.folder)
+      if ("refused" in found) refused = [`${found.refused} ${NO_PROJECT}`]
+      else project = found
     }
     // Checked each time, so a folder that has become a repository since is covered too.
     if (project) keepEvieOutOfGit(project.folder)
 
     // Continuing: the session used last in this project, when there is one,
     // or the one named, which is opened in its own project the same way.
-    const last = input.session ?? (input.continue ? projects.lastSession(project) : undefined)
+    // A folder or project that is no project's has no last session of its
+    // own: carrying on the last one with no project would pick up one from
+    // anywhere, so a new one is started.
+    const last = input.session ?? (input.continue && refused.length === 0 ? projects.lastSession(project) : undefined)
     // A new session is created only once it is needed: when the project's
     // settings ask a question, or when everything else has gone well.
     let session = last
@@ -441,7 +467,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const alreadyOpen = () => (last === undefined ? undefined : sessions.get(last))
     const join = (id: string, open: Open) => {
       open.canAnswer ||= canAnswer
-      return { ...whereItIs(id, input.after), project, resumed: true, notices: open.notices }
+      return { ...whereItIs(id, input.after), project, resumed: true, notices: [...refused, ...open.notices] }
     }
     const openBefore = alreadyOpen()
     if (last !== undefined && openBefore && !closed) return join(last, openBefore)
@@ -472,7 +498,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
 
       const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer: canAnswer || resuming })
       if (left) carryOn(sessionId(), opened, left)
-      return { ...whereItIs(sessionId(), input.after), project, resumed: last !== undefined, notices }
+      return { ...whereItIs(sessionId(), input.after), project, resumed: last !== undefined, notices: [...refused, ...notices] }
     } finally {
       if (session !== undefined) markOpening(session, -1)
     }
@@ -712,6 +738,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     }
     const to = input.project === null ? null : (projects.get(input.project) ?? null)
     if (input.project !== null && to === null) throw new Error(`There is no project with the id "${input.project}".`)
+    const refused = to === null ? undefined : projects.refusal(to)
+    if (refused !== undefined) throw new Error(`${refused} A session cannot be moved into it.`)
     const from = projects.projectOf(input.session)!
     if (from?.id === to?.id) return
     refuseWhileRunning(input.session, "moved")
@@ -1163,9 +1191,11 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       // Each on its own, so that one that cannot be opened again, such as
       // one whose project has gone, does not hold up the others.
       await Promise.all([...left].map((session) => reopen(session).catch(() => {})))
+      // Not a project an earlier evie made at a folder that is no project's.
+      const usable = projects.list().filter((project) => projects.refusal(project) === undefined)
       for (const plugin of options.plugins) {
         try {
-          plugin.start?.({ projects: projects.list(), signal: stopping.signal })
+          plugin.start?.({ projects: usable, signal: stopping.signal })
         } catch (cause) {
           throw new Error(`The plugin "${plugin.name}" could not start its work: ${cause instanceof Error ? cause.message : String(cause)}`)
         }
