@@ -1,3 +1,4 @@
+import { createStreamPacer, type NextFrame } from "../client/stream-pacer.ts"
 import type { Evie, EventBodies, EvieEvent, ToolCall } from "../core/types.ts"
 import { shownFiles } from "../plugins/show/record.ts"
 
@@ -36,6 +37,9 @@ export type TerminalOptions = {
   // Called once with a function that prints a note of the caller's own on a
   // line of its own, such as that the connection to the server dropped.
   onNote?: (show: (text: string) => void) => void
+  // Frame clock for pacing streamed replies smoothly in an interactive
+  // terminal. Left out, pieces print immediately (as for pipes and tests).
+  frame?: NextFrame
 }
 
 const PROMPT = "\n› "
@@ -60,16 +64,53 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
 
   // Whether the last thing printed left the cursor part way along a line.
   let midLine = false
-  const write = (text: string) => {
+  const emitRaw = (text: string) => {
     if (text === "") return
     options.write(text)
     midLine = !text.endsWith("\n")
+  }
+  // When given a frame clock, streamed reply pieces are paced smoothly. A
+  // plain final reply holds its `assistant_message` and completed `turn_end`
+  // until the pacer finishes gliding the remaining text out; any other
+  // output (tool calls, questions, notes, cancel, or a typed line) flushes
+  // immediately so lines never interleave.
+  let heldEnd: EvieEvent[] = []
+  let draining = false
+  const flushHeld = () => {
+    if (draining) return
+    draining = true
+    try {
+      pacer?.flush()
+      while (heldEnd.length > 0) {
+        const queued = heldEnd
+        heldEnd = []
+        for (const event of queued) applyEvent(event)
+      }
+    } finally {
+      draining = false
+    }
+  }
+  const pacer = options.frame
+    ? createStreamPacer({
+        frame: options.frame,
+        emit(text) {
+          emitRaw(text)
+          if (heldEnd.length > 0 && !pacer!.pending()) flushHeld()
+        },
+      })
+    : undefined
+  const write = (text: string) => {
+    flushHeld()
+    emitRaw(text)
   }
   // Shown when Evie is ready for the next message: a blank line, then the
   // prompt unless the input line draws its own.
   const showPrompt = () => write(options.prompt === false ? "\n" : PROMPT)
   // Prints text on a line of its own.
-  const line = (text: string) => write(`${midLine ? "\n" : ""}${text}\n`)
+  const line = (text: string) => {
+    flushHeld()
+    emitRaw(`${midLine ? "\n" : ""}${text}\n`)
+  }
   options.onNote?.((text) => line(`[note] ${text}`))
 
   // The lines typed are read one at a time, here and nowhere else, because
@@ -180,7 +221,12 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   // answered: as they happened, the owner's typing and the question waiting
   // for an answer showed them.
   const draw = (event: EvieEvent, earlier = false) => {
-    if (event.type === "assistant_delta") write(event.text)
+    if (event.type === "assistant_delta") {
+      if (pacer) pacer.push(event.text)
+      else emitRaw(event.text)
+      return
+    }
+    pacer?.flush()
     if (earlier && event.type === "user_message") write(`${midLine ? "\n" : ""}${PROMPT}${event.body.text}\n`)
     if (earlier && event.type === "question") line(`[question] ${event.body.text}`)
     if (earlier && event.type === "answer") line(answered(event.body.choice))
@@ -291,6 +337,28 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     // terminal are a question asked while it opens, and its answer.
     const mine = session === undefined ? event.type === "question" || event.type === "answer" : event.session === session
     if (!mine) return
+    if (event.type === "assistant_delta") {
+      if (heldEnd.length > 0) flushHeld()
+      applyEvent(event)
+      return
+    }
+    if (event.type === "assistant_message" && pacer?.pending()) {
+      const plainFinal = !event.body.interrupted && !(event.body.toolCalls && event.body.toolCalls.length > 0)
+      if (plainFinal) {
+        heldEnd.push(event)
+        return
+      }
+    }
+    if (event.type === "turn_end" && heldEnd.length > 0 && event.body.reason === "completed" && pacer?.pending()) {
+      heldEnd.push(event)
+      return
+    }
+    flushHeld()
+    applyEvent(event)
+  }
+
+  function applyEvent(event: EvieEvent) {
+    if (event.type === "summary") return
     if (session === undefined && event.type === "question") askedWhileOpening.add(event.body.id)
     // More than one can be open at once, such as from two subagents. They
     // are shown one at a time, in the order they came. Where nobody types,
@@ -362,6 +430,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   idle = !turnRunning
 
   options.onInterrupt?.(() => {
+    flushHeld()
     if (idle && !commanding) {
       // Pressed while waiting for jobs after the input ended: stop waiting.
       gaveUpWaiting = true
@@ -401,6 +470,9 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
       if (read === GONE) return
       reading = undefined
       if (read.done) break
+      // If a reply was still gliding out from a completed turn, finish it
+      // before taking the newly typed line.
+      flushHeld()
       // The Enter that ended the typed line moved the cursor to a new one.
       midLine = false
       const text = read.value.trim()
@@ -466,6 +538,7 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
     }
   } finally {
     stop()
+    flushHeld()
     write("\n")
   }
 }

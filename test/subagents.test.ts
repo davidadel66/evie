@@ -367,7 +367,7 @@ test("in manual mode starting a subagent is asked about, and that answer covers 
   await turns(run, 2)
 
   expect(asked).toEqual([
-    "Let evie start a subagent (look into it)? It works without asking before each step: it may change files and run commands inside the project.\n\n  Tidy the notes.",
+    "Let evie start a subagent (look into it)? It works without asking before each step, as in auto mode: it may change files in the project and run commands, and asks only before what is dangerous.\n\n  Tidy the notes.",
   ])
   expect(edits.ran).toEqual(["notes.md"])
 })
@@ -406,11 +406,14 @@ test("what a subagent still has to ask is put to the owner in the session that s
 
 test("a subagent's mode is settled when it is given work: more work in manual mode is asked about, and read-only does not wear off", async () => {
   const edits = editStandIn()
+  // Its own data folder, where the mode set with /mode is kept.
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
   const { run, parent, call } = await start(
     [{ calls: [hand("Tidy the notes.")] }, { text: "Started." }, { text: "It could not." }],
     [{ calls: [{ name: "edit", input: { path: "notes.md" } }] }, { text: "Not allowed." }, { calls: [{ name: "edit", input: { path: "notes.md" } }] }, { text: "Still not allowed." }, { calls: [{ name: "edit", input: { path: "notes.md" } }] }, { text: "Tidied." }],
-    [edits.plugin, permissions({ mode: "read-only" })],
-    { questions: true },
+    [edits.plugin, permissions({ mode: "read-only", dataFolder: home })],
+    { questions: true, home },
   )
   const asked: string[] = []
   let answer = "Yes, once"
@@ -442,8 +445,8 @@ test("a subagent's mode is settled when it is given work: more work in manual mo
   expect(await send("Try again.")).toStartWith("The message was sent")
   await turns(run, 5)
   expect(asked).toEqual([
-    "Let evie give its subagent more work? It works without asking before each step: it may change files and run commands inside the project.",
-    "Let evie give its subagent more work? It works without asking before each step: it may change files and run commands inside the project.",
+    "Let evie give its subagent more work? It works without asking before each step, as in auto mode: it may change files in the project and run commands, and asks only before what is dangerous.",
+    "Let evie give its subagent more work? It works without asking before each step, as in auto mode: it may change files in the project and run commands, and asks only before what is dangerous.",
   ])
   expect(edits.ran).toEqual(["notes.md"])
 

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, startServer, undo as undoPlugin, type Command, type Evie } from "../src/index.ts"
-import { holdChanges, type Changes, type ChangesState } from "../web/src/changes.ts"
+import { holdChanges } from "../web/src/changes.ts"
 import { openConnection } from "../web/src/connection.ts"
 import { holdConversation } from "../web/src/conversation.ts"
 import { diffOf, sidesLoader } from "../web/src/diff-view.ts"
@@ -47,9 +47,9 @@ async function start(script: ScriptedReply[], refuse?: (command: Command) => boo
   return { served, connection, changes: held.changes }
 }
 
-async function until(changes: Changes, ready: (state: ChangesState) => boolean) {
-  while (!ready(changes.state())) await Bun.sleep(5)
-  return changes.state()
+async function until<State>(source: { state(): State }, ready: (state: State) => boolean) {
+  while (!ready(source.state())) await Bun.sleep(5)
+  return source.state()
 }
 
 const writes = (path: string, content: string): ScriptedReply[] => [{ text: [], calls: [{ name: "write", input: { path, content } }] }, { text: ["Written."] }]
@@ -117,10 +117,14 @@ test("the whole session's files are listed only while a part of the page that sh
 test("changes that could not be listed are asked for again at the next turn's end, not as the reply streams in", async () => {
   let asked = 0
   const reply = Array.from({ length: 40 }, (_, at) => `word${at} `)
-  const { served, changes } = await start([{ text: reply }], (command) => command.type === "list_changes" && ++asked > 0)
+  const { served, connection, changes } = await start([{ text: reply }], (command) => command.type === "list_changes" && ++asked > 0)
   await until(changes, (state) => state.problem !== undefined)
+  const { conversation, release } = holdConversation(connection, served.run.session)
+  cleanups.push(async () => release())
   const before = asked
   await say(served.run, "Say a lot")
+  // Wait for the paced reply to finish gliding out and the turn's end to settle.
+  await until(conversation, (state) => !state.turnRunning && state.events.some((event) => event.type === "turn_end"))
   await Bun.sleep(100)
   expect(asked - before).toBe(1)
 })
