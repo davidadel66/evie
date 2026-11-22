@@ -101,6 +101,10 @@ export async function terminal(env: Settings, args: string[]) {
           write: live.write,
           prompt: false,
           typing: live.typing,
+          frame: (apply) => {
+            const timer = setTimeout(apply, 16)
+            return () => clearTimeout(timer)
+          },
           onInterrupt: (handler) => (interrupt = handler),
           onNote: (show) => (note = show),
         })
