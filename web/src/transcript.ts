@@ -1,4 +1,5 @@
 import type { ChangedFile, Job, StoredEvent, TurnChanges } from "../../src/core/types.ts"
+import { shownAttachment, type ShownAttachment } from "./attachments.ts"
 
 // How a conversation reads in the web app, apart from its screen: a
 // session's stored events, with the reply being written and its jobs,
@@ -8,7 +9,8 @@ import type { ChangedFile, Job, StoredEvent, TurnChanges } from "../../src/core/
 // earliest read so far; whether there are earlier ones; the reply being
 // written now, as far as it has come; whether a turn is running; and its
 // background jobs. `pending` are the owner's messages sent from this page
-// that the session has not taken in yet, in the order sent. `notes` are
+// that the session has not taken in yet, in the order sent, each with the
+// files on their way with it. `notes` are
 // said in this page and kept nowhere, such as what a command said, each
 // at the time of the session's last event when it was said.
 export type View = {
@@ -17,10 +19,11 @@ export type View = {
   replySoFar: string
   turnRunning: boolean
   jobs: readonly Job[]
-  pending?: readonly string[]
+  pending?: readonly Pending[]
   notes?: readonly PageNote[]
 }
 export type PageNote = { key: string; time: number; text: string }
+export type Pending = { text: string; files?: readonly File[] }
 
 // One tool call: its name, a short form of its input, and its result as
 // stored, once it has one, with that result in short. `running` while it is
@@ -31,7 +34,9 @@ export type Call = { id: string; name: string; input: string; result?: string; s
 // `turn` is the number of the turn it belongs to, counted in what has been
 // read, so that the page can space turns apart.
 export type Item = { key: string; turn: number } & (
-  | { kind: "owner"; text: string }
+  // `attachments` are the files attached to the owner's message, when it has any.
+  // `sending` are the files of a message on its way.
+  | { kind: "owner"; text: string; attachments?: ShownAttachment[]; sending?: readonly File[] }
   | { kind: "reply"; text: string; streaming: boolean }
   // A run of tool calls with nothing said between them, as one line, and
   // what that line says: Working while one of them is, how long the turn
@@ -108,7 +113,10 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
       ended = false
       waited = 0
     }
-    if (event.type === "user_message") add({ key, turn, kind: "owner", text: event.body.text }, event.time)
+    if (event.type === "user_message") {
+      const attached = (event.body.attachments ?? []).map((each) => shownAttachment(event.session, each))
+      add({ key, turn, kind: "owner", text: event.body.text, ...(attached.length > 0 && { attachments: attached }) }, event.time)
+    }
     if (event.type === "assistant_message") {
       if (event.body.text !== "") add({ key, turn, kind: "reply", text: event.body.text, streaming: false }, event.time)
       if (event.body.interrupted && event.body.text !== "") {
@@ -177,7 +185,9 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
   if (view.replySoFar !== "") add({ key: "streaming", turn, kind: "reply", text: view.replySoFar, streaming: true }, Infinity)
   // The owner's messages the session has not taken in yet come last, as
   // they will: a turn takes them in at its next step.
-  for (const [at, text] of (view.pending ?? []).entries()) add({ key: `pending${at}`, turn, kind: "owner", text }, Infinity)
+  for (const [at, { text, files }] of (view.pending ?? []).entries()) {
+    add({ key: `pending${at}`, turn, kind: "owner", text, ...(files !== undefined && files.length > 0 && { sending: files }) }, Infinity)
+  }
   // Each run is known by its last call, which reading the page before does
   // not change, and says what it is.
   for (const item of items) {

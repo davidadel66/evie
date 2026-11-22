@@ -1,8 +1,9 @@
 import type { Database } from "bun:sqlite"
+import type { Attachment } from "./types.ts"
 
 // The inbox: the only way input enters a session. A client adds a row, and
 // the turn loop takes the waiting rows.
-export type InboxMessage = { text: string }
+export type InboxMessage = { text: string; attachments?: Attachment[] }
 
 export type Inbox = {
   add(session: string, message: InboxMessage): void

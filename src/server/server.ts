@@ -1,6 +1,6 @@
 import type { HTMLBundle, ServerWebSocket } from "bun"
 import { randomBytes } from "node:crypto"
-import type { Command, Commands, Evie, EvieEvent } from "../core/types.ts"
+import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent } from "../core/types.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
 import type { WebApp } from "./web-app.ts"
 import { hostInAddress, onThisComputer, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
@@ -40,6 +40,9 @@ export type ServerOptions = {
   // which is for tests to change. A connection from a web page counts only
   // when the page is at a local address too.
   fromThisComputer?: (address: string) => boolean
+  // What keeps the files attached to messages, which a signed-in client
+  // sends over HTTP. Without it, the attachments route refuses them.
+  attachments?: Attachments
 }
 
 export type EvieServer = {
@@ -106,7 +109,10 @@ const REMEMBERED = 200
 // Commands that only read, whose replies can be large, such as a file read
 // from a workspace's Storage: they are not remembered, so they take none of
 // the places. Carried out again, they change nothing.
-const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage"])
+const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage", "list_files"])
+// The images an attachment is given back as, to show: those a browser
+// draws and never runs.
+const SHOWN = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 // How long the code in a sign-in link works: long enough for the browser to
 // open, short enough that a link left in a browser's history is of no use.
 const SIGN_IN_CODE_LASTS = 5 * 60_000
@@ -322,6 +328,47 @@ export function startServer(options: ServerOptions): EvieServer {
     })
   }
 
+  // A file attached to a message, taken in from a signed-in client, as the
+  // WebSocket is, and kept by the core, which gives back what the message
+  // records of it. One larger than the limit is refused as it arrives,
+  // before it is all read.
+  async function attach(request: Request, port: number): Promise<Response> {
+    const admitted = admit(request, port)
+    if (admitted instanceof Response) return admitted
+    if (!options.attachments) return new Response("This server takes no attachments.", { status: 404 })
+    const asked = new URL(request.url).searchParams
+    const session = asked.get("session")
+    const name = asked.get("name")
+    if (session === null || name === null) return new Response("Name the session and the file, as /attachments?session=<id>&name=<file name>.", { status: 400 })
+    // Checked before the body is read, so that nothing is read for nothing.
+    const refused = options.attachments.refusal(session, name)
+    if (refused !== undefined) return new Response(refused, { status: 400 })
+    const bytes = await bodyWithin(request, ATTACHMENT_LIMIT)
+    if (bytes === undefined) return new Response(`${name} is larger than the ${ATTACHMENT_LIMIT / 1024 / 1024} MB a file attached can be.`, { status: 413 })
+    try {
+      return Response.json(await options.attachments.save(session, name, bytes))
+    } catch (cause) {
+      return new Response(cause instanceof Error ? cause.message : String(cause), { status: 400 })
+    }
+  }
+
+  // An image attached to one of a session's messages, given back to a
+  // signed-in client to show. Only an image of a kind a browser draws, and
+  // never runs, is given back, and the browser is told not to take it for
+  // anything else, so that a page attached cannot run as evie's own.
+  async function attachment(request: Request, port: number): Promise<Response> {
+    const admitted = admit(request, port)
+    if (admitted instanceof Response) return admitted
+    const asked = new URL(request.url).searchParams
+    const session = asked.get("session")
+    const path = asked.get("path")
+    const found = options.attachments && session !== null && path !== null ? await options.attachments.open(session, path) : undefined
+    if (found === undefined || !SHOWN.includes(found.type)) return new Response("There is no image attached there to show.", { status: 404 })
+    return new Response(Bun.file(found.file), {
+      headers: { "Content-Type": found.type, "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox", "Cache-Control": "private, max-age=86400" },
+    })
+  }
+
   const server = Bun.serve<Connection>({
     hostname: options.host,
     port: options.port,
@@ -349,6 +396,8 @@ export function startServer(options: ServerOptions): EvieServer {
         const admitted = admit(request, server.port!)
         return admitted instanceof Response ? admitted : new Response("This token is accepted.")
       }
+      if (path === PATHS.attachments && request.method === "POST") return attach(request, server.port!)
+      if (path === PATHS.attachments && request.method === "GET") return attachment(request, server.port!)
       if (path === PATHS.login && request.method === "POST") return login(request, server.port!)
       if (path === PATHS.signInLink && request.method === "POST") return signInLink(request, server.port!)
       return new Response("Not found.", { status: 404 })
@@ -450,6 +499,20 @@ export function startServer(options: ServerOptions): EvieServer {
 }
 
 const send = (socket: ServerWebSocket<Connection>, message: ServerMessage) => socket.send(JSON.stringify(message))
+
+// A request's body, read as it arrives, or nothing once it is larger than
+// `limit` bytes, as its length says or as it turns out.
+async function bodyWithin(request: Request, limit: number): Promise<Uint8Array | undefined> {
+  if (Number(request.headers.get("content-length")) > limit) return undefined
+  const pieces: Uint8Array[] = []
+  let size = 0
+  for await (const piece of request.body ?? []) {
+    size += piece.byteLength
+    if (size > limit) return undefined
+    pieces.push(piece)
+  }
+  return Buffer.concat(pieces)
+}
 
 // The token in the request's `Authorization` header, if it carries one.
 const bearerIn = (request: Request) => /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]

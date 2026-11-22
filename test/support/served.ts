@@ -41,6 +41,7 @@ export async function serveEvie(
     ...(options.keepaliveEvery !== undefined && { keepaliveEvery: options.keepaliveEvery }),
     ...(options.app && { app: options.app }),
     ...(options.signInCodeLasts !== undefined && { signInCodeLasts: options.signInCodeLasts }),
+    attachments: run.evie.attachments,
   })
   const clients: { close(): Promise<void> }[] = []
   return {

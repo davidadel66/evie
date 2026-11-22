@@ -1,4 +1,5 @@
-import type { Evie } from "../../src/core/types.ts"
+import type { Attachment, Evie } from "../../src/core/types.ts"
+import { uploadFile } from "./attachments.ts"
 import { connect, ConnectError } from "../../src/server/connect.ts"
 import { PATHS } from "../../src/server/wire.ts"
 
@@ -40,6 +41,9 @@ export type ConnectionOptions = {
   // left out.
   firstWait?: number
   answerWithin?: number
+  // For tests: how long a file attached may take to be sent, two minutes
+  // when left out.
+  uploadWithin?: number
 }
 
 export type Connection = {
@@ -55,6 +59,10 @@ export type Connection = {
   signIn(proof: { token: string }): Promise<string | undefined>
   // Closes the connection, for good.
   close(): Promise<void>
+  // Sends a file attached to a message in a session to the server, over
+  // HTTP, signed in as the connection is, and gives back the attachment, or
+  // fails with why, in words for the owner.
+  upload(session: string, file: File): Promise<Attachment>
 }
 
 export function openConnection(options: ConnectionOptions): Connection {
@@ -152,6 +160,7 @@ export function openConnection(options: ConnectionOptions): Connection {
       closing.abort()
       await evie?.close()
     },
+    upload: (session, file) => uploadFile(options.url, options.token, session, file, options.uploadWithin),
   }
 }
 

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite"
-import type { EventBodies, StoredEvent, StoredEventType } from "./types.ts"
+import type { Attachment, EventBodies, StoredEvent, StoredEventType } from "./types.ts"
 
 // The event log: the add-only record of everything that happened in a
 // session. It is the truth; a request to the model is rebuilt from it. A
@@ -16,6 +16,9 @@ export type EventLog = {
   cutOff(): string[]
   // Takes away every event of a session, which is being deleted.
   remove(session: string): void
+  // The files attached to a session's messages, oldest first, read from
+  // its messages that have any, not from the rest of its log.
+  attached(session: string): Attachment[]
 }
 
 type EventRow = { session: string; seq: number; type: string; body: string; time: number }
@@ -43,6 +46,9 @@ export function createEventLog(db: Database): EventLog {
     `SELECT id FROM session WHERE (SELECT type FROM event WHERE event.session = session.id AND type IN ('turn_start', 'turn_end') ORDER BY seq DESC LIMIT 1) = 'turn_start'`,
   )
   const removeAll = db.query("DELETE FROM event WHERE session = ?")
+  const withAttachments = db.query<{ body: string }, [string]>(
+    `SELECT body FROM event WHERE session = ? AND type = 'user_message' AND body LIKE '%"attachments":%' ORDER BY seq`,
+  )
   const fromRow = (row: EventRow) =>
     ({
       session: row.session,
@@ -73,6 +79,10 @@ export function createEventLog(db: Database): EventLog {
       // One more than the page is read, to tell whether there are earlier ones.
       const rows = selectBefore.all(session, before, limit + 1)
       return { events: rows.slice(0, limit).reverse().map(fromRow), earlier: rows.length > limit }
+    },
+
+    attached(session) {
+      return withAttachments.all(session).flatMap((row) => (JSON.parse(row.body) as EventBodies["user_message"]).attachments ?? [])
     },
 
     cutOff() {

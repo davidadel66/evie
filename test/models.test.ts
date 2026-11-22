@@ -51,6 +51,17 @@ test("the system prompt says which project and folder the session is in", async 
   expect(provider.requests[1]?.system).toContain("This session is not in a project")
 })
 
+test("in a project, the system prompt says that an @ and a path in the owner's message names a file from its folder", async () => {
+  const { run, provider } = await start("anthropic/claude-sonnet-4.6")
+  const general = await run.evie.send({ type: "open_session" })
+
+  await say(run, "hi")
+  await say(run, "hi", general.session)
+
+  expect(provider.requests[0]?.system).toContain("A word such as @src/app.ts in the owner's message names a file by its path from there.")
+  expect(provider.requests[1]?.system).not.toContain("@src/app.ts")
+})
+
 test("a tool the model's profile leaves out cannot be called", async () => {
   const { run } = await start("openai/gpt-5", [], [
     { text: [], calls: [{ name: "edit", input: { path: "a.txt", oldString: "a", newString: "b" } }] },

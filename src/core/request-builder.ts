@@ -1,5 +1,6 @@
+import { shownName } from "./attachments.ts"
 import { conversationOf, summaryMessage } from "./compaction.ts"
-import type { Message, Request, StoredEvent, Tool } from "./types.ts"
+import type { Attachment, EventBodies, Message, Request, StoredEvent, Tool } from "./types.ts"
 
 // Builds what the model sees from the session's events and the registered
 // tools. It is a pure function: the same log always gives the same request,
@@ -24,16 +25,23 @@ import type { Message, Request, StoredEvent, Tool } from "./types.ts"
 export const NOTE_OPENING = "[Note from Evie:"
 export const ONLY_THE_CORE_WRITES = [NOTE_OPENING]
 
+// `shown` are the attached images the model is shown, by their path, as
+// their bytes in base64. Every other attachment is named by its path, and
+// any other image said not to be shown, unless it is not known whether the
+// model takes images.
+export type ShownImages = { images: ReadonlyMap<string, string>; unknown?: boolean }
+
 export function buildRequest(
   model: string,
   events: readonly StoredEvent[],
   tools: readonly Tool[],
   maxTokens?: number,
+  shown: ShownImages = { images: new Map() },
 ): Request {
   const { compaction, kept } = conversationOf(events)
   const messages: Message[] = compaction ? [{ role: "user", text: summaryMessage(compaction.body) }] : []
   for (const [index, event] of kept.entries()) {
-    if (event.type === "user_message") messages.push({ role: "user", text: event.body.text })
+    if (event.type === "user_message") messages.push(ownerMessage(event.body, shown))
     if (event.type === "assistant_message") {
       const { toolCalls } = event.body
       const text = event.body.interrupted ? `${event.body.text}\n\n${cutShortNote(kept, index)}` : event.body.text
@@ -60,6 +68,40 @@ export function buildRequest(
     })),
     // Only what the model is told about a tool goes in: not its function.
   }
+}
+
+// The owner's message, with a line for each file attached to it after its
+// text, saying where it is kept: an image the model is shown follows the
+// text, and the model reads any other file with its tools.
+function ownerMessage(body: EventBodies["user_message"], { images, unknown }: ShownImages): Message {
+  const attached = body.attachments ?? []
+  if (attached.length === 0) return { role: "user", text: body.text }
+  const shown = attached.filter((each) => images.has(each.path))
+  // The name and the path are quoted, so that nothing in them can start a
+  // line of its own; the name, which a client chose, loses what could close
+  // the line it is in, or start another, too.
+  const quoted = (text: string) => JSON.stringify(text)
+  const lines = attached.map(
+    (each) => `[Attached: ${quoted(shownName(each.name))} (${each.type}, ${sizeIn(each.size)}), kept at ${quoted(each.path)}. ${howShown(each, images, unknown === true)}]`,
+  )
+  return {
+    role: "user",
+    text: [...(body.text === "" ? [] : [body.text, ""]), ...lines].join("\n"),
+    ...(shown.length > 0 && { images: shown.map((each) => ({ type: each.type, data: images.get(each.path)! })) }),
+  }
+}
+
+function howShown(attachment: Attachment, images: ReadonlyMap<string, string>, unknown: boolean): string {
+  if (images.has(attachment.path)) return "It is shown below."
+  if (attachment.type.startsWith("image/") && !unknown) return "It cannot be shown to you as an image here, so only its path is given."
+  return "Read it with your tools to see what it holds."
+}
+
+// A size in bytes, in short: 4 bytes, 120 KB, 2.1 MB.
+function sizeIn(bytes: number): string {
+  if (bytes < 1024) return `${bytes} byte${bytes === 1 ? "" : "s"}`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1).replace(/\.0$/, "")} MB`
 }
 
 // What cut a reply short is read from what follows it in the log: a turn

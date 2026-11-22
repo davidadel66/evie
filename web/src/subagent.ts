@@ -32,6 +32,7 @@ const FRESH: ConversationState = {
   jobs: [],
   pending: [],
   notes: [],
+  project: undefined,
 }
 
 // Nothing is said in a subagent's conversation from the page: it is shown
@@ -165,6 +166,9 @@ export function openSubagent(connection: Connection, session: string, options: {
       closed = true
       clearTimeout(timer)
       unfollow()
+    },
+    listFiles: async () => {
+      throw new Error(READ_ONLY)
     },
   }
 }

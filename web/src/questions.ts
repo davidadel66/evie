@@ -101,6 +101,22 @@ export function sendDoes(typed: string, showing: Asked | undefined): SendDoes | 
   return command ? { run: command } : { message: text }
 }
 
+// What sending does with files attached: they go with a message, which
+// then needs no words, or with words that decline a permission prompt. A
+// command, or an answer to a question, takes no files, and neither does
+// an empty box while a question waits to be answered: the box says so,
+// and nothing is sent.
+export function sendWithFiles(typed: string, showing: Asked | undefined, files: number): SendDoes | undefined {
+  const does = sendDoes(typed, showing)
+  if (files === 0) return does
+  if (does === undefined) {
+    if (showing?.kind === "permission") return { decline: permissionChoices(showing).deny, message: "" }
+    return showing === undefined ? { message: "" } : { refuse: "Answer the question first. Files attached go with a message." }
+  }
+  if ("message" in does || "refuse" in does) return does
+  return { refuse: "Files attached go with a message, not with a command or an answer. Remove them to send this." }
+}
+
 // The conversation's items as the page draws them: a question the session
 // is waiting on is left out where it was asked, since it shows where it is
 // answered, at the end or docked above the box. One the log has no answer

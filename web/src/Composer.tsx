@@ -3,16 +3,17 @@ import type { Shown } from "./Asking.tsx"
 import { DockedQuestion } from "./Asking.tsx"
 import { Button } from "./components/ui/button.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
-import { contextMeter, earlierMessages, menuKey, rankCommands, recallStep, slashAt, type MenuItem, type Recalled } from "./composer.ts"
-import type { Conversation, ConversationState } from "./conversation.ts"
-import { ArrowUpBold, Check, StopFill } from "./icons.tsx"
+import { attachable, contextMeter, earlierMessages, mentionAt, menuKey, putMention, rankCommands, rankFiles, recallStep, slashAt, type MenuItem, type Recalled } from "./composer.ts"
+import type { Conversation, ConversationState, Outgoing } from "./conversation.ts"
+import { ArrowUpBold, Check, File as FileIcon, Paperclip, StopFill, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { makersOf, searchModels, type Model } from "./models.ts"
 import { whenAsked, windowOver } from "./page-requests.ts"
-import { sendDoes } from "./questions.ts"
+import { sendWithFiles } from "./questions.ts"
 import { label, onMac, pressed } from "./shortcuts.ts"
 import { useWide } from "./wide.ts"
 import { Spinner } from "./Spinner.tsx"
+import { sizeWords } from "./workspace.ts"
 
 // The message box at the bottom of the conversation, to the board's
 // Composer, working as T3 Code's does: Enter sends and Shift and Enter
@@ -21,7 +22,10 @@ import { Spinner } from "./Spinner.tsx"
 // mod+shift+M, opens the model picker. While evie works, what is sent
 // steers the turn, and Stop, or Escape, stops it. Under the text, the
 // model's name and how full the conversation is, whose menu compacts it.
-// At phone width it is one row until it is tapped.
+// At phone width it is one row until it is tapped. An @ opens the menu of
+// the project's files, and files are attached with the paperclip, by
+// pasting or by dropping them on the box, as T3 Code's are: each is a chip
+// above the text until it is sent.
 
 // The model under the text, which /model picks: the one in use, the models
 // to pick from, and the picking, which gives back why not, or nothing.
@@ -39,15 +43,24 @@ type Props = {
   // Tells the guard on questions that a key was typed, or that the owner
   // sent or left the box.
   asking: { typed(): void; cleared(): void }
-  // Sends a message. Gives back why it could not be sent, when the text
-  // goes back into the box.
-  send(text: string): Promise<string | undefined>
+  // Sends a message, with the files attached to it. Gives back why it
+  // could not be sent, when the text and the files go back into the box.
+  // A file the server took on a try that failed keeps where it is kept,
+  // and is not sent again.
+  send(text: string, files: readonly Outgoing[]): Promise<string | undefined>
+  // The files of the session's project, which an @ picks from. A session
+  // with no project has none, and no @ menu.
+  mentions?: (() => Promise<{ files: string[]; more: boolean }>) | undefined
 }
+
+// A file attached in the box, until it is sent.
+type Attached = Outgoing & { key: number }
+let attachedCount = 0
 
 // The model, as the menu lists it: picking it opens the picker, as in T3 Code.
 const MODEL: MenuItem = { name: "model", description: "Pick the model this session uses" }
 
-export function Composer({ conversation, state, model, shown, answer, asking, send }: Props) {
+export function Composer({ conversation, state, model, shown, answer, asking, send, mentions }: Props) {
   const [text, setText] = useState("")
   const [caret, setCaret] = useState(0)
   const [problem, setProblem] = useState<string>()
@@ -58,17 +71,23 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   const [commands, setCommands] = useState<{ items?: MenuItem[]; problem?: string }>()
   const [picking, setPicking] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [attached, setAttached] = useState<Attached[]>([])
+  const [dragging, setDragging] = useState(false)
+  const [listedFiles, setListedFiles] = useState<{ files?: string[]; more?: boolean; problem?: string }>()
   // Whether the context meter's menu is open, which keeps the box whole
   // at phone width, as the picker does, though the focus has left it.
   const [meterOpen, setMeterOpen] = useState(false)
   const wide = useWide()
   const box = useRef<HTMLTextAreaElement>(null)
+  const chooser = useRef<HTMLInputElement>(null)
   // Where the caret goes once the text set has been drawn.
   const caretTo = useRef<number>(undefined)
 
   const slash = closedAt === text ? undefined : slashAt(text, caret)
   const menuOpen = slash !== undefined && !picking
   const working = state?.turnRunning === true
+  const mention = closedAt === text || mentions === undefined || picking ? undefined : mentionAt(text, caret)
+  const filesOpen = mention !== undefined
 
   // The commands are listed again each time the menu opens, since a skill
   // written a moment ago can be started at once; meanwhile the menu shows
@@ -92,6 +111,21 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     return rankCommands([MODEL, ...commands.items.filter((item) => item.name !== MODEL.name)], slash.query)
   }, [slash?.query, slash?.first, commands, conversation])
   useEffect(() => setHighlight(undefined), [slash?.query])
+  // The project's files are listed again each time the @ menu opens, since
+  // a file may have been made a moment ago; meanwhile the menu shows those
+  // listed last time.
+  useEffect(() => {
+    setHighlight(undefined)
+    if (!filesOpen || mentions === undefined) return
+    let current = true
+    mentions().then(
+      (listed) => current && setListedFiles(listed),
+      (cause: unknown) => current && setListedFiles((was) => (was?.files !== undefined ? was : { problem: cause instanceof Error ? cause.message : String(cause) })),
+    )
+    return () => void (current = false)
+  }, [filesOpen, mentions])
+  const files = useMemo(() => (mention === undefined || listedFiles?.files === undefined ? [] : rankFiles(listedFiles.files, mention.query)), [mention?.query, listedFiles])
+  useEffect(() => setHighlight(undefined), [mention?.query])
 
   // The box grows with its text, up to a height, then scrolls.
   useLayoutEffect(() => {
@@ -132,6 +166,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     const back = conversation.takeGivenBack()
     if (back === undefined) return
     setText((now) => (now === "" ? back.text : now))
+    if (back.files !== undefined) setAttached((now) => [...now, ...back.files!.map((each) => ({ ...each, key: (attachedCount += 1) }))])
     setProblem(back.problem)
   }, [state?.givenBack, conversation])
 
@@ -153,36 +188,65 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     put(`${filled}${after.replace(/^ /, "")}`, filled.length)
   }
 
+  // Files added by the paperclip, a paste or a drop, but for any larger
+  // than the server takes, which the box names.
+  function attach(adding: readonly File[]) {
+    if (adding.length === 0) return
+    const { taken, problem } = attachable(adding)
+    setProblem(problem)
+    setAttached((now) => [...now, ...taken.map((file) => ({ key: (attachedCount += 1), file }))])
+  }
+
+  function pickFile(path: string) {
+    if (mention === undefined) return
+    const filled = putMention(text, mention, caret, path)
+    put(filled.text, filled.caret)
+  }
+
   async function submit() {
-    const does = sendDoes(text, shown?.question)
+    const does = sendWithFiles(text, shown?.question, attached.length)
     if (does === undefined) return
     // Not sent: the text stays, and the box says why.
     if ("refuse" in does) return setProblem(does.refuse)
     const was = text
+    const wasAttached = attached
+    const files = attached
     asking.cleared()
     setProblem(undefined)
     setRecalled(undefined)
     put("")
+    setAttached([])
     const restore = (refused: string | undefined) => {
       if (refused === undefined) return
       setProblem(refused)
       setText((now) => (now === "" ? was : now))
+      setAttached((now) => (now.length === 0 ? wasAttached : now))
     }
     if ("answer" in does) return restore(await answer(shown!.question.id, does.answer))
     if ("decline" in does) {
       const refused = await answer(shown!.question.id, does.decline)
       if (refused !== undefined) return restore(refused)
-      return restore(await send(does.message))
+      return restore(await send(does.message, files))
     }
     if ("run" in does) {
       if (conversation === undefined) return restore("Commands can be run once the session has started. Send a message first.")
       return void conversation.run(does.run.name, does.run.args)
     }
-    restore(await send(does.message))
+    restore(await send(does.message, files))
   }
 
   function onKeyDown(event: KeyEvent<HTMLTextAreaElement>) {
     if (event.nativeEvent.isComposing) return
+    if (filesOpen) {
+      const move = menuKey(event.key, highlight, files.length)
+      if (move !== undefined) {
+        event.preventDefault()
+        if ("close" in move) setClosedAt(text)
+        else if ("highlight" in move) setHighlight(move.highlight)
+        else pickFile(files[move.pick]!)
+        return
+      }
+    }
     if (menuOpen) {
       const move = menuKey(event.key, highlight, items.length)
       if (move !== undefined) {
@@ -208,7 +272,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     const onFirstLine = !text.slice(0, area.selectionStart).includes("\n")
     const onLastLine = !text.slice(area.selectionEnd).includes("\n")
     if ((event.key === "ArrowUp" && onFirstLine) || (event.key === "ArrowDown" && onLastLine)) {
-      const sent = [...(state?.events ?? []).flatMap((each) => (each.type === "user_message" ? [each.body.text] : [])), ...(state?.pending ?? [])]
+      const sent = [...(state?.events ?? []).flatMap((each) => (each.type === "user_message" ? [each.body.text] : [])), ...(state?.pending ?? []).map((each) => each.text)]
       const step = recallStep(event.key === "ArrowUp" ? "back" : "forward", earlierMessages(sent), recalled, text)
       if (step === undefined) return
       event.preventDefault()
@@ -228,9 +292,15 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
         : working
           ? "Tell evie more as it works. Escape stops it"
           : conversation === undefined
-            ? "Ask anything"
-            : "Ask anything. / commands"
+            ? mentions === undefined
+              ? "Ask anything"
+              : "Ask anything. @ files"
+            : mentions === undefined
+              ? "Ask anything. / commands"
+              : "Ask anything. @ files, / commands"
   const menuId = "composer-menu"
+  const filesId = "composer-files"
+  const collapsedNow = collapsed && attached.length === 0
 
   return (
     <div className="shrink-0 px-4 pb-4 wide:px-7 wide:pb-6">
@@ -239,6 +309,11 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
         {problem !== undefined && (
           <p role="status" className="px-4 text-caption break-words text-text-muted">
             {problem}
+          </p>
+        )}
+        {dragging && (
+          <p role="status" className="px-4 text-caption text-text-muted">
+            Drop the files to attach them
           </p>
         )}
         <div className="relative">
@@ -251,6 +326,17 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
               listing={conversation !== undefined && slash.first && commands?.items === undefined ? (commands?.problem ?? "listing") : undefined}
               highlight={highlight}
               pick={pick}
+              setHighlight={setHighlight}
+            />
+          )}
+          {filesOpen && (
+            <FileMenu
+              id={filesId}
+              files={files}
+              listing={listedFiles?.files === undefined ? (listedFiles?.problem ?? "listing") : undefined}
+              more={listedFiles?.more === true ? listedFiles.files?.length : undefined}
+              highlight={highlight}
+              pick={pickFile}
               setHighlight={setHighlight}
             />
           )}
@@ -274,8 +360,24 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
             onMouseDown={(event) => {
               if (!wide && event.target instanceof Element && event.target.closest("button") !== null) event.preventDefault()
             }}
-            className={cn("flex rounded-lg border border-line bg-surface", collapsed ? "items-center gap-2 py-1 pr-1 pl-4" : "flex-col gap-1 pt-3 pr-2 pb-2 pl-4")}
+            // Files dropped on the box are attached.
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes("Files")) return
+              event.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
+            }}
+            onDrop={(event) => {
+              if (event.dataTransfer.files.length === 0) return
+              event.preventDefault()
+              setDragging(false)
+              attach([...event.dataTransfer.files])
+            }}
+            className={cn("flex rounded-lg border border-line bg-surface", collapsedNow ? "items-center gap-2 py-1 pr-1 pl-4" : "flex-col gap-1 pt-3 pr-2 pb-2 pl-4")}
           >
+            {attached.length > 0 && <AttachedFiles attached={attached} remove={(key) => setAttached((now) => now.filter((each) => each.key !== key))} />}
             {/* At phone width the text's line is as tall as a finger's tap, on one row or whole. */}
             <label className="flex min-w-0 flex-1 items-center self-stretch max-wide:min-h-touch-min">
               <span className="sr-only">Message evie</span>
@@ -285,10 +387,10 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
                 value={text}
                 placeholder={placeholder}
                 role="combobox"
-                aria-expanded={menuOpen}
-                aria-controls={menuOpen ? menuId : undefined}
+                aria-expanded={menuOpen || filesOpen}
+                aria-controls={menuOpen ? menuId : filesOpen ? filesId : undefined}
                 aria-autocomplete="list"
-                aria-activedescendant={menuOpen && highlight !== undefined ? `${menuId}-${highlight}` : undefined}
+                aria-activedescendant={(menuOpen || filesOpen) && highlight !== undefined ? `${menuOpen ? menuId : filesId}-${highlight}` : undefined}
                 onChange={(event) => {
                   setText(event.target.value)
                   setCaret(event.target.selectionStart)
@@ -297,25 +399,49 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
                 }}
                 onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
                 onKeyDown={onKeyDown}
+                // Files pasted are attached, as an image copied is.
+                onPaste={(event) => {
+                  if (event.clipboardData.files.length === 0) return
+                  event.preventDefault()
+                  attach([...event.clipboardData.files])
+                }}
                 onFocus={() => setFocused(true)}
                 onBlur={() => {
                   setFocused(false)
                   asking.cleared()
                 }}
                 // One row until tapped: the text runs on, not onto a second line.
-                wrap={collapsed ? "off" : "soft"}
+                wrap={collapsedNow ? "off" : "soft"}
                 className="max-h-composer-text w-full resize-none overflow-y-auto bg-transparent text-body text-text outline-none placeholder:text-text-muted"
               />
             </label>
-            <div className={cn("flex min-w-0 items-center gap-2", !collapsed && "justify-end")}>
-              {!collapsed && (
+            <div className={cn("flex min-w-0 items-center gap-2", !collapsedNow && "justify-end")}>
+              <input
+                ref={chooser}
+                type="file"
+                multiple
+                hidden
+                onChange={(event) => {
+                  attach([...(event.currentTarget.files ?? [])])
+                  event.currentTarget.value = ""
+                  box.current?.focus()
+                }}
+              />
+              {!collapsedNow && (
+                // Pressed, the box keeps the focus, so that at phone width it
+                // stays open while the files are chosen.
+                <Button variant="icon" aria-label="Attach files" title="Attach files" onPointerDown={(event) => event.preventDefault()} onClick={() => chooser.current?.click()} className="mr-auto -ml-2">
+                  <Paperclip />
+                </Button>
+              )}
+              {!collapsedNow && (
                 <div className="flex min-w-0 items-center text-caption text-text-muted">
                   <ModelName model={model.current} toggle={() => setPicking((open) => !open)} />
                   {conversation && state && <ContextMeter conversation={conversation} state={state} opened={setMeterOpen} />}
                 </div>
               )}
               {working && <StopButton stopping={state?.stopping === true} stop={() => conversation?.stop()} />}
-              <Button type="submit" variant="primary" aria-label={working ? "Send, to steer the turn" : "Send"} disabled={text.trim() === ""} className="size-control rounded-full p-0">
+              <Button type="submit" variant="primary" aria-label={working ? "Send, to steer the turn" : "Send"} disabled={text.trim() === "" && attached.length === 0} className="size-control rounded-full p-0">
                 <ArrowUpBold className="size-icon-sm" />
               </Button>
             </div>
@@ -616,6 +742,125 @@ function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// The files attached in the box, as chips above the text, as T3 Code's,
+// drawn on the box itself, with no box of their own: an image's small
+// thumbnail, or any other file's icon, its name and size, and a button
+// that takes it off.
+function AttachedFiles({ attached, remove }: { attached: Attached[]; remove(key: number): void }) {
+  return (
+    <ul aria-label="Files to send" className="flex flex-wrap gap-x-4 pb-1">
+      {attached.map(({ key, file }) => (
+        <li key={key} className="flex h-control max-w-full min-w-0 items-center gap-2">
+          <FileChip file={file} />
+          <Button variant="icon" aria-label={`Remove ${file.name}`} onClick={() => remove(key)} className="-ml-2 [&>svg]:size-icon-sm">
+            <X />
+          </Button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// A file in the browser as a chip shows it: an image's thumbnail, or any
+// other file's icon, then its name and size.
+export function FileChip({ file }: { file: File }) {
+  return (
+    <>
+      {file.type.startsWith("image/") ? <Thumbnail file={file} /> : <FileIcon className="size-icon-sm shrink-0 text-text-muted" />}
+      <span className="min-w-0 truncate text-caption text-text" title={file.name}>
+        {file.name}
+      </span>
+      <span className="shrink-0 text-caption text-text-muted">{sizeWords(file.size)}</span>
+    </>
+  )
+}
+
+// A small picture of an image attached, read from the file in the browser
+// until it is sent, with the corners of the design system's smaller things.
+function Thumbnail({ file }: { file: File }) {
+  const [address, setAddress] = useState<string>()
+  useEffect(() => {
+    const made = URL.createObjectURL(file)
+    setAddress(made)
+    return () => URL.revokeObjectURL(made)
+  }, [file])
+  return <span className="size-attachment-chip shrink-0 overflow-hidden rounded-sm">{address !== undefined && <img src={address} alt="" className="size-full object-cover" />}</span>
+}
+
+// The menu an @ opens, just above the box, as T3 Code's: the project's
+// files, filtered and ranked as the owner types, each by its name and the
+// folder it is in. The box keeps the focus, and moves the highlight with
+// Up and Down, as in the menu of commands.
+function FileMenu({
+  id,
+  files,
+  listing,
+  more,
+  highlight,
+  pick,
+  setHighlight,
+}: {
+  id: string
+  files: string[]
+  // While the files are being listed, "listing", or why they could not be.
+  listing: string | undefined
+  // How many files were listed, when the project has more than that.
+  more: number | undefined
+  highlight: number | undefined
+  pick(path: string): void
+  setHighlight(at: number): void
+}) {
+  const list = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    if (highlight !== undefined) list.current?.querySelector(`#${id}-${highlight}`)?.scrollIntoView({ block: "nearest" })
+  }, [highlight])
+  const quiet = (words: string, working = false) => (
+    <p className={cn("flex min-h-control items-center gap-2 px-3 text-caption", working ? "text-status-working" : "text-text-muted")}>
+      {working && <Spinner />}
+      {words}
+    </p>
+  )
+  return (
+    <div className="absolute inset-x-0 bottom-full z-40 mb-2 flex max-h-composer-menu flex-col overflow-y-auto rounded-md border border-line bg-surface p-2 shadow-float">
+      {listing === "listing" ? (
+        quiet("Listing the files", true)
+      ) : listing !== undefined ? (
+        quiet(listing)
+      ) : files.length === 0 ? (
+        quiet("No matching file.")
+      ) : (
+        <ul ref={list} id={id} role="listbox" aria-label="Files" className="flex flex-col">
+          {files.map((path, at) => {
+            const cut = path.lastIndexOf("/")
+            return (
+              <li
+                key={path}
+                id={`${id}-${at}`}
+                role="option"
+                aria-selected={at === highlight}
+                // The box keeps the focus.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => pick(path)}
+                onMouseMove={() => at !== highlight && setHighlight(at)}
+                className={cn("flex h-control shrink-0 cursor-default items-center gap-3 rounded-md px-3", at === highlight && "bg-surface-raised")}
+              >
+                <FileIcon className="size-icon-sm shrink-0 text-text-muted" />
+                <span className="shrink-0 text-label text-text">{path.slice(cut + 1)}</span>
+                {cut > 0 && (
+                  <span title={path} className="min-w-0 flex-1 truncate text-caption text-text-muted">
+                    {path.slice(0, cut)}
+                  </span>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {more !== undefined && listing === undefined && quiet(`Only the first ${more.toLocaleString("en")} files are listed.`)}
     </div>
   )
 }

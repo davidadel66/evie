@@ -1,6 +1,6 @@
 import { join } from "node:path"
 import type { EventLog } from "./log.ts"
-import type { Inbox } from "./inbox.ts"
+import type { Inbox, InboxMessage } from "./inbox.ts"
 import {
   DEFAULT_CEILING,
   SUMMARY_PROMPT,
@@ -13,10 +13,10 @@ import {
   tailBudget,
   triggerSize,
 } from "./compaction.ts"
-import { ONLY_THE_CORE_WRITES, buildRequest } from "./request-builder.ts"
+import { ONLY_THE_CORE_WRITES, buildRequest, type ShownImages } from "./request-builder.ts"
 import { CancelledBeforeStart, runToolCall } from "./tools.ts"
 import type { HookRunner } from "./host.ts"
-import type { EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, ToolContext, Usage } from "./types.ts"
+import type { Attachment, EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, ToolContext, Usage } from "./types.ts"
 
 export type LoopOptions = {
   session: string
@@ -48,6 +48,9 @@ export type LoopOptions = {
   children: ToolContext["children"]
   // Names the session, as hooks are given it.
   name: HookContext["name"]
+  // An attached file's bytes, in base64, when it is an image a model can
+  // be shown, or nothing.
+  image?(attachment: Attachment): Promise<string | undefined>
   // The session that started this one as a subagent, when one did.
   parent?: string
   // For a subagent: the named agent it is, and whether it only reads.
@@ -95,6 +98,28 @@ export function currentModel(events: readonly StoredEvent[], startedWith: string
   return switched?.type === "model_changed" ? switched.body.model : startedWith
 }
 
+// The most images a request carries, and the most base64 they come to
+// together, as some of the models take no more.
+const SHOWN_IMAGES = 4
+const SHOWN_BASE64 = 16 * 1024 * 1024
+
+// A promise's value, or nothing if it fails, or once the signal fires,
+// leaving nothing listening on the signal afterwards.
+function untilAborted<Value>(promise: Promise<Value>, signal: AbortSignal): Promise<Value | undefined> {
+  if (signal.aborted) return Promise.resolve(undefined)
+  return new Promise((resolve) => {
+    const stop = () => resolve(undefined)
+    signal.addEventListener("abort", stop, { once: true })
+    promise.then(resolve, () => resolve(undefined)).finally(() => signal.removeEventListener("abort", stop))
+  })
+}
+
+// What a message from the owner records: its text, and what was attached to it.
+const said = (message: InboxMessage): EventBodies["user_message"] => ({
+  text: message.text,
+  ...(message.attachments !== undefined && message.attachments.length > 0 && { attachments: message.attachments }),
+})
+
 // The turn loop. A turn is everything from a message arriving to the model's
 // final answer. A step is one model request plus the tool calls it asks for;
 // a turn takes as many steps as the model needs. The loop keeps no
@@ -140,6 +165,44 @@ export function createLoop(options: LoopOptions): Loop {
   // There is work for a turn: a message from the owner, or a note the model is to be woken for.
   const turnWanted = () => inbox.waiting(session) || waitingNotes.some((note) => note.wake)
 
+  // ---- Images ---------------------------------------------------------------------
+
+  // The images in the conversation that a provider refused a request for
+  // carrying, by their path, which are not sent again; and the last answer
+  // the provider gave for each model, on whether it takes images.
+  const refusedImages = new Set<string>()
+  const takesImages = new Map<string, boolean>()
+
+  // The images attached in a conversation that its model is shown, by their
+  // path: none, unless its provider says the model takes images, which is
+  // asked only when there is an image to show; then the newest four it can
+  // be shown, at most 16 MB of base64 together. When the provider cannot
+  // tell, the last answer it gave for the model holds; with none, it is not
+  // known, and the model is not told the images cannot be shown. Read again
+  // for each request, so that a model switched to that takes none is given
+  // their paths.
+  async function imagesIn(events: readonly StoredEvent[], modelName: string, signal: AbortSignal): Promise<ShownImages> {
+    const images = new Map<string, string>()
+    const attached = conversationOf(events).kept.flatMap((event) => (event.type === "user_message" ? (event.body.attachments ?? []) : []))
+    const pictures = attached.filter((each) => each.type.startsWith("image/"))
+    if (pictures.length === 0 || !options.image || !provider.takesImages) return { images }
+    const answer = await untilAborted(provider.takesImages(modelName), signal)
+    if (answer !== undefined) takesImages.set(modelName, answer)
+    const takes = takesImages.get(modelName)
+    if (takes === undefined) return { images, unknown: true }
+    if (!takes) return { images }
+    let total = 0
+    for (const each of pictures.toReversed()) {
+      if (images.size === SHOWN_IMAGES) break
+      if (refusedImages.has(each.path) || images.has(each.path)) continue
+      const data = await options.image(each)
+      if (data === undefined || total + data.length > SHOWN_BASE64) continue
+      total += data.length
+      images.set(each.path, data)
+    }
+    return { images }
+  }
+
   // ---- Compaction ---------------------------------------------------------------
 
   const ceiling = options.compaction?.ceiling ?? DEFAULT_CEILING
@@ -151,9 +214,7 @@ export function createLoop(options: LoopOptions): Loop {
   // now and is made again the next time.
   async function triggerFor(modelName: string, signal: AbortSignal): Promise<number> {
     if (!knownLimits.has(modelName)) {
-      const cancelled = new Promise<undefined>((resolve) => signal.addEventListener("abort", () => resolve(undefined), { once: true }))
-      const lookedUp = provider.contextLimit?.(modelName).catch(() => undefined)
-      const limit = options.compaction?.limits?.[modelName] ?? (signal.aborted ? undefined : await Promise.race([lookedUp, cancelled]))
+      const limit = options.compaction?.limits?.[modelName] ?? (provider.contextLimit ? await untilAborted(provider.contextLimit(modelName), signal) : undefined)
       if (limit !== undefined) knownLimits.set(modelName, limit)
     }
     return triggerSize(knownLimits.get(modelName), ceiling)
@@ -176,6 +237,8 @@ export function createLoop(options: LoopOptions): Loop {
     // was written later than some of what it sits in front of, so it is
     // placed by hand, not found by its position in the log.
     const old = [...(earlier ? [earlier] : []), ...kept.filter((event) => event.seq < keepFrom)]
+    // A summary is written from the images' paths alone, so that an image
+    // cannot stop the conversation being made shorter.
     const base = await hooks.beforeRequest(buildRequest(modelName, old, host.tools.list(), maxTokens), {
       session,
       project,
@@ -250,15 +313,19 @@ export function createLoop(options: LoopOptions): Loop {
     // request refused as too long is compacted and retried only once.
     let compactionFailed = false
     let retriedTooLong = false
+    // Set once a request was refused while it carried images: the rest of
+    // the turn names every image by its path. `suspect` are the images it
+    // carried, which are not sent again once a request without them is
+    // answered, since they were what was refused.
+    let withoutImages = false
+    let suspect: string[] = []
 
     // Moving input from the inbox to the log is one transaction, so a crash
     // can neither lose a message nor record it twice. If it fails, the turn
     // has not started and the failure stops the loop.
     const started = atomically(() => {
       const events: StoredEvent[] = [log.append(session, "turn_start", {})]
-      for (const message of inbox.take(session)) {
-        events.push(log.append(session, "user_message", { text: message.text }))
-      }
+      for (const message of inbox.take(session)) events.push(log.append(session, "user_message", said(message)))
       return events
     })
     for (const event of started) emit(event)
@@ -275,7 +342,7 @@ export function createLoop(options: LoopOptions): Loop {
         writeNotes("all")
         if (step > 1) {
           const steered = atomically(() =>
-            inbox.take(session).map((message) => log.append(session, "user_message", { text: message.text })),
+            inbox.take(session).map((message) => log.append(session, "user_message", said(message))),
           )
           for (const event of steered) emit(event)
         }
@@ -304,7 +371,9 @@ export function createLoop(options: LoopOptions): Loop {
         }
 
         const events = log.events(session)
-        const request = await hooks.beforeRequest(buildRequest(currentModel(events, model), events, host.tools.list(), maxTokens), context())
+        const modelNow = currentModel(events, model)
+        const shown = withoutImages ? { images: new Map<string, string>() } : await imagesIn(events, modelNow, signal)
+        const request = await hooks.beforeRequest(buildRequest(modelNow, events, host.tools.list(), maxTokens, shown), context())
         // Only the tools the hooks left in the request can be called in this step.
         const offered = host.tools.list().filter((tool) => request.tools.some((left) => left.name === tool.name))
         // A message that arrived while the request was being put together
@@ -315,6 +384,7 @@ export function createLoop(options: LoopOptions): Loop {
         const calls: ToolCall[] = []
         let failure: string | undefined
         let tooLong = false
+        let refused = false
         let usage: Usage | undefined
         const replying = (reply = new AbortController())
         // The request is halted when the turn is cancelled or the reply is steered.
@@ -336,6 +406,7 @@ export function createLoop(options: LoopOptions): Loop {
               if (chunk.reason === "error") {
                 failure = chunk.error
                 tooLong = chunk.tooLong === true
+                refused = chunk.refused === true
               } else usage = chunk.usage
             }
           }
@@ -361,6 +432,15 @@ export function createLoop(options: LoopOptions): Loop {
           continue
         }
         if (failure !== undefined) {
+          // A request refused while it carried images is sent again with
+          // each image by its path, so that a session is never stuck on an
+          // image. Refused again, the images were not the cause.
+          if (refused && shown.images.size > 0) {
+            suspect = [...shown.images.keys()]
+            withoutImages = true
+            continue
+          }
+          suspect = []
           // A request that was more than the model can read is compacted
           // and sent again, once.
           if (tooLong && !retriedTooLong) {
@@ -375,6 +455,10 @@ export function createLoop(options: LoopOptions): Loop {
           error = failure
           break
         }
+
+        // Answered without the images it was refused with: those are not sent again.
+        for (const path of suspect) refusedImages.add(path)
+        suspect = []
 
         // A provider that did not stop where it was asked to may let the
         // model write what only the core writes. It is cut off there, and so

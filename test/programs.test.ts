@@ -160,6 +160,22 @@ test("evie serve runs Evie, and evie in a project folder sends it a message and 
   expect(after.stderr).toContain(`No evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.`)
 })
 
+test("evie serve takes a file attached in a session from a signed-in client, and keeps it", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  await serve(home)
+  const token = (await readFile(join(home, "server-token"), "utf8")).trim()
+  const client = await connect({ url: `http://127.0.0.1:${port}`, token })
+  cleanups.push(() => client.close())
+  const { session } = await client.send({ type: "open_session" })
+
+  const answer = await fetch(`http://127.0.0.1:${port}/attachments?session=${session}&name=plan.txt`, { method: "POST", body: "Beds.\n", headers: { Authorization: `Bearer ${token}` } })
+
+  expect(answer.status).toBe(200)
+  const { path } = (await answer.json()) as { path: string }
+  expect(await readFile(path, "utf8")).toBe("Beds.\n")
+})
+
 test("another device connects with EVIE_SERVER and a token of its own, until the token is taken back", async () => {
   const port = await freePort()
   const home = await homeWith(port, ["Hello, phone."])
