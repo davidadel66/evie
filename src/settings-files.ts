@@ -1,4 +1,4 @@
-import { readFile, rename, writeFile } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -11,6 +11,7 @@ import { guard } from "./plugins/guard.ts"
 import { instructions } from "./plugins/instructions.ts"
 import { jobs } from "./plugins/jobs.ts"
 import { models } from "./plugins/models/index.ts"
+import { naming } from "./plugins/naming.ts"
 import { openrouter } from "./plugins/openrouter.ts"
 import { MODES, permissions, type Mode, type Rule } from "./plugins/permissions/index.ts"
 import { shell } from "./plugins/shell.ts"
@@ -19,7 +20,7 @@ import { subagents } from "./plugins/subagents.ts"
 import { sync } from "./plugins/sync.ts"
 import { undo } from "./plugins/undo.ts"
 import { web } from "./plugins/web.ts"
-import type { Settings } from "./settings.ts"
+import { replaceFile, type Settings } from "./settings.ts"
 
 // Evie's settings files: which model to use, how long a reply may be, and
 // which plugins to load. Keys are not kept here; they come from the
@@ -33,6 +34,10 @@ import type { Settings } from "./settings.ts"
 //   { "model": "some/model", "maxTokens": 16000,
 //     "plugins": ["files", { "use": "shell" }, "/path/to/my-plugin.ts"],
 //     "trust": ["/path/to/a/project"] }
+//
+// A built-in plugin's options are given as `{ "use": ..., "options": ... }`,
+// such as the model that names sessions:
+// `{ "use": "naming", "options": { "model": "anthropic/claude-haiku-5.5" } }`.
 //
 // A project's own file can also say where its `.evie/` folder syncs:
 // `"sync": "private"` backs it up to a private repository, through the sync
@@ -73,6 +78,21 @@ export type SettingsFiles = {
   projectSettings(project: Project, context?: { ask: Ask }): Promise<ProjectSettings>
   // Trusts a project, by its folder, as answering yes to the question does.
   trust(folder: string): Promise<void>
+  // Stops trusting a project, by its folder, as answering no does.
+  untrust(folder: string): Promise<void>
+  // The global plugins as the global file listed them when it was read,
+  // each by the name or the path it is given by, the ones under
+  // "addPlugins" last.
+  listed: string[]
+  // The global file as it is now: the plugins it lists, so named, the ones
+  // under "addPlugins" among them, and the project folders it trusts.
+  now(): Promise<{ plugins: string[]; added: string[]; trust: string[] }>
+  // Adds a plugin file to "addPlugins", by its path, or takes one off it.
+  // The list of plugins, or the built-in one when the file gives none, is
+  // left as it is. Checking that the server would start with the plugin is
+  // for the caller.
+  addPlugin(path: string): Promise<void>
+  removePlugin(path: string): Promise<void>
   // Where the project's `.evie/` folder syncs, by its own settings file,
   // read each time it is asked; undefined when the file sets nothing, or
   // the project is not trusted.
@@ -93,6 +113,9 @@ type SettingsFile = {
   // What a model can read, for a model whose limit is not known or is wrong.
   contextLimits?: Record<string, number>
   plugins?: Entry[]
+  // Plugin files loaded after the list, by their paths: the ones the
+  // settings window adds, which leaves the list as it is.
+  addPlugins?: string[]
   // How freely Evie may act: the mode sessions start in, the rules, and the
   // owner's remembered "always" answers for each project. A project's own
   // file can set `mode` and `rules`.
@@ -134,10 +157,11 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   instructions: (_options, context) => instructions({ dataFolder: context.home }),
   web: (_options, context) => web({ env: context.env }),
   sync: (_options, context) => sync({ dataFolder: context.home, setting: context.syncSetting }),
+  naming: (options) => naming(typeof options.model === "string" && options.model.trim() !== "" ? { model: options.model.trim() } : {}),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
 // `undo` comes after `permissions`, so a call that is refused is not recorded.
-const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "naming", "openrouter"]
 
 // The permissions plugin as the settings describe it. A project's own mode
 // wins over the global one, and its rules come after the global ones.
@@ -158,7 +182,10 @@ function permissionsFor(context: Context, own: { mode?: Mode; rules?: Rule[] }):
 const TRUST = "Yes, trust this project"
 const DO_NOT_TRUST = "No, ignore its settings file"
 
-export async function loadSettingsFiles(options: { env: Settings }): Promise<SettingsFiles> {
+// `adding` are plugin files to load after the ones the global file lists,
+// as if it listed them under "addPlugins", to check that the server would
+// start with them.
+export async function loadSettingsFiles(options: { env: Settings; adding?: string[] }): Promise<SettingsFiles> {
   const home = dataFolder(options.env)
   const globalFile = join(home, "evie.json")
   const global = (await readSettingsFile(globalFile)) ?? {}
@@ -173,8 +200,10 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
   // Asked each time it matters, since a project can be trusted while Evie runs.
   const context: Context = { env: options.env, home, globalFile, permissions: global.permissions ?? {}, trusted: (folder) => trusted.has(folder), syncSetting }
 
+  const added = [...(global.addPlugins ?? []), ...(options.adding ?? [])]
+  if (options.adding) checkSettings({ ...global, addPlugins: added }, globalFile)
   const plugins: Plugin[] = []
-  for (const entry of global.plugins ?? DEFAULT) plugins.push(await load(entry, home, context))
+  for (const entry of [...(global.plugins ?? DEFAULT), ...added]) plugins.push(await load(entry, home, context))
 
   // The environment wins over both files.
   const fromEnv = {
@@ -186,6 +215,31 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
 
   return {
     file: globalFile,
+    listed: [...(global.plugins ?? DEFAULT).map(nameOf), ...(global.addPlugins ?? [])],
+    async now() {
+      const settings = (await readSettingsFile(globalFile)) ?? {}
+      const added = settings.addPlugins ?? []
+      return { plugins: [...(settings.plugins ?? DEFAULT).map(nameOf), ...added], added, trust: [...folders(settings.trust)] }
+    },
+    addPlugin: (path) =>
+      update(globalFile, (settings) => {
+        const listed = [...(settings.plugins ?? DEFAULT).map(nameOf), ...(settings.addPlugins ?? [])]
+        if (listed.includes(path)) throw new Error(`"${path}" is in the list of plugins in ${globalFile} already.`)
+        settings.addPlugins = [...(settings.addPlugins ?? []), path]
+      }),
+    removePlugin: (path) =>
+      update(globalFile, (settings) => {
+        if (!settings.addPlugins?.includes(path)) {
+          throw new Error(`"${path}" was not added from the settings window, so it is left as it is. It is taken off "plugins" in ${globalFile} by hand.`)
+        }
+        settings.addPlugins = settings.addPlugins.filter((added) => added !== path)
+        if (settings.addPlugins.length === 0) delete settings.addPlugins
+      }),
+    async untrust(folder) {
+      await remember(globalFile, "untrusted", folder)
+      untrusted.add(folder)
+      trusted.delete(folder)
+    },
     ...(model !== undefined && { model }),
     ...(maxTokens !== undefined && { maxTokens }),
     ...((global.compactAt !== undefined || global.contextLimits !== undefined) && {
@@ -281,14 +335,16 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
 
 // Changes the global settings file. The file is read again first, so nothing
 // written to it since Evie started is lost, and replaced in one step, so it
-// is never left half written. Changes are made one at a time.
+// is never left half written. Changes are made one at a time. A change that
+// throws, or leaves settings that would not pass the checks the file passes
+// when it is read, is not written.
 let saving: Promise<void> = Promise.resolve()
-function update(file: string, change: (settings: SettingsFile) => void): Promise<void> {
+function update(file: string, change: (settings: SettingsFile) => void | Promise<void>): Promise<void> {
   const saved = saving.then(async () => {
     const settings: SettingsFile = (await readSettingsFile(file)) ?? {}
-    change(settings)
-    await writeFile(`${file}.new`, `${JSON.stringify(settings, null, 2)}\n`)
-    await rename(`${file}.new`, file)
+    await change(settings)
+    checkSettings(settings, file)
+    await replaceFile(file, `${JSON.stringify(settings, null, 2)}\n`)
   })
   saving = saved.catch(() => {})
   return saved
@@ -348,7 +404,7 @@ function withEviePort(address: string): string {
 // ---- Loading one plugin -----------------------------------------------------------------
 
 async function load(entry: Entry, baseFolder: string, context: Context): Promise<Plugin> {
-  const name = typeof entry === "string" ? entry : entry.use
+  const name = nameOf(entry)
   const options = typeof entry === "string" ? {} : (entry.options ?? {})
 
   if (Object.hasOwn(BUILT_IN, name)) return BUILT_IN[name]!(options, context)
@@ -381,6 +437,8 @@ const wholeNumber = (text: string | undefined) => {
   const value = Number(text)
   return Number.isInteger(value) && value > 0 ? value : undefined
 }
+// The name or path a plugin is given by in a list of plugins.
+const nameOf = (entry: Entry) => (typeof entry === "string" ? entry : entry.use)
 const looksLikePath = (name: string) => /[/\\]|^[.~]|\.(ts|js|mjs)$/.test(name)
 const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir())
 const isPlugin = (value: unknown): value is Plugin =>
@@ -408,6 +466,12 @@ async function readSettingsFile(file: string): Promise<SettingsFile | undefined>
   } catch (cause) {
     throw new Error(`${file} is not valid JSON: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
+  return checkSettings(parsed, file)
+}
+
+// The settings a file holds, once they have been checked to be what Evie
+// can use; otherwise what is wrong, in words that name the file.
+function checkSettings(parsed: unknown, file: string): SettingsFile {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error(`${file} must hold one JSON object.`)
   const settings = parsed as Record<string, unknown>
 
@@ -419,6 +483,7 @@ async function readSettingsFile(file: string): Promise<SettingsFile | undefined>
   const isEntry = (item: unknown) =>
     typeof item === "string" || (typeof item === "object" && item !== null && typeof (item as { use?: unknown }).use === "string")
   listOf("plugins", isEntry, 'plugin names, paths, or { "use": ..., "options": ... } entries')
+  listOf("addPlugins", (item) => typeof item === "string" && looksLikePath(item), "paths to plugin files")
   listOf("trust", (item) => typeof item === "string", "project folders")
   listOf("untrusted", (item) => typeof item === "string", "project folders")
   listOf("disable", (item) => typeof item === "string", "plugin names")

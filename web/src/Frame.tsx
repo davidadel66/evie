@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react"
+import { useState, useSyncExternalStore } from "react"
 import { useCardShortcut } from "./card-shown.ts"
 import { connectionLine, type Connection, type ConnectionState } from "./connection.ts"
 import { Conversation, Draft, Placeholder } from "./Conversation.tsx"
@@ -7,6 +7,7 @@ import { CardButton, CardPlace } from "./ProjectCard.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import { SessionList } from "./SessionList.tsx"
+import { HeaderName } from "./SessionRow.tsx"
 import type { Sessions } from "./sessions.ts"
 import { Settings } from "./Settings.tsx"
 import { Spinner } from "./Spinner.tsx"
@@ -30,7 +31,7 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
         <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-7">
           <span className="text-title text-text">evie</span>
           <div className="ml-auto">
-            <Settings />
+            <Settings connection={connection} />
           </div>
         </header>
         <ConnectionLine state={state} />
@@ -76,20 +77,32 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
   if (selected.subagent !== undefined) return <SubagentView connection={connection} parent={selected.session} parentTitle={title} subagent={selected.subagent} />
   return (
     <>
-      <Top title={title} />
+      <Top key={selected.session} title={title} {...(session !== undefined && { rename: (name: string) => sessions.rename(session.session, name) })} />
       <Conversation connection={connection} session={selected.session} />
     </>
   )
 }
 
 // The middle column's header: the session's name, when there is one to
-// show, and the button that shows and hides the project card.
-function Top({ title }: { title?: string }) {
+// show, and the button that shows and hides the project card. A name that
+// can be renamed is typed in place after a double-click, and why a name was
+// not taken is said on a line under the header.
+function Top({ title, rename }: { title?: string; rename?(name: string): Promise<string | undefined> }) {
+  const [note, setNote] = useState<string>()
   return (
-    <header className="flex h-header-height shrink-0 items-center gap-3 border-b border-line pr-4 pl-7">
-      {title === undefined ? <span className="flex-1" /> : <h1 className="min-w-0 flex-1 truncate text-title text-text">{title}</h1>}
-      <CardButton />
-    </header>
+    <>
+      <header className="flex h-header-height shrink-0 items-center gap-3 border-b border-line pr-4 pl-7">
+        {title === undefined ? (
+          <span className="flex-1" />
+        ) : rename === undefined ? (
+          <h1 className="min-w-0 flex-1 truncate text-title text-text">{title}</h1>
+        ) : (
+          <HeaderName title={title} rename={rename} said={setNote} />
+        )}
+        <CardButton />
+      </header>
+      <div role="status">{note !== undefined && <p className="px-7 pt-3 text-caption text-text-muted">{note}</p>}</div>
+    </>
   )
 }
 

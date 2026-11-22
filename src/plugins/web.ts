@@ -1,4 +1,4 @@
-import type { Plugin, Tool } from "../core/types.ts"
+import type { Key, Plugin, Tool } from "../core/types.ts"
 
 // The built-in plugin for the internet: searching it, and reading a page.
 //
@@ -30,6 +30,11 @@ export type WebOptions = {
   fetch?: typeof globalThis.fetch
   timeoutSeconds?: number
 }
+
+// The key this plugin reads, for the settings window.
+export const WEB_KEYS: Key[] = [
+  { name: "BRAVE_API_KEY", about: "Lets evie search the web, through Brave Search. Without it, evie can still read a page it is given the address of." },
+]
 
 export function web(options: WebOptions): Plugin {
   const send = options.fetch ?? globalThis.fetch
@@ -174,6 +179,7 @@ export function web(options: WebOptions): Plugin {
 
   return {
     name: "web",
+    keys: WEB_KEYS,
     setup(host) {
       if (options.env.BRAVE_API_KEY) host.tools.add(search)
       host.tools.add(fetchPage)

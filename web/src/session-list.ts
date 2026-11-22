@@ -33,6 +33,39 @@ export function filterSessions(sessions: readonly SessionSummary[], filter: Filt
   })
 }
 
+// What saving a name typed in a row comes to: the name to send, on one
+// line and without the spaces at its ends; why not, when it is blank; or
+// nothing to do, when it is the title the session has already.
+export function nameToSave(typed: string, title: string): { name: string } | { refused: string } | undefined {
+  const name = typed.replace(/\s+/g, " ").trim()
+  if (name === "") return { refused: "A session's name cannot be blank, so it keeps the one it has." }
+  return name === title ? undefined : { name }
+}
+
+// What a key pressed in a row's name field does: Enter saves the name and
+// Escape gives it up, as in T3 Code; any other key is typing, and so is one
+// that is part of composing a character, as in Japanese.
+export function nameFieldKey(key: string, composing: boolean): "save" | "cancel" | undefined {
+  if (composing) return undefined
+  return key === "Enter" ? "save" : key === "Escape" ? "cancel" : undefined
+}
+
+// The session F2 renames: the row that has the keyboard's focus, or else
+// the selected session. `focusedRow` is null for a row with no session to
+// rename, a draft's, which F2 leaves alone. Not while the owner is typing
+// in a field, where F2 is the field's.
+export function renamedByF2(focus: { focusedRow?: string | null; typing: boolean }, selected: string | undefined): string | undefined {
+  if (focus.typing || focus.focusedRow === null) return undefined
+  return focus.focusedRow ?? selected
+}
+
+// The selected session, when it is one of those deleted: it may be shown
+// in the middle, or one of its subagents' conversations, or in the card.
+export function deletedSelection(selected: Selected | undefined, deleted: readonly string[]): string | undefined {
+  if (selected === undefined || !("session" in selected)) return undefined
+  return deleted.includes(selected.session) ? selected.session : undefined
+}
+
 // The project being looked at, which a new session starts in: the
 // selected draft's or session's, or with nothing selected, the one the
 // list is narrowed to, or none. A session not in the list is taken to

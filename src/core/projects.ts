@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite"
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
+import { NOT_ACTIVITY } from "./log.ts"
 import type { Project, ProjectColour } from "./types.ts"
 
 // Projects and the sessions that belong to them. A project is found by its
@@ -27,10 +28,10 @@ export type Projects = {
   // `as` says which named agent a subagent is, and whether it is held to
   // reading only.
   createSession(project: Project | null, parent?: string, as?: { agent?: string; readOnly?: boolean }): string
-  // The session used last in a project, or the last general session: the one
-  // with the newest event, settling aside. Undefined when none has had a
-  // conversation. A subagent's session is never the answer: it is not the
-  // owner's to carry on.
+  // The session used last in a project, or the last general session: the
+  // one with the newest event, settling, naming and moving aside. Undefined when
+  // none has had a conversation. A subagent's session is never the answer:
+  // it is not the owner's to carry on.
   lastSession(project: Project | null): string | undefined
   // The project a session belongs to, null for a general session, or
   // undefined when there is no session with that id. A session whose
@@ -45,6 +46,10 @@ export type Projects = {
   // when it was made, and the text of its task, its first message, or null
   // before it has one.
   subagentsOf(session: string): { id: string; created: number; task: string | null }[]
+  // Puts a session and its subagents in another project, or with null in none.
+  move(session: string, project: string | null): void
+  // Takes a session away, which is being deleted.
+  remove(session: string): void
 }
 
 // The folder a project is rooted at: the nearest folder at or above this one
@@ -239,10 +244,10 @@ export function createProjects(db: Database): Projects {
   // `IS` compares with null as well as with an id. Only a session the owner
   // has said something in counts: one that holds nothing but a question
   // asked while it was opening is not a conversation to carry on. Settling
-  // a session by hand, or bringing it back, is not using it, so it is left
-  // out, as it is from a session's activity.
+  // a session by hand, or bringing it back, naming it and moving it are not
+  // using it, so they are left out, as they are from a session's activity.
   const lastUsed = db.query<{ id: string }, [string | null]>(
-    `SELECT session.id FROM session JOIN event ON event.session = session.id AND event.type != 'settled'
+    `SELECT session.id FROM session JOIN event ON event.session = session.id AND NOT ${NOT_ACTIVITY}
      WHERE session.project IS ?
        AND session.parent IS NULL
        AND session.id IN (SELECT session FROM event WHERE type = 'user_message')
@@ -250,6 +255,9 @@ export function createProjects(db: Database): Projects {
      ORDER BY MAX(event.time) DESC, session.created DESC
      LIMIT 1`,
   )
+
+  const moveRows = db.query("UPDATE session SET project = ? WHERE id = ? OR parent = ?")
+  const removeRow = db.query("DELETE FROM session WHERE id = ?")
 
   const insert = (folder: string, name: string): Project => {
     const project: Project = { id: crypto.randomUUID(), name, folder }
@@ -333,6 +341,14 @@ export function createProjects(db: Database): Projects {
 
     subagentsOf(session) {
       return children.all(session).map(({ id, created, first }) => ({ id, created, task: textOf(first) }))
+    },
+
+    move(session, project) {
+      moveRows.run(project, session, session)
+    },
+
+    remove(session) {
+      removeRow.run(session)
     },
   }
 }

@@ -9,7 +9,7 @@ import type { StorageEntry, StorageFile } from "./types.ts"
 
 // The largest file that is read, 1 MB, so that one reply never carries
 // more: a server keeps its latest replies to each device for a while.
-export const STORAGE_FILE_LIMIT = 1024 * 1024
+const STORAGE_FILE_LIMIT = 1024 * 1024
 
 // The images that are read as such, by their ending, with their type.
 const IMAGES: Record<string, string> = {

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import { loadSettingsFiles, type Plugin } from "../src/index.ts"
@@ -213,8 +213,15 @@ test("new_project at a code repository's folder keeps the .evie/ it makes out of
 
 test("a project made but not trusted, as when the global settings file cannot be written, says so and how it will be trusted", async () => {
   const { run, home } = await startWithSettings()
-  // Stands for a settings file that cannot be replaced.
-  await mkdir(join(home, "evie.json.new"))
+  // A settings file that is a link to one in a folder nothing new can be
+  // made in, so it can be read but not replaced, since a file is replaced
+  // by one made beside it. Made writable again before it is removed.
+  const locked = await tempFolder("evie-locked-")
+  await writeFile(join(locked, "evie.json"), await readFile(join(home, "evie.json")))
+  await rm(join(home, "evie.json"))
+  await symlink(join(locked, "evie.json"), join(home, "evie.json"))
+  await chmod(locked, 0o500)
+  cleanups.push(() => chmod(locked, 0o700))
   const folder = join(await tempFolder("evie-place-"), "notes")
 
   const making = run.evie.send({ type: "new_project", folder })

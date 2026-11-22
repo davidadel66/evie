@@ -42,6 +42,11 @@ export const PATHS = {
 // 4000 are the application's own. A client closed with it stops trying.
 export const TAKEN_BACK = 4001
 
+// Whether a web address, such as a page's, is on the computer it is read
+// on: at 127.0.0.1, localhost or ::1. The server and its web page both go
+// by it, for what only the computer evie runs on may change.
+export const onThisComputer = (address: string) => URL.canParse(address) && ["127.0.0.1", "localhost", "[::1]"].includes(new URL(address).hostname)
+
 // A host as it is written in an address. An IPv6 address, such as ::1, has
 // colons of its own, so it goes in brackets: http://[::1]:3843.
 export const hostInAddress = (host: string) => (host.includes(":") && !host.startsWith("[") ? `[${host}]` : host)

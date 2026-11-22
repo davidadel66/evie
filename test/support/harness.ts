@@ -18,6 +18,7 @@ export async function startEvie(
     projectFolder?: string
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
     trust?: NonNullable<EvieOptions["trust"]>
+    settings?: NonNullable<EvieOptions["settings"]>
     syncSetting?: NonNullable<EvieOptions["syncSetting"]>
     compaction?: NonNullable<EvieOptions["compaction"]>
     quietCheckEvery?: number
@@ -37,6 +38,7 @@ export async function startEvie(
     plugins,
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
     ...(options.trust && { trust: options.trust }),
+    ...(options.settings && { settings: options.settings }),
     ...(options.syncSetting && { syncSetting: options.syncSetting }),
     ...(options.compaction && { compaction: options.compaction }),
     ...(options.quietCheckEvery !== undefined && { quietCheckEvery: options.quietCheckEvery }),

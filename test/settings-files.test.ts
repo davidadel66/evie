@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createEvie, loadSettingsFiles } from "../src/index.ts"
+import { createEvie, loadSettingsFiles, type Plugin, type Provider, type Request } from "../src/index.ts"
 import { say, startEvie, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -40,14 +40,36 @@ async function start(global: unknown, script: ScriptedReply[] = Array.from({ len
   if (global !== undefined) await writeFile(join(home, "evie.json"), typeof global === "string" ? global : JSON.stringify(global))
   const settings = await loadSettingsFiles({ env: { EVIE_HOME: home } })
   const model = scriptedProvider(script)
-  const run = await startEvie([model.plugin, ...settings.plugins], { home, projectSettings: settings.projectSettings })
+  const naming = namedAside(model.provider)
+  const run = await startEvie([naming.plugin, ...settings.plugins], { home, projectSettings: settings.projectSettings })
   cleanups.push(run.stop)
   // The names of the tools the model is offered in a session's next turn.
   async function offered(session = run.session) {
     await say(run, "hi", session)
     return model.requests.at(-1)!.tools.map((tool) => tool.name)
   }
-  return { run, model, home, offered, settings }
+  return { run, model, home, offered, settings, naming }
+}
+
+// The scripted model, standing in as well for the model that names
+// sessions, whose requests are answered with a name, and kept apart, so
+// that the script is the session's alone.
+function namedAside(provider: Provider) {
+  const requests: Request[] = []
+  const plugin: Plugin = {
+    name: "scripted-provider",
+    setup: (host) =>
+      host.providers.add({
+        name: provider.name,
+        async *stream(request, signal) {
+          if (!request.system?.includes("3 to 8 words")) return yield* provider.stream(request, signal)
+          requests.push(request)
+          yield { type: "text", text: "A name" }
+          yield { type: "finish", reason: "stop" }
+        },
+      }),
+  }
+  return { plugin, requests }
 }
 
 async function projectWith(settings: unknown, files: Record<string, string> = {}) {
@@ -70,8 +92,19 @@ const defaultTools = [...usualTools, "job_stop", "ask", "subagent", "subagent_se
 test("with no settings file, the built-in plugins load", async () => {
   const { offered, settings } = await start(undefined)
 
-  expect(settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "openrouter"])
+  expect(settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "naming", "openrouter"])
   expect(await offered()).toEqual(defaultTools)
+})
+
+test("sessions are named by anthropic/claude-haiku-5.5 unless the settings file gives the naming plugin another model", async () => {
+  const named = async (global: unknown) => {
+    const { run, naming } = await start(global)
+    await say(run, "Plan the beds for spring")
+    return naming.requests.map((request) => request.model)
+  }
+
+  expect(await named(undefined)).toEqual(["anthropic/claude-haiku-5.5"])
+  expect(await named({ plugins: ["files", { use: "naming", options: { model: "google/gemini-3-flash" } }] })).toEqual(["google/gemini-3-flash"])
 })
 
 test("leaving a built-in plugin out of the list removes what it registers", async () => {
@@ -143,13 +176,26 @@ test("a plugin that cannot be loaded stops Evie at start, with an error that nam
   await writeFile(join(outside, "broken.ts"), "export default { name: 'broken', setup() { throw new Error('could not connect') } }")
 
   await expect(start({ plugins: ["no-such-plugin"] })).rejects.toThrow(
-    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, jobs, guard, permissions, undo, models, ask, subagents, skills, instructions, web, sync, openrouter.',
+    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, jobs, guard, permissions, undo, models, ask, subagents, skills, instructions, web, sync, naming, openrouter.',
   )
   await expect(start({ plugins: ["/no/such/file.ts"] })).rejects.toThrow('The plugin "/no/such/file.ts" could not be loaded')
   await expect(start({ plugins: [join(outside, "empty.ts")] })).rejects.toThrow("does not export a plugin")
   await expect(start({ plugins: ["files", join(outside, "broken.ts")] })).rejects.toThrow(
     'The plugin "broken" could not be set up: could not connect',
   )
+})
+
+test("plugin files under addPlugins load after the list, the built-in one when evie.json gives none; an entry that is not one is refused as a bad plugin is", async () => {
+  const outside = await tempFolder("evie-outside-")
+  await writeFile(join(outside, "greeter.ts"), toolPlugin("greet"))
+
+  const { settings } = await start({ addPlugins: [join(outside, "greeter.ts")] })
+  expect(settings.plugins.map((plugin) => plugin.name).slice(-2)).toEqual(["openrouter", "greet"])
+  const listed = await start({ plugins: ["files", "openrouter"], addPlugins: [join(outside, "greeter.ts")] })
+  expect(listed.settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "openrouter", "greet"])
+
+  await expect(start({ addPlugins: ["/no/such/file.ts"] })).rejects.toThrow('The plugin "/no/such/file.ts" could not be loaded')
+  await expect(start({ addPlugins: ["web"] })).rejects.toThrow(/"addPlugins" must be a list of paths to plugin files\.$/)
 })
 
 test("a settings file that is not valid says which file and why", async () => {

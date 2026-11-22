@@ -131,6 +131,7 @@ In your shell:
 | Command | What it does |
 |---|---|
 | `evie serve` | Runs the server, which also serves the web app. Leave it running; every client talks to it. |
+| `evie serve --check` | Checks that the server would start with its settings, without starting it, and says what would stop it. |
 | `evie` | Starts the terminal client in the project of the folder you are in. |
 | `evie -c` (or `--continue`) | Carries on the last session of this project, joining it if it is still running. |
 | `evie web` | Opens the web app in your browser, signed in. `--print` prints the sign-in link instead. |
@@ -158,7 +159,8 @@ Ctrl-C stops the turn in progress, and quits when nothing is running.
 
 `evie serve` listens on this computer only, at `http://127.0.0.1:3843`.
 It reads the settings files when it starts, so a change to them takes
-effect when the server is started again.
+effect when the server is started again, which the web app's settings can
+do (see "The web app").
 
 When the connection to the server drops, as when the laptop sleeps or the
 server is started again, `evie` says so and connects again by itself, then
@@ -232,8 +234,57 @@ any name other than `127.0.0.1` or `localhost` must be listed under
 The page has three columns: the list of sessions, the conversation and the
 project card. While the page is connected, nothing says so; while the
 line is down, one quiet line under the name at the top says Reconnecting,
-and why, and the page catches up by itself once the line is back. The gear beside the name opens the settings, where the theme is
-picked: one of Dusk, Moss and Oxblood, which the browser remembers.
+and why, and the page catches up by itself once the line is back.
+
+The gear beside the name opens the settings, with a page each for:
+
+- **Appearance:** the theme, one of Dusk, Moss and Oxblood, which the
+  browser remembers.
+- **Keys:** the keys the loaded plugins read from `.env` (see
+  "Settings"), each with what it is for and only whether it is set. A new
+  value is written to the file, readable by you only, and is never shown
+  again, here or anywhere else; Clear takes it out. A key set where the
+  server runs wins over the file, and the page says so.
+- **Plugins:** the plugins `evie.json` loads, each with whether it is
+  loaded. A plugin file can be added by its full path, and taken off again;
+  it goes under `addPlugins` (see "Choosing which plugins load"). The
+  built-in ones are changed in `evie.json` itself.
+- **Instructions:** your instruction file, `AGENTS.md` in the data folder,
+  to edit and save. It applies from the next message. What you have written
+  and not saved is kept when the window is closed, until you save it.
+- **Projects:** each project, with whether its own settings are trusted,
+  to trust it or stop trusting it.
+
+Each change is checked as the server would check it when it starts, so one
+that would stop it starting is refused there and then, in the words
+starting would give, and nothing is written. A plugin file is checked by
+`evie serve --check`, in a process of its own: it loads the settings files
+and sets the plugins up together, as starting does, without listening or
+opening any session. Most changes apply once the server starts again: the
+window says so, and **Restart to apply** starts it again, as after a crash,
+so that work in progress carries on; the page connects again by itself. A
+restart is refused, saying why, when the same check finds the server would
+not start. Under the login service (see "Keeping the server running"), the
+service starts the server again; run by hand, `evie serve` starts a new
+server in its own place, in the same terminal, which Ctrl-C stops as
+before.
+
+Keys are typed in, and plugins and trusted projects changed, through the
+settings only on the computer evie runs on: the server refuses those
+changes from a connection that does not come from this computer's own
+address, 127.0.0.1 or ::1, or that comes from a page at any other address,
+and a page opened at any other address shows them as they stand. So a key
+never crosses the network. This is a seat belt, not a wall: a signed-in
+device can still ask evie to do anything evie can do, and can answer the
+question whether to trust a project, as opening a project's session from a
+phone asks.
+
+Something on this computer that passes connections on to the server, such
+as a proxy that serves it over HTTPS, makes them all come from this
+computer's address; a browser's page still says where it is, but a client
+that is not a browser does not. So keep the server on 127.0.0.1, as it is
+unless `evie.json` says otherwise, unless what is in front of it does its
+own sign-in.
 
 The list shows every session you have said something in, kept current as
 they change, and listed again when the line comes back:
@@ -243,12 +294,11 @@ they change, and listed again when the line comes back:
   **Settled** are groups at the bottom, which open and close; the browser
   remembers which are open.
 - **Each row** shows its project's icon and name, and how long ago it was
-  active, or its state; the session's name, which is the opening words of
-  its first message for now; and the git branch its project is on, asked
-  for again when the window has the focus back and each minute while the
-  page is shown. A project has a folder in a colour chosen from its id
-  until you pick its icon and colour in its workspace (below). Its icon
-  and name open its workspace.
+  active, or its state; the session's name; and the git branch its
+  project is on, asked for again when the window has the focus back and
+  each minute while the page is shown. A project has a folder in a colour
+  chosen from its id until you pick its icon and colour in its workspace
+  (below). Its icon and name open its workspace.
 - **New session** makes a draft of a new session, at the top of the list,
   in the project of the selected session or draft, or of the project the
   list is narrowed to; the menu beside it makes one in another project, or
@@ -260,9 +310,26 @@ they change, and listed again when the line comes back:
   box, with why.
 - **Search** narrows the list by name, and the menu beside it to one
   project.
+- **A session's name** is written by a small model from your first
+  message, in the background, without holding up the reply; until it
+  comes, the row shows the opening words of that message. A request for a
+  name that fails or takes too long is given up, and the opening words
+  stay. You can rename a session at any time, and evie never replaces
+  your name.
 - **A row's menu** (the `···` on the selected row, or on any row under the
-  pointer) settles the session or brings it back. A session that is
-  working, or waiting for an answer, is not settled; the row says why.
+  pointer) renames the session, moves it to another project or to none,
+  settles it or brings it back, and deletes it. A double-click on the row,
+  or on the name at the top of the conversation, or F2, renames it too:
+  Enter or leaving the field saves the name, Escape gives it up, and a
+  blank name, or one over 80 characters, is refused. A session moved
+  works in its new project, with that project's plugins, from its next
+  turn, and evie is told where it now works; a move is not activity, so a
+  settled session stays settled. Delete asks first, and removes the
+  session for good: its conversation, its subagents and the files evie
+  kept for it, though not the files it changed in a project. A page that
+  has the session open lets it go and says it was deleted. A session that
+  is working or waiting for an answer is not settled, moved or deleted,
+  nor moved or deleted while it opens; the row says why.
 - **What is selected** is kept in the page's address, as `#session=<id>`,
   or for a draft `#draft=<project id>` or `#draft=none`, so a reload or a
   bookmark opens on it.
@@ -707,7 +774,8 @@ Evie keeps its state in `~/.evie`. Set `EVIE_HOME` to use another folder.
 Two files in that folder hold its settings.
 
 **`.env` is for keys.** One `NAME=value` per line. Evie reads a key and
-never writes it anywhere.
+never writes it anywhere else; the web app's settings write a key you set
+there to this file, which only your user can read.
 
 ```
 OPENROUTER_API_KEY=...
@@ -777,7 +845,7 @@ the per-model settings and the permissions.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the thirteen built-in ones load:
+a list, the fourteen built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
@@ -793,6 +861,7 @@ a list, the thirteen built-in ones load:
 | `instructions` | The owner's and the project's instruction files |
 | `web` | `web_search` and `web_fetch` |
 | `sync` | The backing up of a project's `.evie` folder, and the `/sync` command |
+| `naming` | A name for each session, written by a small model from its first message |
 | `openrouter` | The connection to models through OpenRouter |
 
 ```json
@@ -810,11 +879,16 @@ a list, the thirteen built-in ones load:
     "instructions",
     "web",
     "sync",
+    "naming",
     "openrouter",
     { "use": "/path/to/my-plugin.ts", "options": { "greeting": "hi" } }
   ]
 }
 ```
+
+Sessions are named by `anthropic/claude-haiku-5.5`, through the same
+provider as the rest. Another model is set in the plugin's options:
+`{ "use": "naming", "options": { "model": "another/model" } }`.
 
 One more built-in plugin, `guard`, is not loaded by default. It is the
 part of `permissions` that refuses the most destructive commands, by
@@ -823,6 +897,17 @@ itself, for running Evie with no other rules.
 A built-in plugin is named. A plugin of your own is given by the path to
 its file. Leaving a plugin out switches it off: without `shell`, the model
 cannot run commands.
+
+`addPlugins` lists plugin files, by their paths, to load after the list:
+after `plugins`, or after the built-in plugins when there is no `plugins`.
+The web app's settings add a plugin file here and take it off again, so
+the list of built-in plugins is left as it is. An entry that is not the
+path to a plugin file stops the server at start, as a bad entry in
+`plugins` does.
+
+```json
+{ "addPlugins": ["/path/to/my-plugin.ts"] }
+```
 
 A project's own file, `.evie/evie.json` in its folder, adds plugins for that
 project only and can switch off a global one there. It can also set that
@@ -887,6 +972,23 @@ export default (options) => ({
 })
 ```
 
+A plugin can also say which keys it reads from `.env`, each with what it
+is for in one line, and the web app's settings list them for you to set:
+
+```ts
+export default {
+  name: "weather",
+  keys: [{ name: "WEATHER_API_KEY", about: "Reads the forecast from the weather service." }],
+  setup(host) { /* ... */ },
+}
+```
+
+For now Evie hands the keys in `.env` to its built-in plugins only. A plugin
+file reads a key it lists from the environment the server runs in, and only
+from there: under the login service that environment holds just the data
+folder and `PATH`, which is why `evie service install` names only the
+built-in plugins' keys.
+
 Through the host a plugin can add to four lists:
 
 | List | What an entry is |
@@ -896,14 +998,14 @@ Through the host a plugin can add to four lists:
 | `host.profiles` | What one family of models is given: a system prompt and its tools for changing files |
 | `host.commands` | A command you type starting with a slash, such as `/model`. A command can tell the model something with `context.tell`, which adds a note to the conversation |
 
-It can also attach to three *hooks*, moments in the loop where a plugin's
-code runs:
+It can also attach to *hooks*, moments where a plugin's code runs:
 
 | Hook | When it runs | What it can do |
 |---|---|---|
 | `before_request` | After a request is built, before it is sent | Change the system prompt and the tools the model is offered |
 | `before_tool` | After a tool call's input is checked, before the tool runs | Refuse the call with a reason |
 | `after_tool` | After a tool has run | Change the result the model sees |
+| `session_deleted` | After a session has been deleted for good | Remove the files the plugin kept for it |
 
 A hook and a tool can also ask you a question and wait for the answer.
 `context.ask` returns the choice you made, or `null` when the question was
@@ -926,8 +1028,10 @@ host.on("before_tool", (call) => {
 })
 ```
 
-Hooks run in the order their plugins are listed. Each is told the session,
-its project and the conversation so far. `host.project` says which project
+Hooks run in the order their plugins are listed. Each of the first three
+is told the session, its project and the conversation so far, and can
+give the session a name with `context.name`, which does nothing once it
+has one. `host.project` says which project
 the plugin is being set up for.
 
 A plugin with work of its own over time, such as the `sync` plugin's
@@ -1185,6 +1289,9 @@ credited here, and its licence notice is kept with the code.
   format and the way the `patch` tool finds lines, in
   `src/plugins/files/patch.ts`, rewritten from Rust. The licence and Codex's
   notice are in `LICENSES/`.
+- [T3 Code](https://github.com/pingdotgg/t3code) (MIT): the prompt that
+  names sessions, in `src/plugins/naming.ts`, rewritten in evie's words.
+  Its licence is in `LICENSES/`.
 
 The web app's fonts are [Geist and Geist Mono](https://github.com/vercel/geist-font)
 (SIL Open Font License 1.1), from the `@fontsource-variable` packages. Its

@@ -33,6 +33,16 @@ export type EventBodies = {
   // The owner set the session aside, or with false brought it back. It is
   // not activity in the session, and the model is not shown it.
   settled: { settled: boolean }
+  // The session was given a name, as a list of sessions shows it, by the
+  // owner or by a plugin that names sessions. The latest is its name. A
+  // plugin names a session only while it has no name, so the owner's is
+  // never replaced. It is not activity in the session, and the model is not
+  // shown it.
+  named: { name: string }
+  // The owner moved the session from one project to another, by their ids,
+  // or with null into or out of none. It is followed by a note telling the
+  // model where it now works. Neither is activity in the session.
+  moved: { from: string | null; to: string | null }
 }
 
 // Something Evie asks the owner, with the answers to choose from. With
@@ -66,7 +76,7 @@ export type DeltaEvent = { type: "assistant_delta"; session: string; text: strin
 // A job started or ended. Sent to clients, never stored.
 export type JobEvent = { type: "job"; session: string; job: Job }
 
-export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent
+export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent | DeletedEvent
 
 // ---- Sessions in a list ---------------------------------------------------------
 
@@ -80,9 +90,10 @@ export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent
 export type SessionState = "needs_you" | "working" | "active" | "settled"
 
 // One line of a list of sessions. `project` is the id of its project, null
-// for a general session. `name` is the opening words of its first message,
-// null until it has one. `lastActive` is the time of its latest stored
-// event, settling aside, or when it was made if it has none.
+// for a general session. `name` is the latest it was given, or until it is
+// given one, the opening words of its first message, null until it has one.
+// `lastActive` is the time of its latest stored event, settling, naming and
+// moving aside, or when it was made if it has none.
 export type SessionSummary = { session: string; project: string | null; name: string | null; state: SessionState; lastActive: number }
 
 // A session's summary, sent when it is first listed and whenever its
@@ -90,6 +101,11 @@ export type SessionSummary = { session: string; project: string | null; name: st
 // Sent to clients, never stored. Evie's server sends it to every client,
 // whatever sessions it has open, so that each can keep a list of sessions.
 export type SummaryEvent = { type: "summary" } & SessionSummary
+
+// A session was deleted for good, with its subagents. Sent to clients,
+// never stored, and like a summary to every client, so that each can drop
+// it from its list of sessions.
+export type DeletedEvent = { type: "deleted"; session: string }
 
 // ---- The request to a model ---------------------------------------------------
 
@@ -401,6 +417,11 @@ export type HookContext = {
   // and whether it is held to reading only.
   agent?: string
   readOnly?: true
+  // Names the session, as a list of sessions shows it, for a plugin that
+  // names sessions. It can be called at any time, as when a name written in
+  // the background arrives. It does nothing once the session has a name,
+  // the owner's or one given before, or has been deleted, or Evie has closed.
+  name(text: string): void
 }
 
 // A tool call after its input has been checked and repaired.
@@ -418,6 +439,12 @@ export type Hooks = {
   before_tool(call: CheckedToolCall, context: HookContext): { deny: string } | void | Promise<{ deny: string } | void>
   // After a tool has run. Return changed result text, or nothing to leave it.
   after_tool(call: CheckedToolCall, text: string, context: HookContext): string | void | Promise<string | void>
+  // After a session has been deleted for good: a plugin that keeps files
+  // for a session in the data folder removes this one's. It is told of
+  // each of the session's subagents too, which are deleted with it. The
+  // global plugins are told, and those of each project the session ran in
+  // whose plugins are set up already: none is set up just to be told.
+  session_deleted(session: string): void | Promise<void>
 }
 
 // The only way a plugin adds anything to Evie. Each project has a host of its
@@ -442,7 +469,13 @@ export type Plugin = {
   // server is once it listens, with every project and a signal that fires
   // when Evie stops. Only the global plugins are started.
   start?(context: { projects: readonly Project[]; signal: AbortSignal }): void
+  // The keys the plugin reads from the data folder's `.env` file, each with
+  // what it is for in one line, for the owner to set in a settings window.
+  keys?: readonly Key[]
 }
+
+// A key a plugin reads, such as OPENROUTER_API_KEY, and what it is for.
+export type Key = { name: string; about: string }
 
 // What one project has of its own, on top of the global settings.
 export type ProjectSettings = {
@@ -500,6 +533,57 @@ export type StorageFile = { path: string; size: number; changed: number } & (
   | { kind: "text"; text: string }
   | { kind: "image"; type: string; data: string }
 )
+
+// ---- Settings -------------------------------------------------------------------
+
+// The settings the owner changes from a client's settings window, as they
+// stand in the data folder's files. `keys` are the keys the loaded plugins
+// read from the `.env` file, with what each is for, then any other the file
+// sets; each says only whether the file sets it (`inFile`) and whether the
+// server's own environment does (`environment`), which wins over the file,
+// never its value. `keysPrivate` says only the owner's user can read the
+// file, or there is none yet. `plugins` are the ones `evie.json` lists,
+// each by the name or path it is given by, with whether it is `listed`
+// there now, whether it was `loaded` when the server started, and whether
+// it was `added` from a settings window, under "addPlugins", which only
+// such a window takes off. `instructions` is the text of the owner's
+// instruction file, empty when there is none. `projects` are every
+// project, each with whether its own settings are trusted. A setting that
+// is `pending` has been changed, and the change applies once the server
+// starts again; `restart` says that some change waits for that. `started`
+// is when this server started, which names it to `restart_server`.
+export type SettingsView = {
+  keys: { name: string; about?: string; inFile: boolean; environment: boolean; pending: boolean }[]
+  keysPrivate: boolean
+  plugins: { name: string; listed: boolean; loaded: boolean; added: boolean }[]
+  instructions: string
+  projects: (Project & { trusted: boolean; pending: boolean })[]
+  restart: boolean
+  started: number
+}
+
+// One change to the settings: a key set to a value, or cleared with null;
+// a plugin file added, by its path, or one so added taken off again; the
+// owner's instruction file saved; or a project, by its id, trusted or not.
+export type SettingsChange =
+  | { key: string; value: string | null }
+  | { addPlugin: string }
+  | { removePlugin: string }
+  | { instructions: string }
+  | { project: string; trusted: boolean }
+
+// What carries out the settings commands, given to the core by the program
+// that runs it, which knows its settings files and how to start the server
+// again. `projects` are every project there is.
+export type SettingsEditor = {
+  read(projects: readonly Project[]): Promise<SettingsView>
+  // Makes the change, once it has been checked as the files are when Evie
+  // starts; one that would not pass is refused, saying why, and nothing is
+  // written.
+  change(change: SettingsChange, projects: readonly Project[]): Promise<void>
+  // Starts the server again, when `started` is this server's.
+  restart(started: number): Promise<void>
+}
 
 // ---- The client interface -------------------------------------------------------
 
@@ -668,6 +752,64 @@ export type Commands = {
   list_subagents: {
     input: { session: string }
     output: { session: string; name: string | null; started: number }[]
+  }
+  // The settings, as a settings window shows them. A key's value is never
+  // given, only whether it is set.
+  read_settings: {
+    input: Record<never, never>
+    output: SettingsView
+  }
+  // Makes one change to the settings, written to the file it belongs in,
+  // and gives back the settings as they are then. Each change is checked as
+  // the files are when Evie starts: one that would not pass is refused, with
+  // the same words, and nothing is written. A key's value goes to the data
+  // folder's `.env` only: it is never given back, nor kept anywhere else.
+  change_settings: {
+    input: SettingsChange
+    output: SettingsView
+  }
+  // Starts the server again in its restart mode, so that the work running
+  // in it is picked up again, as after a crash, and every setting applies.
+  // `started` is the server's, as `read_settings` gave it: a server started
+  // since does nothing, so that the command, sent again after the restart,
+  // does not restart it again. Refused, saying why, when the settings files
+  // would stop the server starting again.
+  restart_server: {
+    input: { started: number }
+    output: void
+  }
+  // Names a session, as the owner calls it, as a `named` event in its log.
+  // It can be renamed at any time, open or not, but not a subagent's, which
+  // is not listed. The name is kept on one line, and a blank one, or one
+  // over 80 characters, is refused.
+  // A name the owner gives is never replaced by one evie writes.
+  rename_session: {
+    input: { session: string; name: string }
+    output: void
+  }
+  // Moves a session into a project, out of one with `project` null, or
+  // between two, with its subagents, as a `moved` event in its log and a
+  // note telling the model which project and folder it now works in. An
+  // open session runs in the new project, with its plugins, from its next
+  // turn; setting them up can ask whether to trust the project. It is
+  // refused while anything runs in the session: a turn, a question waiting
+  // for an answer, a background job or a subagent. Moving a session to the
+  // project it is in does nothing. Not a subagent's, which moves with it.
+  move_session: {
+    input: { session: string; project: string | null }
+    output: void
+  }
+  // Deletes a session for good: its events, its subagents' sessions, and
+  // the files evie and its plugins keep for them in the data folder, such
+  // as saved tool output, background jobs' records and undo's copies. Every
+  // client is sent a `deleted` event. It is refused while anything runs in
+  // the session, or while it is opening, as a move is. Not a subagent's,
+  // which goes with its session. `leftOver` says, a sentence each, what
+  // could not be removed once the session was gone, naming the folder or
+  // the plugin; it is empty when everything went.
+  delete_session: {
+    input: { session: string }
+    output: { leftOver: string[] }
   }
   // Sets the icon and the colour a project is drawn with, as the owner
   // picked them: `icon` is the name of an icon in the Phosphor set, in
