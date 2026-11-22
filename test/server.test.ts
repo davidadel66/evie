@@ -19,6 +19,7 @@ import {
 } from "../src/index.ts"
 import { nextEvent, say, startEvie, stored, type Run } from "./support/harness.ts"
 import { lineTo } from "./support/line.ts"
+import { rawWebSocket } from "./support/raw-websocket.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
 import { commandId } from "../src/server/connect.ts"
@@ -1706,4 +1707,60 @@ test("a client whose WebSocket is refused three times in a row as it connects ag
   while (ended.length === 0) await Bun.sleep(5)
 
   expect(ended.map((cause) => cause.reason)).toEqual(["page"])
+})
+
+// ---- Compression ----------------------------------------------------------------------------
+
+test("a client that offers compression, as a browser does, is sent each message compressed with what came before kept, and its keepalives plain", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin], { keepaliveEvery: 20 })
+  cleanups.push(served.stop)
+  // What Chrome offers.
+  const socket = await rawWebSocket(served.server.url, { Authorization: `Bearer ${served.token}`, "Sec-WebSocket-Extensions": "permessage-deflate; client_max_window_bits" })
+  cleanups.push(async () => socket.close())
+  // The same command three times, whose replies differ only in their ids.
+  const ids = [1, 2, 3].map((n) => `the same list asked for again, time ${n}`)
+  for (const id of ids) socket.send(JSON.stringify({ id, command: { type: "list_projects" } }))
+
+  const replies = await Promise.all(ids.map((id) => socket.next((frame) => frame.text.includes(id))))
+  const keepalive = await socket.next((frame) => frame.text.includes("keepalive"))
+
+  // The server compresses, and keeps its window from one message to the next.
+  expect(socket.extensions).toContain("permessage-deflate")
+  expect(socket.extensions).not.toContain("server_no_context_takeover")
+  expect(replies.map((reply) => reply.compressed)).toEqual([true, true, true])
+  // What the messages say is unchanged.
+  const said = replies.map((reply) => JSON.parse(reply.text) as ServerMessage)
+  expect(said.map((reply) => ("reply" in reply ? reply.reply : undefined))).toEqual(ids)
+  const results = said.map((reply) => ("result" in reply ? reply.result : "no result"))
+  expect(results[0]).toBeArray()
+  expect(results).toEqual([results[0], results[0], results[0]])
+  // A reply mostly the same as the one before it is sent as a pointer back
+  // to it, so it takes a fraction of the first one's bytes.
+  expect(replies[1]!.size).toBeLessThan(replies[0]!.size / 2)
+  expect(replies[2]!.size).toBeLessThan(replies[0]!.size / 2)
+  expect(keepalive).toEqual({ compressed: false, size: 18, text: '{"keepalive":true}' })
+})
+
+test("a client that offers no compression is sent every message as plain JSON, as before", async () => {
+  const served = await serveEvie([scriptedProvider([]).plugin], { keepaliveEvery: 20 })
+  cleanups.push(served.stop)
+  const socket = await rawWebSocket(served.server.url, { Authorization: `Bearer ${served.token}` })
+  cleanups.push(async () => socket.close())
+  socket.send(JSON.stringify({ id: "list", command: { type: "list_projects" } }))
+
+  const reply = await socket.next((frame) => frame.text.includes('"reply"'))
+  const keepalive = await socket.next((frame) => frame.text.includes("keepalive"))
+
+  expect(socket.extensions).toBe("")
+  expect(reply.compressed).toBe(false)
+  expect(JSON.parse(reply.text)).toMatchObject({ reply: "list" })
+  expect(reply.size).toBe(Buffer.byteLength(reply.text))
+  expect(keepalive).toEqual({ compressed: false, size: 18, text: '{"keepalive":true}' })
+})
+
+test("the terminal client, whose WebSocket offers compression, is sent a reply of many small pieces and shows it whole, in order", async () => {
+  const pieces = Array.from({ length: 300 }, (_, at) => `piece ${at}, `)
+  const { printed } = await typeOverTheNetwork(["hello"], [{ text: pieces }])
+
+  expect(printed).toContain(pieces.join(""))
 })
