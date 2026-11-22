@@ -47,6 +47,8 @@ export function Conversation({ connection, session, folder }: { connection: Conn
 const AT_BOTTOM = 32
 // How many of the first items are remembered to keep the owner's place.
 const ANCHORS = 5
+// The first items drawn in a conversation and where each is.
+const firstItems = (box: HTMLElement) => [...box.querySelectorAll<HTMLElement>("[data-item]")].slice(0, ANCHORS).map((each) => ({ key: each.dataset.item!, top: each.offsetTop }))
 
 // A conversation as it reads, the session's own, with its message box, or
 // one of its subagents', which is read only: it has no box, since nothing
@@ -90,15 +92,29 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
       return now
     })
   const drawn = useRef<{ key: string; top: number }[]>([])
+  // Where the conversation was scrolled to when last told, to know the owner
+  // scrolling up from the conversation growing below them; and the frame
+  // asked for to keep the owner at the bottom, while it waits.
+  const lastTop = useRef(0)
+  const following = useRef(0)
+  useEffect(() => () => cancelAnimationFrame(following.current), [])
 
   // Within half a screen of the top, the page before is read.
   const readIfNearTop = () => {
     const box = scroller.current
     if (box && box.scrollTop < box.clientHeight / 2) conversation.readEarlier()
   }
+  // The owner stays at the bottom while near it, and until they scroll up:
+  // the conversation growing below them, faster than they are kept at the
+  // bottom, does not count. Once they leave it, where the first few items
+  // are is taken, which is otherwise taken only while they are away.
   function onScroll() {
     const box = scroller.current!
-    stuck.current = box.scrollHeight - box.scrollTop - box.clientHeight <= AT_BOTTOM
+    const top = box.scrollTop
+    const was = stuck.current
+    stuck.current = box.scrollHeight - top - box.clientHeight <= AT_BOTTOM || (was && top >= lastTop.current)
+    lastTop.current = top
+    if (was && !stuck.current) drawn.current = firstItems(box)
     setScrolledUp(!stuck.current)
     readIfNearTop()
   }
@@ -112,17 +128,28 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
   // After each change, before it is shown: kept at the bottom, or moved by
   // as far as the first of the items drawn last time that is still there.
   // A few are kept, since the first can change as the page before joins
-  // its turn to the rest.
+  // its turn to the rest. At the bottom, it is kept there once a frame,
+  // however often it was drawn since, just before the frame is shown:
+  // asking how tall the conversation is, or where anything in it is, lays
+  // all of it out, which for every piece of a fast stream into a long
+  // session was most of a phone's time.
   useLayoutEffect(() => {
     const box = scroller.current
     if (!box) return
-    const placed = (key: string) => box.querySelector<HTMLElement>(`[data-item="${CSS.escape(key)}"]`)
-    if (stuck.current) box.scrollTop = box.scrollHeight
-    else {
-      const anchor = drawn.current.find((each) => placed(each.key) !== null)
-      if (anchor) box.scrollTop += placed(anchor.key)!.offsetTop - anchor.top
+    if (stuck.current) {
+      following.current ||= requestAnimationFrame(() => {
+        following.current = 0
+        const box = scroller.current
+        if (!box || !stuck.current) return
+        box.scrollTop = box.scrollHeight
+        readIfNearTop()
+      })
+      return
     }
-    drawn.current = [...box.querySelectorAll<HTMLElement>("[data-item]")].slice(0, ANCHORS).map((each) => ({ key: each.dataset.item!, top: each.offsetTop }))
+    const placed = (key: string) => box.querySelector<HTMLElement>(`[data-item="${CSS.escape(key)}"]`)
+    const anchor = drawn.current.find((each) => placed(each.key) !== null)
+    if (anchor) box.scrollTop += placed(anchor.key)!.offsetTop - anchor.top
+    drawn.current = firstItems(box)
     readIfNearTop()
   })
   // What grows by itself, as a reply rewrapping when the window is resized,
