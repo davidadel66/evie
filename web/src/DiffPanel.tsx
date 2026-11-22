@@ -261,13 +261,13 @@ function SessionDiff({ connection, session, project, narrow }: { connection: Con
 // given, then at desktop width the button that closes it.
 function Top({ narrow, children }: { narrow: boolean; children?: ReactNode }) {
   return (
-    <header className={`flex h-header-height shrink-0 items-center gap-1 border-b border-line pr-4 ${narrow ? "pl-2" : "pl-7"}`}>
+    <header className={`flex h-header-height shrink-0 items-center gap-1 border-b border-line pr-3 ${narrow ? "pl-2" : "pl-gutter"}`}>
       {narrow && (
         <Button variant="icon" aria-label="Back to the conversation" onClick={closeDiff}>
           <CaretLeft />
         </Button>
       )}
-      {children ?? <h2 className="flex-1 text-title text-text">Diff</h2>}
+      {children ?? <h2 className="flex-1 text-label text-text">Diff</h2>}
       {!narrow && (
         <Button variant="icon" aria-label="Close the diff" title={`Close the diff (${/Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘D" : "Ctrl+D"})`} onClick={closeDiff}>
           <X />
@@ -288,7 +288,7 @@ function Toggle({ label, pressed, onClick, children }: { label: string; pressed:
 }
 
 function Quiet({ children }: { children: ReactNode }) {
-  return <p className="px-7 py-6 text-body text-text-muted">{children}</p>
+  return <p className="px-gutter py-4 text-body text-text-muted">{children}</p>
 }
 
 // What there is no change to show in, by what is compared.
@@ -325,7 +325,7 @@ function Body({
   if (read === undefined) {
     if (listProblem !== undefined) return <Problem text={listProblem} tryAgain={tryAgain} />
     return (
-      <p className="flex min-h-control items-center gap-2 px-7 py-6 text-body text-status-working">
+      <p className="flex min-h-control items-center gap-2 px-gutter py-4 text-body text-status-working">
         <Spinner />
         Reading the changes
       </p>
@@ -338,7 +338,7 @@ function Body({
   const line = changedFilesLine(files)
   return (
     <>
-      <p className="flex flex-wrap items-center gap-2 px-7 pt-4 pb-3 text-caption text-text-muted">
+      <p className="flex flex-wrap items-center gap-2 px-gutter pt-4 pb-3 text-caption text-text-muted">
         {line.files}
         <Counts added={line.added} removed={line.removed} />
         {read.base !== undefined && <span>against {read.base}</span>}
@@ -352,7 +352,7 @@ function Body({
 
 function Problem({ text, tryAgain }: { text: string; tryAgain(): void }) {
   return (
-    <div className="flex flex-col items-start px-7 py-6">
+    <div className="flex flex-col items-start px-gutter py-4">
       <p className="text-body break-words text-text-muted">{text}</p>
       <Button variant="quiet" onClick={tryAgain} className="-ml-3">
         Try again
@@ -367,7 +367,7 @@ function FileSection({ file, layout, folded, fold }: { file: FileDiff; layout: "
   return (
     <section data-file={file.path} aria-label={file.path} className="border-t border-line">
       <h3 className="sticky top-0 z-10 bg-bg">
-        <button type="button" aria-expanded={!folded} onClick={fold} title={file.path} className="flex h-row-height w-full min-w-0 items-center gap-2 border-b border-line pr-4 pl-7 text-left">
+        <button type="button" aria-expanded={!folded} onClick={fold} title={file.path} className="flex h-row-height w-full min-w-0 items-center gap-2 border-b border-line pr-3 pl-gutter text-left">
           <CaretRight className={`size-icon-sm shrink-0 text-text-muted transition-transform motion-reduce:transition-none ${folded ? "" : "rotate-90"}`} />
           <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{file.path}</span>
           {file.status !== "changed" && <span className="shrink-0 text-caption text-text-muted">{file.status === "added" ? "Added" : "Removed"}</span>}
@@ -385,7 +385,7 @@ const MOST_LINES = 3000
 
 function FileDiffBody({ file, layout }: { file: FileDiff; layout: "stacked" | "split" }) {
   const drawn = useMemo(() => drawnLines(hunksOf(file.patch ?? ""), MOST_LINES), [file.patch])
-  const note = (text: string) => <p className="px-7 py-3 text-caption text-text-muted">{text}</p>
+  const note = (text: string) => <p className="px-gutter py-3 text-caption text-text-muted">{text}</p>
   if (file.submodule) return note("Submodule changed")
   if (file.tooMany) return note("Not compared: one comparison reads at most 300 files.")
   if (file.tooSlow) return note("Not compared: comparing it took too long.")
@@ -400,24 +400,24 @@ function FileDiffBody({ file, layout }: { file: FileDiff; layout: "stacked" | "s
     <div className="pb-3 font-mono text-code">
       {drawn.hunks.map((hunk) => (
         <Fragment key={hunk.header}>
-          <div className="px-7 py-1 wrap-anywhere text-text-muted select-none">{hunk.header}</div>
+          <div className="px-gutter py-1 wrap-anywhere text-text-muted select-none">{hunk.header}</div>
           {layout === "stacked"
             ? hunk.lines.map((line, at) => (
-                <div key={at} className={`flex px-7 ${washOf(line)}`}>
+                <div key={at} className={`flex px-gutter ${washOf(line)}`}>
                   <LineNumber value={line.old} style={number} />
                   <LineNumber value={line.new} style={number} />
                   <Text line={line} />
                 </div>
               ))
             : sideBySide(hunk.lines).map((row, at) => (
-                <div key={at} className="flex px-7">
+                <div key={at} className="flex px-gutter">
                   <Half line={row.left} side="old" style={number} />
                   <Half line={row.right} side="new" style={number} />
                 </div>
               ))}
         </Fragment>
       ))}
-      {drawn.cut && <p className="px-7 pt-3 font-sans text-caption text-text-muted">This file is too large to show in full</p>}
+      {drawn.cut && <p className="px-gutter pt-3 font-sans text-caption text-text-muted">This file is too large to show in full</p>}
     </div>
   )
 }

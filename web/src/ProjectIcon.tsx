@@ -105,8 +105,8 @@ export function ProjectGlyph({ project }: { project: string }) {
 
 // A project's small tile and its name, as a session row's first line
 // shows them, as a link to the project's workspace. Above the row's own
-// link, it reaches into the row's padding, for the pointer, and a little
-// past it, so that a finger has the board's 44px.
+// link, it reaches into the row's padding, and a little past it, so that
+// it is easier to aim at.
 export function ProjectLink({ project, name }: { project: string; name: string | undefined }) {
   return (
     <span className="flex min-w-0 flex-1">

@@ -30,7 +30,7 @@ function Shown({ storage, project, place, now }: { storage: Storage; project: Li
   if (place.file !== undefined) return <FileShown state={state} path={place.file} back={back} now={now} />
   const top = state.folders.get("")
   return (
-    <div className="flex flex-col gap-8 px-4 py-6 wide:px-7">
+    <div className="flex flex-col gap-8 px-gutter py-4">
       <section aria-label="Files" className="flex flex-col">
         <div className="flex items-baseline justify-between gap-4 px-3 pb-2 text-caption text-text-muted">
           <h2>Files in .evie</h2>
@@ -115,7 +115,7 @@ function FileShown({ state, path, back, now }: { state: StorageState; path: stri
   const read = file?.read
   return (
     <div className="flex min-w-0 flex-col">
-      <div className="flex min-h-row-height items-center gap-2 border-b border-line py-1 pr-4 pl-2 wide:pr-7 wide:pl-4">
+      <div className="flex min-h-row-height items-center gap-2 border-b border-line py-1 pr-gutter wide:pl-2">
         <a href={back} className="inline-flex h-control shrink-0 items-center gap-2 rounded-md px-3 text-body text-text-muted hover:text-text">
           <CaretLeft className="size-icon-sm" />
           Storage
@@ -129,7 +129,7 @@ function FileShown({ state, path, back, now }: { state: StorageState; path: stri
           </span>
         )}
       </div>
-      <div className="px-4 py-6 wide:px-7">
+      <div className="px-gutter py-4">
         {file?.problem !== undefined ? (
           <p className="text-body break-words text-text-muted">{file.problem}</p>
         ) : read === undefined ? (

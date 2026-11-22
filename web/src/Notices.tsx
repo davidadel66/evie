@@ -135,16 +135,16 @@ export function Notices({ connection, sessions }: { connection: Connection; sess
   return (
     <div role="region" aria-label="Notices" aria-live="polite" className="pointer-events-none fixed top-header-height right-4 z-50 flex w-notice flex-col gap-2">
       {shown.map((each) => (
-        <section key={each.id} aria-label={`${WORDS[each.notice]}: ${each.name}`} className="pointer-events-auto flex items-center gap-2 rounded-md border border-line bg-surface py-2 pr-2 pl-4 shadow-float">
+        <section key={each.id} aria-label={`${WORDS[each.notice]}: ${each.name}`} className="pointer-events-auto flex items-center gap-2 rounded-md border border-line bg-surface py-2 pr-2 pl-3 shadow-float">
           <div className="flex min-w-0 flex-1 flex-col gap-1 py-1">
             <State notice={each.notice} />
             <p className="truncate text-label text-text">{each.name}</p>
             {each.error !== undefined && <p className="truncate text-caption text-text-muted">{each.error}</p>}
           </div>
-          <Button variant="secondary" onClick={() => select({ session: each.session })}>
+          <Button variant="secondary" onClick={() => select({ session: each.session })} className="h-control-sm px-2 text-caption">
             Open
           </Button>
-          <Button variant="icon" aria-label="Dismiss" onClick={() => setShown((was) => was.filter((other) => other.id !== each.id))}>
+          <Button variant="icon" aria-label="Dismiss" onClick={() => setShown((was) => was.filter((other) => other.id !== each.id))} className="size-control-sm">
             <X />
           </Button>
         </section>

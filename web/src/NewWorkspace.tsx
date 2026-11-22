@@ -109,7 +109,7 @@ function Form({ connection, sessions, made }: { connection: Connection; sessions
           placeholder="~/finances"
           value={folder}
           onChange={(event) => setTyped(event.target.value)}
-          className="font-mono text-code"
+          className="font-mono"
         />
         <p id={ids.about} className="text-caption text-text-muted">
           Made when it is missing. A folder already there, such as a code repository, is added as it is.

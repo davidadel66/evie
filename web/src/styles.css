@@ -5,7 +5,8 @@
 
 /* Tailwind's theme holds the design system's tokens and nothing else, so
    that each class names one: bg-bg-side, text-text-muted, text-caption,
-   p-7, rounded-md, shadow-float. The values are copied from its tokens.json. */
+   p-7, rounded-md, shadow-float. The colours are copied from its
+   tokens.json; the sizes are T3 Code's, at every width, phone included. */
 @theme {
   --*: initial;
 
@@ -15,52 +16,67 @@
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
-  --text-caption: 13px;
-  --text-caption--line-height: 18px;
-  --text-body: 15px;
-  --text-body--line-height: 21px;
-  --text-label: 15px;
-  --text-label--line-height: 21px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  /* A reply and the owner's message, on T3 Code's looser line for reading. */
+  --text-prose: 14px;
+  --text-prose--line-height: 1.625;
+  /* What is typed into a text box or the message box. At phone width it
+     is 16px, set below, so that iOS does not zoom the page in when one is
+     tapped, as T3 Code's are. */
+  --text-field: 14px;
+  --text-field--line-height: 1.625;
+  --text-label: 14px;
+  --text-label--line-height: 20px;
   --text-label--font-weight: 600;
-  --text-title: 17px;
-  --text-title--line-height: 22px;
+  --text-title: 16px;
+  --text-title--line-height: 24px;
   --text-title--font-weight: 600;
   --text-title--letter-spacing: -0.01em;
-  --text-page-title: 22px;
+  --text-page-title: 20px;
   --text-page-title--line-height: 28px;
   --text-page-title--font-weight: 600;
   --text-page-title--letter-spacing: -0.01em;
-  --text-figure: 28px;
+  --text-figure: 24px;
   --text-figure--line-height: 32px;
   --text-figure--font-weight: 600;
   --text-figure--letter-spacing: -0.02em;
   /* With font-mono. */
   --text-code: 13px;
-  --text-code--line-height: 18px;
+  --text-code--line-height: 20px;
 
   /* The spacing steps, and nothing between them, so that p-1 is space-1
      (4px) and p-7 is space-7 (28px), and a class off the scale, such as
-     p-5, is not made at all. */
+     p-9, is not made at all. */
   --spacing-0: 0px;
   --spacing-1: 4px;
   --spacing-2: 8px;
   --spacing-3: 12px;
   --spacing-4: 16px;
+  --spacing-5: 20px;
   --spacing-6: 24px;
   --spacing-7: 28px;
   --spacing-8: 32px;
 
   /* The fixed sizes, by their names: h-row-height, h-header-height. */
-  --spacing-row-height: 44px;
-  --spacing-header-height: 56px;
+  --spacing-row-height: 32px;
+  --spacing-work-row: 24px;
+  --spacing-header-height: 52px;
   --spacing-rail-width: 64px;
   --spacing-side-chat-width: 360px;
+  /* The page's side padding: 20px, and 12px at phone width, set below. */
+  --spacing-gutter: 20px;
+  /* The least a finger aims at: on a touch screen, a button reaches this
+     far round itself, unseen, as T3 Code's do. */
   --spacing-touch-min: 44px;
+  --spacing-icon-xs: 12px;
   --spacing-icon-sm: 16px;
   --spacing-icon-md: 20px;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
   --radius-lg: 16px;
   --radius-full: 9999px;
   /* A project's icon tile: corners a quarter of its size, at any size. */
@@ -98,9 +114,11 @@
   }
 
   /* Sizes of the layout that the design system's board does not name yet,
-     set here once, by a name each: w-session-list, max-w-sign-in-column. */
-  --spacing-session-list: 288px;
-  --spacing-project-card: 320px;
+     set here once, by a name each: w-session-list, max-w-sign-in-column.
+     The session list is as wide as T3 Code's sidebar, and the project card
+     as its details panel. */
+  --spacing-session-list: 256px;
+  --spacing-project-card: 280px;
   /* The project card as a sheet over the page, at 980px or narrower: about
      88% of the screen, and no wider than T3 Code's right panel. */
   --spacing-card-sheet: min(88vw, 448px);
@@ -111,22 +129,27 @@
   /* The command palette: as wide as T3 Code's, and its rows at most this
      tall before they scroll. */
   --spacing-palette: 576px;
-  --spacing-palette-list: min(448px, 60dvh);
-  /* A notice floating at the top of the page, within the page's 16px sides
-     at phone width. */
+  --spacing-palette-list: min(420px, 60dvh);
+  /* A notice floating at the top of the page, at least 16px from the
+     screen's sides at phone width. */
   --spacing-notice: min(360px, calc(100vw - 32px));
   --spacing-sign-in-column: 400px;
-  /* The conversation in the middle column, at most this wide, and the room
-     a tool call's name takes in a turn's steps, as the board's Message
-     draws them. */
-  --spacing-conversation: 740px;
+  /* The conversation in the middle column, at most as wide as T3 Code's,
+     and the room a tool call's name takes in a turn's steps, as the
+     board's Message draws them. */
+  --spacing-conversation: 736px;
   --spacing-call-name: 48px;
-  /* Buttons are at least 40px tall, and so are a menu's items; a menu is
-     at least this wide. */
-  --spacing-control: 40px;
+  /* Buttons and text boxes are 32px tall, as T3 Code's; small buttons,
+     such as the chips under the message box's text, and the items of a
+     menu, the palette or a picker, are 28px, as T3 Code's are. A menu is at
+     least this wide, and one of sentences, such as the context meter's, at
+     most this wide, at least 16px from the screen's sides at phone width. */
+  --spacing-control: 32px;
+  --spacing-control-sm: 28px;
   --spacing-menu: 176px;
-  /* The widest a dialog is. */
-  --spacing-dialog: 400px;
+  --spacing-menu-wide: min(400px, calc(100vw - 32px));
+  /* The widest a dialog is, as T3 Code's. */
+  --spacing-dialog: 512px;
   /* The settings window: the widest it is, its height, kept within the
      page's, its column of pages, and a text box beside a setting. */
   --spacing-settings: 720px;
@@ -140,9 +163,10 @@
      the icon on the strip's is icon-md. */
   --spacing-tile-header: 28px;
   --spacing-tile-strip: 44px;
-  /* The project icon picker: six 40px columns, as many as the colours, and
-     the tallest its icons grow before they scroll. */
-  --spacing-icon-picker: 280px;
+  /* The project icon picker: six 32px columns, as many as the colours, the
+     gaps between them, its padding and its line; and the tallest its icons
+     grow before they scroll. */
+  --spacing-icon-picker: 230px;
   --spacing-icon-grid: 220px;
   /* The least a workspace's name keeps in its header, cut with an
      ellipsis, before its tabs scroll sideways instead. */
@@ -152,8 +176,8 @@
   /* The message box: the tallest its text grows before it scrolls; the
      tallest the / menu and the model picker above it are, as T3 Code's;
      and the picker's column of makers. */
-  --spacing-composer-text: 240px;
-  --spacing-composer-menu: 320px;
+  --spacing-composer-text: 208px;
+  --spacing-composer-menu: 288px;
   --spacing-picker-makers: 144px;
   /* The tallest a background job's output grows in the project card
      before it scrolls. */
@@ -163,7 +187,7 @@
   /* Files attached: the thumbnail in a chip above the message box's text,
      the largest an image attached shows in the conversation, and the
      largest it shows opened, within the page. */
-  --spacing-attachment-chip: 32px;
+  --spacing-attachment-chip: 24px;
   --spacing-attachment-shown: 160px;
   --spacing-image-open: min(90vw, 1200px);
   --spacing-image-open-height: 80dvh;
@@ -216,14 +240,14 @@
     line-height: var(--text-body--line-height);
   }
 
-  /* At phone width, where a finger aims, every button and menu item is at
-     least as tall as the board's touch-min. */
+  /* At phone width the sizes stay as dense as at desktop width, as T3
+     Code's do, but for two: the page's side padding is narrower, and what
+     is typed into a text box is 16px, below which iOS zooms the page in
+     when a text box is tapped. */
   @media (width < 768px) {
     :root {
-      --spacing-control: var(--spacing-touch-min);
-      /* The icon picker's six columns grow with them: six 44px columns,
-         the gaps between them and its padding. */
-      --spacing-icon-picker: 300px;
+      --spacing-gutter: 12px;
+      --text-field: 16px;
     }
   }
 

@@ -55,15 +55,25 @@ test("the spacing scale has only the design system's steps and named sizes, so a
   try {
     const sheet = join(folder, "classes.css")
     const styles = join(import.meta.dir, "..", "web", "src", "styles.css")
-    await writeFile(sheet, `@import "${styles}";\n@source inline("p-1 p-7 p-8 w-session-list p-5 h-10 m-9");\n`)
+    await writeFile(sheet, `@import "${styles}";\n@source inline("p-1 p-5 p-7 p-8 w-session-list p-9 h-10 m-12");\n`)
     const built = await Bun.build({ entrypoints: [sheet], plugins: [tailwind] })
     const style = await built.outputs[0]!.text()
 
-    for (const made of ["p-1", "p-7", "p-8", "w-session-list"]) expect(style).toContain(`.${made} {`)
-    for (const offScale of ["p-5", "h-10", "m-9"]) expect(style).not.toContain(`.${offScale} {`)
+    for (const made of ["p-1", "p-5", "p-7", "p-8", "w-session-list"]) expect(style).toContain(`.${made} {`)
+    for (const offScale of ["p-9", "h-10", "m-12"]) expect(style).not.toContain(`.${offScale} {`)
   } finally {
     await rm(folder, { recursive: true, force: true })
   }
+})
+
+test("what is typed into a text box is 14px, as T3 Code's, and 16px at phone width, so that iOS does not zoom the page in when one is tapped", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const style = await Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.text()
+
+  expect(style).toMatch(/--text-field:14px;/)
+  expect(style).toMatch(/@media \(max-width:767\.9+px\)\{:root\{[^}]*--text-field:16px[;}]/)
+  expect(style).toContain(".text-field{font-size:var(--text-field);")
 })
 
 test("the page puts itself in the theme this browser picked before it is first drawn", async () => {

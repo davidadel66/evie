@@ -106,9 +106,9 @@ export function PermissionPrompt({ question, count, answer, redirect }: { questi
                 <CaretDown className="size-icon-sm" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-w-dialog">
+            <DropdownMenuContent align="start" className="max-w-menu-wide">
               {more.map((choice) => (
-                <DropdownMenuItem key={choice} onSelect={() => void pick(choice)} className="h-auto min-h-control py-2 whitespace-normal">
+                <DropdownMenuItem key={choice} onSelect={() => void pick(choice)} className="h-auto min-h-control-sm py-1 whitespace-normal">
                   {choice}
                 </DropdownMenuItem>
               ))}
@@ -148,12 +148,12 @@ export function DockedQuestion({ question, count, answer }: { question: Asked; c
     return () => document.removeEventListener("keydown", onKey)
   }, [question])
   return (
-    <section aria-label="Question from evie" className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 shadow-float">
+    <section aria-label="Question from evie" className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-3 shadow-float">
       <QuestionText text={question.text} />
       <ol className="flex flex-wrap gap-2">
         {question.choices.map((choice, at) => (
           <li key={choice}>
-            <Button variant="secondary" className="h-auto min-h-control rounded-full py-2 text-left whitespace-normal" onClick={() => void pick(choice)}>
+            <Button variant="secondary" className="h-auto min-h-control rounded-full py-1 text-left whitespace-normal" onClick={() => void pick(choice)}>
               <span className="text-text-muted">{at + 1}</span>
               {choice}
             </Button>

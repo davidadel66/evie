@@ -1,7 +1,8 @@
 // Adapted from shadcn/ui's dialog (MIT licence, notice in
 // LICENSES/shadcn-ui-MIT.txt): only the parts the web app uses, styled to
-// the design system. It floats, so it has a surface: a 1px line, 10px
-// corners and the floating shadow, centred within the page's side padding.
+// the design system. It floats, so it has a surface: a 1px line, 16px
+// corners, as T3 Code's dialogs have, and the floating shadow, centred
+// within 16px of the page's sides.
 // Radix closes it on Escape, on a click outside and by its close button,
 // keeps the focus inside it while it is open, and gives the focus back to
 // the button that opened it.
@@ -31,7 +32,7 @@ function DialogContent({ className, ...props }: ComponentProps<typeof DialogPrim
       <DialogPrimitive.Content
         data-slot="dialog-content"
         aria-describedby={undefined}
-        className={cn("fixed inset-x-7 top-1/2 z-50 mx-auto flex max-w-dialog -translate-y-1/2 flex-col gap-6 rounded-md border border-line bg-surface p-6 text-body text-text shadow-float", className)}
+        className={cn("fixed inset-x-4 top-1/2 z-50 mx-auto flex max-w-dialog -translate-y-1/2 flex-col gap-4 rounded-lg border border-line bg-surface p-6 text-body text-text shadow-float", className)}
         {...props}
       />
     </DialogPrimitive.Portal>

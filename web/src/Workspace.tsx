@@ -79,12 +79,12 @@ export function WorkspaceView({ place, state, connection, sessions }: { place: W
 
 // The strip: the way back to the session view, a tile for every workspace,
 // the one open ringed in its colour, each with a dot while a session in it
-// needs the owner, and New workspace at the end. Moving to another
-// workspace keeps the tab.
+// needs the owner, and New workspace at the end, each button as big as a
+// tile. Moving to another workspace keeps the tab.
 function Strip({ list, place, back, connection, sessions }: { list: SessionList; place: WorkspacePlace; back: string; connection: Connection; sessions: Sessions }) {
   return (
-    <nav aria-label="Workspaces" className="flex shrink-0 items-center gap-3 overflow-x-auto bg-bg-side px-4 py-2 wide:w-rail-width wide:flex-col wide:overflow-x-hidden wide:overflow-y-auto wide:px-0 wide:py-3">
-      <a href={back} aria-label="Back to the sessions" title="Back to the sessions" className={cn(buttonVariants({ variant: "icon" }), "size-touch-min")}>
+    <nav aria-label="Workspaces" className="flex shrink-0 items-center gap-3 overflow-x-auto bg-bg-side px-gutter py-2 wide:w-rail-width wide:flex-col wide:overflow-x-hidden wide:overflow-y-auto wide:px-0 wide:py-3">
+      <a href={back} aria-label="Back to the sessions" title="Back to the sessions" className={cn(buttonVariants({ variant: "icon" }), "size-tile-strip [&>svg]:size-icon-md")}>
         <ChatsCircle />
       </a>
       <ul className="flex shrink-0 items-center gap-3 wide:flex-col">
@@ -108,7 +108,7 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
         })}
       </ul>
       <NewWorkspace connection={connection} sessions={sessions}>
-        <button type="button" aria-label="New workspace" title="New workspace" className={cn(buttonVariants({ variant: "icon" }), "size-touch-min")}>
+        <button type="button" aria-label="New workspace" title="New workspace" className={cn(buttonVariants({ variant: "icon" }), "size-tile-strip [&>svg]:size-icon-md")}>
           <Plus />
         </button>
       </NewWorkspace>
@@ -124,7 +124,7 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
 // board's tab rows do at phone width.
 function Header({ project, place, connection, sessions }: { project: ListedProject; place: WorkspacePlace; connection: Connection; sessions: Sessions }) {
   return (
-    <header className="flex h-header-height shrink-0 items-center gap-4 border-b border-line px-4 wide:gap-6 wide:px-7">
+    <header className="flex h-header-height shrink-0 items-center gap-4 border-b border-line px-gutter wide:gap-6">
       <h1 className="flex flex-1 text-title text-text">
         <IconPicker connection={connection} sessions={sessions} project={project}>
           <button type="button" title="Pick its icon and colour" className="-ml-2 flex h-control items-center gap-2 rounded-md px-2">
@@ -167,7 +167,7 @@ function Tab({ name, tab, place }: { name: string; tab: WorkspaceTab; place: Wor
 function SessionsTab({ list, place, now }: { list: SessionList; place: WorkspacePlace; now: number }) {
   const shown = sessionsOf(list.sessions, place.workspace)
   return (
-    <section aria-label="Sessions" className="flex flex-col px-4 py-6 wide:px-7">
+    <section aria-label="Sessions" className="flex flex-col px-gutter py-4">
       <h2 className="px-3 pb-2 text-caption text-text-muted">Sessions</h2>
       {list.listed && shown.length === 0 ? (
         <p className="border-t border-line px-3 pt-3 text-caption text-text-muted">No sessions here yet. Write to evie in the side chat to start one.</p>
@@ -283,7 +283,7 @@ function ChatHeader({ title, add, full, rename }: { title: string; add?: string;
   }, [rename !== undefined])
   return (
     <>
-      <header className="flex h-header-height shrink-0 items-center gap-1 border-b border-line pr-2 pl-7">
+      <header className="flex h-header-height shrink-0 items-center gap-1 border-b border-line pr-2 pl-gutter">
         {rename === undefined ? <h2 className="min-w-0 flex-1 truncate text-label text-text">{title}</h2> : <HeaderName title={title} rename={rename} said={setNote} small />}
         {add !== undefined && (
           <a href={add} aria-label="New session here" title="New session here" className={buttonVariants({ variant: "icon" })}>
@@ -296,7 +296,7 @@ function ChatHeader({ title, add, full, rename }: { title: string; add?: string;
           </a>
         )}
       </header>
-      <div role="status">{note !== undefined && <p className="px-7 pt-3 text-caption text-text-muted">{note}</p>}</div>
+      <div role="status">{note !== undefined && <p className="px-gutter pt-3 text-caption text-text-muted">{note}</p>}</div>
     </>
   )
 }

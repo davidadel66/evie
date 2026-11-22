@@ -303,7 +303,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   const collapsedNow = collapsed && attached.length === 0
 
   return (
-    <div className="shrink-0 px-4 pb-4 wide:px-7 wide:pb-6">
+    <div className="shrink-0 px-gutter pb-4 wide:pb-5">
       <div className="mx-auto flex max-w-conversation flex-col gap-2">
         {docked && <DockedQuestion question={docked.question} count={docked.count} answer={answer} />}
         {problem !== undefined && (
@@ -378,8 +378,8 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
             className={cn("flex rounded-lg border border-line bg-surface", collapsedNow ? "items-center gap-2 py-1 pr-1 pl-4" : "flex-col gap-1 pt-3 pr-2 pb-2 pl-4")}
           >
             {attached.length > 0 && <AttachedFiles attached={attached} remove={(key) => setAttached((now) => now.filter((each) => each.key !== key))} />}
-            {/* At phone width the text's line is as tall as a finger's tap, on one row or whole. */}
-            <label className="flex min-w-0 flex-1 items-center self-stretch max-wide:min-h-touch-min">
+            {/* At phone width the text's line is as tall as a button, on one row or whole. */}
+            <label className="flex min-w-0 flex-1 items-center self-stretch max-wide:min-h-control">
               <span className="sr-only">Message evie</span>
               <textarea
                 ref={box}
@@ -412,7 +412,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
                 }}
                 // One row until tapped: the text runs on, not onto a second line.
                 wrap={collapsedNow ? "off" : "soft"}
-                className="max-h-composer-text w-full resize-none overflow-y-auto bg-transparent text-body text-text outline-none placeholder:text-text-muted"
+                className="max-h-composer-text w-full resize-none overflow-y-auto bg-transparent text-field text-text outline-none placeholder:text-text-muted"
               />
             </label>
             <div className={cn("flex min-w-0 items-center gap-2", !collapsedNow && "justify-end")}>
@@ -430,12 +430,12 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
               {!collapsedNow && (
                 // Pressed, the box keeps the focus, so that at phone width it
                 // stays open while the files are chosen.
-                <Button variant="icon" aria-label="Attach files" title="Attach files" onPointerDown={(event) => event.preventDefault()} onClick={() => chooser.current?.click()} className="mr-auto -ml-2">
+                <Button variant="icon" aria-label="Attach files" title="Attach files" onPointerDown={(event) => event.preventDefault()} onClick={() => chooser.current?.click()} className="mr-auto -ml-1 size-control-sm">
                   <Paperclip />
                 </Button>
               )}
               {!collapsedNow && (
-                <div className="flex min-w-0 items-center text-caption text-text-muted">
+                <div className="flex min-w-0 items-center text-body text-text-muted">
                   <ModelName model={model.current} toggle={() => setPicking((open) => !open)} />
                   {conversation && state && <ContextMeter conversation={conversation} state={state} opened={setMeterOpen} />}
                 </div>
@@ -452,7 +452,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   )
 }
 
-// Stop, as T3 Code's: a round button with a square in it, beside Send. Once
+// Stop, as T3 Code's: a round button with a small square in it, beside Send. Once
 // pressed, it says Stopping until the turn has ended.
 function StopButton({ stopping, stop }: { stopping: boolean; stop(): void }) {
   if (stopping) {
@@ -465,13 +465,13 @@ function StopButton({ stopping, stop }: { stopping: boolean; stop(): void }) {
   }
   return (
     <Button variant="secondary" aria-label="Stop" title={`Stop (${label("stop", onMac())})`} onClick={stop} className="size-control rounded-full p-0">
-      <StopFill className="size-icon-sm" />
+      <StopFill className="size-icon-xs" />
     </Button>
   )
 }
 
-// The model's name, the part of its id after the maker's, which opens the
-// picker, and closes it again.
+// The model's name, the part of its id after the maker's, as a small
+// button, as T3 Code's chips are, which opens the picker, and closes it again.
 function ModelName({ model, toggle }: { model: string | undefined; toggle(): void }) {
   if (model === undefined) return null
   return (
@@ -481,7 +481,7 @@ function ModelName({ model, toggle }: { model: string | undefined; toggle(): voi
       data-picker-toggle=""
       title={`${model}. Pick another with /model or ${label("model", onMac())}`}
       aria-label={`Model: ${model}. Pick another`}
-      className="min-w-0 px-2 text-caption"
+      className="h-control-sm min-w-0 px-2 text-body"
     >
       <span className="truncate">{model.slice(model.indexOf("/") + 1)}</span>
     </Button>
@@ -495,7 +495,7 @@ function ModelName({ model, toggle }: { model: string | undefined; toggle(): voi
 function ContextMeter({ conversation, state, opened }: { conversation: Conversation; state: ConversationState; opened(open: boolean): void }) {
   if (state.running.includes("compact")) {
     return (
-      <span role="status" className="flex h-control items-center gap-2 px-2 text-status-working">
+      <span role="status" className="flex h-control-sm items-center gap-2 px-2 text-status-working">
         <Spinner />
         Compacting
       </span>
@@ -513,15 +513,15 @@ function MeterMenu({ conversation, meter, opened }: { conversation: Conversation
   return (
     <DropdownMenu onOpenChange={opened}>
       <DropdownMenuTrigger asChild>
-        <Button variant="quiet" aria-label={`Context ${meter.percent} full`} className="min-w-control px-2 text-caption">
+        <Button variant="quiet" aria-label={`Context ${meter.percent} full`} className="h-control-sm min-w-control-sm px-2 text-body">
           {meter.percent}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="end" className="max-w-dialog">
+      <DropdownMenuContent side="top" align="end" className="max-w-menu-wide">
         <DropdownMenuLabel className="text-body text-text">
           {meter.size} of {meter.compactsAt} tokens
         </DropdownMenuLabel>
-        <p className="px-3 pb-2 text-caption text-text-muted">At {meter.compactsAt}, evie replaces the older part of the conversation with a summary by itself.</p>
+        <p className="px-2 pb-2 text-caption text-text-muted">At {meter.compactsAt}, evie replaces the older part of the conversation with a summary by itself.</p>
         <DropdownMenuItem onSelect={() => void conversation.run("compact", "")}>Compact now</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -557,13 +557,13 @@ function CommandMenu({
     if (highlight !== undefined) list.current?.querySelector(`#${id}-${highlight}`)?.scrollIntoView({ block: "nearest" })
   }, [highlight])
   const quiet = (words: string, working = false) => (
-    <p className={cn("flex min-h-control items-center gap-2 px-3 text-caption", working ? "text-status-working" : "text-text-muted")}>
+    <p className={cn("flex min-h-control-sm items-center gap-2 px-2 text-caption", working ? "text-status-working" : "text-text-muted")}>
       {working && <Spinner />}
       {words}
     </p>
   )
   return (
-    <div className="absolute inset-x-0 bottom-full z-40 mb-2 flex max-h-composer-menu flex-col overflow-y-auto rounded-md border border-line bg-surface p-2 shadow-float">
+    <div className="absolute inset-x-0 bottom-full z-40 mb-2 flex max-h-composer-menu flex-col overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-float">
       {listing === "listing" ? (
         quiet("Listing the commands", true)
       ) : listing !== undefined ? (
@@ -582,9 +582,9 @@ function CommandMenu({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => pick(item)}
               onMouseMove={() => at !== highlight && setHighlight(at)}
-              className={cn("flex h-control shrink-0 cursor-default items-center gap-3 rounded-md px-3", at === highlight && "bg-surface-raised")}
+              className={cn("flex h-control-sm shrink-0 cursor-default items-center gap-2 rounded-sm px-2", at === highlight && "bg-surface-raised")}
             >
-              <span className="shrink-0 text-label text-text">/{item.name}</span>
+              <span className="shrink-0 text-caption font-medium text-text">/{item.name}</span>
               <span title={item.description} className="min-w-0 flex-1 truncate text-caption text-text-muted">
                 {item.description}
               </span>
@@ -664,7 +664,7 @@ function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
     <div ref={root} role="dialog" aria-label="Pick a model" className="absolute inset-x-0 bottom-full z-40 mb-2 flex h-composer-menu flex-col overflow-hidden rounded-md border border-line bg-surface shadow-float wide:flex-row">
       <nav
         aria-label="Makers"
-        className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 wide:w-picker-makers wide:flex-col wide:gap-0 wide:overflow-x-hidden wide:overflow-y-auto wide:border-r wide:border-b-0"
+        className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-1 wide:w-picker-makers wide:flex-col wide:gap-0 wide:overflow-x-hidden wide:overflow-y-auto wide:border-r wide:border-b-0"
       >
         {makers.map((each) => (
           <button
@@ -675,7 +675,7 @@ function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
               setQuery("")
               setMaker(each.key)
             }}
-            className="flex h-control shrink-0 items-center rounded-md px-3 text-left text-body text-text-muted hover:text-text aria-[current]:bg-surface-raised aria-[current]:text-text"
+            className="flex h-control-sm shrink-0 items-center rounded-sm px-2 text-left text-body text-text-muted hover:text-text aria-[current]:bg-surface-raised aria-[current]:text-text"
           >
             <span className="truncate">{each.name}</span>
           </button>
@@ -694,18 +694,18 @@ function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
           aria-expanded="true"
           aria-controls="model-list"
           aria-activedescendant={shown.length > 0 ? `model-${highlight}` : undefined}
-          className="h-control shrink-0 border-b border-line bg-transparent px-4 text-body text-text outline-none placeholder:text-text-muted"
+          className="h-control shrink-0 border-b border-line bg-transparent px-3 text-field text-text outline-none placeholder:text-text-muted"
         />
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <div className="min-h-0 flex-1 overflow-y-auto p-1">
           {listed.problem !== undefined ? (
-            <p className="px-3 py-2 text-caption text-text-muted">{listed.problem}</p>
+            <p className="px-2 py-2 text-caption text-text-muted">{listed.problem}</p>
           ) : listed.models === undefined ? (
-            <p className="flex min-h-control items-center gap-2 px-3 text-caption text-status-working">
+            <p className="flex min-h-control-sm items-center gap-2 px-2 text-caption text-status-working">
               <Spinner />
               Listing the models
             </p>
           ) : shown.length === 0 ? (
-            <p className="px-3 py-2 text-caption text-text-muted">{query.trim() === "" ? "No models to pick from." : "No matching model."}</p>
+            <p className="px-2 py-2 text-caption text-text-muted">{query.trim() === "" ? "No models to pick from." : "No matching model."}</p>
           ) : (
             <ul id="model-list" role="listbox" aria-label="Models" className="flex flex-col">
               {shown.map((each, at) => (
@@ -719,7 +719,7 @@ function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => void pick(each.id)}
                   onMouseMove={() => at !== highlight && setHighlight(at)}
-                  className={cn("flex min-h-control shrink-0 cursor-default items-center gap-2 rounded-md px-3 py-1", at === highlight && "bg-surface-raised")}
+                  className={cn("flex min-h-control-sm shrink-0 cursor-default items-center gap-2 rounded-sm px-2 py-1", at === highlight && "bg-surface-raised")}
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-body text-text">{each.name}</span>
@@ -736,7 +736,7 @@ function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
             </ul>
           )}
           {refused !== undefined && (
-            <p role="status" className="px-3 py-2 text-caption text-text-muted">
+            <p role="status" className="px-2 py-2 text-caption text-text-muted">
               {refused}
             </p>
           )}
@@ -756,7 +756,7 @@ function AttachedFiles({ attached, remove }: { attached: Attached[]; remove(key:
       {attached.map(({ key, file }) => (
         <li key={key} className="flex h-control max-w-full min-w-0 items-center gap-2">
           <FileChip file={file} />
-          <Button variant="icon" aria-label={`Remove ${file.name}`} onClick={() => remove(key)} className="-ml-2 [&>svg]:size-icon-sm">
+          <Button variant="icon" aria-label={`Remove ${file.name}`} onClick={() => remove(key)} className="-ml-1 size-control-sm">
             <X />
           </Button>
         </li>
@@ -819,13 +819,13 @@ function FileMenu({
     if (highlight !== undefined) list.current?.querySelector(`#${id}-${highlight}`)?.scrollIntoView({ block: "nearest" })
   }, [highlight])
   const quiet = (words: string, working = false) => (
-    <p className={cn("flex min-h-control items-center gap-2 px-3 text-caption", working ? "text-status-working" : "text-text-muted")}>
+    <p className={cn("flex min-h-control-sm items-center gap-2 px-2 text-caption", working ? "text-status-working" : "text-text-muted")}>
       {working && <Spinner />}
       {words}
     </p>
   )
   return (
-    <div className="absolute inset-x-0 bottom-full z-40 mb-2 flex max-h-composer-menu flex-col overflow-y-auto rounded-md border border-line bg-surface p-2 shadow-float">
+    <div className="absolute inset-x-0 bottom-full z-40 mb-2 flex max-h-composer-menu flex-col overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-float">
       {listing === "listing" ? (
         quiet("Listing the files", true)
       ) : listing !== undefined ? (
@@ -846,10 +846,10 @@ function FileMenu({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => pick(path)}
                 onMouseMove={() => at !== highlight && setHighlight(at)}
-                className={cn("flex h-control shrink-0 cursor-default items-center gap-3 rounded-md px-3", at === highlight && "bg-surface-raised")}
+                className={cn("flex h-control-sm shrink-0 cursor-default items-center gap-2 rounded-sm px-2", at === highlight && "bg-surface-raised")}
               >
                 <FileIcon className="size-icon-sm shrink-0 text-text-muted" />
-                <span className="shrink-0 text-label text-text">{path.slice(cut + 1)}</span>
+                <span className="shrink-0 text-caption font-medium text-text">{path.slice(cut + 1)}</span>
                 {cut > 0 && (
                   <span title={path} className="min-w-0 flex-1 truncate text-caption text-text-muted">
                     {path.slice(0, cut)}

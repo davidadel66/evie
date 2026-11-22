@@ -186,9 +186,9 @@ function Row({
 
 // The session's name, typed in place of its title, as in T3 Code: Enter or
 // leaving the field saves it, and Escape gives it up. It starts with the
-// whole name chosen, to be typed over. `size` is the title's text style:
-// a row's, or the conversation header's.
-function NameField({ title, save, cancel, size = "text-label" }: { title: string; save(typed: string): void; cancel(): void; size?: "text-label" | "text-title" }) {
+// whole name chosen, to be typed over. Its text is a text box's, in the
+// title's weight.
+function NameField({ title, save, cancel }: { title: string; save(typed: string): void; cancel(): void }) {
   const [typed, setTyped] = useState(title)
   // Enter and Escape end the edit, and the field then loses the focus as
   // it goes, which must not save it again.
@@ -211,7 +211,7 @@ function NameField({ title, save, cancel, size = "text-label" }: { title: string
         else cancel()
       }}
       onBlur={() => !ended.current && save(typed)}
-      className={cn("relative z-10 -mx-1 min-w-0 flex-1 rounded-md bg-transparent px-1 text-text focus-visible:outline-offset-0", size)}
+      className="relative z-10 -mx-1 min-w-0 flex-1 rounded-md bg-transparent px-1 text-field font-semibold text-text focus-visible:outline-offset-0"
     />
   )
 }
@@ -220,8 +220,8 @@ function NameField({ title, save, cancel, size = "text-label" }: { title: string
 // types it in place, as in T3 Code, with the same rules as in its row.
 // `said` is told why a name was not taken, or with nothing that there is
 // nothing to say.
-// `small` is the side chat's, a label among the workspace's columns rather
-// than the page's title. The command palette's Rename this session renames
+// `small` is the side chat's, a heading among the workspace's columns
+// rather than the page's title. The command palette's Rename this session renames
 // it here, and so does F2 when the list is out of sight.
 export function HeaderName({ title, rename, said, small = false }: { title: string; rename(name: string): Promise<string | undefined>; said(note: string | undefined): void; small?: boolean }) {
   const [editing, setEditing] = useState(false)
@@ -237,8 +237,7 @@ export function HeaderName({ title, rename, said, small = false }: { title: stri
     said(await rename(result.name))
     setSaving(undefined)
   }
-  const size = small ? "text-label" : "text-title"
-  if (editing) return <NameField title={shown} save={save} cancel={() => setEditing(false)} size={size} />
+  if (editing) return <NameField title={shown} save={save} cancel={() => setEditing(false)} />
   const Heading = small ? "h2" : "h1"
   return (
     <Heading
@@ -246,7 +245,7 @@ export function HeaderName({ title, rename, said, small = false }: { title: stri
         said(undefined)
         setEditing(true)
       }}
-      className={cn("min-w-0 flex-1 truncate text-text", size)}
+      className="min-w-0 flex-1 truncate text-label text-text"
     >
       {shown}
     </Heading>
@@ -271,7 +270,8 @@ function State({ session, now }: { session: SessionSummary; now: number }) {
 // The row's menu, behind an icon button at the end of its title, in a space
 // of its own so that the title always ends in an ellipsis. Taller than its
 // line, for the pointer, without making the line taller, it reaches into the
-// row's padding on the right. It shows on the selected row, and on any row
+// row's padding on the right. It is a small button, as T3 Code's in a row
+// are. It shows on the selected row, and on any row
 // while the pointer is over it or it has the keyboard's focus; otherwise a
 // tap goes through to the row.
 //
@@ -318,7 +318,7 @@ function RowMenu({
           variant="icon"
           aria-label={`Actions for ${title}`}
           className={cn(
-            "relative z-10 -my-3 -mr-3",
+            "relative z-10 -my-1 -mr-2 size-control-sm",
             !selected &&
               "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100",
           )}

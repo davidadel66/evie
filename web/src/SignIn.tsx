@@ -21,9 +21,9 @@ export function SignIn({ connection, state }: { connection: Connection; state: E
 
   const said = failed ?? state.reason
   return (
-    <main className="flex min-h-dvh justify-center bg-bg px-7 py-8 wide:items-center">
+    <main className="flex min-h-dvh justify-center bg-bg px-gutter py-8 wide:items-center">
       <div className="flex w-full max-w-sign-in-column flex-col gap-6">
-        <span className="text-title text-text">evie</span>
+        <span className="text-label text-text">evie</span>
 
         <div className="flex flex-col gap-3">
           <h1 className="text-page-title text-text">Sign in</h1>
@@ -47,7 +47,7 @@ export function SignIn({ connection, state }: { connection: Connection; state: E
             spellCheck={false}
             value={token}
             onChange={(event) => setToken(event.target.value)}
-            className="h-touch-min rounded-md border border-line px-3 font-mono text-code text-text"
+            className="h-control rounded-md border border-line px-3 font-mono text-field text-text"
           />
           {said !== undefined && (
             <p role="alert" className="text-body text-text">
@@ -57,7 +57,7 @@ export function SignIn({ connection, state }: { connection: Connection; state: E
           <button
             type="submit"
             disabled={signingIn}
-            className="h-touch-min rounded-md bg-text px-4 text-label text-bg disabled:bg-transparent disabled:text-text-muted"
+            className="h-control rounded-md bg-text px-3 text-label text-bg disabled:bg-transparent disabled:text-text-muted"
           >
             {signingIn ? "Signing in…" : "Sign in"}
           </button>

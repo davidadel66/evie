@@ -132,7 +132,7 @@ export function Reading({ conversation, readOnly = false, changes }: { conversat
       <div className="relative flex min-h-0 flex-1 flex-col">
         {/* The browser's own anchoring is off, since this keeps the owner's place itself. */}
         <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]">
-          <div ref={content} className="px-7 py-8">
+          <div ref={content} className="px-gutter py-4">
             <div className="mx-auto flex max-w-conversation flex-col">
               {state.readingEarlier && <Working words="Reading the earlier conversation" />}
               {/* What failed is tried again only when asked, or when the line comes back. */}
@@ -147,17 +147,17 @@ export function Reading({ conversation, readOnly = false, changes }: { conversat
               {!state.opened && state.problem === undefined && <Working words="Opening the session" />}
               {state.opened && state.problem === undefined && items.length === 0 && <p className="text-body text-text-muted">Nothing has been said in this session yet.</p>}
               {items.map((item, at) => (
-                <div key={item.key} data-item={item.key} className={`flex flex-col ${at === 0 ? "" : item.turn !== items[at - 1]!.turn ? "mt-6" : "mt-4"}`}>
+                <div key={item.key} data-item={item.key} className={`flex flex-col ${at === 0 ? "" : item.turn !== items[at - 1]!.turn ? "mt-4" : "mt-2"}`}>
                   <Drawn item={item} shown={opens} show={show} />
                 </div>
               ))}
               {state.running.filter((name) => name !== "compact").map((name, at) => (
-                <div key={`${name}${at}`} className={items.length > 0 || at > 0 ? "mt-4" : ""}>
+                <div key={`${name}${at}`} className={items.length > 0 || at > 0 ? "mt-2" : ""}>
                   <Working words={`Running /${name}`} />
                 </div>
               ))}
               {shown?.place === "inline" && (
-                <div data-item="permission" className={items.length > 0 ? "mt-6" : ""}>
+                <div data-item="permission" className={items.length > 0 ? "mt-4" : ""}>
                   <PermissionPrompt question={shown.question} count={shown.count} answer={conversation.answer} redirect />
                 </div>
               )}
@@ -166,7 +166,7 @@ export function Reading({ conversation, readOnly = false, changes }: { conversat
         </div>
         {scrolledUp && (
           <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
-            <Button variant="quiet" onClick={toLatest} className="pointer-events-auto rounded-full bg-surface px-4 shadow-float">
+            <Button variant="quiet" onClick={toLatest} className="pointer-events-auto h-control-sm rounded-full bg-surface px-3 text-caption shadow-float">
               Jump to the latest
             </Button>
           </div>
@@ -238,7 +238,7 @@ function Drafting({ draft, where, moved, inProject }: { draft: OpenedDraft; wher
         {state.starting === undefined ? (
           <Placeholder title="New session" text={`A new session ${where} starts when its first message is sent.`} />
         ) : (
-          <div className="px-7 py-8">
+          <div className="px-gutter py-4">
             <div className="mx-auto flex max-w-conversation flex-col gap-4">
               <Drawn item={{ key: "starting", turn: 0, kind: "owner", text: state.starting }} shown={new Set()} show={() => {}} />
               {shown?.place === "inline" ? <PermissionPrompt question={shown.question} count={shown.count} answer={draft.answer} redirect={false} /> : <Working words="Starting the session" />}
@@ -262,7 +262,7 @@ function Drafting({ draft, where, moved, inProject }: { draft: OpenedDraft; wher
 // The middle column with nothing to read in it: a title and a line.
 export function Placeholder({ title, text }: { title: string; text: string }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-7 py-8 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-1 px-gutter py-8 text-center">
       <h1 className="text-page-title text-text">{title}</h1>
       <p className="max-w-sign-in-column text-body text-text-muted">{text}</p>
     </div>
@@ -277,7 +277,7 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
     case "owner":
       return (
         <>
-          {item.text !== "" && <p className="max-w-4/5 self-end rounded-lg bg-surface-raised px-4 py-2 text-body break-words whitespace-pre-wrap text-text">{item.text}</p>}
+          {item.text !== "" && <p className="max-w-4/5 self-end rounded-lg bg-surface-raised p-3 text-prose break-words whitespace-pre-wrap text-text">{item.text}</p>}
           {item.attachments !== undefined && <Attachments attachments={item.attachments} spaced={item.text !== ""} />}
           {item.sending !== undefined && <SendingFiles files={item.sending} spaced={item.text !== ""} />}
         </>
@@ -297,7 +297,7 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
       return <TurnChangedFiles turn={item.number} files={item.files} />
     case "failed":
       return (
-        <div className="text-caption">
+        <div className="text-body">
           <p className="text-status-failed">Failed</p>
           <p className="break-words text-text-muted">{item.error}</p>
         </div>
@@ -368,13 +368,14 @@ function Attachments({ attachments, spaced }: { attachments: ShownAttachment[]; 
 // reply above it again.
 const Markdown = memo(function Markdown({ text, className }: { text: string; className: string }) {
   const drawn = useMemo(() => renderMarkdown(text), [text])
-  return <div className={`text-body break-words [&>*+*]:mt-3 ${className}`}>{drawn}</div>
+  return <div className={`text-prose break-words [&>*+*]:mt-3 ${className}`}>{drawn}</div>
 })
 
-// Working, as the design system says it: the word, with a small spinner.
+// Working, as the design system says it: the word, with a small spinner,
+// on a row of the work log.
 function Working({ words }: { words: string }) {
   return (
-    <p className="flex min-h-control items-center gap-2 text-body text-status-working">
+    <p className="flex min-h-work-row items-center gap-2 text-body text-status-working">
       <Spinner />
       {words}
     </p>
@@ -383,7 +384,7 @@ function Working({ words }: { words: string }) {
 
 // A caret that turns as what it opens opens.
 function Caret({ open }: { open: boolean }) {
-  return <CaretRight className={`size-icon-sm shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
+  return <CaretRight className={`size-icon-xs shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
 }
 
 // A completed turn's work before its final reply, as one quiet line that
@@ -393,12 +394,12 @@ function Fold({ item, shown, show }: { item: Extract<Item, { kind: "fold" }> } &
   const open = shown.has(item.key)
   return (
     <div className="flex flex-col">
-      <button type="button" aria-expanded={open} onClick={() => show([item.key], !open)} className="flex min-h-control items-center gap-2 self-start text-body text-text-muted hover:text-text">
+      <button type="button" aria-expanded={open} onClick={() => show([item.key], !open)} className="flex min-h-work-row items-center gap-2 self-start text-body text-text-muted hover:text-text">
         {item.label}
         <Caret open={open} />
       </button>
       {open && (
-        <div className="flex flex-col gap-4 border-l border-line pt-2 pb-2 pl-3">
+        <div className="flex flex-col gap-2 border-l border-line pt-1 pb-2 pl-3">
           {item.items.map((inside) => (
             <div key={inside.key} className="flex flex-col">
               <Drawn item={inside} shown={shown} show={show} />
@@ -417,7 +418,7 @@ function StepsLine({ calls, label, running, shown, show }: { calls: Call[]; labe
   const open = ids.some((id) => shown.has(id))
   return (
     <div className="flex flex-col">
-      <button type="button" aria-expanded={open} onClick={() => show(ids, !open)} className={`flex min-h-control items-center gap-2 self-start text-body hover:text-text ${running ? "text-status-working" : "text-text-muted"}`}>
+      <button type="button" aria-expanded={open} onClick={() => show(ids, !open)} className={`flex min-h-work-row items-center gap-2 self-start text-body hover:text-text ${running ? "text-status-working" : "text-text-muted"}`}>
         {running && <Spinner />}
         {label}
         <Caret open={open} />
@@ -433,12 +434,12 @@ function StepsLine({ calls, label, running, shown, show }: { calls: Call[]; labe
   )
 }
 
-// One tool call: its name, a short form of its input, and its result in
-// short, which opens to its result as stored.
+// One tool call, on a row of the work log: its name, a short form of its
+// input, and its result in short, which opens to its result as stored.
 function CallRow({ call, open, toggle }: { call: Call; open: boolean; toggle: () => void }) {
   return (
     <li className="flex min-w-0 flex-col">
-      <button type="button" aria-expanded={open} onClick={toggle} className="flex min-h-control w-full min-w-0 items-center py-1 text-left">
+      <button type="button" aria-expanded={open} onClick={toggle} className="flex min-h-work-row w-full min-w-0 items-center py-1 text-left">
         <span className="flex w-full min-w-0 items-start gap-3">
           <span className="min-w-call-name shrink-0 font-mono text-code text-text-muted">{call.name}</span>
           <span className="flex min-w-0 flex-1 flex-col">
@@ -455,9 +456,9 @@ function CallRow({ call, open, toggle }: { call: Call; open: boolean; toggle: ()
       </button>
       {open &&
         (call.result !== undefined ? (
-          <pre className="pb-3 font-mono text-code break-words whitespace-pre-wrap text-text-muted">{call.result}</pre>
+          <pre className="pb-2 font-mono text-code break-words whitespace-pre-wrap text-text-muted">{call.result}</pre>
         ) : (
-          <p className="pb-3 text-caption text-text-muted">{call.running ? "No result yet." : "No result."}</p>
+          <p className="pb-2 text-caption text-text-muted">{call.running ? "No result yet." : "No result."}</p>
         ))}
     </li>
   )
@@ -469,7 +470,7 @@ function Note({ text, more }: { text: string; more?: string }) {
   if (more === undefined) return <p className="text-body break-words text-text-muted">{text}</p>
   return (
     <div className="flex flex-col">
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex min-h-control items-center gap-2 self-start text-left text-body text-text-muted hover:text-text">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex min-h-work-row items-center gap-2 self-start text-left text-body text-text-muted hover:text-text">
         <span className="break-words">{text}</span>
         <Caret open={open} />
       </button>
