@@ -1,32 +1,32 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { ListedProject } from "../../src/core/types.ts"
+import { settingsIn } from "./address.ts"
 import { useCardShortcut } from "./card-shown.ts"
+import { CardButton, CardLane, CardPlace } from "./CardPlace.tsx"
+import { Button } from "./components/ui/button.tsx"
 import type { Connection, ConnectionState } from "./connection.ts"
 import { ConnectionLine, ConnectionUnderHeader } from "./ConnectionLine.tsx"
 import { ConnectionShown } from "./connection-shown.ts"
 import { Conversation, Draft, Placeholder } from "./Conversation.tsx"
 import { startedHere } from "./conversation.ts"
+import { Screen, whenIdle } from "./later.ts"
 import { cn } from "./lib/utils.ts"
 import { LIST_ID, toggleList, useListShown } from "./list-shown.ts"
 import { Notices } from "./Notices.tsx"
-import { Palette } from "./Palette.tsx"
-import { useDiffShortcut } from "./diff-shown.ts"
-import { PanelButton, RightPanel } from "./DiffPanel.tsx"
-import { CardButton, CardLane, CardPlace } from "./ProjectCard.tsx"
+import { toggleDiff, useDiffShortcut, useDiffShown } from "./diff-shown.ts"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
-import { CaretDown } from "./icons.tsx"
+import { CaretDown, GearSix, SidebarRight } from "./icons.tsx"
 import { NoProjectTile, ProjectGlyph, ProjectTile } from "./ProjectIcon.tsx"
-import { select, useSelected } from "./selection.ts"
+import { Palette, RightPanel, SCREENS, SettingsPage, WorkspaceView } from "./screens.ts"
+import { openSettings, select, useAddress, useSelected, useWorkspacePlace } from "./selection.ts"
 import { projectLookedAt, titleOf } from "./session-list.ts"
 import { ListButton, ListTop, SessionList } from "./SessionList.tsx"
 import { HeaderName } from "./SessionRow.tsx"
 import type { Sessions } from "./sessions.ts"
-import { SettingsButton, SettingsPage } from "./Settings.tsx"
 import { newSession, windowOver } from "./page-requests.ts"
-import { onMac, pressed } from "./shortcuts.ts"
+import { label as keyLabel, onMac, pressed } from "./shortcuts.ts"
 import { SubagentView } from "./Subagent.tsx"
 import { workspaceIn } from "./workspace.ts"
-import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 
 // The page once signed in: the session list and the conversation, in
 // columns, the list on the left, 256px wide, and the conversation filling
@@ -36,23 +36,76 @@ import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 // The details open from a button in the session's header. With a
 // workspace in the address, the workspace view instead. The settings page,
 // the command palette and the notices float over either.
+//
+// The screens opened rarely or later, the settings, the palette, the
+// details, the right panel and the workspace view, are in files of their
+// own (see screens.ts), which the page fetches once it is idle, so that
+// each opens at once the first time; one opened before then shows once it
+// is here.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
   useDiffShortcut()
   const [palette, setPalette] = useState(false)
   useFrameShortcuts(() => setPalette((open) => !open))
+  useEffect(() => whenIdle(SCREENS.preload), [])
   const workspace = useWorkspacePlace()
+  const settings = settingsIn(useAddress()) !== undefined
   return (
     <ConnectionShown.Provider value={state}>
       {workspace !== undefined ? (
-        <WorkspaceView place={workspace} state={state} connection={connection} sessions={sessions} />
+        // Until the view is here, the screen it will take, empty.
+        <Screen loads={SCREENS} wanted fallback={<div className="h-dvh" />}>
+          <WorkspaceView place={workspace} state={state} connection={connection} sessions={sessions} />
+        </Screen>
       ) : (
         <SessionView state={state} connection={connection} sessions={sessions} />
       )}
-      <SettingsPage connection={connection} />
-      <Palette connection={connection} sessions={sessions} open={palette} close={() => setPalette(false)} />
+      <Screen loads={SCREENS} wanted={settings}>
+        <SettingsPage connection={connection} />
+      </Screen>
+      <Screen loads={SCREENS} wanted={palette}>
+        <Palette connection={connection} sessions={sessions} open={palette} close={() => setPalette(false)} />
+      </Screen>
       <Notices connection={connection} sessions={sessions} />
     </ConnectionShown.Provider>
+  )
+}
+
+// The gear that opens the settings, as T3 Code's settings button.
+function SettingsButton() {
+  return (
+    <Button variant="icon" aria-label="Settings" title="Settings" onClick={() => openSettings()}>
+      <GearSix />
+    </Button>
+  )
+}
+
+// The right panel (see DiffPanel.tsx), on the page once it is first opened
+// or its file is here.
+function RightPanelPlace({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
+  const shown = useDiffShown()
+  return (
+    <Screen loads={SCREENS} wanted={shown.open}>
+      <RightPanel connection={connection} sessions={sessions} />
+    </Screen>
+  )
+}
+
+// The button in the conversation's header that shows and hides the right
+// panel, raised while it is shown.
+function PanelButton() {
+  const shown = useDiffShown()
+  return (
+    <button
+      type="button"
+      aria-label="Show or hide the right panel"
+      aria-pressed={shown.open}
+      title={`Right panel (${keyLabel("diff", onMac())})`}
+      onClick={toggleDiff}
+      className={cn("flex size-control-sm shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-text/8 hover:text-text", shown.open && "bg-surface-raised text-text")}
+    >
+      <SidebarRight className="size-icon-sm" />
+    </button>
   )
 }
 
@@ -79,7 +132,7 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
         <CardPlace connection={connection} sessions={sessions} />
       </main>
 
-      <RightPanel connection={connection} sessions={sessions} />
+      <RightPanelPlace connection={connection} sessions={sessions} />
     </div>
   )
 }

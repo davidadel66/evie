@@ -5,6 +5,7 @@ import { addressAsOpened } from "./address.ts"
 import { openConnection } from "./connection.ts"
 import { followLooks } from "./project-look.ts"
 import { refreshWhileShown } from "./refresh.ts"
+import { loadScreensOpenAtStart } from "./screens.ts"
 import { openSessions } from "./sessions.ts"
 
 // A sign-in link opens the page with a code after # in its address. The
@@ -21,6 +22,8 @@ if (location.pathname + location.hash !== opened) history.replaceState(null, "",
 // page loads.
 const connection = (import.meta.hot.data.connection ??= openConnection({ url: location.origin, ...(code !== undefined && { code }) }))
 const sessions = (import.meta.hot.data.sessions ??= openSessions(connection))
+// A screen the page opens on, loaded later otherwise, is fetched while it connects.
+loadScreensOpenAtStart()
 // Every project's tile takes its icon and colour from the latest list of projects.
 import.meta.hot.data.looks ??= followLooks(sessions)
 // The projects' branches change with a checkout, which sends no event, so
