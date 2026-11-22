@@ -138,6 +138,9 @@ export function undo(options: UndoOptions = {}): Plugin {
         if (record.files.length > 0) await save(folder, record)
       })
 
+      // A session deleted for good takes its copies with it.
+      host.on("session_deleted", (session) => rm(join(root, session), { recursive: true, force: true }))
+
       host.commands.add({
         name: "undo",
         description: "Put files back as they were before Evie's last turn that changed any. Run it again to go back further.",

@@ -2,7 +2,9 @@ import type { Database } from "bun:sqlite"
 import type { EventBodies, StoredEvent, StoredEventType } from "./types.ts"
 
 // The event log: the add-only record of everything that happened in a
-// session. It is the truth; a request to the model is rebuilt from it.
+// session. It is the truth; a request to the model is rebuilt from it. A
+// session's events are only ever taken away all at once, when the session
+// is deleted for good.
 export type EventLog = {
   append<Type extends StoredEventType>(session: string, type: Type, body: EventBodies[Type]): StoredEvent
   events(session: string): StoredEvent[]
@@ -12,9 +14,17 @@ export type EventLog = {
   // The sessions whose last turn started and never ended, as when Evie
   // stopped in the middle of it.
   cutOff(): string[]
+  // Takes away every event of a session, which is being deleted.
+  remove(session: string): void
 }
 
 type EventRow = { session: string; seq: number; type: string; body: string; time: number }
+
+// The events that are not activity in a session, as an SQL condition on a
+// row of the event table named `event`: the owner settling it or bringing
+// it back, naming it, and moving it, with the note that tells the model of
+// the move, which is the event straight after it.
+export const NOT_ACTIVITY = `(event.type IN ('settled', 'named', 'moved') OR (event.type = 'note' AND EXISTS (SELECT 1 FROM event AS move WHERE move.session = event.session AND move.seq = event.seq - 1 AND move.type = 'moved')))`
 
 export function createEventLog(db: Database): EventLog {
   const nextSeq = db.query<{ seq: number }, [string]>(
@@ -32,6 +42,7 @@ export function createEventLog(db: Database): EventLog {
   const lastTurns = db.query<{ id: string }, []>(
     `SELECT id FROM session WHERE (SELECT type FROM event WHERE event.session = session.id AND type IN ('turn_start', 'turn_end') ORDER BY seq DESC LIMIT 1) = 'turn_start'`,
   )
+  const removeAll = db.query("DELETE FROM event WHERE session = ?")
   const fromRow = (row: EventRow) =>
     ({
       session: row.session,
@@ -66,6 +77,10 @@ export function createEventLog(db: Database): EventLog {
 
     cutOff() {
       return lastTurns.all().map((row) => row.id)
+    },
+
+    remove(session) {
+      removeAll.run(session)
     },
   }
 }

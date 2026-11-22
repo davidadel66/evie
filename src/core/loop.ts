@@ -46,6 +46,8 @@ export type LoopOptions = {
   jobs: ToolContext["jobs"]
   // The session's subagents, as tools are given them.
   children: ToolContext["children"]
+  // Names the session, as hooks are given it.
+  name: HookContext["name"]
   // The session that started this one as a subagent, when one did.
   parent?: string
   // For a subagent: the named agent it is, and whether it only reads.
@@ -180,6 +182,7 @@ export function createLoop(options: LoopOptions): Loop {
       events,
       signal,
       ask: (question) => options.ask(question, signal),
+      name: options.name,
       ...startedAs,
     })
 
@@ -285,6 +288,7 @@ export function createLoop(options: LoopOptions): Loop {
           events: log.events(session),
           signal,
           ask,
+          name: options.name,
           ...startedAs,
         })
 
