@@ -64,7 +64,7 @@ function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Dropdo
 }
 
 function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
-  return <DropdownMenuPrimitive.Separator data-slot="dropdown-menu-separator" className={cn("my-1 h-px shrink-0 bg-line", className)} {...props} />
+  return <DropdownMenuPrimitive.Separator data-slot="dropdown-menu-separator" className={cn("my-1 h-(--line-width) shrink-0 bg-line", className)} {...props} />
 }
 
 export {

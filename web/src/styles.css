@@ -63,8 +63,16 @@
   --radius-md: 10px;
   --radius-lg: 16px;
   --radius-full: 9999px;
+  /* A project's icon tile: corners a quarter of its size, at any size. */
+  --radius-tile: 25%;
 
   --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  /* How long a change, such as a group's caret turning, takes, and how it
+     eases: Tailwind's own values, which clearing its defaults left out. The
+     design system's board names none. */
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* The small spinner beside the word Working. */
   --animate-spin: spin 1s linear infinite;
@@ -86,6 +94,8 @@
   /* A project's icon tile in a session row, and the icon on it. */
   --spacing-tile-row: 18px;
   --spacing-tile-row-icon: 12px;
+  /* The widest the session list's project filter grows, beside the search. */
+  --spacing-project-filter: 128px;
   /* Below this width, the columns stack. */
   --breakpoint-wide: 960px;
 }
@@ -128,7 +138,7 @@
 
   /* Every control shows the same 2px ring when focused from the keyboard. */
   :focus-visible {
-    outline: 2px solid var(--focus-ring);
+    outline: var(--indicator-width) solid var(--focus-ring);
     outline-offset: 2px;
   }
 }

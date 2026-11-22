@@ -14,6 +14,7 @@ export const NAMED_SIZES = [
   "control",
   "tile-row",
   "tile-row-icon",
+  "project-filter",
   "session-list",
   "project-card",
   "sign-in-column",
@@ -31,6 +32,7 @@ const merge = extendTailwindMerge({
       text: ["caption", "body", "label", "title", "page-title", "figure", "code"],
       spacing: [...NAMED_SIZES],
       shadow: ["float"],
+      radius: ["tile"],
     },
   },
 })
