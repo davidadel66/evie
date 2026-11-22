@@ -1,20 +1,24 @@
+import type { BuildMetafile } from "bun"
 import tailwind from "bun-plugin-tailwind"
 
 // The web app's build, which `buildWebApp` runs in a process of its own:
 //
-//   bun build-web-app.ts <page> <folder for the files> <file for the metafile>
+//   bun build-web-app.ts <page> <file for the list> <file for the files>
 //
 // Bun's bundler keeps its working memory, about 300 MB for this app, for as
 // long as the process that ran it lives, and the server runs all the time.
 // Built here, the memory goes when this process exits.
 //
-// It writes the files built into the folder it is given, and Bun's
-// metafile, which names each file built and the chunks it imports, to the
-// file it is given. If the build fails, it says why on stderr, one line for
+// It writes every file built into one file, one after another, which is
+// quicker to write and to read back than each file on its own, and a list
+// of them, as JSON: each file's path, type and size, in that order, and
+// Bun's metafile. If the build fails, it says why on stderr, one line for
 // each of the bundler's messages, `file:line: message`, and exits with code 1.
-const [page, folder, metafile] = process.argv.slice(2)
-if (page === undefined || folder === undefined || metafile === undefined) {
-  console.error("Usage: bun build-web-app.ts <page> <folder for the files> <file for the metafile>")
+export type Built = { files: { path: string; type: string; size: number }[]; metafile: BuildMetafile }
+
+const [page, list, files] = process.argv.slice(2)
+if (page === undefined || list === undefined || files === undefined) {
+  console.error("Usage: bun build-web-app.ts <page> <file for the list> <file for the files>")
   process.exit(2)
 }
 
@@ -35,10 +39,12 @@ try {
     // own, which the page loads then, so that the rest of the page does not
     // wait for them.
     splitting: true,
-    outdir: folder,
     metafile: true,
   })
-  await Bun.write(metafile, JSON.stringify(built.metafile))
+  const outputs = await Promise.all(built.outputs.map(async (output) => ({ path: output.path, type: output.type, bytes: new Uint8Array(await output.arrayBuffer()) })))
+  await Bun.write(files, new Blob(outputs.map((output) => output.bytes)))
+  const listed: Built = { files: outputs.map(({ path, type, bytes }) => ({ path, type, size: bytes.length })), metafile: built.metafile! }
+  await Bun.write(list, JSON.stringify(listed))
 } catch (cause) {
   console.error(described(cause))
   process.exit(1)

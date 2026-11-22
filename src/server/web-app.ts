@@ -3,6 +3,7 @@ import { mkdtemp, readdir, rm, stat } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import page from "../../web/index.html"
+import type { Built } from "./build-web-app.ts"
 
 // The web app, for the server to serve: its page, and the files the page
 // loads, each by the path it is served at. The page is either built already,
@@ -33,8 +34,8 @@ const TEMPORARY = "evie-web-app-"
 // finds. It is started in the repository's folder, whatever folder the
 // server was started in, so that it takes no bunfig.toml or .env from there,
 // and the metafile names files by their paths in the repository. It writes
-// into a temporary folder; the files are read from it into memory, and the
-// folder is removed, whether the build worked or not. A build that fails
+// into a temporary folder, from which the files are read into memory, and
+// the folder is removed, whether the build worked or not. A build that fails
 // says why, each of the bundler's messages as `file:line: message`.
 //
 // `page`, to build another page, and `temporary`, the folder the temporary
@@ -45,9 +46,8 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
   // While it builds, the folders earlier builds left are removed.
   const tidying = removeLeftFolders(temporary)
   try {
-    const built = join(folder, "files")
-    const metafile = join(folder, "metafile.json")
-    const child = Bun.spawn([process.execPath, BUILD, options.page ?? PAGE, built, metafile], {
+    const [list, all] = [join(folder, "files.json"), join(folder, "files")]
+    const child = Bun.spawn([process.execPath, BUILD, options.page ?? PAGE, list, all], {
       cwd: REPOSITORY,
       stdin: "ignore",
       stdout: "ignore",
@@ -55,14 +55,19 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
     })
     const [problem, code] = await Promise.all([new Response(child.stderr).text(), child.exited])
     if (code !== 0) throw new Error(problem.trim() || `The web app's build stopped with exit code ${code}, saying nothing.`)
+    // Each file, by the path it is served at, cut from the one file the
+    // build wrote them all into, in the order of its list.
+    const built: Built = await Bun.file(list).json()
+    const bytes = await Bun.file(all).bytes()
     const files: Record<string, Blob> = {}
-    for await (const path of new Bun.Glob("**/*").scan(built)) {
-      const file = Bun.file(join(built, path))
-      files[`/${path}`] = new Blob([await file.bytes()], { type: file.type })
+    let at = 0
+    for (const file of built.files) {
+      files[file.path.replace(/^\./, "")] = new Blob([bytes.subarray(at, at + file.size)], { type: file.type })
+      at += file.size
     }
     const { "/index.html": builtPage, ...loaded } = files
     if (!builtPage) throw new Error("Bun's bundler built the web app without its page.")
-    return { page: builtPage, files: loaded, metafile: await Bun.file(metafile).json() }
+    return { page: builtPage, files: loaded, metafile: built.metafile }
   } finally {
     await Promise.all([rm(folder, { recursive: true, force: true }), tidying])
   }
