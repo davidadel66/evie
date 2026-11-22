@@ -6,7 +6,7 @@ import { files, startServer, undo as undoPlugin, type Command, type Evie } from 
 import { holdChanges, type Changes, type ChangesState } from "../web/src/changes.ts"
 import { openConnection } from "../web/src/connection.ts"
 import { holdConversation } from "../web/src/conversation.ts"
-import { diffOf } from "../web/src/diff-view.ts"
+import { diffOf, sidesLoader } from "../web/src/diff-view.ts"
 import { say } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
@@ -70,20 +70,23 @@ test("a session's changes are listed once it is open, and again as each turn end
   expect((await changes.read("session")).files.map((file) => file.path)).toEqual(["a.md", "b.md"])
 })
 
-test("what the diff panel reads of a turn or the session can be drawn with the unchanged lines between changes folded, and opened, since the whole file comes with it", async () => {
+test("a file's whole sides are read for what the diff panel compares, the latest turn as the list says it, and handed to the diff view to open the lines folded between changes", async () => {
   const numbered = (change: (line: number) => string) => Array.from({ length: 20 }, (_, at) => `${change(at + 1)}\n`).join("")
   const first = numbered((line) => `line ${line}`)
-  const { served, changes } = await start([...writes("a.md", first), ...writes("a.md", numbered((line) => (line === 3 || line === 17 ? `changed ${line}` : `line ${line}`)))])
+  const second = numbered((line) => (line === 3 || line === 17 ? `changed ${line}` : `line ${line}`))
+  const { served, changes } = await start([...writes("a.md", first), ...writes("a.md", second)])
   await say(served.run, "Write a")
   await say(served.run, "Change it")
   await until(changes, (state) => state.listed?.turns.length === 2)
 
-  const turn = diffOf((await changes.read("latest")).files[0]!)!
-  // Lines 7 to 13 are folded between the two changes, and 1 to 20 are all known.
-  expect(turn.hunks.map((hunk) => hunk.collapsedBefore)).toEqual([0, 7])
-  expect([turn.isPartial, turn.additionLines.length, turn.deletionLines.length]).toEqual([false, 20, 20])
-  const session = diffOf((await changes.read("session")).files[0]!)!
-  expect([session.type, session.additionLines.length]).toEqual(["new", 20])
+  const file = (await changes.read("latest")).files[0]!
+  // Only the lines around the changes come with the diff: lines 7 to 13 are folded between them.
+  const diff = diffOf(file)!
+  expect(diff.hunks.map((hunk) => hunk.collapsedBefore)).toEqual([0, 7])
+  expect(diff.isPartial).toBe(true)
+  expect(await changes.sides("latest", "a.md")).toEqual({ before: first, after: second })
+  expect(await sidesLoader((path, from) => changes.sides("latest", path, from))(diff)).toEqual({ oldFile: { name: "a.md", contents: first }, newFile: { name: "a.md", contents: second } })
+  expect(await changes.sides("session", "a.md")).toEqual({ before: null, after: second })
 })
 
 test("changes undone are listed no more", async () => {

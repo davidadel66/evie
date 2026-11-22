@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import type { ChangedFile, TurnChanges } from "../src/core/types.ts"
-import { changedFilesLine, filesTree, hasCounts, scopeChoices, sidesOf } from "../web/src/diff.ts"
+import type { ChangedFile, FileDiff, TurnChanges } from "../src/core/types.ts"
+import { cardFiles, changedFilesLine, filesTree, firstDrawn, foldFiles, hasCounts, scopeChoices, treeFolders } from "../web/src/diff.ts"
 
 // The diff's rules, apart from its screen: what the right panel compares,
 // the changed-files line and tree, and a file's two sides from its diff.
@@ -76,13 +76,41 @@ test("the files' tree puts folders before files, each in order of name, joins a 
   const rows = filesTree(files, new Set())
   expect(rows.flatMap((row) => (row.kind === "file" ? [row.path] : []))).toEqual(["docs/guide/start/one.md", "src/core/a.ts", "src/core/b.ts", "src/web/c.tsx", "src/web/logo.png", "README.md"])
   expect(rows.flatMap((row) => (row.kind === "folder" ? [row.path] : []))).toEqual(["docs/guide/start", "src", "src/core", "src/web"])
+  // Collapse all and Expand all read the folders shown: all open, they fold
+  // every folder; one shown folded, they open them all. A folder folded out
+  // of sight, or one of another comparison, does not count.
+  expect(treeFolders(files, new Set())).toEqual({ all: ["docs/guide/start", "src", "src/core", "src/web"], open: true })
+  expect(treeFolders(files, new Set(["src/core"])).open).toBe(false)
+  expect(treeFolders(files, new Set(["src", "src/core"])).open).toBe(false)
+  expect(treeFolders(files, new Set(["elsewhere"])).open).toBe(true)
 })
 
-test("a file's diff, which carries the whole file, gives back what the file held before and after, line ends and all", () => {
-  const patch = ["@@ -1,4 +1,4 @@", " one", "-two", "+2", " three", "-four", "\\ No newline at end of file", "+four", ""].join("\n")
-  expect(sidesOf(patch)).toEqual({ before: "one\ntwo\nthree\nfour", after: "one\n2\nthree\nfour\n" })
-  // A file added whole had nothing before it.
-  expect(sidesOf("@@ -0,0 +1,2 @@\n+a\n+b\n")).toEqual({ before: "", after: "a\nb\n" })
-  // A diff that does not start at the file's first line is not the whole file.
-  expect(sidesOf("@@ -3,2 +3,2 @@\n c\n-d\n+D\n")).toBeUndefined()
+const diffed = (path: string, extra: Partial<FileDiff> = {}): FileDiff => ({ path, status: "changed", added: 1, removed: 1, patch: "@@ -1,1 +1,1 @@\n-a\n+b\n", ...extra })
+
+test("the diff opens with every file folded but the first that has a diff, or the one it was opened at; a file that comes later is folded, and what the owner folded or opened stays", () => {
+  const picture = file("a.png", 0, 0, { binary: true })
+  const files = [picture, diffed("b.md"), diffed("c.md")]
+  expect(firstDrawn(files)).toBe("b.md")
+  const first = foldFiles(undefined, files, undefined)
+  expect([...first.folded]).toEqual(["c.md"])
+  // Opened at a file, that one is open instead.
+  expect([...foldFiles(undefined, files, "c.md").folded]).toEqual(["b.md"])
+  // A file that comes later, as when a turn ends, is folded; the owner's own folding stays.
+  const owned = { seen: first.seen, folded: new Set(["b.md"]) }
+  expect([...foldFiles(owned, [...files, diffed("d.md")], undefined).folded].sort()).toEqual(["b.md", "d.md"])
+  // Asked to go to a file folded, it opens.
+  expect([...foldFiles(owned, files, "b.md").folded]).toEqual([])
+  // A file renamed and not changed has a diff to draw: its header.
+  expect(firstDrawn([picture, diffed("z.md", { from: "y.md", patch: "" })])).toBe("z.md")
+  expect(firstDrawn([picture])).toBeUndefined()
+})
+
+test("a turn's card lists at most 200 files, in the order of their paths, and says how many more the full diff has", () => {
+  const many = Array.from({ length: 205 }, (_, at) => file(`f${String(at).padStart(3, "0")}.md`, 1, 0)).reverse()
+  const { listed, more } = cardFiles(many)
+  expect(listed).toHaveLength(200)
+  expect(listed[0]!.path).toBe("f000.md")
+  expect(listed.at(-1)!.path).toBe("f199.md")
+  expect(more).toBe(5)
+  expect(cardFiles([file("b.md", 1, 0), file("a.md", 1, 0)])).toEqual({ listed: [file("a.md", 1, 0), file("b.md", 1, 0)], more: 0 })
 })

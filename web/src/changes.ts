@@ -7,7 +7,7 @@ import type { Scope } from "./diff.ts"
 // screens: the turns that changed files and the session's files, listed
 // once the session is open, and again each time a turn ends or a note is
 // added, as undo adds one when it puts files back; and each comparison the
-// diff panel shows, read when it is asked for.
+// diff panel shows, and a file's whole sides in it, read when asked for.
 
 export type Listed = Commands["list_changes"]["output"]
 export type ChangesState = { listed: Listed | undefined; problem: string | undefined }
@@ -18,9 +18,13 @@ export type Changes = {
   // A comparison's files, with their diffs, or an error saying why it
   // could not be read. `base` is the branch to compare the branch with.
   read(scope: Scope, base?: string): Promise<Commands["read_changes"]["output"]>
+  // One file's whole sides, before and after, as the same comparison has
+  // them, by its path and, for a file renamed, the path it had before.
+  sides(scope: Scope, path: string, from?: string, base?: string): Promise<Commands["read_file_sides"]["output"]>
 }
 
 const NOT_CONNECTED = "Not connected to evie's server."
+type Comparison = { of: "turn"; turn: number } | { of: "session" | "uncommitted" } | { of: "branch"; base?: string }
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
 
 function openChanges(connection: Connection, session: string, conversation: Conversation): Changes & { close(): void; whole(wanted: boolean): void } {
@@ -77,6 +81,18 @@ function openChanges(connection: Connection, session: string, conversation: Conv
       }
     }
   }
+  // What a comparison is, as the server's commands name it: the latest
+  // turn is the session's last, as the list says it, and undefined before
+  // the session has one.
+  async function comparison(evie: Evie, scope: Scope, base: string | undefined): Promise<Comparison | undefined> {
+    if (scope === "latest") {
+      const latest = state.listed?.latest ?? (await evie.send({ type: "list_changes", session })).latest
+      return latest === 0 ? undefined : { of: "turn", turn: latest }
+    }
+    if (scope.startsWith("turn:")) return { of: "turn", turn: Number(scope.slice("turn:".length)) }
+    if (scope === "branch") return { of: "branch", ...(base !== undefined && { base }) }
+    return { of: scope as "session" | "uncommitted" }
+  }
   let closed = false
   let status = connection.state().status
   const unfollow = conversation.subscribe(() => void list())
@@ -98,13 +114,15 @@ function openChanges(connection: Connection, session: string, conversation: Conv
     async read(scope, base) {
       const evie = client()
       if (evie === undefined) throw new Error(NOT_CONNECTED)
-      if (scope === "latest") {
-        const latest = state.listed?.latest ?? (await evie.send({ type: "list_changes", session })).latest
-        return latest === 0 ? { files: [] } : evie.send({ type: "read_changes", session, of: "turn", turn: latest })
-      }
-      if (scope.startsWith("turn:")) return evie.send({ type: "read_changes", session, of: "turn", turn: Number(scope.slice("turn:".length)) })
-      if (scope === "branch") return evie.send({ type: "read_changes", session, of: "branch", ...(base !== undefined && { base }) })
-      return evie.send({ type: "read_changes", session, of: scope as "session" | "uncommitted" })
+      const of = await comparison(evie, scope, base)
+      return of === undefined ? { files: [] } : evie.send({ type: "read_changes", session, ...of })
+    },
+    async sides(scope, path, from, base) {
+      const evie = client()
+      if (evie === undefined) throw new Error(NOT_CONNECTED)
+      const of = await comparison(evie, scope, base)
+      if (of === undefined) return { unavailable: `${path} is not among the files this comparison changed.` }
+      return evie.send({ type: "read_file_sides", session, ...of, path, ...(from !== undefined && { from }) })
     },
     close() {
       closed = true

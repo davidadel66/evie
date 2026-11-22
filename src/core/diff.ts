@@ -48,10 +48,7 @@ export async function contentsAt(path: string): Promise<Contents> {
 // milliseconds, comparing may take: past either, the file is too large to show.
 const MOST_EDITS = 10_000
 const LONGEST = 1000
-// How many unchanged lines come with each change when only the lines
-// changed are counted. A diff to show carries the whole file around its
-// changes instead, so that the page can show the unchanged lines between
-// them when asked, as T3 Code's diff does; the page folds them away.
+// How many unchanged lines are shown around each change.
 const CONTEXT = 3
 
 // A file holding a NUL byte in its first 8000 bytes is binary, as git
@@ -72,10 +69,8 @@ export function compare(path: string, before: Contents, after: Contents, options
   if (sides.some(isBinary)) return { ...file, binary: true }
   if (sides.some((side) => side.length > LARGEST)) return { ...file, tooLarge: true }
   const [old, now] = sides.map((side) => decoder.decode(side))
-  // A side has no more lines than characters: the whole file.
-  const context = options.patch ? Math.max(old!.length, now!.length) : CONTEXT
   // A file added or removed whole is every line of it, with nothing to work out.
-  const compared = old === "" || now === "" ? whole(old!, now!) : structuredPatch(path, path, old!, now!, undefined, undefined, { context, maxEditLength: MOST_EDITS, timeout: LONGEST })
+  const compared = old === "" || now === "" ? whole(old!, now!) : structuredPatch(path, path, old!, now!, undefined, undefined, { context: CONTEXT, maxEditLength: MOST_EDITS, timeout: LONGEST })
   if (compared === undefined) return { ...file, tooLarge: true }
   let added = 0
   let removed = 0
@@ -104,6 +99,19 @@ function whole(old: string, now: string): { hunks: { oldStart: number; oldLines:
   if (ended) lines.pop()
   const marked = [...lines.map((line) => sign + line), ...(ended ? [] : ["\\ No newline at end of file"])]
   return { hunks: [{ oldStart: 1, oldLines: old === "" ? 0 : lines.length, newStart: 1, newLines: old === "" ? lines.length : 0, lines: marked }] }
+}
+
+// One file's whole contents, before and after, as text for a client to
+// show the unchanged lines between its changes, or why they cannot be:
+// nothing changed, or a side is not known, binary, or larger than a diff
+// shows. `name` is the file as the client knows it.
+export function fileSides(name: string, before: Contents, after: Contents): { before: string | null; after: string | null } | { unavailable: string } {
+  const same = before instanceof Uint8Array && after instanceof Uint8Array && Buffer.from(before).equals(after)
+  if ((before === null && after === null) || same) return { unavailable: `${name} is not among the files this comparison changed.` }
+  if (before === undefined || after === undefined) return { unavailable: `What ${name} held is not known.` }
+  if (isTooLarge(before) || isTooLarge(after) || [before, after].some((side) => side !== null && side.length > LARGEST)) return { unavailable: `${name} is too large to show in full.` }
+  if ([before, after].some((side) => side !== null && isBinary(side))) return { unavailable: `${name} is binary, so it is not shown.` }
+  return { before: before === null ? null : decoder.decode(before), after: after === null ? null : decoder.decode(after) }
 }
 
 const statusOf = (before: Contents, after: Contents) => (before === null ? "added" : after === null ? "removed" : "changed")

@@ -60,20 +60,48 @@ test("a turn's changed files are listed with how many lines each added and remov
   expect(read.files).toEqual([{ path: "notes.md", status: "changed", added: 1, removed: 1, patch: "@@ -1,3 +1,3 @@\n one\n-two\n+2\n three\n" }])
 })
 
-test("a file's diff carries the whole file around its changes, so that the page can show the unchanged lines between them when asked, whatever is compared", async () => {
-  const numbered = (change: (line: number) => string) => Array.from({ length: 12 }, (_, at) => `${change(at + 1)}\n`).join("")
-  const { run, projectFolder } = await start(turn(edit("notes.md", "line 2\n", "two\n"), edit("notes.md", "line 11\n", "eleven\n")), { "notes.md": numbered((line) => `line ${line}`) }, { git: true })
+// A file of twenty lines, "line 1" to "line 20".
+const twenty = (change: (line: number) => string = (line) => `line ${line}`) => Array.from({ length: 20 }, (_, at) => `${change(at + 1)}\n`).join("")
+
+test("a file's diff carries three lines around each change, whatever is compared, and the whole of it is read only when asked for", async () => {
+  const changed = twenty((line) => (line === 2 ? "two" : line === 17 ? "seventeen" : `line ${line}`))
+  const { run, projectFolder } = await start(turn(edit("notes.md", "line 2\n", "two\n"), edit("notes.md", "line 17\n", "seventeen\n")), { "notes.md": twenty() }, { git: true })
   await git(["checkout", "-q", "-b", "feature"], projectFolder)
   await say(run, "change it")
 
-  const lines = Array.from({ length: 12 }, (_, at) => at + 1).flatMap((line) => (line === 2 ? ["-line 2", "+two"] : line === 11 ? ["-line 11", "+eleven"] : [` line ${line}`]))
-  const whole: FileDiff[] = [{ path: "notes.md", status: "changed", added: 2, removed: 2, patch: `@@ -1,12 +1,12 @@\n${lines.join("\n")}\n` }]
-  expect((await run.evie.send({ type: "read_changes", session: run.session, of: "turn", turn: 1 })).files).toEqual(whole)
-  expect((await run.evie.send({ type: "read_changes", session: run.session, of: "session" })).files).toEqual(whole)
-  expect((await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })).files).toEqual(whole)
-  expect((await run.evie.send({ type: "read_changes", session: run.session, of: "branch" })).files).toEqual(whole)
-  // Only counted, as when the changes are listed, the lines are not sent.
-  expect((await run.evie.send({ type: "list_changes", session: run.session, whole: true })).session).toEqual([{ path: "notes.md", status: "changed", added: 2, removed: 2 }])
+  const around = (lines: string[]) => lines.join("\n")
+  const patch = `@@ -1,5 +1,5 @@\n${around([" line 1", "-line 2", "+two", " line 3", " line 4", " line 5"])}\n@@ -14,7 +14,7 @@\n${around([" line 14", " line 15", " line 16", "-line 17", "+seventeen", " line 18", " line 19", " line 20"])}\n`
+  const files: FileDiff[] = [{ path: "notes.md", status: "changed", added: 2, removed: 2, patch }]
+  const scopes = [{ of: "turn", turn: 1 }, { of: "session" }, { of: "uncommitted" }, { of: "branch" }] as const
+  for (const scope of scopes) {
+    expect((await run.evie.send({ type: "read_changes", session: run.session, ...scope })).files).toEqual(files)
+    // The whole file, before and after, as the page asks for it to show the lines between the changes.
+    expect(await run.evie.send({ type: "read_file_sides", session: run.session, ...scope, path: "notes.md" })).toEqual({ before: twenty(), after: changed })
+  }
+  // A file the comparison did not change has no sides to read.
+  expect(await run.evie.send({ type: "read_file_sides", session: run.session, of: "turn", turn: 1, path: "other.md" })).toEqual({ unavailable: "other.md is not among the files this comparison changed." })
+})
+
+test("a file's sides larger than a diff shows are not read, and the answer says so", async () => {
+  const big = "x".repeat(99) + "\n"
+  const { run } = await start(turn(edit("big.md", "first\n", "changed\n")), { "big.md": `first\n${big.repeat(11_000)}` })
+  await say(run, "change it")
+
+  expect(await run.evie.send({ type: "read_file_sides", session: run.session, of: "turn", turn: 1, path: "big.md" })).toEqual({ unavailable: "big.md is too large to show in full." })
+})
+
+test("in a git project, a file moved with git is a rename: its diff runs from where it was, and its sides are read from there", async () => {
+  const { run, projectFolder } = await start([], { "old.md": twenty(), "kept.md": "kept\n" }, { git: true })
+  await git(["mv", "old.md", "new.md"], projectFolder)
+  await writeFile(join(projectFolder, "new.md"), twenty((line) => (line === 10 ? "ten" : `line ${line}`)))
+  await git(["mv", "kept.md", "moved.md"], projectFolder)
+
+  const read = await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })
+  expect(read.files).toEqual([
+    { path: "moved.md", from: "kept.md", status: "changed", added: 0, removed: 0, patch: "" },
+    { path: "new.md", from: "old.md", status: "changed", added: 1, removed: 1, patch: "@@ -7,7 +7,7 @@\n line 7\n line 8\n line 9\n-line 10\n+ten\n line 11\n line 12\n line 13\n" },
+  ])
+  expect(await run.evie.send({ type: "read_file_sides", session: run.session, of: "uncommitted", path: "new.md", from: "old.md" })).toEqual({ before: twenty(), after: twenty((line) => (line === 10 ? "ten" : `line ${line}`)) })
 })
 
 test("a file a turn added, one it removed and one it changed each say so, with their lines", async () => {

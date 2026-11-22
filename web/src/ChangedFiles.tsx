@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { ChangedFile } from "../../src/core/types.ts"
-import { changedFilesLine, filesTree, type TreeRow } from "./diff.ts"
+import { cardFiles, changedFilesLine, filesTree, treeFolders, type TreeRow } from "./diff.ts"
 import { openDiff } from "./diff-shown.ts"
 import { CaretRight, CaretUpDown, FileText, Folder, FolderOpen, GitDiff } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
@@ -24,19 +24,19 @@ export function Stat({ added, removed, className }: { added: number; removed: nu
 }
 
 // The end of a completed turn that changed files, as T3 Code's
-// changed-files card, drawn as the owner's drawing has it: a rounded card
-// that says how many files and lines changed, with a button that folds or
-// opens all its folders and Open diff, which opens the diff on the turn at
-// its first file; and under them the files as a tree, each folder open at
-// first. A file opens the diff at that file, and a folder folds.
+// changed-files card: a rounded card that says how many files and lines
+// changed, with a button that folds or opens all its folders and Open
+// diff, which opens the diff on the turn at its first file with a diff;
+// and under them the files as a tree, each folder open at first, at most
+// 200 files, then how many more the full diff has. A file opens the diff
+// at that file, and a folder folds.
 export function TurnChangedFiles({ turn, files }: { turn: number; files: ChangedFile[] }) {
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
-  const rows = filesTree(files, folded)
-  const folders = filesTree(files, new Set()).flatMap((row) => (row.kind === "folder" ? [row.path] : []))
+  const { listed, more } = cardFiles(files)
+  const rows = filesTree(listed, folded)
+  const folders = treeFolders(listed, folded)
   const line = changedFilesLine(files)
-  const allOpen = folded.size === 0
-  // The diff lists the files in order of their paths, as git does.
-  const first = files.map((file) => file.path).sort(byPath)[0]
+  const openAtFirst = () => openDiff({ scope: `turn:${turn}`, first: true })
   return (
     <div className="@container mt-4 rounded-md bg-text/4">
       <div className="flex items-center justify-between gap-2 px-3 py-2">
@@ -45,12 +45,12 @@ export function TurnChangedFiles({ turn, files }: { turn: number; files: Changed
           <Stat added={line.added} removed={line.removed} />
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {folders.length > 0 && (
+          {folders.all.length > 0 && (
             <button
               type="button"
-              aria-label={allOpen ? "Collapse all folders" : "Expand all folders"}
-              title={allOpen ? "Collapse all folders" : "Expand all folders"}
-              onClick={() => setFolded(allOpen ? new Set(folders) : new Set())}
+              aria-label={folders.open ? "Collapse all folders" : "Expand all folders"}
+              title={folders.open ? "Collapse all folders" : "Expand all folders"}
+              onClick={() => setFolded(folders.open ? new Set(folders.all) : new Set())}
               className="flex size-control-xs items-center justify-center rounded-chip text-text-muted hover:bg-text/8 hover:text-text"
             >
               <CaretUpDown className="size-icon-xs" />
@@ -60,7 +60,7 @@ export function TurnChangedFiles({ turn, files }: { turn: number; files: Changed
             type="button"
             aria-label="Open diff"
             title="Open the full diff"
-            onClick={() => openDiff({ scope: `turn:${turn}`, ...(first !== undefined && { file: first }) })}
+            onClick={openAtFirst}
             className="flex h-control-xs items-center gap-1.5 rounded-chip px-2 text-caption font-medium text-text-muted hover:bg-text/8 hover:text-text"
           >
             <GitDiff className="size-icon-xs" />
@@ -81,14 +81,15 @@ export function TurnChangedFiles({ turn, files }: { turn: number; files: Changed
           }
           pick={(path) => openDiff({ scope: `turn:${turn}`, file: path })}
         />
+        {more > 0 && (
+          <button type="button" onClick={openAtFirst} className="mt-1 flex h-control-xs items-center self-start rounded-chip px-2 text-caption text-text-muted hover:bg-text/8 hover:text-text">
+            {more} more {more === 1 ? "file" : "files"} in the full diff
+          </button>
+        )}
       </div>
     </div>
   )
 }
-
-// Paths in the order git lists them, by their characters' codes, so that
-// "README.md" comes before "recipes/".
-export const byPath = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 // The rows of a tree of changed files, as T3 Code's card draws them: 28px
 // rows, 14px further in at each level; a folder with its caret, its icon,

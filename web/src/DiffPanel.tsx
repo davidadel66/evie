@@ -1,14 +1,30 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react"
-import type { ChangedFile, Commands, FileDiff, ListedProject, PullRequest } from "../../src/core/types.ts"
+import { Component, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react"
+import type { Commands, FileDiff, ListedProject, PullRequest } from "../../src/core/types.ts"
 import { followPullRequest, pullRequestOf, type PullRequestState } from "./card.ts"
 import { holdChanges, type Changes, type ChangesState } from "./changes.ts"
-import { byPath, FilesTreeRows, Stat } from "./ChangedFiles.tsx"
+import { FilesTreeRows, Stat } from "./ChangedFiles.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet.tsx"
 import type { Connection } from "./connection.ts"
 import { startedHere } from "./conversation.ts"
-import { changedFilesLine, filesTree, hasCounts, scopeChoices, type Scope } from "./diff.ts"
-import { closeDiff, compareLatest, compareOther, drawAs, showTab, showTree, toggleDiff, useDiffShown, wentToFile, widenTo, wrapLines } from "./diff-shown.ts"
+import { byPath, changedFilesLine, filesTree, firstDrawn, foldFiles, scopeChoices, treeFolders, type Scope } from "./diff.ts"
+import {
+  closeDiff,
+  compareLatest,
+  compareOther,
+  drawAs,
+  keepView,
+  showTab,
+  showTree,
+  toggleDiff,
+  useDiffShown,
+  viewOf,
+  wentToFile,
+  widenTo,
+  widenTreeTo,
+  wrapLines,
+  type DiffView as KeptView,
+} from "./diff-shown.ts"
 import {
   ArrowClockwise,
   ArrowElbowDownLeft,
@@ -27,22 +43,22 @@ import {
   XCircle,
 } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
-import { BESIDE, panelPlace, panelWidth, PHONE, type PanelPlace } from "./right-panel.ts"
+import { BESIDE, panelPlace, panelWidth, PHONE, treeWidth, type PanelPlace } from "./right-panel.ts"
 import { checksSummary, checkWord, pullRequestWord } from "./pull-request.ts"
 import { useSelected } from "./selection.ts"
 import type { Sessions } from "./sessions.ts"
 import { label as keyLabel, onMac } from "./shortcuts.ts"
 import { Spinner } from "./Spinner.tsx"
 
-// The right panel, as T3 Code's, drawn as the owner's drawing of it: a
-// column beside the conversation, 540px at first and as wide as the owner
-// drags its left edge, which this browser remembers; at 980px or narrower a
-// sheet over the page from the right, and at phone width the whole screen.
-// A strip of tabs heads it: the diff, and the branch's pull request when it
-// has one. The diff shows what the selected session changed, by turn or
-// for the whole session, and in a git project the uncommitted work and the
-// branch, under T3 Code's compact toolbar. The diff itself is drawn by the
-// diff view, loaded the first time the panel shows one.
+// The right panel, as T3 Code's: a column beside the conversation, 540px
+// at first and as wide as the owner drags its left edge, which this
+// browser remembers; at 980px or narrower a sheet over the page from the
+// right, and at phone width T3 Code's narrower sheet. A strip of tabs heads
+// it: the diff, and the branch's pull request when it has one. The diff
+// shows what the selected session changed, by turn or for the whole
+// session, and in a git project the uncommitted work and the branch, under
+// T3 Code's compact toolbar. The diff itself is drawn by the diff view,
+// loaded the first time the panel shows one.
 
 const DiffView = lazy(() => import("./DiffView.tsx"))
 
@@ -90,11 +106,11 @@ export function RightPanel({ connection, sessions }: { connection: Connection; s
     was.current = session
     compareLatest()
   }, [session])
-  const panel = <Panel connection={connection} sessions={sessions} session={session} />
+  const panel = <Panel connection={connection} sessions={sessions} session={session} phone={place === "phone"} />
   if (place === "beside") return shown.open ? <Beside>{panel}</Beside> : null
   return (
     <Sheet open={shown.open} onOpenChange={(open) => !open && closeDiff()}>
-      <SheetContent aria-label="Right panel" className={cn("bg-bg text-caption", place === "screen" ? "w-full border-l-0" : "w-panel-sheet")}>
+      <SheetContent aria-label="Right panel" className={cn("bg-bg text-caption", place === "phone" ? "w-panel-phone" : "w-panel-sheet")}>
         <SheetTitle className="sr-only">Right panel</SheetTitle>
         {panel}
       </SheetContent>
@@ -102,48 +118,29 @@ export function RightPanel({ connection, sessions }: { connection: Connection; s
   )
 }
 
-// How far one press of an arrow key moves the panel's edge.
+// How far one press of an arrow key moves an edge, and how far the pointer
+// must move before a press on an edge is a drag.
 const KEY_STEP = 16
+const DRAG_SLOP = 3
 
-// The panel beside the conversation, as wide as it was made, within its
-// room (panelWidth): the row it shares with the conversation is measured
-// as it changes. Its left edge is dragged to resize it, as T3 Code's, or
-// moved with the arrow keys once focused.
-function Beside({ children }: { children: ReactNode }) {
-  const shown = useDiffShown()
-  const place = useRef<HTMLElement>(null)
-  const [room, setRoom] = useState({ window: innerWidth, row: innerWidth })
+// What moves an edge, as T3 Code's: dragged with the pointer, the width
+// follows it, and is kept once it has moved; a press that does not move
+// keeps nothing. `width` is the width now, `widen` gives the width for a
+// pointer moved by so far, and `keep` keeps the one it ends at.
+function useEdge(width: number, widen: (by: number) => number, keep: (width: number) => void) {
   const [dragging, setDragging] = useState<number>()
-  useLayoutEffect(() => {
-    const aside = place.current
-    const row = aside?.parentElement
-    if (!aside || !row) return
-    const measure = () => {
-      const beside = aside.previousElementSibling instanceof HTMLElement ? aside.previousElementSibling.offsetWidth : 0
-      setRoom((now) => {
-        const next = { window: innerWidth, row: beside + aside.offsetWidth }
-        return now.window === next.window && now.row === next.row ? now : next
-      })
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(row)
-    addEventListener("resize", measure)
-    return () => {
-      observer.disconnect()
-      removeEventListener("resize", measure)
-    }
-  }, [])
-  const width = panelWidth(dragging ?? shown.width, room)
-  function drag(event: React.PointerEvent<HTMLDivElement>) {
+  function press(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return
     event.preventDefault()
     const handle = event.currentTarget
     handle.setPointerCapture(event.pointerId)
-    const from = { x: event.clientX, width }
+    const from = event.clientX
     let now = width
-    const move = (moved: PointerEvent) => {
-      now = panelWidth(from.width + from.x - moved.clientX, room)
+    let moved = false
+    const move = (pointer: PointerEvent) => {
+      if (!moved && Math.abs(pointer.clientX - from) < DRAG_SLOP) return
+      moved = true
+      now = widen(from - pointer.clientX)
       setDragging(now)
     }
     const end = () => {
@@ -151,31 +148,73 @@ function Beside({ children }: { children: ReactNode }) {
       handle.removeEventListener("pointerup", end)
       handle.removeEventListener("pointercancel", end)
       setDragging(undefined)
-      widenTo(now)
+      if (moved) keep(now)
     }
     handle.addEventListener("pointermove", move)
     handle.addEventListener("pointerup", end)
     handle.addEventListener("pointercancel", end)
   }
+  return { dragging, press }
+}
+
+// An edge to resize by: a 4px strip, wider on a touch screen, that shows a
+// line on hover, while dragged and when focused, and moves with the arrow
+// keys, as T3 Code's.
+function Edge({ label, width, dragging, press, step }: { label: string; width: number; dragging: boolean; press(event: React.PointerEvent<HTMLDivElement>): void; step(by: number): void }) {
+  return (
+    <div
+      role="separator"
+      aria-label={label}
+      aria-orientation="vertical"
+      aria-valuenow={Math.round(width)}
+      tabIndex={0}
+      onPointerDown={press}
+      onKeyDown={(event) => {
+        const by = event.key === "ArrowLeft" ? KEY_STEP : event.key === "ArrowRight" ? -KEY_STEP : 0
+        if (by === 0) return
+        event.preventDefault()
+        step(by)
+      }}
+      className="group absolute inset-y-0 left-0 z-40 w-1 -translate-x-1/2 cursor-col-resize touch-none outline-none select-none pointer-coarse:w-4"
+    >
+      <span aria-hidden="true" className={cn("pointer-events-none absolute inset-y-0 left-1/2 w-px bg-transparent transition-colors group-hover:bg-line group-focus-visible:bg-accent", dragging && "bg-accent")} />
+    </div>
+  )
+}
+
+// The panel beside the conversation, as wide as it was made, within its
+// room (panelWidth): the conversation's column and the panel are watched,
+// so the room follows the session list shown or hidden as well as the
+// window.
+function Beside({ children }: { children: ReactNode }) {
+  const shown = useDiffShown()
+  const place = useRef<HTMLElement>(null)
+  const [room, setRoom] = useState({ window: innerWidth, row: innerWidth })
+  useLayoutEffect(() => {
+    const aside = place.current
+    const conversation = aside?.previousElementSibling
+    if (!aside || !(conversation instanceof HTMLElement)) return
+    const measure = () =>
+      setRoom((now) => {
+        const next = { window: innerWidth, row: conversation.offsetWidth + aside.offsetWidth }
+        return now.window === next.window && now.row === next.row ? now : next
+      })
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(conversation)
+    observer.observe(aside)
+    addEventListener("resize", measure)
+    return () => {
+      observer.disconnect()
+      removeEventListener("resize", measure)
+    }
+  }, [])
+  const kept = panelWidth(shown.width, room)
+  const edge = useEdge(kept, (by) => panelWidth(kept + by, room), widenTo)
+  const width = edge.dragging ?? kept
   return (
     <aside ref={place} aria-label="Right panel" style={{ width }} className="relative flex min-h-0 shrink-0 flex-col border-l border-line bg-bg text-caption text-text">
-      <div
-        role="separator"
-        aria-label="Resize the right panel"
-        aria-orientation="vertical"
-        aria-valuenow={width}
-        tabIndex={0}
-        onPointerDown={drag}
-        onKeyDown={(event) => {
-          const by = event.key === "ArrowLeft" ? KEY_STEP : event.key === "ArrowRight" ? -KEY_STEP : 0
-          if (by === 0) return
-          event.preventDefault()
-          widenTo(panelWidth(width + by, room))
-        }}
-        className="group absolute inset-y-0 left-0 z-40 w-1 -translate-x-1/2 cursor-col-resize touch-none outline-none select-none pointer-coarse:w-4"
-      >
-        <span aria-hidden="true" className={cn("pointer-events-none absolute inset-y-0 left-1/2 w-px bg-transparent transition-colors group-hover:bg-line group-focus-visible:bg-accent", dragging !== undefined && "bg-accent")} />
-      </div>
+      <Edge label="Resize the right panel" width={width} dragging={edge.dragging !== undefined} press={edge.press} step={(by) => widenTo(panelWidth(width + by, room))} />
       {children}
     </aside>
   )
@@ -183,7 +222,7 @@ function Beside({ children }: { children: ReactNode }) {
 
 // The panel for what is selected: its tabs, and the tab shown. The pull
 // request's tab is there while the session's project's branch has one.
-function Panel({ connection, sessions, session }: { connection: Connection; sessions: Sessions; session: string | undefined }) {
+function Panel({ connection, sessions, session, phone }: { connection: Connection; sessions: Sessions; session: string | undefined; phone: boolean }) {
   const shown = useDiffShown()
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const summary = session === undefined ? undefined : list.sessions.find((each) => each.session === session)
@@ -213,7 +252,7 @@ function Panel({ connection, sessions, session }: { connection: Connection; sess
           <Quiet>No session is open. The changes a session makes are shown here.</Quiet>
         </>
       ) : (
-        <SessionDiff key={session} connection={connection} session={session} project={project} />
+        <SessionDiff key={session} connection={connection} session={session} project={project} branch={summary?.branch} phone={phone} />
       )}
     </>
   )
@@ -273,7 +312,8 @@ function ToolButton({ label, pressed, className, children, ...props }: { label: 
   )
 }
 
-const NONE_FOLDED: ReadonlySet<string> = new Set()
+const NONE: ReadonlySet<string> = new Set()
+const EMPTY_VIEW: KeptView = { seen: NONE, folded: NONE, scroll: 0, tree: NONE }
 const NOT_LISTED: ChangesState = { listed: undefined, problem: undefined }
 const noChanges = { subscribe: () => () => {}, state: () => NOT_LISTED }
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
@@ -306,7 +346,7 @@ function CloseButton() {
   )
 }
 
-function SessionDiff({ connection, session, project }: { connection: Connection; session: string; project: ListedProject | null | undefined }) {
+function SessionDiff({ connection, session, project, branch, phone }: { connection: Connection; session: string; project: ListedProject | null | undefined; branch: string | undefined; phone: boolean }) {
   const shown = useDiffShown()
   const [changes, setChanges] = useState<Changes>()
   useEffect(() => {
@@ -348,74 +388,74 @@ function SessionDiff({ connection, session, project }: { connection: Connection;
 
   const shownRead = read?.scope === scope ? read : undefined
   const files = useMemo(() => (shownRead !== undefined && "files" in shownRead ? [...shownRead.files].sort((a, b) => byPath(a.path, b.path)) : undefined), [shownRead])
-  // Each file is folded at first, but the one the panel was opened at, or
-  // else the first, as the owner's drawing has it; one that comes later,
-  // as when a turn ends, is folded too. What the owner folds or opens stays.
-  const [folding, setFolding] = useState<{ scope: Scope; seen: ReadonlySet<string>; folded: ReadonlySet<string> }>({ scope, seen: new Set(), folded: new Set() })
-  const target = shown.file
+
+  // How the owner left this comparison, kept by the session and what it
+  // compares: the latest turn as the turn it is now, so that a new turn
+  // opens at its own first file.
+  const compared = scope === "latest" && listed !== undefined ? `turn:${listed.latest}` : scope
+  const key = `${session}\u0000${compared}`
+  const [, redraw] = useState(0)
+  const current = viewOf(key) ?? EMPTY_VIEW
+  const change = (next: Partial<KeptView>) => {
+    keepView(key, { ...current, ...next })
+    redraw((times) => times + 1)
+  }
+  // Each file is folded at first but the one the panel was opened at, or
+  // else the first that has a diff; one that comes later, as when a turn
+  // ends, is folded too.
+  const target = shown.file ?? (shown.first && files !== undefined ? firstDrawn(files) : undefined)
   useEffect(() => {
     if (files === undefined) return
-    setFolding((was) => {
-      const fresh = was.scope !== scope
-      const seen = fresh ? new Set<string>() : new Set(was.seen)
-      const folded = fresh ? new Set<string>() : new Set(was.folded)
-      const open = target ?? (fresh || was.seen.size === 0 ? files[0]?.path : undefined)
-      for (const file of files) {
-        if (seen.has(file.path)) continue
-        seen.add(file.path)
-        if (file.path !== open) folded.add(file.path)
-      }
-      if (open !== undefined) folded.delete(open)
-      return { scope, seen, folded }
-    })
-  }, [files, scope, target])
-  const folded = folding.scope === scope ? folding.folded : NONE_FOLDED
-  const fold = (path: string) =>
-    setFolding((was) => {
-      const now = new Set(was.folded)
-      if (!now.delete(path)) now.add(path)
-      return { ...was, folded: now }
-    })
-  // Opened at a file, from a turn's card: gone to once, when it is drawn.
+    const folding = foldFiles(current, files, target)
+    if (folding.folded.size !== current.folded.size || folding.seen.size !== current.seen.size || [...folding.folded].some((path) => !current.folded.has(path))) change(folding)
+  }, [files, key, target])
+  const fold = (path: string) => {
+    const folded = new Set(current.folded)
+    if (!folded.delete(path)) folded.add(path)
+    change({ folded })
+  }
+  // Opened at a file, from a turn's card or the tree: gone to once, when it is drawn.
   const [goTo, setGoTo] = useState<string>()
-  const [current, setCurrent] = useState<string>()
+  const [at, setAt] = useState<string>()
   useEffect(() => {
     if (target === undefined || !files?.some((file) => file.path === target)) return
     setGoTo(target)
-    setCurrent(target)
+    setAt(target)
     wentToFile()
   }, [files, target])
+  // At phone width the tree, when shown, takes the diff's place, and goes
+  // once a file is picked in it.
+  const [treeHere, setTreeHere] = useState(false)
+  const treeShown = phone ? treeHere : shown.tree
   function toFile(path: string) {
-    setFolding((was) => {
-      const now = new Set(was.folded)
-      now.delete(path)
-      return { ...was, folded: now }
-    })
+    const folded = new Set(current.folded)
+    folded.delete(path)
+    change({ folded })
+    if (phone) setTreeHere(false)
     setGoTo(path)
-    setCurrent(path)
+    setAt(path)
   }
+  // Why a file's folded lines could not be opened, until something else is compared.
+  const [opening, setOpening] = useState<string>()
+  useEffect(() => setOpening(undefined), [key])
 
-  const [treeFolded, setTreeFolded] = useState<ReadonlySet<string>>(new Set())
   // The session's latest turn, opened from its card, is the latest turn.
   const named: Scope = listed !== undefined && scope === `turn:${listed.latest}` ? "latest" : scope
   const label = choices.find((choice) => choice.key === named)?.label ?? (named.startsWith("turn:") ? `Turn ${named.slice(5)}` : "Latest turn")
   const totals = files !== undefined && files.length > 0 ? changedFilesLine(files) : undefined
-  // The files with a diff to draw, and those that say why they have none.
-  const [drawable, notes] = useMemo(() => {
-    const drawn = (file: FileDiff) => file.patch !== undefined && file.patch !== ""
-    return [files?.filter(drawn) ?? [], files?.filter((file) => !drawn(file)) ?? []]
-  }, [files])
   const byTurns = scope === "latest" || scope === "session" || scope.startsWith("turn:")
+  const layout = phone ? "stacked" : shown.layout
+  const sides = (path: string, from: string | undefined) => changes!.sides(scope, path, from, scope === "branch" ? base : undefined)
   return (
     <>
       <Toolbar>
-        <div className="flex min-w-0 flex-1 items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-label={`Diff scope: ${label}`}
-                className="flex h-control-xs max-w-full min-w-0 items-center gap-1 rounded-md bg-text/5 pr-1.5 pl-2 text-caption font-medium text-text hover:bg-text/8 data-[state=open]:bg-text/8"
+                className="flex h-control-xs max-w-full min-w-0 shrink-0 items-center gap-1 rounded-md bg-text/5 pr-1.5 pl-2 text-caption font-medium text-text hover:bg-text/8 data-[state=open]:bg-text/8"
               >
                 <span className="truncate">{label}</span>
                 <CaretDown className="size-icon-caret shrink-0 opacity-70" />
@@ -429,79 +469,141 @@ function SessionDiff({ connection, session, project }: { connection: Connection;
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
+          {/* The branch compared, and the one it is compared against, as T3 Code names them. */}
+          {scope === "branch" && shownRead !== undefined && "base" in shownRead && shownRead.base !== undefined && (
+            <span className="min-w-0 truncate text-caption text-text-muted" title={`${branch ?? "This branch"} against ${shownRead.base}`}>
+              {branch ?? "This branch"} against {shownRead.base}
+            </span>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           {totals !== undefined && <Stat added={totals.added} removed={totals.removed} className="mr-1 text-2xs" />}
           <ToolButton label="Refresh diff" onClick={() => setAgain(again + 1)}>
             <ArrowClockwise className={cn(reading && "animate-spin motion-reduce:animate-none")} />
           </ToolButton>
-          <div role="group" aria-label="Diff layout" className="mx-0.5 flex rounded-md bg-text/6 p-0.5">
-            <Segment label="Stacked diff view" title="Stacked" pressed={shown.layout === "stacked"} onClick={() => drawAs("stacked")}>
-              <Rows />
-            </Segment>
-            <Segment label="Split diff view" title="Side by side" pressed={shown.layout === "split"} onClick={() => drawAs("split")}>
-              <Columns />
-            </Segment>
-          </div>
+          {/* At phone width a diff is always stacked. */}
+          {!phone && (
+            <div role="group" aria-label="Diff layout" className="mx-0.5 flex rounded-md bg-text/6 p-0.5">
+              <Segment label="Stacked diff view" title="Stacked" pressed={shown.layout === "stacked"} onClick={() => drawAs("stacked")}>
+                <Rows />
+              </Segment>
+              <Segment label="Split diff view" title="Side by side" pressed={shown.layout === "split"} onClick={() => drawAs("split")}>
+                <Columns />
+              </Segment>
+            </div>
+          )}
           <ToolButton label={shown.wrap ? "Disable line wrapping" : "Enable line wrapping"} pressed={shown.wrap} onClick={() => wrapLines(!shown.wrap)}>
             <ArrowElbowDownLeft />
           </ToolButton>
-          <ToolButton label={shown.tree ? "Hide file tree" : "Show file tree"} pressed={shown.tree} onClick={() => showTree(!shown.tree)}>
+          <ToolButton label={treeShown ? "Hide file tree" : "Show file tree"} pressed={treeShown} onClick={() => (phone ? setTreeHere(!treeHere) : showTree(!shown.tree))}>
             <TreeView />
           </ToolButton>
           <span aria-hidden="true" className="mx-1 h-4 w-px bg-line" />
           <CloseButton />
         </div>
       </Toolbar>
+      {opening !== undefined && <Problem text={opening} />}
       {byTurns && listed !== undefined && !listed.kept ? (
         <Quiet>evie keeps no copies of the files it changes in this project, since its undo plugin is off, so what its turns changed cannot be shown.</Quiet>
       ) : shownRead === undefined ? (
-        listProblem !== undefined ? <Problem text={listProblem} /> : <Loading />
+        listProblem !== undefined ? <Problem text={`${listProblem} Refresh to try again.`} /> : <Loading />
       ) : "problem" in shownRead ? (
-        <Problem text={shownRead.problem} />
+        <Problem text={`${shownRead.problem} Refresh to try again.`} />
       ) : shownRead.unavailable !== undefined ? (
         <Quiet>{shownRead.unavailable}</Quiet>
       ) : files === undefined || files.length === 0 ? (
         <Quiet>{nothingIn(scope, shownRead.base)}</Quiet>
       ) : (
-        <div className="flex min-h-0 flex-1">
-          <div className="min-h-0 min-w-0 flex-1">
+        <DiffAndTree tree={treeShown} phone={phone} files={files} folded={current.tree} at={at} setFolded={(tree) => change({ tree })} pick={toFile}>
+          <ViewBoundary>
             <Suspense fallback={<Loading />}>
               <DiffView
-                files={drawable}
-                layout={shown.layout}
+                key={key}
+                files={files}
+                layout={layout}
                 wrap={shown.wrap}
-                folded={folded}
+                folded={current.folded}
                 fold={fold}
                 goTo={goTo}
                 wentTo={() => setGoTo(undefined)}
-                {...(notes.length > 0 && { footer: <Notes files={notes} /> })}
+                scroll={current.scroll}
+                scrolled={(top) => keepView(key, { ...(viewOf(key) ?? EMPTY_VIEW), scroll: top })}
+                read={sides}
+                failed={setOpening}
               />
             </Suspense>
-          </div>
-          {shown.tree && (
-            <nav aria-label="Changed files" className="flex w-diff-tree min-h-0 shrink-0 flex-col border-l border-line/60">
-              <FilesHeader files={files} folded={treeFolded} setFolded={setTreeFolded} />
-              <div className="flex min-h-0 flex-col overflow-y-auto px-1 pb-2">
-                <FilesTreeRows
-                  rows={filesTree(files, treeFolded)}
-                  current={current}
-                  fold={(path) =>
-                    setTreeFolded((was) => {
-                      const now = new Set(was)
-                      if (!now.delete(path)) now.add(path)
-                      return now
-                    })
-                  }
-                  pick={toFile}
-                />
-              </div>
-            </nav>
-          )}
-        </div>
+          </ViewBoundary>
+        </DiffAndTree>
       )}
     </>
   )
+}
+
+// The diff, and beside it, when shown, the file tree, as T3 Code's: on the
+// right, as wide as the owner drags its left edge, which this browser
+// remembers. At phone width the tree, when shown, takes the diff's place.
+function DiffAndTree({ tree, phone, files, folded, at, setFolded, pick, children }: { tree: boolean; phone: boolean; files: readonly FileDiff[]; folded: ReadonlySet<string>; at: string | undefined; setFolded(folded: ReadonlySet<string>): void; pick(path: string): void; children: ReactNode }) {
+  const shown = useDiffShown()
+  const row = useRef<HTMLDivElement>(null)
+  const [room, setRoom] = useState(0)
+  useLayoutEffect(() => {
+    const element = row.current
+    if (!element) return
+    const measure = () => setRoom(element.clientWidth)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  const kept = treeWidth(shown.treeWidth, room)
+  const edge = useEdge(kept, (by) => treeWidth(kept + by, room), widenTreeTo)
+  const width = edge.dragging ?? kept
+  const nav = (
+    <nav aria-label="Changed files" style={phone ? undefined : { width }} className={cn("relative flex min-h-0 flex-col", phone ? "flex-1" : "shrink-0 border-l border-line/60")}>
+      {!phone && <Edge label="Resize the file tree" width={width} dragging={edge.dragging !== undefined} press={edge.press} step={(by) => widenTreeTo(treeWidth(width + by, room))} />}
+      <FilesHeader files={files} folded={folded} setFolded={setFolded} />
+      <div className="flex min-h-0 flex-col overflow-y-auto px-1 pb-2">
+        <FilesTreeRows
+          rows={filesTree(files, folded)}
+          current={at}
+          fold={(path) => {
+            const now = new Set(folded)
+            if (!now.delete(path)) now.add(path)
+            setFolded(now)
+          }}
+          pick={pick}
+        />
+      </div>
+    </nav>
+  )
+  return (
+    <div ref={row} className="flex min-h-0 flex-1">
+      {!(phone && tree) && <div className="min-h-0 min-w-0 flex-1">{children}</div>}
+      {tree && nav}
+    </div>
+  )
+}
+
+// What the panel shows should the diff view fail to load, as an old page
+// does once the server has restarted with a new build, or one gone
+// offline: a line saying so, and a way to load the page again, in place of
+// the diff, so that the rest of the page carries on.
+class ViewBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  override render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-5 py-2 text-center text-caption text-text-muted">
+        <p>The diff view could not be loaded</p>
+        <button type="button" onClick={() => location.reload()} className="flex h-control-xs items-center rounded-md bg-text/5 px-2 text-caption font-medium text-text hover:bg-text/8">
+          Reload
+        </button>
+      </div>
+    )
+  }
 }
 
 function ScopeItem({ choice }: { choice: ReturnType<typeof scopeChoices>[number] }) {
@@ -535,52 +637,21 @@ function Segment({ label, title, pressed, onClick, children }: { label: string; 
 }
 
 // The tree's header, as T3 Code's: "Files", how many, and a button that
-// folds or opens every folder.
-function FilesHeader({ files, folded, setFolded }: { files: readonly ChangedFile[]; folded: ReadonlySet<string>; setFolded(folded: ReadonlySet<string>): void }) {
-  const folders = filesTree(files, new Set()).flatMap((row) => (row.kind === "folder" ? [row.path] : []))
-  const allOpen = folded.size === 0
+// folds every folder, or, while one shown is folded, opens them all.
+function FilesHeader({ files, folded, setFolded }: { files: readonly FileDiff[]; folded: ReadonlySet<string>; setFolded(folded: ReadonlySet<string>): void }) {
+  const folders = treeFolders(files, folded)
   return (
     <div className="flex h-diff-toolbar shrink-0 items-center gap-2 pr-1 pl-3">
       <span className="text-caption font-medium text-text">Files</span>
       <span className="text-caption text-text-muted tabular-nums">{files.length}</span>
       <span className="flex-1" />
-      {folders.length > 0 && (
-        <ToolButton label={allOpen ? "Collapse all folders" : "Expand all folders"} onClick={() => setFolded(allOpen ? new Set(folders) : new Set())}>
+      {folders.all.length > 0 && (
+        <ToolButton label={folders.open ? "Collapse all folders" : "Expand all folders"} onClick={() => setFolded(folders.open ? new Set(folders.all) : new Set())}>
           <CaretUpDown />
         </ToolButton>
       )}
     </div>
   )
-}
-
-// The files that have no diff to draw, after those that have, each in a
-// row as a file's header, saying why.
-function Notes({ files }: { files: readonly FileDiff[] }) {
-  return (
-    <ul aria-label="Files not shown" className="flex flex-col pb-2">
-      {files.map((file) => (
-        <li key={file.path} className="flex h-row-height min-w-0 items-center gap-1.5 pr-3 pl-8 text-caption">
-          <span title={file.path} className="min-w-0 flex-1 truncate text-text">
-            {file.path}
-          </span>
-          <span className="shrink-0 text-text-muted">{noteOf(file)}</span>
-          {hasCounts(file) && <Stat added={file.added} removed={file.removed} className="ml-1 text-2xs" />}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-// Why a file has no diff to draw.
-function noteOf(file: FileDiff): string {
-  if (file.submodule) return "Submodule changed"
-  if (file.tooMany) return "Not compared: one comparison reads at most 300 files"
-  if (file.tooSlow) return "Not compared: it took too long"
-  if (file.filtered) return "Filtered file, changes not shown"
-  if (file.binary) return "Binary file, not shown"
-  if (file.tooLarge) return "Too large to show"
-  if (file.unknown) return "Changed outside evie, and no copy is kept"
-  return file.status === "removed" ? "The file was empty" : "The file is empty"
 }
 
 // A line where the diff would be, as T3 Code's: in the middle, small and muted.
@@ -592,8 +663,9 @@ function Quiet({ children }: { children: ReactNode }) {
   )
 }
 
+// What went wrong, as T3 Code says it: a small red line above the diff.
 function Problem({ text }: { text: string }) {
-  return <p className="px-3 py-2 text-2xs break-words text-status-failed/80">{text} Refresh to try again.</p>
+  return <p className="shrink-0 px-3 py-2 text-2xs break-words text-status-failed/80">{text}</p>
 }
 
 // While the diff is read, or its view loads: bars where the files' headers

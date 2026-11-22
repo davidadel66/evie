@@ -64,14 +64,11 @@
      edge and its counts, and, mixed with the ground in the diff view
      (diff-view.ts), the wash under it, its line number's column and the
      number itself. The board names no colours for them, so they are its own
-     muted green and red, the values Done and Failed have, as the owner's
-     drawing of the diff has them. */
+     muted green and red, the values Done and Failed have. */
   --diff-added: var(--status-done);
   --diff-removed: var(--status-failed);
-  /* A file changed, in the diff's file headers: the project slate. */
-  --diff-changed: var(--project-slate);
-  /* A diff's syntax colours, as the owner's drawing has them: lighter tints
-     of the project colours, which read on the dark ground. Headings and
+  /* A diff's syntax colours: lighter tints of the project colours, which
+     read on the dark ground. Headings and
      names in mustard, keywords and a list's marks in rust, links and types
      in slate, addresses and strings in moss, code and constants in plum;
      comments and punctuation are muted, the rest is text. */

@@ -269,6 +269,13 @@ test("pinned, the card stays beside the conversation while it has the room, and 
   expect(CARD_CLEARANCE).toBe(324)
 })
 
+test("while the right panel is open the card goes behind its header button, and pinned, it comes back when the panel closes", () => {
+  const room = { phone: false, pinned: true, height: 960, width: 1440 - 256 }
+  expect(cardPlace({ ...room, panel: true })).toBe("popover")
+  expect(cardPlace({ ...room, panel: false })).toBe("inline")
+  expect(cardPlace({ ...room, width: 390, phone: true, panel: true })).toBe("sheet")
+})
+
 test("the card does not pin in a column with less than 160px of room under its top, as T3 Code's does not: it opens from the header", () => {
   // The column's height, less the card's 64px from its top and 12px from its foot.
   expect(cardPlace({ width: 1184, phone: false, pinned: true, height: 64 + 160 + 12 })).toBe("inline")

@@ -1,34 +1,47 @@
-import type { ChangedFile, TurnChanges } from "../../src/core/types.ts"
+import type { ChangedFile, FileDiff, TurnChanges } from "../../src/core/types.ts"
 
 // The diff's rules, apart from its screen: what the right panel can
-// compare, the line that says how much a turn changed, the changed files
-// as a tree, and what a file held before and after, from its diff as the
-// server sends it.
+// compare, the line that says how much a turn changed, which files are
+// folded, a turn's files as its card lists them, and the changed files as
+// a tree.
 
-// What a file held before and after, from its diff, which carries the
-// whole file around its changes, as the server sends it to show: each
-// unchanged line is on both sides, a line removed before, and a line added
-// after. Undefined for a diff that is not of the whole file, one that does
-// not start at its first line or comes in more than one piece.
-export function sidesOf(patch: string): { before: string; after: string } | undefined {
-  const lines = patch.split("\n")
-  if (lines.at(-1) === "") lines.pop()
-  const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(lines[0] ?? "")
-  if (header === null || Number(header[1]) > 1 || Number(header[2]) > 1 || lines.slice(1).some((line) => line.startsWith("@@"))) return undefined
-  const before: string[] = []
-  const after: string[] = []
-  // The side or sides the last line went to, which a mark after it says had no line end.
-  let last: string[][] = []
-  for (const line of lines.slice(1)) {
-    if (line.startsWith("\\")) {
-      for (const side of last) side[side.length - 1] = side.at(-1)!.slice(0, -1)
-      continue
-    }
-    const text = `${line.slice(1)}\n`
-    last = line.startsWith("+") ? [after] : line.startsWith("-") ? [before] : [before, after]
-    for (const side of last) side.push(text)
+// Paths in the order git lists them, by their characters' codes, so that
+// "README.md" comes before "recipes/".
+export const byPath = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+
+// Whether a file has a diff to draw: its lines, or for a file renamed and
+// not changed, its header. One binary, too large, filtered or not known
+// has none, and says why instead.
+export const drawable = (file: FileDiff) => file.patch !== undefined && (file.patch !== "" || file.from !== undefined)
+
+// The first file, in the order of their paths, that has a diff to draw.
+export const firstDrawn = (files: readonly FileDiff[]): string | undefined => files.filter(drawable).map((file) => file.path).sort(byPath)[0]
+
+// Which files of a comparison are folded, and which have been seen. Each
+// file is folded the first time it is seen, as T3 Code's are, but the file
+// the diff is opened `at`, or else, the first time any is seen, the first
+// that has a diff; and a file it is opened at later opens. What the owner
+// folds or opens stays as they left it.
+export type Folding = { seen: ReadonlySet<string>; folded: ReadonlySet<string> }
+export function foldFiles(was: Folding | undefined, files: readonly FileDiff[], at: string | undefined): Folding {
+  const seen = new Set(was?.seen)
+  const folded = new Set(was?.folded)
+  const open = at ?? (seen.size === 0 ? firstDrawn(files) : undefined)
+  for (const file of files) {
+    if (seen.has(file.path) || !drawable(file)) continue
+    seen.add(file.path)
+    if (file.path !== open) folded.add(file.path)
   }
-  return { before: before.join(""), after: after.join("") }
+  if (open !== undefined) folded.delete(open)
+  return { seen, folded }
+}
+
+// The files a turn's card lists, as T3 Code's: at most 200, in the order
+// of their paths, and how many more the full diff has.
+const MOST_IN_CARD = 200
+export function cardFiles<File extends ChangedFile>(files: readonly File[]): { listed: File[]; more: number } {
+  const ordered = [...files].sort((a, b) => byPath(a.path, b.path))
+  return { listed: ordered.slice(0, MOST_IN_CARD), more: Math.max(0, ordered.length - MOST_IN_CARD) }
 }
 
 // Whether a file's lines added and removed were counted: not for one that
@@ -140,4 +153,13 @@ export function filesTree(files: readonly ChangedFile[], folded: ReadonlySet<str
   }
   walk(top, 0, "")
   return rows
+}
+
+// Every folder of the files' tree, by its whole path, and whether those
+// shown are all open, which says whether a press of the tree's button
+// folds every folder or opens them all.
+export function treeFolders(files: readonly ChangedFile[], folded: ReadonlySet<string>): { all: string[]; open: boolean } {
+  const all = filesTree(files, new Set()).flatMap((row) => (row.kind === "folder" ? [row.path] : []))
+  const open = filesTree(files, folded).every((row) => row.kind !== "folder" || row.open)
+  return { all, open }
 }

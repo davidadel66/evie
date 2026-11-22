@@ -244,15 +244,16 @@
   --spacing-job-output: 240px;
   /* The right panel, as T3 Code's: its diff's toolbar, 40px tall; the
      small 24px buttons in it, on its tabs and on a turn's changed-files
-     card; the widest a tab grows; the file tree beside the diff, at most
-     256px and 40% of the panel; and the panel as a sheet over the page at
-     980px or narrower, 42% of the window, at least 320px and at most 448px.
-     How wide it is beside the conversation is worked out in right-panel.ts. */
+     card; the widest a tab grows; and the panel as a sheet over the page
+     at 980px or narrower, 42% of the window, at least 320px and at most
+     448px, and at phone width the narrower of 88% of the window and 384px.
+     How wide it and its file tree are beside the conversation is worked
+     out in right-panel.ts. */
   --spacing-diff-toolbar: 40px;
   --spacing-control-xs: 24px;
   --spacing-panel-tab: 144px;
-  --spacing-diff-tree: min(256px, 40%);
   --spacing-panel-sheet: clamp(320px, 42vw, 448px);
+  --spacing-panel-phone: min(88vw, 384px);
   /* Files attached: the thumbnail in a chip above the message box's text,
      the largest an image attached shows in the conversation, and the
      largest it shows opened, within the page. */

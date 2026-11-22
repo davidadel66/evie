@@ -499,10 +499,16 @@ export type ChangedFile = {
   // One git turns with a filter, as git-lfs does: its contents in git and
   // in the folder differ by the filter, which is not run, so it is not compared.
   filtered?: true
+  // A file git found renamed: the path it had before, from which it is
+  // compared. Only the git comparisons find renames.
+  from?: string
 }
 
 // With its diff, when it has one: its hunks as a unified diff writes them,
-// from the first `@@` line, without the lines that name the files.
+// each change with three unchanged lines around it, from the first `@@`
+// line, without the lines that name the files. Empty for a file renamed
+// and not changed. The whole file, to show the lines between the hunks, is
+// read apart, with `read_file_sides`.
 export type FileDiff = ChangedFile & { patch?: string }
 
 // A turn that changed files: its number in the session, counted from 1;
@@ -964,6 +970,20 @@ export type Commands = {
       | { session: string; of: "session" | "uncommitted" }
       | { session: string; of: "branch"; base?: string }
     output: { files: FileDiff[]; base?: string; unavailable?: string }
+  }
+  // The whole of one file a comparison changed, as `read_changes` compares
+  // it, before and after, for a client to show the unchanged lines between
+  // its changes: `path` as `read_changes` gives it, and `from`, the path it
+  // had before, for a file renamed. A side is null where there was no file.
+  // A file the comparison did not change, or one that is binary, larger
+  // than a diff shows, or not known, has no sides, and the answer says why.
+  read_file_sides: {
+    input: (
+      | { session: string; of: "turn"; turn: number }
+      | { session: string; of: "session" | "uncommitted" }
+      | { session: string; of: "branch"; base?: string }
+    ) & { path: string; from?: string }
+    output: { before: string | null; after: string | null } | { unavailable: string }
   }
   // The pull request of the branch a project's folder is on, as the
   // plugin that reads them gives it, such as the github plugin with the

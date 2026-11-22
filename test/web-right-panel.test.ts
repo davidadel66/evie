@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { panelPlace, panelWidth } from "../web/src/right-panel.ts"
+import { panelPlace, panelWidth, treeWidth } from "../web/src/right-panel.ts"
 
 // The right panel's room, as T3 Code's has it: how wide it is beside the
 // conversation, and where it is at each width of the window.
@@ -17,11 +17,23 @@ test("the right panel is 540px wide at first, and as wide as it was made, but at
   expect(panelWidth(undefined, { window: 990, row: 600 })).toBe(360)
 })
 
-test("the right panel sits beside the conversation above 980px, slides over it from the right up to there, and fills the screen at phone width", () => {
+test("the right panel sits beside the conversation above 980px, slides over it from the right up to there, and at phone width is T3 Code's narrower sheet", () => {
   expect(panelPlace(1440)).toBe("beside")
   expect(panelPlace(981)).toBe("beside")
   expect(panelPlace(980)).toBe("sheet")
   expect(panelPlace(768)).toBe("sheet")
-  expect(panelPlace(767)).toBe("screen")
-  expect(panelPlace(390)).toBe("screen")
+  expect(panelPlace(767)).toBe("phone")
+  expect(panelPlace(390)).toBe("phone")
+})
+
+test("the file tree beside the diff is 256px at first, or 40% of the panel when that is less, as wide as it was made between 160px and 560px, and always leaves the diff 256px", () => {
+  expect(treeWidth(undefined, 540)).toBe(216)
+  expect(treeWidth(undefined, 800)).toBe(256)
+  expect(treeWidth(300, 800)).toBe(300)
+  expect(treeWidth(100, 800)).toBe(160)
+  expect(treeWidth(700, 1000)).toBe(560)
+  // The diff keeps 256px of a 540px panel, so the tree has at most 284px.
+  expect(treeWidth(400, 540)).toBe(284)
+  // A panel too narrow for both gives the tree its least.
+  expect(treeWidth(undefined, 360)).toBe(160)
 })
