@@ -6,6 +6,9 @@ Parts of evie are adapted from T3 Code (https://github.com/pingdotgg/t3code):
   src/plugins/github.ts, and in web/src/pull-request.ts.
 - How a run of tool calls is summed up in a sentence, in web/src/step-words.ts,
   from T3 Code's work log (packages/client-runtime/src/work-log/presentation.ts).
+- How a reply still streaming in is cut into blocks, in web/src/markdown.ts,
+  from T3 Code's splitMarkdownBlocks
+  (apps/web/src/components/chat/markdownStreamBlocks.ts).
 
 MIT License
 
