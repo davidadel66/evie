@@ -196,6 +196,28 @@ test("a further message to a subagent that has finished builds on its conversati
   expect(notes(run)[1]).toContain("Background job 2 (subagent: look into it) has finished.\n\nIts report:\n\ncreateSession is on line 80.")
 })
 
+test("each round of a subagent's work is a job that names the subagent's session, so that a client can read its conversation", async () => {
+  const { run, parent, call } = await start(
+    [{ calls: [hand("Find the session code.")] }, { text: "Started." }, { text: "Got it." }],
+    [{ text: "It is in projects.ts." }, { text: "createSession is on line 80." }],
+  )
+  await say(run, "go")
+  await turns(run, 2)
+  const child = childId(run)
+  const sent = call("subagent_send", { id: child, message: "Which line?" })
+  parent.push({ text: "Line 80, then." })
+  await sent
+  await turns(run, 4)
+
+  const told = run.events.flatMap((event) => (event.type === "job" ? [`${event.job.id} ${event.job.status} ${event.job.subagent}`] : []))
+  expect(told).toEqual([`1 running ${child}`, `1 finished ${child}`, `2 running ${child}`, `2 finished ${child}`])
+  const { jobs: listed } = await run.evie.send({ type: "open_session", session: run.session })
+  expect(listed.map((job) => [job.id, job.subagent])).toEqual([
+    ["1", child],
+    ["2", child],
+  ])
+})
+
 test("a message to a subagent that is still working joins what it is doing, and one report follows", async () => {
   // A tool the subagent waits in until the test lets it go, so the message arrives while it works.
   let release = () => {}

@@ -163,6 +163,9 @@ export type Job = {
   started: number
   ended?: number
   outputFile: string
+  // The session doing the work, for a round of a subagent's: a client can
+  // read its conversation with `read_history`.
+  subagent?: string
 }
 
 // What a tool hands over when it puts work in the background.
@@ -180,6 +183,8 @@ export type JobWork = {
   // What the job's record keeps for the work's plugin, to pick the work up
   // again after Evie restarts, such as the id of a subagent.
   keep?: Record<string, unknown>
+  // The session doing the work, when it is a subagent's round of work.
+  subagent?: string
 }
 
 // A job number taken for work a tool call waits on, before it is a job: its
@@ -573,6 +578,17 @@ export type Commands = {
   list_sessions: {
     input: Record<never, never>
     output: SessionSummary[]
+  }
+  // A background job's output so far, as its work wrote it to its output
+  // file: from byte `after`, where the last read ended, to the end, or
+  // without it from the start. At most the last 64 KiB are given, from the
+  // first character that starts in them; `from` and `to` say which bytes
+  // of the file the text is, so a `from` past `after` means some were
+  // skipped. A character not yet written whole is left for the next read.
+  // The jobs are those `open_session` lists: the ones since Evie last started.
+  read_job_output: {
+    input: { session: string; id: string; after?: number }
+    output: { text: string; from: number; to: number }
   }
 }
 

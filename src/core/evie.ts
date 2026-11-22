@@ -3,7 +3,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
-import { createJobs, EndNotKnown } from "./jobs.ts"
+import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { branchOf, createProjects, keepEvieOutOfGit, makeProject } from "./projects.ts"
@@ -618,6 +618,17 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, limit)
   }
 
+  // A job's output is read from its file, for the jobs this run of Evie knows.
+  async function readJobOutput(input: Commands["read_job_output"]["input"]): Promise<Commands["read_job_output"]["output"]> {
+    if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
+    if (input.after !== undefined && (!Number.isInteger(input.after) || input.after < 0)) {
+      throw new Error("`after` is where the last read ended, as its `to` gave it: a whole number of bytes, from 0.")
+    }
+    const job = jobs.list(input.session).find((each) => each.id === input.id)
+    if (!job) throw new Error(`This session has had no job ${String(input.id)} since Evie last started.`)
+    return readOutput(job.outputFile, input.after)
+  }
+
   // Each project's branch is read now, from its folder, all at once.
   async function listProjects(): Promise<Commands["list_projects"]["output"]> {
     return Promise.all(
@@ -730,6 +741,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return summaries.list() as Output
         case "new_project":
           return (await newProject(command)) as Output
+        case "read_job_output":
+          return (await readJobOutput(command)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

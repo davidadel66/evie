@@ -139,7 +139,16 @@ export function createJobs(options: {
   function track(record: JobRecord, work: JobWork, wake = true): Job {
     const { id, session } = record
     delete record.inCall
-    const job: Job = { id, session, kind: record.kind, title: record.title, status: "running", started: record.started, outputFile: record.outputFile }
+    const job: Job = {
+      id,
+      session,
+      kind: record.kind,
+      title: record.title,
+      status: "running",
+      started: record.started,
+      outputFile: record.outputFile,
+      ...(work.subagent !== undefined && { subagent: work.subagent }),
+    }
     const running: Running = { job, work, record, ...(!wake && { quiet: true as const }) }
     ofSession(session).push(running)
     save(record)
@@ -301,6 +310,39 @@ export function createJobs(options: {
       await Promise.allSettled((all.get(session) ?? []).filter(({ job }) => job.status === "running").map(({ work }) => work.done))
     },
   }
+}
+
+// The most of a job's output one read gives: its latest part.
+const OUTPUT_READ = 64 * 1024
+
+// A job's output from byte `after` of its file, or from the start, as the
+// `read_job_output` command gives it: the last 64 KiB at most, in whole
+// characters. A file that is not there, or shorter than `after`, as when
+// the work replaced it, is read from its start.
+export async function readOutput(file: string, after = 0): Promise<{ text: string; from: number; to: number }> {
+  let bytes: Uint8Array
+  let from: number
+  try {
+    const whole = Bun.file(file)
+    const size = whole.size
+    from = Math.max(after <= size ? after : 0, size - OUTPUT_READ)
+    bytes = await whole.slice(from, size).bytes()
+  } catch {
+    return { text: "", from: 0, to: 0 }
+  }
+  // A cut can fall inside a character: the part of one at the start is
+  // left out, and one not yet written whole at the end is left for later.
+  let start = 0
+  while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start++
+  let end = bytes.length
+  for (let back = 1; back <= Math.min(4, end - start); back++) {
+    const byte = bytes[end - back]!
+    if ((byte & 0xc0) === 0x80) continue
+    const length = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc0 ? 2 : 1
+    if (length > back) end -= back
+    break
+  }
+  return { text: new TextDecoder().decode(bytes.subarray(start, end)), from: from + start, to: from + end }
 }
 
 // The names in a folder, or none when it cannot be read, as before it is made.

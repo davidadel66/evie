@@ -99,6 +99,7 @@ export function subagents(options: SubagentsOptions = {}): Plugin {
           kind: "subagent",
           title,
           keep: { child },
+          subagent: child,
           done: children
             .whenIdle(child)
             .finally(() => {
