@@ -33,9 +33,9 @@ export function ConnectionLine({ state }: { state: ConnectionState }) {
   )
 }
 
-// The same line under a view's header at phone width, where the list's
-// sheet, which has it at desktop width, is out of sight: under a session's
-// conversation's header, or a subagent's.
+// The same line under a view's header at phone width, where the top of
+// the list, which has it at desktop width, is scrolled out of sight: under
+// a session's conversation's header, or a subagent's.
 export function ConnectionUnderHeader() {
   const state = useContext(ConnectionShown)
   const list = useListShown()

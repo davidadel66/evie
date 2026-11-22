@@ -3,7 +3,6 @@ import type { ProjectColour } from "../../src/core/types.ts"
 import { cn } from "./lib/utils.ts"
 import { DEFAULT_ICON, PROJECT_ICONS } from "./project-icons.ts"
 import { keptLook, onLooks, type Look } from "./project-look.ts"
-import { addressOfWorkspace } from "./workspace.ts"
 
 // The classes of each project colour: the icon in the colour, its tile, an
 // 18% tint of it, and the line on the edge of the selected workspace's tile.
@@ -104,21 +103,20 @@ export function ProjectGlyph({ project }: { project: string }) {
   return <IconGlyph icon={icon} className={COLOUR[colour]} />
 }
 
-// A project's small tile and its name, as a session row's first line
-// shows them, as a link to the project's workspace. Above the row's own
-// link, it reaches into the row's padding, and a little past it, so that
-// it is easier to aim at.
-export function ProjectLink({ project, name }: { project: string; name: string | undefined }) {
+// The tile of a session with no project, as the Session view drawing has
+// it: as big as a project's, empty, with a dashed outline.
+export function NoProjectTile() {
+  return <span aria-hidden="true" className="size-tile-row shrink-0 rounded-tile border border-dashed border-text-muted" />
+}
+
+// A project's small tile and its name, or for none the empty tile and "No
+// project", as a session row's first line shows them, as words of the
+// row: the whole row is the link that opens the session.
+export function ProjectName({ project, name }: { project: string | null; name: string | undefined }) {
   return (
-    <span className="flex min-w-0 flex-1">
-      <a
-        href={addressOfWorkspace({ workspace: project, tab: "sessions" })}
-        title={name === undefined ? "Open the workspace" : `Open the ${name} workspace`}
-        className="relative z-10 -my-3 flex min-w-0 items-center gap-2 py-3 before:absolute before:inset-x-0 before:-inset-y-(--line-width) hover:text-text"
-      >
-        <ProjectIcon project={project} />
-        <span className="min-w-0 truncate">{name}</span>
-      </a>
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      {project === null ? <NoProjectTile /> : <ProjectIcon project={project} />}
+      <span className="min-w-0 truncate">{project === null ? "No project" : name}</span>
     </span>
   )
 }

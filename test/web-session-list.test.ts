@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import type { SessionState, SessionSummary } from "../src/core/types.ts"
 import { addressAsOpened, addressOf, lookedAt, selectedIn } from "../web/src/address.ts"
 import { refreshWhileShown } from "../web/src/refresh.ts"
-import { ageWords, besides, deletedSelection, filterSessions, groupSessions, inListOrder, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove } from "../web/src/session-list.ts"
+import { ageWords, besides, deletedSelection, filterSessions, groupSessions, inListOrder, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove, workspaceToOpen } from "../web/src/session-list.ts"
 
 // The session list's own rules, apart from its screen: how sessions are
 // grouped and ordered, and found by search and by project, and how a
@@ -41,6 +41,10 @@ test("sessions that need the owner come first, then the active ones, each newest
   expect(ids(groups.settled)).toEqual(["settled-new", "settled-old"])
 })
 
+// The projects' names, as the list knows them.
+const NAMES: Record<string, string> = { p1: "garden-planner", p2: "recipe-box" }
+const nameOf = (project: string | null) => (project === null ? "No project" : NAMES[project])
+
 test("a search keeps the sessions whose name has every word of it, in any case and any order, and a session with no name yet is found as a new session", () => {
   const sessions = [
     summary("plants", "active", 1, "p1", "Keep a list of what to plant"),
@@ -48,19 +52,20 @@ test("a search keeps the sessions whose name has every word of it, in any case a
     summary("unnamed", "active", 3, "p1", null),
   ]
 
-  expect(ids(filterSessions(sessions, { search: "  PLANT list " }))).toEqual(["plants"])
-  expect(ids(filterSessions(sessions, { search: "soup plant" }))).toEqual([])
-  expect(ids(filterSessions(sessions, { search: "new" }))).toEqual(["unnamed"])
-  expect(ids(filterSessions(sessions, { search: "" }))).toEqual(["plants", "soup", "unnamed"])
+  expect(ids(filterSessions(sessions, "  PLANT list ", nameOf))).toEqual(["plants"])
+  expect(ids(filterSessions(sessions, "soup plant", nameOf))).toEqual([])
+  expect(ids(filterSessions(sessions, "new", nameOf))).toEqual(["unnamed"])
+  expect(ids(filterSessions(sessions, "", nameOf))).toEqual(["plants", "soup", "unnamed"])
 })
 
-test("a project filter keeps that project's sessions, or with none those of no project, and without one keeps them all", () => {
-  const sessions = [summary("in-p1", "active", 1, "p1"), summary("in-p2", "active", 2, "p2"), summary("general", "active", 3, null)]
+test("a search matches the project's name as well as the session's, as the Session view drawing's does, so it narrows the list to a project", () => {
+  const sessions = [summary("beds", "active", 1, "p1", "Plan the beds"), summary("cake", "active", 2, "p2", "Apple cake"), summary("general", "active", 3, null, "Back up SQLite")]
 
-  expect(ids(filterSessions(sessions, { search: "", project: "p2" }))).toEqual(["in-p2"])
-  expect(ids(filterSessions(sessions, { search: "", project: null }))).toEqual(["general"])
-  expect(ids(filterSessions(sessions, { search: "" }))).toEqual(["in-p1", "in-p2", "general"])
-  expect(ids(filterSessions(sessions, { search: "general", project: "p1" }))).toEqual([])
+  expect(ids(filterSessions(sessions, "recipe", nameOf))).toEqual(["cake"])
+  expect(ids(filterSessions(sessions, "garden beds", nameOf))).toEqual(["beds"])
+  expect(ids(filterSessions(sessions, "no project", nameOf))).toEqual(["general"])
+  // A project not listed yet is matched by the session's name alone.
+  expect(ids(filterSessions(sessions, "apple", () => undefined))).toEqual(["cake"])
 })
 
 test("a project's colour is one of the six project colours, the same each time for the same id, and ids spread over all six", () => {
@@ -118,19 +123,32 @@ test("as the page opens, it is put at its root with a sign-in code taken out of 
   expect(addressAsOpened("")).toBe("/")
 })
 
-test("the project being looked at is the selected draft's or session's, or else the one the list is narrowed to, or none, so New session again keeps to the same draft", () => {
-  const sessions = [summary("in-p1", "active", 1, "p1"), summary("general", "active", 2, null)]
+test("the project being looked at is the selected draft's or session's, or with nothing open, the latest active session's, as T3 Code's new thread is, or none, so New session again keeps to the same draft", () => {
+  const sessions = [summary("general", "active", 2, null), summary("in-p1", "active", 1, "p1")]
 
-  expect(projectLookedAt({ draft: "p2" }, sessions, { search: "", project: "p1" })).toBe("p2")
-  expect(projectLookedAt({ draft: null }, sessions, { search: "" })).toBeNull()
-  expect(projectLookedAt({ session: "in-p1" }, sessions, { search: "", project: null })).toBe("p1")
-  expect(projectLookedAt({ session: "general" }, sessions, { search: "", project: "p1" })).toBeNull()
-  expect(projectLookedAt(undefined, sessions, { search: "", project: "p1" })).toBe("p1")
-  expect(projectLookedAt({ session: "not-listed" }, sessions, { search: "" })).toBeNull()
-  expect(projectLookedAt(undefined, sessions, { search: "" })).toBeNull()
+  expect(projectLookedAt({ draft: "p2" }, sessions)).toBe("p2")
+  expect(projectLookedAt({ draft: null }, sessions)).toBeNull()
+  expect(projectLookedAt({ session: "in-p1" }, sessions)).toBe("p1")
+  expect(projectLookedAt({ session: "general" }, sessions)).toBeNull()
+  expect(projectLookedAt({ session: "not-listed" }, sessions)).toBeNull()
+  expect(projectLookedAt(undefined, sessions)).toBe("p1")
+  expect(projectLookedAt(undefined, [summary("general", "active", 2, null)])).toBeNull()
+  expect(projectLookedAt(undefined, [])).toBeNull()
   // Pressed again on a draft, New session comes back to the same draft.
   const draft = { draft: "p2" }
-  expect(addressOf({ draft: projectLookedAt(draft, sessions, { search: "" }) })).toBe(addressOf(draft))
+  expect(addressOf({ draft: projectLookedAt(draft, sessions) })).toBe(addressOf(draft))
+})
+
+test("the Workspaces button opens the workspace of the project being looked at, or else of the latest active session in one, or else the first project, and with no project none", () => {
+  const projects = [{ id: "p1" }, { id: "p2" }]
+  const sessions = [summary("general", "active", 1, null), summary("in-p2", "active", 5, "p2")]
+
+  expect(workspaceToOpen("p1", sessions, projects)).toBe("p1")
+  expect(workspaceToOpen(null, sessions, projects)).toBe("p2")
+  expect(workspaceToOpen(null, [], projects)).toBe("p1")
+  // A project the list no longer has is not opened.
+  expect(workspaceToOpen("gone", [], projects)).toBe("p1")
+  expect(workspaceToOpen(null, sessions, [])).toBeUndefined()
 })
 
 test("when the selected session moves into a closed group, that group opens so that it stays in sight, and nothing else opens or closes", () => {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 
 // Phone width, as T3 Code's sidebar has it: 767px and narrower. Below it
-// the session list is a sheet, the message box is one row until tapped,
+// the session view's columns stack, the message box is one row until tapped,
 // the settings window and the diff fill the screen, and a workspace's
 // columns stack, and the session details are a sheet. The stylesheet's
 // `wide` breakpoint is the same width.

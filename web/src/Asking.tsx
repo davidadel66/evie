@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react"
 import { Button } from "./components/ui/button.tsx"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
-import { CaretDown } from "./icons.tsx"
-import { choiceForKey, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, permissionChoices, releaseAt, shownQuestion, type Asked, type Guard } from "./questions.ts"
+import { choiceForKey, freshGuard, type KeyFocus, guardCleared, guardReleases, guardSees, guardTyped, releaseAt, shownQuestion, type Asked, type Guard } from "./questions.ts"
 
-// The questions evie asks, answered in place, as T3 Code answers them: a
-// permission prompt in the conversation, with its choices as buttons, and
-// any other question docked above the message box, its choices numbered.
-// One shows at a time; one that arrives while the owner is typing waits
-// until they stop.
+// The questions evie asks, answered in place in the conversation, as part
+// of its reply, as the Session view drawing has them: the question, its
+// choices as buttons under it, the first the main one, and under them that
+// evie needs the owner. A permission prompt is drawn the same way. One
+// shows at a time; one that arrives while the owner is typing waits until
+// they stop.
 
 export type Shown = ReturnType<typeof shownQuestion>
 
@@ -46,126 +45,87 @@ export function useAsking(waiting: readonly Asked[]): { shown: Shown; typed(): v
 // What answering does: gives back why the server would not take it, or nothing.
 type Answer = (id: string, choice: string | null) => Promise<string | undefined>
 
-// The question waits with no time limit, as the board's Question says.
-function WaitingLine({ count, also }: { count: string | undefined; also?: string }) {
+// The question waits with no time limit, as the board's Question says: a
+// dot and the words in the colour for what needs the owner.
+function NeedsYou({ count }: { count: string | undefined }) {
   return (
-    <p className="flex items-center gap-2 text-caption text-text-muted">
+    <p className="mt-4 flex items-center gap-2 text-caption text-status-needs">
       <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-status-needs" />
-      <span>
-        Waiting for your answer{count !== undefined && ` (${count})`}
-        {also !== undefined && `. ${also}`}
-      </span>
+      <span>Needs you. Waiting for your answer{count !== undefined && ` (${count})`}</span>
     </p>
   )
 }
 
 // A question's text: its first paragraph as the question, and what follows,
-// such as a command or the files it would change, as code.
-function QuestionText({ text }: { text: string }) {
+// such as a command or the files it would change, as code. The same once
+// it has been answered.
+export function QuestionText({ text }: { text: string }) {
   const [question = "", ...rest] = text.split(/\n\s*\n/)
   const detail = rest.join("\n\n").replace(/^ {2}/gm, "")
   return (
     <>
       <p className="text-label break-words whitespace-pre-wrap text-text">{question}</p>
-      {detail.trim() !== "" && <pre className="font-mono text-code break-words whitespace-pre-wrap text-text">{detail}</pre>}
+      {detail.trim() !== "" && <pre className="mt-2 font-mono text-code break-words whitespace-pre-wrap text-text">{detail}</pre>}
     </>
   )
 }
 
-// Why an answer was not taken, until the next try.
-function useRefused(question: string) {
+// A question at the end of the conversation, as the Session view drawing
+// has one: the question in bold, its choices as round buttons under it,
+// the first the main one and the others secondary, and under them that
+// evie needs the owner. A key from 1 to 9 picks a choice while the focus is
+// on nothing or in the empty message box, as T3 Code's keys do; the
+// owner's own words sent from the box are the answer when it takes them.
+// A permission prompt looks the same, and only a click answers it: words
+// sent from the box refuse it, and go to evie as what to do instead.
+export function QuestionPrompt({ question, count, answer }: { question: Asked; count: string | undefined; answer: Answer }) {
   const [refused, setRefused] = useState<string>()
-  useEffect(() => setRefused(undefined), [question])
-  return [refused, setRefused] as const
-}
-
-// A permission prompt, at the end of the conversation, as T3 Code shows an
-// approval: what evie would do, then its choices as buttons, the one that
-// refuses first, the one that allows as the main one, and any others,
-// such as always allowing it, under More. In a session, words sent from the
-// box refuse it and go to evie as what to do instead (`redirect`).
-export function PermissionPrompt({ question, count, answer, redirect }: { question: Asked; count: string | undefined; answer: Answer; redirect: boolean }) {
-  const { deny, allow, more } = permissionChoices(question)
-  const [refused, setRefused] = useRefused(question.id)
+  useEffect(() => setRefused(undefined), [question.id])
   const pick = async (choice: string) => setRefused(await answer(question.id, choice))
-  return (
-    <section aria-label="Permission needed" className="flex flex-col gap-2">
-      <QuestionText text={question.text} />
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="secondary" className="rounded-full" onClick={() => void pick(deny)}>
-          {deny}
-        </Button>
-        <Button variant="primary" className="rounded-full" onClick={() => void pick(allow)}>
-          {allow}
-        </Button>
-        {more.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="quiet" className="gap-1">
-                More
-                <CaretDown className="size-icon-control" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-w-menu-wide">
-              {more.map((choice) => (
-                <DropdownMenuItem key={choice} onSelect={() => void pick(choice)} className="h-auto min-h-control-sm py-1 whitespace-normal">
-                  {choice}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-      <WaitingLine count={count} {...(redirect && { also: "Or send a message to say no, and what to do instead" })} />
-      {refused !== undefined && (
-        <p role="status" className="text-caption break-words text-text-muted">
-          {refused}
-        </p>
-      )}
-    </section>
-  )
-}
-
-// Any other question, docked above the message box, as T3 Code docks one:
-// it floats, so it has a surface. Its choices are numbered, and a key from
-// 1 to 9 picks one while the focus is not in a text box, as T3 Code's do;
-// in the box, a number sent picks it too, as in the terminal, and the
-// owner's own words sent are the answer when it takes them.
-export function DockedQuestion({ question, count, answer }: { question: Asked; count: string | undefined; answer: Answer }) {
-  const [refused, setRefused] = useRefused(question.id)
-  const pick = async (choice: string) => setRefused(await answer(question.id, choice))
+  const keys = question.kind !== "permission"
   useEffect(() => {
+    if (!keys) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
-      const target = event.target as HTMLElement | null
-      if (target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="menu"], [role="dialog"], [role="listbox"]')) return
-      const choice = choiceForKey(event.key, question)
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return
+      const choice = choiceForKey(event.key, question, focusOf(event.target))
       if (choice === undefined) return
       event.preventDefault()
       void pick(choice)
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
-  }, [question])
+  }, [question, keys])
   return (
-    <section aria-label="Question from evie" className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-3 shadow-float">
+    <section aria-label={question.kind === "permission" ? "Permission needed" : "Question from evie"} className="flex flex-col">
       <QuestionText text={question.text} />
-      <ol className="flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {question.choices.map((choice, at) => (
-          <li key={choice}>
-            <Button variant="secondary" className="h-auto min-h-control rounded-full py-1 text-left whitespace-normal" onClick={() => void pick(choice)}>
-              <span className="text-text-muted">{at + 1}</span>
-              {choice}
-            </Button>
-          </li>
+          <Button
+            key={choice}
+            variant={at === 0 ? "primary" : "secondary"}
+            {...(keys && at < 9 && { title: `${choice} (${at + 1})` })}
+            className="h-auto min-h-control rounded-full py-1 text-left whitespace-normal"
+            onClick={() => void pick(choice)}
+          >
+            {choice}
+          </Button>
         ))}
-      </ol>
-      <WaitingLine count={count} also={question.freeText ? "Choose one, or write your own answer below" : "Choose one, or type its number"} />
+      </div>
       {refused !== undefined && (
-        <p role="status" className="text-caption break-words text-text-muted">
+        <p role="status" className="mt-2 text-caption break-words text-text-muted">
           {refused}
         </p>
       )}
+      <NeedsYou count={count} />
     </section>
   )
+}
+
+// Where the focus is as a key is pressed, for the keys 1 to 9: on nothing,
+// in the message box, which marks itself, empty or with something typed,
+// or anywhere else, as on a button or a row of the work log.
+function focusOf(target: EventTarget | null): KeyFocus {
+  if (!(target instanceof HTMLElement) || target === document.body || target === document.documentElement) return "nothing"
+  if (target instanceof HTMLTextAreaElement && target.dataset.messageBox !== undefined) return target.value === "" ? "empty box" : "typed box"
+  return "elsewhere"
 }

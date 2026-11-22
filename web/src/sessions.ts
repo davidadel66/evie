@@ -11,8 +11,11 @@ export type SessionList = {
   listed: boolean
   // Every session, as its latest summary says, the latest active first.
   sessions: SessionSummary[]
-  // Every project, by name, with the branch each is on.
+  // Every project, by name, with the branch each is on, and whether they
+  // have been listed yet since the page started: until then, none is known
+  // to be none.
   projects: ListedProject[]
+  projectsListed: boolean
   // Why the sessions could not be listed, in words for the owner, or
   // undefined when they could.
   problem: string | undefined
@@ -56,7 +59,7 @@ export type Sessions = {
 }
 
 export function openSessions(connection: Connection): Sessions {
-  let state: SessionList = { listed: false, sessions: [], projects: [], problem: undefined, projectsProblem: undefined, deleted: [] }
+  let state: SessionList = { listed: false, sessions: [], projects: [], projectsListed: false, problem: undefined, projectsProblem: undefined, deleted: [] }
   const listeners = new Set<() => void>()
 
   function set(next: Partial<SessionList>) {
@@ -126,7 +129,7 @@ export function openSessions(connection: Connection): Sessions {
     void evie
       .send({ type: "list_projects" })
       .then(
-        (projects) => set({ projects, projectsProblem: undefined }),
+        (projects) => set({ projects, projectsListed: true, projectsProblem: undefined }),
         (cause: unknown) => set({ projectsProblem: `The projects could not be listed: ${wordsOf(cause)}` }),
       )
       .finally(() => {
