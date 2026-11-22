@@ -28,8 +28,8 @@ test("a connection with no token, or with one that is not a token, is refused be
 
   expect((await fetch(`${server.url}/ws`)).status).toBe(401)
   expect((await fetch(`${server.url}/ws`, { headers: { Authorization: "Bearer not-a-token" } })).status).toBe(401)
-  await expect(connect({ url: server.url })).rejects.toThrow(`The Evie server at ${server.url} asks for a token, and none was given.`)
-  await expect(connect({ url: server.url, token: "not-a-token" })).rejects.toThrow(`The Evie server at ${server.url} did not accept the token.`)
+  await expect(connect({ url: server.url })).rejects.toThrow(`The evie server at ${server.url} asks for a token, and none was given.`)
+  await expect(connect({ url: server.url, token: "not-a-token" })).rejects.toThrow(`The evie server at ${server.url} did not accept the token.`)
 })
 
 test("with no server running, the client says so and how to start one", async () => {
@@ -38,7 +38,7 @@ test("with no server running, the client says so and how to start one", async ()
   const url = `http://127.0.0.1:${probe.port}`
   await probe.stop(true)
 
-  await expect(connect({ url, token: "any" })).rejects.toThrow(`No Evie server is running at ${url}. Start it with \`evie serve\`.`)
+  await expect(connect({ url, token: "any" })).rejects.toThrow(`No evie server is running at ${url}. Start it with \`evie serve\`.`)
 })
 
 test("a client gives up on an address where nothing answers when its signal fires, closes its connection, and says so", async () => {
@@ -48,7 +48,7 @@ test("a client gives up on an address where nothing answers when its signal fire
   cleanups.push(async () => silent.stop(true))
   const url = `http://127.0.0.1:${silent.port}`
 
-  await expect(connect({ url, token: "any", signal: AbortSignal.timeout(100) })).rejects.toThrow(`No Evie server answered at ${url}.`)
+  await expect(connect({ url, token: "any", signal: AbortSignal.timeout(100) })).rejects.toThrow(`No evie server answered at ${url}.`)
   while (!closed) await Bun.sleep(5)
 })
 
@@ -186,7 +186,7 @@ test("a command sent with a token that was just taken back is not carried out", 
   await takeBack(served.run.home, "test device")
 
   await expect(client.send({ type: "open_session", folder: served.run.projectFolder })).rejects.toThrow(
-    "The connection to Evie was lost before it answered: This device's token was taken back.",
+    "The connection to evie was lost before it answered: This device's token was taken back.",
   )
 })
 
@@ -248,7 +248,7 @@ test("a token that cannot be checked, such as with the database busy, is answere
     expect(await answer.text()).toBe("The token could not be checked just now. Try again.")
   }
   await expect(connect({ url: server.url, token: served.token })).rejects.toThrow(
-    `The Evie server at ${server.url} could not check the token just now. Try again.`,
+    `The evie server at ${server.url} could not check the token just now. Try again.`,
   )
 })
 

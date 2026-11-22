@@ -83,7 +83,7 @@ test("when no server answers at first, it keeps trying, saying why, until one do
 
   expect(await until(connection, "reconnecting")).toEqual({
     status: "reconnecting",
-    reason: `No Evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.`,
+    reason: `No evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.`,
   })
   const server = startServer({ evie: served.run.evie, tokens: served.tokens, host: "127.0.0.1", port })
   cleanups.push(() => server.stop())
@@ -113,4 +113,26 @@ test("a sign-in code that does not work leaves it signed out, saying why, and so
   })
   expect(await connection.signIn({ token: "not-a-token" })).toBe("evie did not accept that token. Check that it was copied whole.")
   expect(connection.state().status).toBe("signed out")
+})
+
+test("a page at an address the server does not let in, whose cookie is good, is signed out saying what to change, not left reconnecting", async () => {
+  // As the server answers such a page: its WebSocket is refused for the
+  // page's address, but its request to /check carries no Origin, as a
+  // browser's request to its own page's server does not, and is accepted.
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: (request) =>
+      new URL(request.url).pathname === "/check"
+        ? new Response("This token is accepted.")
+        : new Response("Connections from this page are not allowed.", { status: 403 }),
+  })
+  cleanups.push(async () => server.stop(true))
+  const url = `http://127.0.0.1:${server.port}`
+  const { connection } = open({ url })
+
+  expect(await until(connection, "signed out")).toEqual({
+    status: "signed out",
+    reason: `The evie server at ${url} does not let this page connect. Add its address to "origins" under "server" in evie.json.`,
+  })
 })

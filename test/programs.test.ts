@@ -156,7 +156,7 @@ test("evie serve runs Evie, and evie in a project folder sends it a message and 
   expect(await server.exited).toBe(143)
   const after = await evie([], { home, cwd: project, input: "hello\n" })
   expect(after.code).toBe(1)
-  expect(after.stderr).toContain(`No Evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.`)
+  expect(after.stderr).toContain(`No evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.`)
 })
 
 test("another device connects with EVIE_SERVER and a token of its own, until the token is taken back", async () => {
@@ -176,7 +176,7 @@ test("another device connects with EVIE_SERVER and a token of its own, until the
   expect((await evie(["token", "remove", "phone"], { home })).code).toBe(0)
   const refused = await evie([], { home: device, input: "hello\n", env: reach })
   expect(refused.code).toBe(1)
-  expect(refused.stderr).toContain(`The Evie server at http://127.0.0.1:${port} did not accept the token.`)
+  expect(refused.stderr).toContain(`The evie server at http://127.0.0.1:${port} did not accept the token.`)
 })
 
 test("this computer's token is kept when the server starts again, stays taken back once taken back, and is made anew when its file is removed", async () => {
@@ -375,7 +375,7 @@ test("evie run from a pipe or a script gives up when the server stays down, sayi
   await terminal.shows(DROPPED)
 
   expect(await terminal.exited()).toBe(1)
-  expect(terminal.printed.err).toBe(`No Evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
+  expect(terminal.printed.err).toBe(`No evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
 })
 
 test("when this computer's token is taken back while the connection is down, evie stops trying, and says why", async () => {
@@ -507,7 +507,7 @@ test("evie web with the server stopped says no server is running, and how to sta
 
   expect(said.code).toBe(1)
   expect(said.stdout).toBe("")
-  expect(said.stderr).toBe(`No Evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
+  expect(said.stderr).toBe(`No evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
 })
 
 test("evie web on another device, with a token of its own, says to open the server's address in a browser there and paste the token", async () => {

@@ -893,8 +893,8 @@ test("a client closed while its line is down stops trying, and a command waiting
   await client.close()
   line.mend()
 
-  await expect(waiting).rejects.toThrow("The connection to Evie was lost before it answered: the connection was closed.")
-  await expect(client.send({ type: "cancel", session })).rejects.toThrow("Not connected to Evie: the connection was closed.")
+  await expect(waiting).rejects.toThrow("The connection to evie was lost before it answered: the connection was closed.")
+  await expect(client.send({ type: "cancel", session })).rejects.toThrow("Not connected to evie: the connection was closed.")
   // Past the first few times it would have tried again.
   await Bun.sleep(FIRST_WAIT * 10)
   expect(back).toBe(0)

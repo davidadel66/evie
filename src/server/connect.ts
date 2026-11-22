@@ -401,7 +401,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
       waiting.delete(id)
       command.lose(reason)
     }
-    const why = (down = new ConnectError(`The connection to the Evie server at ${address.origin} dropped: ${reason}.`, "other"))
+    const why = (down = new ConnectError(`The connection to the evie server at ${address.origin} dropped: ${reason}.`, "other"))
     if (options.giveUpAfter !== undefined) giveUp = setTimeout(() => end(down ?? why), options.giveUpAfter)
     options.onDrop?.(reason)
     void tryAgain()
@@ -470,7 +470,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 
   return {
     send<Sent extends Command>(command: Sent) {
-      if (stopping.signal.aborted) return Promise.reject(new Error(`Not connected to Evie: ${String(stopping.signal.reason).replace(/\.$/, "")}.`))
+      if (stopping.signal.aborted) return Promise.reject(new Error(`Not connected to evie: ${String(stopping.signal.reason).replace(/\.$/, "")}.`))
       const message: ClientMessage = { id: commandId(), command }
       return new Promise<Commands[Sent["type"]]["output"]>((resolve, reject) => {
         const waited: Waiting = {
@@ -520,7 +520,7 @@ export function commandId(): string {
 }
 
 // Why a command failed when no reply to it will come.
-const lost = (why: string) => new Error(`The connection to Evie was lost before it answered: ${why.replace(/\.$/, "")}.`)
+const lost = (why: string) => new Error(`The connection to evie was lost before it answered: ${why.replace(/\.$/, "")}.`)
 
 // The reply to an open, with where the session stands as a later reading of
 // it says: whether a turn is running, the questions waiting, the reply so
@@ -599,31 +599,36 @@ async function whyRefused(address: URL, headers: Record<string, string> | undefi
   } catch {
     return signal?.aborted ? noAnswer(address) : noServer(address)
   }
+  // The token is accepted, yet the WebSocket was refused: it was the page
+  // that was refused. A browser's request to its own page's server carries
+  // no Origin, so the check lets it in while the WebSocket, which always
+  // carries one, is turned away.
+  if (status === 200) return refusal(address, 403, headers !== undefined)
   return refusal(address, status, headers !== undefined)
 }
 
 // Nothing answers at the address.
-export const noServer = (address: URL) => new ConnectError(`No Evie server is running at ${address.origin}. Start it with \`evie serve\`.`, "no server")
+export const noServer = (address: URL) => new ConnectError(`No evie server is running at ${address.origin}. Start it with \`evie serve\`.`, "no server")
 
 // Why the server refused a request, from the status it answered with, in
 // words for the owner. `withToken` says whether the request brought a token.
 export function refusal(address: URL, status: number, withToken: boolean): ConnectError {
   const where = address.origin
-  if (status === 401 && !withToken) return new ConnectError(`The Evie server at ${where} asks for a token, and none was given.`, "token")
+  if (status === 401 && !withToken) return new ConnectError(`The evie server at ${where} asks for a token, and none was given.`, "token")
   if (status === 401) {
     return new ConnectError(
-      `The Evie server at ${where} did not accept the token. If it was taken back, make a new one on the server's ` +
+      `The evie server at ${where} did not accept the token. If it was taken back, make a new one on the server's ` +
         `computer with \`evie token add <name>\`.`,
       "token",
     )
   }
   if (status === 403) {
-    return new ConnectError(`The Evie server at ${where} does not let this page connect. Add its address to "origins" under "server" in evie.json.`, "page")
+    return new ConnectError(`The evie server at ${where} does not let this page connect. Add its address to "origins" under "server" in evie.json.`, "page")
   }
-  if (status === 503) return new ConnectError(`The Evie server at ${where} could not check the token just now. Try again.`, "other")
-  return new ConnectError(`Could not connect to the Evie server at ${where} (it answered ${status}).`, "other")
+  if (status === 503) return new ConnectError(`The evie server at ${where} could not check the token just now. Try again.`, "other")
+  return new ConnectError(`Could not connect to the evie server at ${where} (it answered ${status}).`, "other")
 }
 
 // Something took the connection but did not answer in time.
 export const noAnswer = (address: URL) =>
-  new ConnectError(`No Evie server answered at ${address.origin}. Check the address, and that \`evie serve\` is running there.`, "no answer")
+  new ConnectError(`No evie server answered at ${address.origin}. Check the address, and that \`evie serve\` is running there.`, "no answer")
