@@ -104,7 +104,8 @@ export function createEventLog(db: Database): EventLog {
       try {
         for (const row of selectAfter.iterate(session, after)) {
           const event = fromRow(row)
-          const more = Buffer.byteLength(JSON.stringify(event))
+          // With the comma that comes before it in a list.
+          const more = Buffer.byteLength(JSON.stringify(event)) + 1
           if (events.length > 0 && size + more > bytes) return { events, bytes: size, more: true }
           events.push(event)
           size += more

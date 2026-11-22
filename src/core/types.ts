@@ -812,11 +812,13 @@ export type Commands = {
     // the session's background jobs, the ended ones included: their events
     // are not stored, so a client that missed some learns here how each stands.
     // With `after`, the number of the last event a client saw, as when it
-    // catches up after a drop, `events` are those after it, in order, a page
-    // of at most `CATCH_UP_PAGE` of them, or a single event larger than
-    // that. `more` says that the log goes on past the page: the client asks
-    // again, from the page's last event, until a page comes without it, and
-    // where the session stands is read from that last page.
+    // catches up after a drop, `events` are those after it, in order: as
+    // many as fit in `CATCH_UP_PAGE` with everything else the reply carries,
+    // or a single event larger than that. `more` says to ask again, from the
+    // page's last event, until a page comes without it. A page with `more`
+    // leaves out the questions waiting (`openQuestions` is empty) and the
+    // reply so far: where the session stands is read from the last page,
+    // which live events follow. `jobs` come with every page.
     output: {
       session: string
       project: Project | null

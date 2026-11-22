@@ -20,6 +20,7 @@ import { createSummaries, nameOf } from "./summaries.ts"
 import { CATCH_UP_PAGE, type Ask, type Children, type Commands, type Core, type EvieEvent, type Host, type JobRecord, type JobWork, type Plugin, type Project, type ProjectSettings, type Provider, type SettingsEditor } from "./types.ts"
 
 type Cut = "none" | "asking" | "working"
+type Opened = Commands["open_session"]["output"]
 
 export type EvieOptions = {
   // Settings from the environment. `EVIE_HOME` names the data folder.
@@ -467,7 +468,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const alreadyOpen = () => (last === undefined ? undefined : sessions.get(last))
     const join = (id: string, open: Open) => {
       open.canAnswer ||= canAnswer
-      return { ...whereItIs(id, input.after), project, resumed: true, notices: [...refused, ...open.notices] }
+      return whereItIs(id, input.after, { project, resumed: true, notices: [...refused, ...open.notices] })
     }
     const openBefore = alreadyOpen()
     if (last !== undefined && openBefore && !closed) return join(last, openBefore)
@@ -493,12 +494,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       // closed off instead, with its jobs left for when the owner opens it.
       if (resuming && scope.forNow && left) {
         if (left.cut !== "none") emit(log.append(sessionId(), "note", { text: STOPPED_UNTRUSTED }))
-        return { ...whereItIs(sessionId()), project, resumed: true, notices }
+        return whereItIs(sessionId(), undefined, { project, resumed: true, notices })
       }
 
       const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer: canAnswer || resuming })
       if (left) carryOn(sessionId(), opened, left)
-      return { ...whereItIs(sessionId(), input.after), project, resumed: last !== undefined, notices: [...refused, ...notices] }
+      return whereItIs(sessionId(), input.after, { project, resumed: last !== undefined, notices: [...refused, ...notices] })
     } finally {
       if (session !== undefined) markOpening(session, -1)
     }
@@ -517,26 +518,28 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // Where a session that is being opened stands: whether a turn is running
   // in it, as in one another client left running, the questions it is still
   // waiting on, its jobs, and the reply being written. A turn is running
-  // when the log's last turn has not ended. With `after`, the events after
-  // that number too, as many as fit in a catch-up's page, and whether more
-  // follow. An event larger than a page goes in a page of its own, so that
+  // when the log's last turn has not ended. `rest` is the rest of the reply
+  // to an open.
+  //
+  // With `after`, the events after that number too, as many as fit in a
+  // catch-up's page with everything else the reply carries, all of it
+  // counted. An event larger than a page goes in a page of its own, so that
   // every page moves the client on. Only the page's own events are read.
+  // A page that more follow says so, and leaves out the questions waiting
+  // and the reply so far, which the client takes from the last page.
+  //
   // All of it is read in one step, with nothing waited for in between, so it
   // describes a single moment: every event emitted later is sent as it happens.
-  function whereItIs(session: string, after?: number) {
+  function whereItIs(session: string, after: number | undefined, rest: Pick<Opened, "project" | "resumed" | "notices">): Opened {
     const latest = log.latest(session)
     const replySoFar = sessions.get(session)?.loop.replySoFar() ?? ""
-    const page = after === undefined ? undefined : log.after(session, after, CATCH_UP_PAGE)
-    return {
-      session,
-      turnRunning: latest.turnRunning,
-      openQuestions: questions.waiting(session),
-      lastSeq: latest.seq,
-      jobs: jobs.list(session),
-      ...(page && { events: page.events }),
-      ...(page?.more && { more: true as const }),
-      ...(replySoFar !== "" && { replySoFar }),
-    }
+    const standing = { session, ...rest, turnRunning: latest.turnRunning, lastSeq: latest.seq, jobs: jobs.list(session) }
+    const last = { openQuestions: questions.waiting(session), ...(replySoFar !== "" && { replySoFar }) }
+    if (after === undefined) return { ...standing, ...last }
+    const room = CATCH_UP_PAGE - Buffer.byteLength(JSON.stringify({ ...standing, ...last, events: [], more: true }))
+    const page = log.after(session, after, room)
+    if (!page.more && (page.bytes <= room || page.events.length === 0)) return { ...standing, ...last, events: page.events }
+    return { ...standing, openQuestions: [], events: page.events, more: true }
   }
 
   // What an earlier run of Evie left in a session that is opening in this

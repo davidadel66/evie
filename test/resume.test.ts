@@ -4,6 +4,7 @@ import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { runTerminal, type Commands, type Plugin } from "../src/index.ts"
+import { CATCH_UP_PAGE } from "../src/core/types.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -342,6 +343,26 @@ test("each page of a catch-up reads only its own part of the log, not the whole 
   // The log holds 48 events; a page reads its own, the one after them, and a few rows besides.
   expect(read.length).toBe(6)
   for (const page of read) expect(page.rows).toBeLessThanOrEqual(page.events + 6)
+})
+
+test("everything a page carries counts in its size, and the reply being written comes only with the last page, which the client applies", async () => {
+  const replySoFar = "r".repeat(300 * KiB)
+  const model = scriptedProvider([...Array.from({ length: 12 }, (_, at) => ({ text: [String(at % 10).repeat(400 * KiB)] })), { hang: true, text: [replySoFar] }])
+  const run = await startEvie([model.plugin], { compaction: { ceiling: 1_000_000_000 } })
+  cleanups.push(run.stop)
+  for (let at = 1; at <= 12; at++) await say(run, `Message ${at}`)
+  const writing = new Promise<void>((resolve) => run.evie.subscribe((event) => event.type === "assistant_delta" && resolve()))
+  await run.evie.send({ type: "send_message", session: run.session, text: "One more" })
+  await writing
+
+  const pages = await catchUpInPages(run, 0)
+
+  for (const page of pages) expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(CATCH_UP_PAGE)
+  expect(pages.flatMap((page) => page.events!.map((event) => event.seq))).toEqual(Array.from({ length: 50 }, (_, at) => at + 1))
+  for (const page of pages.slice(0, -1)) expect([page.replySoFar, page.openQuestions]).toEqual([undefined, []])
+  expect(pages.at(-1)).toMatchObject({ replySoFar, turnRunning: true, lastSeq: 50 })
+  expect(pages.at(-1)!.more).toBeUndefined()
+  await run.evie.send({ type: "cancel", session: run.session })
 })
 
 test("an event larger than a page goes in a page of its own", async () => {
