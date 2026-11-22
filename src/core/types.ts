@@ -441,7 +441,9 @@ export type Hooks = {
   after_tool(call: CheckedToolCall, text: string, context: HookContext): string | void | Promise<string | void>
   // After a session has been deleted for good: a plugin that keeps files
   // for a session in the data folder removes this one's. It is told of
-  // each of the session's subagents too, which are deleted with it.
+  // each of the session's subagents too, which are deleted with it. The
+  // global plugins are told, and those of each project the session ran in
+  // whose plugins are set up already: none is set up just to be told.
   session_deleted(session: string): void | Promise<void>
 }
 
@@ -692,10 +694,13 @@ export type Commands = {
   // the files evie and its plugins keep for them in the data folder, such
   // as saved tool output, background jobs' records and undo's copies. Every
   // client is sent a `deleted` event. It is refused while anything runs in
-  // the session, as a move is. Not a subagent's, which goes with its session.
+  // the session, or while it is opening, as a move is. Not a subagent's,
+  // which goes with its session. `leftOver` says, a sentence each, what
+  // could not be removed once the session was gone, naming the folder or
+  // the plugin; it is empty when everything went.
   delete_session: {
     input: { session: string }
-    output: void
+    output: { leftOver: string[] }
   }
 }
 

@@ -200,3 +200,59 @@ test("a move is not activity: a session settled by hand stays settled and keeps 
   await say(run, "Carry on in the new project")
   expect(model.requests.at(-1)!.messages.some((message) => message.role === "user" && message.text.startsWith("[Note from Evie: The owner moved this session"))).toBe(true)
 })
+
+test("a message sent the moment a move is recorded reaches the session in its new project: there is no moment when it is not open", async () => {
+  const { run, seen, other } = await start([{ text: ["Noted."] }, { text: ["Working there."] }])
+  await say(run, "Plan the beds for spring")
+  let sent: Promise<string> | undefined
+  const unsubscribe = run.evie.subscribe((event) => {
+    if (event.type !== "moved" || event.session !== run.session) return
+    unsubscribe()
+    sent = run.evie.send({ type: "send_message", session: run.session, text: "Carry on there" }).then(
+      () => "sent",
+      (cause) => String(cause),
+    )
+  })
+
+  await run.evie.send({ type: "move_session", session: run.session, project: other.id })
+
+  expect(await sent).toBe("sent")
+  while (stored(run.events).filter((event) => event.type === "turn_end").length < 2) await Bun.sleep(5)
+  expect(seen).toEqual([run.project!.id, other.id])
+})
+
+test("a move or a delete while the session is still opening is refused, saying so, and goes once it has opened", async () => {
+  const home = await mkdtemp(join(tmpdir(), "evie-home-"))
+  const folder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
+  cleanups.push(async () => {
+    for (const each of [home, folder]) await rm(each, { recursive: true, force: true })
+  })
+  const first = await startEvie([scriptedProvider([{ text: ["Noted."] }]).plugin], { home, projectFolder: folder })
+  await say(first, "Plan the beds for spring")
+  await first.stop()
+  // Evie starts again, and the project's settings take their time the next time they are read.
+  let reads = 0
+  let release = () => {}
+  const held = new Promise<void>((resolve) => (release = resolve))
+  const second = await startEvie([scriptedProvider([]).plugin], {
+    home,
+    projectFolder: folder,
+    projectSettings: async () => {
+      if (++reads === 2) await held
+      return { plugins: [], forNow: true }
+    },
+  })
+  cleanups.push(second.stop)
+
+  const opening = second.evie.send({ type: "open_session", session: first.session })
+  while (reads < 2) await Bun.sleep(5)
+  await expect(second.evie.send({ type: "move_session", session: first.session, project: null })).rejects.toThrow(
+    "This session is opening, so it cannot be moved yet. Try again once it has opened.",
+  )
+  await expect(second.evie.send({ type: "delete_session", session: first.session })).rejects.toThrow("This session is opening, so it cannot be deleted yet.")
+  release()
+  await opening
+
+  await second.evie.send({ type: "move_session", session: first.session, project: null })
+  expect((await second.evie.send({ type: "list_sessions" })).find((each) => each.session === first.session)?.project).toBeNull()
+})

@@ -378,7 +378,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     if (input.after !== undefined && input.session === undefined) {
       throw new Error("`after` is the number of the last event seen in a session, so it is given only with `session`.")
     }
-    let project = null
+    let project: Project | null = null
     if (input.session !== undefined) {
       const found = projects.projectOf(input.session)
       if (found === undefined) throw new Error(`There is no session with the id "${input.session}".`)
@@ -402,7 +402,11 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     // A new session is created only once it is needed: when the project's
     // settings ask a question, or when everything else has gone well.
     let session = last
-    const sessionId = () => (session ??= projects.createSession(project))
+    // A new session is opening from the moment it is made.
+    const sessionId = () => {
+      if (session === undefined) markOpening((session = projects.createSession(project)), 1)
+      return session
+    }
     const canAnswer = input.questions === true
 
     // A session still open in this process, such as one another client left
@@ -415,33 +419,47 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     }
     const openBefore = alreadyOpen()
     if (last !== undefined && openBefore && !closed) return join(last, openBefore)
+    if (last !== undefined) markOpening(last, 1)
+    try {
+      const scope = await scopeFor(project, (question) => questions.ask(sessionId(), question, { canAnswer }))
+      if (closed) throw new Error("Evie was closed while the session was opening.")
+      const { notices } = scope
+      // A project's own model wins over the global one.
+      const model = scope.model ?? options.model
+      if (!model) {
+        const where = options.settingsFile ? `Add "model" to ${options.settingsFile}` : "Set a model"
+        throw new Error(`No model is set. ${where}, with a name from https://openrouter.ai/models.`)
+      }
 
-    const scope = await scopeFor(project, (question) => questions.ask(sessionId(), question, { canAnswer }))
-    if (closed) throw new Error("Evie was closed while the session was opening.")
-    const { notices } = scope
-    // A project's own model wins over the global one.
-    const model = scope.model ?? options.model
-    if (!model) {
-      const where = options.settingsFile ? `Add "model" to ${options.settingsFile}` : "Set a model"
-      throw new Error(`No model is set. ${where}, with a name from https://openrouter.ai/models.`)
+      // From here to the session being listed as open nothing waits, so two
+      // clients continuing the same session at once cannot both start it.
+      const openAfter = alreadyOpen()
+      if (last !== undefined && openAfter) return join(last, openAfter)
+      const left = last !== undefined ? settleLeft(last) : undefined
+      // Picked up in a project whose own settings the owner has not yet
+      // trusted or refused, the session would run without them. It is left
+      // closed off instead, with its jobs left for when the owner opens it.
+      if (resuming && scope.forNow && left) {
+        if (left.cut !== "none") emit(log.append(sessionId(), "note", { text: STOPPED_UNTRUSTED }))
+        return { ...whereItIs(sessionId()), project, resumed: true, notices }
+      }
+
+      const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer: canAnswer || resuming })
+      if (left) carryOn(sessionId(), opened, left)
+      return { ...whereItIs(sessionId(), input.after), project, resumed: last !== undefined, notices }
+    } finally {
+      if (session !== undefined) markOpening(session, -1)
     }
+  }
 
-    // From here to the session being listed as open nothing waits, so two
-    // clients continuing the same session at once cannot both start it.
-    const openAfter = alreadyOpen()
-    if (last !== undefined && openAfter) return join(last, openAfter)
-    const left = last !== undefined ? settleLeft(last) : undefined
-    // Picked up in a project whose own settings the owner has not yet
-    // trusted or refused, the session would run without them. It is left
-    // closed off instead, with its jobs left for when the owner opens it.
-    if (resuming && scope.forNow && left) {
-      if (left.cut !== "none") emit(log.append(sessionId(), "note", { text: STOPPED_UNTRUSTED }))
-      return { ...whereItIs(sessionId()), project, resumed: true, notices }
-    }
-
-    const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer: canAnswer || resuming })
-    if (left) carryOn(sessionId(), opened, left)
-    return { ...whereItIs(sessionId(), input.after), project, resumed: last !== undefined, notices }
+  // The sessions being opened now, each with how many opens of it are under
+  // way: a session is set up in its project as it stands when it is opened,
+  // so it is not moved or deleted meanwhile.
+  const opening = new Map<string, number>()
+  function markOpening(session: string, by: 1 | -1) {
+    const count = (opening.get(session) ?? 0) + by
+    if (count > 0) opening.set(session, count)
+    else opening.delete(session)
   }
 
   // Where a session that is being opened stands: whether a turn is running
@@ -685,7 +703,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       refuseWhileRunning(input.session, "moved")
     }
     // The session's loop, and its subagents', are let go: idle, they stop
-    // at once. A subagent opens again in the new project when it is next used.
+    // at once. A subagent opens again in the new project when it is next
+    // used. An open session's new loop takes the old one's place in the same
+    // step, with nothing waited for in between, so that it is never without
+    // one: a message or an open that comes as the move is told of finds it.
     const family = [input.session, ...subagentsOf(input.session)]
     const stopped = family.flatMap((id) => {
       const each = sessions.get(id)
@@ -697,20 +718,24 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       projects.move(input.session, moved.to)
       return family.flatMap((id) => [log.append(id, "moved", moved), log.append(id, "note", { text: movedNote(from, to) })])
     })()
-    for (const event of written) emit(event)
-    await Promise.all(stopped)
     if (open && scope) {
       // It starts with the new project's model, as it would if it were opened there.
       const model = scope.model ?? options.model ?? open.model
       startLoop({ session: input.session, project: to, scope, model, canAnswer: open.canAnswer })
     }
+    for (const event of written) emit(event)
+    await Promise.all(stopped)
   }
 
-  async function deleteSession(input: Commands["delete_session"]["input"]): Promise<void> {
+  async function deleteSession(input: Commands["delete_session"]["input"]): Promise<Commands["delete_session"]["output"]> {
     listedSession(input.session, "Delete")
     refuseWhileRunning(input.session, "deleted")
-    const project = projects.projectOf(input.session)!
     const family = [input.session, ...subagentsOf(input.session)]
+    // The plugins told are those set up already for the projects it ran in:
+    // the global ones, its project's, and those of any it was moved from.
+    const ranIn = new Set([projects.projectOf(input.session)?.id ?? null, null])
+    for (const event of log.events(input.session)) if (event.type === "moved") ranIn.add(event.body.from)
+    const scopes = new Set([...ranIn].flatMap((id) => built.get(id) ?? []))
     const stopped = family.flatMap((id) => {
       const each = sessions.get(id)
       sessions.delete(id)
@@ -729,20 +754,20 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     // Then the files kept for them, once they are gone from the database, so
     // that a session is never left without them: the core's own, the saved
     // tool output and the jobs' records, and the plugins' own, such as
-    // undo's copies, which the plugins the session ran with remove.
-    const scope = await scopeFor(project, async () => null).catch(() => built.get(null)!)
-    const problems: string[] = []
+    // undo's copies. What cannot be removed is said, and the delete stands.
+    const leftOver: string[] = []
     for (const id of family) {
-      await rm(join(home, "tool-output", id), { recursive: true, force: true }).catch((cause) => problems.push(reasonOf(cause)))
-      await scope.hooks.sessionDeleted(id).catch((cause) => problems.push(reasonOf(cause)))
+      const folder = join(home, "tool-output", id)
+      await rm(folder, { recursive: true, force: true }).catch((cause) => leftOver.push(`The saved output and job records in ${folder} could not be removed: ${reasonOf(cause)}`))
+      for (const scope of scopes) leftOver.push(...(await scope.hooks.sessionDeleted(id)))
     }
-    if (problems.length > 0) {
-      throw new Error(`The session was deleted, but some of the files kept for it in ${home} could not be removed: ${problems.join(" ")}`)
-    }
+    return { leftOver: [...new Set(leftOver)] }
   }
 
-  // Refuses to change a session while anything runs in it.
+  // Refuses to change a session while anything runs in it, or while it is
+  // opening, which sets it up in its project as it stands.
   function refuseWhileRunning(session: string, verb: string): void {
+    if (opening.has(session)) throw new Error(`This session is opening, so it cannot be ${verb} yet. Try again once it has opened.`)
     const what = runningIn(session)
     if (what !== undefined) throw new Error(`This session cannot be ${verb} while ${what}. Wait until it has finished, or stop it, then try again.`)
   }

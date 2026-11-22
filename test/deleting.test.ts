@@ -121,3 +121,80 @@ test("a subagent's session is deleted only with the session that started it, and
   await expect(run.evie.send({ type: "delete_session", session: "no-such-session" })).rejects.toThrow('There is no session with the id "no-such-session"')
   expect((await run.evie.send({ type: "read_history", session: child })).events.length).toBeGreaterThan(0)
 })
+
+// A tool that hands quick work to the background, which leaves the job's
+// files in the session's folder of saved output.
+const quickJob: Plugin = {
+  name: "quick-job",
+  setup(host) {
+    host.tools.add({
+      name: "quick_job",
+      description: "Starts quick work in the background.",
+      inputSchema: { type: "object" },
+      run: async (_input, context) => `Started as job ${context.jobs.start({ kind: "work", title: "quick work", done: Promise.resolve("Done."), stop: () => {} }).id}.`,
+    })
+  },
+}
+
+test("deleting one session leaves another session's undo copies and saved output as they were", async () => {
+  // The job ends within the turn, which is told of it at its next step.
+  const turn = (file: string): ScriptedReply[] => [{ text: [], calls: [{ name: "write", input: { path: file, content: "kept\n" } }, { name: "quick_job", input: {} }] }, { text: ["Written."] }]
+  const run = await start([...turn("one.md"), ...turn("two.md")], (home) => [files(), undo({ dataFolder: home }), quickJob])
+  await say(run, "Write the first")
+  const other = (await run.evie.send({ type: "open_session", folder: run.projectFolder })).session
+  await say(run, "Write the second", other)
+  const otherUndo = await readdir(join(run.home, "undo", other), { recursive: true })
+  const otherOutput = await readdir(join(run.home, "tool-output", other))
+
+  await run.evie.send({ type: "delete_session", session: run.session })
+
+  expect(await keptFor(run.home, "undo")).toEqual([other])
+  expect(await keptFor(run.home, "tool-output")).toEqual([other])
+  expect(await readdir(join(run.home, "undo", other), { recursive: true })).toEqual(otherUndo)
+  expect(await readdir(join(run.home, "tool-output", other))).toEqual(otherOutput)
+})
+
+test("a delete that cannot remove every file kept for the session still deletes it, and says what was left, naming the plugin", async () => {
+  const stuck: Plugin = {
+    name: "stuck",
+    setup(host) {
+      host.on("session_deleted", () => {
+        throw new Error("its folder is locked")
+      })
+    },
+  }
+  const run = await start([{ text: ["Noted."] }], () => [stuck])
+  await say(run, "Plan the beds for spring")
+
+  const deleted = await run.evie.send({ type: "delete_session", session: run.session })
+
+  expect(deleted).toEqual({ leftOver: ['The plugin "stuck" broke in its session_deleted hook: its folder is locked'] })
+  expect(await run.evie.send({ type: "list_sessions" })).toEqual([])
+})
+
+test("deleting a session never sets up a project's plugins to do it, so it asks nothing, and the global plugins still remove their files", async () => {
+  const home = await mkdtemp(join(tmpdir(), "evie-home-"))
+  const here = await mkdtemp(join(tmpdir(), "evie-project-"))
+  const there = await mkdtemp(join(tmpdir(), "evie-project-"))
+  cleanups.push(async () => {
+    for (const folder of [home, here, there]) await rm(folder, { recursive: true, force: true })
+  })
+  const setUp: string[] = []
+  const options = { home, projectFolder: here, questions: true, projectSettings: async (project: { folder: string }) => (setUp.push(project.folder), []) }
+  const plugins = (script: ScriptedReply[]) => [scriptedProvider(script).plugin, files(), undo({ dataFolder: home })]
+  // A session in a second project, which writes a file, so undo keeps a copy.
+  const first = await startEvie(plugins([{ text: [], calls: [{ name: "write", input: { path: "beds.md", content: "North bed.\n" } }] }, { text: ["Written."] }]), options)
+  const session = (await first.evie.send({ type: "open_session", folder: there })).session
+  await say(first, "Write down the beds", session)
+  await first.stop()
+  expect(await keptFor(home, "undo")).toEqual([session])
+
+  // Evie starts again, and the second project is not opened.
+  const second = await startEvie(plugins([]), options)
+  cleanups.push(second.stop)
+  setUp.length = 0
+  await second.evie.send({ type: "delete_session", session })
+
+  expect(setUp).toEqual([])
+  expect(await keptFor(home, "undo")).toEqual([])
+})
