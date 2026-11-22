@@ -1,5 +1,6 @@
-import { open, readFile, realpath, rename, rm } from "node:fs/promises"
-import { join } from "node:path"
+import { randomBytes } from "node:crypto"
+import { lstat, open, readFile, readlink, rename, rm, stat, type FileHandle } from "node:fs/promises"
+import { basename, dirname, join, resolve } from "node:path"
 import { dataFolder } from "./core/evie.ts"
 
 export type Settings = Record<string, string | undefined>
@@ -88,28 +89,51 @@ export function writeKey(home: string, name: string, value: string | null): Prom
 }
 
 // Replaces a settings file's text in one step, so that it is never read
-// half written: the text is written beside the file, flushed to the disk,
-// and moved into its place. A file that is a link to one elsewhere is
-// replaced where it is, so the link stays. Replacements of one file are
-// made one at a time. `mode` is the new file's, as 0o600 for one only the
+// half written: the text is written to a file beside it, made new under a
+// name of its own, flushed to the disk, and moved into its place; when any
+// of that fails, the file beside it is removed, so no copy is left. A file
+// that is a link is replaced where the link leads, even when nothing is
+// there yet, so the link stays. Replacements of one file are made one at a
+// time. The file keeps its mode, or takes `mode`, as 0o600 for one only the
 // owner's user can read.
 const replacing = new Map<string, Promise<void>>()
 export function replaceFile(file: string, text: string, mode?: number): Promise<void> {
   const replaced = (replacing.get(file) ?? Promise.resolve()).then(async () => {
-    const target = await realpath(file).catch(() => file)
-    const beside = `${target}.new`
-    await rm(beside, { force: true })
-    const handle = await open(beside, "w", mode)
+    const target = await whereItLeads(file)
+    const keep = mode ?? (await stat(target).then((found) => found.mode & 0o777, () => undefined))
+    const beside = join(dirname(target), `.${basename(target)}.${randomBytes(8).toString("hex")}.new`)
+    let handle: FileHandle | undefined
     try {
+      handle = await open(beside, "wx", keep ?? 0o666)
+      if (keep !== undefined) await handle.chmod(keep)
       await handle.writeFile(text)
       await handle.sync()
-    } finally {
       await handle.close()
+      handle = undefined
+      await rename(beside, target)
+    } catch (cause) {
+      await handle?.close().catch(() => {})
+      await rm(beside, { force: true })
+      throw cause
     }
-    await rename(beside, target)
   })
   const settled = replaced.catch(() => {})
   replacing.set(file, settled)
   void settled.then(() => replacing.get(file) === settled && replacing.delete(file))
   return replaced
+}
+
+// Where writing to a file lands: the file itself, or for a link where it
+// leads, followed one link at a time, so that a link to a file not there
+// yet leads to where that file will be. A link that leads round in a circle
+// is refused.
+const MOST_LINKS = 40
+async function whereItLeads(file: string): Promise<string> {
+  let path = file
+  for (let links = 0; links < MOST_LINKS; links++) {
+    const found = await lstat(path).catch(() => undefined)
+    if (!found?.isSymbolicLink()) return path
+    path = resolve(dirname(path), await readlink(path))
+  }
+  throw new Error(`${file} is a link that leads round in a circle, so it was not written.`)
 }

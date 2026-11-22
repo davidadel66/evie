@@ -125,11 +125,10 @@ export function openServerSettings(connection: Connection): ServerSettings {
   }
 }
 
-// Whether a page at this address is on the computer evie runs on, where
-// it connects to the server from that computer's own address, as the
+// Whether a page at this address is on the computer evie runs on, as the
 // server needs for the keys, the plugins and the trusted projects to be
-// changed.
-export const onThisComputer = (address: string) => ["127.0.0.1", "localhost", "[::1]"].includes(new URL(address).hostname)
+// changed from it.
+export { onThisComputer } from "../../src/server/wire.ts"
 
 const NOT_CONNECTED = "Not connected to evie's server just now. Wait until it is connected."
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))

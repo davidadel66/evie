@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process"
 import { readFile, stat } from "node:fs/promises"
 import { join } from "node:path"
 import { dataFolder } from "./core/evie.ts"
@@ -27,7 +28,22 @@ export type SettingsEditorOptions = {
   // would stop it, in words, or nothing. A fresh `evie serve --check` when
   // left out, which tests can stand in for.
   check?: (adding: string[]) => Promise<string | undefined>
+  // How long, in milliseconds, that check may take before it is stopped:
+  // 30 seconds when left out, which is for tests to change.
+  checkWithin?: number
 }
+
+// The settings editor, and `close`, which the server calls as it stops.
+export type SettingsEditorWithClose = SettingsEditor & {
+  // Stops any check still running, so that none outlives the server.
+  close(): void
+}
+
+// How long a check may take, in milliseconds.
+const CHECK_WITHIN = 30_000
+
+// A check running in a process of its own, which can be stopped.
+type Running = { stop(why: "time" | "stopping"): void }
 
 // The `evie` command, run to check the settings in a fresh process.
 const CLI = join(import.meta.dir, "cli.ts")
@@ -36,15 +52,66 @@ const CLI = join(import.meta.dir, "cli.ts")
 // a process of its own: `evie serve --check`, which loads the settings files
 // and sets the plugins up together, as starting does, with no port and no
 // sessions. A process of its own loads each plugin file as it is now, where
-// this one keeps each as it was first loaded, and leaves nothing behind.
-async function checkInFreshProcess(environment: Settings, adding: string[]): Promise<string | undefined> {
+// this one keeps each as it was first loaded. It runs in a process group of
+// its own, which is stopped as one once it has ended, or when it takes
+// longer than `within`, or when the server stops, so that nothing it
+// started, such as a command a plugin ran, is left behind.
+function checkInFreshProcess(environment: Settings, adding: string[], within: number, running: Set<Running>): Promise<string | undefined> {
   const env = Object.fromEntries(Object.entries(environment).filter((entry): entry is [string, string] => entry[1] !== undefined))
-  const run = Bun.spawn([process.execPath, CLI, "serve", "--check", ...adding], { env, stdin: "ignore", stdout: "ignore", stderr: "pipe" })
-  const [said, code] = await Promise.all([new Response(run.stderr).text(), run.exited])
-  return code === 0 ? undefined : said.trim() || `The check stopped with exit code ${code}, saying nothing.`
+  const child = spawn(process.execPath, [CLI, "serve", "--check", ...adding], { env, stdio: ["ignore", "ignore", "pipe"], detached: true })
+  const stopGroup = () => {
+    try {
+      process.kill(-child.pid!, "SIGKILL")
+    } catch {
+      // The group has gone already.
+    }
+  }
+  let said = ""
+  child.stderr!.on("data", (chunk: Buffer) => (said += chunk.toString()))
+  return new Promise((resolve) => {
+    let why: "time" | "stopping" | undefined
+    const check: Running = {
+      stop(reason) {
+        why ??= reason
+        stopGroup()
+      },
+    }
+    running.add(check)
+    const timer = setTimeout(() => check.stop("time"), within)
+    child.on("exit", () => {
+      clearTimeout(timer)
+      running.delete(check)
+      stopGroup()
+    })
+    // Once every process of the group has gone, what it said is all there.
+    child.on("close", (code) => {
+      if (why === "time") {
+        resolve(`The check that evie's server would start did not finish within ${seconds(within)}, so it was stopped. A plugin may be waiting on something as it loads or is set up.`)
+      } else if (why === "stopping") resolve("The check that evie's server would start was stopped, since the server is stopping.")
+      else resolve(code === 0 ? undefined : endOf(said.trim()) || `The check stopped with exit code ${code}, saying nothing.`)
+    })
+    child.on("error", (cause) => {
+      clearTimeout(timer)
+      running.delete(check)
+      resolve(`The check that evie's server would start could not be run: ${cause.message}`)
+    })
+  })
 }
 
-export function settingsEditor(options: SettingsEditorOptions): SettingsEditor {
+// What a check said, as much of it as is worth showing, which can reach a
+// phone: its last 40 lines, and of those the last 4 KB, saying when the
+// start was left out.
+const LINES = 40
+const CHARACTERS = 4096
+export function endOf(said: string): string {
+  const lines = said.split("\n")
+  const kept = lines.slice(-LINES).join("\n").slice(-CHARACTERS)
+  return kept === said ? said : `(Only the end of what the check said is shown.)\n${kept}`
+}
+
+const seconds = (ms: number) => `${ms / 1000} second${ms === 1000 ? "" : "s"}`
+
+export function settingsEditor(options: SettingsEditorOptions): SettingsEditorWithClose {
   const home = dataFolder(options.env)
   const started = Date.now()
   // The keys the server took from the file when it started: the ones its
@@ -83,7 +150,8 @@ export function settingsEditor(options: SettingsEditorOptions): SettingsEditor {
     await writeKey(home, name, given)
   }
 
-  const check = options.check ?? ((adding: string[]) => checkInFreshProcess(options.environment, adding))
+  const running = new Set<Running>()
+  const check = options.check ?? ((adding: string[]) => checkInFreshProcess(options.environment, adding, options.checkWithin ?? CHECK_WITHIN, running))
 
   // The plugins listed now, in order, then any loaded when the server
   // started that are no longer listed.
@@ -175,6 +243,9 @@ export function settingsEditor(options: SettingsEditorOptions): SettingsEditor {
       const problem = await check([])
       if (problem !== undefined) throw new Error(`evie's server was not restarted, since it would not start again. ${problem}`)
       setTimeout(options.restart, 0)
+    },
+    close() {
+      for (const each of running) each.stop("stopping")
     },
   }
 }

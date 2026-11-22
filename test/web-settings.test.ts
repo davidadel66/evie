@@ -187,3 +187,47 @@ test("instructions being written are kept until saved, whatever a later read bri
   here.editInstructions("Changed again.")
   expect(here.state().draft).toBeUndefined()
 })
+
+// Sends one command over a WebSocket of its own, as a page at `origin`
+// would, and gives back the server's reply.
+async function sendFrom(url: string, token: string, origin: string, command: Record<string, unknown>) {
+  const socket = new WebSocket(new URL("/ws", url).href.replace(/^http/, "ws"), { headers: { Origin: origin, Authorization: `Bearer ${token}` } } as never)
+  await new Promise((resolve, reject) => {
+    socket.onopen = resolve
+    socket.onerror = reject
+  })
+  const reply = new Promise<{ result?: unknown; error?: string }>((resolve) => {
+    socket.onmessage = (message) => {
+      const parsed = JSON.parse(String(message.data))
+      if ("reply" in parsed) resolve(parsed)
+    }
+  })
+  socket.send(JSON.stringify({ id: "one", command }))
+  const answered = await reply
+  socket.close()
+  return answered
+}
+
+test("a connection from this computer's own address counts as this computer only when the page it comes from, if any, is at a local address too", async () => {
+  const home = await dataFolder()
+  const real = { EVIE_HOME: home }
+  const env = await loadSettings(real)
+  const files = await loadSettingsFiles({ env })
+  const settings = settingsEditor({ env, environment: real, files, restart: () => {} })
+  const run = await startEvie([scriptedProvider([]).plugin, ...files.plugins], { home, settings })
+  const tokens = await openTokens(home)
+  // A page served by something in front of the server, such as a proxy on this computer.
+  const server = startServer({ evie: run.evie, tokens, host: "127.0.0.1", port: 0, origins: ["https://evie.example.com"] })
+  cleanups.push(async () => {
+    await server.stop()
+    tokens.close()
+    await run.stop()
+  })
+  const token = (tokens.add("browser") as { secret: string }).secret
+  const key = { type: "change_settings", key: "OPENROUTER_API_KEY", value: "made-up" }
+
+  expect(await sendFrom(server.url, token, "https://evie.example.com", key)).toMatchObject({
+    error: "Keys, plugins and trusted projects can be changed only on the computer evie runs on.",
+  })
+  expect(await sendFrom(server.url, token, server.url, key)).not.toHaveProperty("error")
+})

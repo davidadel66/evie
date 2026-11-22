@@ -269,15 +269,22 @@ service starts the server again; run by hand, `evie serve` starts a new
 server in its own place, in the same terminal, which Ctrl-C stops as
 before.
 
-The keys, the plugins and the trusted projects can be changed only on the
-computer evie runs on: the server refuses those changes from a connection
-that does not come from this computer's own address, 127.0.0.1 or ::1, and
-a page opened at any other address shows them as they stand. Anything on
-this computer that passes connections on to the server, such as a proxy
-that serves it over HTTPS, makes every device it lets in look as if it
-were on this computer. So keep the server on 127.0.0.1, as it is unless
-`evie.json` says otherwise, unless what is in front of it does its own
-sign-in.
+Keys are typed in, and plugins and trusted projects changed, through the
+settings only on the computer evie runs on: the server refuses those
+changes from a connection that does not come from this computer's own
+address, 127.0.0.1 or ::1, or that comes from a page at any other address,
+and a page opened at any other address shows them as they stand. So a key
+never crosses the network. This is a seat belt, not a wall: a signed-in
+device can still ask evie to do anything evie can do, and can answer the
+question whether to trust a project, as opening a project's session from a
+phone asks.
+
+Something on this computer that passes connections on to the server, such
+as a proxy that serves it over HTTPS, makes them all come from this
+computer's address; a browser's page still says where it is, but a client
+that is not a browser does not. So keep the server on 127.0.0.1, as it is
+unless `evie.json` says otherwise, unless what is in front of it does its
+own sign-in.
 
 The list shows every session you have said something in, kept current as
 they change, and listed again when the line comes back:
@@ -912,8 +919,11 @@ export default {
 }
 ```
 
-For now Evie hands the keys in `.env` to its built-in plugins only; a plugin
-file reads its key from the environment the server runs in.
+For now Evie hands the keys in `.env` to its built-in plugins only. A plugin
+file reads a key it lists from the environment the server runs in, and only
+from there: under the login service that environment holds just the data
+folder and `PATH`, which is why `evie service install` names only the
+built-in plugins' keys.
 
 Through the host a plugin can add to four lists:
 

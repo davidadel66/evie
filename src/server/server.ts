@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto"
 import type { Command, Commands, Evie, EvieEvent } from "../core/types.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
 import type { WebApp } from "./web-app.ts"
-import { hostInAddress, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
+import { hostInAddress, onThisComputer, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
 
 // Evie's server. It is a client of the core, as the terminal was: it uses
 // only `send` and `subscribe`, and carries them over one WebSocket to each
@@ -37,7 +37,8 @@ export type ServerOptions = {
   signInCodeLasts?: number
   // Whether a connection from this address comes from the computer the
   // server runs on: when it comes from 127.0.0.1 or ::1, when left out,
-  // which is for tests to change.
+  // which is for tests to change. A connection from a web page counts only
+  // when the page is at a local address too.
   fromThisComputer?: (address: string) => boolean
 }
 
@@ -51,10 +52,13 @@ export type EvieServer = {
 // A device that is let in: the token it brought, and the device's name.
 type Admitted = { token: string; device: string }
 
-// The settings that only the computer evie runs on may change: its keys,
-// the plugin files it runs, and which projects' own settings it trusts.
-// With any of them, a device elsewhere could take the computer over, or
-// reach its keys. Any device may change the rest, and restart the server.
+// The settings window's changes that only the computer evie runs on may
+// make: a key typed in, so that a key never crosses the network, and the
+// plugin files it runs and the projects it trusts. It is a seat belt, not a
+// wall: a signed-in device can still ask evie to do anything evie can do,
+// and can answer a question such as whether to trust a project, as opening
+// a project's session from a phone asks. Any device may change the rest,
+// and restart the server.
 const ONLY_HERE = ["key", "addPlugin", "removePlugin", "project"]
 const changesOnlyHere = (command: Command) => command.type === "change_settings" && ONLY_HERE.some((field) => field in command)
 const ONLY_HERE_WORDS = "Keys, plugins and trusted projects can be changed only on the computer evie runs on."
@@ -328,8 +332,12 @@ export function startServer(options: ServerOptions): EvieServer {
         // refused never reaches the core.
         const admitted = admit(request, server.port!)
         if (admitted instanceof Response) return admitted
+        // Something on this computer that passes connections on, such as a
+        // proxy serving the page over HTTPS, makes every connection come from
+        // here; the page's own address, which the browser gives, does not.
         const address = server.requestIP(request)?.address ?? ""
-        const here = (options.fromThisComputer ?? isLoopback)(address)
+        const origin = request.headers.get("origin")
+        const here = (options.fromThisComputer ?? isLoopback)(address) && (origin === null || onThisComputer(origin))
         if (server.upgrade(request, { data: { ...admitted, here, unsubscribe: () => {}, sessions: new Set(), opening: 0, joining: new Map(), openingQuestions: new Map() } })) return undefined
         return new Response("Connect here with a WebSocket.", { status: 400 })
       }

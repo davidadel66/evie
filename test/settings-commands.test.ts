@@ -3,7 +3,7 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { loadSettings, loadSettingsFiles } from "../src/index.ts"
-import { settingsEditor } from "../src/settings-editor.ts"
+import { endOf, settingsEditor } from "../src/settings-editor.ts"
 import { startEvie } from "./support/harness.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 
@@ -25,8 +25,9 @@ async function tempFolder(prefix: string) {
 // Starts Evie as `evie serve` does, from a data folder holding these files:
 // the `.env`, the `evie.json` (a short list of plugins when none is given)
 // and the owner's instruction file. `environment` stands for the one the
-// server runs in. Each restart asked for is counted.
-async function start(files: { env?: string; settings?: unknown; instructions?: string } = {}, environment: Record<string, string> = {}) {
+// server runs in. Each restart asked for is counted. `checkWithin` is how
+// long the check that the server would start may take.
+async function start(files: { env?: string; settings?: unknown; instructions?: string } = {}, environment: Record<string, string> = {}, checkWithin?: number) {
   const home = await tempFolder("evie-home-")
   if (files.env !== undefined) await writeFile(join(home, ".env"), files.env)
   if (files.instructions !== undefined) await writeFile(join(home, "AGENTS.md"), files.instructions)
@@ -35,10 +36,10 @@ async function start(files: { env?: string; settings?: unknown; instructions?: s
   const env = await loadSettings(real)
   const settings = await loadSettingsFiles({ env })
   const restarts: number[] = []
-  const editor = settingsEditor({ env, environment: real, files: settings, restart: () => restarts.push(Date.now()) })
+  const editor = settingsEditor({ env, environment: real, files: settings, restart: () => restarts.push(Date.now()), ...(checkWithin !== undefined && { checkWithin }) })
   const run = await startEvie([scriptedProvider([]).plugin, ...settings.plugins], { home, projectSettings: settings.projectSettings, trust: settings.trust, settings: editor })
   cleanups.push(run.stop)
-  return { run, home, restarts }
+  return { run, home, restarts, editor }
 }
 
 // What loading the settings files says, as `evie serve` does when it
@@ -222,6 +223,60 @@ test("a plugin is checked in a fresh process, with the plugins the server would 
     `"/made/up/never-added.ts" was not added from the settings window, so it is left as it is. It is taken off "plugins" in ${join(home, "evie.json")} by hand.`,
   )
   expect(await readFile(join(home, "evie.json"), "utf8")).toBe(before)
+})
+
+// A plugin file that never finishes loading, having started a command of
+// its own, and the ids of the two processes, once it has written them.
+async function hangingPlugin() {
+  const folder = await tempFolder("evie-plugins-")
+  const ids = join(folder, "ids")
+  const file = join(folder, "hanging.ts")
+  await writeFile(file, `const sleeper = Bun.spawn(["sleep", "60"]); await Bun.write(${JSON.stringify(ids)}, process.pid + " " + sleeper.pid); await new Promise(() => {}); export default {}`)
+  const started = async () => {
+    while (!(await Bun.file(ids).exists())) await Bun.sleep(10)
+    return (await readFile(ids, "utf8")).split(" ").map(Number)
+  }
+  return { file, started }
+}
+const gone = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+    return false
+  } catch {
+    return true
+  }
+}
+
+test("a check that does not finish in time is stopped, with what it started, and the change is refused saying so", async () => {
+  const hanging = await hangingPlugin()
+  const { run } = await start({}, {}, 1000)
+
+  const refused = await run.evie.send({ type: "change_settings", addPlugin: hanging.file }).catch((cause: Error) => cause.message)
+
+  expect(refused).toBe("The check that evie's server would start did not finish within 1 second, so it was stopped. A plugin may be waiting on something as it loads or is set up.")
+  const ids = await hanging.started()
+  await Bun.sleep(100)
+  expect(ids.map(gone)).toEqual([true, true])
+})
+
+test("a check still running when the server stops is stopped with it", async () => {
+  const hanging = await hangingPlugin()
+  const { run, editor } = await start()
+
+  const adding = run.evie.send({ type: "change_settings", addPlugin: hanging.file }).catch((cause: Error) => cause.message)
+  const ids = await hanging.started()
+  editor.close()
+
+  expect(await adding).toBe("The check that evie's server would start was stopped, since the server is stopping.")
+  await Bun.sleep(100)
+  expect(ids.map(gone)).toEqual([true, true])
+})
+
+test("what a check said is cut to its last 40 lines, and to its last 4 KB, saying so, since it can reach a phone", () => {
+  const lines = Array.from({ length: 100 }, (_, at) => `line ${at + 1}`)
+  expect(endOf(lines.join("\n"))).toBe(`(Only the end of what the check said is shown.)\n${lines.slice(60).join("\n")}`)
+  expect(endOf("x".repeat(10_000))).toBe(`(Only the end of what the check said is shown.)\n${"x".repeat(4096)}`)
+  expect(endOf("Short and whole.")).toBe("Short and whole.")
 })
 
 // ---- The instruction file ---------------------------------------------------------------------

@@ -46,13 +46,14 @@ export async function serve(env: Settings, args: string[] = []) {
   const serverSettings = await loadServerSettings({ env }).catch(fail)
   // What a restart asked for from the settings window does, once the server listens.
   let restart = () => {}
+  const editor = settingsEditor({ env, environment: process.env, files: settings, restart: () => restart() })
   const evie = await createEvie({
     env,
     plugins: settings.plugins,
     projectSettings: settings.projectSettings,
     trust: settings.trust,
     settingsFile: settings.file,
-    settings: settingsEditor({ env, environment: process.env, files: settings, restart: () => restart() }),
+    settings: editor,
     ...(settings.model !== undefined && { model: settings.model }),
     ...(settings.maxTokens !== undefined && { maxTokens: settings.maxTokens }),
     ...(settings.compaction !== undefined && { compaction: settings.compaction }),
@@ -113,6 +114,7 @@ export async function serve(env: Settings, args: string[] = []) {
   let stopping = false
   function stop(forGood: boolean, then: () => void) {
     stopping = true
+    editor.close()
     stopTidying()
     forgetStopForGood(home)
     void server
