@@ -1872,7 +1872,12 @@ test("a client that offers no compression is sent every message as plain JSON, a
 
 test("the terminal client, whose WebSocket offers compression, is sent a reply of many small pieces and shows it whole, in order", async () => {
   const pieces = Array.from({ length: 300 }, (_, at) => `piece ${at}, `)
-  const { printed } = await typeOverTheNetwork(["hello"], [{ text: pieces }])
+  const { printed, served } = await typeOverTheNetwork(["hello"], [{ text: pieces }])
+  // The WebSocket the terminal's client opens, as `connect` opens it.
+  const socket = new WebSocket(`${served.server.url.replace(/^http/, "ws")}/ws`, { headers: { Authorization: `Bearer ${served.token}` } })
+  await new Promise((resolve) => socket.addEventListener("open", resolve, { once: true }))
+  cleanups.push(async () => socket.close())
 
+  expect(socket.extensions).toContain("permessage-deflate")
   expect(printed).toContain(pieces.join(""))
 })

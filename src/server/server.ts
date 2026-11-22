@@ -409,18 +409,19 @@ export function startServer(options: ServerOptions): EvieServer {
     websocket: {
       // What the server sends is compressed for a client that offers
       // permessage-deflate, as browsers and Bun's own WebSocket do. A client
-      // that does not is sent plain text, as before. Each connection has a
-      // compressor of its own that keeps what it sent in its window, so that
-      // the pieces of a streamed reply, each a few letters in the same
-      // envelope, go as pointers back to the piece before: a reply of 561
-      // pieces moves about 9 KB in place of 57 KB. Bun's default, one
-      // compressor shared by every connection, starts afresh with each
-      // message, which barely shrinks such small ones. "dedicated" asks for
-      // zlib's largest window, 32 KB, at 256 KB of memory a connection. Bun
-      // 1.4.0 gives every size its smallest compressor instead, with a
-      // window of 512 bytes: enough for the pieces, but it finds few of the
-      // repeats in a page of history. Bun 1.4.5 gives the window asked for.
-      // What clients send, small commands, needs only the shared decompressor.
+      // that does not is sent plain text. Each connection has a compressor
+      // of its own that keeps what it sent in its window, so that the pieces
+      // of a streamed reply, each a few letters in the same envelope, go as
+      // pointers back to the piece before: a reply of 561 pieces moves about
+      // 9 KB in place of 57 KB. The compressor Bun shares between every
+      // connection, which `perMessageDeflate: true` gives, starts afresh
+      // with each message, which barely shrinks such small ones.
+      // "dedicated" asks for zlib's largest window, 32 KB, at 256 KB of
+      // memory a connection. Bun 1.4.0 gives every size its smallest
+      // compressor instead, with a window of 512 bytes: enough for the
+      // pieces, but it finds few of the repeats in a page of history. Bun
+      // 1.4.5 gives the window asked for. What clients send, small
+      // commands, needs only the shared decompressor.
       perMessageDeflate: { compress: "dedicated", decompress: true },
       open(socket) {
         connections.add(socket)

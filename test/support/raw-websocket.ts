@@ -18,6 +18,12 @@ export async function rawWebSocket(serverUrl: string, headers: Record<string, st
   const address = new URL("/ws", serverUrl)
   const frames: RawFrame[] = []
   const waiting = new Set<() => void>()
+  const wakeAll = () => {
+    for (const wake of [...waiting]) wake()
+    waiting.clear()
+  }
+  // Why no more messages will come, once none will.
+  let ended: Error | undefined
   let head: string | undefined
   let buffer = Buffer.alloc(0)
   // permessage-deflate keeps what it has sent in its window, unless the
@@ -47,8 +53,14 @@ export async function rawWebSocket(serverUrl: string, headers: Record<string, st
       const payload = buffer.subarray(at, at + length)
       const first = buffer[0]!
       buffer = buffer.subarray(at + length)
-      // Only text messages are kept, not a ping or a close.
-      if ((first & 0x0f) !== 0x1) continue
+      const opcode = first & 0x0f
+      // A ping or a close is passed over. A message in several frames, which
+      // the server does not send, is not read: the tests waiting are told.
+      if (opcode >= 0x8) continue
+      if (opcode !== 0x1 || (first & 0x80) === 0) {
+        ended ??= new Error("The server sent a message in several frames, which this client does not read.")
+        break
+      }
       const compressed = (first & 0x40) !== 0
       let text = payload.toString()
       if (compressed) {
@@ -60,7 +72,7 @@ export async function rawWebSocket(serverUrl: string, headers: Record<string, st
       }
       frames.push({ compressed, size: payload.length, text })
     }
-    for (const wake of [...waiting]) wake()
+    wakeAll()
   }
 
   const opened = Promise.withResolvers<void>()
@@ -69,10 +81,15 @@ export async function rawWebSocket(serverUrl: string, headers: Record<string, st
     port: Number(address.port),
     socket: {
       data(_socket, chunk) {
+        if (ended) return
         read(chunk)
         if (head !== undefined) opened.resolve()
       },
-      close: () => opened.reject(new Error("The server closed the connection.")),
+      close() {
+        ended ??= new Error("The server closed the connection.")
+        opened.reject(ended)
+        wakeAll()
+      },
     },
   })
   const lines = [
@@ -94,15 +111,14 @@ export async function rawWebSocket(serverUrl: string, headers: Record<string, st
     extensions: /^sec-websocket-extensions: *(.*)$/im.exec(head!)?.[1]?.trim() ?? "",
     // Every message the server has sent, in order.
     frames,
-    // Settles with the first message so far, or still to come, that matches.
+    // Settles with the first message so far, or still to come, that matches,
+    // or fails, saying why, once no more messages will come.
     async next(matches: (frame: RawFrame) => boolean): Promise<RawFrame> {
       for (;;) {
         const found = frames.find(matches)
         if (found) return found
-        await new Promise<void>((wake) => {
-          waiting.add(wake)
-          setTimeout(() => (waiting.delete(wake), wake()), 50)
-        })
+        if (ended) throw ended
+        await new Promise<void>((wake) => waiting.add(wake))
       }
     },
     // Sends a text message, masked, as a client must.
