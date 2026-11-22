@@ -67,12 +67,12 @@ test("once connected, Storage lists the whole .evie folder, every folder open, a
 test("a file is read to be shown, and one Storage cannot show says why, in the server's words", async () => {
   const { connection, evieFolder, project } = await start()
   await mkdir(evieFolder, { recursive: true })
-  await writeFile(join(evieFolder, "notes.md"), "# Beds\n")
+  await writeFile(join(evieFolder, "notes.txt"), "Beds\n")
   const storage = storageOf(connection, project)
 
-  storage.show("notes.md")
+  storage.show("notes.txt")
   const read = await until(storage, (state) => state.file?.read !== undefined)
-  expect(read.file).toMatchObject({ path: "notes.md", read: { kind: "text", text: "# Beds\n" } })
+  expect(read.file).toMatchObject({ path: "notes.txt", read: { kind: "text", text: "Beds\n" } })
 
   storage.show("../secret.txt")
   const refused = await until(storage, (state) => state.file?.problem !== undefined)
@@ -224,4 +224,27 @@ test("Storage lists what evie showed under shown, by the day, and opens each suc
   expect(await fetched.text()).toBe("# Guide\n")
   // A file of no kind evie shows is read as Storage reads it.
   expect(storageShown(project, "notes.txt")).toBeUndefined()
+})
+
+test("a file the frame draws itself is not read over the line; one the route will not give is read as Storage reads any file, and says why when it cannot be", async () => {
+  const { connection, evieFolder, project } = await start()
+  await mkdir(join(evieFolder, "shown"), { recursive: true })
+  await writeFile(join(evieFolder, "shown", "guide.md"), "# Guide\n")
+  await writeFile(join(evieFolder, "shown", "not-really.md"), new Uint8Array([0x23, 0, 0x01, 0x02]))
+  await writeFile(join(evieFolder, "shown", "logo.svg"), "an outline, not yet a drawing\n")
+  const storage = storageOf(connection, project)
+  await until(storage, (state) => state.folders.get("")?.entries !== undefined)
+
+  storage.show("shown/guide.md")
+  expect((await until(storage, (state) => state.file?.framed === true || state.file?.read !== undefined)).file).toEqual({ path: "shown/guide.md", framed: true })
+
+  storage.show("shown/not-really.md")
+  expect((await until(storage, (state) => state.file?.problem !== undefined || state.file?.framed === true)).file).toEqual({
+    path: "shown/not-really.md",
+    problem: "shown/not-really.md is neither text nor an image, so Storage cannot show it.",
+  })
+
+  storage.show("shown/logo.svg")
+  const read = await until(storage, (state) => state.file?.path === "shown/logo.svg" && (state.file.read !== undefined || state.file.framed === true))
+  expect(read.file).toMatchObject({ path: "shown/logo.svg", read: { kind: "image", type: "image/svg+xml" } })
 })

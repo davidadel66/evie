@@ -442,7 +442,7 @@ export function startServer(options: ServerOptions): EvieServer {
       }
       if (path === PATHS.attachments && request.method === "POST") return attach(request, server.port!)
       if (path === PATHS.attachments && request.method === "GET") return attachment(request, server.port!)
-      if (path === PATHS.storage && request.method === "GET") return storageFile(request, server.port!)
+      if (path === PATHS.storage && (request.method === "GET" || request.method === "HEAD")) return storageFile(request, server.port!)
       if (path === PATHS.login && request.method === "POST") return login(request, server.port!)
       if (path === PATHS.signInLink && request.method === "POST") return signInLink(request, server.port!)
       return new Response("Not found.", { status: 404 })

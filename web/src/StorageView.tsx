@@ -114,9 +114,12 @@ const indentOf = (depth: number) => ({ paddingLeft: `${depth * 24}px` })
 function FileShown({ state, path, back, now, project }: { state: StorageState; path: string; back: string; now: number; project: string }) {
   const file = state.file?.path === path ? state.file : undefined
   const read = file?.read
-  // A file of a kind evie shows opens in the frame it is shown in under a
-  // reply, drawn by the same viewer, fetched whole from the route.
-  const shown = storageShown(project, path)
+  // A file of a kind evie shows, which the server gives, opens in the frame
+  // it is shown in under a reply, drawn by the same viewer, fetched whole;
+  // its size and age are its folder's listing's, as it is not read here.
+  const shown = file?.framed ? storageShown(project, path) : undefined
+  const listed = state.folders.get(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "")?.entries?.find((entry) => entry.path === path)
+  const facts = read ?? (shown !== undefined && listed?.kind === "file" ? listed : undefined)
   return (
     <div className="flex min-w-0 flex-col">
       <div className="flex min-h-row-height items-center gap-2 border-b border-line py-1 pr-gutter wide:pl-2">
@@ -127,9 +130,9 @@ function FileShown({ state, path, back, now, project }: { state: StorageState; p
         <span title={path} className="min-w-0 flex-1 truncate font-mono text-code text-text">
           {path}
         </span>
-        {read !== undefined && (
+        {facts !== undefined && (
           <span className="shrink-0 text-caption text-text-muted">
-            {sizeWords(read.size)} · {ageWords(read.changed, now)}
+            {sizeWords(facts.size)} · {ageWords(facts.changed, now)}
           </span>
         )}
       </div>
