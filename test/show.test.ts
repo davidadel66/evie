@@ -200,8 +200,13 @@ test("the guard keeps show out of private folders, as it keeps the file tools, b
   setSystemTime(new Date(2026, 10, 22, 9, 30))
   const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
   cleanups.push(() => rm(home, { recursive: true, force: true }))
+  const made = await realpath(await mkdtemp(join(tmpdir(), "evie-made-")))
+  cleanups.push(() => rm(made, { recursive: true, force: true }))
+  await writeFile(join(made, "chart.png"), png())
+  // A file from outside a project asks first; this one the owner allowed.
+  const allowed = [{ action: "read", match: `${made}/**`, effect: "allow" as const }]
   const script: ScriptedReply[] = []
-  const run = await startEvie([scriptedProvider(script).plugin, show({ dataFolder: home }), permissions({ mode: "auto", dataFolder: home })], { home })
+  const run = await startEvie([scriptedProvider(script).plugin, show({ dataFolder: home }), permissions({ mode: "auto", dataFolder: home, rules: allowed })], { home })
   cleanups.push(run.stop)
   const call = async (paths: string[], session: string) => {
     script.push({ text: [], calls: [{ name: "show", input: { paths } }] }, { text: ["Here it is."] })
@@ -211,9 +216,6 @@ test("the guard keeps show out of private folders, as it keeps the file tools, b
   const { session } = await run.evie.send({ type: "open_session" })
   const other = (await run.evie.send({ type: "open_session" })).session
   const theirs = (await run.evie.attachments.save(other, "photo.png", png())).path
-  const made = await realpath(await mkdtemp(join(tmpdir(), "evie-made-")))
-  cleanups.push(() => rm(made, { recursive: true, force: true }))
-  await writeFile(join(made, "chart.png"), png())
 
   expect(await call([join(made, "chart.png"), theirs], session)).toStartWith(`Blocked by the guard: ${theirs} is in a private folder.`)
   expect(await call([join(made, "chart.png")], session)).toStartWith("Shown to the owner under your reply:")
