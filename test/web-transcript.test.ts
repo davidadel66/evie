@@ -33,6 +33,7 @@ function read(items: Item[]): string[] {
     if (item.kind === "failed") return `failed ${item.turn}: ${item.error}`
     if (item.kind === "fold") return `fold ${item.turn}: ${item.label} (${read(item.items).join(" | ")})`
     if (item.kind === "changes") return `changes ${item.turn}: ${item.files.map((file) => file.path).join(", ")}`
+    if (item.kind === "shown") return `shown ${item.turn}: ${item.file.name}`
     return `note ${item.turn}: ${item.text}`
   })
 }

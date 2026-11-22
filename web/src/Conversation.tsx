@@ -10,7 +10,7 @@ import type { Connection } from "./connection.ts"
 import { holdConversation, openDraft, type Conversation as Opened, type Draft as OpenedDraft, type Outgoing } from "./conversation.ts"
 import type { ShownAttachment } from "./attachments.ts"
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog.tsx"
-import { CaretRight, ChatsCircle, File as FileIcon, FileText, Globe, Hammer, Lightbulb, MagnifyingGlass, NotePencil, Robot, TerminalWindow, Wrench, X } from "./icons.tsx"
+import { CaretRight, ChatsCircle, File as FileIcon, FileImage, FileText, Globe, Hammer, Lightbulb, MagnifyingGlass, NotePencil, Robot, TerminalWindow, Wrench, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { renderMarkdown } from "./markdown.ts"
 import { addressOf } from "./address.ts"
@@ -502,6 +502,7 @@ const KIND_ICON: Record<StepKind | "mixed", typeof FileText> = {
   web: Globe,
   agent: Robot,
   question: ChatsCircle,
+  show: FileImage,
   other: Wrench,
   mixed: Hammer,
 }
