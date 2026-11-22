@@ -75,7 +75,7 @@ export type DeltaEvent = { type: "assistant_delta"; session: string; text: strin
 // A job started or ended. Sent to clients, never stored.
 export type JobEvent = { type: "job"; session: string; job: Job }
 
-export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent
+export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent | DeletedEvent
 
 // ---- Sessions in a list ---------------------------------------------------------
 
@@ -100,6 +100,11 @@ export type SessionSummary = { session: string; project: string | null; name: st
 // Sent to clients, never stored. Evie's server sends it to every client,
 // whatever sessions it has open, so that each can keep a list of sessions.
 export type SummaryEvent = { type: "summary" } & SessionSummary
+
+// A session was deleted for good, with its subagents. Sent to clients,
+// never stored, and like a summary to every client, so that each can drop
+// it from its list of sessions.
+export type DeletedEvent = { type: "deleted"; session: string }
 
 // ---- The request to a model ---------------------------------------------------
 
@@ -424,6 +429,10 @@ export type Hooks = {
   before_tool(call: CheckedToolCall, context: HookContext): { deny: string } | void | Promise<{ deny: string } | void>
   // After a tool has run. Return changed result text, or nothing to leave it.
   after_tool(call: CheckedToolCall, text: string, context: HookContext): string | void | Promise<string | void>
+  // After a session has been deleted for good: a plugin that keeps files
+  // for a session in the data folder removes this one's. It is told of
+  // each of the session's subagents too, which are deleted with it.
+  session_deleted(session: string): void | Promise<void>
 }
 
 // The only way a plugin adds anything to Evie. Each project has a host of its
@@ -643,6 +652,15 @@ export type Commands = {
   // project it is in does nothing. Not a subagent's, which moves with it.
   move_session: {
     input: { session: string; project: string | null }
+    output: void
+  }
+  // Deletes a session for good: its events, its subagents' sessions, and
+  // the files evie and its plugins keep for them in the data folder, such
+  // as saved tool output, background jobs' records and undo's copies. Every
+  // client is sent a `deleted` event. It is refused while anything runs in
+  // the session, as a move is. Not a subagent's, which goes with its session.
+  delete_session: {
+    input: { session: string }
     output: void
   }
 }

@@ -38,6 +38,8 @@ export type Projects = {
   childrenOf(session: string): string[]
   // Puts a session and its subagents in another project, or with null in none.
   move(session: string, project: string | null): void
+  // Takes a session away, which is being deleted.
+  remove(session: string): void
 }
 
 // The folder a project is rooted at: the nearest folder at or above this one
@@ -205,6 +207,7 @@ export function createProjects(db: Database): Projects {
 
   const children = db.query<{ id: string }, [string]>("SELECT id FROM session WHERE parent = ? ORDER BY created")
   const moveRows = db.query("UPDATE session SET project = ? WHERE id = ? OR parent = ?")
+  const removeRow = db.query("DELETE FROM session WHERE id = ?")
 
   const insert = (folder: string, name: string): Project => {
     const project: Project = { id: crypto.randomUUID(), name, folder }
@@ -273,6 +276,10 @@ export function createProjects(db: Database): Projects {
 
     move(session, project) {
       moveRows.run(project, session, session)
+    },
+
+    remove(session) {
+      removeRow.run(session)
     },
   }
 }

@@ -163,3 +163,16 @@ test("a blank name, a session that is not there, and a subagent's session are re
   // Nor is a subagent's session named by the small model: only the owner's session was.
   expect(asked).toHaveLength(1)
 })
+
+test("a name that arrives once the session has been deleted is dropped", async () => {
+  const naming = gate()
+  const { run } = await start([{ text: ["Noted."] }], answers("Spring vegetable beds", naming.opened))
+  await say(run, "Plan which vegetables go in which beds this spring")
+
+  await run.evie.send({ type: "delete_session", session: run.session })
+  naming.open()
+  await Bun.sleep(20)
+
+  expect(await run.evie.send({ type: "list_sessions" })).toEqual([])
+  expect(run.events.some((event) => event.type === "named")).toBe(false)
+})

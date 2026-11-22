@@ -230,3 +230,52 @@ test("asked for again, the projects come with the branch each is on now, as afte
 
   expect((await until(sessions, (state) => state.projects[0]?.branch !== "main")).projects[0]!.branch).toBe("feat/beds")
 })
+
+test("a session is renamed from the list, which shows its new name once its summary comes, and a blank name is refused with the server's reason", async () => {
+  const { served, connection } = await start([{ text: ["Noted."] }])
+  await say(served.run, "Plan the beds for spring")
+  const sessions = list(connection)
+  await until(sessions, (state) => state.listed)
+
+  expect(await sessions.rename(served.run.session, "Garden beds")).toBeUndefined()
+  await until(sessions, (state) => state.sessions[0]?.name === "Garden beds")
+  expect(await sessions.rename(served.run.session, "   ")).toBe("A session's name cannot be blank. Give it a name of a few words.")
+})
+
+test("a session is moved from the list into another project or none, and a move refused while it works says why", async () => {
+  const { served, connection } = await start([{ text: ["Noted."] }, { hang: true }])
+  await say(served.run, "Plan the beds for spring")
+  const sessions = list(connection)
+  await until(sessions, (state) => state.listed)
+  const projectOf = (state: SessionList, session: string) => state.sessions.find((each) => each.session === session)?.project
+
+  expect(await sessions.move(served.run.session, null)).toBeUndefined()
+  await until(sessions, (state) => projectOf(state, served.run.session) === null)
+  expect(await sessions.move(served.run.session, served.run.project!.id)).toBeUndefined()
+  await until(sessions, (state) => projectOf(state, served.run.session) === served.run.project!.id)
+
+  await served.run.evie.send({ type: "send_message", session: served.run.session, text: "Work on this for a while" })
+  await until(sessions, (state) => state.sessions[0]?.state === "working")
+  expect(await sessions.move(served.run.session, null)).toBe("This session cannot be moved while a turn is running in it. Wait until it has finished, or stop it, then try again.")
+})
+
+test("a session deleted from one page is dropped from every page's list, whatever each has open", async () => {
+  const { served, connection } = await start([{ text: ["Noted."] }, { text: ["Noted."] }])
+  await say(served.run, "Plan the beds for spring")
+  const other = await served.run.evie.send({ type: "open_session" })
+  await say(served.run, "What is the weather tomorrow?", other.session)
+  const sessions = list(connection)
+  // A second page, which has the session open.
+  const second = openConnection({ url: served.server.url, token: served.token, firstWait: 10 })
+  cleanups.push(() => second.close())
+  const secondList = list(second)
+  await until(sessions, (state) => state.listed && state.sessions.length === 2)
+  await until(secondList, (state) => state.listed && state.sessions.length === 2)
+  const secondClient = second.state()
+  if (secondClient.status !== "connected") throw new Error("the second page is not connected")
+  await secondClient.evie.send({ type: "open_session", session: served.run.session, questions: true })
+
+  expect(await sessions.delete(served.run.session)).toBeUndefined()
+
+  for (const each of [sessions, secondList]) expect((await until(each, (state) => state.sessions.length === 1)).sessions.map((one) => one.session)).toEqual([other.session])
+})

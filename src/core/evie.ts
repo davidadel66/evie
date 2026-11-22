@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises"
+import { mkdir, rm } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { createHost, type HookRunner } from "./host.ts"
@@ -94,6 +94,8 @@ function movedNote(from: Project | null, to: Project | null): string {
   const before = from === null ? "" : ` Files named earlier in this conversation are still in the old folder, ${from.folder}.`
   return `The owner moved this session ${moved}. ${now}${before}`
 }
+
+const reasonOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause)).replace(/\.*$/, ".")
 
 // A session's name as it is kept: on one line, with no spaces at its ends.
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
@@ -694,6 +696,41 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     }
   }
 
+  async function deleteSession(input: Commands["delete_session"]["input"]): Promise<void> {
+    listedSession(input.session, "Delete")
+    refuseWhileRunning(input.session, "deleted")
+    const project = projects.projectOf(input.session)!
+    const family = [input.session, ...projects.childrenOf(input.session)]
+    const stopped = family.flatMap((id) => {
+      const each = sessions.get(id)
+      sessions.delete(id)
+      return each ? [each.loop.stop()] : []
+    })
+    db.transaction(() => {
+      for (const id of family) {
+        log.remove(id)
+        inbox.take(id)
+        projects.remove(id)
+      }
+    })()
+    summaries.forget(input.session)
+    deliver({ type: "deleted", session: input.session })
+    await Promise.all(stopped)
+    // Then the files kept for them, once they are gone from the database, so
+    // that a session is never left without them: the core's own, the saved
+    // tool output and the jobs' records, and the plugins' own, such as
+    // undo's copies, which the plugins the session ran with remove.
+    const scope = await scopeFor(project, async () => null).catch(() => built.get(null)!)
+    const problems: string[] = []
+    for (const id of family) {
+      await rm(join(home, "tool-output", id), { recursive: true, force: true }).catch((cause) => problems.push(reasonOf(cause)))
+      await scope.hooks.sessionDeleted(id).catch((cause) => problems.push(reasonOf(cause)))
+    }
+    if (problems.length > 0) {
+      throw new Error(`The session was deleted, but some of the files kept for it in ${home} could not be removed: ${problems.join(" ")}`)
+    }
+  }
+
   // Refuses to change a session while anything runs in it.
   function refuseWhileRunning(session: string, verb: string): void {
     const what = runningIn(session)
@@ -900,6 +937,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return renameSession(command) as Output
         case "move_session":
           return (await moveSession(command)) as Output
+        case "delete_session":
+          return (await deleteSession(command)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

@@ -1,4 +1,4 @@
-import type { Evie, ListedProject, SessionSummary, SummaryEvent } from "../../src/core/types.ts"
+import type { Command, Evie, ListedProject, SessionSummary, SummaryEvent } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 
 // The web app's list of sessions and projects, apart from its screens,
@@ -36,6 +36,14 @@ export type Sessions = {
   // for an answer, or nothing. The list changes when the session's summary
   // comes.
   settle(session: string, settled: boolean): Promise<string | undefined>
+  // Renames a session, moves it into a project or with null out of one, or
+  // deletes it for good. Each gives back why the server refused, as it does
+  // a blank name, or a move or a delete while the session is working, or
+  // nothing. The list changes when the session's summary comes, or for a
+  // delete, the word that it is gone, which every page is sent.
+  rename(session: string, name: string): Promise<string | undefined>
+  move(session: string, project: string | null): Promise<string | undefined>
+  delete(session: string): Promise<string | undefined>
   // Stops following the connection.
   close(): void
 }
@@ -59,17 +67,27 @@ export function openSessions(connection: Connection): Sessions {
     if (summary.project !== null && !state.projects.some((project) => project.id === summary.project)) listProjects(evie)
   }
 
+  // A session deleted is taken out of the list, and out of any list that
+  // is out, which can be older than its deletion.
+  function drop(session: string) {
+    for (const heard of listing) heard.set(session, "deleted")
+    set({ sessions: state.sessions.filter((each) => each.session !== session) })
+  }
+
   // The summaries heard while each list of sessions is out. The list can be
   // older than any of them, as when the server answers it from before a
   // drop, so each of them wins over the list's line for its session.
-  const listing = new Set<Map<string, SessionSummary>>()
+  const listing = new Set<Map<string, SessionSummary | "deleted">>()
 
   function list(evie: Evie) {
-    const heard = new Map<string, SessionSummary>()
+    const heard = new Map<string, SessionSummary | "deleted">()
     listing.add(heard)
     const sessions = evie.send({ type: "list_sessions" }).finally(() => listing.delete(heard)).then((listed) => {
       const lines = new Map<string, SessionSummary>(listed.map((each) => [each.session, each]))
-      for (const [session, summary] of heard) lines.set(session, summary)
+      for (const [session, summary] of heard) {
+        if (summary === "deleted") lines.delete(session)
+        else lines.set(session, summary)
+      }
       set({ sessions: [...lines.values()].sort((a, b) => b.lastActive - a.lastActive) })
     })
     void sessions.then(
@@ -119,6 +137,7 @@ export function openSessions(connection: Connection): Sessions {
       heard = evie
       unhear = evie.subscribe((event) => {
         if (event.type === "summary") keep(evie, summaryOf(event))
+        if (event.type === "deleted") drop(event.session)
       })
     }
     if (evie !== undefined && evie !== connected) list(evie)
@@ -126,6 +145,19 @@ export function openSessions(connection: Connection): Sessions {
   }
   const unfollow = connection.subscribe(follow)
   follow()
+
+  // Sent on the client the list follows, so that a command asked for while
+  // the line is down waits for it, as the client's commands do. Gives back
+  // why the server refused, or nothing.
+  async function carryOut(command: Command): Promise<string | undefined> {
+    if (heard === undefined) return NOT_CONNECTED
+    try {
+      await heard.send(command)
+      return undefined
+    } catch (cause) {
+      return wordsOf(cause)
+    }
+  }
 
   return {
     state: () => state,
@@ -136,17 +168,10 @@ export function openSessions(connection: Connection): Sessions {
     refreshProjects() {
       if (connected !== undefined) listProjects(connected)
     },
-    // Sent on the client the list follows, so that a settle asked for while
-    // the line is down waits for it, as the client's commands do.
-    async settle(session, settled) {
-      if (heard === undefined) return NOT_CONNECTED
-      try {
-        await heard.send({ type: "settle_session", session, settled })
-        return undefined
-      } catch (cause) {
-        return wordsOf(cause)
-      }
-    },
+    settle: (session, settled) => carryOut({ type: "settle_session", session, settled }),
+    rename: (session, name) => carryOut({ type: "rename_session", session, name }),
+    move: (session, project) => carryOut({ type: "move_session", session, project }),
+    delete: (session) => carryOut({ type: "delete_session", session }),
     close() {
       unfollow()
       unhear()

@@ -23,6 +23,8 @@ export type Summaries = {
   // Sends the summary of each session that has changed with nothing
   // happening in it, which only time does: a week of quiet settles it.
   look(): void
+  // Forgets a session that has been deleted.
+  forget(session: string): void
 }
 
 // What a summary is worked out from: the session's own row, and a few
@@ -125,6 +127,9 @@ export function createSummaries(options: {
     },
     look() {
       for (const row of all.all().filter(listed)) send(summaryOf(row))
+    },
+    forget(session) {
+      sent.delete(session)
     },
   }
 }
