@@ -1,84 +1,47 @@
-import type { ChangedFile, TurnChanges } from "../../src/core/types.ts"
+import type { ChangedFile, FileDiff, TurnChanges } from "../../src/core/types.ts"
 
-// The diff panel's rules, apart from its screen: what it can compare, the
-// line that says how much a turn changed, and a file's diff, as the server
-// gives it, split into hunks and lines, and drawn stacked or side by side.
+// The diff's rules, apart from its screen: what the right panel can
+// compare, the line that says how much a turn changed, which files are
+// folded, a turn's files as its card lists them, and the changed files as
+// a tree.
 
-// One line of a diff: unchanged, added or removed, with its number in the
-// file before and after, as it has one there. `noNewline` marks a last
-// line with no line end.
-export type Line = { kind: "same" | "added" | "removed"; text: string; old?: number; new?: number; noNewline?: true }
-// A run of changed lines with the unchanged lines around them, under its
-// `@@` line.
-export type Hunk = { header: string; lines: Line[] }
+// Paths in the order git lists them, by their characters' codes, so that
+// "README.md" comes before "recipes/".
+export const byPath = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
-// A unified diff's hunks, from its `@@` lines on.
-export function hunksOf(patch: string): Hunk[] {
-  const hunks: Hunk[] = []
-  let old = 0
-  let now = 0
-  for (const written of patch.split("\n")) {
-    const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(written)
-    if (header) {
-      hunks.push({ header: written, lines: [] })
-      // A range of no lines starts at the line before it.
-      old = Math.max(1, Number(header[1]))
-      now = Math.max(1, Number(header[2]))
-      continue
-    }
-    const hunk = hunks.at(-1)
-    if (hunk === undefined || written === "") continue
-    const text = written.slice(1)
-    if (written.startsWith("\\")) {
-      const last = hunk.lines.at(-1)
-      if (last) last.noNewline = true
-    } else if (written.startsWith("+")) hunk.lines.push({ kind: "added", text, new: now++ })
-    else if (written.startsWith("-")) hunk.lines.push({ kind: "removed", text, old: old++ })
-    else hunk.lines.push({ kind: "same", text, old: old++, new: now++ })
+// Whether a file has a diff to draw: its lines, or for a file renamed and
+// not changed, its header. One binary, too large, filtered or not known
+// has none, and says why instead.
+export const drawable = (file: FileDiff) => file.patch !== undefined && (file.patch !== "" || file.from !== undefined)
+
+// The first file, in the order of their paths, that has a diff to draw.
+export const firstDrawn = (files: readonly FileDiff[]): string | undefined => files.filter(drawable).map((file) => file.path).sort(byPath)[0]
+
+// Which files of a comparison are folded, and which have been seen. Each
+// file is folded the first time it is seen, as T3 Code's are, but the file
+// the diff is opened `at`, or else, the first time any is seen, the first
+// that has a diff; and a file it is opened at later opens. What the owner
+// folds or opens stays as they left it.
+export type Folding = { seen: ReadonlySet<string>; folded: ReadonlySet<string> }
+export function foldFiles(was: Folding | undefined, files: readonly FileDiff[], at: string | undefined): Folding {
+  const seen = new Set(was?.seen)
+  const folded = new Set(was?.folded)
+  const open = at ?? (seen.size === 0 ? firstDrawn(files) : undefined)
+  for (const file of files) {
+    if (seen.has(file.path) || !drawable(file)) continue
+    seen.add(file.path)
+    if (file.path !== open) folded.add(file.path)
   }
-  return hunks
+  if (open !== undefined) folded.delete(open)
+  return { seen, folded }
 }
 
-// The lines of a file that are drawn: the first `most` of them, so that a
-// file of tens of thousands of lines cannot stall the page; whether the
-// rest were left out; and the widest line number among those drawn, for
-// the room the numbers take.
-export function drawnLines(hunks: readonly Hunk[], most: number): { hunks: Hunk[]; cut: boolean; widest: number } {
-  const drawn: Hunk[] = []
-  let left = most
-  let widest = 0
-  for (const hunk of hunks) {
-    if (left === 0) return { hunks: drawn, cut: true, widest }
-    const lines = hunk.lines.length <= left ? hunk.lines : hunk.lines.slice(0, left)
-    left -= lines.length
-    for (const line of lines) widest = Math.max(widest, line.old ?? 0, line.new ?? 0)
-    drawn.push(lines === hunk.lines ? hunk : { ...hunk, lines })
-    if (lines !== hunk.lines) return { hunks: drawn, cut: true, widest }
-  }
-  return { hunks: drawn, cut: false, widest }
-}
-
-// A hunk's lines side by side: before on the left, after on the right. An
-// unchanged line is on both sides. Lines removed face the lines added in
-// their place, one to one, and what is left over faces nothing.
-export function sideBySide(lines: readonly Line[]): { left?: Line; right?: Line }[] {
-  const rows: { left?: Line; right?: Line }[] = []
-  for (let at = 0; at < lines.length; ) {
-    const line = lines[at]!
-    if (line.kind === "same") {
-      rows.push({ left: line, right: line })
-      at += 1
-      continue
-    }
-    const removed: Line[] = []
-    const added: Line[] = []
-    while (lines[at]?.kind === "removed") removed.push(lines[at++]!)
-    while (lines[at]?.kind === "added") added.push(lines[at++]!)
-    for (let row = 0; row < Math.max(removed.length, added.length); row += 1) {
-      rows.push({ ...(removed[row] && { left: removed[row] }), ...(added[row] && { right: added[row] }) })
-    }
-  }
-  return rows
+// The files a turn's card lists, as T3 Code's: at most 200, in the order
+// of their paths, and how many more the full diff has.
+const MOST_IN_CARD = 200
+export function cardFiles<File extends ChangedFile>(files: readonly File[]): { listed: File[]; more: number } {
+  const ordered = [...files].sort((a, b) => byPath(a.path, b.path))
+  return { listed: ordered.slice(0, MOST_IN_CARD), more: Math.max(0, ordered.length - MOST_IN_CARD) }
 }
 
 // Whether a file's lines added and removed were counted: not for one that
@@ -94,15 +57,6 @@ export function changedFilesLine(files: readonly ChangedFile[]): { files: string
   const counted = files.filter(hasCounts)
   const sum = (count: (file: ChangedFile) => number) => counted.reduce((total, file) => total + count(file), 0)
   return { files: `${files.length} changed ${files.length === 1 ? "file" : "files"}`, added: sum((file) => file.added), removed: sum((file) => file.removed) }
-}
-
-// What the project card says of the session's changes: the line, or that
-// there are none yet, or that they are not kept here; nothing until they
-// have been listed.
-export function sessionLine(listed: { kept: boolean; session?: readonly ChangedFile[] } | undefined): string | ReturnType<typeof changedFilesLine> {
-  if (listed === undefined || listed.session === undefined) return ""
-  if (!listed.kept) return "evie keeps no copies of the files it changes here, so its changes are not shown."
-  return listed.session.length === 0 ? "No changes in this session yet" : changedFilesLine(listed.session)
 }
 
 // What the panel can compare, by a key of its own: the session's latest
@@ -138,28 +92,47 @@ function shortTime(time: number, now: number, timeZone?: string): string {
   return day(time) === day(now) ? clock : `${new Intl.DateTimeFormat("en-GB", { ...options, day: "numeric", month: "short" }).format(time)}, ${clock}`
 }
 
-// A row of the file tree beside the diff: a folder, or a file, by its
-// whole path, each with how deep it is.
-export type TreeRow = { kind: "folder"; name: string; depth: number } | { kind: "file"; name: string; depth: number; path: string }
+// A row of a tree of changed files, as the changed-files card at the end
+// of a turn and the file tree beside the diff draw them: a folder, known
+// by its whole path, and whether it is open; or a file, by its whole path.
+// Each has how deep it is, and the lines added and removed in it, which a
+// folder sums across the files in it whose lines were counted; a file
+// whose lines were not counted, such as one that is binary, has none.
+type Counts = { added: number; removed: number }
+export type TreeRow =
+  | { kind: "folder"; path: string; name: string; depth: number; open: boolean; counts: Counts }
+  | { kind: "file"; path: string; name: string; depth: number; counts: Counts | undefined }
 
-// The files' paths as a tree: in each folder, its folders first, then its
-// files, each in order of name. A folder that holds one folder and nothing
-// else is joined to it, as "src/core", so the tree is not deeper than it
-// needs to be. A path that starts with a slash, outside the project, is a
-// tree of its own from the top.
-export function fileTree(paths: readonly string[]): TreeRow[] {
-  type Folder = { folders: Map<string, Folder>; files: Map<string, string> }
-  const top: Folder = { folders: new Map(), files: new Map() }
-  for (const path of paths) {
-    const parts = path.split("/")
+// The files as a tree, as T3 Code's changed-files card lists them: in each
+// folder, its folders first, then its files, each in order of name. A
+// folder that holds one folder and nothing else is joined to it, as
+// "src/core", so the tree is not deeper than it needs to be. Every folder
+// is open, but those `folded`, by their whole paths, whose files are left
+// out. A path that starts with a slash, outside the project, is a tree of
+// its own from the top.
+export function filesTree(files: readonly ChangedFile[], folded: ReadonlySet<string>): TreeRow[] {
+  type Folder = { folders: Map<string, Folder>; files: Map<string, ChangedFile>; counts: Counts }
+  const made = (): Folder => ({ folders: new Map(), files: new Map(), counts: { added: 0, removed: 0 } })
+  const top = made()
+  for (const each of files) {
+    const parts = each.path.split("/")
     const name = parts.pop()!
     let folder = top
-    for (const part of parts) folder = folder.folders.get(part) ?? folder.folders.set(part, { folders: new Map(), files: new Map() }).get(part)!
-    folder.files.set(name, path)
+    const within = [top]
+    for (const part of parts) {
+      folder = folder.folders.get(part) ?? folder.folders.set(part, made()).get(part)!
+      within.push(folder)
+    }
+    folder.files.set(name, each)
+    if (!hasCounts(each)) continue
+    for (const holding of within) {
+      holding.counts.added += each.added
+      holding.counts.removed += each.removed
+    }
   }
   const byName = (a: string, b: string) => a.localeCompare(b)
   const rows: TreeRow[] = []
-  const walk = (folder: Folder, depth: number) => {
+  const walk = (folder: Folder, depth: number, path: string) => {
     for (const name of [...folder.folders.keys()].sort(byName)) {
       let joined = name
       let inside = folder.folders.get(name)!
@@ -168,11 +141,25 @@ export function fileTree(paths: readonly string[]): TreeRow[] {
         joined = `${joined}/${next}`
         inside = only
       }
-      rows.push({ kind: "folder", name: joined, depth })
-      walk(inside, depth + 1)
+      const whole = path === "" ? joined : `${path}/${joined}`
+      const open = !folded.has(whole)
+      rows.push({ kind: "folder", path: whole, name: joined, depth, open, counts: inside.counts })
+      if (open) walk(inside, depth + 1, whole)
     }
-    for (const name of [...folder.files.keys()].sort(byName)) rows.push({ kind: "file", name, depth, path: folder.files.get(name)! })
+    for (const name of [...folder.files.keys()].sort(byName)) {
+      const each = folder.files.get(name)!
+      rows.push({ kind: "file", path: each.path, name, depth, counts: hasCounts(each) ? { added: each.added, removed: each.removed } : undefined })
+    }
   }
-  walk(top, 0)
+  walk(top, 0, "")
   return rows
+}
+
+// Every folder of the files' tree, by its whole path, and whether those
+// shown are all open, which says whether a press of the tree's button
+// folds every folder or opens them all.
+export function treeFolders(files: readonly ChangedFile[], folded: ReadonlySet<string>): { all: string[]; open: boolean } {
+  const all = filesTree(files, new Set()).flatMap((row) => (row.kind === "folder" ? [row.path] : []))
+  const open = filesTree(files, folded).every((row) => row.kind !== "folder" || row.open)
+  return { all, open }
 }

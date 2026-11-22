@@ -4,6 +4,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   connect,
+  files,
+  undo,
   ConnectError,
   runTerminal,
   startServer,
@@ -1097,6 +1099,31 @@ test("the replies to Storage's reads are not remembered, since they can be large
   await writeFile(join(evie, "notes.md"), "second\n")
   expect(await own.send({ id: "read", command: read })).toMatchObject({ result: { text: "second\n" } })
   for (let n = 1; n <= 200; n++) await own.send({ id: `list ${n}`, command: { type: "list_storage", project } })
+
+  expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
+})
+
+test("the replies to a diff's reads, and to reading a changed file's whole sides, are not remembered either, since they can be large and reading again changes nothing, so they take none of the 200 places", async () => {
+  const count = counted()
+  const home = await mkdtemp(join(tmpdir(), "evie-undo-"))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  const script: ScriptedReply[] = [{ text: [], calls: [{ name: "write", input: { path: "notes.md", content: "first\n" } }] }, { text: ["Written."] }]
+  const served = await serveEvie([scriptedProvider(script).plugin, files(), undo({ dataFolder: home }), count.plugin])
+  cleanups.push(served.stop)
+  await say(served.run, "Write the notes")
+  const own = await ownLine(served.server.url, served.token)
+  expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
+
+  const read = { type: "read_changes", session: served.run.session, of: "session" } as const
+  expect(await own.send({ id: "read", command: read })).toMatchObject({ result: { files: [{ path: "notes.md", patch: "@@ -0,0 +1,1 @@\n+first\n" }] } })
+  await writeFile(join(served.run.projectFolder, "notes.md"), "second\n")
+  expect(await own.send({ id: "read", command: read })).toMatchObject({ result: { files: [{ path: "notes.md", patch: "@@ -0,0 +1,1 @@\n+second\n" }] } })
+  const sides = { type: "read_file_sides", session: served.run.session, of: "session", path: "notes.md" } as const
+  expect(await own.send({ id: "sides", command: sides })).toMatchObject({ result: { before: null, after: "second\n" } })
+  await writeFile(join(served.run.projectFolder, "notes.md"), "third\n")
+  expect(await own.send({ id: "sides", command: sides })).toMatchObject({ result: { before: null, after: "third\n" } })
+  for (let n = 1; n <= 100; n++) await own.send({ id: `read ${n}`, command: read })
+  for (let n = 1; n <= 100; n++) await own.send({ id: `sides ${n}`, command: sides })
 
   expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
 })

@@ -1,5 +1,5 @@
-import { isAbsolute, relative } from "node:path"
-import { compareApart, contentsAt, LARGEST, TOO_LARGE } from "./diff.ts"
+import { isAbsolute, join, relative } from "node:path"
+import { compareApart, contentsAt, fileSides, LARGEST, TOO_LARGE } from "./diff.ts"
 import { runGit } from "./git.ts"
 import { inGit } from "./projects.ts"
 import type { ChangedFile, ChangeKeeper, Commands, Contents, FileDiff, Project, StoredEvent, TurnChanges } from "./types.ts"
@@ -131,8 +131,26 @@ export function createTurnChanges() {
     async session(keeper: ChangeKeeper | undefined, session: string, project: Project | null): Promise<FileDiff[]> {
       return keeper === undefined ? [] : relocated(capped(await sessionFiles(keeper, session, { patch: true })), project)
     },
+    // One file's sides, by its path as a client is shown it, in a turn: what
+    // the turn found there and what it left; or in the whole session, from
+    // before the first turn that changed it to the file as it is now.
+    async sides(keeper: ChangeKeeper | undefined, session: string, turn: number | "session", path: string, project: Project | null): Promise<Sides> {
+      const full = project === null || isAbsolute(path) ? path : join(project.folder, path)
+      const notAmong = { unavailable: `${path} is not among the files this comparison changed.` }
+      if (keeper === undefined) return notAmong
+      if (turn !== "session") {
+        const kept = (await keeper.files(session, turn)).find((file) => file.path === full)
+        return kept === undefined ? notAmong : fileSides(path, kept.before, kept.after)
+      }
+      const first = (await keeper.turns(session)).find((each) => each.paths.includes(full))
+      if (first === undefined) return notAmong
+      const kept = (await keeper.files(session, first.turn)).find((file) => file.path === full)
+      return kept === undefined ? notAmong : fileSides(path, kept.before, await contentsAt(full))
+    },
   }
 }
+
+type Sides = Commands["read_file_sides"]["output"]
 
 // The most files one comparison reads and compares. Those past it are
 // listed by their paths, as too many, without being read.
@@ -181,29 +199,42 @@ const lines = (said: Buffer) => said.toString("utf8").split("\0").filter((each) 
 // it is compared.
 async function sinceCommit(folder: string, commit: string): Promise<FileDiff[]> {
   const [changed, untracked] = await Promise.all([
-    git(folder, ["diff", ...DIFF_SAFE, "--raw", "-z", "--no-renames", "--ignore-submodules=dirty", "--relative", commit, "--"], { worktree: true }),
+    git(folder, ["diff", ...DIFF_SAFE, "--raw", "-z", "--find-renames", "--ignore-submodules=dirty", "--relative", commit, "--"], { worktree: true }),
     git(folder, ["ls-files", "--others", "--exclude-standard", "-z"], { worktree: true }),
   ])
-  // Each change is ":<mode before> <mode after> <id> <id> <status>", then its path.
-  type Listed = { status: "added" | "removed" | "changed"; submodule: boolean }
+  // Each change is ":<mode before> <mode after> <id> <id> <status>", then
+  // its path; a rename's status is R and a score, with the path it had
+  // before and then its path.
+  type Listed = { status: "added" | "removed" | "changed"; submodule: boolean; from?: string }
   const files = new Map<string, Listed>()
   const raw = lines(changed)
-  for (let at = 0; at + 1 < raw.length; at += 2) {
+  for (let at = 0; at < raw.length; ) {
     const [before, after, , , letter] = raw[at]!.slice(1).split(" ")
-    files.set(raw[at + 1]!, { status: letter === "A" ? "added" : letter === "D" ? "removed" : "changed", submodule: before === SUBMODULE || after === SUBMODULE })
+    const renamed = letter?.startsWith("R") === true
+    const path = raw[at + (renamed ? 2 : 1)]
+    if (path === undefined) break
+    const submodule = before === SUBMODULE || after === SUBMODULE
+    files.set(path, { status: letter === "A" ? "added" : letter === "D" ? "removed" : "changed", submodule, ...(renamed && { from: raw[at + 1]! }) })
+    at += renamed ? 3 : 2
   }
   // A repository inside this one is listed with a slash at its end, and is not a file.
   for (const path of lines(untracked)) if (!path.endsWith("/") && !files.has(path)) files.set(path, { status: "added", submodule: false })
   const paths = [...files.keys()].sort()
   const read = paths.slice(0, MOST_FILES)
   const filtered = await withFilters(folder, read.filter((path) => !files.get(path)!.submodule))
-  const committed = await blobs(folder, commit, read.filter((path) => files.get(path)!.status !== "added" && !files.get(path)!.submodule && !filtered.has(path)))
+  // What the commit held for each, at the path it had there.
+  const was = (path: string) => files.get(path)!.from ?? path
+  const committed = await blobs(folder, commit, read.filter((path) => files.get(path)!.status !== "added" && !files.get(path)!.submodule && !filtered.has(path)).map(was))
   const until = budget()
   const compared = await fewAtOnce(read, async (path): Promise<FileDiff | undefined> => {
-    const { status, submodule } = files.get(path)!
-    if (submodule) return { path, status, added: 0, removed: 0, unknown: true, submodule: true }
-    if (filtered.has(path)) return { path, status, added: 0, removed: 0, filtered: true }
-    return compareApart(path, status === "added" ? null : committed.get(path), status === "removed" ? null : await contentsAt(`${folder}/${path}`), { patch: true, until })
+    const { status, submodule, from } = files.get(path)!
+    const moved = from === undefined ? {} : { from }
+    if (submodule) return { path, status, added: 0, removed: 0, unknown: true, submodule: true, ...moved }
+    if (filtered.has(path)) return { path, status, added: 0, removed: 0, filtered: true, ...moved }
+    const file = await compareApart(path, status === "added" ? null : committed.get(was(path)), status === "removed" ? null : await contentsAt(`${folder}/${path}`), { patch: true, until })
+    // A file renamed and not changed is still listed, with no lines.
+    if (file === undefined) return from === undefined ? undefined : { path, from, status, added: 0, removed: 0, patch: "" }
+    return { ...file, ...moved }
   })
   const tooMany = paths.slice(MOST_FILES).map((path): FileDiff => ({ path, status: files.get(path)!.status, added: 0, removed: 0, tooMany: true }))
   return capped([...compared.filter((file) => file !== undefined), ...tooMany])
@@ -319,6 +350,34 @@ export async function readBranch(project: Project | null, given: string | undefi
   const start = await branchStart(folder, given, pullRequestBase)
   if ("unavailable" in start) return unavailable(start.unavailable)
   return { files: await sinceCommit(folder, start.from), base: start.base }
+}
+
+// One file's sides, as the uncommitted work or the branch compares it:
+// what `commit` held at the path it had there, and what the folder holds.
+// `path` is from the project's folder, as the comparison gives it, and
+// nothing outside the folder is read.
+async function sidesSince(folder: string, commit: string, path: string, from: string | undefined): Promise<Sides> {
+  const outside = (each: string) => isAbsolute(each) || relative(folder, join(folder, each)).startsWith("..")
+  if (outside(path) || (from !== undefined && outside(from))) return { unavailable: `${path} is not among the files this comparison changed.` }
+  const was = from ?? path
+  // A path the commit does not hold had no file there.
+  const held = (await git(folder, ["ls-tree", "-z", "--name-only", commit, "--", was])).length > 0
+  const before = held ? (await blobs(folder, commit, [was])).get(was) : null
+  return fileSides(path, before, await contentsAt(join(folder, path)))
+}
+
+export async function readUncommittedSides(project: Project | null, path: string, from: string | undefined): Promise<Sides> {
+  const folder = await inRepository(project)
+  if (typeof folder !== "string") return folder
+  return sidesSince(folder, await head(folder), path, from)
+}
+
+export async function readBranchSides(project: Project | null, given: string | undefined, path: string, from: string | undefined, pullRequestBase: () => Promise<string | undefined> = async () => undefined): Promise<Sides> {
+  const folder = await inRepository(project)
+  if (typeof folder !== "string") return folder
+  const start = await branchStart(folder, given, pullRequestBase)
+  if ("unavailable" in start) return start
+  return sidesSince(folder, start.from, path, from)
 }
 
 // Where a branch's changes are counted from: where it left the branch it

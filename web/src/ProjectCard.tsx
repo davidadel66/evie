@@ -81,15 +81,14 @@ import { label as keyLabel, onMac } from "./shortcuts.ts"
 import { Spinner } from "./Spinner.tsx"
 import { addressOfWorkspace } from "./workspace.ts"
 
-// The session details, as T3 Code's details card, drawn as the owner's
-// drawing of it: a card that floats at the top right of the conversation,
-// pinned beside it or opened over it from its header (see card-shown.ts),
-// with a slim row naming it, which holds Choose what to show and Pin, and
-// its sections: the workspace, with the project, its folder and Undo last
-// change; version control, with the branch, its pull request and checks,
-// the git button and the changes against the base; the lineage, with the
-// parent and the subagents; and background work. At phone width it is a
-// sheet from the right.
+// The session details, as T3 Code's details card: a card that floats at
+// the top right of the conversation, pinned beside it or opened over it
+// from its header (see card-shown.ts), with a slim row naming it, which
+// holds Choose what to show and Pin, and its sections: the workspace, with
+// the project, its folder and Undo last change; version control, with the
+// branch, its pull request and checks, the git button and the changes
+// against the base; the lineage, with the parent and the subagents; and
+// background work. At phone width it is a sheet from the right.
 
 // The card's place in the conversation's column, which it measures to know
 // whether a pinned card has the room to sit there. It is given its place
@@ -141,7 +140,7 @@ export function CardPlace({ connection, sessions }: { connection: Connection; se
         </PopoverPrimitive.Portal>
       </PopoverPrimitive.Root>
       {(shown.place === "inline" || shown.place === "over") && shown.open && (
-        // Pinned without the room beside the conversation, it stays open over it, with the floating shadow, as drawn.
+        // Pinned without the room beside the conversation, it stays open over it, with the floating shadow.
         <aside
           aria-label="Session details"
           className={cn(
@@ -271,7 +270,7 @@ function Heading({ menu, setMenu }: { menu: boolean; setMenu(open: boolean): voi
   const shown = useCardShown()
   const pin = shown.pinned ? "Unpin: open it from the header instead" : "Pin beside the conversation"
   return (
-    // A 32px row under 6px of room, as drawn.
+    // A 32px row under 6px of room.
     <div className="flex min-h-row-height items-center gap-0.5 pt-1.5 pr-3 pl-2 box-content">
       <h2 className="min-w-0 flex-1 pl-2.5 text-detail-heading text-text-muted">Session details</h2>
       <DropdownMenu open={menu} onOpenChange={setMenu}>
@@ -1054,7 +1053,7 @@ function useNow(ticking: boolean) {
 
 // The lineage: the session that started this one, while one of its
 // subagents' conversations is open, which leads back to it, with how it
-// stands, "Waiting" while it waits on its subagents, as drawn; the
+// stands, "Waiting" while it waits on its subagents; the
 // subagents working, each with how long it has run and Stop; and those
 // that have ended, folded away under Previous agents. Each opens its
 // conversation in the middle, read only; the one open is raised. Each list

@@ -338,13 +338,13 @@ export function sectionsShown(shown: Shown, has: { undo: boolean; git: boolean; 
 // Where the card is. Pinned, it sits beside the conversation, which keeps
 // clear of it, while the conversation has the room ("inline"), and
 // without the room it stays open floating over the conversation ("over"),
-// as the owner's drawing has it below 1100px. Unpinned, it opens over the
-// conversation from the button in its header ("popover"), as does a
-// pinned one in a column with less than 160px of room under its top, as
-// T3 Code's does not pin there. At phone width it is a sheet. The room is
-// measured on the conversation's own column, as T3 Code measures it, so
-// that the card floats at 1100px wide or narrower with the session list
-// beside it, as drawn, and wider with the list or the diff open.
+// at 1100px or narrower with the session list beside it. Unpinned, it
+// opens over the conversation from the button in its header ("popover"),
+// as does a pinned one in a column with less than 160px of room under its
+// top, as T3 Code's does not pin there, and any while the right panel is
+// open, which takes the right side; pinned, it comes back when the panel
+// closes. At phone width it is a sheet. The room is measured on the
+// conversation's own column, as T3 Code measures it.
 export type CardPlace = "inline" | "over" | "popover" | "sheet"
 
 // The card's width and the gap at its side, as T3 Code's; the room between
@@ -362,9 +362,9 @@ export const CARD_CLEARANCE = CARD_WIDTH + CARD_GAP + CARD_ROOM
 // above the column's foot.
 export const cardRoom = (height: number) => height - CARD_TOP - CARD_GAP
 
-export function cardPlace({ width, height, phone, pinned }: { width: number; height: number; phone: boolean; pinned: boolean }): CardPlace {
+export function cardPlace({ width, height, phone, pinned, panel = false }: { width: number; height: number; phone: boolean; pinned: boolean; panel?: boolean }): CardPlace {
   if (phone) return "sheet"
-  if (!pinned || cardRoom(height) < LEAST_HEIGHT) return "popover"
+  if (!pinned || panel || cardRoom(height) < LEAST_HEIGHT) return "popover"
   return width - CARD_CLEARANCE > LEAST_CONVERSATION ? "inline" : "over"
 }
 
