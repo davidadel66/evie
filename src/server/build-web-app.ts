@@ -1,5 +1,6 @@
 import type { BuildMetafile } from "bun"
 import tailwind from "bun-plugin-tailwind"
+import { ENCODINGS, variantsOf, type Encoding, type Variants } from "./variants.ts"
 
 // The web app's build, which `buildWebApp` runs in a process of its own:
 //
@@ -7,14 +8,17 @@ import tailwind from "bun-plugin-tailwind"
 //
 // Bun's bundler keeps its working memory, about 300 MB for this app, for as
 // long as the process that ran it lives, and the server runs all the time.
-// Built here, the memory goes when this process exits.
+// Built here, the memory goes when this process exits. So does the
+// compressor's, which makes each file's compressed variants here too.
 //
-// It writes every file built into one file, one after another, which is
-// quicker to write and to read back than each file on its own, and a list
-// of them, as JSON: each file's path, type and size, in that order, and
-// Bun's metafile. If the build fails, it says why on stderr, one line for
-// each of the bundler's messages, `file:line: message`, and exits with code 1.
-export type Built = { files: { path: string; type: string; size: number }[]; metafile: BuildMetafile }
+// It writes every file built into one file, one after another, each as its
+// variants in the order of `ENCODINGS`, which is quicker to write and to
+// read back than each on its own, and a list of them, as JSON: each file's
+// path, type, the hash of its contents, and the size of each variant it
+// has, in that order, and Bun's metafile. If the build fails, it says why
+// on stderr, one line for each of the bundler's messages, `file:line:
+// message`, and exits with code 1.
+export type Built = { files: { path: string; type: string; tag: string; sizes: Partial<Record<Encoding, number>> }[]; metafile: BuildMetafile }
 
 const [page, list, files] = process.argv.slice(2)
 if (page === undefined || list === undefined || files === undefined) {
@@ -41,13 +45,26 @@ try {
     splitting: true,
     metafile: true,
   })
-  const outputs = await Promise.all(built.outputs.map(async (output) => ({ path: output.path, type: output.type, bytes: new Uint8Array(await output.arrayBuffer()) })))
-  await Bun.write(files, new Blob(outputs.map((output) => output.bytes)))
-  const listed: Built = { files: outputs.map(({ path, type, bytes }) => ({ path, type, size: bytes.length })), metafile: built.metafile! }
+  // Every file built, the diff library's worker among them, though the
+  // metafile does not list it.
+  const outputs = await Promise.all(built.outputs.map(async (output) => ({ path: output.path, file: await variantsOf(new Uint8Array(await output.arrayBuffer()), output.type) })))
+  await Bun.write(files, new Blob(outputs.flatMap(({ file }) => variantsIn(file).map(([, variant]) => variant))))
+  const listed: Built = {
+    files: outputs.map(({ path, file }) => ({ path, type: file.type, tag: file.tag, sizes: Object.fromEntries(variantsIn(file).map(([encoding, variant]) => [encoding, variant.length])) })),
+    metafile: built.metafile!,
+  }
   await Bun.write(list, JSON.stringify(listed))
 } catch (cause) {
   console.error(described(cause))
   process.exit(1)
+}
+
+// The variants a file has, each with its encoding, in the order they are written.
+function variantsIn(file: Variants): [Encoding, Uint8Array][] {
+  return ENCODINGS.flatMap((encoding) => {
+    const variant = file[encoding]
+    return variant ? [[encoding, variant]] : []
+  })
 }
 
 // Why the build failed. The bundler fails with "Bundle failed", and what

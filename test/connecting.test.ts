@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { brotliDecompressSync, gunzipSync } from "node:zlib"
 import { connect, startServer } from "../src/index.ts"
 import { openTokens, OWN_NAME } from "../src/server/tokens.ts"
 import { buildWebApp, type WebApp } from "../src/server/web-app.ts"
@@ -297,21 +298,76 @@ test("the web app's page is served to anyone at the server's own address and at 
   if (!("files" in app)) throw new Error("the web app was not built")
   const { server } = await start({ app })
 
+  // Asked for as Bun's fetch asks, which takes brotli and reads it.
   for (const path of ["/", "/sign-in"]) {
     const answer = await fetch(`${server.url}${path}`)
     expect(answer.status).toBe(200)
     expect(answer.headers.get("content-type")).toStartWith("text/html")
-    expect(await answer.text()).toBe(await app.page.text())
+    // Asked for afresh each time, so that a new version is seen.
+    expect(answer.headers.get("cache-control")).toBe("no-cache")
+    expect(await answer.text()).toBe(new TextDecoder().decode(app.page.identity))
   }
   for (const [path, file] of Object.entries(app.files)) {
     const answer = await fetch(`${server.url}${path}`)
     expect(answer.status).toBe(200)
     expect(answer.headers.get("content-type")).toBe(file.type)
-    expect(await answer.text()).toBe(await file.text())
+    // Named by a hash of its contents, so kept for good.
+    expect(answer.headers.get("cache-control")).toBe("public, max-age=31536000, immutable")
+    expect(await answer.text()).toBe(new TextDecoder().decode(file.identity))
   }
   // Everything else still needs a token.
   expect((await fetch(`${server.url}/ws`)).status).toBe(401)
   expect((await fetch(`${server.url}/nothing-here`)).status).toBe(404)
+})
+
+test("the web app's script is sent with brotli, gzip or as it is, as the browser accepts, and the page, its script and a file under 1 KB each answer 304 to the tag of what the browser has", async () => {
+  const app = await webApp()
+  if (!("files" in app)) throw new Error("the web app was not built")
+  const { server } = await start({ app })
+  const page = new TextDecoder().decode(app.page.identity)
+  const script = page.match(/<script[^>]* src="([^"]+)"/)![1]!
+  const small = Object.entries(app.files).find(([, file]) => file.identity.length <= 1024)![0]
+
+  // The bytes as sent, without fetch reading them.
+  const asked = (path: string, headers: Record<string, string>) => fetch(`${server.url}${path}`, { headers, decompress: false })
+  const brotli = await asked(script, { "Accept-Encoding": "gzip, deflate, br, zstd" })
+  const gzip = await asked(script, { "Accept-Encoding": "gzip" })
+  const neither = await asked(script, { "Accept-Encoding": "identity" })
+
+  const plain = Buffer.from(app.files[script]!.identity)
+  expect(brotliDecompressSync(Buffer.from(await brotli.arrayBuffer()))).toEqual(plain)
+  expect(gunzipSync(Buffer.from(await gzip.arrayBuffer()))).toEqual(plain)
+  expect(Buffer.from(await neither.arrayBuffer())).toEqual(plain)
+  expect([brotli, gzip, neither].map((answer) => [answer.headers.get("content-encoding"), answer.headers.get("vary")])).toEqual([
+    ["br", "Accept-Encoding"],
+    ["gzip", "Accept-Encoding"],
+    [null, "Accept-Encoding"],
+  ])
+  const tags = [brotli, gzip, neither].map((answer) => answer.headers.get("etag")!)
+  expect(new Set(tags).size).toBe(3)
+
+  // A second visit: what the browser kept is not sent again.
+  for (const [answer, acceptEncoding] of [
+    [brotli, "gzip, deflate, br, zstd"],
+    [gzip, "gzip"],
+    [neither, "identity"],
+  ] as const) {
+    const again = await asked(script, { "Accept-Encoding": acceptEncoding, "If-None-Match": answer.headers.get("etag")! })
+    expect([again.status, await again.text(), again.headers.get("vary"), again.headers.get("cache-control")]).toEqual([304, "", "Accept-Encoding", "public, max-age=31536000, immutable"])
+  }
+  for (const [path, cache] of [
+    ["/", "no-cache"],
+    [small, "public, max-age=31536000, immutable"],
+  ] as const) {
+    const first = await asked(path, { "Accept-Encoding": "br" })
+    expect(first.headers.get("etag")).toMatch(/^"[^"]+"$/)
+    const again = await asked(path, { "Accept-Encoding": "br", "If-None-Match": first.headers.get("etag")! })
+    expect([again.status, await again.text(), again.headers.get("cache-control")]).toEqual([304, "", cache])
+  }
+  // A file under 1 KB is sent as it is, to anyone.
+  const tiny = await asked(small, { "Accept-Encoding": "br" })
+  expect([tiny.headers.get("content-encoding"), tiny.headers.get("vary")]).toEqual([null, null])
+  expect(await tiny.text()).toBe(new TextDecoder().decode(app.files[small]!.identity))
 })
 
 test("the page, with its links to the chunks its script imports, is asked for afresh on each visit, and the chunks it names are kept for good", async () => {
