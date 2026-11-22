@@ -78,7 +78,7 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
       })
 
       host.on("before_tool", async (call, context) => {
-        const guarded = blockedByGuard(call, folder, context.session)
+        const guarded = blockedByGuard(call, folder, context.session, context.parent)
         if (guarded !== undefined) return { deny: guarded }
 
         // A subagent started as an agent that only reads stays that way.
@@ -89,7 +89,7 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
           // Reading the output Evie saved for this session is not reaching
           // outside the project, so it is not asked about. A rule that
           // denies it still does.
-          const ownOutput = act.action === "read" && effect !== "deny" && isSavedOutput(data, context.session, act.target)
+          const ownOutput = act.action === "read" && effect !== "deny" && isSavedOutput(data, context.session, act.target, context.parent)
           if (ownOutput) return { act, effect: "allow" as const, standing: false }
           // An agent or a skill in the data folder applies in every project
           // from then on. Reading one is free. Writing one is asked about

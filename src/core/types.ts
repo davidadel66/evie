@@ -69,17 +69,23 @@ export type Attachment = { path: string; name: string; type: string; size: numbe
 // folder, under the day, or with no project in the data folder, under the
 // session. What the file is comes from its bytes. A name taken already
 // gets a number, so no file is replaced. It refuses a name that is not a
-// plain file name, and a file larger than the limit. `open` finds a file
-// recorded on one of the session's messages, to show it, or nothing when
-// there is none such.
+// plain file name, and a file larger than the limit. `refusal` says why a
+// file of that name cannot be attached in the session, before anything is
+// read of it, or nothing. `open` finds a file recorded on one of the
+// session's messages, to show it, or nothing when there is none such.
 export type Attachments = {
   save(session: string, name: string, bytes: Uint8Array): Promise<Attachment>
+  refusal(session: string, name: string): string | undefined
   open(session: string, path: string): Promise<{ file: string; type: string } | undefined>
 }
 
 // The largest file that can be attached: 10 MB, as T3 Code allows for an
 // image. A client checks it before sending, and the server again.
 export const ATTACHMENT_LIMIT = 10 * 1024 * 1024
+
+// The most files of a project that are listed for @, so that a folder of a
+// great many is listed quickly.
+export const FILE_LISTING_LIMIT = 10_000
 
 export type StoredEventType = keyof EventBodies
 
@@ -1009,8 +1015,9 @@ export type Commands = {
   // The files of a project the owner can mention with @, by their paths
   // from its folder, with slashes: in a git repository the files git lists,
   // tracked or not, but not those it ignores, and elsewhere every file, the
-  // nearest first; never git's own folder or node_modules. At most 10,000
-  // are walked, and `more` says there were more.
+  // nearest first; never git's own folder, node_modules, the .evie folder,
+  // evie's data folder, or a folder of keys such as .ssh. At most 10,000
+  // are walked, and `more` says there were more, as when git took too long.
   list_files: {
     input: { project: string }
     output: { files: string[]; more: boolean }

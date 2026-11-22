@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } f
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ATTACHMENT_LIMIT, type Attachment } from "../src/core/types.ts"
-import { files, permissions, type Plugin, type Request } from "../src/index.ts"
+import { files, jobs, permissions, subagents, type Plugin, type Request } from "../src/index.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie, type Served } from "./support/served.ts"
@@ -350,6 +350,38 @@ test("with no project, the model may read the files attached in its own session,
   expect(await readdir(join(home, "attachments"))).toEqual([])
 })
 
+test("a subagent of a session with no project may read the files attached in the session that started it", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  // One script for the session and one for its subagent, known by its system prompt.
+  const scripts = { parent: [{ calls: [{ name: "subagent", input: { description: "read the plan", task: "Read the plan." } }] }, { text: "Done." }], child: [] as { text?: string; calls?: { name: string; input: object }[] }[] }
+  const asked = { parent: 0, child: 0 }
+  const twoScripts: Plugin = {
+    name: "two-scripts",
+    setup: (host) =>
+      host.providers.add({
+        name: "two-scripts",
+        async *stream(request) {
+          const who = request.system?.includes("You are a subagent") ? "child" : "parent"
+          const reply = scripts[who][asked[who]++]!
+          if (reply.text) yield { type: "text", text: reply.text }
+          for (const [at, call] of (reply.calls ?? []).entries()) yield { type: "tool_call", id: `${who}-${asked[who]}-${at}`, name: call.name, arguments: JSON.stringify(call.input) }
+          yield { type: "finish", reason: reply.calls ? "tool_calls" : "stop" }
+        },
+      }),
+  }
+  const run = await startEvie([twoScripts, subagents({ dataFolder: home }), jobs(), files(), permissions({ mode: "auto", dataFolder: home })], { home })
+  cleanups.push(run.stop)
+  const { session } = await run.evie.send({ type: "open_session" })
+  const plan = await run.evie.attachments.save(session, "plan.txt", bytes("Beds.\n"))
+  scripts.child.push({ calls: [{ name: "read", input: { path: plan.path } }] }, { text: "It says beds." })
+
+  await say(run, "Have a subagent read the plan", session)
+  while (!stored(run.events).some((event) => event.type === "tool_result" && event.body.name === "read")) await Bun.sleep(5)
+
+  expect(stored(run.events).find((event) => event.type === "tool_result" && event.body.name === "read")?.body).toMatchObject({ text: "1: Beds." })
+})
+
 // ---- The upload route ----------------------------------------------------------------
 
 async function serve() {
@@ -434,6 +466,19 @@ test("an upload is refused when its name would leave the attachments folder, or 
   expect(await Bun.file(join(projectFolder, ".evie", "evie.json")).exists()).toBe(false)
   expect(await Bun.file(join(projectFolder, ".evie", "attachments", "2026-11-22", "huge.bin")).exists()).toBe(false)
   expect((await upload(served, "no-such-session", "plan.txt", "x")).status).toBe(400)
+})
+
+test("an upload for a session there is not, or with a name that is not plain, is refused before its body is read", async () => {
+  const served = await serve()
+  // A body that never ends: read, it would hold the answer up for good.
+  const endless = () => new ReadableStream<Uint8Array>({ pull: () => new Promise(() => {}) })
+  const send = (session: string, name: string) =>
+    fetch(`${served.server.url}/attachments?${new URLSearchParams({ session, name })}`, { method: "POST", body: endless(), headers: { Authorization: `Bearer ${served.token}` }, signal: AbortSignal.timeout(2000) })
+
+  const unknown = await send("no-such-session", "plan.txt")
+  expect(unknown.status).toBe(400)
+  expect(await unknown.text()).toBe('There is no session with the id "no-such-session".')
+  expect((await send(served.run.session, "../plan.txt")).status).toBe(400)
 })
 
 test("an image attached to a message is given back to a signed-in client to show, and nothing else is", async () => {

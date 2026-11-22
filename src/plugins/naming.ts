@@ -1,3 +1,4 @@
+import { wordsOf } from "../core/summaries.ts"
 import type { HookContext, Plugin, Provider } from "../core/types.ts"
 
 // The built-in naming plugin. After the owner's first message in a session,
@@ -67,7 +68,7 @@ export function naming(options: NamingOptions = {}): Plugin {
         const provider = host.providers.list()[0]
         if (first?.type !== "user_message" || !provider) return
         asked.add(context.session)
-        void nameSession(provider, first.body.text, context)
+        void nameSession(provider, String(wordsOf(first.body)), context)
       })
       async function nameSession(provider: Provider, message: string, context: HookContext) {
         try {

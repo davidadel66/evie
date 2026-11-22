@@ -229,7 +229,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   }
 
   const questions = createQuestions({ log, emit })
-  const attachments = createAttachments({ home, projectOf: (session) => projects.projectOf(session), events: (session) => log.events(session) })
+  const attachments = createAttachments({ home, projectOf: (session) => projects.projectOf(session), attached: (session) => log.attached(session) })
   let closed = false
   // Fires when Evie stops, for the work plugins started.
   const stopping = new AbortController()
@@ -1100,7 +1100,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
         case "read_storage":
           return (await readStorage(projectFor(command.project).folder, command.path, home)) as Output
         case "list_files":
-          return (await listProjectFiles(projectFor(command.project).folder)) as Output
+          return (await listProjectFiles(projectFor(command.project).folder, { dataFolder: home })) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

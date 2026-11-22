@@ -2,7 +2,7 @@ import { closeSync, lstatSync, openSync, readSync, realpathSync } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, join, relative, sep } from "node:path"
 import { ownEvie } from "./storage.ts"
-import { ATTACHMENT_LIMIT, type Attachment, type Attachments, type Project, type StoredEvent } from "./types.ts"
+import { ATTACHMENT_LIMIT, type Attachment, type Attachments, type Project } from "./types.ts"
 
 // The files the owner attaches to messages. In a project they are kept in
 // its `.evie/attachments/` folder, under the day they came, such as
@@ -50,8 +50,8 @@ export function createAttachments(options: {
   // The project a session is in now, null for none, or undefined for a
   // session there is not.
   projectOf(session: string): Project | null | undefined
-  // A session's events, in which its messages record what was attached.
-  events(session: string): readonly StoredEvent[]
+  // The files attached to a session's messages, as they record them.
+  attached(session: string): readonly Attachment[]
 }): AttachmentStore {
   // The folder a session's files are kept in now: its project's own
   // `.evie` folder, by the rule Storage keeps to, or the data folder's.
@@ -72,9 +72,22 @@ export function createAttachments(options: {
     return join(folder, ".evie", "attachments")
   }
 
+  // Why a file of this name cannot be attached in the session, or nothing.
+  function refusal(session: string, name: string): string | undefined {
+    if (!plain(name)) return `${JSON.stringify(name)} is not a plain file name. A file is attached by its name alone, such as "plan.pdf".`
+    try {
+      rootFor(session)
+      return undefined
+    } catch (cause) {
+      return cause instanceof Error ? cause.message : String(cause)
+    }
+  }
+
   return {
+    refusal,
     async save(session, name, bytes) {
-      if (!plain(name)) throw new Error(`${JSON.stringify(name)} is not a plain file name. A file is attached by its name alone, such as "plan.pdf".`)
+      const refused = refusal(session, name)
+      if (refused !== undefined) throw new Error(refused)
       if (bytes.byteLength > ATTACHMENT_LIMIT) throw new Error(`${name} is larger than the ${ATTACHMENT_LIMIT / 1024 / 1024} MB a file attached can be.`)
       const root = rootFor(session)
       const day = await folderAt(root, today())
@@ -91,10 +104,7 @@ export function createAttachments(options: {
     },
     async open(session, path) {
       if (options.projectOf(session) === undefined) return undefined
-      const recorded = options
-        .events(session)
-        .flatMap((event) => (event.type === "user_message" ? (event.body.attachments ?? []) : []))
-        .find((each) => each.path === path)
+      const recorded = options.attached(session).find((each) => each.path === path)
       return recorded !== undefined && isKept(path, recorded.size) ? { file: path, type: recorded.type } : undefined
     },
     async image(attachment) {

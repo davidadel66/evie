@@ -26,7 +26,9 @@ export type GuardOptions = {
 
 // Makes the check: given a tool call and the project's folder, it returns
 // the reason the call is blocked, worded for the model, or undefined.
-export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall, projectFolder: string | null, session?: string) => string | undefined {
+// `parent` is the session that started this one as a subagent, whose
+// attachments it may read too.
+export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall, projectFolder: string | null, session?: string, parent?: string) => string | undefined {
   const home = homedir()
   const privateFolders = [
     options.dataFolder ?? dataFolder({}),
@@ -37,12 +39,12 @@ export function createGuard(options: GuardOptions = {}): (call: CheckedToolCall,
 
   const data = options.dataFolder ?? dataFolder({})
 
-  return (call, projectFolder, session) => {
+  return (call, projectFolder, session, parent) => {
     const folder = projectFolder ?? home
     // The one part of the data folder the tools may read: the session's own
     // saved output, which the model is told to read from there.
     if (session !== undefined && ["read", "grep", "glob"].includes(call.name) && typeof call.input.path === "string" && isAbsolute(call.input.path)) {
-      if (isSavedOutput(data, session, call.input.path)) return undefined
+      if (isSavedOutput(data, session, call.input.path, parent)) return undefined
     }
     // The owner's agents and skills are theirs to have Evie read with the
     // file tools, and to write when something asks them first.
@@ -65,7 +67,7 @@ export function guard(options: GuardOptions = {}): Plugin {
     name: "guard",
     setup(host) {
       host.on("before_tool", (call, context) => {
-        const deny = blocked(call, context.project?.folder ?? null, context.session)
+        const deny = blocked(call, context.project?.folder ?? null, context.session, context.parent)
         if (deny !== undefined) return { deny }
       })
     },
@@ -207,11 +209,13 @@ export function followLinks(absolute: string): string {
 // True for a path inside a folder where one session's own files are kept
 // in the data folder: tool output that was too long to show, and the output
 // of its background jobs; and the files the owner attached to its messages
-// with no project to keep them in. Links are followed, so nothing outside
+// with no project to keep them in, or to those of `parent`, the session
+// that started it as a subagent. Links are followed, so nothing outside
 // them can be reached through them.
-export function isSavedOutput(data: string, session: string, path: string): boolean {
-  return ["tool-output", "attachments"].some((kind) => {
-    const inside = relative(followLinks(resolve(data, kind, session)), followLinks(resolve(path)))
+export function isSavedOutput(data: string, session: string, path: string, parent?: string): boolean {
+  const folders = [resolve(data, "tool-output", session), resolve(data, "attachments", session), ...(parent === undefined ? [] : [resolve(data, "attachments", parent)])]
+  return folders.some((folder) => {
+    const inside = relative(followLinks(folder), followLinks(resolve(path)))
     return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
   })
 }

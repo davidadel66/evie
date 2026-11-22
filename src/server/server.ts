@@ -340,6 +340,9 @@ export function startServer(options: ServerOptions): EvieServer {
     const session = asked.get("session")
     const name = asked.get("name")
     if (session === null || name === null) return new Response("Name the session and the file, as /attachments?session=<id>&name=<file name>.", { status: 400 })
+    // Checked before the body is read, so that nothing is read for nothing.
+    const refused = options.attachments.refusal(session, name)
+    if (refused !== undefined) return new Response(refused, { status: 400 })
     const bytes = await bodyWithin(request, ATTACHMENT_LIMIT)
     if (bytes === undefined) return new Response(`${name} is larger than the ${ATTACHMENT_LIMIT / 1024 / 1024} MB a file attached can be.`, { status: 413 })
     try {

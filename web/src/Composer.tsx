@@ -321,7 +321,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
               id={filesId}
               files={files}
               listing={listedFiles?.files === undefined ? (listedFiles?.problem ?? "listing") : undefined}
-              more={listedFiles?.more === true}
+              more={listedFiles?.more === true ? listedFiles.files?.length : undefined}
               highlight={highlight}
               pick={pickFile}
               setHighlight={setHighlight}
@@ -781,8 +781,8 @@ function FileMenu({
   files: string[]
   // While the files are being listed, "listing", or why they could not be.
   listing: string | undefined
-  // Whether the project has more files than were listed.
-  more: boolean
+  // How many files were listed, when the project has more than that.
+  more: number | undefined
   highlight: number | undefined
   pick(path: string): void
   setHighlight(at: number): void
@@ -833,7 +833,7 @@ function FileMenu({
           })}
         </ul>
       )}
-      {more && listing === undefined && quiet("The project has more files than are listed. Type more of a name to find one.")}
+      {more !== undefined && listing === undefined && quiet(`Only the first ${more.toLocaleString("en")} files are listed.`)}
     </div>
   )
 }

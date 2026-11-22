@@ -3,6 +3,7 @@ import { Database } from "bun:sqlite"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { createEventLog } from "../src/core/log.ts"
 import { MIGRATIONS, openStore, type Migration } from "../src/core/store.ts"
 import { startEvie } from "./support/harness.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
@@ -100,4 +101,25 @@ test("a data folder from before projects had icons keeps its projects, each with
   cleanups.push(async () => db.close())
   expect(db.query<{ name: string }, []>("PRAGMA table_info(project)").all().map((column) => column.name)).toEqual(["id", "name", "folder", "created", "icon", "colour"])
   expect(db.query("SELECT icon, colour FROM project WHERE id = 'kept-project'").get()).toEqual({ icon: null, colour: null })
+})
+
+test("the files attached to a session's messages are read from those messages alone, oldest first", async () => {
+  const folder = await mkdtemp(join(tmpdir(), "evie-store-"))
+  const db = openStore(join(folder, "evie.db"))
+  try {
+    const log = createEventLog(db)
+    const plan = { path: "/p/.evie/attachments/2026-11-22/plan.txt", name: "plan.txt", type: "text/plain", size: 6 }
+    const photo = { path: "/p/.evie/attachments/2026-11-22/photo.png", name: "photo.png", type: "image/png", size: 33 }
+    log.append("s1", "user_message", { text: "Read this", attachments: [plan] })
+    log.append("s1", "assistant_message", { text: 'It mentions "attachments": none.' })
+    log.append("s1", "user_message", { text: "And this" })
+    log.append("s1", "user_message", { text: "", attachments: [photo] })
+    log.append("s2", "user_message", { text: "Another", attachments: [plan] })
+
+    expect(log.attached("s1")).toEqual([plan, photo])
+    expect(log.attached("s3")).toEqual([])
+  } finally {
+    db.close()
+    await rm(folder, { recursive: true, force: true })
+  }
 })
