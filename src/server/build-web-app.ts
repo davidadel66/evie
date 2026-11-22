@@ -6,7 +6,10 @@ import { ENCODINGS, variantsOf, type Encoding, type Variants } from "./variants.
 
 // The web app's build, which `buildWebApp` runs in a process of its own:
 //
-//   bun build-web-app.ts <page> <file for the list> <file for the files>
+//   bun build-web-app.ts <page> <file for the list> <file for the files> [<worker>...]
+//
+// with each script the page starts as a worker, which the bundler does not
+// find from the page.
 //
 // Bun's bundler keeps its working memory, about 300 MB for this app, for as
 // long as the process that ran it lives, and the server runs all the time.
@@ -22,15 +25,22 @@ import { ENCODINGS, variantsOf, type Encoding, type Variants } from "./variants.
 // message`, and exits with code 1.
 export type Built = { files: { path: string; type: string; tag: string; sizes: Partial<Record<Encoding, number>> }[]; metafile: BuildMetafile }
 
-const [page, list, files] = process.argv.slice(2)
+const [page, list, files, ...workers] = process.argv.slice(2)
 if (page === undefined || list === undefined || files === undefined) {
-  console.error("Usage: bun build-web-app.ts <page> <file for the list> <file for the files>")
+  console.error("Usage: bun build-web-app.ts <page> <file for the list> <file for the files> [<worker>...]")
   process.exit(2)
 }
 
 try {
   const built = await Bun.build({
-    entrypoints: [page],
+    // The workers are built in the same build as the page, so that what
+    // they import from the same libraries is in the same chunks, which the
+    // browser then fetches once for both.
+    entrypoints: [page, ...workers],
+    // Each named with a hash of what it holds, as the chunks are, so that a
+    // browser keeps a worker for good and fetches it again when it changes.
+    // The page is too, though it is served by its own paths, not this name.
+    naming: "[name]-[hash].[ext]",
     // The plugins are handed to the bundler here, in code, so the build does
     // not depend on a bunfig.toml in the folder it is started in. The fonts
     // the stylesheet names are left out of it, for the server to serve as
@@ -49,8 +59,7 @@ try {
     splitting: true,
     metafile: true,
   })
-  // Every file built, the diff library's worker among them, though the
-  // metafile does not list it.
+  // Every file built.
   const outputs = await Promise.all(built.outputs.map(async (output) => ({ path: output.path, file: await variantsOf(new Uint8Array(await output.arrayBuffer()), output.type) })))
   await Bun.write(files, new Blob(outputs.flatMap(({ file }) => variantsIn(file).map(([, variant]) => variant))))
   const listed: Built = {

@@ -26,6 +26,13 @@ export type BuiltWebApp = { page: Variants; files: Record<string, Variants>; met
 // stylesheet, and everything they import.
 const PAGE = join(import.meta.dir, "..", "..", "web", "index.html")
 
+// The script the diff's colouring workers run, which the bundler starts from
+// too, since it does not follow `new Worker(...)` in the page's script, by
+// its path in the repository, and the meta tag in the page's head that
+// gives the page its address (see `workerAddress`). The diff view reads the
+// tag by the same name, `DIFF_WORKER_META` in web/src/diff-view.ts.
+const DIFF_WORKER = { source: "web/src/diff-worker.ts", meta: "evie-diff-worker" }
+
 // The script that builds it, in a process of its own.
 const BUILD = join(import.meta.dir, "build-web-app.ts")
 
@@ -49,8 +56,8 @@ const TEMPORARY = "evie-web-app-"
 // given, in its head, what the bundler does not write itself (`headLinks`),
 // and its files are given the fonts its stylesheet names (`FONTS`).
 //
-// `page`, to build another page, and `temporary`, the folder the temporary
-// folder is made in, are for tests.
+// `page`, to build another page, on its own, without the diff's worker, and
+// `temporary`, the folder the temporary folder is made in, are for tests.
 export async function buildWebApp(options: { page?: string; temporary?: string } = {}): Promise<BuiltWebApp> {
   const temporary = options.temporary ?? tmpdir()
   const folder = await mkdtemp(join(temporary, TEMPORARY))
@@ -58,7 +65,8 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
   const tidying = removeLeftFolders(temporary)
   try {
     const [list, all] = [join(folder, "files.json"), join(folder, "files")]
-    const child = Bun.spawn([process.execPath, BUILD, options.page ?? PAGE, list, all], {
+    const workers = options.page === undefined ? [join(REPOSITORY, DIFF_WORKER.source)] : []
+    const child = Bun.spawn([process.execPath, BUILD, options.page ?? PAGE, list, all, ...workers], {
       cwd: REPOSITORY,
       stdin: "ignore",
       stdout: "ignore",
@@ -87,7 +95,10 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
     // A file cut in the wrong place would be kept by browsers for good,
     // under a name that says it never changes.
     if (at !== bytes.length) throw new Error(`The web app's build listed ${at} bytes of files and wrote ${bytes.length}.`)
-    const { "/index.html": builtPage, ...loaded } = files
+    // The page is built under a name with a hash, as the diff's worker is
+    // (see build-web-app.ts), and served at its own paths, not by that name.
+    const builtPage = Object.entries(files).find(([path]) => isPage(path))?.[1]
+    const loaded = Object.fromEntries(Object.entries(files).filter(([path]) => !isPage(path)))
     if (!builtPage) throw new Error("Bun's bundler built the web app without its page.")
     // The fonts the stylesheet names, which the build left out of it.
     for (const font of FONTS) loaded[font.address] = await variantsOf(await Bun.file(font.file).bytes(), "font/woff2")
@@ -107,16 +118,23 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
 // the root, `/chunk-1a2b3c4d.js`.
 const servedAt = (path: string) => path.replace(/^\./, "")
 
+// Whether a file built, by its path, is the page: the one HTML file.
+const isPage = (path: string) => path.endsWith(".html")
+
 // A link for the built page's head, by its attributes, such as
 // `{ rel: "modulepreload", href: "/chunk-1a2b3c4d.js" }`. An attribute with
 // no value, such as `crossorigin`, is given as "".
 export type HeadLink = { rel: string; href: string; [attribute: string]: string }
 
+// A meta tag for the built page's head, by its name and its content, such
+// as `{ name: "evie-diff-worker", content: "/diff-worker-1a2b3c4d.js" }`.
+export type HeadMeta = { name: string; content: string }
+
 // What the built page's head is given that Bun's bundler does not write
 // itself, worked out from the build's metafile once, as the server starts.
 // This is the one place the built page is added to.
-export function headLinks(metafile: BuildMetafile): HeadLink[] {
-  return [...fontPreloads(), ...chunkPreloads(metafile)]
+export function headLinks(metafile: BuildMetafile): (HeadLink | HeadMeta)[] {
+  return [...fontPreloads(), ...chunkPreloads(metafile), ...workerAddress(metafile)]
 }
 
 // A `preload` link for each font the page asks for as it starts: see
@@ -147,7 +165,7 @@ function fontPreloads(): HeadLink[] {
 function chunkPreloads(metafile: BuildMetafile): HeadLink[] {
   const { outputs } = metafile
   // The page's own scripts: the outputs built from the same file as the page.
-  const page = outputs["./index.html"]?.entryPoint
+  const page = Object.entries(outputs).find(([path]) => isPage(path))?.[1].entryPoint
   const scripts = Object.keys(outputs).filter((path) => page !== undefined && outputs[path]!.entryPoint === page && path.endsWith(".js"))
   const imported = new Set<string>()
   const follow = (path: string) => {
@@ -164,26 +182,43 @@ function chunkPreloads(metafile: BuildMetafile): HeadLink[] {
   return [...imported].map((path) => ({ rel: "modulepreload", href: servedAt(path), crossorigin: "" }))
 }
 
-// The page with each link added just before `</head>`, but for one it has
-// already: one of the same kind (`rel`) for the same address, however it is
-// written, as the bundler may write it itself. What is in a comment is not
-// the page's own.
-export function withHeadLinks(page: string, links: HeadLink[]): string {
-  // Each kind a link is, with its address as the page resolves it, so
-  // `./chunk.js` is `/chunk.js`.
-  const kinds = (link: { rel?: string; href?: string }) => {
-    const address = URL.parse(link.href ?? "", "http://page/")?.href ?? link.href
-    return (link.rel ?? "").toLowerCase().split(/\s+/).filter(Boolean).map((rel) => `${rel} ${address}`)
+// The address of the diff's worker, in a meta tag the page reads it from:
+// `<meta name="evie-diff-worker" content="/diff-worker-1a2b3c4d.js">`. Bun
+// 1.4.0 does not build what the page starts with `new Worker(...)`, and
+// leaves `new URL("./diff-worker.ts", import.meta.url)` as it is, so the
+// worker is built as a second entry point beside the page, with which it
+// shares its chunks, under a name with a hash of what it holds, as the
+// chunks are. A meta tag names it without fetching it: a link to it would
+// have the browser fetch it with every page, and it is wanted only once a
+// diff is drawn.
+function workerAddress(metafile: BuildMetafile): HeadMeta[] {
+  const built = Object.keys(metafile.outputs).find((path) => metafile.outputs[path]!.entryPoint === DIFF_WORKER.source && path.endsWith(".js"))
+  return built === undefined ? [] : [{ name: DIFF_WORKER.meta, content: servedAt(built) }]
+}
+
+// The page with each link and meta tag added just before `</head>`, but
+// for one it has already: a link of the same kind (`rel`) for the same
+// address, however it is written, as the bundler may write it itself, or a
+// meta tag of the same name. What is in a comment is not the page's own.
+export function withHeadLinks(page: string, tags: (HeadLink | HeadMeta)[]): string {
+  // Each kind a tag is: a link's for each of its kinds, with its address as
+  // the page resolves it, so `./chunk.js` is `/chunk.js`; a meta tag's by
+  // its name.
+  const kinds = (tag: "link" | "meta", attributes: { rel?: string; href?: string; name?: string }) => {
+    if (tag === "meta") return attributes.name ? [`meta ${attributes.name}`] : []
+    const address = URL.parse(attributes.href ?? "", "http://page/")?.href ?? attributes.href
+    return (attributes.rel ?? "").toLowerCase().split(/\s+/).filter(Boolean).map((rel) => `${rel} ${address}`)
   }
-  // The page's links and the end of its head, in order, with each comment
-  // passed over whole.
-  const found = [...page.matchAll(/<!--[\s\S]*?-->|<link\b([^>]*)>|<\/head\s*>/gi)]
-  const had = new Set(found.flatMap((match) => (match[1] === undefined ? [] : kinds(attributesOf(match[1])))))
-  const added: HeadLink[] = []
-  for (const link of links) {
-    if (kinds(link).every((kind) => had.has(kind))) continue
-    for (const kind of kinds(link)) had.add(kind)
-    added.push(link)
+  // The page's links and meta tags and the end of its head, in order, with
+  // each comment passed over whole.
+  const found = [...page.matchAll(/<!--[\s\S]*?-->|<(link|meta)\b([^>]*)>|<\/head\s*>/gi)]
+  const had = new Set(found.flatMap((match) => (match[1] === undefined ? [] : kinds(match[1].toLowerCase() as "link" | "meta", attributesOf(match[2]!)))))
+  const added: (HeadLink | HeadMeta)[] = []
+  for (const tag of tags) {
+    const its = kinds(nameOf(tag), tag)
+    if (its.every((kind) => had.has(kind))) continue
+    for (const kind of its) had.add(kind)
+    added.push(tag)
   }
   if (added.length === 0) return page
   const end = found.find((match) => /^<\/head/i.test(match[0]))?.index
@@ -191,10 +226,13 @@ export function withHeadLinks(page: string, links: HeadLink[]): string {
   return page.slice(0, end) + added.map(tagOf).join("") + page.slice(end)
 }
 
-// A link written as a tag, such as `<link rel="modulepreload" href="/chunk-1a2b3c4d.js" crossorigin>`.
-function tagOf(link: HeadLink): string {
+// Whether a tag for the head is a link or a meta tag.
+const nameOf = (tag: HeadLink | HeadMeta) => ("rel" in tag ? "link" : "meta")
+
+// A link or meta tag written as a tag, such as `<link rel="modulepreload" href="/chunk-1a2b3c4d.js" crossorigin>`.
+function tagOf(tag: HeadLink | HeadMeta): string {
   const quoted = (value: string) => `"${value.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}"`
-  return `<link${Object.entries(link).map(([name, value]) => (value === "" ? ` ${name}` : ` ${name}=${quoted(value)}`)).join("")}>`
+  return `<${nameOf(tag)}${Object.entries(tag).map(([name, value]) => (value === "" ? ` ${name}` : ` ${name}=${quoted(value)}`)).join("")}>`
 }
 
 // A tag's attributes, by name, from the text after its name, whether each
