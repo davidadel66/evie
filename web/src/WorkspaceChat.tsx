@@ -434,7 +434,7 @@ function ChatBox({ send, asking, given, stop }: { send(text: string): Promise<st
             className="max-h-composer-text w-full resize-none overflow-y-auto bg-transparent text-field text-text outline-none placeholder:text-text-muted"
           />
         </label>
-        {/* Filled at all times, as drawn; with nothing to send it is dimmed. */}
+        {/* Round, and filled with the text colour at all times, as the main button is; with nothing to send, at half strength. */}
         <Button type="submit" variant="primary" aria-label="Send" disabled={text.trim() === ""} className="size-control rounded-full p-0 disabled:bg-text disabled:text-bg disabled:opacity-50">
           <ArrowUpBold className="size-icon-sm" />
         </Button>

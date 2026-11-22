@@ -53,8 +53,7 @@ const ANCHORS = 5
 // is said in a subagent's conversation from the page. With `changes`, each
 // completed turn that changed files ends with them. A question waiting
 // shows at the end, as part of evie's reply; while a turn runs with none,
-// a line there says so, with a way to stop it, as the Session view drawing
-// has it.
+// a line there says so, with a way to stop it.
 export function Reading({ conversation, readOnly = false, changes, folder }: { conversation: Opened; readOnly?: boolean; changes?: Changes; folder?: string | undefined }) {
   const state = useSyncExternalStore(conversation.subscribe, conversation.state)
   const { events, earlier, replySoFar, turnRunning, jobs, pending, notes } = state
@@ -212,7 +211,7 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
 const NONE_LISTED = { listed: undefined, problem: undefined }
 const noChanges = { subscribe: () => () => {}, state: () => NONE_LISTED }
 
-// A draft of a new session, in the middle column: the drawn "What should
+// A draft of a new session, in the middle column: the headline "What should
 // evie do?", and the message box, whose first message starts it. While it starts, the
 // message shows as the owner's, and a question asked as the session opens,
 // such as whether to trust its project, is answered in place. Once its
@@ -281,8 +280,8 @@ function Drafting({ draft, moved, inProject }: { draft: OpenedDraft; moved(sessi
   )
 }
 
-// A conversation with nothing in it yet, as the Session view drawing has
-// it: one line in its middle, over the message box.
+// A conversation with nothing in it yet: one line, in the page title's
+// size, centred in the column over the message box.
 function Headline() {
   return <h2 className="m-auto text-center text-page-title text-text">What should evie do?</h2>
 }
@@ -477,12 +476,12 @@ function useNow(ticking: boolean) {
   return now
 }
 
-// While a turn runs, under the conversation, as the Session view drawing
-// has it, its one sign that evie is working: how long the turn has worked,
-// counting up each second on the server's clock, as T3 Code's timer does,
-// also while a question waits, and a quiet Stop, which says Stopping until
-// the turn has ended. A turn begun before the page read says only Working,
-// and a subagent's has no Stop.
+// While a turn runs, in quiet caption words on one line under the
+// conversation, its one sign that evie is working: how long the turn has
+// worked, counting up each second on the server's clock, as T3 Code's timer
+// does, also while a question waits, and a quiet Stop, which says Stopping
+// until the turn has ended. A turn begun before the page read says only
+// Working, and a subagent's has no Stop.
 function RunningLine({ since, stopping, stop }: { since: number | undefined; stopping: boolean; stop?: () => void }) {
   const now = useNow(since !== undefined && !stopping)
   return (
