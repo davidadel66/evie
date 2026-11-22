@@ -9,8 +9,18 @@ import type { Project, ProjectColour } from "./types.ts"
 // Projects and the sessions that belong to them. A project is found by its
 // id; its folder is only where its files are today.
 export type Projects = {
-  // The project a folder belongs to, created the first time it is asked for.
-  forFolder(folder: string): Project
+  // The project a folder belongs to, created the first time it is asked
+  // for; or none, saying why, when the project's folder could never be one
+  // (see `refusal`).
+  forFolder(folder: string): Project | { refused: string }
+  // Why a project's folder can never be a project's, or undefined when it
+  // can: it is evie's data folder, is inside it or holds it, or its .evie
+  // folder leads to one of those through a link. A project at the home
+  // folder, which holds the data folder's usual place, would take evie's
+  // own settings file there, ~/.evie/evie.json, for the project's own. None
+  // is made at such a folder, and one an earlier evie made there is no
+  // project now: its sessions open with no project.
+  refusal(project: Project): string | undefined
   // Registers a new project rooted at exactly this folder, which must be a
   // full path with links resolved. Throws when the folder is already a project.
   create(folder: string, name: string): Project
@@ -151,6 +161,33 @@ const within = (folder: string, outer: string) => {
   return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path)
 }
 
+// How a folder stands to evie's data folder, both as they really are: it is
+// the data folder, is inside it, or holds it; undefined when it is none of
+// these, as a project's folder must be.
+function besideData(folder: string, data: string): "is" | "inside" | "holds" | undefined {
+  if (folder === data) return "is"
+  if (within(folder, data)) return "inside"
+  if (within(data, folder)) return "holds"
+  return undefined
+}
+
+// Why a folder, as it really is, can never be a project's (see `refusal`),
+// in words, or undefined when it can. `data` is the data folder as it
+// really is, and `shown` as evie was given it.
+function whyNotAProject(folder: string, data: string, shown: string): string | undefined {
+  const stands = { is: "is evie's data folder", inside: `is inside evie's data folder, ${shown}`, holds: `holds evie's data folder, ${shown}` }
+  const how = besideData(folder, data)
+  if (how !== undefined) return `${folder} ${stands[how]}, where evie keeps its own settings and state, so it is never made a project.`
+  const evie = realFolder(join(folder, ".evie"))
+  const through = besideData(evie, data)
+  if (through === undefined) return undefined
+  return `The .evie folder of ${folder} leads to ${evie}, which ${stands[through]}, where evie keeps its own settings and state, so ${folder} is never made a project.`
+}
+
+// What says to give a folder inside a repository that is no project's a
+// repository of its own, so that it is a project's itself.
+const ownRepository = (folder: string) => `To make ${folder} a project of its own, give it a git repository of its own, with git init there.`
+
 // Makes a new project, as the `new_project` command asks: the folder when it
 // is missing, and its `.evie/evie.json`, which backs up its `.evie/` folder
 // to a private repository, unless it is asked to keep it on this computer.
@@ -182,15 +219,24 @@ export async function makeProject(
   if (existsSync(given) && !statSync(given).isDirectory()) throw new Error(`${given} is a file, not a folder.`)
   const folder = realFolder(given)
   const data = realFolder(dataFolder)
+  if (within(folder, data)) throw new Error(`${given} is in evie's data folder, ${dataFolder}, where evie keeps its own state. Choose a folder outside it.`)
+  // As it really is, since a .evie that is a link counts where it leads.
+  const ownEvie = besideData(realFolder(join(folder, ".evie")), data)
+  if (ownEvie === "is" || ownEvie === "holds") throw new Error(`The .evie folder of ${given} is, or holds, evie's data folder, ${dataFolder}. Choose another folder for the project.`)
+  if (ownEvie === "inside") throw new Error(`The .evie folder of ${given} leads into evie's data folder, ${dataFolder}. Choose another folder for the project.`)
+  if (besideData(folder, data) === "holds") throw new Error(`${given} holds evie's data folder, ${dataFolder}, where evie keeps its own state. Choose a folder that does not hold it.`)
   // Opened later, a folder inside a repository is taken to be the
-  // repository's project, so a project of its own there could not be reached.
+  // repository's project, so a project of its own there could not be
+  // reached. Checked after the folder itself, so that a folder offered a
+  // repository of its own could be a project.
   const root = projectRoot(folder)
+  const rootRefused = root === folder ? undefined : whyNotAProject(root, data, dataFolder)
+  if (rootRefused !== undefined) {
+    throw new Error(`${given} is inside the git repository at ${root}, which is never a project: ${rootRefused} ${ownRepository(given)}`.replace(/\.$/, ", then make the project."))
+  }
   if (root !== folder) {
     throw new Error(`${given} is inside the git repository at ${root}, so it belongs to that repository's project. Make the project at the repository's own folder instead.`)
   }
-  if (within(folder, data)) throw new Error(`${given} is in evie's data folder, ${dataFolder}, where evie keeps its own state. Choose a folder outside it.`)
-  // As it really is, since a .evie that is a link counts where it leads.
-  if (within(data, realFolder(join(folder, ".evie")))) throw new Error(`The .evie folder of ${given} is, or holds, evie's data folder, ${dataFolder}. Choose another folder for the project.`)
   const evie = join(folder, ".evie")
   if (existsSync(evie) && !statSync(evie).isDirectory()) {
     throw new Error(`${evie} is a file. evie keeps what it adds to a project in a folder of that name, so move the file elsewhere, then make the project.`)
@@ -218,7 +264,9 @@ const PROJECT_COLOURS: readonly ProjectColour[] = ["moss", "mustard", "maroon", 
 const ICON_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const LONGEST_ICON_NAME = 64
 
-export function createProjects(db: Database): Projects {
+// `dataFolder` is evie's data folder, which no project's folder may be,
+// be inside or hold.
+export function createProjects(db: Database, dataFolder: string): Projects {
   const byFolder = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE folder = ?")
   const byId = db.query<Project, [string]>("SELECT id, name, folder FROM project WHERE id = ?")
   const all = db.query<Project, []>("SELECT id, name, folder FROM project ORDER BY name COLLATE NOCASE, created")
@@ -267,9 +315,23 @@ export function createProjects(db: Database): Projects {
     forFolder(folder) {
       if (!existsSync(folder)) throw new Error(`The folder "${folder}" does not exist.`)
       if (!statSync(folder).isDirectory()) throw new Error(`"${folder}" is a file, not a folder.`)
-      // Symbolic links are resolved so one folder is never two projects.
+      // Symbolic links are resolved so one folder is never two projects, and
+      // so a link cannot pass the data folder off as another folder.
       const resolved = realpathSync(folder)
-      return findOrCreate(projectRoot(resolved))
+      const root = projectRoot(resolved)
+      const data = realFolder(dataFolder)
+      const why = whyNotAProject(root, data, dataFolder)
+      if (why === undefined) return findOrCreate(root)
+      if (root === resolved) return { refused: why }
+      // A folder inside a repository that is no project's, as a home folder
+      // kept in git is, is a project's once it has a repository of its own,
+      // unless it could not be one either.
+      const offer = whyNotAProject(resolved, data, dataFolder) === undefined ? ` ${ownRepository(resolved)}` : ""
+      return { refused: `${resolved} belongs to the git repository at ${root}. ${why}${offer}` }
+    },
+
+    refusal(project) {
+      return whyNotAProject(realFolder(project.folder), realFolder(dataFolder), dataFolder)
     },
 
     create(folder, name) {
