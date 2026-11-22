@@ -671,7 +671,9 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       if (to) keepEvieOutOfGit(to.folder)
       scope = await scopeFor(to, (question) => questions.ask(input.session, question, { canAnswer: open.canAnswer }))
       if (closed) throw new Error("Evie was closed while the session was being moved.")
-      if (projects.projectOf(input.session)?.id !== from?.id) throw new Error("This session was moved elsewhere while it was being moved. Look at where it is now, and move it again.")
+      const now = projects.projectOf(input.session)
+      if (now === undefined) throw new Error("This session was deleted while it was being moved.")
+      if (now?.id !== from?.id) throw new Error("This session was moved elsewhere while it was being moved. Look at where it is now, and move it again.")
       refuseWhileRunning(input.session, "moved")
     }
     // The session's loop, and its subagents', are let go: idle, they stop

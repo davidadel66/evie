@@ -244,10 +244,9 @@ they change, and listed again when the line comes back:
   **Settled** are groups at the bottom, which open and close; the browser
   remembers which are open.
 - **Each row** shows its project's icon and name, and how long ago it was
-  active, or its state; the session's name, which is the opening words of
-  its first message for now; and the git branch its project is on, asked
-  for again when the window has the focus back and each minute while the
-  page is shown. Until a project's icon and colour can be picked, each
+  active, or its state; the session's name; and the git branch its
+  project is on, asked for again when the window has the focus back and
+  each minute while the page is shown. Until a project's icon and colour can be picked, each
   project has a folder in a colour chosen from its id.
 - **New session** makes a draft of a new session, at the top of the list,
   in the project of the selected session or draft, or of the project the
@@ -260,9 +259,23 @@ they change, and listed again when the line comes back:
   box, with why.
 - **Search** narrows the list by name, and the menu beside it to one
   project.
+- **A session's name** is written by a small model from your first
+  message, in the background, without holding up the reply; until it
+  comes, the row shows the opening words of that message. A request for a
+  name that fails or takes too long is given up, and the opening words
+  stay. You can rename a session at any time, and evie never replaces
+  your name.
 - **A row's menu** (the `···` on the selected row, or on any row under the
-  pointer) settles the session or brings it back. A session that is
-  working, or waiting for an answer, is not settled; the row says why.
+  pointer) renames the session, moves it to another project or to none,
+  settles it or brings it back, and deletes it. A double-click on the row,
+  or F2, renames it too: Enter or leaving the field saves the name, Escape
+  gives it up, and a blank name is refused. A session moved works in its
+  new project, with that project's plugins, from its next turn, and evie
+  is told where it now works. Delete asks first, and removes the session
+  for good: its conversation, its subagents and the files evie kept for
+  it, though not the files it changed in a project. A session that is
+  working, or waiting for an answer, is not settled, moved or deleted;
+  the row says why.
 - **What is selected** is kept in the page's address, as `#session=<id>`,
   or for a draft `#draft=<project id>` or `#draft=none`, so a reload or a
   bookmark opens on it.
@@ -698,7 +711,7 @@ the per-model settings and the permissions.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the thirteen built-in ones load:
+a list, the fourteen built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
@@ -714,6 +727,7 @@ a list, the thirteen built-in ones load:
 | `instructions` | The owner's and the project's instruction files |
 | `web` | `web_search` and `web_fetch` |
 | `sync` | The backing up of a project's `.evie` folder, and the `/sync` command |
+| `naming` | A name for each session, written by a small model from its first message |
 | `openrouter` | The connection to models through OpenRouter |
 
 ```json
@@ -731,11 +745,16 @@ a list, the thirteen built-in ones load:
     "instructions",
     "web",
     "sync",
+    "naming",
     "openrouter",
     { "use": "/path/to/my-plugin.ts", "options": { "greeting": "hi" } }
   ]
 }
 ```
+
+Sessions are named by `anthropic/claude-haiku-5.5`, through the same
+provider as the rest. Another model is set in the plugin's options:
+`{ "use": "naming", "options": { "model": "another/model" } }`.
 
 One more built-in plugin, `guard`, is not loaded by default. It is the
 part of `permissions` that refuses the most destructive commands, by
@@ -817,14 +836,14 @@ Through the host a plugin can add to four lists:
 | `host.profiles` | What one family of models is given: a system prompt and its tools for changing files |
 | `host.commands` | A command you type starting with a slash, such as `/model`. A command can tell the model something with `context.tell`, which adds a note to the conversation |
 
-It can also attach to three *hooks*, moments in the loop where a plugin's
-code runs:
+It can also attach to *hooks*, moments where a plugin's code runs:
 
 | Hook | When it runs | What it can do |
 |---|---|---|
 | `before_request` | After a request is built, before it is sent | Change the system prompt and the tools the model is offered |
 | `before_tool` | After a tool call's input is checked, before the tool runs | Refuse the call with a reason |
 | `after_tool` | After a tool has run | Change the result the model sees |
+| `session_deleted` | After a session has been deleted for good | Remove the files the plugin kept for it |
 
 A hook and a tool can also ask you a question and wait for the answer.
 `context.ask` returns the choice you made, or `null` when the question was
@@ -847,8 +866,10 @@ host.on("before_tool", (call) => {
 })
 ```
 
-Hooks run in the order their plugins are listed. Each is told the session,
-its project and the conversation so far. `host.project` says which project
+Hooks run in the order their plugins are listed. Each of the first three
+is told the session, its project and the conversation so far, and can
+give the session a name with `context.name`, which does nothing once it
+has one. `host.project` says which project
 the plugin is being set up for.
 
 A plugin with work of its own over time, such as the `sync` plugin's

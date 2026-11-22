@@ -17,8 +17,8 @@ import { Input } from "./components/ui/input.tsx"
 import { CaretDown, CaretRight, MagnifyingGlass, Plus } from "./icons.tsx"
 import { ProjectGlyph } from "./ProjectIcon.tsx"
 import { select, useSelected } from "./selection.ts"
-import { filterSessions, groupSessions, keepOpenGroups, openGroups, projectLookedAt, revealMove, type Filter, type OpenGroups } from "./session-list.ts"
-import { DraftRow, SessionRow } from "./SessionRow.tsx"
+import { filterSessions, groupSessions, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, type Filter, type OpenGroups } from "./session-list.ts"
+import { DeleteDialog, DraftRow, SessionRow } from "./SessionRow.tsx"
 import type { Sessions } from "./sessions.ts"
 
 // The session list, in the left column: a new session, a search and a
@@ -33,6 +33,10 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
   const [open, setOpen] = useState(openGroups)
   // The session whose menu should have the focus back once it has moved.
   const [refocus, setRefocus] = useState<string>()
+  // The session whose name is being typed in its row, and the one asked
+  // about deleting.
+  const [editing, setEditing] = useState<string>()
+  const [deleting, setDeleting] = useState<SessionSummary>()
   const now = useMinute()
 
   const selectedSession = selected !== undefined && "session" in selected ? selected.session : undefined
@@ -57,6 +61,30 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
     if (next !== open) setGroups(next)
   }, [selectedSession, selectedState])
 
+  // F2 renames the row that has the focus, or else the selected session,
+  // as in T3 Code, when its row is in sight.
+  useEffect(() => {
+    function renameOnF2(event: KeyboardEvent) {
+      if (event.key !== "F2" || event.defaultPrevented) return
+      const focused = document.activeElement
+      const typing = focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement || (focused instanceof HTMLElement && focused.isContentEditable)
+      const focusedRow = focused instanceof HTMLAnchorElement ? focused.dataset.session : undefined
+      const session = renamedByF2({ ...(focusedRow !== undefined && { focusedRow }), typing }, selectedSession)
+      if (session === undefined || document.querySelector(`a[data-session="${CSS.escape(session)}"]`) === null) return
+      event.preventDefault()
+      setEditing(session)
+    }
+    addEventListener("keydown", renameOnF2)
+    return () => removeEventListener("keydown", renameOnF2)
+  }, [selectedSession])
+
+  // A session deleted while selected leaves nothing selected.
+  async function remove(session: SessionSummary) {
+    const refused = await sessions.delete(session.session)
+    if (refused === undefined && session.session === selectedSession) location.hash = ""
+    return refused
+  }
+
   const groups = groupSessions(filterSessions(list.sessions, filter))
   const rows = (shown: SessionSummary[]) => (
     <ul className="flex flex-col gap-1">
@@ -65,13 +93,20 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
           key={session.session}
           session={session}
           project={projectOf(session.project)}
+          projects={list.projects}
           selected={session.session === selectedSession}
           now={now}
-          settle={async (settled) => {
-            const refused = await sessions.settle(session.session, settled)
-            if (refused === undefined && session.session === selectedSession) setRefocus(session.session)
-            return refused
+          actions={{
+            settle: async (settled) => {
+              const refused = await sessions.settle(session.session, settled)
+              if (refused === undefined && session.session === selectedSession) setRefocus(session.session)
+              return refused
+            },
+            rename: (name) => sessions.rename(session.session, name),
+            move: (project) => sessions.move(session.session, project),
+            askDelete: () => setDeleting(session),
           }}
+          editing={{ now: editing === session.session, start: () => setEditing(session.session), end: () => setEditing(undefined) }}
           refocus={{ asked: refocus === session.session, done: () => setRefocus(undefined) }}
         />
       ))}
@@ -134,6 +169,7 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
           </Group>
         )}
       </div>
+      <DeleteDialog session={deleting} close={() => setDeleting(undefined)} remove={remove} />
     </div>
   )
 }
