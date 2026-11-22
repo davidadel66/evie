@@ -209,7 +209,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   const db = openStore(join(home, "evie.db"))
   const log = createEventLog(db)
   const inbox = createInbox(db)
-  const projects = createProjects(db)
+  const projects = createProjects(db, home)
 
   const listeners = new Set<(event: EvieEvent) => void>()
   const deliver = (event: EvieEvent) => {
@@ -405,6 +405,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       throw new Error("`after` is the number of the last event seen in a session, so it is given only with `session`.")
     }
     let project: Project | null = null
+    // Why a folder given is no project's, as for evie's data folder or a
+    // folder holding it, such as the home folder: said once, as the session
+    // opens, which belongs to no project.
+    let refused: string[] = []
     if (input.session !== undefined) {
       const found = projects.projectOf(input.session)
       if (found === undefined) throw new Error(`There is no session with the id "${input.session}".`)
@@ -417,7 +421,9 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       project = projects.get(input.project) ?? null
       if (!project) throw new Error(`There is no project with the id "${input.project}".`)
     } else if (input.folder !== undefined) {
-      project = projects.forFolder(input.folder)
+      const found = projects.forFolder(input.folder)
+      if ("refused" in found) refused = [found.refused]
+      else project = found
     }
     // Checked each time, so a folder that has become a repository since is covered too.
     if (project) keepEvieOutOfGit(project.folder)
@@ -441,7 +447,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const alreadyOpen = () => (last === undefined ? undefined : sessions.get(last))
     const join = (id: string, open: Open) => {
       open.canAnswer ||= canAnswer
-      return { ...whereItIs(id, input.after), project, resumed: true, notices: open.notices }
+      return { ...whereItIs(id, input.after), project, resumed: true, notices: [...refused, ...open.notices] }
     }
     const openBefore = alreadyOpen()
     if (last !== undefined && openBefore && !closed) return join(last, openBefore)
@@ -472,7 +478,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
 
       const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer: canAnswer || resuming })
       if (left) carryOn(sessionId(), opened, left)
-      return { ...whereItIs(sessionId(), input.after), project, resumed: last !== undefined, notices }
+      return { ...whereItIs(sessionId(), input.after), project, resumed: last !== undefined, notices: [...refused, ...notices] }
     } finally {
       if (session !== undefined) markOpening(session, -1)
     }

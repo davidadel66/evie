@@ -1,7 +1,8 @@
+import { Database } from "bun:sqlite"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { createEvie, type Evie, type EvieEvent, type EvieOptions, type Plugin, type StoredEvent } from "../../src/index.ts"
+import { basename, join } from "node:path"
+import { createEvie, type Evie, type EvieEvent, type EvieOptions, type Plugin, type Project, type StoredEvent } from "../../src/index.ts"
 
 export type Run = Awaited<ReturnType<typeof startEvie>>
 
@@ -95,4 +96,20 @@ export function nextEvent<Type extends EvieEvent["type"]>(run: { evie: Evie }, t
       resolve(event as Extract<EvieEvent, { type: Type }>)
     })
   })
+}
+
+// Registers a project at a folder, as it really is, in the database of the
+// data folder `home`, as an earlier evie could before it refused to make a
+// project at a folder that is, holds or is inside its data folder, such as
+// the home folder. For a test of what still keeps such a project away from
+// evie's own files.
+export function registeredEarlier(home: string, folder: string): Project {
+  const project: Project = { id: crypto.randomUUID(), name: basename(folder), folder }
+  const db = new Database(join(home, "evie.db"))
+  try {
+    db.query("INSERT INTO project (id, name, folder, created) VALUES (?, ?, ?, ?)").run(project.id, project.name, project.folder, Date.now())
+  } finally {
+    db.close()
+  }
+  return project
 }

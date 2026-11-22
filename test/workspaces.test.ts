@@ -151,6 +151,19 @@ test("new_project refuses Evie's data folder, anything inside it, and a folder w
   await expect(inner.evie.send({ type: "new_project", folder: deeper })).rejects.toThrow(`The .evie folder of ${deeper} is, or holds, evie's data folder`)
 })
 
+test("new_project refuses a folder that holds evie's data folder further down, as one above an EVIE_HOME set elsewhere does", async () => {
+  const above = await tempFolder("evie-above-")
+  const home = join(above, "state", "evie")
+  const run = await startEvie([scriptedProvider([]).plugin], { home })
+  cleanups.push(run.stop)
+
+  await expect(run.evie.send({ type: "new_project", folder: above })).rejects.toThrow(
+    `${above} holds evie's data folder, ${home}, where evie keeps its own state. Choose a folder that does not hold it.`,
+  )
+  expect(await exists(join(above, ".evie"))).toBe(false)
+  expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...run.project!, git: false }])
+})
+
 test("new_project refuses a folder whose .evie is a link to the data folder, or to a folder holding it, as it really is", async () => {
   const home = await tempFolder("evie-home-")
   const run = await startEvie([scriptedProvider([]).plugin], { home })

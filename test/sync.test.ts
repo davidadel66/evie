@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, shell, sync, type Plugin } from "../src/index.ts"
 import { git, ran } from "./support/git.ts"
-import { say, startEvie } from "./support/harness.ts"
+import { registeredEarlier, say, startEvie } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
 // The sync plugin with a stand-in for GitHub: `gh` is answered here, and
@@ -76,7 +76,7 @@ async function standInGitHub() {
 // whose .evie folder holds its settings and syncs as `setting` says, which
 // is "private" unless given, and nothing when given as undefined.
 // With `dataFolderInside`, the project's .evie folder is evie's data folder,
-// as it is for a project at the home folder.
+// as it is for a project at the home folder that an earlier evie made.
 // `scriptFor` makes the model's replies once the project folder is known.
 // `pushes` stands in for `git push`, when given.
 async function start(
@@ -117,8 +117,12 @@ async function start(
   const run = await startEvie([model.plugin, files(), shell(), plugin], { home, projectFolder })
   cleanups.push(run.stop)
   const evieFolder = join(projectFolder, ".evie")
-  const syncNow = async () => (await run.evie.send({ type: "run_command", session: run.session, name: "sync", args: "" })).text
-  return { run, github, projectFolder, evieFolder, commands, syncNow, name: `evie-${run.project!.name.toLowerCase()}` }
+  // Evie never makes a project at the folder above its data folder now, so
+  // the project is one an earlier evie made there, opened by its id.
+  const project = options.dataFolderInside ? registeredEarlier(home, projectFolder) : run.project!
+  const session = options.dataFolderInside ? (await run.evie.send({ type: "open_session", project: project.id })).session : run.session
+  const syncNow = async () => (await run.evie.send({ type: "run_command", session, name: "sync", args: "" })).text
+  return { run, github, projectFolder, evieFolder, commands, syncNow, name: `evie-${project.name.toLowerCase()}` }
 }
 
 // ---- The first sync ------------------------------------------------------------------------------

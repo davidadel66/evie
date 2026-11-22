@@ -949,13 +949,19 @@ own settings are used without asking. When its `.evie` folder already
 held files, such as skills that came with a cloned repository, the
 project is made but not trusted, and its first session asks. A folder
 that is already a project, that already has a `.evie/evie.json`, that is
-inside a git repository other than at its top, or that is in Evie's data
-folder is refused. `evie new` says whether the project is trusted and
+inside a git repository other than at its top, or that is, holds or is
+inside Evie's data folder is refused. `evie new` says whether the project is trusted and
 whether its `.evie` folder is backed up. The web app makes one with New
 workspace, which takes a folder from `~/` as the server's home folder, and
 can also keep the `.evie` folder on this computer (`"sync": "none"`). A
 name of only dots is refused. Then run `evie` in that folder
 to start working there.
+
+Running `evie` in a folder makes it a project too, or the git repository
+it is in, but never one that is, holds or is inside Evie's data folder,
+such as the home folder, which holds `~/.evie`: a project there would take
+Evie's own settings file for its own. The session started there belongs to
+no project, and says so as it opens.
 
 **Kept out of the project's own git.** When a project's folder is a git
 repository, Evie adds `/.evie/` to the repository's local exclude list,
