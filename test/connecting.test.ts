@@ -370,6 +370,25 @@ test("the web app's script is sent with brotli, gzip or as it is, as the browser
   expect(await tiny.text()).toBe(new TextDecoder().decode(app.files[small]!.identity))
 })
 
+test("a font is sent as it is, whatever the browser accepts, is kept for good, and answers 304 to the tag of what the browser has", async () => {
+  const app = await webApp()
+  if (!("files" in app)) throw new Error("the web app was not built")
+  const { server } = await start({ app })
+  const page = new TextDecoder().decode(app.page.identity)
+  const style = page.match(/<link rel="stylesheet"[^>]* href="([^"]+)"/)![1]!
+  const fonts = [...new TextDecoder().decode(app.files[style]!.identity).matchAll(/url\((\/fonts\/[^)]+)\)/g)].map((match) => match[1]!)
+  expect(fonts.length).toBe(4)
+
+  for (const font of fonts) {
+    const answer = await fetch(`${server.url}${font}`, { headers: { "Accept-Encoding": "gzip, deflate, br, zstd" }, decompress: false })
+    expect([answer.status, answer.headers.get("content-type"), answer.headers.get("content-encoding"), answer.headers.get("vary")]).toEqual([200, "font/woff2", null, null])
+    expect(answer.headers.get("cache-control")).toBe("public, max-age=31536000, immutable")
+    expect(Buffer.from(await answer.arrayBuffer())).toEqual(Buffer.from(app.files[font]!.identity))
+    const again = await fetch(`${server.url}${font}`, { headers: { "If-None-Match": answer.headers.get("etag")! } })
+    expect([again.status, await again.text()]).toEqual([304, ""])
+  }
+})
+
 test("the page, with its links to the chunks its script imports, is asked for afresh on each visit, and the chunks it names are kept for good", async () => {
   const app = await webApp()
   const { server } = await start({ app })

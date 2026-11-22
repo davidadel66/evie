@@ -1,5 +1,6 @@
 import type { BuildMetafile } from "bun"
 import tailwind from "bun-plugin-tailwind"
+import { fontsPlugin } from "./fonts.ts"
 import { ENCODINGS, variantsOf, type Encoding, type Variants } from "./variants.ts"
 
 // The web app's build, which `buildWebApp` runs in a process of its own:
@@ -29,9 +30,11 @@ if (page === undefined || list === undefined || files === undefined) {
 try {
   const built = await Bun.build({
     entrypoints: [page],
-    // Tailwind's plugin is handed to the bundler here, in code, so the build
-    // does not depend on a bunfig.toml in the folder it is started in.
-    plugins: [tailwind],
+    // The plugins are handed to the bundler here, in code, so the build does
+    // not depend on a bunfig.toml in the folder it is started in. The fonts
+    // the stylesheet names are left out of it, for the server to serve as
+    // files: see `FONTS`.
+    plugins: [fontsPlugin(true), tailwind],
     minify: true,
     // The page is served at more than one path, such as /sign-in, so it
     // names its files from the root.
