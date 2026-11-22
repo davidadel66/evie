@@ -1,5 +1,6 @@
 import type { BuildMetafile } from "bun"
 import tailwind from "bun-plugin-tailwind"
+import { fontsPlugin } from "./fonts.ts"
 import { shikiFiles } from "./shiki-files.ts"
 import { ENCODINGS, variantsOf, type Encoding, type Variants } from "./variants.ts"
 
@@ -30,11 +31,12 @@ if (page === undefined || list === undefined || files === undefined) {
 try {
   const built = await Bun.build({
     entrypoints: [page],
-    // Tailwind's plugin is handed to the bundler here, in code, so the build
-    // does not depend on a bunfig.toml in the folder it is started in. Shiki's
-    // grammars and themes are left out, and loaded from the server's address
-    // for them: see `shikiFiles`.
-    plugins: [tailwind, shikiFiles],
+    // The plugins are handed to the bundler here, in code, so the build does
+    // not depend on a bunfig.toml in the folder it is started in. The fonts
+    // the stylesheet names are left out of it, for the server to serve as
+    // files: see `FONTS`. So are Shiki's grammars and themes, which are
+    // loaded from the server's address for them: see `shikiFiles`.
+    plugins: [fontsPlugin(true), tailwind, shikiFiles],
     minify: true,
     // The page is served at more than one path, such as /sign-in, so it
     // names its files from the root.
