@@ -12,7 +12,7 @@ import type { ShownAttachment } from "./attachments.ts"
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog.tsx"
 import { CaretRight, ChatsCircle, File as FileIcon, FileText, Globe, Hammer, Lightbulb, MagnifyingGlass, NotePencil, Robot, TerminalWindow, Wrench, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
-import { renderMarkdown } from "./markdown.ts"
+import { markdownBlocks, renderMarkdown } from "./markdown.ts"
 import { addressOf } from "./address.ts"
 import type { Sessions } from "./sessions.ts"
 import { Spinner } from "./Spinner.tsx"
@@ -47,6 +47,8 @@ export function Conversation({ connection, session, folder }: { connection: Conn
 const AT_BOTTOM = 32
 // How many of the first items are remembered to keep the owner's place.
 const ANCHORS = 5
+// The first items drawn in a conversation and where each is.
+const firstItems = (box: HTMLElement) => [...box.querySelectorAll<HTMLElement>("[data-item]")].slice(0, ANCHORS).map((each) => ({ key: each.dataset.item!, top: each.offsetTop }))
 
 // A conversation as it reads, the session's own, with its message box, or
 // one of its subagents', which is read only: it has no box, since nothing
@@ -89,39 +91,76 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
       return now
     })
   const drawn = useRef<{ key: string; top: number }[]>([])
+  // Where the conversation was last scrolled to, by the owner or to keep
+  // them at the bottom, to know the owner scrolling up from the conversation
+  // growing below them; and the frame asked for to keep the owner at the
+  // bottom, while it waits, which is let go with the conversation it was
+  // asked for.
+  const lastTop = useRef(0)
+  const following = useRef(0)
+  useLayoutEffect(
+    () => () => {
+      cancelAnimationFrame(following.current)
+      following.current = 0
+    },
+    [conversation],
+  )
+  const toBottom = (box: HTMLDivElement) => {
+    box.scrollTop = box.scrollHeight
+    lastTop.current = box.scrollTop
+  }
 
   // Within half a screen of the top, the page before is read.
   const readIfNearTop = () => {
     const box = scroller.current
     if (box && box.scrollTop < box.clientHeight / 2) conversation.readEarlier()
   }
+  // The owner stays at the bottom while near it, and until they scroll up:
+  // the conversation growing below them, faster than they are kept at the
+  // bottom, does not count. Once they leave it, where the first few items
+  // are is taken, which is otherwise taken only while they are away.
   function onScroll() {
     const box = scroller.current!
-    stuck.current = box.scrollHeight - box.scrollTop - box.clientHeight <= AT_BOTTOM
+    const top = box.scrollTop
+    const was = stuck.current
+    stuck.current = box.scrollHeight - top - box.clientHeight <= AT_BOTTOM || (was && top >= lastTop.current)
+    lastTop.current = top
+    if (was && !stuck.current) drawn.current = firstItems(box)
     setScrolledUp(!stuck.current)
     readIfNearTop()
   }
   function toLatest() {
     const box = scroller.current!
     stuck.current = true
-    box.scrollTop = box.scrollHeight
+    toBottom(box)
     setScrolledUp(false)
   }
 
   // After each change, before it is shown: kept at the bottom, or moved by
   // as far as the first of the items drawn last time that is still there.
   // A few are kept, since the first can change as the page before joins
-  // its turn to the rest.
+  // its turn to the rest. At the bottom, it is kept there once a frame,
+  // however often it was drawn since, just before the frame is shown:
+  // asking how tall the conversation is, or where anything in it is, lays
+  // all of it out, which for every piece of a fast stream into a long
+  // session was most of a phone's time.
   useLayoutEffect(() => {
     const box = scroller.current
     if (!box) return
-    const placed = (key: string) => box.querySelector<HTMLElement>(`[data-item="${CSS.escape(key)}"]`)
-    if (stuck.current) box.scrollTop = box.scrollHeight
-    else {
-      const anchor = drawn.current.find((each) => placed(each.key) !== null)
-      if (anchor) box.scrollTop += placed(anchor.key)!.offsetTop - anchor.top
+    if (stuck.current) {
+      following.current ||= requestAnimationFrame(() => {
+        following.current = 0
+        const box = scroller.current
+        if (!box || !stuck.current) return
+        toBottom(box)
+        readIfNearTop()
+      })
+      return
     }
-    drawn.current = [...box.querySelectorAll<HTMLElement>("[data-item]")].slice(0, ANCHORS).map((each) => ({ key: each.dataset.item!, top: each.offsetTop }))
+    const placed = (key: string) => box.querySelector<HTMLElement>(`[data-item="${CSS.escape(key)}"]`)
+    const anchor = drawn.current.find((each) => placed(each.key) !== null)
+    if (anchor) box.scrollTop += placed(anchor.key)!.offsetTop - anchor.top
+    drawn.current = firstItems(box)
     readIfNearTop()
   })
   // What grows by itself, as a reply rewrapping when the window is resized,
@@ -130,7 +169,7 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
     const box = scroller.current
     if (!box || !content.current) return
     const watch = new ResizeObserver(() => {
-      if (stuck.current) box.scrollTop = box.scrollHeight
+      if (stuck.current) toBottom(box)
     })
     watch.observe(content.current)
     watch.observe(box)
@@ -310,7 +349,7 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
         </>
       )
     case "reply":
-      return <Markdown text={item.text} className="text-text" />
+      return <Markdown text={item.text} streaming={item.streaming} className="text-text" />
     case "steps":
       return <WorkRun item={item} shown={shown} show={show} />
     case "thinking":
@@ -394,10 +433,28 @@ function Attachments({ attachments, spaced }: { attachments: ShownAttachment[]; 
 
 // A reply, or a piece of one, drawn from its Markdown. Drawn again only
 // when its text changes, so that a reply streaming in does not draw every
-// reply above it again.
-const Markdown = memo(function Markdown({ text, className }: { text: string; className: string }) {
-  const drawn = useMemo(() => renderMarkdown(text), [text])
-  return <div className={`text-prose break-words [&>*+*]:mt-3 ${className}`}>{drawn}</div>
+// reply above it again. A reply still streaming is drawn by its blocks, so
+// that each piece reads again only the last block, which is still open,
+// and not the whole reply so far. Once the turn has ended, the reply is the
+// one stored, drawn from one reading of the whole.
+const Markdown = memo(function Markdown({ text, streaming = false, className }: { text: string; streaming?: boolean; className: string }) {
+  // The blocks the reply was cut into at its last piece, which the next cut
+  // starts from. It is written while drawing, on purpose: it only saves
+  // work, since each cut checks that the reply still starts with it, so a
+  // draw that React throws away leaves nothing wrong behind.
+  const cut = useRef<string[]>([])
+  if (streaming) cut.current = markdownBlocks(text, cut.current)
+  return (
+    <div className={`text-prose break-words [&>*+*]:mt-3 ${className}`}>
+      {streaming ? cut.current.map((block, at) => <MarkdownBlock key={at} text={block} />) : <MarkdownBlock text={text} />}
+    </div>
+  )
+})
+
+// Markdown drawn as it is, again only when it changes. Its elements are
+// the box's own children, as if they were drawn with the blocks around them.
+const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
+  return renderMarkdown(text)
 })
 
 // Working, as the design system says it: the word, with a small spinner,

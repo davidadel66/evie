@@ -11,6 +11,82 @@ export function renderMarkdown(text: string): ReactNode[] {
   return blocks(new Lexer({ gfm: true }).lex(text))
 }
 
+// A reply still streaming in, cut into its blocks, so that each can be
+// drawn on its own: the blocks before the last are finished and drawn once,
+// and only the last, still open, is read again as each piece comes. Read
+// whole on every piece, a reply costs more with each piece, by the square
+// of its length. Each cut is at a blank line that ends every open block, so
+// that each block is drawn as it would be in the whole reply: not inside a
+// fenced code block, and not before an indented line or a list's next item,
+// which can still belong to the block above. A reply in which one part
+// changes how another is read, such as a link defined elsewhere, is left in
+// one piece. Adapted from T3 Code's splitMarkdownBlocks (MIT licence, notice
+// in LICENSES/t3code-MIT.txt).
+//
+// `before` is what the reply was cut into at its last piece. While the
+// reply still starts with all of it, the cuts before its last two blocks
+// stand, and only those two are looked at again, line by line. The last cut
+// is looked at again because the line after it may still be coming in: "1"
+// starts a block of its own, but "1." may be the next item of a list above.
+// What is left that grows with the reply is the check that it still starts
+// with `before`: one comparison of the two texts, which the browser makes
+// in one go, at a small part of the cost of reading them.
+export function markdownBlocks(text: string, before: readonly string[] = []): string[] {
+  // One comparison with the text before, in one piece, costs far less than
+  // one for each block.
+  const found = before.length > 2 && text.startsWith(before.join("")) ? before.slice(0, -2) : []
+  let start = found.reduce((length, block) => length + block.length, 0) // where the open block starts
+  // marked reads "\r" as the end of a line, as this does not.
+  if (text.includes("\r", start)) return [text]
+  let fence = "" // the marks of the fenced code block the line is in, if any
+  let indent = 0 // how far in those marks are
+  let blank = false // whether a blank line came just before
+  for (let at = start; at <= text.length; ) {
+    let end = text.indexOf("\n", at)
+    if (end === -1) end = text.length
+    const line = text.slice(at, end)
+    if (fence !== "") {
+      // A line left of the marks may end the list item the code is in,
+      // which is not followed here.
+      if (/[^ \t]/.test(line.slice(0, indent))) return [text]
+      if (FENCE_END.exec(line)?.[1]!.startsWith(fence)) fence = ""
+    } else if (BLANK.test(line)) {
+      blank = true
+    } else {
+      if (READ_WHOLE.test(line)) return [text]
+      if (blank && at > start && !GOES_ON.test(line)) {
+        found.push(text.slice(start, at))
+        start = at
+      }
+      blank = false
+      const opens = FENCE.exec(line)?.[1]
+      if (opens !== undefined) [fence, indent] = [opens, line.indexOf(opens)]
+    }
+    at = end + 1
+  }
+  found.push(text.slice(start))
+  return found
+}
+
+// A fenced code block's first line: three backticks or more, with none after
+// them on the line, or three tildes or more.
+const FENCE = /^ {0,3}(`{3,}(?![^`\n]*`)|~{3,})/
+// Its last line, as marked reads it: as many of the same marks or more, and
+// only spaces after them.
+const FENCE_END = /^ {0,3}(`{3,}|~{3,}) *$/
+// A blank line, as marked reads one between blocks: only spaces and tabs.
+const BLANK = /^[ \t]*$/
+// A line after a blank line that can still belong to the block above: one
+// indented, or a list's next item.
+const GOES_ON = /^(?:[ \t]|(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$))/
+// A line that changes how other blocks are read: a link's definition, which
+// a link anywhere can use, or the last line of one whose name runs over more
+// than one line; HTML at the start of a line, which can run on past blank
+// lines; a link's tag, after which marked links no more addresses; or a line
+// of other spaces only, such as a no-break space, which marked reads as
+// blank inside a list and as words outside one.
+const READ_WHOLE = /^[ \t>*+\-\d.)]*\[[^\]\n]+\]:|^[^[\n]*\]:|^ {0,3}<[A-Za-z!?/]|<a |^\s+$/i
+
 const HEADINGS = ["h1", "h2", "h3", "h4", "h5", "h6"] as const
 // Each heading's text style, at T3 Code's 20, 18, 16 and 14px.
 const HEADING_SIZES = ["text-page-title", "text-heading", "text-title"] as const
