@@ -1,6 +1,7 @@
 import { existsSync, realpathSync } from "node:fs"
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { dataFolder } from "../core/evie.ts"
+import { gitEnv } from "../core/git.ts"
 import type { CheckedToolCall, Plugin, Project } from "../core/types.ts"
 import { patchFiles } from "./files/paths.ts"
 
@@ -36,8 +37,8 @@ export type SyncOptions = {
   after?: number
   every?: number
   // Runs a command, `git` or `gh`, in a folder, stopping it when the signal
-  // fires. Replaceable, so tests never reach GitHub.
-  run?: (command: string[], cwd: string, signal: AbortSignal | undefined) => Promise<Ran>
+  // fires, with the environment given. Replaceable, so tests never reach GitHub.
+  run?: (command: string[], cwd: string, signal: AbortSignal | undefined, env: Record<string, string>) => Promise<Ran>
   // Stops the timers and any command running, for good. Evie's own signal
   // is added when it starts the plugin's work.
   signal?: AbortSignal
@@ -80,7 +81,15 @@ export function sync(options: SyncOptions): Plugin {
       }
     })
   whenStopped(stopped)
-  const run = (command: string[], cwd: string) => (options.run ?? runCommand)(command, cwd, stopped)
+  // Git, and the git that gh runs, run none of the commands a repository's
+  // settings can name, as the core runs it (core/git.ts): the .evie folder
+  // may have come with the project. Only a push reaches another computer,
+  // so only a push keeps the transports, credential helper and ssh command
+  // the settings have.
+  const run = async (command: string[], cwd: string) => {
+    const env = await gitEnv(cwd, { worktree: command[0] === "git", remote: command[0] === "git" && command.includes("push") })
+    return (options.run ?? runCommand)(command, cwd, stopped, env)
+  }
 
   // One try at a time for each project: a try asked for while one is under
   // way waits for it. Why the last one failed is kept until one does not.
@@ -321,12 +330,12 @@ function repositoryName(project: Project): string {
 // Runs a command, never waiting for a password to be typed, and for at most
 // two minutes, so a network that has gone cannot hold a try up for ever. It
 // is stopped when the signal fires.
-async function runCommand(command: string[], cwd: string, signal: AbortSignal | undefined): Promise<Ran> {
+async function runCommand(command: string[], cwd: string, signal: AbortSignal | undefined, env: Record<string, string>): Promise<Ran> {
   try {
     const child = Bun.spawn(command, {
       cwd,
       ...(signal && { signal }),
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1" },
+      env: { ...env, GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1" },
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",

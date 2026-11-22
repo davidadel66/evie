@@ -1,4 +1,4 @@
-import type { Job, StoredEvent } from "../../src/core/types.ts"
+import type { ChangedFile, Job, StoredEvent, TurnChanges } from "../../src/core/types.ts"
 
 // How a conversation reads in the web app, apart from its screen: a
 // session's stored events, with the reply being written and its jobs,
@@ -48,6 +48,9 @@ export type Item = { key: string; turn: number } & (
   // line saying how long the turn worked, or, when its start was not read,
   // which tools it used. Questions, answers and notes stay outside it.
   | { kind: "fold"; label: string; items: Item[] }
+  // The files a completed turn changed, after its final reply, with the
+  // turn's number in the session, for the diff panel to open on.
+  | { kind: "changes"; number: number; files: ChangedFile[] }
 )
 
 type Steps = Extract<Item, { kind: "steps" }>
@@ -58,7 +61,9 @@ type Asked = Extract<Item, { kind: "question" }>
 const CUT_SHORT = "The reply was cut short."
 const COMPACTED = "The conversation was getting long, so its earlier part is now a summary."
 
-export function transcriptOf(view: View): Item[] {
+// `changes` are the session's turns that changed files, as the server
+// lists them, each known by its end's event.
+export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): Item[] {
   const items: Item[] = []
   let turn = 0
   // The turn being read: when it started, if its start has been read; its
@@ -151,6 +156,8 @@ export function transcriptOf(view: View): Item[] {
       if (firstRun && seconds !== undefined) worked.set(firstRun, seconds)
       ends.set(turn, { seq: event.seq, completed: event.body.reason === "completed", ...(seconds !== undefined && { seconds }) })
       if (event.body.reason === "error") add({ key, turn, kind: "failed", error: event.body.error ?? "The turn failed." }, event.time)
+      const changed = event.body.reason === "completed" ? changes.find((each) => each.end === event.seq) : undefined
+      if (changed) add({ key: `changes-${event.seq}`, turn, kind: "changes", number: changed.turn, files: changed.files }, event.time)
       // A turn stopped as its reply was being written says both at once.
       const last = items.at(-1)
       if (event.body.reason === "cancelled" && last?.kind === "note" && last.text === CUT_SHORT) last.text = `Stopped. ${CUT_SHORT}`

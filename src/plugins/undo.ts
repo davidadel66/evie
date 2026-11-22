@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto"
 import { realpathSync } from "node:fs"
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises"
+import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { dataFolder } from "../core/evie.ts"
-import type { CheckedToolCall, HookContext, Plugin } from "../core/types.ts"
+import { contentsAt, LARGEST, TOO_LARGE } from "../core/diff.ts"
+import type { CheckedToolCall, Contents, HookContext, KeptFile, Plugin } from "../core/types.ts"
 import { patchFiles } from "./files/paths.ts"
 
 // The built-in undo plugin. `/undo` puts files back as they were before
@@ -140,6 +141,60 @@ export function undo(options: UndoOptions = {}): Plugin {
 
       // A session deleted for good takes its copies with it.
       host.on("session_deleted", (session) => rm(join(root, session), { recursive: true, force: true }))
+
+      // What each turn changed, for a client to show as diffs: the files
+      // whose contents the turn changed, read from its record alone; and
+      // for one turn, each file's copy from before it, and what it left in
+      // the file. That is the file as it is now, while it still holds what
+      // the turn left, or else the copy a later turn kept of it before
+      // changing it, when that copy is what this turn left. Otherwise it is
+      // not known. A turn undone is gone, with its copies.
+      const keptTurns = async (session: string) => {
+        const numbers = (await readdir(join(root, session)).catch(() => [] as string[])).map(Number).filter(Number.isInteger).sort((a, b) => a - b)
+        return Promise.all(numbers.map(async (turn) => ({ turn, folder: turnFolder(session, turn), record: await load(turnFolder(session, turn)) })))
+      }
+      // A copy's contents, or too large, for one over the size a diff shows, which is not read.
+      const copyOf = async (folder: string, file: Kept): Promise<Contents> => {
+        if (file.copy === undefined) return null
+        const read = await contentsAt(join(folder, file.copy))
+        return read === null ? undefined : read
+      }
+      const changedIn = (record: Record) => record.files.filter((file) => file.after !== file.before)
+      host.changes.add({
+        name: "undo",
+        async turns(session) {
+          return (await keptTurns(session)).flatMap(({ turn, record }) => {
+            const paths = changedIn(record).map((file) => file.path)
+            return paths.length === 0 ? [] : [{ turn, paths }]
+          })
+        },
+        async files(session, turn) {
+          const kept = await keptTurns(session)
+          const at = kept.findIndex((each) => each.turn === turn)
+          if (at === -1) return []
+          const { folder, record } = kept[at]!
+          const later = kept.slice(at + 1)
+          const files: KeptFile[] = []
+          for (const file of changedIn(record)) {
+            const before = file.before === UNKNOWN ? undefined : await copyOf(folder, file)
+            files.push({ path: file.path, before, after: await leftBy(file, later) })
+          }
+          return files
+        },
+      })
+      async function leftBy(file: Kept, later: { folder: string; record: Record }[]): Promise<Contents> {
+        if (file.after === ABSENT) return null
+        if (file.after === undefined || file.after === UNKNOWN) return undefined
+        // A file over the size a diff shows is not read, even to tell whether it still holds what the turn left.
+        if (((await lstat(file.path).catch(() => undefined))?.size ?? 0) > LARGEST) return TOO_LARGE
+        const now = await stateOf(file.path)
+        if (now.mark === file.after) return now.contents
+        for (const { folder, record } of later) {
+          const next = record.files.find((each) => each.path === file.path && each.before === file.after)
+          if (next) return copyOf(folder, next)
+        }
+        return undefined
+      }
 
       host.commands.add({
         name: "undo",

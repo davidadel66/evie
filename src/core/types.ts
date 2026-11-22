@@ -398,6 +398,85 @@ export type SlashCommand = {
   names?(): Promise<readonly { name: string; description: string; kind?: string }[]>
 }
 
+// ---- Changes ------------------------------------------------------------------
+
+// What a plugin knows of the files a session's turns changed, such as undo
+// from the copies it keeps. `turns` gives each turn that changed any, by
+// its number in the session, counted from 1, oldest first, with the full
+// paths of the files it changed, and reads none of them. `files` gives one
+// turn's files, with what each held before the turn and what it left.
+export type ChangeKeeper = {
+  name: string
+  turns(session: string): Promise<KeptTurn[]>
+  files(session: string, turn: number): Promise<KeptFile[]>
+}
+export type KeptTurn = { turn: number; paths: string[] }
+// A file's contents, as a diff is made from them: its bytes; null when
+// there was no file; undefined when they are not known, as when the file
+// has changed since and no copy of what a turn left is kept; or
+// `{ tooLarge: true }` for one larger than a diff shows, which is not read.
+export type Contents = Uint8Array | null | undefined | { tooLarge: true }
+
+// A file a turn changed, by its full path: what it held before the turn,
+// and what the turn left in it.
+export type KeptFile = { path: string; before: Contents; after: Contents }
+
+// A file as a list of changes shows it: its path, from the project's
+// folder when it is inside it; whether it was added, removed or changed;
+// and how many lines were added and removed. One that is `binary`, or
+// `tooLarge` to show, has no diff. One that is binary, too large to
+// compare at all, past the most files one comparison reads (`tooMany`) or
+// the time it may take (`tooSlow`), `filtered`, or whose contents before
+// or after are `unknown`, as a submodule's are, counts no lines.
+export type ChangedFile = {
+  path: string
+  status: "added" | "removed" | "changed"
+  added: number
+  removed: number
+  binary?: true
+  tooLarge?: true
+  unknown?: true
+  // A git submodule moved to another commit: nothing inside it is compared.
+  submodule?: true
+  // Past the most files one comparison reads: listed, and not read.
+  tooMany?: true
+  // Past the time one comparison may take: listed, and not compared.
+  tooSlow?: true
+  // One git turns with a filter, as git-lfs does: its contents in git and
+  // in the folder differ by the filter, which is not run, so it is not compared.
+  filtered?: true
+}
+
+// With its diff, when it has one: its hunks as a unified diff writes them,
+// from the first `@@` line, without the lines that name the files.
+export type FileDiff = ChangedFile & { patch?: string }
+
+// A turn that changed files: its number in the session, counted from 1;
+// the numbers of its `turn_start` event and, once it has ended, its
+// `turn_end` event; when it ended, or while it runs, when it started; and
+// what it changed.
+export type TurnChanges = { turn: number; start: number; end?: number; time: number; files: ChangedFile[] }
+
+// A branch's pull request, as a plugin reads it: its number, title,
+// state, address and base branch, and its checks, each by its name, how it
+// stands, and where its details are. An address is only ever an https link.
+export type PullRequest = {
+  number: number
+  title: string
+  state: "open" | "draft" | "merged" | "closed"
+  url?: string
+  base: string
+  checks: { name: string; state: "passed" | "failed" | "running" | "waiting" | "cancelled" | "skipped" | "neutral"; url?: string }[]
+}
+
+// A plugin that reads the pull request of the branch a folder is on, such
+// as the github plugin. `read` gives null when the branch has none, or the
+// plugin cannot ask, and fails, saying why, when it could not be read.
+export type PullRequestReader = {
+  name: string
+  read(folder: string): Promise<PullRequest | null>
+}
+
 // ---- Hooks --------------------------------------------------------------------
 
 // What every hook is told about the moment it runs in.
@@ -457,6 +536,12 @@ export type Host = {
   profiles: Registry<ModelProfile>
   commands: Registry<SlashCommand>
   jobKinds: Registry<JobKind>
+  // What keeps the files each turn changed, so that a client can show them
+  // as diffs: undo, from the copies it keeps. The first one added is used.
+  changes: Registry<ChangeKeeper>
+  // What reads the pull request of a project's branch: the github plugin,
+  // with the GitHub CLI. The first one added is used.
+  pullRequests: Registry<PullRequestReader>
   // Attaches a function to a hook.
   on<Name extends keyof Hooks>(name: Name, handler: Hooks[Name]): void
 }
@@ -754,6 +839,42 @@ export type Commands = {
   list_subagents: {
     input: { session: string }
     output: { session: string; name: string | null; started: number }[]
+  }
+  // What an open session's turns changed with Evie's file tools: each turn
+  // that changed a file, oldest first; `latest`, the number of its latest
+  // turn, 0 before it has one; and with `whole`, `session`, every file its
+  // turns changed, from before the first change to it to the file as it is
+  // now, which is worked out only when it is asked for. `kept` says
+  // whether a plugin keeps the files turns change at all: without one,
+  // such as undo, nothing is listed.
+  list_changes: {
+    input: { session: string; whole?: boolean }
+    output: { kept: boolean; latest: number; turns: TurnChanges[]; session?: ChangedFile[] }
+  }
+  // The diff of what changed, for an open session: in one of its turns; in
+  // the whole session, as `list_changes` gives it; or in its project's git
+  // repository, the work not yet committed (`uncommitted`), or the branch,
+  // from where it left `base` to the files as they are now, uncommitted
+  // work included. `base` is a branch, the repository's own main branch
+  // when it is not given, and the output names the one used. Files git
+  // does not track and does not ignore count as added. What cannot be
+  // compared, as in a folder that is not in a git repository, or against a
+  // base that cannot be found, is `unavailable`, which says why in words.
+  read_changes: {
+    input:
+      | { session: string; of: "turn"; turn: number }
+      | { session: string; of: "session" | "uncommitted" }
+      | { session: string; of: "branch"; base?: string }
+    output: { files: FileDiff[]; base?: string; unavailable?: string }
+  }
+  // The pull request of the branch a project's folder is on, as the
+  // plugin that reads them gives it, such as the github plugin with the
+  // GitHub CLI. Null when the branch has none, when the plugin cannot ask,
+  // as with no `gh` signed in, or when no plugin reads them. Reading only:
+  // nothing is changed on GitHub.
+  read_pull_request: {
+    input: { project: string }
+    output: PullRequest | null
   }
   // The settings, as a settings window shows them. A key's value is never
   // given, only whether it is set.

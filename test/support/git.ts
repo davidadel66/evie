@@ -20,9 +20,11 @@ export async function git(args: string[], cwd: string): Promise<string> {
 }
 
 // Runs a command with the same settings as `git` above, and returns how it
-// went, as the sync plugin is told.
-export async function ran(command: string[], cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
-  const run = Bun.spawn(command, { cwd, env: GIT_ENV, stdin: "ignore", stdout: "pipe", stderr: "pipe" })
+// went, as the sync plugin is told. `env` adds to them, as the settings
+// the sync plugin gives git do.
+export async function ran(command: string[], cwd: string, env: Record<string, string> = {}): Promise<{ code: number; stdout: string; stderr: string }> {
+  const given = Object.fromEntries(Object.entries(env).filter(([name]) => name.startsWith("GIT_") || name === "SSH_ASKPASS"))
+  const run = Bun.spawn(command, { cwd, env: { ...GIT_ENV, ...given }, stdin: "ignore", stdout: "pipe", stderr: "pipe" })
   const [stdout, stderr, code] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text(), run.exited])
   return { code, stdout, stderr }
 }
