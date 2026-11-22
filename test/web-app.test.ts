@@ -51,7 +51,8 @@ test("every file the web app builds over 1 KB, the diff's worker and what it imp
   const imported = app.metafile.outputs[worker!]!.imports.map((each) => each.path.replace(/^\./, ""))
   const largest = imported.toSorted((a, b) => app.files[b]!.identity.length - app.files[a]!.identity.length)[0]
   expect(app.files[largest!]!.identity.length).toBeGreaterThan(1024)
-  const files = [app.page, ...Object.values(app.files)]
+  // The fonts are compressed already, and are sent as they are: see the fonts' test.
+  const files = [app.page, ...Object.values(app.files)].filter((file) => !file.type.startsWith("font/"))
   for (const file of files) {
     const plain = file.identity
     if (plain.length <= 1024) {
@@ -160,7 +161,8 @@ test("the page is given each of its links once, and the address of the diff's wo
       "./chunk-worker.js": output([]),
     },
   }
-  const links = headLinks(metafile)
+  // The fonts' links, which do not come from the metafile, have a test of their own.
+  const links = headLinks(metafile).filter((tag) => !("rel" in tag) || tag.rel !== "preload")
   expect(links).toEqual([
     { rel: "modulepreload", href: "/chunk-a.js", crossorigin: "" },
     { rel: "modulepreload", href: "/chunk-c.js", crossorigin: "" },
@@ -243,7 +245,7 @@ test("a build that fails names the file and the line, evie serve goes on without
 
 test("a temporary folder left by a server stopped while it built is removed by the next build, and one still being built into is not", async () => {
   await inFolder("evie-left-build-", async (folder) => {
-    await writeFile(join(folder, "index.html"), '<!doctype html><html><body><script type="module" src="./main.ts"></script></body></html>\n')
+    await writeFile(join(folder, "index.html"), '<!doctype html><html><head></head><body><script type="module" src="./main.ts"></script></body></html>\n')
     await writeFile(join(folder, "main.ts"), 'console.log("evie")\n')
     const temporary = join(folder, "temporary")
     // Left two hours ago, as by Ctrl-C while the server started; another
@@ -265,24 +267,122 @@ test("the web app builds into a page whose script and stylesheet are built besid
 
   const page = text(app.page.identity)
   // The empty icon, `data:,`, is carried in the page and loads nothing. Beside
-  // its script and stylesheet, it preloads the chunks its script imports.
+  // its script and stylesheet, it preloads the chunks its script imports and
+  // the fonts English text is drawn in.
   const loads = [...page.matchAll(/(?:src|href)="(?!data:,")([^"]+)"/g)].map((match) => match[1]!)
   const scripts = [...page.matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
   const preloads = [...page.matchAll(/<link\b[^>]*\bmodulepreload\b[^>]*\bhref="([^"]+)"/g)].map((match) => match[1]!)
+  const fonts = [...page.matchAll(/<link\b[^>]*\brel="preload"[^>]*\bhref="([^"]+)"/g)].map((match) => match[1]!)
   const styles = loads.filter((path) => path.endsWith(".css"))
-  expect([scripts.length, styles.length]).toEqual([1, 1])
-  expect(loads.sort()).toEqual([...scripts, ...preloads, ...styles].sort())
+  expect([scripts.length, styles.length, fonts.length]).toEqual([1, 1, 2])
+  expect(loads.sort()).toEqual([...scripts, ...preloads, ...fonts, ...styles].sort())
   expect([...scripts, ...preloads].every((path) => path.endsWith(".js"))).toBe(true)
+  expect(fonts.every((path) => path.startsWith("/fonts/") && path.endsWith(".woff2"))).toBe(true)
   for (const path of loads) expect(Object.keys(app.files)).toContain(path)
 
   const style = text(app.files[styles[0]!]!.identity)
   const script = text(app.files[scripts[0]!]!.identity)
-  // The fonts are evie's own, carried in the stylesheet, not fetched from Google.
-  expect(style).toMatch(/@font-face\{font-family:Geist;[^}]*url\(data:font\/woff2/)
-  expect(style).toMatch(/@font-face\{font-family:Geist Mono;[^}]*url\(data:font\/woff2/)
+  // The fonts are evie's own, served beside the page, not fetched from Google.
+  expect(style).toMatch(/@font-face\{font-family:Geist;[^}]*url\(\/fonts\//)
+  expect(style).toMatch(/@font-face\{font-family:Geist Mono;[^}]*url\(\/fonts\//)
   for (const text of [page, style]) expect(text).not.toMatch(/(?:url\(|src="|href=")https?:/)
   // React's production build, minified: its development build warns about this.
   expect(script).not.toContain("Download the React DevTools")
+})
+
+// The four font files, Geist and Geist Mono for the Latin and the extended
+// Latin alphabets, as their packages have them, each with the address it is
+// served at: its name, with its package's version.
+async function fontFiles(): Promise<{ address: string; latin: boolean; bytes: Uint8Array }[]> {
+  const names = [
+    ["geist", "geist-latin-wght-normal"],
+    ["geist", "geist-latin-ext-wght-normal"],
+    ["geist-mono", "geist-mono-latin-wght-normal"],
+    ["geist-mono", "geist-mono-latin-ext-wght-normal"],
+  ] as const
+  return Promise.all(
+    names.map(async ([font, name]) => {
+      const folder = join(import.meta.dir, "..", "node_modules", "@fontsource-variable", font)
+      const { version } = (await Bun.file(join(folder, "package.json")).json()) as { version: string }
+      return { address: `/fonts/${name}-${version}.woff2`, latin: !name.includes("latin-ext"), bytes: await Bun.file(join(folder, "files", `${name}.woff2`)).bytes() }
+    }),
+  )
+}
+
+test("the stylesheet carries no font of its own: it names each Geist and Geist Mono file by an address with its package's version, and each is served beside the page as its package has it", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const style = text(Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.identity)
+  const fonts = await fontFiles()
+
+  expect(style).not.toContain("data:font")
+  const faces = style.match(/@font-face\{[^}]*\}/g) ?? []
+  expect(faces.map((face) => face.match(/src:url\(([^)]+)\)/)?.[1]).sort()).toEqual(fonts.map((font) => font.address).sort())
+  // Each is drawn in once it has come, and until then the text is drawn in
+  // a fallback font, rather than not at all; each is fetched only for the
+  // letters it has.
+  for (const face of faces) expect(face).toMatch(/font-display:swap;.*;unicode-range:U\+/)
+  for (const font of fonts) {
+    const file = app.files[font.address]
+    expect(file?.type).toBe("font/woff2")
+    expect(file?.identity).toEqual(font.bytes)
+    // A font is compressed already, so it is kept only as it is.
+    expect([file?.br, file?.gzip]).toEqual([undefined, undefined])
+  }
+})
+
+test("the page preloads the two Latin fonts, which English text is drawn in, as a font is fetched, and not the extended Latin ones, which are fetched only for a letter of theirs", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const page = text(app.page.identity)
+  const fonts = await fontFiles()
+
+  const preloads = [...page.matchAll(/<link\b[^>]*\brel="preload"[^>]*>/g)].map((match) => match[0])
+  // `crossorigin`, since the browser fetches every font that way, and uses
+  // what it preloaded only when it was fetched in the same way.
+  const latin = fonts.filter((font) => font.latin).map((font) => `<link rel="preload" href="${font.address}" as="font" type="font/woff2" crossorigin>`)
+  expect(preloads.sort()).toEqual(latin.sort())
+  for (const tag of preloads) expect(page.indexOf(tag)).toBeLessThan(page.indexOf("</head>"))
+})
+
+test("a stylesheet that names a font the server does not serve, as one of an older version of its package, fails the build, naming the file and the line", async () => {
+  await inFolder("evie-old-font-", async (folder) => {
+    await writeFile(join(folder, "index.html"), '<!doctype html><html><head><link rel="stylesheet" href="./fonts.css"></head><body></body></html>\n')
+    await writeFile(join(folder, "fonts.css"), '@font-face {\n  font-family: "Geist";\n  src: url("/fonts/geist-latin-wght-normal-5.0.0.woff2") format("woff2");\n}\n')
+    const temporary = join(folder, "temporary")
+    await mkdir(temporary)
+
+    const built = await builtWebApp(async () => ({ buildWebApp: () => buildWebApp({ page: join(folder, "index.html"), temporary }) }))
+
+    const file = join(await realpath(folder), "fonts.css")
+    expect(built).toEqual({ problem: `The web app could not be built, so it is not served:\n${file}:3: Could not resolve: "/fonts/geist-latin-wght-normal-5.0.0.woff2"` })
+  })
+})
+
+test("for evie serve --dev, Bun's bundler takes the fonts' plugin from bunfig.toml, and puts each font the stylesheet names into it, as it bundles the page", async () => {
+  // As `evie serve --dev` serves the page: Bun's import of it, bundled on
+  // request, by a Bun started in the repository's folder.
+  const serving = Bun.spawn(
+    [
+      process.execPath,
+      "-e",
+      `const { webAppForDevelopment } = await import(${JSON.stringify(join(import.meta.dir, "..", "src", "server", "web-app.ts"))})\n` +
+        "const server = Bun.serve({ port: 0, development: true, routes: { '/': webAppForDevelopment().page } })\n" +
+        "const page = await (await fetch(server.url)).text()\n" +
+        "const styles = await Promise.all([...page.matchAll(/<link[^>]*rel=\"stylesheet\"[^>]*href=\"([^\"]+)\"/g)].map(async (match) => (await fetch(new URL(match[1], server.url))).text()))\n" +
+        "console.log(JSON.stringify(styles))\n" +
+        "server.stop(true)\n",
+    ],
+    { cwd: join(import.meta.dir, ".."), stdout: "pipe", stderr: "pipe" },
+  )
+  const [said, problem, code] = await Promise.all([new Response(serving.stdout).text(), new Response(serving.stderr).text(), serving.exited])
+
+  // Bun says on stderr how long it took to bundle the page, so what it says
+  // is shown only when it fails.
+  expect({ code, problem: code === 0 ? "" : problem }).toEqual({ code: 0, problem: "" })
+  const style = (JSON.parse(said) as string[]).join("\n")
+  for (const family of ["Geist", "Geist Mono"]) expect(style).toMatch(new RegExp(`font-family: "?${family}"?;[^}]*url\\("?data:font/woff2`))
+  expect(style).not.toContain("/fonts/")
 })
 
 test("the stylesheet holds the design system's colours for each of its three themes, and the screens' classes name them", async () => {

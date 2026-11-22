@@ -9,6 +9,7 @@ peer = false
 [serve.static]
 # For working on the web app with `evie serve --dev`, run in this folder: Bun
 # bundles the page on each request, and takes its plugins from here. The
-# server built for everyday use hands the plugin to the bundler itself, so it
-# does not need this file.
-plugins = ["bun-plugin-tailwind"]
+# server built for everyday use hands the plugins to the bundler itself, so it
+# does not need this file. The fonts' plugin finds the fonts the stylesheet
+# names by their addresses.
+plugins = ["./src/server/fonts.ts", "bun-plugin-tailwind"]

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import page from "../../web/index.html"
 import type { Built } from "./build-web-app.ts"
+import { FONTS } from "./fonts.ts"
 import { ENCODINGS, variantsOf, type Variants } from "./variants.ts"
 
 // The web app, for the server to serve: its page, and the files the page
@@ -52,7 +53,8 @@ const TEMPORARY = "evie-web-app-"
 // folder, from which the files are read into memory, and the folder is
 // removed, whether the build worked or not. A build that fails says why,
 // each of the bundler's messages as `file:line: message`. The page is then
-// given, in its head, what the bundler does not write itself (`headLinks`).
+// given, in its head, what the bundler does not write itself (`headLinks`),
+// and its files are given the fonts its stylesheet names (`FONTS`).
 //
 // `page`, to build another page, on its own, without the diff's worker, and
 // `temporary`, the folder the temporary folder is made in, are for tests.
@@ -98,6 +100,8 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
     const builtPage = Object.entries(files).find(([path]) => isPage(path))?.[1]
     const loaded = Object.fromEntries(Object.entries(files).filter(([path]) => !isPage(path)))
     if (!builtPage) throw new Error("Bun's bundler built the web app without its page.")
+    // The fonts the stylesheet names, which the build left out of it.
+    for (const font of FONTS) loaded[font.address] = await variantsOf(await Bun.file(font.file).bytes(), "font/woff2")
     // The page as it is served is finished here, so it is compressed here
     // too: the build's variants are of the page before. It is a few KB,
     // which costs the server about 2.6 MB of the compressor's memory.
@@ -130,7 +134,17 @@ export type HeadMeta = { name: string; content: string }
 // itself, worked out from the build's metafile once, as the server starts.
 // This is the one place the built page is added to.
 export function headLinks(metafile: BuildMetafile): (HeadLink | HeadMeta)[] {
-  return [...chunkPreloads(metafile), ...workerAddress(metafile)]
+  return [...fontPreloads(), ...chunkPreloads(metafile), ...workerAddress(metafile)]
+}
+
+// A `preload` link for each font the page asks for as it starts: see
+// `FONTS`. They come before the chunks' links, so that the browser, which
+// asks a server for only six files at once, does not leave them waiting
+// behind the chunks: they must have come by the time text is drawn. `crossorigin`,
+// since the browser fetches every font that way, and uses what it
+// preloaded only when it was fetched in the same way.
+function fontPreloads(): HeadLink[] {
+  return FONTS.filter((font) => font.preload).map((font) => ({ rel: "preload", href: font.address, as: "font", type: "font/woff2", crossorigin: "" }))
 }
 
 // A `modulepreload` link for each chunk the page's script imports, and each
