@@ -1,8 +1,7 @@
-import { useSyncExternalStore } from "react"
+import { useEffect, useSyncExternalStore } from "react"
 import type { ProjectColour } from "../../src/core/types.ts"
 import { cn } from "./lib/utils.ts"
-import { DEFAULT_ICON, PROJECT_ICONS } from "./project-icons.ts"
-import { keptLook, onLooks, type Look } from "./project-look.ts"
+import { DEFAULT_ICON, FOLDER, ICON_SET, keptLook, onLooks, type Look } from "./project-look.ts"
 
 // The classes of each project colour: the icon in the colour, its tile, an
 // 18% tint of it, and the line on the edge of the selected workspace's tile.
@@ -48,11 +47,18 @@ export function useLook(project: string): Look {
 
 // A project icon by its name, from the set the owner picks from, in the
 // colour of the text around it; one not in the set is drawn as a folder.
+// Any but the folder waits for the set's drawings (see ICON_SET), drawn
+// empty, at its size, until they are here.
 export function IconGlyph({ icon, className }: { icon: string; className?: string }) {
-  const drawn = PROJECT_ICONS.find((each) => each.name === icon) ?? PROJECT_ICONS.find((each) => each.name === DEFAULT_ICON)!
+  const set = useSyncExternalStore(ICON_SET.subscribe, ICON_SET.loaded)
+  const own = icon !== DEFAULT_ICON
+  useEffect(() => {
+    if (own) ICON_SET.preload()
+  }, [own])
+  const drawn = !own ? FOLDER : set === undefined ? undefined : (set.PROJECT_ICONS.find((each) => each.name === icon) ?? FOLDER)
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" {...(className !== undefined && { className })}>
-      {drawn.paths.map((path, at) => (
+      {drawn?.paths.map((path, at) => (
         <path key={at} d={path.d} {...(path.opacity !== undefined && { opacity: path.opacity })} />
       ))}
     </svg>
