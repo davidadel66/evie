@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import type { ListedProject } from "../../src/core/types.ts"
 import { addressOf } from "./address.ts"
 import { Button, buttonVariants } from "./components/ui/button.tsx"
@@ -10,11 +10,11 @@ import { GearSix, List, Plus, SidebarRight } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { NewWorkspace } from "./NewWorkspace.tsx"
 import { ProjectTile } from "./ProjectIcon.tsx"
-import { openSettings } from "./selection.ts"
+import { openSettings, sessionViewLeft } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import type { SessionList, Sessions } from "./sessions.ts"
 import { Later, StorageView } from "./StorageView.tsx"
-import { addressOfWorkspace, NEW_CHAT, needsYou, sessionStatus, sessionsOf, setChatShown, workspaceIn, type SessionStatus, type WorkspacePlace, type WorkspaceTab } from "./workspace.ts"
+import { addressOfWorkspace, NEW_CHAT, needsYou, sessionStatus, sessionsOf, setChatShown, type SessionStatus, type WorkspacePlace, type WorkspaceTab } from "./workspace.ts"
 import { SideChat, useChatShown } from "./WorkspaceChat.tsx"
 
 // The workspace view: a project's home. The strip of every workspace on
@@ -24,22 +24,9 @@ import { SideChat, useChatShown } from "./WorkspaceChat.tsx"
 // stays a column on the left, and the side chat stacks below the
 // workspace, a screen high, the two scrolling together.
 
-// Where the owner is, when it is in a workspace, redrawn as the address
-// changes. Elsewhere, the address is remembered, for the strip's way back.
-export function useWorkspacePlace(): WorkspacePlace | undefined {
-  const hash = useSyncExternalStore(onAddressChange, () => location.hash)
-  const place = useMemo(() => workspaceIn(hash), [hash])
-  if (place === undefined) sessionView = hash === "" ? "#" : hash
-  return place
-}
-function onAddressChange(listener: () => void) {
-  addEventListener("hashchange", listener)
-  return () => removeEventListener("hashchange", listener)
-}
-// The session view's address as the owner last left it for a workspace,
-// or undefined when the page opened in one.
-let sessionView: string | undefined
-
+// The page loads this view later, once it is idle or the owner opens a
+// workspace (see screens.ts); where the owner is, which the page needs from
+// the start, is kept in selection.ts.
 export function WorkspaceView({ place, state, connection, sessions }: { place: WorkspacePlace; state: ConnectionState; connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const project = list.projects.find((each) => each.id === place.workspace)
@@ -47,7 +34,7 @@ export function WorkspaceView({ place, state, connection, sessions }: { place: W
   const chatShown = useChatShown()
   // Back to the session view as it was left, or to the side chat's session there.
   const chat = place.chat !== undefined && place.chat !== NEW_CHAT ? place.chat : undefined
-  const back = sessionView ?? (chat !== undefined ? addressOf({ session: chat }) : "#")
+  const back = sessionViewLeft() ?? (chat !== undefined ? addressOf({ session: chat }) : "#")
   return (
     <div className="flex h-dvh">
       <Strip list={list} place={place} back={back} connection={connection} sessions={sessions} />

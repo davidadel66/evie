@@ -1,11 +1,9 @@
-import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react"
 import type { ChangedFile, GitStatus, Job, ListedProject, PullRequest } from "../../src/core/types.ts"
 import { addressOf } from "./address.ts"
 import { followGitStatus, followOutput, followPullRequest, followSubagents, openFolder, pullRequestOf, stopJob, undo, type FollowedGitStatus, type Following, type Lineage, type PullRequestState } from "./card.ts"
-import { closeFloating, measured, pinCard, resetItems, showItem, toggleCard, useCardShown } from "./card-shown.ts"
+import { closeFloating, pinCard, resetItems, showItem, useCardShown } from "./card-shown.ts"
 import { holdChanges, type Changes as SessionChanges } from "./changes.ts"
-import { Button } from "./components/ui/button.tsx"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -16,7 +14,6 @@ import {
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu.tsx"
 import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover.tsx"
-import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet.tsx"
 import type { Connection } from "./connection.ts"
 import { holdConversation, startedHere, type Conversation } from "./conversation.ts"
 import { openDiff } from "./diff-shown.ts"
@@ -26,7 +23,6 @@ import {
   Plus,
   ArrowCounterClockwise,
   ArrowSquareOut,
-  Article,
   CaretDown,
   Check,
   CheckCircle,
@@ -77,7 +73,6 @@ import { checkLook, checksSummary, checkWord, fixRequest, pullRequestWord } from
 import { select, useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import type { Sessions } from "./sessions.ts"
-import { label as keyLabel, onMac } from "./shortcuts.ts"
 import { Spinner } from "./Spinner.tsx"
 import { addressOfWorkspace } from "./workspace.ts"
 
@@ -89,110 +84,18 @@ import { addressOfWorkspace } from "./workspace.ts"
 // branch, its pull request and checks, the git button and the changes
 // against the base; the lineage, with the parent and the subagents; and
 // background work. At phone width it is a sheet from the right.
-
-// The card's place in the conversation's column, which it measures to know
-// whether a pinned card has the room to sit there. It is given its place
-// by the page: in place, in the column's top right corner; floating, from
-// the same corner over the conversation; at phone width, as a sheet. A
-// card floating closes when another session is picked.
-export function CardPlace({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
-  const shown = useCardShown()
-  const selected = useSelected()
-  const corner = useRef<HTMLDivElement>(null)
-  // A click outside closes it, as does Escape, but a click on the header's
-  // button, which toggles it; the focus goes back to that button, unless
-  // the click outside took it elsewhere.
-  const pointedAway = useRef(false)
-  useEffect(() => closeFloating(), [selected])
-  useLayoutEffect(() => {
-    const column = corner.current?.parentElement
-    if (!column) return
-    const observer = new ResizeObserver(() => measured(column.clientWidth, column.clientHeight))
-    observer.observe(column)
-    measured(column.clientWidth, column.clientHeight)
-    return () => observer.disconnect()
-  }, [])
-  const card = <DetailsCard connection={connection} sessions={sessions} />
-  return (
-    <>
-      <PopoverPrimitive.Root open={shown.place === "popover" && shown.open} onOpenChange={(open) => !open && closeFloating()}>
-        <PopoverPrimitive.Anchor asChild>
-          <div ref={corner} aria-hidden="true" className="pointer-events-none absolute top-details-top right-3 size-0" />
-        </PopoverPrimitive.Anchor>
-        <PopoverPrimitive.Portal>
-          <PopoverPrimitive.Content
-            aria-label="Session details"
-            side="bottom"
-            align="end"
-            sideOffset={0}
-            collisionPadding={12}
-            onOpenAutoFocus={() => (pointedAway.current = false)}
-            onPointerDownOutside={() => (pointedAway.current = true)}
-            onInteractOutside={(event) => event.target instanceof Element && event.target.closest("[data-card-button]") !== null && event.preventDefault()}
-            onCloseAutoFocus={(event) => {
-              event.preventDefault()
-              if (!pointedAway.current) document.querySelector<HTMLElement>("[data-card-button]")?.focus()
-            }}
-            className="z-40 flex max-h-(--radix-popover-content-available-height) w-details-card max-w-[calc(100vw-var(--spacing-6))] flex-col overflow-y-auto rounded-lg border border-text/10 text-detail text-text shadow-float details-glass"
-          >
-            {card}
-          </PopoverPrimitive.Content>
-        </PopoverPrimitive.Portal>
-      </PopoverPrimitive.Root>
-      {(shown.place === "inline" || shown.place === "over") && shown.open && (
-        // Pinned without the room beside the conversation, it stays open over it, with the floating shadow.
-        <aside
-          aria-label="Session details"
-          className={cn(
-            "absolute top-details-top right-3 z-20 flex max-h-details-height w-details-card max-w-[calc(100%-var(--spacing-6))] flex-col overflow-y-auto rounded-lg border border-text/10 text-detail text-text details-glass",
-            shown.place === "over" && "shadow-float",
-          )}
-        >
-          {card}
-        </aside>
-      )}
-      <Sheet open={shown.place === "sheet" && shown.open} onOpenChange={(open) => !open && closeFloating()}>
-        <SheetContent aria-label="Session details" className="overflow-y-auto text-detail">
-          <SheetTitle className="sr-only">Session details</SheetTitle>
-          {card}
-        </SheetContent>
-      </Sheet>
-    </>
-  )
-}
-
-// The button in the conversation's header that opens and closes the card,
-// raised while it is open.
-export function CardButton() {
-  const shown = useCardShown()
-  return (
-    <Button
-      variant="icon"
-      data-card-button=""
-      aria-label="Show or hide session details"
-      aria-pressed={shown.open}
-      title={`Session details (${keyLabel("card", onMac())})`}
-      onClick={toggleCard}
-      className={cn("size-control-sm", shown.open && "bg-surface-raised text-text")}
-    >
-      <Article />
-    </Button>
-  )
-}
-
-// What is under the conversation's header, kept clear of the card while it
-// is pinned open beside it.
-export function CardLane({ children }: { children: ReactNode }) {
-  const shown = useCardShown()
-  return <div className={cn("flex min-h-0 flex-1 flex-col", shown.place === "inline" && shown.open && "pr-details-clear")}>{children}</div>
-}
+//
+// The page loads this file later, once it is idle or the card is first
+// opened (see screens.ts). Its place on the page, the button that opens it
+// and the room kept for it, which the page has from the start, are in
+// CardPlace.tsx.
 
 // What the card holds for what is selected: a session, a draft of one, or
 // nothing. Taller than its room, it drops to a compact density, and below
 // that an essential one, as T3 Code's does, by its height measured at
 // each; lists that scroll as they grow, the lineage and background work,
 // are not counted, so that asking to see more of one hides nothing.
-function DetailsCard({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
+export function DetailsCard({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
   const shown = useCardShown()
@@ -1176,30 +1079,6 @@ function StopButton({ label, title, stop }: { label: string; title: string; stop
       <StopFill className="size-icon-xxs" />
     </button>
   )
-}
-
-// How a job or a subagent stands, in its word, as the design system's
-// Status says it: Working with a spinner, Done with a check, Failed, and
-// the rest in quiet words.
-export function StateWord({ status }: { status: Job["status"] }) {
-  const word = stateWord(status)
-  if (status === "running") {
-    return (
-      <span className="flex shrink-0 items-center gap-1 text-caption text-status-working">
-        <Spinner />
-        {word}
-      </span>
-    )
-  }
-  if (status === "finished") {
-    return (
-      <span className="flex shrink-0 items-center gap-1 text-caption text-status-done">
-        <Check className="size-icon-sm" />
-        {word}
-      </span>
-    )
-  }
-  return <span className={`shrink-0 text-caption ${status === "failed" ? "text-status-failed" : "text-text-muted"}`}>{word}</span>
 }
 
 // Background work, shaped as T3 Code's servers: each job running, which

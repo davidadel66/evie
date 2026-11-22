@@ -1,11 +1,10 @@
-import { useState, type KeyboardEvent, type ReactNode } from "react"
+import { useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react"
 import type { ProjectColour } from "../../src/core/types.ts"
 import { Input } from "./components/ui/input.tsx"
 import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover.tsx"
 import type { Connection } from "./connection.ts"
 import { cn } from "./lib/utils.ts"
-import { searchIcons } from "./project-icons.ts"
-import type { Look } from "./project-look.ts"
+import { ICON_SET, type Look } from "./project-look.ts"
 import { COLOUR, IconGlyph, SWATCH, useLook } from "./ProjectIcon.tsx"
 import { PROJECT_COLOURS } from "./session-list.ts"
 import type { Sessions } from "./sessions.ts"
@@ -16,12 +15,17 @@ import { pickIcon } from "./workspace-actions.ts"
 // that suit a project. A colour applies at once and leaves the picker open,
 // to pick the icon in it; an icon applies and closes it. Every tile on the
 // page shows the pick straight away, and goes back if the server refuses it.
+//
+// The icons' drawings are fetched as it opens, when no project's icon has
+// fetched them yet; until they are here, the grid is there empty, at its
+// height, so that nothing under it moves as they come.
 export function IconPicker({ connection, sessions, project, children }: { connection: Connection; sessions: Sessions; project: { id: string; name: string }; children: ReactNode }) {
   const look = useLook(project.id)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [problem, setProblem] = useState<string>()
-  const shown = searchIcons(query)
+  const set = useSyncExternalStore(ICON_SET.subscribe, ICON_SET.loaded)
+  const shown = set === undefined ? [] : set.searchIcons(query)
 
   // The pick is drawn at once by `pickIcon`; one refused opens the picker
   // again, to say why.
@@ -44,7 +48,10 @@ export function IconPicker({ connection, sessions, project, children }: { connec
       open={open}
       onOpenChange={(now) => {
         setOpen(now)
-        if (now) setQuery("")
+        if (now) {
+          setQuery("")
+          ICON_SET.preload()
+        }
       }}
     >
       <PopoverTrigger asChild>{children}</PopoverTrigger>
@@ -66,7 +73,9 @@ export function IconPicker({ connection, sessions, project, children }: { connec
           ))}
         </div>
         <Input type="search" autoFocus aria-label="Search icons" placeholder="Search icons" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={onKeyDown} />
-        {shown.length === 0 ? (
+        {set === undefined ? (
+          <ul aria-label="Icons" aria-busy="true" className="h-icon-grid" />
+        ) : shown.length === 0 ? (
           <p className="px-2 py-2 text-caption text-text-muted">No matching icon.</p>
         ) : (
           <ul aria-label="Icons" className="grid max-h-icon-grid grid-cols-6 gap-1 overflow-y-auto">
