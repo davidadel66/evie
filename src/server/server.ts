@@ -103,6 +103,10 @@ const COOKIE_LASTS = 400 * 24 * 60 * 60
 // A device sends far fewer commands than this while its line is down, and
 // each reply kept is small.
 const REMEMBERED = 200
+// Commands that only read, whose replies can be large, such as a file read
+// from a workspace's Storage: they are not remembered, so they take none of
+// the places. Carried out again, they change nothing.
+const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage"])
 // How long the code in a sign-in link works: long enough for the browser to
 // open, short enough that a link left in a browser's history is of no use.
 const SIGN_IN_CODE_LASTS = 5 * 60_000
@@ -129,7 +133,7 @@ export function startServer(options: ServerOptions): EvieServer {
       )
     // A command its client will never send again, such as its own catch-up
     // after a drop, whose reply can be large, is not remembered.
-    if (message.once === true) return carryOut()
+    if (message.once === true || NOT_REMEMBERED.has(message.command.type)) return carryOut()
     let sent = replies.get(device)
     if (!sent) replies.set(device, (sent = new Map()))
     const remembered = sent.get(message.id)

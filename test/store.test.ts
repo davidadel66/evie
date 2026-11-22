@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { openStore, type Migration } from "../src/core/store.ts"
+import { MIGRATIONS, openStore, type Migration } from "../src/core/store.ts"
 import { startEvie } from "./support/harness.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
 
@@ -82,4 +82,22 @@ test("a step that fails leaves the database as it was", async () => {
   cleanups.push(async () => after.close())
   expect(version(after)).toBe(1)
   expect(after.query<{ name: string }, []>("PRAGMA table_info(note)").all().map((column) => column.name)).toEqual(["id", "text"])
+})
+
+test("a data folder from before projects had icons keeps its projects, each with no icon or colour until the owner picks them", async () => {
+  const home = await tempFolder("evie-home-")
+  const folder = await realpath(await tempFolder("evie-old-project-"))
+  // The tables as the four steps before this one left them.
+  const old = openStore(join(home, "evie.db"), MIGRATIONS.slice(0, 4))
+  old.run("INSERT INTO project (id, name, folder, created) VALUES ('kept-project', 'old', ?, 1)", [folder])
+  old.close()
+
+  const run = await startEvie([scriptedProvider([]).plugin], { home })
+  cleanups.push(run.stop)
+
+  expect(await run.evie.send({ type: "list_projects" })).toContainEqual({ id: "kept-project", name: "old", folder, git: false })
+  const db = new Database(join(home, "evie.db"))
+  cleanups.push(async () => db.close())
+  expect(db.query<{ name: string }, []>("PRAGMA table_info(project)").all().map((column) => column.name)).toEqual(["id", "name", "folder", "created", "icon", "colour"])
+  expect(db.query("SELECT icon, colour FROM project WHERE id = 'kept-project'").get()).toEqual({ icon: null, colour: null })
 })

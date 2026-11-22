@@ -1,9 +1,14 @@
-import { FolderDuotone } from "./icons.tsx"
-import { projectColour, type ProjectColour } from "./session-list.ts"
+import { useSyncExternalStore } from "react"
+import type { ProjectColour } from "../../src/core/types.ts"
+import { cn } from "./lib/utils.ts"
+import { DEFAULT_ICON, PROJECT_ICONS } from "./project-icons.ts"
+import { keptLook, onLooks, type Look } from "./project-look.ts"
+import { addressOfWorkspace } from "./workspace.ts"
 
-// The classes of each project colour: the icon in the colour, and its
-// tile, an 18% tint of it. Written out whole, so that Tailwind finds each.
-const COLOUR: Record<ProjectColour, string> = {
+// The classes of each project colour: the icon in the colour, its tile, an
+// 18% tint of it, and the ring around the selected workspace's tile.
+// Written out whole, so that Tailwind finds each.
+export const COLOUR: Record<ProjectColour, string> = {
   moss: "text-project-moss",
   mustard: "text-project-mustard",
   maroon: "text-project-maroon",
@@ -19,22 +24,99 @@ const TILE: Record<ProjectColour, string> = {
   slate: "bg-project-slate/18",
   plum: "bg-project-plum/18",
 }
+const RING: Record<ProjectColour, string> = {
+  moss: "ring-project-moss",
+  mustard: "ring-project-mustard",
+  maroon: "ring-project-maroon",
+  rust: "ring-project-rust",
+  slate: "ring-project-slate",
+  plum: "ring-project-plum",
+}
+// A swatch of each colour, as the icon picker offers them.
+export const SWATCH: Record<ProjectColour, string> = {
+  moss: "bg-project-moss",
+  mustard: "bg-project-mustard",
+  maroon: "bg-project-maroon",
+  rust: "bg-project-rust",
+  slate: "bg-project-slate",
+  plum: "bg-project-plum",
+}
 
-// A project's icon as the small tile beside its name in a session row.
-// Until the owner can pick a project's icon and colour, every project has a
-// folder, in a colour chosen from its id. The tile's corners are a quarter
-// of its size, so that it never becomes round.
-export function ProjectIcon({ project }: { project: string }) {
-  const colour = projectColour(project)
+// A project's look, redrawn when the owner picks another, on any tile.
+export function useLook(project: string): Look {
+  return useSyncExternalStore(onLooks, () => keptLook(project))
+}
+
+// A project icon by its name, from the set the owner picks from, in the
+// colour of the text around it; one not in the set is drawn as a folder.
+export function IconGlyph({ icon, className }: { icon: string; className?: string }) {
+  const drawn = PROJECT_ICONS.find((each) => each.name === icon) ?? PROJECT_ICONS.find((each) => each.name === DEFAULT_ICON)!
   return (
-    <span aria-hidden="true" className={`flex size-tile-row shrink-0 items-center justify-center rounded-tile ${TILE[colour]} ${COLOUR[colour]}`}>
-      <FolderDuotone className="size-tile-row-icon" />
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" {...(className !== undefined && { className })}>
+      {drawn.paths.map((path, at) => (
+        <path key={at} d={path.d} {...(path.opacity !== undefined && { opacity: path.opacity })} />
+      ))}
+    </svg>
+  )
+}
+
+// The sizes of a project's tile: beside its name in a session row and the
+// project card, in the workspace header, and in the workspace strip.
+const SIZES = {
+  row: "size-tile-row [&>svg]:size-tile-row-icon",
+  header: "size-tile-header [&>svg]:size-icon-sm",
+  strip: "size-tile-strip [&>svg]:size-icon-md",
+}
+
+// A project's icon on its tile: the icon in the project's colour on an 18%
+// tint of it. The tile's corners are a quarter of its size, so that it
+// never becomes round. In the strip, the selected workspace's is ringed in
+// its colour. `look` draws it as it would be, as the picker shows a choice.
+export function ProjectTile({ project, size, selected = false, look }: { project: string; size: keyof typeof SIZES; selected?: boolean; look?: Look }) {
+  const kept = useLook(project)
+  const { icon, colour } = look ?? kept
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-tile",
+        SIZES[size],
+        TILE[colour],
+        COLOUR[colour],
+        selected && `ring-(length:--indicator-width) ring-offset-(length:--indicator-width) ring-offset-bg-side ${RING[colour]}`,
+      )}
+    >
+      <IconGlyph icon={icon} />
     </span>
   )
+}
+
+// A project's icon as the small tile beside its name in a session row.
+export function ProjectIcon({ project }: { project: string }) {
+  return <ProjectTile project={project} size="row" />
 }
 
 // A project's icon alone, in its colour, as a menu item leads with it: the
 // menu sizes it.
 export function ProjectGlyph({ project }: { project: string }) {
-  return <FolderDuotone className={COLOUR[projectColour(project)]} />
+  const { icon, colour } = useLook(project)
+  return <IconGlyph icon={icon} className={COLOUR[colour]} />
+}
+
+// A project's small tile and its name, as a session row's first line
+// shows them, as a link to the project's workspace. Above the row's own
+// link, it reaches into the row's padding, for the pointer.
+export function ProjectLink({ project, name }: { project: string; name: string | undefined }) {
+  return (
+    <span className="flex min-w-0 flex-1">
+      <a
+        href={addressOfWorkspace({ workspace: project, tab: "sessions" })}
+        title={name === undefined ? "Open the workspace" : `Open the ${name} workspace`}
+        className="relative z-10 -my-3 flex min-w-0 items-center gap-2 py-3 hover:text-text"
+      >
+        <ProjectIcon project={project} />
+        <span className="min-w-0 truncate">{name}</span>
+      </a>
+    </span>
+  )
 }

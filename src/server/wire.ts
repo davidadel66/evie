@@ -9,7 +9,8 @@ import type { Command, EvieEvent } from "../core/types.ts"
 // same id. A command sent again with the same id, after the line dropped, is
 // answered with the first one's reply, not carried out again, while the
 // server keeps running: it remembers, in its memory, the replies to the last
-// 200 commands of each device, however long ago they were sent. `once` says
+// 200 commands of each device, however long ago they were sent, but for
+// those that read a workspace's Storage, which are read again. `once` says
 // the client will never send this command again, as with its own catch-up
 // after a drop, whose reply can be large: its reply is not remembered, and
 // it takes none of the 200 places.
