@@ -9,6 +9,8 @@ import { cn } from "./lib/utils.ts"
 import { closeListSheet, toggleList, useListShown } from "./list-shown.ts"
 import { Notices } from "./Notices.tsx"
 import { Palette } from "./Palette.tsx"
+import { useDiffShortcut } from "./diff-shown.ts"
+import { DiffPlace } from "./DiffPanel.tsx"
 import { CardButton, CardPlace } from "./ProjectCard.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
@@ -31,6 +33,7 @@ import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 // view instead. The command palette and the notices float over either.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
+  useDiffShortcut()
   const [palette, setPalette] = useState(false)
   useFrameShortcuts(() => setPalette((open) => !open))
   const workspace = useWorkspacePlace()
@@ -77,6 +80,8 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
         <OpenSession connection={connection} sessions={sessions} />
       </main>
 
+      <DiffPlace connection={connection} sessions={sessions} />
+      <DiffPlace connection={connection} sessions={sessions} />
       <CardPlace connection={connection} sessions={sessions} />
     </div>
   )

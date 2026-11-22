@@ -1,6 +1,7 @@
 import { mkdir, rm } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import { createTurnChanges, readBranch, readUncommitted } from "./changes.ts"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
@@ -839,6 +840,32 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return projects.subagentsOf(input.session).map(({ id, created, task }) => ({ session: id, name: nameOf(task), started: created }))
   }
 
+  // What an open session's turns changed, from what its plugins keep of
+  // them, such as undo's copies, and with git, what its project's
+  // repository holds that is not committed, or on its branch.
+  const turnChanges = createTurnChanges()
+  async function readChanges(input: Commands["read_changes"]["input"]): Promise<Commands["read_changes"]["output"]> {
+    const { host, project } = open(input.session)
+    const keeper = host.changes.list()[0]
+    switch (input.of) {
+      case "turn":
+        if (!Number.isInteger(input.turn) || input.turn < 1) throw new Error("`turn` is the number of a turn in the session, from 1.")
+        return { files: await turnChanges.turn(keeper, input.session, input.turn, project) }
+      case "session":
+        return { files: await turnChanges.session(keeper, input.session, project) }
+      case "uncommitted":
+        return readUncommitted(project)
+      case "branch":
+        // Without a base, the branch's pull request's, when it has one.
+        return readBranch(project, input.base, async () => {
+          const reader = host.pullRequests.list()[0]
+          return project === null || reader === undefined ? undefined : (await reader.read(project.folder).catch(() => null))?.base
+        })
+      default:
+        throw new Error("`of` is what to compare: \"turn\", \"session\", \"uncommitted\" or \"branch\".")
+    }
+  }
+
   // Each project's branch, and whether its folder is in a git work tree,
   // are read now, from its folder, all at once.
   // Whether each is backed up is read from its settings file too: a file
@@ -1031,6 +1058,19 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await readJobOutput(command)) as Output
         case "list_subagents":
           return listSubagents(command) as Output
+        case "list_changes": {
+          const { host, project } = open(command.session)
+          return (await turnChanges.list(host.changes.list()[0], command.session, log.events(command.session), project, command.whole === true)) as Output
+        }
+        case "read_changes":
+          return (await readChanges(command)) as Output
+        case "read_pull_request": {
+          const project = projects.get(command.project)
+          if (!project) throw new Error(`There is no project with the id "${String(command.project)}".`)
+          // The project's own plugins once a session has opened there, or else the global ones.
+          const reader = (built.get(project.id) ?? built.get(null)!).host.pullRequests.list()[0]
+          return ((await reader?.read(project.folder)) ?? null) as Output
+        }
         case "read_settings":
           return (await editor().read(projects.list())) as Output
         case "change_settings":

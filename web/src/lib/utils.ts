@@ -35,6 +35,7 @@ export const NAMED_SIZES = [
   "call-name",
   "menu",
   "dialog",
+  "diff-tree",
   "settings",
   "settings-height",
   "settings-pages",
