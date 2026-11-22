@@ -29,9 +29,12 @@ function read(items: Item[]): string[] {
     if (item.kind === "steps") return `steps ${item.turn}: ${item.label} [${item.calls.map((call) => call.name).join(", ")}]`
     if (item.kind === "question") return `question ${item.turn}: ${item.text}${item.waiting ? ` (waiting: ${item.choices.join(" / ")})` : ""}`
     if (item.kind === "failed") return `failed ${item.turn}: ${item.error}`
+    if (item.kind === "fold") return `fold ${item.turn}: ${item.label} (${read(item.items).join(" | ")})`
     return `note ${item.turn}: ${item.text}`
   })
 }
+// Every item, with what a fold holds in its place.
+const unfolded = (items: Item[]) => items.flatMap((item) => (item.kind === "fold" ? item.items : [item]))
 
 test("the owner's messages and evie's replies are read in order, with the turn each belongs to", () => {
   const events = session(
@@ -82,21 +85,52 @@ const fixingTheReadme = () =>
     event("turn_end", { reason: "completed" }, 1_048_000),
   )
 
-test("evie's words stay where they were written, each run of tool calls between them is one line of steps, and the turn's first says how long the turn worked, the rest which tools they used", () => {
+test("a turn that ended as completed is folded before its final reply into one line saying how long it worked, holding evie's words and each run of calls in the order they came", () => {
   const items = transcriptOf(view(fixingTheReadme()))
 
   expect(read(items)).toEqual([
     "owner 1: The README gives the wrong command for running the tests. Can you fix it?",
-    "reply 1: I'll read the README first.",
-    "steps 1: Worked for 48s [read, edit]",
-    "reply 1: The README says `npm test`, but package.json runs the tests with Bun.",
-    "steps 1: Used shell and read [shell, read, shell]",
+    "fold 1: Worked for 48s (" +
+      "reply 1: I'll read the README first. | " +
+      "steps 1: Used read and edit [read, edit] | " +
+      "reply 1: The README says `npm test`, but package.json runs the tests with Bun. | " +
+      "steps 1: Used shell and read [shell, read, shell])",
     "reply 1: Fixed: the README now says `bun test`.",
   ])
 })
 
+test("a turn that was stopped, failed, or had a reply cut short is not folded, and its first run says how long it worked", () => {
+  const ending = (how: [StoredEventType, unknown, number | undefined][]) =>
+    session(
+      event("turn_start", {}, 1_000_000),
+      event("user_message", { text: "Check the tests" }, 1_000_000),
+      event("assistant_message", { text: "Running them.", toolCalls: [{ id: "c1", name: "shell", arguments: '{"command":"bun test"}' }] }, 1_001_000),
+      event("tool_result", { callId: "c1", name: "shell", text: "12 pass" }, 1_005_000),
+      ...how,
+    )
+  const lines = (events: StoredEvent[]) => read(transcriptOf(view(events)))
+
+  expect(lines(ending([event("turn_end", { reason: "cancelled" }, 1_010_000)]))).toEqual([
+    "owner 1: Check the tests",
+    "reply 1: Running them.",
+    "steps 1: Worked for 10s [shell]",
+    "note 1: Stopped.",
+  ])
+  expect(lines(ending([event("turn_end", { reason: "error", error: "OpenRouter answered 502." }, 1_010_000)])).slice(2)).toEqual(["steps 1: Worked for 10s [shell]", "failed 1: OpenRouter answered 502."])
+  expect(
+    lines(
+      ending([
+        event("assistant_message", { text: "All 12", interrupted: true }, 1_006_000),
+        event("user_message", { text: "Shorter" }, 1_007_000),
+        event("assistant_message", { text: "They pass." }, 1_008_000),
+        event("turn_end", { reason: "completed" }, 1_010_000),
+      ]),
+    ).slice(2),
+  ).toEqual(["steps 1: Worked for 10s [shell]", "reply 1: All 12", "note 1: The reply was cut short.", "owner 1: Shorter", "reply 1: They pass."])
+})
+
 test("each call in the steps is its name, a short form of its input on one line, its result as stored, and that result in short: its first line, cut short", () => {
-  const calls = transcriptOf(view(fixingTheReadme())).flatMap((item) => (item.kind === "steps" ? item.calls : []))
+  const calls = unfolded(transcriptOf(view(fixingTheReadme()))).flatMap((item) => (item.kind === "steps" ? item.calls : []))
 
   expect(calls).toEqual([
     { id: "c1", name: "read", input: "README.md", result: "\n1: # Recipe box\n2: Run the tests with `npm test`.", short: "1: # Recipe box", running: false },
@@ -107,14 +141,18 @@ test("each call in the steps is its name, a short form of its input on one line,
   ])
 })
 
-test("a line of steps keeps its key when the page before it is read, even one that began on that page", () => {
-  const key = (items: Item[], name: string) => items.findLast((item) => item.kind === "steps" && item.calls.some((call) => call.name === name))?.key
+test("a fold, and a line of steps in it, keep their keys when the page before is read, even when the turn began on that page; without its start, the fold names the tools", () => {
+  const key = (items: Item[], name: string) => unfolded(items).findLast((item) => item.kind === "steps" && item.calls.some((call) => call.name === name))?.key
+  const fold = (items: Item[]) => items.find((item) => item.kind === "fold")
 
   const whole = transcriptOf(view(fixingTheReadme()))
   const fromTheMiddle = transcriptOf(view(fixingTheReadme().slice(8), { earlier: true }))
 
   expect(key(fromTheMiddle, "shell")).toBeDefined()
   expect(key(fromTheMiddle, "shell")).toBe(key(whole, "shell"))
+  expect(fold(fromTheMiddle)?.key).toBeDefined()
+  expect(fold(fromTheMiddle)?.key).toBe(fold(whole)?.key)
+  expect(read(fromTheMiddle)[0]).toBe("fold 0: Used read and shell (steps 0: Used read and shell [read, shell])")
 })
 
 test("while a turn runs, the run being worked on says Working, the call with no result yet is the one running, and the reply being written comes last", () => {
@@ -220,17 +258,16 @@ test("a question shows its choices while it waits; answered, the answer is the o
     "question 1: Should watering record the time as well as the day? (waiting: Just the day / The day and the time)",
   ])
 
+  // Folded once the turn has ended, the question and its answer stay outside, after the fold's line.
   expect(read(transcriptOf(view(askingFirst("Just the day"))))).toEqual([
     "owner 1: Add a way to mark a plant as watered.",
-    "reply 1: One thing to settle first.",
-    "steps 1: Worked for 6s [ask]",
+    "fold 1: Worked for 6s (reply 1: One thing to settle first. | steps 1: Used ask [ask] | steps 1: Used edit [edit])",
     "question 1: Should watering record the time as well as the day?",
     "owner 1: Just the day",
-    "steps 1: Used edit [edit]",
     "reply 1: Done: only the day is kept.",
   ])
 
-  expect(read(transcriptOf(view(askingFirst(null)))).slice(3, 5)).toEqual(["question 1: Should watering record the time as well as the day?", "note 1: Not answered."])
+  expect(read(transcriptOf(view(askingFirst(null)))).slice(2, 4)).toEqual(["question 1: Should watering record the time as well as the day?", "note 1: Not answered."])
 })
 
 // The seeded session that runs the slow tests in the background, and is
@@ -262,7 +299,7 @@ const job = (status: Job["status"], ended?: number): Job => ({
 test("a background job's start and end are said where they happened, as the terminal says them", () => {
   expect(read(transcriptOf(view(inTheBackground(), { jobs: [job("finished", 1_019_000)] })))).toEqual([
     "owner 1: Run the slow tests in the background.",
-    "steps 1: Worked for 6s [shell]",
+    "fold 1: Worked for 6s (steps 1: Used shell [shell])",
     "note 1: Background job 1 started: sh scripts/slow-tests.sh",
     "reply 1: They are running in the background.",
     "note 1: Background job 1 finished after 16s: sh scripts/slow-tests.sh",
@@ -281,7 +318,7 @@ test("a page that begins part way through a turn shows the calls whose results i
   const events = inTheBackground().slice(3)
 
   expect(read(transcriptOf(view(events, { earlier: true, jobs: [job("finished", 1_019_000)] })))).toEqual([
-    "steps 0: Used shell [shell]",
+    "fold 0: Used shell (steps 0: Used shell [shell])",
     "reply 0: They are running in the background.",
     "note 0: Background job 1 finished after 16s: sh scripts/slow-tests.sh",
     "note 1: Note to evie: Background job 1 (sh scripts/slow-tests.sh) has finished.",

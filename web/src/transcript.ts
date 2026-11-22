@@ -36,6 +36,11 @@ export type Item = { key: string; turn: number } & (
   | { kind: "note"; text: string; more?: string }
   | { kind: "question"; text: string; choices: string[]; waiting: boolean }
   | { kind: "failed"; error: string }
+  // A turn that ended as completed, as T3 Code draws one: what came before
+  // its final reply, evie's words and its runs of calls, folded into one
+  // line saying how long the turn worked, or, when its start was not read,
+  // which tools it used. Questions, answers and notes stay outside it.
+  | { kind: "fold"; label: string; items: Item[] }
 )
 
 type Steps = Extract<Item, { kind: "steps" }>
@@ -61,6 +66,11 @@ export function transcriptOf(view: View): Item[] {
   const calls = new Map<string, Call>()
   const questions = new Map<string, { item: Asked; time: number }>()
   const worked = new Map<Steps, number>()
+  // How each turn read ended, by its number: its end's number, whether it
+  // completed, and how long it worked when its start was read; and the
+  // turns with a reply cut short.
+  const ends = new Map<number, { seq: number; completed: boolean; seconds?: number }>()
+  const cut = new Set<number>()
   // When each item happened, to place each job's start and end among them.
   const times = new Map<Item, number>()
   const add = (item: Item, time: number) => {
@@ -89,7 +99,10 @@ export function transcriptOf(view: View): Item[] {
     if (event.type === "user_message") add({ key, turn, kind: "owner", text: event.body.text }, event.time)
     if (event.type === "assistant_message") {
       if (event.body.text !== "") add({ key, turn, kind: "reply", text: event.body.text, streaming: false }, event.time)
-      if (event.body.interrupted && event.body.text !== "") add({ key: `${key}-cut`, turn, kind: "note", text: CUT_SHORT }, event.time)
+      if (event.body.interrupted && event.body.text !== "") {
+        add({ key: `${key}-cut`, turn, kind: "note", text: CUT_SHORT }, event.time)
+        cut.add(turn)
+      }
       for (const call of event.body.toolCalls ?? []) {
         const made: Call = { id: call.id, name: call.name, input: inputOf(call.arguments), running: false }
         calls.set(call.id, made)
@@ -127,7 +140,9 @@ export function transcriptOf(view: View): Item[] {
     if (event.type === "turn_end") {
       ended = true
       // How long it worked is known only when its start was read.
-      if (firstRun && started !== undefined) worked.set(firstRun, secondsBetween(started + waited, event.time))
+      const seconds = started === undefined ? undefined : secondsBetween(started + waited, event.time)
+      if (firstRun && seconds !== undefined) worked.set(firstRun, seconds)
+      ends.set(turn, { seq: event.seq, completed: event.body.reason === "completed", ...(seconds !== undefined && { seconds }) })
       if (event.body.reason === "error") add({ key, turn, kind: "failed", error: event.body.error ?? "The turn failed." }, event.time)
       // A turn stopped as its reply was being written says both at once.
       const last = items.at(-1)
@@ -152,7 +167,7 @@ export function transcriptOf(view: View): Item[] {
     if (item.kind !== "steps" || item.key === "working") continue
     item.key = `s-${item.calls.at(-1)!.id}`
     const seconds = worked.get(item)
-    item.label = item.running ? "Working" : seconds !== undefined ? workedFor(seconds) : `Used ${listed([...new Set(item.calls.map((call) => call.name))])}`
+    item.label = item.running ? "Working" : seconds !== undefined ? workedFor(seconds) : usedTools(item.calls)
   }
 
   // Each job's start, and its end once it has ended, where it happened,
@@ -174,8 +189,48 @@ export function transcriptOf(view: View): Item[] {
     items.splice(place, 0, item)
     times.set(item, line.time)
   }
-  return items
+  return folded(items, ends, cut)
 }
+
+// Each turn that ended as completed, with nothing cut short, folded as T3
+// Code folds one: its runs of calls and evie's words before the final
+// reply go into one line, placed where the first of them was; what else
+// came in between, such as a question, its answer or a note, follows the
+// line in order, then the final reply. The fold is known by the number of
+// the turn's end, which reading the page before does not change.
+function folded(items: Item[], ends: Map<number, { seq: number; completed: boolean; seconds?: number }>, cut: Set<number>): Item[] {
+  const out: Item[] = []
+  for (let from = 0; from < items.length; ) {
+    const turn = items[from]!.turn
+    let to = from
+    while (to < items.length && items[to]!.turn === turn) to += 1
+    const group = items.slice(from, to)
+    from = to
+    const end = ends.get(turn)
+    const final = group.findLastIndex((item) => item.kind === "reply")
+    const before = final === -1 ? group : group.slice(0, final)
+    const inside = before.filter((item) => item.kind === "steps" || item.kind === "reply")
+    if (!end?.completed || cut.has(turn) || inside.length === 0) {
+      out.push(...group)
+      continue
+    }
+    // Inside, each run says which tools it used; the fold says how long.
+    const runs = inside.filter((item): item is Steps => item.kind === "steps")
+    for (const run of runs) run.label = usedTools(run.calls)
+    const label = end.seconds !== undefined ? workedFor(end.seconds) : usedTools(runs.flatMap((run) => run.calls))
+    const first = group.indexOf(inside[0]!)
+    out.push(
+      ...group.slice(0, first),
+      { key: `fold-${end.seq}`, turn, kind: "fold", label, items: inside },
+      ...before.slice(first).filter((item) => !(inside as Item[]).includes(item)),
+      ...(final === -1 ? [] : group.slice(final)),
+    )
+  }
+  return out
+}
+
+// Which tools calls used, each named once: "Used read, edit and shell".
+const usedTools = (calls: Call[]) => `Used ${listed([...new Set(calls.map((call) => call.name))])}`
 
 // Words in a list: "a", "a and b", "a, b and c".
 const listed = (words: string[]) => (words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`)

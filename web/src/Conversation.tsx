@@ -160,6 +160,8 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
       return <Markdown text={item.text} className="text-text" />
     case "steps":
       return <StepsLine calls={item.calls} label={item.label} running={item.running} shown={shown} show={show} />
+    case "fold":
+      return <Fold item={item} shown={shown} show={show} />
     case "note":
       return <Note text={item.text} {...(item.more !== undefined && { more: item.more })} />
     case "question":
@@ -212,6 +214,30 @@ function Working({ words }: { words: string }) {
 // A caret that turns as what it opens opens.
 function Caret({ open }: { open: boolean }) {
   return <CaretRight className={`size-icon-sm shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
+}
+
+// A completed turn's work before its final reply, as one quiet line that
+// opens to it all, in order: evie's words, and each run of calls, which
+// opens as it does outside a fold.
+function Fold({ item, shown, show }: { item: Extract<Item, { kind: "fold" }> } & Shown) {
+  const open = shown.has(item.key)
+  return (
+    <div className="flex flex-col">
+      <button type="button" aria-expanded={open} onClick={() => show([item.key], !open)} className="flex min-h-control items-center gap-2 self-start text-body text-text-muted hover:text-text">
+        {item.label}
+        <Caret open={open} />
+      </button>
+      {open && (
+        <div className="flex flex-col gap-4 border-l border-line pt-2 pb-2 pl-3">
+          {item.items.map((inside) => (
+            <div key={inside.key} className="flex flex-col">
+              <Drawn item={inside} shown={shown} show={show} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // A run of tool calls as one quiet line, which opens to list each call.
