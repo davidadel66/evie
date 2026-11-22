@@ -6,7 +6,8 @@ import { workspaceIn } from "./workspace.ts"
 // The screens the page opens rarely or later, which its first script does
 // not carry (see later.ts): the settings; the command palette; the session
 // details, whose place on the page is CardPlace.tsx; the right panel, with
-// its diff; and the workspace view, with its side chat and its storage.
+// its diff; the workspace view, with its side chat and its storage; and
+// the frames and viewers of the files evie shows (ShownLater.tsx).
 // They are one file, which the page fetches once it is idle, so that each
 // opens at once the first time, or at once when it opens on one of them.
 // One file rather than one each: the bundler gives the code each set of
@@ -19,6 +20,7 @@ export const Palette = lazyFrom(SCREENS, (module) => module.Palette)
 export const DetailsCard = lazyFrom(SCREENS, (module) => module.DetailsCard)
 export const RightPanel = lazyFrom(SCREENS, (module) => module.RightPanel)
 export const WorkspaceView = lazyFrom(SCREENS, (module) => module.WorkspaceView)
+export const ShownFrame = lazyFrom(SCREENS, (module) => module.ShownFrame)
 
 // Fetches the screens at once when the page opens on one, beside its
 // connection to the server, so that it is here by the time the page is

@@ -63,6 +63,10 @@ export type Connection = {
   // HTTP, signed in as the connection is, and gives back the attachment, or
   // fails with why, in words for the owner.
   upload(session: string, file: File): Promise<Attachment>
+  // Asks the server for a file it gives over HTTP, as a Storage file to
+  // draw, by its address, signed in as the connection is. Fails only when
+  // the server cannot be reached; an answer that refuses is given back.
+  fetchFile(address: string, method?: "GET" | "HEAD"): Promise<Response>
 }
 
 export function openConnection(options: ConnectionOptions): Connection {
@@ -161,6 +165,7 @@ export function openConnection(options: ConnectionOptions): Connection {
       await evie?.close()
     },
     upload: (session, file) => uploadFile(options.url, options.token, session, file, options.uploadWithin),
+    fetchFile: (address, method = "GET") => fetch(new URL(address, options.url), { method, headers: options.token === undefined ? {} : { Authorization: `Bearer ${options.token}` } }),
   }
 }
 

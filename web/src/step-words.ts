@@ -14,7 +14,7 @@
 export type CallSaid = { name: string; input: string; fields?: Readonly<Record<string, unknown>> }
 
 // What a call did, which its icon shows.
-export type StepKind = "read" | "edit" | "command" | "search" | "web" | "agent" | "question" | "other"
+export type StepKind = "read" | "edit" | "command" | "search" | "web" | "agent" | "question" | "show" | "other"
 
 // How long what a call worked on may be before it is cut short.
 const LONG = 80
@@ -59,6 +59,11 @@ export function stepWords(call: CallSaid, how: { running?: boolean; folder?: str
     const named = files.length === 0 ? "files" : files.length <= 2 ? listed(files) : `${files[0]} +${files.length - 1} more`
     return `${how.running ? "Editing" : "Edited"} ${named}`
   }
+  if (call.name === "show") {
+    const files = shownFiles(call).map((file) => fromFolder(file, how.folder))
+    const named = files.length === 0 ? "a file" : files.length <= 2 ? listed(files) : `${files[0]} +${files.length - 1} more`
+    return `${how.running ? "Showing" : "Showed"} ${named}`
+  }
   const plain = PLAIN[call.name]
   if (plain !== undefined) return plain[tense]
   const rule = RULES[call.name]
@@ -86,6 +91,7 @@ export function liveWords(call: CallSaid, folder?: string): string {
 export function stepTarget(call: CallSaid, folder?: string): string {
   const rule = RULES[call.name]
   if (call.name === "patch") return patchFiles(call).map((file) => fromFolder(file, folder)).join(", ") || stepWords(call, { running: true })
+  if (call.name === "show") return shownFiles(call).map((file) => fromFolder(file, folder)).join(", ") || stepWords(call, { running: true })
   const what = rule === undefined ? undefined : targetOf(call, rule, folder)
   return what ?? stepWords(call, { running: true, ...(folder !== undefined && { folder }) })
 }
@@ -114,6 +120,8 @@ export function stepKind(name: string): StepKind {
       return "agent"
     case "ask":
       return "question"
+    case "show":
+      return "show"
     default:
       return "other"
   }
@@ -135,17 +143,19 @@ const FAILED = [
   /^The owner said no to this/,
   /^Not done: this needs the owner's say-so/,
   /This is a bug in evie or a plugin, not a problem with the input\.\s*$/,
+  /^Not shown: /,
 ]
 
 // The kinds a run's calls are counted by, each with how a count of it is
 // said and how much it matters: running commands, changing files and
 // asking subagents most, a tool evie does not know least, as T3 Code ranks
 // them.
-type Counted = "read" | "change" | "command" | "code" | "web" | "page" | "subagent" | "other"
+type Counted = "read" | "change" | "command" | "code" | "web" | "page" | "subagent" | "shown" | "other"
 const COUNTED: Record<Counted, { words: (count: number) => string; rank: number }> = {
   command: { words: (count) => `Ran ${count} ${count === 1 ? "command" : "commands"}`, rank: 0 },
   change: { words: (count) => `Changed ${count} ${count === 1 ? "file" : "files"}`, rank: 0 },
   subagent: { words: (count) => `Asked ${count} ${count === 1 ? "subagent" : "subagents"}`, rank: 0 },
+  shown: { words: (count) => `Showed ${count} ${count === 1 ? "file" : "files"}`, rank: 0 },
   read: { words: (count) => `Read ${count} ${count === 1 ? "file" : "files"}`, rank: 1 },
   code: { words: (count) => `Searched code ${count} ${count === 1 ? "time" : "times"}`, rank: 1 },
   web: { words: (count) => `Searched the web ${count} ${count === 1 ? "time" : "times"}`, rank: 1 },
@@ -164,6 +174,7 @@ const COUNTED_AS: Record<string, Counted> = {
   web_search: "web",
   web_fetch: "page",
   subagent: "subagent",
+  show: "shown",
 }
 
 // A run of calls in one sentence: the call itself, for a run of one;
@@ -177,6 +188,7 @@ export function runWords(calls: readonly CallSaid[]): string {
     const counted = COUNTED_AS[call.name] ?? "other"
     const kind = kinds.get(counted) ?? { calls: 0, files: new Set<string>(), unnamed: 0 }
     kind.calls += 1
+    if (counted === "shown") kind.unnamed += Math.max(1, shownFiles(call).length)
     if (counted === "change") {
       const files = call.name === "patch" ? patchFiles(call) : [targetOf(call, RULES[call.name]!)].flatMap((file) => (file === undefined ? [] : [file]))
       if (files.length === 0) kind.unnamed += 1
@@ -184,7 +196,7 @@ export function runWords(calls: readonly CallSaid[]): string {
     }
     kinds.set(counted, kind)
   }
-  const all = [...kinds].map(([counted, kind], at) => ({ counted, at, calls: kind.calls, count: counted === "change" ? kind.files.size + kind.unnamed : kind.calls }))
+  const all = [...kinds].map(([counted, kind], at) => ({ counted, at, calls: kind.calls, count: counted === "change" ? kind.files.size + kind.unnamed : counted === "shown" ? kind.unnamed : kind.calls }))
   const chosen = [...all].sort((a, b) => COUNTED[a.counted].rank - COUNTED[b.counted].rank || a.at - b.at).slice(0, 2).sort((a, b) => a.at - b.at)
   const rest = calls.length - chosen.reduce((sum, each) => sum + each.calls, 0)
   const clauses = [...chosen.map((each) => COUNTED[each.counted].words(each.count)), ...(rest > 0 ? [`Performed ${rest} other ${rest === 1 ? "action" : "actions"}`] : [])]
@@ -208,6 +220,13 @@ function patchFiles(call: CallSaid): string[] {
   const whole = typeof call.fields?.patchText === "string" ? call.fields.patchText : undefined
   if (whole !== undefined) return [...whole.matchAll(/^[ \t]*\*\*\* (?:Add File|Update File|Delete File):[ \t]*(.+?)[ \t]*$/gm)].map((found) => found[1]!)
   return [...call.input.matchAll(/\*\*\* (?:Add|Update|Delete) File: (\S+)/g)].map((found) => found[1]!)
+}
+
+// The files a show call names, from its input whole, or from it in short.
+function shownFiles(call: CallSaid): string[] {
+  const whole = call.fields?.paths
+  if (Array.isArray(whole)) return whole.filter((path): path is string => typeof path === "string" && path.trim() !== "").map(oneLine)
+  return call.input.trim() === "" ? [] : [oneLine(call.input)]
 }
 
 // A command's program, as T3 Code names a running one: its first word,
