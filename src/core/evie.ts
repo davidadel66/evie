@@ -6,7 +6,7 @@ import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
-import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
+import { triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { readGitStatus } from "./git-status.ts"
 import { openOnThisComputer } from "./open-folder.ts"
@@ -1039,7 +1039,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const model = scope.model ?? options.model
     if (!model) throw new Error(`No model is set. ${options.settingsFile ? `Add "model" to ${options.settingsFile}` : "Set a model"}, with a name from https://openrouter.ai/models.`)
     const limit = options.compaction?.limits?.[model] ?? (await limitWithin(scope.provider, model, AbortSignal.timeout(LOOK_UP_WITHIN)))
-    return { model, size: 0, compactsAt: triggerSize(limit, options.compaction?.ceiling ?? DEFAULT_CEILING) }
+    return { model, size: 0, compactsAt: triggerSize(limit, options.compaction?.ceiling) }
   }
 
   // What a model can read, as its provider looks it up, or nothing when it

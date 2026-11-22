@@ -11,9 +11,9 @@ import type { Message, StoredEvent } from "./types.ts"
 // choosing where to cut, and the wording. The loop makes the summary request.
 
 // A conversation is compacted when it reaches this share of what the model
-// can read, or the ceiling, whichever comes first. The ceiling matters for
-// models that can read a million tokens: long before they are full, every
-// request is large and costly, and the model uses the conversation less well.
+// can read (or an explicit `compactAt` ceiling set by the owner, whichever
+// comes first). When a model's limit is not known and no ceiling is set,
+// the fallback decides.
 export const SHARE_OF_LIMIT = 0.8
 export const DEFAULT_CEILING = 200_000
 // How much of the most recent conversation is kept word for word, as a share
@@ -24,10 +24,14 @@ const MOST_FILES = 50
 
 export type CompactionEvent = Extract<StoredEvent, { type: "compaction" }>
 
-// The size at which a conversation is compacted. With a model whose limit is
-// not known, the ceiling decides alone.
-export function triggerSize(modelLimit: number | undefined, ceiling: number): number {
-  return modelLimit === undefined ? ceiling : Math.min(Math.floor(modelLimit * SHARE_OF_LIMIT), ceiling)
+// The size at which a conversation is compacted. When the model's limit is
+// known, 80% of it is used, capped by the owner's `ceiling` if one was set.
+// When the limit is not known, the owner's `ceiling` (or `DEFAULT_CEILING`)
+// decides alone.
+export function triggerSize(modelLimit: number | undefined, ceiling?: number): number {
+  if (modelLimit === undefined) return ceiling ?? DEFAULT_CEILING
+  const fromModel = Math.floor(modelLimit * SHARE_OF_LIMIT)
+  return ceiling === undefined ? fromModel : Math.min(fromModel, ceiling)
 }
 
 // Never less than one token, so the newest message is always kept.

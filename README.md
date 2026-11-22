@@ -1278,9 +1278,9 @@ lower it if you see that.
 **Long conversations.** Every request carries the whole conversation, so a
 long session would eventually be more than the model can read. Before that
 happens, Evie replaces the older part with a summary and carries on. Nothing
-is deleted from its record. It does this at 80% of what the model can read,
-or at 200,000 tokens, whichever comes first, and `/compact` does it on
-request. Two settings change that:
+is deleted from its record. It does this at 80% of what the model can read
+(or 200,000 tokens when the model's limit is not known), and `/compact` does
+it on request. Two settings change that:
 
 ```json
 {
@@ -1289,9 +1289,10 @@ request. Two settings change that:
 }
 ```
 
-`compactAt` is the size at which a conversation is compacted. Evie looks up
-what each model can read from OpenRouter; `contextLimits` is for a model it
-gets wrong or does not know.
+`compactAt` sets an optional ceiling so a conversation compacts no later
+than that size, even on models with a larger window. Evie looks up what each
+model can read from OpenRouter; `contextLimits` is for a model it gets wrong
+or does not know.
 
 **The server.** Where `evie serve` listens, and which web pages besides its
 own may connect to it, such as a web client being developed on another
