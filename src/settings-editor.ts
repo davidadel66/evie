@@ -1,18 +1,16 @@
-import { readFile, rename, writeFile } from "node:fs/promises"
+import { readFile, stat } from "node:fs/promises"
+import { join } from "node:path"
 import { dataFolder } from "./core/evie.ts"
 import type { Project, SettingsEditor, SettingsView } from "./core/types.ts"
 import { ownInstructionsFile } from "./plugins/instructions.ts"
 import { loadServerSettings, loadSettingsFiles, type SettingsFiles } from "./settings-files.ts"
-import { keysInFile, keyValueProblem, loadSettings, writeKey, type Settings } from "./settings.ts"
+import { keysInFile, keyValueProblem, loadSettings, replaceFile, writeKey, type Settings } from "./settings.ts"
 
 // What the settings window reads and changes, for the server: the keys in
 // the data folder's `.env`, the plugins `evie.json` lists, the owner's
 // instruction file and which projects are trusted. Most of them are read
 // only when the server starts, so a change to one applies once it starts
 // again, and until then it is said to be pending.
-
-// The keys Evie's own plugins read from the `.env` file.
-const KEYS = ["OPENROUTER_API_KEY", "BRAVE_API_KEY"]
 
 export type SettingsEditorOptions = {
   // The settings the server started with: its environment and the `.env`
@@ -34,18 +32,27 @@ export function settingsEditor(options: SettingsEditorOptions): SettingsEditor {
   // settings have that its environment does not.
   const fromFile = Object.keys(options.env).filter((name) => options.environment[name] === undefined)
 
-  // Evie's own keys, then any other the file sets now or set at the start.
+  // The keys the plugins loaded at the start say they read, then any other
+  // the file sets now or set at the start.
+  const declared = new Map(options.files.plugins.flatMap((plugin) => plugin.keys ?? []).map((key) => [key.name, key.about]))
   async function keys(): Promise<SettingsView["keys"]> {
     const inFile = await keysInFile(home)
-    const names = [...new Set([...KEYS, ...Object.keys(inFile), ...fromFile])]
+    const names = [...new Set([...declared.keys(), ...Object.keys(inFile), ...fromFile])]
     return names.map((name) => ({
       name,
-      set: Boolean(inFile[name]),
+      ...(declared.has(name) && { about: declared.get(name)! }),
+      inFile: Boolean(inFile[name]),
       environment: options.environment[name] !== undefined,
       // What the server would start with now is not what it started with.
       pending: (options.environment[name] ?? inFile[name]) !== options.env[name],
     }))
   }
+  // Whether only the owner's user can read the file, or there is none yet.
+  const keysPrivate = () =>
+    stat(join(home, ".env")).then(
+      (file) => (file.mode & 0o077) === 0,
+      () => true,
+    )
 
   async function setKey(name: string, value: string | null) {
     const known = (await keys()).map((key) => key.name)
@@ -72,14 +79,12 @@ export function settingsEditor(options: SettingsEditorOptions): SettingsEditor {
   }
 
   // The owner's instruction file is read before every request, so a change
-  // to it applies from the next one. It is replaced in one step, so it is
-  // never read half written.
+  // to it applies from the next one.
   const instructionsFile = ownInstructionsFile(home)
   const instructions = () => readFile(instructionsFile, "utf8").catch((cause: { code?: string }) => (cause.code === "ENOENT" ? "" : Promise.reject(cause)))
   async function saveInstructions(text: unknown) {
     if (typeof text !== "string") throw new Error("`instructions` is the text of the instruction file.")
-    await writeFile(`${instructionsFile}.new`, text)
-    await rename(`${instructionsFile}.new`, instructionsFile)
+    await replaceFile(instructionsFile, text)
   }
 
   // Whether each project was trusted before the window first changed that,
@@ -106,9 +111,10 @@ export function settingsEditor(options: SettingsEditorOptions): SettingsEditor {
 
   return {
     async read(projects) {
-      const [listedKeys, listedPlugins, text, listedProjects] = await Promise.all([keys(), plugins(), instructions(), projectsOf(projects)])
+      const [listedKeys, secret, listedPlugins, text, listedProjects] = await Promise.all([keys(), keysPrivate(), plugins(), instructions(), projectsOf(projects)])
       return {
         keys: listedKeys,
+        keysPrivate: secret,
         plugins: listedPlugins,
         instructions: text,
         projects: listedProjects,

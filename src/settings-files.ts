@@ -1,4 +1,4 @@
-import { readFile, rename, writeFile } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -19,7 +19,7 @@ import { subagents } from "./plugins/subagents.ts"
 import { sync } from "./plugins/sync.ts"
 import { undo } from "./plugins/undo.ts"
 import { web } from "./plugins/web.ts"
-import type { Settings } from "./settings.ts"
+import { replaceFile, type Settings } from "./settings.ts"
 
 // Evie's settings files: which model to use, how long a reply may be, and
 // which plugins to load. Keys are not kept here; they come from the
@@ -327,8 +327,7 @@ function update(file: string, change: (settings: SettingsFile) => void | Promise
     const settings: SettingsFile = (await readSettingsFile(file)) ?? {}
     await change(settings)
     checkSettings(settings, file)
-    await writeFile(`${file}.new`, `${JSON.stringify(settings, null, 2)}\n`)
-    await rename(`${file}.new`, file)
+    await replaceFile(file, `${JSON.stringify(settings, null, 2)}\n`)
   })
   saving = saved.catch(() => {})
   return saved

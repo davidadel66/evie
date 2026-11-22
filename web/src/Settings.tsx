@@ -233,12 +233,6 @@ function useSending(change: Change) {
 
 // ---- Keys ----------------------------------------------------------------------------------------
 
-// What each of evie's own keys is for.
-const KEY_ABOUT: Record<string, string> = {
-  OPENROUTER_API_KEY: "Reaches the models, through OpenRouter.",
-  BRAVE_API_KEY: "Lets evie search the web, through Brave Search. Without it, evie can still read a page it is given the address of.",
-}
-
 function Keys({ view, change }: { view: SettingsView; change: Change }) {
   return (
     <>
@@ -269,7 +263,7 @@ function KeyRow({ item, change }: { item: SettingsView["keys"][number]; change: 
       <Row
         label={item.name}
         title={<code className="font-mono text-code">{item.name}</code>}
-        about={KEY_ABOUT[item.name]}
+        {...(item.about !== undefined && { about: item.about })}
         standing={keyState(item)}
         control={
           <form onSubmit={save} className="flex w-full flex-wrap items-center gap-2 @min-[440px]:w-auto">
@@ -278,7 +272,7 @@ function KeyRow({ item, change }: { item: SettingsView["keys"][number]; change: 
               autoComplete="off"
               spellCheck={false}
               aria-label={`New value for ${item.name}`}
-              placeholder={item.set ? "A new value" : "Its value"}
+              placeholder={item.inFile ? "A new value" : "Its value"}
               value={value}
               onChange={(event) => setValue(event.target.value)}
               className="min-w-0 flex-1 font-mono text-code @min-[440px]:w-settings-field @min-[440px]:flex-none"
@@ -288,7 +282,7 @@ function KeyRow({ item, change }: { item: SettingsView["keys"][number]; change: 
                 Save
               </Button>
             )}
-            {item.set && value === "" && (
+            {item.inFile && value === "" && (
               <Button variant="quiet" disabled={busy} onClick={() => void sendKey({ key: item.name, value: null })}>
                 Clear
               </Button>

@@ -3,6 +3,8 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { delimiter, dirname, isAbsolute, join, resolve } from "node:path"
 import { dataFolder, loadSettings, type Settings } from "../index.ts"
+import { OPENROUTER_KEYS } from "../plugins/openrouter.ts"
+import { WEB_KEYS } from "../plugins/web.ts"
 import { fail, print, STOP_FOR_GOOD } from "./common.ts"
 
 // `evie service`: the login service, which runs `evie serve` when the owner
@@ -19,12 +21,12 @@ const LOAD_PAUSE_MS = 500
 // has stopped by then.
 const START_CHECK_MS = 2000
 
-// The settings `evie serve` reads from its environment. The service starts
-// it with none of the terminal's, so each has to be in the data folder's
+// The settings `evie serve` reads from its environment: the keys the
+// built-in plugins say they read, and two of its own. The service starts it
+// with none of the terminal's, so each has to be in the data folder's
 // `.env`, or, for some, in its `evie.json`, for the service to have it.
 const SERVER_SETTINGS: { name: string; inSettingsFile?: string }[] = [
-  { name: "OPENROUTER_API_KEY" },
-  { name: "BRAVE_API_KEY" },
+  ...[...OPENROUTER_KEYS, ...WEB_KEYS].map(({ name }) => ({ name })),
   { name: "EVIE_MODEL", inSettingsFile: "model" },
   { name: "EVIE_MAX_TOKENS", inSettingsFile: "maxTokens" },
 ]

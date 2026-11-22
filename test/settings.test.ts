@@ -56,7 +56,7 @@ test("a key set in the file's text replaces its line where it is, drops a second
   const text = ["# my keys", "export OPENROUTER_API_KEY=old-one", "", "BRAVE_API_KEY='brave'", "OPENROUTER_API_KEY=older-still", "not a setting"].join("\n")
 
   expect(withKey(text, "OPENROUTER_API_KEY", "made-up-new")).toBe(
-    ["# my keys", "OPENROUTER_API_KEY=made-up-new", "", "BRAVE_API_KEY='brave'", "not a setting"].join("\n"),
+    ["# my keys", "export OPENROUTER_API_KEY=made-up-new", "", "BRAVE_API_KEY='brave'", "not a setting"].join("\n"),
   )
 })
 
@@ -64,4 +64,11 @@ test("a key not in the file yet goes on a line of its own at the end, and one cl
   expect(withKey("BRAVE_API_KEY=brave", "OPENROUTER_API_KEY", "made-up")).toBe("BRAVE_API_KEY=brave\nOPENROUTER_API_KEY=made-up\n")
   expect(withKey("", "OPENROUTER_API_KEY", "made-up")).toBe("OPENROUTER_API_KEY=made-up\n")
   expect(withKey("# keys\nOPENROUTER_API_KEY=made-up\nBRAVE_API_KEY=brave\n", "OPENROUTER_API_KEY", null)).toBe("# keys\nBRAVE_API_KEY=brave\n")
+})
+
+test("a key's line keeps its export, and a file written with CRLF line endings keeps them", () => {
+  expect(withKey("export OPENROUTER_API_KEY=old-one\n", "OPENROUTER_API_KEY", "made-up-new")).toBe("export OPENROUTER_API_KEY=made-up-new\n")
+  expect(withKey("# keys\r\nBRAVE_API_KEY=brave\r\n", "OPENROUTER_API_KEY", "made-up")).toBe("# keys\r\nBRAVE_API_KEY=brave\r\nOPENROUTER_API_KEY=made-up\r\n")
+  expect(withKey("OPENROUTER_API_KEY=old\r\nBRAVE_API_KEY=brave\r\n", "OPENROUTER_API_KEY", "made-up")).toBe("OPENROUTER_API_KEY=made-up\r\nBRAVE_API_KEY=brave\r\n")
+  expect(withKey("OPENROUTER_API_KEY=old\r\nBRAVE_API_KEY=brave\r\n", "OPENROUTER_API_KEY", null)).toBe("BRAVE_API_KEY=brave\r\n")
 })

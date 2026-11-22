@@ -50,7 +50,7 @@ async function serveIn(home: string, port = 0, restart = () => {}) {
 
 async function dataFolder() {
   const home = await tempFolder("evie-home-")
-  await writeFile(join(home, "evie.json"), JSON.stringify({ plugins: ["ask"] }))
+  await writeFile(join(home, "evie.json"), JSON.stringify({ plugins: ["ask", "openrouter", "web"] }))
   return home
 }
 
@@ -75,10 +75,10 @@ test("once connected, the settings are read from the server, and a change made g
   const settings = follow(server.url, made.secret)
 
   const read = await until(settings, (state) => state.view !== undefined)
-  expect(read.view!.keys[0]).toEqual({ name: "OPENROUTER_API_KEY", set: false, environment: false, pending: false })
+  expect(read.view!.keys[0]).toMatchObject({ name: "OPENROUTER_API_KEY", inFile: false, environment: false, pending: false })
 
   expect(await settings.change({ key: "OPENROUTER_API_KEY", value: "made-up-openrouter" })).toBeUndefined()
-  expect(settings.state().view!.keys[0]).toEqual({ name: "OPENROUTER_API_KEY", set: true, environment: false, pending: true })
+  expect(settings.state().view!.keys[0]).toMatchObject({ name: "OPENROUTER_API_KEY", inFile: true, environment: false, pending: true })
   expect(settings.state().view!.restart).toBe(true)
 })
 
@@ -116,10 +116,14 @@ test("a restart is under way from when it is asked for until the server started 
 })
 
 test("each setting says in words how it stands, and when a change to it waits for the server to start again", () => {
-  const key = { name: "OPENROUTER_API_KEY", set: true, environment: false, pending: false }
+  const key = { name: "OPENROUTER_API_KEY", inFile: true, environment: false, pending: false }
   expect(keyState(key)).toEqual({ word: "Set" })
-  expect(keyState({ ...key, set: false, pending: true })).toEqual({ word: "Not set", note: "Applies once evie's server starts again." })
-  expect(keyState({ ...key, environment: true })).toEqual({ word: "Set", note: "The environment evie's server runs in sets it too, and wins over this." })
+  expect(keyState({ ...key, inFile: false, pending: true })).toEqual({ word: "Not set", note: "Applies once evie's server starts again." })
+  expect(keyState({ ...key, inFile: false, environment: true })).toEqual({ word: "Set by the environment evie's server runs in", note: "That wins over a value saved here." })
+  expect(keyState({ ...key, environment: true })).toEqual({
+    word: "Set",
+    note: "The environment evie's server runs in sets it too, and wins over this. Clearing it here does not unset it there.",
+  })
 
   expect(pluginState({ name: "web", listed: true, loaded: true })).toEqual({ word: "Loaded" })
   expect(pluginState({ name: "web", listed: true, loaded: false })).toEqual({ word: "Not loaded yet", note: "Loads once evie's server starts again." })

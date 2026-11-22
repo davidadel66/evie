@@ -1,4 +1,4 @@
-import { readFile, rename, rm, writeFile } from "node:fs/promises"
+import { open, readFile, realpath, rename, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { dataFolder } from "./core/evie.ts"
 
@@ -41,20 +41,22 @@ function defined(environment: Settings): Record<string, string> {
 }
 
 // The file's text with a key set to a value, or with null taken out. The
-// key's first line is replaced where it is and any later one taken out, so
-// that the file holds it once; a key not there yet goes on a line of its
-// own at the end. Every other line is kept as it is.
+// key's first line is replaced where it is, keeping an `export` it has, and
+// any later one taken out, so that the file holds it once; a key not there
+// yet goes on a line of its own at the end. Every other line is kept as it
+// is, and so are the file's line endings.
 export function withKey(text: string, name: string, value: string | null): string {
-  const lines = text.split("\n")
+  const end = text.includes("\r\n") ? "\r\n" : "\n"
+  const lines = text.split(end)
   const at = lines.findIndex((line) => LINE.exec(line)?.[1] === name)
   if (at === -1) {
     if (value === null) return text
-    return `${text === "" || text.endsWith("\n") ? text : `${text}\n`}${name}=${value}\n`
+    return `${text === "" || text.endsWith(end) ? text : `${text}${end}`}${name}=${value}${end}`
   }
   const kept = lines.filter((line, index) => index <= at || LINE.exec(line)?.[1] !== name)
   if (value === null) kept.splice(at, 1)
-  else kept[at] = `${name}=${value}`
-  return kept.join("\n")
+  else kept[at] = `${/^\s*export\s/.test(kept[at]!) ? "export " : ""}${name}=${value}`
+  return kept.join(end)
 }
 
 // The keys the data folder's `.env` file sets, as it is now.
@@ -72,18 +74,42 @@ export function keyValueProblem(name: string, value: string): string | undefined
   return undefined
 }
 
-// Sets a key in the data folder's `.env` file, or with null takes it out.
-// The file is replaced in one step, so it is never left half written, by
-// one only the owner's user can read. Changes are made one at a time.
+// Sets a key in the data folder's `.env` file, or with null takes it out,
+// in a file only the owner's user can read. Changes are made one at a time.
 let writing: Promise<void> = Promise.resolve()
 export function writeKey(home: string, name: string, value: string | null): Promise<void> {
   const written = writing.then(async () => {
     const file = join(home, ".env")
     const text = await readFile(file, "utf8").catch((cause: { code?: string }) => (cause.code === "ENOENT" ? "" : Promise.reject(cause)))
-    await rm(`${file}.new`, { force: true })
-    await writeFile(`${file}.new`, withKey(text, name, value), { mode: 0o600 })
-    await rename(`${file}.new`, file)
+    await replaceFile(file, withKey(text, name, value), 0o600)
   })
   writing = written.catch(() => {})
   return written
+}
+
+// Replaces a settings file's text in one step, so that it is never read
+// half written: the text is written beside the file, flushed to the disk,
+// and moved into its place. A file that is a link to one elsewhere is
+// replaced where it is, so the link stays. Replacements of one file are
+// made one at a time. `mode` is the new file's, as 0o600 for one only the
+// owner's user can read.
+const replacing = new Map<string, Promise<void>>()
+export function replaceFile(file: string, text: string, mode?: number): Promise<void> {
+  const replaced = (replacing.get(file) ?? Promise.resolve()).then(async () => {
+    const target = await realpath(file).catch(() => file)
+    const beside = `${target}.new`
+    await rm(beside, { force: true })
+    const handle = await open(beside, "w", mode)
+    try {
+      await handle.writeFile(text)
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+    await rename(beside, target)
+  })
+  const settled = replaced.catch(() => {})
+  replacing.set(file, settled)
+  void settled.then(() => replacing.get(file) === settled && replacing.delete(file))
+  return replaced
 }

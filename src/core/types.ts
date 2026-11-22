@@ -433,7 +433,13 @@ export type Plugin = {
   // server is once it listens, with every project and a signal that fires
   // when Evie stops. Only the global plugins are started.
   start?(context: { projects: readonly Project[]; signal: AbortSignal }): void
+  // The keys the plugin reads from the data folder's `.env` file, each with
+  // what it is for in one line, for the owner to set in a settings window.
+  keys?: readonly Key[]
 }
+
+// A key a plugin reads, such as OPENROUTER_API_KEY, and what it is for.
+export type Key = { name: string; about: string }
 
 // What one project has of its own, on top of the global settings.
 export type ProjectSettings = {
@@ -467,10 +473,12 @@ export type ListedProject = Project & { branch?: string }
 // ---- Settings -------------------------------------------------------------------
 
 // The settings the owner changes from a client's settings window, as they
-// stand in the data folder's files. `keys` are the keys Evie reads from the
-// `.env` file, each with only whether the file sets it, never its value;
-// `environment` says the server's own environment sets it too, which wins
-// over the file. `plugins` are the ones `evie.json` lists, each by the name
+// stand in the data folder's files. `keys` are the keys the loaded plugins
+// read from the `.env` file, with what each is for, then any other the file
+// sets; each says only whether the file sets it (`inFile`) and whether the
+// server's own environment does (`environment`), which wins over the file,
+// never its value. `keysPrivate` says only the owner's user can read the
+// file, or there is none yet. `plugins` are the ones `evie.json` lists, each by the name
 // or path it is given by, with whether it is `listed` there now and whether
 // it was `loaded` when the server started. `instructions` is the text of
 // the owner's instruction file, empty when there is none. `projects` are
@@ -479,7 +487,8 @@ export type ListedProject = Project & { branch?: string }
 // server starts again; `restart` says that some change waits for that.
 // `started` is when this server started, which names it to `restart_server`.
 export type SettingsView = {
-  keys: { name: string; set: boolean; environment: boolean; pending: boolean }[]
+  keys: { name: string; about?: string; inFile: boolean; environment: boolean; pending: boolean }[]
+  keysPrivate: boolean
   plugins: { name: string; listed: boolean; loaded: boolean }[]
   instructions: string
   projects: (Project & { trusted: boolean; pending: boolean })[]

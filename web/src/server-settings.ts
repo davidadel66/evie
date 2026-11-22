@@ -117,9 +117,13 @@ export type Standing = { word: string; note?: string }
 
 const ONCE_STARTED = "once evie's server starts again."
 
+// A key set where the server runs wins over the file, now and once it starts again.
 export function keyState(key: SettingsView["keys"][number]): Standing {
-  const word = key.set ? "Set" : "Not set"
-  if (key.environment) return { word, note: "The environment evie's server runs in sets it too, and wins over this." }
+  if (key.environment && !key.inFile) return { word: "Set by the environment evie's server runs in", note: "That wins over a value saved here." }
+  if (key.environment) {
+    return { word: "Set", note: "The environment evie's server runs in sets it too, and wins over this. Clearing it here does not unset it there." }
+  }
+  const word = key.inFile ? "Set" : "Not set"
   return key.pending ? { word, note: `Applies ${ONCE_STARTED}` } : { word }
 }
 

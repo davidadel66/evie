@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises"
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { loadSettings, loadSettingsFiles } from "../src/index.ts"
@@ -30,7 +30,7 @@ async function start(files: { env?: string; settings?: unknown; instructions?: s
   const home = await tempFolder("evie-home-")
   if (files.env !== undefined) await writeFile(join(home, ".env"), files.env)
   if (files.instructions !== undefined) await writeFile(join(home, "AGENTS.md"), files.instructions)
-  await writeFile(join(home, "evie.json"), JSON.stringify(files.settings ?? { plugins: ["ask"] }))
+  await writeFile(join(home, "evie.json"), JSON.stringify(files.settings ?? { plugins: ["ask", "openrouter", "web"] }))
   const real = { EVIE_HOME: home, ...environment }
   const env = await loadSettings(real)
   const settings = await loadSettingsFiles({ env })
@@ -54,37 +54,70 @@ async function startingSays(settings: unknown) {
 
 // ---- Keys --------------------------------------------------------------------------------------
 
+// What the built-in plugins say their keys are for.
+const OPENROUTER = { name: "OPENROUTER_API_KEY", about: "Reaches the models, through OpenRouter." }
+const BRAVE = { name: "BRAVE_API_KEY", about: "Lets evie search the web, through Brave Search. Without it, evie can still read a page it is given the address of." }
+
 test("a key set from the window is written to the data folder's .env, and only whether it is set comes back", async () => {
   const { run, home } = await start({ env: "BRAVE_API_KEY=made-up-brave\n" })
 
   const before = await run.evie.send({ type: "read_settings" })
   expect(before.keys).toEqual([
-    { name: "OPENROUTER_API_KEY", set: false, environment: false, pending: false },
-    { name: "BRAVE_API_KEY", set: true, environment: false, pending: false },
+    { ...OPENROUTER, inFile: false, environment: false, pending: false },
+    { ...BRAVE, inFile: true, environment: false, pending: false },
   ])
+  // Written as most files are, others on this computer can read it.
+  expect(before.keysPrivate).toBe(false)
   expect(before.restart).toBe(false)
 
   const after = await run.evie.send({ type: "change_settings", key: "OPENROUTER_API_KEY", value: "made-up-openrouter" })
   expect(await readFile(join(home, ".env"), "utf8")).toBe("BRAVE_API_KEY=made-up-brave\nOPENROUTER_API_KEY=made-up-openrouter\n")
   // Only the owner's user can read the file it is in.
   expect((await stat(join(home, ".env"))).mode & 0o777).toBe(0o600)
+  expect(after.keysPrivate).toBe(true)
   // The server started without it, so it is used once the server starts again.
-  expect(after.keys[0]).toEqual({ name: "OPENROUTER_API_KEY", set: true, environment: false, pending: true })
+  expect(after.keys[0]).toEqual({ ...OPENROUTER, inFile: true, environment: false, pending: true })
   expect(after.restart).toBe(true)
   for (const view of [before, after, await run.evie.send({ type: "read_settings" })]) expect(JSON.stringify(view)).not.toContain("made-up")
 })
 
-test("a key cleared is taken out of the file, and one the server's own environment sets is said to win over it", async () => {
-  const { run, home } = await start({ env: "# keys\nOPENROUTER_API_KEY=made-up-openrouter\nBRAVE_API_KEY=made-up-brave\n" }, { BRAVE_API_KEY: "made-up-from-the-environment" })
+test("a key cleared is taken out of the file, and one the server's own environment sets says so, whether or not the file does", async () => {
+  const { run, home } = await start(
+    { env: "# keys\nOPENROUTER_API_KEY=made-up-openrouter\nBRAVE_API_KEY=made-up-brave\n" },
+    { BRAVE_API_KEY: "made-up-from-the-environment" },
+  )
 
   const cleared = await run.evie.send({ type: "change_settings", key: "OPENROUTER_API_KEY", value: null })
-
   expect(await readFile(join(home, ".env"), "utf8")).toBe("# keys\nBRAVE_API_KEY=made-up-brave\n")
   expect(cleared.keys).toEqual([
-    { name: "OPENROUTER_API_KEY", set: false, environment: false, pending: true },
-    { name: "BRAVE_API_KEY", set: true, environment: true, pending: false },
+    { ...OPENROUTER, inFile: false, environment: false, pending: true },
+    { ...BRAVE, inFile: true, environment: true, pending: false },
   ])
-  expect(JSON.stringify(cleared)).not.toContain("made-up")
+
+  // Cleared from the file, it is still set where the server runs.
+  const both = await run.evie.send({ type: "change_settings", key: "BRAVE_API_KEY", value: null })
+  expect(both.keys[1]).toEqual({ ...BRAVE, inFile: false, environment: true, pending: false })
+  expect(JSON.stringify(both)).not.toContain("made-up")
+})
+
+test("the keys are the ones the loaded plugins say they read, each with what it is for, then any other the .env file sets", async () => {
+  const service = join(await tempFolder("evie-plugins-"), "service.ts")
+  await writeFile(service, 'export default { name: "service", keys: [{ name: "MADE_UP_SERVICE_KEY", about: "Reaches a made-up service." }], setup() {} }')
+  const { run } = await start({ settings: { plugins: ["ask", service] }, env: "SOMETHING_ELSE=made-up\n" })
+
+  const { keys } = await run.evie.send({ type: "read_settings" })
+  expect(keys).toEqual([
+    { name: "MADE_UP_SERVICE_KEY", about: "Reaches a made-up service.", inFile: false, environment: false, pending: false },
+    { name: "SOMETHING_ELSE", inFile: true, environment: false, pending: false },
+  ])
+  const refused = await run.evie.send({ type: "change_settings", key: "OPENROUTER_API_KEY", value: "made-up" }).catch((cause: Error) => cause.message)
+  expect(refused).toBe('"OPENROUTER_API_KEY" is not one of the keys evie reads. They are: MADE_UP_SERVICE_KEY, SOMETHING_ELSE.')
+})
+
+test("with no .env file yet, the keys are private: the first one set makes the file, which only the owner's user can read", async () => {
+  const { run } = await start()
+
+  expect((await run.evie.send({ type: "read_settings" })).keysPrivate).toBe(true)
 })
 
 test("a key's value that would not be read back as it was given is refused, saying why, and nothing is written", async () => {
@@ -107,6 +140,18 @@ test("a key's value that would not be read back as it was given is refused, sayi
   // Spaces around a value pasted in are not part of it, as when the file is read.
   await run.evie.send({ type: "change_settings", key: "OPENROUTER_API_KEY", value: "  made-up-pasted \n" })
   expect(await readFile(join(home, ".env"), "utf8")).toBe("OPENROUTER_API_KEY=made-up-pasted\n")
+})
+
+test("a key set where .env is a link to a file elsewhere is written to that file, and the link is kept", async () => {
+  const { run, home } = await start()
+  const elsewhere = join(await tempFolder("evie-dotfiles-"), "evie.env")
+  await writeFile(elsewhere, "BRAVE_API_KEY=made-up-brave\n")
+  await symlink(elsewhere, join(home, ".env"))
+
+  await run.evie.send({ type: "change_settings", key: "OPENROUTER_API_KEY", value: "made-up-openrouter" })
+
+  expect((await lstat(join(home, ".env"))).isSymbolicLink()).toBe(true)
+  expect(await readFile(elsewhere, "utf8")).toBe("BRAVE_API_KEY=made-up-brave\nOPENROUTER_API_KEY=made-up-openrouter\n")
 })
 
 // ---- Plugins ---------------------------------------------------------------------------------
@@ -183,6 +228,21 @@ test("the owner's instruction file is shown, and saved as it is written, with no
   expect(await readFile(join(home, "AGENTS.md"), "utf8")).toBe("Answer briefly.\nAsk before pushing.\n")
   expect(saved.instructions).toBe("Answer briefly.\nAsk before pushing.\n")
   expect(saved.restart).toBe(false)
+})
+
+test("an instruction file that is a link to a file elsewhere is saved to that file, and two saves at once are made one after the other", async () => {
+  const { run, home } = await start()
+  const elsewhere = join(await tempFolder("evie-dotfiles-"), "my-agents.md")
+  await writeFile(elsewhere, "Answer briefly.\n")
+  await symlink(elsewhere, join(home, "AGENTS.md"))
+
+  await Promise.all([
+    run.evie.send({ type: "change_settings", instructions: "First." }),
+    run.evie.send({ type: "change_settings", instructions: "Second." }),
+  ])
+
+  expect((await lstat(join(home, "AGENTS.md"))).isSymbolicLink()).toBe(true)
+  expect(await readFile(elsewhere, "utf8")).toBe("Second.")
 })
 
 test("with no instruction file there is nothing to show, and saving makes one", async () => {
