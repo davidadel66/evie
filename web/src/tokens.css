@@ -60,9 +60,9 @@
   --project-plum: #8e6888;
   --chart-bar: var(--accent);
   --chart-current: var(--text);
-  /* Lines a diff adds and removes. The board names no colours for them, so
-     they are its own muted green and red, as Done and Failed have them,
-     each beside the + or − that also says it. */
+  /* Lines a diff adds and removes, and nothing else: the wash under each,
+     and the + or − at its start. The board names no colours for them, so
+     they are its own muted green and red, the values Done and Failed have. */
   --diff-added: var(--status-done);
   --diff-removed: var(--status-failed);
 }

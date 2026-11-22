@@ -169,10 +169,10 @@
   --color-chart-current: var(--chart-current);
   --color-diff-added: var(--diff-added);
   --color-diff-removed: var(--diff-removed);
-  /* A line added or removed lies on a faint wash of its colour, as a
-     project's icon lies on a tint of its own. */
-  --color-diff-added-line: color-mix(in srgb, var(--diff-added) 14%, transparent);
-  --color-diff-removed-line: color-mix(in srgb, var(--diff-removed) 14%, transparent);
+  /* A line added or removed lies on the board's 18% tint of its colour,
+     as a project's icon does on its own. */
+  --color-diff-added-line: color-mix(in srgb, var(--diff-added) 18%, transparent);
+  --color-diff-removed-line: color-mix(in srgb, var(--diff-removed) 18%, transparent);
 }
 
 @layer base {

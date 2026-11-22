@@ -421,8 +421,9 @@ export type KeptFile = { path: string; before: Uint8Array | null | undefined; af
 // folder when it is inside it; whether it was added, removed or changed;
 // and how many lines were added and removed. One that is `binary`, or
 // `tooLarge` to show, has no diff. One that is binary, too large to
-// compare at all, or whose contents before or after are `unknown`, counts
-// no lines.
+// compare at all, past the most files one comparison reads (`tooMany`),
+// or whose contents before or after are `unknown`, as a submodule's are,
+// counts no lines.
 export type ChangedFile = {
   path: string
   status: "added" | "removed" | "changed"

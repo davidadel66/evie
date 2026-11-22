@@ -40,6 +40,25 @@ export function hunksOf(patch: string): Hunk[] {
   return hunks
 }
 
+// The lines of a file that are drawn: the first `most` of them, so that a
+// file of tens of thousands of lines cannot stall the page; whether the
+// rest were left out; and the widest line number among those drawn, for
+// the room the numbers take.
+export function drawnLines(hunks: readonly Hunk[], most: number): { hunks: Hunk[]; cut: boolean; widest: number } {
+  const drawn: Hunk[] = []
+  let left = most
+  let widest = 0
+  for (const hunk of hunks) {
+    if (left === 0) return { hunks: drawn, cut: true, widest }
+    const lines = hunk.lines.length <= left ? hunk.lines : hunk.lines.slice(0, left)
+    left -= lines.length
+    for (const line of lines) widest = Math.max(widest, line.old ?? 0, line.new ?? 0)
+    drawn.push(lines === hunk.lines ? hunk : { ...hunk, lines })
+    if (lines !== hunk.lines) return { hunks: drawn, cut: true, widest }
+  }
+  return { hunks: drawn, cut: false, widest }
+}
+
 // A hunk's lines side by side: before on the left, after on the right. An
 // unchanged line is on both sides. Lines removed face the lines added in
 // their place, one to one, and what is left over faces nothing.
@@ -63,29 +82,50 @@ export function sideBySide(lines: readonly Line[]): { left?: Line; right?: Line 
   return rows
 }
 
+// Whether a file's lines added and removed were counted: not for one that
+// is binary, whose contents are not known, past the most files read, or
+// too large to compare at all. One left out of a diff for its size after
+// its lines were counted has them.
+export const hasCounts = (file: ChangedFile) => !file.binary && !file.unknown && !file.tooMany && !(file.tooLarge && file.added + file.removed === 0)
+
 // What a turn's changed-files line says: how many files, and how many
-// lines were added and removed across them.
+// lines were added and removed across those whose lines were counted.
 export function changedFilesLine(files: readonly ChangedFile[]): { files: string; added: number; removed: number } {
-  const sum = (count: (file: ChangedFile) => number) => files.reduce((total, file) => total + count(file), 0)
+  const counted = files.filter(hasCounts)
+  const sum = (count: (file: ChangedFile) => number) => counted.reduce((total, file) => total + count(file), 0)
   return { files: `${files.length} changed ${files.length === 1 ? "file" : "files"}`, added: sum((file) => file.added), removed: sum((file) => file.removed) }
+}
+
+// What the project card says of the session's changes: the line, or that
+// there are none yet, or that they are not kept here; nothing until they
+// have been listed.
+export function sessionLine(listed: { kept: boolean; session?: readonly ChangedFile[] } | undefined): string | ReturnType<typeof changedFilesLine> {
+  if (listed === undefined || listed.session === undefined) return ""
+  if (!listed.kept) return "evie keeps no copies of the files it changes here, so its changes are not shown."
+  return listed.session.length === 0 ? "No changes in this session yet" : changedFilesLine(listed.session)
 }
 
 // What the panel can compare, by a key of its own: the session's latest
 // turn, one of its turns, the whole session, and in a git repository, the
 // work not yet committed and the branch against its base.
 export type Scope = "latest" | `turn:${number}` | "session" | "uncommitted" | "branch"
-export type ScopeChoice = { key: Scope; label: string; time?: string }
+// `disabled` says why one cannot be picked.
+export type ScopeChoice = { key: Scope; label: string; time?: string; disabled?: string }
 
 // The choices, as the panel's menu lists them: the latest turn first, then
 // each turn that changed files, newest first, with when it ended; the
-// session; and with git, the uncommitted work and the branch.
-export function scopeChoices(given: { turns: readonly TurnChanges[]; git: boolean; now: number; timeZone?: string }): ScopeChoice[] {
+// session; and in a project, the uncommitted work and the branch. `git` is
+// whether the project's folder is in git, undefined when that is not known,
+// when the server is asked and says, and null with no project. Known not
+// to be, they are listed, but cannot be picked, and say why.
+export function scopeChoices(given: { turns: readonly TurnChanges[]; git: boolean | undefined | null; now: number; timeZone?: string }): ScopeChoice[] {
   const turns = [...given.turns].reverse().map((turn): ScopeChoice => ({ key: `turn:${turn.turn}`, label: `Turn ${turn.turn}`, time: shortTime(turn.time, given.now, given.timeZone) }))
+  const why = given.git === false ? { disabled: "Not a git repository" } : {}
   return [
     { key: "latest", label: "Latest turn" },
     ...turns,
     { key: "session", label: "This session" },
-    ...(given.git ? [{ key: "uncommitted", label: "Uncommitted" } as const, { key: "branch", label: "This branch" } as const] : []),
+    ...(given.git === null ? [] : [{ key: "uncommitted", label: "Uncommitted", ...why } as const, { key: "branch", label: "This branch", ...why } as const]),
   ]
 }
 

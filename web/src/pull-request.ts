@@ -31,3 +31,10 @@ export function checksSummary(checks: readonly Check[]): string {
   const passed = count("passed")
   return passed === checks.length ? "All checks passed" : of(passed, "passing")
 }
+
+// How a check is drawn, as the design system's Status draws a state:
+// passed as Done, with a check; failed as Failed, with its mark; running
+// as Working, with the spinner; the rest in quiet words.
+export function checkLook(state: Check["state"]): "done" | "failed" | "working" | "quiet" {
+  return state === "passed" ? "done" : state === "failed" ? "failed" : state === "running" ? "working" : "quiet"
+}

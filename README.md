@@ -406,14 +406,20 @@ The project card, on the right, is the selected session's:
   number and state in words (Open, Draft, Merged or Closed); its title,
   which opens it on GitHub; and its checks summed up, such as "2 of 5
   failing", which open a menu of each check, with how it stands and a link
-  to its details. The server reads it with the GitHub CLI, `gh pr view`,
-  in the project's folder, as `gh` is signed in on the server's computer,
-  when the card opens and each minute while the page is shown. With no
-  `gh`, or one not signed in, nothing is shown. The page only reads it:
-  nothing on GitHub is changed from it.
+  to its details, each check's state drawn as a Status: a check and Passed,
+  a cross and Failed, the spinner and Running. The `github` plugin reads it
+  with the GitHub CLI, `gh pr view`, in the project's folder, as `gh` is
+  signed in on the server's computer, when the card opens and each minute
+  while the page is shown. With no `gh`, one not signed in, or the plugin
+  not loaded, nothing is shown. `gh` is given only the server's path, home,
+  settings and temporary folders, language and its own `GH_` and `GITHUB_`
+  settings: no git settings and no keys. Only https links are kept, for
+  the pull request and its checks. The page only reads it: nothing on
+  GitHub is changed from it.
 - **Changes:** how many files the session has changed, with the lines
   added and removed, from before its first change to now, and Open diff,
-  which opens the diff on the whole session. Commit, Push and Pull request each send evie a request in
+  which opens the diff on the whole session. Without the undo plugin, it
+  says that changes are not kept here. Commit, Push and Pull request each send evie a request in
   words, as a message in the session, such as "Commit the changes in this
   session with a short message."; evie carries it out as it would if you had
   typed it, and asks before pushing, as it always does. A request sent
@@ -449,7 +455,9 @@ What evie changed is shown as diffs, as T3 Code shows them:
 - **In the conversation,** a completed turn that changed files with evie's
   file tools ends with one quiet line, such as "3 changed files +12 −4",
   which opens to list them, and Open diff, which opens the diff on that
-  turn. A file in the list opens it at that file.
+  turn. A file in the list opens it at that file. The counts leave out a
+  file whose lines were not counted, such as a binary one, which shows
+  none.
 - **The diff** opens from that line, from the project card's Open diff, or
   with Cmd+D (Ctrl+D elsewhere), which also closes it. At desktop width it
   is a column beside the conversation, in the project card's place, and
@@ -461,16 +469,25 @@ What evie changed is shown as diffs, as T3 Code shows them:
   each file from before the session first changed it to now; and in a git
   project, Uncommitted, every change since the last commit, and This
   branch, the branch against the branch it is merged into: its pull
-  request's base when it has one, and otherwise the repository's main
-  branch. Both include files git does not track and does not ignore.
+  request's base when it has one, which the server asks the `github`
+  plugin for, and otherwise the repository's main branch. Both include
+  files git does not track and does not ignore, and count changes as git
+  does: a file taken out of git is removed, though it is still in the
+  folder, and a submodule moved to another commit says "Submodule
+  changed". In a folder known not to be in git, both are listed but cannot
+  be picked, and say why; when that is not known, the server is asked, and
+  what it says is shown in words.
 - **Each file** has a header that stays at the top while the file scrolls
   past, and folds the file when pressed. A file that is binary, or too
   large to show, says so instead of a diff, and so does one whose contents
   are no longer known, as when it has been changed outside evie since the
-  turn and no copy of what the turn left is kept. A diff is drawn stacked
-  or side by side, which the browser remembers; at phone width it is
-  stacked. Lines added and removed lie on a faint wash of green and red,
-  with a + or − beside each.
+  turn and no copy of what the turn left is kept. One comparison reads at
+  most 300 files, a few at a time; the files past them are listed, as not
+  compared. A file is drawn up to 3,000 lines, after which it says it is
+  too large to show in full. A diff is drawn stacked or side by side, which
+  the browser remembers; at phone width it is stacked. Lines added and
+  removed lie on a wash of green and red, with a + or − at the start of
+  each; nothing else in the panel is coloured.
 - **The file tree** beside the diff lists its files by folder; a file in
   it scrolls to that file. It can be hidden, which the browser remembers.
 - **The changes by turn come from undo's copies,** which it keeps of each
@@ -479,7 +496,19 @@ What evie changed is shown as diffs, as T3 Code shows them:
   A turn undone is gone from the list, with its copies. Without the undo
   plugin, the turns' changes are not kept, and the diff says so. What a
   shell command changed is not in a turn's changes; in a git project it is
-  in Uncommitted.
+  in Uncommitted. A turn that has ended changes no more, so what it changed
+  is worked out once and kept; the whole session's files are worked out
+  only when the project card asks for them, and lines are compared on a
+  thread of the server's own, so that a long comparison holds nothing up.
+- **A repository is read without running anything it names.** A
+  repository's own settings can name commands for git to run, and one just
+  cloned is not to be trusted with that, so the server asks git with each
+  of them turned off: the file system monitor (`core.fsmonitor`), hooks
+  (`core.hooksPath`, and no index written, which would run one), the
+  pager, an external diff (`diff.external`, and `--no-ext-diff` for a diff
+  driver's command), text conversion (`--no-textconv`), and every filter
+  its settings name, whose clean, smudge and process commands are each set
+  to none. The files themselves are read by the server, not through git.
 
 ### Keeping the server running
 
@@ -1192,10 +1221,11 @@ The strokes, `line-width` (1px) and `indicator-width` (2px, for the focus
 ring), are the board's, kept beside the colours in `tokens.css`.
 
 The board names no colours for a diff's lines. `diff-added` and
-`diff-removed`, in `tokens.css`, are its own muted green and red, the ones
-Done and Failed use, and a line added or removed lies on a 14% wash of
-its colour, as a project's icon lies on a tint of its own. Each line keeps
-its + or −, so the colour is never all that says it.
+`diff-removed`, in `tokens.css`, are its own muted green and red, the values
+Done and Failed have, and each has one job: a line added or removed lies
+on the board's 18% tint of its colour, as a project's icon lies on its own,
+and the + or − at the line's start is in it. Counts such as "+3 −2" are
+quiet words, in `text-muted`, wherever they are shown.
 
 `bunfig.toml` also stops `bun install` from installing peer dependencies.
 The Tailwind plugin names Bun itself as one, and a second Bun in

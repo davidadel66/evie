@@ -7,7 +7,7 @@ import { Counts } from "./ChangedFiles.tsx"
 import { holdChanges, type Changes as SessionChanges } from "./changes.ts"
 import { Button } from "./components/ui/button.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
-import { changedFilesLine } from "./diff.ts"
+import { sessionLine } from "./diff.ts"
 import { openDiff, useDiffShown } from "./diff-shown.ts"
 import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet.tsx"
 import type { Connection } from "./connection.ts"
@@ -16,7 +16,7 @@ import { FolderPath } from "./FolderPath.tsx"
 import { ArrowSquareOut, CaretDown, CaretRight, Check, SidebarRight, X } from "./icons.tsx"
 import { backgroundJobs, branchWords, gitWhyNot, stateWord, subagentsOf, undoWhyNot, type CardFacts, type Subagent } from "./project-card.ts"
 import { ProjectIcon } from "./ProjectIcon.tsx"
-import { checksSummary, checkWord, pullRequestWord } from "./pull-request.ts"
+import { checkLook, checksSummary, checkWord, pullRequestWord } from "./pull-request.ts"
 import { select, useSelected } from "./selection.ts"
 import type { Sessions } from "./sessions.ts"
 import { Spinner } from "./Spinner.tsx"
@@ -354,15 +354,12 @@ function Changes({
 // whole session.
 function SessionChanged({ changes }: { changes: SessionChanges }) {
   const { listed } = useSyncExternalStore(changes.subscribe, changes.state)
-  const files = listed?.session ?? []
-  const line = changedFilesLine(files)
+  const line = sessionLine(listed)
   const keys = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘D" : "Ctrl+D"
   return (
-    <div className="mb-3 flex h-row-height items-center gap-2 border-t border-b border-line pl-3">
-      <span className="min-w-0 flex-1 truncate text-body text-text-muted">
-        {listed === undefined ? "" : files.length === 0 ? "No changes in this session yet" : line.files}
-      </span>
-      {files.length > 0 && <Counts added={line.added} removed={line.removed} />}
+    <div className="mb-3 flex min-h-row-height items-center gap-2 border-t border-b border-line pl-3">
+      <span className="min-w-0 flex-1 py-2 text-body text-text-muted">{typeof line === "string" ? line : line.files}</span>
+      {typeof line !== "string" && <Counts added={line.added} removed={line.removed} />}
       <Button variant="quiet" title={`Open the diff (${keys})`} onClick={() => openDiff({ scope: "session" })}>
         Open diff
       </Button>
@@ -394,11 +391,16 @@ function PullRequestRow({ connection, project }: { connection: Connection; proje
         </dd>
       </div>
       <dd>
-        <a href={pull.url} target="_blank" rel="noreferrer" title={`Open pull request #${pull.number} on GitHub`} className="flex min-h-control items-start gap-2 py-2 text-body font-medium text-text hover:underline">
-          <span className="line-clamp-2 min-w-0 flex-1 break-words">{pull.title}</span>
-          <ArrowSquareOut className="mt-1 size-icon-sm shrink-0 text-text-muted" />
-          <span className="sr-only">(opens GitHub)</span>
-        </a>
+        {/* The server gives only an https link, and none for any other. */}
+        {pull.url !== undefined ? (
+          <a href={pull.url} target="_blank" rel="noreferrer" title={`Open pull request #${pull.number} on GitHub`} className="flex min-h-control items-start gap-2 py-2 text-body font-medium text-text hover:underline">
+            <span className="line-clamp-2 min-w-0 flex-1 break-words">{pull.title}</span>
+            <ArrowSquareOut className="mt-1 size-icon-sm shrink-0 text-text-muted" />
+            <span className="sr-only">(opens GitHub)</span>
+          </a>
+        ) : (
+          <p className="line-clamp-2 py-2 text-body font-medium break-words text-text">{pull.title}</p>
+        )}
       </dd>
       {pull.checks.length > 0 && (
         <dd>
@@ -427,7 +429,7 @@ function Checks({ checks }: { checks: PullRequest["checks"] }) {
           const row = (
             <>
               <span className="min-w-0 flex-1 truncate">{check.name}</span>
-              <span className={`shrink-0 text-caption ${check.state === "failed" ? "text-status-failed" : check.state === "passed" ? "text-status-done" : "text-text-muted"}`}>{checkWord(check.state)}</span>
+              <CheckState state={check.state} />
               {check.url !== undefined && <ArrowSquareOut className="text-text-muted" />}
             </>
           )
@@ -446,6 +448,39 @@ function Checks({ checks }: { checks: PullRequest["checks"] }) {
       </DropdownMenuContent>
     </DropdownMenu>
   )
+}
+
+// How a check stands, as the design system's Status draws a state: passed
+// with a check, in Done's colour; failed with its mark, in Failed's;
+// running with the spinner, as Working; the rest in quiet words.
+function CheckState({ state }: { state: PullRequest["checks"][number]["state"] }) {
+  const look = checkLook(state)
+  const word = checkWord(state)
+  if (look === "done") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-caption text-status-done">
+        <Check className="size-icon-sm" />
+        {word}
+      </span>
+    )
+  }
+  if (look === "failed") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-caption text-status-failed">
+        <X className="size-icon-sm" />
+        {word}
+      </span>
+    )
+  }
+  if (look === "working") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-caption text-status-working">
+        <Spinner />
+        {word}
+      </span>
+    )
+  }
+  return <span className="shrink-0 text-caption text-text-muted">{word}</span>
 }
 
 // How a job or a subagent stands, in its word, as the design system's

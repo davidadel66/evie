@@ -1,6 +1,6 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
-import type { FileDiff, ListedProject } from "../../src/core/types.ts"
+import type { Commands, FileDiff, ListedProject } from "../../src/core/types.ts"
 import { pullRequestOf } from "./card.ts"
 import { useCardShown } from "./card-shown.ts"
 import { holdChanges, type Changes, type ChangesState } from "./changes.ts"
@@ -9,7 +9,7 @@ import { Button } from "./components/ui/button.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import type { Connection } from "./connection.ts"
 import { startedHere } from "./conversation.ts"
-import { changedFilesLine, fileTree, hunksOf, scopeChoices, sideBySide, type Line, type Scope } from "./diff.ts"
+import { changedFilesLine, drawnLines, fileTree, hasCounts, hunksOf, scopeChoices, sideBySide, type Line, type Scope } from "./diff.ts"
 import { closeDiff, compareLatest, compareOther, drawAs, showTree, useDiffShown, wentToFile } from "./diff-shown.ts"
 import { ArrowClockwise, CaretDown, CaretLeft, CaretRight, Columns, Rows, TreeView, X } from "./icons.tsx"
 import { useSelected } from "./selection.ts"
@@ -82,7 +82,7 @@ const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : St
 
 // What has been read for what is compared now, by its key, so that what
 // was read for something else is not shown under its name.
-type Read = { scope: Scope; files: FileDiff[]; base?: string } | { scope: Scope; problem: string }
+type Read = ({ scope: Scope } & Commands["read_changes"]["output"]) | { scope: Scope; problem: string }
 
 function SessionDiff({ connection, session, project, narrow }: { connection: Connection; session: string; project: ListedProject | null | undefined; narrow: boolean }) {
   const shown = useDiffShown()
@@ -93,7 +93,9 @@ function SessionDiff({ connection, session, project, narrow }: { connection: Con
     return held.release
   }, [connection, session])
   const { listed, problem: listProblem } = useSyncExternalStore(changes?.subscribe ?? noChanges.subscribe, changes?.state ?? noChanges.state)
-  const git = project?.git !== false && project !== null
+  // Whether the project's folder is in git: null with no project, and
+  // undefined when it is not known, when the server is asked.
+  const git = project === null ? null : project?.git
   const choices = useMemo(() => scopeChoices({ turns: listed?.turns ?? [], git, now: Date.now() }), [listed, git])
 
   // Read again as it is picked, as each turn ends, and when asked.
@@ -103,8 +105,8 @@ function SessionDiff({ connection, session, project, narrow }: { connection: Con
   const scope = shown.scope
   useEffect(() => {
     if (changes === undefined) return
-    if ((scope === "uncommitted" || scope === "branch") && !git) {
-      setRead({ scope, problem: project === null ? "This session has no project, so there is no git repository." : "Not a git repository" })
+    if ((scope === "uncommitted" || scope === "branch") && (git === false || git === null)) {
+      setRead({ scope, files: [], unavailable: git === null ? "This session has no project, so there is no git repository to compare." : "Not a git repository" })
       return
     }
     // The latest turn is known once the list has been read.
@@ -175,9 +177,10 @@ function SessionDiff({ connection, session, project, narrow }: { connection: Con
                 <Fragment key={choice.key}>
                   {choice.key === "session" && <DropdownMenuSeparator />}
                   {at === 1 && choice.key.startsWith("turn:") && <DropdownMenuLabel>Turns</DropdownMenuLabel>}
-                  <DropdownMenuRadioItem value={choice.key}>
+                  <DropdownMenuRadioItem value={choice.key} disabled={choice.disabled !== undefined} className="data-disabled:text-text-muted">
                     <span className="flex-1">{choice.label}</span>
                     {choice.time !== undefined && <span className="pl-4 text-caption text-text-muted">{choice.time}</span>}
+                    {choice.disabled !== undefined && <span className="pl-4 text-caption text-text-muted">{choice.disabled}</span>}
                   </DropdownMenuRadioItem>
                 </Fragment>
               ))}
@@ -241,7 +244,7 @@ function SessionDiff({ connection, session, project, narrow }: { connection: Con
                   <li key={row.path}>
                     <button type="button" style={indent} title={row.path} onClick={() => toFile(row.path)} className="flex h-control w-full min-w-0 items-center gap-2 pr-3 text-left hover:bg-surface-raised">
                       <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{row.name}</span>
-                      {!file.binary && !file.unknown && <Counts added={file.added} removed={file.removed} />}
+                      {hasCounts(file) && <Counts added={file.added} removed={file.removed} />}
                     </button>
                   </li>
                 )
@@ -328,7 +331,9 @@ function Body({
       </p>
     )
   }
-  if ("problem" in read) return read.problem === "Not a git repository" ? <Quiet>Not a git repository</Quiet> : <Problem text={read.problem} tryAgain={tryAgain} />
+  if ("problem" in read) return <Problem text={read.problem} tryAgain={tryAgain} />
+  // What could not be compared, as outside git, is said as it is, not as a fault.
+  if (read.unavailable !== undefined) return <Quiet>{read.unavailable}</Quiet>
   if (files.length === 0) return <Quiet>{nothingIn(scope, read.base)}</Quiet>
   const line = changedFilesLine(files)
   return (
@@ -366,7 +371,7 @@ function FileSection({ file, layout, folded, fold }: { file: FileDiff; layout: "
           <CaretRight className={`size-icon-sm shrink-0 text-text-muted transition-transform motion-reduce:transition-none ${folded ? "" : "rotate-90"}`} />
           <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{file.path}</span>
           {file.status !== "changed" && <span className="shrink-0 text-caption text-text-muted">{file.status === "added" ? "Added" : "Removed"}</span>}
-          {!file.binary && !file.unknown && <Counts added={file.added} removed={file.removed} />}
+          {hasCounts(file) && <Counts added={file.added} removed={file.removed} />}
         </button>
       </h3>
       {!folded && <FileDiffBody file={file} layout={layout} />}
@@ -374,37 +379,43 @@ function FileSection({ file, layout, folded, fold }: { file: FileDiff; layout: "
   )
 }
 
+// The most lines of one file drawn, so that a file of tens of thousands of
+// lines cannot stall the page.
+const MOST_LINES = 3000
+
 function FileDiffBody({ file, layout }: { file: FileDiff; layout: "stacked" | "split" }) {
-  const hunks = useMemo(() => hunksOf(file.patch ?? ""), [file.patch])
+  const drawn = useMemo(() => drawnLines(hunksOf(file.patch ?? ""), MOST_LINES), [file.patch])
   const note = (text: string) => <p className="px-7 py-3 text-caption text-text-muted">{text}</p>
+  if (file.submodule) return note("Submodule changed")
+  if (file.tooMany) return note("Not compared: one comparison reads at most 300 files.")
   if (file.binary) return note("This file is binary, so it is not shown.")
   if (file.tooLarge) return note("This file is too large to show.")
   if (file.unknown) return note("What this file held is not known: it has been changed outside evie's file tools since, and no copy of it is kept.")
-  if (hunks.length === 0) return note(file.status === "removed" ? "The file was empty." : "The file is empty.")
-  // Room for the longest line number in the file.
-  const digits = String(Math.max(...hunks.flatMap((hunk) => hunk.lines.map((line) => Math.max(line.old ?? 0, line.new ?? 0))))).length
-  const number = { width: `${digits + 2}ch` }
+  if (drawn.hunks.length === 0) return note(file.status === "removed" ? "The file was empty." : "The file is empty.")
+  // Room for the longest line number drawn.
+  const number = { width: `${String(drawn.widest).length + 2}ch` }
   return (
     <div className="pb-3 font-mono text-code">
-      {hunks.map((hunk) => (
+      {drawn.hunks.map((hunk) => (
         <Fragment key={hunk.header}>
           <div className="px-7 py-1 wrap-anywhere text-text-muted select-none">{hunk.header}</div>
           {layout === "stacked"
             ? hunk.lines.map((line, at) => (
-                <div key={at} className={`flex ${washOf(line)}`}>
+                <div key={at} className={`flex px-7 ${washOf(line)}`}>
                   <LineNumber value={line.old} style={number} />
                   <LineNumber value={line.new} style={number} />
                   <Text line={line} />
                 </div>
               ))
             : sideBySide(hunk.lines).map((row, at) => (
-                <div key={at} className="flex">
+                <div key={at} className="flex px-7">
                   <Half line={row.left} side="old" style={number} />
                   <Half line={row.right} side="new" style={number} />
                 </div>
               ))}
         </Fragment>
       ))}
+      {drawn.cut && <p className="px-7 pt-3 font-sans text-caption text-text-muted">This file is too large to show in full</p>}
     </div>
   )
 }
