@@ -1,5 +1,5 @@
 import type { BuildMetafile, HTMLBundle } from "bun"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, readdir, rm, stat } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import page from "../../web/index.html"
@@ -20,6 +20,9 @@ const PAGE = join(import.meta.dir, "..", "..", "web", "index.html")
 // The script that builds it, in a process of its own.
 const BUILD = join(import.meta.dir, "build-web-app.ts")
 
+// What the name of each build's temporary folder starts with.
+const TEMPORARY = "evie-web-app-"
+
 // Builds the web app, minified, as `evie serve` does when it starts, so there
 // is no build step. Bun's bundler keeps its working memory, about 300 MB, for
 // as long as the process that ran it lives, so the build runs in a process
@@ -37,7 +40,10 @@ const BUILD = join(import.meta.dir, "build-web-app.ts")
 // `page`, to build another page, and `temporary`, the folder the temporary
 // folder is made in, are for tests.
 export async function buildWebApp(options: { page?: string; temporary?: string } = {}): Promise<WebApp> {
-  const folder = await mkdtemp(join(options.temporary ?? tmpdir(), "evie-web-app-"))
+  const temporary = options.temporary ?? tmpdir()
+  const folder = await mkdtemp(join(temporary, TEMPORARY))
+  // While it builds, the folders earlier builds left are removed.
+  const tidying = removeLeftFolders(temporary)
   try {
     const built = join(folder, "files")
     const metafile = join(folder, "metafile.json")
@@ -58,7 +64,24 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
     if (!builtPage) throw new Error("Bun's bundler built the web app without its page.")
     return { page: builtPage, files: loaded, metafile: await Bun.file(metafile).json() }
   } finally {
-    await rm(folder, { recursive: true, force: true })
+    await Promise.all([rm(folder, { recursive: true, force: true }), tidying])
+  }
+}
+
+// Removes the temporary folders that builds left behind. A server stopped
+// while it builds, as by Ctrl-C as it starts, stops before it can remove its
+// folder. A build takes about a second, so a folder untouched for an hour is
+// no build's still running, such as another server's.
+async function removeLeftFolders(temporary: string) {
+  const hourAgo = Date.now() - 60 * 60 * 1000
+  for (const name of await readdir(temporary).catch(() => [])) {
+    if (!name.startsWith(TEMPORARY)) continue
+    try {
+      const folder = join(temporary, name)
+      if ((await stat(folder)).mtimeMs < hourAgo) await rm(folder, { recursive: true, force: true })
+    } catch {
+      // Gone already, or another user's: left as it is.
+    }
   }
 }
 

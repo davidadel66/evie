@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import tailwind from "bun-plugin-tailwind"
-import { chmod, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, realpath, rm, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { builtWebApp } from "../src/programs/serve.ts"
@@ -74,6 +74,24 @@ test("a build that fails names the file and the line, evie serve goes on without
     const file = join(await realpath(folder), "main.tsx")
     expect(built).toEqual({ problem: `The web app could not be built, so it is not served:\n${file}:2: Expected ")" but found end of file` })
     expect(await readdir(temporary)).toEqual([])
+  })
+})
+
+test("a temporary folder left by a server stopped while it built is removed by the next build, and one still being built into is not", async () => {
+  await inFolder("evie-left-build-", async (folder) => {
+    await writeFile(join(folder, "index.html"), '<!doctype html><html><body><script type="module" src="./main.ts"></script></body></html>\n')
+    await writeFile(join(folder, "main.ts"), 'console.log("evie")\n')
+    const temporary = join(folder, "temporary")
+    // Left two hours ago, as by Ctrl-C while the server started; another
+    // server's, building now; and a folder that is not a build's.
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    for (const name of ["evie-web-app-left", "evie-web-app-building", "something-else"]) await mkdir(join(temporary, name, "files"), { recursive: true })
+    for (const name of ["evie-web-app-left", "something-else"]) await utimes(join(temporary, name), twoHoursAgo, twoHoursAgo)
+
+    const app = await buildWebApp({ page: join(folder, "index.html"), temporary })
+
+    expect("files" in app).toBe(true)
+    expect((await readdir(temporary)).sort()).toEqual(["evie-web-app-building", "something-else"])
   })
 })
 
