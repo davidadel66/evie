@@ -2,6 +2,7 @@ import { afterEach, expect, setSystemTime, test } from "bun:test"
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { permissions } from "../src/index.ts"
 import { show } from "../src/plugins/show/index.ts"
 import { say, startEvie, stored } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
@@ -181,4 +182,30 @@ test("a kind not on the list, a file too large, one not there and a folder are r
     expect(await call(given)).toBe('Not shown: `paths` is a list of the files to show, at least one, such as ["out/chart.png"].')
   }
   expect(await Bun.file(join(folder, ".evie", "shown", "2026-11-22", "chart.png")).exists()).toBe(false)
+})
+
+test("the guard keeps show out of private folders, as it keeps the file tools, but lets a session show again what it showed", async () => {
+  setSystemTime(new Date(2026, 10, 22, 9, 30))
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }))
+  const script: ScriptedReply[] = []
+  const run = await startEvie([scriptedProvider(script).plugin, show({ dataFolder: home }), permissions({ mode: "auto", dataFolder: home })], { home })
+  cleanups.push(run.stop)
+  const call = async (paths: string[], session: string) => {
+    script.push({ text: [], calls: [{ name: "show", input: { paths } }] }, { text: ["Here it is."] })
+    await say(run, "Show me", session)
+    return stored(run.events).findLast((event) => event.type === "tool_result")!.body.text
+  }
+  const { session } = await run.evie.send({ type: "open_session" })
+  const other = (await run.evie.send({ type: "open_session" })).session
+  const theirs = (await run.evie.attachments.save(other, "photo.png", png())).path
+  const made = await realpath(await mkdtemp(join(tmpdir(), "evie-made-")))
+  cleanups.push(() => rm(made, { recursive: true, force: true }))
+  await writeFile(join(made, "chart.png"), png())
+
+  expect(await call([join(made, "chart.png"), theirs], session)).toStartWith(`Blocked by the guard: ${theirs} is in a private folder.`)
+  expect(await call([join(made, "chart.png")], session)).toStartWith("Shown to the owner under your reply:")
+  const kept = join(home, "shown", session, "2026-11-22", "chart.png")
+  expect(await call([kept], session)).toBe(`Shown to the owner under your reply:\n- ${JSON.stringify(kept)} (image/png, 33 bytes), already in Storage`)
+  expect(await call([kept], other)).toStartWith(`Blocked by the guard: ${kept} is in a private folder.`)
 })

@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { files, shell, sync, type Plugin } from "../src/index.ts"
+import { files, shell, show, sync, type Plugin } from "../src/index.ts"
 import { git, ran } from "./support/git.ts"
 import { say, startEvie } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
@@ -114,7 +114,7 @@ async function start(
     signal: stopped.signal,
   })
   const model = scriptedProvider(scriptFor ? await scriptFor(projectFolder) : (options.script ?? []))
-  const run = await startEvie([model.plugin, files(), shell(), plugin], { home, projectFolder })
+  const run = await startEvie([model.plugin, files(), shell(), show({ dataFolder: home }), plugin], { home, projectFolder })
   cleanups.push(run.stop)
   const evieFolder = join(projectFolder, ".evie")
   const syncNow = async () => (await run.evie.send({ type: "run_command", session: run.session, name: "sync", args: "" })).text
@@ -260,6 +260,16 @@ test("a change outside .evie/ is no reason to sync, and a command, which may hav
   await say(run, "say hello")
   await commitsReach(github, name, 1)
   expect((await github.commits(name))[0]!.files).toEqual(["evie.json", "hello.md"])
+})
+
+test("a file shown is kept in .evie/, which is a reason to sync", async () => {
+  const { run, github, name } = await start({ after: 50, script: [...turn(write("chart.md", "# Chart\n")), ...turn({ name: "show", input: { paths: ["chart.md"] } })] })
+
+  await say(run, "write the chart")
+  await say(run, "show it")
+  await commitsReach(github, name, 1)
+
+  expect((await github.commits(name))[0]!.files).toEqual(["evie.json", expect.stringMatching(/^shown\/\d{4}-\d{2}-\d{2}\/chart\.md$/)])
 })
 
 test("once an hour, what changed in .evie/ is synced whatever Evie did, as when the owner edits a file there himself", async () => {
