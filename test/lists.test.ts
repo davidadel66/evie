@@ -371,6 +371,22 @@ test("a project on no branch, as with a commit checked out by itself, records no
   expect(recordedBranches(run)).toEqual(["main", null])
 })
 
+test("a branch read as a turn ends is still recorded when Evie closes straight after the turn", async () => {
+  const home = await mkdtemp(join(tmpdir(), "evie-home-"))
+  const folder = await realpath(await mkdtemp(join(tmpdir(), "a-repository-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(folder, { recursive: true, force: true }))
+  await git(["init", "-q", "-b", "feat/quick"], folder)
+  const first = await startEvie([scriptedProvider([{ text: ["Quick."] }]).plugin], { home, projectFolder: folder })
+  await say(first, "A quick one")
+  await first.stop()
+
+  const again = await startEvie([scriptedProvider([]).plugin], { home, projectFolder: folder })
+  cleanups.push(again.stop)
+  const listed = await again.evie.send({ type: "list_sessions" })
+
+  expect(listed.find((summary) => summary.session === first.session)?.branch).toBe("feat/quick")
+})
+
 test("two sessions of one project each keep the branch they last worked on", async () => {
   const { run } = await start([{ text: ["On permissions."] }, { text: ["On dev."] }])
   await git(["init", "-q", "-b", "feat/permissions"], run.projectFolder)

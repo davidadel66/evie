@@ -295,22 +295,29 @@ export function createLoop(options: LoopOptions): Loop {
   // beside the turn's work rather than before it, and recorded once git has
   // answered, when it is not the one the session last recorded: with none
   // when the project is on no branch, or git could not say. A read that
-  // answers after a later one has been recorded is let go, and so is any
-  // once the loop has stopped, as when the session is moved or deleted.
+  // answers after a later one has been recorded is let go, and so is one
+  // that answers once the session has been moved or deleted, which the log
+  // tells. Stopping the loop waits for the reads, so that one answering as
+  // Evie closes is still recorded.
   let reads = 0
   let lastRecorded = 0
+  const branchReads = new Set<Promise<void>>()
   function readBranch() {
     if (folder === null) return
     const read = ++reads
-    void branchOf(folder).then((branch) => {
-      if (stopped || read < lastRecorded) return
-      lastRecorded = read
-      try {
-        if (branch !== recordedBranch(log.events(session))) emit(log.append(session, "branch", branch === undefined ? {} : { branch }))
-      } catch {
-        // The log cannot be written now, as while Evie closes: the next turn reads it again.
-      }
-    })
+    const from = log.events(session).at(-1)?.seq ?? 0
+    const reading: Promise<void> = branchOf(folder)
+      .then((branch) => {
+        if (read < lastRecorded) return
+        const events = log.events(session)
+        if (events.length === 0 || events.some((event) => event.type === "moved" && event.seq > from)) return
+        lastRecorded = read
+        if (branch !== recordedBranch(events)) emit(log.append(session, "branch", branch === undefined ? {} : { branch }))
+      })
+      // The log cannot be written now: the next turn reads the branch again.
+      .catch(() => {})
+      .finally(() => branchReads.delete(reading))
+    branchReads.add(reading)
   }
 
   async function run() {
@@ -632,6 +639,7 @@ export function createLoop(options: LoopOptions): Loop {
       stopped = true
       cancel?.abort()
       await running
+      await Promise.all(branchReads)
     },
   }
 }
