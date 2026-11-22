@@ -49,8 +49,7 @@ export function Frame({ state, sessions }: { state: ConnectionState; sessions: S
 }
 
 // The middle column, for now: the selected session's title, where its
-// conversation will be. A session selected that the list does not hold yet
-// is one with nothing said in it, as one just started before a reload.
+// conversation will be, or for a draft, where the new session will start.
 function OpenSession({ sessions }: { sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
@@ -62,11 +61,29 @@ function OpenSession({ sessions }: { sessions: Sessions }) {
       </>
     )
   }
+  if ("draft" in selected) {
+    const project = list.projects.find((each) => each.id === selected.draft)
+    const where = selected.draft === null ? "with no project" : `in ${project?.name ?? "its project"}`
+    return (
+      <>
+        <h1 className="text-page-title text-text">New session</h1>
+        <p className="max-w-sign-in-column text-body text-text-muted">A new session {where} starts when its first message is sent.</p>
+      </>
+    )
+  }
   if (!list.listed) return null
-  const session = list.sessions.find((each) => each.session === selected)
+  const session = list.sessions.find((each) => each.session === selected.session)
+  if (session === undefined) {
+    return (
+      <>
+        <h1 className="text-page-title text-text">Not in the list</h1>
+        <p className="max-w-sign-in-column text-body text-text-muted">Nothing has been said in this session yet, or it is no longer there.</p>
+      </>
+    )
+  }
   return (
     <>
-      <h1 className="max-w-sign-in-column text-page-title text-text">{session === undefined ? "New session" : titleOf(session)}</h1>
+      <h1 className="max-w-sign-in-column text-page-title text-text">{titleOf(session)}</h1>
       <p className="max-w-sign-in-column text-body text-text-muted">Its conversation will be shown here.</p>
     </>
   )

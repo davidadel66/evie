@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test"
 import type { SessionState, SessionSummary } from "../src/core/types.ts"
 import { addressAsOpened, addressOf, selectedIn } from "../web/src/address.ts"
-import { ageWords, filterSessions, groupSessions, PROJECT_COLOURS, projectColour } from "../web/src/session-list.ts"
+import { refreshWhileShown } from "../web/src/refresh.ts"
+import { ageWords, filterSessions, groupSessions, PROJECT_COLOURS, projectColour, projectLookedAt, revealMove } from "../web/src/session-list.ts"
 
 // The session list's own rules, apart from its screen: how sessions are
 // grouped and ordered, and found by search and by project, and how a
@@ -87,15 +88,77 @@ test("how long ago a session was active is said in its largest whole unit, short
 })
 
 test("the selected session is kept after # in the address, and an address naming none, or something else, selects none", () => {
-  expect(addressOf("a1b2-c3")).toBe("#session=a1b2-c3")
-  expect(selectedIn(addressOf("a1b2-c3"))).toBe("a1b2-c3")
+  expect(addressOf({ session: "a1b2-c3" })).toBe("#session=a1b2-c3")
+  expect(selectedIn(addressOf({ session: "a1b2-c3" }))).toEqual({ session: "a1b2-c3" })
   expect(selectedIn("")).toBeUndefined()
   expect(selectedIn("#code=abc")).toBeUndefined()
   expect(selectedIn("#session=")).toBeUndefined()
 })
 
-test("as the page opens, it is put at its root with a sign-in code taken out of its address, and a selected session kept", () => {
+test("a new session not yet started is a draft, kept in the address by its project, or by none", () => {
+  expect(addressOf({ draft: "p1" })).toBe("#draft=p1")
+  expect(addressOf({ draft: null })).toBe("#draft=none")
+  expect(selectedIn("#draft=p1")).toEqual({ draft: "p1" })
+  expect(selectedIn("#draft=none")).toEqual({ draft: null })
+  expect(selectedIn("#draft=")).toBeUndefined()
+})
+
+test("as the page opens, it is put at its root with a sign-in code taken out of its address, and a selected session or draft kept", () => {
   expect(addressAsOpened("#code=abc")).toBe("/")
   expect(addressAsOpened("#session=s1")).toBe("/#session=s1")
+  expect(addressAsOpened("#draft=none")).toBe("/#draft=none")
   expect(addressAsOpened("")).toBe("/")
+})
+
+test("the project being looked at is the selected draft's or session's, or else the one the list is narrowed to, or none, so New session again keeps to the same draft", () => {
+  const sessions = [summary("in-p1", "active", 1, "p1"), summary("general", "active", 2, null)]
+
+  expect(projectLookedAt({ draft: "p2" }, sessions, { search: "", project: "p1" })).toBe("p2")
+  expect(projectLookedAt({ draft: null }, sessions, { search: "" })).toBeNull()
+  expect(projectLookedAt({ session: "in-p1" }, sessions, { search: "", project: null })).toBe("p1")
+  expect(projectLookedAt({ session: "general" }, sessions, { search: "", project: "p1" })).toBeNull()
+  expect(projectLookedAt(undefined, sessions, { search: "", project: "p1" })).toBe("p1")
+  expect(projectLookedAt({ session: "not-listed" }, sessions, { search: "" })).toBeNull()
+  expect(projectLookedAt(undefined, sessions, { search: "" })).toBeNull()
+  // Pressed again on a draft, New session comes back to the same draft.
+  const draft = { draft: "p2" }
+  expect(addressOf({ draft: projectLookedAt(draft, sessions, { search: "" }) })).toBe(addressOf(draft))
+})
+
+test("when the selected session moves into a closed group, that group opens so that it stays in sight, and nothing else opens or closes", () => {
+  const closed = { working: false, settled: false }
+
+  expect(revealMove(closed, "active", "settled")).toEqual({ working: false, settled: true })
+  expect(revealMove(closed, "needs_you", "working")).toEqual({ working: true, settled: false })
+  expect(revealMove(closed, "settled", "working")).toEqual({ working: true, settled: false })
+  // Within its group, or to the top, or when the owner closes the group it is in, nothing changes.
+  expect(revealMove(closed, "settled", "settled")).toBe(closed)
+  expect(revealMove(closed, "settled", "active")).toBe(closed)
+  expect(revealMove(closed, "working", "needs_you")).toBe(closed)
+  // Seen for the first time, as when the list is first drawn, it has not moved.
+  expect(revealMove(closed, undefined, "settled")).toBe(closed)
+  const open = { working: true, settled: true }
+  expect(revealMove(open, "active", "settled")).toBe(open)
+})
+
+test("what goes stale is asked for again when the window has the focus back, and at each interval while the page is shown, not while it is hidden", async () => {
+  const window = new EventTarget()
+  let shown = true
+  let asked = 0
+  const stop = refreshWhileShown(() => asked++, { window, shown: () => shown, every: 40 })
+
+  window.dispatchEvent(new Event("focus"))
+  expect(asked).toBe(1)
+  await Bun.sleep(100)
+  expect(asked).toBe(3)
+
+  shown = false
+  await Bun.sleep(100)
+  expect(asked).toBe(3)
+
+  shown = true
+  stop()
+  window.dispatchEvent(new Event("focus"))
+  await Bun.sleep(100)
+  expect(asked).toBe(3)
 })

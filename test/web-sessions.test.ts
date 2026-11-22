@@ -2,9 +2,10 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { startServer } from "../src/index.ts"
+import { startServer, type Command, type Evie } from "../src/index.ts"
 import { openConnection } from "../web/src/connection.ts"
 import { openSessions, type SessionList, type Sessions } from "../web/src/sessions.ts"
+import { git } from "./support/git.ts"
 import { say } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
@@ -27,6 +28,32 @@ async function start(script: ScriptedReply[] = []) {
   return { served, connection }
 }
 
+// Starts the server in front of a core whose every answer passes through
+// `hold`, which can keep one back, as a slow server, or a line that brings
+// it late, would. The connection is to that server.
+async function startHolding(script: ScriptedReply[], hold: (command: Command, answer: () => Promise<unknown>) => Promise<unknown>) {
+  const served = await serveEvie([scriptedProvider(script).plugin])
+  cleanups.push(served.stop)
+  const core = served.run.evie
+  const evie: Evie = {
+    send: (command) => hold(command, () => core.send(command)) as never,
+    subscribe: (listener) => core.subscribe(listener),
+    close: async () => {},
+  }
+  const server = startServer({ evie, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+  cleanups.push(() => server.stop())
+  const connection = openConnection({ url: server.url, token: served.token, firstWait: 10 })
+  cleanups.push(() => connection.close())
+  return { served, connection }
+}
+
+// A promise to wait on, and the function that settles it.
+function gate() {
+  let open = () => {}
+  const opened = new Promise<void>((resolve) => (open = resolve))
+  return { opened, open }
+}
+
 // Opens the list on a connection.
 function list(connection: Parameters<typeof openSessions>[0]) {
   const sessions = openSessions(connection)
@@ -45,7 +72,7 @@ test("once connected, every session is listed, and every project with the branch
   await say(served.run, "Plan the beds for spring")
 
   const sessions = list(connection)
-  const listed = await until(sessions, (state) => state.listed)
+  const listed = await until(sessions, (state) => state.listed && state.projects.length > 0)
 
   expect(listed.sessions).toEqual([{ session: served.run.session, project: served.run.project!.id, name: "Plan the beds for spring", state: "active", lastActive: expect.any(Number) }])
   expect(listed.projects).toEqual([served.run.project!])
@@ -100,68 +127,6 @@ test("a session in a project made since the list was listed brings that project 
   expect(known.projects).toEqual([opened.project!, served.run.project!])
 })
 
-// The client the connection gives once connected.
-function client(connection: ReturnType<typeof openConnection>) {
-  const state = connection.state()
-  if (state.status !== "connected") throw new Error("not connected")
-  return state.evie
-}
-
-test("a session started from the list, in a project or in none, is listed at once as new, and its summary takes its place once something is said in it", async () => {
-  const { served, connection } = await start([{ text: ["Noted."] }])
-  const sessions = list(connection)
-  await until(sessions, (state) => state.listed)
-
-  const inProject = await sessions.start(served.run.project!.id)
-  const general = await sessions.start(null)
-  if (!("session" in inProject) || !("session" in general)) throw new Error("not started")
-
-  expect(sessions.state().sessions).toEqual([
-    { session: general.session, project: null, name: null, state: "active", lastActive: expect.any(Number), new: true },
-    { session: inProject.session, project: served.run.project!.id, name: null, state: "active", lastActive: expect.any(Number), new: true },
-  ])
-  await client(connection).send({ type: "send_message", session: inProject.session, text: "Water the tomatoes" })
-  const said = await until(sessions, (state) => state.sessions.some((each) => each.session === inProject.session && each.name !== null))
-  expect(said.sessions.find((each) => each.session === inProject.session)).toEqual({
-    session: inProject.session,
-    project: served.run.project!.id,
-    name: "Water the tomatoes",
-    state: expect.any(String),
-    lastActive: expect.any(Number),
-  })
-})
-
-test("a session that cannot be started says why", async () => {
-  const { connection } = await start()
-  const sessions = list(connection)
-  await until(sessions, (state) => state.listed)
-
-  expect(await sessions.start("no-such-project")).toEqual({ problem: expect.stringContaining("no-such-project") })
-  expect(sessions.state().sessions).toEqual([])
-})
-
-test("a session started here with nothing said in it yet stays listed when the list is listed again", async () => {
-  const { served, connection } = await start([{ text: ["Noted."] }])
-  await say(served.run, "Plan the beds for spring")
-  const sessions = list(connection)
-  await until(sessions, (state) => state.listed)
-  const started = await sessions.start(null)
-  if (!("session" in started)) throw new Error(started.problem)
-  const port = Number(new URL(served.server.url).port)
-
-  await served.server.stop()
-  while (connection.state().status !== "reconnecting") await Bun.sleep(5)
-  await served.run.evie.send({ type: "settle_session", session: served.run.session, settled: true })
-  const again = startServer({ evie: served.run.evie, tokens: served.tokens, host: "127.0.0.1", port })
-  cleanups.push(() => again.stop())
-
-  const relisted = await until(sessions, (state) => state.sessions.some((each) => each.state === "settled"))
-  expect(relisted.sessions.map((each) => [each.session, each.state])).toEqual([
-    [started.session, "active"],
-    [served.run.session, "settled"],
-  ])
-})
-
 test("a session is settled from the list and brought back, and one that is working is not settled, with the server's reason", async () => {
   const { served, connection } = await start([{ text: ["Noted."] }, { hang: true }])
   await say(served.run, "Plan the beds for spring")
@@ -178,4 +143,90 @@ test("a session is settled from the list and brought back, and one that is worki
   await served.run.evie.send({ type: "send_message", session: busy.session, text: "Work on this for a while" })
   await until(sessions, (state) => stateOf(state, busy.session) === "working")
   expect(await sessions.settle(busy.session, true)).toBe("This session is working, or waiting for an answer to a question. Wait until it has finished, then settle it.")
+})
+
+test("the projects are listed one request at a time, and once more for every ask meanwhile, so a late answer never takes a project back", async () => {
+  // The first answer is the projects as they were when it was asked, and comes late.
+  let asked = 0
+  const late = gate()
+  const { served, connection } = await startHolding([{ text: ["Noted."] }], async (command, answer) => {
+    if (command.type !== "list_projects") return answer()
+    const at = ++asked
+    const answered = await answer()
+    if (at === 1) await late.opened
+    return answered
+  })
+  const sessions = list(connection)
+  while (asked === 0) await Bun.sleep(5)
+  const folder = await realpath(await mkdtemp(join(tmpdir(), "a-new-project-")))
+  cleanups.push(() => rm(folder, { recursive: true, force: true }))
+
+  // Each summary of the new project's session asks for the projects again.
+  const opened = await served.run.evie.send({ type: "open_session", folder })
+  await say(served.run, "Sort the seed packets", opened.session)
+  await until(sessions, (state) => state.sessions.some((each) => each.session === opened.session))
+  await Bun.sleep(50)
+  const askedWhileLate = asked
+  late.open()
+  await until(sessions, (state) => state.projects.length === 2)
+  await Bun.sleep(50)
+
+  expect(askedWhileLate).toBe(1)
+  expect(asked).toBe(2)
+  expect(sessions.state().projects).toEqual([opened.project!, served.run.project!])
+})
+
+test("a summary that comes while the sessions are being listed wins over the list's older line for its session, and a session it brings stays", async () => {
+  // The first list is the sessions as they were when it was asked, and comes late.
+  let asked = 0
+  const late = gate()
+  const { served, connection } = await startHolding([{ text: ["Noted."] }, { text: ["Noted."] }], async (command, answer) => {
+    if (command.type !== "list_sessions") return answer()
+    const at = ++asked
+    const answered = await answer()
+    if (at === 1) await late.opened
+    return answered
+  })
+  await say(served.run, "Plan the beds for spring")
+  const sessions = list(connection)
+  while (asked === 0) await Bun.sleep(5)
+
+  await served.run.evie.send({ type: "settle_session", session: served.run.session, settled: true })
+  const other = await served.run.evie.send({ type: "open_session" })
+  await say(served.run, "What is the weather tomorrow?", other.session)
+  await until(sessions, (state) => state.sessions.length === 2)
+  late.open()
+  await until(sessions, (state) => state.listed)
+
+  expect(sessions.state().sessions.map((each) => [each.session, each.state])).toEqual([
+    [other.session, "active"],
+    [served.run.session, "settled"],
+  ])
+})
+
+test("when the projects cannot be listed, the sessions are listed all the same, and the projects' failure is told on its own", async () => {
+  const { served, connection } = await startHolding([{ text: ["Noted."] }], async (command, answer) => {
+    if (command.type === "list_projects") throw new Error("The project table could not be read.")
+    return answer()
+  })
+  await say(served.run, "Plan the beds for spring")
+  const sessions = list(connection)
+
+  const listed = await until(sessions, (state) => state.listed && state.projectsProblem !== undefined)
+
+  expect(listed.sessions.map((each) => each.name)).toEqual(["Plan the beds for spring"])
+  expect(listed.problem).toBeUndefined()
+  expect(listed.projectsProblem).toBe("The projects could not be listed: The project table could not be read.")
+})
+
+test("asked for again, the projects come with the branch each is on now, as after a checkout", async () => {
+  const { served, connection } = await start()
+  await git(["init", "-q", "-b", "main"], served.run.projectFolder)
+  const sessions = list(connection)
+  await until(sessions, (state) => state.projects[0]?.branch === "main")
+
+  await git(["checkout", "-q", "-b", "feat/beds"], served.run.projectFolder)
+  sessions.refreshProjects()
+
+  expect((await until(sessions, (state) => state.projects[0]?.branch !== "main")).projects[0]!.branch).toBe("feat/beds")
 })

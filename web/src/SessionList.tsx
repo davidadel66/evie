@@ -1,5 +1,6 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
-import type { ListedProject } from "../../src/core/types.ts"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+import type { ListedProject, SessionState, SessionSummary } from "../../src/core/types.ts"
+import { addressOf } from "./address.ts"
 import { Button } from "./components/ui/button.tsx"
 import {
   DropdownMenu,
@@ -12,58 +13,64 @@ import {
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu.tsx"
 import { Input } from "./components/ui/input.tsx"
-import { CaretDown, CaretRight, Plus } from "./icons.tsx"
-import { ProjectIcon } from "./ProjectIcon.tsx"
-import { filterSessions, groupSessions, keepOpenGroups, openGroups, type Filter, type OpenGroups } from "./session-list.ts"
+import { CaretDown, CaretRight, MagnifyingGlass, Plus } from "./icons.tsx"
+import { ProjectGlyph } from "./ProjectIcon.tsx"
 import { select, useSelected } from "./selection.ts"
-import { SessionRow } from "./SessionRow.tsx"
-import type { ListedSession, Sessions } from "./sessions.ts"
+import { filterSessions, groupSessions, keepOpenGroups, openGroups, projectLookedAt, revealMove, type Filter, type OpenGroups } from "./session-list.ts"
+import { DraftRow, SessionRow } from "./SessionRow.tsx"
+import type { Sessions } from "./sessions.ts"
 
 // The session list, in the left column: a new session, a search and a
 // project filter above the sessions, which are grouped with those that
 // need the owner and the active ones at the top, and the working and the
-// settled ones in groups below that open and close.
+// settled ones in groups below that open and close. A new session is a
+// draft, at the very top, until its first message is sent.
 export function SessionList({ sessions }: { sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
   const [filter, setFilter] = useState<Filter>({ search: "" })
   const [open, setOpen] = useState(openGroups)
-  // Why a new session could not be started.
-  const [problem, setProblem] = useState<string>()
+  // The session whose menu should have the focus back once it has moved.
+  const [refocus, setRefocus] = useState<string>()
   const now = useMinute()
 
-  // The project being looked at: the selected session's, or the one the
-  // list is narrowed to, or none.
-  const looked = list.sessions.find((each) => each.session === selected)
-  const lookingAt = looked !== undefined ? looked.project : (filter.project ?? null)
+  const selectedSession = selected !== undefined && "session" in selected ? selected.session : undefined
+  const lookingAt = projectLookedAt(selected, list.sessions, filter)
+  const projectOf = (project: string | null) => list.projects.find((each) => each.id === project)
 
-  async function start(project: string | null) {
-    setProblem(undefined)
-    const started = await sessions.start(project)
-    if ("problem" in started) return setProblem(started.problem)
-    // So that the new session's row is in sight.
-    setFilter((current) => ({ search: "", ...(current.project === project && { project }) }))
-    select(started.session)
-  }
-
-  function toggle(group: keyof OpenGroups) {
-    const next = { ...open, [group]: !open[group] }
+  function setGroups(next: OpenGroups) {
     setOpen(next)
     keepOpenGroups(next)
   }
 
+  // A selected session that moves into a closed group, as when the owner
+  // settles it, opens that group, so that it stays in sight.
+  const selectedState = list.sessions.find((each) => each.session === selectedSession)?.state
+  const seen = useRef<{ session?: string; state?: SessionState }>({})
+  useEffect(() => {
+    const before = seen.current.session === selectedSession ? seen.current.state : undefined
+    seen.current = { ...(selectedSession !== undefined && { session: selectedSession }), ...(selectedState !== undefined && { state: selectedState }) }
+    if (selectedState === undefined) return
+    const next = revealMove(open, before, selectedState)
+    if (next !== open) setGroups(next)
+  }, [selectedSession, selectedState])
+
   const groups = groupSessions(filterSessions(list.sessions, filter))
-  const projectOf = (session: ListedSession) => list.projects.find((project) => project.id === session.project)
-  const rows = (shown: ListedSession[]) => (
+  const rows = (shown: SessionSummary[]) => (
     <ul className="flex flex-col gap-1">
       {shown.map((session) => (
         <SessionRow
           key={session.session}
           session={session}
-          project={projectOf(session)}
-          selected={session.session === selected}
+          project={projectOf(session.project)}
+          selected={session.session === selectedSession}
           now={now}
-          settle={(settled) => sessions.settle(session.session, settled)}
+          settle={async (settled) => {
+            const refused = await sessions.settle(session.session, settled)
+            if (refused === undefined && session.session === selectedSession) setRefocus(session.session)
+            return refused
+          }}
+          refocus={{ asked: refocus === session.session, done: () => setRefocus(undefined) }}
         />
       ))}
     </ul>
@@ -73,37 +80,48 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-2 px-4 pb-3">
-        <NewSession projects={list.projects} lookingAt={lookingAt} start={start} />
-        {problem !== undefined && (
-          <p role="alert" className="px-3 text-caption text-text-muted">
-            {problem}
-          </p>
-        )}
+        <NewSession projects={list.projects} lookingAt={lookingAt} start={(project) => select({ draft: project })} />
         <div className="flex gap-1">
-          <Input
-            type="search"
-            aria-label="Search sessions by name"
-            placeholder="Search"
-            value={filter.search}
-            onChange={(event) => setFilter({ ...filter, search: event.target.value })}
-          />
+          <div className="relative min-w-0 flex-1">
+            <MagnifyingGlass className="pointer-events-none absolute top-1/2 left-2 size-icon-sm -translate-y-1/2 text-text-muted" />
+            <Input
+              type="search"
+              aria-label="Search sessions by name"
+              placeholder="Search"
+              className="pl-8"
+              value={filter.search}
+              onChange={(event) => setFilter({ ...filter, search: event.target.value })}
+            />
+          </div>
           <ProjectFilter projects={list.projects} project={filter.project} choose={(project) => setFilter({ search: filter.search, ...(project !== undefined && { project }) })} />
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-6">
-        {list.problem !== undefined && <p className="px-3 text-caption text-text-muted">{list.problem}</p>}
+        {[list.problem, list.projectsProblem].map(
+          (problem) =>
+            problem !== undefined && (
+              <p key={problem} className="px-3 pb-2 text-caption text-text-muted">
+                {problem}
+              </p>
+            ),
+        )}
+        {selected !== undefined && "draft" in selected && (
+          <ul className="mb-1 flex flex-col">
+            <DraftRow project={selected.draft} listed={projectOf(selected.draft)} href={addressOf(selected)} />
+          </ul>
+        )}
         {list.listed && nothing && (
           <p className="px-3 text-caption text-text-muted">{list.sessions.length === 0 ? "No sessions yet. Start one with New session." : "No sessions match."}</p>
         )}
         {rows(groups.top)}
         {groups.working.length > 0 && (
-          <Group name="Working" count={groups.working.length} open={open.working} toggle={() => toggle("working")}>
+          <Group name="Working" count={groups.working.length} open={open.working} toggle={() => setGroups({ ...open, working: !open.working })}>
             {rows(groups.working)}
           </Group>
         )}
         {groups.settled.length > 0 && (
-          <Group name="Settled" count={groups.settled.length} open={open.settled} toggle={() => toggle("settled")}>
+          <Group name="Settled" count={groups.settled.length} open={open.settled} toggle={() => setGroups({ ...open, settled: !open.settled })}>
             {rows(groups.settled)}
           </Group>
         )}
@@ -126,8 +144,9 @@ function Group({ name, count, open, toggle, children }: { name: string; count: n
   )
 }
 
-// The New session button, which starts a session in the project being
-// looked at, and beside it a menu to start one in another project, or in none.
+// The New session button, which makes a draft of a session in the project
+// being looked at, and beside it a menu to make one in another project, or
+// in none. Pressed again on a draft, it comes back to the same draft.
 function NewSession({ projects, lookingAt, start }: { projects: ListedProject[]; lookingAt: string | null; start(project: string | null): void }) {
   const where = lookingAt === null ? "with no project" : `in ${projects.find((project) => project.id === lookingAt)?.name ?? "its project"}`
   return (
@@ -146,7 +165,7 @@ function NewSession({ projects, lookingAt, start }: { projects: ListedProject[];
           <DropdownMenuLabel>New session in</DropdownMenuLabel>
           {projects.map((project) => (
             <DropdownMenuItem key={project.id} current={project.id === lookingAt} onSelect={() => start(project.id)}>
-              <ProjectIcon project={project.id} />
+              <ProjectGlyph project={project.id} />
               {project.name}
             </DropdownMenuItem>
           ))}
@@ -168,7 +187,7 @@ function ProjectFilter({ projects, project, choose }: { projects: ListedProject[
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="quiet" aria-label={`Show sessions of: ${name}`} className="max-w-1/2 gap-1 px-3">
+        <Button variant="quiet" aria-label={`Show sessions of: ${name}`} className="max-w-project-filter gap-1 px-3">
           <span className="truncate">{name}</span>
           <CaretDown className="size-icon-sm" />
         </Button>
@@ -178,7 +197,7 @@ function ProjectFilter({ projects, project, choose }: { projects: ListedProject[
           <DropdownMenuRadioItem value={ALL}>All projects</DropdownMenuRadioItem>
           {projects.map((each) => (
             <DropdownMenuRadioItem key={each.id} value={each.id}>
-              <ProjectIcon project={each.id} />
+              <ProjectGlyph project={each.id} />
               {each.name}
             </DropdownMenuRadioItem>
           ))}

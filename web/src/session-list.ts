@@ -1,4 +1,5 @@
-import type { SessionSummary } from "../../src/core/types.ts"
+import type { SessionState, SessionSummary } from "../../src/core/types.ts"
+import type { Selected } from "./address.ts"
 
 // The session list's rules, apart from its screen.
 
@@ -30,6 +31,16 @@ export function filterSessions(sessions: readonly SessionSummary[], filter: Filt
     const title = titleOf(session).toLowerCase()
     return words.every((word) => title.includes(word))
   })
+}
+
+// The project being looked at, which a new session starts in: the
+// selected draft's or session's, or with nothing selected, the one the
+// list is narrowed to, or none. A session not in the list is taken to
+// have none.
+export function projectLookedAt(selected: Selected | undefined, sessions: readonly SessionSummary[], filter: Filter): string | null {
+  if (selected === undefined) return filter.project ?? null
+  if ("draft" in selected) return selected.draft
+  return sessions.find((each) => each.session === selected.session)?.project ?? null
 }
 
 // The six project colours, by their names in the design system. Until the
@@ -66,6 +77,17 @@ const AGE_UNITS: [string, number][] = [
 // Which of the groups at the bottom are open, as this browser last left
 // them. Working starts open and Settled closed.
 export type OpenGroups = { working: boolean; settled: boolean }
+
+// The groups to have open once the selected session's state has gone from
+// `before` to `after`: a closed group it moved into is opened, so that the
+// session stays in sight, as when the owner settles it. The same groups
+// when it has not moved from one group to another, or moved to the top.
+export function revealMove(open: OpenGroups, before: SessionState | undefined, after: SessionState): OpenGroups {
+  const group = groupOf(after)
+  if (before === undefined || group === groupOf(before) || group === "top" || open[group]) return open
+  return { ...open, [group]: true }
+}
+const groupOf = (state: SessionState) => (state === "working" || state === "settled" ? state : "top")
 
 // Where this browser keeps them.
 const GROUPS_KEY = "evie.groups"

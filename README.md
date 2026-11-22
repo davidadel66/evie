@@ -245,19 +245,24 @@ they change, and listed again when the line comes back:
   remembers which are open.
 - **Each row** shows its project's icon and name, and how long ago it was
   active, or its state; the session's name, which is the opening words of
-  its first message for now; and the git branch its project is on. Until a
-  project's icon and colour can be picked, each project has a folder in a
-  colour chosen from its id.
-- **New session** starts a session in the project of the selected session,
-  or of the project the list is narrowed to; the menu beside it starts one
-  in another project, or in none.
+  its first message for now; and the git branch its project is on, asked
+  for again when the window has the focus back and each minute while the
+  page is shown. Until a project's icon and colour can be picked, each
+  project has a folder in a colour chosen from its id.
+- **New session** makes a draft of a new session, at the top of the list,
+  in the project of the selected session or draft, or of the project the
+  list is narrowed to; the menu beside it makes one in another project, or
+  in none. Nothing is made on the server until its first message is sent,
+  so a draft left unused leaves nothing behind. Pressed again, it comes
+  back to the same draft.
 - **Search** narrows the list by name, and the menu beside it to one
   project.
 - **A row's menu** (the `···` on the selected row, or on any row under the
   pointer) settles the session or brings it back. A session that is
   working, or waiting for an answer, is not settled; the row says why.
-- **The selected session** is kept in the page's address, as
-  `#session=<id>`, so a reload or a bookmark opens on it.
+- **What is selected** is kept in the page's address, as `#session=<id>`,
+  or for a draft `#draft=<project id>` or `#draft=none`, so a reload or a
+  bookmark opens on it.
 
 ### Keeping the server running
 
@@ -896,9 +901,28 @@ theme in `web/src/styles.css`. Tailwind's own defaults are cleared, so each
 class names a token, such as `bg-bg-side`, `text-text-muted`,
 `text-caption` or `p-7`, and its spacing scale holds only the design
 system's steps, so a class off it, such as `p-5`, is not made at all. The
-few sizes of the layout that the design system does not name yet, such as
-the width of the session list, are named once in `styles.css`. The fonts, Geist and Geist Mono, are carried in
-the stylesheet, so the page asks no other site for anything.
+fonts, Geist and Geist Mono, are carried in the stylesheet, so the page asks
+no other site for anything.
+
+A few values the design system's board does not name are named once in
+`styles.css`, each by a name of its own:
+
+| Name | Value | For |
+|---|---|---|
+| `session-list` | 288px | The width of the session list |
+| `project-card` | 320px | The width of the project card |
+| `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle |
+| `control` | 40px | The height of buttons and menu items, which the board's Button and Menu give in words |
+| `menu` | 176px | The narrowest a menu is |
+| `tile-row` | 18px | A project's icon tile in a session row, which the board's WorkspaceIcon gives in words |
+| `tile-row-icon` | 12px | The icon on that tile, as the board's SessionRow draws it |
+| `project-filter` | 128px | The widest the session list's project filter grows |
+| `radius-tile` | 25% | A project's icon tile's corners, a quarter of its size at any size |
+| `default-transition-duration` | 150ms | How long a change takes, such as a group's caret turning |
+| `default-transition-timing-function` | `cubic-bezier(0.4, 0, 0.2, 1)` | How it eases |
+
+The strokes, `line-width` (1px) and `indicator-width` (2px, for the focus
+ring), are the board's, kept beside the colours in `tokens.css`.
 
 `bunfig.toml` also stops `bun install` from installing peer dependencies.
 The Tailwind plugin names Bun itself as one, and a second Bun in

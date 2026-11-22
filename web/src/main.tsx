@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client"
 import { App } from "./App.tsx"
 import { addressAsOpened } from "./address.ts"
 import { openConnection } from "./connection.ts"
+import { refreshWhileShown } from "./refresh.ts"
 import { openSessions } from "./sessions.ts"
 
 // A sign-in link opens the page with a code after # in its address. The
@@ -19,6 +20,14 @@ if (location.pathname + location.hash !== opened) history.replaceState(null, "",
 // page loads.
 const connection = (import.meta.hot.data.connection ??= openConnection({ url: location.origin, ...(code !== undefined && { code }) }))
 const sessions = (import.meta.hot.data.sessions ??= openSessions(connection))
+// The projects' branches change with a checkout, which sends no event, so
+// they are asked for again when the window has the focus back, and each
+// minute while the page is shown.
+import.meta.hot.data.refresh ??= refreshWhileShown(() => sessions.refreshProjects(), {
+  window,
+  shown: () => document.visibilityState === "visible",
+  every: 60_000,
+})
 const root = (import.meta.hot.data.root ??= createRoot(document.getElementById("root")!))
 root.render(
   <StrictMode>
