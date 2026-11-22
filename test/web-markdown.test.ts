@@ -72,7 +72,9 @@ const REPLIES = {
   quotes: "> a\n>\n> b\n\n> c\n\nAfter.",
   "a reply cut short in a code block": "Run:\n\n```sh\nbun test\n\nbun run check",
   "a reply cut short after a blank line": "One.\n\n- a\n\n",
+  "lines of other spaces, which marked reads as blank only in a list": "a\n \nb\n\n　\nc\n\n- d\n\n \n\n- e",
   "a link defined elsewhere": "See [the docs][d] and [bun].\n\n[d]: https://bun.sh/docs\n\n[bun]: https://bun.sh",
+  "a link defined elsewhere, its name over two lines": "See [a b].\n\n[a\nb]: https://bun.sh",
   "HTML, which runs past blank lines": '<details>\n\n<div onclick="alert(1)">hidden</div>\n\n</details>\n\nA <b>bold</b> word.',
   "a link's tag, after which no address is linked": "A <a href=x> b\n\nhttps://bun.sh",
   "a code block whose closing marks end in a tab, which marked does not close": "```\ncode\n```\t\n\nAfter.",
@@ -116,7 +118,7 @@ test("a streaming reply is cut at blank lines between blocks, never inside a cod
 })
 
 test("a reply that one part reads differently elsewhere, such as a link's definition or HTML, is read whole", () => {
-  for (const text of [REPLIES["a link defined elsewhere"], REPLIES["HTML, which runs past blank lines"], REPLIES["a link's tag, after which no address is linked"], "One.\r\n\r\nTwo."]) expect(markdownBlocks(text)).toEqual([text])
+  for (const text of [REPLIES["a link defined elsewhere"], REPLIES["a link defined elsewhere, its name over two lines"], REPLIES["HTML, which runs past blank lines"], REPLIES["a link's tag, after which no address is linked"], "One.\r\n\r\nTwo."]) expect(markdownBlocks(text)).toEqual([text])
   // In a code block, such lines are only code.
   expect(markdownBlocks("```html\n<div>\n[a]: b\n```\n\nAfter.")).toEqual(["```html\n<div>\n[a]: b\n```\n\n", "After."])
 })

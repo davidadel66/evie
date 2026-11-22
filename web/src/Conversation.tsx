@@ -401,8 +401,9 @@ function Attachments({ attachments, spaced }: { attachments: ShownAttachment[]; 
 // one stored, drawn from one reading of the whole.
 const Markdown = memo(function Markdown({ text, streaming = false, className }: { text: string; streaming?: boolean; className: string }) {
   // The blocks the reply was cut into at its last piece, which the next cut
-  // starts from. Kept across draws only to save work: each cut checks that
-  // the reply still starts with them.
+  // starts from. It is written while drawing, on purpose: it only saves
+  // work, since each cut checks that the reply still starts with it, so a
+  // draw that React throws away leaves nothing wrong behind.
   const cut = useRef<string[]>([])
   if (streaming) cut.current = markdownBlocks(text, cut.current)
   return (
