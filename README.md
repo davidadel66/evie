@@ -211,9 +211,10 @@ five minutes, and opens it with `open` on a Mac or `xdg-open` elsewhere.
 The page trades the link's code for a cookie, and takes the code out of the
 address bar. Each browser signed in this way gets a token of its own, named
 `browser` and the day (UTC), such as `browser 2026-11-21`, or
-`browser 2026-11-21 (2)` for a second one that day. `evie token list` shows
-them, and `evie token remove "browser 2026-11-21"` signs that browser out at
-once. The cookie lasts 400 days, the longest a browser keeps one, and the
+`browser 2026-11-21 (2)` for a second one that day. A browser signed in
+already keeps its token when `evie web` opens it again. `evie token list`
+shows them, and `evie token remove "browser 2026-11-21"` signs that browser
+out at once. The cookie lasts 400 days, the longest a browser keeps one, and the
 page's scripts cannot read it.
 
 On another device, such as a phone, open the server's address and paste a
