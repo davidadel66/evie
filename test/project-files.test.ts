@@ -85,7 +85,21 @@ test("git is asked with none of the commands a repository's settings name, and a
 
   expect(await listProjectFiles(folder, { dataFolder: DATA })).toEqual({ files: ["README.md"], more: false })
   expect(await readdir(noted)).toEqual(["fsmonitor"])
-  expect((await listProjectFiles(folder, { dataFolder: DATA, gitWithin: 1 })).more).toBe(true)
+
+  // A git that takes ten seconds to list files, first on the path, which
+  // hands everything else to the real git at once: the listing is given
+  // up at its time limit, however fast the computer is.
+  const slow = join(noted, "slow")
+  await mkdir(slow)
+  await writeFile(join(slow, "git"), `#!/bin/sh\ncase " $* " in *" ls-files "*) sleep 10 </dev/null >/dev/null 2>&1 ;; esac\nexec "${Bun.which("git")}" "$@"\n`)
+  await chmod(join(slow, "git"), 0o755)
+  const path = process.env.PATH
+  process.env.PATH = `${slow}:${path}`
+  try {
+    expect((await listProjectFiles(folder, { dataFolder: DATA, gitWithin: 300 })).more).toBe(true)
+  } finally {
+    process.env.PATH = path
+  }
 })
 
 test("only so many files are listed, and the listing says there are more", async () => {
