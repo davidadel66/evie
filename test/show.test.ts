@@ -1,5 +1,5 @@
 import { afterEach, expect, setSystemTime, test } from "bun:test"
-import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { permissions } from "../src/index.ts"
@@ -235,4 +235,32 @@ test("a shown folder that leads through a link elsewhere is refused, saying what
 
   expect(await call(["out/chart.png"])).toBe("Not shown: The folder shown files are kept in leads through a link to somewhere else, so nothing is shown there. Remove the link, and show it again.")
   expect(await readdir(elsewhere)).toEqual([])
+})
+
+test("a file that cannot be read, one in a folder that cannot be looked in, and what is not a file are refused, each saying what to do next", async () => {
+  setSystemTime(new Date(2026, 10, 22, 9, 30))
+  const { call, put, folder } = await start()
+  await put("out/private.png", png())
+  await chmod(join(folder, "out", "private.png"), 0o000)
+  await put("locked/chart.png", png())
+  await chmod(join(folder, "locked"), 0o000)
+  cleanups.push(() => chmod(join(folder, "locked"), 0o755))
+  Bun.spawnSync(["mkfifo", join(folder, "out", "pipe.md")])
+
+  expect(await call(["out/private.png"])).toMatch(/^Not shown: out\/private\.png could not be read \(EACCES[^)]*\)\. Check that evie may read it, or tell the owner its path instead\.$/)
+  expect(await call(["locked/chart.png"])).toMatch(/^Not shown: locked\/chart\.png could not be read \(EACCES[^)]*\)\. Check that evie may read it, or tell the owner its path instead\.$/)
+  expect(await call(["out/pipe.md"])).toBe("Not shown: out/pipe.md is not a file that can be shown. Save what it holds to a file of a kind evie shows, or tell the owner its path instead.")
+})
+
+test("when keeping a file fails partway through a call, the copies that call made are removed, and the refusal says what to do next", async () => {
+  setSystemTime(new Date(2026, 10, 22, 9, 30))
+  const { call, put, folder } = await start()
+  await put("out/first.png", png())
+  // A name one short of the most a file system takes: with its kind's ending added, it is too long to keep.
+  await put(`out/${"x".repeat(252)}`, png())
+
+  expect(await call(["out/first.png", `out/${"x".repeat(252)}`])).toMatch(
+    /^Not shown: the files could not be kept in Storage \(ENAMETOOLONG[^)]*\)\. Check that there is room and that evie may write there, then call show again, or tell the owner the paths instead\.$/,
+  )
+  expect(await readdir(join(folder, ".evie", "shown", "2026-11-22"))).toEqual([])
 })
