@@ -1,204 +1,387 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
-import type { Job, ListedProject, PullRequest } from "../../src/core/types.ts"
+import * as PopoverPrimitive from "@radix-ui/react-popover"
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react"
+import type { GitStatus, Job, ListedProject, PullRequest } from "../../src/core/types.ts"
 import { addressOf } from "./address.ts"
-import { followOutput, followPullRequest, followSubagents, request, stopJob, undo, type Following, type Lineage } from "./card.ts"
-import { closeSheet, toggleCard, useCardShown } from "./card-shown.ts"
-import { Counts } from "./ChangedFiles.tsx"
+import { followGitStatus, followOutput, followPullRequest, followSubagents, pullRequestOf, stopJob, undo, type FollowedGitStatus, type Following, type Lineage } from "./card.ts"
+import { closeFloating, measured, pinCard, resetItems, showItem, toggleCard, useCardShown } from "./card-shown.ts"
 import { holdChanges, type Changes as SessionChanges } from "./changes.ts"
 import { Button } from "./components/ui/button.tsx"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
-import { sessionLine } from "./diff.ts"
-import { openDiff, useDiffShown } from "./diff-shown.ts"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./components/ui/dropdown-menu.tsx"
+import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover.tsx"
 import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet.tsx"
 import type { Connection } from "./connection.ts"
 import { holdConversation, startedHere, type Conversation } from "./conversation.ts"
+import { openDiff } from "./diff-shown.ts"
 import { FolderPath } from "./FolderPath.tsx"
-import { ArrowSquareOut, CaretDown, CaretRight, Check, SidebarRight, X } from "./icons.tsx"
-import { backgroundJobs, branchWords, gitWhyNot, stateWord, subagentsOf, undoWhyNot, type CardFacts, type Subagent } from "./project-card.ts"
-import { ProjectIcon } from "./ProjectIcon.tsx"
-import { checkLook, checksSummary, checkWord, pullRequestWord } from "./pull-request.ts"
-import { addressOfWorkspace } from "./workspace.ts"
+import {
+  ArrowBendLeftUp,
+  ArrowCounterClockwise,
+  ArrowSquareOut,
+  Article,
+  CaretDown,
+  Check,
+  CheckCircle,
+  CircleDashed,
+  CloudArrowUp,
+  Folder,
+  GitBranch,
+  GitCommit,
+  GitDiff,
+  GitPullRequest,
+  PushPin,
+  PushPinFill,
+  Robot,
+  SlidersHorizontal,
+  StopFill,
+  TerminalWindow,
+  X,
+  XCircle,
+} from "./icons.tsx"
+import { cn } from "./lib/utils.ts"
+import {
+  backgroundJobs,
+  DETAILS_ITEMS,
+  gitAction,
+  gitMenu,
+  gitWhyNot,
+  isDefaultShown,
+  lineageOf,
+  REQUESTS,
+  sectionsShown,
+  stateWord,
+  subagentsOf,
+  switchRequest,
+  undoWhyNot,
+  type CardFacts,
+  type Request,
+  type Shown,
+} from "./project-card.ts"
+import { ProjectTile } from "./ProjectIcon.tsx"
+import { checkLook, checksSummary, checkWord, fixRequest, pullRequestWord } from "./pull-request.ts"
 import { select, useSelected } from "./selection.ts"
-import { label as keyLabel, onMac } from "./shortcuts.ts"
+import { titleOf } from "./session-list.ts"
 import type { Sessions } from "./sessions.ts"
+import { label as keyLabel, onMac } from "./shortcuts.ts"
 import { Spinner } from "./Spinner.tsx"
+import { addressOfWorkspace } from "./workspace.ts"
 
-// The project card, on the right: the selected session's project, its
-// folder and branch; what can be done with its changes; its subagents,
-// each of which opens its conversation in the middle; and its background
-// jobs, each of which opens to its output. At desktop width it is a column
-// the owner can hide; narrower, it is a sheet over the page, as T3 Code's
-// right panel is, which goes once something is picked in it or elsewhere.
+// The session details, as T3 Code's details card, drawn as the owner's
+// drawing of it: a card that floats at the top right of the conversation,
+// pinned beside it or opened over it from its header (see card-shown.ts),
+// with a slim row naming it, which holds Choose what to show and Pin, and
+// its sections: the workspace, with the project, its folder and Undo last
+// change; version control, with the branch, its pull request and checks,
+// the git button and the changes against the base; the lineage, with the
+// parent and the subagents; and background work. At phone width it is a
+// sheet from the right.
+
+// The card's place in the conversation's column, which it measures to know
+// whether a pinned card has the room to sit there. It is given its place
+// by the page: in place, in the column's top right corner; floating, from
+// the same corner over the conversation; at phone width, as a sheet. A
+// card floating closes when another session is picked.
 export function CardPlace({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const shown = useCardShown()
-  const diff = useDiffShown()
   const selected = useSelected()
-  useEffect(() => {
-    if (!shown.wide) closeSheet()
-  }, [selected])
-  if (shown.wide) {
-    // The diff panel, while it is open, is in the card's place.
-    if (!shown.column || diff.open) return null
-    return (
-      <aside aria-label="Project" className="flex w-project-card shrink-0 flex-col border-l border-line bg-bg">
-        <ProjectCard connection={connection} sessions={sessions} />
-      </aside>
-    )
-  }
+  const corner = useRef<HTMLDivElement>(null)
+  // A click outside closes it, as does Escape, but a click on the header's
+  // button, which toggles it; the focus goes back to that button, unless
+  // the click outside took it elsewhere.
+  const pointedAway = useRef(false)
+  useEffect(() => closeFloating(), [selected])
+  useLayoutEffect(() => {
+    const column = corner.current?.parentElement
+    if (!column) return
+    const observer = new ResizeObserver(() => measured(column.clientWidth))
+    observer.observe(column)
+    measured(column.clientWidth)
+    return () => observer.disconnect()
+  }, [])
+  const card = <DetailsCard connection={connection} sessions={sessions} />
   return (
-    <Sheet open={shown.sheet} onOpenChange={(open) => !open && closeSheet()}>
-      <SheetContent aria-label="Project">
-        <SheetTitle className="sr-only">Project</SheetTitle>
-        <ProjectCard connection={connection} sessions={sessions} />
-      </SheetContent>
-    </Sheet>
+    <>
+      <PopoverPrimitive.Root open={shown.place === "popover" && shown.open} onOpenChange={(open) => !open && closeFloating()}>
+        <PopoverPrimitive.Anchor asChild>
+          <div ref={corner} aria-hidden="true" className="pointer-events-none absolute top-details-top right-3 size-0" />
+        </PopoverPrimitive.Anchor>
+        <PopoverPrimitive.Portal>
+          <PopoverPrimitive.Content
+            aria-label="Session details"
+            side="bottom"
+            align="end"
+            sideOffset={0}
+            collisionPadding={12}
+            onOpenAutoFocus={() => (pointedAway.current = false)}
+            onPointerDownOutside={() => (pointedAway.current = true)}
+            onInteractOutside={(event) => event.target instanceof Element && event.target.closest("[data-card-button]") !== null && event.preventDefault()}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              if (!pointedAway.current) document.querySelector<HTMLElement>("[data-card-button]")?.focus()
+            }}
+            className="z-40 flex max-h-(--radix-popover-content-available-height) w-details-card max-w-[calc(100vw-var(--spacing-6))] flex-col overflow-y-auto rounded-lg border border-text/10 text-detail text-text shadow-float details-glass"
+          >
+            {card}
+          </PopoverPrimitive.Content>
+        </PopoverPrimitive.Portal>
+      </PopoverPrimitive.Root>
+      {shown.place === "inline" && shown.open && (
+        <aside
+          aria-label="Session details"
+          className="absolute top-details-top right-3 z-20 flex max-h-details-height w-details-card max-w-[calc(100%-var(--spacing-6))] flex-col overflow-y-auto rounded-lg border border-text/10 text-detail text-text details-glass"
+        >
+          {card}
+        </aside>
+      )}
+      <Sheet open={shown.place === "sheet" && shown.open} onOpenChange={(open) => !open && closeFloating()}>
+        <SheetContent aria-label="Session details" className="overflow-y-auto text-detail">
+          <SheetTitle className="sr-only">Session details</SheetTitle>
+          {card}
+        </SheetContent>
+      </Sheet>
+    </>
   )
 }
 
-// The button in the middle column's header that shows and hides the card.
+// The button in the conversation's header that opens and closes the card,
+// raised while it is open.
 export function CardButton() {
   const shown = useCardShown()
-  const open = shown.wide ? shown.column : shown.sheet
-  const label = open ? "Hide the project card" : "Show the project card"
   return (
-    <Button variant="icon" aria-label={label} aria-pressed={open} title={`${label} (${keyLabel("card", onMac())})`} onClick={toggleCard} className="size-control-sm">
-      <SidebarRight />
+    <Button
+      variant="icon"
+      data-card-button=""
+      aria-label="Show or hide session details"
+      aria-pressed={shown.open}
+      title={`Session details (${keyLabel("card", onMac())})`}
+      onClick={toggleCard}
+      className={cn("size-control-sm", shown.open && "bg-surface-raised text-text")}
+    >
+      <Article />
     </Button>
   )
 }
 
+// What is under the conversation's header, kept clear of the card while it
+// is pinned open beside it.
+export function CardLane({ children }: { children: ReactNode }) {
+  const shown = useCardShown()
+  return <div className={cn("flex min-h-0 flex-1 flex-col", shown.place === "inline" && shown.open && "pr-details-clear")}>{children}</div>
+}
+
 // What the card holds for what is selected: a session, a draft of one, or nothing.
-function ProjectCard({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
+function DetailsCard({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
+  const [menu, setMenu] = useState(false)
+  const frame = (children: ReactNode) => (
+    <div className="flex flex-col">
+      <Heading menu={menu} setMenu={setMenu} />
+      {children}
+    </div>
+  )
   const projectOf = (id: string | null) => (id === null ? null : list.projects.find((each) => each.id === id))
-  if (selected === undefined) return <Empty text="No session is open." />
+  if (selected === undefined) return frame(<Quiet>No session is open.</Quiet>)
   if ("draft" in selected) {
-    return (
-      <Body>
-        <Header projectId={selected.draft} project={projectOf(selected.draft)} />
-        <Where connection={connection} projectId={selected.draft} project={projectOf(selected.draft)} />
-        <p className="px-5 pt-4 text-caption text-text-muted">The rest is shown once the session's first message is sent.</p>
-      </Body>
+    return frame(
+      <>
+        <Section label="Workspace" first>
+          <ProjectRows projectId={selected.draft} project={projectOf(selected.draft)} />
+        </Section>
+        <Quiet>The rest is shown once the session's first message is sent.</Quiet>
+      </>,
     )
   }
-  if (!list.listed) return <Empty text="" />
+  if (!list.listed) return frame(null)
   // A session this page has just started is shown before the list has it.
   const summary = list.sessions.find((each) => each.session === selected.session)
   const started = startedHere(selected.session)
-  if (summary === undefined && started === undefined) return <Empty text="This session is not in the list." />
+  if (summary === undefined && started === undefined) return frame(<Quiet>This session is not in the list.</Quiet>)
   const projectId = summary !== undefined ? summary.project : started!
-  return <SessionCard key={selected.session} connection={connection} session={selected.session} opened={selected.subagent} projectId={projectId} project={projectOf(projectId)} />
-}
-
-// The card with nothing of a session's to show, but a line saying so.
-function Empty({ text }: { text: string }) {
-  return (
-    <Body>
-      <Header projectId={null} title="Project" />
-      {text !== "" && <p className="px-5 text-caption text-text-muted">{text}</p>}
-    </Body>
+  const parent = { title: summary === undefined ? "New session" : titleOf(summary), state: summary?.state }
+  return frame(
+    <SessionDetails
+      key={selected.session}
+      connection={connection}
+      session={selected.session}
+      opened={selected.subagent}
+      parent={parent}
+      projectId={projectId}
+      project={projectOf(projectId)}
+      chooseWhatToShow={() => setMenu(true)}
+    />,
   )
 }
 
-function Body({ children }: { children: ReactNode }) {
-  return <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">{children}</div>
+// A line in the card saying there is nothing more to show, or why.
+function Quiet({ children }: { children: ReactNode }) {
+  return <p className="px-4.5 pb-3 text-caption text-text-muted">{children}</p>
 }
 
-// The card's top row: the project's tile and name, or that there is none,
-// and the button that hides the card.
-function Header({ projectId, project, title }: { projectId: string | null; project?: ListedProject | null | undefined; title?: string }) {
-  const name = title ?? (projectId === null ? "No project" : (project?.name ?? "Project"))
+// The slim row at the card's top: its name, Choose what to show, and Pin,
+// or at phone width, Close.
+function Heading({ menu, setMenu }: { menu: boolean; setMenu(open: boolean): void }) {
+  const shown = useCardShown()
+  const pin = shown.pinned ? "Unpin: open it from the header instead" : "Pin beside the conversation"
   return (
-    <header className="flex h-header-height shrink-0 items-center gap-2 pr-3 pl-5">
-      {projectId === null ? (
-        <h2 className="min-w-0 flex-1 truncate text-label text-text">{name}</h2>
+    // A 32px row under 6px of room, as drawn.
+    <div className="flex min-h-row-height items-center gap-0.5 pt-1.5 pr-3 pl-2 box-content">
+      <h2 className="min-w-0 flex-1 pl-2.5 text-detail-heading text-text-muted">Session details</h2>
+      <DropdownMenu open={menu} onOpenChange={setMenu}>
+        <DropdownMenuTrigger asChild>
+          <IconAction label="Choose what to show" pressed={menu}>
+            <SlidersHorizontal />
+          </IconAction>
+        </DropdownMenuTrigger>
+        <ItemsMenu shown={shown.shown} />
+      </DropdownMenu>
+      {shown.place === "sheet" ? (
+        <IconAction label="Close session details" onClick={closeFloating}>
+          <X />
+        </IconAction>
       ) : (
-        // The project's tile and name open its workspace.
-        <h2 className="flex min-w-0 flex-1 text-label text-text">
-          <a href={addressOfWorkspace({ workspace: projectId, tab: "sessions" })} title={`Open the ${name} workspace`} className="flex h-control min-w-0 items-center gap-2">
-            <ProjectIcon project={projectId} />
-            <span className="min-w-0 truncate">{name}</span>
-          </a>
-        </h2>
+        <IconAction label={pin} pressed={shown.pinned} aria-pressed={shown.pinned} onClick={() => pinCard(!shown.pinned)}>
+          {shown.pinned ? <PushPinFill /> : <PushPin />}
+        </IconAction>
       )}
-      <Button variant="icon" aria-label="Hide the project card" onClick={toggleCard} className="size-control-sm">
-        <X />
-      </Button>
-    </header>
-  )
-}
-
-// Where the project is: its folder, and the branch it is on, as rows, and
-// the branch's pull request, when it has one. A session with no project
-// has none, which the header says.
-function Where({ connection, projectId, project }: { connection: Connection; projectId: string | null; project: ListedProject | null | undefined }) {
-  if (projectId === null) return null
-  if (project == null) return <p className="border-t border-line px-5 pt-4 text-caption text-text-muted">The project's details have not been read yet.</p>
-  const branch = branchWords(project)
-  return (
-    <dl className="flex flex-col px-2">
-      <Row label="Folder">
-        <dd className="min-w-0">
-          <FolderPath folder={project.folder} className="text-text" />
-        </dd>
-      </Row>
-      <Row label="Branch">
-        <dd title={branch.text} className={`min-w-0 truncate ${branch.branch ? "font-mono text-code text-text" : "text-body text-text-muted"}`}>
-          {branch.text}
-        </dd>
-      </Row>
-      {project.branch !== undefined && <PullRequestRow key={`${project.id} ${project.branch}`} connection={connection} project={project.id} />}
-    </dl>
-  )
-}
-
-// A row of a list: its label on the left and its value on the right, on
-// one line, with a line on top.
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex h-row-height items-center justify-between gap-4 border-t border-line px-3">
-      <dt className="shrink-0 text-body font-medium text-text-muted">{label}</dt>
-      {children}
     </div>
   )
 }
 
-// A section of the card, under a caption that says what it is.
-function Section({ title, count, children }: { title: string; count?: string; children: ReactNode }) {
+// A 24px button holding an icon alone, as T3 Code's card's, named by its label.
+function IconAction({ label, pressed = false, className, children, ...props }: { label: string; pressed?: boolean } & ComponentProps<"button">) {
   return (
-    <section aria-label={title} className="flex flex-col px-2 pt-4">
-      <h3 className="px-3 pb-2 text-caption text-text-muted">
-        {title}
-        {count !== undefined && ` · ${count}`}
-      </h3>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className={cn(
+        "flex size-6 shrink-0 items-center justify-center rounded-chip text-text-muted hover:bg-text/8 [&>svg]:size-icon-caret",
+        pressed && "bg-text/8 text-text",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  )
+}
+
+// Choose what to show: each item, ticked while it shows, which stays open
+// to choose another, and Reset to default, off while all are as at first.
+function ItemsMenu({ shown }: { shown: Shown }) {
+  return (
+    <DropdownMenuContent align="end" className="w-details-menu text-detail">
+      <DropdownMenuLabel>Show in session details</DropdownMenuLabel>
+      {DETAILS_ITEMS.map((item) => (
+        <DropdownMenuCheckboxItem key={item.id} checked={shown[item.id]} onCheckedChange={(on) => showItem(item.id, on)} onSelect={(event) => event.preventDefault()} className="text-detail">
+          {item.label}
+        </DropdownMenuCheckboxItem>
+      ))}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem disabled={isDefaultShown(shown)} onSelect={(event) => (event.preventDefault(), resetItems())} className="pl-8 text-detail data-disabled:text-text-muted">
+        Reset to default
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  )
+}
+
+// A section of the card: the first has no line above it, and one named on
+// the card has its heading.
+function Section({ label, first = false, heading, children }: { label: string; first?: boolean; heading?: string; children: ReactNode }) {
+  const id = useId()
+  return (
+    <section
+      {...(heading !== undefined ? { "aria-labelledby": id } : { "aria-label": label })}
+      className={cn("flex flex-col px-2 pb-2.5", first ? "pt-0.5" : "border-t border-line pt-2")}
+    >
+      {heading !== undefined && (
+        <div className="mb-1 flex min-h-row-height items-center px-2.5">
+          <h3 id={id} className="text-detail-heading text-text-muted">
+            {heading}
+          </h3>
+        </div>
+      )}
       {children}
     </section>
   )
 }
 
-// The card of a session: everything above, from the session as it stands,
-// which it follows with the middle column, and as it changes.
-function SessionCard({
+// A row's look, as T3 Code's: 32px, its icon and words 10px in, raised a
+// little on hover; and its icon's.
+const ROW = "flex h-row-height w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-detail font-medium text-text/85 hover:bg-text/8"
+const ROW_ICON = "size-icon-sm shrink-0 text-text-muted"
+
+// The project, which opens its workspace, and its folder; or that the
+// session has none.
+function ProjectRows({ projectId, project }: { projectId: string | null; project: ListedProject | null | undefined }) {
+  if (projectId === null) {
+    return (
+      <>
+        <div className={cn(ROW, "hover:bg-transparent")}>
+          <span aria-hidden="true" className="size-icon-sm shrink-0 rounded-sm border border-dashed border-text-muted" />
+          <span className="min-w-0 truncate">No project</span>
+        </div>
+        <div className={cn(ROW, "font-normal hover:bg-transparent")}>
+          <Folder className={ROW_ICON} />
+          <span className="min-w-0 truncate font-mono text-caption">No folder</span>
+        </div>
+      </>
+    )
+  }
+  const name = project?.name ?? "Project"
+  return (
+    <>
+      <a href={addressOfWorkspace({ workspace: projectId, tab: "sessions" })} title={`Open the ${name} workspace`} className={ROW}>
+        <ProjectTile project={projectId} size="detail" />
+        <span className="min-w-0 truncate">{name}</span>
+      </a>
+      {project != null && (
+        <div className={cn(ROW, "font-normal hover:bg-transparent")}>
+          <Folder className={ROW_ICON} />
+          <FolderPath folder={project.folder} className="text-caption" />
+        </div>
+      )}
+    </>
+  )
+}
+
+// How long a git button's request keeps the buttons off when no turn
+// starts for it, in milliseconds.
+const REQUEST_WAIT = 5000
+
+// The card of a session: everything it shows, from the session as it
+// stands, which it follows with the middle column, and as it changes.
+function SessionDetails({
   connection,
   session,
   opened,
+  parent,
   projectId,
   project,
+  chooseWhatToShow,
 }: {
   connection: Connection
   session: string
   // The subagent whose conversation is open in the middle, if one is.
   opened: string | undefined
+  parent: { title: string; state: string | undefined }
   projectId: string | null
   project: ListedProject | null | undefined
+  chooseWhatToShow(): void
 }) {
   const [followed, setFollowed] = useState<{ conversation: Conversation; lineage: Lineage; changes: SessionChanges }>()
   useEffect(() => {
     const held = holdConversation(connection, session)
     const lineage = followSubagents(connection, session)
-    // With the whole session's files, which the card sums up.
-    const changes = holdChanges(connection, session, { whole: true })
+    const changes = holdChanges(connection, session)
     setFollowed({ conversation: held.conversation, lineage, changes: changes.changes })
     return () => {
       changes.release()
@@ -206,14 +389,46 @@ function SessionCard({
       lineage.close()
     }
   }, [connection, session])
-  return (
-    <Body>
-      <Header projectId={projectId} project={project} />
-      <Where connection={connection} projectId={projectId} project={project} />
-      {followed && <Live connection={connection} {...followed} session={session} opened={opened} project={project} />}
-    </Body>
-  )
+  const repository = projectId !== null && project?.git !== false ? projectId : undefined
+  const pull = usePullRequest(connection, repository, project?.branch)
+  const git = useGitStatus(connection, repository)
+  if (followed === undefined) {
+    return (
+      <Section label="Workspace" first>
+        <ProjectRows projectId={projectId} project={project} />
+      </Section>
+    )
+  }
+  return <Live connection={connection} {...followed} session={session} opened={opened} parent={parent} projectId={projectId} project={project} pull={pull} git={git} chooseWhatToShow={chooseWhatToShow} />
 }
+
+// The branch's pull request, read when the card opens and each minute
+// while it is shown; undefined until read, and null when there is none.
+function usePullRequest(connection: Connection, project: string | undefined, branch: string | undefined) {
+  const [followed, setFollowed] = useState<ReturnType<typeof followPullRequest>>()
+  useEffect(() => {
+    if (project === undefined) return setFollowed(undefined)
+    const following = followPullRequest(connection, project, { window, shown: () => document.visibilityState === "visible" })
+    setFollowed(following)
+    return following.close
+  }, [connection, project, branch])
+  return useSyncExternalStore(followed?.subscribe ?? nothing.subscribe, followed?.state ?? nothing.state)
+}
+
+// How the branch stands, as followGitStatus reads it, with what follows it,
+// to read it again when a turn ends.
+function useGitStatus(connection: Connection, project: string | undefined) {
+  const [followed, setFollowed] = useState<FollowedGitStatus>()
+  useEffect(() => {
+    if (project === undefined) return setFollowed(undefined)
+    const following = followGitStatus(connection, project, { window, shown: () => document.visibilityState === "visible", base: () => pullRequestOf(project)?.base ?? undefined })
+    setFollowed(following)
+    return following.close
+  }, [connection, project])
+  const status = useSyncExternalStore(followed?.subscribe ?? nothing.subscribe, followed?.state ?? nothing.state) as GitStatus | null | undefined
+  return { status, again: () => followed?.again() }
+}
+const nothing = { subscribe: () => () => {}, state: () => undefined }
 
 function Live({
   connection,
@@ -222,7 +437,12 @@ function Live({
   changes,
   session,
   opened,
+  parent,
+  projectId,
   project,
+  pull,
+  git,
+  chooseWhatToShow,
 }: {
   connection: Connection
   conversation: Conversation
@@ -230,208 +450,313 @@ function Live({
   changes: SessionChanges
   session: string
   opened: string | undefined
+  parent: { title: string; state: string | undefined }
+  projectId: string | null
   project: ListedProject | null | undefined
+  pull: PullRequest | null | undefined
+  git: { status: GitStatus | null | undefined; again(): void }
+  chooseWhatToShow(): void
 }) {
+  const shown = useCardShown().shown
   const state = useSyncExternalStore(conversation.subscribe, conversation.state)
-  const { listed } = useSyncExternalStore(lineage.subscribe, lineage.state)
+  const { listed: stored } = useSyncExternalStore(lineage.subscribe, lineage.state)
+  const { listed } = useSyncExternalStore(changes.subscribe, changes.state)
   const connected = useSyncExternalStore(connection.subscribe, connection.state).status === "connected"
-  const facts = {
-    connected,
-    session: state.opened ? "open" : state.problem !== undefined ? "failed" : "opening",
-    project,
-    turnRunning: state.turnRunning,
-  } as const
-  const subagents = subagentsOf(listed, state.jobs)
-  const jobs = backgroundJobs(state.jobs)
-  // Why the last Stop could not be asked for, until the next.
-  const [stopRefused, setStopRefused] = useState<string>()
-  const stop = (id: string) => void stopJob(connection, session, id).then(setStopRefused)
-  const working = (count: number) => (count > 0 ? `${count} working` : undefined)
-  const refusal = stopRefused !== undefined && <p className="px-3 pb-2 text-caption text-text-muted">{stopRefused}</p>
 
-  return (
-    <>
-      <Changes conversation={conversation} changes={changes} session={session} opened={opened} facts={facts} />
-      {subagents.length > 0 && (
-        <Section title="Subagents" {...withCount(working(subagents.filter((each) => each.status === "running").length))}>
-          {refusal}
-          <ul className="flex flex-col">
-            {subagents.map((subagent) => (
-              <SubagentRow key={subagent.session} parent={session} subagent={subagent} open={subagent.session === opened} stop={(job) => stop(job)} />
-            ))}
-          </ul>
-        </Section>
-      )}
-      {jobs.running.length + jobs.ended.length > 0 && (
-        <Section title="Background jobs" {...withCount(working(jobs.running.length))}>
-          {subagents.length === 0 && refusal}
-          <Jobs connection={connection} session={session} running={jobs.running} ended={jobs.ended} stop={stop} />
-        </Section>
-      )}
-    </>
-  )
-}
-const withCount = (count: string | undefined) => (count === undefined ? {} : { count })
-
-// How long a git button's request keeps the buttons off when no turn
-// starts for it, in milliseconds.
-const REQUEST_WAIT = 5000
-
-// Commit, push and pull request, each a request in words sent to evie, and
-// undo, each disabled with why while it does not apply. With a subagent's
-// conversation open in the middle, a press goes back to the session's own
-// first, so that what it says is in view.
-function Changes({
-  conversation,
-  changes,
-  session,
-  opened,
-  facts,
-}: {
-  conversation: Conversation
-  changes: SessionChanges
-  session: string
-  opened: string | undefined
-  facts: Omit<CardFacts, "requested">
-}) {
-  // Why a request could not be sent, until the next is.
-  const [refused, setRefused] = useState<string>()
-  const [sending, setSending] = useState(false)
   // A request sent that evie has not started on: one at a time.
   const [requested, setRequested] = useState(false)
-  const [undoing, setUndoing] = useState(false)
   useEffect(() => {
-    if (facts.turnRunning) setRequested(false)
-  }, [facts.turnRunning])
+    if (state.turnRunning) setRequested(false)
+  }, [state.turnRunning])
   useEffect(() => {
     if (!requested) return
     const timer = setTimeout(() => setRequested(false), REQUEST_WAIT)
     return () => clearTimeout(timer)
   }, [requested])
-  const gitNote = useId()
-  const undoNote = useId()
-  const gitWhy = gitWhyNot({ ...facts, requested })
-  const undoWhy = undoWhyNot({ ...facts, requested })
-  const why = gitWhy ?? refused
-  const back = () => opened !== undefined && select({ session })
-  async function ask(kind: Parameters<typeof request>[1]) {
-    back()
-    setSending(true)
-    const failed = await request(conversation, kind)
-    setRefused(failed)
-    setRequested(failed === undefined)
-    setSending(false)
-  }
-  async function undoLast() {
-    back()
-    setUndoing(true)
-    await undo(conversation)
-    setUndoing(false)
-  }
-  return (
-    <Section title="Changes">
-      <SessionChanged changes={changes} />
-      {/* Each button's own padding brings its word to the card's 20px edge. */}
-      <div className="flex flex-wrap gap-2">
-        {(["commit", "push", "pull request"] as const).map((kind) => (
-          <Button key={kind} disabled={gitWhy !== undefined || sending} aria-describedby={why === undefined ? undefined : gitNote} onClick={() => void ask(kind)} className="px-3">
-            {{ commit: "Commit", push: "Push", "pull request": "Pull request" }[kind]}
-          </Button>
-        ))}
-      </div>
-      {why !== undefined && (
-        <p id={gitNote} className="px-3 pt-2 text-caption text-text-muted">
-          {why}
-        </p>
-      )}
-      <div className="flex pt-3">
-        <Button disabled={undoWhy !== undefined || undoing} aria-describedby={undoWhy === undefined ? undefined : undoNote} onClick={() => void undoLast()} className="px-3">
-          Undo last change
-        </Button>
-      </div>
-      {undoWhy !== undefined && (
-        <p id={undoNote} className="px-3 pt-2 text-caption text-text-muted">
-          {undoWhy}
-        </p>
-      )}
-    </Section>
-  )
-}
-
-// What the session has changed, in one row, as T3 Code's details card
-// says it: how many files, and lines added and removed, from before its
-// first change to now; and Open diff, which opens the diff panel on the
-// whole session.
-function SessionChanged({ changes }: { changes: SessionChanges }) {
-  const { listed } = useSyncExternalStore(changes.subscribe, changes.state)
-  const line = sessionLine(listed)
-  const keys = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘D" : "Ctrl+D"
-  return (
-    <div className="mb-3 flex min-h-row-height items-center gap-2 border-t border-b border-line pl-3">
-      <span className="min-w-0 flex-1 py-2 text-body text-text-muted">{typeof line === "string" ? line : line.files}</span>
-      {typeof line !== "string" && <Counts added={line.added} removed={line.removed} />}
-      <Button variant="quiet" title={`Open the diff (${keys})`} onClick={() => openDiff({ scope: "session" })}>
-        Open diff
-      </Button>
-    </div>
-  )
-}
-
-// The branch's pull request, as T3 Code's details card shows it: its title,
-// which opens it on GitHub; its number and state in words; and its checks
-// summed up, which open a menu of each check, with how it stands and a
-// link to its details. Read when the card opens and each minute while it
-// is shown. Nothing is shown when there is none, or the server cannot ask
-// GitHub.
-function PullRequestRow({ connection, project }: { connection: Connection; project: string }) {
-  const [followed, setFollowed] = useState<ReturnType<typeof followPullRequest>>()
+  // How the branch stands is read again once each turn has ended, and once
+  // the pull request is read, whose base the changes are counted against.
+  const ended = state.events.findLast((event) => event.type === "turn_end")?.seq
   useEffect(() => {
-    const following = followPullRequest(connection, project, { window, shown: () => document.visibilityState === "visible" })
-    setFollowed(following)
-    return following.close
-  }, [connection, project])
-  const pull = useSyncExternalStore(followed?.subscribe ?? noPull.subscribe, followed?.state ?? noPull.state)
-  if (pull == null) return null
+    if (ended !== undefined || pull?.base !== undefined) git.again()
+  }, [ended, pull?.base])
+
+  const facts: CardFacts = {
+    connected,
+    session: state.opened ? "open" : state.problem !== undefined ? "failed" : "opening",
+    project,
+    turnRunning: state.turnRunning,
+    requested,
+  }
+  // With a subagent's conversation open in the middle, a press goes back to
+  // the session's own first, so that what it says is in view.
+  const back = () => opened !== undefined && select({ session })
+  async function ask(text: string) {
+    back()
+    const failed = await conversation.send(text)
+    setRequested(failed === undefined)
+    return failed
+  }
+
+  const subagents = subagentsOf(stored, state.jobs)
+  const jobs = backgroundJobs(state.jobs)
+  const latest = listed?.kept ? listed.turns.at(-1) : undefined
+  const has = { undo: latest !== undefined, git: git.status !== null && projectId !== null && project?.git !== false, related: opened !== undefined || subagents.length > 0, jobs: jobs.running.length > 0 }
+  const [openJobs, setOpenJobs] = useState<ReadonlySet<string>>(new Set())
+  // A job open as it ends stays listed, with its output, until it is closed.
+  const listedJobs = [...jobs.running, ...jobs.ended.filter((job) => openJobs.has(job.id))]
+  const sections = sectionsShown(shown, { ...has, jobs: listedJobs.length > 0 })
+  // Why the last Stop could not be asked for, until the next.
+  const [stopRefused, setStopRefused] = useState<string>()
+  const stop = (id: string) => void stopJob(connection, session, id).then(setStopRefused)
+
   return (
-    <div className="flex flex-col border-t border-line px-3 pt-2 pb-1">
-      <div className="flex min-h-control items-center justify-between gap-4">
-        <dt className="shrink-0 text-body font-medium text-text-muted">Pull request</dt>
-        <dd className="shrink-0 text-body text-text">
-          #{pull.number} <span className="text-text-muted">·</span> {pullRequestWord(pull.state)}
-        </dd>
-      </div>
-      <dd>
-        {/* The server gives only an https link, and none for any other. */}
-        {pull.url !== undefined ? (
-          <a href={pull.url} target="_blank" rel="noreferrer" title={`Open pull request #${pull.number} on GitHub`} className="flex min-h-control items-start gap-2 py-2 text-body font-medium text-text hover:underline">
-            <span className="line-clamp-2 min-w-0 flex-1 break-words">{pull.title}</span>
-            <ArrowSquareOut className="mt-1 size-icon-sm shrink-0 text-text-muted" />
-            <span className="sr-only">(opens GitHub)</span>
-          </a>
-        ) : (
-          <p className="line-clamp-2 py-2 text-body font-medium break-words text-text">{pull.title}</p>
-        )}
-      </dd>
-      {pull.checks.length > 0 && (
-        <dd>
-          <Checks checks={pull.checks} />
-        </dd>
+    <>
+      {sections.workspace && (
+        <Section label="Workspace" first>
+          {shown.workspace && <ProjectRows projectId={projectId} project={project} />}
+          {shown.undo && latest !== undefined && (
+            <UndoRow
+              files={latest.files.length}
+              why={undoWhyNot(facts)}
+              undo={async () => {
+                back()
+                await undo(conversation)
+              }}
+            />
+          )}
+        </Section>
       )}
+      {sections.versionControl && (
+        <Section label="Version control" first={!sections.workspace}>
+          {shown.branch && <BranchRow status={git.status} branch={git.status?.branch ?? project?.branch} why={gitWhyNot(facts)} ask={ask} />}
+          {shown.branch && pull != null && <PullRow pull={pull} why={gitWhyNot(facts)} ask={ask} />}
+          {shown.git && <GitButton name={project?.name ?? "the project"} status={git.status} pull={pull} why={gitWhyNot(facts)} ask={ask} />}
+          {shown.changes && <ChangesRow status={git.status} back={back} />}
+        </Section>
+      )}
+      {sections.lineage && (
+        <LineageSection
+          first={!sections.workspace && !sections.versionControl}
+          session={session}
+          parent={parent}
+          opened={opened}
+          subagents={subagents}
+          stop={stop}
+          refused={stopRefused}
+        />
+      )}
+      {sections.jobs && (
+        <Section label="Background work" heading="Background work" first={!sections.workspace && !sections.versionControl && !sections.lineage}>
+          {!sections.lineage && stopRefused !== undefined && <p className="px-2.5 pb-1 text-caption text-text-muted">{stopRefused}</p>}
+          <ul aria-label="Background work" className="flex flex-col">
+            {listedJobs.map((job) => (
+              <JobRow
+                key={job.id}
+                connection={connection}
+                session={session}
+                job={job}
+                open={openJobs.has(job.id)}
+                toggle={() =>
+                  setOpenJobs((was) => {
+                    const now = new Set(was)
+                    if (!now.delete(job.id)) now.add(job.id)
+                    return now
+                  })
+                }
+                stop={() => stop(job.id)}
+              />
+            ))}
+          </ul>
+        </Section>
+      )}
+      {sections.nothing && (
+        <div className="px-2 pt-1 pb-2">
+          <button type="button" onClick={chooseWhatToShow} className={ROW}>
+            <SlidersHorizontal className={ROW_ICON} />
+            Choose what to show
+          </button>
+        </div>
+      )}
+    </>
+  )
+}
+
+// A control that does something, or while it does not apply, says why
+// when pressed or pointed at, as T3 Code's git button does, rather than
+// being off and silent. It stays in the order of the keyboard.
+function Act({ why, onPress, className, label, children }: { why: string | undefined; onPress(): void; className: string; label?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const note = useId()
+  useEffect(() => {
+    if (why === undefined) setOpen(false)
+  }, [why])
+  return (
+    <Popover open={open && why !== undefined} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          aria-disabled={why !== undefined}
+          aria-describedby={why === undefined ? undefined : note}
+          title={why ?? label}
+          onClick={(event) => {
+            if (why !== undefined) return
+            event.preventDefault()
+            onPress()
+          }}
+          className={cn(className, why !== undefined && "text-text-muted")}
+        >
+          {children}
+        </button>
+      </PopoverTrigger>
+      {why !== undefined && (
+        <span id={note} hidden>
+          {why}
+        </span>
+      )}
+      <PopoverContent side="bottom" className="max-w-details-card text-caption text-text-muted">
+        {why}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function UndoRow({ files, why, undo }: { files: number; why: string | undefined; undo(): Promise<void> }) {
+  const [undoing, setUndoing] = useState(false)
+  return (
+    <Act
+      why={why ?? (undoing ? "Undoing…" : undefined)}
+      onPress={() => {
+        setUndoing(true)
+        void undo().finally(() => setUndoing(false))
+      }}
+      className={ROW}
+    >
+      <ArrowCounterClockwise className={ROW_ICON} />
+      <span className="flex-1" title="Put back the files as they were before the last turn">
+        Undo last change
+      </span>
+      <span className="text-caption font-normal text-text-muted">{files === 1 ? "1 file" : `${files} files`}</span>
+    </Act>
+  )
+}
+
+// Two buttons in one row, as T3 Code's split controls: the main one, and a
+// caret that opens a menu, parted by a line only while the row is pointed at.
+const SPLIT = "group/split flex h-row-height w-full items-center rounded-md hover:bg-text/8 has-[[data-state=open]]:bg-text/8"
+const SPLIT_MAIN = "flex h-row-height min-w-0 flex-1 items-center gap-2.5 rounded-l-md px-2.5 text-left text-detail font-medium text-text/85 hover:bg-text/8"
+const SPLIT_CARET = "flex size-8 shrink-0 items-center justify-center rounded-r-md text-text-muted hover:bg-text/8 [&>svg]:size-icon-sm"
+const SPLIT_LINE = "h-4 w-(--line-width) shrink-0 bg-transparent group-hover/split:bg-line group-has-[[data-state=open]]/split:bg-line"
+
+// The branch, and the caret that asks evie to switch to another of the
+// repository's branches, in words, as the git buttons ask.
+function BranchRow({ status, branch, why, ask }: { status: GitStatus | null | undefined; branch: string | undefined; why: string | undefined; ask(text: string): Promise<string | undefined> }) {
+  const [open, setOpen] = useState(false)
+  const others = (status?.branches ?? []).filter((each) => each !== branch)
+  const named = branch ?? "No branch"
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <div className={SPLIT}>
+        <button type="button" aria-label={`Branch: ${named}`} title={named} onClick={() => setOpen(true)} className={SPLIT_MAIN}>
+          <GitBranch className={ROW_ICON} />
+          <span className="min-w-0 truncate">{named}</span>
+        </button>
+        <span aria-hidden="true" className={SPLIT_LINE} />
+        <DropdownMenuTrigger asChild>
+          <button type="button" aria-label="Change branch" title="Change branch" className={SPLIT_CARET}>
+            <CaretDown />
+          </button>
+        </DropdownMenuTrigger>
+      </div>
+      <DropdownMenuContent align="end" className="w-details-card max-w-menu-wide text-detail">
+        <DropdownMenuLabel>{others.length > 0 ? "Ask evie to switch to" : "No other branch to switch to"}</DropdownMenuLabel>
+        {others.map((each) => (
+          <DropdownMenuItem key={each} disabled={why !== undefined} title={why} onSelect={() => void ask(switchRequest(each))} className="text-detail">
+            <GitBranch className="text-text-muted" />
+            <span className="min-w-0 truncate">{each}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+// The branch's pull request, as T3 Code's row: its title, on up to two
+// lines, which opens it on GitHub; under it its number, its checks summed
+// up, which open a menu of each, and Fix while any fails, which asks evie
+// to fix them in this session, in words, as the git buttons ask.
+function PullRow({ pull, why, ask }: { pull: PullRequest; why: string | undefined; ask(text: string): Promise<string | undefined> }) {
+  const fix = fixRequest(pull)
+  const state = pullRequestWord(pull.state).toLowerCase()
+  const title = (
+    <>
+      <GitPullRequest className={cn("mt-px size-icon-sm shrink-0", PULL_COLOUR[pull.state])} />
+      <span className="line-clamp-2 min-w-0 flex-1 break-words">{pull.title}</span>
+    </>
+  )
+  const look = "flex min-h-row-height w-full items-start gap-2.5 rounded-md px-2.5 pt-1.5 text-left text-detail/4.5 font-medium text-text/85 hover:bg-text/8"
+  return (
+    <div className="pb-1.5">
+      {/* The server gives only an https link, and none for any other. */}
+      {pull.url !== undefined ? (
+        <a href={pull.url} target="_blank" rel="noreferrer" aria-label={`Pull request #${pull.number}, ${state}: ${pull.title}`} title={`Open pull request #${pull.number} on GitHub`} className={look}>
+          {title}
+        </a>
+      ) : (
+        <p aria-label={`Pull request #${pull.number}, ${state}: ${pull.title}`} className={cn(look, "hover:bg-transparent")}>
+          {title}
+        </p>
+      )}
+      <div className="flex h-5 min-w-0 items-center gap-0.5 pr-2.5 pl-detail-indent text-caption text-text-muted">
+        <span className="mr-1 shrink-0 tabular-nums">#{pull.number}</span>
+        {pull.checks.length > 0 && <Checks checks={pull.checks} />}
+        <span className="flex-1" />
+        {fix !== undefined && (
+          <Act
+            why={why}
+            onPress={() => void ask(fix)}
+            label="Fix the failing checks in this session"
+            className="h-5 shrink-0 rounded-chip bg-status-failed/12 px-1.5 text-caption font-medium text-status-failed hover:bg-status-failed/16"
+          >
+            Fix
+          </Act>
+        )}
+      </div>
     </div>
   )
 }
-const noPull = { subscribe: () => () => {}, state: () => undefined }
+
+// A pull request's icon in the colour of how it stands: open in Done's,
+// merged in plum, as T3 Code's in violet, closed in Failed's, and a draft
+// quiet.
+const PULL_COLOUR: Record<PullRequest["state"], string> = {
+  open: "text-status-done",
+  merged: "text-project-plum",
+  closed: "text-status-failed",
+  draft: "text-text-muted",
+}
 
 function Checks({ checks }: { checks: PullRequest["checks"] }) {
   const summary = checksSummary(checks)
   const failing = checks.some((check) => check.state === "failed" || check.state === "cancelled")
+  const pending = checks.some((check) => check.state === "running" || check.state === "waiting")
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="quiet" aria-label={`Checks: ${summary}`} className={`-ml-3 gap-1 ${failing ? "text-status-failed hover:text-status-failed" : ""}`}>
-          {summary}
-          <CaretDown className="size-icon-control" />
-        </Button>
+        <button
+          type="button"
+          aria-label={`Open checks: ${summary}`}
+          className="flex h-6 min-w-0 items-center gap-1 rounded-chip px-1.5 text-caption font-medium text-text-muted hover:bg-text/8 data-[state=open]:bg-text/8"
+        >
+          {failing ? (
+            <XCircle className="size-icon-caret shrink-0 text-status-failed" />
+          ) : pending ? (
+            <CircleDashed className="size-icon-caret shrink-0 text-status-working" />
+          ) : (
+            <CheckCircle className="size-icon-caret shrink-0 text-status-done" />
+          )}
+          <span className="min-w-0 truncate tabular-nums">{summary}</span>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-w-card-sheet">
         <DropdownMenuLabel>{summary}</DropdownMenuLabel>
@@ -493,6 +818,206 @@ function CheckState({ state }: { state: PullRequest["checks"][number]["state"] }
   return <span className="shrink-0 text-caption text-text-muted">{word}</span>
 }
 
+// The git button: its label follows how the branch stands (gitAction), and
+// a press sends evie its request in words; the caret opens Commit, Push
+// and Create pull request, each sent the same way. While none applies, or
+// evie is busy, it says why.
+function GitButton({
+  name,
+  status,
+  pull,
+  why,
+  ask,
+}: {
+  name: string
+  status: GitStatus | null | undefined
+  pull: PullRequest | null | undefined
+  why: string | undefined
+  ask(text: string): Promise<string | undefined>
+}) {
+  const action = gitAction(status ?? undefined, pull)
+  const menu = gitMenu(status ?? undefined, pull)
+  // Why the last request could not be sent, until the next.
+  const [refused, setRefused] = useState<string>()
+  const send = async (kind: Request) => setRefused(await ask(REQUESTS[kind]))
+  const Icon = action.label === "Commit" ? GitCommit : action.label === "Commit, push & PR" ? GitPullRequest : CloudArrowUp
+  return (
+    <>
+      <div role="group" aria-label={`Git actions for ${name}`} className={SPLIT}>
+        <Act why={why ?? action.why ?? refused} onPress={() => void send(action.request)} className={SPLIT_MAIN} label={action.label}>
+          <Icon className={ROW_ICON} />
+          <span className="min-w-0 truncate">{action.label}</span>
+        </Act>
+        <span aria-hidden="true" className={SPLIT_LINE} />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label="Git action options" title="Git action options" disabled={menu.length === 0} className={SPLIT_CARET}>
+              <CaretDown />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-details-card max-w-menu-wide text-detail">
+            {menu.map((item) => {
+              const off = why ?? item.why
+              const Glyph = item.request === "commit" ? GitCommit : item.request === "push" ? CloudArrowUp : GitPullRequest
+              return (
+                <DropdownMenuItem key={item.request} disabled={off !== undefined} title={off} onSelect={() => void send(item.request)} className="text-detail data-disabled:text-text-muted">
+                  <Glyph className="text-text-muted" />
+                  {item.label}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </>
+  )
+}
+
+// What the branch has changed, as T3 Code's row: against the branch it is
+// compared with, or on the main branch the work not committed, with the
+// lines added and removed; it opens the diff on the same.
+function ChangesRow({ status, back }: { status: GitStatus | null | undefined; back(): void }) {
+  const changes = status?.changes
+  const against = changes?.against ?? null
+  return (
+    <button
+      type="button"
+      title={against !== null ? `Open the changes against ${against}` : "Open the changes since the last commit"}
+      onClick={() => {
+        back()
+        openDiff({ scope: against !== null ? "branch" : "uncommitted" })
+      }}
+      className={ROW}
+    >
+      <GitDiff className={ROW_ICON} />
+      <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+        <span className="shrink-0">Changes</span>
+        <span className="min-w-0 truncate font-normal text-text-muted">{changes === undefined ? "" : against !== null ? `vs ${against}` : "Uncommitted"}</span>
+        {changes !== undefined && (
+          <span className="ml-auto flex shrink-0 gap-2 pl-2 font-mono text-caption font-normal tabular-nums">
+            <span className={changes.added > 0 ? "text-diff-added" : "text-text-muted"}>+{changes.added}</span>
+            <span className={changes.removed > 0 ? "text-diff-removed" : "text-text-muted"}>−{changes.removed}</span>
+          </span>
+        )}
+      </span>
+    </button>
+  )
+}
+
+// The time now, again each second while `ticking`, for how long a
+// subagent's round has run.
+function useNow(ticking: boolean) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    if (!ticking) return
+    setNow(Date.now())
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [ticking])
+  return now
+}
+
+// The lineage: the session that started this one, while one of its
+// subagents' conversations is open, which leads back to it; the subagents
+// working, each with how long it has run and Stop; and those that have
+// ended, folded away under Previous agents. Each opens its conversation in
+// the middle, read only; the one open is raised.
+function LineageSection({
+  first,
+  session,
+  parent,
+  opened,
+  subagents,
+  stop,
+  refused,
+}: {
+  first: boolean
+  session: string
+  parent: { title: string; state: string | undefined }
+  opened: string | undefined
+  subagents: ReturnType<typeof subagentsOf>
+  stop(job: string): void
+  refused: string | undefined
+}) {
+  const working = subagents.some((each) => each.status === "running")
+  const now = useNow(working)
+  const shown = lineageOf(subagents, now)
+  const [folded, setFolded] = useState(true)
+  const openEnded = shown.previous.some((each) => each.session === opened)
+  useEffect(() => {
+    if (openEnded) setFolded(false)
+  }, [openEnded])
+  return (
+    <Section label="Lineage" heading={shown.heading} first={first}>
+      {refused !== undefined && <p className="px-2.5 pb-1 text-caption text-text-muted">{refused}</p>}
+      <ul aria-label="Related sessions" className="flex flex-col">
+        {opened !== undefined && (
+          <li className="flex h-row-height">
+            <a href={addressOf({ session })} title="Open the parent session" className={ROW}>
+              <ArrowBendLeftUp className={ROW_ICON} />
+              <span className="min-w-0 flex-1 truncate text-body/4">{parent.title}</span>
+              <span className="shrink-0 text-detail-heading font-normal text-text-muted">{parent.state === "working" ? "Working" : parent.state === "needs_you" ? "Needs you" : ""}</span>
+            </a>
+          </li>
+        )}
+        {shown.running.map((each) => (
+          <SubagentRow key={each.session} parent={session} subagent={each} open={each.session === opened} stop={each.job !== undefined ? () => stop(each.job!) : undefined} />
+        ))}
+      </ul>
+      {shown.previous.length > 0 && (
+        <>
+          <button type="button" aria-expanded={!folded} onClick={() => setFolded(!folded)} className={ROW}>
+            <Robot className={ROW_ICON} />
+            <span className="flex-1">Previous agents</span>
+            <span className="text-caption font-normal text-text-muted tabular-nums">{shown.previous.length}</span>
+            <CaretDown className={cn(ROW_ICON, "transition-transform motion-reduce:transition-none", folded && "-rotate-90")} />
+          </button>
+          {!folded && (
+            <ul aria-label="Previous agents" className="flex flex-col">
+              {shown.previous.map((each) => (
+                <SubagentRow key={each.session} parent={session} subagent={each} open={each.session === opened} stop={undefined} />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </Section>
+  )
+}
+
+// The dot on a subagent's robot: the accent while it works, Done's or
+// Failed's once it has ended so, and quiet otherwise.
+const DOT: Record<Job["status"], string> = { running: "bg-accent", finished: "bg-status-done", failed: "bg-status-failed", stopped: "bg-text-muted", unknown: "bg-text-muted" }
+
+function SubagentRow({ parent, subagent, open, stop }: { parent: string; subagent: ReturnType<typeof lineageOf>["running"][number]; open: boolean; stop: (() => void) | undefined }) {
+  return (
+    <li className="relative flex h-row-height">
+      <a
+        href={addressOf({ session: parent, subagent: subagent.session })}
+        aria-current={open ? "page" : undefined}
+        title={`Open subagent: ${subagent.name}`}
+        className={cn(ROW, stop !== undefined && "pr-8", open && "bg-text/8")}
+      >
+        <span className="relative flex size-icon-sm shrink-0">
+          <Robot className={ROW_ICON} />
+          <span aria-hidden="true" className={cn("absolute -right-0.5 -bottom-0.5 size-2 rounded-full border-(length:--indicator-width) border-surface", DOT[subagent.status])} />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-body/4">{subagent.name}</span>
+        <span className="shrink-0 text-detail-heading font-normal text-text-muted tabular-nums">{subagent.state}</span>
+      </a>
+      {stop !== undefined && <StopButton label={`Stop subagent ${subagent.name}`} title="Stop subagent" stop={stop} />}
+    </li>
+  )
+}
+
+function StopButton({ label, title, stop }: { label: string; title: string; stop(): void }) {
+  return (
+    <button type="button" aria-label={label} title={title} onClick={stop} className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-chip text-status-failed hover:bg-text/8">
+      <StopFill className="size-icon-xxs" />
+    </button>
+  )
+}
+
 // How a job or a subagent stands, in its word, as the design system's
 // Status says it: Working with a spinner, Done with a check, Failed, and
 // the rest in quiet words.
@@ -517,87 +1042,26 @@ export function StateWord({ status }: { status: Job["status"] }) {
   return <span className={`shrink-0 text-caption ${status === "failed" ? "text-status-failed" : "text-text-muted"}`}>{word}</span>
 }
 
-// A subagent, as a row whose name, on a line of its own, opens its
-// conversation in the middle; under it, how it stands, with Stop while it
-// works. The one open is raised.
-function SubagentRow({ parent, subagent, open, stop }: { parent: string; subagent: Subagent; open: boolean; stop(job: string): void }) {
-  return (
-    <li className={`flex flex-col border-t border-line ${open ? "bg-surface-raised" : ""}`}>
-      <a
-        href={addressOf({ session: parent, subagent: subagent.session })}
-        aria-current={open ? "page" : undefined}
-        title={subagent.name}
-        className="flex min-h-control min-w-0 items-center px-3 pt-1 text-body font-medium text-text"
-      >
-        <span className="min-w-0 truncate">{subagent.name}</span>
-      </a>
-      <Standing status={subagent.status} stop={subagent.status === "running" && subagent.job !== undefined ? () => stop(subagent.job!) : undefined} label={`Stop ${subagent.name}`} />
-    </li>
-  )
-}
-
-// The second line of a row: how it stands, and Stop while it works.
-function Standing({ status, stop, label }: { status: Job["status"]; stop: (() => void) | undefined; label: string }) {
-  return (
-    <div className="flex min-h-control items-center justify-between gap-2 pb-1 pl-3">
-      <StateWord status={status} />
-      {stop && (
-        <Button variant="quiet" aria-label={label} onClick={stop}>
-          Stop
-        </Button>
-      )}
-    </div>
-  )
-}
-
-// The session's background jobs: those running, then those that have
-// ended, folded away under their count. Each opens to its output. They are
-// one list, so that a job open as it ends stays open, with its output, in
-// the ended group, which opens for it.
-function Jobs({ connection, session, running, ended, stop }: { connection: Connection; session: string; running: Job[]; ended: Job[]; stop(id: string): void }) {
-  const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
-  const [showEnded, setShowEnded] = useState(false)
-  const openEnded = ended.some((job) => open.has(job.id))
-  const endedIds = ended.map((job) => job.id).join(" ")
-  useEffect(() => {
-    if (openEnded) setShowEnded(true)
-  }, [endedIds])
-  const toggle = (id: string) =>
-    setOpen((was) => {
-      const now = new Set(was)
-      if (!now.delete(id)) now.add(id)
-      return now
-    })
-  const row = (job: Job) => <JobRow key={job.id} connection={connection} session={session} job={job} open={open.has(job.id)} toggle={() => toggle(job.id)} stop={() => stop(job.id)} />
-  const fold =
-    ended.length > 0 ? (
-      <li key="ended" className="border-t border-line">
-        <button type="button" aria-expanded={showEnded} onClick={() => setShowEnded(!showEnded)} className="flex h-row-height w-full items-center gap-2 px-3 text-body text-text-muted hover:text-text">
-          {ended.length} ended
-          <Caret open={showEnded} />
-        </button>
-      </li>
-    ) : null
-  return <ul className="flex flex-col">{[...running.map(row), fold, ...(showEnded ? ended.map(row) : [])]}</ul>
-}
-
-// A job, as a row: its command, on a line of its own, which opens to its
-// output; under it, how it stands, with Stop while it runs.
+// A job, as a row, shaped as T3 Code's servers: how it stands and its
+// command, which opens to its output; and Stop while it runs.
 function JobRow({ connection, session, job, open, toggle, stop }: { connection: Connection; session: string; job: Job; open: boolean; toggle(): void; stop(): void }) {
+  const running = job.status === "running"
   return (
-    <li className="flex flex-col border-t border-line">
-      <button type="button" aria-expanded={open} onClick={toggle} title={job.title} className="flex min-h-control w-full min-w-0 items-center gap-2 px-3 pt-1 text-left">
-        <Caret open={open} />
-        <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{job.title}</span>
-      </button>
-      <Standing status={job.status} stop={job.status === "running" ? stop : undefined} label={`Stop job ${job.id}`} />
+    <li className="flex flex-col">
+      <div className="relative flex h-row-height">
+        <button type="button" aria-expanded={open} onClick={toggle} title={job.title} className={cn(ROW, "font-normal", running && "pr-8")}>
+          <TerminalWindow className={ROW_ICON} />
+          <span className="min-w-0 flex-1 truncate">
+            <span className="font-medium">{running ? "Running" : stateWord(job.status)}</span>
+            <span className="text-text-muted"> · </span>
+            <span className="font-mono text-caption text-text-muted">{job.title}</span>
+          </span>
+        </button>
+        {running && <StopButton label={`Stop job ${job.id}`} title="Stop the command" stop={stop} />}
+      </div>
       {open && <JobOutput connection={connection} session={session} job={job} />}
     </li>
   )
-}
-
-function Caret({ open }: { open: boolean }) {
-  return <CaretRight className={`size-icon-sm shrink-0 text-text-muted transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
 }
 
 // A job's output, followed while it runs. It stays at its end as it
@@ -628,7 +1092,7 @@ function Output({ following, running }: { following: Following; running: boolean
   })
   const quiet = (text: string) => <p className="text-caption text-text-muted">{text}</p>
   return (
-    <div className="flex flex-col gap-1 px-3 pb-3">
+    <div className="flex flex-col gap-1 px-2.5 pt-1 pb-2">
       {problem !== undefined && quiet(problem)}
       {output?.cut && quiet("Earlier output is not shown.")}
       {output === undefined && problem === undefined && quiet("Reading its output.")}
@@ -640,7 +1104,7 @@ function Output({ following, running }: { following: Following; running: boolean
             const at = box.current!
             stuck.current = at.scrollHeight - at.scrollTop - at.clientHeight <= AT_END
           }}
-          className="max-h-job-output overflow-auto font-mono text-code break-words whitespace-pre-wrap text-text-muted"
+          className="max-h-job-output overflow-auto font-mono text-caption break-words whitespace-pre-wrap text-text-muted"
         >
           {output.text}
         </pre>

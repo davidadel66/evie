@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test"
 import type { GitStatus, Job } from "../src/core/types.ts"
-import { backgroundJobs, branchWords, CARD_CLEARANCE, cardPlace, DETAILS_ITEMS, gitAction, gitMenu, gitWhyNot, isDefaultShown, joinOutput, keptChoices, lineageOf, sectionsShown, shownFrom, stateWord, subagentsOf, undoWhyNot } from "../web/src/project-card.ts"
+import { backgroundJobs, CARD_CLEARANCE, cardPlace, DETAILS_ITEMS, gitAction, gitMenu, gitWhyNot, isDefaultShown, joinOutput, keptChoices, lineageOf, sectionsShown, shownFrom, stateWord, subagentsOf, undoWhyNot } from "../web/src/project-card.ts"
 
-// The project card's rules, apart from its screen: how it says where the
-// project is, which of its actions apply and why not, and how it lists a
-// session's subagents and background jobs.
+// The session details' rules, apart from their screen: which of their
+// actions apply and why not, what the git button offers as the branch
+// stands, which sections show and where, and how they list a session's
+// subagents and background jobs.
 
 const repository = { id: "p1", name: "recipe-box", folder: "/Users/david/code/recipe-box", branch: "main", git: true }
 const idle = { connected: true, session: "open" as const, project: repository, turnRunning: false, requested: false }
@@ -39,14 +40,6 @@ test("undo applies in any session while evie is not working, project or not", ()
   expect(undoWhyNot({ ...idle, project: null })).toBeUndefined()
   expect(undoWhyNot({ ...idle, turnRunning: true })).toBe("evie is working. Undo when it has finished.")
   expect(undoWhyNot({ ...idle, connected: false })).toBe("Not connected to evie's server.")
-})
-
-test("the branch row says the branch, or why there is none", () => {
-  const project = { id: "p1", name: "recipe-box", folder: "/code/recipe-box" }
-  expect(branchWords({ ...project, branch: "main", git: true })).toEqual({ text: "main", branch: true })
-  expect(branchWords({ ...project, git: true })).toEqual({ text: "No branch", branch: false })
-  expect(branchWords({ ...project, git: false })).toEqual({ text: "Not a git repository", branch: false })
-  expect(branchWords(project)).toEqual({ text: "Not known", branch: false })
 })
 
 const job = (id: string, status: Job["status"], extra: Partial<Job> = {}): Job => ({

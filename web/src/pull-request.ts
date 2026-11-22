@@ -1,6 +1,6 @@
 import type { PullRequest } from "../../src/core/types.ts"
 
-// How the project card says how a branch's pull request stands, in words:
+// How the session details say how a branch's pull request stands, in words:
 // its state, and its checks summed up, as T3 Code's pull request row says
 // them. The summary's wording is adapted from T3 Code's
 // `summarizePullRequestChecks` (MIT licence, notice in LICENSES/t3code-MIT.txt).

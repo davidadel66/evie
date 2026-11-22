@@ -1,7 +1,8 @@
 import type { GitStatus, Job, ListedProject, PullRequest } from "../../src/core/types.ts"
 
-// The project card's rules, apart from its screen: which of its actions
-// apply and why not, how it says the project's branch, and how it lists the
+// The session details' rules, apart from their screen: which of their
+// actions apply and why not, what the git button offers as the branch
+// stands, which sections show and where the card is, and how it lists the
 // session's subagents and background jobs.
 
 // What the card knows of the session when it decides what applies: whether
@@ -53,15 +54,6 @@ export function undoWhyNot(facts: CardFacts): string | undefined {
   return undefined
 }
 
-// What the branch row says: the branch, or why there is none, and whether
-// it is a branch's name, shown as code.
-export function branchWords(project: ListedProject): { text: string; branch: boolean } {
-  if (project.branch !== undefined) return { text: project.branch, branch: true }
-  if (project.git === true) return { text: "No branch", branch: false }
-  if (project.git === false) return { text: "Not a git repository", branch: false }
-  return { text: "Not known", branch: false }
-}
-
 // What each git button asks evie, as a message in the session, in plain
 // words. evie carries it out as it would if the owner had typed it, and
 // asks before pushing, as it always does.
@@ -74,6 +66,10 @@ export const REQUESTS = {
     "Commit any changes in this session with a short message, push this branch to its remote, and open a pull request for it, with a short title and a summary of its changes.",
 } as const
 export type Request = keyof typeof REQUESTS
+
+// What the branch row's menu asks evie, in words, to switch the project's
+// folder to another of its branches.
+export const switchRequest = (branch: string) => `Switch this project's folder to the branch ${JSON.stringify(branch)}.`
 
 // The git button: its label, the request it sends, and why it is off, when
 // it is. Its label follows how the branch stands, by T3 Code's rule

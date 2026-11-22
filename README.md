@@ -231,8 +231,8 @@ any name other than `127.0.0.1` or `localhost` must be listed under
 { "server": { "host": "0.0.0.0", "origins": ["http://my-mac.local:3843"] } }
 ```
 
-The page has three columns: the list of sessions, the conversation and the
-project card. While the page is connected, nothing says so; while the
+The page has two columns, the list of sessions and the conversation, with
+the session details floating at the conversation's top right. While the page is connected, nothing says so; while the
 line is down, one quiet line under the name at the top says Reconnecting,
 and why, and the page catches up by itself once the line is back.
 
@@ -428,61 +428,86 @@ The message box at the bottom of the conversation works as T3 Code's does:
   server already has are not sent again. A first message of files alone
   names the session after them.
 
-The project card, on the right, is the selected session's:
+The session details are T3 Code's details card, as the owner drew it: a
+card that floats at the top right of the conversation, in small text, with
+a slim row at its top naming it, which holds Choose what to show and Pin.
+Its sections are the selected session's:
 
-- **Its project:** the project's icon and name, which open its
-  workspace, its folder, cut at its
-  start when it is long, so that its end shows, and whole when pointed at;
-  and the git branch it is on, kept current as the session list keeps it,
-  or "No branch" in a repository on none of its own, or "Not a git
-  repository". A session with no project says so.
-- **The branch's pull request,** when it has one, as T3 Code shows it: its
-  number and state in words (Open, Draft, Merged or Closed); its title,
-  which opens it on GitHub; and its checks summed up, such as "2 of 5
-  failing", which open a menu of each check, with how it stands and a link
-  to its details, each check's state drawn as a Status: a check and Passed,
-  a cross and Failed, the spinner and Running. The `github` plugin reads it
-  with the GitHub CLI, `gh pr view`, in the project's folder, as `gh` is
-  signed in on the server's computer, when the card opens and each minute
-  while the page is shown. With no `gh`, one not signed in, or the plugin
-  not loaded, nothing is shown. `gh` is given only the server's path, home,
-  settings and temporary folders, language and its own `GH_` and `GITHUB_`
-  settings: no git settings and no keys. Only https links are kept, for
-  the pull request and its checks. The page only reads it: nothing on
-  GitHub is changed from it.
-- **Changes:** how many files the session has changed, with the lines
-  added and removed, from before its first change to now, and Open diff,
-  which opens the diff on the whole session. Without the undo plugin, it
-  says that changes are not kept here. Commit, Push and Pull request each send evie a request in
-  words, as a message in the session, such as "Commit the changes in this
-  session with a short message."; evie carries it out as it would if you had
-  typed it, and asks before pushing, as it always does. A request sent
-  keeps the three off until evie starts on it, so it is sent once. Undo
-  last change runs `/undo`, and what it says is a quiet note in the
-  conversation, as the terminal shows it; like the terminal's, the note is
-  not kept, so it is gone once the session is opened again. Each button is
-  disabled while it does not apply, and a line under it says why: the
-  session still opening, no project, a folder not in a git repository, or
-  evie working on a turn. With a subagent's conversation open, a press goes
-  back to the session's own first, so that what it says is in view.
-- **Subagents:** each subagent the session has started, newest first, with
-  its name and how its latest round of work stands, in a word (Working,
-  Done, Failed or Stopped), and Stop while it works. One with no round
-  since evie's server last started says Ended. Picking one opens its
-  conversation in the middle, read only, under its name, with a line below
-  that leads back to the session; while it works, what it adds is read
-  every second.
-- **Background jobs:** each job the session has run in the background since
-  evie's server last started, as `/jobs` lists them, with its command and
-  how it stands, and Stop while it runs, which is `/jobs stop`. One opens
-  to its output, which keeps up while it runs, and stays open when the job
-  ends. Ended jobs fold away under their count.
+- **Workspace:** the project's icon and name, which open its workspace;
+  its folder, cut at its start when it is long, so that its end shows, and
+  whole when pointed at; and Undo last change, with how many files the
+  last turn that changed any changed, which runs `/undo`. What `/undo`
+  says is a quiet note in the conversation, as the terminal shows it; like
+  the terminal's, the note is not kept. A session with no project says so.
+- **Version control,** in a git repository:
+  - The branch, whose caret lists the repository's recent branches; picking
+    one asks evie, in words, to switch the folder to it.
+  - The branch's pull request, when it has one, as T3 Code's row: its
+    title, which opens it on GitHub, in the colour of how it stands; its
+    number; its checks summed up, such as "2 of 5 failing", which open a
+    menu of each check, with how it stands and a link to its details; and
+    Fix while any fails, which asks evie, in words, to fix the failing
+    checks in this session. The `github` plugin reads it with the GitHub
+    CLI, `gh pr view`, in the project's folder, as `gh` is signed in on the
+    server's computer, when the card opens and each minute while the page
+    is shown. With no `gh`, one not signed in, or the plugin not loaded,
+    nothing is shown. `gh` is given only the server's path, home, settings
+    and temporary folders, language and its own `GH_` and `GITHUB_`
+    settings: no git settings and no keys. Only https links are kept, for
+    the pull request and its checks. The page only reads it: nothing on
+    GitHub is changed from it.
+  - One git button, whose label follows how the branch stands, by T3
+    Code's rule: Commit & push with work to commit on the main branch or a
+    branch with a pull request open; Commit, push & PR with work to commit
+    on a branch with none, or commits that lead to a pull request; Commit
+    when the branch is behind its remote or there is nowhere to push; Push
+    with commits to push. When there is nothing it can do, it says why when
+    pressed or pointed at. Its caret opens Commit, Push and Create pull
+    request, each off, saying why, while it does not apply. Each sends evie
+    a request in words, as a message in the session, such as "Commit the
+    changes in this session with a short message, and push this branch to
+    its remote."; evie carries it out as it would if you had typed it, and
+    asks before pushing, as it always does. A request sent keeps the
+    buttons off until evie starts on it, so it is sent once.
+  - Changes against the branch it is compared with, its pull request's
+    base or else the main branch, such as "vs main +71 −6", or on the main
+    branch, the work not committed, "Uncommitted"; it opens the diff on the
+    same. How the branch stands is read from the folder with git, which
+    reaches no other computer, when the card opens, when a turn ends, when
+    the window has the focus back and each minute while the page is shown.
+- **Lineage:** while one of the session's subagents' conversations is open,
+  the session itself, which leads back to it; each subagent working, with
+  how long its round has run, such as "Working · 31s", and Stop; and those
+  that have ended, folded away under Previous agents, each with how it
+  ended (Done, Failed, Stopped, or Ended for one with no round since evie's
+  server last started). Picking one opens its conversation in the middle,
+  read only, under its name, with a line below that leads back to the
+  session; while it works, what it adds is read every second.
+- **Background work:** each job running in the background, with its
+  command, and Stop, which is `/jobs stop`. One opens to its output, which
+  keeps up while it runs, and stays listed, with its output, once it ends,
+  until it is closed.
 
-At desktop width the card can be hidden and shown with the button at the
-right of the middle column's header, or with Cmd+Option+B (Ctrl+Alt+B
-elsewhere), and the browser remembers which. At 980px wide or narrower the
-same button opens it as a sheet over the page, from the right, which goes
-once something is picked.
+Each button is off while it does not apply, and says why: the session still
+opening, evie working on a turn, or the line down. With a subagent's
+conversation open, a press goes back to the session's own first, so that
+what it says is in view.
+
+**Choose what to show** opens a menu of the card's items: Project and
+folder, Undo last change, Branch and pull request, Git actions, Changes,
+Lineage and Background work, each ticked while it shows, and Reset to
+default. The browser remembers what differs from the default. With nothing
+chosen, the card offers the menu instead.
+
+**Pinned,** the default, the card stays open beside the conversation, which
+keeps clear of it, while the conversation has the room: at 1100px wide or
+narrower with the session list showing, or with the diff open, it floats
+instead. **Unpinned,** or without the room, it opens over the conversation
+from the button at the right of the conversation's header, or with
+Cmd+Option+B (Ctrl+Alt+B elsewhere), and closes on a click outside or
+Escape. The browser remembers whether it is pinned, and whether the pinned
+card was closed. At phone width it is a sheet over the page, from the
+right, which goes once another session is picked.
 
 What evie changed is shown as diffs, as T3 Code shows them:
 
@@ -492,11 +517,9 @@ What evie changed is shown as diffs, as T3 Code shows them:
   turn. A file in the list opens it at that file. The counts leave out a
   file whose lines were not counted, such as a binary one, which shows
   none.
-- **The diff** opens from that line, from the project card's Open diff, or
+- **The diff** opens from that line, from the session details' Changes, or
   with Cmd+D (Ctrl+D elsewhere), which also closes it. At desktop width it
-  is a column beside the conversation, in the project card's place, and
-  wider than the card, since a diff needs the room; closing it brings the
-  card back. At phone width it fills the screen, with a way back
+  is a column beside the conversation. At phone width it fills the screen, with a way back
   at its top left.
 - **The menu at its top** picks what to compare: the latest turn; each turn
   that changed files, newest first, with when it ended; the whole session,
@@ -532,7 +555,7 @@ What evie changed is shown as diffs, as T3 Code shows them:
   shell command changed is not in a turn's changes; in a git project it is
   in Uncommitted. A turn that has ended changes no more, so what it changed
   is worked out once and kept; the whole session's files are worked out
-  only when the project card asks for them, and lines are compared on a
+  only when the page asks for them, and lines are compared on a
   thread of the server's own, so that a long comparison holds nothing up.
 - **A repository is read without running anything it names.** A
   repository's own settings can name commands for git to run, and one just
@@ -575,7 +598,7 @@ they cannot be changed yet.
 | Mod+Shift+O, or Mod+N | A new session: where New session makes one, or in a workspace, in its side chat |
 | Mod+Alt+[ and ], or Mod+Shift+[ and ] | The session above or below in the list, in the session view |
 | Mod+B | Show or hide the session list, in the session view |
-| Mod+Alt+B | Show or hide the project card |
+| Mod+Alt+B | Show or hide session details |
 | Mod+D | Open or close the diff |
 | Mod+Shift+M | Pick a model |
 | Escape | Stop evie, in the message box |
@@ -639,7 +662,7 @@ desktop width. On a touch screen each button also reaches an unseen 44px
 round itself, so that a finger finds it although it looks small.
 
 **A workspace** is a project's home, opened from its icon or name in the
-session list or the project card. The page then has three other columns:
+session list or the session details. The page then has three other columns:
 
 - **The strip,** on the left: a tile for every workspace, the one open
   ringed in its colour, and a dot on any with a session waiting for you
@@ -1122,7 +1145,7 @@ a list, the fifteen built-in ones load:
 | `web` | `web_search` and `web_fetch` |
 | `sync` | The backing up of a project's `.evie` folder, and the `/sync` command |
 | `naming` | A name for each session, written by a small model from its first message |
-| `github` | The pull request of a project's branch, read with the GitHub CLI for the web app's project card and diffs |
+| `github` | The pull request of a project's branch, read with the GitHub CLI for the web app's session details and diffs |
 | `openrouter` | The connection to models through OpenRouter |
 
 ```json
@@ -1427,7 +1450,7 @@ typed into a text box, `field`, is 16px, below which iOS zooms the page in
 when a text box is tapped, and the page's side padding, `gutter`, is 12px.
 Text, rows, headers, chips and the work log keep their sizes, as T3 Code's
 do. A test checks that every text box in the web app takes `field`. The
-layout's own breakpoint, where the list and the card become sheets, is
+layout's own breakpoint, where the list and the session details become sheets, is
 768px (`wide`), as T3 Code's sidebar's is.
 
 **Text.** Sans-serif (Geist) but for `code`, in Geist Mono:
@@ -1445,17 +1468,22 @@ layout's own breakpoint, where the list and the card become sheets, is
 | `page-title` | 20px on 28px, −0.01em | 600 | The one title of a dialog, the settings window or an empty page; a reply's top heading |
 | `figure` | 24px on 32px, −0.02em | 600 | Big numbers on dashboards, when there are any |
 | `code` | 13px on 20px | 400 | File paths, commands, diffs and tool calls |
+| `detail` | 13px on 16px | 400 | The rows of the session details, as T3 Code's details card |
+| `detail-heading` | 11px on 16px | 500 | The headings over the session details' sections, and its name |
 
 **Spacing,** on a 4px grid:
 
 | Name | Value | For |
 |---|---|---|
+| `space-0.5` | 2px | T3 Code's half step: between the session details' heading buttons |
 | `space-1` | 4px | Between a label and its value; inside a menu, around its items |
-| `space-1.5` | 6px | T3 Code's one half step: above and below a menu's heading; the room a row's `···` reaches into |
+| `space-1.5` | 6px | T3 Code's half step: above and below a menu's heading; the room a row's `···` reaches into |
 | `space-2` | 8px | Between an icon and its text; a menu item's sides; between a turn's steps; the session list's sides |
+| `space-2.5` | 10px | T3 Code's half step: the sides of a row of the session details, and the room between its icon and its words |
 | `space-3` | 12px | Inside small controls; the sides of a row and a header; a setting's top and bottom |
 | `space-4` | 16px | Inside the message box; between turns; above and below the conversation |
-| `space-5` | 20px | Where a column's text starts: the name at the top of the list, the project card's rows; a list's indent in a reply; under the message box at desktop width |
+| `space-4.5` | 18px | T3 Code's half step: the line of a pull request's title in the session details |
+| `space-5` | 20px | Where a column's text starts: the name at the top of the list, a list's indent in a reply; under the message box at desktop width |
 | `space-6` | 24px | Inside a dialog and the settings window; between tabs |
 | `space-7` | 28px | The height of a chip under the message box's text, at every width, as T3 Code's |
 | `space-8` | 32px | Between a setting and its control; between sections; above and below an empty page's words; the stop button, at every width |
@@ -1464,6 +1492,7 @@ layout's own breakpoint, where the list and the card become sheets, is
 
 | Name | Value | For |
 |---|---|---|
+| `radius-chip` | 6px | A small control inside a row of the session details: its icon buttons, its checks and Fix |
 | `radius-sm` | 4px | Menu items and the rows of the palette and pickers; badges; an image's thumbnail |
 | `radius-md` | 8px | The default: buttons, text boxes, menus, popovers, notices, selected rows |
 | `radius-lg` | 16px | The message box, the owner's message, a docked question, dialogs, the settings window and the palette |
@@ -1476,11 +1505,12 @@ layout's own breakpoint, where the list and the card become sheets, is
 |---|---|---|
 | `control` | 32px; 36px below 640px | Buttons, text boxes and icon buttons; the settings' pages; the send button |
 | `control-sm` | 28px; 32px below 640px | Small buttons: the paperclip, the buttons that show and hide the list and the card, a row's `···`, a notice's; the items of a menu, the palette, the `/` and `@` menus and the model picker |
-| `row-height` | 32px | A row in a list: a file in Storage, a session in a workspace, a file's header in the diff, a line of the project card |
+| `row-height` | 32px | A row in a list: a file in Storage, a session in a workspace, a file's header in the diff, a row of the session details |
 | `work-row` | 24px | A row of a turn's work log: a run of calls, each call, Working, Worked for, a note |
 | `header-height` | 52px | Every column's header: the list's, the conversation's, the card's, the diff's, a workspace's and its side chat's |
 | `gutter` | 20px; 12px below 640px | The page's side padding: the conversation, the message box, a workspace, the sign-in page |
 | `touch-min` | 44px | The least a finger aims at: on a touch screen, each button reaches this far round itself, unseen |
+| `icon-xxs` | 11px | The icon on a project's tile in the session details, and the square of their Stop buttons |
 | `icon-xs` | 12px | Small marks beside text: the caret that opens a group of the list, the spinner, the square in Stop |
 | `icon-caret` | 14px | The caret that opens a turn's work or a note, as T3 Code's |
 | `icon-sm` | 16px | Icons beside text, in rows and the palette |
@@ -1489,12 +1519,17 @@ layout's own breakpoint, where the list and the card become sheets, is
 | `rail-width` | 64px | The strip of workspace tiles |
 | `tile-strip` | 44px | A workspace's tile in the strip, and the strip's back and New workspace buttons |
 | `tile-header` | 28px | A project's tile in a workspace's header |
-| `tile-row` | 18px | A project's icon tile in a session row and the project card |
+| `tile-row` | 18px | A project's icon tile in a session row |
 | `tile-row-icon` | 12px | The icon on that tile |
 | `side-chat-width` | 360px | A workspace's side chat |
 | `session-list` | 256px | The width of the session list, as T3 Code's sidebar |
-| `project-card` | 280px | The width of the project card, as T3 Code's details panel |
-| `card-sheet` | `min(88vw, 448px)` | The width of the project card as a sheet over the page, at 980px or narrower |
+| `details-card` | 280px | The width of the session details, as T3 Code's details card |
+| `details-top` | 64px | How far below the conversation's top the session details float: 12px under its header |
+| `details-height` | the column, less 76px | The tallest the session details grow before they scroll, 12px above the column's foot |
+| `details-clear` | 324px | What the conversation keeps clear beside the pinned session details: the card, the 12px at its side and 32px between, as T3 Code's |
+| `details-menu` | 236px | The width of the menu that chooses what the session details show |
+| `detail-indent` | 36px | Where a row's words start in the session details, past its icon: a pull request's second line |
+| `card-sheet` | `min(88vw, 448px)` | The width of the session details as a sheet over the page, at phone width |
 | `list-sheet` | `min(calc(100vw - 12px), 448px)` | The width of the session list as a sheet over the page, at 767px or narrower, as T3 Code's sidebar |
 | `conversation` | 736px | The widest the conversation and the message box are, as T3 Code's |
 | `call-name` | 48px | The room a tool call's name takes in a turn's steps |
@@ -1520,7 +1555,7 @@ layout's own breakpoint, where the list and the card become sheets, is
 | `attachment-shown` | 160px | The largest an image attached shows in the conversation |
 | `image-open` | `min(90vw, 1200px)` | The widest an image attached shows opened |
 | `image-open-height` | 80dvh | The tallest it shows opened |
-| `job-output` | 240px | The tallest a background job's output grows in the project card before it scrolls |
+| `job-output` | 240px | The tallest a background job's output grows in the session details before it scrolls |
 | `diff-tree` | 240px | The file tree beside a diff |
 | `wide` | 768px | Phone width is below it: the list is a sheet, the message box is one row until tapped, the settings and the diff fill the screen, a workspace's columns stack |
 

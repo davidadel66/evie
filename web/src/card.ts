@@ -4,9 +4,10 @@ import type { Conversation } from "./conversation.ts"
 import { joinOutput, REQUESTS, type Listed, type Output } from "./project-card.ts"
 import { refreshWhileShown } from "./refresh.ts"
 
-// The project card's work with evie's server, apart from its screen: undo,
-// the git buttons' requests, stopping a job, following a job's output, and
-// listing the session's subagents.
+// The session details' work with evie's server, apart from their screen:
+// undo, the git buttons' requests, stopping a job, following a job's
+// output, listing the session's subagents, and following the branch's pull
+// request and how the branch stands.
 
 // The client to send on, while the page is connected.
 const clientOf = (connection: Connection): Evie | undefined => {
@@ -247,9 +248,10 @@ const GIT_STATUS_EVERY = 60_000
 // minute while the page is shown, and when the line comes back. A branch's
 // changes are counted against `base`, the branch's pull request's base as
 // the card last read it, as the diff panel compares them. Until it is first
-// read it is undefined; null says the folder is not in git. One that could
-// not be read keeps what was read before. One read at a time, and once
-// more after one asked for while another was out.
+// read it is undefined, unless it was read before on this page, as when
+// the card is drawn again in another place; null says the folder is not in
+// git. One that could not be read keeps what was read before. One read at
+// a time, and once more after one asked for while another was out.
 export type FollowedGitStatus = {
   state(): GitStatus | null | undefined
   subscribe(listener: () => void): () => void
@@ -257,8 +259,10 @@ export type FollowedGitStatus = {
   close(): void
 }
 
+const gitStatuses = new Map<string, GitStatus | null>()
+
 export function followGitStatus(connection: Connection, project: string, page: { window: EventTarget; shown(): boolean; base(): string | undefined; every?: number }): FollowedGitStatus {
-  let state: GitStatus | null | undefined
+  let state: GitStatus | null | undefined = gitStatuses.get(project)
   const listeners = new Set<() => void>()
   let closed = false
   let reading = false
@@ -274,6 +278,7 @@ export function followGitStatus(connection: Connection, project: string, page: {
     try {
       const base = page.base()
       const read = await evie.send({ type: "read_git_status", project, ...(base !== undefined && { base }) })
+      gitStatuses.set(project, read)
       if (closed) return
       state = read
       for (const listener of [...listeners]) listener()

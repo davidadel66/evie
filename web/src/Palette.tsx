@@ -4,7 +4,7 @@ import { toggleCard, useCardShown } from "./card-shown.ts"
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog.tsx"
 import type { Connection } from "./connection.ts"
 import { holdConversation, type Conversation, type ConversationState } from "./conversation.ts"
-import { CaretLeft, CaretRight, GearSix, MagnifyingGlass, Plus, SidebarLeft, SidebarRight, StopFill } from "./icons.tsx"
+import { Article, CaretLeft, CaretRight, GearSix, MagnifyingGlass, Plus, SidebarLeft, StopFill } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { toggleList, useListShown } from "./list-shown.ts"
 import { ask, newSession } from "./page-requests.ts"
@@ -159,7 +159,7 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
       },
     }),
     list: () => ({ id: "list", title: shownNow(listShown) ? "Hide the session list" : "Show the session list", keywords: ["sidebar", "sessions"], icon: <SidebarLeft />, shortcut: "session list", run: toggleList }),
-    card: () => ({ id: "card", title: shownNow(cardShown) ? "Hide the project card" : "Show the project card", keywords: ["panel", "project", "subagents", "jobs"], icon: <SidebarRight />, shortcut: "card", run: toggleCard }),
+    card: () => ({ id: "card", title: cardShown.open ? "Hide session details" : "Show session details", keywords: ["panel", "project", "card", "subagents", "jobs"], icon: <Article />, shortcut: "card", run: toggleCard }),
     diff: () => ({ id: "diff", title: diffShown.open ? "Close the diff" : "Open the diff", keywords: ["changes", "diffs", "files"], shortcut: "diff", run: toggleDiff }),
     settle: () =>
       session && {

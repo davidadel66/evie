@@ -13,7 +13,7 @@ import { Notices } from "./Notices.tsx"
 import { Palette } from "./Palette.tsx"
 import { useDiffShortcut } from "./diff-shown.ts"
 import { DiffPlace } from "./DiffPanel.tsx"
-import { CardButton, CardPlace } from "./ProjectCard.tsx"
+import { CardButton, CardLane, CardPlace } from "./ProjectCard.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import { ListButton, SessionList } from "./SessionList.tsx"
@@ -26,11 +26,11 @@ import { SubagentView } from "./Subagent.tsx"
 import { workspaceIn } from "./workspace.ts"
 import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 
-// The page once signed in: the session list, the conversation and the
-// project card, in three columns, as T3 Code lays them out. At 767px or
-// narrower the list is a sheet over the page from the left, and at 980px
-// or narrower the card is one from the right, each opened from a button in
-// the session's header. With a workspace in the address, the workspace
+// The page once signed in: the session list and the conversation, in
+// columns, as T3 Code lays them out, with the session details floating at
+// the conversation's top right. At 767px or narrower the list is a sheet
+// over the page from the left, and the details one from the right, each
+// opened from a button in the session's header. With a workspace in the address, the workspace
 // view instead. The command palette and the notices float over either.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
@@ -77,12 +77,12 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
         <SessionList connection={connection} sessions={sessions} />
       </ListPlace>
 
-      <main inert={sheetOpen} className="flex min-w-0 flex-1 flex-col bg-bg">
+      <main inert={sheetOpen} className="relative flex min-w-0 flex-1 flex-col bg-bg">
         <OpenSession connection={connection} sessions={sessions} />
+        <CardPlace connection={connection} sessions={sessions} />
       </main>
 
       <DiffPlace connection={connection} sessions={sessions} />
-      <CardPlace connection={connection} sessions={sessions} />
     </div>
   )
 }
@@ -172,7 +172,7 @@ function useFrameShortcuts(togglePalette: () => void) {
 // The middle column: the selected session's conversation, under its name,
 // or one of its subagents', or for a draft, where the new session will
 // start. Whatever it shows, its header has the button that shows and hides
-// the project card.
+// the session details.
 function OpenSession({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
@@ -183,7 +183,9 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
     return (
       <>
         <Top />
-        <Draft connection={connection} sessions={sessions} project={selected.draft} where={where} />
+        <CardLane>
+          <Draft connection={connection} sessions={sessions} project={selected.draft} where={where} />
+        </CardLane>
       </>
     )
   }
@@ -200,14 +202,16 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
   return (
     <>
       <Top key={selected.session} title={title} {...(session !== undefined && { rename: (name: string) => sessions.rename(session.session, name) })} />
-      <Conversation connection={connection} session={selected.session} />
+      <CardLane>
+        <Conversation connection={connection} session={selected.session} />
+      </CardLane>
     </>
   )
 }
 
 // The middle column's header: the button that shows and hides the session
 // list, the session's name, when there is one to show, and the button that
-// shows and hides the project card. A name that can be renamed is typed in
+// shows and hides the session details. A name that can be renamed is typed in
 // place after a double-click, and why a name was not taken is said on a
 // line under the header. At phone width, the line that says the connection
 // is down is under it too.

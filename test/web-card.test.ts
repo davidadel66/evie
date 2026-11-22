@@ -336,6 +336,11 @@ test("how the project's branch stands is read once connected, again when asked, 
   base = "dev"
   following.again()
   await untilStatus(following, (status) => status?.changes.against === "dev")
+
+  // Followed again, as when the card is drawn again in another place, it starts from what was last read.
+  const again = followGitStatus(connection, served.run.project!.id, { window: page, shown: () => true, base: () => base })
+  cleanups.push(async () => again.close())
+  expect(again.state()).toMatchObject({ branch: "feat/breads", changes: { against: "dev" } })
 })
 
 test("a project whose folder is not in git has no git status", async () => {
