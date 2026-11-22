@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { chmod, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { github } from "../src/index.ts"
@@ -16,6 +16,10 @@ const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
+
+// The path the tests were started with, which each one's own path is made
+// from, whatever an earlier one in the same test set it to.
+const STARTED_PATH = process.env.PATH ?? ""
 
 // Evie in a project that is a git repository on a branch of its own, with
 // a stand-in `gh` that prints `answer` and stops with `code`, or with no
@@ -40,9 +44,20 @@ async function start(gh: { answer?: unknown; said?: string; code?: number } | "m
     )
     await chmod(join(bin, "gh"), 0o755)
   }
-  // Only the stand-in is on the path, so a real `gh` is never found.
+  // The stand-in comes first on the path, so a real `gh`, which a machine
+  // such as GitHub's runner may have, is never found before it. With none,
+  // the path holds only this folder, with git, which the plugin runs first,
+  // and nothing else, so that whatever the machine has installed, no `gh`
+  // is found at all.
   const path = process.env.PATH
-  process.env.PATH = `${bin}:/usr/bin:/bin`
+  if (gh === "missing") {
+    const real = Bun.which("git", { PATH: STARTED_PATH })
+    if (real === null) throw new Error("These tests need git on the path.")
+    await symlink(real, join(bin, "git"))
+    process.env.PATH = bin
+  } else {
+    process.env.PATH = `${bin}:${STARTED_PATH}`
+  }
   cleanups.push(async () => {
     process.env.PATH = path
   })
