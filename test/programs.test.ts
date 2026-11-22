@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { Database } from "bun:sqlite"
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 import { openStore } from "../src/core/store.ts"
 import type { ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -417,6 +417,63 @@ test("Ctrl-C while the connection is down stops evie trying, and it leaves", asy
 
   expect(await terminal.exited()).toBe(130)
   expect(terminal.printed.out).toContain("[note] Stopped trying to reach Evie's server. `evie -c` comes back to this session.\n")
+})
+
+// ---- evie new --------------------------------------------------------------------------------
+
+test("evie new makes a project through the server, in a folder named from where it is run, and prints what it made", async () => {
+  const port = await freePort()
+  // A server whose plugins leave out the sync plugin.
+  const home = await homeWith(port, [])
+  const place = await tempFolder("evie-place-")
+  await serve(home)
+
+  const made = await evie(["new", "notes", "My", "notes"], { home, cwd: place })
+
+  const folder = join(place, "notes")
+  expect(made.stderr).toBe("")
+  expect(made.code).toBe(0)
+  expect(made.stdout).toBe(
+    `Made ${folder}, and the project "My notes" in it, which is trusted.\n` +
+      `Its settings are in ${join(folder, ".evie", "evie.json")}, which holds "sync": "private", but the server does not load ` +
+      `the sync plugin, so its .evie folder is not backed up. To back it up, add "sync" to "plugins" in the server's evie.json ` +
+      "and start the server again.\n" +
+      "Run `evie` in that folder to start working there.\n",
+  )
+  expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ sync: "private" })
+  expect(JSON.parse(await readFile(join(home, "evie.json"), "utf8")).trust).toEqual([folder])
+
+  const again = await evie(["new", folder], { home })
+  expect(again.code).toBe(1)
+  expect(again.stderr).toContain(`${folder} is already the project "My notes".`)
+})
+
+test("evie new in a folder whose .evie folder already held files says the project is not trusted yet, and why", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  const folder = await tempFolder("evie-cloned-")
+  await mkdir(join(folder, ".evie", "agents"), { recursive: true })
+  await writeFile(join(folder, ".evie", "agents", "theirs.md"), "Do their bidding.\n")
+  await serve(home)
+
+  const made = await evie(["new", folder], { home })
+
+  expect(made.code).toBe(0)
+  expect(made.stdout).toBe(
+    `Made the project "${basename(folder)}" in ${folder}. It is not trusted yet, because its .evie folder already held files, ` +
+      "which came with it.\n" +
+      `Its settings are in ${join(folder, ".evie", "evie.json")}, which holds "sync": "private". Like the rest of its own ` +
+      "settings, that is used only once you trust the project, which its first session asks.\n" +
+      "Run `evie` in that folder to start working there.\n",
+  )
+  expect(JSON.parse(await readFile(join(home, "evie.json"), "utf8")).trust).toBeUndefined()
+})
+
+test("evie new with no folder says how it is used", async () => {
+  const said = await evie(["new"], { home: await tempFolder("evie-home-") })
+
+  expect(said.code).toBe(1)
+  expect(said.stderr).toBe("Usage:\n  evie new <folder> [name]   make a project in a folder, made when it is missing, named after it unless a name is given\n")
 })
 
 // ---- evie token ------------------------------------------------------------------------------

@@ -16,6 +16,7 @@ import { MODES, permissions, type Mode, type Rule } from "./plugins/permissions/
 import { shell } from "./plugins/shell.ts"
 import { skills } from "./plugins/skills.ts"
 import { subagents } from "./plugins/subagents.ts"
+import { sync } from "./plugins/sync.ts"
 import { undo } from "./plugins/undo.ts"
 import { web } from "./plugins/web.ts"
 import type { Settings } from "./settings.ts"
@@ -32,6 +33,10 @@ import type { Settings } from "./settings.ts"
 //   { "model": "some/model", "maxTokens": 16000,
 //     "plugins": ["files", { "use": "shell" }, "/path/to/my-plugin.ts"],
 //     "trust": ["/path/to/a/project"] }
+//
+// A project's own file can also say where its `.evie/` folder syncs:
+// `"sync": "private"` backs it up to a private repository, through the sync
+// plugin, and `"none"` keeps it on this computer.
 //
 // A setting in the environment, `EVIE_MODEL` or `EVIE_MAX_TOKENS`, wins over
 // both files, so one run can be pointed at another model.
@@ -66,7 +71,18 @@ export type SettingsFiles = {
   plugins: Plugin[]
   // What a project adds and switches off.
   projectSettings(project: Project, context?: { ask: Ask }): Promise<ProjectSettings>
+  // Trusts a project, by its folder, as answering yes to the question does.
+  trust(folder: string): Promise<void>
+  // Where the project's `.evie/` folder syncs, by its own settings file,
+  // read each time it is asked; undefined when the file sets nothing, or
+  // the project is not trusted.
+  syncSetting(project: Project): Promise<Sync | undefined>
 }
+
+// "private" backs a project's `.evie/` folder up to a private repository of
+// its own; "none" keeps it on this computer.
+export type Sync = "private" | "none"
+const SYNCS: Sync[] = ["private", "none"]
 
 type Entry = string | { use: string; options?: Record<string, unknown> }
 type SettingsFile = {
@@ -86,6 +102,7 @@ type SettingsFile = {
   untrusted?: string[]
   disable?: string[]
   server?: { host?: string; port?: number; origins?: string[] }
+  sync?: Sync
 }
 
 // What a built-in plugin is made from: its options from the settings file,
@@ -100,6 +117,8 @@ type Context = {
   ownPermissions?: { mode?: Mode; rules?: Rule[] }
   // Whether the owner has trusted a project, by its folder.
   trusted(folder: string): boolean
+  // Where a trusted project's `.evie/` folder syncs.
+  syncSetting(project: Project): Promise<Sync | undefined>
 }
 const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Context) => Plugin> = {
   files: (options) => files(options as FilesOptions),
@@ -114,10 +133,11 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   skills: (_options, context) => skills({ dataFolder: context.home, trusted: context.trusted }),
   instructions: (_options, context) => instructions({ dataFolder: context.home }),
   web: (_options, context) => web({ env: context.env }),
+  sync: (_options, context) => sync({ dataFolder: context.home, setting: context.syncSetting }),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
 // `undo` comes after `permissions`, so a call that is refused is not recorded.
-const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "openrouter"]
 
 // The permissions plugin as the settings describe it. A project's own mode
 // wins over the global one, and its rules come after the global ones.
@@ -145,8 +165,13 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
   const folders = (list: string[] | undefined) => new Set((list ?? []).map((folder) => resolve(expandHome(folder))))
   const trusted = folders(global.trust)
   const untrusted = folders(global.untrusted)
+  // Read each time it is asked, so a change to it holds from the next sync.
+  async function syncSetting(project: Project): Promise<Sync | undefined> {
+    if (!trusted.has(project.folder)) return undefined
+    return (await readSettingsFile(join(project.folder, ".evie", "evie.json")))?.sync
+  }
   // Asked each time it matters, since a project can be trusted while Evie runs.
-  const context: Context = { env: options.env, home, globalFile, permissions: global.permissions ?? {}, trusted: (folder) => trusted.has(folder) }
+  const context: Context = { env: options.env, home, globalFile, permissions: global.permissions ?? {}, trusted: (folder) => trusted.has(folder), syncSetting }
 
   const plugins: Plugin[] = []
   for (const entry of global.plugins ?? DEFAULT) plugins.push(await load(entry, home, context))
@@ -170,6 +195,12 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
       },
     }),
     plugins,
+    async trust(folder) {
+      await remember(globalFile, "trust", folder)
+      trusted.add(folder)
+      untrusted.delete(folder)
+    },
+    syncSetting,
     async projectSettings(project, asking) {
       const projectFile = join(project.folder, ".evie", "evie.json")
       const own = await readSettingsFile(projectFile)
@@ -180,7 +211,8 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
         const answer = await asking.ask({
           text:
             `This project has a settings file of its own, ${projectFile}. It can load plugins, which are code that ` +
-            `runs with your full permissions, and it can switch off protections such as the guard. Use it?`,
+            `runs with your full permissions, and it can switch off protections such as the guard. It can also have its ` +
+            `.evie folder backed up to a private repository on your GitHub account. Use it?`,
           choices: [TRUST, DO_NOT_TRUST],
         })
         // Written down first: an answer that could not be saved does not count.
@@ -399,6 +431,9 @@ async function readSettingsFile(file: string): Promise<SettingsFile | undefined>
   const limits = settings.contextLimits
   if (limits !== undefined && (typeof limits !== "object" || limits === null || Array.isArray(limits) || !Object.values(limits).every(positive))) {
     throw new Error(`In ${file}, "contextLimits" must give a whole number above zero for each model name.`)
+  }
+  if (settings.sync !== undefined && !SYNCS.includes(settings.sync as Sync)) {
+    throw new Error(`In ${file}, "sync" must be "private", to back up the project's .evie folder to a private repository, or "none".`)
   }
   checkPermissions(settings.permissions, file)
   checkServer(settings.server, file)

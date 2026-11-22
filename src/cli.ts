@@ -5,6 +5,7 @@
 //   evie serve                 runs Evie: the core behind its server
 //   evie                       the terminal client, in the folder it is run
 //                              in; it connects to the server
+//   evie new <folder> [name]   makes a project in a folder, through the server
 //   evie token add <name>      makes a token for a device; list and remove
 //                              list them and take one back
 //   evie service install       runs `evie serve` at login, on macOS;
@@ -12,6 +13,7 @@
 //   evie seed                  fills an empty data folder with made-up
 //                              projects and sessions
 import { loadSettings } from "./settings.ts"
+import { newProject } from "./programs/new.ts"
 import { seed } from "./programs/seed.ts"
 import { serve } from "./programs/serve.ts"
 import { service } from "./programs/service.ts"
@@ -30,6 +32,7 @@ const env = await loadSettings(process.env)
 
 const [command, ...rest] = process.argv.slice(2)
 if (command === "serve") await serve(env)
+else if (command === "new") await newProject(env, rest)
 else if (command === "token") await token(env, rest)
 else if (command === "service") await service(env, rest)
 else if (command === "seed") await seed(env)

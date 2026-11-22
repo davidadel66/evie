@@ -418,6 +418,11 @@ export type Host = {
 export type Plugin = {
   name: string
   setup(host: Host): void | Promise<void>
+  // For a plugin with work of its own over time, such as a backup every
+  // hour: called once, when Evie is sure to be the only one running, as the
+  // server is once it listens, with every project and a signal that fires
+  // when Evie stops. Only the global plugins are started.
+  start?(context: { projects: readonly Project[]; signal: AbortSignal }): void
 }
 
 // What one project has of its own, on top of the global settings.
@@ -542,6 +547,22 @@ export type Commands = {
     input: Record<never, never>
     output: Project[]
   }
+  // Makes a new project at a folder, given by its full path: the folder
+  // itself when it is missing, and a `.evie/evie.json` in it whose
+  // `"sync": "private"` backs up the project's `.evie/` folder to a private
+  // repository. The project is registered, named after its folder unless
+  // `name` is given, and trusted, unless its `.evie/` folder already held
+  // something, which its first session then asks about. `madeFolder` says
+  // whether the folder was missing, `trusted` whether it is trusted, and
+  // `syncs` whether its `.evie/` folder is backed up: it is trusted, and
+  // the sync plugin is loaded. A
+  // folder that is already a project, has Evie settings of its own, is
+  // inside a git repository below its top, or is in Evie's data folder is
+  // refused, and nothing is made.
+  new_project: {
+    input: { folder: string; name?: string }
+    output: { project: Project; madeFolder: boolean; trusted: boolean; syncs: boolean }
+  }
   // Every session the owner has said something in, or that has asked a
   // question, that is not a subagent's, the latest active first.
   list_sessions: {
@@ -566,7 +587,8 @@ export type Evie = {
 export type Core = Omit<Evie, "close"> & {
   // Picks up the work an earlier run of Evie left in the data folder: jobs
   // still running, or that ended with no one there to tell, and turns cut
-  // off. Called once, by the server, once it is sure to be the only one.
+  // off. Then starts the plugins' own work over time. Called once, by the
+  // server, once it is sure to be the only one.
   resumeWork(): Promise<void>
   // Stops Evie for good: turns and background jobs are stopped. With
   // `restart`, nothing is stopped and nothing more is written, so the next

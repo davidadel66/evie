@@ -17,6 +17,7 @@ export async function startEvie(
     // A project folder to use, to stand for Evie being started again in the same project.
     projectFolder?: string
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
+    trust?: NonNullable<EvieOptions["trust"]>
     compaction?: NonNullable<EvieOptions["compaction"]>
     quietCheckEvery?: number
     // Open the session as a client that shows questions and answers them.
@@ -34,6 +35,7 @@ export async function startEvie(
     model: options.model ?? "test/model",
     plugins,
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
+    ...(options.trust && { trust: options.trust }),
     ...(options.compaction && { compaction: options.compaction }),
     ...(options.quietCheckEvery !== undefined && { quietCheckEvery: options.quietCheckEvery }),
   }).catch(async (error) => {

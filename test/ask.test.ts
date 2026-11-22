@@ -250,7 +250,11 @@ test("opening a project that has its own settings file asks whether to trust it"
 
   const { question, opened } = await open("Yes, trust this project")
 
-  expect(question.body.text).toContain(`This project has a settings file of its own, ${join(folder, ".evie", "evie.json")}.`)
+  expect(question.body.text).toBe(
+    `This project has a settings file of its own, ${join(folder, ".evie", "evie.json")}. It can load plugins, which are code that ` +
+      "runs with your full permissions, and it can switch off protections such as the guard. It can also have its .evie folder " +
+      "backed up to a private repository on your GitHub account. Use it?",
+  )
   expect(question.body.choices).toEqual(["Yes, trust this project", "No, ignore its settings file"])
   // The question is in the log of the session that was opening.
   expect(question.session).toBe(opened.session)
