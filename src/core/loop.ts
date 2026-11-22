@@ -14,6 +14,7 @@ import {
   triggerSize,
 } from "./compaction.ts"
 import { ONLY_THE_CORE_WRITES, buildRequest, type ShownImages } from "./request-builder.ts"
+import { branchOf } from "./projects.ts"
 import { CancelledBeforeStart, runToolCall } from "./tools.ts"
 import type { HookRunner } from "./host.ts"
 import type { Attachment, EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, ToolContext, Usage } from "./types.ts"
@@ -96,6 +97,13 @@ export type Loop = {
 export function currentModel(events: readonly StoredEvent[], startedWith: string): string {
   const switched = events.findLast((event) => event.type === "model_changed")
   return switched?.type === "model_changed" ? switched.body.model : startedWith
+}
+
+// The branch a session last recorded as a turn started, since it was last
+// moved, if it was, or nothing: the branch a list of sessions shows it on.
+function recordedBranch(events: readonly StoredEvent[]): string | undefined {
+  const last = events.findLast((event) => event.type === "branch" || event.type === "moved")
+  return last?.type === "branch" ? last.body.branch : undefined
 }
 
 // The most images a request carries, and the most base64 they come to
@@ -283,6 +291,13 @@ export function createLoop(options: LoopOptions): Loop {
 
   // ---- Turns --------------------------------------------------------------------
 
+  // As a turn starts: the branch the project is on, recorded when it is not
+  // the one the session last recorded.
+  async function recordBranch(signal: AbortSignal) {
+    const branch = folder === null ? undefined : await untilAborted(branchOf(folder), signal)
+    if (branch !== undefined && branch !== recordedBranch(log.events(session))) emit(log.append(session, "branch", { branch }))
+  }
+
   async function run() {
     try {
       while (!stopped && turnWanted()) await turn()
@@ -340,6 +355,7 @@ export function createLoop(options: LoopOptions): Loop {
         // message that arrives during a reply stops that reply (see wake)
         // and the loop comes back here.
         writeNotes("all")
+        if (step === 1) await recordBranch(signal)
         if (step > 1) {
           const steered = atomically(() =>
             inbox.take(session).map((message) => log.append(session, "user_message", said(message))),
