@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { loadSettings } from "../src/index.ts"
+import { withKey } from "../src/settings.ts"
 
 let home: string | undefined
 afterEach(async () => {
@@ -47,4 +48,20 @@ test("settings from the file are not put into the process's own environment", as
   await settingsWith("EVIE_TEST_ONLY_IN_FILE=secret\n")
 
   expect(process.env.EVIE_TEST_ONLY_IN_FILE).toBeUndefined()
+})
+
+// ---- Changing a key in the file ------------------------------------------------------------
+
+test("a key set in the file's text replaces its line where it is, drops a second one, and leaves every other line as it was", () => {
+  const text = ["# my keys", "export OPENROUTER_API_KEY=old-one", "", "BRAVE_API_KEY='brave'", "OPENROUTER_API_KEY=older-still", "not a setting"].join("\n")
+
+  expect(withKey(text, "OPENROUTER_API_KEY", "made-up-new")).toBe(
+    ["# my keys", "OPENROUTER_API_KEY=made-up-new", "", "BRAVE_API_KEY='brave'", "not a setting"].join("\n"),
+  )
+})
+
+test("a key not in the file yet goes on a line of its own at the end, and one cleared is taken out", () => {
+  expect(withKey("BRAVE_API_KEY=brave", "OPENROUTER_API_KEY", "made-up")).toBe("BRAVE_API_KEY=brave\nOPENROUTER_API_KEY=made-up\n")
+  expect(withKey("", "OPENROUTER_API_KEY", "made-up")).toBe("OPENROUTER_API_KEY=made-up\n")
+  expect(withKey("# keys\nOPENROUTER_API_KEY=made-up\nBRAVE_API_KEY=brave\n", "OPENROUTER_API_KEY", null)).toBe("# keys\nBRAVE_API_KEY=brave\n")
 })

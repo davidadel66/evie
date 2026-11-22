@@ -10,7 +10,7 @@ import { fail, print, STOP_FOR_GOOD } from "./common.ts"
 // small file in ~/Library/LaunchAgents that tells launchd, the Mac's own
 // service runner, what to run and how.
 
-const LABEL = "com.evie.serve"
+export const LABEL = "com.evie.serve"
 // How many times loading the service is tried, and how long to wait between tries.
 const LOAD_TRIES = 5
 const LOAD_PAUSE_MS = 500

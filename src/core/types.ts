@@ -454,6 +454,53 @@ export type Project = { id: string; name: string; folder: string }
 // not in a git repository or is on no branch.
 export type ListedProject = Project & { branch?: string }
 
+// ---- Settings -------------------------------------------------------------------
+
+// The settings the owner changes from a client's settings window, as they
+// stand in the data folder's files. `keys` are the keys Evie reads from the
+// `.env` file, each with only whether the file sets it, never its value;
+// `environment` says the server's own environment sets it too, which wins
+// over the file. `plugins` are the ones `evie.json` lists, each by the name
+// or path it is given by, with whether it is `listed` there now and whether
+// it was `loaded` when the server started. `instructions` is the text of
+// the owner's instruction file, empty when there is none. `projects` are
+// every project, each with whether its own settings are trusted. A setting
+// that is `pending` has been changed, and the change applies once the
+// server starts again; `restart` says that some change waits for that.
+// `started` is when this server started, which names it to `restart_server`.
+export type SettingsView = {
+  keys: { name: string; set: boolean; environment: boolean; pending: boolean }[]
+  plugins: { name: string; listed: boolean; loaded: boolean }[]
+  instructions: string
+  projects: (Project & { trusted: boolean; pending: boolean })[]
+  restart: boolean
+  started: number
+}
+
+// One change to the settings: a key set to a value, or cleared with null;
+// a plugin added to the list, by a built-in plugin's name or a plugin
+// file's path, or taken off it; the owner's instruction file saved; or a
+// project, by its id, trusted or not.
+export type SettingsChange =
+  | { key: string; value: string | null }
+  | { addPlugin: string }
+  | { removePlugin: string }
+  | { instructions: string }
+  | { project: string; trusted: boolean }
+
+// What carries out the settings commands, given to the core by the program
+// that runs it, which knows its settings files and how to start the server
+// again. `projects` are every project there is.
+export type SettingsEditor = {
+  read(projects: readonly Project[]): Promise<SettingsView>
+  // Makes the change, once it has been checked as the files are when Evie
+  // starts; one that would not pass is refused, saying why, and nothing is
+  // written.
+  change(change: SettingsChange, projects: readonly Project[]): Promise<void>
+  // Starts the server again, when `started` is this server's.
+  restart(started: number): Promise<void>
+}
+
 // ---- The client interface -------------------------------------------------------
 
 // What each command takes and what it gives back.
@@ -573,6 +620,31 @@ export type Commands = {
   list_sessions: {
     input: Record<never, never>
     output: SessionSummary[]
+  }
+  // The settings, as a settings window shows them. A key's value is never
+  // given, only whether it is set.
+  read_settings: {
+    input: Record<never, never>
+    output: SettingsView
+  }
+  // Makes one change to the settings, written to the file it belongs in,
+  // and gives back the settings as they are then. Each change is checked as
+  // the files are when Evie starts: one that would not pass is refused, with
+  // the same words, and nothing is written. A key's value goes to the data
+  // folder's `.env` only: it is never given back, nor kept anywhere else.
+  change_settings: {
+    input: SettingsChange
+    output: SettingsView
+  }
+  // Starts the server again in its restart mode, so that the work running
+  // in it is picked up again, as after a crash, and every setting applies.
+  // `started` is the server's, as `read_settings` gave it: a server started
+  // since does nothing, so that the command, sent again after the restart,
+  // does not restart it again. Refused, saying why, when the settings files
+  // would stop the server starting again.
+  restart_server: {
+    input: { started: number }
+    output: void
   }
 }
 

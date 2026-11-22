@@ -10,7 +10,7 @@ import { branchOf, createProjects, keepEvieOutOfGit, makeProject } from "./proje
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
 import { createSummaries } from "./summaries.ts"
-import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
+import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider, SettingsEditor } from "./types.ts"
 
 type Cut = "none" | "asking" | "working"
 
@@ -38,6 +38,8 @@ export type EvieOptions = {
   // yes to whether to trust them does. A project `new_project` makes is
   // trusted this way.
   trust?: (folder: string) => Promise<void>
+  // What carries out the settings commands, which fail without it.
+  settings?: SettingsEditor
   // How often, in milliseconds, sessions are looked at for any that a week
   // of quiet has settled, to send their summaries: nothing happens in a
   // session to tell of it. Once an hour when left out, which is for tests to change.
@@ -689,6 +691,11 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return { text }
   }
 
+  function editor(): SettingsEditor {
+    if (!options.settings) throw new Error("This Evie has no settings to change: it was started without them.")
+    return options.settings
+  }
+
   // Opens a session again in this process, to pick up what was left in it.
   // A subagent's is opened by the session that started it, which is opened first.
   async function reopen(session: string): Promise<void> {
@@ -730,6 +737,13 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return summaries.list() as Output
         case "new_project":
           return (await newProject(command)) as Output
+        case "read_settings":
+          return (await editor().read(projects.list())) as Output
+        case "change_settings":
+          await editor().change(command, projects.list())
+          return (await editor().read(projects.list())) as Output
+        case "restart_server":
+          return (await editor().restart(command.started)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, utimes, writeFil
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import { openStore } from "../src/core/store.ts"
+import { connect } from "../src/server/connect.ts"
 import type { ScriptedReply } from "./support/scripted-provider.ts"
 
 // The real programs, run as the owner runs them: `evie serve`, `evie` and
@@ -697,4 +698,29 @@ test("evie serve stopped with Ctrl-C, by closing its terminal, or with a stop-fo
     expect(groupThere(group)).toBe(false)
     expect(await Bun.file(join(home, "stop-for-good")).exists()).toBe(false)
   }
+})
+
+test("evie serve run by hand starts again in its own place when a restart is asked for: running work is picked up again, and Ctrl-C then stops it all", async () => {
+  const port = await freePort()
+  const { home, server, session, output } = await commandRunning(port, "ps -o pgid= -p $$ | tr -d ' '; sleep 30")
+  while (!(await readFile(output, "utf8")).includes("\n")) await Bun.sleep(5)
+  const group = Number((await readFile(output, "utf8")).split("\n")[0])
+  cleanups.push(async () => void (groupThere(group) && process.kill(-group, "SIGKILL")))
+  const client = await connect({ url: `http://127.0.0.1:${port}`, token: (await readFile(join(home, "server-token"), "utf8")).trim(), firstWait: 50 })
+  cleanups.push(() => client.close())
+  const { started } = await client.send({ type: "read_settings" })
+
+  await client.send({ type: "restart_server", started })
+
+  // The client connects again by itself, to the server started in its place.
+  let now = started
+  while (now === started) now = (await client.send({ type: "read_settings" })).started
+  const opened = await client.send({ type: "open_session", session })
+  expect(opened.jobs).toMatchObject([{ id: "1", status: "running" }])
+  expect(groupThere(group)).toBe(true)
+
+  server.kill("SIGINT")
+  expect(await server.exited).toBe(130)
+  expect(groupThere(group)).toBe(false)
+  expect(await fetch(`http://127.0.0.1:${port}/`).then(() => "answered", () => "nothing there")).toBe("nothing there")
 })

@@ -1,11 +1,15 @@
+import { spawn, type ChildProcess } from "node:child_process"
 import { existsSync, realpathSync, rmSync } from "node:fs"
+import { constants } from "node:os"
 import { join } from "node:path"
 import { keepOutputTidy } from "../core/tools.ts"
 import { createEvie, dataFolder, loadSettingsFiles, startServer, type EvieServer, type Settings } from "../index.ts"
 import { ensureOwnToken, openTokens } from "../server/tokens.ts"
 import type { WebApp } from "../server/web-app.ts"
+import { settingsEditor } from "../settings-editor.ts"
 import { loadServerSettings } from "../settings-files.ts"
 import { EXIT_CODES, fail, print, reason, STOP_FOR_GOOD, type StopSignal } from "./common.ts"
+import { LABEL } from "./service.ts"
 
 // Removes the file that says the server is to stop for good, if it is there.
 function forgetStopForGood(home: string) {
@@ -35,12 +39,15 @@ export async function serve(env: Settings, args: string[] = []) {
   }
   const settings = await loadSettingsFiles({ env }).catch(fail)
   const serverSettings = await loadServerSettings({ env }).catch(fail)
+  // What a restart asked for from the settings window does, once the server listens.
+  let restart = () => {}
   const evie = await createEvie({
     env,
     plugins: settings.plugins,
     projectSettings: settings.projectSettings,
     trust: settings.trust,
     settingsFile: settings.file,
+    settings: settingsEditor({ env, environment: process.env, files: settings, restart: () => restart() }),
     ...(settings.model !== undefined && { model: settings.model }),
     ...(settings.maxTokens !== undefined && { maxTokens: settings.maxTokens }),
     ...(settings.compaction !== undefined && { compaction: settings.compaction }),
@@ -93,26 +100,83 @@ export async function serve(env: Settings, args: string[] = []) {
   // Stopped for good, with Ctrl-C, by closing the terminal it runs in, or
   // with the file that says so, Evie is closed properly: turns are stopped,
   // and so is any command left running in the background. Told to stop
-  // otherwise, as launchd does when the login service is restarted, its
-  // work is left as it is for the next start to pick up.
+  // otherwise, as launchd does when the login service is restarted, or
+  // asked to restart, its work is left as it is for the next start to pick up.
   // Each step is taken even when the one before it fails, so the core is
   // closed whatever happens to the listener. Told again while that is under
   // way, it stops at once.
   let stopping = false
+  function stop(forGood: boolean, then: () => void) {
+    stopping = true
+    stopTidying()
+    forgetStopForGood(home)
+    void server
+      .stop()
+      .finally(() => evie.close(forGood ? {} : { restart: true }))
+      .finally(() => tokens.close())
+      .catch((cause) => console.error(`Evie did not stop cleanly: ${reason(cause)}`))
+      .finally(then)
+  }
   for (const [signal, code] of Object.entries(EXIT_CODES) as [StopSignal, number][]) {
     process.on(signal, () => {
       if (stopping) process.exit(code)
-      stopping = true
-      stopTidying()
-      const forGood = signal !== "SIGTERM" || existsSync(join(home, STOP_FOR_GOOD))
-      forgetStopForGood(home)
-      void server
-        .stop()
-        .finally(() => evie.close(forGood ? {} : { restart: true }))
-        .finally(() => tokens.close())
-        .catch((cause) => console.error(`Evie did not stop cleanly: ${reason(cause)}`))
-        .finally(() => process.exit(code))
+      stop(signal !== "SIGTERM" || existsSync(join(home, STOP_FOR_GOOD)), () => process.exit(code))
     })
+  }
+  restart = () => {
+    if (stopping) return
+    print("evie serve · starting again, as the settings window asked\n")
+    stop(false, startAgain)
+  }
+}
+
+// The exit code of a server that stopped to be started again.
+const RESTART = 75
+// Set in the environment of an `evie serve` that another watches over, to
+// that one's process id.
+const WATCHED_BY = "EVIE_WATCHED_BY"
+
+// Once a restart has stopped the server, whatever runs it starts it again:
+// launchd, for the login service, which starts it again whenever it stops;
+// or the `evie serve` that started this one and watches over it. Run by
+// hand, there is nothing to, so this process does: see `watchOver`.
+// launchd is process 1, and names the service it starts in its
+// environment, which is checked too, since a process whose parent has gone
+// is given to process 1 as well.
+function startAgain(): void {
+  const byLoginService = process.ppid === 1 && process.env.XPC_SERVICE_NAME === LABEL
+  if (byLoginService || process.env[WATCHED_BY] === String(process.ppid)) process.exit(RESTART)
+  void watchOver()
+}
+
+// From now on this process only watches over a new `evie serve`, started
+// with the same arguments, in the same folder and printing to the same
+// place, and starts it again each time it stops for a restart. It passes
+// on each signal that stops a server, so Ctrl-C and closing the terminal
+// stop it as before, and it ends as that one ends, with its exit code. The
+// new one is in a process group of its own, so that the terminal's Ctrl-C
+// reaches it once, through this process.
+async function watchOver(): Promise<never> {
+  let current: ChildProcess | undefined
+  for (const signal of Object.keys(EXIT_CODES) as StopSignal[]) {
+    process.removeAllListeners(signal)
+    process.on(signal, () => current?.kill(signal))
+  }
+  for (;;) {
+    const started = spawn(process.execPath, process.argv.slice(1), {
+      stdio: ["ignore", "inherit", "inherit"],
+      detached: true,
+      env: { ...process.env, [WATCHED_BY]: String(process.pid) },
+    })
+    current = started
+    const code = await new Promise<number>((resolve) => {
+      started.on("exit", (code, signal) => resolve(code ?? 128 + (signal ? constants.signals[signal] : 0)))
+      started.on("error", (cause) => {
+        console.error(`evie serve could not be started again: ${reason(cause)}`)
+        resolve(1)
+      })
+    })
+    if (code !== RESTART) process.exit(code)
   }
 }
 

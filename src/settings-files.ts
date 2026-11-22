@@ -73,6 +73,20 @@ export type SettingsFiles = {
   projectSettings(project: Project, context?: { ask: Ask }): Promise<ProjectSettings>
   // Trusts a project, by its folder, as answering yes to the question does.
   trust(folder: string): Promise<void>
+  // Stops trusting a project, by its folder, as answering no does.
+  untrust(folder: string): Promise<void>
+  // The global plugins as the global file listed them when it was read,
+  // each by the name or the path it is given by.
+  listed: string[]
+  // The global file as it is now: the plugins it lists, so named, and the
+  // project folders it trusts.
+  now(): Promise<{ plugins: string[]; trust: string[] }>
+  // Adds a plugin to the end of the global list, by a built-in plugin's
+  // name or a plugin file's path, once it has loaded as it does when Evie
+  // starts; or takes one off the list. With no list in the file, the
+  // built-in plugins are the list.
+  addPlugin(name: string): Promise<void>
+  removePlugin(name: string): Promise<void>
   // Where the project's `.evie/` folder syncs, by its own settings file,
   // read each time it is asked; undefined when the file sets nothing, or
   // the project is not trusted.
@@ -186,6 +200,29 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
 
   return {
     file: globalFile,
+    listed: (global.plugins ?? DEFAULT).map(nameOf),
+    async now() {
+      const settings = (await readSettingsFile(globalFile)) ?? {}
+      return { plugins: (settings.plugins ?? DEFAULT).map(nameOf), trust: [...folders(settings.trust)] }
+    },
+    addPlugin: (name) =>
+      update(globalFile, async (settings) => {
+        const list = settings.plugins ?? DEFAULT
+        if (list.some((entry) => nameOf(entry) === name)) throw new Error(`"${name}" is in the list of plugins in ${globalFile} already.`)
+        await load(name, home, context)
+        settings.plugins = [...list, name]
+      }),
+    removePlugin: (name) =>
+      update(globalFile, (settings) => {
+        const list = settings.plugins ?? DEFAULT
+        if (!list.some((entry) => nameOf(entry) === name)) throw new Error(`"${name}" is not in the list of plugins in ${globalFile}.`)
+        settings.plugins = list.filter((entry) => nameOf(entry) !== name)
+      }),
+    async untrust(folder) {
+      await remember(globalFile, "untrusted", folder)
+      untrusted.add(folder)
+      trusted.delete(folder)
+    },
     ...(model !== undefined && { model }),
     ...(maxTokens !== undefined && { maxTokens }),
     ...((global.compactAt !== undefined || global.contextLimits !== undefined) && {
@@ -280,12 +317,15 @@ export async function loadSettingsFiles(options: { env: Settings }): Promise<Set
 
 // Changes the global settings file. The file is read again first, so nothing
 // written to it since Evie started is lost, and replaced in one step, so it
-// is never left half written. Changes are made one at a time.
+// is never left half written. Changes are made one at a time. A change that
+// throws, or leaves settings that would not pass the checks the file passes
+// when it is read, is not written.
 let saving: Promise<void> = Promise.resolve()
-function update(file: string, change: (settings: SettingsFile) => void): Promise<void> {
+function update(file: string, change: (settings: SettingsFile) => void | Promise<void>): Promise<void> {
   const saved = saving.then(async () => {
     const settings: SettingsFile = (await readSettingsFile(file)) ?? {}
-    change(settings)
+    await change(settings)
+    checkSettings(settings, file)
     await writeFile(`${file}.new`, `${JSON.stringify(settings, null, 2)}\n`)
     await rename(`${file}.new`, file)
   })
@@ -347,7 +387,7 @@ function withEviePort(address: string): string {
 // ---- Loading one plugin -----------------------------------------------------------------
 
 async function load(entry: Entry, baseFolder: string, context: Context): Promise<Plugin> {
-  const name = typeof entry === "string" ? entry : entry.use
+  const name = nameOf(entry)
   const options = typeof entry === "string" ? {} : (entry.options ?? {})
 
   if (Object.hasOwn(BUILT_IN, name)) return BUILT_IN[name]!(options, context)
@@ -380,6 +420,8 @@ const wholeNumber = (text: string | undefined) => {
   const value = Number(text)
   return Number.isInteger(value) && value > 0 ? value : undefined
 }
+// The name or path a plugin is given by in a list of plugins.
+const nameOf = (entry: Entry) => (typeof entry === "string" ? entry : entry.use)
 const looksLikePath = (name: string) => /[/\\]|^[.~]|\.(ts|js|mjs)$/.test(name)
 const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir())
 const isPlugin = (value: unknown): value is Plugin =>
@@ -407,6 +449,12 @@ async function readSettingsFile(file: string): Promise<SettingsFile | undefined>
   } catch (cause) {
     throw new Error(`${file} is not valid JSON: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
+  return checkSettings(parsed, file)
+}
+
+// The settings a file holds, once they have been checked to be what Evie
+// can use; otherwise what is wrong, in words that name the file.
+function checkSettings(parsed: unknown, file: string): SettingsFile {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error(`${file} must hold one JSON object.`)
   const settings = parsed as Record<string, unknown>
 
