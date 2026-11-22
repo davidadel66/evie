@@ -3,7 +3,6 @@ import type { ListedProject, StorageEntry } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 import { CaretLeft, CaretRight, File, FileImage, FolderSimple } from "./icons.tsx"
 import { ageWords } from "./session-list.ts"
-import { Spinner } from "./Spinner.tsx"
 import { openStorage, type Storage, type StorageState } from "./storage.ts"
 import { addressOfWorkspace, sizeWords, type WorkspacePlace } from "./workspace.ts"
 
@@ -45,6 +44,7 @@ function Shown({ storage, project, place, now }: { storage: Storage; project: Li
         ) : (
           <ul className="flex flex-col">
             <Entries entries={top.entries} depth={0} state={state} storage={storage} place={place} now={now} />
+            <More count={top.more ?? 0} indent={0} />
           </ul>
         )}
       </section>
@@ -63,7 +63,7 @@ function Entries({ entries, depth, state, storage, place, now }: { entries: Stor
   return entries.map((entry) => {
     const details = (
       <span className="flex shrink-0 items-center gap-4 text-caption text-text-muted">
-        {entry.kind === "file" && <span>{sizeWords(entry.size)}</span>}
+        {entry.kind === "file" && <span className="font-mono text-code">{sizeWords(entry.size)}</span>}
         <span className="min-w-8 text-right">{ageWords(entry.changed, now)}</span>
       </span>
     )
@@ -99,7 +99,10 @@ function Entries({ entries, depth, state, storage, place, now }: { entries: Stor
             ) : inside.entries.length === 0 ? (
               <Quiet indent={depth + 1}>Nothing in this folder.</Quiet>
             ) : (
-              <Entries entries={inside.entries} depth={depth + 1} state={state} storage={storage} place={place} now={now} />
+              <>
+                <Entries entries={inside.entries} depth={depth + 1} state={state} storage={storage} place={place} now={now} />
+                <More count={inside.more ?? 0} indent={depth + 1} />
+              </>
             )}
           </ul>
         )}
@@ -133,10 +136,7 @@ function FileShown({ state, path, back, now }: { state: StorageState; path: stri
         {file?.problem !== undefined ? (
           <p className="text-body break-words text-text-muted">{file.problem}</p>
         ) : read === undefined ? (
-          <p className="flex min-h-control items-center gap-2 text-body text-status-working">
-            <Spinner />
-            Reading the file
-          </p>
+          <p className="flex min-h-control items-center text-body text-text-muted">Reading the file</p>
         ) : read.kind === "image" ? (
           <img src={`data:${read.type};base64,${read.data}`} alt={path} className="max-w-full" />
         ) : (
@@ -147,20 +147,20 @@ function FileShown({ state, path, back, now }: { state: StorageState; path: stri
   )
 }
 
-// A folder being listed, as Working is said: at the top, or as a row of an open folder.
+// A folder being listed, in quiet words: at the top, or as a row of an open folder.
 function Listing({ indent }: { indent?: number }) {
-  const words = (
-    <>
-      <Spinner />
-      Listing
-    </>
-  )
-  if (indent === undefined) return <p className="flex h-row-height items-center gap-2 border-t border-line px-3 text-caption text-status-working">{words}</p>
+  if (indent === undefined) return <p className="flex h-row-height items-center border-t border-line px-3 text-caption text-text-muted">Listing</p>
   return (
-    <li style={{ paddingLeft: `${12 + indent * 24}px` }} className="flex h-row-height items-center gap-2 border-t border-line text-caption text-status-working">
-      {words}
+    <li style={{ paddingLeft: `${12 + indent * 24}px` }} className="flex h-row-height items-center border-t border-line text-caption text-text-muted">
+      Listing
     </li>
   )
+}
+
+// How many more entries a folder holds than its listing gives.
+function More({ count, indent }: { count: number; indent: number }) {
+  if (count === 0) return null
+  return <Quiet indent={indent}>{`${count} more, not listed here.`}</Quiet>
 }
 
 function Quiet({ children, indent }: { children: ReactNode; indent?: number }) {

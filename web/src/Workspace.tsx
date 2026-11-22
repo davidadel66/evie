@@ -15,7 +15,7 @@ import { ageWords, titleOf } from "./session-list.ts"
 import type { SessionList, Sessions } from "./sessions.ts"
 import { Spinner } from "./Spinner.tsx"
 import { Later, StorageView } from "./StorageView.tsx"
-import { addressOfWorkspace, latestSession, needsYou, NEW_CHAT, sessionsOf, workspaceIn, type WorkspacePlace, type WorkspaceTab } from "./workspace.ts"
+import { addressOfWorkspace, chatAddress, latestSession, needsYou, NEW_CHAT, sessionsOf, workspaceIn, type WorkspacePlace, type WorkspaceTab } from "./workspace.ts"
 
 // The workspace view: a project's home. The strip of every workspace on
 // the left, the workspace itself in the middle, with its header and the
@@ -116,11 +116,12 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
 // The workspace's header, in one row: its tile and name, which open the
 // picker of its icon and colour; its dashboards as tabs, none yet; and
 // Storage, Sessions and Memory pinned to the right, Memory not yet there.
-// The name takes at most half the row; at phone width the tabs scroll sideways.
+// Where the row is short, the name gives way, cut with an ellipsis, so that
+// the pinned tabs always show whole.
 function Header({ project, place, connection, sessions }: { project: ListedProject; place: WorkspacePlace; connection: Connection; sessions: Sessions }) {
   return (
-    <header className="flex h-header-height shrink-0 items-center gap-6 border-b border-line pr-4 pl-7 wide:pr-7">
-      <h1 className="flex max-w-1/2 min-w-0 shrink-0 text-title text-text">
+    <header className="flex h-header-height shrink-0 items-center gap-4 border-b border-line px-4 wide:gap-6 wide:px-7">
+      <h1 className="flex min-w-0 flex-1 text-title text-text">
         <IconPicker connection={connection} sessions={sessions} project={project}>
           <button type="button" title="Pick its icon and colour" className="-ml-2 flex h-control min-w-0 items-center gap-2 rounded-md px-2">
             <ProjectTile project={project.id} size="header" />
@@ -129,7 +130,7 @@ function Header({ project, place, connection, sessions }: { project: ListedProje
         </IconPicker>
       </h1>
       {/* A workspace's dashboards will be tabs here, before the pinned ones. */}
-      <nav aria-label="Workspace tabs" className="ml-auto flex h-full min-w-0 shrink items-stretch gap-6 overflow-x-auto">
+      <nav aria-label="Workspace tabs" className="flex h-full shrink-0 items-stretch gap-6">
         <Tab name="Storage" tab="storage" place={place} />
         <Tab name="Sessions" tab="sessions" place={place} />
         <span aria-disabled="true" className="flex shrink-0 items-center gap-2 text-label text-text-muted">
@@ -219,7 +220,17 @@ function SideChat({ project, place, list, connection, sessions }: { project: Lis
     return (
       <>
         <ChatHeader title="New session" full={addressOf({ draft: project.id })} />
-        <Draft connection={connection} sessions={sessions} project={project.id} where={`in ${project.name}`} moved={(session) => location.replace(at(session))} />
+        <Draft
+          connection={connection}
+          sessions={sessions}
+          project={project.id}
+          where={`in ${project.name}`}
+          // As the address is when the session has started, which the owner may have changed meanwhile.
+          moved={(session) => {
+            const there = chatAddress(location.hash, project.id, session)
+            if (there !== undefined) location.replace(there)
+          }}
+        />
       </>
     )
   }

@@ -38,21 +38,27 @@ test("Storage lists what a project's .evie folder holds, folders first, each fil
   const top = await run.evie.send({ type: "list_storage", project: run.project!.id })
   const inFiles = await run.evie.send({ type: "list_storage", project: run.project!.id, folder: "files" })
 
-  expect(top).toEqual([
-    { name: "files", path: "files", kind: "folder", changed: await changedAt(join(run.evieFolder, "files")) },
-    { name: "Agenda.txt", path: "Agenda.txt", kind: "file", size: 6, changed: await changedAt(join(run.evieFolder, "Agenda.txt")) },
-    { name: "evie.json", path: "evie.json", kind: "file", size: 22, changed: await changedAt(join(run.evieFolder, "evie.json")) },
-  ])
-  expect(inFiles).toEqual([
-    { name: "receipts", path: "files/receipts", kind: "folder", changed: await changedAt(join(run.evieFolder, "files", "receipts")) },
-    { name: "notes.md", path: "files/notes.md", kind: "file", size: 7, changed: await changedAt(join(run.evieFolder, "files", "notes.md")) },
-  ])
+  expect(top).toEqual({
+    entries: [
+      { name: "files", path: "files", kind: "folder", changed: await changedAt(join(run.evieFolder, "files")) },
+      { name: "Agenda.txt", path: "Agenda.txt", kind: "file", size: 6, changed: await changedAt(join(run.evieFolder, "Agenda.txt")) },
+      { name: "evie.json", path: "evie.json", kind: "file", size: 22, changed: await changedAt(join(run.evieFolder, "evie.json")) },
+    ],
+    more: 0,
+  })
+  expect(inFiles).toEqual({
+    entries: [
+      { name: "receipts", path: "files/receipts", kind: "folder", changed: await changedAt(join(run.evieFolder, "files", "receipts")) },
+      { name: "notes.md", path: "files/notes.md", kind: "file", size: 7, changed: await changedAt(join(run.evieFolder, "files", "notes.md")) },
+    ],
+    more: 0,
+  })
 })
 
 test("a project with no .evie folder yet has nothing in Storage, and a folder that is not there is refused", async () => {
   const run = await start()
 
-  expect(await run.evie.send({ type: "list_storage", project: run.project!.id })).toEqual([])
+  expect(await run.evie.send({ type: "list_storage", project: run.project!.id })).toEqual({ entries: [], more: 0 })
   await expect(run.evie.send({ type: "list_storage", project: run.project!.id, folder: "files" })).rejects.toThrow(
     "There is no folder files in this project's .evie folder.",
   )
@@ -75,8 +81,8 @@ test("Storage refuses a folder outside the .evie folder: one that climbs out, a 
     )
   }
   const top = await run.evie.send({ type: "list_storage", project })
-  expect(top.map((entry) => entry.name)).toEqual(["files", "shortcut"])
-  expect((await run.evie.send({ type: "list_storage", project, folder: "shortcut" })).map((entry) => entry.path)).toEqual(["shortcut/kept.txt"])
+  expect(top.entries.map((entry) => entry.name)).toEqual(["files", "shortcut"])
+  expect((await run.evie.send({ type: "list_storage", project, folder: "shortcut" })).entries.map((entry) => entry.path)).toEqual(["shortcut/kept.txt"])
 })
 
 test("a text file in Storage is read as its text, and an image as its bytes with their type", async () => {
@@ -125,4 +131,71 @@ test("Storage reads no file over 1 MB, none that is neither text nor an image, n
   for (const path of ["../secret.txt", join(outside, "secret.txt"), "files/secret.txt"]) {
     await expect(read(path)).rejects.toThrow(`${path} is outside this project's .evie folder. Storage holds only what is inside it.`)
   }
+})
+
+test("a .evie that is itself a link to another folder is refused, since the folder it leads to is not the project's", async () => {
+  const run = await start()
+  const outside = await tempFolder("evie-outside-")
+  await writeFile(join(outside, "hosts"), "127.0.0.1 localhost\n")
+  await symlink(outside, run.evieFolder)
+  const project = run.project!.id
+  const refused = `This project's .evie folder is a link to ${outside}, so Storage does not show it: it shows only a .evie folder of the project's own.`
+
+  await expect(run.evie.send({ type: "list_storage", project })).rejects.toThrow(refused)
+  await expect(run.evie.send({ type: "read_storage", project, path: "hosts" })).rejects.toThrow(refused)
+})
+
+test("Storage refuses a .evie folder that is evie's data folder, holds it, or is inside it, since the data folder holds the keys", async () => {
+  const place = await tempFolder("evie-place-")
+  const refused = "This project's .evie folder is, holds, or is inside evie's data folder, which holds its keys, so Storage does not show it."
+  // A project at the folder above the data folder, as one at the home folder is above ~/.evie.
+  const above = await startEvie([scriptedProvider([]).plugin], { home: join(place, ".evie"), projectFolder: place })
+  cleanups.push(above.stop)
+  await writeFile(join(place, ".evie", ".env"), "OPENROUTER_API_KEY=made-up\n")
+  await expect(above.evie.send({ type: "list_storage", project: above.project!.id })).rejects.toThrow(refused)
+  await expect(above.evie.send({ type: "read_storage", project: above.project!.id, path: ".env" })).rejects.toThrow(refused)
+
+  // One whose .evie holds the data folder, and one inside the data folder.
+  const holder = await tempFolder("evie-holder-")
+  const holding = await startEvie([scriptedProvider([]).plugin], { home: join(holder, ".evie", "data"), projectFolder: holder })
+  cleanups.push(holding.stop)
+  await expect(holding.evie.send({ type: "list_storage", project: holding.project!.id })).rejects.toThrow(refused)
+  const home = await tempFolder("evie-home-")
+  await mkdir(join(home, "kept", ".evie"), { recursive: true })
+  const within = await startEvie([scriptedProvider([]).plugin], { home, projectFolder: join(home, "kept") })
+  cleanups.push(within.stop)
+  await expect(within.evie.send({ type: "list_storage", project: within.project!.id })).rejects.toThrow(refused)
+})
+
+test("the .evie folder's own git repository is refused at any depth of path, and a folder is named the same however it is written", async () => {
+  const run = await start()
+  await mkdir(join(run.evieFolder, ".git"), { recursive: true })
+  await writeFile(join(run.evieFolder, ".git", "config"), "[remote]\n")
+  await mkdir(join(run.evieFolder, "files"), { recursive: true })
+  await writeFile(join(run.evieFolder, "files", "notes.md"), "# Beds\n")
+  const project = run.project!.id
+
+  for (const folder of [".git", "./.git/", "files/../.git"]) {
+    await expect(run.evie.send({ type: "list_storage", project, folder })).rejects.toThrow(
+      `${folder} is the .evie folder's own git repository, which backs it up, and not one of its files.`,
+    )
+  }
+  await expect(run.evie.send({ type: "read_storage", project, path: ".git/config" })).rejects.toThrow(
+    ".git/config is the .evie folder's own git repository, which backs it up, and not one of its files.",
+  )
+  for (const folder of [".", "./", ""]) expect((await run.evie.send({ type: "list_storage", project, folder })).entries.map((entry) => entry.path)).toEqual(["files"])
+  for (const folder of ["files/", "./files", "files//"]) expect((await run.evie.send({ type: "list_storage", project, folder })).entries.map((entry) => entry.path)).toEqual(["files/notes.md"])
+  expect((await run.evie.send({ type: "read_storage", project, path: "./files//notes.md" })).path).toBe("files/notes.md")
+})
+
+test("a folder is listed up to 500 entries, by name, and says how many more it holds", async () => {
+  const run = await start()
+  await mkdir(join(run.evieFolder, "many"), { recursive: true })
+  for (let at = 1; at <= 503; at++) await writeFile(join(run.evieFolder, "many", `note-${at}.md`), "")
+
+  const listed = await run.evie.send({ type: "list_storage", project: run.project!.id, folder: "many" })
+
+  expect(listed.entries.length).toBe(500)
+  expect(listed.entries.at(-1)!.name).toBe("note-500.md")
+  expect(listed.more).toBe(3)
 })

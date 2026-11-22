@@ -35,7 +35,7 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
           </div>
         </header>
         <ConnectionLine state={state} />
-        <SessionList sessions={sessions} />
+        <SessionList connection={connection} sessions={sessions} />
       </aside>
 
       <main className="flex h-dvh min-w-0 flex-none flex-col bg-bg wide:flex-1">

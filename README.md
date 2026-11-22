@@ -453,19 +453,24 @@ session list or the project card. The page then has three other columns:
   side chat.
 - **Storage** lists the files in the project's `.evie` folder, with their
   size and how long ago they changed, a folder opening in place under its
-  own row, and says whether the folder is backed up. A text file or an
-  image opens in the workspace, read only. The server reads only inside
-  the `.evie` folder: a path that leaves it, by `..` or through a link, is
-  refused, and so is a file over 1 MB. Attachments will be kept here too.
+  own row, up to 500 to a folder, and says whether the folder is backed
+  up. A text file or an image opens in the workspace, read only. The server
+  reads only inside the `.evie` folder: a path that leaves it, by `..` or
+  through a link, is refused, and so are the folder's own git repository
+  and a file over 1 MB. So is the whole of a `.evie` that is itself a link
+  to another folder, or that is, holds, or is inside evie's data folder,
+  which holds your keys, as for a project at your home folder.
+  Attachments will be kept here too.
 - **The side chat,** on the right, shows the session picked, or until one
   is, the workspace's latest, or a new session in its project when it has
   none, with the message box. Its header starts a new session there, and
   opens the session in the session view.
-- **New workspace** asks for a name, a folder, suggested in your home
-  folder and named after it, and whether to back up its `.evie` folder to
-  a private repository (see "Workspaces"). A folder already there, such as
-  a code repository, is added as a project the same way. What the server
-  refuses, it says in its own words.
+- **New workspace**, in the strip, in the New session button's menu, and
+  in a session list with nothing in it yet, asks for a name, a folder,
+  suggested in your home folder as `~/` and the name, and whether to back
+  up its `.evie` folder to a private repository (see "Workspaces"). A
+  folder already there, such as a code repository, is added as a project
+  the same way. What the server refuses, it says in its own words.
 
 The address keeps where you are, as `#workspace=<project id>&tab=storage`,
 with `&chat=<session id>` for the side chat's session and `&file=<path>`
@@ -552,8 +557,9 @@ that is already a project, that already has a `.evie/evie.json`, that is
 inside a git repository other than at its top, or that is in Evie's data
 folder is refused. `evie new` says whether the project is trusted and
 whether its `.evie` folder is backed up. The web app makes one with New
-workspace, in a workspace's strip, which can also keep the `.evie` folder
-on this computer (`"sync": "none"`). Then run `evie` in that folder
+workspace, which takes a folder from `~/` as the server's home folder, and
+can also keep the `.evie` folder on this computer (`"sync": "none"`). A
+name of only dots is refused. Then run `evie` in that folder
 to start working there.
 
 **Kept out of the project's own git.** When a project's folder is a git

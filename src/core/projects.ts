@@ -175,14 +175,17 @@ export async function makeProject(
   projects: Projects,
   input: { folder: string; name?: string; sync?: "private" | "none" },
   dataFolder: string,
+  homeFolder: string,
 ): Promise<{ project: Project; madeFolder: boolean; heldFiles: boolean; sync: "private" | "none" }> {
   // Checked here, since a client that is not type-checked can send anything.
-  const given = input.folder
+  // A folder in the home folder may be written from ~, as a shell reads it.
+  const given = typeof input.folder === "string" ? input.folder.replace(/^~(?=\/|$)/, homeFolder) : input.folder
   if (typeof given !== "string" || !isAbsolute(given)) {
-    throw new Error(`${JSON.stringify(given)} is not a full path. Give the folder's full path, such as /Users/me/finances.`)
+    throw new Error(`${JSON.stringify(input.folder)} is not a full path. Give the folder's full path, such as /Users/me/finances, or one in your home folder, such as ~/finances.`)
   }
-  if (input.name !== undefined && (typeof input.name !== "string" || input.name.trim() === "")) {
-    throw new Error("`name` is the project's name, and must be text that is not blank.")
+  // A name of only dots, such as "..", names no folder of its own.
+  if (input.name !== undefined && (typeof input.name !== "string" || /^\.*$/.test(input.name.trim()))) {
+    throw new Error("`name` is the project's name, and must be text that is not blank and not only dots, such as Finances.")
   }
   const sync = input.sync ?? "private"
   if (sync !== "private" && sync !== "none") {
@@ -198,7 +201,8 @@ export async function makeProject(
     throw new Error(`${given} is inside the git repository at ${root}, so it belongs to that repository's project. Make the project at the repository's own folder instead.`)
   }
   if (within(folder, data)) throw new Error(`${given} is in Evie's data folder, ${dataFolder}, where Evie keeps its own state. Choose a folder outside it.`)
-  if (within(data, join(folder, ".evie"))) throw new Error(`The .evie folder of ${given} is, or holds, Evie's data folder, ${dataFolder}. Choose another folder for the project.`)
+  // As it really is, since a .evie that is a link counts where it leads.
+  if (within(data, realFolder(join(folder, ".evie")))) throw new Error(`The .evie folder of ${given} is, or holds, Evie's data folder, ${dataFolder}. Choose another folder for the project.`)
   const evie = join(folder, ".evie")
   if (existsSync(evie) && !statSync(evie).isDirectory()) {
     throw new Error(`${evie} is a file. Evie keeps what it adds to a project in a folder of that name, so move the file elsewhere, then make the project.`)

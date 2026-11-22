@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
-import { homedir, tmpdir } from "node:os"
+import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import { loadSettingsFiles, type Plugin } from "../src/index.ts"
 import { git } from "./support/git.ts"
@@ -51,10 +51,30 @@ test("new_project makes the folder when it is missing, with a .evie/evie.json th
   expect(await run.evie.send({ type: "list_projects" })).toContainEqual({ ...made.project, git: false })
 })
 
-test("a client is told the home folder of the computer Evie runs on, where it suggests a new project's folder", async () => {
-  const run = await start()
+test("new_project takes a folder in the home folder written with ~, as a shell reads it, the home folder being the server's", async () => {
+  const home = await tempFolder("evie-owner-")
+  const run = await startEvie([scriptedProvider([]).plugin], { env: { HOME: home } })
+  cleanups.push(run.stop)
 
-  expect(await run.evie.send({ type: "read_home" })).toEqual({ folder: homedir() })
+  const made = await run.evie.send({ type: "new_project", folder: "~/Family finances", name: "Finances" })
+
+  expect(made.project).toMatchObject({ name: "Finances", folder: join(home, "Family finances") })
+  expect(await exists(join(home, "Family finances", ".evie", "evie.json"))).toBe(true)
+  await expect(run.evie.send({ type: "new_project", folder: "~other/notes" })).rejects.toThrow(
+    '"~other/notes" is not a full path. Give the folder\'s full path, such as /Users/me/finances, or one in your home folder, such as ~/finances.',
+  )
+})
+
+test("new_project refuses a name that is only dots, which would name no folder of its own", async () => {
+  const run = await start()
+  const place = await tempFolder("evie-place-")
+
+  for (const name of [".", "..", " ... "]) {
+    await expect(run.evie.send({ type: "new_project", folder: join(place, "notes"), name })).rejects.toThrow(
+      "`name` is the project's name, and must be text that is not blank and not only dots, such as Finances.",
+    )
+  }
+  expect(await exists(join(place, "notes"))).toBe(false)
 })
 
 test("new_project keeps the project's .evie folder on this computer when asked to, and says it is not backed up", async () => {
@@ -65,7 +85,7 @@ test("new_project keeps the project's .evie folder on this computer when asked t
 
   expect(made).toMatchObject({ trusted: true, syncs: false })
   expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ sync: "none" })
-  expect((await run.evie.send({ type: "list_projects" })).find((each) => each.id === made.project.id)).not.toHaveProperty("syncs")
+  expect((await run.evie.send({ type: "list_projects" })).find((each) => each.id === made.project.id)).toMatchObject({ syncs: false })
   await expect(run.evie.send({ type: "new_project", folder: join(folder, "..", "other"), sync: "public" as never })).rejects.toThrow(
     '`sync` is where the project\'s .evie folder is backed up: "private", to a private repository, or "none", to keep it on this computer.',
   )
@@ -131,6 +151,21 @@ test("new_project refuses Evie's data folder, anything inside it, and a folder w
   await expect(inner.evie.send({ type: "new_project", folder: deeper })).rejects.toThrow(`The .evie folder of ${deeper} is, or holds, Evie's data folder`)
 })
 
+test("new_project refuses a folder whose .evie is a link to the data folder, or to a folder holding it, as it really is", async () => {
+  const home = await tempFolder("evie-home-")
+  const run = await startEvie([scriptedProvider([]).plugin], { home })
+  cleanups.push(run.stop)
+  const place = await tempFolder("evie-place-")
+  await mkdir(join(place, "linked"))
+  await symlink(home, join(place, "linked", ".evie"))
+  await mkdir(join(place, "above"))
+  await symlink(join(home, ".."), join(place, "above", ".evie"))
+
+  for (const folder of [join(place, "linked"), join(place, "above")]) {
+    await expect(run.evie.send({ type: "new_project", folder })).rejects.toThrow(`The .evie folder of ${folder} is, or holds, Evie's data folder, ${home}.`)
+  }
+})
+
 test("new_project refuses a folder with Evie settings of its own, which it would otherwise trust unread", async () => {
   const { run, globalFile } = await startWithSettings()
   const folder = await tempFolder("evie-cloned-")
@@ -143,7 +178,7 @@ test("new_project refuses a folder with Evie settings of its own, which it would
   )
   expect(JSON.parse(await readFile(join(folder, ".evie", "evie.json"), "utf8"))).toEqual({ plugins: ["./theirs.ts"] })
   expect(await globalFile()).toEqual({ plugins: [] })
-  expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...run.project!, git: false }])
+  expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...run.project!, git: false, syncs: false }])
 })
 
 test("new_project refuses a path that is not a full one, a file, a blank name, and a folder inside a git repository", async () => {
@@ -153,10 +188,10 @@ test("new_project refuses a path that is not a full one, a file, a blank name, a
   await mkdir(join(place, "repository", ".git"), { recursive: true })
 
   await expect(run.evie.send({ type: "new_project", folder: "finances" })).rejects.toThrow(
-    '"finances" is not a full path. Give the folder\'s full path, such as /Users/me/finances.',
+    '"finances" is not a full path. Give the folder\'s full path, such as /Users/me/finances, or one in your home folder, such as ~/finances.',
   )
   await expect(run.evie.send({ type: "new_project", folder: join(place, "notes.txt") })).rejects.toThrow(`${join(place, "notes.txt")} is a file, not a folder.`)
-  await expect(run.evie.send({ type: "new_project", folder: join(place, "new"), name: "  " })).rejects.toThrow("`name` is the project's name, and must be text that is not blank.")
+  await expect(run.evie.send({ type: "new_project", folder: join(place, "new"), name: "  " })).rejects.toThrow("`name` is the project's name, and must be text that is not blank and not only dots, such as Finances.")
   await expect(run.evie.send({ type: "new_project", folder: join(place, "repository", "docs") })).rejects.toThrow(
     `${join(place, "repository", "docs")} is inside the git repository at ${join(place, "repository")}, so it belongs to that ` +
       "repository's project. Make the project at the repository's own folder instead.",
@@ -301,9 +336,9 @@ test("the owner picks a project's icon and colour, which every list of projects 
   const run = await startEvie([scriptedProvider([]).plugin], { home })
   const project = run.project!
 
-  expect(await run.evie.send({ type: "set_project_icon", project: project.id, icon: "leaf", colour: "moss" })).toBeUndefined()
+  expect(await run.evie.send({ type: "set_project_look", project: project.id, icon: "leaf", colour: "moss" })).toBeUndefined()
   expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...project, git: false, icon: "leaf", colour: "moss" }])
-  await run.evie.send({ type: "set_project_icon", project: project.id, icon: "cooking-pot", colour: "rust" })
+  await run.evie.send({ type: "set_project_look", project: project.id, icon: "cooking-pot", colour: "rust" })
   await run.evie.close()
 
   const again = await startEvie([scriptedProvider([]).plugin], { home, projectFolder: run.projectFolder })
@@ -318,13 +353,13 @@ test("a project's icon is given by its Phosphor name and its colour is one of th
   const run = await start()
   const project = run.project!.id
 
-  await expect(run.evie.send({ type: "set_project_icon", project, icon: "Leaf Icon", colour: "moss" })).rejects.toThrow(
+  await expect(run.evie.send({ type: "set_project_look", project, icon: "Leaf Icon", colour: "moss" })).rejects.toThrow(
     '"Leaf Icon" is not the name of an icon. Give a Phosphor icon\'s name, in lower case with dashes, such as "folder" or "cooking-pot".',
   )
-  await expect(run.evie.send({ type: "set_project_icon", project, icon: "leaf", colour: "green" as never })).rejects.toThrow(
+  await expect(run.evie.send({ type: "set_project_look", project, icon: "leaf", colour: "green" as never })).rejects.toThrow(
     '"green" is not one of the project colours. Give one of: moss, mustard, maroon, rust, slate, plum.',
   )
-  await expect(run.evie.send({ type: "set_project_icon", project: "no-such-project", icon: "leaf", colour: "moss" })).rejects.toThrow(
+  await expect(run.evie.send({ type: "set_project_look", project: "no-such-project", icon: "leaf", colour: "moss" })).rejects.toThrow(
     'There is no project with the id "no-such-project".',
   )
   expect(await run.evie.send({ type: "list_projects" })).toEqual([{ ...run.project!, git: false }])
@@ -346,14 +381,20 @@ test("a project is listed as backed up while its .evie folder syncs privately: i
   const listed = await run.evie.send({ type: "list_projects" })
 
   expect(listed.find((each) => each.id === fresh.id)).toEqual({ ...fresh, git: false, syncs: true })
-  expect(listed.find((each) => each.id === cloned.id)).toEqual({ ...cloned, git: false })
-  expect(listed.find((each) => each.id === kept.id)).toEqual({ ...kept, git: false })
-  expect(listed.find((each) => each.id === run.project!.id)).not.toHaveProperty("syncs")
+  expect(listed.find((each) => each.id === cloned.id)).toEqual({ ...cloned, git: false, syncs: false })
+  expect(listed.find((each) => each.id === kept.id)).toEqual({ ...kept, git: false, syncs: false })
+  expect(listed.find((each) => each.id === run.project!.id)).toEqual({ ...run.project!, git: false, syncs: false })
+})
+
+test("an Evie not told where projects sync, as one started without its settings files, leaves out whether each is backed up", async () => {
+  const run = await start()
+
+  expect((await run.evie.send({ type: "list_projects" }))[0]).not.toHaveProperty("syncs")
 })
 
 test("without the sync plugin, no project is listed as backed up, whatever its setting", async () => {
   const { run } = await startWithSettings()
   const made = (await run.evie.send({ type: "new_project", folder: join(await tempFolder("evie-place-"), "fresh") })).project
 
-  expect((await run.evie.send({ type: "list_projects" })).find((each) => each.id === made.id)).toEqual({ ...made, git: false })
+  expect((await run.evie.send({ type: "list_projects" })).find((each) => each.id === made.id)).toEqual({ ...made, git: false, syncs: false })
 })

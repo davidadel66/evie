@@ -60,18 +60,21 @@ export function latestSession(sessions: readonly SessionSummary[], project: stri
 export const needsYou = (sessions: readonly SessionSummary[], project: string) => sessions.some((each) => each.project === project && each.state === "needs_you")
 
 // Where a new workspace's folder is suggested: in the home folder of the
-// computer evie runs on, named after the workspace, with any slash in its
-// name made a dash.
-export const suggestedFolder = (home: string, name: string) => `${home.replace(/\/+$/, "")}/${name.trim().replace(/[/\\]+/g, "-")}`
+// computer evie runs on, written from ~ for the server to read, named after
+// the workspace, with any slash in its name made a dash and any dot at its
+// start left off, so that it names a folder of its own. A name that leaves
+// nothing suggests nothing.
+export function suggestedFolder(name: string): string {
+  const folder = name.trim().replace(/[/\\]+/g, "-").replace(/^[.\-\s]+/, "")
+  return folder === "" || /^[.\-]*$/.test(folder) ? "" : `~/${folder}`
+}
 
-// A folder the owner typed, with a leading ~ read as the home folder of
-// the computer evie runs on, as a shell reads it. Anything else is left
-// for the server to judge.
-export function fullFolder(typed: string, home: string): string {
-  const folder = typed.trim()
-  if (folder === "~") return home
-  if (folder.startsWith("~/")) return `${home.replace(/\/+$/, "")}/${folder.slice(2)}`
-  return folder
+// The address that shows a session just started in a project's side chat:
+// the workspace as the address has it now, as the owner may have changed
+// its tab meanwhile, or nothing once the owner has left it.
+export function chatAddress(hash: string, project: string, session: string): string | undefined {
+  const now = workspaceIn(hash)
+  return now?.workspace === project ? addressOfWorkspace({ ...now, chat: session }) : undefined
 }
 
 // A file's size as Storage lists it: in bytes below a kilobyte, then in

@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover
 import type { Connection } from "./connection.ts"
 import { cn } from "./lib/utils.ts"
 import { searchIcons } from "./project-icons.ts"
-import { keepLooks, type Look } from "./project-look.ts"
+import type { Look } from "./project-look.ts"
 import { COLOUR, IconGlyph, SWATCH, useLook } from "./ProjectIcon.tsx"
 import { PROJECT_COLOURS } from "./session-list.ts"
 import type { Sessions } from "./sessions.ts"
@@ -23,14 +23,13 @@ export function IconPicker({ connection, sessions, project, children }: { connec
   const [problem, setProblem] = useState<string>()
   const shown = searchIcons(query)
 
+  // The pick is drawn at once by `pickIcon`; one refused opens the picker
+  // again, to say why.
   async function pick(next: Look, close: boolean) {
-    const before = look
     setProblem(undefined)
-    keepLooks([{ id: project.id, ...next }])
     if (close) setOpen(false)
     const refused = await pickIcon(connection, sessions, project.id, next)
     if (refused === undefined) return
-    keepLooks([{ id: project.id, ...before }])
     setProblem(refused)
     setOpen(true)
   }

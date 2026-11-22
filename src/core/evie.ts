@@ -846,17 +846,19 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   async function listProjects(): Promise<Commands["list_projects"]["output"]> {
     const icons = projects.icons()
     const syncing = options.plugins.some((plugin) => plugin.name === "sync")
-    const backedUp = async (project: Project) => syncing && (await Promise.resolve(options.syncSetting?.(project)).catch(() => undefined)) === "private"
+    const setting = options.syncSetting
+    const backedUp = async (project: Project) =>
+      setting === undefined ? undefined : syncing && (await Promise.resolve(setting(project)).catch(() => undefined)) === "private"
     return Promise.all(
       projects.list().map(async (project) => {
         const [branch, git, syncs] = await Promise.all([branchOf(project.folder), inGit(project.folder), backedUp(project)])
-        return { ...project, ...(branch !== undefined && { branch }), ...(git !== undefined && { git }), ...icons.get(project.id), ...(syncs && { syncs: true as const }) }
+        return { ...project, ...(branch !== undefined && { branch }), ...(git !== undefined && { git }), ...icons.get(project.id), ...(syncs !== undefined && { syncs }) }
       }),
     )
   }
 
   async function newProject(input: Commands["new_project"]["input"]): Promise<Commands["new_project"]["output"]> {
-    const { project, madeFolder, heldFiles, sync } = await makeProject(projects, input, home)
+    const { project, madeFolder, heldFiles, sync } = await makeProject(projects, input, home, options.env.HOME || homedir())
     keepEvieOutOfGit(project.folder)
     // The project is made by now. Untrusted, it still works, and its first
     // session asks whether to trust its settings file and what came with it.
@@ -1042,14 +1044,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await moveSession(command)) as Output
         case "delete_session":
           return (await deleteSession(command)) as Output
-        case "set_project_icon":
+        case "set_project_look":
           return projects.setIcon(command.project, command.icon, command.colour) as Output
-        case "read_home":
-          return { folder: homedir() } as Output
         case "list_storage":
-          return (await listStorage(projectFor(command.project).folder, command.folder)) as Output
+          return (await listStorage(projectFor(command.project).folder, command.folder, home)) as Output
         case "read_storage":
-          return (await readStorage(projectFor(command.project).folder, command.path)) as Output
+          return (await readStorage(projectFor(command.project).folder, command.path, home)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

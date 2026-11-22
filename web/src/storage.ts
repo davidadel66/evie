@@ -7,8 +7,9 @@ import type { Connection } from "./connection.ts"
 // connected, and what is open is listed again when the line comes back,
 // since nothing tells the page that a file changed meanwhile.
 
-// A folder as listed, or why it could not be, or neither while it is being listed.
-export type FolderListing = { entries?: StorageEntry[]; problem?: string }
+// A folder as listed, with how many more entries it holds than a listing
+// gives, or why it could not be listed, or neither while it is being listed.
+export type FolderListing = { entries?: StorageEntry[]; more?: number; problem?: string }
 
 export type StorageState = {
   // Each folder listed, by its path in the `.evie` folder, the top as "".
@@ -51,7 +52,7 @@ export function openStorage(connection: Connection, project: string): Storage {
     if (evie === undefined) return
     if (!state.folders.has(folder)) setFolder(folder, {})
     evie.send({ type: "list_storage", project, ...(folder !== "" && { folder }) }).then(
-      (entries) => !closed && setFolder(folder, { entries }),
+      (listed) => !closed && setFolder(folder, listed),
       (cause: unknown) => !closed && setFolder(folder, { problem: wordsOf(cause) }),
     )
   }

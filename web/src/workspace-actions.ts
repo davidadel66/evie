@@ -1,12 +1,11 @@
 import type { Commands, Evie } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
-import type { Look } from "./project-look.ts"
+import { endPick, startPick, type Look } from "./project-look.ts"
 import type { Sessions } from "./sessions.ts"
 
 // What the workspace view asks of evie's server for the owner, apart from
-// its screen: picking a project's icon and colour, making a workspace, and
-// the home folder a new one's folder is suggested in. Each gives back why
-// the server refused, in its own words.
+// its screen: picking a project's icon and colour, and making a workspace.
+// Each gives back why the server refused, in its own words.
 
 const clientOf = (connection: Connection): Evie | undefined => {
   const now = connection.state()
@@ -15,22 +14,29 @@ const clientOf = (connection: Connection): Evie | undefined => {
 const NOT_CONNECTED = "Not connected to evie's server."
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
 
-// Sets a project's icon and colour, then lists the projects again, so that
-// every tile on the page shows them. Gives back why not, or nothing.
+// Sets a project's icon and colour, drawing them at once on every tile on
+// the page, and lists the projects again. Until that list is in, a list
+// of projects does not draw over the pick; then the project is drawn as it
+// says, as picked, or as it was before a refused pick, unless a later pick
+// has been made meanwhile. Gives back why not, or nothing.
 export async function pickIcon(connection: Connection, sessions: Sessions, project: string, look: Look): Promise<string | undefined> {
   const evie = clientOf(connection)
   if (evie === undefined) return NOT_CONNECTED
+  const pick = startPick(project, look)
+  let refused: string | undefined
   try {
-    await evie.send({ type: "set_project_icon", project, icon: look.icon, colour: look.colour })
-    sessions.refreshProjects()
-    return undefined
+    await evie.send({ type: "set_project_look", project, icon: look.icon, colour: look.colour })
   } catch (cause) {
-    return wordsOf(cause)
+    refused = wordsOf(cause)
   }
+  await sessions.refreshProjects()
+  endPick(project, pick, sessions.state().projects.find((each) => each.id === project))
+  return refused
 }
 
 // Makes a project with `new_project`, then lists the projects again, so
-// that the new one is in the strip. Gives back what was made, or why not.
+// that the new one is in the strip, and gives back what was made once the
+// list has it, or why not.
 export async function makeWorkspace(
   connection: Connection,
   sessions: Sessions,
@@ -40,20 +46,9 @@ export async function makeWorkspace(
   if (evie === undefined) return { problem: NOT_CONNECTED }
   try {
     const made = await evie.send({ type: "new_project", ...input })
-    sessions.refreshProjects()
+    await sessions.refreshProjects()
     return made
   } catch (cause) {
     return { problem: wordsOf(cause) }
   }
-}
-
-// The home folder of the computer evie runs on, or undefined when it
-// cannot be asked, as while the line is down.
-export async function readHome(connection: Connection): Promise<string | undefined> {
-  const evie = clientOf(connection)
-  if (evie === undefined) return undefined
-  return evie.send({ type: "read_home" }).then(
-    (home) => home.folder,
-    () => undefined,
-  )
 }

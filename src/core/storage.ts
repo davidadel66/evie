@@ -1,15 +1,22 @@
 import { readdir, readFile, realpath, stat } from "node:fs/promises"
-import { extname, isAbsolute, join, relative, sep } from "node:path"
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import type { StorageEntry, StorageFile } from "./types.ts"
 
 // A workspace's Storage: what its project's `.evie/` folder holds, as a
 // client shows it, listed a folder at a time and read a file at a time.
 // Nothing outside that folder is listed or read: a path is refused when it
-// climbs out of it, is a full path, or leads out through a link.
+// climbs out of it, is a full path, or leads out through a link. A `.evie`
+// that is itself a link is refused as a whole, since where it leads is not
+// the project's, and so is one that is, holds, or is inside evie's data
+// folder, which holds its keys. The folder's own git repository, which
+// backs it up, is not one of its files, and is refused too.
 
-// The largest file that is read, 1 MB, so that one reply never carries
-// more: a server keeps its latest replies to each device for a while.
+// The largest file that is read, 1 MB, so that one reply is never more than
+// about 1.4 MB, an image's bytes in base64.
 const STORAGE_FILE_LIMIT = 1024 * 1024
+// The most entries one listing of a folder gives, by name, so that a folder
+// of thousands of files is not one huge reply.
+const STORAGE_LISTING_LIMIT = 500
 
 // The images that are read as such, by their ending, with their type.
 const IMAGES: Record<string, string> = {
@@ -25,44 +32,47 @@ const IMAGES: Record<string, string> = {
 // back it up: it is not one of the owner's files.
 const OWN_GIT = ".git"
 
-// What one folder holds, folders first, then files, each by name. `folder`
-// is a path inside the `.evie/` folder, such as "files", or nothing for the
-// folder itself. A `.evie/` folder not made yet holds nothing. An entry that
-// leads out of it, or nowhere, through a link is left out.
-export async function listStorage(project: string, folder = ""): Promise<StorageEntry[]> {
-  const evie = join(project, ".evie")
-  const top = await realOrNothing(evie)
-  if (top === undefined && folder === "") return []
-  const at = await inside(evie, top, folder, "folder")
+// What one folder holds, folders first, then files, each by name, up to
+// the limit, and how many more it holds. `folder` is a path inside the
+// `.evie/` folder, such as "files", or nothing for the folder itself. A
+// `.evie/` folder not made yet holds nothing. An entry that leads out of
+// it, or nowhere, through a link is left out.
+export async function listStorage(project: string, folder: string | undefined, dataFolder: string): Promise<{ entries: StorageEntry[]; more: number }> {
+  const evie = await ownEvie(project, dataFolder)
+  const named = inside(folder ?? "", "folder")
+  if (evie === undefined && named === "") return { entries: [], more: 0 }
+  const at = await real(evie, named, folder ?? "", "folder")
   const kind = await stat(at).catch(() => undefined)
   if (!kind?.isDirectory()) throw new Error(`There is no folder ${folder} in this project's .evie folder.`)
   const listed: StorageEntry[] = []
   for (const name of await readdir(at)) {
-    if (folder === "" && name === OWN_GIT) continue
-    const real = await realOrNothing(join(at, name))
-    if (real === undefined || !within(real, top!)) continue
-    const facts = await stat(real).catch(() => undefined)
+    if (named === "" && name === OWN_GIT) continue
+    const target = await realOrNothing(join(at, name))
+    if (target === undefined || !within(target, evie!)) continue
+    const facts = await stat(target).catch(() => undefined)
     if (!facts || (!facts.isFile() && !facts.isDirectory())) continue
-    const path = folder === "" ? name : `${trimmed(folder)}/${name}`
+    const path = named === "" ? name : `${named}/${name}`
     const changed = Math.floor(facts.mtimeMs)
     listed.push(facts.isDirectory() ? { name, path, kind: "folder", changed } : { name, path, kind: "file", size: facts.size, changed })
   }
   const byName = (a: StorageEntry, b: StorageEntry) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true })
-  return [...listed.filter((entry) => entry.kind === "folder").sort(byName), ...listed.filter((entry) => entry.kind === "file").sort(byName)]
+  const sorted = [...listed.filter((entry) => entry.kind === "folder").sort(byName), ...listed.filter((entry) => entry.kind === "file").sort(byName)]
+  return { entries: sorted.slice(0, STORAGE_LISTING_LIMIT), more: Math.max(0, sorted.length - STORAGE_LISTING_LIMIT) }
 }
 
 // One file, as text when it is text, or as an image when its ending names
 // one, and no larger than the limit. Anything else is refused, saying why.
-export async function readStorage(project: string, path: string): Promise<StorageFile> {
-  const evie = join(project, ".evie")
-  const at = await inside(evie, await realOrNothing(evie), path, "file")
+export async function readStorage(project: string, path: string, dataFolder: string): Promise<StorageFile> {
+  const evie = await ownEvie(project, dataFolder)
+  const named = inside(path, "file")
+  const at = await real(evie, named, path, "file")
   const facts = await stat(at).catch(() => undefined)
   if (!facts?.isFile()) throw new Error(`There is no file ${path} in this project's .evie folder.`)
   if (facts.size > STORAGE_FILE_LIMIT) {
     throw new Error(`${path} is larger than the 1 MB Storage shows. Open it on the computer evie runs on instead.`)
   }
   const bytes = await readFile(at)
-  const shown = { path: trimmed(path), size: facts.size, changed: Math.floor(facts.mtimeMs) }
+  const shown = { path: named, size: facts.size, changed: Math.floor(facts.mtimeMs) }
   const image = IMAGES[extname(at).toLowerCase()]
   if (image !== undefined) return { ...shown, kind: "image", type: image, data: bytes.toString("base64") }
   const text = asText(bytes)
@@ -70,18 +80,47 @@ export async function readStorage(project: string, path: string): Promise<Storag
   return { ...shown, kind: "text", text }
 }
 
-// The full path of a folder or file named inside the `.evie/` folder, as it
-// really is, once it is sure to be inside it. `top` is the `.evie/` folder
-// as it really is, or nothing when there is none yet.
-async function inside(evie: string, top: string | undefined, path: string, what: "folder" | "file"): Promise<string> {
+// The project's `.evie/` folder as it really is, or nothing when there is
+// none yet. One that is a link, or that is, holds, or is inside the data
+// folder, is refused, saying why.
+async function ownEvie(project: string, dataFolder: string): Promise<string | undefined> {
+  const folder = await realOrNothing(project)
+  if (folder === undefined) return undefined
+  const evie = join(folder, ".evie")
+  const target = await realOrNothing(evie)
+  if (target === undefined) return undefined
+  if (target !== evie) throw new Error(`This project's .evie folder is a link to ${target}, so Storage does not show it: it shows only a .evie folder of the project's own.`)
+  const data = (await realOrNothing(dataFolder)) ?? dataFolder
+  if (within(evie, data) || within(data, evie)) {
+    throw new Error("This project's .evie folder is, holds, or is inside evie's data folder, which holds its keys, so Storage does not show it.")
+  }
+  return evie
+}
+
+// A path named inside the `.evie/` folder, written plainly: with slashes,
+// none at either end, and no `.` or `..` in it. One that climbs out of the
+// folder, or is a full path, is refused, and so is the folder's own git
+// repository.
+function inside(path: string, what: "folder" | "file"): string {
   if (typeof path !== "string") throw new Error(`\`${what === "folder" ? "folder" : "path"}\` is a path inside the project's .evie folder, such as "files/notes.md".`)
-  const outside = new Error(`${path} is outside this project's .evie folder. Storage holds only what is inside it.`)
-  if (isAbsolute(path) || !within(join(evie, path), evie)) throw outside
-  if (top === undefined) throw new Error(`There is no ${what} ${path} in this project's .evie folder.`)
-  const real = await realOrNothing(join(evie, path))
-  if (real === undefined) throw new Error(`There is no ${what} ${path} in this project's .evie folder.`)
-  if (!within(real, top)) throw outside
-  return real
+  const plain = relative(ROOT, resolve(ROOT, path))
+  if (isAbsolute(path) || plain === ".." || plain.startsWith(`..${sep}`)) throw new Error(`${path} is outside this project's .evie folder. Storage holds only what is inside it.`)
+  const names = plain === "" ? [] : plain.split(sep)
+  if (names[0] === OWN_GIT) throw new Error(`${path} is the .evie folder's own git repository, which backs it up, and not one of its files.`)
+  return names.join("/")
+}
+// Where a path is resolved against to write it plainly: any full path will do.
+const ROOT = resolve("/evie-storage")
+
+// A folder or file named inside the `.evie/` folder, as it really is, once
+// it is sure to be inside it. `evie` is the `.evie/` folder as it really is,
+// or nothing when there is none yet. `given` is the path as it was asked for.
+async function real(evie: string | undefined, named: string, given: string, what: "folder" | "file"): Promise<string> {
+  if (evie === undefined) throw new Error(`There is no ${what} ${given} in this project's .evie folder.`)
+  const target = await realOrNothing(join(evie, named))
+  if (target === undefined) throw new Error(`There is no ${what} ${given} in this project's .evie folder.`)
+  if (!within(target, evie)) throw new Error(`${given} is outside this project's .evie folder. Storage holds only what is inside it.`)
+  return target
 }
 
 // A path with its links resolved, or nothing when it leads nowhere.
@@ -93,9 +132,6 @@ function within(path: string, folder: string): boolean {
   const from = relative(folder, path)
   return from !== ".." && !from.startsWith(`..${sep}`) && !isAbsolute(from)
 }
-
-// A path as a list gives it: slashes between its names, none at either end.
-const trimmed = (path: string) => path.split(/[\\/]+/).filter((name) => name !== "" && name !== ".").join("/")
 
 // Text in UTF-8, as most text files are: bytes that are not, or that hold
 // a zero byte, as a program's files do, are not text.
