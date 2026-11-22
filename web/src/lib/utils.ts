@@ -59,7 +59,10 @@ export const NAMED_SIZES = [
   "work-group",
   "menu",
   "dialog",
-  "diff-tree",
+  "diff-toolbar",
+  "panel-tab",
+  "panel-sheet",
+  "panel-phone",
   "settings-page",
   "settings-page-height",
   "settings-nav",
@@ -83,9 +86,9 @@ export const NAMED_SIZES = [
 const merge = extendTailwindMerge({
   extend: {
     theme: {
-      text: ["caption", "body", "prose", "field", "control", "label", "heading", "title", "page-title", "figure", "code", "detail", "detail-heading"],
+      text: ["caption", "body", "prose", "field", "control", "label", "heading", "title", "page-title", "figure", "code", "2xs", "3xs", "detail", "detail-heading"],
       spacing: [...NAMED_SIZES],
-      shadow: ["float"],
+      shadow: ["float", "toggle"],
       radius: ["tile", "chip"],
     },
   },

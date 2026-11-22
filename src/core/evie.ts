@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, relative, sep } from "node:path"
-import { createTurnChanges, readBranch, readUncommitted } from "./changes.ts"
+import { createTurnChanges, readBranch, readBranchSides, readUncommitted, readUncommittedSides } from "./changes.ts"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
@@ -879,6 +879,31 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     }
   }
 
+  // One file's whole contents, before and after, as `read_changes`
+  // compares it, for a client to show the lines between its changes.
+  async function readFileSides(input: Commands["read_file_sides"]["input"]): Promise<Commands["read_file_sides"]["output"]> {
+    const { host, project } = open(input.session)
+    if (typeof input.path !== "string" || input.path === "") throw new Error("`path` is the file's path, as `read_changes` gives it.")
+    const from = typeof input.from === "string" ? input.from : undefined
+    const keeper = host.changes.list()[0]
+    switch (input.of) {
+      case "turn":
+        if (!Number.isInteger(input.turn) || input.turn < 1) throw new Error("`turn` is the number of a turn in the session, from 1.")
+        return turnChanges.sides(keeper, input.session, input.turn, input.path, project)
+      case "session":
+        return turnChanges.sides(keeper, input.session, "session", input.path, project)
+      case "uncommitted":
+        return readUncommittedSides(project, input.path, from)
+      case "branch":
+        return readBranchSides(project, input.base, input.path, from, async () => {
+          const reader = host.pullRequests.list()[0]
+          return project === null || reader === undefined ? undefined : (await reader.read(project.folder).catch(() => null))?.base
+        })
+      default:
+        throw new Error("`of` is what to compare: \"turn\", \"session\", \"uncommitted\" or \"branch\".")
+    }
+  }
+
   // A folder written from the home folder, as `~/code/recipe-box`, or
   // nothing when it is not inside it.
   function fromHome(folder: string): string | undefined {
@@ -1087,6 +1112,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
         }
         case "read_changes":
           return (await readChanges(command)) as Output
+        case "read_file_sides":
+          return (await readFileSides(command)) as Output
         case "read_pull_request": {
           const project = projects.get(command.project)
           if (!project) throw new Error(`There is no project with the id "${String(command.project)}".`)

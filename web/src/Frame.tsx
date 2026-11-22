@@ -11,7 +11,7 @@ import { LIST_ID, toggleList, useListShown } from "./list-shown.ts"
 import { Notices } from "./Notices.tsx"
 import { Palette } from "./Palette.tsx"
 import { useDiffShortcut } from "./diff-shown.ts"
-import { DiffPlace } from "./DiffPanel.tsx"
+import { PanelButton, RightPanel } from "./DiffPanel.tsx"
 import { CardButton, CardLane, CardPlace } from "./ProjectCard.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import { CaretDown } from "./icons.tsx"
@@ -79,7 +79,7 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
         <CardPlace connection={connection} sessions={sessions} />
       </main>
 
-      <DiffPlace connection={connection} sessions={sessions} />
+      <RightPanel connection={connection} sessions={sessions} />
     </div>
   )
 }
@@ -189,13 +189,13 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
 
 // The middle column's header, as the Session view drawing has it: the
 // project's tile and its name, quiet, then the session's name; after the
-// button that shows and hides the session list, and before the one that
-// shows and hides the session details, on the right. For a draft, the project
-// is a menu to pick another, or none, as T3 Code's draft picks where a new
-// thread goes. A name that can be renamed is typed in place after a
-// double-click, and why a name was not taken is said on a line under the
-// header. At phone width, the line that says the connection is down is
-// under it too.
+// button that shows and hides the session list, and before those that show
+// and hide the session details and the right panel, on the right. For a
+// draft, the project is a menu to pick another, or none, as T3 Code's draft
+// picks where a new thread goes. A name that can be renamed is typed in
+// place after a double-click, and why a name was not taken is said on a
+// line under the header. At phone width, the line that says the connection
+// is down is under it too.
 function Top({
   project,
   title,
@@ -256,6 +256,7 @@ function Top({
           <HeaderName title={title} rename={rename} said={setNote} />
         )}
         <CardButton />
+        <PanelButton />
       </header>
       <ConnectionUnderHeader />
       <div role="status">{note !== undefined && <p className="px-gutter pt-3 text-caption text-text-muted">{note}</p>}</div>

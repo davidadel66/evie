@@ -429,7 +429,7 @@ under it, and works as T3 Code's does:
   sent at once, edited in the box (Escape gives the edit up; Alt+Up edits
   the last) or removed; one is edited at a time, and none while a
   question waits. A turn that is stopped, or fails, holds the queue, which
-  says so, "Held after Stop", with Send now, until you send one of its
+  says so, "Held after the turn was stopped", with Send now, until you send one of its
   messages by hand; a turn started another way, from the box or a
   terminal, does not let it go on. Leaving the session gives up an edit
   and holds the queue too, so that nothing is sent while you cannot see
@@ -1675,7 +1675,7 @@ session details become a sheet, is
 | `composer-menu` | 288px | The tallest the `/` and `@` menus and the model picker above the message box are, as T3 Code's |
 | `drawer-inset` | 22px | How much narrower than the message box its `/` and `@` drawers are, on each side, as T3 Code's |
 | `drawer-tuck` | 17px | How far those drawers tuck under the box's top edge, as T3 Code's |
-| `control-xs` | 24px; 28px below 640px | A small button inside a row: a queued message's Send now, edit and remove, as T3 Code's |
+| `control-xs` | 24px; 28px below 640px | A small button inside a row: a queued message's Send now, edit and remove; those in the right panel's toolbar, on its tabs and on a turn's changed-files card, as T3 Code's |
 | `icon-row` | 14px | The icon on such a button, and on a file's chip in the message box's text |
 | `reset` | 20px | A setting's reset, after its title, and the clear button of the settings' search |
 | `switch-knob` | 14px; 18px below 640px | The knob of a setting's switch, whose track is `switch-height` by `switch-width` round it, and which travels `switch-travel` |
@@ -1685,7 +1685,10 @@ session details become a sheet, is
 | `image-open` | `min(90vw, 1200px)` | The widest an image attached shows opened |
 | `image-open-height` | 80dvh | The tallest it shows opened |
 | `job-output` | 240px | The tallest a background job's output grows in the session details before it scrolls |
-| `diff-tree` | 240px | The file tree beside a diff |
+| `diff-toolbar` | 40px | The right panel's diff toolbar, as T3 Code's |
+| `panel-tab` | 144px | The widest a tab of the right panel grows |
+| `panel-sheet` | `clamp(320px, 42vw, 448px)` | The right panel as a sheet over the page, at 980px or narrower |
+| `panel-phone` | `min(88vw, 384px)` | The right panel as a sheet at phone width |
 | `wide` | 768px | Phone width is below it: the session view's columns stack, the message box is one row until tapped, the settings and the diff fill the screen, a workspace's columns stack |
 
 The strokes, `line-width` (1px, every divider) and `indicator-width` (2px,

@@ -108,4 +108,4 @@ export function QueuedMessages({ conversation, queue, turnRunning, asked }: { co
 }
 
 // Why a queue is held, as its line says.
-const HELD: Record<Held, string> = { stopped: "Held after Stop", failed: "Held after an error", left: "Held while you were away" }
+const HELD: Record<Held, string> = { stopped: "Held after the turn was stopped", failed: "Held after an error", left: "Held while you were away" }

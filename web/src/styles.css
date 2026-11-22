@@ -56,6 +56,12 @@
   /* With font-mono. */
   --text-code: 13px;
   --text-code--line-height: 20px;
+  /* The small print of a diff, as T3 Code's: its counts and a folder's
+     name in a tree of changed files at 11px, and a tree row's counts at 10px. */
+  --text-2xs: 11px;
+  --text-2xs--line-height: 16px;
+  --text-3xs: 10px;
+  --text-3xs--line-height: 16px;
   /* The rows of the session details, and the headings over their
      sections, as T3 Code's details card has them. */
   --text-detail: 13px;
@@ -114,6 +120,9 @@
   --radius-tile: 25%;
 
   --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
+  /* The pressed half of a switch, as the diff's stacked or side by side,
+     raised a little off the switch, as T3 Code's. */
+  --shadow-toggle: 0 1px 2px rgba(0, 0, 0, 0.4);
 
   /* How long a change, such as a group's caret turning, takes, and how it
      eases: Tailwind's own values, which clearing its defaults left out. The
@@ -188,9 +197,10 @@
      most this wide, at least 16px from the screen's sides at phone width. */
   --spacing-control: 32px;
   --spacing-control-sm: 28px;
-  /* A small button inside a row, as a queued message's and a setting's
-     reset, as T3 Code's xs buttons, 24px, and 28px below 640px; the
-     icon on one; and the slot of a setting's reset, as T3 Code's. */
+  /* A small button inside a row, as a queued message's, and in the right
+     panel's toolbar, on its tabs and on a turn's changed-files card, as T3
+     Code's xs buttons, 24px, and 28px below 640px; the icon on one; and
+     the slot of a setting's reset, as T3 Code's. */
   --spacing-control-xs: 24px;
   --spacing-icon-row: 14px;
   --spacing-reset: 20px;
@@ -259,8 +269,17 @@
   /* The tallest a background job's output grows in the project card
      before it scrolls. */
   --spacing-job-output: 240px;
-  /* The file tree beside a diff. */
-  --spacing-diff-tree: 240px;
+  /* The right panel, as T3 Code's: its diff's toolbar, 40px tall, whose
+     small buttons, as those on its tabs and on a turn's changed-files card,
+     are control-xs; the widest a tab grows; and the panel as a sheet over the page
+     at 980px or narrower, 42% of the window, at least 320px and at most
+     448px, and at phone width the narrower of 88% of the window and 384px.
+     How wide it and its file tree are beside the conversation is worked
+     out in right-panel.ts. */
+  --spacing-diff-toolbar: 40px;
+  --spacing-panel-tab: 144px;
+  --spacing-panel-sheet: clamp(320px, 42vw, 448px);
+  --spacing-panel-phone: min(88vw, 384px);
   /* Files attached: the thumbnail in a chip above the message box's text,
      the largest an image attached shows in the conversation, and the
      largest it shows opened, within the page. */
@@ -303,10 +322,6 @@
   --color-chart-current: var(--chart-current);
   --color-diff-added: var(--diff-added);
   --color-diff-removed: var(--diff-removed);
-  /* A line added or removed lies on the board's 18% tint of its colour,
-     as a project's icon does on its own. */
-  --color-diff-added-line: color-mix(in srgb, var(--diff-added) 18%, transparent);
-  --color-diff-removed-line: color-mix(in srgb, var(--diff-removed) 18%, transparent);
 }
 
 /* The message box's surface, and its drawers', floating over the
