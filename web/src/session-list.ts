@@ -19,17 +19,16 @@ export function groupSessions(sessions: readonly SessionSummary[]): Groups {
 // message yet, such as one just started, "New session".
 export const titleOf = (session: SessionSummary) => session.name ?? "New session"
 
-// What the list is narrowed to: the sessions whose title has every word of
-// `search` in it, in any case, and those of one project, or with `project`
-// null those of no project. Without `project`, every project's.
-export type Filter = { search: string; project?: string | null }
-
-export function filterSessions(sessions: readonly SessionSummary[], filter: Filter): SessionSummary[] {
-  const words = filter.search.toLowerCase().split(/\s+/).filter((word) => word !== "")
+// The sessions a search keeps: those whose title and project's name,
+// together, have every word of it in them, in any case, as the Session
+// view drawing's search does, so that a project's name narrows the list
+// to it. `projectName` names a project by its id, or for null "No
+// project", or gives nothing for one not listed yet.
+export function filterSessions(sessions: readonly SessionSummary[], search: string, projectName: (project: string | null) => string | undefined): SessionSummary[] {
+  const words = search.toLowerCase().split(/\s+/).filter((word) => word !== "")
   return sessions.filter((session) => {
-    if (filter.project !== undefined && session.project !== filter.project) return false
-    const title = titleOf(session).toLowerCase()
-    return words.every((word) => title.includes(word))
+    const named = `${titleOf(session)} ${projectName(session.project) ?? ""}`.toLowerCase()
+    return words.every((word) => named.includes(word))
   })
 }
 
@@ -71,14 +70,26 @@ export function deletedSelection(selected: Selected | undefined, deleted: readon
 }
 
 // The project being looked at, which a new session starts in: the
-// selected draft's or session's, or with nothing selected, the one the
-// list is narrowed to, or none. A session not in the list is taken to
-// have none.
-export function projectLookedAt(selected: Selected | undefined, sessions: readonly SessionSummary[], filter: Filter): string | null {
-  if (selected === undefined) return filter.project ?? null
+// selected draft's or session's, or with nothing selected, the latest
+// active session's, as T3 Code starts a new thread in the project used
+// last, or none. A session not in the list is taken to have none.
+export function projectLookedAt(selected: Selected | undefined, sessions: readonly SessionSummary[]): string | null {
+  if (selected === undefined) return latest(sessions)?.project ?? null
   if ("draft" in selected) return selected.draft
   return sessions.find((each) => each.session === selected.session)?.project ?? null
 }
+
+// The workspace the Workspaces button at the top of the list opens: the
+// project being looked at's, or else that of the latest active session in
+// a project, or else the first project's; with no project, none.
+export function workspaceToOpen(lookingAt: string | null, sessions: readonly SessionSummary[], projects: readonly { id: string }[]): string | undefined {
+  const listed = (project: string | null | undefined) => projects.some((each) => each.id === project)
+  if (listed(lookingAt)) return lookingAt!
+  return latest(sessions.filter((each) => listed(each.project)))?.project ?? projects[0]?.id
+}
+
+// The session last active, or none.
+const latest = (sessions: readonly SessionSummary[]) => sessions.reduce<SessionSummary | undefined>((best, each) => (best === undefined || each.lastActive > best.lastActive ? each : best), undefined)
 
 // The six project colours, by their names in the design system. Until the
 // owner picks a project's colour, each project is given one from its id,

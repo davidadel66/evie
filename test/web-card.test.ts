@@ -268,7 +268,8 @@ test("a session's subagents are known from those stored and from its jobs, and o
   const child = openSubagent(connection, found!.session, { working, every: 10 })
   cleanups.push(async () => child.close())
   const reading = await until(child, (state) => state.opened && state.events.length >= 4)
-  expect(said(reading)).toEqual(["Find where the tests are.", "Working"])
+  // Under the head of its running turn, what it is doing.
+  expect(said(reading)).toEqual(["Find where the tests are.", "working", "Using wait"])
   expect(reading.turnRunning).toBe(true)
 
   model.release()

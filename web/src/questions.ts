@@ -2,9 +2,10 @@ import type { EventBodies } from "../../src/core/types.ts"
 import { commandIn } from "./composer.ts"
 import type { Item } from "./transcript.ts"
 
-// The questions evie asks, as the message box shows them, apart from its
-// screen: when one shows, and where. They follow T3 Code's, which the
-// owner chose as the model for evie's.
+// The questions evie asks, apart from their screen: when one shows, and
+// what the message box does while one waits. They show in the
+// conversation, as the Session view drawing has them, and the box works
+// with them as T3 Code's does.
 
 export type Asked = EventBodies["question"]
 
@@ -45,22 +46,17 @@ export function guardReleases(guard: Guard, now: number): Guard {
 export const guardCleared = (guard: Guard): Guard => ({ ...guard, lastKey: -Infinity, held: new Set() })
 
 // The question to show now: the oldest of those waiting that is not held.
-// A permission prompt shows in place, at the end of the conversation; any
-// other question docks above the message box. With more than one waiting,
-// `count` says which this is of how many, as "1/3".
-export function shownQuestion(waiting: readonly Asked[], held: ReadonlySet<string>): { question: Asked; place: "inline" | "docked"; count: string | undefined } | undefined {
+// It shows at the end of the conversation, a permission prompt as any
+// other. With more than one waiting, `count` says which this is of how
+// many, as "1/3".
+export function shownQuestion(waiting: readonly Asked[], held: ReadonlySet<string>): { question: Asked; count: string | undefined } | undefined {
   const at = waiting.findIndex((question) => !held.has(question.id))
   if (at === -1) return undefined
-  const question = waiting[at]!
-  return { question, place: question.kind === "permission" ? "inline" : "docked", count: waiting.length > 1 ? `${at + 1}/${waiting.length}` : undefined }
+  return { question: waiting[at]!, count: waiting.length > 1 ? `${at + 1}/${waiting.length}` : undefined }
 }
 
-// A permission prompt's choices, as its buttons show them: the one that
-// refuses, which is its last; the one that allows, its first, which is the
-// main one; and any others, which go under More.
-export function permissionChoices(question: Asked): { deny: string; allow: string; more: string[] } {
-  return { allow: question.choices[0]!, deny: question.choices.at(-1)!, more: question.choices.slice(1, -1) }
-}
+// The choice that refuses a permission prompt: its last. Its first allows.
+export const refusingChoice = (question: Asked): string => question.choices.at(-1)!
 
 // The answer a message sent from the box gives the question waiting, as the
 // terminal takes a typed line: a number picks the choice with that number,
@@ -91,7 +87,7 @@ export function sendDoes(typed: string, showing: Asked | undefined): SendDoes | 
   const text = typed.trim()
   if (text === "") return undefined
   const command = commandIn(text)
-  if (showing?.kind === "permission") return command ? { run: command } : { decline: permissionChoices(showing).deny, message: text }
+  if (showing?.kind === "permission") return command ? { run: command } : { decline: refusingChoice(showing), message: text }
   if (showing !== undefined) {
     const answer = answerTyped(text, showing)
     if (answer !== undefined) return { answer }
@@ -110,7 +106,7 @@ export function sendWithFiles(typed: string, showing: Asked | undefined, files: 
   const does = sendDoes(typed, showing)
   if (files === 0) return does
   if (does === undefined) {
-    if (showing?.kind === "permission") return { decline: permissionChoices(showing).deny, message: "" }
+    if (showing?.kind === "permission") return { decline: refusingChoice(showing), message: "" }
     return showing === undefined ? { message: "" } : { refuse: "Answer the question first. Files attached go with a message." }
   }
   if ("message" in does || "refuse" in does) return does
@@ -119,7 +115,7 @@ export function sendWithFiles(typed: string, showing: Asked | undefined, files: 
 
 // The conversation's items as the page draws them: a question the session
 // is waiting on is left out where it was asked, since it shows where it is
-// answered, at the end or docked above the box. One the log has no answer
+// answered, at the end of the conversation. One the log has no answer
 // to that the session no longer waits on, as one cut off by a restart, is
 // drawn as it was asked, unanswered.
 export function asAsked(items: readonly Item[], waiting: readonly Asked[]): Item[] {

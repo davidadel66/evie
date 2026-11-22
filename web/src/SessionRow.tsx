@@ -16,9 +16,8 @@ import {
 import { Check, DotsThree } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { whenAsked } from "./page-requests.ts"
-import { ProjectGlyph, ProjectLink } from "./ProjectIcon.tsx"
+import { ProjectGlyph, ProjectName } from "./ProjectIcon.tsx"
 import { ageWords, nameFieldKey, nameToSave, titleOf } from "./session-list.ts"
-import { Spinner } from "./Spinner.tsx"
 
 // What the owner can do to a session from its row, each giving back why
 // the server refused, or nothing.
@@ -81,6 +80,7 @@ export function SessionRow({
       project={session.project}
       listed={project}
       title={title}
+      branch={session.branch}
       href={addressOf({ session: session.session })}
       session={session.session}
       selected={selected}
@@ -108,23 +108,26 @@ export function SessionRow({
 }
 
 // A new session not yet started, in a project or in none: the selected row,
-// at the top of the list, until its first message is sent.
+// at the top of the list, until its first message is sent, on the branch
+// its project is on now, where it will start.
 export function DraftRow({ project, listed, href }: { project: string | null; listed: ListedProject | undefined; href: string }) {
-  return <Row project={project} listed={listed} title="New session" href={href} selected />
+  return <Row project={project} listed={listed} title="New session" branch={listed?.branch} href={href} selected />
 }
 
-// A row in three short lines: the project's icon and name, with the state
-// or how long ago the session was active; its title, ending in an ellipsis
-// when cut, and its menu's button in a space of its own; and the branch its
-// project is on, left out with no project. The whole row is the link that
-// selects it, and a double-click on it edits its name, when it has one to
-// edit; while it is edited, a field takes the link's place. The selected
-// row is raised. A note, such as why the server refused, goes on a line
-// under it.
+// A row in three short lines, as the Session view drawing has it: the
+// project's tile and name, or for none an empty tile and "No project",
+// with the state or how long ago the session was active; its title, ending
+// in an ellipsis when cut, and its menu's button in a space of its own;
+// and the session's own branch, the one it last worked on, left out when
+// it has none. The whole row is the link that selects it, and a
+// double-click on it edits its name, when it has one to edit; while it is
+// edited, a field takes the link's place. The selected row is raised. A
+// note, such as why the server refused, goes on a line under it.
 function Row({
   project,
   listed,
   title,
+  branch,
   href,
   session,
   selected,
@@ -137,6 +140,7 @@ function Row({
   project: string | null
   listed: ListedProject | undefined
   title: string
+  branch: string | undefined
   href: string
   session?: string
   selected: boolean
@@ -147,9 +151,9 @@ function Row({
   note?: string | undefined
 }) {
   return (
-    <li className={cn("group relative flex flex-col rounded-md px-3 py-2", selected && "bg-surface-raised")}>
+    <li className={cn("group relative flex flex-col rounded-md px-row-inset py-2", selected && "bg-surface-raised")}>
       <span className="flex items-center gap-2 text-caption text-text-muted">
-        {project === null ? <span className="min-w-0 flex-1 truncate">No project</span> : <ProjectLink project={project} name={listed?.name} />}
+        <ProjectName project={project} name={listed?.name} />
         {state}
       </span>
       <span className="flex items-center">
@@ -174,7 +178,7 @@ function Row({
         )}
         {menu}
       </span>
-      {project !== null && listed?.branch !== undefined && <span className="truncate text-caption text-text-muted">{listed.branch}</span>}
+      {branch !== undefined && <span className="truncate text-caption text-text-muted">{branch}</span>}
       {note !== undefined && (
         <span role="status" className="pt-1 text-caption text-text-muted">
           {note}
@@ -252,18 +256,12 @@ export function HeaderName({ title, rename, said, small = false }: { title: stri
   )
 }
 
-// The state in words where the owner is needed or evie is at work, and
-// otherwise how long ago the session was active.
+// The state in words where the owner is needed or evie is at work, as the
+// Session view drawing has them, and otherwise how long ago the session
+// was active.
 function State({ session, now }: { session: SessionSummary; now: number }) {
   if (session.state === "needs_you") return <span className="shrink-0 text-status-needs">Needs you</span>
-  if (session.state === "working") {
-    return (
-      <span className="flex shrink-0 items-center gap-1 text-status-working">
-        <Spinner />
-        Working
-      </span>
-    )
-  }
+  if (session.state === "working") return <span className="shrink-0 text-status-working">Working</span>
   return <span className="shrink-0">{ageWords(session.lastActive, now)}</span>
 }
 

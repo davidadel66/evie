@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as KeyEvent } from "react"
 import type { Shown } from "./Asking.tsx"
-import { DockedQuestion } from "./Asking.tsx"
 import { Button } from "./components/ui/button.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import { attachable, contextMeter, earlierMessages, mentionAt, menuKey, putMention, rankCommands, rankFiles, recallStep, slashAt, type MenuItem, type Recalled } from "./composer.ts"
@@ -281,13 +280,13 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
     }
   }
 
-  const docked = shown?.place === "docked" ? shown : undefined
   // At phone width, one row until tapped, as T3 Code's, unless there is more to show.
-  const collapsed = !wide && !focused && !text.includes("\n") && docked === undefined && !picking && !meterOpen
+  const collapsed = !wide && !focused && !text.includes("\n") && !picking && !meterOpen
+  const permission = shown?.question.kind === "permission"
   const placeholder =
-    shown?.place === "inline" && conversation !== undefined
+    permission && conversation !== undefined
       ? "Send a message to say no, and what to do instead"
-      : docked?.question.freeText
+      : !permission && shown?.question.freeText
         ? "Your own answer, or a number"
         : working
           ? "Tell evie more as it works. Escape stops it"
@@ -305,7 +304,6 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   return (
     <div className="shrink-0 px-gutter pb-4 wide:pb-5">
       <div className="mx-auto flex max-w-conversation flex-col gap-2">
-        {docked && <DockedQuestion question={docked.question} count={docked.count} answer={answer} />}
         {problem !== undefined && (
           <p role="status" className="px-4 text-caption break-words text-text-muted">
             {problem}

@@ -228,7 +228,6 @@ function SideChat({ project, place, list, connection, sessions }: { project: Lis
           connection={connection}
           sessions={sessions}
           project={project.id}
-          where={`in ${project.name}`}
           // As the address is when the session has started, which the owner may have changed meanwhile.
           moved={(session) => {
             const there = chatAddress(location.hash, project.id, session)

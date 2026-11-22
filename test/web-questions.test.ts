@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import type { EventBodies } from "../src/core/types.ts"
 import type { Item } from "../web/src/transcript.ts"
-import { answerTyped, asAsked, choiceForKey, sendDoes, sendWithFiles, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, permissionChoices, releaseAt, shownQuestion } from "../web/src/questions.ts"
+import { answerTyped, asAsked, choiceForKey, sendDoes, sendWithFiles, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, refusingChoice, releaseAt, shownQuestion } from "../web/src/questions.ts"
 
 // The questions evie asks, as the message box shows them, apart from its
 // screen: when one shows, and where.
@@ -45,25 +45,21 @@ type Asked = EventBodies["question"]
 const asked = (id: string, more: Partial<Asked> = {}): Asked => ({ id, text: `Question ${id}?`, choices: ["North bed", "South bed"], ...more })
 const permission = (id: string): Asked => ({ id, text: "Run this command?\n\n  git push", choices: ["Yes, once", "Always in this project: allow git push", "No"], freeText: true, kind: "permission" })
 
-test("one question shows at a time, the oldest waiting first: a permission prompt in place in the conversation, any other docked above the box, with how many wait", () => {
+test("one question shows at a time, in the conversation, a permission prompt as any other, the oldest waiting first, with how many wait", () => {
   expect(shownQuestion([], new Set())).toBeUndefined()
-  expect(shownQuestion([asked("q1")], new Set())).toEqual({ question: asked("q1"), place: "docked", count: undefined })
-  expect(shownQuestion([permission("p1"), asked("q2"), asked("q3")], new Set())).toEqual({ question: permission("p1"), place: "inline", count: "1/3" })
+  expect(shownQuestion([asked("q1")], new Set())).toEqual({ question: asked("q1"), count: undefined })
+  expect(shownQuestion([permission("p1"), asked("q2"), asked("q3")], new Set())).toEqual({ question: permission("p1"), count: "1/3" })
   // One held while the owner types is passed over until it is let go.
-  expect(shownQuestion([asked("q1"), asked("q2")], new Set(["q1"]))).toEqual({ question: asked("q2"), place: "docked", count: "2/2" })
+  expect(shownQuestion([asked("q1"), asked("q2")], new Set(["q1"]))).toEqual({ question: asked("q2"), count: "2/2" })
   expect(shownQuestion([asked("q1")], new Set(["q1"]))).toBeUndefined()
 })
 
-test("a permission prompt's choices: the one that refuses, its last, first; the one that allows, its first, as the main one; any others under More", () => {
-  expect(permissionChoices(permission("p1"))).toEqual({ deny: "No", allow: "Yes, once", more: ["Always in this project: allow git push"] })
-  expect(permissionChoices({ id: "t", text: "Use it?", choices: ["Yes, trust this project", "No, ignore its settings file"], kind: "permission" })).toEqual({
-    deny: "No, ignore its settings file",
-    allow: "Yes, trust this project",
-    more: [],
-  })
+test("a permission prompt is refused with its last choice", () => {
+  expect(refusingChoice(permission("p1"))).toBe("No")
+  expect(refusingChoice({ id: "t", text: "Use it?", choices: ["Yes, trust this project", "No, ignore its settings file"], kind: "permission" })).toBe("No, ignore its settings file")
 })
 
-test("what is sent from the box while a docked question waits answers it as the terminal takes a typed line: a number picks that choice, and other words are the answer when it takes them", () => {
+test("what is sent from the box while a question waits answers it as the terminal takes a typed line: a number picks that choice, and other words are the answer when it takes them", () => {
   expect(answerTyped("2", asked("q1"))).toBe("South bed")
   expect(answerTyped(" 1 ", asked("q1", { freeText: true }))).toBe("North bed")
   expect(answerTyped("Both, north first", asked("q1", { freeText: true }))).toBe("Both, north first")

@@ -1,5 +1,7 @@
 import type { ChangedFile, Job, StoredEvent, TurnChanges } from "../../src/core/types.ts"
 import { shownAttachment, type ShownAttachment } from "./attachments.ts"
+import { stepKind, stepSentence, type StepKind } from "./step-words.ts"
+import { durationWords, runSummary } from "./work-log.ts"
 
 // How a conversation reads in the web app, apart from its screen: a
 // session's stored events, with the reply being written and its jobs,
@@ -12,7 +14,9 @@ import { shownAttachment, type ShownAttachment } from "./attachments.ts"
 // that the session has not taken in yet, in the order sent, each with the
 // files on their way with it. `notes` are
 // said in this page and kept nowhere, such as what a command said, each
-// at the time of the session's last event when it was said.
+// at the time of the session's last event when it was said. `folder` is
+// the session's project's, when the page knows it, which the work log
+// names the files in it from.
 export type View = {
   events: readonly StoredEvent[]
   earlier: boolean
@@ -21,14 +25,16 @@ export type View = {
   jobs: readonly Job[]
   pending?: readonly Pending[]
   notes?: readonly PageNote[]
+  folder?: string
 }
 export type PageNote = { key: string; time: number; text: string }
 export type Pending = { text: string; files?: readonly File[] }
 
-// One tool call: its name, a short form of its input, and its result as
-// stored, once it has one, with that result in short. `running` while it is
-// being carried out.
-export type Call = { id: string; name: string; input: string; result?: string; short?: string; running: boolean }
+// One tool call: its name; what it did, as one sentence of the work log,
+// in the present while it is being carried out (`running`), and the kind of
+// thing it did; a short form of its input; and its result as stored, once
+// it has one, with that result in short.
+export type Call = { id: string; name: string; kind: StepKind; sentence: string; input: string; result?: string; short?: string; running: boolean }
 
 // One thing the page draws. `key` stays the same as more is read, and
 // `turn` is the number of the turn it belongs to, counted in what has been
@@ -38,11 +44,17 @@ export type Item = { key: string; turn: number } & (
   // `sending` are the files of a message on its way.
   | { kind: "owner"; text: string; attachments?: ShownAttachment[]; sending?: readonly File[] }
   | { kind: "reply"; text: string; streaming: boolean }
-  // A run of tool calls with nothing said between them, as one line, and
-  // what that line says: Working while one of them is, how long the turn
-  // worked on the turn's first run once it has ended, or else which tools
-  // the run used.
-  | { kind: "steps"; calls: Call[]; label: string; running: boolean }
+  // A run of tool calls with nothing said between them, as the work log
+  // shows it: a run of one call as that call's sentence, a run of several
+  // counted by kind, and while one of them is being carried out, what it
+  // is doing. The first run of a turn that ended without being folded also
+  // says how long the turn worked (`worked`).
+  | { kind: "steps"; calls: Call[]; label: string; running: boolean; worked?: string }
+  // The head of the turn running now, as T3 Code's work log has it: when it
+  // started, when its start has been read; how long it has waited for the
+  // owner's answers; and while a question waits, since when. The page
+  // counts how long it has worked from these.
+  | { kind: "working"; started?: number; waited: number; waitingSince?: number }
   // Something said in quiet words, with `more` to open, in Markdown.
   | { kind: "note"; text: string; more?: string }
   // `waiting` while the log has no answer to it; `id` ties it to its answer.
@@ -81,6 +93,16 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
   // counted as work.
   let waited = 0
   const calls = new Map<string, Call>()
+  // Each call's input as the model wrote it, which its sentence is made from.
+  const asked = new Map<Call, string>()
+  const sentenced = (call: { name: string; arguments: string }, running: boolean) => ({
+    kind: stepKind(call.name),
+    sentence: stepSentence(call.name, call.arguments, { running, ...(view.folder !== undefined && { folder: view.folder }) }),
+  })
+  // A run of calls counted by kind.
+  const summed = (all: Call[]) => runSummary(all.map((call) => ({ name: call.name, arguments: asked.get(call) ?? "{}" })))
+  // The question the running turn waits on, by when it was asked.
+  let waitingSince: number | undefined
   const questions = new Map<string, { item: Asked; time: number }>()
   const worked = new Map<Steps, number>()
   // How each turn read ended, by its number: its end's number, whether it
@@ -112,6 +134,7 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
       firstRun = undefined
       ended = false
       waited = 0
+      waitingSince = undefined
     }
     if (event.type === "user_message") {
       const attached = (event.body.attachments ?? []).map((each) => shownAttachment(event.session, each))
@@ -124,7 +147,8 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
         cut.add(turn)
       }
       for (const call of event.body.toolCalls ?? []) {
-        const made: Call = { id: call.id, name: call.name, input: inputOf(call.arguments), running: false }
+        const made: Call = { id: call.id, name: call.name, ...sentenced(call, false), input: inputOf(call.arguments), running: false }
+        asked.set(made, call.arguments)
         calls.set(call.id, made)
         runAt(event.time).calls.push(made)
       }
@@ -133,11 +157,15 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
       const call = calls.get(event.body.callId)
       if (call) Object.assign(call, { result: event.body.text, short: shortOf(event.body.text) })
       // A call asked for on a page not read yet is known by its result.
-      else runAt(event.time).calls.push({ id: event.body.callId, name: event.body.name, input: "", result: event.body.text, short: shortOf(event.body.text), running: false })
+      else {
+        const known = { name: event.body.name, arguments: "{}" }
+        runAt(event.time).calls.push({ id: event.body.callId, name: event.body.name, ...sentenced(known, false), input: "", result: event.body.text, short: shortOf(event.body.text), running: false })
+      }
     }
     if (event.type === "question") {
       const item: Asked = { key, turn, kind: "question", id: event.body.id, text: event.body.text, choices: event.body.choices, waiting: true }
       questions.set(event.body.id, { item, time: event.time })
+      waitingSince ??= event.time
       add(item, event.time)
     }
     // Once answered, the choices go, and the answer is the owner's message.
@@ -149,6 +177,7 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
         asked.item.waiting = false
         waited += event.time - asked.time
       }
+      waitingSince = [...questions.values()].find((each) => each.item.waiting)?.time
       if (event.body.choice === null) add({ key, turn, kind: "note", text: "Not answered." }, event.time)
       else add({ key, turn, kind: "owner", text: event.body.choice }, event.time)
     }
@@ -175,12 +204,11 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
   // The turn running now is the last one. It works on the first call of its
   // latest run that has no result; or, with none and nothing being written,
   // on its next step, said at the end.
-  if (view.turnRunning && !ended) {
+  const running = view.turnRunning && !ended
+  if (running) {
     const latest = items.findLast((item): item is Steps => item.kind === "steps" && item.turn === turn)
     const next = latest?.calls.find((call) => call.result === undefined)
-    if (latest && next) {
-      latest.running = next.running = true
-    } else if (view.replySoFar === "") add({ key: "working", turn, kind: "steps", calls: [], label: "Working", running: true }, Infinity)
+    if (latest && next) latest.running = next.running = true
   }
   if (view.replySoFar !== "") add({ key: "streaming", turn, kind: "reply", text: view.replySoFar, streaming: true }, Infinity)
   // The owner's messages the session has not taken in yet come last, as
@@ -191,10 +219,23 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
   // Each run is known by its last call, which reading the page before does
   // not change, and says what it is.
   for (const item of items) {
-    if (item.kind !== "steps" || item.key === "working") continue
+    if (item.kind !== "steps") continue
     item.key = `s-${item.calls.at(-1)!.id}`
+    for (const call of item.calls) if (call.running) Object.assign(call, sentenced({ name: call.name, arguments: asked.get(call) ?? "{}" }, true))
+    const now = item.calls.find((call) => call.running)
+    item.label = now !== undefined ? now.sentence : item.calls.length === 1 ? item.calls[0]!.sentence : summed(item.calls)
     const seconds = worked.get(item)
-    item.label = item.running ? "Working" : seconds !== undefined ? workedFor(seconds) : usedTools(item.calls)
+    if (seconds !== undefined) item.worked = workedFor(seconds)
+  }
+  // The running turn's head goes under the owner's messages it started
+  // with, before anything it has done, and before any message of the
+  // owner's not taken in yet.
+  if (running) {
+    const first = items.findIndex((item) => item.turn === turn && !(item.kind === "owner" && item.key.startsWith("e")))
+    const place = first === -1 ? items.length : first
+    const head: Item = { key: "working", turn, kind: "working", ...(started !== undefined && { started }), waited, ...(waitingSince !== undefined && { waitingSince }) }
+    items.splice(place, 0, head)
+    times.set(head, items[place - 1] === undefined ? -Infinity : times.get(items[place - 1]!)!)
   }
 
   // Each job's start, and its end once it has ended, and what a command
@@ -217,7 +258,7 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
     items.splice(place, 0, item)
     times.set(item, line.time)
   }
-  return folded(items, ends, cut)
+  return folded(items, ends, cut, summed)
 }
 
 // Each turn that ended as completed, with nothing cut short, folded as T3
@@ -226,7 +267,7 @@ export function transcriptOf(view: View, changes: readonly TurnChanges[] = []): 
 // came in between, such as a question, its answer or a note, follows the
 // line in order, then the final reply. The fold is known by the number of
 // the turn's end, which reading the page before does not change.
-function folded(items: Item[], ends: Map<number, { seq: number; completed: boolean; seconds?: number }>, cut: Set<number>): Item[] {
+function folded(items: Item[], ends: Map<number, { seq: number; completed: boolean; seconds?: number }>, cut: Set<number>, summed: (calls: Call[]) => string): Item[] {
   const out: Item[] = []
   for (let from = 0; from < items.length; ) {
     const turn = items[from]!.turn
@@ -242,10 +283,10 @@ function folded(items: Item[], ends: Map<number, { seq: number; completed: boole
       out.push(...group)
       continue
     }
-    // Inside, each run says which tools it used; the fold says how long.
+    // Inside, each run says what it did; the fold says how long.
     const runs = inside.filter((item): item is Steps => item.kind === "steps")
-    for (const run of runs) run.label = usedTools(run.calls)
-    const label = end.seconds !== undefined ? workedFor(end.seconds) : usedTools(runs.flatMap((run) => run.calls))
+    for (const run of runs) delete run.worked
+    const label = end.seconds !== undefined ? workedFor(end.seconds) : summed(runs.flatMap((run) => run.calls))
     const first = group.indexOf(inside[0]!)
     out.push(
       ...group.slice(0, first),
@@ -257,11 +298,6 @@ function folded(items: Item[], ends: Map<number, { seq: number; completed: boole
   return out
 }
 
-// Which tools calls used, each named once: "Used read, edit and shell".
-const usedTools = (calls: Call[]) => `Used ${listed([...new Set(calls.map((call) => call.name))])}`
-
-// Words in a list: "a", "a and b", "a, b and c".
-const listed = (words: string[]) => (words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`)
 
 // A call's result in short: its first line with anything on it, cut short.
 const SHORT = 80
@@ -292,10 +328,6 @@ function inputOf(written: string): string {
 }
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
 
-// What a turn's line of steps says once the turn has ended: how long it
-// worked, in its two largest units.
-export function workedFor(seconds: number): string {
-  const [hours, minutes, rest] = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60]
-  const words = hours > 0 ? [`${hours}h`, minutes > 0 ? `${minutes}m` : ""] : minutes > 0 ? [`${minutes}m`, rest > 0 ? `${rest}s` : ""] : [`${rest}s`]
-  return `Worked for ${words.filter((word) => word !== "").join(" ")}`
-}
+// What a turn's line says once the turn has ended: how long it worked, in
+// its two largest units.
+export const workedFor = (seconds: number) => `Worked for ${durationWords(seconds)}`

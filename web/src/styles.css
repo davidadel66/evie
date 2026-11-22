@@ -150,10 +150,10 @@
   --spacing-notice: min(360px, calc(100vw - 32px));
   --spacing-sign-in-column: 400px;
   /* The conversation in the middle column, at most as wide as T3 Code's,
-     and the room a tool call's name takes in a turn's steps, as the
-     board's Message draws them. */
+     and the tallest a tool call's result grows in the work log before it
+     scrolls, as T3 Code's. */
   --spacing-conversation: 736px;
-  --spacing-call-name: 48px;
+  --spacing-call-result: 256px;
   /* Buttons and text boxes are 32px tall, as T3 Code's; small buttons,
      and the items of a menu, the palette or a picker, are 28px, as T3
      Code's are; each 4px taller below 640px. A menu is at
@@ -171,7 +171,12 @@
   --spacing-settings-height: min(600px, calc(100dvh - 32px));
   --spacing-settings-pages: 176px;
   --spacing-settings-field: 200px;
-  /* A project's icon tile in a session row, and the icon on it. */
+  /* The room between a session row's edge and its words, so that they
+     start 18px from the list's edge, as in the Session view drawing and
+     T3 Code's sidebar. */
+  --spacing-row-inset: 10px;
+  /* A project's icon tile in a session row, and the icon on it, and in
+     the conversation's header. */
   --spacing-tile-row: 18px;
   --spacing-tile-row-icon: 12px;
   /* A project's tile in the workspace header and in the workspace strip;
@@ -280,5 +285,33 @@
   :focus-visible {
     outline: var(--indicator-width) solid var(--focus-ring);
     outline-offset: 2px;
+  }
+}
+
+/* The words of a tool call being carried out, with a light sweeping across
+   them, as T3 Code's live work row has (MIT licence, notice in
+   LICENSES/t3code-MIT.txt). Still, for those who ask for less motion. */
+@utility live-shine {
+  @media (prefers-reduced-motion: no-preference) {
+    color: transparent;
+    background-image: linear-gradient(to right, transparent, var(--text), transparent), linear-gradient(var(--text-muted), var(--text-muted));
+    background-size:
+      calc(3 * var(--spacing-work-row)) 100%,
+      100% 100%;
+    background-repeat: no-repeat;
+    background-clip: text;
+    animation: live-shine 2.2s steps(30) infinite;
+  }
+}
+@keyframes live-shine {
+  from {
+    background-position:
+      calc(-3 * var(--spacing-work-row)) 0,
+      0 0;
+  }
+  to {
+    background-position:
+      calc(100% + 3 * var(--spacing-work-row)) 0,
+      0 0;
   }
 }

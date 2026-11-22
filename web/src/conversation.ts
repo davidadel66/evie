@@ -11,7 +11,7 @@ import type { Pending, View } from "./transcript.ts"
 // them. Its events are followed as they come, and the network client
 // catches up on those missed while the line was down, passing on none twice.
 
-export type ConversationState = Required<View> & {
+export type ConversationState = Required<Omit<View, "folder">> & {
   // Whether the session has been opened and its latest page read.
   opened: boolean
   // Whether the page before the earliest read is being read.
