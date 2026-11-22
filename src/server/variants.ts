@@ -52,28 +52,31 @@ export async function variantsOf(bytes: Uint8Array, type: string): Promise<Varia
 // Accept-Encoding allows, saying that the answer varies by that header, so
 // that a cache never hands a brotli file to a client that cannot read it.
 // Each variant has an ETag of its own. A browser that has a variant already
-// sends its ETag back in If-None-Match, and is answered 304, with no body:
-// Bun's static routes do this by themselves, but cannot choose a variant.
-// `cache` is the file's Cache-Control.
+// sends its ETag back in If-None-Match with a GET (or a HEAD), and is
+// answered 304, with no body: Bun's static routes do this by themselves,
+// but cannot choose a variant. `cache` is the file's Cache-Control.
 export function fileRoute(file: Variants, cache: string): (request: Request) => Response {
   const varies = COMPRESSED.some((encoding) => file[encoding] !== undefined)
   return (request) => {
     const encoding = chosen(file, request.headers.get("accept-encoding"))
     const etag = `"${file.tag}${encoding === "identity" ? "" : `-${encoding}`}"`
     const headers: Record<string, string> = { "Cache-Control": cache, ETag: etag, ...(varies && { Vary: "Accept-Encoding" }) }
-    if (has(request.headers.get("if-none-match"), etag)) return new Response(null, { status: 304, headers })
+    const reading = request.method === "GET" || request.method === "HEAD"
+    if (reading && has(request.headers.get("if-none-match"), etag)) return new Response(null, { status: 304, headers })
     return new Response(file[encoding], { headers: { ...headers, "Content-Type": file.type, ...(encoding !== "identity" && { "Content-Encoding": encoding }) } })
   }
 }
 
 // The variant to send: brotli, else gzip, if the file has it and the
 // request's Accept-Encoding names it without refusing it with a weight of
-// 0, as `br;q=0` does; else the file as it is. A `*` is not taken to ask
-// for brotli: only a request that names it is sent it.
+// 0, as `br;q=0` does; else the file as it is. Other weights are not
+// compared: brotli is the smaller, so it is sent whenever it is accepted. A
+// `*` is not taken to ask for brotli: only a request that names it is sent it.
 function chosen(file: Variants, acceptEncoding: string | null): Encoding {
   const accepted = new Set<string>()
-  for (const each of (acceptEncoding ?? "").toLowerCase().split(",")) {
-    const [name, ...parameters] = each.split(";").map((part) => part.trim())
+  // Spaces are dropped, so that `br; q = 0` refuses brotli too.
+  for (const each of (acceptEncoding ?? "").toLowerCase().replace(/\s+/g, "").split(",")) {
+    const [name, ...parameters] = each.split(";")
     const weight = parameters.find((parameter) => parameter.startsWith("q="))
     if (name && (weight === undefined || Number(weight.slice(2)) > 0)) accepted.add(name)
   }

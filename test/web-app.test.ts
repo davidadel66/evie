@@ -239,7 +239,7 @@ test("the focus ring and the spinner's ring are drawn at the design system's ind
 test("the screens opened rarely or later, and the drawings of every icon but the folder, are not in the script the page loads first, but in files of their own", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
-  const page = await app.page.text()
+  const page = text(app.page.identity)
 
   // The page's script and every file it imports before it runs: not those
   // it imports with import(), which load when asked for.
@@ -247,13 +247,13 @@ test("the screens opened rarely or later, and the drawings of every icon but the
   const follow = async (path: string) => {
     if (first.has(path)) return
     first.add(path)
-    const script = await app.files[path]!.text()
+    const script = text(app.files[path]!.identity)
     for (const match of script.matchAll(/\bimport\s*([^("'`;]*?)\s*["'](\/[^"']+\.js)["']/g)) await follow(match[2]!)
   }
   await follow(page.match(/<script type="module"[^>]*src="([^"]+)"/)![1]!)
-  const firstScript = (await Promise.all([...first].map((path) => app.files[path]!.text()))).join("\n")
+  const firstScript = [...first].map((path) => text(app.files[path]!.identity)).join("\n")
   const others = Object.entries(app.files).filter(([path]) => path.endsWith(".js") && !first.has(path))
-  const laterScripts = (await Promise.all(others.map(([, file]) => file.text()))).join("\n")
+  const laterScripts = others.map(([, file]) => text(file.identity)).join("\n")
 
   // Words of the settings, the command palette, the session details, the
   // right panel, the workspace view, its side chat and storage, the icon

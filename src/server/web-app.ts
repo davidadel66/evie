@@ -76,6 +76,9 @@ export async function buildWebApp(options: { page?: string; temporary?: string }
       }
       files[path.replace(/^\./, "")] = file as Variants
     }
+    // A file cut in the wrong place would be kept by browsers for good,
+    // under a name that says it never changes.
+    if (at !== bytes.length) throw new Error(`The web app's build listed ${at} bytes of files and wrote ${bytes.length}.`)
     const { "/index.html": builtPage, ...loaded } = files
     if (!builtPage) throw new Error("Bun's bundler built the web app without its page.")
     return { page: builtPage, files: loaded, metafile: built.metafile }

@@ -56,8 +56,9 @@ test("a request that accepts br is sent brotli, one that accepts only gzip is se
   expect(await asked("gzip, deflate, br, zstd")).toEqual({ encoding: "br", ...same })
   expect(await asked("br;q=0.5, gzip;q=1")).toEqual({ encoding: "br", ...same })
   expect(await asked("gzip, deflate")).toEqual({ encoding: "gzip", ...same })
-  // Brotli refused by a weight of 0.
+  // Brotli refused by a weight of 0, written with spaces or without.
   expect(await asked("br;q=0, gzip")).toEqual({ encoding: "gzip", ...same })
+  expect(await asked("br; q = 0, gzip")).toEqual({ encoding: "gzip", ...same })
   // Neither asked for: a `*` is not taken to ask for brotli.
   for (const neither of [undefined, "", "identity", "deflate, zstd", "*", "br;q=0, gzip;q=0.000"]) expect(await asked(neither)).toEqual({ encoding: null, ...same })
 })
@@ -90,6 +91,9 @@ test("each variant has its own ETag, and a request sending it back is answered 3
   const other = await ask(file, { "Accept-Encoding": "br", "If-None-Match": tags.gzip! })
   expect([other.status, other.headers.get("content-encoding"), other.headers.get("etag")]).toEqual([200, "br", tags.br])
   expect((await ask(file, { "Accept-Encoding": "br", "If-None-Match": '"not-this-file"' })).status).toBe(200)
+  // A 304 is only for reading: a HEAD gets one, a POST does not.
+  const asking = (method: string) => fileRoute(file, IMMUTABLE)(new Request("http://evie.test/file.js", { method, headers: { "Accept-Encoding": "br", "If-None-Match": tags.br! } }))
+  expect([asking("HEAD").status, asking("POST").status]).toEqual([304, 200])
 })
 
 test("a file kept only as it is says nothing of Accept-Encoding, and still has an ETag that answers 304", async () => {
