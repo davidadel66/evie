@@ -476,6 +476,40 @@ test("evie new with no folder says how it is used", async () => {
   expect(said.stderr).toBe("Usage:\n  evie new <folder> [name]   make a project in a folder, made when it is missing, named after it unless a name is given\n")
 })
 
+// ---- evie web --------------------------------------------------------------------------------
+
+test("evie serve serves the web app, and evie web --print prints a sign-in link whose code signs a browser in once", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  await serve(home)
+  const page = `http://127.0.0.1:${port}`
+
+  expect((await fetch(page)).headers.get("content-type")).toStartWith("text/html")
+  const printed = await evie(["web", "--print"], { home })
+
+  expect(printed.stderr).toBe("")
+  expect(printed.code).toBe(0)
+  const code = new RegExp(`^${page}/sign-in#code=([\\w-]{43})\n$`).exec(printed.stdout)?.[1]
+  expect(code).toBeString()
+  const login = () => fetch(`${page}/login`, { method: "POST", headers: { Origin: page, "Content-Type": "application/json" }, body: JSON.stringify({ code }) })
+  expect((await login()).status).toBe(204)
+  expect((await login()).status).toBe(401)
+})
+
+test("evie web with the server stopped says no server is running, and how to start one", async () => {
+  const port = await freePort()
+  const home = await homeWith(port, [])
+  const server = await serve(home)
+  server.kill("SIGTERM")
+  await server.exited
+
+  const said = await evie(["web", "--print"], { home })
+
+  expect(said.code).toBe(1)
+  expect(said.stdout).toBe("")
+  expect(said.stderr).toBe(`No Evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
+})
+
 // ---- evie token ------------------------------------------------------------------------------
 
 test("tokens are made, listed and taken back by name, each without touching the others", async () => {

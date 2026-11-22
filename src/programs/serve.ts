@@ -16,10 +16,17 @@ function forgetStopForGood(home: string) {
 }
 
 // `evie serve`: starts the core with the plugins the settings list, and
-// serves it until told to stop. The first time, it makes this computer's
-// token. Once it is listening, it picks up the work an earlier run left, and
-// tidies away tool output older than a week, and again each day while it runs.
-export async function serve(env: Settings) {
+// serves it until told to stop, with the web app. The first time, it makes
+// this computer's token. Once it is listening, it picks up the work an
+// earlier run left, and tidies away tool output older than a week, and
+// again each day while it runs.
+//
+// `--dev` is for working on the web app: it is bundled again on each
+// request, and the open page is updated as its files are saved. It needs
+// the server started in the repository's folder, for its bunfig.toml.
+export async function serve(env: Settings, args: string[] = []) {
+  if (args.some((arg) => arg !== "--dev")) fail("Usage:\n  evie serve         run Evie's server\n  evie serve --dev   run it with the web app rebuilt as it changes")
+  const developing = args.includes("--dev")
   const settings = await loadSettingsFiles({ env }).catch(fail)
   const serverSettings = await loadServerSettings({ env }).catch(fail)
   const evie = await createEvie({
@@ -45,9 +52,18 @@ export async function serve(env: Settings) {
     return closeAndFail(`This computer's token could not be made: ${reason(cause)}`)
   })
 
+  // The web app is built now, before the server listens, in a moment. It is
+  // loaded only here, so the terminal client never loads the bundler's
+  // plugins. A web app that cannot be built is left out, saying why: the
+  // terminal and every other client still work.
+  const { buildWebApp, webAppForDevelopment } = await import("../server/web-app.ts")
+  const app = developing
+    ? webAppForDevelopment()
+    : await buildWebApp().catch((cause) => void console.error(`The web app could not be built, so it is not served: ${reason(cause)}`))
+
   let server: EvieServer
   try {
-    server = startServer({ evie, tokens, host: serverSettings.host, port: serverSettings.port, origins: serverSettings.origins })
+    server = startServer({ evie, tokens, host: serverSettings.host, port: serverSettings.port, origins: serverSettings.origins, ...(app && { app }) })
   } catch (cause) {
     tokens.close()
     return closeAndFail(
@@ -60,6 +76,7 @@ export async function serve(env: Settings) {
   // it would make its next restart a stop for good.
   forgetStopForGood(home)
   print(`evie serve · listening on ${server.url}\n`)
+  if (developing) print("The web app is bundled from its source on each request, and updated in the browser as it changes.\n")
   // Only now, so that a second `evie serve`, which cannot have the port,
   // never touches the folder or the work of the one already running.
   const stopTidying = keepOutputTidy(join(home, "tool-output"))

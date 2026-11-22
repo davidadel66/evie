@@ -587,16 +587,24 @@ async function openSocket(address: URL, headers: Record<string, string> | undefi
 // server is asked why over plain HTTP, and the answer is put in words for
 // the owner.
 async function whyRefused(address: URL, headers: Record<string, string> | undefined, signal: AbortSignal | undefined): Promise<ConnectError> {
-  const where = address.origin
   let status: number
   try {
     const response = await fetch(new URL(PATHS.check, address), { headers: headers ?? {}, ...(signal && { signal }) })
     status = response.status
   } catch {
-    if (signal?.aborted) return noAnswer(address)
-    return new ConnectError(`No Evie server is running at ${where}. Start it with \`evie serve\`.`, "no server")
+    return signal?.aborted ? noAnswer(address) : noServer(address)
   }
-  if (status === 401 && headers === undefined) return new ConnectError(`The Evie server at ${where} asks for a token, and none was given.`, "token")
+  return refusal(address, status, headers !== undefined)
+}
+
+// Nothing answers at the address.
+export const noServer = (address: URL) => new ConnectError(`No Evie server is running at ${address.origin}. Start it with \`evie serve\`.`, "no server")
+
+// Why the server refused a request, from the status it answered with, in
+// words for the owner. `withToken` says whether the request brought a token.
+export function refusal(address: URL, status: number, withToken: boolean): ConnectError {
+  const where = address.origin
+  if (status === 401 && !withToken) return new ConnectError(`The Evie server at ${where} asks for a token, and none was given.`, "token")
   if (status === 401) {
     return new ConnectError(
       `The Evie server at ${where} did not accept the token. If it was taken back, make a new one on the server's ` +
@@ -612,5 +620,5 @@ async function whyRefused(address: URL, headers: Record<string, string> | undefi
 }
 
 // Something took the connection but did not answer in time.
-const noAnswer = (address: URL) =>
+export const noAnswer = (address: URL) =>
   new ConnectError(`No Evie server answered at ${address.origin}. Check the address, and that \`evie serve\` is running there.`, "no answer")
