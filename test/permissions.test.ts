@@ -783,6 +783,10 @@ test("in auto mode any command runs without asking, wherever it reads, and so do
     "mv build/a.txt .",
     "cp ~/Documents/notes.txt notes.txt",
     "git checkout -- src/app.ts",
+    "sed -i '' 's/a/b/' notes.txt",
+    "sed -n 's/a/b/p' ~/notes.txt",
+    "perl -pi -e 's/a/b/' /tmp/evie-work/notes.txt",
+    "perl -ne 'print' ~/notes.txt",
   ]
   for (const command of commands) expect(await attempt(shell(command))).toBe("done")
   for (const call of [
@@ -819,6 +823,9 @@ test("in auto mode the dangerous is still asked about: sending, deleting or over
     shell("git restore a.txt", "/somewhere/else"),
     shell("tar -xzf a.tgz -C ~/x"),
     shell('rm "$f"'),
+    shell("sed -i '' 's/a/b/' ~/notes.txt"),
+    shell("sed --in-place=.bak -e 's/a/b/' ~/notes.txt"),
+    shell("perl -pi -e 's/a/b/' ~/notes.txt"),
     // A link in the project that leads outside it, and the temp folder, is followed.
     shell("rm sys/x"),
     shell("git push"),

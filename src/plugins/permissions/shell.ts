@@ -198,6 +198,16 @@ function valuesOf(words: string[], short: string, long: string): string[] {
   })
 }
 const DELETERS = ["rm", "rmdir", "unlink", "shred", "truncate", "mv"]
+// An editor that changes files in place, as `sed -i` and `perl -i` do,
+// changes the files it names. Its script is the word after an option that
+// takes one, such as `-e`, or else its first word, which names no file.
+const inPlace =
+  (takesScript: RegExp) =>
+  (_args: string[], words: string[]): Overwrites => {
+    if (!words.some((word) => /^-[a-zA-Z]*i/.test(word) || word.startsWith("--in-place"))) return { files: [], folders: [] }
+    const named = words.filter((word, at) => word !== "" && !word.startsWith("-") && !(at > 0 && takesScript.test(words[at - 1]!)))
+    return { files: words.some((word) => takesScript.test(word)) ? named : named.slice(1), folders: [] }
+  }
 const OVERWRITES: Record<string, (args: string[], words: string[], gitIn: string[]) => Overwrites> = {
   ...Object.fromEntries(["rm", "rmdir", "unlink", "shred", "truncate", "tee"].map((name) => [name, (args: string[]) => ({ files: args, folders: [] })])),
   mv: (args, words) => {
@@ -208,6 +218,8 @@ const OVERWRITES: Record<string, (args: string[], words: string[], gitIn: string
     const into = valuesOf(words, "-t", "--target-directory")
     return { files: [], folders: into.length > 0 ? into : args.length > 1 ? args.slice(-1) : [] }
   },
+  sed: inPlace(/^(-[a-zA-Z]*[ef]|--expression|--file)$/),
+  perl: inPlace(/^-[a-zA-Z]*[eE]$/),
   dd: (_args, words) => ({ files: words.filter((word) => word.startsWith("of=")).map((word) => word.slice(3)), folders: [] }),
   find: (_args, words) => {
     const removes = words.includes("-delete") || words.some((word, at) => /^-(exec|execdir|ok|okdir)$/.test(word) && DELETERS.includes(words[at + 1] ?? ""))

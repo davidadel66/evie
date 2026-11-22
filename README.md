@@ -1177,7 +1177,8 @@ before the dangerous ones:
 - ones that delete, move or overwrite files outside the project and the
   temp folder (`/tmp` and `$TMPDIR`), with links followed: `rm`, `rmdir`,
   `unlink`, `shred`, `truncate`, `mv`, `cp` onto a file, `>`, `>>` or
-  `tee` to a file, `dd`, `find … -delete`, `tar` extracting, and `git
+  `tee` to a file, `dd`, `find … -delete`, `tar` extracting, `sed -i` and
+  `perl -i`, and `git
   clean`, `reset --hard`, `checkout --` or `restore` run in another folder;
 - `sudo` and its kin, and ones that change system settings, such as
   `launchctl`, `defaults write`, `pmset`, `diskutil` and `shutdown`.
