@@ -27,6 +27,11 @@ export async function buildWebApp(): Promise<WebApp> {
     publicPath: "/",
     // React's production build, without its checks and warnings for developers.
     define: { "process.env.NODE_ENV": JSON.stringify("production") },
+    // What the page imports only when it needs it, such as the diff's
+    // library and each language it colours, is built into files of their
+    // own, which the page loads then, so that the rest of the page does not
+    // wait for them.
+    splitting: true,
   }).catch((cause: unknown) => {
     // The bundler fails with "Bundle failed", and what went wrong where
     // in the errors it carries.

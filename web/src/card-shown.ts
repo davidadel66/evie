@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react"
+import { diffShown, subscribeShown } from "./diff-shown.ts"
 import { windowOver } from "./page-requests.ts"
 import { cardPlace, cardRoom, keptChoices, shownFrom, type CardPlace, type DetailsItem, type Shown } from "./project-card.ts"
 import { onMac, pressed } from "./shortcuts.ts"
@@ -6,13 +7,15 @@ import { WIDE } from "./wide.ts"
 
 // Where the session details are, whether they are open, and what they
 // show. They float at the top right of the conversation. Pinned, they stay
-// open beside it while it has the room, and over it without the room, as
-// the owner's drawing has them, and this browser remembers whether they
-// were closed; unpinned, or in a column too short to pin in, they open over
-// it from the button in its header, or with mod+alt+B, and close again on a
-// click outside or Escape, as T3 Code's details card does. At phone width
-// they are a sheet from the right. This browser remembers whether they are
-// pinned and what they show. `room` is the height the card has.
+// open beside it while it has the room, and over it without the room, and
+// this browser remembers whether they were closed; unpinned, or in a column
+// too short to pin in, they open over it from the button in its header, or
+// with mod+alt+B, and close again on a click outside or Escape, as T3
+// Code's details card does. At phone width
+// they are a sheet from the right. While the right panel is open, which
+// takes the right side, they go behind their header button, and pinned,
+// come back when it closes. This browser remembers whether they are pinned
+// and what they show. `room` is the height the card has.
 
 export type CardShown = {
   place: CardPlace
@@ -49,12 +52,14 @@ function remember(key: string, value: string | null) {
 const media = typeof matchMedia === "function" ? matchMedia(WIDE) : undefined
 
 // The conversation's column's width and height, as the card measures them;
-// whether the page is a phone's; and whether the card is open in each place
-// it can be: pinned, in place or over the conversation, or floating.
+// whether the page is a phone's; whether the right panel is open; and
+// whether the card is open in each place it can be: pinned, in place or
+// over the conversation, or floating.
 let state = {
   width: typeof innerWidth === "number" ? innerWidth : 1440,
   height: typeof innerHeight === "number" ? innerHeight : 900,
   phone: media !== undefined && !media.matches,
+  panel: diffShown().open,
   pinned: remembered(PINNED) !== "unpinned",
   inline: remembered(CLOSED) !== "hidden",
   popover: false,
@@ -87,6 +92,7 @@ function subscribe(listener: () => void) {
   return () => void listeners.delete(listener)
 }
 media?.addEventListener("change", () => set({ phone: !media.matches }))
+subscribeShown(() => set({ panel: diffShown().open }))
 
 // Where the card is now, redrawn as it changes.
 export const useCardShown = () => useSyncExternalStore(subscribe, () => snapshot)
