@@ -281,7 +281,12 @@ test("a session deleted from one page is dropped from every page's list, whateve
   if (secondClient.status !== "connected") throw new Error("the second page is not connected")
   await secondClient.evie.send({ type: "open_session", session: served.run.session, questions: true })
 
-  expect(await sessions.delete(served.run.session)).toBeUndefined()
+  expect(await sessions.delete(served.run.session)).toEqual({ leftOver: [] })
 
-  for (const each of [sessions, secondList]) expect((await until(each, (state) => state.sessions.length === 1)).sessions.map((one) => one.session)).toEqual([other.session])
+  for (const each of [sessions, secondList]) {
+    const after = await until(each, (state) => state.sessions.length === 1)
+    expect(after.sessions.map((one) => one.session)).toEqual([other.session])
+    // So that a page with it open can say it was deleted.
+    expect(after.deleted).toEqual([served.run.session])
+  }
 })

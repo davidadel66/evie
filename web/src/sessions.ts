@@ -20,6 +20,9 @@ export type SessionList = {
   // for, or undefined when they could. The sessions are listed all the
   // same, without their projects' names and branches.
   projectsProblem: string | undefined
+  // The sessions deleted while the page has been open, from here or
+  // elsewhere, oldest first, so that a page with one open can say so.
+  deleted: readonly string[]
 }
 
 export type Sessions = {
@@ -43,13 +46,15 @@ export type Sessions = {
   // delete, the word that it is gone, which every page is sent.
   rename(session: string, name: string): Promise<string | undefined>
   move(session: string, project: string | null): Promise<string | undefined>
-  delete(session: string): Promise<string | undefined>
+  // A delete that went gives back what could not be removed once the
+  // session was gone, a sentence each, which is nothing when all of it went.
+  delete(session: string): Promise<{ refused: string } | { leftOver: string[] }>
   // Stops following the connection.
   close(): void
 }
 
 export function openSessions(connection: Connection): Sessions {
-  let state: SessionList = { listed: false, sessions: [], projects: [], problem: undefined, projectsProblem: undefined }
+  let state: SessionList = { listed: false, sessions: [], projects: [], problem: undefined, projectsProblem: undefined, deleted: [] }
   const listeners = new Set<() => void>()
 
   function set(next: Partial<SessionList>) {
@@ -71,7 +76,7 @@ export function openSessions(connection: Connection): Sessions {
   // is out, which can be older than its deletion.
   function drop(session: string) {
     for (const heard of listing) heard.set(session, "deleted")
-    set({ sessions: state.sessions.filter((each) => each.session !== session) })
+    set({ sessions: state.sessions.filter((each) => each.session !== session), deleted: [...state.deleted.filter((each) => each !== session), session] })
   }
 
   // The summaries heard while each list of sessions is out. The list can be
@@ -171,7 +176,14 @@ export function openSessions(connection: Connection): Sessions {
     settle: (session, settled) => carryOut({ type: "settle_session", session, settled }),
     rename: (session, name) => carryOut({ type: "rename_session", session, name }),
     move: (session, project) => carryOut({ type: "move_session", session, project }),
-    delete: (session) => carryOut({ type: "delete_session", session }),
+    async delete(session) {
+      if (heard === undefined) return { refused: NOT_CONNECTED }
+      try {
+        return await heard.send({ type: "delete_session", session })
+      } catch (cause) {
+        return { refused: wordsOf(cause) }
+      }
+    },
     close() {
       unfollow()
       unhear()

@@ -13,7 +13,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu.tsx"
-import { DotsThree } from "./icons.tsx"
+import { Check, DotsThree } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { ProjectGlyph, ProjectIcon } from "./ProjectIcon.tsx"
 import { ageWords, nameFieldKey, nameToSave, titleOf } from "./session-list.ts"
@@ -157,6 +157,7 @@ function Row({
           // Its box covers the whole row, so the row is the link; the menu sits above it.
           <a
             href={href}
+            data-row=""
             data-session={session}
             aria-current={selected ? "page" : undefined}
             onDoubleClick={
@@ -185,8 +186,9 @@ function Row({
 
 // The session's name, typed in place of its title, as in T3 Code: Enter or
 // leaving the field saves it, and Escape gives it up. It starts with the
-// whole name chosen, to be typed over.
-function NameField({ title, save, cancel }: { title: string; save(typed: string): void; cancel(): void }) {
+// whole name chosen, to be typed over. `size` is the title's text style:
+// a row's, or the conversation header's.
+function NameField({ title, save, cancel, size = "text-label" }: { title: string; save(typed: string): void; cancel(): void; size?: "text-label" | "text-title" }) {
   const [typed, setTyped] = useState(title)
   // Enter and Escape end the edit, and the field then loses the focus as
   // it goes, which must not save it again.
@@ -209,8 +211,39 @@ function NameField({ title, save, cancel }: { title: string; save(typed: string)
         else cancel()
       }}
       onBlur={() => !ended.current && save(typed)}
-      className="relative z-10 -mx-1 min-w-0 flex-1 rounded-sm bg-transparent px-1 text-label text-text focus-visible:outline-offset-0"
+      className={cn("relative z-10 -mx-1 min-w-0 flex-1 rounded-md bg-transparent px-1 text-text focus-visible:outline-offset-0", size)}
     />
+  )
+}
+
+// The session's name as the conversation's header shows it. A double-click
+// types it in place, as in T3 Code, with the same rules as in its row.
+// `said` is told why a name was not taken, or with nothing that there is
+// nothing to say.
+export function HeaderName({ title, rename, said }: { title: string; rename(name: string): Promise<string | undefined>; said(note: string | undefined): void }) {
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState<string>()
+  const shown = saving ?? title
+  async function save(typed: string) {
+    setEditing(false)
+    const result = nameToSave(typed, shown)
+    if (result === undefined) return
+    if ("refused" in result) return said(result.refused)
+    setSaving(result.name)
+    said(await rename(result.name))
+    setSaving(undefined)
+  }
+  if (editing) return <NameField title={shown} save={save} cancel={() => setEditing(false)} size="text-title" />
+  return (
+    <h1
+      onDoubleClick={() => {
+        said(undefined)
+        setEditing(true)
+      }}
+      className="min-w-0 flex-1 truncate text-title text-text"
+    >
+      {shown}
+    </h1>
   )
 }
 
@@ -271,7 +304,6 @@ function RowMenu({
     button.current?.focus()
     refocus.done()
   }, [refocus])
-  const moveTo = (to: string | null) => to !== project && move(to)
   return (
     <DropdownMenu onOpenChange={(open) => open && opened()}>
       <DropdownMenuTrigger asChild>
@@ -305,14 +337,16 @@ function RowMenu({
           <DropdownMenuSubTrigger>Move to…</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             {projects.map((each) => (
-              <DropdownMenuItem key={each.id} current={each.id === project} onSelect={() => moveTo(each.id)}>
+              <DropdownMenuItem key={each.id} disabled={each.id === project} onSelect={() => move(each.id)}>
                 <ProjectGlyph project={each.id} />
                 {each.name}
+                {each.id === project && <Current />}
               </DropdownMenuItem>
             ))}
             {projects.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuItem current={project === null} onSelect={() => moveTo(null)}>
+            <DropdownMenuItem disabled={project === null} onSelect={() => move(null)}>
               No project
+              {project === null && <Current />}
             </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
@@ -324,6 +358,17 @@ function RowMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+// The project a session is in, among those it can be moved to: marked, as
+// the one it is in now, and not to be picked.
+function Current() {
+  return (
+    <span className="ml-auto flex items-center gap-1 pl-4 text-caption text-text-muted">
+      <Check className="size-icon-sm" />
+      Current
+    </span>
   )
 }
 

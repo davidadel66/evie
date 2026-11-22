@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import type { SessionState, SessionSummary } from "../src/core/types.ts"
 import { addressAsOpened, addressOf, selectedIn } from "../web/src/address.ts"
 import { refreshWhileShown } from "../web/src/refresh.ts"
-import { ageWords, filterSessions, groupSessions, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove } from "../web/src/session-list.ts"
+import { ageWords, deletedSelection, filterSessions, groupSessions, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove } from "../web/src/session-list.ts"
 
 // The session list's own rules, apart from its screen: how sessions are
 // grouped and ordered, and found by search and by project, and how a
@@ -184,9 +184,19 @@ test("in a row's name field, Enter saves and Escape gives up, and a key that is 
   expect(nameFieldKey("Enter", true)).toBeUndefined()
 })
 
-test("F2 renames the row that has the keyboard's focus, or else the selected session, but not while the owner types in a field", () => {
+test("F2 renames the row that has the keyboard's focus, or else the selected session, but not a draft's row, nor while the owner types in a field", () => {
   expect(renamedByF2({ focusedRow: "s2", typing: false }, "s1")).toBe("s2")
   expect(renamedByF2({ typing: false }, "s1")).toBe("s1")
+  // A draft's row has the focus: it has no session to rename.
+  expect(renamedByF2({ focusedRow: null, typing: false }, "s1")).toBeUndefined()
   expect(renamedByF2({ typing: true }, "s1")).toBeUndefined()
   expect(renamedByF2({ typing: false }, undefined)).toBeUndefined()
+})
+
+test("a selected session that has been deleted is found, and so is one whose subagent's conversation is open, so the page can let it go", () => {
+  expect(deletedSelection({ session: "s1" }, ["s0", "s1"])).toBe("s1")
+  expect(deletedSelection({ session: "s1", subagent: "a1" }, ["s1"])).toBe("s1")
+  expect(deletedSelection({ session: "s2" }, ["s1"])).toBeUndefined()
+  expect(deletedSelection({ draft: null }, ["s1"])).toBeUndefined()
+  expect(deletedSelection(undefined, ["s1"])).toBeUndefined()
 })

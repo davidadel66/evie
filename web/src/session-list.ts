@@ -51,11 +51,19 @@ export function nameFieldKey(key: string, composing: boolean): "save" | "cancel"
 }
 
 // The session F2 renames: the row that has the keyboard's focus, or else
-// the selected session. Not while the owner is typing in a field, where
-// F2 is the field's.
-export function renamedByF2(focus: { focusedRow?: string; typing: boolean }, selected: string | undefined): string | undefined {
-  if (focus.typing) return undefined
+// the selected session. `focusedRow` is null for a row with no session to
+// rename, a draft's, which F2 leaves alone. Not while the owner is typing
+// in a field, where F2 is the field's.
+export function renamedByF2(focus: { focusedRow?: string | null; typing: boolean }, selected: string | undefined): string | undefined {
+  if (focus.typing || focus.focusedRow === null) return undefined
   return focus.focusedRow ?? selected
+}
+
+// The selected session, when it is one of those deleted: it may be shown
+// in the middle, or one of its subagents' conversations, or in the card.
+export function deletedSelection(selected: Selected | undefined, deleted: readonly string[]): string | undefined {
+  if (selected === undefined || !("session" in selected)) return undefined
+  return deleted.includes(selected.session) ? selected.session : undefined
 }
 
 // The project being looked at, which a new session starts in: the

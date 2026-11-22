@@ -17,7 +17,7 @@ import { Input } from "./components/ui/input.tsx"
 import { CaretDown, CaretRight, MagnifyingGlass, Plus } from "./icons.tsx"
 import { ProjectGlyph } from "./ProjectIcon.tsx"
 import { select, useSelected } from "./selection.ts"
-import { filterSessions, groupSessions, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, type Filter, type OpenGroups } from "./session-list.ts"
+import { deletedSelection, filterSessions, groupSessions, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, titleOf, type Filter, type OpenGroups } from "./session-list.ts"
 import { DeleteDialog, DraftRow, SessionRow } from "./SessionRow.tsx"
 import type { Sessions } from "./sessions.ts"
 
@@ -37,6 +37,9 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
   // about deleting.
   const [editing, setEditing] = useState<string>()
   const [deleting, setDeleting] = useState<SessionSummary>()
+  // A quiet word about the list, such as that the selected session was
+  // deleted, until something else is selected.
+  const [notice, setNotice] = useState<string>()
   const now = useMinute()
 
   const selectedSession = selected !== undefined && "session" in selected ? selected.session : undefined
@@ -68,7 +71,8 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
       if (event.key !== "F2" || event.defaultPrevented) return
       const focused = document.activeElement
       const typing = focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement || (focused instanceof HTMLElement && focused.isContentEditable)
-      const focusedRow = focused instanceof HTMLAnchorElement ? focused.dataset.session : undefined
+      // A row's link, which has no session when it is a draft's.
+      const focusedRow = focused instanceof HTMLAnchorElement && focused.dataset.row !== undefined ? (focused.dataset.session ?? null) : undefined
       const session = renamedByF2({ ...(focusedRow !== undefined && { focusedRow }), typing }, selectedSession)
       if (session === undefined || document.querySelector(`a[data-session="${CSS.escape(session)}"]`) === null) return
       event.preventDefault()
@@ -78,11 +82,28 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
     return () => removeEventListener("keydown", renameOnF2)
   }, [selectedSession])
 
-  // A session deleted while selected leaves nothing selected.
+  // The selected session, deleted from here or elsewhere, is let go: its
+  // conversation, a subagent's of it, and its card are no longer shown,
+  // and the list says so.
+  const gone = deletedSelection(selected, list.deleted)
+  useEffect(() => {
+    if (gone === undefined) return
+    location.hash = ""
+    setNotice("This session was deleted.")
+  }, [gone])
+  useEffect(() => {
+    if (selected !== undefined) setNotice(undefined)
+  }, [selected])
+
+  // Gives back why the server refused, or nothing. A delete that could not
+  // remove everything kept for the session still went, and the list says
+  // what was left.
   async function remove(session: SessionSummary) {
-    const refused = await sessions.delete(session.session)
-    if (refused === undefined && session.session === selectedSession) location.hash = ""
-    return refused
+    const done = await sessions.delete(session.session)
+    if ("refused" in done) return done.refused
+    if (session.session === selectedSession) location.hash = ""
+    if (done.leftOver.length > 0) setNotice(`${titleOf(session)} was deleted, but not all that evie kept for it could be removed. ${done.leftOver.join(" ")}`)
+    return undefined
   }
 
   const groups = groupSessions(filterSessions(list.sessions, filter))
@@ -143,6 +164,7 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
               </p>
             ),
         )}
+        <div role="status">{notice !== undefined && <p className="px-3 pb-2 text-caption text-text-muted">{notice}</p>}</div>
         {selected !== undefined && "draft" in selected && (
           <ul className="mb-1 flex flex-col">
             <DraftRow project={selected.draft} listed={projectOf(selected.draft)} href={addressOf(selected)} />
