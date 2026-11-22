@@ -630,8 +630,11 @@ mode with a sound readies it at once. Everything is read from what the server se
 page already, and for a turn's end, the session's latest events, so the
 server does nothing more for it.
 
-At phone width, every button and menu item is at least 44px tall, the
-board's size for a finger.
+At phone width the page is as dense as at desktop width, as T3 Code's
+is. What is typed into a text box or the message box is 16px there, so
+that the phone does not zoom the page in when one is tapped, and on a touch
+screen each button reaches an unseen 44px round itself, so that a finger
+finds it although it looks small.
 
 **A workspace** is a project's home, opened from its icon or name in the
 session list or the project card. The page then has three other columns:
@@ -1402,48 +1405,118 @@ sizes and sizes, so that, say, `text-caption` and `text-text-muted` are
 both kept. A size added to the theme in `styles.css` is added to its list
 too; a test checks the two agree.
 
-The design system's tokens are copied from its `tokens.json`: the colours
-into `web/src/tokens.css`, one set per theme, and the rest into Tailwind's
-theme in `web/src/styles.css`. Tailwind's own defaults are cleared, so each
-class names a token, such as `bg-bg-side`, `text-text-muted`,
-`text-caption` or `p-7`, and its spacing scale holds only the design
-system's steps, so a class off it, such as `p-5`, is not made at all. The
-fonts, Geist and Geist Mono, are carried in the stylesheet, so the page asks
-no other site for anything.
+The design system's colours are copied from its `tokens.json` into
+`web/src/tokens.css`, one set per theme. Its sizes follow T3 Code's
+density, at every width, phone included: 14px text, 12px details, 28 to
+32px controls and 24px rows in a turn's work log, where the board first
+had 15px text and 40 to 44px controls. Its fonts, Geist and Geist Mono, and
+its three themes are its own. The sizes are in Tailwind's theme in
+`web/src/styles.css`. Tailwind's own defaults are cleared, so each class
+names a token, such as `bg-bg-side`, `text-text-muted`, `text-caption` or
+`p-7`, and its spacing scale holds only the steps below, so a class off it,
+such as `p-9`, is not made at all. The fonts are carried in the
+stylesheet, so the page asks no other site for anything.
 
-A few values the design system's board does not name are named once in
-`styles.css`, each by a name of its own:
+Below 768px, phone width, every size stays as it is but two: the page's
+side padding, `gutter`, is 12px, and the text typed into a text box,
+`field`, is 16px, below which iOS zooms the page in when a text box is
+tapped. A test checks that every text box in the web app takes `field`.
+
+**Text.** Sans-serif (Geist) but for `code`, in Geist Mono:
+
+| Name | Size and line | Weight | For |
+|---|---|---|---|
+| `caption` | 12px on 16px | 400 | Details beside or under a title: a project's name, a branch, an age; a menu's heading; notes and refusals |
+| `body` | 14px on 20px | 400 | List rows, quiet buttons, a turn's work log, paragraphs, menu items |
+| `prose` | 14px on 1.625 (about 23px) | 400 | A reply and the owner's message, on T3 Code's looser line for reading |
+| `field` | 14px on 1.625; 16px at phone width | 400 | What is typed into a text box, the message box or a search |
+| `label` | 14px on 20px | 600 | Titles: a session's in the list and in a header, a setting's, a question's; buttons; the name `evie` at the top |
+| `title` | 16px on 24px, −0.01em | 600 | A workspace's name in its header, a settings page's title, a reply's second and third headings |
+| `page-title` | 20px on 28px, −0.01em | 600 | The one title of a dialog, the settings window or an empty page; a reply's top heading |
+| `figure` | 24px on 32px, −0.02em | 600 | Big numbers on dashboards, when there are any |
+| `code` | 13px on 20px | 400 | File paths, commands, diffs and tool calls |
+
+**Spacing,** on a 4px grid:
 
 | Name | Value | For |
 |---|---|---|
-| `session-list` | 288px | The width of the session list |
-| `project-card` | 320px | The width of the project card |
+| `space-1` | 4px | Between a label and its value; inside a menu, around its items |
+| `space-2` | 8px | Between an icon and its text; a menu item's sides; between a turn's steps; the session list's sides |
+| `space-3` | 12px | Inside small controls; the sides of a row and a header; a setting's top and bottom |
+| `space-4` | 16px | Inside the message box; between turns; above and below the conversation |
+| `space-5` | 20px | Where a column's text starts: the name at the top of the list, the project card's rows; a list's indent in a reply; under the message box at desktop width |
+| `space-6` | 24px | Inside a dialog and the settings window; between tabs |
+| `space-7` | 28px | In the scale, though nothing uses it now that the page's side padding is `gutter` |
+| `space-8` | 32px | Between a setting and its control; between sections; above and below an empty page's words |
+
+**Corners:**
+
+| Name | Value | For |
+|---|---|---|
+| `radius-sm` | 4px | Menu items and the rows of the palette and pickers; badges; an image's thumbnail |
+| `radius-md` | 8px | The default: buttons, text boxes, menus, popovers, notices, selected rows |
+| `radius-lg` | 16px | The message box, the owner's message, a docked question, dialogs, the settings window and the palette |
+| `radius-full` | 9999px | Pill buttons such as answer choices, the round send and stop buttons, status dots |
+| `radius-tile` | 25% | A project's icon tile's corners, a quarter of its size at any size |
+
+**Sizes,** each by a name of its own, such as `h-control` or `w-session-list`:
+
+| Name | Value | For |
+|---|---|---|
+| `control` | 32px | Buttons, text boxes and icon buttons; the settings' pages; the send and stop buttons |
+| `control-sm` | 28px | Small buttons: the chips under the message box's text, the buttons that show and hide the list and the card, a row's `···`, a notice's; the items of a menu, the palette, the `/` and `@` menus and the model picker |
+| `row-height` | 32px | A row in a list: a file in Storage, a session in a workspace, a file's header in the diff, a line of the project card |
+| `work-row` | 24px | A row of a turn's work log: a run of calls, each call, Working, Worked for, a note |
+| `header-height` | 52px | Every column's header: the list's, the conversation's, the card's, the diff's, a workspace's and its side chat's |
+| `gutter` | 20px; 12px at phone width | The page's side padding: the conversation, the message box, a workspace, the sign-in page |
+| `touch-min` | 44px | The least a finger aims at: on a touch screen, each button reaches this far round itself, unseen |
+| `icon-xs` | 12px | Small marks beside text: the caret that opens a group or a turn's steps, the spinner, the square in Stop |
+| `icon-sm` | 16px | Icons beside text, in menus and in icon buttons |
+| `icon-md` | 20px | The icon on a workspace's tile in the strip, and on the strip's own buttons |
+| `rail-width` | 64px | The strip of workspace tiles |
+| `tile-strip` | 44px | A workspace's tile in the strip, and the strip's back and New workspace buttons |
+| `tile-header` | 28px | A project's tile in a workspace's header |
+| `tile-row` | 18px | A project's icon tile in a session row and the project card |
+| `tile-row-icon` | 12px | The icon on that tile |
+| `side-chat-width` | 360px | A workspace's side chat |
+| `session-list` | 256px | The width of the session list, as T3 Code's sidebar |
+| `project-card` | 280px | The width of the project card, as T3 Code's details panel |
 | `card-sheet` | `min(88vw, 448px)` | The width of the project card as a sheet over the page, at 980px or narrower |
 | `list-sheet` | `min(calc(100vw - 12px), 448px)` | The width of the session list as a sheet over the page, at 767px or narrower, as T3 Code's sidebar |
+| `conversation` | 736px | The widest the conversation and the message box are, as T3 Code's |
+| `call-name` | 48px | The room a tool call's name takes in a turn's steps |
 | `palette` | 576px | The widest the command palette is, as T3 Code's |
-| `palette-list` | `min(448px, 60dvh)` | The tallest the palette's rows grow before they scroll |
+| `palette-list` | `min(420px, 60dvh)` | The tallest the palette's rows grow before they scroll, as T3 Code's |
 | `notice` | `min(360px, calc(100vw - 32px))` | The width of a notice at the top of the page |
-| `workspace-name` | 96px | The least a workspace's name keeps in its header before its tabs scroll sideways |
-| `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle |
-| `conversation` | 740px | The widest the conversation is, which the board's Message gives in words |
-| `call-name` | 48px | The room a tool call's name takes in a turn's steps, as the board's Message draws them |
-| `control` | 40px | The height of buttons and menu items, which the board's Button and Menu give in words; below 768px, the board's `touch-min`, 44px |
 | `menu` | 176px | The narrowest a menu is |
-| `dialog` | 400px | The widest a dialog is, such as the settings window |
-| `tile-row` | 18px | A project's icon tile in a session row, which the board's WorkspaceIcon gives in words |
-| `tile-row-icon` | 12px | The icon on that tile, as the board's SessionRow draws it |
+| `menu-wide` | `min(400px, calc(100vw - 32px))` | The widest a menu of sentences grows, such as the context meter's |
+| `dialog` | 512px | The widest a dialog is, as T3 Code's |
+| `settings` | 720px | The widest the settings window is |
+| `settings-height` | `min(600px, calc(100dvh - 56px))` | The settings window's height |
+| `settings-pages` | 176px | The settings window's column of pages |
+| `settings-field` | 200px | A text box beside a setting |
+| `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle of an empty page |
+| `workspace-name` | 96px | The least a workspace's name keeps in its header before its tabs scroll sideways |
 | `project-filter` | 128px | The widest the session list's project filter grows |
-| `composer-text` | 240px | The tallest the message box's text grows before it scrolls |
-| `composer-menu` | 320px | The tallest the `/` menu and the model picker above the message box are, as T3 Code's |
+| `icon-picker` | 230px | The project icon picker: six 32px columns, their gaps, its padding and its line |
+| `icon-grid` | 220px | The tallest the picker's icons grow before they scroll |
+| `composer-text` | 208px | The tallest the message box's text grows before it scrolls, as T3 Code's |
+| `composer-menu` | 288px | The tallest the `/` and `@` menus and the model picker above the message box are, as T3 Code's |
 | `picker-makers` | 144px | The model picker's column of makers |
+| `attachment-chip` | 24px | An image's thumbnail in a chip above the message box's text |
+| `attachment-shown` | 160px | The largest an image attached shows in the conversation |
+| `image-open` | `min(90vw, 1200px)` | The widest an image attached shows opened |
+| `image-open-height` | 80dvh | The tallest it shows opened |
 | `job-output` | 240px | The tallest a background job's output grows in the project card before it scrolls |
 | `diff-tree` | 240px | The file tree beside a diff |
-| `radius-tile` | 25% | A project's icon tile's corners, a quarter of its size at any size |
-| `default-transition-duration` | 150ms | How long a change takes, such as a group's caret turning |
-| `default-transition-timing-function` | `cubic-bezier(0.4, 0, 0.2, 1)` | How it eases |
+| `wide` | 768px | Phone width is below it: the list is a sheet, the message box is one row until tapped, the settings and the diff fill the screen, a workspace's columns stack |
 
-The strokes, `line-width` (1px) and `indicator-width` (2px, for the focus
-ring), are the board's, kept beside the colours in `tokens.css`.
+The strokes, `line-width` (1px, every divider) and `indicator-width` (2px,
+the focus ring and the line under the selected tab), and the one shadow,
+`shadow-float` (`0 12px 32px rgba(0, 0, 0, 0.5)`, only on what floats), are
+the board's, as are the colours. A change, such as a caret turning, takes
+150ms (`default-transition-duration`) and eases on `cubic-bezier(0.4, 0,
+0.2, 1)` (`default-transition-timing-function`), Tailwind's own values.
 
 The board names no colours for a diff's lines. `diff-added` and
 `diff-removed`, in `tokens.css`, are its own muted green and red, the values
