@@ -61,7 +61,9 @@ test("a file in a project's Storage is given to a signed-in client, as its kind,
   expect(await (await fetchFile(served, { project, path: "files/guide.md" })).text()).toBe("# Guide\n")
   const logo = await fetchFile(served, { project, path: "files/logo.svg" })
   expect([logo.headers.get("content-type"), logo.headers.get("content-security-policy")]).toEqual(["image/svg+xml", SEALED])
-  expect((await fetchFile(served, { project, path: "files/card.pdf" })).headers.get("content-type")).toBe("application/pdf")
+  // A PDF is sealed but for the sandbox, which can keep a browser's own PDF view from drawing it.
+  const card = await fetchFile(served, { project, path: "files/card.pdf" })
+  expect([card.headers.get("content-type"), card.headers.get("x-content-type-options"), card.headers.get("content-security-policy")]).toEqual(["application/pdf", "nosniff", "default-src 'none'; frame-ancestors 'self'"])
 
   expect((await fetchFile(served, { project, path: "files/guide.md" }, { token: null })).status).toBe(401)
   expect((await fetchFile(served, { project, path: "files/guide.md" }, { token: "not-a-token" })).status).toBe(401)

@@ -386,10 +386,14 @@ export function startServer(options: ServerOptions): EvieServer {
   // with no project, by its full path. Only a file of a kind evie shows
   // (the show plugin's list, which is the route's too) is given, as that
   // kind, and the browser is told not to take it for anything else, nor to
-  // run anything in it, nor to let a page of another site frame it. Chrome's
-  // own PDF view still draws a PDF sent so, framed or opened by itself, and
-  // an SVG is drawn as an image, which never runs its scripts. A file can
-  // change in Storage, so the browser asks again each time it is drawn anew.
+  // load or run anything in it, nor to let a page of another site frame it.
+  // Every kind but a PDF is also sandboxed, as a page of no site at all.
+  // A PDF is drawn by the browser's own viewer, which a sandbox can keep
+  // from drawing, as WebKit's keeps plugins from running; and with no
+  // script, style or connection let in, and the type held to PDF, its
+  // document has nothing to run as evie's page. An SVG is drawn as an
+  // image, which never runs its scripts. A file can change in Storage, so
+  // the browser asks again each time it is drawn anew.
   async function storageFile(request: Request, port: number): Promise<Response> {
     const admitted = admit(request, port)
     if (admitted instanceof Response) return admitted
@@ -403,7 +407,7 @@ export function startServer(options: ServerOptions): EvieServer {
       headers: {
         "Content-Type": type.startsWith("text/") ? `${type}; charset=utf-8` : type,
         "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "default-src 'none'; frame-ancestors 'self'; sandbox",
+        "Content-Security-Policy": type === "application/pdf" ? "default-src 'none'; frame-ancestors 'self'" : "default-src 'none'; frame-ancestors 'self'; sandbox",
         "Cache-Control": "private, no-cache",
       },
     })
