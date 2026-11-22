@@ -87,11 +87,11 @@ export type Attachments = {
   open(session: string, path: string): Promise<{ file: string; type: string } | undefined>
 }
 
-// How much of the events missed one reply to a catch-up holds: about 1 MB,
-// as JSON. A client on a slow line hears from the server once a reply has
-// arrived whole, so each comes in good time; it asks for the next page from
-// the last event of this one.
-export const CATCH_UP_PAGE = 1024 * 1024
+// How much of a session's events one reply holds, as a catch-up's page or
+// a page of history: about 1 MB, as JSON. A client on a slow line hears from
+// the server once a reply has arrived whole, so each comes in good time; it
+// asks for the next page from the last event of this one.
+export const PAGE_BYTES = 1024 * 1024
 
 // The largest file that can be attached: 10 MB, as T3 Code allows for an
 // image. A client checks it before sending, and the server again.
@@ -813,7 +813,7 @@ export type Commands = {
     // are not stored, so a client that missed some learns here how each stands.
     // With `after`, the number of the last event a client saw, as when it
     // catches up after a drop, `events` are those after it, in order: as
-    // many as fit in `CATCH_UP_PAGE` with everything else the reply carries,
+    // many as fit in `PAGE_BYTES` with everything else the reply carries,
     // or a single event larger than that. `more` says to ask again, from the
     // page's last event, until a page comes without it. A page with `more`
     // leaves out the questions waiting (`openQuestions` is empty) and the
@@ -877,8 +877,9 @@ export type Commands = {
   // numbered below `before`, or its latest of all without it, in order, and
   // whether there are earlier ones, which a page with `before` set to the
   // first one's number reads. A page is 50 events unless `limit` asks for
-  // another number, from 1 to 500. The session need not be open, and
-  // can be a subagent's.
+  // another number, from 1 to 500, and stops sooner at `PAGE_BYTES` of them,
+  // as a catch-up's page does, but holds at least one. The session need not
+  // be open, and can be a subagent's.
   read_history: {
     input: { session: string; before?: number; limit?: number }
     output: { events: StoredEvent[]; earlier: boolean }

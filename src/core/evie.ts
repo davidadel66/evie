@@ -17,7 +17,7 @@ import { listProjectFiles } from "./project-files.ts"
 import { listStorage, readStorage } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
-import { CATCH_UP_PAGE, type Ask, type Children, type Commands, type Core, type EvieEvent, type Host, type JobRecord, type JobWork, type Plugin, type Project, type ProjectSettings, type Provider, type SettingsEditor } from "./types.ts"
+import { PAGE_BYTES, type Ask, type Children, type Commands, type Core, type EvieEvent, type Host, type JobRecord, type JobWork, type Plugin, type Project, type ProjectSettings, type Provider, type SettingsEditor } from "./types.ts"
 
 type Cut = "none" | "asking" | "working"
 type Opened = Commands["open_session"]["output"]
@@ -536,7 +536,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const standing = { session, ...rest, turnRunning: latest.turnRunning, lastSeq: latest.seq, jobs: jobs.list(session) }
     const last = { openQuestions: questions.waiting(session), ...(replySoFar !== "" && { replySoFar }) }
     if (after === undefined) return { ...standing, ...last }
-    const room = CATCH_UP_PAGE - Buffer.byteLength(JSON.stringify({ ...standing, ...last, events: [], more: true }))
+    const room = PAGE_BYTES - Buffer.byteLength(JSON.stringify({ ...standing, ...last, events: [], more: true }))
     const page = log.after(session, after, room)
     if (!page.more && (page.bytes <= room || page.events.length === 0)) return { ...standing, ...last, events: page.events }
     return { ...standing, openQuestions: [], events: page.events, more: true }
@@ -864,7 +864,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const limit = input.limit ?? PAGE
     if (!Number.isInteger(limit) || limit < 1 || limit > LONGEST_PAGE) throw new Error(`\`limit\` is how many events to read, a whole number from 1 to ${LONGEST_PAGE}.`)
     if (input.before !== undefined && !Number.isInteger(input.before)) throw new Error("`before` is the number of an event, and the page holds the events before it.")
-    return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, limit)
+    return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, limit, PAGE_BYTES)
   }
 
   // A job's output is read from its file, for the jobs this run of Evie knows.

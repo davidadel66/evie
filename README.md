@@ -97,8 +97,8 @@ Type a message and press Enter.
   in, with its conversation. It first shows the end of the earlier
   conversation, as it looked when it happened: your messages, Evie's
   replies, and a line for each tool Evie used and what came back. A long
-  session shows its last 50 events, with a line saying how many earlier
-  ones are left out.
+  session shows its last 50 events, or fewer when they come to more than
+  about 1 MB, with a line saying how many earlier ones are left out.
 - **`/model`** shows which model is in use. `/model` and a name switches to
   another in the middle of a session.
 - **`/mode`** shows how freely Evie may act, and `/mode auto`, `/mode manual`

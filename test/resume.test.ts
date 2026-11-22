@@ -4,7 +4,7 @@ import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { runTerminal, type Commands, type Plugin } from "../src/index.ts"
-import { CATCH_UP_PAGE } from "../src/core/types.ts"
+import { PAGE_BYTES } from "../src/core/types.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -357,12 +357,25 @@ test("everything a page carries counts in its size, and the reply being written 
 
   const pages = await catchUpInPages(run, 0)
 
-  for (const page of pages) expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(CATCH_UP_PAGE)
+  for (const page of pages) expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(PAGE_BYTES)
   expect(pages.flatMap((page) => page.events!.map((event) => event.seq))).toEqual(Array.from({ length: 50 }, (_, at) => at + 1))
   for (const page of pages.slice(0, -1)) expect([page.replySoFar, page.openQuestions]).toEqual([undefined, []])
   expect(pages.at(-1)).toMatchObject({ replySoFar, turnRunning: true, lastSeq: 50 })
   expect(pages.at(-1)!.more).toBeUndefined()
   await run.evie.send({ type: "cancel", session: run.session })
+})
+
+test("a page of history stops at about 1 MB as well as at its count, and reading earlier pages reaches every event", async () => {
+  const run = await largeSession(Array.from({ length: 12 }, (_, at) => String(at % 10).repeat(400 * KiB)))
+
+  const latest = await run.evie.send({ type: "read_history", session: run.session })
+  const pages = [latest]
+  while (pages[0]!.earlier) pages.unshift(await run.evie.send({ type: "read_history", session: run.session, before: pages[0]!.events[0]!.seq }))
+
+  // Two replies of 400 KiB fit in a page, a third does not: from 48 back to the end of the turn before the third.
+  expect(latest.events.map((event) => event.seq)).toEqual([40, 41, 42, 43, 44, 45, 46, 47, 48])
+  for (const page of pages) expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(PAGE_BYTES)
+  expect(pages.flatMap((page) => page.events.map((event) => event.seq))).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
 })
 
 test("an event larger than a page goes in a page of its own", async () => {
