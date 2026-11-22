@@ -44,13 +44,16 @@ const shorten = (text: string, length: number) => (text.length > length ? `${tex
 // What waiting for a command gives in place of its result when the input
 // ends while the command's question is waiting: the terminal is leaving.
 const LEFT = Symbol("left")
+// What waiting for the next line gives when the session has been deleted.
+const GONE = Symbol("gone")
 
 // The terminal client. It opens a session in the project of the folder it was
 // started in, sends each line typed as a message, and prints the model's reply
 // as it streams. When Evie asks a question, the next line typed is the
 // answer. It ends when the input ends, after any turn in progress, unless
 // that turn is waiting on a question: then it leaves the question for another
-// terminal, or for this one started again, to answer.
+// terminal, or for this one started again, to answer. It also ends, saying
+// so, when its session is deleted from another client.
 export async function runTerminal(options: TerminalOptions): Promise<void> {
   const { evie } = options
 
@@ -198,6 +201,10 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   let gaveUpWaiting = false
   // True while a command such as /compact is running.
   let commanding = false
+  // Settles when the session is deleted, as from another client: the
+  // terminal is then done with it.
+  let whenDeleted = () => {}
+  const deleted = new Promise<typeof GONE>((resolve) => (whenDeleted = () => resolve(GONE)))
 
   // Waits for work that can stop to ask a question: opening the session, or
   // running a command. Lines are read during it only while a question is
@@ -286,6 +293,11 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
         showNextQuestion()
       }
     }
+    if (event.type === "deleted") {
+      line("[note] This session was deleted from another client, so this terminal is done with it.")
+      whenDeleted()
+      return
+    }
     // A turn can start without a message from the owner, when a background job ends.
     if (event.type === "turn_start") idle = false
     if (event.type === "job") {
@@ -365,7 +377,8 @@ export async function runTerminal(options: TerminalOptions): Promise<void> {
   for (const event of arrived) handle(event)
   try {
     while (!ended) {
-      const read = await nextLine()
+      const read = await Promise.race([nextLine(), deleted])
+      if (read === GONE) return
       reading = undefined
       if (read.done) break
       // The Enter that ended the typed line moved the cursor to a new one.

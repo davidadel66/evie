@@ -24,6 +24,10 @@ export type HookRunner = {
   beforeTool(call: CheckedToolCall, context: HookContext): Promise<string | undefined>
   // The result text as the hooks left it.
   afterTool(call: CheckedToolCall, text: string, context: HookContext): Promise<string>
+  // Tells every plugin that keeps files for sessions that one was deleted,
+  // and gives back what went wrong, a sentence naming the plugin for each
+  // that broke. One that breaks does not keep the others from being told.
+  sessionDeleted(session: string): Promise<string[]>
 }
 
 type Attached = { [Name in keyof Hooks]: { plugin: string; handler: Hooks[Name] }[] }
@@ -35,7 +39,7 @@ export async function createHost(
   plugins: readonly Plugin[],
   project: Project | null,
 ): Promise<{ host: Host; hooks: HookRunner }> {
-  const attached: Attached = { before_request: [], before_tool: [], after_tool: [] }
+  const attached: Attached = { before_request: [], before_tool: [], after_tool: [], session_deleted: [] }
   const shared = {
     project,
     tools: createRegistry("tool"),
@@ -92,6 +96,13 @@ export async function createHost(
         text = (await call("after_tool", plugin, () => handler(toolCall, text, context))) ?? text
       }
       return text
+    },
+    async sessionDeleted(session) {
+      const failures: string[] = []
+      for (const { plugin, handler } of attached.session_deleted) {
+        await call("session_deleted", plugin, () => handler(session)).catch((cause: unknown) => failures.push(reason(cause)))
+      }
+      return failures
     },
   }
 

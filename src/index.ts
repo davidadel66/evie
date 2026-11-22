@@ -9,6 +9,7 @@ export { instructions, type InstructionsOptions } from "./plugins/instructions.t
 export { permissions, type Mode, type PermissionsOptions, type Rule } from "./plugins/permissions/index.ts"
 export { jobs } from "./plugins/jobs.ts"
 export { models } from "./plugins/models/index.ts"
+export { naming, type NamingOptions } from "./plugins/naming.ts"
 export { subagents, type SubagentsOptions } from "./plugins/subagents.ts"
 export { skills, type SkillsOptions } from "./plugins/skills.ts"
 export { sync, type SyncOptions } from "./plugins/sync.ts"

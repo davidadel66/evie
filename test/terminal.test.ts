@@ -239,3 +239,27 @@ test("--continue does not draw again a question asked while the session was open
   expect(printed.split("Trust this project?")).toHaveLength(2)
   expect(printed.split("[answered] Yes")).toHaveLength(2)
 })
+
+test("a session deleted from another client while the terminal has it open is said so, and the terminal ends", async () => {
+  const model = scriptedProvider([{ text: ["Noted."] }])
+  const run = await startEvie([model.plugin])
+  stop = run.stop
+  // Once the reply is in, another client deletes the session.
+  run.evie.subscribe((event) => {
+    if (event.type === "turn_end") setTimeout(() => void run.evie.send({ type: "delete_session", session: event.session }), 20)
+  })
+  let printed = ""
+  await runTerminal({
+    evie: run.evie,
+    folder: run.projectFolder,
+    // The owner types one line and then nothing more, so only the delete can end the terminal.
+    lines: (async function* () {
+      yield "hello"
+      await new Promise(() => {})
+    })(),
+    write: (text) => (printed += text),
+  })
+
+  expect(printed).toContain("Noted.")
+  expect(printed).toContain("[note] This session was deleted from another client, so this terminal is done with it.")
+})
