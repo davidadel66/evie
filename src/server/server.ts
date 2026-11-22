@@ -208,8 +208,7 @@ export function startServer(options: ServerOptions): EvieServer {
   // refuses it.
   function admit(request: Request, port: number): Admitted | Response {
     const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]
-    const cookie = new Bun.CookieMap(request.headers.get("cookie") ?? "").get(COOKIE) ?? undefined
-    return refusedPage(request, port) ?? deviceFor(bearer ?? cookie)
+    return refusedPage(request, port) ?? deviceFor(bearer ?? cookieIn(request))
   }
 
   // A device with a token asks for a link that signs a browser in, as
@@ -234,11 +233,18 @@ export function startServer(options: ServerOptions): EvieServer {
   // with `evie token remove`. The token is made only now, so a link never
   // used leaves no token behind. The code is used up only once the token is
   // made: a token that cannot be made just now leaves it to be tried again.
-  function signedInBrowser(code: string): Admitted | Response {
+  // A browser signed in already, as when `evie web` is run again, keeps the
+  // token it has, so that each browser has one.
+  function signedInBrowser(code: string, cookie: string | undefined): Admitted | Response {
     const until = codes.get(code)
     if (until === undefined || until <= Date.now()) {
       codes.delete(code)
       return new Response("This sign-in link has been used already or has expired. Run `evie web` for a new one.", { status: 401 })
+    }
+    const already = cookie === undefined ? undefined : deviceFor(cookie)
+    if (already !== undefined && !(already instanceof Response)) {
+      codes.delete(code)
+      return already
     }
     const day = new Date().toISOString().slice(0, 10)
     try {
@@ -264,7 +270,8 @@ export function startServer(options: ServerOptions): EvieServer {
     const refused = refusedPage(request, port)
     if (refused) return refused
     const body = (await request.json().catch(() => undefined)) as { token?: unknown; code?: unknown } | undefined
-    const admitted = typeof body?.code === "string" ? signedInBrowser(body.code) : deviceFor(typeof body?.token === "string" ? body.token : undefined)
+    const admitted =
+      typeof body?.code === "string" ? signedInBrowser(body.code, cookieIn(request)) : deviceFor(typeof body?.token === "string" ? body.token : undefined)
     if (admitted instanceof Response) return admitted
     const secure = new URL(request.url).protocol === "https:" ? "; Secure" : ""
     return new Response(null, {
@@ -389,6 +396,9 @@ export function startServer(options: ServerOptions): EvieServer {
 }
 
 const send = (socket: ServerWebSocket<Connection>, message: ServerMessage) => socket.send(JSON.stringify(message))
+
+// The token in the browser's cookie, if the request carries one.
+const cookieIn = (request: Request) => new Bun.CookieMap(request.headers.get("cookie") ?? "").get(COOKIE) ?? undefined
 
 // Where the web app is served: its page, at its own address and at the
 // address a sign-in link opens, and each file the page loads. A built

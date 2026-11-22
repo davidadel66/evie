@@ -393,3 +393,21 @@ test("two browsers signed in on the same day each have a token of their own, and
   expect(await opens(server.url, { Origin: page, Cookie: laptop })).toBe(false)
   expect(await opens(server.url, { Origin: page, Cookie: phone })).toBe(true)
 })
+
+test("a browser already signed in that opens a sign-in link keeps the token it has, and the link's code is used up", async () => {
+  const { server, token, tokens } = await start()
+  const page = `http://127.0.0.1:${new URL(server.url).port}`
+  const newLink = async () => codeIn(await signInLink(server.url, { Authorization: `Bearer ${token}` }), server.url)
+  const first = await login(server.url, page, { code: await newLink() })
+  const cookie = first.headers.get("set-cookie")!.split("; ")[0]!
+  const withCookie = (code: string) =>
+    fetch(`${server.url}/login`, { method: "POST", headers: { Origin: page, "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify({ code }) })
+
+  const code = await newLink()
+  const again = await withCookie(code)
+
+  expect(again.status).toBe(204)
+  expect(again.headers.get("set-cookie")!.split("; ")[0]).toBe(cookie)
+  expect(tokens.list().map((made) => made.name)).toEqual(["test device", `browser ${new Date().toISOString().slice(0, 10)}`])
+  expect((await withCookie(code)).status).toBe(401)
+})
