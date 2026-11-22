@@ -6,7 +6,8 @@
 // What each stored event carries. The event log holds these and nothing else.
 export type EventBodies = {
   turn_start: Record<string, never>
-  user_message: { text: string }
+  // A message from the owner, with the files attached to it, when it has any.
+  user_message: { text: string; attachments?: Attachment[] }
   // The model's reply: its text and any tool calls it asked for.
   // `interrupted` marks a reply that was cut short by a cancel. `usage` is
   // the size of the request and the reply, as the provider counted them.
@@ -55,6 +56,36 @@ export type Question = { text: string; choices: string[]; freeText?: true; kind?
 // Asks the owner and waits for the answer. It returns the choice, or null
 // when the question was refused, which is to be treated as a no.
 export type Ask = (question: Question) => Promise<string | null>
+
+// A file the owner attached to a message, as evie keeps it: its full path,
+// in the project's `.evie/attachments/` folder or, for a session with no
+// project, in the data folder's; the name it was attached by; its type,
+// such as "image/png"; and its size, in bytes.
+export type Attachment = { path: string; name: string; type: string; size: number }
+
+// What keeps the files attached to messages, for the server to take them
+// in over HTTP and to show them. `save` keeps a file attached in a session
+// and gives back what a message records of it: in its project's `.evie/`
+// folder, under the day, or with no project in the data folder, under the
+// session. What the file is comes from its bytes. A name taken already
+// gets a number, so no file is replaced. It refuses a name that is not a
+// plain file name, and a file larger than the limit. `refusal` says why a
+// file of that name cannot be attached in the session, before anything is
+// read of it, or nothing. `open` finds a file recorded on one of the
+// session's messages, to show it, or nothing when there is none such.
+export type Attachments = {
+  save(session: string, name: string, bytes: Uint8Array): Promise<Attachment>
+  refusal(session: string, name: string): string | undefined
+  open(session: string, path: string): Promise<{ file: string; type: string } | undefined>
+}
+
+// The largest file that can be attached: 10 MB, as T3 Code allows for an
+// image. A client checks it before sending, and the server again.
+export const ATTACHMENT_LIMIT = 10 * 1024 * 1024
+
+// The most files of a project that are listed for @, so that a folder of a
+// great many is listed quickly.
+export const FILE_LISTING_LIMIT = 10_000
 
 export type StoredEventType = keyof EventBodies
 
@@ -113,10 +144,14 @@ export type DeletedEvent = { type: "deleted"; session: string }
 // model wrote it: JSON text that has not been checked yet.
 export type ToolCall = { id: string; name: string; arguments: string }
 
+// `images` go with an owner's message to a model that takes images, after
+// its text, each as its type, such as "image/png", and its bytes in base64.
 export type Message =
-  | { role: "user"; text: string }
+  | { role: "user"; text: string; images?: Image[] }
   | { role: "assistant"; text: string; toolCalls?: ToolCall[] }
   | { role: "tool"; callId: string; text: string }
+
+export type Image = { type: string; data: string }
 
 export type ToolDefinition = {
   name: string
@@ -155,7 +190,9 @@ export type Chunk =
   | { type: "tool_call"; id: string; name: string; arguments: string }
   | { type: "finish"; reason: "stop" | "tool_calls" | "length"; usage?: Usage }
   // `tooLong` marks a request refused for being more than the model can read.
-  | { type: "finish"; reason: "error"; error: string; usage?: Usage; tooLong?: true }
+  // `refused` marks one refused as bad or too large, as for an image in it
+  // the model cannot take.
+  | { type: "finish"; reason: "error"; error: string; usage?: Usage; tooLong?: true; refused?: true }
 
 // How the core reaches a model: a request and the turn's cancel signal go in,
 // a stream of chunks comes out.
@@ -167,6 +204,11 @@ export type Provider = {
   // The models the provider offers, each by the id a request names it by
   // and the name it is shown by. Fails, saying why, when they cannot be listed.
   models?(): Promise<{ id: string; name: string }[]>
+  // Whether a model can be sent images, or nothing when that cannot be
+  // told now, as when the provider's list of models cannot be read.
+  // Without it, or when it says no or fails, the model is told where each
+  // image is kept instead.
+  takesImages?(model: string): Promise<boolean | undefined>
 }
 
 // ---- Jobs ---------------------------------------------------------------------
@@ -718,8 +760,12 @@ export type Commands = {
       replySoFar?: string
     }
   }
+  // `attachments` are the paths of files kept for the session by
+  // `Attachments.save`, which the message records, each with its name,
+  // what it is and its size, as read from the file; any other path is
+  // refused.
   send_message: {
-    input: { session: string; text: string }
+    input: { session: string; text: string; attachments?: string[] }
     output: void
   }
   // Stops the session's turn in progress. Does nothing when it is idle.
@@ -966,6 +1012,16 @@ export type Commands = {
     input: { project: string; path: string }
     output: StorageFile
   }
+  // The files of a project the owner can mention with @, by their paths
+  // from its folder, with slashes: in a git repository the files git lists,
+  // tracked or not, but not those it ignores, and elsewhere every file, the
+  // nearest first; never git's own folder, node_modules, the .evie folder,
+  // evie's data folder, or a folder of keys such as .ssh. At most 10,000
+  // are walked, and `more` says there were more, as when git took too long.
+  list_files: {
+    input: { project: string }
+    output: { files: string[]; more: boolean }
+  }
 }
 
 export type Command = { [Type in keyof Commands]: { type: Type } & Commands[Type]["input"] }[keyof Commands]
@@ -982,6 +1038,8 @@ export type Evie = {
 // The core itself, as the program that runs it holds it: the client
 // interface, and what only that program does.
 export type Core = Omit<Evie, "close"> & {
+  // The files attached to messages, which the server takes in over HTTP.
+  attachments: Attachments
   // Picks up the work an earlier run of Evie left in the data folder: jobs
   // still running, or that ended with no one there to tell, and turns cut
   // off. Then starts the plugins' own work over time. Called once, by the

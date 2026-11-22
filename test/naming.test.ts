@@ -194,3 +194,17 @@ test("what a small model adds around a name is taken off: marks, a label inside 
     expect((await named).body.name).toBe(name!)
   }
 })
+
+test("a first message of files alone is named from their names: the list shows them until a name comes, and the naming model is given them", async () => {
+  const named = gate()
+  const { run, asked } = await start([{ text: ["Seen."] }], answers("Garden photos", named.opened))
+  const first = await run.evie.attachments.save(run.session, "screenshot.png", new TextEncoder().encode("x"))
+  const second = await run.evie.attachments.save(run.session, "beds.txt", new TextEncoder().encode("x"))
+
+  await say(run, "  ", run.session, [first.path, second.path])
+
+  expect(await nameOf(run)).toBe("screenshot.png, beds.txt")
+  while (asked.length === 0) await Bun.sleep(5)
+  expect(asked[0]?.messages[0]?.text).toBe("screenshot.png, beds.txt")
+  named.open()
+})

@@ -13,18 +13,20 @@ export type ScriptedCall = { name: string; input: Record<string, unknown> | stri
 // with a failure the way a real provider does.
 // `usage` is what the provider reports the request and reply came to.
 // `tooLong` with `error` is a request refused as more than the model can
-// read, and `cutOff` is a reply that hit its length limit.
+// read, `refused` with `error` one refused as bad, as for an image in it,
+// and `cutOff` is a reply that hit its length limit.
 export type ScriptedReply =
-  | { text: string[]; error?: string; tooLong?: true; cutOff?: true; calls?: ScriptedCall[]; usage?: { inputTokens: number; outputTokens: number } }
+  | { text: string[]; error?: string; tooLong?: true; refused?: true; cutOff?: true; calls?: ScriptedCall[]; usage?: { inputTokens: number; outputTokens: number } }
   | { fail: string }
   | { hang: true; text?: string[]; reports?: true }
 
 // `limit` is what the model can read. `lookUpLimit` stands in for the lookup
 // itself, for a test where it fails or never answers. `models` are the
-// models it offers, when it is to list some.
+// models it offers, when it is to list some. `images` says which models
+// take images, when some are to, or undefined when it cannot be told.
 export function scriptedProvider(
   script: ScriptedReply[],
-  options: { limit?: number; lookUpLimit?: () => Promise<number | undefined>; models?: { id: string; name: string }[] } = {},
+  options: { limit?: number; lookUpLimit?: () => Promise<number | undefined>; models?: { id: string; name: string }[]; images?: (model: string) => boolean | undefined } = {},
 ) {
   const requests: Request[] = []
   const provider: Provider = {
@@ -33,6 +35,7 @@ export function scriptedProvider(
     ...(options.limit !== undefined && { contextLimit: async () => options.limit }),
     ...(options.lookUpLimit && { contextLimit: options.lookUpLimit }),
     ...(options.models && { models: async () => structuredClone(options.models!) }),
+    ...(options.images && { takesImages: async (model: string) => options.images!(model) }),
     async *stream(request, signal) {
       requests.push(structuredClone(request))
       const reply = script[requests.length - 1]
@@ -61,7 +64,7 @@ export function scriptedProvider(
         }
       }
       if (reply.error !== undefined) {
-        yield { type: "finish", reason: "error", error: reply.error, ...usage, ...(reply.tooLong && { tooLong: true as const }) }
+        yield { type: "finish", reason: "error", error: reply.error, ...usage, ...(reply.tooLong && { tooLong: true as const }), ...(reply.refused && { refused: true as const }) }
       } else if (reply.cutOff) yield { type: "finish", reason: "length", ...usage }
       else yield { type: "finish", reason: calls.length > 0 ? "tool_calls" : "stop", ...usage }
     },

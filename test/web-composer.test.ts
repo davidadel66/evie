@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
-import { commandIn, contextMeter, earlierMessages, menuKey, rankCommands, recallStep, slashAt } from "../web/src/composer.ts"
+import { ATTACHMENT_LIMIT } from "../src/core/types.ts"
+import { attachable, commandIn, contextMeter, earlierMessages, mentionAt, menuKey, putMention, rankCommands, rankFiles, recallStep, slashAt } from "../web/src/composer.ts"
 
 // The message box's rules, apart from its screen: the menu a slash opens,
 // and how it is filtered and ranked as the owner types.
@@ -104,4 +105,43 @@ test("the context meter says how full the conversation is as a share of the size
   // A conversation can be past it until its next request compacts it.
   expect(contextMeter({ size: 170_000, compactsAt: 160_000 })).toEqual({ percent: "106%", size: "170k", compactsAt: "160k" })
   expect(contextMeter({ size: 2_400_000, compactsAt: 0 })).toEqual({ percent: "0%", size: "2.4M", compactsAt: "0" })
+})
+
+// ---- @ mentions and attachments --------------------------------------------------------
+
+test("an @ at the start of a word, up to the caret, opens the menu of the project's files with what follows it; one inside a word does not", () => {
+  expect(mentionAt("@", 1)).toEqual({ from: 0, query: "" })
+  expect(mentionAt("Look at @src/ap", 15)).toEqual({ from: 8, query: "src/ap" })
+  expect(mentionAt("one\n@pl", 7)).toEqual({ from: 4, query: "pl" })
+  expect(mentionAt("@plan.md ", 9)).toBeUndefined()
+  expect(mentionAt("write to me@example.com", 23)).toBeUndefined()
+  expect(mentionAt("@plan.md", 0)).toBeUndefined()
+  expect(mentionAt("", 0)).toBeUndefined()
+})
+
+test("the files are ranked as the commands are: an exact name, then a name or a path that starts with what was typed, a word in the path that does, then anywhere in it", () => {
+  const paths = ["README.md", "src/app.test.ts", "web/src/App.tsx", "docs/mapping.md", "test/apple.test.ts", "src/app.ts", "app"]
+  expect(rankFiles(paths, "")).toEqual(paths)
+  expect(rankFiles(paths, "app")).toEqual(["app", "src/app.ts", "src/app.test.ts", "web/src/App.tsx", "test/apple.test.ts", "docs/mapping.md"])
+  expect(rankFiles(paths, "src/app")).toEqual(["src/app.ts", "src/app.test.ts", "web/src/App.tsx"])
+  expect(rankFiles(paths, "test")).toEqual(["test/apple.test.ts", "src/app.test.ts"])
+  expect(rankFiles(paths, "zzz")).toEqual([])
+  // Only so many are shown.
+  expect(rankFiles(Array.from({ length: 80 }, (_, at) => `file-${at}.md`), "file")).toHaveLength(50)
+})
+
+test("picking a file puts an @ and its path in place of what was typed, with a space after it, and the caret after that", () => {
+  expect(putMention("Look at @ap now", { from: 8, query: "ap" }, 11, "src/app.ts")).toEqual({ text: "Look at @src/app.ts now", caret: 20 })
+  expect(putMention("@", { from: 0, query: "" }, 1, "plan.md")).toEqual({ text: "@plan.md ", caret: 9 })
+})
+
+test("a file larger than the limit is not attached, and the box says which and why", () => {
+  const small = { name: "photo.png", size: 1200 }
+  const large = { name: "video.mov", size: ATTACHMENT_LIMIT + 1 }
+  const huge = { name: "disk.img", size: ATTACHMENT_LIMIT * 3 }
+
+  expect(attachable([small])).toEqual({ taken: [small], problem: undefined })
+  expect(attachable([small, large])).toEqual({ taken: [small], problem: "video.mov is larger than the 10 MB a file attached can be." })
+  expect(attachable([large, huge]).problem).toBe("video.mov and disk.img are larger than the 10 MB a file attached can be.")
+  expect(attachable([{ name: "exact.bin", size: ATTACHMENT_LIMIT }]).taken).toHaveLength(1)
 })

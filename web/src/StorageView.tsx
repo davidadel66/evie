@@ -9,7 +9,8 @@ import { addressOfWorkspace, sizeWords, type WorkspacePlace } from "./workspace.
 // The workspace's Storage tab: the files in its project's .evie folder, as
 // a list of rows, a folder opening in place under its own row, and whether
 // the folder is backed up. A file opens in the workspace, read only, in
-// place of the list. Attachments are to be kept here too, below the files.
+// place of the list. The files attached to messages are here, in the
+// folder's attachments folder.
 export function StorageView({ connection, project, place, now }: { connection: Connection; project: ListedProject; place: WorkspacePlace; now: number }) {
   const [storage, setStorage] = useState<{ project: string; storage: Storage }>()
   useEffect(() => {
@@ -47,10 +48,6 @@ function Shown({ storage, project, place, now }: { storage: Storage; project: Li
             <More count={top.more ?? 0} indent={0} />
           </ul>
         )}
-      </section>
-      <section aria-label="Attachments" className="flex items-center gap-2 px-3 text-caption text-text-muted">
-        <h2>Attachments</h2>
-        <Later />
       </section>
     </div>
   )

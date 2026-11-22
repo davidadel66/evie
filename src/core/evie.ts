@@ -10,6 +10,8 @@ import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
+import { createAttachments } from "./attachments.ts"
+import { listProjectFiles } from "./project-files.ts"
 import { listStorage, readStorage } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
@@ -227,6 +229,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   }
 
   const questions = createQuestions({ log, emit })
+  const attachments = createAttachments({ home, projectOf: (session) => projects.projectOf(session), attached: (session) => log.attached(session) })
   let closed = false
   // Fires when Evie stops, for the work plugins started.
   const stopping = new AbortController()
@@ -298,6 +301,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       },
       children,
       name: (text) => nameByEvie(session, text),
+      image: (attachment) => attachments.image(attachment),
       ...(parent !== undefined && { parent }),
       ...(as.agent !== undefined && { agent: as.agent }),
       ...(as.readOnly && { readOnly: true }),
@@ -649,7 +653,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   function sendMessage(input: Commands["send_message"]["input"]): void {
     if (typeof input.text !== "string") throw new Error("`text` is the message, and must be text.")
     const { loop } = open(input.session)
-    inbox.add(input.session, { text: input.text })
+    const attached = attachments.check(input.session, input.attachments)
+    inbox.add(input.session, { text: input.text, ...(attached !== undefined && { attachments: attached }) })
     loop.wake()
   }
 
@@ -770,12 +775,15 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     await Promise.all(stopped)
     // Then the files kept for them, once they are gone from the database, so
     // that a session is never left without them: the core's own, the saved
-    // tool output and the jobs' records, and the plugins' own, such as
-    // undo's copies. What cannot be removed is said, and the delete stands.
+    // tool output and the jobs' records and the files attached with no
+    // project, and the plugins' own, such as undo's copies. What cannot be
+    // removed is said, and the delete stands.
     const leftOver: string[] = []
     for (const id of family) {
       const folder = join(home, "tool-output", id)
       await rm(folder, { recursive: true, force: true }).catch((cause) => leftOver.push(`The saved output and job records in ${folder} could not be removed: ${reasonOf(cause)}`))
+      const attached = join(home, "attachments", id)
+      await rm(attached, { recursive: true, force: true }).catch((cause) => leftOver.push(`The files attached in ${attached} could not be removed: ${reasonOf(cause)}`))
       for (const scope of scopes) leftOver.push(...(await scope.hooks.sessionDeleted(id)))
     }
     return { leftOver: [...new Set(leftOver)] }
@@ -1020,6 +1028,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   }
 
   return {
+    attachments,
     async send(command) {
       // Each branch returns what its command promises; the cast tells the
       // compiler so, since it cannot follow the command's type through.
@@ -1090,6 +1099,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await listStorage(projectFor(command.project).folder, command.folder, home)) as Output
         case "read_storage":
           return (await readStorage(projectFor(command.project).folder, command.path, home)) as Output
+        case "list_files":
+          return (await listProjectFiles(projectFor(command.project).folder, { dataFolder: home })) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

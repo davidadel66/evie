@@ -101,7 +101,7 @@ export function createSummaries(options: {
   const summaryOf = (row: Row): SessionSummary => ({
     session: row.id,
     project: row.project,
-    name: givenName(bodyOf(row.named)?.name) ?? nameOf(bodyOf(row.first)?.text),
+    name: givenName(bodyOf(row.named)?.name) ?? nameOf(wordsOf(bodyOf(row.first) ?? {})),
     state: stateOf(row),
     lastActive: lastActive(row),
   })
@@ -153,6 +153,14 @@ function bodyOf(body: string | null): Record<string, unknown> | undefined {
 
 // The name a session was given, or null when the body holds none.
 const givenName = (name: unknown) => (typeof name === "string" && name !== "" ? name : null)
+
+// What a message from the owner says, to name a session by: its text, or
+// when it has none, the names of the files attached to it.
+export function wordsOf(body: { text?: unknown; attachments?: unknown }): unknown {
+  if (typeof body.text === "string" && body.text.trim() !== "") return body.text
+  const names = Array.isArray(body.attachments) ? body.attachments.flatMap((each: { name?: unknown }) => (typeof each?.name === "string" ? [each.name] : [])) : []
+  return names.length > 0 ? names.join(", ") : body.text
+}
 
 // How long a session's name may be, in characters, before it is cut short.
 const NAME_LENGTH = 60

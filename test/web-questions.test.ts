@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import type { EventBodies } from "../src/core/types.ts"
 import type { Item } from "../web/src/transcript.ts"
-import { answerTyped, asAsked, choiceForKey, sendDoes, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, permissionChoices, releaseAt, shownQuestion } from "../web/src/questions.ts"
+import { answerTyped, asAsked, choiceForKey, sendDoes, sendWithFiles, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, permissionChoices, releaseAt, shownQuestion } from "../web/src/questions.ts"
 
 // The questions evie asks, as the message box shows them, apart from its
 // screen: when one shows, and where.
@@ -101,6 +101,21 @@ test("while a permission prompt waits, words sent decline it with its refusing c
   // A number is a message here too: the prompt's choices are not numbered.
   expect(sendDoes("1", permission("p1"))).toEqual({ decline: "No", message: "1" })
   expect(sendDoes("/mode auto", permission("p1"))).toEqual({ run: { name: "mode", args: "auto" } })
+})
+
+test("files attached go with a message, which then needs no words; a command or an answer does not take them, and the box says so", () => {
+  expect(sendWithFiles("What is this?", undefined, 1)).toEqual({ message: "What is this?" })
+  expect(sendWithFiles("  ", undefined, 2)).toEqual({ message: "" })
+  expect(sendWithFiles("", permission("p1"), 1)).toEqual({ decline: "No", message: "" })
+  expect(sendWithFiles("Use this one", permission("p1"), 1)).toEqual({ decline: "No", message: "Use this one" })
+  const notTaken = { refuse: "Files attached go with a message, not with a command or an answer. Remove them to send this." }
+  expect(sendWithFiles("/compact", undefined, 1)).toEqual(notTaken)
+  expect(sendWithFiles("2", asked("q1"), 1)).toEqual(notTaken)
+  expect(sendWithFiles("", asked("q1"), 1)).toEqual({ refuse: "Answer the question first. Files attached go with a message." })
+  expect(sendWithFiles("Hold on", asked("q1"), 1)).toEqual({ refuse: "Pick one of the choices, 1 to 2." })
+  // With none attached, sending does what it always does.
+  expect(sendWithFiles("   ", undefined, 0)).toBeUndefined()
+  expect(sendWithFiles("/compact", undefined, 0)).toEqual({ run: { name: "compact", args: "" } })
 })
 
 test("a question waiting is left out where it was asked, since it shows where it is answered; one with no answer that no longer waits, as after a restart, is drawn as asked", () => {

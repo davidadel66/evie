@@ -350,7 +350,9 @@ it stands, even while a reply is being written:
 - **Your messages** are on the right; **evie's replies** are on the page,
   drawn from Markdown (headings, lists, code, links and tables). HTML in a
   reply is shown as the text it is, an image is linked to rather than
-  loaded, and only a web or mail address is a link.
+  loaded, and only a web or mail address is a link. What you attached to a
+  message is under it: an image as a thumbnail, which opens full size, and
+  any other file as its name and size.
 - **A reply streams in** as it is written.
 - **While a turn runs**, it shows in the order things happen: evie's
   words where it wrote them, and each run of tools it used between them as
@@ -407,6 +409,24 @@ The message box at the bottom of the conversation works as T3 Code's does:
 - **At phone width**, 767px wide or narrower as throughout the page, the
   box is one row until you tap it, and the model picker's makers are a row
   above its models that scrolls sideways.
+- **An @** at the start of a word, in a session in a project, opens a menu
+  of the project's files, narrowed and ranked as you type, as the slash
+  menu is, with the same keys. Picking one puts `@` and its path in the
+  message, such as `@src/app.ts`, and evie reads it with its tools. The
+  files are those git lists, tracked or not, but not those it ignores, or
+  outside git every file; never `.git`, `node_modules`, the `.evie`
+  folder, evie's data folder or a folder of keys such as `.ssh`, and at
+  most 10,000 of them; the menu says when there are more.
+- **Files are attached** with the paperclip, by pasting them, or by dropping
+  them on the box. Each shows as a chip above the text, an image with a
+  small thumbnail, until it is sent or taken off. A file can be at most
+  10 MB. A message with files needs no words, but a command or an answer
+  to a question takes no files. When the message is sent, it shows at
+  once with its files, as Sending, while each file goes to the server,
+  signed in as the page is, and is kept (see "Attachments"). A message
+  that cannot be sent comes back to the box with its files, and those the
+  server already has are not sent again. A first message of files alone
+  names the session after them.
 
 The project card, on the right, is the selected session's:
 
@@ -638,7 +658,7 @@ session list or the project card. The page then has three other columns:
   and a file over 1 MB. So is the whole of a `.evie` that is itself a link
   to another folder, or that is, holds, or is inside evie's data folder,
   which holds your keys, as for a project at your home folder.
-  Attachments will be kept here too.
+  The files attached to messages are here, under `attachments/`.
 - **The side chat,** on the right, shows the session picked, or until one
   is, the workspace's latest, or a new session in its project when it has
   none, with the message box. Its header starts a new session there, and
@@ -657,6 +677,55 @@ the top, the header stays one row, with the workspace's name cut down to
 96px at the least, and its tabs scrolling sideways after it, and the side
 chat stacks below the workspace. The side chat's session is renamed in its
 header, by a double-click, F2 or the command palette.
+
+### Attachments
+
+A file attached to a message is kept where its session works:
+
+- **In a project**, in its `.evie` folder, under the day it came, such as
+  `.evie/attachments/2026-11-22/plan.pdf`, so that it shows in the
+  workspace's Storage, and is backed up with the folder when the project
+  syncs. It stays when the session is deleted, as the project's other
+  files do.
+- **With no project**, in the data folder, under the session, such as
+  `attachments/<session id>/2026-11-22/plan.pdf`, where evie's tools may
+  read it, as they may read the session's saved output. Deleting the
+  session deletes them. So does a session whose project's `.evie` folder
+  Storage would not show (see above).
+
+No file is ever replaced: a name taken already that day gets a number,
+such as `plan-2.pdf`. A name with a folder in it, a file over 10 MB, and a
+folder that leads through a link elsewhere are refused.
+
+A message keeps each file by its full path, so a session moved to another
+project still finds the files attached before the move. Moving a
+project's folder, though, leaves its earlier messages pointing where the
+files were: their thumbnails no longer show, and evie is told paths that
+are no longer there.
+
+The message records each file's path, name, type and size. When the
+session's model takes images, as OpenRouter's list of models says, an
+image attached (PNG, JPEG, WebP or GIF, whose base64 is at most 5 MB, and
+no more than 8,000 pixels on a side) goes to it as an image in that
+message: the newest four in the conversation, at most 16 MB of base64
+together. Any other file, older or larger images, and every image for a
+model that takes none, are named to the model by their paths, for it to
+read with its tools; a session switched to such a model is given the
+paths of its earlier images too, and a summary of the conversation is
+written from the paths alone. When the list of models cannot be read, the
+last answer for the model holds. A request the provider refuses while it
+carries images is sent again with each image by its path, and those
+images are not sent again while the server runs, so that a session is
+never stuck on an image.
+
+The server takes a file at `POST /attachments?session=<id>&name=<file
+name>`, with the file as the body, from a client signed in as for the
+WebSocket, and answers with the attachment as JSON. What a file is comes
+from its bytes, not from what the browser says: a PNG, JPEG, GIF or WebP
+picture by its signature, and anything else is a plain file, never an
+image. A message names its files by the paths the server gave back, and
+the server reads each one's name, kind and size from the file itself. `GET /attachments?session=<id>&path=<its path>` gives back an image
+attached to one of the session's messages, to show it; nothing else.
 
 ### Keeping the server running
 

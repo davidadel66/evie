@@ -2,7 +2,7 @@ import type { Commands, EventBodies, Evie, EvieEvent, StoredEvent } from "../../
 import type { MenuItem } from "./composer.ts"
 import type { Connection } from "./connection.ts"
 import type { Model } from "./models.ts"
-import type { View } from "./transcript.ts"
+import type { Pending, View } from "./transcript.ts"
 
 // The conversation of the session open in the web app's middle column,
 // apart from its screen, which is told it and redrawn as it changes. The
@@ -23,8 +23,8 @@ export type ConversationState = Required<View> & {
   // The commands being run, by name, in the order they were run.
   running: readonly string[]
   // A message sent for the box that could not be sent, given back to it
-  // with why, as a draft's first message is: see `send`.
-  givenBack: { text: string; problem: string } | undefined
+  // with why, and with its files, as a draft's first message is: see `send`.
+  givenBack: GivenBack | undefined
   // The model the session uses, and how full its conversation is, once
   // they have been read; read again as the conversation changes.
   model: string | undefined
@@ -34,7 +34,18 @@ export type ConversationState = Required<View> & {
   // comes back after a drop, or when the owner asks: nothing else tries it
   // again, so that a failure cannot repeat itself without end.
   problem: string | undefined
+  // The session's project, by its id, or null for none, once opened; kept
+  // current as the session is moved.
+  project: string | null | undefined
 }
+
+export type GivenBack = { text: string; problem: string; files?: readonly Outgoing[] }
+
+// A file attached to a message on its way: the file, and once the server
+// has it, where it is kept. A send that fails part way leaves `path` set on
+// the files the server took, so that sending them again does not send them
+// twice.
+export type Outgoing = { file: File; path?: string }
 
 export type Conversation = {
   // The conversation now. It is the same object until it changes.
@@ -52,10 +63,12 @@ export type Conversation = {
   // has it. Gives back why it could not be sent, in words for the owner, or
   // nothing. Sent while the line is down, it is sent once the line is back.
   // With `giveBack`, for a message sent on the box's behalf, one that cannot
-  // be sent is given back for the box to take (`takeGivenBack`).
-  send(text: string, options?: { giveBack: true }): Promise<string | undefined>
+  // be sent is given back for the box to take (`takeGivenBack`). `files`
+  // are attached to it: each is sent to the server first, and a file it
+  // refuses stops the message, saying why.
+  send(text: string, options?: { giveBack?: true; files?: readonly Outgoing[] }): Promise<string | undefined>
   // The message given back, once, with why it could not be sent.
-  takeGivenBack(): { text: string; problem: string } | undefined
+  takeGivenBack(): GivenBack | undefined
   // Stops the turn in progress, as Ctrl-C does in the terminal. The
   // conversation says it is stopping until the turn has ended.
   stop(): void
@@ -77,9 +90,12 @@ export type Conversation = {
   listModels(): Promise<Model[]>
   // Stops following the session. It stays open in evie.
   close(): void
+  // The files of the session's project the owner can mention with @. Fails,
+  // saying why, in a session with no project.
+  listFiles(): Promise<Commands["list_files"]["output"]>
 }
 
-const FRESH: ConversationState = { opened: false, readingEarlier: false, stopping: false, waiting: [], running: [], givenBack: undefined, model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [] }
+const FRESH: ConversationState = { opened: false, readingEarlier: false, stopping: false, waiting: [], running: [], givenBack: undefined, model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [], project: undefined }
 
 export function openConversation(connection: Connection, session: string): Conversation {
   let state = FRESH
@@ -101,6 +117,8 @@ export function openConversation(connection: Connection, session: string): Conve
   }
   // The number of the session's last event as it was opened: its latest
   // page is read up to it, and every event after it comes as it happens.
+  // Settles once the message sent last has been sent, or could not be.
+  let inOrder: Promise<void> = Promise.resolve()
   let lastSeq = 0
 
   async function join(evie: Evie) {
@@ -137,7 +155,7 @@ export function openConversation(connection: Connection, session: string): Conve
     // The questions it is waiting on, and any asked as it opened, which the answer leaves out once answered.
     const asked = [...opened.openQuestions, ...state.waiting.filter((question) => !opened.openQuestions.some((open) => open.id === question.id))]
     const answered = new Set(state.events.flatMap((event) => (event.type === "answer" ? [event.body.id] : [])))
-    set({ replySoFar: opened.replySoFar ?? "", turnRunning: opened.turnRunning, jobs: opened.jobs, waiting: asked.filter((question) => !answered.has(question.id)) })
+    set({ replySoFar: opened.replySoFar ?? "", turnRunning: opened.turnRunning, jobs: opened.jobs, waiting: asked.filter((question) => !answered.has(question.id)), project: opened.project?.id ?? null })
     measure(evie)
     await readLatest(evie)
   }
@@ -215,7 +233,8 @@ export function openConversation(connection: Connection, session: string): Conve
     set({
       events: merged(state.events, [event]),
       ...(event.type === "model_changed" && { model: event.body.model }),
-      ...(event.type === "user_message" && { pending: without(state.pending, event.body.text) }),
+      ...(event.type === "moved" && { project: event.body.to }),
+      ...(event.type === "user_message" && { pending: withoutMessage(state.pending, event.body.text) }),
       ...((event.type === "question" || event.type === "answer") && { waiting: waitingAfter(state.waiting, event) }),
       ...(ends && { replySoFar: "" }),
       ...(event.type === "turn_start" && { turnRunning: true }),
@@ -250,18 +269,44 @@ export function openConversation(connection: Connection, session: string): Conve
     },
     tryAgain,
     async send(text, options) {
+      const files = options?.files ?? []
+      const shown: Pending = { text, ...(files.length > 0 && { files: files.map((each) => each.file) }) }
       const failed = (problem: string) => {
-        set({ pending: without(state.pending, text), ...(options?.giveBack && { givenBack: { text, problem } }) })
+        set({ pending: state.pending.filter((each) => each !== shown), ...(options?.giveBack && { givenBack: { text, problem, ...(files.length > 0 && { files }) } }) })
         return problem
       }
       const evie = on
       if (evie === undefined) return failed(NOT_CONNECTED)
-      set({ pending: [...state.pending, text] })
+      set({ pending: [...state.pending, shown] })
+      // Messages go in the order they were sent, though one waits on its files.
+      const before = inOrder
+      let done = () => {}
+      inOrder = new Promise<void>((resolve) => (done = resolve))
+      const upload = async () => {
+        for (const each of files) if (each.path === undefined) each.path = (await connection.upload(session, each.file)).path
+      }
+      const message = () => evie.send({ type: "send_message", session, text, ...(files.length > 0 && { attachments: files.map((each) => each.path!) }) })
       try {
-        await evie.send({ type: "send_message", session, text })
+        // Files the server took on an earlier try, kept as they were then.
+        const keptBefore = files.filter((each) => each.path !== undefined)
+        await upload()
+        await before
+        try {
+          await message()
+        } catch (cause) {
+          // A file kept on an earlier try but since gone, as when the
+          // session moved, is sent again from the box, once.
+          if (keptBefore.length === 0 || !NO_LONGER_KEPT.test(wordsOf(cause))) throw cause
+          for (const each of keptBefore) delete each.path
+          await upload()
+          await message()
+        }
         return undefined
       } catch (cause) {
         return failed(wordsOf(cause))
+      } finally {
+        await before
+        done()
       }
     },
     takeGivenBack() {
@@ -317,6 +362,12 @@ export function openConversation(connection: Connection, session: string): Conve
       unhear()
       on = undefined
     },
+    async listFiles() {
+      if (on === undefined) throw new Error(NOT_CONNECTED)
+      if (state.project === undefined) throw new Error("The session is still opening. Try again once it has opened.")
+      if (state.project === null) throw new Error("This session is in no project, so it has no files to mention.")
+      return on.send({ type: "list_files", project: state.project })
+    },
   }
 }
 
@@ -336,11 +387,21 @@ function waitingAfter(waiting: readonly EventBodies["question"][], event: Extrac
   return waiting.some((question) => question.id === event.body.id) ? [...waiting] : [...waiting, event.body]
 }
 
-// The owner's messages on their way, less the first that is `text`.
-function without(pending: readonly string[], text: string): string[] {
-  const at = pending.indexOf(text)
+// The owner's messages on their way, less the first that says `text`.
+function withoutMessage(pending: readonly Pending[], text: string): Pending[] {
+  const at = pending.findIndex((each) => each.text === text)
   return at === -1 ? [...pending] : [...pending.slice(0, at), ...pending.slice(at + 1)]
 }
+
+// A list less the first that is `item`.
+function without(list: readonly string[], item: string): string[] {
+  const at = list.indexOf(item)
+  return at === -1 ? [...list] : [...list.slice(0, at), ...list.slice(at + 1)]
+}
+
+// How the server says a file named by a message is no longer one kept for
+// its session.
+const NO_LONGER_KEPT = /is not a file kept for this session/
 
 const NOT_CONNECTED = "Not connected to evie's server yet. Wait until it is connected, and send it again."
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
@@ -365,7 +426,8 @@ export type Draft = {
   // draft closed meanwhile sends the message without moving the page.
   // Gives back the session's id, or why it could not start, when the
   // message is the owner's again.
-  start(text: string, moved: (session: string) => void): Promise<{ session: string } | { problem: string }>
+  // `files` are attached to the message.
+  start(text: string, moved: (session: string) => void, files?: readonly Outgoing[]): Promise<{ session: string } | { problem: string }>
   // Answers a question asked as the session opens, as a conversation does.
   answer(id: string, choice: string | null): Promise<string | undefined>
   // The models a new session's provider offers, and the one picked for the
@@ -373,6 +435,9 @@ export type Draft = {
   listModels(): Promise<Model[]>
   pick(model: string): void
   close(): void
+  // The files of the draft's project the owner can mention with @. Fails,
+  // saying why, for a draft in no project.
+  listFiles(): Promise<Commands["list_files"]["output"]>
 }
 
 // The conversations of sessions this page started from a draft, until the
@@ -435,7 +500,7 @@ export function openDraft(connection: Connection, project: string | null, option
       listeners.add(listener)
       return () => void listeners.delete(listener)
     },
-    async start(text, moved) {
+    async start(text, moved, files = []) {
       const evie = client
       if (evie === undefined) return { problem: NOT_CONNECTED }
       // A question of an earlier try's session, which could not start, is not this one's.
@@ -484,7 +549,7 @@ export function openDraft(connection: Connection, project: string | null, option
       // page stays where the owner went, and the message is sent all the
       // same, so that nothing is lost: the session is in the list once it is.
       if (closed) {
-        void conversation.send(text).finally(() => conversation.close())
+        void conversation.send(text, { files }).finally(() => conversation.close())
         return { session }
       }
       handedOver.set(session, conversation)
@@ -493,7 +558,7 @@ export function openDraft(connection: Connection, project: string | null, option
       // Sent once the page has moved, so that the list, which the message
       // adds the session to, never shows it beside the draft. One that cannot
       // be sent goes back to the session's box, so that nothing is lost.
-      void conversation.send(text, { giveBack: true })
+      void conversation.send(text, { giveBack: true, files })
       return { session }
     },
     async answer(id, choice) {
@@ -512,6 +577,11 @@ export function openDraft(connection: Connection, project: string | null, option
     pick(model) {
       picked = model
       set({ model })
+    },
+    async listFiles() {
+      if (client === undefined) throw new Error(NOT_CONNECTED)
+      if (project === null) throw new Error("This session is in no project, so it has no files to mention.")
+      return client.send({ type: "list_files", project })
     },
     close() {
       closed = true

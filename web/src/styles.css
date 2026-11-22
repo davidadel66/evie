@@ -160,6 +160,13 @@
   --spacing-job-output: 240px;
   /* The file tree beside a diff. */
   --spacing-diff-tree: 240px;
+  /* Files attached: the thumbnail in a chip above the message box's text,
+     the largest an image attached shows in the conversation, and the
+     largest it shows opened, within the page. */
+  --spacing-attachment-chip: 32px;
+  --spacing-attachment-shown: 160px;
+  --spacing-image-open: min(90vw, 1200px);
+  --spacing-image-open-height: 80dvh;
   /* Phone width, as T3 Code's sidebar has it, is below this: the session
      list is a sheet, the message box is one row until tapped, the settings
      window and the diff fill the screen, and a workspace's columns stack.

@@ -91,5 +91,5 @@ function where(project: Project | null): string {
   if (!project) {
     return "This session is not in a project, so there is no project folder. Give full paths to files and folders."
   }
-  return `You are working in the project "${project.name}". Its folder is ${project.folder}. A relative path is taken from there.`
+  return `You are working in the project "${project.name}". Its folder is ${project.folder}. A relative path is taken from there. A word such as @src/app.ts in the owner's message names a file by its path from there.`
 }
