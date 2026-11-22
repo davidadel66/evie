@@ -11,6 +11,7 @@ import { guard } from "./plugins/guard.ts"
 import { instructions } from "./plugins/instructions.ts"
 import { jobs } from "./plugins/jobs.ts"
 import { models } from "./plugins/models/index.ts"
+import { naming } from "./plugins/naming.ts"
 import { openrouter } from "./plugins/openrouter.ts"
 import { MODES, permissions, type Mode, type Rule } from "./plugins/permissions/index.ts"
 import { shell } from "./plugins/shell.ts"
@@ -33,6 +34,10 @@ import type { Settings } from "./settings.ts"
 //   { "model": "some/model", "maxTokens": 16000,
 //     "plugins": ["files", { "use": "shell" }, "/path/to/my-plugin.ts"],
 //     "trust": ["/path/to/a/project"] }
+//
+// A built-in plugin's options are given as `{ "use": ..., "options": ... }`,
+// such as the model that names sessions:
+// `{ "use": "naming", "options": { "model": "anthropic/claude-haiku-5.5" } }`.
 //
 // A project's own file can also say where its `.evie/` folder syncs:
 // `"sync": "private"` backs it up to a private repository, through the sync
@@ -134,10 +139,11 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   instructions: (_options, context) => instructions({ dataFolder: context.home }),
   web: (_options, context) => web({ env: context.env }),
   sync: (_options, context) => sync({ dataFolder: context.home, setting: context.syncSetting }),
+  naming: (options) => naming(typeof options.model === "string" && options.model.trim() !== "" ? { model: options.model.trim() } : {}),
   openrouter: (_options, context) => openrouter({ env: context.env }),
 }
 // `undo` comes after `permissions`, so a call that is refused is not recorded.
-const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "openrouter"]
+const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "naming", "openrouter"]
 
 // The permissions plugin as the settings describe it. A project's own mode
 // wins over the global one, and its rules come after the global ones.

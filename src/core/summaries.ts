@@ -33,23 +33,28 @@ type Row = {
   id: string
   project: string | null
   created: number
-  // When its latest event was stored, settling aside, or null when it has none.
+  // When its latest event was stored, settling and naming aside, which are
+  // not activity, or null when it has none.
   active: number | null
-  // The body of its latest event when that is the owner settling it, or
-  // bringing it back, after anything else happened in it, and when that was.
+  // The body of its latest event, naming aside, when that is the owner
+  // settling it, or bringing it back, after anything else happened in it,
+  // and when that was.
   hand: string | null
   handTime: number | null
   // The body of its first message, or null when it has none.
   first: string | null
+  // The body of the latest name it was given, or null when it has none.
+  named: string | null
   // Which came last of its turns' starts and ends, or null when it has neither.
   turn: "turn_start" | "turn_end" | null
 }
 
 const COLUMNS = `session.id, session.project, session.created,
-  (SELECT time FROM event WHERE event.session = session.id AND type != 'settled' ORDER BY seq DESC LIMIT 1) AS active,
-  (SELECT CASE type WHEN 'settled' THEN body END FROM event WHERE event.session = session.id ORDER BY seq DESC LIMIT 1) AS hand,
-  (SELECT CASE type WHEN 'settled' THEN time END FROM event WHERE event.session = session.id ORDER BY seq DESC LIMIT 1) AS handTime,
+  (SELECT time FROM event WHERE event.session = session.id AND type NOT IN ('settled', 'named') ORDER BY seq DESC LIMIT 1) AS active,
+  (SELECT CASE type WHEN 'settled' THEN body END FROM event WHERE event.session = session.id AND type != 'named' ORDER BY seq DESC LIMIT 1) AS hand,
+  (SELECT CASE type WHEN 'settled' THEN time END FROM event WHERE event.session = session.id AND type != 'named' ORDER BY seq DESC LIMIT 1) AS handTime,
   (SELECT body FROM event WHERE event.session = session.id AND type = 'user_message' ORDER BY seq LIMIT 1) AS first,
+  (SELECT body FROM event WHERE event.session = session.id AND type = 'named' ORDER BY seq DESC LIMIT 1) AS named,
   (SELECT type FROM event WHERE event.session = session.id AND type IN ('turn_start', 'turn_end') ORDER BY seq DESC LIMIT 1) AS turn`
 
 // How long a session goes without activity before it settles by itself.
@@ -93,7 +98,7 @@ export function createSummaries(options: {
   const summaryOf = (row: Row): SessionSummary => ({
     session: row.id,
     project: row.project,
-    name: nameOf(bodyOf(row.first)?.text),
+    name: givenName(bodyOf(row.named)?.name) ?? nameOf(bodyOf(row.first)?.text),
     state: stateOf(row),
     lastActive: lastActive(row),
   })
@@ -139,6 +144,9 @@ function bodyOf(body: string | null): Record<string, unknown> | undefined {
     return undefined
   }
 }
+
+// The name a session was given, or null when the body holds none.
+const givenName = (name: unknown) => (typeof name === "string" && name !== "" ? name : null)
 
 // How long a session's name may be, in characters, before it is cut short.
 const NAME_LENGTH = 60

@@ -33,6 +33,11 @@ export type EventBodies = {
   // The owner set the session aside, or with false brought it back. It is
   // not activity in the session, and the model is not shown it.
   settled: { settled: boolean }
+  // The session was given a name, as a list of sessions shows it: by the
+  // owner, or by evie, through a plugin that names sessions. evie names a
+  // session only while it has no name, so the owner's is never replaced.
+  // It is not activity in the session, and the model is not shown it.
+  named: { name: string; by: "owner" | "evie" }
 }
 
 // Something Evie asks the owner, with the answers to choose from. With
@@ -80,9 +85,10 @@ export type EvieEvent = StoredEvent | DeltaEvent | JobEvent | SummaryEvent
 export type SessionState = "needs_you" | "working" | "active" | "settled"
 
 // One line of a list of sessions. `project` is the id of its project, null
-// for a general session. `name` is the opening words of its first message,
-// null until it has one. `lastActive` is the time of its latest stored
-// event, settling aside, or when it was made if it has none.
+// for a general session. `name` is the latest it was given, or until it is
+// given one, the opening words of its first message, null until it has one.
+// `lastActive` is the time of its latest stored event, settling and naming
+// aside, or when it was made if it has none.
 export type SessionSummary = { session: string; project: string | null; name: string | null; state: SessionState; lastActive: number }
 
 // A session's summary, sent when it is first listed and whenever its
@@ -392,6 +398,11 @@ export type HookContext = {
   // and whether it is held to reading only.
   agent?: string
   readOnly?: true
+  // Names the session, as a list of sessions shows it, for a plugin that
+  // names sessions. It can be called at any time, as when a name written in
+  // the background arrives. It does nothing once the session has a name,
+  // the owner's or one given before, or has been deleted, or Evie has closed.
+  name(text: string): void
 }
 
 // A tool call after its input has been checked and repaired.
@@ -609,6 +620,14 @@ export type Commands = {
   list_models: {
     input: { session?: string }
     output: { id: string; name: string }[]
+  }
+  // Names a session, as the owner calls it, as a `named` event in its log.
+  // It can be renamed at any time, open or not, but not a subagent's, which
+  // is not listed. The name is kept on one line, and a blank one is refused.
+  // A name the owner gives is never replaced by one evie writes.
+  rename_session: {
+    input: { session: string; name: string }
+    output: void
   }
 }
 

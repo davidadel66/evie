@@ -83,6 +83,9 @@ const STOPPED_AGAIN =
 const MOST_RESTARTS = 3
 const RESTARTS_WINDOW = 5 * 60_000
 
+// A session's name as it is kept: on one line, with no spaces at its ends.
+const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
+
 // Where all of Evie's state lives. Moving Evie is copying this folder.
 export function dataFolder(env: Record<string, string | undefined>): string {
   return env.EVIE_HOME || join(homedir(), ".evie")
@@ -260,6 +263,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
         whileWaiting: (asked) => jobs.whileWaiting(session, asked),
       },
       children,
+      name: (text) => nameByEvie(session, text),
       ...(parent !== undefined && { parent }),
       ...(as.agent !== undefined && { agent: as.agent }),
       ...(as.readOnly && { readOnly: true }),
@@ -602,13 +606,21 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     emit(log.append(input.session, "model_changed", { model }))
   }
 
+  // A name for a session from a plugin that names sessions. It is written
+  // only while the session has none, so that the owner's is never replaced
+  // and a session is not renamed by itself as it goes on.
+  function nameByEvie(session: string, text: string): void {
+    if (closed || typeof text !== "string" || projects.projectOf(session) === undefined) return
+    const name = oneLine(text)
+    if (name === "" || log.events(session).some((event) => event.type === "named")) return
+    emit(log.append(session, "named", { name, by: "evie" }))
+  }
+
   // Written to the log, where the session's state is read from. Any session
   // can be settled, open or not, but not a subagent's, which is not listed,
   // and not while it is working or waiting for an answer.
   function settleSession(input: Commands["settle_session"]["input"]): void {
-    if (projects.projectOf(input.session) === undefined) throw new Error(`There is no session with the id "${input.session}".`)
-    const parent = projects.parentOf(input.session)
-    if (parent !== undefined) throw new Error(`The session "${input.session}" is a subagent's, which is not listed. Settle the session that started it, "${parent}", instead.`)
+    listedSession(input.session, "Settle")
     if (typeof input.settled !== "boolean") throw new Error("`settled` is true to settle the session, or false to bring it back.")
     // What goes on in it next is activity, which would make it active again.
     const state = summaries.state(input.session)
@@ -616,6 +628,22 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       throw new Error("This session is working, or waiting for an answer to a question. Wait until it has finished, then settle it.")
     }
     emit(log.append(input.session, "settled", { settled: input.settled }))
+  }
+
+  function renameSession(input: Commands["rename_session"]["input"]): void {
+    listedSession(input.session, "Rename")
+    if (typeof input.name !== "string") throw new Error("`name` is the session's new name, and must be text.")
+    const name = oneLine(input.name)
+    if (name === "") throw new Error("A session's name cannot be blank. Give it a name of a few words.")
+    emit(log.append(input.session, "named", { name, by: "owner" }))
+  }
+
+  // Checks that a session is one the owner can act on from a list of
+  // sessions: one that is there, and not a subagent's, which is not listed.
+  function listedSession(session: string, verb: string): void {
+    if (projects.projectOf(session) === undefined) throw new Error(`There is no session with the id "${session}".`)
+    const parent = projects.parentOf(session)
+    if (parent !== undefined) throw new Error(`The session "${session}" is a subagent's, which is not listed. ${verb} the session that started it, "${parent}", instead.`)
   }
 
   function readHistory(input: Commands["read_history"]["input"]): Commands["read_history"]["output"] {
@@ -794,6 +822,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await listCommands(command)) as Output
         case "list_models":
           return (await listModels(command)) as Output
+        case "rename_session":
+          return renameSession(command) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)
