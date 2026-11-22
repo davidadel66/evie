@@ -159,11 +159,79 @@ export function rankFiles(paths: readonly string[], typed: string): string[] {
     .map(({ path }) => path)
 }
 
-// The box once a file is picked: an @ and its path in place of what was
-// typed, with a space after it, and where the caret goes, after the space.
-export function putMention(text: string, mention: { from: number; query: string }, caret: number, path: string): { text: string; caret: number } {
-  const filled = `${text.slice(0, mention.from)}@${path} `
-  return { text: `${filled}${text.slice(caret).replace(/^ /, "")}`, caret: filled.length }
+// ---- The text, with its files as chips --------------------------------------------------
+
+// What is in the box: words, and the files named in them, each drawn as a
+// chip in the text, as T3 Code's mention chips are, and sent as an @ and
+// its path, as `@src/app.ts`. Nothing else is sent for one: evie reads the
+// file with its tools.
+export type Part = { text: string } | { file: string }
+
+// A chip, as the caret and the menus count it: one character, the one
+// that stands for an object in text, which no command or @ word can have.
+export const CHIP = "\uFFFC"
+
+// The message the box sends.
+export const textOf = (parts: readonly Part[]): string => parts.map((part) => ("file" in part ? `@${part.file}` : part.text)).join("")
+
+// The box as the caret and the menus read it, each chip one character.
+export const shownOf = (parts: readonly Part[]): string => parts.map((part) => ("file" in part ? CHIP : part.text)).join("")
+
+// Text put in the box, as a message brought back with Up: an @ at the start
+// of a word, with what follows it up to a space or the end, is a chip, as
+// T3 Code reads its prompt's mentions.
+export function partsOf(text: string): Part[] {
+  const parts: Part[] = []
+  let at = 0
+  for (const found of text.matchAll(/(^|\s)@([^\s@"]+)(?=\s|$)/g)) {
+    const start = found.index + found[1]!.length
+    parts.push({ text: text.slice(at, start) }, { file: found[2]! })
+    at = start + 1 + found[2]!.length
+  }
+  parts.push({ text: text.slice(at) })
+  return tidied(parts)
+}
+
+// The box with the stretch from `from` to `to`, counted as `shownOf` counts,
+// replaced by `put`, and where the caret goes: after what was put.
+export function replaced(parts: readonly Part[], from: number, to: number, put: readonly Part[]): { parts: Part[]; caret: number } {
+  const before: Part[] = []
+  const after: Part[] = []
+  let at = 0
+  for (const part of parts) {
+    const length = "file" in part ? 1 : part.text.length
+    if ("file" in part) {
+      if (at + 1 <= from) before.push(part)
+      else if (at >= to) after.push(part)
+    } else {
+      if (at < from) before.push({ text: part.text.slice(0, from - at) })
+      if (at + length > to) after.push({ text: part.text.slice(Math.max(0, to - at)) })
+    }
+    at += length
+  }
+  const head = tidied([...before, ...put])
+  return { parts: tidied([...head, ...after]), caret: shownOf(head).length }
+}
+
+// The box once a file is picked from the @ menu: its chip in place of the
+// @ and what was typed after it, with a space after it, and the caret
+// after the space.
+export function pickFile(parts: readonly Part[], mention: { from: number; query: string }, caret: number, path: string): { parts: Part[]; caret: number } {
+  const after = shownOf(parts).slice(caret)
+  const end = after.startsWith(" ") ? caret + 1 : caret
+  return replaced(parts, mention.from, end, [{ file: path }, { text: " " }])
+}
+
+// Parts with no empty words, and words side by side as one.
+function tidied(parts: readonly Part[]): Part[] {
+  const out: Part[] = []
+  for (const part of parts) {
+    const last = out.at(-1)
+    if ("text" in part && part.text === "") continue
+    if ("text" in part && last !== undefined && "text" in last) out[out.length - 1] = { text: last.text + part.text }
+    else out.push(part)
+  }
+  return out
 }
 
 // ---- Attachments ----------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { ATTACHMENT_LIMIT } from "../src/core/types.ts"
-import { attachable, commandIn, contextMeter, earlierMessages, mentionAt, menuKey, putMention, rankCommands, rankFiles, recallStep, slashAt } from "../web/src/composer.ts"
+import { attachable, CHIP, commandIn, contextMeter, earlierMessages, mentionAt, menuKey, partsOf, pickFile, rankCommands, rankFiles, recallStep, replaced, shownOf, slashAt, textOf, type Part } from "../web/src/composer.ts"
 
 // The message box's rules, apart from its screen: the menu a slash opens,
 // and how it is filtered and ranked as the owner types.
@@ -130,9 +130,33 @@ test("the files are ranked as the commands are: an exact name, then a name or a 
   expect(rankFiles(Array.from({ length: 80 }, (_, at) => `file-${at}.md`), "file")).toHaveLength(50)
 })
 
-test("picking a file puts an @ and its path in place of what was typed, with a space after it, and the caret after that", () => {
-  expect(putMention("Look at @ap now", { from: 8, query: "ap" }, 11, "src/app.ts")).toEqual({ text: "Look at @src/app.ts now", caret: 20 })
-  expect(putMention("@", { from: 0, query: "" }, 1, "plan.md")).toEqual({ text: "@plan.md ", caret: 9 })
+test("a file named in the box is a chip in the text, as T3 Code's are, sent as an @ and its path; to the caret and the menus it is one character", () => {
+  const parts: Part[] = [{ text: "Read " }, { file: "recipes/apple-cake.md" }, { text: " and fix it" }]
+  expect(textOf(parts)).toBe("Read @recipes/apple-cake.md and fix it")
+  expect(shownOf(parts)).toBe(`Read ${CHIP} and fix it`)
+  // A chip is no @ the caret is in, so it opens no menu.
+  expect(mentionAt(shownOf([{ file: "plan.md" }]), 1)).toBeUndefined()
+})
+
+test("text put in the box, as an earlier message brought back, has each @ at a word's start, with what follows it up to a space or the end, as a chip", () => {
+  expect(partsOf("Read @recipes/apple-cake.md and @notes.md")).toEqual([{ text: "Read " }, { file: "recipes/apple-cake.md" }, { text: " and " }, { file: "notes.md" }])
+  expect(partsOf("@a.md\n@b.md")).toEqual([{ file: "a.md" }, { text: "\n" }, { file: "b.md" }])
+  expect(partsOf("write to me@example.com, or @ noon")).toEqual([{ text: "write to me@example.com, or @ noon" }])
+  expect(partsOf("")).toEqual([])
+  for (const text of ["Read @a.md and @b.md", "@a.md", "no chips at all", "two  spaces @x\n"]) expect(textOf(partsOf(text))).toBe(text)
+})
+
+test("picking a file puts its chip in place of the @ and what was typed after it, with a space after it, and the caret after the space", () => {
+  expect(pickFile([{ text: "Look at @ap now" }], { from: 8, query: "ap" }, 11, "src/app.ts")).toEqual({ parts: [{ text: "Look at " }, { file: "src/app.ts" }, { text: " now" }], caret: 10 })
+  expect(pickFile([{ text: "@" }], { from: 0, query: "" }, 1, "plan.md")).toEqual({ parts: [{ file: "plan.md" }, { text: " " }], caret: 2 })
+  expect(textOf(pickFile([{ text: "@" }], { from: 0, query: "" }, 1, "plan.md").parts)).toBe("@plan.md ")
+})
+
+test("a stretch of the text, a chip counted as one character, is replaced as a whole, and the caret goes after what took its place", () => {
+  const parts: Part[] = [{ text: "ab" }, { file: "x.md" }, { text: "cd" }]
+  expect(replaced(parts, 1, 4, [{ text: "Z" }])).toEqual({ parts: [{ text: "aZd" }], caret: 2 })
+  expect(replaced(parts, 5, 5, [{ text: "\n" }])).toEqual({ parts: [{ text: "ab" }, { file: "x.md" }, { text: "cd\n" }], caret: 6 })
+  expect(replaced(parts, 0, 5, [])).toEqual({ parts: [], caret: 0 })
 })
 
 test("a file larger than the limit is not attached, and the box says which and why", () => {

@@ -21,7 +21,7 @@ import { projectLookedAt, titleOf } from "./session-list.ts"
 import { ListButton, ListTop, SessionList } from "./SessionList.tsx"
 import { HeaderName } from "./SessionRow.tsx"
 import type { Sessions } from "./sessions.ts"
-import { Settings } from "./Settings.tsx"
+import { SettingsButton, SettingsPage } from "./Settings.tsx"
 import { newSession, windowOver } from "./page-requests.ts"
 import { onMac, pressed } from "./shortcuts.ts"
 import { SubagentView } from "./Subagent.tsx"
@@ -34,8 +34,8 @@ import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 // 767px or narrower the columns stack, as the drawing has them: the list
 // at the top of the page, and the conversation under it, a screen tall.
 // The details open from a button in the session's header. With a
-// workspace in the address, the workspace view instead. The command
-// palette and the notices float over either.
+// workspace in the address, the workspace view instead. The settings page,
+// the command palette and the notices float over either.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
   useDiffShortcut()
@@ -45,13 +45,11 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
   return (
     <ConnectionShown.Provider value={state}>
       {workspace !== undefined ? (
-        <>
-          <WorkspaceView place={workspace} state={state} connection={connection} sessions={sessions} />
-          <Settings connection={connection} button={false} />
-        </>
+        <WorkspaceView place={workspace} state={state} connection={connection} sessions={sessions} />
       ) : (
         <SessionView state={state} connection={connection} sessions={sessions} />
       )}
+      <SettingsPage connection={connection} />
       <Palette connection={connection} sessions={sessions} open={palette} close={() => setPalette(false)} />
       <Notices connection={connection} sessions={sessions} />
     </ConnectionShown.Provider>
@@ -71,7 +69,7 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
   return (
     <div className="flex flex-col wide:h-dvh wide:flex-row">
       <ListPlace picked={() => !list.wide && main.current?.scrollIntoView({ block: "start" })}>
-        <ListTop connection={connection} sessions={sessions} settings={<Settings connection={connection} />} />
+        <ListTop connection={connection} sessions={sessions} settings={<SettingsButton />} />
         {list.wide && <ConnectionLine state={state} />}
         <SessionList connection={connection} sessions={sessions} />
       </ListPlace>

@@ -1,3 +1,4 @@
+import { settingsPageNamed, type SettingsPage } from "./settings-page.ts"
 import { addressOfWorkspace, chatShown, NEW_CHAT, workspaceIn } from "./workspace.ts"
 
 // The page's address: what is selected in the list is kept after # in it,
@@ -34,13 +35,32 @@ const NONE = "none"
 
 // The address the page is put at as it opens, whatever path it was opened
 // at, such as /sign-in, from its part after #: its root, keeping only what
-// is selected, so that a sign-in code is not left in the address bar, a
-// bookmark or a screenshot.
+// is selected, and the settings when they are open, so that a sign-in code
+// is not left in the address bar, a bookmark or a screenshot.
 export function addressAsOpened(hash: string): string {
   const workspace = workspaceIn(hash)
-  if (workspace !== undefined) return `/${addressOfWorkspace(workspace)}`
   const selected = selectedIn(hash)
-  return `/${selected === undefined ? "" : addressOf(selected)}`
+  const kept = workspace !== undefined ? addressOfWorkspace(workspace) : selected === undefined ? "" : addressOf(selected)
+  return `/${withSettings(kept, settingsIn(hash)?.page)}`
+}
+
+// The settings, open as a page of their own over whatever is open, as T3
+// Code's are, with the page shown kept in the address beside it, as
+// `&settings=<page>`, or alone, `#settings=<page>`; `#settings` opens
+// their first page. Back closes them, or goes to the page before.
+export function settingsIn(hash: string): { page: SettingsPage } | undefined {
+  const page = new URLSearchParams(hash.replace(/^#/, "")).get("settings")
+  return page === null ? undefined : { page: settingsPageNamed(page) }
+}
+
+// The part after # with the settings open on `page`, or closed, and the
+// rest of it as it was.
+export function withSettings(hash: string, page: SettingsPage | undefined): string {
+  const named = new URLSearchParams(hash.replace(/^#/, ""))
+  if (page === undefined) named.delete("settings")
+  else named.set("settings", page)
+  const rest = named.toString()
+  return rest === "" ? "" : `#${rest}`
 }
 
 // What the owner is looking at, as an address has it: in the session view,

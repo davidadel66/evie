@@ -4,12 +4,12 @@ import { newChat } from "./workspace.ts"
 // What the command palette and the shortcuts ask of a part of the page
 // that keeps its own state: the session list to start a new session where
 // it would, or to move to the session above or below; the message box to
-// open its model picker; the header over the conversation to rename its
-// session; and the settings window to open. Each part listens while it is
+// open its model picker; and the header over the conversation to rename
+// its session. Each part listens while it is
 // on the page; a request no part is listening for does nothing, and `ask`
 // says so.
 
-export type PageRequest = "new session" | "previous session" | "next session" | "pick model" | "rename" | "settings"
+export type PageRequest = "new session" | "previous session" | "next session" | "pick model" | "rename"
 
 const listening = new Map<PageRequest, Set<() => void>>()
 
@@ -27,7 +27,7 @@ export function whenAsked(request: PageRequest, then: () => void): () => void {
 }
 
 // The window open over the page, if one is: the command palette, or
-// another, such as the settings or a question whether to delete, while
+// another, such as the settings page or a question whether to delete, while
 // which the page's own shortcuts wait. A sheet is not one.
 export function windowOver(): "palette" | "other" | undefined {
   if (document.querySelector('[data-slot="dialog-content"][data-state="open"]') !== null) return "other"

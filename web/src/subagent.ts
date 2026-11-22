@@ -1,6 +1,7 @@
 import type { Evie, StoredEvent } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 import { merged, type Conversation, type ConversationState } from "./conversation.ts"
+import { NO_QUEUE } from "./queue.ts"
 
 // The conversation of one of the session's subagents, which the middle
 // column shows when the owner picks it in the session details, read only. A
@@ -33,6 +34,7 @@ const FRESH: ConversationState = {
   pending: [],
   notes: [],
   project: undefined,
+  queue: NO_QUEUE,
 }
 
 // Nothing is said in a subagent's conversation from the page: it is shown
@@ -170,6 +172,12 @@ export function openSubagent(connection: Connection, session: string, options: {
     listFiles: async () => {
       throw new Error(READ_ONLY)
     },
+    queue() {},
+    unqueue() {},
+    sendQueuedNow: async () => READ_ONLY,
+    editQueued() {},
+    saveQueued() {},
+    stopEditing() {},
   }
 }
 

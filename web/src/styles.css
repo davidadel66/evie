@@ -188,15 +188,35 @@
      most this wide, at least 16px from the screen's sides at phone width. */
   --spacing-control: 32px;
   --spacing-control-sm: 28px;
+  /* A small button inside a row, as a queued message's and a setting's
+     reset, as T3 Code's xs buttons, 24px, and 28px below 640px; the
+     icon on one; and the slot of a setting's reset, as T3 Code's. */
+  --spacing-control-xs: 24px;
+  --spacing-icon-row: 14px;
+  --spacing-reset: 20px;
+  /* A switch, as T3 Code's: its knob, 14px, and 18px below 640px, and
+     the track round it. */
+  --spacing-switch-knob: 14px;
+  --spacing-switch-height: calc(var(--spacing-switch-knob) + 4px);
+  --spacing-switch-width: calc(var(--spacing-switch-knob) * 2 + 2px);
+  --spacing-switch-travel: calc(var(--spacing-switch-knob) - 2px);
   --spacing-menu: 176px;
   --spacing-menu-wide: min(400px, calc(100vw - 32px));
   /* The widest a dialog is, as T3 Code's. */
   --spacing-dialog: 512px;
-  /* The settings window: the widest it is, its height, kept within the
-     page's, its column of pages, and a text box beside a setting. */
-  --spacing-settings: 720px;
-  --spacing-settings-height: min(600px, calc(100dvh - 32px));
-  --spacing-settings-pages: 176px;
+  /* The settings page, as T3 Code's: over the page, at most this wide and
+     this tall; its column of pages, which is a rail of icons at phone
+     width; its header; the column of its settings, at most this wide, and
+     what a setting is for under its title; a choice's menu, and a text
+     box beside a setting. */
+  --spacing-settings-page: 1280px;
+  --spacing-settings-page-height: 960px;
+  --spacing-settings-nav: 240px;
+  --spacing-settings-rail: 56px;
+  --spacing-settings-header: 48px;
+  --spacing-settings-content: 896px;
+  --spacing-settings-about: 672px;
+  --spacing-settings-select: 224px;
   --spacing-settings-field: 200px;
   /* The room between a session row's edge and its words, so that they
      start 18px from the list's edge, as in the Session view drawing and
@@ -224,12 +244,18 @@
      Narrower, the side chat stacks below the workspace. A container query,
      @workspace-columns, since it is the room beside the strip that counts. */
   --container-workspace-columns: 880px;
-  /* The message box: the tallest its text grows before it scrolls; the
-     tallest the / menu and the model picker above it are, as T3 Code's;
-     and the picker's column of makers. */
+  /* The message box: its text two lines tall at least, as drawn and as
+     T3 Code's, and the tallest it grows before it scrolls; the tallest the
+     / and @ menus and the model picker above it are, as T3 Code's, and the
+     picker's column of makers. The menus are drawers tucked into the
+     box's top edge, as T3 Code's: this much narrower than it on each
+     side, and this far under it. */
+  --spacing-composer-text-min: 2lh;
   --spacing-composer-text: 208px;
   --spacing-composer-menu: 288px;
   --spacing-picker-makers: 144px;
+  --spacing-drawer-inset: 22px;
+  --spacing-drawer-tuck: 17px;
   /* The tallest a background job's output grows in the project card
      before it scrolls. */
   --spacing-job-output: 240px;
@@ -244,8 +270,8 @@
   --spacing-image-open-height: 80dvh;
   /* Phone width, as T3 Code's sidebar has it, is below this: the session
      view's columns stack, the message box is one row until tapped, the
-     settings window and the diff fill the screen, and a workspace's
-     columns stack.
+     settings and the diff fill the screen, and a workspace's columns
+     stack.
      wide.ts gives the same width to the page's code. */
   --breakpoint-wide: 768px;
 }
@@ -283,6 +309,23 @@
   --color-diff-removed-line: color-mix(in srgb, var(--diff-removed) 18%, transparent);
 }
 
+/* The message box's surface, and its drawers', floating over the
+   conversation, which scrolls on under them, as T3 Code's glass: the
+   surface as drawn, a fifth clear, with what is under it blurred. */
+@utility composer-glass {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.14);
+  backdrop-filter: blur(12px) saturate(1.14);
+}
+
+/* The page under the settings, as T3 Code's: dimmed by its own ground,
+   and blurred a little. */
+@utility settings-backdrop {
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
 /* The session details' surface, as T3 Code's glass: the surface a little
    clear, with what is under it blurred. */
 @utility details-glass {
@@ -311,6 +354,8 @@
     :root {
       --spacing-control: 36px;
       --spacing-control-sm: 32px;
+      --spacing-control-xs: 28px;
+      --spacing-switch-knob: 18px;
       --spacing-icon-control: 18px;
       --spacing-icon-picker: 254px;
       --spacing-gutter: 12px;
@@ -365,4 +410,11 @@
 }
 @utility fade-both {
   mask-image: linear-gradient(to bottom, transparent, black var(--spacing-3), black calc(100% - var(--spacing-3)), transparent);
+}
+
+/* A drawer tucked into the message box's top edge shows only what is
+   above the box: its foot, under the box's glass, is left out, so that
+   the two read as one piece, as T3 Code's do. */
+@utility drawer-tucked {
+  mask-image: linear-gradient(to top, transparent var(--spacing-drawer-tuck), black var(--spacing-drawer-tuck));
 }

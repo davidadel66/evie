@@ -2,6 +2,7 @@ import type { Commands, EventBodies, Evie, EvieEvent, StoredEvent } from "../../
 import type { MenuItem } from "./composer.ts"
 import type { Connection } from "./connection.ts"
 import type { Model } from "./models.ts"
+import { afterTurn, editQueued, NO_QUEUE, queueMessage, releaseQueue, removeQueued, saveQueued, sendQueuedNow, stopEditing, type Queue, type Queued } from "./queue.ts"
 import type { Pending, View } from "./transcript.ts"
 import { heard } from "./work-log.ts"
 
@@ -38,6 +39,9 @@ export type ConversationState = Required<Omit<View, "folder">> & {
   // The session's project, by its id, or null for none, once opened; kept
   // current as the session is moved.
   project: string | null | undefined
+  // The messages the owner queued while evie works, each sent as a turn of
+  // its own once the turn before it has finished (see queue.ts).
+  queue: Queue
 }
 
 export type GivenBack = { text: string; problem: string; files?: readonly Outgoing[] }
@@ -89,6 +93,23 @@ export type Conversation = {
   // its provider offers. Fail, saying why, when they cannot be listed.
   listCommands(): Promise<MenuItem[]>
   listModels(): Promise<Model[]>
+  // Queues a message while evie works, to be sent as a turn of its own
+  // once the turn running has finished, rather than steering it. A message
+  // queued is the page's until it is sent: the page keeps the session open
+  // while it has messages queued.
+  queue(text: string, files: readonly Outgoing[]): void
+  // Takes a queued message off the queue.
+  unqueue(key: number): void
+  // Sends a queued message at once, as `send` does: into the turn running,
+  // or as a turn of its own. Gives back why it could not be sent, when it
+  // goes back to the front of the queue, which is held.
+  sendQueuedNow(key: number): Promise<string | undefined>
+  // Marks a queued message as being edited in the box, which keeps its
+  // place and is not sent meanwhile; then saves it with its new words and
+  // files, or leaves it as it was.
+  editQueued(key: number): void
+  saveQueued(key: number, text: string, files: readonly Outgoing[]): void
+  stopEditing(): void
   // Stops following the session. It stays open in evie.
   close(): void
   // The files of the session's project the owner can mention with @. Fails,
@@ -96,7 +117,26 @@ export type Conversation = {
   listFiles(): Promise<Commands["list_files"]["output"]>
 }
 
-const FRESH: ConversationState = { opened: false, readingEarlier: false, stopping: false, waiting: [], running: [], givenBack: undefined, model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [], project: undefined }
+const FRESH: ConversationState = {
+  opened: false,
+  readingEarlier: false,
+  stopping: false,
+  waiting: [],
+  running: [],
+  givenBack: undefined,
+  model: undefined,
+  context: undefined,
+  problem: undefined,
+  events: [],
+  earlier: false,
+  replySoFar: "",
+  turnRunning: false,
+  jobs: [],
+  pending: [],
+  notes: [],
+  project: undefined,
+  queue: NO_QUEUE,
+}
 
 export function openConversation(connection: Connection, session: string): Conversation {
   let state = FRESH
@@ -127,8 +167,9 @@ export function openConversation(connection: Connection, session: string): Conve
     on = evie
     failed = undefined
     // What the owner sent and the session has not taken in yet is still on
-    // its way, and what was said in this page is still where it was said.
-    set({ ...FRESH, pending: state.pending, notes: state.notes, givenBack: state.givenBack })
+    // its way, what was said in this page is still where it was said, and
+    // what was queued is still queued.
+    set({ ...FRESH, pending: state.pending, notes: state.notes, givenBack: state.givenBack, queue: state.queue })
     // Until the open is answered, the session's events are in its answer:
     // the server holds back those that come after it until it is sent. A
     // question and its answer are not held back, since the open can wait on
@@ -157,6 +198,8 @@ export function openConversation(connection: Connection, session: string): Conve
     const asked = [...opened.openQuestions, ...state.waiting.filter((question) => !opened.openQuestions.some((open) => open.id === question.id))]
     const answered = new Set(state.events.flatMap((event) => (event.type === "answer" ? [event.body.id] : [])))
     set({ replySoFar: opened.replySoFar ?? "", turnRunning: opened.turnRunning, jobs: opened.jobs, waiting: asked.filter((question) => !answered.has(question.id)), project: opened.project?.id ?? null })
+    // A turn that ended while the line was down lets the queue go on.
+    if (!opened.turnRunning) release()
     measure(evie)
     await readLatest(evie)
   }
@@ -243,6 +286,29 @@ export function openConversation(connection: Connection, session: string): Conve
       ...(event.type === "turn_start" && { turnRunning: true }),
       ...(event.type === "turn_end" && { turnRunning: false, stopping: false }),
     })
+    if (event.type === "turn_end") applyQueue(afterTurn(state.queue, event.body.reason))
+  }
+
+  // The queue as it is after a change, and the message it lets go, sent:
+  // on its way before the queue is told, so that it is never in neither.
+  function applyQueue(after: { queue: Queue; send?: Queued }) {
+    if (after.send !== undefined) void sendQueued(after.send)
+    set({ queue: after.queue })
+  }
+
+  // A message from the queue, sent. One that could not be goes back to the
+  // front of the queue, which is held, and a note says why.
+  async function sendQueued(item: Queued): Promise<string | undefined> {
+    const problem = await api.send(item.text, { files: item.files })
+    if (problem !== undefined) {
+      set({ queue: { ...state.queue, items: [item, ...state.queue.items], held: true } })
+      note(`The queued message could not be sent: ${problem}`)
+    }
+    return problem
+  }
+  // The first message of the queue sent, while no turn runs, when it may go on.
+  function release() {
+    if (!state.turnRunning) applyQueue(releaseQueue(state.queue))
   }
 
   // Opened once connected, and on the new client after signing in again.
@@ -259,7 +325,7 @@ export function openConversation(connection: Connection, session: string): Conve
   const unfollow = connection.subscribe(follow)
   follow()
 
-  return {
+  const api: Conversation = {
     state: () => state,
     subscribe(listener) {
       listeners.add(listener)
@@ -371,7 +437,32 @@ export function openConversation(connection: Connection, session: string): Conve
       if (state.project === null) throw new Error("This session is in no project, so it has no files to mention.")
       return on.send({ type: "list_files", project: state.project })
     },
+    queue(text, files) {
+      set({ queue: queueMessage(state.queue, text, files) })
+    },
+    unqueue(key) {
+      set({ queue: removeQueued(state.queue, key) })
+    },
+    async sendQueuedNow(key) {
+      const now = sendQueuedNow(state.queue, key)
+      if (now === undefined) return undefined
+      const sending = sendQueued(now.send)
+      set({ queue: now.queue })
+      return sending
+    },
+    editQueued(key) {
+      set({ queue: editQueued(state.queue, key) })
+    },
+    saveQueued(key, text, files) {
+      set({ queue: saveQueued(state.queue, key, text, files) })
+      release()
+    },
+    stopEditing() {
+      set({ queue: stopEditing(state.queue) })
+      release()
+    },
   }
+  return api
 }
 
 // Two runs of a session's events as one, in order, each event once.
@@ -617,8 +708,22 @@ export function holdConversation(connection: Connection, session: string): { con
       released = true
       entry.holders -= 1
       if (entry.holders > 0) return
-      open.delete(session)
-      entry.conversation.close()
+      // Messages queued are sent as their turns come, though nothing on the
+      // page shows the session any more: it is closed once none is left
+      // and the last has reached the session, unless the page holds it
+      // again first.
+      const queued = () => entry.conversation.state().queue.items.length > 0 || entry.conversation.state().pending.length > 0
+      const close = () => {
+        open.delete(session)
+        entry.conversation.close()
+      }
+      if (!queued()) return close()
+      const stop = entry.conversation.subscribe(() => {
+        if (entry.holders > 0) return stop()
+        if (queued()) return
+        stop()
+        close()
+      })
     },
   }
 }

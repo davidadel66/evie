@@ -42,3 +42,12 @@ export function searchModels(models: readonly Model[], typed: string): (Model & 
   })
   return [...found.filter((model) => model.starts), ...found.filter((model) => !model.starts)].map(({ starts: _, ...model }) => model)
 }
+
+// The name the model chip shows for a model, as T3 Code's chip shows its
+// display name: its own, as the provider lists it, without its maker's;
+// or, for one not listed, or before the list has come, its id after the
+// maker's.
+export function modelName(models: readonly Model[] | undefined, id: string): string {
+  const listed = models?.find((model) => model.id === id)
+  return listed === undefined ? id.slice(id.indexOf("/") + 1) : partsOf(listed).name
+}

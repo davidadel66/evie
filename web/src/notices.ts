@@ -75,15 +75,18 @@ export function shownAs(facts: { session: string; lookingAt: string | undefined;
 const KEY = "evie.notifications"
 const MODES: readonly NoticeMode[] = ["off", "on", "sound", "both"]
 
-// As this browser last kept them: system notifications off, as in T3
-// Code, and notices in the page on. A browser can refuse to keep anything,
-// as in a private window, and then they are as they start.
+// How they start, which the settings' resets go back to: system
+// notifications off, as in T3 Code, and notices in the page on.
+export const NOTICE_DEFAULTS: NoticeSettings = { mode: "off", inApp: true }
+
+// As this browser last kept them, or as they start. A browser can refuse
+// to keep anything, as in a private window, and then they are as they start.
 export function rememberedNotices(): NoticeSettings {
   try {
     const kept = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<NoticeSettings>
-    return { mode: MODES.includes(kept.mode as NoticeMode) ? kept.mode! : "off", inApp: kept.inApp !== false }
+    return { mode: MODES.includes(kept.mode as NoticeMode) ? kept.mode! : NOTICE_DEFAULTS.mode, inApp: typeof kept.inApp === "boolean" ? kept.inApp : NOTICE_DEFAULTS.inApp }
   } catch {
-    return { mode: "off", inApp: true }
+    return { ...NOTICE_DEFAULTS }
   }
 }
 

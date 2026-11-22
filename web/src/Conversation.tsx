@@ -3,6 +3,7 @@ import { QuestionPrompt, QuestionText, useAsking } from "./Asking.tsx"
 import { TurnChangedFiles } from "./ChangedFiles.tsx"
 import { holdChanges, type Changes } from "./changes.ts"
 import { asAsked } from "./questions.ts"
+import { QueuedMessages } from "./Queued.tsx"
 import { Button } from "./components/ui/button.tsx"
 import { Composer, FileChip } from "./Composer.tsx"
 import type { Connection } from "./connection.ts"
@@ -66,6 +67,9 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
   )
   const asking = useAsking(state.waiting)
   const { shown } = asking
+  // How tall the message box floats over the conversation's end, which
+  // scrolls clear of it.
+  const [floating, setFloating] = useState(0)
 
   const scroller = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
@@ -139,7 +143,7 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
       <div className="relative flex min-h-0 flex-1 flex-col">
         {/* The browser's own anchoring is off, since this keeps the owner's place itself. */}
         <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]">
-          <div ref={content} className="flex min-h-full flex-col px-gutter py-5">
+          <div ref={content} className="flex min-h-full flex-col px-gutter pt-5" style={{ paddingBottom: `calc(var(--spacing-5) + ${floating}px)` }}>
             <div className="mx-auto flex w-full max-w-conversation flex-1 flex-col">
               {state.readingEarlier && <Working words="Reading the earlier conversation" />}
               {/* What failed is tried again only when asked, or when the line comes back. */}
@@ -174,29 +178,31 @@ export function Reading({ conversation, readOnly = false, changes, folder }: { c
                   </div>
                 )
               )}
+              {!readOnly && state.queue.items.length > 0 && <QueuedMessages conversation={conversation} queue={state.queue} turnRunning={turnRunning} />}
             </div>
           </div>
         </div>
         {scrolledUp && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+          <div className="pointer-events-none absolute inset-x-0 z-30 flex justify-center" style={{ bottom: `calc(var(--spacing-1) + ${floating}px)` }}>
             <Button variant="quiet" onClick={toLatest} className="pointer-events-auto h-control-sm rounded-full bg-surface px-3 text-caption shadow-float">
               Jump to the latest
             </Button>
           </div>
         )}
+        {!readOnly && (
+          <Composer
+            conversation={conversation}
+            state={state}
+            model={{ current: state.model, list: conversation.listModels, pick: conversation.setModel }}
+            shown={shown}
+            answer={conversation.answer}
+            asking={asking}
+            send={(text, files) => conversation.send(text, { files })}
+            mentions={state.project ? conversation.listFiles : undefined}
+            floats={setFloating}
+          />
+        )}
       </div>
-      {!readOnly && (
-        <Composer
-          conversation={conversation}
-          state={state}
-          model={{ current: state.model, list: conversation.listModels, pick: conversation.setModel }}
-          shown={shown}
-          answer={conversation.answer}
-          asking={asking}
-          send={(text, files) => conversation.send(text, { files })}
-          mentions={state.project ? conversation.listFiles : undefined}
-        />
-      )}
     </div>
   )
 }
@@ -238,20 +244,22 @@ function Drafting({ draft, moved, inProject }: { draft: OpenedDraft; moved(sessi
   const state = useSyncExternalStore(draft.subscribe, draft.state)
   const asking = useAsking(state.waiting)
   const { shown } = asking
+  const [floating, setFloating] = useState(0)
+  const clear = { paddingBottom: `calc(var(--spacing-5) + ${floating}px)` }
   async function start(text: string, files: readonly Outgoing[]) {
     if (state.starting !== undefined) return "The session is starting. Send this once it has."
     const started = await draft.start(text, moved, files)
     return "problem" in started ? started.problem : undefined
   }
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
         {state.starting === undefined ? (
-          <div className="flex min-h-full flex-col px-gutter py-5">
+          <div className="flex min-h-full flex-col px-gutter pt-5" style={clear}>
             <Headline />
           </div>
         ) : (
-          <div className="px-gutter py-5">
+          <div className="px-gutter pt-5" style={clear}>
             <div className="mx-auto flex max-w-conversation flex-col gap-4">
               <Drawn item={{ key: "starting", turn: 0, kind: "owner", text: state.starting }} shown={new Set()} show={() => {}} />
               {shown !== undefined ? <QuestionPrompt question={shown.question} count={shown.count} answer={draft.answer} /> : <Working words="Starting the session" />}
@@ -267,6 +275,7 @@ function Drafting({ draft, moved, inProject }: { draft: OpenedDraft; moved(sessi
         asking={asking}
         send={start}
         mentions={inProject ? draft.listFiles : undefined}
+        floats={setFloating}
       />
     </div>
   )

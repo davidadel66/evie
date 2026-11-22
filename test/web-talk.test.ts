@@ -5,7 +5,7 @@ import { ask, models, startServer, type Attachments, type Command, type Evie, ty
 import { openTokens } from "../src/server/tokens.ts"
 import { startEvie } from "./support/harness.ts"
 import { openConnection } from "../web/src/connection.ts"
-import { openConversation, openDraft, takeStarted, type Conversation, type ConversationState, type Draft, type DraftState, type Outgoing } from "../web/src/conversation.ts"
+import { holdConversation, openConversation, openDraft, takeStarted, type Conversation, type ConversationState, type Draft, type DraftState, type Outgoing } from "../web/src/conversation.ts"
 import { openSessions } from "../web/src/sessions.ts"
 import { transcriptOf } from "../web/src/transcript.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
@@ -519,4 +519,77 @@ test("an upload the server does not take in time fails, saying so; the message c
   expect(await next).toBeUndefined()
   const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
   expect(replied.events.filter((event) => event.type === "user_message").map((event) => event.type === "user_message" && event.body.text)).toEqual(["Something else"])
+})
+
+// ---- Queued messages ----------------------------------------------------------------------
+
+const queued = (state: ConversationState) => state.queue.items.map((item) => item.text)
+const turnEnds = (state: ConversationState) => state.events.filter((event) => event.type === "turn_end").length
+
+test("a message queued while evie works waits in the page, not steering the turn, and is sent as a turn of its own once the turn has finished", async () => {
+  const { served, connection, model } = await start([...asking(), { text: ["Watered."] }], { plugins: [ask()] })
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+  await conversation.send("Plan the beds")
+  const { waiting } = await until(conversation, (state) => state.waiting.length === 1)
+
+  conversation.queue("Then water them", [])
+  expect(queued(conversation.state())).toEqual(["Then water them"])
+  expect(conversation.state().pending).toEqual([])
+
+  await conversation.answer(waiting[0]!.id, "South bed")
+  const done = await until(conversation, (state) => turnEnds(state) === 2)
+  expect(done.queue.items).toEqual([])
+  expect(types(done).filter((type) => type === "turn_start")).toHaveLength(2)
+  expect(said(done).slice(-4)).toEqual(["South bed", "Starting there.", "Then water them", "Watered."])
+  expect(model.requests).toHaveLength(3)
+})
+
+test("a turn stopped holds the queue, whose messages wait until one is sent by hand, at once", async () => {
+  const { served, connection, model } = await start([{ hang: true, text: ["Thinking about the beds"] }, { text: ["Watered."] }])
+  const conversation = open(connection, served.run.session)
+  await until(conversation, (state) => state.opened)
+  await conversation.send("Plan the beds")
+  await until(conversation, (state) => state.replySoFar === "Thinking about the beds")
+  conversation.queue("Then water them", [])
+
+  conversation.stop()
+  const stopped = await until(conversation, (state) => !state.turnRunning)
+  await Bun.sleep(50)
+  expect(queued(stopped)).toEqual(["Then water them"])
+  expect(conversation.state().queue.held).toBe(true)
+  expect(model.requests).toHaveLength(1)
+
+  await conversation.sendQueuedNow(stopped.queue.items[0]!.key)
+  const sent = await until(conversation, (state) => turnEnds(state) === 2)
+  expect(sent.queue.items).toEqual([])
+  expect(said(sent).slice(-2)).toEqual(["Then water them", "Watered."])
+})
+
+test("a queued message edited in the box is sent as it was saved, and the page keeps the session open while it has messages queued", async () => {
+  const { served, connection, model } = await start([...asking(), { text: ["Watered."] }], { plugins: [ask()] })
+  const held = holdConversation(connection, served.run.session)
+  const { conversation } = held
+  await until(conversation, (state) => state.opened)
+  await conversation.send("Plan the beds")
+  const { waiting } = await until(conversation, (state) => state.waiting.length === 1)
+  conversation.queue("Then water", [])
+  const key = conversation.state().queue.items[0]!.key
+  conversation.editQueued(key)
+  expect(conversation.state().queue.editing).toBe(key)
+  conversation.saveQueued(key, "Then water them well", [])
+
+  // Let go of by the page, as when the owner moves to another session.
+  held.release()
+  const watching = open(connection, served.run.session)
+  await until(watching, (state) => state.opened)
+  await conversation.answer(waiting[0]!.id, "South bed")
+  const done = await until(watching, (state) => turnEnds(state) === 2)
+  expect(said(done).slice(-2)).toEqual(["Then water them well", "Watered."])
+  expect(model.requests).toHaveLength(3)
+
+  // Once the queue is empty, nothing holds it, and it is closed.
+  const again = holdConversation(connection, served.run.session)
+  cleanups.push(async () => again.release())
+  expect(again.conversation).not.toBe(conversation)
 })
