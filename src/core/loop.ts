@@ -103,7 +103,7 @@ export function currentModel(events: readonly StoredEvent[], startedWith: string
 // moved, if it was, or nothing: the branch a list of sessions shows it on.
 function recordedBranch(events: readonly StoredEvent[]): string | undefined {
   const last = events.findLast((event) => event.type === "branch" || event.type === "moved")
-  return last?.type === "branch" ? last.body.branch : undefined
+  return last?.type === "branch" ? (last.body.branch ?? undefined) : undefined
 }
 
 // The most images a request carries, and the most base64 they come to
@@ -291,11 +291,26 @@ export function createLoop(options: LoopOptions): Loop {
 
   // ---- Turns --------------------------------------------------------------------
 
-  // As a turn starts: the branch the project is on, recorded when it is not
-  // the one the session last recorded.
-  async function recordBranch(signal: AbortSignal) {
-    const branch = folder === null ? undefined : await untilAborted(branchOf(folder), signal)
-    if (branch !== undefined && branch !== recordedBranch(log.events(session))) emit(log.append(session, "branch", { branch }))
+  // The branch the project is on, read as a turn starts and as it ends,
+  // beside the turn's work rather than before it, and recorded once git has
+  // answered, when it is not the one the session last recorded: with none
+  // when the project is on no branch, or git could not say. A read that
+  // answers after a later one has been recorded is let go, and so is any
+  // once the loop has stopped, as when the session is moved or deleted.
+  let reads = 0
+  let lastRecorded = 0
+  function readBranch() {
+    if (folder === null) return
+    const read = ++reads
+    void branchOf(folder).then((branch) => {
+      if (stopped || read < lastRecorded) return
+      lastRecorded = read
+      try {
+        if (branch !== recordedBranch(log.events(session))) emit(log.append(session, "branch", branch === undefined ? {} : { branch }))
+      } catch {
+        // The log cannot be written now, as while Evie closes: the next turn reads it again.
+      }
+    })
   }
 
   async function run() {
@@ -344,6 +359,7 @@ export function createLoop(options: LoopOptions): Loop {
       return events
     })
     for (const event of started) emit(event)
+    readBranch()
 
     try {
       // One pass of this loop is one step.
@@ -355,7 +371,6 @@ export function createLoop(options: LoopOptions): Loop {
         // message that arrives during a reply stops that reply (see wake)
         // and the loop comes back here.
         writeNotes("all")
-        if (step === 1) await recordBranch(signal)
         if (step > 1) {
           const steered = atomically(() =>
             inbox.take(session).map((message) => log.append(session, "user_message", said(message))),
@@ -548,6 +563,7 @@ export function createLoop(options: LoopOptions): Loop {
       // A note that is to wake the model is left for the turn that follows.
       writeNotes("quiet")
       emit(log.append(session, "turn_end", error === undefined ? { reason } : { reason, error }))
+      readBranch()
     }
   }
 
