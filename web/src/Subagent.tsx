@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { addressOf } from "./address.ts"
-import { buttonVariants } from "./components/ui/button.tsx"
+import { followSubagents, type Lineage } from "./card.ts"
 import type { Connection } from "./connection.ts"
 import { holdConversation, type Conversation } from "./conversation.ts"
 import { Reading } from "./Conversation.tsx"
@@ -10,23 +10,43 @@ import { CardButton, StateWord } from "./ProjectCard.tsx"
 import { openSubagent, type Subagent } from "./subagent.ts"
 
 // A subagent's conversation in the middle column, read only, under a
-// header that names it and leads back to the session that started it.
-// Its name and how it stands come from that session's jobs, which the
-// project card follows too; its conversation is read as it works.
+// header that names it, with a line below that leads back to the session
+// that started it. Its name and how it stands come from that session's
+// subagents and jobs, which the project card follows too; its
+// conversation is read as it works.
 export function SubagentView({ connection, parent, parentTitle, subagent }: { connection: Connection; parent: string; parentTitle: string; subagent: string }) {
-  const [held, setHeld] = useState<Conversation>()
+  const [followed, setFollowed] = useState<{ conversation: Conversation; lineage: Lineage }>()
   useEffect(() => {
-    const holding = holdConversation(connection, parent)
-    setHeld(holding.conversation)
-    return holding.release
+    const held = holdConversation(connection, parent)
+    const lineage = followSubagents(connection, parent)
+    setFollowed({ conversation: held.conversation, lineage })
+    return () => {
+      held.release()
+      lineage.close()
+    }
   }, [connection, parent])
-  if (held === undefined) return null
-  return <Opened key={subagent} connection={connection} parent={held} parentId={parent} parentTitle={parentTitle} subagent={subagent} />
+  if (followed === undefined) return null
+  return <Opened key={subagent} connection={connection} {...followed} parentId={parent} parentTitle={parentTitle} subagent={subagent} />
 }
 
-function Opened({ connection, parent, parentId, parentTitle, subagent }: { connection: Connection; parent: Conversation; parentId: string; parentTitle: string; subagent: string }) {
-  const state = useSyncExternalStore(parent.subscribe, parent.state)
-  const found = subagentsOf(state.jobs).find((each) => each.session === subagent)
+function Opened({
+  connection,
+  conversation,
+  lineage,
+  parentId,
+  parentTitle,
+  subagent,
+}: {
+  connection: Connection
+  conversation: Conversation
+  lineage: Lineage
+  parentId: string
+  parentTitle: string
+  subagent: string
+}) {
+  const state = useSyncExternalStore(conversation.subscribe, conversation.state)
+  const { listed } = useSyncExternalStore(lineage.subscribe, lineage.state)
+  const found = subagentsOf(listed, state.jobs).find((each) => each.session === subagent)
   const working = found?.status === "running"
   const workingNow = useRef(working)
   workingNow.current = working
@@ -44,17 +64,18 @@ function Opened({ connection, parent, parentId, parentTitle, subagent }: { conne
 
   return (
     <>
-      <header className="flex h-header-height shrink-0 items-center gap-2 border-b border-line pr-4 pl-4">
-        <a href={addressOf({ session: parentId })} aria-label={`Back to ${parentTitle}`} title={`Back to ${parentTitle}`} className={buttonVariants({ variant: "icon" })}>
-          <CaretLeft />
-        </a>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <h1 className="truncate text-title text-text">{found?.name ?? "Subagent"}</h1>
-          <p className="truncate text-caption text-text-muted">Subagent of {parentTitle}</p>
-        </div>
+      <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-7">
+        <h1 className="min-w-0 flex-1 truncate text-title text-text">{found?.name ?? "Subagent"}</h1>
         {found && <StateWord status={found.status} />}
         <CardButton />
       </header>
+      <a
+        href={addressOf({ session: parentId })}
+        className="flex min-h-control shrink-0 items-center gap-1 border-b border-line px-7 pb-2 text-caption text-text-muted hover:text-text"
+      >
+        <CaretLeft className="size-icon-sm shrink-0" />
+        <span className="min-w-0 truncate">Subagent of {parentTitle}</span>
+      </a>
       {child && <Reading conversation={child} />}
     </>
   )

@@ -291,33 +291,41 @@ it stands, even while a reply is being written:
 
 The project card, on the right, is the selected session's:
 
-- **Its project:** the project's icon and name, its folder, with `~` for a
-  home folder, and the git branch it is on, kept current as the session
-  list keeps it. A session with no project says so.
+- **Its project:** the project's icon and name, its folder, cut at its
+  start when it is long, so that its end shows, and whole when pointed at;
+  and the git branch it is on, kept current as the session list keeps it,
+  or "No branch" in a repository on none of its own, or "Not a git
+  repository". A session with no project says so.
 - **Changes:** Commit, Push and Pull request each send evie a request in
   words, as a message in the session, such as "Commit the changes in this
   session with a short message."; evie carries it out as it would if you had
-  typed it, and asks before pushing, as it always does. Undo last change
-  runs `/undo`, and what it says is a quiet note in the conversation, as
-  the terminal shows it; like the terminal's, the note is not kept, so it
-  is gone once the session is opened again. Each button is disabled while
-  it does not apply, and a line under it says why: no project, a folder
-  that is not a git repository, or evie working on a turn.
-- **Subagents:** each of the session's subagents, newest first, with its
-  name and how its latest round of work stands, in a word (Working, Done,
-  Failed or Stopped), and Stop while it works. Picking one opens its
-  conversation in the middle, read only, under a header that leads back to
-  the session; while it works, what it adds is read every second.
-- **Background jobs:** each job the session has run in the background,
-  with its command and how it stands, and Stop while it runs, which is
-  `/jobs stop`. One opens to its output, which keeps up while it runs.
-  Ended jobs fold away under their count.
+  typed it, and asks before pushing, as it always does. A request sent
+  keeps the three off until evie starts on it, so it is sent once. Undo
+  last change runs `/undo`, and what it says is a quiet note in the
+  conversation, as the terminal shows it; like the terminal's, the note is
+  not kept, so it is gone once the session is opened again. Each button is
+  disabled while it does not apply, and a line under it says why: the
+  session still opening, no project, a folder not in a git repository, or
+  evie working on a turn. With a subagent's conversation open, a press goes
+  back to the session's own first, so that what it says is in view.
+- **Subagents:** each subagent the session has started, newest first, with
+  its name and how its latest round of work stands, in a word (Working,
+  Done, Failed or Stopped), and Stop while it works. One with no round
+  since evie's server last started says Ended. Picking one opens its
+  conversation in the middle, read only, under its name, with a line below
+  that leads back to the session; while it works, what it adds is read
+  every second.
+- **Background jobs:** each job the session has run in the background since
+  evie's server last started, as `/jobs` lists them, with its command and
+  how it stands, and Stop while it runs, which is `/jobs stop`. One opens
+  to its output, which keeps up while it runs, and stays open when the job
+  ends. Ended jobs fold away under their count.
 
-The card lists the subagents and jobs since evie's server last started,
-as `/jobs` does. At desktop width it can be hidden and shown with the
-button at the right of the session's header, or with Cmd+Option+B
-(Ctrl+Alt+B elsewhere), and the browser remembers which. At phone width
-the same button opens it as a sheet over the page, from the right.
+At desktop width the card can be hidden and shown with the button at the
+right of the middle column's header, or with Cmd+Option+B (Ctrl+Alt+B
+elsewhere), and the browser remembers which. At 980px wide or narrower the
+same button opens it as a sheet over the page, from the right, which goes
+once something is picked.
 
 ### Keeping the server running
 
@@ -966,6 +974,7 @@ A few values the design system's board does not name are named once in
 |---|---|---|
 | `session-list` | 288px | The width of the session list |
 | `project-card` | 320px | The width of the project card |
+| `card-sheet` | `min(88vw, 448px)` | The width of the project card as a sheet over the page, at 980px or narrower |
 | `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle |
 | `conversation` | 740px | The widest the conversation is, which the board's Message gives in words |
 | `call-name` | 48px | The room a tool call's name takes in a turn's steps, as the board's Message draws them |

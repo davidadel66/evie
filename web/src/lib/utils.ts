@@ -18,6 +18,7 @@ export const NAMED_SIZES = [
   "job-output",
   "session-list",
   "project-card",
+  "card-sheet",
   "sign-in-column",
   "conversation",
   "call-name",

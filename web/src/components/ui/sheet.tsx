@@ -23,7 +23,7 @@ function SheetContent({ className, ...props }: ComponentProps<typeof SheetPrimit
         data-slot="sheet-content"
         aria-describedby={undefined}
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-project-card max-w-full flex-col border-l border-line bg-surface text-body text-text shadow-float data-[state=closed]:animate-slide-out data-[state=open]:animate-slide-in motion-reduce:animate-none",
+          "fixed inset-y-0 right-0 z-50 flex w-card-sheet flex-col border-l border-line bg-surface text-body text-text shadow-float data-[state=closed]:animate-slide-out data-[state=open]:animate-slide-in motion-reduce:animate-none",
           className,
         )}
         {...props}

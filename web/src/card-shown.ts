@@ -3,15 +3,16 @@ import { isCardShortcut } from "./project-card.ts"
 
 // Where the project card is, and whether it is shown. At desktop width it is
 // the column on the right, which the owner can hide and show, with the
-// button in the session's header or mod+alt+B, and this browser remembers
-// which. At phone width it is a sheet that slides over the page from the
-// right, opened from the session's header, as T3 Code's right panel is at
-// narrow widths.
+// button in the middle column's header or mod+alt+B, and this browser
+// remembers which. At 980px or narrower it is a sheet that slides over the
+// page from the right, opened from the same button, as T3 Code's right
+// panel is at narrow widths.
 
 export type CardShown = { wide: boolean; column: boolean; sheet: boolean }
 
-// The width from which the columns sit side by side, as `wide` in the styles.
-const WIDE = "(min-width: 960px)"
+// The width above which the card is a column: at 980px or narrower it is
+// a sheet, as T3 Code's right panel is.
+const WIDE = "(min-width: 981px)"
 // Where this browser keeps whether the column is hidden.
 const KEY = "evie.card"
 
@@ -55,7 +56,9 @@ export function toggleCard() {
   }
 }
 
-export const closeSheet = () => set({ sheet: false })
+export function closeSheet() {
+  if (shown.sheet) set({ sheet: false })
+}
 
 // mod+alt+B shows and hides the card, wherever the focus is.
 export function useCardShortcut() {

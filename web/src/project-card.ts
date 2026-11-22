@@ -1,44 +1,65 @@
 import type { Job, ListedProject } from "../../src/core/types.ts"
 
-// The project card's rules, apart from its screen: how it says where the
-// session's project is, which of its actions apply and why not, and how it
-// lists the session's subagents and background jobs.
-
-// A project's folder as the card shows it: in a home folder, with ~ in
-// its place. The page cannot ask the server's computer whose home it is,
-// so a folder under /Users or /home is taken to be in its owner's.
-export function shortFolder(folder: string): string {
-  const home = /^\/(?:Users|home)\/[^/]+/.exec(folder)?.[0]
-  return home === undefined ? folder : `~${folder.slice(home.length)}`
-}
+// The project card's rules, apart from its screen: which of its actions
+// apply and why not, how it says the project's branch, and how it lists the
+// session's subagents and background jobs.
 
 // What the card knows of the session when it decides what applies: whether
-// the page is connected, the session's project, null when it has none and
-// undefined while the projects have not been listed, and whether a turn is
-// running in it.
-export type CardFacts = { connected: boolean; project: ListedProject | null | undefined; turnRunning: boolean }
+// the page is connected; whether the session is open, still opening, or
+// could not be opened; its project, null when it has none and undefined
+// while the projects have not been listed; whether a turn is running in
+// it; and whether a git button's request has been sent that evie has not
+// started on yet.
+export type CardFacts = {
+  connected: boolean
+  session: "opening" | "open" | "failed"
+  project: ListedProject | null | undefined
+  turnRunning: boolean
+  requested: boolean
+}
 
 const NOT_CONNECTED = "Not connected to evie's server."
 
-// Why commit, push and pull request do not apply now, or nothing when they
-// do: they need a git repository, and evie to be free to take a request.
-// The project's branch is how the card knows it is a repository: the list
-// of projects gives none for a folder that is not one.
-export function gitWhyNot({ connected, project, turnRunning }: CardFacts): string | undefined {
+// What stops every button: no connection, or no session open.
+function notOpen({ connected, session }: CardFacts): string | undefined {
   if (!connected) return NOT_CONNECTED
+  if (session === "opening") return "Opening the session…"
+  if (session === "failed") return "The session could not be opened."
+  return undefined
+}
+
+// Why commit, push and pull request do not apply now, or nothing when they
+// do: they need a git repository, and evie free to take a request, and
+// one at a time. A folder git did not say about in time is given the
+// benefit of the doubt: evie finds out when it tries.
+export function gitWhyNot(facts: CardFacts): string | undefined {
+  const { project, turnRunning, requested } = facts
+  const closed = notOpen(facts)
+  if (closed !== undefined) return closed
   if (project === null) return "This session has no project, so there is no git repository to work in."
   if (project === undefined) return "The project's details have not been read yet."
-  if (project.branch === undefined) return "The project's folder is not a git repository."
+  if (project.git === false) return "The project's folder is not in a git repository."
   if (turnRunning) return "evie is working. Wait until it has finished."
+  if (requested) return "Sent. evie is about to start on it."
   return undefined
 }
 
 // Why undo does not apply now, or nothing when it does. It puts back what
 // evie's file tools changed, in a project or not, once the turn is over.
-export function undoWhyNot({ connected, turnRunning }: CardFacts): string | undefined {
-  if (!connected) return NOT_CONNECTED
-  if (turnRunning) return "evie is working. Undo when it has finished."
+export function undoWhyNot(facts: CardFacts): string | undefined {
+  const closed = notOpen(facts)
+  if (closed !== undefined) return closed
+  if (facts.turnRunning) return "evie is working. Undo when it has finished."
   return undefined
+}
+
+// What the branch row says: the branch, or why there is none, and whether
+// it is a branch's name, shown as code.
+export function branchWords(project: ListedProject): { text: string; branch: boolean } {
+  if (project.branch !== undefined) return { text: project.branch, branch: true }
+  if (project.git === true) return { text: "No branch", branch: false }
+  if (project.git === false) return { text: "Not a git repository", branch: false }
+  return { text: "Not known", branch: false }
 }
 
 // What each git button asks evie, as a message in the session, in plain
@@ -61,22 +82,36 @@ export function backgroundJobs(jobs: readonly Job[]): { running: Job[]; ended: J
   return { running: own.filter((job) => job.status === "running"), ended: own.filter((job) => job.status !== "running") }
 }
 
-// One of the session's subagents: its session, its name, and how its
-// latest round of work stands, with that round's job, which stops it.
-export type Subagent = { session: string; name: string; status: Job["status"]; job: string }
+// A subagent as the session's stored subagents list it.
+export type Listed = { session: string; name: string | null; started: number }
 
-// The session's subagents, newest first, from the jobs of their rounds of
-// work: each once, however many rounds it has had, as its latest stands.
-// Its name is what its first round was listed as, without the word that
-// says it is a subagent's.
-export function subagentsOf(jobs: readonly Job[]): Subagent[] {
-  const found = new Map<string, Subagent>()
+// One of the session's subagents: its session, its name, and how its
+// latest round of work stands, with that round's job, which stops it. One
+// with no round since the server last started has ended, as far as
+// anyone can tell.
+export type Subagent = { session: string; name: string; status: Job["status"]; job?: string }
+
+// The session's subagents, newest first: those stored, and any its jobs
+// name that were started since they were listed. Each is listed once,
+// however many rounds of work it has had, and stands as its latest round
+// does. It is named as its first round of this run was listed, without
+// the word that says it is a subagent's, or else as stored, by its task.
+export function subagentsOf(listed: readonly Listed[], jobs: readonly Job[]): Subagent[] {
+  const rounds = new Map<string, Job[]>()
   for (const job of [...jobs].sort((a, b) => Number(a.id) - Number(b.id))) {
-    if (job.subagent === undefined) continue
-    const first = found.get(job.subagent)
-    found.set(job.subagent, { session: job.subagent, name: first?.name ?? job.title.replace(/^subagent: /, ""), status: job.status, job: job.id })
+    if (job.subagent !== undefined) rounds.set(job.subagent, [...(rounds.get(job.subagent) ?? []), job])
   }
-  return [...found.values()].reverse()
+  const known = new Map(listed.map((each) => [each.session, each]))
+  const sessions = new Set([...known.keys(), ...rounds.keys()])
+  const started = (session: string) => known.get(session)?.started ?? rounds.get(session)![0]!.started
+  return [...sessions]
+    .sort((a, b) => started(b) - started(a))
+    .map((session) => {
+      const own = rounds.get(session) ?? []
+      const latest = own.at(-1)
+      const name = own[0]?.title.replace(/^subagent: /, "") ?? known.get(session)?.name ?? "Subagent"
+      return { session, name, status: latest?.status ?? "unknown", ...(latest && { job: latest.id }) }
+    })
 }
 
 // How a job, or a subagent's latest round, stands, in a word.
@@ -109,8 +144,19 @@ export function joinOutput(kept: Output | undefined, read: { text: string; from:
 // Whether a key pressed is the one that shows and hides the card, as T3
 // Code's right panel: mod+alt+B, mod being Cmd on a Mac and Ctrl elsewhere.
 // The key is known by its place, since on a Mac Option changes the letter
-// it types.
-export type Keys = { code: string; key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }
+// it types. AltGr, which some keyboards report as Ctrl and Alt, types a
+// letter, so it is not the shortcut; and a key held down toggles once.
+export type Keys = {
+  code: string
+  key: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  repeat: boolean
+  getModifierState(key: string): boolean
+}
 export function isCardShortcut(keys: Keys, mac: boolean): boolean {
+  if (keys.repeat || keys.getModifierState("AltGraph")) return false
   return keys.code === "KeyB" && keys.altKey && !keys.shiftKey && (mac ? keys.metaKey && !keys.ctrlKey : keys.ctrlKey && !keys.metaKey)
 }

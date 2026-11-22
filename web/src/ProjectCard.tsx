@@ -1,16 +1,16 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { Job, ListedProject } from "../../src/core/types.ts"
 import { addressOf } from "./address.ts"
-import { ask, followOutput, stopJob, undo, type Following } from "./card.ts"
+import { ask, followOutput, followSubagents, stopJob, undo, type Following, type Lineage } from "./card.ts"
 import { closeSheet, toggleCard, useCardShown } from "./card-shown.ts"
 import { Button } from "./components/ui/button.tsx"
 import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet.tsx"
 import type { Connection } from "./connection.ts"
 import { holdConversation, type Conversation } from "./conversation.ts"
 import { CaretRight, Check, SidebarRight, X } from "./icons.tsx"
-import { backgroundJobs, gitWhyNot, REQUESTS, shortFolder, stateWord, subagentsOf, undoWhyNot, type Subagent } from "./project-card.ts"
+import { backgroundJobs, branchWords, gitWhyNot, REQUESTS, stateWord, subagentsOf, undoWhyNot, type CardFacts, type Subagent } from "./project-card.ts"
 import { ProjectIcon } from "./ProjectIcon.tsx"
-import { useSelected } from "./selection.ts"
+import { select, useSelected } from "./selection.ts"
 import type { Sessions } from "./sessions.ts"
 import { Spinner } from "./Spinner.tsx"
 
@@ -18,9 +18,14 @@ import { Spinner } from "./Spinner.tsx"
 // folder and branch; what can be done with its changes; its subagents,
 // each of which opens its conversation in the middle; and its background
 // jobs, each of which opens to its output. At desktop width it is a column
-// the owner can hide; at phone width it is a sheet over the page.
+// the owner can hide; narrower, it is a sheet over the page, as T3 Code's
+// right panel is, which goes once something is picked in it or elsewhere.
 export function CardPlace({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const shown = useCardShown()
+  const selected = useSelected()
+  useEffect(() => {
+    if (!shown.wide) closeSheet()
+  }, [selected])
   if (shown.wide) {
     if (!shown.column) return null
     return (
@@ -39,7 +44,7 @@ export function CardPlace({ connection, sessions }: { connection: Connection; se
   )
 }
 
-// The button in the session's header that shows and hides the card.
+// The button in the middle column's header that shows and hides the card.
 export function CardButton() {
   const shown = useCardShown()
   const open = shown.wide ? shown.column : shown.sheet
@@ -111,30 +116,36 @@ function Header({ projectId, project, title }: { projectId: string | null; proje
   )
 }
 
-// Where the project is: its folder, and the branch it is on, as rows.
+// Where the project is: its folder, and the branch it is on, as rows. A
+// session with no project has none, which the header says.
 function Where({ projectId, project }: { projectId: string | null; project: ListedProject | null | undefined }) {
   if (projectId === null) return null
   if (project == null) return <p className="border-t border-line px-7 pt-4 text-caption text-text-muted">The project's details have not been read yet.</p>
+  const branch = branchWords(project)
   return (
     <dl className="flex flex-col px-4">
-      <Row label="Folder" value={shortFolder(project.folder)} whole={project.folder} path />
-      <Row label="Branch" value={project.branch ?? "Not a git repository"} code={project.branch !== undefined} />
+      <Row label="Folder">
+        {/* Cut at its start, so that the end of the path, the project's own folder, shows. */}
+        <dd title={project.folder} dir="rtl" className="min-w-0 truncate font-mono text-code text-text">
+          <bdi dir="ltr">{project.folder}</bdi>
+        </dd>
+      </Row>
+      <Row label="Branch">
+        <dd title={branch.text} className={`min-w-0 truncate ${branch.branch ? "font-mono text-code text-text" : "text-body text-text-muted"}`}>
+          {branch.text}
+        </dd>
+      </Row>
     </dl>
   )
 }
 
-// A row of a list: its label on the left and its value on the right, with
-// a line on top. A long value, such as a folder outside the home folder,
-// goes on over more lines rather than lose its end: a path breaks before
-// one of its folders where it can.
-function Row({ label, value, whole, code = true, path = false }: { label: string; value: string; whole?: string; code?: boolean; path?: boolean }) {
-  const shown = path ? value.split("/").flatMap((part, at) => (at === 0 ? [part] : [<wbr key={at} />, `/${part}`])) : value
+// A row of a list: its label on the left and its value on the right, on
+// one line, with a line on top.
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex min-h-row-height items-center justify-between gap-4 border-t border-line px-3 py-3">
+    <div className="flex h-row-height items-center justify-between gap-4 border-t border-line px-3">
       <dt className="shrink-0 text-body font-medium text-text-muted">{label}</dt>
-      <dd title={whole ?? value} className={`min-w-0 text-right break-words ${code ? "font-mono text-code text-text" : "text-body text-text-muted"}`}>
-        {shown}
-      </dd>
+      {children}
     </div>
   )
 }
@@ -168,17 +179,21 @@ function SessionCard({
   projectId: string | null
   project: ListedProject | null | undefined
 }) {
-  const [conversation, setConversation] = useState<Conversation>()
+  const [followed, setFollowed] = useState<{ conversation: Conversation; lineage: Lineage }>()
   useEffect(() => {
     const held = holdConversation(connection, session)
-    setConversation(held.conversation)
-    return held.release
+    const lineage = followSubagents(connection, session)
+    setFollowed({ conversation: held.conversation, lineage })
+    return () => {
+      held.release()
+      lineage.close()
+    }
   }, [connection, session])
   return (
     <Body>
       <Header projectId={projectId} project={project} />
       <Where projectId={projectId} project={project} />
-      {conversation && <Live connection={connection} conversation={conversation} session={session} opened={opened} project={project} />}
+      {followed && <Live connection={connection} {...followed} session={session} opened={opened} project={project} />}
     </Body>
   )
 }
@@ -186,32 +201,40 @@ function SessionCard({
 function Live({
   connection,
   conversation,
+  lineage,
   session,
   opened,
   project,
 }: {
   connection: Connection
   conversation: Conversation
+  lineage: Lineage
   session: string
   opened: string | undefined
   project: ListedProject | null | undefined
 }) {
   const state = useSyncExternalStore(conversation.subscribe, conversation.state)
+  const { listed } = useSyncExternalStore(lineage.subscribe, lineage.state)
   const connected = useSyncExternalStore(connection.subscribe, connection.state).status === "connected"
-  const facts = { connected, project, turnRunning: state.turnRunning }
-  const subagents = subagentsOf(state.jobs)
+  const facts = {
+    connected,
+    session: state.opened ? "open" : state.problem !== undefined ? "failed" : "opening",
+    project,
+    turnRunning: state.turnRunning,
+  } as const
+  const subagents = subagentsOf(listed, state.jobs)
   const jobs = backgroundJobs(state.jobs)
   const stop = (id: string) => void stopJob(connection, conversation, session, id)
   const working = (count: number) => (count > 0 ? `${count} working` : undefined)
 
   return (
     <>
-      <Changes connection={connection} conversation={conversation} session={session} ready={state.opened} gitWhy={gitWhyNot(facts)} undoWhy={undoWhyNot(facts)} />
+      <Changes connection={connection} conversation={conversation} session={session} opened={opened} facts={facts} />
       {subagents.length > 0 && (
         <Section title="Subagents" {...withCount(working(subagents.filter((each) => each.status === "running").length))}>
           <ul className="flex flex-col">
             {subagents.map((subagent) => (
-              <SubagentRow key={subagent.session} parent={session} subagent={subagent} open={subagent.session === opened} stop={() => stop(subagent.job)} />
+              <SubagentRow key={subagent.session} parent={session} subagent={subagent} open={subagent.session === opened} stop={(job) => stop(job)} />
             ))}
           </ul>
         </Section>
@@ -226,49 +249,67 @@ function Live({
 }
 const withCount = (count: string | undefined) => (count === undefined ? {} : { count })
 
+// How long a git button's request keeps the buttons off when no turn
+// starts for it, in milliseconds.
+const REQUEST_WAIT = 5000
+
 // Commit, push and pull request, each a request in words sent to evie, and
-// undo, each disabled with why while it does not apply.
+// undo, each disabled with why while it does not apply. With a subagent's
+// conversation open in the middle, a press goes back to the session's own
+// first, so that what it says is in view.
 function Changes({
   connection,
   conversation,
   session,
-  ready,
-  gitWhy,
-  undoWhy,
+  opened,
+  facts,
 }: {
   connection: Connection
   conversation: Conversation
   session: string
-  // Whether the session has been opened, and so how it stands is known.
-  ready: boolean
-  gitWhy: string | undefined
-  undoWhy: string | undefined
+  opened: string | undefined
+  facts: Omit<CardFacts, "requested">
 }) {
   // Why a request could not be sent, until the next is.
   const [refused, setRefused] = useState<string>()
   const [sending, setSending] = useState(false)
+  // A request sent that evie has not started on: one at a time.
+  const [requested, setRequested] = useState(false)
   const [undoing, setUndoing] = useState(false)
+  useEffect(() => {
+    if (facts.turnRunning) setRequested(false)
+  }, [facts.turnRunning])
+  useEffect(() => {
+    if (!requested) return
+    const timer = setTimeout(() => setRequested(false), REQUEST_WAIT)
+    return () => clearTimeout(timer)
+  }, [requested])
   const gitNote = useId()
   const undoNote = useId()
-  const why = ready ? (gitWhy ?? refused) : undefined
+  const gitWhy = gitWhyNot({ ...facts, requested })
+  const undoWhy = undoWhyNot({ ...facts, requested })
+  const why = gitWhy ?? refused
+  const back = () => opened !== undefined && select({ session })
   async function request(kind: keyof typeof REQUESTS) {
+    back()
     setSending(true)
-    setRefused(await ask(connection, session, REQUESTS[kind]))
+    const failed = await ask(connection, session, REQUESTS[kind])
+    setRefused(failed)
+    setRequested(failed === undefined)
     setSending(false)
   }
   async function undoLast() {
+    back()
     setUndoing(true)
     await undo(connection, conversation, session)
     setUndoing(false)
   }
-  const gitOff = !ready || gitWhy !== undefined || sending
-  const undoOff = !ready || undoWhy !== undefined || undoing
   return (
     <Section title="Changes">
       {/* Each button's own padding brings its word to the card's 28px edge. */}
       <div className="flex flex-wrap gap-2">
         {(["commit", "push", "pull request"] as const).map((kind) => (
-          <Button key={kind} disabled={gitOff} aria-describedby={why === undefined ? undefined : gitNote} onClick={() => void request(kind)} className="px-3">
+          <Button key={kind} disabled={gitWhy !== undefined || sending} aria-describedby={why === undefined ? undefined : gitNote} onClick={() => void request(kind)} className="px-3">
             {{ commit: "Commit", push: "Push", "pull request": "Pull request" }[kind]}
           </Button>
         ))}
@@ -279,11 +320,11 @@ function Changes({
         </p>
       )}
       <div className="flex pt-3">
-        <Button disabled={undoOff} aria-describedby={ready && undoWhy !== undefined ? undoNote : undefined} onClick={() => void undoLast()} className="px-3">
+        <Button disabled={undoWhy !== undefined || undoing} aria-describedby={undoWhy === undefined ? undefined : undoNote} onClick={() => void undoLast()} className="px-3">
           Undo last change
         </Button>
       </div>
-      {ready && undoWhy !== undefined && (
+      {undoWhy !== undefined && (
         <p id={undoNote} className="px-3 pt-2 text-caption text-text-muted">
           {undoWhy}
         </p>
@@ -316,29 +357,51 @@ export function StateWord({ status }: { status: Job["status"] }) {
   return <span className={`shrink-0 text-caption ${status === "failed" ? "text-status-failed" : "text-text-muted"}`}>{word}</span>
 }
 
-// A subagent, as a row that opens its conversation in the middle, with
-// Stop while it works. The one open is raised.
-function SubagentRow({ parent, subagent, open, stop }: { parent: string; subagent: Subagent; open: boolean; stop(): void }) {
+// A subagent, as a row whose name, on a line of its own, opens its
+// conversation in the middle; under it, how it stands, with Stop while it
+// works. The one open is raised.
+function SubagentRow({ parent, subagent, open, stop }: { parent: string; subagent: Subagent; open: boolean; stop(job: string): void }) {
   return (
-    <li className={`flex h-row-height items-center border-t border-line ${open ? "bg-surface-raised" : ""}`}>
-      <a href={addressOf({ session: parent, subagent: subagent.session })} aria-current={open ? "page" : undefined} className="flex h-full min-w-0 flex-1 items-center gap-3 px-3">
-        <span className="min-w-0 flex-1 truncate text-body font-medium text-text">{subagent.name}</span>
-        <StateWord status={subagent.status} />
+    <li className={`flex flex-col border-t border-line ${open ? "bg-surface-raised" : ""}`}>
+      <a
+        href={addressOf({ session: parent, subagent: subagent.session })}
+        aria-current={open ? "page" : undefined}
+        title={subagent.name}
+        className="flex min-h-control min-w-0 items-center px-3 pt-1 text-body font-medium text-text"
+      >
+        <span className="min-w-0 truncate">{subagent.name}</span>
       </a>
-      {subagent.status === "running" && (
-        <Button variant="quiet" aria-label={`Stop ${subagent.name}`} onClick={stop}>
-          Stop
-        </Button>
-      )}
+      <Standing status={subagent.status} stop={subagent.status === "running" && subagent.job !== undefined ? () => stop(subagent.job!) : undefined} label={`Stop ${subagent.name}`} />
     </li>
   )
 }
 
+// The second line of a row: how it stands, and Stop while it works.
+function Standing({ status, stop, label }: { status: Job["status"]; stop: (() => void) | undefined; label: string }) {
+  return (
+    <div className="flex min-h-control items-center justify-between gap-2 pb-1 pl-3">
+      <StateWord status={status} />
+      {stop && (
+        <Button variant="quiet" aria-label={label} onClick={stop}>
+          Stop
+        </Button>
+      )}
+    </div>
+  )
+}
+
 // The session's background jobs: those running, then those that have
-// ended, folded away under their count. Each opens to its output.
+// ended, folded away under their count. Each opens to its output. They are
+// one list, so that a job open as it ends stays open, with its output, in
+// the ended group, which opens for it.
 function Jobs({ connection, session, running, ended, stop }: { connection: Connection; session: string; running: Job[]; ended: Job[]; stop(id: string): void }) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const [showEnded, setShowEnded] = useState(false)
+  const openEnded = ended.some((job) => open.has(job.id))
+  const endedIds = ended.map((job) => job.id).join(" ")
+  useEffect(() => {
+    if (openEnded) setShowEnded(true)
+  }, [endedIds])
   const toggle = (id: string) =>
     setOpen((was) => {
       const now = new Set(was)
@@ -346,38 +409,28 @@ function Jobs({ connection, session, running, ended, stop }: { connection: Conne
       return now
     })
   const row = (job: Job) => <JobRow key={job.id} connection={connection} session={session} job={job} open={open.has(job.id)} toggle={() => toggle(job.id)} stop={() => stop(job.id)} />
-  return (
-    <ul className="flex flex-col">
-      {running.map(row)}
-      {ended.length > 0 && (
-        <li className="border-t border-line">
-          <button type="button" aria-expanded={showEnded} onClick={() => setShowEnded(!showEnded)} className="flex h-row-height w-full items-center gap-2 px-3 text-body text-text-muted hover:text-text">
-            {ended.length} ended
-            <Caret open={showEnded} />
-          </button>
-        </li>
-      )}
-      {showEnded && ended.map(row)}
-    </ul>
-  )
+  const fold =
+    ended.length > 0 ? (
+      <li key="ended" className="border-t border-line">
+        <button type="button" aria-expanded={showEnded} onClick={() => setShowEnded(!showEnded)} className="flex h-row-height w-full items-center gap-2 px-3 text-body text-text-muted hover:text-text">
+          {ended.length} ended
+          <Caret open={showEnded} />
+        </button>
+      </li>
+    ) : null
+  return <ul className="flex flex-col">{[...running.map(row), fold, ...(showEnded ? ended.map(row) : [])]}</ul>
 }
 
-// A job, as a row that opens to its output, with Stop while it runs.
+// A job, as a row: its command, on a line of its own, which opens to its
+// output; under it, how it stands, with Stop while it runs.
 function JobRow({ connection, session, job, open, toggle, stop }: { connection: Connection; session: string; job: Job; open: boolean; toggle(): void; stop(): void }) {
   return (
     <li className="flex flex-col border-t border-line">
-      <div className="flex h-row-height items-center">
-        <button type="button" aria-expanded={open} onClick={toggle} title={job.title} className="flex h-full min-w-0 flex-1 items-center gap-2 px-3 text-left">
-          <Caret open={open} />
-          <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{job.title}</span>
-          <StateWord status={job.status} />
-        </button>
-        {job.status === "running" && (
-          <Button variant="quiet" aria-label={`Stop job ${job.id}`} onClick={stop}>
-            Stop
-          </Button>
-        )}
-      </div>
+      <button type="button" aria-expanded={open} onClick={toggle} title={job.title} className="flex min-h-control w-full min-w-0 items-center gap-2 px-3 pt-1 text-left">
+        <Caret open={open} />
+        <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{job.title}</span>
+      </button>
+      <Standing status={job.status} stop={job.status === "running" ? stop : undefined} label={`Stop job ${job.id}`} />
       {open && <JobOutput connection={connection} session={session} job={job} />}
     </li>
   )

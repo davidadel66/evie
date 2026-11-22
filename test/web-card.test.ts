@@ -2,8 +2,8 @@ import { afterEach, expect, test } from "bun:test"
 import { appendFile, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { files, jobs, subagents, undo as undoPlugin, type Chunk, type Job } from "../src/index.ts"
-import { ask, followOutput, stopJob, undo, type Following } from "../web/src/card.ts"
+import { files, jobs, startServer, subagents, undo as undoPlugin, type Chunk, type Command, type Evie, type Job } from "../src/index.ts"
+import { ask, followOutput, followSubagents, stopJob, undo, type Following, type Lineage } from "../web/src/card.ts"
 import { openConnection, type Connection } from "../web/src/connection.ts"
 import { holdConversation, type Conversation, type ConversationState } from "../web/src/conversation.ts"
 import { say } from "./support/harness.ts"
@@ -26,11 +26,26 @@ afterEach(async () => {
 })
 
 // A scripted model, or with `script` null, the model the plugins bring.
-async function start(script: ScriptedReply[] | null, plugins: Plugin[] = []) {
+// With `refuse`, the connection is to a server in front of the core whose
+// commands pass through it, which can make one fail, as a server with a
+// fault would.
+async function start(script: ScriptedReply[] | null, plugins: Plugin[] = [], refuse?: (command: Command) => boolean) {
   const model = scriptedProvider(script ?? [])
   const served = await serveEvie([...(script === null ? [] : [model.plugin]), ...plugins])
   cleanups.push(served.stop)
-  const connection = openConnection({ url: served.server.url, token: served.token, firstWait: 10 })
+  let url = served.server.url
+  if (refuse) {
+    const core = served.run.evie
+    const evie: Evie = {
+      send: (command) => (refuse(command) ? Promise.reject(new Error("The disk is busy.")) : core.send(command)) as never,
+      subscribe: (listener) => core.subscribe(listener),
+      close: async () => {},
+    }
+    const server = startServer({ evie, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+    cleanups.push(() => server.stop())
+    url = server.url
+  }
+  const connection = openConnection({ url, token: served.token, firstWait: 10 })
   cleanups.push(() => connection.close())
   return { served, connection, model }
 }
@@ -122,7 +137,7 @@ async function untilOutput(following: Following, ready: (text: string) => boolea
   return following.state()
 }
 
-test("a job's output is read as it grows while it runs, and Stop stops it, saying so in the conversation", async () => {
+test("a job's output is read as it grows while it runs, and Stop stops it, which the job's own lines in the conversation say", async () => {
   const work = backgroundWork()
   const { served, connection } = await start([{ text: [], calls: [{ name: "start_work", input: {} }] }, { text: ["Started."] }], [work.plugin, jobs()])
   await say(served.run, "Build it")
@@ -141,7 +156,50 @@ test("a job's output is read as it grows while it runs, and Stop stops it, sayin
   await stopJob(connection, conversation, served.run.session, "1")
   const stopped = await until(conversation, (state) => state.jobs[0]?.status === "stopped")
   expect(work.started[0]!.stopped).toBe(true)
-  expect(said(stopped)).toContain("Stopping job 1 (the build).")
+  const told = await until(conversation, (state) => said(state).some((line) => line.startsWith("Note to evie: Background job 1")))
+  // The job's end and the note to evie can fall in the same millisecond, in either order.
+  const lines = said(told).filter((line) => line.includes("job 1"))
+  expect(lines).toHaveLength(3)
+  expect(lines).toEqual(
+    expect.arrayContaining([
+      "Background job 1 started: the build",
+      expect.stringMatching(/^Background job 1 stopped after \d+s: the build$/),
+      "Note to evie: Background job 1 (the build) was stopped by the owner.",
+    ]),
+  )
+  expect(stopped.notes).toEqual([])
+})
+
+test("a read of a job's output that fails keeps what was read, and is tried again, waiting longer each time, while the job runs", async () => {
+  const work = backgroundWork()
+  let failing = 0
+  const { served, connection } = await start([{ text: [], calls: [{ name: "start_work", input: {} }] }, { text: ["Started."] }], [work.plugin, jobs()], (command) => {
+    if (command.type !== "read_job_output" || failing === 0) return false
+    failing -= 1
+    return true
+  })
+  await say(served.run, "Build it")
+  const { conversation } = hold(connection, served.run.session)
+  await until(conversation, (state) => state.opened && state.jobs.length === 1)
+  const file = work.started[0]!.job.outputFile
+  await appendFile(file, "compiling\n")
+  const running = () => conversation.state().jobs[0]?.status === "running"
+  const following = followOutput(connection, served.run.session, "1", { running, every: 10 })
+  cleanups.push(async () => following.close())
+  await untilOutput(following, (text) => text === "compiling\n")
+
+  failing = 3
+  while (following.state().problem === undefined) await Bun.sleep(5)
+  expect(following.state()).toEqual({ output: { text: "compiling\n", to: 10, cut: false }, problem: "The output could not be read: The disk is busy." })
+  await appendFile(file, "linking\n")
+  const caughtUp = await untilOutput(following, (text) => text === "compiling\nlinking\n")
+  expect([caughtUp.problem, failing]).toEqual([undefined, 0])
+
+  // A file that has gone is a failure too, which keeps what was read.
+  await rm(file)
+  while (following.state().problem === undefined) await Bun.sleep(5)
+  expect(following.state().output?.text).toBe("compiling\nlinking\n")
+  expect(following.state().problem).toStartWith("The output could not be read: The output of job 1 could not be read:")
 })
 
 test("a git button sends evie its request as the owner's message, which starts a turn as typing it would", async () => {
@@ -182,7 +240,13 @@ function withSubagent(parent: { text?: string; call?: { name: string; input: Rec
   return { plugin, release }
 }
 
-test("a session's subagents are known from its jobs, and one opened reads its conversation, and follows it while it works", async () => {
+// Settles once the session's stored subagents are listed as `ready` says.
+async function untilListed(lineage: Lineage, ready: (listed: ReturnType<Lineage["state"]>["listed"]) => boolean) {
+  while (!ready(lineage.state().listed)) await Bun.sleep(5)
+  return lineage.state().listed
+}
+
+test("a session's subagents are known from those stored and from its jobs, and one opened reads its conversation, and follows it while it works", async () => {
   const model = withSubagent(
     [{ call: { name: "subagent", input: { description: "find the tests", task: "Find where the tests are." } } }, { text: "A subagent is looking." }, { text: "They are in test/." }],
     [{ call: { name: "wait", input: {} } }, { text: "They are in test/, one file a module." }],
@@ -191,10 +255,14 @@ test("a session's subagents are known from its jobs, and one opened reads its co
   await say(served.run, "Where are the tests?")
   const { conversation } = hold(connection, served.run.session)
   const parent = await until(conversation, (state) => state.opened && state.jobs.length === 1)
-  const [found] = subagentsOf(parent.jobs)
+  const lineage = followSubagents(connection, served.run.session)
+  cleanups.push(async () => lineage.close())
+  const listed = await untilListed(lineage, (each) => each.length === 1)
+  expect(listed).toEqual([{ session: parent.jobs[0]!.subagent!, name: "Find where the tests are.", started: expect.any(Number) }])
+  const [found] = subagentsOf(listed, parent.jobs)
   expect(found).toMatchObject({ name: "find the tests", status: "running", job: "1" })
 
-  const working = () => subagentsOf(conversation.state().jobs)[0]?.status === "running"
+  const working = () => subagentsOf(listed, conversation.state().jobs)[0]?.status === "running"
   const child = openSubagent(connection, found!.session, { working, every: 10 })
   cleanups.push(async () => child.close())
   const reading = await until(child, (state) => state.opened && state.events.length >= 4)
@@ -205,4 +273,32 @@ test("a session's subagents are known from its jobs, and one opened reads its co
   const done = await until(child, (state) => !state.turnRunning)
   expect(said(done)).toEqual(["Find where the tests are.", "Used wait", "They are in test/, one file a module."])
   await until(conversation, (state) => state.jobs[0]?.status === "finished")
+})
+
+test("a subagent's conversation that could not read a page before carries on following it once that page is read again", async () => {
+  const model = withSubagent(
+    [{ call: { name: "subagent", input: { description: "find the tests", task: "Find where the tests are." } } }, { text: "A subagent is looking." }, { text: "They are in test/." }],
+    [{ text: "I'll look.", call: { name: "wait", input: {} } }, { text: "They are in test/, one file a module." }],
+  )
+  let refusing = false
+  const { served, connection } = await start(null, [model.plugin, subagents({ dataFolder: await folder() }), jobs()], (command) => refusing && command.type === "read_history" && command.before !== undefined)
+  await say(served.run, "Where are the tests?")
+  const { conversation } = hold(connection, served.run.session)
+  const parent = await until(conversation, (state) => state.opened && state.jobs.length === 1)
+  const working = () => conversation.state().jobs[0]?.status === "running"
+  const child = openSubagent(connection, parent.jobs[0]!.subagent!, { working, every: 10, page: 2 })
+  cleanups.push(async () => child.close())
+  await until(child, (state) => state.opened && state.earlier)
+
+  refusing = true
+  child.readEarlier()
+  await until(child, (state) => state.problem !== undefined)
+  model.release()
+  await until(conversation, (state) => state.jobs[0]?.status === "finished")
+
+  refusing = false
+  child.tryAgain()
+  const done = await until(child, (state) => said(state).at(-1) === "They are in test/, one file a module.")
+  expect(done.problem).toBeUndefined()
+  expect(done.turnRunning).toBe(false)
 })

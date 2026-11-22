@@ -17,7 +17,7 @@ export type Subagent = Conversation & { poke(): void }
 
 const FRESH: ConversationState = { opened: false, readingEarlier: false, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], notes: [] }
 
-export function openSubagent(connection: Connection, session: string, options: { working(): boolean; every?: number }): Subagent {
+export function openSubagent(connection: Connection, session: string, options: { working(): boolean; every?: number; page?: number }): Subagent {
   let state = FRESH
   const listeners = new Set<() => void>()
   const set = (next: Partial<ConversationState>) => {
@@ -52,7 +52,7 @@ export function openSubagent(connection: Connection, session: string, options: {
       let before: number | undefined
       let earlier = false
       for (;;) {
-        const page = await evie.send({ type: "read_history", session, limit: PAGE, ...(before !== undefined && { before }) })
+        const page = await evie.send({ type: "read_history", session, limit: options.page ?? PAGE, ...(before !== undefined && { before }) })
         pages.push(page.events)
         if (pages.length === 1) earlier = page.earlier
         const first = page.events[0]?.seq
@@ -75,14 +75,24 @@ export function openSubagent(connection: Connection, session: string, options: {
     if (running(state.events) || wasRunning) timer = setTimeout(() => void readNew(), options.every ?? EVERY)
   }
 
+  // Reading what is new waits while a page before has failed, and carries
+  // on once that page is read. Tried again, it is read on the client the
+  // page is connected on then.
   function readEarlier(evie: Evie, before: number) {
     set({ readingEarlier: true })
-    evie.send({ type: "read_history", session, before }).then(
-      (page) => !closed && set({ readingEarlier: false, events: merged(page.events, state.events), earlier: page.earlier }),
+    evie.send({ type: "read_history", session, limit: options.page ?? PAGE, before }).then(
+      (page) => {
+        if (closed) return
+        set({ readingEarlier: false, events: merged(page.events, state.events), earlier: page.earlier })
+        void readNew()
+      },
       (cause: unknown) => {
         if (closed) return
         set({ readingEarlier: false })
-        failed = () => readEarlier(evie, before)
+        failed = () => {
+          const now = clientOf()
+          if (now !== undefined) readEarlier(now, before)
+        }
         set({ problem: `The subagent's earlier conversation could not be read: ${wordsOf(cause)}` })
       },
     )
@@ -128,8 +138,8 @@ export function openSubagent(connection: Connection, session: string, options: {
   }
 }
 
-// How many events each read asks for, and how often, in milliseconds,
-// what is new is asked for while the subagent works.
+// How many events each read asks for, unless a test asks for fewer, and
+// how often, in milliseconds, what is new is asked for while the subagent works.
 const PAGE = 50
 const EVERY = 1000
 

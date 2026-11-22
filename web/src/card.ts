@@ -1,7 +1,7 @@
 import type { Evie } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 import type { Conversation } from "./conversation.ts"
-import { joinOutput, type Output } from "./project-card.ts"
+import { joinOutput, type Listed, type Output } from "./project-card.ts"
 
 // The project card's work with evie's server, apart from its screen: undo,
 // the git buttons' requests, stopping a job, and following a job's output.
@@ -43,7 +43,17 @@ export async function ask(connection: Connection, session: string, text: string)
 }
 
 // Stops a background job, or a subagent's round of work, with /jobs stop.
-export const stopJob = (connection: Connection, conversation: Conversation, session: string, id: string) => command(connection, conversation, session, "jobs", `stop ${id}`)
+// What /jobs says is not shown: the job's own lines in the conversation
+// say that it stopped. Only a stop that could not be asked for is.
+export async function stopJob(connection: Connection, conversation: Conversation, session: string, id: string) {
+  const evie = clientOf(connection)
+  if (evie === undefined) return conversation.note(NOT_CONNECTED)
+  try {
+    await evie.send({ type: "run_command", session, name: "jobs", args: `stop ${id}` })
+  } catch (cause) {
+    conversation.note(`Job ${id} could not be stopped: ${wordsOf(cause)}`)
+  }
+}
 
 // A job's output as the card shows it, read so far, or why it could not be.
 export type FollowingState = { output: Output | undefined; problem: string | undefined }
@@ -57,7 +67,9 @@ export type Following = {
 // milliseconds while `running` says the job runs, and once more after it
 // has ended, for what it wrote last. The output has no event of its own,
 // so it is asked for. It is read only while the page is connected, one
-// read at a time, and again once the line is back.
+// read at a time, and again once the line is back. A read that fails
+// keeps what was read before, and is tried again while the job runs,
+// waiting twice as long each time, up to ten times `every`.
 export function followOutput(connection: Connection, session: string, id: string, options: { running(): boolean; every?: number }): Following {
   let state: FollowingState = { output: undefined, problem: undefined }
   const listeners = new Set<() => void>()
@@ -70,6 +82,9 @@ export function followOutput(connection: Connection, session: string, id: string
   let timer: ReturnType<typeof setTimeout> | undefined
   // Whether a read is due: the first, and each while the job runs.
   let due = true
+  // How many reads in a row have failed.
+  let failures = 0
+  const every = options.every ?? EVERY
 
   async function read() {
     const evie = clientOf(connection)
@@ -84,17 +99,21 @@ export function followOutput(connection: Connection, session: string, id: string
       if (closed) return
       const output = joinOutput(state.output, answer)
       if (output !== state.output || state.problem !== undefined) set({ output, problem: undefined })
+      failures = 0
     } catch (cause) {
-      // Tried again when the line comes back, if it was down.
+      // Tried again when the line comes back, if it was down, and while the job runs.
       due = true
-      if (!closed) set({ problem: `The output could not be read: ${wordsOf(cause)}` })
+      failures += 1
+      if (closed) return
+      set({ problem: `The output could not be read: ${wordsOf(cause)}` })
+      if (options.running()) timer = setTimeout(() => void read(), Math.min(every * 2 ** failures, every * 10))
       return
     } finally {
       reading = false
     }
     if (options.running() || wasRunning) {
       due = true
-      timer = setTimeout(() => void read(), options.every ?? EVERY)
+      timer = setTimeout(() => void read(), every)
     }
   }
   const unfollow = connection.subscribe(() => void read())
@@ -116,3 +135,56 @@ export function followOutput(connection: Connection, session: string, id: string
 
 // How often a running job's output is asked for, in milliseconds.
 const EVERY = 1000
+
+// The session's stored subagents, read once connected, and again each time
+// the line comes back, since the server may have started again since. The
+// subagents started meanwhile are known from the session's jobs.
+export type Lineage = {
+  state(): { listed: Listed[]; problem: string | undefined }
+  subscribe(listener: () => void): () => void
+  close(): void
+}
+
+export function followSubagents(connection: Connection, session: string): Lineage {
+  let state: ReturnType<Lineage["state"]> = { listed: [], problem: undefined }
+  const listeners = new Set<() => void>()
+  const set = (next: Partial<typeof state>) => {
+    state = { ...state, ...next }
+    for (const listener of [...listeners]) listener()
+  }
+  let closed = false
+  let listedOn: Evie | undefined
+  function list() {
+    const evie = clientOf(connection)
+    if (closed || evie === undefined || evie === listedOn) return
+    listedOn = evie
+    evie.send({ type: "list_subagents", session }).then(
+      (listed) => !closed && set({ listed, problem: undefined }),
+      (cause: unknown) => {
+        if (closed) return
+        listedOn = undefined
+        set({ problem: `The subagents could not be listed: ${wordsOf(cause)}` })
+      },
+    )
+  }
+  let status = connection.state().status
+  const unfollow = connection.subscribe(() => {
+    const now = connection.state().status
+    // Back after a drop, the server may have started again, with new jobs.
+    if (now === "connected" && status !== "connected") listedOn = undefined
+    status = now
+    list()
+  })
+  list()
+  return {
+    state: () => state,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => void listeners.delete(listener)
+    },
+    close() {
+      closed = true
+      unfollow()
+    },
+  }
+}

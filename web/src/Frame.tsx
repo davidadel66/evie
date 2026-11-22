@@ -42,29 +42,49 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
 }
 
 // The middle column: the selected session's conversation, under its name,
-// or one of its subagents', or for a draft, where the new session will start.
+// or one of its subagents', or for a draft, where the new session will
+// start. Whatever it shows, its header has the button that shows and hides
+// the project card.
 function OpenSession({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
-  if (selected === undefined) return <Placeholder title="No session open" text="The conversation will be here: your messages, evie's replies and the steps it took." />
+  if (selected === undefined) return <Empty title="No session open" text="The conversation will be here: your messages, evie's replies and the steps it took." />
   if ("draft" in selected) {
     const project = list.projects.find((each) => each.id === selected.draft)
     const where = selected.draft === null ? "with no project" : `in ${project?.name ?? "its project"}`
-    return <Placeholder title="New session" text={`A new session ${where} starts when its first message is sent.`} />
+    return <Empty title="New session" text={`A new session ${where} starts when its first message is sent.`} />
   }
   // A session is opened once the list shows it is one: until the list is
   // read, nothing is shown, and one the list does not have is not opened.
-  if (!list.listed) return null
+  if (!list.listed) return <Top />
   const session = list.sessions.find((each) => each.session === selected.session)
-  if (session === undefined) return <Placeholder title="This session is not in the list" text="Nothing has been said in it yet, or it is no longer there." />
+  if (session === undefined) return <Empty title="This session is not in the list" text="Nothing has been said in it yet, or it is no longer there." />
   if (selected.subagent !== undefined) return <SubagentView connection={connection} parent={selected.session} parentTitle={titleOf(session)} subagent={selected.subagent} />
   return (
     <>
-      <header className="flex h-header-height shrink-0 items-center gap-3 border-b border-line pr-4 pl-7">
-        <h1 className="min-w-0 flex-1 truncate text-title text-text">{titleOf(session)}</h1>
-        <CardButton />
-      </header>
+      <Top title={titleOf(session)} />
       <Conversation connection={connection} session={selected.session} />
+    </>
+  )
+}
+
+// The middle column's header: the session's name, when there is one to
+// show, and the button that shows and hides the project card.
+function Top({ title }: { title?: string }) {
+  return (
+    <header className="flex h-header-height shrink-0 items-center gap-3 border-b border-line pr-4 pl-7">
+      {title === undefined ? <span className="flex-1" /> : <h1 className="min-w-0 flex-1 truncate text-title text-text">{title}</h1>}
+      <CardButton />
+    </header>
+  )
+}
+
+// The middle column with nothing to read in it, which says why below the header.
+function Empty({ title, text }: { title: string; text: string }) {
+  return (
+    <>
+      <Top />
+      <Placeholder title={title} text={text} />
     </>
   )
 }
