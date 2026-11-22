@@ -77,7 +77,7 @@ export function QueuedMessages({ conversation, queue, turnRunning, asked }: { co
                       title={asked ? "Answer the question first" : queue.editing !== undefined ? "Another queued message is being edited" : "Edit in the message box"}
                       disabled={asked || queue.editing !== undefined}
                       onClick={() => conversation.editQueued(item.key)}
-                      className="size-control-xs [&>svg]:size-icon-row"
+                      className="size-control-xs disabled:opacity-64 [&>svg]:size-icon-row"
                     >
                       <PencilSimple />
                     </Button>

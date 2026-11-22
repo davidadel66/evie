@@ -421,13 +421,23 @@ under it, and works as T3 Code's does:
   at its next step.
 - **Queued, not steered:** with Mod held, Mod+Enter or a Mod-click on Send,
   a message sent while evie works waits instead, at the end of the
-  conversation, dashed as a message not yet sent, and is sent as a turn of
-  its own once the turn before it has finished, one after another. Each
-  can be sent at once, edited in the box (Escape gives the edit up) or
-  removed. A turn that is stopped, or fails, holds the queue until you send
-  one of its messages by hand. The page holds the queue, not the server: it
-  keeps the session open while anything is queued, and a page closed or
-  reloaded loses it.
+  conversation, dashed and marked Queued, and is sent as a turn of its
+  own once the turn before it has finished: one at a time, the next only
+  once the last has reached the session and its turn has ended. While a
+  question waits, Mod+Enter answers it, or says no and what to do
+  instead, as Enter does, and never queues. Each queued message can be
+  sent at once, edited in the box (Escape gives the edit up; Alt+Up edits
+  the last) or removed; one is edited at a time, and none while a
+  question waits. A turn that is stopped, or fails, holds the queue, which
+  says so, "Held after Stop", with Send now, until you send one of its
+  messages by hand; a turn started another way, from the box or a
+  terminal, does not let it go on. Leaving the session gives up an edit
+  and holds the queue too, so that nothing is sent while you cannot see
+  it, and it is there, held, when you come back. When the line comes back
+  after a drop, the session is read again before anything is sent, and
+  how its last turn ended decides. The page holds the queue, not the
+  server: a page closed or reloaded loses it. For a moment after a send,
+  Send stays Send, so that a second click is not a Stop.
 - **A question** shows at the end of the conversation, as part of evie's
   reply: the question, its choices as round buttons under it, the first
   the main one, and "Needs you. Waiting for your answer". The keys 1 to 9
@@ -469,7 +479,11 @@ under it, and works as T3 Code's does:
   the text as a chip, its icon and its name, which Backspace takes off
   whole; the message says `@` and its path, such as `@src/app.ts`, and
   evie reads it with its tools. A message brought back with Up has its
-  files as chips again. The
+  files as chips again, and so does text pasted or dropped with `@` and a
+  path in it: a chip copied, cut or dragged is its `@` and its path. The
+  box keeps its own undo history, so Mod+Z undoes a chip picked, a paste
+  or a new line in the order they were made, and Mod+Shift+Z does it
+  again. The
   files are those git lists, tracked or not, but not those it ignores, or
   outside git every file; never `.git`, `node_modules`, the `.evie`
   folder, evie's data folder or a folder of keys such as `.ssh`, and at
@@ -725,7 +739,8 @@ went wrong), with the session's name:
 
 In the settings, Notifications are Off at first, or Notifications, Sound
 only, or Notifications with sound; the browser is asked to allow them only
-when you turn them on. A browser shows them only for a page at a secure
+when you turn them on, and a choice of them is kept only once it does,
+as T3 Code's; otherwise the setting says how to allow them. A browser shows them only for a page at a secure
 address, such as `127.0.0.1` on this computer, so not over plain `http`
 from another device. Notices in the page are a switch of their own, on
 until you turn them off. The system's notifications are silent, and
