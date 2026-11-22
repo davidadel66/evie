@@ -102,6 +102,15 @@ test("a change to a file is asked about, and a yes lets that one change through"
   expect(ran).toEqual(["edit src/app.ts", "edit src/app.ts"])
 })
 
+test("a permission prompt says it is one, so that a client can show it as one, as the web app shows it in place", async () => {
+  const { run, attempt } = await start()
+
+  await attempt(edit("src/app.ts"), YES)
+
+  const question = stored(run.events).find((event) => event.type === "question")
+  expect(question?.body).toEqual({ id: expect.any(String), text: "Let Evie change src/app.ts?", choices: [YES, "Always in this project: allow changing files inside the project", NO], freeText: true, kind: "permission" })
+})
+
 test("a no stops the call, and the model is told why", async () => {
   const { attempt, ran } = await start()
 

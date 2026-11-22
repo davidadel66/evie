@@ -389,3 +389,23 @@ test("a limit that could not be looked up is looked up again later", async () =>
 
   expect(compactions()).toHaveLength(1)
 })
+
+test("a client can read how full the conversation is, as the loop measures it, and where it is compacted, with the model in use", async () => {
+  // The model reads 1,000 tokens, so it is compacted at 800, below the ceiling.
+  const { run } = await start([{ text: ["A1"], usage: { inputTokens: 300, outputTokens: 20 } }], { limit: 1000, ceiling: 200_000 })
+  const read = () => run.evie.send({ type: "read_context", session: run.session })
+
+  expect(await read()).toEqual({ model: "test/model", size: 0, compactsAt: 800 })
+  await say(run, "hi")
+  expect(await read()).toEqual({ model: "test/model", size: 320, compactsAt: 800 })
+  // Switched to another model, the conversation is the same size, and the model is the new one.
+  await run.evie.send({ type: "set_model", session: run.session, model: "other/model" })
+  expect(await read()).toEqual({ model: "other/model", size: 320, compactsAt: 800 })
+})
+
+test("reading how full the conversation is needs the session open, and with a model whose limit is not known, the ceiling decides", async () => {
+  const { run } = await start([], { ceiling: 5000 })
+
+  expect(await run.evie.send({ type: "read_context", session: run.session })).toEqual({ model: "test/model", size: 0, compactsAt: 5000 })
+  expect(run.evie.send({ type: "read_context", session: "no-such-session" })).rejects.toThrow('The session "no-such-session" is not open.')
+})

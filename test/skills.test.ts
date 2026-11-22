@@ -245,3 +245,21 @@ test("a very long skill is cut, and a skill whose name cannot be typed after a s
   expect(lastResult()).toContain("[The rest of this file was left out: it is longer than 32 KiB.]")
   expect(lastResult().length).toBeLessThan(34_000)
 })
+
+test("a client can list the commands it can run in a session, each with what it does, and the owner's skills among them, except those a slash cannot reach", async () => {
+  const other: Plugin = { name: "other", setup: (host) => host.commands.add({ name: "status", description: "Shows the status.", run: () => "All quiet." }) }
+  const { run, mine } = await start([], { plugins: () => [other] })
+  await writeSkill(mine, "release", RELEASE)
+  // A command has the name already, and a slash cannot start a name like this one.
+  await writeSkill(mine, "status", "---\ndescription: How to write a status report.\n---\nKeep it short.\n")
+  await writeSkill(mine, "2fa", "---\ndescription: Two-factor setup.\n---\nDo it.\n")
+  await writeSkill(mine, "notes", "---\nname: notes\n---\nKeep notes.\n")
+
+  expect(await run.evie.send({ type: "list_commands", session: run.session })).toEqual([
+    { name: "skills", description: "List your skills. To start one, type a slash and its name, with anything you want to add." },
+    { name: "status", description: "Shows the status." },
+    { name: "compact", description: "Replace the older part of the conversation with a summary, to save room." },
+    { name: "notes", description: "", kind: "skill" },
+    { name: "release", description: "How to cut a release of this project.", kind: "skill" },
+  ])
+})

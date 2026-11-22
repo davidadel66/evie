@@ -689,6 +689,36 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return { text }
   }
 
+  async function readContext(input: Commands["read_context"]["input"]): Promise<Commands["read_context"]["output"]> {
+    const { loop, model: startedWith } = open(input.session)
+    const model = currentModel(log.events(input.session), startedWith)
+    return { model, ...(await loop.measure()) }
+  }
+
+  // A name a slash can reach, as the terminal reads one: a letter, then
+  // letters, digits, dashes and underscores.
+  const SLASH_NAME = /^[A-Za-z][\w-]*$/
+  async function listCommands(input: Commands["list_commands"]["input"]): Promise<Commands["list_commands"]["output"]> {
+    const { host } = open(input.session)
+    const commands = host.commands.list()
+    const own = new Set(commands.map((command) => command.name))
+    const listed: Commands["list_commands"]["output"] = commands.map(({ name, description }) => ({ name, description }))
+    for (const command of commands) {
+      for (const each of (await command.names?.()) ?? []) {
+        // A command's own name wins over a name another covers, so the slash would not reach this one.
+        if (own.has(each.name) || !SLASH_NAME.test(each.name) || listed.some((other) => other.name === each.name)) continue
+        listed.push({ name: each.name, description: each.description, ...(each.kind !== undefined && { kind: each.kind }) })
+      }
+    }
+    return listed
+  }
+
+  async function listModels(input: Commands["list_models"]["input"]): Promise<Commands["list_models"]["output"]> {
+    const provider = open(input.session).host.providers.list()[0]!
+    if (!provider.models) throw new Error(`This session's provider, ${provider.name}, does not list its models. Type the model's name after /model instead.`)
+    return provider.models()
+  }
+
   // Opens a session again in this process, to pick up what was left in it.
   // A subagent's is opened by the session that started it, which is opened first.
   async function reopen(session: string): Promise<void> {
@@ -730,6 +760,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return summaries.list() as Output
         case "new_project":
           return (await newProject(command)) as Output
+        case "read_context":
+          return (await readContext(command)) as Output
+        case "list_commands":
+          return (await listCommands(command)) as Output
+        case "list_models":
+          return (await listModels(command)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

@@ -35,7 +35,12 @@ export function createQuestions(options: { log: EventLog; emit(event: EvieEvent)
       if (question.choices.length === 0 && !question.freeText) throw new Error("A question needs choices, or to allow an answer in words.")
 
       const id = crypto.randomUUID().slice(0, 8)
-      const asked: Question = { text: question.text, choices: [...question.choices], ...(question.freeText && { freeText: true as const }) }
+      const asked: Question = {
+        text: question.text,
+        choices: [...question.choices],
+        ...(question.freeText && { freeText: true as const }),
+        ...(question.kind === "permission" && { kind: "permission" as const }),
+      }
       const event = log.append(session, "question", { id, ...(asker !== undefined && { asker }), ...asked })
 
       return new Promise((resolve) => {

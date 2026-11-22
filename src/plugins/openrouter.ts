@@ -55,22 +55,38 @@ const failed = (error: string, status?: number): Chunk => ({
 export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
   const send = options.fetch ?? globalThis.fetch
   const sleep = options.sleep ?? wait
-  // What each model can read, fetched from OpenRouter's list once and kept.
-  let limits: Promise<Map<string, number> | undefined> | undefined
+  // OpenRouter's list of models, with what each can read, fetched once and
+  // kept. A fetch that failed is not kept, so the next call tries again.
+  type Listed = { id: string; name: string; limit?: number }
+  let listing: Promise<Listed[] | undefined> | undefined
+  async function list(): Promise<Listed[] | undefined> {
+    listing ??= send(MODELS, { signal: AbortSignal.timeout(LIST_TIMEOUT) })
+      .then((response) => response.json() as Promise<{ data?: { id?: unknown; name?: unknown; context_length?: unknown }[] }>)
+      .then((body) =>
+        (body.data ?? []).flatMap(({ id, name, context_length: limit }) =>
+          typeof id === "string" && id !== ""
+            ? [{ id, name: typeof name === "string" && name !== "" ? name : id, ...(typeof limit === "number" && limit > 0 && { limit }) }]
+            : [],
+        ),
+      )
+      .catch(() => undefined)
+    const listed = await listing
+    if (!listed) listing = undefined
+    return listed
+  }
 
   return {
     name: "openrouter",
 
+    // If the list cannot be fetched, the limit is simply not known.
     async contextLimit(model) {
-      limits ??= send(MODELS, { signal: AbortSignal.timeout(LIST_TIMEOUT) })
-        .then((response) => response.json() as Promise<{ data?: { id?: string; context_length?: number }[] }>)
-        .then((body) => new Map((body.data ?? []).flatMap((entry) => (entry.id && entry.context_length ? [[entry.id, entry.context_length] as const] : []))))
-        // If the list cannot be fetched, the limit is simply not known.
-        .catch(() => undefined)
-      const list = await limits
-      // A failed fetch is not kept, so the next call tries again.
-      if (!list) limits = undefined
-      return list?.get(model)
+      return (await list())?.find((entry) => entry.id === model)?.limit
+    },
+
+    async models() {
+      const listed = await list()
+      if (!listed) throw new Error("OpenRouter's list of models could not be fetched. Check the network, and try again.")
+      return listed.map(({ id, name }) => ({ id, name }))
     },
 
     async *stream(request, signal) {
