@@ -860,15 +860,27 @@ test("a session continued by its folder is caught up on at once, so what is writ
   for (const piece of ["Work", " and", " done."]) expect(printed.split(piece)).toHaveLength(2)
 })
 
+// How long the client in the test below lets its line carry nothing before
+// it takes the line to have dropped, in place of 45 seconds. The server, the
+// line and the client all run in the test's one process, so when a busy
+// machine holds that process up, the server cannot send its keepalives
+// either, and once the process runs again the client's wait is over before
+// the next keepalive can reach it: it drops a line that was fine and
+// connects again. So the wait is far longer than the 20 milliseconds between
+// keepalives, and than the hold-ups of up to about half a second seen on a
+// busy test machine.
+const DEAD_AFTER = 1000
+
 test("a line that goes silent without closing, as when a laptop wakes on another network, is noticed, and the client connects again", async () => {
   const { served, line, connect } = await serveOverALine([scriptedProvider([{ text: ["Hi."] }, { text: ["Hi again."] }]).plugin], { keepaliveEvery: 20 })
   const drops: string[] = []
   let back = 0
-  const client = await connect({ deadAfter: 300, onDrop: (reason) => drops.push(reason), onBack: () => back++ })
+  const client = await connect({ deadAfter: DEAD_AFTER, onDrop: (reason) => drops.push(reason), onBack: () => back++ })
   const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
   await say({ evie: client, session }, "hello")
-  // A line that is only quiet is kept: the server's keepalives come through it.
-  await Bun.sleep(600)
+  // A line that is only quiet, for twice as long as the client waits, is
+  // kept: the server's keepalives come through it.
+  await Bun.sleep(DEAD_AFTER * 2)
   expect(drops).toEqual([])
 
   line.freeze()
