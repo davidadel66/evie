@@ -6,7 +6,7 @@ import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
-import { createProjects, keepEvieOutOfGit, makeProject } from "./projects.ts"
+import { branchOf, createProjects, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
 import { createSummaries } from "./summaries.ts"
@@ -618,6 +618,16 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, limit)
   }
 
+  // Each project's branch is read now, from its folder, all at once.
+  async function listProjects(): Promise<Commands["list_projects"]["output"]> {
+    return Promise.all(
+      projects.list().map(async (project) => {
+        const branch = await branchOf(project.folder)
+        return branch === undefined ? project : { ...project, branch }
+      }),
+    )
+  }
+
   async function newProject(input: Commands["new_project"]["input"]): Promise<Commands["new_project"]["output"]> {
     const { project, madeFolder, heldFiles } = await makeProject(projects, input, home)
     keepEvieOutOfGit(project.folder)
@@ -715,7 +725,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
         case "read_history":
           return readHistory(command) as Output
         case "list_projects":
-          return projects.list() as Output
+          return (await listProjects()) as Output
         case "list_sessions":
           return summaries.list() as Output
         case "new_project":

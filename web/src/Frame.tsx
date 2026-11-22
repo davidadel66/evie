@@ -1,14 +1,20 @@
-import { useState } from "react"
+import { useState, useSyncExternalStore } from "react"
+import { Button } from "./components/ui/button.tsx"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import { ConnectionLight } from "./ConnectionLight.tsx"
 import type { ConnectionState } from "./connection.ts"
-import { Menu } from "./Menu.tsx"
+import { useSelected } from "./selection.ts"
+import { titleOf } from "./session-list.ts"
+import { SessionList } from "./SessionList.tsx"
+import type { Sessions } from "./sessions.ts"
 import { applyTheme, rememberedTheme, THEMES, type Theme } from "./theme.ts"
 import { Words } from "./Words.tsx"
 
 // The page once signed in: the session list, the conversation and the
-// project card, in three columns, which stack at phone width. Each holds,
-// for now, a note of what will go there.
-export function Frame({ state }: { state: ConnectionState }) {
+// project card, in three columns, which stack at phone width. The
+// conversation and the project card hold, for now, a note of what will go
+// there.
+export function Frame({ state, sessions }: { state: ConnectionState; sessions: Sessions }) {
   return (
     <div className="flex min-h-dvh flex-col wide:h-dvh wide:flex-row">
       <aside aria-label="Sessions" className="flex flex-col bg-bg-side wide:w-session-list wide:shrink-0">
@@ -25,12 +31,11 @@ export function Frame({ state }: { state: ConnectionState }) {
             <Words text={state.reason} />
           </p>
         )}
-        <p className="px-7 pt-2 pb-6 text-caption text-text-muted">Your sessions will be listed here, with the ones that need you at the top.</p>
+        <SessionList sessions={sessions} />
       </aside>
 
       <main className="flex flex-1 flex-col items-center justify-center gap-2 bg-bg px-7 py-8 text-center">
-        <h1 className="text-page-title text-text">No session open</h1>
-        <p className="max-w-sign-in-column text-body text-text-muted">The conversation will be here: your messages, evie's replies and the steps it took.</p>
+        <OpenSession sessions={sessions} />
       </main>
 
       <aside aria-label="Project" className="flex flex-col border-t border-line bg-bg wide:w-project-card wide:shrink-0 wide:border-t-0 wide:border-l">
@@ -43,30 +48,77 @@ export function Frame({ state }: { state: ConnectionState }) {
   )
 }
 
+// The middle column, for now: the selected session's title, where its
+// conversation will be, or for a draft, where the new session will start.
+function OpenSession({ sessions }: { sessions: Sessions }) {
+  const list = useSyncExternalStore(sessions.subscribe, sessions.state)
+  const selected = useSelected()
+  if (selected === undefined) {
+    return (
+      <>
+        <h1 className="text-page-title text-text">No session open</h1>
+        <p className="max-w-sign-in-column text-body text-text-muted">The conversation will be here: your messages, evie's replies and the steps it took.</p>
+      </>
+    )
+  }
+  if ("draft" in selected) {
+    const project = list.projects.find((each) => each.id === selected.draft)
+    const where = selected.draft === null ? "with no project" : `in ${project?.name ?? "its project"}`
+    return (
+      <>
+        <h1 className="text-page-title text-text">New session</h1>
+        <p className="max-w-sign-in-column text-body text-text-muted">A new session {where} starts when its first message is sent.</p>
+      </>
+    )
+  }
+  if (!list.listed) return null
+  const session = list.sessions.find((each) => each.session === selected.session)
+  if (session === undefined) {
+    return (
+      <>
+        <h1 className="text-page-title text-text">Not in the list</h1>
+        <p className="max-w-sign-in-column text-body text-text-muted">Nothing has been said in this session yet, or it is no longer there.</p>
+      </>
+    )
+  }
+  return (
+    <>
+      <h1 className="max-w-sign-in-column text-page-title text-text">{titleOf(session)}</h1>
+      <p className="max-w-sign-in-column text-body text-text-muted">Its conversation will be shown here.</p>
+    </>
+  )
+}
+
 // The theme picker: Dusk, Moss or Oxblood, remembered in this browser.
 function ThemeMenu() {
   const [theme, setTheme] = useState<Theme>(rememberedTheme)
   const name = THEMES.find((each) => each.id === theme)!.name
   return (
-    <Menu
-      label={`Theme: ${name}`}
-      button={
-        <>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="quiet" aria-label={`Theme: ${name}`}>
           <Swatch theme={theme} />
           {name}
-        </>
-      }
-      items={THEMES.map((each) => ({
-        key: each.id,
-        label: each.name,
-        leading: <Swatch theme={each.id} />,
-        current: each.id === theme,
-        choose() {
-          applyTheme(each.id)
-          setTheme(each.id)
-        },
-      }))}
-    />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuRadioGroup
+          value={theme}
+          onValueChange={(chosen) => {
+            const picked = THEMES.find((each) => each.id === chosen)!.id
+            applyTheme(picked)
+            setTheme(picked)
+          }}
+        >
+          {THEMES.map((each) => (
+            <DropdownMenuRadioItem key={each.id} value={each.id}>
+              <Swatch theme={each.id} />
+              {each.name}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

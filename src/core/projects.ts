@@ -88,6 +88,27 @@ function tracksEvie(folder: string): boolean {
   }
 }
 
+// The git branch a project's folder is on, as git itself says, or
+// undefined when the folder is not the top of a repository, as one inside
+// another repository is not, is on no branch, as with a commit checked out
+// by itself, or git cannot be asked. A repository with no commits yet is on
+// its branch all the same. Git is asked about the folder alone: git's own
+// settings in the server's environment, such as GIT_DIR, which would point
+// it elsewhere, are left out. It is one small process, given up on after a
+// second, so that a list of projects is never held up by one of them.
+export async function branchOf(folder: string): Promise<string | undefined> {
+  try {
+    if (!existsSync(join(folder, ".git"))) return undefined
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")))
+    const asked = Bun.spawn(["git", "symbolic-ref", "--short", "-q", "HEAD"], { cwd: folder, env, stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: 1000 })
+    const [said, code] = await Promise.all([new Response(asked.stdout).text(), asked.exited])
+    const branch = said.trim()
+    return code === 0 && branch !== "" ? branch : undefined
+  } catch {
+    return undefined
+  }
+}
+
 // A folder as it really is, links resolved, whether or not it exists yet:
 // the part that exists is resolved and the rest added to it.
 function realFolder(folder: string): string {
