@@ -167,7 +167,10 @@ server is started again, `evie` says so and connects again by itself, then
 shows what it missed, without repeating anything. So does a device the
 server cannot send to fast enough: once more than 16 MB waits to be sent to
 it, the server closes its connection rather than leave a message out, and
-it catches up the same way. When it cannot catch up,
+it catches up the same way. What was missed comes in pages of about 1 MB,
+each asked for once the one before has arrived, so that a slow line, such
+as a phone's after a long session, catches up a page at a time instead of
+waiting on one large reply. When it cannot catch up,
 as when the project's plugins fail to load as the server opens the session
 again, it says that some of what happened may be missing, and why. A
 message or command it had sent when the line dropped is sent again, and

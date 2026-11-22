@@ -129,14 +129,15 @@ const DEAD_AFTER = 45_000
 //
 // When the line drops after that, the client connects again by itself and
 // catches up: for each session it has open it asks for the events after the
-// last one it passed on, and the reply being written, and passes those on
-// before any live event, so nothing is shown twice and nothing is lost. A
-// command that was not answered when the line dropped is sent again with
-// the same id, and the server, while it keeps running, answers it without
-// carrying it out twice: it remembers the replies to the last 200 commands
-// of each device, however long the line was down. Since that reply can be
-// from long ago, a session opened by its folder, or to continue, is handed
-// back as it stands when the client opens it again by its id straight after.
+// last one it passed on, a page at a time, and the reply being written, and
+// passes those on before any live event, so nothing is shown twice and
+// nothing is lost. A command that was not answered when the line dropped is
+// sent again with the same id, and the server, while it keeps running,
+// answers it without carrying it out twice: it remembers the replies to the
+// last 200 commands of each device, however long the line was down. Since
+// that reply can be from long ago, a session opened by its folder, or to
+// continue, is handed back as it stands when the client opens it again by
+// its id straight after.
 export async function connect(options: ConnectOptions): Promise<Evie> {
   const address = new URL(options.url)
   // A browser's WebSocket takes no headers, and has the cookie in place of the token.
@@ -271,9 +272,14 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   }
 
   // Asks the server for what was missed in a session since the last event
-  // passed on, and passes it on. Live events follow the reply. When the
-  // line drops first, it passes nothing on: the client catches up afresh on
-  // the next line.
+  // passed on, and passes it on. What was missed comes in pages, each of at
+  // most about 1 MB, so that each reaches a slow line in good time: the
+  // client asks for each from the last event of the one before, until one
+  // says no more follow. Only that last page's reading of where the session
+  // stands, its jobs, the reply so far and its number, is passed on, since
+  // it is the one that live events follow. When the line drops first, the
+  // rest is not passed on: the client catches up afresh on the next line,
+  // from the last event it passed on.
   async function catchUp(session: string, line: WebSocket): Promise<void> {
     const seen = seenOf(session)
     // One under way already covers it.
@@ -281,13 +287,22 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     seen.behind = true
     // Of a session the owner has been told nothing of yet, nothing earlier
     // is asked for: the owner is given where it stands now.
-    const fromNow = !seen.told && seen.seq === 0
-    const reply = await ask(line, {
-      type: "open_session",
-      session,
-      ...(!fromNow && { after: seen.seq }),
-      ...(seen.openAs?.questions && { questions: true }),
-    })
+    let after = !seen.told && seen.seq === 0 ? undefined : seen.seq
+    let reply: Reply | undefined
+    for (;;) {
+      reply = await ask(line, {
+        type: "open_session",
+        session,
+        ...(after !== undefined && { after }),
+        ...(seen.openAs?.questions && { questions: true }),
+      })
+      if (!reply || "error" in reply) break
+      const page = reply.result as Opened
+      if (!page.more) break
+      passOnMissed(session, page.events ?? [])
+      // A page that says more follow holds at least one event.
+      after = page.events!.at(-1)!.seq
+    }
     seen.behind = false
     // A session that could not be opened again, as when its project's
     // plugins fail to load, is left as it is: a command sent to it says why,
@@ -306,22 +321,17 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     }
     const output = reply.result as Opened
     // Jobs' events are not stored, so each job that has changed is passed
-    // on, first, since the turns missed are often Evie dealing with a job
-    // that ended. One missing from the list ran in the server before it was
-    // stopped for good and started again, which stopped it.
+    // on, before the last page's events, since the turns missed are often
+    // Evie dealing with a job that ended. One missing from the list ran in
+    // the server before it was stopped for good and started again, which
+    // stopped it.
     if (seen.told) {
       const listed = new Set(output.jobs.map((job) => job.id))
       const gone = [...seen.jobs.values()].filter((job) => job.status === "running" && !listed.has(job.id))
       for (const job of gone) passOn({ type: "job", session, job: { ...job, status: "stopped", ended: Date.now() } })
       for (const job of output.jobs) passOn({ type: "job", session, job })
     }
-    for (const event of output.events ?? []) {
-      // A client of the core always sees a reply's text as pieces before
-      // the stored message, so the part of a reply that was missed is
-      // passed on as one piece before it.
-      if (event.type === "assistant_message" && isNew(seen, event)) passOnText(session, event.body.text)
-      passOn(event)
-    }
+    passOnMissed(session, output.events ?? [])
     // An owner not yet told where the session stands is given the jobs and
     // the reply so far in the reply to its open, so they are not passed on.
     if (seen.told) passOnText(session, output.replySoFar ?? "")
@@ -335,6 +345,18 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     seen.seq = Math.max(seen.seq, output.lastSeq)
     for (const seq of seen.early) if (seq <= seen.seq) seen.early.delete(seq)
     for (const open of opening) open.caughtUp(output)
+  }
+
+  // Passes on the stored events a catch-up was given, but those passed on already.
+  function passOnMissed(session: string, events: readonly StoredEvent[]) {
+    const seen = seenOf(session)
+    for (const event of events) {
+      // A client of the core always sees a reply's text as pieces before
+      // the stored message, so the part of a reply that was missed is
+      // passed on as one piece before it.
+      if (event.type === "assistant_message" && isNew(seen, event)) passOnText(session, event.body.text)
+      passOn(event)
+    }
   }
 
   // Sends a command of the client's own on this line. It resolves with the

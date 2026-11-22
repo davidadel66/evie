@@ -87,6 +87,12 @@ export type Attachments = {
   open(session: string, path: string): Promise<{ file: string; type: string } | undefined>
 }
 
+// How much of the events missed one reply to a catch-up holds: about 1 MB,
+// as JSON. A client on a slow line hears from the server once a reply has
+// arrived whole, so each comes in good time; it asks for the next page from
+// the last event of this one.
+export const CATCH_UP_PAGE = 1024 * 1024
+
 // The largest file that can be attached: 10 MB, as T3 Code allows for an
 // image. A client checks it before sending, and the server again.
 export const ATTACHMENT_LIMIT = 10 * 1024 * 1024
@@ -805,6 +811,12 @@ export type Commands = {
     // every event after it is sent to the client as it happens. `jobs` are
     // the session's background jobs, the ended ones included: their events
     // are not stored, so a client that missed some learns here how each stands.
+    // With `after`, the number of the last event a client saw, as when it
+    // catches up after a drop, `events` are those after it, in order, a page
+    // of at most `CATCH_UP_PAGE` of them, or a single event larger than
+    // that. `more` says that the log goes on past the page: the client asks
+    // again, from the page's last event, until a page comes without it, and
+    // where the session stands is read from that last page.
     output: {
       session: string
       project: Project | null
@@ -815,6 +827,7 @@ export type Commands = {
       lastSeq: number
       jobs: Job[]
       events?: StoredEvent[]
+      more?: true
       replySoFar?: string
     }
   }

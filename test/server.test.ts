@@ -1700,6 +1700,107 @@ test("a catch-up that asks a question, has it answered, and then fails says that
   expect(printed.split("[answered] Yes")).toHaveLength(4)
 })
 
+// ---- Catching up in pages ------------------------------------------------------------------
+
+const KiB = 1024
+// Replies of 400 KiB, as when Evie writes large files: two fit in a page of
+// a catch-up, a third does not. Compaction is put off, so that the model is
+// asked for nothing but the replies.
+const largeReplies = (count: number): ScriptedReply[] => Array.from({ length: count }, (_, at) => ({ text: [String(at % 10).repeat(400 * KiB)] }))
+const largeSession = { compaction: { ceiling: 1_000_000_000 } }
+// The numbers each catch-up a client sent through the line asked from, in turn.
+const catchUpsFrom = (line: Awaited<ReturnType<typeof lineTo>>) =>
+  line.commands().flatMap((command) => (command.type === "open_session" && command.after !== undefined ? [command.after] : []))
+
+test("a catch-up of several megabytes arrives in several pages, each asked for from the last event of the one before, with every event once, in order", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider(largeReplies(12)).plugin], largeSession)
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: number[] = []
+  client.subscribe((event) => "seq" in event && seen.push(event.seq))
+
+  await line.cut()
+  // Twelve turns of four events each, nearly 5 MB, while the line is down.
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  line.mend()
+  // Sent once the line is back and the client has caught up.
+  await client.send({ type: "read_history", session, limit: 1 })
+
+  expect(seen).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+  // Each page ends before a third reply would go in: at 10, 18, 26, 34 and 42.
+  expect(catchUpsFrom(line)).toEqual([0, 10, 18, 26, 34, 42])
+})
+
+test("where the session stands is passed on once, from the last page: the reply being written comes after every event missed", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...largeReplies(12), { hang: true, text: ["Half way"] }]).plugin], largeSession)
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: (number | string)[] = []
+  client.subscribe((event) => {
+    if ("seq" in event) seen.push(event.seq)
+    else if (event.type === "assistant_delta" && event.text === "Half way") seen.push(event.text)
+  })
+
+  await line.cut()
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  const writing = written(served.run, "Half way")
+  await served.run.evie.send({ type: "send_message", session, text: "One more" })
+  await writing
+  line.mend()
+  await client.send({ type: "read_history", session, limit: 1 })
+
+  // Each page read the reply so far, but it is passed on once, after the
+  // last page: twelve turns, then the turn being written, 49 and 50.
+  expect(seen).toEqual([...Array.from({ length: 50 }, (_, at) => at + 1), "Half way"])
+  await served.run.evie.send({ type: "cancel", session })
+})
+
+test("when the line drops part way through the pages, the catch-up starts again from the last event received, and nothing is lost or shown twice", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider(largeReplies(12)).plugin], largeSession)
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: number[] = []
+  client.subscribe((event) => "seq" in event && seen.push(event.seq))
+
+  await line.cut()
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  // The first page arrives, and the line drops as the second comes back.
+  const firstPage = line.passedOn('"more":true')
+  line.mend()
+  await firstPage
+  await line.loseReplyTo("open_session")
+  line.mend()
+  await client.send({ type: "read_history", session, limit: 1 })
+
+  expect(seen).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+  // The first page ended at 10, so the second was asked for from there, and again once the line was back.
+  expect(catchUpsFrom(line)).toEqual([0, 10, 10, 18, 26, 34, 42])
+})
+
+test("a message whose reply was lost is sent again once the pages have all come, answered, and carried out once", async () => {
+  const { served, line, connect } = await serveOverALine([scriptedProvider(largeReplies(12)).plugin], largeSession)
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: number[] = []
+  client.subscribe((event) => "seq" in event && seen.push(event.seq))
+
+  const lost = line.loseReplyTo("send_message")
+  const sent = client.send({ type: "send_message", session, text: "Message 1" })
+  await lost
+  await turnsEnded(served.run, 1)
+  for (let at = 2; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  line.mend()
+
+  await sent
+  expect(seen).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+  // The message's turn_start and user_message came before its reply was lost.
+  expect(catchUpsFrom(line)).toEqual([2, 10, 18, 26, 34, 42])
+  // Answered from the server's memory, not carried out again.
+  expect(stored(served.run.events).filter((event) => event.type === "user_message").map((event) => event.body.text)).toEqual(
+    Array.from({ length: 12 }, (_, at) => `Message ${at + 1}`),
+  )
+})
+
 // ---- Lists and summaries ------------------------------------------------------------------
 
 test("a client that has opened no session is sent the summary of every session as it changes, and none of its events", async () => {

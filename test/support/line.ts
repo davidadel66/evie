@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun"
-import type { ClientMessage, ServerMessage } from "../../src/index.ts"
+import type { ClientMessage, Command, ServerMessage } from "../../src/index.ts"
 
 export type Line = Awaited<ReturnType<typeof lineTo>>
 
@@ -22,6 +22,8 @@ export async function lineTo(serverUrl: string) {
   const hold = new Map<string, { until: Promise<unknown>; caught(): void }>()
   // Waiting for a message with this text in it to go through, either way.
   const watching = new Set<{ text: string; seen(): void }>()
+  // Every command a client sent through the line, in order.
+  const commands: Command[] = []
 
   // Only what the server reads of a request is passed on.
   const headersOf = (request: Request) => {
@@ -103,6 +105,7 @@ export async function lineTo(serverUrl: string) {
           if (client.data.frozen) return
           const message = JSON.parse(String(text)) as ClientMessage
           client.data.sent.set(message.id, message.command.type)
+          commands.push(message.command)
           client.data.upstream.send(String(text))
           saw(String(text))
         },
@@ -162,6 +165,8 @@ export async function lineTo(serverUrl: string) {
     passedOn(text: string) {
       return new Promise<void>((seen) => watching.add({ text, seen }))
     },
+    // The commands clients have sent through the line so far, in order.
+    commands: () => [...commands],
     stop: cut,
   }
 }

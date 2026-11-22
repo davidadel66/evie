@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { runTerminal, type Plugin } from "../src/index.ts"
+import { runTerminal, type Commands, type Plugin } from "../src/index.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -242,6 +242,56 @@ test("a session opened by its id is joined as it is, with the events after the n
     [5, "turn_start"],
     [6, "user_message"],
   ])
+})
+
+// A session with replies this large in it, one per turn, as when Evie
+// writes large files: its log runs to megabytes. Compaction is put off, so
+// that the scripted model is asked for nothing but the replies.
+async function largeSession(replies: string[]) {
+  const model = scriptedProvider(replies.map((text) => ({ text: [text] })))
+  const run = await startEvie([model.plugin], { compaction: { ceiling: 1_000_000_000 } })
+  cleanups.push(run.stop)
+  for (const [at] of replies.entries()) await say(run, `Message ${at + 1}`)
+  return run
+}
+
+// Catches up on a session through the core the way a client does: from the
+// event given, then from the last event of each page, until a page says no
+// more follow. Gives back every page.
+async function catchUpInPages(run: Run, after: number) {
+  const pages: Awaited<ReturnType<Run["evie"]["send"]>>[] = []
+  for (let from = after; pages.length < 50; ) {
+    const page = await run.evie.send({ type: "open_session", session: run.session, after: from })
+    pages.push(page)
+    if (!page.more || !page.events?.length) break
+    from = page.events.at(-1)!.seq
+  }
+  return pages as Commands["open_session"]["output"][]
+}
+
+const KiB = 1024
+
+test("a catch-up of many megabytes is answered in pages of at most about 1 MB of events, in order, each but the last saying more follow", async () => {
+  // Twelve turns, of four events each, whose replies are 400 KiB: two fit in a page, a third does not.
+  const run = await largeSession(Array.from({ length: 12 }, (_, at) => String(at % 10).repeat(400 * KiB)))
+
+  const pages = await catchUpInPages(run, 0)
+
+  expect(pages.map((page) => page.events?.filter((event) => event.type === "assistant_message").length)).toEqual([2, 2, 2, 2, 2, 2])
+  expect(pages.flatMap((page) => page.events!.map((event) => event.seq))).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+  expect(pages.map((page) => page.more)).toEqual([true, true, true, true, true, undefined])
+  // Each page stands where the session does as it is read.
+  for (const page of pages) expect(page).toMatchObject({ session: run.session, lastSeq: 48, turnRunning: false })
+})
+
+test("an event larger than a page goes in a page of its own", async () => {
+  const run = await largeSession(["Short.", "x".repeat(1536 * KiB), "Short again."])
+
+  const pages = await catchUpInPages(run, 0)
+
+  // 1 to 4 the first turn, 5 turn_start, 6 user_message, 7 the large reply, 8 turn_end, 9 to 12 the last turn.
+  expect(pages.map((page) => page.events?.map((event) => event.seq))).toEqual([[1, 2, 3, 4, 5, 6], [7], [8, 9, 10, 11, 12]])
+  expect(pages.map((page) => page.more)).toEqual([true, true, undefined])
 })
 
 test("a session opened by its id that is not open, as after Evie was started again, is opened in its own project, with a turn cut off closed first", async () => {

@@ -23,10 +23,12 @@ export async function serveEvie(
     signInCodeLasts?: number
     // What opens a project's folder, in place of the computer's own.
     openFolder?: NonNullable<EvieOptions["openFolder"]>
+    compaction?: NonNullable<EvieOptions["compaction"]>
   } = {},
 ) {
   const run = await startEvie(plugins, {
     ...(options.questions && { questions: true }),
+    ...(options.compaction && { compaction: options.compaction }),
     ...(options.projectFolder && { projectFolder: options.projectFolder }),
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
     ...(options.openFolder && { openFolder: options.openFolder }),
