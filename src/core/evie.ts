@@ -17,7 +17,7 @@ import { listProjectFiles } from "./project-files.ts"
 import { listStorage, readStorage } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
-import { PAGE_BYTES, type Ask, type Children, type Commands, type Core, type EvieEvent, type Host, type JobRecord, type JobWork, type Plugin, type Project, type ProjectSettings, type Provider, type SettingsEditor } from "./types.ts"
+import { MESSAGE_LIMIT, MESSAGE_TOO_LONG, PAGE_BYTES, type Ask, type Children, type Commands, type Core, type EvieEvent, type Host, type JobRecord, type JobWork, type Plugin, type Project, type ProjectSettings, type Provider, type SettingsEditor } from "./types.ts"
 
 type Cut = "none" | "asking" | "working"
 type Opened = Commands["open_session"]["output"]
@@ -689,6 +689,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // what is stored is read back as text.
   function sendMessage(input: Commands["send_message"]["input"]): void {
     if (typeof input.text !== "string") throw new Error("`text` is the message, and must be text.")
+    if (Buffer.byteLength(input.text) > MESSAGE_LIMIT) throw new Error(MESSAGE_TOO_LONG)
     const { loop } = open(input.session)
     const attached = attachments.check(input.session, input.attachments)
     inbox.add(input.session, { text: input.text, ...(attached !== undefined && { attachments: attached }) })

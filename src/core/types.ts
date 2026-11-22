@@ -93,6 +93,15 @@ export type Attachments = {
 // asks for the next page from the last event of this one.
 export const PAGE_BYTES = 1024 * 1024
 
+// The most text a message to evie can hold, in bytes: 1 MB, about 250,000
+// tokens, more than most models read in one message. A longer one would
+// outlast a slow line's wait as one message, so it is refused, saying to
+// attach it as a file, which can be larger and which the model reads by
+// its path. A client checks it before sending, and the core again.
+export const MESSAGE_LIMIT = 1024 * 1024
+export const MESSAGE_TOO_LONG =
+  "This message is longer than the 1 MB a message can hold. Attach the text as a file instead: a file attached can be up to 10 MB, and evie reads it from there."
+
 // The largest file that can be attached: 10 MB, as T3 Code allows for an
 // image. A client checks it before sending, and the server again.
 export const ATTACHMENT_LIMIT = 10 * 1024 * 1024

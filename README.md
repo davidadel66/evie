@@ -497,7 +497,9 @@ under it, and works as T3 Code's does:
 - **Files are attached** with the paperclip, by pasting them, or by dropping
   them on the box. Each shows as a chip above the text, an image with a
   small thumbnail, until it is sent or taken off. A file can be at most
-  10 MB. A message with files needs no words, but a command or an answer
+  10 MB, and a message's own text at most 1 MB: a longer text stays in the
+  box, which says to attach it as a file instead, and `evie` in a terminal
+  says the same. A message with files needs no words, but a command or an answer
   to a question takes no files. When the message is sent, it shows at
   once with its files, as Sending, while each file goes to the server,
   signed in as the page is, and is kept (see "Attachments"). A message

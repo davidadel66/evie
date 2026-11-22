@@ -489,3 +489,17 @@ test("a session whose project has gone from the database is refused when opened 
     `The session "${first.run.session}" belongs to the project "${first.run.project!.id}", which is missing from evie's database.`,
   )
 })
+
+// ---- A message's size ---------------------------------------------------------------------
+
+test("a message of more than 1 MB of text is refused, saying to attach it as a file, and nothing is stored", async () => {
+  const run = await startEvie([scriptedProvider([{ text: ["ok"] }]).plugin])
+  cleanups.push(run.stop)
+
+  await expect(run.evie.send({ type: "send_message", session: run.session, text: "x".repeat(1024 * 1024 + 1) })).rejects.toThrow(
+    "This message is longer than the 1 MB a message can hold. Attach the text as a file instead: a file attached can be up to 10 MB, and evie reads it from there.",
+  )
+  await say(run, "é".repeat(512 * 1024))
+
+  expect(stored(run.events).filter((event) => event.type === "user_message").map((event) => event.body.text.length)).toEqual([512 * 1024])
+})
