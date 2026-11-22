@@ -75,3 +75,27 @@ test("the page puts itself in the theme this browser picked before it is first d
   expect(themed).toBeGreaterThan(-1)
   expect(themed).toBeLessThan(page.indexOf('rel="stylesheet"'))
 })
+
+test("a transition has a length and an easing, which Tailwind's cleared defaults left out, and none for someone who asks for less motion", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const style = await Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.text()
+
+  // Minified, 150ms is written .15s.
+  expect(style).toMatch(/--default-transition-duration:(150ms|\.15s)/)
+  expect(style).toMatch(/--default-transition-timing-function:cubic-bezier\(\.4,0,\.2,1\)/)
+  expect(style).toMatch(/\.transition-transform\{[^}]*transition-duration:var\(--tw-duration,var\(--default-transition-duration\)\)/)
+  expect(style).toMatch(/@media \(prefers-reduced-motion:reduce\)\{[^@]*\.motion-reduce\\:transition-none\{transition-property:none\}/)
+})
+
+test("the focus ring and the spinner's ring are drawn at the design system's indicator width, and lines at its line width", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const style = await Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.text()
+
+  expect(style).toMatch(/--indicator-width:2px/)
+  expect(style).toMatch(/--line-width:1px/)
+  expect(style).toMatch(/:focus-visible\{outline:var\(--indicator-width\) ?solid var\(--focus-ring\)/)
+  expect(style).toContain(".border-\\(length\\:--indicator-width\\){border-style:var(--tw-border-style);border-width:var(--indicator-width)}")
+  expect(style).not.toMatch(/\.border-2\{/)
+})

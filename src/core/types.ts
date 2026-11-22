@@ -449,6 +449,11 @@ export type ProjectSettings = {
 // and can change; the id is what memory, data and sessions are kept under.
 export type Project = { id: string; name: string; folder: string }
 
+// A project as a list of projects shows it: with the git branch its folder
+// is on, read when the list is asked for, and left out when the folder is
+// not in a git repository or is on no branch.
+export type ListedProject = Project & { branch?: string }
+
 // ---- The client interface -------------------------------------------------------
 
 // What each command takes and what it gives back.
@@ -542,10 +547,10 @@ export type Commands = {
     input: { session: string; before?: number; limit?: number }
     output: { events: StoredEvent[]; earlier: boolean }
   }
-  // Every project, by name.
+  // Every project, by name, with the branch each is on.
   list_projects: {
     input: Record<never, never>
-    output: Project[]
+    output: ListedProject[]
   }
   // Makes a new project at a folder, given by its full path: the folder
   // itself when it is missing, and a `.evie/evie.json` in it whose
