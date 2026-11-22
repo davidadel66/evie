@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+import type { Job } from "../../src/core/types.ts"
 import { addressOf } from "./address.ts"
 import { followSubagents, type Lineage } from "./card.ts"
+import { CardButton, CardLane } from "./CardPlace.tsx"
 import type { Connection } from "./connection.ts"
 import { holdConversation, type Conversation } from "./conversation.ts"
 import { Reading } from "./Conversation.tsx"
-import { CaretLeft } from "./icons.tsx"
-import { subagentsOf } from "./project-card.ts"
+import { CaretLeft, Check } from "./icons.tsx"
+import { stateWord, subagentsOf } from "./project-card.ts"
 import { ConnectionUnderHeader } from "./ConnectionLine.tsx"
-import { CardButton, CardLane, StateWord } from "./ProjectCard.tsx"
 import { ListButton } from "./SessionList.tsx"
+import { Spinner } from "./Spinner.tsx"
 import { openSubagent, type Subagent } from "./subagent.ts"
 
 // A subagent's conversation in the middle column, read only, under a
@@ -83,4 +85,28 @@ function Opened({
       <CardLane>{child && <Reading conversation={child} readOnly />}</CardLane>
     </>
   )
+}
+
+// How a job or a subagent stands, in its word, as the design system's
+// Status says it: Working with a spinner, Done with a check, Failed, and
+// the rest in quiet words.
+export function StateWord({ status }: { status: Job["status"] }) {
+  const word = stateWord(status)
+  if (status === "running") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-caption text-status-working">
+        <Spinner />
+        {word}
+      </span>
+    )
+  }
+  if (status === "finished") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-caption text-status-done">
+        <Check className="size-icon-sm" />
+        {word}
+      </span>
+    )
+  }
+  return <span className={`shrink-0 text-caption ${status === "failed" ? "text-status-failed" : "text-text-muted"}`}>{word}</span>
 }
