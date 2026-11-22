@@ -2,10 +2,12 @@ import type { Evie, StorageEntry, StorageFile } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 
 // A workspace's Storage, apart from its screen: the files in its project's
-// `.evie` folder, listed a folder at a time as the owner opens folders in
-// place, and the one file open, read to be shown. The top is listed once
-// connected, and what is open is listed again when the line comes back,
-// since nothing tells the page that a file changed meanwhile.
+// `.evie` folder, as a tree that starts with every folder open, listed a
+// folder at a time, each folder's own folders as it is listed; the owner
+// can fold a folder and open it again. And the one file open, read to be
+// shown. The top is listed once connected, and every folder listed is
+// listed again when the line comes back, since nothing tells the page that
+// a file changed meanwhile.
 
 // A folder as listed, with how many more entries it holds than a listing
 // gives, or why it could not be listed, or neither while it is being listed.
@@ -14,8 +16,8 @@ export type FolderListing = { entries?: StorageEntry[]; more?: number; problem?:
 export type StorageState = {
   // Each folder listed, by its path in the `.evie` folder, the top as "".
   folders: ReadonlyMap<string, FolderListing>
-  // The folders open in place.
-  open: ReadonlySet<string>
+  // The folders the owner has folded.
+  closed: ReadonlySet<string>
   // The file being shown, as read, or why it could not be, or neither while it is read.
   file?: { path: string; read?: StorageFile; problem?: string }
 }
@@ -23,7 +25,7 @@ export type StorageState = {
 export type Storage = {
   state(): StorageState
   subscribe(listener: () => void): () => void
-  // Opens a folder in place, listing it, or closes it when it is open.
+  // Folds a folder, or opens it again.
   toggle(folder: string): void
   // Reads a file to be shown, or with nothing shows none.
   show(path: string | undefined): void
@@ -31,7 +33,7 @@ export type Storage = {
 }
 
 export function openStorage(connection: Connection, project: string): Storage {
-  let state: StorageState = { folders: new Map(), open: new Set() }
+  let state: StorageState = { folders: new Map(), closed: new Set() }
   const listeners = new Set<() => void>()
   let closed = false
   function set(next: Partial<StorageState>) {
@@ -46,13 +48,17 @@ export function openStorage(connection: Connection, project: string): Storage {
   }
 
   // A folder is listed again over what it showed before, which stays until
-  // the new list comes.
+  // the new list comes. Then each folder in it not listed yet is listed.
   function list(folder: string) {
     const evie = clientOf()
     if (evie === undefined) return
     if (!state.folders.has(folder)) setFolder(folder, {})
     evie.send({ type: "list_storage", project, ...(folder !== "" && { folder }) }).then(
-      (listed) => !closed && setFolder(folder, listed),
+      (listed) => {
+        if (closed) return
+        setFolder(folder, listed)
+        for (const entry of listed.entries) if (entry.kind === "folder" && !state.folders.has(entry.path)) list(entry.path)
+      },
       (cause: unknown) => !closed && setFolder(folder, { problem: wordsOf(cause) }),
     )
   }
@@ -70,14 +76,14 @@ export function openStorage(connection: Connection, project: string): Storage {
     )
   }
 
-  // Each time the page is connected anew: the top, every folder open, and
+  // Each time the page is connected anew: the top, every folder listed, and
   // the file shown.
   let connected: Evie | undefined
   function follow() {
     const evie = clientOf()
     if (evie !== undefined && evie !== connected) {
       connected = evie
-      for (const folder of ["", ...state.open]) list(folder)
+      for (const folder of new Set(["", ...state.folders.keys()])) list(folder)
       if (state.file !== undefined) read(state.file.path)
     }
     if (evie === undefined) connected = undefined
@@ -92,10 +98,10 @@ export function openStorage(connection: Connection, project: string): Storage {
       return () => void listeners.delete(listener)
     },
     toggle(folder) {
-      const open = new Set(state.open)
-      if (open.delete(folder)) return set({ open })
-      set({ open: open.add(folder) })
-      list(folder)
+      const folded = new Set(state.closed)
+      if (!folded.delete(folder)) folded.add(folder)
+      set({ closed: folded })
+      if (!folded.has(folder) && !state.folders.has(folder)) list(folder)
     },
     show(path) {
       if (path === undefined) {

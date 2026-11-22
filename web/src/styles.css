@@ -187,6 +187,11 @@
   /* The least a workspace's name keeps in its header, cut with an
      ellipsis, before its tabs scroll sideways instead. */
   --spacing-workspace-name: 96px;
+  /* The least room, beside the strip, for a workspace and its side chat
+     side by side, as drawn: the workspace at 520px and the chat at 360px.
+     Narrower, the side chat stacks below the workspace. A container query,
+     @workspace-columns, since it is the room beside the strip that counts. */
+  --container-workspace-columns: 880px;
   /* The widest the session list's project filter grows, beside the search. */
   --spacing-project-filter: 128px;
   /* The message box: the tallest its text grows before it scrolls; the
