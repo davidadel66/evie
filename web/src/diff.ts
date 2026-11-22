@@ -83,10 +83,11 @@ export function sideBySide(lines: readonly Line[]): { left?: Line; right?: Line 
 }
 
 // Whether a file's lines added and removed were counted: not for one that
-// is binary, whose contents are not known, past the most files read, or
-// too large to compare at all. One left out of a diff for its size after
-// its lines were counted has them.
-export const hasCounts = (file: ChangedFile) => !file.binary && !file.unknown && !file.tooMany && !(file.tooLarge && file.added + file.removed === 0)
+// is binary, whose contents are not known, past the most files read or the
+// time comparing may take, filtered, or too large to compare at all. One
+// left out of a diff for its size after its lines were counted has them.
+export const hasCounts = (file: ChangedFile) =>
+  !file.binary && !file.unknown && !file.tooMany && !file.tooSlow && !file.filtered && !(file.tooLarge && file.added + file.removed === 0)
 
 // What a turn's changed-files line says: how many files, and how many
 // lines were added and removed across those whose lines were counted.

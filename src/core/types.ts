@@ -411,19 +411,23 @@ export type ChangeKeeper = {
   files(session: string, turn: number): Promise<KeptFile[]>
 }
 export type KeptTurn = { turn: number; paths: string[] }
+// A file's contents, as a diff is made from them: its bytes; null when
+// there was no file; undefined when they are not known, as when the file
+// has changed since and no copy of what a turn left is kept; or
+// `{ tooLarge: true }` for one larger than a diff shows, which is not read.
+export type Contents = Uint8Array | null | undefined | { tooLarge: true }
+
 // A file a turn changed, by its full path: what it held before the turn,
-// and what the turn left in it. Each is null when there was no file, and
-// undefined when it is not known, as when the file has changed since and
-// no copy of what the turn left is kept.
-export type KeptFile = { path: string; before: Uint8Array | null | undefined; after: Uint8Array | null | undefined }
+// and what the turn left in it.
+export type KeptFile = { path: string; before: Contents; after: Contents }
 
 // A file as a list of changes shows it: its path, from the project's
 // folder when it is inside it; whether it was added, removed or changed;
 // and how many lines were added and removed. One that is `binary`, or
 // `tooLarge` to show, has no diff. One that is binary, too large to
-// compare at all, past the most files one comparison reads (`tooMany`),
-// or whose contents before or after are `unknown`, as a submodule's are,
-// counts no lines.
+// compare at all, past the most files one comparison reads (`tooMany`) or
+// the time it may take (`tooSlow`), `filtered`, or whose contents before
+// or after are `unknown`, as a submodule's are, counts no lines.
 export type ChangedFile = {
   path: string
   status: "added" | "removed" | "changed"
@@ -436,6 +440,11 @@ export type ChangedFile = {
   submodule?: true
   // Past the most files one comparison reads: listed, and not read.
   tooMany?: true
+  // Past the time one comparison may take: listed, and not compared.
+  tooSlow?: true
+  // One git turns with a filter, as git-lfs does: its contents in git and
+  // in the folder differ by the filter, which is not run, so it is not compared.
+  filtered?: true
 }
 
 // With its diff, when it has one: its hunks as a unified diff writes them,

@@ -1,3 +1,4 @@
+import { gitSettingsOnly } from "../core/git.ts"
 import { inGit } from "../core/projects.ts"
 import type { Plugin, PullRequest } from "../core/types.ts"
 
@@ -60,7 +61,8 @@ function stateOf(check: Rolled): PullRequest["checks"][number]["state"] {
 // What gh is given of the server's environment: where to find programs,
 // the home, settings and temporary folders it keeps its sign-in and work
 // in, the language, and its own settings, such as GH_TOKEN. Not git's
-// settings, which would point the git it runs elsewhere, nor any key.
+// settings from the server's environment, which would point the git it
+// runs elsewhere, nor any key.
 const GIVEN = /^(PATH|HOME|LANG|LANGUAGE|LC_[A-Z_]+|TMPDIR|XDG_CONFIG_HOME|GH_[A-Z0-9_]+|GITHUB_[A-Z0-9_]+)$/
 
 // Only an https link is given back: anything else, which a page would open
@@ -81,7 +83,10 @@ async function readPullRequest(folder: string): Promise<PullRequest | null> {
     const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => GIVEN.test(name)))
     run = Bun.spawn(["gh", "pr", "view", "--json", FIELDS], {
       cwd: folder,
-      env: { ...env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" },
+      // The git gh runs to find the branch and its remote runs none of the
+      // commands a repository's settings can name, and reaches no other
+      // computer, as the core runs it (core/git.ts); gh asks GitHub itself.
+      env: { ...env, ...gitSettingsOnly(), GH_PROMPT_DISABLED: "1", NO_COLOR: "1" },
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",

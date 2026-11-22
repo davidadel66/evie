@@ -1,8 +1,8 @@
-import { lstat, readFile, readlink } from "node:fs/promises"
 import { isAbsolute, relative } from "node:path"
-import { compareApart } from "./diff.ts"
+import { compareApart, contentsAt, LARGEST, TOO_LARGE } from "./diff.ts"
+import { runGit } from "./git.ts"
 import { inGit } from "./projects.ts"
-import type { ChangedFile, ChangeKeeper, Commands, FileDiff, Project, StoredEvent, TurnChanges } from "./types.ts"
+import type { ChangedFile, ChangeKeeper, Commands, Contents, FileDiff, Project, StoredEvent, TurnChanges } from "./types.ts"
 
 // What a session changed, as the `list_changes` and `read_changes` commands
 // give it: by turn and for the whole session, from the files a plugin
@@ -15,19 +15,6 @@ function shown(path: string, project: Project | null): string {
   if (project === null) return path
   const inside = relative(project.folder, path)
   return inside === "" || inside.startsWith("..") || isAbsolute(inside) ? path : inside
-}
-
-// What is at a path now: a file's contents, a link's target, or null when
-// there is nothing there. Undefined when it cannot be read, as for a folder.
-export async function contentsNow(path: string): Promise<Uint8Array | null | undefined> {
-  try {
-    const kind = await lstat(path)
-    if (kind.isSymbolicLink()) return new TextEncoder().encode(await readlink(path))
-    return await readFile(path)
-  } catch (cause) {
-    const code = (cause as { code?: string }).code
-    return code === "ENOENT" || code === "ENOTDIR" ? null : undefined
-  }
 }
 
 // Each turn's number, from 1, with its start's and end's events.
@@ -57,6 +44,17 @@ function capped(files: FileDiff[]): FileDiff[] {
 // A file past the most one comparison reads, listed by its path alone.
 const tooManyAt = (path: string): FileDiff => ({ path, status: "changed", added: 0, removed: 0, tooMany: true })
 
+// Files as a client is shown them: by their paths from the project's
+// folder, as it is when it is asked, since a session can be moved to
+// another project. They are worked out, and kept, by their full paths.
+const relocated = <File extends ChangedFile>(files: File[], project: Project | null): File[] => files.map((file) => ({ ...file, path: shown(file.path, project) }))
+
+// The longest one answer spends comparing lines, in milliseconds: the
+// files left after it are listed as too slow, so that one answer cannot
+// hold the thread that compares lines for minutes.
+const ANSWER_WITHIN = 20_000
+const budget = () => Date.now() + ANSWER_WITHIN
+
 // What the turns of sessions changed, from what a plugin keeps of them,
 // such as undo's copies. A turn that has ended changes no more, so what it
 // changed is worked out once and kept, for the sessions used last; the
@@ -76,26 +74,29 @@ export function createTurnChanges() {
     return kept
   }
 
-  // One turn's files, compared, with their diffs or only how many lines.
-  async function turnFiles(keeper: ChangeKeeper, session: string, turn: number, project: Project | null, options: { patch: boolean }): Promise<FileDiff[]> {
+  // One turn's files, compared, with their diffs or only how many lines,
+  // by their full paths.
+  async function turnFiles(keeper: ChangeKeeper, session: string, turn: number, options: { patch: boolean }): Promise<FileDiff[]> {
     const files = await keeper.files(session, turn)
-    const compared = await fewAtOnce(files.slice(0, MOST_FILES), (file) => compareApart(shown(file.path, project), file.before, file.after, options))
-    return [...compared.filter((file) => file !== undefined), ...files.slice(MOST_FILES).map((file) => tooManyAt(shown(file.path, project)))]
+    const until = budget()
+    const compared = await fewAtOnce(files.slice(0, MOST_FILES), (file) => compareApart(file.path, file.before, file.after, { ...options, until }))
+    return [...compared.filter((file) => file !== undefined), ...files.slice(MOST_FILES).map((file) => tooManyAt(file.path))]
   }
 
   // Every file the turns changed, each from what it held before the first
-  // turn that changed it to what it holds now.
-  async function sessionFiles(keeper: ChangeKeeper, session: string, project: Project | null, options: { patch: boolean }): Promise<FileDiff[]> {
+  // turn that changed it to what it holds now, by their full paths.
+  async function sessionFiles(keeper: ChangeKeeper, session: string, options: { patch: boolean }): Promise<FileDiff[]> {
     const first = new Map<string, number>()
     for (const { turn, paths } of await keeper.turns(session)) for (const path of paths) if (!first.has(path)) first.set(path, turn)
     const paths = [...first.keys()]
     const read = paths.slice(0, MOST_FILES)
-    const turns = new Map<number, Map<string, Uint8Array | null | undefined>>()
+    const turns = new Map<number, Map<string, Contents>>()
     for (const turn of new Set(read.map((path) => first.get(path)!))) {
       turns.set(turn, new Map((await keeper.files(session, turn)).map((file) => [file.path, file.before])))
     }
-    const compared = await fewAtOnce(read, async (path) => compareApart(shown(path, project), turns.get(first.get(path)!)!.get(path), await contentsNow(path), options))
-    return [...compared.filter((file) => file !== undefined), ...paths.slice(MOST_FILES).map((path) => tooManyAt(shown(path, project)))]
+    const until = budget()
+    const compared = await fewAtOnce(read, async (path) => compareApart(path, turns.get(first.get(path)!)!.get(path), await contentsAt(path), { ...options, until }))
+    return [...compared.filter((file) => file !== undefined), ...paths.slice(MOST_FILES).map((path) => tooManyAt(path))]
   }
 
   return {
@@ -111,23 +112,24 @@ export function createTurnChanges() {
         const key = paths.join("\0")
         let files = kept.get(turn)?.paths === key ? kept.get(turn)!.files : undefined
         if (files === undefined) {
-          files = (await turnFiles(keeper!, session, turn, project, { patch: false })).map(summed)
-          if (end !== undefined) kept.set(turn, { paths: key, files })
+          files = (await turnFiles(keeper!, session, turn, { patch: false })).map(summed)
+          // One that a comparison ran out of time on is worked out again when next asked.
+          if (end !== undefined && !files.some((file) => file.tooSlow)) kept.set(turn, { paths: key, files })
         }
-        if (files.length > 0) listed.push({ turn, start: start.seq, ...(end !== undefined && { end: end.seq }), time: (end ?? start).time, files })
+        if (files.length > 0) listed.push({ turn, start: start.seq, ...(end !== undefined && { end: end.seq }), time: (end ?? start).time, files: relocated(files, project) })
       }
       // Turns no longer kept, as when they are undone, are forgotten.
       for (const turn of kept.keys()) if (!present.some((each) => each.turn === turn)) kept.delete(turn)
       const output = { kept: keeper !== undefined, latest: turns.length, turns: listed }
       if (!whole) return output
-      return { ...output, session: keeper === undefined ? [] : (await sessionFiles(keeper, session, project, { patch: false })).map(summed) }
+      return { ...output, session: keeper === undefined ? [] : relocated((await sessionFiles(keeper, session, { patch: false })).map(summed), project) }
     },
     async turn(keeper: ChangeKeeper | undefined, session: string, turn: number, project: Project | null): Promise<FileDiff[]> {
       if (keeper === undefined || !(await keeper.turns(session)).some((each) => each.turn === turn)) return []
-      return capped(await turnFiles(keeper, session, turn, project, { patch: true }))
+      return relocated(capped(await turnFiles(keeper, session, turn, { patch: true })), project)
     },
     async session(keeper: ChangeKeeper | undefined, session: string, project: Project | null): Promise<FileDiff[]> {
-      return keeper === undefined ? [] : capped(await sessionFiles(keeper, session, project, { patch: true }))
+      return keeper === undefined ? [] : relocated(capped(await sessionFiles(keeper, session, { patch: true })), project)
     },
   }
 }
@@ -156,39 +158,17 @@ async function fewAtOnce<Item, Done>(items: readonly Item[], work: (item: Item) 
 
 const NOT_GIT = "The project's folder is not in a git repository."
 
-// Runs git in a folder and gives back what it printed, or throws with what
-// it said. Git's own settings in the server's environment, such as GIT_DIR,
-// which would point it elsewhere, are left out, as for the branch.
-//
-// A repository's own settings can name commands for git to run, and a
-// repository may be one just cloned, so none of them is run: not a file
-// system monitor (core.fsmonitor), a hook (core.hooksPath, and no index
-// written that would run one), a pager, an external diff or a text
-// conversion (diff.external, and a diff driver's command and textconv,
-// which diffs are asked not to use), nor a filter, whose clean, smudge
-// and process commands are each set to none, by the filter's name. The
-// files themselves are read here, not through git.
-async function git(folder: string, args: string[], input?: Uint8Array): Promise<Buffer> {
-  return run(folder, [...SAFE, ...(await filtersOff(folder)), ...args], input)
+// Runs git in a folder, with none of the commands a repository's settings
+// can name, nor any reaching another computer (see git.ts), and gives back
+// what it printed, or throws with what it said. `worktree` is for a
+// command that reads the folder's files.
+async function git(folder: string, args: string[], options: { input?: Uint8Array; worktree?: boolean } = {}): Promise<Buffer> {
+  const done = await runGit(folder, args, options)
+  if (done.code !== 0) throw new Error(done.stderr.trim() || `git ${args[0]} stopped with code ${done.code}.`)
+  return done.stdout
 }
-const SAFE = ["--no-pager", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "diff.external="]
 const DIFF_SAFE = ["--no-ext-diff", "--no-textconv"]
 
-async function run(folder: string, args: string[], input?: Uint8Array): Promise<Buffer> {
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_"))), GIT_OPTIONAL_LOCKS: "0" }
-  const child = Bun.spawn(["git", ...args], { cwd: folder, env, stdin: input ?? "ignore", stdout: "pipe", stderr: "pipe", timeout: 30_000 })
-  const [said, problem, code] = await Promise.all([new Response(child.stdout).arrayBuffer(), new Response(child.stderr).text(), child.exited])
-  if (code !== 0) throw new Error(problem.trim() || `git ${args.find((arg) => !arg.startsWith("-") && !arg.includes("=")) ?? ""} stopped with code ${code}.`)
-  return Buffer.from(said)
-}
-
-// The settings that turn off each filter git's settings name, wherever they
-// are set. Reading the settings runs nothing.
-async function filtersOff(folder: string): Promise<string[]> {
-  const named = await run(folder, ["config", "--name-only", "--get-regexp", "^filter\\."]).catch(() => Buffer.from(""))
-  const filters = new Set(named.toString("utf8").split("\n").flatMap((line) => /^filter\.(.+)\.[^.]+$/.exec(line.trim())?.[1] ?? []))
-  return [...filters].flatMap((filter) => ["clean=", "smudge=", "process=", "required=false"].flatMap((setting) => ["-c", `filter.${filter}.${setting}`]))
-}
 const lines = (said: Buffer) => said.toString("utf8").split("\0").filter((each) => each !== "")
 
 // The files that differ between a commit and the folder as it is now, each
@@ -201,8 +181,8 @@ const lines = (said: Buffer) => said.toString("utf8").split("\0").filter((each) 
 // it is compared.
 async function sinceCommit(folder: string, commit: string): Promise<FileDiff[]> {
   const [changed, untracked] = await Promise.all([
-    git(folder, ["diff", ...DIFF_SAFE, "--raw", "-z", "--no-renames", "--ignore-submodules=dirty", "--relative", commit, "--"]),
-    git(folder, ["ls-files", "--others", "--exclude-standard", "-z"]),
+    git(folder, ["diff", ...DIFF_SAFE, "--raw", "-z", "--no-renames", "--ignore-submodules=dirty", "--relative", commit, "--"], { worktree: true }),
+    git(folder, ["ls-files", "--others", "--exclude-standard", "-z"], { worktree: true }),
   ])
   // Each change is ":<mode before> <mode after> <id> <id> <status>", then its path.
   type Listed = { status: "added" | "removed" | "changed"; submodule: boolean }
@@ -216,11 +196,14 @@ async function sinceCommit(folder: string, commit: string): Promise<FileDiff[]> 
   for (const path of lines(untracked)) if (!path.endsWith("/") && !files.has(path)) files.set(path, { status: "added", submodule: false })
   const paths = [...files.keys()].sort()
   const read = paths.slice(0, MOST_FILES)
-  const committed = await blobs(folder, commit, read.filter((path) => files.get(path)!.status !== "added" && !files.get(path)!.submodule))
+  const filtered = await withFilters(folder, read.filter((path) => !files.get(path)!.submodule))
+  const committed = await blobs(folder, commit, read.filter((path) => files.get(path)!.status !== "added" && !files.get(path)!.submodule && !filtered.has(path)))
+  const until = budget()
   const compared = await fewAtOnce(read, async (path): Promise<FileDiff | undefined> => {
     const { status, submodule } = files.get(path)!
     if (submodule) return { path, status, added: 0, removed: 0, unknown: true, submodule: true }
-    return compareApart(path, status === "added" ? null : committed.get(path), status === "removed" ? null : await contentsNow(`${folder}/${path}`), { patch: true })
+    if (filtered.has(path)) return { path, status, added: 0, removed: 0, filtered: true }
+    return compareApart(path, status === "added" ? null : committed.get(path), status === "removed" ? null : await contentsAt(`${folder}/${path}`), { patch: true, until })
   })
   const tooMany = paths.slice(MOST_FILES).map((path): FileDiff => ({ path, status: files.get(path)!.status, added: 0, removed: 0, tooMany: true }))
   return capped([...compared.filter((file) => file !== undefined), ...tooMany])
@@ -228,34 +211,54 @@ async function sinceCommit(folder: string, commit: string): Promise<FileDiff[]> 
 // The mode git gives a submodule.
 const SUBMODULE = "160000"
 
-// What a commit held at each path, from one `git cat-file`: the contents,
-// null when it held nothing there, and undefined when what it held is not
-// a file, as for a repository inside this one.
-async function blobs(folder: string, commit: string, paths: string[]): Promise<Map<string, Uint8Array | null | undefined>> {
-  const found = new Map<string, Uint8Array | null | undefined>()
+// What a commit held at each path: the contents; too large, for a file
+// over the limit, which is not read; and undefined when it is not known,
+// as when what it held is not a file, as for a repository inside this
+// one, or is not in this repository, as a partial clone can leave it,
+// since nothing is fetched. Every path asked for is one git says the
+// commit holds. How large each is comes first (`cat-file --batch-check`),
+// and only those within the limit are read (`cat-file --batch`, by their
+// ids), each into a copy of its own.
+async function blobs(folder: string, commit: string, paths: string[]): Promise<Map<string, Contents>> {
+  const found = new Map<string, Contents>()
   // `cat-file` reads one name a line, so a path with a line break in it
   // cannot be asked for: what it held is not known, rather than read wrong.
-  for (const path of paths) if (path.includes("\n")) found.set(path, undefined)
+  for (const path of paths) found.set(path, undefined)
   const asked = paths.filter((path) => !path.includes("\n"))
   if (asked.length === 0) return found
-  const said = await git(folder, ["cat-file", "--batch"], new TextEncoder().encode(asked.map((path) => `${commit}:./${path}\n`).join("")))
+  const checked = (await git(folder, ["cat-file", "--batch-check"], { input: new TextEncoder().encode(asked.map((path) => `${commit}:./${path}\n`).join("")) })).toString("utf8").split("\n")
+  const toRead: { path: string; id: string }[] = []
+  for (const [at, path] of asked.entries()) {
+    // An object found is "<id> <type> <size>"; anything else, as "<name> missing", is not known.
+    const object = /^([0-9a-f]+) ([a-z]+) (\d+)$/.exec(checked[at] ?? "")
+    if (!object || object[2] !== "blob") continue
+    if (Number(object[3]) > LARGEST) found.set(path, TOO_LARGE)
+    else toRead.push({ path, id: object[1]! })
+  }
+  if (toRead.length === 0) return found
+  const said = await git(folder, ["cat-file", "--batch"], { input: new TextEncoder().encode(toRead.map(({ id }) => `${id}\n`).join("")) })
   let at = 0
-  for (const path of asked) {
+  for (const { path } of toRead) {
     const end = said.indexOf(10, at)
-    const header = said.subarray(at, end).toString("utf8")
+    const object = /^[0-9a-f]+ blob (\d+)$/.exec(said.subarray(at, end).toString("utf8"))
     at = end + 1
-    // An object found is "<id> <type> <size>", then its contents; anything
-    // else, as "<name> missing", has no contents after it.
-    const object = /^[0-9a-f]+ ([a-z]+) (\d+)$/.exec(header)
-    if (!object) {
-      found.set(path, header.endsWith(" missing") ? null : undefined)
-      continue
-    }
-    const length = Number(object[2])
-    found.set(path, object[1] === "blob" ? said.subarray(at, at + length) : undefined)
+    if (!object) continue
+    const length = Number(object[1])
+    found.set(path, new Uint8Array(said.subarray(at, at + length)))
     at += length + 1
   }
   return found
+}
+
+// The paths of those files that git turns with a filter, as git-lfs does,
+// as their attributes say. Reading attributes runs nothing.
+async function withFilters(folder: string, paths: string[]): Promise<Set<string>> {
+  if (paths.length === 0) return new Set()
+  const said = lines(await git(folder, ["check-attr", "-z", "--stdin", "filter"], { input: new TextEncoder().encode(paths.map((path) => `${path}\0`).join("")) }))
+  const filtered = new Set<string>()
+  // Each is "<path>", "filter", "<value>".
+  for (let at = 0; at + 2 < said.length; at += 3) if (said[at + 2] !== "unspecified" && said[at + 2] !== "unset") filtered.add(said[at]!)
+  return filtered
 }
 
 // The commit the folder's work is on, or for a repository with no commits
@@ -264,7 +267,7 @@ async function head(folder: string): Promise<string> {
   try {
     return (await git(folder, ["rev-parse", "--verify", "-q", "HEAD"])).toString().trim()
   } catch {
-    return (await git(folder, ["mktree"], new Uint8Array())).toString().trim()
+    return (await git(folder, ["mktree"], { input: new Uint8Array() })).toString().trim()
   }
 }
 

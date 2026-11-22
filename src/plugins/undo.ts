@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto"
 import { realpathSync } from "node:fs"
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises"
+import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { dataFolder } from "../core/evie.ts"
-import type { CheckedToolCall, HookContext, KeptFile, Plugin } from "../core/types.ts"
+import { contentsAt, LARGEST, TOO_LARGE } from "../core/diff.ts"
+import type { CheckedToolCall, Contents, HookContext, KeptFile, Plugin } from "../core/types.ts"
 import { patchFiles } from "./files/paths.ts"
 
 // The built-in undo plugin. `/undo` puts files back as they were before
@@ -152,7 +153,12 @@ export function undo(options: UndoOptions = {}): Plugin {
         const numbers = (await readdir(join(root, session)).catch(() => [] as string[])).map(Number).filter(Number.isInteger).sort((a, b) => a - b)
         return Promise.all(numbers.map(async (turn) => ({ turn, folder: turnFolder(session, turn), record: await load(turnFolder(session, turn)) })))
       }
-      const copyOf = async (folder: string, file: Kept) => (file.copy === undefined ? null : await readFile(join(folder, file.copy)).catch(() => undefined))
+      // A copy's contents, or too large, for one over the size a diff shows, which is not read.
+      const copyOf = async (folder: string, file: Kept): Promise<Contents> => {
+        if (file.copy === undefined) return null
+        const read = await contentsAt(join(folder, file.copy))
+        return read === null ? undefined : read
+      }
       const changedIn = (record: Record) => record.files.filter((file) => file.after !== file.before)
       host.changes.add({
         name: "undo",
@@ -176,9 +182,11 @@ export function undo(options: UndoOptions = {}): Plugin {
           return files
         },
       })
-      async function leftBy(file: Kept, later: { folder: string; record: Record }[]): Promise<Uint8Array | null | undefined> {
+      async function leftBy(file: Kept, later: { folder: string; record: Record }[]): Promise<Contents> {
         if (file.after === ABSENT) return null
         if (file.after === undefined || file.after === UNKNOWN) return undefined
+        // A file over the size a diff shows is not read, even to tell whether it still holds what the turn left.
+        if (((await lstat(file.path).catch(() => undefined))?.size ?? 0) > LARGEST) return TOO_LARGE
         const now = await stateOf(file.path)
         if (now.mark === file.after) return now.contents
         for (const { folder, record } of later) {

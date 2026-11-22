@@ -388,6 +388,8 @@ function FileDiffBody({ file, layout }: { file: FileDiff; layout: "stacked" | "s
   const note = (text: string) => <p className="px-7 py-3 text-caption text-text-muted">{text}</p>
   if (file.submodule) return note("Submodule changed")
   if (file.tooMany) return note("Not compared: one comparison reads at most 300 files.")
+  if (file.tooSlow) return note("Not compared: comparing it took too long.")
+  if (file.filtered) return note("Filtered file, changes not shown")
   if (file.binary) return note("This file is binary, so it is not shown.")
   if (file.tooLarge) return note("This file is too large to show.")
   if (file.unknown) return note("What this file held is not known: it has been changed outside evie's file tools since, and no copy of it is kept.")

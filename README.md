@@ -504,13 +504,31 @@ What evie changed is shown as diffs, as T3 Code shows them:
   thread of the server's own, so that a long comparison holds nothing up.
 - **A repository is read without running anything it names.** A
   repository's own settings can name commands for git to run, and one just
-  cloned is not to be trusted with that, so the server asks git with each
-  of them turned off: the file system monitor (`core.fsmonitor`), hooks
-  (`core.hooksPath`, and no index written, which would run one), the
-  pager, an external diff (`diff.external`, and `--no-ext-diff` for a diff
-  driver's command), text conversion (`--no-textconv`), and every filter
-  its settings name, whose clean, smudge and process commands are each set
-  to none. The files themselves are read by the server, not through git.
+  cloned is not to be trusted with that. Every git that evie runs, in its
+  core and its built-in plugins (`src/core/git.ts`), is given settings that
+  turn each of them off, through its environment (`GIT_CONFIG_COUNT`),
+  which git reads over every settings file: the file system monitor
+  (`core.fsmonitor`); hooks (`core.hooksPath`, and no index written,
+  `GIT_OPTIONAL_LOCKS`, which would run one); the pager; an external diff
+  (`diff.external`, and `--no-ext-diff` for a diff driver's command); text
+  conversion (`--no-textconv`); signing (`commit.gpgSign`,
+  `tag.gpgSign`); upkeep in the background (`gc.auto`,
+  `maintenance.auto`); and for a command that reads the folder's files,
+  every filter its settings name, whose clean, smudge and process commands
+  are each set to none, whatever the filter's name. Nor does git reach
+  another computer: no transport (`protocol.allow`), no fetching of what a
+  partial clone lacks (`GIT_NO_LAZY_FETCH`), no credential helper, ssh
+  command or password program (`credential.helper`, `core.sshCommand`,
+  `core.askPass`), and never a prompt (`GIT_TERMINAL_PROMPT`). The git
+  that `gh` runs is given the same. The one exception is the sync plugin's
+  push to its private backup repository, which keeps the transports,
+  credential helper and ssh command the settings have, and everything else
+  above. The files themselves are read by the server, not through git, and
+  the size of each is looked at first: one over 1 MB is never read. A file
+  git filters, as git-lfs does, is not compared, since its filter is not
+  run, and says "Filtered file, changes not shown". One answer spends at
+  most 20 seconds comparing lines, and one file at most 15: the files left
+  say they took too long, and are not compared.
 
 **A workspace** is a project's home, opened from its icon or name in the
 session list or the project card. The page then has three other columns:

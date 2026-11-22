@@ -157,5 +157,10 @@ test("gh is given only what it needs from the server's environment: its path, ho
   expect(given.LANG).toBe("en_GB.UTF-8")
   expect(given.HOME).toBe(process.env.HOME!)
   expect(given.PATH).toStartWith(process.env.PATH!)
-  expect(Object.keys(given).filter((name) => name.startsWith("GIT_") || name.includes("API_KEY"))).toEqual([])
+  expect(Object.keys(given).filter((name) => name.includes("API_KEY"))).toEqual([])
+  expect(given.GIT_DIR).toBeUndefined()
+  // The git that gh runs runs none of the commands a repository's settings name, and reaches no other computer.
+  const settings = Object.fromEntries(Array.from({ length: Number(given.GIT_CONFIG_COUNT) }, (_, at) => [given[`GIT_CONFIG_KEY_${at}`], given[`GIT_CONFIG_VALUE_${at}`]]))
+  expect(settings).toMatchObject({ "core.fsmonitor": "false", "core.hooksPath": "/dev/null", "protocol.allow": "never", "credential.helper": "" })
+  expect(given.GIT_NO_LAZY_FETCH).toBe("1")
 })

@@ -61,7 +61,7 @@ test("a file shows how many lines it added and removed only when they were count
   expect(hasCounts(file("a.ts", 1, 1))).toBe(true)
   // Left out for size, after its lines were counted.
   expect(hasCounts(file("big.ts", 900, 0, { tooLarge: true }))).toBe(true)
-  for (const extra of [{ binary: true }, { unknown: true }, { tooMany: true }, { tooLarge: true }] as const) expect(hasCounts(file("x", 0, 0, extra))).toBe(false)
+  for (const extra of [{ binary: true }, { unknown: true }, { tooMany: true }, { tooLarge: true }, { tooSlow: true }, { filtered: true }] as const) expect(hasCounts(file("x", 0, 0, extra))).toBe(false)
 })
 
 test("the project card sums up the session's changes, or says it has none, or that they are not kept", () => {

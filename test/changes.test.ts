@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { chmod, mkdir, mkdtemp, readdir, realpath, rm, unlink, utimes, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, realpath, rm, truncate, unlink, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, undo, type Plugin } from "../src/index.ts"
@@ -218,10 +218,10 @@ test("a branch's changes run from where it left its base to the folder as it is 
   expect(await run.evie.send({ type: "read_changes", session: run.session, of: "branch", base: "nowhere" })).toEqual({ files: [], unavailable: 'There is no branch "nowhere" to compare this one with.' })
 })
 
-test("reading a repository's changes runs none of the commands the repository's own settings name", async () => {
-  const { run, projectFolder } = await start([], { "a.md": "a\n", "b.md": "b\n", ".gitattributes": "* diff=evil filter=evil\n" }, { git: true })
-  // A command that notes each time it is run, by the setting that ran it,
-  // and passes what it is given through, as a filter would.
+// A command that notes each time it is run, by the setting that ran it,
+// and passes what it is given through, as a filter would; a hooks folder
+// whose hook notes the same; and what has been noted so far.
+async function noting() {
   const ran = await realpath(await mkdtemp(join(tmpdir(), "evie-ran-")))
   cleanups.push(() => rm(ran, { recursive: true, force: true }))
   const command = join(ran, "noted")
@@ -230,6 +230,12 @@ test("reading a repository's changes runs none of the commands the repository's 
   await mkdir(join(ran, "hooks"))
   await writeFile(join(ran, "hooks", "post-index-change"), `#!/bin/sh\ntouch "${ran}/hook"\n`)
   await chmod(join(ran, "hooks", "post-index-change"), 0o755)
+  return { ran, command, hooks: join(ran, "hooks"), noted: async () => (await readdir(ran)).filter((name) => name !== "noted" && name !== "hooks").sort() }
+}
+
+test("reading a repository's changes runs none of the commands the repository's own settings name", async () => {
+  const { run, projectFolder } = await start([], { "a.md": "a\n", "b.md": "b\n", "c.eq": "c\n", ".gitattributes": "*.md diff=evil filter=evil\n*.eq filter=a=b\n" }, { git: true })
+  const { ran, command, noted } = await noting()
   const settings: [string, string][] = [
     ["core.fsmonitor", `${command} fsmonitor`],
     ["core.hooksPath", join(ran, "hooks")],
@@ -242,18 +248,50 @@ test("reading a repository's changes runs none of the commands the repository's 
     ["filter.evil.smudge", `${command} smudge`],
     ["filter.evil.process", `${command} process`],
     ["filter.evil.required", "true"],
+    // A filter whose name holds "=", which a setting given as name=value would cut short.
+    ["filter.a=b.clean", `${command} clean-a=b`],
+    ["filter.a=b.process", `${command} process-a=b`],
+    ["filter.a=b.required", "true"],
   ]
   for (const [name, value] of settings) await git(["config", name, value], projectFolder)
-  // One file changed, and one rewritten as it was, so git must look inside both.
+  // Files changed, and one rewritten as it was, so git must look inside them.
   await writeFile(join(projectFolder, "b.md"), "b changed\n")
+  await writeFile(join(projectFolder, "c.eq"), "c changed\n")
   await writeFile(join(projectFolder, "a.md"), "a\n")
   await utimes(join(projectFolder, "a.md"), new Date(), new Date(Date.now() + 5000))
 
   const uncommitted = await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })
   await run.evie.send({ type: "read_changes", session: run.session, of: "branch" })
   await run.evie.send({ type: "list_changes", session: run.session })
-  expect(uncommitted.files.map((file) => file.path)).toEqual(["b.md"])
-  expect((await readdir(ran)).filter((name) => name !== "noted" && name !== "hooks").sort()).toEqual([])
+  expect(uncommitted.files.map((file) => file.path)).toEqual(["b.md", "c.eq"])
+  expect(await noted()).toEqual([])
+  expect(ran).toBeTruthy()
+})
+
+test("a blob a partial clone does not hold is not fetched, by anything the repository names, and that file is not known", async () => {
+  const { run, projectFolder } = await start([], {}, { git: false })
+  const { command, noted } = await noting()
+  // A repository to clone from, with a second commit whose a.md the clone does not fetch.
+  const source = await realpath(await mkdtemp(join(tmpdir(), "evie-source-")))
+  cleanups.push(() => rm(source, { recursive: true, force: true }))
+  await git(["init", "-q", "-b", "main"], source)
+  await git(["config", "uploadpack.allowFilter", "true"], source)
+  await writeFile(join(source, "a.md"), "one\n")
+  await git(["add", "-A"], source)
+  await git(["commit", "-q", "-m", "One"], source)
+  await git(["clone", "-q", "--filter=blob:none", `file://${source}`, join(projectFolder, "clone")], projectFolder)
+  const clone = join(projectFolder, "clone")
+  await writeFile(join(source, "a.md"), "two\n")
+  await git(["commit", "-q", "-am", "Two"], source)
+  await git(["fetch", "-q", "--filter=blob:none", "origin"], clone)
+  await git(["reset", "-q", "--soft", "origin/main"], clone)
+  // Asking for anything from the remote would run this.
+  await git(["config", "remote.origin.uploadpack", `${command} uploadpack`], clone)
+  const opened = await run.evie.send({ type: "open_session", folder: clone })
+
+  const read = await run.evie.send({ type: "read_changes", session: opened.session, of: "uncommitted" })
+  expect(read.files).toEqual([{ path: "a.md", status: "changed", added: 0, removed: 0, unknown: true }])
+  expect(await noted()).toEqual([])
 })
 
 test("a file whose name holds a line break is not known, and the files after it are read as they are", async () => {
@@ -349,4 +387,48 @@ test("a finished turn's files are read and compared once, and the whole session 
   // The whole session is left out until it is asked for.
   expect(once.session).toBeUndefined()
   expect((await run.evie.send({ type: "list_changes", session: run.session, whole: true })).session).toEqual([{ path: "a.md", status: "changed", added: 1, removed: 1 }])
+})
+
+test("a file larger than a diff shows is not read at all, however large it is", async () => {
+  const { run, projectFolder } = await start([], { "a.md": "a\n" }, { git: true })
+  // 1.5 GB, written as a sparse file, which takes no room on the disk.
+  await writeFile(join(projectFolder, "huge.log"), "")
+  await truncate(join(projectFolder, "huge.log"), 1.5 * 1024 ** 3)
+  // A committed file over the limit, changed.
+  await writeFile(join(projectFolder, "big.txt"), "x".repeat(2 * 1024 * 1024))
+  await git(["add", "big.txt"], projectFolder)
+  await git(["commit", "-q", "-m", "Big"], projectFolder)
+  await writeFile(join(projectFolder, "big.txt"), "y".repeat(2 * 1024 * 1024))
+
+  const started = performance.now()
+  const read = await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })
+  expect(read.files).toEqual([
+    { path: "big.txt", status: "changed", added: 0, removed: 0, tooLarge: true },
+    { path: "huge.log", status: "added", added: 0, removed: 0, tooLarge: true },
+  ])
+  expect(performance.now() - started).toBeLessThan(3000)
+})
+
+test("a file git filters, as git-lfs does, is not compared, since its filter is not run", async () => {
+  const { run, projectFolder } = await start([], { "a.md": "a\n", "picture.bin": "version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 3\n", ".gitattributes": "*.bin filter=lfs\n" }, { git: true })
+  await writeFile(join(projectFolder, "picture.bin"), "the picture itself")
+  await writeFile(join(projectFolder, "a.md"), "a changed\n")
+
+  const read = await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })
+  expect(read.files).toEqual([
+    { path: "a.md", status: "changed", added: 1, removed: 1, patch: "@@ -1,1 +1,1 @@\n-a\n+a changed\n" },
+    { path: "picture.bin", status: "changed", added: 0, removed: 0, filtered: true },
+  ])
+})
+
+test("a session moved to another project lists its turns' files from where they are now", async () => {
+  const { run, projectFolder } = await start(turn(edit("a.md", "1", "2")), { "a.md": "1\n" })
+  await say(run, "change it")
+  expect((await run.evie.send({ type: "list_changes", session: run.session })).turns[0]?.files[0]?.path).toBe("a.md")
+
+  const elsewhere = await realpath(await mkdtemp(join(tmpdir(), "evie-elsewhere-")))
+  cleanups.push(() => rm(elsewhere, { recursive: true, force: true }))
+  const other = await run.evie.send({ type: "open_session", folder: elsewhere })
+  await run.evie.send({ type: "move_session", session: run.session, project: other.project!.id })
+  expect((await run.evie.send({ type: "list_changes", session: run.session })).turns[0]?.files[0]?.path).toBe(join(projectFolder, "a.md"))
 })
