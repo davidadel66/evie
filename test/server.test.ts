@@ -1830,6 +1830,18 @@ test("a job that ended while the line was down is passed on once, before the fir
   expect(catchUpsFrom(line).length).toBeGreaterThan(1)
 })
 
+test("an open given a number to catch up from is answered with every event after it, though the server sends them in pages", async () => {
+  const { served, connect } = await serveOverALine([scriptedProvider(largeReplies(12)).plugin], largeSession)
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`)
+  const client = await connect()
+
+  const opened = await client.send({ type: "open_session", session: served.run.session, after: 0 })
+
+  expect(opened.more).toBeUndefined()
+  expect(opened.events?.map((event) => event.seq)).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+  expect(opened.lastSeq).toBe(48)
+})
+
 test("a page that says more follow but holds no events ends the catch-up, saying some events may be missing, and the session is still heard from", async () => {
   let faulty = true
   // A server with a fault: its first page of a catch-up says more follow, with no events.

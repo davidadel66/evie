@@ -259,6 +259,26 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     return output
   }
 
+  // The reply to an open given `after`, which the server sends in pages,
+  // read whole: the rest are asked for, from the last event of each, and the
+  // open is answered with every event after the number given and where the
+  // session stands as the last page read it.
+  async function whole(input: OpenInput, first: Opened): Promise<Opened> {
+    const line = socket
+    const events = [...(first.events ?? [])]
+    let page = first
+    while (page.more) {
+      const last = page.events?.at(-1)
+      if (last === undefined) throw new Error("The server said more of the session's events follow, but sent none.")
+      const reply = line === socket && line ? await ask(line, { ...input, after: last.seq } as Command) : undefined
+      if (!reply) throw lost("the line dropped while the rest of the session's events were read")
+      if ("error" in reply) throw new Error(reply.error)
+      page = reply.result as Opened
+      events.push(...(page.events ?? []))
+    }
+    return page === first ? first : { ...page, events }
+  }
+
   // Records that the owner has been given where a session stands, as this
   // reply to an open of it says: the reply so far, and the jobs.
   function tell(seen: Seen, output: Opened) {
@@ -537,7 +557,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
           resent: false,
           answer(reply) {
             if ("error" in reply) return reject(new Error(reply.error))
-            const result = command.type === "open_session" ? onOpened(waited, reply.result as Opened) : reply.result
+            const result = command.type === "open_session" ? whole(command as OpenInput, reply.result as Opened).then((output) => onOpened(waited, output)) : reply.result
             resolve(result as Commands[Sent["type"]]["output"] | Promise<Commands[Sent["type"]]["output"]>)
           },
           lose: (why) => reject(lost(why)),
