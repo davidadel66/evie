@@ -442,7 +442,7 @@ test("an owner's message with images is sent as its text and then each image, as
   ])
 })
 
-test("which models take images is read from the input each takes in OpenRouter's list; with no list, none does", async () => {
+test("which models take images is read from the input each takes in OpenRouter's list", async () => {
   const fake = fakeOpenRouter([
     {
       status: 200,
@@ -463,6 +463,21 @@ test("which models take images is read from the input each takes in OpenRouter's
   expect(await provider.takesImages?.("unknown/model")).toBe(false)
   expect(fake.calls).toHaveLength(1)
 
+})
+
+test("a request refused as bad, or as too large, says so, so that what is in it can be left out and it sent again; one refused for another reason does not", async () => {
+  const bad = await ask([failure(400, "The image could not be decoded.")])
+  const large = await ask([failure(413, "Request entity too large")])
+  const midReply = await ask([ok(text("Hello"), data({ error: { code: 400, message: "Invalid image" }, choices: [] }))])
+  const rateLimited = await ask([failure(429, "Slow down"), failure(429, "Slow down"), failure(429, "Slow down"), failure(429, "Slow down")])
+
+  expect(bad.chunks[0]).toEqual({ type: "finish", reason: "error", error: "OpenRouter could not answer (400): The image could not be decoded.", refused: true })
+  expect(large.chunks[0]).toMatchObject({ reason: "error", refused: true })
+  expect(midReply.chunks.at(-1)).toMatchObject({ reason: "error", refused: true })
+  expect(rateLimited.chunks[0]).not.toHaveProperty("refused")
+})
+
+test("when OpenRouter's list cannot be fetched, whether a model takes images is not known", async () => {
   const offline = createOpenRouterProvider({ env: { OPENROUTER_API_KEY: KEY }, fetch: fakeOpenRouter([{ networkError: "fetch failed" }]).fetch })
-  expect(await offline.takesImages?.("sees/model")).toBe(false)
+  expect(await offline.takesImages?.("sees/model")).toBeUndefined()
 })

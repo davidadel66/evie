@@ -40,6 +40,9 @@ export const IMAGE_TYPES: readonly string[] = ["image/png", "image/jpeg", "image
 // at most 5 MB, the most some of the models take. A larger one is given by
 // its path, so that it cannot make every request of the session fail.
 export const IMAGE_LIMIT = (5 * 1024 * 1024 * 3) / 4
+// The most pixels on a side of an image a model is shown as one, as some
+// of the models refuse a larger one.
+export const IMAGE_SIDE = 8000
 
 export function createAttachments(options: {
   // The data folder.
@@ -97,7 +100,10 @@ export function createAttachments(options: {
     async image(attachment) {
       if (!IMAGE_TYPES.includes(attachment.type) || attachment.size > IMAGE_LIMIT || !isKept(attachment.path, attachment.size)) return undefined
       const bytes = await readFile(attachment.path).catch(() => undefined)
-      return bytes !== undefined && bytes.byteLength <= IMAGE_LIMIT ? bytes.toString("base64") : undefined
+      if (bytes === undefined || bytes.byteLength > IMAGE_LIMIT) return undefined
+      const picture = pictureIn(bytes)
+      if (picture?.type !== attachment.type || picture.width > IMAGE_SIDE || picture.height > IMAGE_SIDE) return undefined
+      return bytes.toString("base64")
     },
     // Read at once, not in steps, so that messages are taken in the order
     // they were sent.

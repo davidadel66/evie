@@ -60,6 +60,7 @@ const failed = (error: string, status?: number): Chunk => ({
   reason: "error",
   error,
   ...(status !== undefined && REFUSED.includes(status) && TOO_LONG.test(error) && { tooLong: true as const }),
+  ...(status !== undefined && REFUSED.includes(status) && { refused: true as const }),
 })
 
 export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
@@ -106,9 +107,10 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
       return (await list())?.find((entry) => entry.id === model)?.limit
     },
 
-    // If the list cannot be fetched, the model is told where each image is.
+    // If the list cannot be fetched, it is not known.
     async takesImages(model) {
-      return (await list())?.find((entry) => entry.id === model)?.images === true
+      const listed = await list()
+      return listed === undefined ? undefined : listed.find((entry) => entry.id === model)?.images === true
     },
 
     async models() {

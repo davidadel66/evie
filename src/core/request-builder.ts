@@ -24,19 +24,23 @@ import type { Attachment, EventBodies, Message, Request, StoredEvent, Tool } fro
 export const NOTE_OPENING = "[Note from Evie:"
 export const ONLY_THE_CORE_WRITES = [NOTE_OPENING]
 
-// `images` are the attached images the model is shown, by their path, as
-// their bytes in base64. Every other attachment is named by its path.
+// `shown` are the attached images the model is shown, by their path, as
+// their bytes in base64. Every other attachment is named by its path, and
+// any other image said not to be shown, unless it is not known whether the
+// model takes images.
+export type ShownImages = { images: ReadonlyMap<string, string>; unknown?: boolean }
+
 export function buildRequest(
   model: string,
   events: readonly StoredEvent[],
   tools: readonly Tool[],
   maxTokens?: number,
-  images: ReadonlyMap<string, string> = new Map(),
+  shown: ShownImages = { images: new Map() },
 ): Request {
   const { compaction, kept } = conversationOf(events)
   const messages: Message[] = compaction ? [{ role: "user", text: summaryMessage(compaction.body) }] : []
   for (const [index, event] of kept.entries()) {
-    if (event.type === "user_message") messages.push(ownerMessage(event.body, images))
+    if (event.type === "user_message") messages.push(ownerMessage(event.body, shown))
     if (event.type === "assistant_message") {
       const { toolCalls } = event.body
       const text = event.body.interrupted ? `${event.body.text}\n\n${cutShortNote(kept, index)}` : event.body.text
@@ -68,7 +72,7 @@ export function buildRequest(
 // The owner's message, with a line for each file attached to it after its
 // text, saying where it is kept: an image the model is shown follows the
 // text, and the model reads any other file with its tools.
-function ownerMessage(body: EventBodies["user_message"], images: ReadonlyMap<string, string>): Message {
+function ownerMessage(body: EventBodies["user_message"], { images, unknown }: ShownImages): Message {
   const attached = body.attachments ?? []
   if (attached.length === 0) return { role: "user", text: body.text }
   const shown = attached.filter((each) => images.has(each.path))
@@ -77,7 +81,7 @@ function ownerMessage(body: EventBodies["user_message"], images: ReadonlyMap<str
   // bracket too, so that it cannot close the line it is in.
   const quoted = (text: string) => JSON.stringify(text)
   const lines = attached.map(
-    (each) => `[Attached: ${quoted(each.name.replaceAll("[", "(").replaceAll("]", ")"))} (${each.type}, ${sizeIn(each.size)}), kept at ${quoted(each.path)}. ${howShown(each, images)}]`,
+    (each) => `[Attached: ${quoted(each.name.replaceAll("[", "(").replaceAll("]", ")"))} (${each.type}, ${sizeIn(each.size)}), kept at ${quoted(each.path)}. ${howShown(each, images, unknown === true)}]`,
   )
   return {
     role: "user",
@@ -86,9 +90,9 @@ function ownerMessage(body: EventBodies["user_message"], images: ReadonlyMap<str
   }
 }
 
-function howShown(attachment: Attachment, images: ReadonlyMap<string, string>): string {
+function howShown(attachment: Attachment, images: ReadonlyMap<string, string>, unknown: boolean): string {
   if (images.has(attachment.path)) return "It is shown below."
-  if (attachment.type.startsWith("image/")) return "It cannot be shown to you as an image here, so only its path is given."
+  if (attachment.type.startsWith("image/") && !unknown) return "It cannot be shown to you as an image here, so only its path is given."
   return "Read it with your tools to see what it holds."
 }
 

@@ -184,7 +184,9 @@ export type Chunk =
   | { type: "tool_call"; id: string; name: string; arguments: string }
   | { type: "finish"; reason: "stop" | "tool_calls" | "length"; usage?: Usage }
   // `tooLong` marks a request refused for being more than the model can read.
-  | { type: "finish"; reason: "error"; error: string; usage?: Usage; tooLong?: true }
+  // `refused` marks one refused as bad or too large, as for an image in it
+  // the model cannot take.
+  | { type: "finish"; reason: "error"; error: string; usage?: Usage; tooLong?: true; refused?: true }
 
 // How the core reaches a model: a request and the turn's cancel signal go in,
 // a stream of chunks comes out.
@@ -196,9 +198,11 @@ export type Provider = {
   // The models the provider offers, each by the id a request names it by
   // and the name it is shown by. Fails, saying why, when they cannot be listed.
   models?(): Promise<{ id: string; name: string }[]>
-  // Whether a model can be sent images. Without it, or when it says no or
-  // fails, the model is told where each image is kept instead.
-  takesImages?(model: string): Promise<boolean>
+  // Whether a model can be sent images, or nothing when that cannot be
+  // told now, as when the provider's list of models cannot be read.
+  // Without it, or when it says no or fails, the model is told where each
+  // image is kept instead.
+  takesImages?(model: string): Promise<boolean | undefined>
 }
 
 // ---- Jobs ---------------------------------------------------------------------

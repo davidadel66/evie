@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } f
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ATTACHMENT_LIMIT, type Attachment } from "../src/core/types.ts"
-import { files, permissions } from "../src/index.ts"
+import { files, permissions, type Plugin, type Request } from "../src/index.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie, type Served } from "./support/served.ts"
@@ -19,7 +19,7 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
-async function start(script: ScriptedReply[] = [{ text: ["Seen."] }], images?: (model: string) => boolean): Promise<Run & { model: ReturnType<typeof scriptedProvider> }> {
+async function start(script: ScriptedReply[] = [{ text: ["Seen."] }], images?: (model: string) => boolean | undefined): Promise<Run & { model: ReturnType<typeof scriptedProvider> }> {
   const model = scriptedProvider(script, { ...(images && { images }) })
   const run = await startEvie([model.plugin])
   cleanups.push(run.stop)
@@ -27,6 +27,12 @@ async function start(script: ScriptedReply[] = [{ text: ["Seen."] }], images?: (
 }
 
 const bytes = (text: string) => new TextEncoder().encode(text)
+
+// A tool that does nothing, for a turn of several steps.
+const nothingTool: Plugin = {
+  name: "nothing-tool",
+  setup: (host) => host.tools.add({ name: "nothing", description: "Does nothing.", inputSchema: { type: "object", properties: {} }, run: async () => "Nothing done." }),
+}
 
 // The openings of pictures, as each kind of file starts: its signature and
 // the part of its header that gives its size, which is all evie reads.
@@ -200,6 +206,125 @@ test("a model that does not take images is given an image's path instead, and so
     { role: "assistant", text: "A seedling." },
     { role: "user", text: "And now?" },
   ])
+})
+
+// What an image is said to be when its path is given instead.
+const notShown = (photo: Attachment) =>
+  `[Attached: ${JSON.stringify(photo.name)} (${photo.type}, ${photo.size} bytes), kept at ${JSON.stringify(photo.path)}. It cannot be shown to you as an image here, so only its path is given.]`
+// The images a request carried, by their bytes in base64.
+const imagesIn = (request: Request | undefined) => (request?.messages ?? []).flatMap((message) => (message.role === "user" ? (message.images ?? []).map((image) => image.data) : []))
+const base64 = (made: Uint8Array) => Buffer.from(made).toString("base64")
+
+test("an image larger than 8000 pixels on a side is given by its path, as models refuse one", async () => {
+  const run = await start([{ text: ["Seen."] }], () => true)
+  const wide = await run.evie.attachments.save(run.session, "panorama.png", png(8001, 600))
+  const tall = await run.evie.attachments.save(run.session, "scroll.jpg", jpeg(400, 9000))
+  const fits = await run.evie.attachments.save(run.session, "square.gif", gif(8000, 8000))
+
+  await say(run, "", run.session, [wide.path, tall.path, fits.path])
+
+  expect(imagesIn(run.model.requests[0])).toEqual([base64(gif(8000, 8000))])
+  expect(run.model.requests[0]?.messages[0]?.text.split("\n").slice(0, 2)).toEqual([notShown(wide), notShown(tall)])
+})
+
+test("only the newest four images go as images, at most 16 MB of base64 together; the older ones by their paths", async () => {
+  const run = await start([{ text: ["One."] }, { text: ["Two."] }], () => true)
+  const photos: Attachment[] = []
+  for (const at of [1, 2, 3, 4, 5]) photos.push(await run.evie.attachments.save(run.session, `photo-${at}.png`, png(at, at)))
+  await say(run, "", run.session, photos.slice(0, 2).map((photo) => photo.path))
+  await say(run, "", run.session, photos.slice(2).map((photo) => photo.path))
+
+  expect(imagesIn(run.model.requests[1])).toEqual([2, 3, 4, 5].map((at) => base64(png(at, at))))
+  expect(run.model.requests[1]?.messages[0]?.text.split("\n")[0]).toBe(notShown(photos[0]!))
+
+  // Four large ones would come to more than 16 MB, so the oldest of them goes by its path.
+  const large = await start([{ text: ["Big."] }], () => true)
+  const big: Attachment[] = []
+  for (const at of [1, 2, 3, 4]) {
+    const made = new Uint8Array(3_900_000)
+    made.set(png(at, at))
+    big.push(await large.evie.attachments.save(large.session, `big-${at}.png`, made))
+  }
+  await say(large, "", large.session, big.map((photo) => photo.path))
+  expect(imagesIn(large.model.requests[0])).toHaveLength(3)
+  expect(large.model.requests[0]?.messages[0]?.text.split("\n")[0]).toBe(
+    `[Attached: "big-1.png" (image/png, 3.7 MB), kept at ${JSON.stringify(big[0]!.path)}. It cannot be shown to you as an image here, so only its path is given.]`,
+  )
+})
+
+test("a summary is written from paths alone: the request to compact carries no images", async () => {
+  const model = scriptedProvider([{ text: ["Seen."] }, { text: ["Noted."] }, { text: ["## Goal\nLook at the beds."] }], { images: () => true })
+  const run = await startEvie([model.plugin], { compaction: { ceiling: 1000 } })
+  cleanups.push(run.stop)
+  const photo = await run.evie.attachments.save(run.session, "photo.png", png())
+
+  await say(run, "Look at this", run.session, [photo.path])
+  await say(run, "word ".repeat(400))
+  expect((await run.evie.send({ type: "run_command", session: run.session, name: "compact", args: "" })).text).toBe("Compacted: the earlier part of the conversation is now a summary.")
+
+  expect(imagesIn(model.requests[0])).toHaveLength(1)
+  expect(imagesIn(model.requests[2])).toEqual([])
+  expect(model.requests[2]?.messages[0]?.text).toContain("kept at")
+})
+
+test("a request refused while it carries images is sent again with each image by its path, and those images are not sent again", async () => {
+  const run = await start([{ text: [], error: "The image could not be read.", refused: true }, { text: ["Seen, by its path."] }, { text: ["Still by its path."] }], () => true)
+  const photo = await run.evie.attachments.save(run.session, "photo.png", png())
+
+  await say(run, "Look", run.session, [photo.path])
+  await say(run, "And again")
+
+  expect(imagesIn(run.model.requests[0])).toHaveLength(1)
+  expect(imagesIn(run.model.requests[1])).toEqual([])
+  expect(run.model.requests[1]?.messages[0]?.text).toBe(`Look\n\n${notShown(photo)}`)
+  expect(imagesIn(run.model.requests[2])).toEqual([])
+  expect(stored(run.events).filter((event) => event.type === "turn_end").map((event) => event.type === "turn_end" && event.body.reason)).toEqual(["completed", "completed"])
+})
+
+test("when it cannot be told whether the model takes images, the last answer for that model is used; with none, images go by their paths, not said to be unshowable", async () => {
+  let answer: boolean | undefined = undefined
+  const run = await start([{ text: ["One."] }, { text: ["Two."] }, { text: ["Three."] }], () => answer)
+  const photo = await run.evie.attachments.save(run.session, "photo.png", png())
+
+  await say(run, "Look", run.session, [photo.path])
+  answer = true
+  await say(run, "Again")
+  answer = undefined
+  await say(run, "Once more")
+
+  expect(imagesIn(run.model.requests[0])).toEqual([])
+  expect(run.model.requests[0]?.messages[0]?.text).toBe(
+    `Look\n\n[Attached: "photo.png" (image/png, 33 bytes), kept at ${JSON.stringify(photo.path)}. Read it with your tools to see what it holds.]`,
+  )
+  expect(imagesIn(run.model.requests[1])).toHaveLength(1)
+  // Not known again, so the last answer, yes, holds.
+  expect(imagesIn(run.model.requests[2])).toHaveLength(1)
+})
+
+test("asking whether the model takes images leaves nothing listening on the turn's signal", async () => {
+  const listening = new Map<unknown, number>()
+  const add = AbortSignal.prototype.addEventListener
+  const remove = AbortSignal.prototype.removeEventListener
+  const run = await startEvie([scriptedProvider([{ text: [], calls: [{ name: "nothing", input: {} }] }, { text: [], calls: [{ name: "nothing", input: {} }] }, { text: ["Done."] }], { images: () => true }).plugin, nothingTool], {
+    compaction: { limits: { "test/model": 1_000_000 } },
+  })
+  cleanups.push(run.stop)
+  const photo = await run.evie.attachments.save(run.session, "photo.png", png())
+  AbortSignal.prototype.addEventListener = function (this: AbortSignal, ...args: Parameters<AbortSignal["addEventListener"]>) {
+    if (args[0] === "abort") listening.set(args[1], (listening.get(args[1]) ?? 0) + 1)
+    return add.apply(this, args)
+  } as never
+  AbortSignal.prototype.removeEventListener = function (this: AbortSignal, ...args: Parameters<AbortSignal["removeEventListener"]>) {
+    if (args[0] === "abort") listening.set(args[1], (listening.get(args[1]) ?? 0) - 1)
+    return remove.apply(this, args)
+  } as never
+  try {
+    await say(run, "Look", run.session, [photo.path])
+  } finally {
+    AbortSignal.prototype.addEventListener = add
+    AbortSignal.prototype.removeEventListener = remove
+  }
+  expect([...listening.values()].filter((count) => count > 0)).toEqual([])
 })
 
 test("with no project, the model may read the files attached in its own session, and not another session's; deleting the session deletes them", async () => {

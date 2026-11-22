@@ -610,11 +610,18 @@ folder that leads through a link elsewhere are refused.
 
 The message records each file's path, name, type and size. When the
 session's model takes images, as OpenRouter's list of models says, an
-image attached (PNG, JPEG, WebP or GIF, whose base64 is at most 5 MB) goes
-to it as an image in that message. Any other file, and every image for a
-model that takes none, is named to the model by its path, for it to read
-with its tools; a session switched to such a model is given the paths of
-its earlier images too.
+image attached (PNG, JPEG, WebP or GIF, whose base64 is at most 5 MB, and
+no more than 8,000 pixels on a side) goes to it as an image in that
+message: the newest four in the conversation, at most 16 MB of base64
+together. Any other file, older or larger images, and every image for a
+model that takes none, are named to the model by their paths, for it to
+read with its tools; a session switched to such a model is given the
+paths of its earlier images too, and a summary of the conversation is
+written from the paths alone. When the list of models cannot be read, the
+last answer for the model holds. A request the provider refuses while it
+carries images is sent again with each image by its path, and those
+images are not sent again while the server runs, so that a session is
+never stuck on an image.
 
 The server takes a file at `POST /attachments?session=<id>&name=<file
 name>`, with the file as the body, from a client signed in as for the
