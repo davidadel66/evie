@@ -1904,6 +1904,42 @@ test("an event and a question written between two pages of a catch-up are each p
   await client.send({ type: "answer_question", session, id: question.body.id, choice: "No" })
 })
 
+test("a stop sent while a catch-up is still coming in pages is carried out at once, not after the last page", async () => {
+  const resume = gate()
+  let paused = () => {}
+  const pausing = new Promise<void>((resolve) => (paused = resolve))
+  const core = (evie: Evie): Evie => ({
+    ...evie,
+    send: (async (command: Command) => {
+      if (command.type === "open_session" && command.after === 10) {
+        paused()
+        await resume.opened
+      }
+      return evie.send(command)
+    }) as Evie["send"],
+  })
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...largeReplies(12), { hang: true, text: ["Working"] }]).plugin], { ...largeSession, core })
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", session: served.run.session })
+  const seen: number[] = []
+  client.subscribe((event) => "seq" in event && seen.push(event.seq))
+
+  await line.cut()
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  const working = written(served.run, "Working")
+  await served.run.evie.send({ type: "send_message", session, text: "Work on" })
+  await working
+  line.mend()
+  await pausing
+  const stopped = client.send({ type: "cancel", session })
+
+  expect(await Promise.race([stopped.then(() => "stopped"), Bun.sleep(1000).then(() => "held back")])).toBe("stopped")
+  resume.open()
+  await client.send({ type: "read_history", session, limit: 1 })
+  // Twelve turns, then the one stopped: its start, its message, the reply cut short and its end.
+  expect(seen).toEqual(Array.from({ length: 52 }, (_, at) => at + 1))
+})
+
 test("a page that says more follow but holds no events ends the catch-up, saying some events may be missing, and the session is still heard from", async () => {
   let faulty = true
   // A server with a fault: its first page of a catch-up says more follow, with no events.

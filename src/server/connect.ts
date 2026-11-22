@@ -90,6 +90,9 @@ type Seen = {
   // passed them: see `onEvent` and `catchUp`.
   behind: boolean
   early: Set<number>
+  // Whether the session's catch-up on the line as it is now has had its
+  // first page, so that the server has the session open again.
+  reopened: boolean
   // Whether the owner has been given where the session stands, in the reply
   // to an open of it. Until then a catch-up gives the owner where it stands
   // in that reply, in place of passing it on: see `onOpened`.
@@ -171,7 +174,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   }
   const seenOf = (session: string): Seen => {
     let seen = sessions.get(session)
-    if (!seen) sessions.set(session, (seen = { seq: 0, shown: "", jobs: new Map(), behind: false, early: new Set(), told: false, opening: [] }))
+    if (!seen) sessions.set(session, (seen = { seq: 0, shown: "", jobs: new Map(), behind: false, early: new Set(), reopened: false, told: false, opening: [] }))
     return seen
   }
   const isNew = (seen: Seen, event: StoredEvent) => event.seq > seen.seq && !seen.early.has(event.seq)
@@ -305,6 +308,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     // One under way already covers it.
     if (seen.behind) return
     seen.behind = true
+    seen.reopened = false
     // Of a session the owner has been told nothing of yet, nothing earlier
     // is asked for: the owner is given where it stands now.
     let after = !seen.told && seen.seq === 0 ? undefined : seen.seq
@@ -327,6 +331,10 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
         // are often evie dealing with a job that ended. The last page's
         // jobs settle any that changed while the pages came.
         if (first && seen.told) passOnJobs(session, page.jobs)
+        if (first) {
+          seen.reopened = true
+          flush()
+        }
         if (!page.more) break
         const last = page.events?.at(-1)
         if (last === undefined) {
@@ -409,17 +417,37 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 
   // Sends each of the owner's waiting commands that has not been sent on
   // the line as it is now, in the order they were sent. While rejoining,
-  // only answers to questions go: opening a session again can wait on one,
-  // and anything else could reach a session before it is open again.
+  // only some go: see `goesWhileRejoining`. Once one is held back, so is
+  // every one sent after it but answers, so that none overtakes it.
   function flush() {
     const line = socket
     if (!line) return
+    let held = false
     for (const command of waiting.values()) {
-      if (command.sentOn === line || (rejoining && command.message.command.type !== "answer_question")) continue
+      if (command.sentOn === line) continue
+      if (rejoining && !goesWhileRejoining(command.message.command, held)) {
+        held = true
+        continue
+      }
       command.resent = command.sentOn !== undefined
       command.sentOn = line
       sendOn(line, command.message)
     }
+  }
+
+  // What is sent while the client catches up after the line came back. An
+  // answer to a question, since opening a session again can wait on one.
+  // A stop, so that one is not kept waiting by a catch-up that takes minutes
+  // on a slow line, once its session is open on the server again, and when
+  // nothing sent before it is held back: it then stops the turn it was meant
+  // for, not one that a message sent before it starts after it. Anything
+  // else waits until the catch-up is done, as it could reach a session
+  // before it is open again.
+  function goesWhileRejoining(command: Command, held: boolean) {
+    if (command.type === "answer_question") return true
+    if (command.type !== "cancel" || held) return false
+    const seen = sessions.get(command.session)
+    return seen === undefined || !seen.behind || seen.reopened
   }
 
   // A line that is closing cannot send. What was not sent waits for the next.
@@ -507,10 +535,12 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     clearTimeout(giveUp)
     options.onBack?.()
     rejoining = true
-    flush()
     const open = [...sessions].flatMap(([session, seen]) => (seen.openAs ? [session] : []))
+    // The catch-ups start first, so that each session is known to be behind.
+    const caughtUp = Promise.all(open.map((session) => catchUp(session, line)))
+    flush()
     try {
-      await Promise.all(open.map((session) => catchUp(session, line)))
+      await caughtUp
     } finally {
       // Unless the line dropped again first, and trying again has begun.
       if (socket === line) {
