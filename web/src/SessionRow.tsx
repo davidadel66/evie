@@ -5,7 +5,7 @@ import { Button } from "./components/ui/button.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import { DotsThree } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
-import { ProjectIcon } from "./ProjectIcon.tsx"
+import { ProjectLink } from "./ProjectIcon.tsx"
 import { ageWords, titleOf } from "./session-list.ts"
 import { Spinner } from "./Spinner.tsx"
 
@@ -92,8 +92,7 @@ function Row({
   return (
     <li className={cn("group relative flex flex-col rounded-md px-3 py-2", selected && "bg-surface-raised")}>
       <span className="flex items-center gap-2 text-caption text-text-muted">
-        {project !== null && <ProjectIcon project={project} />}
-        <span className="min-w-0 flex-1 truncate">{project === null ? "No project" : listed?.name}</span>
+        {project === null ? <span className="min-w-0 flex-1 truncate">No project</span> : <ProjectLink project={project} name={listed?.name} />}
         {state}
       </span>
       <span className="flex items-center">

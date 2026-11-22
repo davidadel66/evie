@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client"
 import { App } from "./App.tsx"
 import { addressAsOpened } from "./address.ts"
 import { openConnection } from "./connection.ts"
+import { keepLooks } from "./project-look.ts"
 import { refreshWhileShown } from "./refresh.ts"
 import { openSessions } from "./sessions.ts"
 
@@ -20,6 +21,8 @@ if (location.pathname + location.hash !== opened) history.replaceState(null, "",
 // page loads.
 const connection = (import.meta.hot.data.connection ??= openConnection({ url: location.origin, ...(code !== undefined && { code }) }))
 const sessions = (import.meta.hot.data.sessions ??= openSessions(connection))
+// Every project's tile takes its icon and colour from the latest list of projects.
+import.meta.hot.data.looks ??= sessions.subscribe(() => keepLooks(sessions.state().projects))
 // The projects' branches change with a checkout, which sends no event, so
 // they are asked for again when the window has the focus back, and each
 // minute while the page is shown.

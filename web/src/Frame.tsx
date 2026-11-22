@@ -12,13 +12,17 @@ import { Settings } from "./Settings.tsx"
 import { Spinner } from "./Spinner.tsx"
 import { SubagentView } from "./Subagent.tsx"
 import { Words } from "./Words.tsx"
+import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 
 // The page once signed in: the session list, the conversation and the
 // project card, in three columns. At phone width the list and the
 // conversation stack, the conversation a screen high, and the project card
-// is a sheet over the page, opened from the session's header.
+// is a sheet over the page, opened from the session's header. With a
+// workspace in the address, the workspace view instead.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
+  const workspace = useWorkspacePlace()
+  if (workspace !== undefined) return <WorkspaceView place={workspace} state={state} connection={connection} sessions={sessions} />
   return (
     <div className="flex min-h-dvh flex-col wide:h-dvh wide:flex-row">
       <aside aria-label="Sessions" className="flex flex-col bg-bg-side wide:w-session-list wide:shrink-0">
@@ -103,7 +107,7 @@ function Empty({ title, text }: { title: string; text: string }) {
 // Working is said, with why, until it is back. The status region is always
 // on the page, and only its words come and go, so that a screen reader,
 // which listens to a region already there, says them.
-function ConnectionLine({ state }: { state: ConnectionState }) {
+export function ConnectionLine({ state }: { state: ConnectionState }) {
   const line = connectionLine(state)
   return (
     <div role="status">

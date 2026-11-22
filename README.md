@@ -246,8 +246,9 @@ they change, and listed again when the line comes back:
   active, or its state; the session's name, which is the opening words of
   its first message for now; and the git branch its project is on, asked
   for again when the window has the focus back and each minute while the
-  page is shown. Until a project's icon and colour can be picked, each
-  project has a folder in a colour chosen from its id.
+  page is shown. A project has a folder in a colour chosen from its id
+  until you pick its icon and colour in its workspace (below). Its icon
+  and name open its workspace.
 - **New session** makes a draft of a new session, at the top of the list,
   in the project of the selected session or draft, or of the project the
   list is narrowed to; the menu beside it makes one in another project, or
@@ -330,7 +331,8 @@ The message box at the bottom of the conversation works as T3 Code's does:
 
 The project card, on the right, is the selected session's:
 
-- **Its project:** the project's icon and name, its folder, cut at its
+- **Its project:** the project's icon and name, which open its
+  workspace, its folder, cut at its
   start when it is long, so that its end shows, and whole when pointed at;
   and the git branch it is on, kept current as the session list keeps it,
   or "No branch" in a repository on none of its own, or "Not a git
@@ -365,6 +367,44 @@ right of the middle column's header, or with Cmd+Option+B (Ctrl+Alt+B
 elsewhere), and the browser remembers which. At 980px wide or narrower the
 same button opens it as a sheet over the page, from the right, which goes
 once something is picked.
+
+**A workspace** is a project's home, opened from its icon or name in the
+session list or the project card. The page then has three other columns:
+
+- **The strip,** on the left: a tile for every workspace, the one open
+  ringed in its colour, and a dot on any with a session waiting for you
+  (its name says Needs you). Above them, the way back to the sessions;
+  below them, New workspace.
+- **The workspace,** with its header in one row: its icon and name, then
+  Storage, Sessions and Memory, which is to come and says Later. Its
+  dashboards will be tabs there too. Pressing the icon or the name opens a
+  picker of its icon and colour: the six project colours, and a search
+  over about sixty of Phosphor's icons that suit a project. A colour
+  applies at once; an icon applies and closes the picker. Both are kept in
+  evie's database, and every tile on the page shows them.
+- **Sessions** lists the project's sessions. Picking one shows it in the
+  side chat.
+- **Storage** lists the files in the project's `.evie` folder, with their
+  size and how long ago they changed, a folder opening in place under its
+  own row, and says whether the folder is backed up. A text file or an
+  image opens in the workspace, read only. The server reads only inside
+  the `.evie` folder: a path that leaves it, by `..` or through a link, is
+  refused, and so is a file over 1 MB. Attachments will be kept here too.
+- **The side chat,** on the right, shows the session picked, or until one
+  is, the workspace's latest, or a new session in its project when it has
+  none, with the message box. Its header starts a new session there, and
+  opens the session in the session view.
+- **New workspace** asks for a name, a folder, suggested in your home
+  folder and named after it, and whether to back up its `.evie` folder to
+  a private repository (see "Workspaces"). A folder already there, such as
+  a code repository, is added as a project the same way. What the server
+  refuses, it says in its own words.
+
+The address keeps where you are, as `#workspace=<project id>&tab=storage`,
+with `&chat=<session id>` for the side chat's session and `&file=<path>`
+for a file open in Storage. At phone width the strip is a row of tiles at
+the top, the tabs scroll sideways, and the side chat stacks below the
+workspace.
 
 ### Keeping the server running
 
@@ -444,7 +484,9 @@ project is made but not trusted, and its first session asks. A folder
 that is already a project, that already has a `.evie/evie.json`, that is
 inside a git repository other than at its top, or that is in Evie's data
 folder is refused. `evie new` says whether the project is trusted and
-whether its `.evie` folder is backed up. Then run `evie` in that folder
+whether its `.evie` folder is backed up. The web app makes one with New
+workspace, in a workspace's strip, which can also keep the `.evie` folder
+on this computer (`"sync": "none"`). Then run `evie` in that folder
 to start working there.
 
 **Kept out of the project's own git.** When a project's folder is a git
