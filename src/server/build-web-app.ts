@@ -1,6 +1,7 @@
 import type { BuildMetafile } from "bun"
 import tailwind from "bun-plugin-tailwind"
 import { fontsPlugin } from "./fonts.ts"
+import { shikiFiles } from "./shiki-files.ts"
 import { ENCODINGS, variantsOf, type Encoding, type Variants } from "./variants.ts"
 
 // The web app's build, which `buildWebApp` runs in a process of its own:
@@ -33,8 +34,9 @@ try {
     // The plugins are handed to the bundler here, in code, so the build does
     // not depend on a bunfig.toml in the folder it is started in. The fonts
     // the stylesheet names are left out of it, for the server to serve as
-    // files: see `FONTS`.
-    plugins: [fontsPlugin(true), tailwind],
+    // files: see `FONTS`. So are Shiki's grammars and themes, which are
+    // loaded from the server's address for them: see `shikiFiles`.
+    plugins: [fontsPlugin(true), tailwind, shikiFiles],
     minify: true,
     // The page is served at more than one path, such as /sign-in, so it
     // names its files from the root.
@@ -42,9 +44,8 @@ try {
     // React's production build, without its checks and warnings for developers.
     define: { "process.env.NODE_ENV": JSON.stringify("production") },
     // What the page imports only when it needs it, such as the diff's
-    // library and each language it colours, is built into files of their
-    // own, which the page loads then, so that the rest of the page does not
-    // wait for them.
+    // library, is built into files of their own, which the page loads then,
+    // so that the rest of the page does not wait for them.
     splitting: true,
     metafile: true,
   })
