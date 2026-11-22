@@ -110,7 +110,7 @@ export default function DiffView({ files, layout, wrap, folded, fold, goTo, went
       <CodeView<undefined>
         ref={viewer}
         containerRef={scroller}
-        className="h-full min-h-0 overflow-auto outline-none"
+        className="min-h-0 flex-1 overflow-auto outline-none"
         items={items}
         options={options}
         onScroll={(top) => restoring.current === undefined && !gone.current && scrolled(top)}
