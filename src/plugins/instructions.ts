@@ -18,6 +18,9 @@ import type { Plugin } from "../core/types.ts"
 // The names a project's file may have, in the order they are looked for.
 const PROJECT_FILES = ["AGENTS.md", "CLAUDE.md"]
 const GLOBAL_FILE = "AGENTS.md"
+
+// The owner's own instruction file, in the data folder.
+export const ownInstructionsFile = (home: string) => join(home, GLOBAL_FILE)
 // The most of one file that is used.
 const MAX_BYTES = 32 * 1024
 
@@ -41,7 +44,7 @@ export function instructions(options: InstructionsOptions = {}): Plugin {
         const have = (file: Instructions) =>
           `The contents of ${file.path} are given here ${file.cut ? "up to a size limit" : "in full"}, so you already have them: do not read that file to find them.`
 
-        const fromOwner = await readInstructions(join(home, GLOBAL_FILE))
+        const fromOwner = await readInstructions(ownInstructionsFile(home))
         if (fromOwner) {
           sections.push(`# Instructions from the owner\n\nThe owner wrote these for every project. Follow them. ${have(fromOwner)}\n\n${fromOwner.text}`)
         }

@@ -11,7 +11,7 @@ import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
-import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider } from "./types.ts"
+import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider, SettingsEditor } from "./types.ts"
 
 type Cut = "none" | "asking" | "working"
 
@@ -39,6 +39,8 @@ export type EvieOptions = {
   // yes to whether to trust them does. A project `new_project` makes is
   // trusted this way.
   trust?: (folder: string) => Promise<void>
+  // What carries out the settings commands, which fail without it.
+  settings?: SettingsEditor
   // How often, in milliseconds, sessions are looked at for any that a week
   // of quiet has settled, to send their summaries: nothing happens in a
   // session to tell of it. Once an hour when left out, which is for tests to change.
@@ -82,6 +84,23 @@ const STOPPED_AGAIN =
   "so it was left stopped, in case it is what stops the server."
 const MOST_RESTARTS = 3
 const RESTARTS_WINDOW = 5 * 60_000
+
+// Sets plugins up together, for a project or for the general session, as
+// Evie does for each, with the core's own command beside theirs, and gives
+// back their host and the provider sessions there use. Fails, saying why,
+// when they cannot be set up together, as when two register a tool of the
+// same name, or none registers a provider.
+export async function setUpPlugins(plugins: readonly Plugin[], project: Project | null): Promise<{ host: Host; hooks: HookRunner; provider: Provider }> {
+  const { host, hooks } = await createHost(plugins, project)
+  host.commands.add({
+    name: "compact",
+    description: "Replace the older part of the conversation with a summary, to save room.",
+    run: (_args, context) => context.compact(),
+  })
+  const provider = host.providers.list()[0]
+  if (!provider) throw new Error("No provider is registered. Load a plugin that registers one.")
+  return { host, hooks, provider }
+}
 
 // What the model is told when the owner moves its session: the project and
 // folder it now works in, and where the files named before the move are.
@@ -138,15 +157,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const given = project && options.projectSettings ? await options.projectSettings(project, { ask }) : []
     const own: ProjectSettings = "plugins" in given ? given : { plugins: given }
     const kept = options.plugins.filter((plugin) => !own.disable?.includes(plugin.name))
-    const { host, hooks } = await createHost([...kept, ...own.plugins], project)
-    // A command of the core's own, beside the ones plugins register.
-    host.commands.add({
-      name: "compact",
-      description: "Replace the older part of the conversation with a summary, to save room.",
-      run: (_args, context) => context.compact(),
-    })
-    const provider = host.providers.list()[0]
-    if (!provider) throw new Error("No provider is registered. Load a plugin that registers one.")
+    const { host, hooks, provider } = await setUpPlugins([...kept, ...own.plugins], project)
     return {
       host,
       hooks,
@@ -945,6 +956,11 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return provider.models()
   }
 
+  function editor(): SettingsEditor {
+    if (!options.settings) throw new Error("This Evie has no settings to change: it was started without them.")
+    return options.settings
+  }
+
   // Opens a session again in this process, to pick up what was left in it.
   // A subagent's is opened by the session that started it, which is opened first.
   async function reopen(session: string): Promise<void> {
@@ -996,6 +1012,13 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await readJobOutput(command)) as Output
         case "list_subagents":
           return listSubagents(command) as Output
+        case "read_settings":
+          return (await editor().read(projects.list())) as Output
+        case "change_settings":
+          await editor().change(command, projects.list())
+          return (await editor().read(projects.list())) as Output
+        case "restart_server":
+          return (await editor().restart(command.started)) as Output
         case "rename_session":
           return renameSession(command) as Output
         case "move_session":

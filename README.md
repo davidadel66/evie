@@ -131,6 +131,7 @@ In your shell:
 | Command | What it does |
 |---|---|
 | `evie serve` | Runs the server, which also serves the web app. Leave it running; every client talks to it. |
+| `evie serve --check` | Checks that the server would start with its settings, without starting it, and says what would stop it. |
 | `evie` | Starts the terminal client in the project of the folder you are in. |
 | `evie -c` (or `--continue`) | Carries on the last session of this project, joining it if it is still running. |
 | `evie web` | Opens the web app in your browser, signed in. `--print` prints the sign-in link instead. |
@@ -158,7 +159,8 @@ Ctrl-C stops the turn in progress, and quits when nothing is running.
 
 `evie serve` listens on this computer only, at `http://127.0.0.1:3843`.
 It reads the settings files when it starts, so a change to them takes
-effect when the server is started again.
+effect when the server is started again, which the web app's settings can
+do (see "The web app").
 
 When the connection to the server drops, as when the laptop sleeps or the
 server is started again, `evie` says so and connects again by itself, then
@@ -232,8 +234,57 @@ any name other than `127.0.0.1` or `localhost` must be listed under
 The page has three columns: the list of sessions, the conversation and the
 project card. While the page is connected, nothing says so; while the
 line is down, one quiet line under the name at the top says Reconnecting,
-and why, and the page catches up by itself once the line is back. The gear beside the name opens the settings, where the theme is
-picked: one of Dusk, Moss and Oxblood, which the browser remembers.
+and why, and the page catches up by itself once the line is back.
+
+The gear beside the name opens the settings, with a page each for:
+
+- **Appearance:** the theme, one of Dusk, Moss and Oxblood, which the
+  browser remembers.
+- **Keys:** the keys the loaded plugins read from `.env` (see
+  "Settings"), each with what it is for and only whether it is set. A new
+  value is written to the file, readable by you only, and is never shown
+  again, here or anywhere else; Clear takes it out. A key set where the
+  server runs wins over the file, and the page says so.
+- **Plugins:** the plugins `evie.json` loads, each with whether it is
+  loaded. A plugin file can be added by its full path, and taken off again;
+  it goes under `addPlugins` (see "Choosing which plugins load"). The
+  built-in ones are changed in `evie.json` itself.
+- **Instructions:** your instruction file, `AGENTS.md` in the data folder,
+  to edit and save. It applies from the next message. What you have written
+  and not saved is kept when the window is closed, until you save it.
+- **Projects:** each project, with whether its own settings are trusted,
+  to trust it or stop trusting it.
+
+Each change is checked as the server would check it when it starts, so one
+that would stop it starting is refused there and then, in the words
+starting would give, and nothing is written. A plugin file is checked by
+`evie serve --check`, in a process of its own: it loads the settings files
+and sets the plugins up together, as starting does, without listening or
+opening any session. Most changes apply once the server starts again: the
+window says so, and **Restart to apply** starts it again, as after a crash,
+so that work in progress carries on; the page connects again by itself. A
+restart is refused, saying why, when the same check finds the server would
+not start. Under the login service (see "Keeping the server running"), the
+service starts the server again; run by hand, `evie serve` starts a new
+server in its own place, in the same terminal, which Ctrl-C stops as
+before.
+
+Keys are typed in, and plugins and trusted projects changed, through the
+settings only on the computer evie runs on: the server refuses those
+changes from a connection that does not come from this computer's own
+address, 127.0.0.1 or ::1, or that comes from a page at any other address,
+and a page opened at any other address shows them as they stand. So a key
+never crosses the network. This is a seat belt, not a wall: a signed-in
+device can still ask evie to do anything evie can do, and can answer the
+question whether to trust a project, as opening a project's session from a
+phone asks.
+
+Something on this computer that passes connections on to the server, such
+as a proxy that serves it over HTTPS, makes them all come from this
+computer's address; a browser's page still says where it is, but a client
+that is not a browser does not. So keep the server on 127.0.0.1, as it is
+unless `evie.json` says otherwise, unless what is in front of it does its
+own sign-in.
 
 The list shows every session you have said something in, kept current as
 they change, and listed again when the line comes back:
@@ -681,7 +732,8 @@ Evie keeps its state in `~/.evie`. Set `EVIE_HOME` to use another folder.
 Two files in that folder hold its settings.
 
 **`.env` is for keys.** One `NAME=value` per line. Evie reads a key and
-never writes it anywhere.
+never writes it anywhere else; the web app's settings write a key you set
+there to this file, which only your user can read.
 
 ```
 OPENROUTER_API_KEY=...
@@ -804,6 +856,17 @@ A built-in plugin is named. A plugin of your own is given by the path to
 its file. Leaving a plugin out switches it off: without `shell`, the model
 cannot run commands.
 
+`addPlugins` lists plugin files, by their paths, to load after the list:
+after `plugins`, or after the built-in plugins when there is no `plugins`.
+The web app's settings add a plugin file here and take it off again, so
+the list of built-in plugins is left as it is. An entry that is not the
+path to a plugin file stops the server at start, as a bad entry in
+`plugins` does.
+
+```json
+{ "addPlugins": ["/path/to/my-plugin.ts"] }
+```
+
 A project's own file, `.evie/evie.json` in its folder, adds plugins for that
 project only and can switch off a global one there. It can also set that
 project's model:
@@ -866,6 +929,23 @@ export default (options) => ({
   },
 })
 ```
+
+A plugin can also say which keys it reads from `.env`, each with what it
+is for in one line, and the web app's settings list them for you to set:
+
+```ts
+export default {
+  name: "weather",
+  keys: [{ name: "WEATHER_API_KEY", about: "Reads the forecast from the weather service." }],
+  setup(host) { /* ... */ },
+}
+```
+
+For now Evie hands the keys in `.env` to its built-in plugins only. A plugin
+file reads a key it lists from the environment the server runs in, and only
+from there: under the login service that environment holds just the data
+folder and `PATH`, which is why `evie service install` names only the
+built-in plugins' keys.
 
 Through the host a plugin can add to four lists:
 
