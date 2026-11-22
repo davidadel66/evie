@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from "node:fs"
+import { existsSync, realpathSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { keepOutputTidy } from "../core/tools.ts"
 import { createEvie, dataFolder, loadSettingsFiles, startServer, type EvieServer, type Settings } from "../index.ts"
@@ -27,6 +27,12 @@ function forgetStopForGood(home: string) {
 export async function serve(env: Settings, args: string[] = []) {
   if (args.some((arg) => arg !== "--dev")) fail("Usage:\n  evie serve         run Evie's server\n  evie serve --dev   run it with the web app rebuilt as it changes")
   const developing = args.includes("--dev")
+  // The web app's module is loaded only here, so the terminal client never
+  // loads the bundler's plugins.
+  const { buildWebApp, REPOSITORY, webAppForDevelopment } = await import("../server/web-app.ts")
+  if (developing && realpathSync(process.cwd()) !== realpathSync(REPOSITORY)) {
+    fail(`Start \`evie serve --dev\` in the repository's folder, ${REPOSITORY}: Bun takes the web app's Tailwind plugin from the bunfig.toml there.`)
+  }
   const settings = await loadSettingsFiles({ env }).catch(fail)
   const serverSettings = await loadServerSettings({ env }).catch(fail)
   const evie = await createEvie({
@@ -52,14 +58,12 @@ export async function serve(env: Settings, args: string[] = []) {
     return closeAndFail(`This computer's token could not be made: ${reason(cause)}`)
   })
 
-  // The web app is built now, before the server listens, in a moment. It is
-  // loaded only here, so the terminal client never loads the bundler's
-  // plugins. A web app that cannot be built is left out, saying why: the
-  // terminal and every other client still work.
-  const { buildWebApp, webAppForDevelopment } = await import("../server/web-app.ts")
+  // The web app is built before the server listens, which takes a moment. A
+  // web app that cannot be built is left out, saying why: the terminal and
+  // every other client still work.
   const app = developing
     ? webAppForDevelopment()
-    : await buildWebApp().catch((cause) => void console.error(`The web app could not be built, so it is not served: ${reason(cause)}`))
+    : await buildWebApp().catch((cause) => void console.error(`The web app could not be built, so it is not served:\n${reason(cause)}`))
 
   let server: EvieServer
   try {

@@ -27,6 +27,12 @@ export async function buildWebApp(): Promise<WebApp> {
     publicPath: "/",
     // React's production build, without its checks and warnings for developers.
     define: { "process.env.NODE_ENV": JSON.stringify("production") },
+  }).catch((cause: unknown) => {
+    // The bundler fails with "Bundle failed", and what went wrong where
+    // in the errors it carries.
+    const errors = cause instanceof AggregateError ? (cause.errors as Partial<BuildMessage>[]) : []
+    const where = (error: Partial<BuildMessage>) => (error.position ? `${error.position.file}:${error.position.line}: ` : "")
+    throw errors.length === 0 ? cause : new Error(errors.map((error) => `${where(error)}${error.message}`).join("\n"))
   })
   const files: Record<string, Blob> = {}
   for (const output of built.outputs) files[output.path.replace(/^\./, "")] = new Blob([await output.arrayBuffer()], { type: output.type })
@@ -39,5 +45,6 @@ export async function buildWebApp(): Promise<WebApp> {
 // keeps the open page up to date as its files are saved, keeping the state
 // of the components on screen. Bun takes the Tailwind plugin for this from
 // `bunfig.toml`, which it reads from the folder it was started in, so the
-// server must be started in the repository's folder.
+// server must be started in the repository's folder, which is `REPOSITORY`.
 export const webAppForDevelopment = (): WebApp => ({ page })
+export const REPOSITORY = join(import.meta.dir, "..", "..")

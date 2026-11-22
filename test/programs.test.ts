@@ -510,6 +510,17 @@ test("evie web with the server stopped says no server is running, and how to sta
   expect(said.stderr).toBe(`No Evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.\n`)
 })
 
+test("evie serve --dev started outside the repository's folder says where to start it, since Bun reads the Tailwind plugin from there", async () => {
+  const home = await homeWith(await freePort(), [])
+
+  const said = await evie(["serve", "--dev"], { home })
+
+  expect(said.code).toBe(1)
+  expect(said.stderr).toBe(
+    `Start \`evie serve --dev\` in the repository's folder, ${join(import.meta.dir, "..")}: Bun takes the web app's Tailwind plugin from the bunfig.toml there.\n`,
+  )
+})
+
 // ---- evie token ------------------------------------------------------------------------------
 
 test("tokens are made, listed and taken back by name, each without touching the others", async () => {
