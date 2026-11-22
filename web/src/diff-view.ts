@@ -169,14 +169,24 @@ export function viewerItems(files: readonly FileDiff[], folded: ReadonlySet<stri
     const fileDiff = drawn.get(file)
     if (fileDiff === null || fileDiff === undefined) return []
     const collapsed = folded.has(file.path)
-    return [{ id: file.path, type: "diff", fileDiff, collapsed, version: (file.patch?.length ?? 0) * 2 + (collapsed ? 1 : 0) }]
+    // The viewer draws an item again only when its version changes: with
+    // what the file holds, and with its folding.
+    return [{ id: file.path, type: "diff", fileDiff, collapsed, version: hashOf(file.patch ?? "") * 2 + (collapsed ? 1 : 0) }]
   })
+}
+
+// A 32-bit FNV-1a hash of a text, as T3 Code keys its diffs.
+function hashOf(text: string): number {
+  let hash = 0x811c9dc5
+  for (let at = 0; at < text.length; at += 1) hash = Math.imul(hash ^ text.charCodeAt(at), 0x01000193) >>> 0
+  return hash
 }
 
 // How the viewer draws them, as T3 Code's diff panel: stacked or side by
 // side, long lines wrapped or scrolled sideways, a bar on each line changed
-// and no highlight within lines, each file's header kept in sight, in
-// evie's colours, with the sizes the look above sets.
+// and no highlight within lines, each file's header kept in sight, the
+// unchanged lines folded under a flat band across the file, as the owner's
+// drawing has it, in evie's colours, with the sizes the look above sets.
 export function viewerOptions(given: { layout: "stacked" | "split"; wrap: boolean; drawn(): void }): CodeViewReactOptions<undefined, undefined> {
   return {
     theme: THEME,

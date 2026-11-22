@@ -273,6 +273,7 @@ function ToolButton({ label, pressed, className, children, ...props }: { label: 
   )
 }
 
+const NONE_FOLDED: ReadonlySet<string> = new Set()
 const NOT_LISTED: ChangesState = { listed: undefined, problem: undefined }
 const noChanges = { subscribe: () => () => {}, state: () => NOT_LISTED }
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
@@ -368,7 +369,7 @@ function SessionDiff({ connection, session, project }: { connection: Connection;
       return { scope, seen, folded }
     })
   }, [files, scope, target])
-  const folded = folding.scope === scope ? folding.folded : new Set<string>()
+  const folded = folding.scope === scope ? folding.folded : NONE_FOLDED
   const fold = (path: string) =>
     setFolding((was) => {
       const now = new Set(was.folded)
@@ -399,8 +400,11 @@ function SessionDiff({ connection, session, project }: { connection: Connection;
   const named: Scope = listed !== undefined && scope === `turn:${listed.latest}` ? "latest" : scope
   const label = choices.find((choice) => choice.key === named)?.label ?? (named.startsWith("turn:") ? `Turn ${named.slice(5)}` : "Latest turn")
   const totals = files !== undefined && files.length > 0 ? changedFilesLine(files) : undefined
-  const drawable = files?.filter((file) => file.patch !== undefined && file.patch !== "") ?? []
-  const notes = files?.filter((file) => file.patch === undefined || file.patch === "") ?? []
+  // The files with a diff to draw, and those that say why they have none.
+  const [drawable, notes] = useMemo(() => {
+    const drawn = (file: FileDiff) => file.patch !== undefined && file.patch !== ""
+    return [files?.filter(drawn) ?? [], files?.filter((file) => !drawn(file)) ?? []]
+  }, [files])
   const byTurns = scope === "latest" || scope === "session" || scope.startsWith("turn:")
   return (
     <>
