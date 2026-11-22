@@ -145,8 +145,13 @@ export function withHeadLinks(page: string, links: HeadLink[]): string {
   if (added.length === 0) return page
   const end = page.indexOf("</head>")
   if (end === -1) throw new Error("The built page has no </head> to add its links before.")
-  const written = (link: HeadLink) => `<link${Object.entries(link).map(([name, value]) => (value === "" ? ` ${name}` : ` ${name}="${value.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}"`)).join("")}>`
-  return page.slice(0, end) + added.map(written).join("") + page.slice(end)
+  return page.slice(0, end) + added.map(tagOf).join("") + page.slice(end)
+}
+
+// A link written as a tag, such as `<link rel="modulepreload" href="/chunk-1a2b3c4d.js" crossorigin>`.
+function tagOf(link: HeadLink): string {
+  const quoted = (value: string) => `"${value.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}"`
+  return `<link${Object.entries(link).map(([name, value]) => (value === "" ? ` ${name}` : ` ${name}=${quoted(value)}`)).join("")}>`
 }
 
 // A tag's attributes, by name, from the text after its name, whether each
