@@ -508,25 +508,33 @@ export function startServer(options: ServerOptions): EvieServer {
 // number of bytes sent; -1 when it was queued, because the client is reading
 // more slowly than the server sends; or 0 when it was dropped, because the
 // connection is closed or already has more than `backpressureLimit` bytes,
-// 16 MB, waiting to be sent.
+// 16 MB, waiting to be sent. Bun checks the limit before it queues a
+// message, so a single message larger than it is still queued whole.
 //
 // A message dropped is never let go silently, since the client would carry
 // on without it: an event missing from its conversation, or a command left
-// waiting for its reply. The connection is closed instead, saying why, and
-// the client connects again and catches up from the log, as after any drop,
-// sending again each command still waiting. A connection closed already is
-// left as it is.
+// waiting for its reply. The connection is closed instead, and the client
+// connects again and catches up from the log, as after any drop, sending
+// again each command still waiting. Bun first sends what was queued before
+// it, so the client has everything up to the gap. A keepalive dropped is
+// let go, since it carries nothing: what is queued ahead of it is still on
+// its way, and is heard from. Nor is a connection that is no longer open
+// closed again.
 //
 // A message queued is kept: Bun sends it, and every one after it, in order,
 // as the client reads. So nothing more is done. Holding the connection's
 // events back until Bun says it has drained would keep a second queue
 // beside Bun's, with no limit of its own, where Bun's has one: once it is
 // past it, the next message is dropped, which closes the connection as above.
-export function send(socket: Pick<ServerWebSocket<unknown>, "send" | "close">, message: ServerMessage) {
-  if (socket.send(JSON.stringify(message)) === 0) socket.close(DROPPED, DROPPED_WORDS)
+export function send(socket: Pick<ServerWebSocket<unknown>, "send" | "close" | "readyState">, message: ServerMessage) {
+  if (socket.send(JSON.stringify(message)) !== 0 || "keepalive" in message || socket.readyState !== WebSocket.OPEN) return
+  socket.close(DROPPED, DROPPED_WORDS)
 }
-// Why, as the client tells the owner: "The connection to evie's server
-// dropped: …". A close frame holds at most 123 bytes of it.
+// Why, for the client to tell the owner: "The connection to evie's server
+// dropped: …". It goes in the close frame, at most 123 bytes, which is
+// queued behind the rest; past the limit Bun can end the connection
+// without it, and the client hears only that the line dropped, and
+// connects again all the same.
 const DROPPED_WORDS = "a message to this device could not be sent, so it connects again and catches up"
 
 // A request's body, read as it arrives, or nothing once it is larger than

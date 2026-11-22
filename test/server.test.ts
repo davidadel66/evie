@@ -595,12 +595,14 @@ test("a message that is not a command closes that connection only, saying why, a
 // does, in turn as `answers` says: with the number of bytes sent, with -1
 // for one queued while the client reads more slowly than the server sends,
 // or with 0 for one dropped. Past the answers given, every message is sent.
-function standInSocket(answers: number[]) {
+// `readyState` is 1 while it is open, and 3 once it has closed.
+function standInSocket(answers: number[], readyState: 1 | 3 = 1) {
   const sent: ServerMessage[] = []
   const closed: { code: number | undefined; reason: string | undefined }[] = []
   return {
     sent,
     closed,
+    readyState,
     send(data: unknown) {
       sent.push(JSON.parse(String(data)) as ServerMessage)
       return answers.shift() ?? String(data).length
@@ -611,17 +613,36 @@ function standInSocket(answers: number[]) {
   }
 }
 
+// A stored event, as the server sends it.
+const noteEvent = (seq: number): ServerMessage => ({ event: { type: "note", session: "s", seq, time: seq, body: { text: `note ${seq}` } } })
+
 test("a message a connection drops closes that connection, saying why, so that its client connects again and catches up from the log", () => {
   const socket = standInSocket([0])
 
-  sendMessage(socket, { keepalive: true })
+  sendMessage(socket, noteEvent(1))
 
   expect(socket.closed).toEqual([{ code: DROPPED, reason: "a message to this device could not be sent, so it connects again and catches up" }])
 })
 
+test("a keepalive a connection drops leaves it open, since it carries nothing the client could miss", () => {
+  const socket = standInSocket([0])
+
+  sendMessage(socket, { keepalive: true })
+
+  expect(socket.closed).toEqual([])
+})
+
+test("a message dropped on a connection that has closed already closes nothing more", () => {
+  const socket = standInSocket([0], 3)
+
+  sendMessage(socket, noteEvent(1))
+
+  expect(socket.closed).toEqual([])
+})
+
 test("messages queued while a connection is backed up are kept, as is the connection: each is sent in order as the client reads", () => {
   const socket = standInSocket([-1, -1, 40])
-  const events = [1, 2, 3].map((seq): ServerMessage => ({ event: { type: "note", session: "s", seq, time: seq, body: { text: `note ${seq}` } } }))
+  const events = [1, 2, 3].map(noteEvent)
 
   for (const message of events) sendMessage(socket, message)
 
