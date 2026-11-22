@@ -1,6 +1,6 @@
 import { join } from "node:path"
 import type { EventLog } from "./log.ts"
-import type { Inbox } from "./inbox.ts"
+import type { Inbox, InboxMessage } from "./inbox.ts"
 import {
   DEFAULT_CEILING,
   SUMMARY_PROMPT,
@@ -94,6 +94,12 @@ export function currentModel(events: readonly StoredEvent[], startedWith: string
   const switched = events.findLast((event) => event.type === "model_changed")
   return switched?.type === "model_changed" ? switched.body.model : startedWith
 }
+
+// What a message from the owner records: its text, and what was attached to it.
+const said = (message: InboxMessage): EventBodies["user_message"] => ({
+  text: message.text,
+  ...(message.attachments !== undefined && message.attachments.length > 0 && { attachments: message.attachments }),
+})
 
 // The turn loop. A turn is everything from a message arriving to the model's
 // final answer. A step is one model request plus the tool calls it asks for;
@@ -256,9 +262,7 @@ export function createLoop(options: LoopOptions): Loop {
     // has not started and the failure stops the loop.
     const started = atomically(() => {
       const events: StoredEvent[] = [log.append(session, "turn_start", {})]
-      for (const message of inbox.take(session)) {
-        events.push(log.append(session, "user_message", { text: message.text }))
-      }
+      for (const message of inbox.take(session)) events.push(log.append(session, "user_message", said(message)))
       return events
     })
     for (const event of started) emit(event)
@@ -275,7 +279,7 @@ export function createLoop(options: LoopOptions): Loop {
         writeNotes("all")
         if (step > 1) {
           const steered = atomically(() =>
-            inbox.take(session).map((message) => log.append(session, "user_message", { text: message.text })),
+            inbox.take(session).map((message) => log.append(session, "user_message", said(message))),
           )
           for (const event of steered) emit(event)
         }

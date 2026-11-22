@@ -83,7 +83,7 @@ export async function readStorage(project: string, path: string, dataFolder: str
 // The project's `.evie/` folder as it really is, or nothing when there is
 // none yet. One that is a link, or that is, holds, or is inside the data
 // folder, is refused, saying why.
-async function ownEvie(project: string, dataFolder: string): Promise<string | undefined> {
+export async function ownEvie(project: string, dataFolder: string): Promise<string | undefined> {
   const folder = await realOrNothing(project)
   if (folder === undefined) return undefined
   const evie = join(folder, ".evie")

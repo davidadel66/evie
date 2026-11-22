@@ -9,6 +9,7 @@ import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
+import { createAttachments } from "./attachments.ts"
 import { listStorage, readStorage } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
@@ -226,6 +227,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   }
 
   const questions = createQuestions({ log, emit })
+  const attachments = createAttachments({ home, projectOf: (session) => projects.projectOf(session) })
   let closed = false
   // Fires when Evie stops, for the work plugins started.
   const stopping = new AbortController()
@@ -648,7 +650,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   function sendMessage(input: Commands["send_message"]["input"]): void {
     if (typeof input.text !== "string") throw new Error("`text` is the message, and must be text.")
     const { loop } = open(input.session)
-    inbox.add(input.session, { text: input.text })
+    const attached = attachments.check(input.session, input.attachments)
+    inbox.add(input.session, { text: input.text, ...(attached !== undefined && { attachments: attached }) })
     loop.wake()
   }
 
@@ -993,6 +996,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   }
 
   return {
+    attachments,
     async send(command) {
       // Each branch returns what its command promises; the cast tells the
       // compiler so, since it cannot follow the command's type through.
