@@ -13,6 +13,10 @@ export type SettingsState = {
   // From when a restart is asked for until the server started in its place
   // has answered.
   restarting: boolean
+  // The instructions as the owner is writing them, until they are saved,
+  // or undefined when there are no changes not yet saved. It is kept
+  // whatever the server's text becomes meanwhile.
+  draft: string | undefined
 }
 
 export type ServerSettings = {
@@ -26,12 +30,18 @@ export type ServerSettings = {
   change(change: SettingsChange): Promise<string | undefined>
   // Asks the server to start again. Gives back why it refused, or nothing.
   restart(): Promise<string | undefined>
+  // Keeps the instructions as the owner is writing them. Written back to
+  // the server's text, there are no changes left to save.
+  editInstructions(text: string): void
+  // Saves the instructions being written. Gives back why the server
+  // refused, or nothing; once saved, there are none being written.
+  saveInstructions(): Promise<string | undefined>
   // Stops following the connection.
   close(): void
 }
 
 export function openServerSettings(connection: Connection): ServerSettings {
-  let state: SettingsState = { view: undefined, problem: undefined, restarting: false }
+  let state: SettingsState = { view: undefined, problem: undefined, restarting: false, draft: undefined }
   const listeners = new Set<() => void>()
   // When the server that was asked to restart started.
   let restartOf: number | undefined
@@ -46,7 +56,7 @@ export function openServerSettings(connection: Connection): ServerSettings {
   function show(view: SettingsView) {
     const restarting = restartOf !== undefined && view.started === restartOf
     if (!restarting) restartOf = undefined
-    set({ view, problem: undefined, restarting })
+    set({ view, problem: undefined, restarting, draft: state.draft === view.instructions ? undefined : state.draft })
   }
 
   function read(evie: Evie) {
@@ -69,22 +79,24 @@ export function openServerSettings(connection: Connection): ServerSettings {
   const unfollow = connection.subscribe(follow)
   follow()
 
+  async function change(made: SettingsChange): Promise<string | undefined> {
+    const evie = client
+    if (evie === undefined) return NOT_CONNECTED
+    try {
+      show(await evie.send({ type: "change_settings", ...made }))
+      return undefined
+    } catch (cause) {
+      return wordsOf(cause)
+    }
+  }
+
   return {
     state: () => state,
     subscribe(listener) {
       listeners.add(listener)
       return () => void listeners.delete(listener)
     },
-    async change(change) {
-      const evie = client
-      if (evie === undefined) return NOT_CONNECTED
-      try {
-        show(await evie.send({ type: "change_settings", ...change }))
-        return undefined
-      } catch (cause) {
-        return wordsOf(cause)
-      }
-    },
+    change,
     async restart() {
       const evie = client
       if (evie === undefined || state.view === undefined) return NOT_CONNECTED
@@ -99,6 +111,13 @@ export function openServerSettings(connection: Connection): ServerSettings {
         set({ restarting: false })
         return wordsOf(cause)
       }
+    },
+    editInstructions(text) {
+      set({ draft: text === state.view?.instructions ? undefined : text })
+    },
+    async saveInstructions() {
+      if (state.draft === undefined) return undefined
+      return change({ instructions: state.draft })
     },
     close() {
       unfollow()

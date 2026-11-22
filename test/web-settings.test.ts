@@ -158,3 +158,32 @@ test("a page is on the computer evie runs on when its own address is", () => {
   expect(["http://127.0.0.1:3843", "http://localhost:3843", "http://[::1]:3843"].map(onThisComputer)).toEqual([true, true, true])
   expect(["http://my-mac.local:3843", "http://192.168.1.20:3843", "https://evie.example.com"].map(onThisComputer)).toEqual([false, false, false])
 })
+
+test("instructions being written are kept until saved, whatever a later read brings; with none being written, the text follows the server's", async () => {
+  const home = await dataFolder()
+  const { tokens, server } = await serveIn(home)
+  const here = follow(server.url, (tokens.add("browser") as { secret: string }).secret)
+  const elsewhere = follow(server.url, (tokens.add("laptop") as { secret: string }).secret)
+  await until(here, (state) => state.view !== undefined)
+  await until(elsewhere, (state) => state.view !== undefined)
+
+  here.editInstructions("Answer briefly.")
+  await elsewhere.change({ instructions: "From the laptop." })
+  // Read again, as after any change made here.
+  await here.change({ key: "OPENROUTER_API_KEY", value: "made-up" })
+  expect(here.state().view!.instructions).toBe("From the laptop.")
+  expect(here.state().draft).toBe("Answer briefly.")
+
+  expect(await here.saveInstructions()).toBeUndefined()
+  expect(here.state().draft).toBeUndefined()
+  expect(here.state().view!.instructions).toBe("Answer briefly.")
+
+  await elsewhere.change({ instructions: "Changed again." })
+  await here.change({ key: "OPENROUTER_API_KEY", value: null })
+  expect(here.state().draft).toBeUndefined()
+  expect(here.state().view!.instructions).toBe("Changed again.")
+
+  // Written back to what is saved, there is nothing being written.
+  here.editInstructions("Changed again.")
+  expect(here.state().draft).toBeUndefined()
+})
