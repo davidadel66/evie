@@ -2,6 +2,7 @@ import type { HTMLBundle, ServerWebSocket } from "bun"
 import { randomBytes } from "node:crypto"
 import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent } from "../core/types.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
+import { fileRoute } from "./variants.ts"
 import type { WebApp } from "./web-app.ts"
 import { DROPPED, hostInAddress, onThisComputer, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
 
@@ -571,13 +572,13 @@ const cookieIn = (request: Request, port: number) => new Bun.CookieMap(request.h
 // address a sign-in link opens, and each file the page loads. A built
 // file's name carries a hash of its contents, so a browser may keep it for
 // good; the page is asked for afresh each time, so a new version is seen.
-function appRoutes(app: WebApp | undefined): Record<string, Response | HTMLBundle> {
+// Each is sent compressed to a browser that can read it: see `fileRoute`.
+function appRoutes(app: WebApp | undefined): Record<string, HTMLBundle | ((request: Request) => Response)> {
   if (!app) return {}
   if (!("files" in app)) return { [PATHS.page]: app.page, [PATHS.signIn]: app.page }
-  const served = (file: Blob, cache: string) => new Response(file, { headers: { "Content-Type": file.type, "Cache-Control": cache } })
-  const routes: Record<string, Response> = {}
-  for (const [path, file] of Object.entries(app.files)) routes[path] = served(file, "public, max-age=31536000, immutable")
-  for (const path of [PATHS.page, PATHS.signIn]) routes[path] = served(app.page, "no-cache")
+  const routes: Record<string, (request: Request) => Response> = {}
+  for (const [path, file] of Object.entries(app.files)) routes[path] = fileRoute(file, "public, max-age=31536000, immutable")
+  for (const path of [PATHS.page, PATHS.signIn]) routes[path] = fileRoute(app.page, "no-cache")
   return routes
 }
 

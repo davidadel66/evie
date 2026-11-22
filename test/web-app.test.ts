@@ -3,6 +3,7 @@ import tailwind from "bun-plugin-tailwind"
 import { chmod, mkdir, mkdtemp, readdir, realpath, rm, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { brotliDecompressSync, gunzipSync } from "node:zlib"
 import { builtWebApp } from "../src/programs/serve.ts"
 import { buildWebApp } from "../src/server/web-app.ts"
 
@@ -19,16 +20,40 @@ async function inFolder<T>(prefix: string, use: (folder: string) => Promise<T>):
   }
 }
 
+// A file built, as text.
+const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
+
 test("the build hands over its metafile, which names the page's script by its path in the repository, and each chunk it imports is a file built beside it", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
 
-  const script = [...(await app.page.text()).matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
+  const script = [...text(app.page.identity).matchAll(/<script[^>]* src="([^"]+)"/g)].map((match) => match[1]!)
   const entries = Object.entries(app.metafile.outputs).filter(([path, output]) => output.entryPoint === "web/index.html" && path.endsWith(".js"))
   expect(entries.map(([path]) => path.replace(/^\./, ""))).toEqual(script)
   const imports = entries[0]![1].imports.filter((each) => each.kind === "import-statement")
   expect(imports.length).toBeGreaterThan(0)
   for (const each of imports) expect(Object.keys(app.files)).toContain(each.path.replace(/^\./, ""))
+})
+
+test("every file the web app builds over 1 KB, the diff library's worker among them, is kept compressed with brotli and with gzip, each of which decodes to the file", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+
+  // The worker is built, though the metafile does not list it.
+  const worker = Object.keys(app.files).find((path) => /^\/worker-portable-[^/]+\.js$/.test(path))
+  expect(worker).toBeDefined()
+  expect(Object.keys(app.metafile.outputs).map((path) => path.replace(/^\./, ""))).not.toContain(worker)
+  const files = [app.page, ...Object.values(app.files)]
+  for (const file of files) {
+    const plain = file.identity
+    if (plain.length <= 1024) {
+      expect([file.br, file.gzip]).toEqual([undefined, undefined])
+      continue
+    }
+    expect(brotliDecompressSync(file.br!)).toEqual(Buffer.from(plain))
+    expect(gunzipSync(file.gzip!)).toEqual(Buffer.from(plain))
+  }
+  expect(app.files[worker!]!.br!.length).toBeLessThan(app.files[worker!]!.identity.length / 2)
 })
 
 test("a server started in another folder, with another bun first on its path, builds the web app with its own Bun, and leaves nothing in the temporary folder", async () => {
@@ -45,7 +70,7 @@ test("a server started in another folder, with another bun first on its path, bu
       `const { buildWebApp } = await import(${JSON.stringify(join(import.meta.dir, "..", "src", "server", "web-app.ts"))})\n` +
         `const app = await buildWebApp({ temporary: ${JSON.stringify(temporary)} })\n` +
         "const pages = Object.values(app.metafile.outputs).map((output) => output.entryPoint).filter((path) => path?.endsWith('index.html'))\n" +
-        "console.log(JSON.stringify({ page: await app.page.text(), pages: [...new Set(pages)] }))\n",
+        "console.log(JSON.stringify({ page: new TextDecoder().decode(app.page.identity), pages: [...new Set(pages)] }))\n",
     )
 
     const server = Bun.spawn([process.execPath, "build.ts"], { cwd: elsewhere, env: { ...process.env, PATH: `${join(elsewhere, "bin")}:${process.env.PATH}` }, stdout: "pipe", stderr: "pipe" })
@@ -99,14 +124,14 @@ test("the web app builds into a page whose script and stylesheet are built besid
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
 
-  const page = await app.page.text()
+  const page = text(app.page.identity)
   // The empty icon, `data:,`, is carried in the page and loads nothing.
   const loads = [...page.matchAll(/(?:src|href)="(?!data:,")([^"]+)"/g)].map((match) => match[1]!)
   expect(loads.map((path) => path.split(".").pop()).sort()).toEqual(["css", "js"])
   for (const path of loads) expect(Object.keys(app.files)).toContain(path)
 
-  const style = await app.files[loads.find((path) => path.endsWith(".css"))!]!.text()
-  const script = await app.files[loads.find((path) => path.endsWith(".js"))!]!.text()
+  const style = text(app.files[loads.find((path) => path.endsWith(".css"))!]!.identity)
+  const script = text(app.files[loads.find((path) => path.endsWith(".js"))!]!.identity)
   // The fonts are evie's own, carried in the stylesheet, not fetched from Google.
   expect(style).toMatch(/@font-face\{font-family:Geist;[^}]*url\(data:font\/woff2/)
   expect(style).toMatch(/@font-face\{font-family:Geist Mono;[^}]*url\(data:font\/woff2/)
@@ -118,7 +143,7 @@ test("the web app builds into a page whose script and stylesheet are built besid
 test("the stylesheet holds the design system's colours for each of its three themes, and the screens' classes name them", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
-  const style = await Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.text()
+  const style = text(Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.identity)
 
   // Dusk is the default, and each theme sets the same names.
   expect(style).toMatch(/:root,\[data-theme=dusk\]\{[^}]*--bg:#131312;--bg-side:#0e0e0d;/)
@@ -156,7 +181,7 @@ test("the spacing scale has only the design system's steps and named sizes, so a
 test("below 640px the controls grow a step, as T3 Code's, and what is typed into a text box is 16px, so that iOS does not zoom the page in when one is tapped", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
-  const style = await Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.text()
+  const style = text(Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.identity)
 
   for (const desktop of ["--spacing-control:32px", "--spacing-control-sm:28px", "--spacing-icon-control:16px", "--text-control:14px", "--text-field:14px", "--spacing-gutter:20px"]) {
     expect(style).toContain(`${desktop};`)
@@ -171,7 +196,7 @@ test("below 640px the controls grow a step, as T3 Code's, and what is typed into
 test("the page puts itself in the theme this browser picked before it is first drawn", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
-  const page = await app.page.text()
+  const page = text(app.page.identity)
 
   const themed = page.indexOf('localStorage.getItem("evie.theme")')
   expect(themed).toBeGreaterThan(-1)
@@ -181,7 +206,7 @@ test("the page puts itself in the theme this browser picked before it is first d
 test("the page names an empty icon, so that the browser does not ask for /favicon.ico and get a 404 on every load", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
-  const page = await app.page.text()
+  const page = text(app.page.identity)
 
   const icon = page.match(/<link\b[^>]*\brel="?icon"?[^>]*>/)?.[0]
   expect(icon).toMatch(/\bhref="?data:,"?[\s/>]/)
@@ -190,7 +215,7 @@ test("the page names an empty icon, so that the browser does not ask for /favico
 test("a transition has a length and an easing, which Tailwind's cleared defaults left out, and none for someone who asks for less motion", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
-  const style = await Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.text()
+  const style = text(Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.identity)
 
   // Minified, 150ms is written .15s.
   expect(style).toMatch(/--default-transition-duration:(150ms|\.15s)/)
@@ -202,7 +227,7 @@ test("a transition has a length and an easing, which Tailwind's cleared defaults
 test("the focus ring and the spinner's ring are drawn at the design system's indicator width, and lines at its line width", async () => {
   const app = await buildWebApp()
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
-  const style = await Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.text()
+  const style = text(Object.values(app.files).find((file) => file.type.startsWith("text/css"))!.identity)
 
   expect(style).toMatch(/--indicator-width:2px/)
   expect(style).toMatch(/--line-width:1px/)
