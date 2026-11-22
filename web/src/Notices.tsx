@@ -164,8 +164,8 @@ function lookingAt(hash: string): string | undefined {
 // What each notice says, as its title.
 const WORDS: Record<Notice, string> = { "needs you": "Needs you", finished: "Finished", failed: "Failed" }
 
-// The notice's state in words, as the board's Status says one: Needs you
-// with its dot, Finished with a check, and Failed, each in its colour.
+// The notice's state in caption words: Needs you with a small dot before
+// it, Finished with a check, and Failed, each in its colour.
 function State({ notice }: { notice: Notice }) {
   if (notice === "needs you") {
     return (

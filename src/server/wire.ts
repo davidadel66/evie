@@ -47,6 +47,10 @@ export const PATHS = {
 // The close code for a connection whose token was taken back. Codes from
 // 4000 are the application's own. A client closed with it stops trying.
 export const TAKEN_BACK = 4001
+// The close code for a connection the server closed because a message to
+// it was dropped, as when the client reads too slowly to keep up. A client
+// closed with it connects again and catches up, as after any other drop.
+export const DROPPED = 4002
 
 // Whether a web address, such as a page's, is on the computer it is read
 // on: at 127.0.0.1, localhost or ::1. The server and its web page both go

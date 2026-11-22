@@ -5,8 +5,8 @@ import { WIDE } from "./wide.ts"
 // column on the left, which the owner can hide and show, with the button
 // at the left of the middle column's header or mod+B, and this browser
 // remembers which; at 767px or narrower, at the top of the page, with the
-// conversation stacked under it, as the Session view drawing has the
-// columns stack, where the same button and keys scroll up to it.
+// conversation stacked under it, a screen tall, where the same button and
+// keys scroll up to it.
 const list = panel({ wide: WIDE, key: "evie.list" })
 
 export const useListShown = list.use

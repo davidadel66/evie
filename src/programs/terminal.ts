@@ -27,9 +27,9 @@ export async function terminal(env: Settings, args: string[]) {
     ...(!process.stdin.isTTY && { giveUpAfter: giveUpAfter(env) }),
     // As when the laptop sleeps or the server is stopped. The client
     // connects again by itself, and shows what was missed meanwhile.
-    onDrop: () => {
+    onDrop: (reason) => {
       down = true
-      note("The connection to Evie's server dropped. Trying again…")
+      note(`The connection to Evie's server dropped: ${reason}. Trying again…`)
     },
     onBack: () => {
       down = false
