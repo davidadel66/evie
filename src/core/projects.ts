@@ -34,6 +34,10 @@ export type Projects = {
   parentOf(session: string): string | undefined
   // What a subagent's session was started as.
   startedAs(session: string): { agent?: string; readOnly: boolean }
+  // The sessions this one started as subagents.
+  childrenOf(session: string): string[]
+  // Puts a session and its subagents in another project, or with null in none.
+  move(session: string, project: string | null): void
 }
 
 // The folder a project is rooted at: the nearest folder at or above this one
@@ -199,6 +203,9 @@ export function createProjects(db: Database): Projects {
      LIMIT 1`,
   )
 
+  const children = db.query<{ id: string }, [string]>("SELECT id FROM session WHERE parent = ? ORDER BY created")
+  const moveRows = db.query("UPDATE session SET project = ? WHERE id = ? OR parent = ?")
+
   const insert = (folder: string, name: string): Project => {
     const project: Project = { id: crypto.randomUUID(), name, folder }
     insertProject.run(project.id, project.name, project.folder, Date.now())
@@ -258,6 +265,14 @@ export function createProjects(db: Database): Projects {
 
     lastSession(project) {
       return lastUsed.get(project?.id ?? null)?.id
+    },
+
+    childrenOf(session) {
+      return children.all(session).map((row) => row.id)
+    },
+
+    move(session, project) {
+      moveRows.run(project, session, session)
     },
   }
 }

@@ -83,6 +83,18 @@ const STOPPED_AGAIN =
 const MOST_RESTARTS = 3
 const RESTARTS_WINDOW = 5 * 60_000
 
+// What the model is told when the owner moves its session: the project and
+// folder it now works in, and where the files named before the move are.
+function movedNote(from: Project | null, to: Project | null): string {
+  const moved = from === null ? `into the project "${to!.name}"` : to === null ? `out of the project "${from.name}"` : `from the project "${from.name}" into the project "${to.name}"`
+  const now =
+    to === null
+      ? "It is now in no project, so there is no project folder: give full paths to files and folders."
+      : `You are now working in it: its folder is ${to.folder}, and a relative path is taken from there.`
+  const before = from === null ? "" : ` Files named earlier in this conversation are still in the old folder, ${from.folder}.`
+  return `The owner moved this session ${moved}. ${now}${before}`
+}
+
 // A session's name as it is kept: on one line, with no spaces at its ends.
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
 
@@ -638,6 +650,68 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     emit(log.append(input.session, "named", { name, by: "owner" }))
   }
 
+  async function moveSession(input: Commands["move_session"]["input"]): Promise<void> {
+    listedSession(input.session, "Move")
+    if (input.project !== null && typeof input.project !== "string") {
+      throw new Error("`project` is the id of the project to move the session into, or null to move it out of its project.")
+    }
+    const to = input.project === null ? null : (projects.get(input.project) ?? null)
+    if (input.project !== null && to === null) throw new Error(`There is no project with the id "${input.project}".`)
+    const from = projects.projectOf(input.session)!
+    if (from?.id === to?.id) return
+    refuseWhileRunning(input.session, "moved")
+    // An open session runs on in the new project from its next turn, so the
+    // project's plugins are set up first, as opening a session there would,
+    // which can ask whether to trust them.
+    const open = sessions.get(input.session)
+    let scope: Scope | undefined
+    if (open) {
+      if (to) keepEvieOutOfGit(to.folder)
+      scope = await scopeFor(to, (question) => questions.ask(input.session, question, { canAnswer: open.canAnswer }))
+      if (closed) throw new Error("Evie was closed while the session was being moved.")
+      if (projects.projectOf(input.session)?.id !== from?.id) throw new Error("This session was moved elsewhere while it was being moved. Look at where it is now, and move it again.")
+      refuseWhileRunning(input.session, "moved")
+    }
+    // The session's loop, and its subagents', are let go: idle, they stop
+    // at once. A subagent opens again in the new project when it is next used.
+    const family = [input.session, ...projects.childrenOf(input.session)]
+    const stopped = family.flatMap((id) => {
+      const each = sessions.get(id)
+      sessions.delete(id)
+      return each ? [each.loop.stop()] : []
+    })
+    const moved = { from: from?.id ?? null, to: to?.id ?? null }
+    const written = db.transaction(() => {
+      projects.move(input.session, moved.to)
+      return family.flatMap((id) => [log.append(id, "moved", moved), log.append(id, "note", { text: movedNote(from, to) })])
+    })()
+    for (const event of written) emit(event)
+    await Promise.all(stopped)
+    if (open && scope) {
+      // It starts with the new project's model, as it would if it were opened there.
+      const model = scope.model ?? options.model ?? open.model
+      startLoop({ session: input.session, project: to, scope, model, canAnswer: open.canAnswer })
+    }
+  }
+
+  // Refuses to change a session while anything runs in it.
+  function refuseWhileRunning(session: string, verb: string): void {
+    const what = runningIn(session)
+    if (what !== undefined) throw new Error(`This session cannot be ${verb} while ${what}. Wait until it has finished, or stop it, then try again.`)
+  }
+
+  // What runs in a session, in words, or undefined when nothing does: a
+  // question waiting for an answer, which its subagents' questions are too,
+  // a turn, a background job, or a subagent at work.
+  function runningIn(session: string): string | undefined {
+    if (questions.waiting(session).length > 0) return "a question in it is waiting for an answer"
+    if (sessions.get(session)?.loop.busy()) return "a turn is running in it"
+    const job = jobs.list(session).find((each) => each.status === "running")
+    if (job) return job.kind === "subagent" ? `a subagent it started is working (job ${job.id}, ${job.title})` : `its background job ${job.id} (${job.title}) is running`
+    const busy = projects.childrenOf(session).some((child) => sessions.get(child)?.loop.busy() || jobs.list(child).some((each) => each.status === "running"))
+    return busy ? "a subagent it started is working" : undefined
+  }
+
   // Checks that a session is one the owner can act on from a list of
   // sessions: one that is there, and not a subagent's, which is not listed.
   function listedSession(session: string, verb: string): void {
@@ -824,6 +898,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await listModels(command)) as Output
         case "rename_session":
           return renameSession(command) as Output
+        case "move_session":
+          return (await moveSession(command)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

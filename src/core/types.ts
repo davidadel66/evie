@@ -38,6 +38,10 @@ export type EventBodies = {
   // session only while it has no name, so the owner's is never replaced.
   // It is not activity in the session, and the model is not shown it.
   named: { name: string; by: "owner" | "evie" }
+  // The owner moved the session from one project to another, by their ids,
+  // or with null into or out of none. It is followed by a note telling the
+  // model where it now works.
+  moved: { from: string | null; to: string | null }
 }
 
 // Something Evie asks the owner, with the answers to choose from. With
@@ -627,6 +631,18 @@ export type Commands = {
   // A name the owner gives is never replaced by one evie writes.
   rename_session: {
     input: { session: string; name: string }
+    output: void
+  }
+  // Moves a session into a project, out of one with `project` null, or
+  // between two, with its subagents, as a `moved` event in its log and a
+  // note telling the model which project and folder it now works in. An
+  // open session runs in the new project, with its plugins, from its next
+  // turn; setting them up can ask whether to trust the project. It is
+  // refused while anything runs in the session: a turn, a question waiting
+  // for an answer, a background job or a subagent. Moving a session to the
+  // project it is in does nothing. Not a subagent's, which moves with it.
+  move_session: {
+    input: { session: string; project: string | null }
     output: void
   }
 }
