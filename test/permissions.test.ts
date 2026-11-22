@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { loadSettingsFiles, permissions, type PermissionsOptions, type Plugin, type Rule } from "../src/index.ts"
@@ -293,7 +293,7 @@ test("/mode shows the mode and changes it, for that session only", async () => {
   const other = await run.evie.send({ type: "open_session", folder, questions: true })
 
   expect((await mode("")).text).toStartWith("The mode is manual.")
-  expect((await mode("auto")).text).toBe('The mode is now auto, for this session. New sessions start in manual, which "permissions.mode" in evie.json sets.')
+  expect((await mode("auto")).text).toBe("The mode is now auto, for this session. New sessions start in manual, the default.")
   expect((await mode("yolo")).text).toStartWith('There is no mode "yolo".')
   await attempt(edit("src/app.ts"))
   await attempt(edit("src/app.ts"), NO, other.session)
@@ -710,6 +710,8 @@ test("in auto mode more ways of publishing, deploying and writing outside the pr
     "pnpm dlx vercel",
     "http POST example.com/hook",
     "tar -xf a.tar -C../..",
+    // The project is in the temp folder here, so the other folder is named from the home folder.
+    "make -C ~/other clean",
     "echo x>/etc/x",
     "cd && rm -rf build",
   ]
@@ -776,7 +778,10 @@ test("in auto mode any command runs without asking, wherever it reads, and so do
     "bun run typecheck > /tmp/x.log 2>&1",
     "cat ~/Documents/notes.txt",
     "ls -la /etc",
-    "make -C../other build",
+    "git -C ~/other log --oneline",
+    "cd /tmp/evie-work && make",
+    "git ls-files | xargs wc -l",
+    "find -L . -name '*.tmp' -delete",
     "rm -rf /tmp/evie-work/build",
     `echo hi > ${join(tmpdir(), "evie-note.txt")}`,
     "cd /tmp/evie-work && rm -rf build",
@@ -786,7 +791,6 @@ test("in auto mode any command runs without asking, wherever it reads, and so do
     "sed -i '' 's/a/b/' notes.txt",
     "sed -n 's/a/b/p' ~/notes.txt",
     "perl -pi -e 's/a/b/' /tmp/evie-work/notes.txt",
-    "perl -ne 'print' ~/notes.txt",
   ]
   for (const command of commands) expect(await attempt(shell(command))).toBe("done")
   for (const call of [
@@ -833,6 +837,28 @@ test("in auto mode the dangerous is still asked about: sending, deleting or over
     shell("defaults write com.apple.dock autohide -bool true"),
     shell("launchctl load ~/Library/LaunchAgents/x.plist"),
     shell("pmset sleepnow"),
+    // A command that names a place outside, or runs in one, and is not known to change only files inside.
+    shell('bash -c "rm -rf ~/Documents"'),
+    shell("find ~/old | xargs rm"),
+    shell("timeout 5 rm ~/x"),
+    shell("\\rm ~/x"),
+    shell("env -C ~/x rm -rf build"),
+    shell("find ~/old -exec /bin/rm {} \\;"),
+    shell("ln -sf ~/dotfiles/zshrc ~/.zshrc"),
+    shell("chmod -R 755 ~/x"),
+    shell("curl -o ~/x https://example.com/x"),
+    shell("wget -O ~/x https://example.com/x"),
+    shell("unzip -o a.zip -d ~/x"),
+    shell("tar -cf ~/out.tar src"),
+    shell("install -m 755 tool ~/bin/tool"),
+    shell("git -C ~/x checkout ."),
+    shell("git -C ~/x stash drop"),
+    shell("git -C ~/x branch -D old"),
+    shell("git -C ~/x commit -m wip"),
+    shell("perl -ne 'print' ~/notes.txt"),
+    shell("cd '/etc' && rm -f hosts"),
+    shell("find -L ~/old -delete"),
+    shell("find -name '*.log' -delete", "/somewhere/else"),
     shell("scutil --set HostName box"),
     edit("/somewhere/else/hosts"),
     // A file shown is copied into the project, whose files are backed up, so showing one from outside asks in every mode.
@@ -907,4 +933,47 @@ test("a mode set with /mode is kept for that session when evie starts again, and
   expect(kept.filter((file) => file.includes(first.session))).toHaveLength(1)
   await again.evie.send({ type: "delete_session", session: first.session })
   expect(kept.filter((file) => file.includes(first.session)).every((file) => !existsSync(join(home, file)))).toBe(true)
+})
+
+test("in auto mode reading the owner's credentials asks, by the read tools or by any command, and one in the project is as before", async () => {
+  const { attempt, asked } = await start({ mode: "auto" })
+  const calls = [
+    read(join(homedir(), ".netrc")),
+    read(join(homedir(), ".config", "gcloud", "application_default_credentials.json")),
+    { name: "grep", input: { pattern: "token", path: join(homedir(), ".azure") } },
+    shell("cat ~/.npmrc"),
+    shell("cat ~/.pypirc ~/.git-credentials"),
+    shell("cat ~/.config/git/credentials"),
+    shell("grep oauth ~/.config/gh/hosts.yml"),
+    shell("cat $HOME/.docker/config.json"),
+    shell("cat ~/.kube/config"),
+    shell("security find-generic-password -s github -w"),
+    shell("security find-internet-password -s example.com"),
+  ]
+  for (const call of calls) expect(await attempt(call, NO)).toStartWith("The owner said no to this.")
+  expect(asked).toHaveLength(calls.length)
+
+  expect(await attempt(shell("cat .env .npmrc"))).toBe("done")
+  expect(await attempt(read(".netrc"))).toBe("done")
+  expect(asked).toHaveLength(calls.length)
+})
+
+test("a mode set with /mode wins over its file, which is read once, and a mode that could not be saved leaves no stale file", async () => {
+  const { run, mode, attempt } = await start()
+  const file = join(run.home, "modes", run.session)
+  expect((await mode("auto")).text).toStartWith("The mode is now auto, for this session.")
+  await writeFile(file, "read-only")
+  expect((await mode("")).text).toStartWith("The mode is auto.")
+  expect(await attempt(edit("src/app.ts"))).toBe("done")
+
+  // The file can no longer be written, so the mode holds only until evie stops, and the old file goes.
+  await chmod(file, 0o400)
+  expect((await mode("manual")).text).toStartWith("The mode is now manual, for this session until evie stops, since it could not be saved.")
+  expect(existsSync(file)).toBe(false)
+})
+
+test("/mode names the setting that gave the default, when one did", async () => {
+  const { run } = await withSettings({ permissions: { mode: "auto" } })
+  const reply = await run.evie.send({ type: "run_command", session: run.session, name: "mode", args: "manual" })
+  expect(reply.text).toBe('The mode is now manual, for this session. New sessions start in auto, which "permissions.mode" in evie.json sets.')
 })

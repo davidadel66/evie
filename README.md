@@ -1167,19 +1167,27 @@ What happens without a rule depends on the mode:
 |---|---|---|---|---|
 | `read-only` | Allowed | Denied | Only ones that just look, such as `ls` and `git status` | Denied |
 | `manual` | Allowed | Asks | Asks, except ones that just look | Asks |
-| `auto` | Allowed | Allowed | Allowed, except the dangerous ones below, which ask | Reading is allowed; showing a file asks, since a copy is kept in the project; changing a file asks, except in the temp folder |
+| `auto` | Allowed | Allowed | Allowed, except the dangerous ones below, which ask | Reading is allowed, except your credentials; showing a file asks, since a copy is kept in the project; changing a file asks, except in the temp folder |
 
-In `auto` mode evie runs any command, wherever it reads, and asks only
-before the dangerous ones:
+In `auto` mode evie runs any command that stays in the project and the
+temp folder (`/tmp` and `$TMPDIR`), and any command anywhere that only
+looks, and asks before the dangerous ones:
 
 - ones that leave the computer or act for you online: pushes, publishing,
   `gh` changes, POSTs, `ssh` and its kin, deploys and cloud tools;
 - ones that delete, move or overwrite files outside the project and the
-  temp folder (`/tmp` and `$TMPDIR`), with links followed: `rm`, `rmdir`,
-  `unlink`, `shred`, `truncate`, `mv`, `cp` onto a file, `>`, `>>` or
-  `tee` to a file, `dd`, `find … -delete`, `tar` extracting, `sed -i` and
-  `perl -i`, and `git
-  clean`, `reset --hard`, `checkout --` or `restore` run in another folder;
+  temp folder, with links followed: `rm`, `rmdir`, `unlink`, `shred`,
+  `truncate`, `mv`, `cp` onto a file, `>`, `>>` or `tee` to a file, `dd`,
+  `find … -delete`, `xargs rm`, `tar`, `sed -i`, `perl -i`, and `git`
+  doing anything but looking in another folder;
+- any other command that names a place outside the project and the temp
+  folder, or runs in one, such as `ln -sf … ~/.zshrc` or `curl -o ~/x`,
+  unless it only looks, as `cat ~/notes.txt` does, or is one of those
+  above and changes only files inside, as `cp ~/notes.txt .` does;
+- reading your credentials, by a tool or a command: `~/.netrc`,
+  `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/.config/git/credentials`,
+  `~/.config/gh/hosts.yml`, `~/.docker/config.json`, `~/.kube/config`,
+  `~/.config/gcloud/`, `~/.azure/`, and `security find-…-password`;
 - `sudo` and its kin, and ones that change system settings, such as
   `launchctl`, `defaults write`, `pmset`, `diskutil` and `shutdown`.
 

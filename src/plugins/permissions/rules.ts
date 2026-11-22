@@ -3,7 +3,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import type { CheckedToolCall } from "../../core/types.ts"
 import { patchFiles } from "../files/paths.ts"
 import { followLinks } from "../guard.ts"
-import { changesSystem, isOutwardFacing, isReadOnly, leavesForHome, overwrittenBy, partsOf, placesIn, plainWords, startOf } from "./shell.ts"
+import { cdTarget, changesSystem, isOutwardFacing, isReadOnly, leavesForHome, overwrittenBy, partsOf, placesIn, plainWords, startOf } from "./shell.ts"
 
 // The rules of the permissions plugin: what a tool call is about to do, and
 // whether that is allowed, denied, or needs the owner's say-so. This file
@@ -14,12 +14,10 @@ export type Effect = "allow" | "deny" | "ask"
 // The three ways of working. A mode is what happens when no rule matches.
 //   read-only  nothing is changed, and nothing is asked
 //   manual     reading is free; every change and every command is asked about
-//   auto       reading is free anywhere, except showing a file from outside
-//              the project, which copies it in; and changing files inside the
-//              project and the temp folder; any command runs, except the
-//              dangerous ones, which are asked about: those that send or
-//              publish, delete or overwrite files elsewhere, or change the
-//              system
+//   auto       reading is free anywhere, except the owner's credentials and
+//              showing a file from outside the project, which copies it in;
+//              so is changing files inside the project and the temp folder,
+//              and any command but the dangerous ones (see dangerIn)
 export const MODES = ["read-only", "manual", "auto"] as const
 export type Mode = (typeof MODES)[number]
 
@@ -54,9 +52,8 @@ export type Act = {
   shown?: boolean
   // For a command: the files it names, in full.
   names?: string[]
-  // For a command: whether it deletes, moves or overwrites files outside
-  // the project and the temp folder, or may.
-  writesOutside?: boolean
+  // For a command: whether auto mode asks about it (see dangerIn).
+  dangerous?: boolean
 }
 
 const READ_TOOLS = ["read", "grep", "glob"]
@@ -83,38 +80,67 @@ const isTemp = (absolute: string, itself = true) => TEMP.some((folder) => isInsi
 // Where a file that a command deletes, moves or overwrites is, in full,
 // with the command run in `runsIn`, which is null when that cannot be told:
 // "nowhere" for the places that are not files, and "unknown" when it cannot
-// be told, which is treated as outside.
+// be told, which is treated as outside. A word with a quote still in it,
+// as one left open, cannot be told.
 function whereWritten(place: string, runsIn: string | null): string {
   if (["/dev/null", "/dev/stdout", "/dev/stderr"].includes(place)) return "nowhere"
-  if (/^~[^/]/.test(place)) return "unknown"
+  if (/^~[^/]/.test(place) || /["']/.test(place)) return "unknown"
   const expanded = expandHome(place).replace(/^(\$TMPDIR\b|\$\{TMPDIR\})/, (found) => process.env.TMPDIR || found)
   if (/[$`]/.test(expanded) || (runsIn === null && !isAbsolute(expanded))) return "unknown"
   return fullPath(expanded, runsIn)
 }
 
-// Whether a command line deletes, moves or overwrites files outside the
-// project and the temp folder, judged one command at a time. A command
-// after a `cd` is judged as if run both where the line started and where
-// it went, since a `cd` inside brackets does not last.
-function writesOutsideIn(parts: string[], runsIn: string, folder: string | null): boolean[] {
-  const places: (string | null)[] = [runsIn]
+// What holds the owner's credentials, which auto mode asks before reading:
+// files in the home folder, with `/**` for everything in a folder, and
+// commands that print a secret.
+const CREDENTIALS: (string | RegExp)[] = [
+  "~/.netrc",
+  "~/.npmrc",
+  "~/.pypirc",
+  "~/.git-credentials",
+  "~/.config/git/credentials",
+  "~/.config/gh/hosts.yml",
+  "~/.docker/config.json",
+  "~/.kube/config",
+  "~/.config/gcloud/**",
+  "~/.azure/**",
+  /^security find-[\w-]+-password\b/,
+]
+const isCredential = (absolute: string) => CREDENTIALS.some((entry) => typeof entry === "string" && pathMatches(entry, absolute, null))
+const printsCredential = (part: string) => CREDENTIALS.some((entry) => entry instanceof RegExp && entry.test(plainOf(part)))
+
+// Whether auto mode asks about each command in a line. It asks about one
+// that sends or publishes, changes the system, or reads the owner's
+// credentials; one that deletes, moves or overwrites files outside the
+// project and the temp folder; and one that names a place outside them, or
+// runs in one, unless it only looks or is known to change nothing but files
+// inside them. A command after a `cd` is judged as if run both where the
+// line started and where it went, since a `cd` inside brackets does not last.
+function dangerIn(parts: string[], runsIn: string, folder: string | null): boolean[] {
+  const heres: (string | null)[] = [runsIn]
+  // `itself` says whether the project or the temp folder itself counts, and not only what is in it.
+  const safe = (at: string, itself: boolean) => at === "nowhere" || (at !== "unknown" && ((isInside(folder, at) && (itself || at !== folder)) || isTemp(at, itself)))
   return parts.map((part) => {
-    const { words } = plainWords(part)
-    if (words[0] === "cd" || words[0] === "pushd") {
-      const to = words.slice(1).find((word) => word === "-" || !word.startsWith("-"))
-      for (const from of [...places]) {
-        const there = to === undefined || to === "~" ? homedir() : to === "-" ? "unknown" : whereWritten(to, from)
-        places.push(there === "unknown" || there === "nowhere" ? null : there)
+    const named = heres.flatMap((here) => placesIn(part).map((place) => (here === null ? "unknown" : whereIs(place, here))))
+    const { files, folders, unnamed, known } = overwrittenBy(part)
+    const lands = (place: string, itself: boolean) => heres.every((here) => safe(whereWritten(place, here), itself))
+    const dangerous =
+      isOutwardFacing(part) ||
+      changesSystem(part) ||
+      printsCredential(part) ||
+      named.some(isCredential) ||
+      unnamed === true ||
+      !files.every((file) => lands(file, false)) ||
+      !folders.every((place) => lands(place, true)) ||
+      ((heres.some((here) => here === null || !safe(here, true)) || named.some((at) => !safe(at, true))) && !isReadOnly(part) && !known)
+    const to = cdTarget(part)
+    if (to !== undefined) {
+      for (const from of [...heres]) {
+        const there = to === "~" ? homedir() : to === "-" || from === null ? "unknown" : whereWritten(to, from)
+        heres.push(there === "unknown" || there === "nowhere" ? null : there)
       }
-      return false
     }
-    const { files, folders } = overwrittenBy(part)
-    const safe = (place: string, itself: boolean) =>
-      places.every((from) => {
-        const at = whereWritten(place, from)
-        return at === "nowhere" || (at !== "unknown" && ((isInside(folder, at) && (itself || at !== folder)) || isTemp(at, itself)))
-      })
-    return !files.every((file) => safe(file, false)) || !folders.every((place) => safe(place, true))
+    return dangerous
   })
 }
 
@@ -165,8 +191,8 @@ export function actsOf(call: CheckedToolCall, folder: string | null): Act[] {
     // outside it or names a place outside it. Once one command in the line
     // has changed folder to somewhere outside, so have the ones after it.
     const left = !isInside(folder, runsIn ?? homedir()) || judged.some(({ part, outside }) => leavesForHome(part) || (outside && /^(cd|pushd)$/.test(plainWords(part).words[0] ?? "")))
-    const writes = writesOutsideIn(parts, runsIn ?? homedir(), folder)
-    return judged.map(({ part, names, outside }, at) => ({ action: "shell", target: part, inside: !left && !outside, kind: "command", names, writesOutside: writes[at]! }))
+    const danger = dangerIn(parts, runsIn ?? homedir(), folder)
+    return judged.map(({ part, names, outside }, at) => ({ action: "shell", target: part, inside: !left && !outside, kind: "command", names, dangerous: danger[at]! }))
   }
   if (WEB_TOOLS.includes(call.name)) return [{ action: "web", target: text(call.input.url) || text(call.input.query), kind: "other" }]
   return [{ action: call.name, target: "", kind: "other" }]
@@ -223,12 +249,10 @@ function byMode(act: Act, mode: Mode): Effect {
   // changes nothing. Giving a subagent more work is the same as starting one.
   if (act.action === "subagent" || act.action === "subagent_send") return mode === "manual" ? "ask" : "allow"
   // A file shown from outside the project is copied in, so it asks in every mode.
-  if (act.action === "read") return act.inside || (mode === "auto" && !act.shown) ? "allow" : "ask"
+  if (act.action === "read") return act.inside || (mode === "auto" && !act.shown && !isCredential(act.target)) ? "allow" : "ask"
   if (act.action === "edit") return mode === "auto" && (act.inside || isTemp(act.target, false)) ? "allow" : "ask"
   if (act.action === "shell") {
-    // The dangerous ones: what leaves the computer, what deletes or
-    // overwrites files elsewhere, and what changes the system.
-    if (mode === "auto") return isOutwardFacing(act.target) || act.writesOutside || changesSystem(act.target) ? "ask" : "allow"
+    if (mode === "auto") return act.dangerous ? "ask" : "allow"
     return act.inside && isReadOnly(act.target) ? "allow" : "ask"
   }
   // A tool the plugin knows nothing about.

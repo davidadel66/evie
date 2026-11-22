@@ -8,13 +8,18 @@
 // Sets quoted text aside while a command is taken apart, so that `rg "a|b"`
 // is one command and not two. Only text the shell would not run is set
 // aside: single quotes, and double quotes with no `$` or backtick in them.
-function setQuotesAside(command: string): { text: string; putBack(text: string): string } {
+//
+// `unquote` puts it back with the quotes taken off, as the shell would read
+// it, and takes off double quotes that hold a `$` too. A quote left open
+// stays, so the word cannot be read as a place.
+function setQuotesAside(command: string): { text: string; putBack(text: string): string; unquote(text: string): string } {
   const quoted: string[] = []
   const text = command.replace(/\\\n/g, " ").replace(/'[^']*'|"[^"$`\\]*"/g, (found) => {
     quoted.push(found)
     return `\u0000${quoted.length - 1}\u0000`
   })
-  return { text, putBack: (piece) => piece.replace(/\u0000(\d+)\u0000/g, (_all, index: string) => quoted[Number(index)]!) }
+  const back = (piece: string, bare: boolean) => piece.replace(/\u0000(\d+)\u0000/g, (_all, index: string) => (bare ? quoted[Number(index)]!.slice(1, -1) : quoted[Number(index)]!))
+  return { text, putBack: (piece) => back(piece, false), unquote: (piece) => back(piece.replace(/"([^"'`\\]*)"/g, "$1"), true) }
 }
 
 // The commands in a command line: the pieces between `&&`, `||`, `;`, `|`,
@@ -187,8 +192,11 @@ export function changesSystem(part: string): boolean {
 // that to, from its words after the name. `files` are the files themselves;
 // `folders` are where files land or are changed, as where `cp` copies to or
 // where `git clean` runs, with "." for the folder the command runs in.
-// Writing a command's output to a file, with `>` or `>>`, is one more.
-type Overwrites = { files: string[]; folders: string[] }
+// `unnamed` says it changes files it does not name, such as `xargs rm`.
+// Undefined when it may change more than its words tell, as `perl` without
+// `-i` may. Writing a command's output to a file, with `>` or `>>`, is one more.
+type Overwrites = { files: string[]; folders: string[]; unnamed?: true }
+const NONE: Overwrites = { files: [], folders: [] }
 // The values given to an option: `-t dir`, `-tdir`, `--target-directory dir` or `--target-directory=dir`.
 function valuesOf(words: string[], short: string, long: string): string[] {
   return words.flatMap((word, at) => {
@@ -197,18 +205,19 @@ function valuesOf(words: string[], short: string, long: string): string[] {
     return word.startsWith(short) && !word.startsWith("--") && word.length > short.length ? [word.slice(short.length)] : []
   })
 }
-const DELETERS = ["rm", "rmdir", "unlink", "shred", "truncate", "mv"]
+// The name of a program as it would be run: `/bin/rm` and `\rm` are rm.
+const programOf = (word: string | undefined) => (word ?? "").replace(/^\\/, "").replace(/^.*\//, "")
 // An editor that changes files in place, as `sed -i` and `perl -i` do,
 // changes the files it names. Its script is the word after an option that
 // takes one, such as `-e`, or else its first word, which names no file.
 const inPlace =
-  (takesScript: RegExp) =>
-  (_args: string[], words: string[]): Overwrites => {
-    if (!words.some((word) => /^-[a-zA-Z]*i/.test(word) || word.startsWith("--in-place"))) return { files: [], folders: [] }
+  (takesScript: RegExp, otherwise: Overwrites | undefined) =>
+  (_args: string[], words: string[]): Overwrites | undefined => {
+    if (!words.some((word) => /^-[a-zA-Z]*i/.test(word) || word.startsWith("--in-place"))) return otherwise
     const named = words.filter((word, at) => word !== "" && !word.startsWith("-") && !(at > 0 && takesScript.test(words[at - 1]!)))
     return { files: words.some((word) => takesScript.test(word)) ? named : named.slice(1), folders: [] }
   }
-const OVERWRITES: Record<string, (args: string[], words: string[], gitIn: string[]) => Overwrites> = {
+const OVERWRITES: Record<string, (args: string[], words: string[], gitIn: string[]) => Overwrites | undefined> = {
   ...Object.fromEntries(["rm", "rmdir", "unlink", "shred", "truncate", "tee"].map((name) => [name, (args: string[]) => ({ files: args, folders: [] })])),
   mv: (args, words) => {
     const into = valuesOf(words, "-t", "--target-directory")
@@ -218,51 +227,81 @@ const OVERWRITES: Record<string, (args: string[], words: string[], gitIn: string
     const into = valuesOf(words, "-t", "--target-directory")
     return { files: [], folders: into.length > 0 ? into : args.length > 1 ? args.slice(-1) : [] }
   },
-  sed: inPlace(/^(-[a-zA-Z]*[ef]|--expression|--file)$/),
-  perl: inPlace(/^-[a-zA-Z]*[eE]$/),
+  sed: inPlace(/^(-[a-zA-Z]*[ef]|--expression|--file)$/, NONE),
+  perl: inPlace(/^-[a-zA-Z]*[eE]$/, undefined),
   dd: (_args, words) => ({ files: words.filter((word) => word.startsWith("of=")).map((word) => word.slice(3)), folders: [] }),
   find: (_args, words) => {
-    const removes = words.includes("-delete") || words.some((word, at) => /^-(exec|execdir|ok|okdir)$/.test(word) && DELETERS.includes(words[at + 1] ?? ""))
-    const end = words.findIndex((word) => /^[-(!]/.test(word))
-    const starts = words.slice(0, end === -1 ? words.length : end)
-    return { files: [], folders: removes ? (starts.length > 0 ? starts : ["."]) : [] }
+    // Options that come before the places it starts from.
+    let from = 0
+    while (["-L", "-H", "-P", "-E", "-X", "-s", "-x", "-f"].includes(words[from] ?? "")) from += 1
+    const end = words.findIndex((word, at) => at >= from && /^[-(!]/.test(word))
+    const starts = words.slice(from, end === -1 ? words.length : end)
+    // Deleting, or running for each file anything that does more than look.
+    const changes = words.includes("-delete") || words.some((word, at) => /^-(exec|execdir|ok|okdir)$/.test(word) && !isReadOnly(words.slice(at + 1).join(" ")))
+    if (!changes) return NONE
+    return starts.length > 0 ? { files: [], folders: starts } : { files: [], folders: [], unnamed: true }
+  },
+  // What xargs runs is given files that cannot be told from its words.
+  xargs: (_args, words) => {
+    const runs = words.findIndex((word) => !word.startsWith("-") && !/^\d+$/.test(word))
+    if (runs === -1 || isReadOnly(words.slice(runs).join(" "))) return NONE
+    return Object.hasOwn(OVERWRITES, programOf(words[runs])) ? { files: [], folders: [], unnamed: true } : undefined
   },
   tar: (_args, words) => {
-    const extracts = words.includes("--extract") || words.includes("--get") || /^-?[a-zA-Z]*x/.test(words[0] ?? "") || words.some((word) => /^-[a-zA-Z]*x/.test(word))
-    const into = valuesOf(words, "-C", "--directory")
-    return { files: [], folders: extracts ? (into.length > 0 ? into : ["."]) : [] }
+    const short = words.filter((word, at) => (at === 0 && /^[a-zA-Z]+$/.test(word)) || /^-[a-zA-Z]/.test(word)).map((word) => word.replace(/^-/, ""))
+    const has = (letter: RegExp, long: string[]) => words.some((word) => long.includes(word)) || short.some((word) => letter.test(word))
+    if (has(/x/, ["--extract", "--get"])) {
+      const into = valuesOf(words, "-C", "--directory")
+      return { files: [], folders: into.length > 0 ? into : ["."] }
+    }
+    // Making an archive writes the file named after `f`.
+    if (has(/[cruA]/, ["--create", "--append", "--update", "--catenate"])) {
+      const archive = words.flatMap((word, at) => ((at === 0 || word.startsWith("-")) && /^-?[a-zA-Z]*f$/.test(word) ? [words[at + 1] ?? ""] : []))
+      return { files: [...archive, ...valuesOf(words, "--file", "--file")], folders: [] }
+    }
+    return has(/t/, ["--list"]) ? NONE : undefined
   },
-  git: (args, words, gitIn) => {
-    const [sub] = args
-    const discards =
-      sub === "clean" ||
-      (sub === "reset" && words.includes("--hard")) ||
-      (sub === "checkout" && (words.includes("--") || words.includes("-f") || words.includes("--force"))) ||
-      (sub === "restore" && !((words.includes("--staged") || words.includes("-S")) && !words.includes("--worktree") && !words.includes("-W")))
-    return { files: [], folders: discards ? (gitIn.length > 0 ? gitIn : ["."]) : [] }
-  },
+  // git changes the folder it works in with anything but looking, and may write any place it names.
+  git: (args, words, gitIn) => (isReadOnly(["git", ...words].join(" ")) ? NONE : { files: [], folders: [...(gitIn.length > 0 ? gitIn : ["."]), ...args.slice(1)] }),
 }
 
-// What a command deletes, moves or overwrites, as written. In auto mode one
-// that does so outside the project and the temp folder is asked about.
-export function overwrittenBy(part: string): Overwrites {
-  const { text, putBack } = setQuotesAside(part)
-  const plain = (word: string) => putBack(word).replace(/["']/g, "")
+// What a command deletes, moves or overwrites, as written. `known` says
+// whether that is all it changes: it is one of the commands above, or only
+// looks apart from where it writes its output. In auto mode one that
+// changes files outside the project and the temp folder is asked about.
+export function overwrittenBy(part: string): Overwrites & { known: boolean } {
+  const { text, putBack, unquote } = setQuotesAside(part)
   const redirected: string[] = []
   // A redirect to a file writes it. Sending one stream to another does not.
   const bare = text
     .replace(/\d*>&\d+/g, " ")
     .replace(/(?:&|\d*)>>?\|?\s*([^\s<>|&;()]+)/g, (_all, target: string) => {
-      redirected.push(plain(target))
+      redirected.push(unquote(target))
       return " "
     })
     .replace(/\d*<<?-?\s*\S+/g, " ")
   const { words, gitIn } = plainWords(bare)
-  const [name = "", ...rest] = words.map(plain)
-  const found = Object.hasOwn(OVERWRITES, name) ? OVERWRITES[name]!(rest.filter((word) => !word.startsWith("-")), rest, gitIn.map(plain)) : { files: [], folders: [] }
+  const [name = "", ...rest] = words.map(unquote)
+  const found = Object.hasOwn(OVERWRITES, name) ? OVERWRITES[name]!(rest.filter((word) => !word.startsWith("-")), rest, gitIn.map(unquote)) : undefined
   // `{a,b}` names each of a and b.
   const each = (places: string[]) => places.flatMap((place) => place.split(/[{},]/)).filter((place) => place !== "")
-  return { files: each([...found.files, ...redirected]), folders: each(found.folders) }
+  return {
+    files: each([...(found?.files ?? []), ...redirected]),
+    folders: each(found?.folders ?? []),
+    ...(found?.unnamed && { unnamed: true as const }),
+    known: found !== undefined || isReadOnly(putBack(bare)),
+  }
+}
+
+// Where a `cd` or `pushd` goes, as written with its quotes taken off: "~"
+// for the home folder and "-" for wherever it was last. Undefined for any
+// other command.
+export function cdTarget(part: string): string | undefined {
+  const { text, unquote } = setQuotesAside(part)
+  const { words } = plainWords(text)
+  if (words[0] !== "cd" && words[0] !== "pushd") return undefined
+  const to = words.slice(1).find((word) => word === "-" || !word.startsWith("-"))
+  return to === undefined ? "~" : unquote(to)
 }
 
 // Every piece of a command that could name a place on disk: its words, the

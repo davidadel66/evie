@@ -46,6 +46,7 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
   // This plugin asks before each write to the owner's agents and skills, so the guard may let them through.
   const blockedByGuard = createGuard({ ...(options.dataFolder !== undefined && { dataFolder: options.dataFolder }), definitionsCanBeWritten: true })
   const startsIn = options.mode ?? "manual"
+  const newSessions = options.mode === undefined ? "New sessions start in manual, the default." : `New sessions start in ${options.mode}, which "permissions.mode" in evie.json sets.`
   const data = options.dataFolder ?? dataFolder({})
   const keptIn = join(data, "modes")
   // A session's id is the name of its file, so one that could not be is never used.
@@ -67,10 +68,13 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
       const key = folder ?? "general"
       // Shared by every session in this project, and added to by "always" answers.
       const remembered: Rule[] = [...(options.remembered?.[key] ?? [])]
-      // The mode of each session that has changed it here, which holds
-      // until evie stops if it could not be kept in its file.
+      // The mode of each session, read from its file the first time it is
+      // needed and changed by /mode. What is here wins over the file.
       const modes = new Map<string, Mode>()
-      const ownMode = (session: string): Mode => kept(session) ?? modes.get(session) ?? startsIn
+      const ownMode = (session: string): Mode => {
+        if (!modes.has(session)) modes.set(session, kept(session) ?? startsIn)
+        return modes.get(session)!
+      }
       // A subagent has no mode the owner sets. It works in auto, so that it
       // is not asking about every step from the background; or read-only,
       // when the session that started it was read-only at the time. Which
@@ -91,19 +95,20 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         description: "Show or change how freely evie may act: read-only, manual or auto.",
         async run(args, context) {
           const wanted = args.trim()
-          if (wanted === "") return `The mode is ${modeOf(context.session)}. ${ABOUT}`
-          if (!MODES.includes(wanted as Mode)) return `There is no mode "${wanted}". ${ABOUT}`
+          if (wanted === "") return `The mode is ${modeOf(context.session)}. ${ABOUT} ${newSessions}`
+          if (!MODES.includes(wanted as Mode)) return `There is no mode "${wanted}". ${ABOUT} ${newSessions}`
           modes.set(context.session, wanted as Mode)
           const file = fileOf(context.session)
           const saved =
             file !== undefined &&
             (await mkdir(keptIn, { recursive: true })
               .then(() => writeFile(file, wanted))
-              .then(() => true, () => false))
-          return (
-            `The mode is now ${wanted}, for this session${saved ? "" : " until evie stops, since it could not be saved"}. ` +
-            `New sessions start in ${startsIn}, which "permissions.mode" in evie.json sets.`
-          )
+              // A file that could not be written over would give the old mode when evie starts again.
+              .then(
+                () => true,
+                () => rm(file, { force: true }).then(() => false, () => false),
+              ))
+          return `The mode is now ${wanted}, for this session${saved ? "" : " until evie stops, since it could not be saved"}. ${newSessions}`
         },
       })
 
@@ -197,6 +202,6 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
 
 const ABOUT =
   "The modes are: read-only, which changes nothing; manual, which asks before every change and every command; and " +
-  "auto, which reads anywhere and runs any command, and asks only before the dangerous ones: sending or publishing, " +
-  "deleting or overwriting files outside the project and the temp folder, and changing the system. Change it for " +
-  'this session with /mode and a name. New sessions start in the mode "permissions.mode" in evie.json sets.'
+  "auto, which reads anywhere and works freely in the project and the temp folder, and asks before what is " +
+  "dangerous: sending or publishing, changing anything outside them, reading your credentials, and changing the " +
+  "system. Change it for this session with /mode and a name."
