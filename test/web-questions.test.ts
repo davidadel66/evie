@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import type { EventBodies } from "../src/core/types.ts"
-import { answerTyped, choiceForKey, sendDoes, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, permissionChoices, releaseAt, shownQuestion } from "../web/src/questions.ts"
+import type { Item } from "../web/src/transcript.ts"
+import { answerTyped, asAsked, choiceForKey, sendDoes, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, permissionChoices, releaseAt, shownQuestion } from "../web/src/questions.ts"
 
 // The questions evie asks, as the message box shows them, apart from its
 // screen: when one shows, and where.
@@ -62,7 +63,7 @@ test("a permission prompt's choices: the one that refuses, its last, first; the 
   })
 })
 
-test("what is sent from the box while a question waits answers it as the terminal takes a typed line: a number picks that choice, and other words are the answer when it takes them", () => {
+test("what is sent from the box while a docked question waits answers it as the terminal takes a typed line: a number picks that choice, and other words are the answer when it takes them", () => {
   expect(answerTyped("2", asked("q1"))).toBe("South bed")
   expect(answerTyped(" 1 ", asked("q1", { freeText: true }))).toBe("North bed")
   expect(answerTyped("Both, north first", asked("q1", { freeText: true }))).toBe("Both, north first")
@@ -70,8 +71,6 @@ test("what is sent from the box while a question waits answers it as the termina
   expect(answerTyped("Both", asked("q1"))).toBeUndefined()
   expect(answerTyped("3", asked("q1", { freeText: true }))).toBeUndefined()
   expect(answerTyped("  ", asked("q1", { freeText: true }))).toBeUndefined()
-  // Words sent while a permission prompt waits refuse it, and say what to do instead.
-  expect(answerTyped("Use the staging branch", permission("p1"))).toBe("Use the staging branch")
 })
 
 test("the keys 1 to 9 pick the choice with that number", () => {
@@ -87,8 +86,29 @@ test("sending from the box answers the question showing when the words answer it
   expect(sendDoes("/model some/model", undefined)).toEqual({ run: { name: "model", args: "some/model" } })
   expect(sendDoes("2", asked("q1"))).toEqual({ answer: "South bed" })
   expect(sendDoes("Neither, the herbs", asked("q1", { freeText: true }))).toEqual({ answer: "Neither, the herbs" })
-  // Words the question does not take are a message, for the turn to read once it is answered.
-  expect(sendDoes("Hold on", asked("q1"))).toEqual({ message: "Hold on" })
   expect(sendDoes("/compact", asked("q1"))).toEqual({ run: { name: "compact", args: "" } })
   expect(sendDoes("   ", undefined)).toBeUndefined()
+})
+
+test("while a question with choices only waits, words or a number it has no choice for are not sent: the owner is asked to pick one, as the terminal asks again", () => {
+  expect(sendDoes("Hold on", asked("q1"))).toEqual({ refuse: "Pick one of the choices, 1 to 2." })
+  expect(sendDoes("3", asked("q1"))).toEqual({ refuse: "Pick one of the choices, 1 to 2." })
+  expect(sendDoes("3", asked("q1", { freeText: true }))).toEqual({ refuse: "Pick one of the choices, 1 to 2, or write your own answer." })
+})
+
+test("while a permission prompt waits, words sent decline it with its refusing choice and go to evie as a message, so that it does that instead, as T3 Code's do", () => {
+  expect(sendDoes("Use the staging branch", permission("p1"))).toEqual({ decline: "No", message: "Use the staging branch" })
+  // A number is a message here too: the prompt's choices are not numbered.
+  expect(sendDoes("1", permission("p1"))).toEqual({ decline: "No", message: "1" })
+  expect(sendDoes("/mode auto", permission("p1"))).toEqual({ run: { name: "mode", args: "auto" } })
+})
+
+test("a question waiting is left out where it was asked, since it shows where it is answered; one with no answer that no longer waits, as after a restart, is drawn as asked", () => {
+  const items: Item[] = [
+    { key: "e1", turn: 1, kind: "owner", text: "Plan the beds" },
+    { key: "e2", turn: 1, kind: "question", id: "q1", text: "Which bed first?", choices: ["North", "South"], waiting: true },
+    { key: "e3", turn: 2, kind: "question", id: "q2", text: "And then?", choices: ["Herbs"], waiting: true },
+  ]
+  expect(asAsked(items, [asked("q2")])).toEqual([items[0]!, { ...items[1]!, waiting: false } as Item])
+  expect(asAsked(items, [])).toEqual([items[0]!, { ...items[1]!, waiting: false } as Item, { ...items[2]!, waiting: false } as Item])
 })

@@ -256,7 +256,8 @@ they change, and listed again when the line comes back:
   so a draft left unused leaves nothing behind. Pressed again, it comes
   back to the same draft. The first message starts the session, asking
   first whether to trust the project when evie needs to know, and the page
-  moves to it.
+  moves to it. A first message that cannot be sent comes back into the
+  box, with why.
 - **Search** narrows the list by name, and the menu beside it to one
   project.
 - **A row's menu** (the `···` on the selected row, or on any row under the
@@ -300,12 +301,14 @@ The message box at the bottom of the conversation works as T3 Code's does:
   Escape in the box, stops the turn, and says Stopping until it has.
 - **A permission prompt** shows at the end of the conversation, with its
   choices as buttons: No, then Yes, once, and the others, such as always
-  allowing it, under More. A message sent instead says no, and what to do
-  instead.
+  allowing it, under More. A message sent instead answers it No, and goes
+  to evie as what to do instead.
 - **Any other question** docks just above the box, its choices numbered:
   the keys 1 to 9 pick one while the box does not have the focus, a number
   sent from the box picks one, and your own words sent answer it when it
-  takes them. Several waiting are taken one at a time, with a count such as
+  takes them. Anything else is not sent: the box asks you to pick one of
+  the choices, as the terminal asks again. Several waiting are taken one at
+  a time, with a count such as
   1/3. A question that arrives while you are typing waits until you have
   not typed for a second and a half, so that a stray key cannot answer it.
   One answered elsewhere, such as in a terminal, goes away.
@@ -316,7 +319,11 @@ The message box at the bottom of the conversation works as T3 Code's does:
   answer shows as a quiet note, kept nowhere, as in the terminal.
 - **`/model`**, or Cmd-Shift-M (Ctrl-Shift-M elsewhere), opens a picker of
   the models the provider offers, grouped by maker, with a search over them
-  all; the one in use is marked.
+  all; the one in use is marked. In a draft, it picks the model the new
+  session starts with; until one is picked, the draft shows the model a new
+  session would use. A project's own model is known once a session has
+  opened there since the server started. In a draft, the other commands
+  wait until the session has started.
 - **Under the text**, the model's name, which opens the picker too, and how
   full the conversation is, as a share of the size at which evie compacts
   it by itself. Its menu gives both sizes, and Compact now.

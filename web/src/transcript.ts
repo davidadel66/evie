@@ -40,7 +40,8 @@ export type Item = { key: string; turn: number } & (
   | { kind: "steps"; calls: Call[]; label: string; running: boolean }
   // Something said in quiet words, with `more` to open, in Markdown.
   | { kind: "note"; text: string; more?: string }
-  | { kind: "question"; text: string; choices: string[]; waiting: boolean }
+  // `waiting` while the log has no answer to it; `id` ties it to its answer.
+  | { kind: "question"; id: string; text: string; choices: string[]; waiting: boolean }
   | { kind: "failed"; error: string }
   // A turn that ended as completed, as T3 Code draws one: what came before
   // its final reply, evie's words and its runs of calls, folded into one
@@ -122,7 +123,7 @@ export function transcriptOf(view: View): Item[] {
       else runAt(event.time).calls.push({ id: event.body.callId, name: event.body.name, input: "", result: event.body.text, short: shortOf(event.body.text), running: false })
     }
     if (event.type === "question") {
-      const item: Asked = { key, turn, kind: "question", text: event.body.text, choices: event.body.choices, waiting: true }
+      const item: Asked = { key, turn, kind: "question", id: event.body.id, text: event.body.text, choices: event.body.choices, waiting: true }
       questions.set(event.body.id, { item, time: event.time })
       add(item, event.time)
     }

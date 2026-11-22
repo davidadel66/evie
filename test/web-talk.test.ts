@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { ask, models, type EvieOptions, type Plugin } from "../src/index.ts"
+import { ask, models, startServer, type Command, type Evie, type EvieOptions, type Plugin } from "../src/index.ts"
 import { openConnection } from "../web/src/connection.ts"
 import { openConversation, openDraft, takeStarted, type Conversation, type ConversationState, type Draft, type DraftState } from "../web/src/conversation.ts"
 import { openSessions } from "../web/src/sessions.ts"
@@ -299,4 +299,77 @@ test("while two commands run, the first to finish leaves the other running", asy
   finish()
   await slowly
   expect(conversation.state().running).toEqual([])
+})
+
+test("a draft started again after its session could not start answers the new session's question, not the first one's", async () => {
+  // The first time its settings are read, the project asks, then fails; then it asks and loads.
+  let tries = 0
+  const failsOnce: NonNullable<EvieOptions["projectSettings"]> = async (_project, { ask }) => {
+    tries += 1
+    const answer = await ask({ text: "Trust this project?", choices: ["Yes", "No"], kind: "permission" })
+    if (tries === 2) throw new Error("its settings file could not be read")
+    return { plugins: [], ...(answer !== "Yes" && { forNow: true as const }) }
+  }
+  const { served, connection } = await start([{ text: ["Noted."] }], { projectSettings: failsOnce })
+  const { draft: started } = await draft(connection, served.run.project!.id)
+
+  const first = started.start("Plan the beds", () => {})
+  const asked = await untilDraft(started, (state) => state.waiting.length === 1)
+  await started.answer(asked.waiting[0]!.id, "Yes")
+  expect(await first).toMatchObject({ problem: expect.stringContaining("its settings file could not be read") })
+  expect(started.state().waiting).toEqual([])
+
+  const again = started.start("Plan the beds", () => {})
+  const askedAgain = await untilDraft(started, (state) => state.waiting.length === 1)
+  expect(askedAgain.waiting[0]!.id).not.toBe(asked.waiting[0]!.id)
+  expect(await started.answer(askedAgain.waiting[0]!.id, "Yes")).toBeUndefined()
+  const result = await again
+  if (!("session" in result)) throw new Error(result.problem)
+  takeStarted(result.session)?.close()
+})
+
+test("a draft shows the model a new session would use, lists the models, and a model picked there is the session's before its first message", async () => {
+  const { served, connection } = await start([{ text: ["Noted."] }], { models: [{ id: "maker/model", name: "Maker: Model" }] })
+  const { draft: started } = await draft(connection, served.run.project!.id)
+
+  await untilDraft(started, (state) => state.model === "test/model")
+  expect(await started.listModels()).toEqual([{ id: "maker/model", name: "Maker: Model" }])
+  started.pick("maker/model")
+  expect(started.state().model).toBe("maker/model")
+
+  const result = await started.start("Plan the beds", () => {})
+  if (!("session" in result)) throw new Error(result.problem)
+  const conversation = takeStarted(result.session)!
+  cleanups.push(async () => conversation.close())
+  const replied = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end") && state.model === "maker/model")
+  expect(types(replied).slice(0, 2)).toEqual(["model_changed", "turn_start"])
+})
+
+test("a draft's first message that cannot be sent once the page has moved to the session is given back for the box, with why, so nothing is lost", async () => {
+  // A server whose core refuses to take a message.
+  const served = await serveEvie([scriptedProvider([]).plugin])
+  cleanups.push(served.stop)
+  const core = served.run.evie
+  const evie: Evie = {
+    send: (command: Command) => (command.type === "send_message" ? Promise.reject(new Error("The event log could not be written.")) : core.send(command)) as never,
+    subscribe: (listener) => core.subscribe(listener),
+    close: async () => {},
+  }
+  const server = startServer({ evie, tokens: served.tokens, host: "127.0.0.1", port: 0 })
+  cleanups.push(() => server.stop())
+  const connection = openConnection({ url: server.url, token: served.token, firstWait: 10 })
+  cleanups.push(() => connection.close())
+  const { draft: started } = await draft(connection, null)
+
+  const result = await started.start("Plan the beds", () => {})
+  if (!("session" in result)) throw new Error(result.problem)
+  const conversation = takeStarted(result.session)!
+  cleanups.push(async () => conversation.close())
+  const given = await until(conversation, (state) => state.givenBack !== undefined)
+
+  expect(given.givenBack).toEqual({ text: "Plan the beds", problem: "The event log could not be written." })
+  expect(given.pending).toEqual([])
+  expect(conversation.takeGivenBack()).toEqual({ text: "Plan the beds", problem: "The event log could not be written." })
+  expect(conversation.takeGivenBack()).toBeUndefined()
+  expect(conversation.state().givenBack).toBeUndefined()
 })

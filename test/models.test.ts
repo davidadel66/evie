@@ -226,6 +226,8 @@ test("a client can list the models the session's provider offers, and is told wh
   }
   const listed = await startEvie([listing])
   expect(await listed.evie.send({ type: "list_models", session: listed.session })).toEqual([{ id: "maker/model", name: "Maker: Model" }])
+  // With no session, the provider a new session would use, as a draft in the web app asks.
+  expect(await listed.evie.send({ type: "list_models" })).toEqual([{ id: "maker/model", name: "Maker: Model" }])
   await listed.stop()
 
   // The scripted provider offers no list.

@@ -1,5 +1,6 @@
 import type { EventBodies } from "../../src/core/types.ts"
 import { commandIn } from "./composer.ts"
+import type { Item } from "./transcript.ts"
 
 // The questions evie asks, as the message box shows them, apart from its
 // screen: when one shows, and where. They follow T3 Code's, which the
@@ -75,16 +76,37 @@ export function answerTyped(typed: string, question: Asked): string | undefined 
 // The choice a key from 1 to 9 picks.
 export const choiceForKey = (key: string, question: Asked): string | undefined => (/^[1-9]$/.test(key) ? question.choices[Number(key) - 1] : undefined)
 
-// What sending from the box does: answers the question showing, when the
-// words answer it, as the terminal takes a line while a question waits;
-// otherwise runs the command a slash and a word name; otherwise sends the
-// words as a message, which steers a turn in progress, or waits for the
-// question to be answered. Nothing, for a box with nothing in it.
-export function sendDoes(typed: string, showing: Asked | undefined): { answer: string } | { run: { name: string; args: string } } | { message: string } | undefined {
+// What sending from the box does, with the question showing, if one is.
+// While a permission prompt waits, words decline it, with its refusing
+// choice, and go to evie as a message, so that it does that instead, as
+// T3 Code's "Send a message to decline and redirect" does. While another
+// question waits, words that answer it, as the terminal takes a line,
+// answer it; a number it has no choice for, or words a question with
+// choices only does not take, are not sent, and the owner is asked to pick
+// one, as the terminal asks again. Otherwise a slash and a word runs that
+// command, and anything else is a message, which steers a turn in
+// progress. Nothing, for a box with nothing in it.
+export type SendDoes = { answer: string } | { decline: string; message: string } | { run: { name: string; args: string } } | { message: string } | { refuse: string }
+export function sendDoes(typed: string, showing: Asked | undefined): SendDoes | undefined {
   const text = typed.trim()
   if (text === "") return undefined
-  const answer = showing && answerTyped(text, showing)
-  if (answer !== undefined) return { answer }
   const command = commandIn(text)
+  if (showing?.kind === "permission") return command ? { run: command } : { decline: permissionChoices(showing).deny, message: text }
+  if (showing !== undefined) {
+    const answer = answerTyped(text, showing)
+    if (answer !== undefined) return { answer }
+    if (command) return { run: command }
+    return { refuse: `Pick one of the choices, 1 to ${showing.choices.length}${showing.freeText ? ", or write your own answer" : ""}.` }
+  }
   return command ? { run: command } : { message: text }
+}
+
+// The conversation's items as the page draws them: a question the session
+// is waiting on is left out where it was asked, since it shows where it is
+// answered, at the end or docked above the box. One the log has no answer
+// to that the session no longer waits on, as one cut off by a restart, is
+// drawn as it was asked, unanswered.
+export function asAsked(items: readonly Item[], waiting: readonly Asked[]): Item[] {
+  const open = new Set(waiting.map((question) => question.id))
+  return items.flatMap((item) => (item.kind !== "question" || !item.waiting ? [item] : open.has(item.id) ? [] : [{ ...item, waiting: false }]))
 }

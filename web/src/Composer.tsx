@@ -20,11 +20,16 @@ import { Spinner } from "./Spinner.tsx"
 // model's name and how full the conversation is, whose menu compacts it.
 // At phone width it is one row until it is tapped.
 
+// The model under the text, which /model picks: the one in use, the models
+// to pick from, and the picking, which gives back why not, or nothing.
+export type ModelChoice = { current: string | undefined; list(): Promise<Model[]>; pick(model: string): Promise<string | undefined> }
+
 type Props = {
   // The session's conversation and how it stands. A draft has neither: it
-  // runs no commands until its session has started.
+  // runs no commands but /model until its session has started.
   conversation?: Conversation | undefined
   state?: ConversationState | undefined
+  model: ModelChoice
   // The question showing, which what is sent may answer, and how to answer it.
   shown: Shown
   answer(id: string, choice: string | null): Promise<string | undefined>
@@ -39,7 +44,7 @@ type Props = {
 // The model, as the menu lists it: picking it opens the picker, as in T3 Code.
 const MODEL: MenuItem = { name: "model", description: "Pick the model this session uses" }
 
-export function Composer({ conversation, state, shown, answer, asking, send }: Props) {
+export function Composer({ conversation, state, model, shown, answer, asking, send }: Props) {
   const [text, setText] = useState("")
   const [caret, setCaret] = useState(0)
   const [problem, setProblem] = useState<string>()
@@ -72,12 +77,14 @@ export function Composer({ conversation, state, shown, answer, asking, send }: P
     )
     return () => void (current = false)
   }, [menuOpen, conversation])
-  // At the start of the message every command can be run; elsewhere only the model picked.
+  // At the start of the message every command can be run; elsewhere, and
+  // in a draft, only the model picked.
   const items = useMemo(() => {
-    if (slash === undefined || commands?.items === undefined) return []
-    const all = [MODEL, ...commands.items.filter((item) => item.name !== MODEL.name)]
-    return rankCommands(slash.first ? all : [MODEL], slash.query)
-  }, [slash?.query, slash?.first, commands])
+    if (slash === undefined) return []
+    if (conversation === undefined || !slash.first) return rankCommands([MODEL], slash.query)
+    if (commands?.items === undefined) return []
+    return rankCommands([MODEL, ...commands.items.filter((item) => item.name !== MODEL.name)], slash.query)
+  }, [slash?.query, slash?.first, commands, conversation])
   useEffect(() => setHighlight(undefined), [slash?.query])
 
   // The box grows with its text, up to a height, then scrolls.
@@ -98,7 +105,6 @@ export function Composer({ conversation, state, shown, answer, asking, send }: P
   }, [])
   // mod+shift+M opens the model picker, as in T3 Code.
   useEffect(() => {
-    if (conversation === undefined) return
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "m") {
         event.preventDefault()
@@ -107,7 +113,16 @@ export function Composer({ conversation, state, shown, answer, asking, send }: P
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
-  }, [conversation])
+  }, [])
+  // A message that could not be sent on the box's behalf, such as a draft's
+  // first, comes back into the box, with why, unless the owner has typed since.
+  useEffect(() => {
+    if (state?.givenBack === undefined || conversation === undefined) return
+    const back = conversation.takeGivenBack()
+    if (back === undefined) return
+    setText((now) => (now === "" ? back.text : now))
+    setProblem(back.problem)
+  }, [state?.givenBack, conversation])
 
   function put(next: string, at = next.length) {
     caretTo.current = at
@@ -130,6 +145,8 @@ export function Composer({ conversation, state, shown, answer, asking, send }: P
   async function submit() {
     const does = sendDoes(text, shown?.question)
     if (does === undefined) return
+    // Not sent: the text stays, and the box says why.
+    if ("refuse" in does) return setProblem(does.refuse)
     const was = text
     asking.cleared()
     setProblem(undefined)
@@ -141,6 +158,11 @@ export function Composer({ conversation, state, shown, answer, asking, send }: P
       setText((now) => (now === "" ? was : now))
     }
     if ("answer" in does) return restore(await answer(shown!.question.id, does.answer))
+    if ("decline" in does) {
+      const refused = await answer(shown!.question.id, does.decline)
+      if (refused !== undefined) return restore(refused)
+      return restore(await send(does.message))
+    }
     if ("run" in does) {
       if (conversation === undefined) return restore("Commands can be run once the session has started. Send a message first.")
       return void conversation.run(does.run.name, does.run.args)
@@ -188,7 +210,7 @@ export function Composer({ conversation, state, shown, answer, asking, send }: P
   // At phone width, one row until tapped, as T3 Code's, unless there is more to show.
   const collapsed = !wide && !focused && !text.includes("\n") && docked === undefined && !picking
   const placeholder =
-    shown?.place === "inline" && shown.question.freeText
+    shown?.place === "inline" && conversation !== undefined
       ? "Send a message to say no, and what to do instead"
       : docked?.question.freeText
         ? "Your own answer, or a number"
@@ -209,11 +231,21 @@ export function Composer({ conversation, state, shown, answer, asking, send }: P
           </p>
         )}
         <div className="relative">
-          {menuOpen && <CommandMenu id={menuId} slash={slash} items={items} draft={conversation === undefined} commands={commands} highlight={highlight} pick={pick} setHighlight={setHighlight} />}
-          {picking && conversation && state && (
+          {menuOpen && (
+            <CommandMenu
+              id={menuId}
+              slash={slash}
+              items={items}
+              draft={conversation === undefined}
+              listing={conversation !== undefined && slash.first && commands?.items === undefined ? (commands?.problem ?? "listing") : undefined}
+              highlight={highlight}
+              pick={pick}
+              setHighlight={setHighlight}
+            />
+          )}
+          {picking && (
             <ModelPicker
-              conversation={conversation}
-              current={state.model}
+              model={model}
               close={() => {
                 setPicking(false)
                 box.current?.focus()
@@ -258,10 +290,10 @@ export function Composer({ conversation, state, shown, answer, asking, send }: P
               />
             </label>
             <div className={cn("flex min-w-0 items-center gap-2", !collapsed && "justify-end")}>
-              {!collapsed && conversation && state && (
+              {!collapsed && (
                 <div className="flex min-w-0 items-center text-caption text-text-muted">
-                  <ModelName model={state.model} open={() => setPicking(true)} />
-                  <ContextMeter conversation={conversation} state={state} />
+                  <ModelName model={model.current} toggle={() => setPicking((open) => !open)} />
+                  {conversation && state && <ContextMeter conversation={conversation} state={state} />}
                 </div>
               )}
               {working && <StopButton stopping={state?.stopping === true} stop={() => conversation?.stop()} />}
@@ -308,11 +340,19 @@ function StopButton({ stopping, stop }: { stopping: boolean; stop(): void }) {
   )
 }
 
-// The model's name, the part of its id after the maker's, which opens the picker.
-function ModelName({ model, open }: { model: string | undefined; open(): void }) {
+// The model's name, the part of its id after the maker's, which opens the
+// picker, and closes it again.
+function ModelName({ model, toggle }: { model: string | undefined; toggle(): void }) {
   if (model === undefined) return null
   return (
-    <Button variant="quiet" onClick={open} title={`${model}. Pick another with /model or ${MOD}+Shift+M`} aria-label={`Model: ${model}. Pick another`} className="min-w-0 px-2 text-caption">
+    <Button
+      variant="quiet"
+      onClick={toggle}
+      data-picker-toggle=""
+      title={`${model}. Pick another with /model or ${MOD}+Shift+M`}
+      aria-label={`Model: ${model}. Pick another`}
+      className="min-w-0 px-2 text-caption"
+    >
       <span className="truncate">{model.slice(model.indexOf("/") + 1)}</span>
     </Button>
   )
@@ -360,7 +400,7 @@ function CommandMenu({
   slash,
   items,
   draft,
-  commands,
+  listing,
   highlight,
   pick,
   setHighlight,
@@ -368,8 +408,10 @@ function CommandMenu({
   id: string
   slash: NonNullable<ReturnType<typeof slashAt>>
   items: MenuItem[]
+  // In a draft, which runs no command but /model.
   draft: boolean
-  commands: { items?: MenuItem[]; problem?: string } | undefined
+  // While the commands are being listed, "listing", or why they could not be.
+  listing: string | undefined
   highlight: number | undefined
   pick(item: MenuItem): void
   setHighlight(at: number): void
@@ -386,14 +428,12 @@ function CommandMenu({
   )
   return (
     <div className="absolute inset-x-0 bottom-full z-40 mb-2 flex max-h-composer-menu flex-col overflow-y-auto rounded-md border border-line bg-surface p-2 shadow-float">
-      {draft ? (
-        quiet("Commands can be run once the session has started.")
-      ) : commands?.problem !== undefined ? (
-        quiet(commands.problem)
-      ) : commands?.items === undefined ? (
+      {listing === "listing" ? (
         quiet("Listing the commands", true)
+      ) : listing !== undefined ? (
+        quiet(listing)
       ) : items.length === 0 ? (
-        quiet("No matching command.")
+        quiet(draft ? "Other commands can be run once the session has started." : "No matching command.")
       ) : (
         <ul ref={list} id={id} role="listbox" aria-label={slash.first ? "Commands and skills" : "Commands"} className="flex flex-col">
           {items.map((item, at) => (
@@ -417,15 +457,19 @@ function CommandMenu({
           ))}
         </ul>
       )}
+      {draft && items.length > 0 && quiet("Other commands can be run once the session has started.")}
     </div>
   )
 }
 
 // The model picker, just above the box, as T3 Code's: the makers in a
 // column on the left, the current model's first; a search over every
-// maker's models on the right; the model in use raised, with a check.
-// Up and Down move, Enter picks, Escape closes, giving the focus back.
-function ModelPicker({ conversation, current, close }: { conversation: Conversation; current: string | undefined; close(): void }) {
+// maker's models on the right; the model in use marked with a check and
+// "In use". As in a menu, the row Up and Down, or the pointer, moves to is
+// raised; Enter picks it, and Escape, or a click outside it other than on
+// the model's name, which closes it too, closes it, giving the focus back.
+function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
+  const current = model.current
   const [listed, setListed] = useState<{ models?: Model[]; problem?: string }>({})
   const [query, setQuery] = useState("")
   const [maker, setMaker] = useState<string>()
@@ -434,15 +478,19 @@ function ModelPicker({ conversation, current, close }: { conversation: Conversat
   const root = useRef<HTMLDivElement>(null)
   useEffect(() => {
     let live = true
-    conversation.listModels().then(
+    model.list().then(
       (models) => live && setListed({ models }),
       (cause: unknown) => live && setListed({ problem: cause instanceof Error ? cause.message : String(cause) }),
     )
     return () => void (live = false)
-  }, [conversation])
-  // A click outside closes it, as a menu's does.
+  }, [])
+  // A click outside closes it, as a menu's does, but for one on the model's
+  // name, which closes it itself.
   useEffect(() => {
-    const outside = (event: PointerEvent) => !root.current?.contains(event.target as Node) && close()
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Element
+      if (!root.current?.contains(target) && target.closest?.("[data-picker-toggle]") == null) close()
+    }
     document.addEventListener("pointerdown", outside)
     return () => document.removeEventListener("pointerdown", outside)
   }, [close])
@@ -453,8 +501,8 @@ function ModelPicker({ conversation, current, close }: { conversation: Conversat
   const shown: (Model & { maker?: string })[] = query.trim() !== "" ? searchModels(listed.models ?? [], query) : (makers.find((each) => each.key === chosen)?.models ?? [])
   useEffect(() => setHighlight(0), [query, chosen])
 
-  async function pick(model: string) {
-    const problem = await conversation.setModel(model)
+  async function pick(id: string) {
+    const problem = await model.pick(id)
     if (problem !== undefined) setRefused(problem)
     else close()
   }
@@ -467,8 +515,8 @@ function ModelPicker({ conversation, current, close }: { conversation: Conversat
       if (shown.length > 0) setHighlight((at) => (at + (event.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length)
     } else if (event.key === "Enter") {
       event.preventDefault()
-      const model = shown[highlight]
-      if (model) void pick(model.id)
+      const chosen = shown[highlight]
+      if (chosen) void pick(chosen.id)
     }
   }
   useEffect(() => {
@@ -520,26 +568,24 @@ function ModelPicker({ conversation, current, close }: { conversation: Conversat
             <p className="px-3 py-2 text-caption text-text-muted">{query.trim() === "" ? "No models to pick from." : "No matching model."}</p>
           ) : (
             <ul id="model-list" role="listbox" aria-label="Models" className="flex flex-col">
-              {shown.map((model, at) => (
+              {shown.map((each, at) => (
                 <li
-                  key={model.id}
+                  key={each.id}
                   id={`model-${at}`}
                   data-at={at}
                   role="option"
                   aria-selected={at === highlight}
-                  onClick={() => void pick(model.id)}
+                  // The search keeps the focus.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => void pick(each.id)}
                   onMouseMove={() => at !== highlight && setHighlight(at)}
-                  className={cn(
-                    "flex min-h-control shrink-0 cursor-default items-center gap-2 rounded-md px-3 py-1",
-                    model.id === current && "bg-surface-raised",
-                    at === highlight && "outline-(length:--indicator-width) outline-focus-ring -outline-offset-2",
-                  )}
+                  className={cn("flex min-h-control shrink-0 cursor-default items-center gap-2 rounded-md px-3 py-1", at === highlight && "bg-surface-raised")}
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-body text-text">{model.name}</span>
-                    <span className="truncate text-caption text-text-muted">{model.maker !== undefined ? `${model.maker} · ${model.id}` : model.id}</span>
+                    <span className="truncate text-body text-text">{each.name}</span>
+                    <span className="truncate text-caption text-text-muted">{each.maker !== undefined ? `${each.maker} · ${each.id}` : each.id}</span>
                   </span>
-                  {model.id === current && (
+                  {each.id === current && (
                     <span className="flex shrink-0 items-center gap-1 text-caption text-text-muted">
                       <Check className="size-icon-sm" />
                       In use

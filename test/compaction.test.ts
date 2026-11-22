@@ -417,3 +417,12 @@ test("reading how full the conversation is does not wait on a limit lookup that 
   expect(await run.evie.send({ type: "read_context", session: run.session })).toEqual({ model: "test/model", size: 0, compactsAt: 5000 })
   expect(Date.now() - asked).toBeLessThan(3000)
 })
+
+test("with no session, a client reads what a new session would start with: the model, in a project that sets its own once a session has opened there, an empty conversation, and where it is compacted", async () => {
+  const model = scriptedProvider([], { limit: 1000 })
+  const run = await startEvie([model.plugin], { compaction: { ceiling: 200_000 }, projectSettings: async () => ({ plugins: [], model: "project/model" }) })
+  cleanups.push(run.stop)
+
+  expect(await run.evie.send({ type: "read_context" })).toEqual({ model: "test/model", size: 0, compactsAt: 800 })
+  expect(await run.evie.send({ type: "read_context", project: run.project!.id })).toEqual({ model: "project/model", size: 0, compactsAt: 800 })
+})

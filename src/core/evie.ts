@@ -5,6 +5,7 @@ import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
+import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { branchOf, createProjects, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
@@ -109,6 +110,9 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     forNow?: true
   }
   const scopes = new Map<string | null, Promise<Scope>>()
+  // The sets built and kept, as they are once built, by project id, or
+  // null for the general session's, which is built as Evie starts.
+  const built = new Map<string | null, Scope>()
 
   async function buildScope(project: Project | null, ask: Ask): Promise<Scope> {
     const given = project && options.projectSettings ? await options.projectSettings(project, { ask }) : []
@@ -147,7 +151,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       // while the owner has not said whether to trust the project, so the
       // next session asks again. A session already open keeps the set it has.
       scope.then(
-        (built) => built.forNow && scopes.delete(key),
+        (made) => (made.forNow ? scopes.delete(key) : built.set(key, made)),
         () => scopes.delete(key),
       )
     }
@@ -694,9 +698,25 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   }
 
   async function readContext(input: Commands["read_context"]["input"]): Promise<Commands["read_context"]["output"]> {
-    const { loop, model: startedWith } = open(input.session)
-    const model = currentModel(log.events(input.session), startedWith)
-    return { model, ...(await loop.measure(AbortSignal.timeout(LOOK_UP_WITHIN))) }
+    if (input.session !== undefined) {
+      const { loop, model: startedWith } = open(input.session)
+      const model = currentModel(log.events(input.session), startedWith)
+      return { model, ...(await loop.measure(AbortSignal.timeout(LOOK_UP_WITHIN))) }
+    }
+    // A new session's: in a project whose own settings have been read since
+    // Evie started, its model; otherwise the one sessions start with.
+    const scope = (input.project !== undefined ? built.get(input.project) : undefined) ?? built.get(null)!
+    const model = scope.model ?? options.model
+    if (!model) throw new Error(`No model is set. ${options.settingsFile ? `Add "model" to ${options.settingsFile}` : "Set a model"}, with a name from https://openrouter.ai/models.`)
+    const limit = options.compaction?.limits?.[model] ?? (await limitWithin(scope.provider, model, AbortSignal.timeout(LOOK_UP_WITHIN)))
+    return { model, size: 0, compactsAt: triggerSize(limit, options.compaction?.ceiling ?? DEFAULT_CEILING) }
+  }
+
+  // What a model can read, as its provider looks it up, or nothing when it
+  // cannot, or has not answered by the time the signal fires.
+  async function limitWithin(provider: Provider, model: string, signal: AbortSignal): Promise<number | undefined> {
+    const given = new Promise<undefined>((resolve) => signal.addEventListener("abort", () => resolve(undefined), { once: true }))
+    return Promise.race([Promise.resolve(provider.contextLimit?.(model)).catch(() => undefined), given])
   }
 
   // A name a slash can reach, as the terminal reads one: a letter, then
@@ -721,7 +741,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   }
 
   async function listModels(input: Commands["list_models"]["input"]): Promise<Commands["list_models"]["output"]> {
-    const provider = open(input.session).host.providers.list()[0]!
+    // With no session, the general session's provider, which a new session uses unless its project adds one.
+    const provider = input.session === undefined ? built.get(null)!.provider : open(input.session).host.providers.list()[0]!
     if (!provider.models) throw new Error(`This session's provider, ${provider.name}, does not list its models. Type the model's name after /model instead.`)
     return provider.models()
   }

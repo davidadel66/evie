@@ -22,6 +22,9 @@ export type ConversationState = Required<View> & {
   waiting: EventBodies["question"][]
   // The commands being run, by name, in the order they were run.
   running: readonly string[]
+  // A message sent for the box that could not be sent, given back to it
+  // with why, as a draft's first message is: see `send`.
+  givenBack: { text: string; problem: string } | undefined
   // The model the session uses, and how full its conversation is, once
   // they have been read; read again as the conversation changes.
   model: string | undefined
@@ -48,7 +51,11 @@ export type Conversation = {
   // step, as the terminal's does. It is shown as pending until the session
   // has it. Gives back why it could not be sent, in words for the owner, or
   // nothing. Sent while the line is down, it is sent once the line is back.
-  send(text: string): Promise<string | undefined>
+  // With `giveBack`, for a message sent on the box's behalf, one that cannot
+  // be sent is given back for the box to take (`takeGivenBack`).
+  send(text: string, options?: { giveBack: true }): Promise<string | undefined>
+  // The message given back, once, with why it could not be sent.
+  takeGivenBack(): { text: string; problem: string } | undefined
   // Stops the turn in progress, as Ctrl-C does in the terminal. The
   // conversation says it is stopping until the turn has ended.
   stop(): void
@@ -72,7 +79,7 @@ export type Conversation = {
   close(): void
 }
 
-const FRESH: ConversationState = { opened: false, readingEarlier: false, stopping: false, waiting: [], running: [], model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [] }
+const FRESH: ConversationState = { opened: false, readingEarlier: false, stopping: false, waiting: [], running: [], givenBack: undefined, model: undefined, context: undefined, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], pending: [], notes: [] }
 
 export function openConversation(connection: Connection, session: string): Conversation {
   let state = FRESH
@@ -102,7 +109,7 @@ export function openConversation(connection: Connection, session: string): Conve
     failed = undefined
     // What the owner sent and the session has not taken in yet is still on
     // its way, and what was said in this page is still where it was said.
-    set({ ...FRESH, pending: state.pending, notes: state.notes })
+    set({ ...FRESH, pending: state.pending, notes: state.notes, givenBack: state.givenBack })
     // Until the open is answered, the session's events are in its answer:
     // the server holds back those that come after it until it is sent. A
     // question and its answer are not held back, since the open can wait on
@@ -241,17 +248,25 @@ export function openConversation(connection: Connection, session: string): Conve
       readEarlier(on, first)
     },
     tryAgain,
-    async send(text) {
+    async send(text, options) {
+      const failed = (problem: string) => {
+        set({ pending: without(state.pending, text), ...(options?.giveBack && { givenBack: { text, problem } }) })
+        return problem
+      }
       const evie = on
-      if (evie === undefined) return NOT_CONNECTED
+      if (evie === undefined) return failed(NOT_CONNECTED)
       set({ pending: [...state.pending, text] })
       try {
         await evie.send({ type: "send_message", session, text })
         return undefined
       } catch (cause) {
-        set({ pending: without(state.pending, text) })
-        return wordsOf(cause)
+        return failed(wordsOf(cause))
       }
+    },
+    takeGivenBack() {
+      const given = state.givenBack
+      if (given !== undefined) set({ givenBack: undefined })
+      return given
     },
     stop() {
       if (on === undefined || !state.turnRunning) return
@@ -333,9 +348,10 @@ const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : St
 
 // A draft as the page shows it: the first message, from when it is sent
 // until the session has started or could not; the questions asked as the
-// session opens, such as whether to trust its project, oldest first; and
-// why it could not start, in words for the owner.
-export type DraftState = { starting: string | undefined; waiting: EventBodies["question"][]; problem: string | undefined }
+// session opens, such as whether to trust its project, oldest first; why it
+// could not start, in words for the owner; and the model the session will
+// use, the one picked here or, once read, the one a new session starts with.
+export type DraftState = { starting: string | undefined; waiting: EventBodies["question"][]; problem: string | undefined; model: string | undefined }
 
 export type Draft = {
   state(): DraftState
@@ -351,6 +367,10 @@ export type Draft = {
   start(text: string, moved: (session: string) => void): Promise<{ session: string } | { problem: string }>
   // Answers a question asked as the session opens, as a conversation does.
   answer(id: string, choice: string | null): Promise<string | undefined>
+  // The models a new session's provider offers, and the one picked for the
+  // session, which is switched to as it opens, before its first message.
+  listModels(): Promise<Model[]>
+  pick(model: string): void
   close(): void
 }
 
@@ -379,7 +399,7 @@ export const startedHere = (session: string): string | null | undefined => start
 // server sends the questions of sessions no client has open only while
 // this one is opening.
 export function openDraft(connection: Connection, project: string | null, options: { listed(session: string): boolean }): Draft {
-  let state: DraftState = { starting: undefined, waiting: [], problem: undefined }
+  let state: DraftState = { starting: undefined, waiting: [], problem: undefined, model: undefined }
   const listeners = new Set<() => void>()
   function set(next: Partial<DraftState>) {
     state = { ...state, ...next }
@@ -392,10 +412,18 @@ export function openDraft(connection: Connection, project: string | null, option
   // The client of the last connection made, which a command sent while the
   // line is down waits on until it is back.
   let client: Evie | undefined
+  // The model picked here, if one has been.
+  let picked: string | undefined
   const follow = () => {
     const now = connection.state()
-    if (now.status === "connected") client = now.evie
     if (now.status === "signed out") client = undefined
+    if (now.status !== "connected" || now.evie === client) return
+    client = now.evie
+    // The model a new session there would start with, to show until one is picked.
+    client.send({ type: "read_context", ...(project !== null && { project }) }).then(
+      (read) => picked === undefined && !closed && set({ model: read.model }),
+      () => {},
+    )
   }
   const unfollow = connection.subscribe(follow)
   follow()
@@ -409,7 +437,9 @@ export function openDraft(connection: Connection, project: string | null, option
     async start(text, moved) {
       const evie = client
       if (evie === undefined) return { problem: NOT_CONNECTED }
-      set({ starting: text, problem: undefined })
+      // A question of an earlier try's session, which could not start, is not this one's.
+      asking = undefined
+      set({ starting: text, waiting: [], problem: undefined })
       unhear()
       unhear = evie.subscribe((event) => {
         if (event.type !== "question" && event.type !== "answer") return
@@ -418,6 +448,7 @@ export function openDraft(connection: Connection, project: string | null, option
       })
       const failed = (problem: string) => {
         unhear()
+        asking = undefined
         set({ starting: undefined, waiting: [], problem })
         return { problem }
       }
@@ -429,6 +460,14 @@ export function openDraft(connection: Connection, project: string | null, option
       }
       unhear()
       set({ waiting: [] })
+      // The model picked here is the session's from its first request.
+      if (picked !== undefined) {
+        try {
+          await evie.send({ type: "set_model", session, model: picked })
+        } catch (cause) {
+          return failed(`The session started, but its model could not be switched to ${picked}: ${wordsOf(cause)}`)
+        }
+      }
       startedIn.set(session, project)
       const conversation = openConversation(connection, session)
       // Read before the page moves to it, so that it shows the session read.
@@ -451,8 +490,9 @@ export function openDraft(connection: Connection, project: string | null, option
       moved(session)
       set({ starting: undefined })
       // Sent once the page has moved, so that the list, which the message
-      // adds the session to, never shows it beside the draft.
-      void conversation.send(text)
+      // adds the session to, never shows it beside the draft. One that cannot
+      // be sent goes back to the session's box, so that nothing is lost.
+      void conversation.send(text, { giveBack: true })
       return { session }
     },
     async answer(id, choice) {
@@ -463,6 +503,14 @@ export function openDraft(connection: Connection, project: string | null, option
       } catch (cause) {
         return wordsOf(cause)
       }
+    },
+    async listModels() {
+      if (client === undefined) throw new Error(NOT_CONNECTED)
+      return client.send({ type: "list_models" })
+    },
+    pick(model) {
+      picked = model
+      set({ model })
     },
     close() {
       closed = true

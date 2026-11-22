@@ -1,5 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { PermissionPrompt, useAsking } from "./Asking.tsx"
+import { asAsked } from "./questions.ts"
 import { Button } from "./components/ui/button.tsx"
 import { Composer } from "./Composer.tsx"
 import type { Connection } from "./connection.ts"
@@ -40,8 +41,8 @@ function Reading({ conversation }: { conversation: Opened }) {
   // A question waiting is shown where it is answered, at the end or docked
   // above the box, so it is left out where it was asked until it is answered.
   const items = useMemo(
-    () => transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, pending, notes }).filter((item) => !(item.kind === "question" && item.waiting)),
-    [events, earlier, replySoFar, turnRunning, jobs, pending, notes],
+    () => asAsked(transcriptOf({ events, earlier, replySoFar, turnRunning, jobs, pending, notes }), state.waiting),
+    [events, earlier, replySoFar, turnRunning, jobs, pending, notes, state.waiting],
   )
   const asking = useAsking(state.waiting)
   const { shown } = asking
@@ -144,7 +145,7 @@ function Reading({ conversation }: { conversation: Opened }) {
               ))}
               {shown?.place === "inline" && (
                 <div data-item="permission" className={items.length > 0 ? "mt-6" : ""}>
-                  <PermissionPrompt question={shown.question} count={shown.count} answer={conversation.answer} />
+                  <PermissionPrompt question={shown.question} count={shown.count} answer={conversation.answer} redirect />
                 </div>
               )}
             </div>
@@ -158,7 +159,15 @@ function Reading({ conversation }: { conversation: Opened }) {
           </div>
         )}
       </div>
-      <Composer conversation={conversation} state={state} shown={shown} answer={conversation.answer} asking={asking} send={conversation.send} />
+      <Composer
+        conversation={conversation}
+        state={state}
+        model={{ current: state.model, list: conversation.listModels, pick: conversation.setModel }}
+        shown={shown}
+        answer={conversation.answer}
+        asking={asking}
+        send={(text) => conversation.send(text)}
+      />
     </div>
   )
 }
@@ -198,12 +207,13 @@ function Drafting({ draft, where }: { draft: OpenedDraft; where: string }) {
           <div className="px-7 py-8">
             <div className="mx-auto flex max-w-conversation flex-col gap-4">
               <Drawn item={{ key: "starting", turn: 0, kind: "owner", text: state.starting }} shown={new Set()} show={() => {}} />
-              {shown?.place === "inline" ? <PermissionPrompt question={shown.question} count={shown.count} answer={draft.answer} /> : <Working words="Starting the session" />}
+              {shown?.place === "inline" ? <PermissionPrompt question={shown.question} count={shown.count} answer={draft.answer} redirect={false} /> : <Working words="Starting the session" />}
             </div>
           </div>
         )}
       </div>
-      <Composer shown={shown} answer={draft.answer} asking={asking} send={start} />
+      {/* The model picked here is the session's from its first message. */}
+      <Composer model={{ current: state.model, list: draft.listModels, pick: async (model) => (draft.pick(model), undefined) }} shown={shown} answer={draft.answer} asking={asking} send={start} />
     </div>
   )
 }
@@ -233,25 +243,9 @@ function Drawn({ item, shown, show }: { item: Item } & Shown) {
       return <Fold item={item} shown={shown} show={show} />
     case "note":
       return <Note text={item.text} {...(item.more !== undefined && { more: item.more })} />
+    // A question as it was asked. One waiting is drawn where it is answered.
     case "question":
-      return (
-        <div className="flex flex-col gap-2">
-          <p className="text-label text-text">{item.text}</p>
-          {item.waiting && (
-            <>
-              <ul className="list-disc pl-6 text-body text-text-muted">
-                {item.choices.map((choice) => (
-                  <li key={choice}>{choice}</li>
-                ))}
-              </ul>
-              <p className="flex items-center gap-2 text-caption text-text-muted">
-                <span aria-hidden="true" className="size-2 rounded-full bg-status-needs" />
-                Waiting for your answer
-              </p>
-            </>
-          )}
-        </div>
-      )
+      return <p className="text-label break-words whitespace-pre-wrap text-text">{item.text}</p>
     case "failed":
       return (
         <div className="text-caption">

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { Button } from "./components/ui/button.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
 import { CaretDown } from "./icons.tsx"
-import { choiceForKey, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, permissionChoices, releaseAt, shownQuestion, type Asked } from "./questions.ts"
+import { choiceForKey, freshGuard, guardCleared, guardReleases, guardSees, guardTyped, permissionChoices, releaseAt, shownQuestion, type Asked, type Guard } from "./questions.ts"
 
 // The questions evie asks, answered in place, as T3 Code answers them: a
 // permission prompt in the conversation, with its choices as buttons, and
@@ -16,20 +16,30 @@ export type Shown = ReturnType<typeof shownQuestion>
 // and what the message box tells the guard: a key typed, and the owner
 // sending or leaving the box.
 export function useAsking(waiting: readonly Asked[]): { shown: Shown; typed(): void; cleared(): void } {
-  const [guard, setGuard] = useState(freshGuard)
   const ids = waiting.map((question) => question.id).join(" ")
-  useEffect(() => setGuard((was) => guardSees(was, ids === "" ? [] : ids.split(" "), Date.now())), [ids])
+  const seen = (guard: Guard) => guardSees(guard, ids === "" ? [] : ids.split(" "), Date.now())
+  const [kept, setKept] = useState(() => ({ ids, guard: seen(freshGuard()) }))
+  // Worked out as the questions are drawn, not after, so that a question
+  // that arrives while the owner types is never shown, even for a moment,
+  // when a key such as Enter could answer it. React draws again at once,
+  // before anything is shown, with what is kept here.
+  let guard = kept.guard
+  if (kept.ids !== ids) {
+    guard = seen(kept.guard)
+    setKept({ ids, guard })
+  }
+  const keep = (change: (guard: Guard) => Guard) => setKept((was) => ({ ...was, guard: change(was.guard) }))
   // Shown once the owner has not typed for long enough.
   const at = releaseAt(guard)
   useEffect(() => {
     if (at === undefined) return
-    const timer = setTimeout(() => setGuard((was) => guardReleases(was, Date.now())), Math.max(0, at - Date.now()))
+    const timer = setTimeout(() => keep((was) => guardReleases(was, Date.now())), Math.max(0, at - Date.now()))
     return () => clearTimeout(timer)
   }, [at])
   return {
     shown: shownQuestion(waiting, guard.held),
-    typed: () => setGuard((was) => guardTyped(was, Date.now())),
-    cleared: () => setGuard(guardCleared),
+    typed: () => keep((was) => guardTyped(was, Date.now())),
+    cleared: () => keep(guardCleared),
   }
 }
 
@@ -72,9 +82,9 @@ function useRefused(question: string) {
 // A permission prompt, at the end of the conversation, as T3 Code shows an
 // approval: what evie would do, then its choices as buttons, the one that
 // refuses first, the one that allows as the main one, and any others,
-// such as always allowing it, under More. Words sent from the box, when it
-// takes them, refuse it and say what to do instead.
-export function PermissionPrompt({ question, count, answer }: { question: Asked; count: string | undefined; answer: Answer }) {
+// such as always allowing it, under More. In a session, words sent from the
+// box refuse it and go to evie as what to do instead (`redirect`).
+export function PermissionPrompt({ question, count, answer, redirect }: { question: Asked; count: string | undefined; answer: Answer; redirect: boolean }) {
   const { deny, allow, more } = permissionChoices(question)
   const [refused, setRefused] = useRefused(question.id)
   const pick = async (choice: string) => setRefused(await answer(question.id, choice))
@@ -106,7 +116,7 @@ export function PermissionPrompt({ question, count, answer }: { question: Asked;
           </DropdownMenu>
         )}
       </div>
-      <WaitingLine count={count} {...(question.freeText && { also: "Or send a message to say no, and what to do instead" })} />
+      <WaitingLine count={count} {...(redirect && { also: "Or send a message to say no, and what to do instead" })} />
       {refused !== undefined && (
         <p role="status" className="text-caption break-words text-text-muted">
           {refused}
