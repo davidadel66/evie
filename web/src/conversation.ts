@@ -343,7 +343,8 @@ export type Draft = {
   // message: opens it on the server, and once its conversation has been
   // read, calls `moved` with its id, for the page to move to it, then sends
   // the message, which the conversation shows as on its way. The
-  // conversation is handed over for the page to take (`takeStarted`).
+  // conversation is handed over for the page to take (`takeStarted`). A
+  // draft closed meanwhile sends the message without moving the page.
   // Gives back the session's id, or why it could not start, when the
   // message is the owner's again.
   start(text: string, moved: (session: string) => void): Promise<{ session: string } | { problem: string }>
@@ -438,9 +439,12 @@ export function openDraft(connection: Connection, project: string | null, option
           resolve()
         })
       })
+      // Left meanwhile, as when the owner selected another session, the
+      // page stays where the owner went, and the message is sent all the
+      // same, so that nothing is lost: the session is in the list once it is.
       if (closed) {
-        conversation.close()
-        return { problem: "The draft was closed." }
+        void conversation.send(text).finally(() => conversation.close())
+        return { session }
       }
       handedOver.set(session, conversation)
       moved(session)

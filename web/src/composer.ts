@@ -21,11 +21,11 @@ export function slashAt(text: string, caret: number): { from: number; query: str
   return { from, query, first: text.slice(0, from).trim() === "" }
 }
 
-// The items whose name or description has what was typed, in any case:
-// an exact name first, then a name that starts with it, then one with a
-// word that starts with it, then one with it anywhere, and then those
-// whose description has it. Within each, the shorter name first, then the
-// order they were listed in. With nothing typed, all of them as listed.
+// The items whose name has what was typed, in any case: an exact name
+// first, then a name that starts with it, then one with a word that starts
+// with it, then one with it anywhere. Within each, the shorter name first,
+// then the order they were listed in. With nothing typed, all of them as
+// listed. Descriptions are not searched: a short word is in most of them.
 export function rankCommands<Item extends MenuItem>(items: readonly Item[], typed: string): Item[] {
   const query = typed.trim().toLowerCase()
   if (query === "") return [...items]
@@ -35,7 +35,6 @@ export function rankCommands<Item extends MenuItem>(items: readonly Item[], type
     if (name.startsWith(query)) return 1
     if (name.split(/[-_]/).slice(1).some((word) => word.startsWith(query))) return 2
     if (name.includes(query)) return 3
-    if (item.description.toLowerCase().includes(query)) return 4
     return undefined
   }
   return items

@@ -29,13 +29,14 @@ test("a slash at the start of a word, up to the caret, opens the menu with what 
   expect(slashAt("", 0)).toBeUndefined()
 })
 
-test("the commands are ranked as typed: an exact name, then the start of a name, the start of a word in it, anywhere in it, then the description", () => {
+test("the commands are ranked as typed: an exact name, then the start of a name, the start of a word in it, then anywhere in it", () => {
   expect(names(rankCommands(COMMANDS, ""))).toEqual(names(COMMANDS))
   expect(names(rankCommands(COMMANDS, "mode"))).toEqual(["mode", "model", "unmodelled"])
   expect(names(rankCommands(COMMANDS, "MOD"))).toEqual(["mode", "model", "unmodelled"])
   // The start of a word in a name wins over the same letters inside a word.
   expect(names(rankCommands([{ name: "footnotes", description: "" }, ...COMMANDS], "notes"))).toEqual(["release-notes", "footnotes"])
-  expect(names(rankCommands(COMMANDS, "summary"))).toEqual(["compact"])
+  // Only names are searched: a short word is in most descriptions.
+  expect(names(rankCommands(COMMANDS, "summary"))).toEqual([])
   expect(rankCommands(COMMANDS, "zzz")).toEqual([])
 })
 

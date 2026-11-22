@@ -267,3 +267,19 @@ test("a draft whose session cannot be started says why, and gives the message ba
   expect(await started.start("Plan the beds", () => {})).toEqual({ problem: 'The session could not be started: There is no project with the id "no-such-project".' })
   expect(started.state().starting).toBeUndefined()
 })
+
+test("a draft left while its session starts still sends the first message, so nothing is lost, and does not move the page", async () => {
+  const { connection } = await start([{ text: ["Noted."] }])
+  const { draft: started, sessions } = await draft(connection, null)
+
+  const moves: string[] = []
+  const starting = started.start("Plan the beds", (session) => moves.push(session))
+  started.close()
+  const result = await starting
+  if (!("session" in result)) throw new Error(result.problem)
+
+  expect(moves).toEqual([])
+  expect(takeStarted(result.session)).toBeUndefined()
+  while (!sessions.state().sessions.some((each) => each.session === result.session)) await Bun.sleep(5)
+  expect(sessions.state().sessions.find((each) => each.session === result.session)?.name).toBe("Plan the beds")
+})
