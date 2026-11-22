@@ -213,3 +213,24 @@ test("a GPT model is told which commands throw work away, and other models are n
   expect(gpt.provider.requests[0]?.system).toContain("Do not run a command that throws work away unless the owner clearly asks for it: git reset --hard")
   expect(other.provider.requests[0]?.system).not.toContain("git reset --hard")
 })
+
+test("a client can list the models the session's provider offers, and is told why when it cannot", async () => {
+  const listing: Plugin = {
+    name: "listing",
+    setup: (host) =>
+      host.providers.add({
+        name: "listing",
+        stream: async function* () {},
+        models: async () => [{ id: "maker/model", name: "Maker: Model" }],
+      }),
+  }
+  const listed = await startEvie([listing])
+  expect(await listed.evie.send({ type: "list_models", session: listed.session })).toEqual([{ id: "maker/model", name: "Maker: Model" }])
+  // With no session, the provider a new session would use, as a draft in the web app asks.
+  expect(await listed.evie.send({ type: "list_models" })).toEqual([{ id: "maker/model", name: "Maker: Model" }])
+  await listed.stop()
+
+  // The scripted provider offers no list.
+  const { run } = await start("some/model")
+  expect(run.evie.send({ type: "list_models", session: run.session })).rejects.toThrow("This session's provider, scripted, does not list its models. Type the model's name after /model instead.")
+})

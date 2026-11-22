@@ -36,8 +36,11 @@ export type EventBodies = {
 }
 
 // Something Evie asks the owner, with the answers to choose from. With
-// `freeText` the owner may also answer in their own words.
-export type Question = { text: string; choices: string[]; freeText?: true }
+// `freeText` the owner may also answer in their own words. A question of
+// `kind` "permission" asks whether Evie may do something: its first choice
+// lets it, and its last refuses. A client may show it as such, as the web
+// app shows it in place in the conversation.
+export type Question = { text: string; choices: string[]; freeText?: true; kind?: "permission" }
 
 // Asks the owner and waits for the answer. It returns the choice, or null
 // when the question was refused, which is to be treated as a no.
@@ -145,6 +148,9 @@ export type Provider = {
   stream(request: Request, signal: AbortSignal): AsyncIterable<Chunk>
   // How many tokens a model can read in one request, when the provider knows.
   contextLimit?(model: string): Promise<number | undefined>
+  // The models the provider offers, each by the id a request names it by
+  // and the name it is shown by. Fails, saying why, when they cannot be listed.
+  models?(): Promise<{ id: string; name: string }[]>
 }
 
 // ---- Jobs ---------------------------------------------------------------------
@@ -361,6 +367,10 @@ export type SlashCommand = {
   // not known until then, such as one for each of the owner's skills. A
   // command's own name always wins over a name another command covers.
   covers?(name: string): boolean | Promise<boolean>
+  // The names it covers, with what each does, for a client to list beside
+  // the commands, such as in a menu. `kind` is a word for what they are,
+  // such as "skill".
+  names?(): Promise<readonly { name: string; description: string; kind?: string }[]>
 }
 
 // ---- Hooks --------------------------------------------------------------------
@@ -573,6 +583,32 @@ export type Commands = {
   list_sessions: {
     input: Record<never, never>
     output: SessionSummary[]
+  }
+  // How full an open session's conversation is: the model it uses now, the
+  // conversation's size in tokens, as the loop measures it before each
+  // request, and the size at which the loop compacts it by itself. With no
+  // session, what a new session would start with, in a project or in none:
+  // its model, an empty conversation, and where it would be compacted. A
+  // project's own model is known once a session has opened there since
+  // Evie started; until then it is the model sessions start with.
+  read_context: {
+    input: { session: string; project?: never } | { session?: never; project?: string }
+    output: { model: string; size: number; compactsAt: number }
+  }
+  // The commands a client can run in an open session, each with what it
+  // does, and after them the names commands cover that a slash can reach,
+  // such as the owner's skills, with `kind` saying what they are.
+  list_commands: {
+    input: { session: string }
+    output: { name: string; description: string; kind?: string }[]
+  }
+  // The models the provider of an open session offers, to switch to with
+  // `set_model`, each by its id and its name; with no session, those of the
+  // provider a new session would use. Fails, saying why, when the provider
+  // cannot list them.
+  list_models: {
+    input: { session?: string }
+    output: { id: string; name: string }[]
   }
 }
 
