@@ -36,7 +36,7 @@ export function WorkspaceView({ place, state, connection, sessions }: { place: W
   const chat = place.chat !== undefined && place.chat !== NEW_CHAT ? place.chat : undefined
   const back = sessionViewLeft() ?? (chat !== undefined ? addressOf({ session: chat }) : "#")
   return (
-    <div className="flex h-dvh">
+    <div className="flex h-dvh overflow-hidden">
       <Strip list={list} place={place} back={back} connection={connection} sessions={sessions} />
       <div className="@container min-w-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col @workspace-columns:h-full @workspace-columns:flex-row">
