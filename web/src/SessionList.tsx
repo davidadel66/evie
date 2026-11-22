@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { ListedProject, SessionState, SessionSummary } from "../../src/core/types.ts"
 import { addressOf } from "./address.ts"
+import { startedHere } from "./conversation.ts"
 import { Button } from "./components/ui/button.tsx"
 import {
   DropdownMenu,
@@ -35,6 +36,7 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
   const now = useMinute()
 
   const selectedSession = selected !== undefined && "session" in selected ? selected.session : undefined
+  const startingIn = selectedSession !== undefined && !list.sessions.some((each) => each.session === selectedSession) ? startedHere(selectedSession) : undefined
   const lookingAt = projectLookedAt(selected, list.sessions, filter)
   const projectOf = (project: string | null) => list.projects.find((each) => each.id === project)
 
@@ -109,6 +111,12 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
         {selected !== undefined && "draft" in selected && (
           <ul className="mb-1 flex flex-col">
             <DraftRow project={selected.draft} listed={projectOf(selected.draft)} href={addressOf(selected)} />
+          </ul>
+        )}
+        {/* A session started here from a draft stays in its place until its first message lists it. */}
+        {startingIn !== undefined && (
+          <ul className="mb-1 flex flex-col">
+            <DraftRow project={startingIn} listed={projectOf(startingIn)} href={addressOf(selected!)} />
           </ul>
         )}
         {list.listed && nothing && (

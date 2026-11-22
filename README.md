@@ -230,11 +230,9 @@ any name other than `127.0.0.1` or `localhost` must be listed under
 ```
 
 The page has three columns: the list of sessions, the conversation and the
-project card. For now a conversation can be read but not yet written in.
-While the page is connected, nothing says so;
-while the line is down, one quiet line under the name at the top says
-Reconnecting, and why, and the page catches up by itself once the line is
-back. The gear beside the name opens the settings, where the theme is
+project card. While the page is connected, nothing says so; while the
+line is down, one quiet line under the name at the top says Reconnecting,
+and why, and the page catches up by itself once the line is back. The gear beside the name opens the settings, where the theme is
 picked: one of Dusk, Moss and Oxblood, which the browser remembers.
 
 The list shows every session you have said something in, kept current as
@@ -255,7 +253,10 @@ they change, and listed again when the line comes back:
   list is narrowed to; the menu beside it makes one in another project, or
   in none. Nothing is made on the server until its first message is sent,
   so a draft left unused leaves nothing behind. Pressed again, it comes
-  back to the same draft.
+  back to the same draft. The first message starts the session, asking
+  first whether to trust the project when evie needs to know, and the page
+  moves to it. A first message that cannot be sent comes back into the
+  box, with why.
 - **Search** narrows the list by name, and the menu beside it to one
   project.
 - **A row's menu** (the `···` on the selected row, or on any row under the
@@ -288,6 +289,44 @@ it stands, even while a reply is being written:
 - **The latest page** of the conversation is shown first, and earlier ones
   as you scroll up. While you are at the bottom, new text keeps you there;
   scrolled up, you stay where you are, with a way back down.
+
+The message box at the bottom of the conversation works as T3 Code's does:
+
+- **Enter sends**, and Shift and Enter starts a new line. Up in an empty
+  box brings back your earlier messages in the session, and Down goes
+  forward again.
+- **While evie works**, what you send steers the turn, as in the terminal:
+  evie reads it at its next step. A round Stop button beside Send, or
+  Escape in the box, stops the turn, and says Stopping until it has.
+- **A permission prompt** shows at the end of the conversation, with its
+  choices as buttons: No, then Yes, once, and the others, such as always
+  allowing it, under More. A message sent instead answers it No, and goes
+  to evie as what to do instead.
+- **Any other question** docks just above the box, its choices numbered:
+  the keys 1 to 9 pick one while the box does not have the focus, a number
+  sent from the box picks one, and your own words sent answer it when it
+  takes them. Anything else is not sent: the box asks you to pick one of
+  the choices, as the terminal asks again. Several waiting are taken one at
+  a time, with a count such as
+  1/3. A question that arrives while you are typing waits until you have
+  not typed for a second and a half, so that a stray key cannot answer it.
+  One answered elsewhere, such as in a terminal, goes away.
+- **A slash** at the start of a word opens a menu of the session's
+  commands and your skills, each with what it does, narrowed as you type.
+  Up and Down move, Enter or Tab picks, and Escape closes it. A message
+  that is a slash and a word, such as `/compact`, runs the command, whose
+  answer shows as a quiet note, kept nowhere, as in the terminal.
+- **`/model`**, or Cmd-Shift-M (Ctrl-Shift-M elsewhere), opens a picker of
+  the models the provider offers, grouped by maker, with a search over them
+  all; the one in use is marked. In a draft, it picks the model the new
+  session starts with; until one is picked, the draft shows the model a new
+  session would use. A project's own model is known once a session has
+  opened there since the server started. In a draft, the other commands
+  wait until the session has started.
+- **Under the text**, the model's name, which opens the picker too, and how
+  full the conversation is, as a share of the size at which evie compacts
+  it by itself. Its menu gives both sizes, and Compact now.
+- **At phone width** the box is one row until you tap it.
 
 The project card, on the right, is the selected session's:
 
@@ -984,6 +1023,9 @@ A few values the design system's board does not name are named once in
 | `tile-row` | 18px | A project's icon tile in a session row, which the board's WorkspaceIcon gives in words |
 | `tile-row-icon` | 12px | The icon on that tile, as the board's SessionRow draws it |
 | `project-filter` | 128px | The widest the session list's project filter grows |
+| `composer-text` | 240px | The tallest the message box's text grows before it scrolls |
+| `composer-menu` | 320px | The tallest the `/` menu and the model picker above the message box are, as T3 Code's |
+| `picker-makers` | 144px | The model picker's column of makers |
 | `job-output` | 240px | The tallest a background job's output grows in the project card before it scrolls |
 | `radius-tile` | 25% | A project's icon tile's corners, a quarter of its size at any size |
 | `default-transition-duration` | 150ms | How long a change takes, such as a group's caret turning |
@@ -1086,8 +1128,8 @@ remove `evie.db` and `server-token` from it, and its `-seed` folder, first.
 
 ## What comes next
 
-- The rest of the web client: writing in the conversation, the changes and
-  their diffs, and a workspace for each project.
+- The rest of the web client: the changes and their diffs, and a
+  workspace for each project.
 - Scheduled work, memory, voice and a phone app.
 
 ## Credits

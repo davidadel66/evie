@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react"
 import { useCardShortcut } from "./card-shown.ts"
 import { connectionLine, type Connection, type ConnectionState } from "./connection.ts"
-import { Conversation, Placeholder } from "./Conversation.tsx"
+import { Conversation, Draft, Placeholder } from "./Conversation.tsx"
+import { startedHere } from "./conversation.ts"
 import { CardButton, CardPlace } from "./ProjectCard.tsx"
 import { useSelected } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
@@ -32,7 +33,7 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
         <SessionList sessions={sessions} />
       </aside>
 
-      <main className="flex h-dvh min-w-0 flex-1 flex-col bg-bg">
+      <main className="flex h-dvh min-w-0 flex-none flex-col bg-bg wide:flex-1">
         <OpenSession connection={connection} sessions={sessions} />
       </main>
 
@@ -52,17 +53,26 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
   if ("draft" in selected) {
     const project = list.projects.find((each) => each.id === selected.draft)
     const where = selected.draft === null ? "with no project" : `in ${project?.name ?? "its project"}`
-    return <Empty title="New session" text={`A new session ${where} starts when its first message is sent.`} />
+    return (
+      <>
+        <Top />
+        <Draft connection={connection} sessions={sessions} project={selected.draft} where={where} />
+      </>
+    )
   }
   // A session is opened once the list shows it is one: until the list is
-  // read, nothing is shown, and one the list does not have is not opened.
+  // read, nothing is shown, and one the list does not have is not opened,
+  // unless this page has just started it, and its first message is on its way.
   if (!list.listed) return <Top />
   const session = list.sessions.find((each) => each.session === selected.session)
-  if (session === undefined) return <Empty title="This session is not in the list" text="Nothing has been said in it yet, or it is no longer there." />
-  if (selected.subagent !== undefined) return <SubagentView connection={connection} parent={selected.session} parentTitle={titleOf(session)} subagent={selected.subagent} />
+  if (session === undefined && startedHere(selected.session) === undefined) {
+    return <Empty title="This session is not in the list" text="Nothing has been said in it yet, or it is no longer there." />
+  }
+  const title = session === undefined ? "New session" : titleOf(session)
+  if (selected.subagent !== undefined) return <SubagentView connection={connection} parent={selected.session} parentTitle={title} subagent={selected.subagent} />
   return (
     <>
-      <Top title={titleOf(session)} />
+      <Top title={title} />
       <Conversation connection={connection} session={selected.session} />
     </>
   )

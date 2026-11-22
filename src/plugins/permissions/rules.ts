@@ -237,22 +237,22 @@ export function questionFor(call: CheckedToolCall, asking: readonly Act[], folde
     const doing = asking[0].action === "read" ? "read" : "change"
     const outside = asking.some((act) => !act.inside) ? " outside the project" : ""
     const files = [...new Set(asking.map((act) => shown(act.target, folder)))]
-    return files.length === 1 ? `Let Evie ${doing} ${files[0]}${outside && ", which is"}${outside}?` : `Let Evie ${doing} these files${outside}?\n\n  ${files.join("\n  ")}`
+    return files.length === 1 ? `Let evie ${doing} ${files[0]}${outside && ", which is"}${outside}?` : `Let evie ${doing} these files${outside}?\n\n  ${files.join("\n  ")}`
   }
   if (call.name === "subagent") {
     const task = String(call.input.task ?? "").trim()
     return (
-      `Let Evie start a subagent (${String(call.input.description ?? "a task")}${typeof call.input.agent === "string" && call.input.agent.trim() !== "" ? `, as the agent "${call.input.agent.trim()}"` : ""})? It works without asking before each ` +
+      `Let evie start a subagent (${String(call.input.description ?? "a task")}${typeof call.input.agent === "string" && call.input.agent.trim() !== "" ? `, as the agent "${call.input.agent.trim()}"` : ""})? It works without asking before each ` +
       `step: it may change files and run commands inside the project.\n\n  ${task.length > 400 ? `${task.slice(0, 400)}…` : task}`
     )
   }
   if (call.name === "subagent_send") {
     const message = String(call.input.message ?? "").trim()
     return (
-      "Let Evie give its subagent more work? It works without asking before each step: it may change files and run " +
+      "Let evie give its subagent more work? It works without asking before each step: it may change files and run " +
       `commands inside the project.\n\n  ${message.length > 400 ? `${message.slice(0, 400)}…` : message}`
     )
   }
   const input = JSON.stringify(call.input)
-  return `Let Evie use the tool ${call.name}?\n\n  ${input.length > 300 ? `${input.slice(0, 300)}…` : input}`
+  return `Let evie use the tool ${call.name}?\n\n  ${input.length > 300 ? `${input.slice(0, 300)}…` : input}`
 }

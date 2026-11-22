@@ -122,6 +122,7 @@ export function skills(options: SkillsOptions = {}): Plugin {
         description: "List your skills. To start one, type a slash and its name, with anything you want to add.",
         // A slash and a skill's name starts that skill.
         covers: async (name) => (await all()).some((skill) => skill.name === tidyName(name)),
+        names: async () => (await all()).map((skill) => ({ name: skill.name, description: skill.description, kind: "skill" })),
         async run(args, context) {
           const skills = await all()
           if (context.invokedAs !== "skills") {

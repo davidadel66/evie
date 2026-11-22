@@ -5,6 +5,7 @@ import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
 import { createEventLog } from "./log.ts"
+import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
@@ -43,6 +44,10 @@ export type EvieOptions = {
   // session to tell of it. Once an hour when left out, which is for tests to change.
   quietCheckEvery?: number
 }
+
+// How long reading how full a conversation is waits for a model's limit to
+// be looked up before answering without it.
+const LOOK_UP_WITHIN = 2000
 
 // How many events a page of a session's history holds, unless it asks for
 // another number, and the most it can ask for.
@@ -105,6 +110,9 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     forNow?: true
   }
   const scopes = new Map<string | null, Promise<Scope>>()
+  // The sets built and kept, as they are once built, by project id, or
+  // null for the general session's, which is built as Evie starts.
+  const built = new Map<string | null, Scope>()
 
   async function buildScope(project: Project | null, ask: Ask): Promise<Scope> {
     const given = project && options.projectSettings ? await options.projectSettings(project, { ask }) : []
@@ -143,7 +151,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       // while the owner has not said whether to trust the project, so the
       // next session asks again. A session already open keeps the set it has.
       scope.then(
-        (built) => built.forNow && scopes.delete(key),
+        (made) => (made.forNow ? scopes.delete(key) : built.set(key, made)),
         () => scopes.delete(key),
       )
     }
@@ -714,6 +722,56 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return { text }
   }
 
+  async function readContext(input: Commands["read_context"]["input"]): Promise<Commands["read_context"]["output"]> {
+    if (input.session !== undefined) {
+      const { loop, model: startedWith } = open(input.session)
+      const model = currentModel(log.events(input.session), startedWith)
+      return { model, ...(await loop.measure(AbortSignal.timeout(LOOK_UP_WITHIN))) }
+    }
+    // A new session's: in a project whose own settings have been read since
+    // Evie started, its model; otherwise the one sessions start with.
+    const scope = (input.project !== undefined ? built.get(input.project) : undefined) ?? built.get(null)!
+    const model = scope.model ?? options.model
+    if (!model) throw new Error(`No model is set. ${options.settingsFile ? `Add "model" to ${options.settingsFile}` : "Set a model"}, with a name from https://openrouter.ai/models.`)
+    const limit = options.compaction?.limits?.[model] ?? (await limitWithin(scope.provider, model, AbortSignal.timeout(LOOK_UP_WITHIN)))
+    return { model, size: 0, compactsAt: triggerSize(limit, options.compaction?.ceiling ?? DEFAULT_CEILING) }
+  }
+
+  // What a model can read, as its provider looks it up, or nothing when it
+  // cannot, or has not answered by the time the signal fires.
+  async function limitWithin(provider: Provider, model: string, signal: AbortSignal): Promise<number | undefined> {
+    const given = new Promise<undefined>((resolve) => signal.addEventListener("abort", () => resolve(undefined), { once: true }))
+    return Promise.race([Promise.resolve(provider.contextLimit?.(model)).catch(() => undefined), given])
+  }
+
+  // A name a slash can reach, as the terminal reads one: a letter, then
+  // letters, digits, dashes and underscores.
+  const SLASH_NAME = /^[A-Za-z][\w-]*$/
+  async function listCommands(input: Commands["list_commands"]["input"]): Promise<Commands["list_commands"]["output"]> {
+    const { host } = open(input.session)
+    const commands = host.commands.list()
+    const own = new Set(commands.map((command) => command.name))
+    const listed: Commands["list_commands"]["output"] = commands.map(({ name, description }) => ({ name, description }))
+    for (const command of commands) {
+      // A command whose names cannot be listed, as when a folder cannot be
+      // read, is listed without them, so the others are still offered.
+      const names = await Promise.resolve(command.names?.()).catch(() => undefined)
+      for (const each of names ?? []) {
+        // A command's own name wins over a name another covers, so the slash would not reach this one.
+        if (own.has(each.name) || !SLASH_NAME.test(each.name) || listed.some((other) => other.name === each.name)) continue
+        listed.push({ name: each.name, description: each.description, ...(each.kind !== undefined && { kind: each.kind }) })
+      }
+    }
+    return listed
+  }
+
+  async function listModels(input: Commands["list_models"]["input"]): Promise<Commands["list_models"]["output"]> {
+    // With no session, the general session's provider, which a new session uses unless its project adds one.
+    const provider = input.session === undefined ? built.get(null)!.provider : open(input.session).host.providers.list()[0]!
+    if (!provider.models) throw new Error(`This session's provider, ${provider.name}, does not list its models. Type the model's name after /model instead.`)
+    return provider.models()
+  }
+
   // Opens a session again in this process, to pick up what was left in it.
   // A subagent's is opened by the session that started it, which is opened first.
   async function reopen(session: string): Promise<void> {
@@ -755,6 +813,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return summaries.list() as Output
         case "new_project":
           return (await newProject(command)) as Output
+        case "read_context":
+          return (await readContext(command)) as Output
+        case "list_commands":
+          return (await listCommands(command)) as Output
+        case "list_models":
+          return (await listModels(command)) as Output
         case "read_job_output":
           return (await readJobOutput(command)) as Output
         case "list_subagents":

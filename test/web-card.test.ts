@@ -3,7 +3,7 @@ import { appendFile, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, jobs, startServer, subagents, undo as undoPlugin, type Chunk, type Command, type Evie, type Job } from "../src/index.ts"
-import { ask, followOutput, followSubagents, stopJob, undo, type Following, type Lineage } from "../web/src/card.ts"
+import { followOutput, followSubagents, request, stopJob, undo, type Following, type Lineage } from "../web/src/card.ts"
 import { openConnection, type Connection } from "../web/src/connection.ts"
 import { holdConversation, type Conversation, type ConversationState } from "../web/src/conversation.ts"
 import { say } from "./support/harness.ts"
@@ -98,7 +98,7 @@ test("undo runs /undo, and what it says is a quiet note in the conversation, as 
   const { conversation } = hold(connection, served.run.session)
   await until(conversation, (state) => state.opened)
 
-  await undo(connection, conversation, served.run.session)
+  await undo(conversation)
   const undone = await until(conversation, (state) => said(state).at(-1)?.startsWith("Removed") === true)
   expect(said(undone).slice(-2)).toEqual([
     "Note to evie: The owner undid the file changes of an earlier turn. Removed, because the turn created it: notes.md. These files no longer hold what you wrote, so read a file again before you change it.",
@@ -153,7 +153,7 @@ test("a job's output is read as it grows while it runs, and Stop stops it, which
   await appendFile(file, "linking\n")
   await untilOutput(following, (text) => text === "compiling\nlinking\n")
 
-  await stopJob(connection, conversation, served.run.session, "1")
+  expect(await stopJob(connection, served.run.session, "1")).toBeUndefined()
   const stopped = await until(conversation, (state) => state.jobs[0]?.status === "stopped")
   expect(work.started[0]!.stopped).toBe(true)
   const told = await until(conversation, (state) => said(state).some((line) => line.startsWith("Note to evie: Background job 1")))
@@ -202,12 +202,14 @@ test("a read of a job's output that fails keeps what was read, and is tried agai
   expect(following.state().problem).toStartWith("The output could not be read: The output of job 1 could not be read:")
 })
 
-test("a git button sends evie its request as the owner's message, which starts a turn as typing it would", async () => {
+test("a git button sends evie its request as the owner's message, shown at once, which starts a turn as typing it would", async () => {
   const { served, connection, model } = await start([{ text: ["Committed as 1a2b3c: Add the notes."] }])
   const { conversation } = hold(connection, served.run.session)
   await until(conversation, (state) => state.opened)
 
-  expect(await ask(connection, served.run.session, REQUESTS.commit)).toBeUndefined()
+  const sent = request(conversation, "commit")
+  expect(conversation.state().pending).toEqual([REQUESTS.commit])
+  expect(await sent).toBeUndefined()
   const answered = await until(conversation, (state) => state.events.some((event) => event.type === "turn_end"))
   expect(said(answered)).toEqual(["Commit the changes in this session with a short message.", "Committed as 1a2b3c: Add the notes."])
   expect(model.requests[0]?.messages.at(-1)).toEqual({ role: "user", text: "Commit the changes in this session with a short message." })

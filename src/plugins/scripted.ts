@@ -20,14 +20,19 @@ export type ScriptedReply =
   | { hang: true; text?: string[]; reports?: true }
 
 // `limit` is what the model can read. `lookUpLimit` stands in for the lookup
-// itself, for a test where it fails or never answers.
-export function scriptedProvider(script: ScriptedReply[], options: { limit?: number; lookUpLimit?: () => Promise<number | undefined> } = {}) {
+// itself, for a test where it fails or never answers. `models` are the
+// models it offers, when it is to list some.
+export function scriptedProvider(
+  script: ScriptedReply[],
+  options: { limit?: number; lookUpLimit?: () => Promise<number | undefined>; models?: { id: string; name: string }[] } = {},
+) {
   const requests: Request[] = []
   const provider: Provider = {
     name: "scripted",
     // What the model can read, when a test gives it a limit.
     ...(options.limit !== undefined && { contextLimit: async () => options.limit }),
     ...(options.lookUpLimit && { contextLimit: options.lookUpLimit }),
+    ...(options.models && { models: async () => structuredClone(options.models!) }),
     async *stream(request, signal) {
       requests.push(structuredClone(request))
       const reply = script[requests.length - 1]

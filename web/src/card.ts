@@ -1,10 +1,11 @@
 import type { Evie } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 import type { Conversation } from "./conversation.ts"
-import { joinOutput, type Listed, type Output } from "./project-card.ts"
+import { joinOutput, REQUESTS, type Listed, type Output } from "./project-card.ts"
 
 // The project card's work with evie's server, apart from its screen: undo,
-// the git buttons' requests, stopping a job, and following a job's output.
+// the git buttons' requests, stopping a job, following a job's output, and
+// listing the session's subagents.
 
 // The client to send on, while the page is connected.
 const clientOf = (connection: Connection): Evie | undefined => {
@@ -14,44 +15,27 @@ const clientOf = (connection: Connection): Evie | undefined => {
 const NOT_CONNECTED = "Not connected to evie's server."
 const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
 
-// Runs a command in the session, as the terminal does when the owner types
-// it, and shows what it says as a quiet note in its conversation.
-async function command(connection: Connection, conversation: Conversation, session: string, name: string, args: string) {
-  const evie = clientOf(connection)
-  if (evie === undefined) return conversation.note(NOT_CONNECTED)
-  try {
-    conversation.note((await evie.send({ type: "run_command", session, name, args })).text)
-  } catch (cause) {
-    conversation.note(`/${name} could not be run: ${wordsOf(cause)}`)
-  }
-}
+// Puts back the files evie's last turn that changed any changed, with
+// /undo, whose answer the conversation shows as a quiet note, as the
+// terminal shows it.
+export const undo = (conversation: Conversation) => conversation.run("undo", "")
 
-// Puts back the files evie's last turn that changed any changed, with /undo.
-export const undo = (connection: Connection, conversation: Conversation, session: string) => command(connection, conversation, session, "undo", "")
-
-// Sends the session a request in words, as the owner typing it would,
-// such as a git button's. Gives back why it could not be sent, or nothing.
-export async function ask(connection: Connection, session: string, text: string): Promise<string | undefined> {
-  const evie = clientOf(connection)
-  if (evie === undefined) return NOT_CONNECTED
-  try {
-    await evie.send({ type: "send_message", session, text })
-    return undefined
-  } catch (cause) {
-    return `It could not be sent: ${wordsOf(cause)}`
-  }
-}
+// Sends evie a git button's request, as the owner typing it in the
+// message box would: it shows at once, and starts a turn. Gives back why
+// it could not be sent, or nothing.
+export const request = (conversation: Conversation, kind: keyof typeof REQUESTS) => conversation.send(REQUESTS[kind])
 
 // Stops a background job, or a subagent's round of work, with /jobs stop.
 // What /jobs says is not shown: the job's own lines in the conversation
-// say that it stopped. Only a stop that could not be asked for is.
-export async function stopJob(connection: Connection, conversation: Conversation, session: string, id: string) {
+// say that it stopped. Gives back why it could not be asked for, or nothing.
+export async function stopJob(connection: Connection, session: string, id: string): Promise<string | undefined> {
   const evie = clientOf(connection)
-  if (evie === undefined) return conversation.note(NOT_CONNECTED)
+  if (evie === undefined) return NOT_CONNECTED
   try {
     await evie.send({ type: "run_command", session, name: "jobs", args: `stop ${id}` })
+    return undefined
   } catch (cause) {
-    conversation.note(`Job ${id} could not be stopped: ${wordsOf(cause)}`)
+    return `Job ${id} could not be stopped: ${wordsOf(cause)}`
   }
 }
 

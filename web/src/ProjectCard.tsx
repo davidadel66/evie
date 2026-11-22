@@ -1,14 +1,14 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { Job, ListedProject } from "../../src/core/types.ts"
 import { addressOf } from "./address.ts"
-import { ask, followOutput, followSubagents, stopJob, undo, type Following, type Lineage } from "./card.ts"
+import { followOutput, followSubagents, request, stopJob, undo, type Following, type Lineage } from "./card.ts"
 import { closeSheet, toggleCard, useCardShown } from "./card-shown.ts"
 import { Button } from "./components/ui/button.tsx"
 import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet.tsx"
 import type { Connection } from "./connection.ts"
-import { holdConversation, type Conversation } from "./conversation.ts"
+import { holdConversation, startedHere, type Conversation } from "./conversation.ts"
 import { CaretRight, Check, SidebarRight, X } from "./icons.tsx"
-import { backgroundJobs, branchWords, gitWhyNot, REQUESTS, stateWord, subagentsOf, undoWhyNot, type CardFacts, type Subagent } from "./project-card.ts"
+import { backgroundJobs, branchWords, gitWhyNot, stateWord, subagentsOf, undoWhyNot, type CardFacts, type Subagent } from "./project-card.ts"
 import { ProjectIcon } from "./ProjectIcon.tsx"
 import { select, useSelected } from "./selection.ts"
 import type { Sessions } from "./sessions.ts"
@@ -73,18 +73,12 @@ function ProjectCard({ connection, sessions }: { connection: Connection; session
     )
   }
   if (!list.listed) return <Empty text="" />
+  // A session this page has just started is shown before the list has it.
   const summary = list.sessions.find((each) => each.session === selected.session)
-  if (summary === undefined) return <Empty text="This session is not in the list." />
-  return (
-    <SessionCard
-      key={selected.session}
-      connection={connection}
-      session={selected.session}
-      opened={selected.subagent}
-      projectId={summary.project}
-      project={projectOf(summary.project)}
-    />
-  )
+  const started = startedHere(selected.session)
+  if (summary === undefined && started === undefined) return <Empty text="This session is not in the list." />
+  const projectId = summary !== undefined ? summary.project : started!
+  return <SessionCard key={selected.session} connection={connection} session={selected.session} opened={selected.subagent} projectId={projectId} project={projectOf(projectId)} />
 }
 
 // The card with nothing of a session's to show, but a line saying so.
@@ -224,14 +218,18 @@ function Live({
   } as const
   const subagents = subagentsOf(listed, state.jobs)
   const jobs = backgroundJobs(state.jobs)
-  const stop = (id: string) => void stopJob(connection, conversation, session, id)
+  // Why the last Stop could not be asked for, until the next.
+  const [stopRefused, setStopRefused] = useState<string>()
+  const stop = (id: string) => void stopJob(connection, session, id).then(setStopRefused)
   const working = (count: number) => (count > 0 ? `${count} working` : undefined)
+  const refusal = stopRefused !== undefined && <p className="px-3 pb-2 text-caption text-text-muted">{stopRefused}</p>
 
   return (
     <>
-      <Changes connection={connection} conversation={conversation} session={session} opened={opened} facts={facts} />
+      <Changes conversation={conversation} session={session} opened={opened} facts={facts} />
       {subagents.length > 0 && (
         <Section title="Subagents" {...withCount(working(subagents.filter((each) => each.status === "running").length))}>
+          {refusal}
           <ul className="flex flex-col">
             {subagents.map((subagent) => (
               <SubagentRow key={subagent.session} parent={session} subagent={subagent} open={subagent.session === opened} stop={(job) => stop(job)} />
@@ -241,6 +239,7 @@ function Live({
       )}
       {jobs.running.length + jobs.ended.length > 0 && (
         <Section title="Background jobs" {...withCount(working(jobs.running.length))}>
+          {subagents.length === 0 && refusal}
           <Jobs connection={connection} session={session} running={jobs.running} ended={jobs.ended} stop={stop} />
         </Section>
       )}
@@ -258,13 +257,11 @@ const REQUEST_WAIT = 5000
 // conversation open in the middle, a press goes back to the session's own
 // first, so that what it says is in view.
 function Changes({
-  connection,
   conversation,
   session,
   opened,
   facts,
 }: {
-  connection: Connection
   conversation: Conversation
   session: string
   opened: string | undefined
@@ -290,10 +287,10 @@ function Changes({
   const undoWhy = undoWhyNot({ ...facts, requested })
   const why = gitWhy ?? refused
   const back = () => opened !== undefined && select({ session })
-  async function request(kind: keyof typeof REQUESTS) {
+  async function ask(kind: Parameters<typeof request>[1]) {
     back()
     setSending(true)
-    const failed = await ask(connection, session, REQUESTS[kind])
+    const failed = await request(conversation, kind)
     setRefused(failed)
     setRequested(failed === undefined)
     setSending(false)
@@ -301,7 +298,7 @@ function Changes({
   async function undoLast() {
     back()
     setUndoing(true)
-    await undo(connection, conversation, session)
+    await undo(conversation)
     setUndoing(false)
   }
   return (
@@ -309,7 +306,7 @@ function Changes({
       {/* Each button's own padding brings its word to the card's 28px edge. */}
       <div className="flex flex-wrap gap-2">
         {(["commit", "push", "pull request"] as const).map((kind) => (
-          <Button key={kind} disabled={gitWhy !== undefined || sending} aria-describedby={why === undefined ? undefined : gitNote} onClick={() => void request(kind)} className="px-3">
+          <Button key={kind} disabled={gitWhy !== undefined || sending} aria-describedby={why === undefined ? undefined : gitNote} onClick={() => void ask(kind)} className="px-3">
             {{ commit: "Commit", push: "Push", "pull request": "Pull request" }[kind]}
           </Button>
         ))}

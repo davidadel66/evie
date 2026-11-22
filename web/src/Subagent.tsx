@@ -76,7 +76,7 @@ function Opened({
         <CaretLeft className="size-icon-sm shrink-0" />
         <span className="min-w-0 truncate">Subagent of {parentTitle}</span>
       </a>
-      {child && <Reading conversation={child} />}
+      {child && <Reading conversation={child} readOnly />}
     </>
   )
 }

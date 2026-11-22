@@ -15,7 +15,28 @@ import { merged, type Conversation, type ConversationState } from "./conversatio
 // when a new round starts.
 export type Subagent = Conversation & { poke(): void }
 
-const FRESH: ConversationState = { opened: false, readingEarlier: false, problem: undefined, events: [], earlier: false, replySoFar: "", turnRunning: false, jobs: [], notes: [] }
+const FRESH: ConversationState = {
+  opened: false,
+  readingEarlier: false,
+  stopping: false,
+  waiting: [],
+  running: [],
+  givenBack: undefined,
+  model: undefined,
+  context: undefined,
+  problem: undefined,
+  events: [],
+  earlier: false,
+  replySoFar: "",
+  turnRunning: false,
+  jobs: [],
+  pending: [],
+  notes: [],
+}
+
+// Nothing is said in a subagent's conversation from the page: it is shown
+// with no message box, and what would talk in it says so.
+const READ_ONLY = "A subagent's conversation is read only. Send its session a message instead."
 
 export function openSubagent(connection: Connection, session: string, options: { working(): boolean; every?: number; page?: number }): Subagent {
   let state = FRESH
@@ -127,8 +148,18 @@ export function openSubagent(connection: Connection, session: string, options: {
       readEarlier(evie, first)
     },
     tryAgain,
-    // Nothing is run in a subagent's conversation from the page.
-    note() {},
+    send: async () => READ_ONLY,
+    takeGivenBack: () => undefined,
+    stop() {},
+    answer: async () => READ_ONLY,
+    async run() {},
+    setModel: async () => READ_ONLY,
+    listCommands: async () => {
+      throw new Error(READ_ONLY)
+    },
+    listModels: async () => {
+      throw new Error(READ_ONLY)
+    },
     poke: () => void readNew(),
     close() {
       closed = true

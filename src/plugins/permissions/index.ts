@@ -126,7 +126,7 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         const text = everyTime
           ? `${questionFor(call, asking, folder)}\n\nThis is an agent or a skill of yours. It applies in every project from now on, so it is asked about each time.`
           : questionFor(call, asking, folder)
-        const given = await context.ask({ text, choices: everyTime ? [ONCE, NO] : [ONCE, ALWAYS, NO], freeText: true })
+        const given = await context.ask({ text, choices: everyTime ? [ONCE, NO] : [ONCE, ALWAYS, NO], freeText: true, kind: "permission" })
         // A plain word typed in place of a number means what it says.
         const word = given?.trim().toLowerCase()
         const answer = word === "y" || word === "yes" ? ONCE : word === "n" || word === "no" ? NO : word === "always" && !everyTime ? ALWAYS : given
