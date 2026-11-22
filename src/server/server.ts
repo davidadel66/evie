@@ -1,9 +1,9 @@
 import type { HTMLBundle, ServerWebSocket } from "bun"
 import { randomBytes } from "node:crypto"
-import type { Commands, Evie, EvieEvent } from "../core/types.ts"
+import type { Command, Commands, Evie, EvieEvent } from "../core/types.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
 import type { WebApp } from "./web-app.ts"
-import { hostInAddress, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
+import { hostInAddress, onThisComputer, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
 
 // Evie's server. It is a client of the core, as the terminal was: it uses
 // only `send` and `subscribe`, and carries them over one WebSocket to each
@@ -35,6 +35,11 @@ export type ServerOptions = {
   // How long, in milliseconds, the code in a sign-in link works. Five
   // minutes when left out, which is for tests to change.
   signInCodeLasts?: number
+  // Whether a connection from this address comes from the computer the
+  // server runs on: when it comes from 127.0.0.1 or ::1, when left out,
+  // which is for tests to change. A connection from a web page counts only
+  // when the page is at a local address too.
+  fromThisComputer?: (address: string) => boolean
 }
 
 export type EvieServer = {
@@ -47,11 +52,28 @@ export type EvieServer = {
 // A device that is let in: the token it brought, and the device's name.
 type Admitted = { token: string; device: string }
 
+// The settings window's changes that only the computer evie runs on may
+// make: a key typed in, so that a key never crosses the network, and the
+// plugin files it runs and the projects it trusts. It is a seat belt, not a
+// wall: a signed-in device can still ask evie to do anything evie can do,
+// and can answer a question such as whether to trust a project, as opening
+// a project's session from a phone asks. Any device may change the rest,
+// and restart the server.
+const ONLY_HERE = ["key", "addPlugin", "removePlugin", "project"]
+const changesOnlyHere = (command: Command) => command.type === "change_settings" && ONLY_HERE.some((field) => field in command)
+const ONLY_HERE_WORDS = "Keys, plugins and trusted projects can be changed only on the computer evie runs on."
+
+// The addresses of this computer itself, as a connection from it comes
+// from: 127.0.0.1, or any of 127.0.0.0/8, or ::1, written either way.
+const isLoopback = (address: string) => /^(::ffff:)?127\./.test(address) || address === "::1"
+
 // What the server keeps for each connection: who it is, the sessions it has
 // opened, how many sessions it is opening right now, the sessions it is
-// opening by their id right now, and the questions it was sent while
-// opening that are still waiting, by id, with their session.
+// opening by their id right now, the questions it was sent while opening
+// that are still waiting, by id, with their session, and whether it comes
+// from the computer the server runs on.
 type Connection = Admitted & {
+  here: boolean
   unsubscribe: () => void
   sessions: Set<string>
   opening: number
@@ -310,7 +332,13 @@ export function startServer(options: ServerOptions): EvieServer {
         // refused never reaches the core.
         const admitted = admit(request, server.port!)
         if (admitted instanceof Response) return admitted
-        if (server.upgrade(request, { data: { ...admitted, unsubscribe: () => {}, sessions: new Set(), opening: 0, joining: new Map(), openingQuestions: new Map() } })) return undefined
+        // Something on this computer that passes connections on, such as a
+        // proxy serving the page over HTTPS, makes every connection come from
+        // here; the page's own address, which the browser gives, does not.
+        const address = server.requestIP(request)?.address ?? ""
+        const origin = request.headers.get("origin")
+        const here = (options.fromThisComputer ?? isLoopback)(address) && (origin === null || onThisComputer(origin))
+        if (server.upgrade(request, { data: { ...admitted, here, unsubscribe: () => {}, sessions: new Set(), opening: 0, joining: new Map(), openingQuestions: new Map() } })) return undefined
         return new Response("Connect here with a WebSocket.", { status: 400 })
       }
       if (path === PATHS.check) {
@@ -352,6 +380,7 @@ export function startServer(options: ServerOptions): EvieServer {
         // A client that sends something else has a bug. Its connection is
         // closed, saying why, and nothing else is touched.
         if (!message) return socket.close(1007, 'Each message must be JSON of the form { "id": ..., "command": ... }')
+        if (!socket.data.here && changesOnlyHere(message.command)) return void send(socket, { reply: message.id, error: ONLY_HERE_WORDS })
         const open = message.command.type === "open_session" ? message.command : undefined
         if (open) socket.data.opening += 1
         // A session opened by its id, as a client catching up does, is sent

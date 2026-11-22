@@ -152,6 +152,19 @@ test("a plugin that cannot be loaded stops Evie at start, with an error that nam
   )
 })
 
+test("plugin files under addPlugins load after the list, the built-in one when evie.json gives none; an entry that is not one is refused as a bad plugin is", async () => {
+  const outside = await tempFolder("evie-outside-")
+  await writeFile(join(outside, "greeter.ts"), toolPlugin("greet"))
+
+  const { settings } = await start({ addPlugins: [join(outside, "greeter.ts")] })
+  expect(settings.plugins.map((plugin) => plugin.name).slice(-2)).toEqual(["openrouter", "greet"])
+  const listed = await start({ plugins: ["files", "openrouter"], addPlugins: [join(outside, "greeter.ts")] })
+  expect(listed.settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "openrouter", "greet"])
+
+  await expect(start({ addPlugins: ["/no/such/file.ts"] })).rejects.toThrow('The plugin "/no/such/file.ts" could not be loaded')
+  await expect(start({ addPlugins: ["web"] })).rejects.toThrow(/"addPlugins" must be a list of paths to plugin files\.$/)
+})
+
 test("a settings file that is not valid says which file and why", async () => {
   await expect(start("{ not json")).rejects.toThrow(/evie\.json is not valid JSON/)
   await expect(start({ plugins: "files" })).rejects.toThrow(/"plugins" must be a list/)

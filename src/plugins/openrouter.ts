@@ -1,4 +1,4 @@
-import type { Chunk, Message, Plugin, Provider, Request, Usage } from "../core/types.ts"
+import type { Chunk, Key, Message, Plugin, Provider, Request, Usage } from "../core/types.ts"
 
 // The built-in provider. It reaches every model through OpenRouter with one
 // plain HTTPS request per step, and reads the streamed reply itself.
@@ -36,9 +36,13 @@ export type OpenRouterOptions = {
   now?: () => number
 }
 
+// The key this plugin reads, for the settings window.
+export const OPENROUTER_KEYS: Key[] = [{ name: "OPENROUTER_API_KEY", about: "Reaches the models, through OpenRouter." }]
+
 export function openrouter(options: OpenRouterOptions): Plugin {
   return {
     name: "openrouter",
+    keys: OPENROUTER_KEYS,
     setup(host) {
       host.providers.add(createOpenRouterProvider(options))
     },
