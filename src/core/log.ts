@@ -9,8 +9,18 @@ export type EventLog = {
   append<Type extends StoredEventType>(session: string, type: Type, body: EventBodies[Type]): StoredEvent
   events(session: string): StoredEvent[]
   // Up to `limit` of a session's events, the latest of those numbered below
-  // `before`, in order, and whether there are earlier ones.
-  page(session: string, before: number, limit: number): { events: StoredEvent[]; earlier: boolean }
+  // `before`, in order, as many as fit in `bytes`, each measured as it is
+  // sent, as JSON, but always at least one; and whether there are earlier
+  // ones. Only those, and the one before them, are read.
+  page(session: string, before: number, limit: number, bytes: number): { events: StoredEvent[]; earlier: boolean }
+  // A session's events numbered after `after`, in order, as many as fit in
+  // `bytes`, each measured as it is sent, as JSON, but always at least one;
+  // their size; and whether more follow. Only those, and the one after
+  // them, are read.
+  after(session: string, after: number, bytes: number): { events: StoredEvent[]; bytes: number; more: boolean }
+  // The number of a session's last event, 0 when it has none, and whether
+  // its last turn has started and not ended, read without reading its events.
+  latest(session: string): { seq: number; turnRunning: boolean }
   // The sessions whose last turn started and never ended, as when Evie
   // stopped in the middle of it.
   cutOff(): string[]
@@ -38,9 +48,16 @@ export function createEventLog(db: Database): EventLog {
     "SELECT session, seq, type, body, time FROM event WHERE session = ? ORDER BY seq",
   )
 
-  // Read back from `before` through the log's key, so only the page is read.
-  const selectBefore = db.query<EventRow, [string, number, number]>(
-    "SELECT session, seq, type, body, time FROM event WHERE session = ? AND seq < ? ORDER BY seq DESC LIMIT ?",
+  // Read back from `before` through the log's key, so only the page is read,
+  // and made afresh each time, as `AFTER` is.
+  const BEFORE = "SELECT session, seq, type, body, time FROM event WHERE session = ? AND seq < ? ORDER BY seq DESC LIMIT ?"
+  // Read row by row, and left once the page is full. It is made afresh
+  // each time: Bun 1.4.0 refuses to read again through a statement whose
+  // last reading was left part way ("bad parameter or other API misuse").
+  const AFTER = "SELECT session, seq, type, body, time FROM event WHERE session = ? AND seq > ? ORDER BY seq"
+  const lastSeq = db.query<{ seq: number }, [string]>("SELECT COALESCE(MAX(seq), 0) AS seq FROM event WHERE session = ?")
+  const lastTurn = db.query<{ type: string }, [string]>(
+    "SELECT type FROM event WHERE session = ? AND type IN ('turn_start', 'turn_end') ORDER BY seq DESC LIMIT 1",
   )
   const lastTurns = db.query<{ id: string }, []>(
     `SELECT id FROM session WHERE (SELECT type FROM event WHERE event.session = session.id AND type IN ('turn_start', 'turn_end') ORDER BY seq DESC LIMIT 1) = 'turn_start'`,
@@ -75,10 +92,47 @@ export function createEventLog(db: Database): EventLog {
       return select.all(session).map(fromRow)
     },
 
-    page(session, before, limit) {
-      // One more than the page is read, to tell whether there are earlier ones.
-      const rows = selectBefore.all(session, before, limit + 1)
-      return { events: rows.slice(0, limit).reverse().map(fromRow), earlier: rows.length > limit }
+    page(session, before, limit, bytes) {
+      const events: StoredEvent[] = []
+      let size = 0
+      const selectBefore = db.prepare<EventRow, [string, number, number]>(BEFORE)
+      try {
+        // One more than the page is read, to tell whether there are earlier ones.
+        for (const row of selectBefore.iterate(session, before, limit + 1)) {
+          const event = fromRow(row)
+          // With the comma that comes before it in a list.
+          const more = Buffer.byteLength(JSON.stringify(event)) + 1
+          if (events.length === limit || (events.length > 0 && size + more > bytes)) return { events: events.reverse(), earlier: true }
+          events.push(event)
+          size += more
+        }
+        return { events: events.reverse(), earlier: false }
+      } finally {
+        selectBefore.finalize()
+      }
+    },
+
+    after(session, after, bytes) {
+      const events: StoredEvent[] = []
+      let size = 0
+      const selectAfter = db.prepare<EventRow, [string, number]>(AFTER)
+      try {
+        for (const row of selectAfter.iterate(session, after)) {
+          const event = fromRow(row)
+          // With the comma that comes before it in a list.
+          const more = Buffer.byteLength(JSON.stringify(event)) + 1
+          if (events.length > 0 && size + more > bytes) return { events, bytes: size, more: true }
+          events.push(event)
+          size += more
+        }
+        return { events, bytes: size, more: false }
+      } finally {
+        selectAfter.finalize()
+      }
+    },
+
+    latest(session) {
+      return { seq: lastSeq.get(session)?.seq ?? 0, turnRunning: lastTurn.get(session)?.type === "turn_start" }
     },
 
     attached(session) {

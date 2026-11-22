@@ -90,6 +90,9 @@ type Seen = {
   // passed them: see `onEvent` and `catchUp`.
   behind: boolean
   early: Set<number>
+  // Whether the session's catch-up on the line as it is now has had its
+  // first page, so that the server has the session open again.
+  reopened: boolean
   // Whether the owner has been given where the session stands, in the reply
   // to an open of it. Until then a catch-up gives the owner where it stands
   // in that reply, in place of passing it on: see `onOpened`.
@@ -129,14 +132,15 @@ const DEAD_AFTER = 45_000
 //
 // When the line drops after that, the client connects again by itself and
 // catches up: for each session it has open it asks for the events after the
-// last one it passed on, and the reply being written, and passes those on
-// before any live event, so nothing is shown twice and nothing is lost. A
-// command that was not answered when the line dropped is sent again with
-// the same id, and the server, while it keeps running, answers it without
-// carrying it out twice: it remembers the replies to the last 200 commands
-// of each device, however long the line was down. Since that reply can be
-// from long ago, a session opened by its folder, or to continue, is handed
-// back as it stands when the client opens it again by its id straight after.
+// last one it passed on, a page at a time, and the reply being written, and
+// passes those on before any live event, so nothing is shown twice and
+// nothing is lost. A command that was not answered when the line dropped is
+// sent again with the same id, and the server, while it keeps running,
+// answers it without carrying it out twice: it remembers the replies to the
+// last 200 commands of each device, however long the line was down. Since
+// that reply can be from long ago, a session opened by its folder, or to
+// continue, is handed back as it stands when the client opens it again by
+// its id straight after.
 export async function connect(options: ConnectOptions): Promise<Evie> {
   const address = new URL(options.url)
   // A browser's WebSocket takes no headers, and has the cookie in place of the token.
@@ -170,7 +174,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   }
   const seenOf = (session: string): Seen => {
     let seen = sessions.get(session)
-    if (!seen) sessions.set(session, (seen = { seq: 0, shown: "", jobs: new Map(), behind: false, early: new Set(), told: false, opening: [] }))
+    if (!seen) sessions.set(session, (seen = { seq: 0, shown: "", jobs: new Map(), behind: false, early: new Set(), reopened: false, told: false, opening: [] }))
     return seen
   }
   const isNew = (seen: Seen, event: StoredEvent) => event.seq > seen.seq && !seen.early.has(event.seq)
@@ -258,6 +262,26 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     return output
   }
 
+  // The reply to an open given `after`, which the server sends in pages,
+  // read whole: the rest are asked for, from the last event of each, and the
+  // open is answered with every event after the number given and where the
+  // session stands as the last page read it.
+  async function whole(input: OpenInput, first: Opened): Promise<Opened> {
+    const line = socket
+    const events = [...(first.events ?? [])]
+    let page = first
+    while (page.more) {
+      const last = page.events?.at(-1)
+      if (last === undefined) throw new Error("The server said more of the session's events follow, but sent none.")
+      const reply = line === socket && line ? await ask(line, { ...input, after: last.seq } as Command) : undefined
+      if (!reply) throw lost("the line dropped while the rest of the session's events were read")
+      if ("error" in reply) throw new Error(reply.error)
+      page = reply.result as Opened
+      events.push(...(page.events ?? []))
+    }
+    return page === first ? first : { ...page, events }
+  }
+
   // Records that the owner has been given where a session stands, as this
   // reply to an open of it says: the reply so far, and the jobs.
   function tell(seen: Seen, output: Opened) {
@@ -271,24 +295,58 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
   }
 
   // Asks the server for what was missed in a session since the last event
-  // passed on, and passes it on. Live events follow the reply. When the
-  // line drops first, it passes nothing on: the client catches up afresh on
-  // the next line.
+  // passed on, and passes it on. What was missed comes in pages, each of at
+  // most about 1 MB, so that each reaches a slow line in good time: the
+  // client asks for each from the last event of the one before, until one
+  // says no more follow. Only that last page's reading of where the session
+  // stands, its jobs, the reply so far and its number, is passed on, since
+  // it is the one that live events follow. When the line drops first, the
+  // rest is not passed on: the client catches up afresh on the next line,
+  // from the last event it passed on.
   async function catchUp(session: string, line: WebSocket): Promise<void> {
     const seen = seenOf(session)
     // One under way already covers it.
     if (seen.behind) return
     seen.behind = true
+    seen.reopened = false
     // Of a session the owner has been told nothing of yet, nothing earlier
     // is asked for: the owner is given where it stands now.
-    const fromNow = !seen.told && seen.seq === 0
-    const reply = await ask(line, {
-      type: "open_session",
-      session,
-      ...(!fromNow && { after: seen.seq }),
-      ...(seen.openAs?.questions && { questions: true }),
-    })
-    seen.behind = false
+    let after = !seen.told && seen.seq === 0 ? undefined : seen.seq
+    let reply: Reply | undefined
+    // Set when a page says more follow but holds none, which only a server
+    // with a fault sends: asking again from the same event would never end.
+    let empty = false
+    try {
+      for (let first = true; ; first = false) {
+        reply = await ask(line, {
+          type: "open_session",
+          session,
+          ...(after !== undefined && { after }),
+          ...(seen.openAs?.questions && { questions: true }),
+        })
+        if (!reply || "error" in reply) break
+        const page = reply.result as Opened
+        // Jobs' events are not stored, so each job that has changed is
+        // passed on before the first page's events, since the turns missed
+        // are often evie dealing with a job that ended. The last page's
+        // jobs settle any that changed while the pages came.
+        if (first && seen.told) passOnJobs(session, page.jobs)
+        if (first) {
+          seen.reopened = true
+          flush()
+        }
+        if (!page.more) break
+        const last = page.events?.at(-1)
+        if (last === undefined) {
+          empty = true
+          break
+        }
+        passOnMissed(session, page.events!)
+        after = last.seq
+      }
+    } finally {
+      seen.behind = false
+    }
     // A session that could not be opened again, as when its project's
     // plugins fail to load, is left as it is: a command sent to it says why,
     // and the owner is told that some of its events may be missing, since
@@ -299,29 +357,15 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     // ask from, and those questions and answers stay in `early`, for it to skip.
     if (!reply) return
     const opening = seen.opening.splice(0)
-    if ("error" in reply) {
+    const failed = "error" in reply ? reply.error : empty ? "The server said more of its events follow, but sent none." : undefined
+    if (failed !== undefined || "error" in reply) {
       for (const open of opening) open.caughtUp(undefined)
-      options.onMissing?.(`Catching up on the session ${session} failed, so some of its events may be missing here. ${reply.error}`)
+      options.onMissing?.(`Catching up on the session ${session} failed, so some of its events may be missing here. ${failed}`)
       return
     }
     const output = reply.result as Opened
-    // Jobs' events are not stored, so each job that has changed is passed
-    // on, first, since the turns missed are often Evie dealing with a job
-    // that ended. One missing from the list ran in the server before it was
-    // stopped for good and started again, which stopped it.
-    if (seen.told) {
-      const listed = new Set(output.jobs.map((job) => job.id))
-      const gone = [...seen.jobs.values()].filter((job) => job.status === "running" && !listed.has(job.id))
-      for (const job of gone) passOn({ type: "job", session, job: { ...job, status: "stopped", ended: Date.now() } })
-      for (const job of output.jobs) passOn({ type: "job", session, job })
-    }
-    for (const event of output.events ?? []) {
-      // A client of the core always sees a reply's text as pieces before
-      // the stored message, so the part of a reply that was missed is
-      // passed on as one piece before it.
-      if (event.type === "assistant_message" && isNew(seen, event)) passOnText(session, event.body.text)
-      passOn(event)
-    }
+    if (seen.told) passOnJobs(session, output.jobs)
+    passOnMissed(session, output.events ?? [])
     // An owner not yet told where the session stands is given the jobs and
     // the reply so far in the reply to its open, so they are not passed on.
     if (seen.told) passOnText(session, output.replySoFar ?? "")
@@ -337,6 +381,30 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     for (const open of opening) open.caughtUp(output)
   }
 
+  // Passes on each of a session's jobs that has changed since it was last
+  // passed on, as a catch-up lists them. One missing from the list ran in
+  // the server before it was stopped for good and started again, which
+  // stopped it.
+  function passOnJobs(session: string, jobs: readonly Job[]) {
+    const seen = seenOf(session)
+    const listed = new Set(jobs.map((job) => job.id))
+    const gone = [...seen.jobs.values()].filter((job) => job.status === "running" && !listed.has(job.id))
+    for (const job of gone) passOn({ type: "job", session, job: { ...job, status: "stopped", ended: Date.now() } })
+    for (const job of jobs) passOn({ type: "job", session, job })
+  }
+
+  // Passes on the stored events a catch-up was given, but those passed on already.
+  function passOnMissed(session: string, events: readonly StoredEvent[]) {
+    const seen = seenOf(session)
+    for (const event of events) {
+      // A client of the core always sees a reply's text as pieces before
+      // the stored message, so the part of a reply that was missed is
+      // passed on as one piece before it.
+      if (event.type === "assistant_message" && isNew(seen, event)) passOnText(session, event.body.text)
+      passOn(event)
+    }
+  }
+
   // Sends a command of the client's own on this line. It resolves with the
   // server's reply, or with nothing when the line drops first.
   function ask(line: WebSocket, command: Command): Promise<Reply | undefined> {
@@ -349,17 +417,37 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
 
   // Sends each of the owner's waiting commands that has not been sent on
   // the line as it is now, in the order they were sent. While rejoining,
-  // only answers to questions go: opening a session again can wait on one,
-  // and anything else could reach a session before it is open again.
+  // only some go: see `goesWhileRejoining`. Once one is held back, so is
+  // every one sent after it but answers, so that none overtakes it.
   function flush() {
     const line = socket
     if (!line) return
+    let held = false
     for (const command of waiting.values()) {
-      if (command.sentOn === line || (rejoining && command.message.command.type !== "answer_question")) continue
+      if (command.sentOn === line) continue
+      if (rejoining && !goesWhileRejoining(command.message.command, held)) {
+        held = true
+        continue
+      }
       command.resent = command.sentOn !== undefined
       command.sentOn = line
       sendOn(line, command.message)
     }
+  }
+
+  // What is sent while the client catches up after the line came back. An
+  // answer to a question, since opening a session again can wait on one.
+  // A stop, so that one is not kept waiting by a catch-up that takes minutes
+  // on a slow line, once its session is open on the server again, and when
+  // nothing sent before it is held back: it then stops the turn it was meant
+  // for, not one that a message sent before it starts after it. Anything
+  // else waits until the catch-up is done, as it could reach a session
+  // before it is open again.
+  function goesWhileRejoining(command: Command, held: boolean) {
+    if (command.type === "answer_question") return true
+    if (command.type !== "cancel" || held) return false
+    const seen = sessions.get(command.session)
+    return seen === undefined || !seen.behind || seen.reopened
   }
 
   // A line that is closing cannot send. What was not sent waits for the next.
@@ -447,13 +535,19 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     clearTimeout(giveUp)
     options.onBack?.()
     rejoining = true
-    flush()
     const open = [...sessions].flatMap(([session, seen]) => (seen.openAs ? [session] : []))
-    await Promise.all(open.map((session) => catchUp(session, line)))
-    // The line dropped again first, and trying again has begun.
-    if (socket !== line) return
-    rejoining = false
+    // The catch-ups start first, so that each session is known to be behind.
+    const caughtUp = Promise.all(open.map((session) => catchUp(session, line)))
     flush()
+    try {
+      await caughtUp
+    } finally {
+      // Unless the line dropped again first, and trying again has begun.
+      if (socket === line) {
+        rejoining = false
+        flush()
+      }
+    }
   }
 
   // Every command still waiting fails, saying why.
@@ -493,7 +587,7 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
           resent: false,
           answer(reply) {
             if ("error" in reply) return reject(new Error(reply.error))
-            const result = command.type === "open_session" ? onOpened(waited, reply.result as Opened) : reply.result
+            const result = command.type === "open_session" ? whole(command as OpenInput, reply.result as Opened).then((output) => onOpened(waited, output)) : reply.result
             resolve(result as Commands[Sent["type"]]["output"] | Promise<Commands[Sent["type"]]["output"]>)
           },
           lose: (why) => reject(lost(why)),

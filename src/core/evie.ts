@@ -17,9 +17,10 @@ import { listProjectFiles } from "./project-files.ts"
 import { listStorage, readStorage, storageFileAt } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
-import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider, SettingsEditor } from "./types.ts"
+import { MESSAGE_LIMIT, MESSAGE_TOO_LONG, PAGE_BYTES, type Ask, type Children, type Commands, type Core, type EvieEvent, type Host, type JobRecord, type JobWork, type Plugin, type Project, type ProjectSettings, type Provider, type SettingsEditor } from "./types.ts"
 
 type Cut = "none" | "asking" | "working"
+type Opened = Commands["open_session"]["output"]
 
 export type EvieOptions = {
   // Settings from the environment. `EVIE_HOME` names the data folder.
@@ -467,7 +468,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const alreadyOpen = () => (last === undefined ? undefined : sessions.get(last))
     const join = (id: string, open: Open) => {
       open.canAnswer ||= canAnswer
-      return { ...whereItIs(id, input.after), project, resumed: true, notices: [...refused, ...open.notices] }
+      return whereItIs(id, input.after, { project, resumed: true, notices: [...refused, ...open.notices] })
     }
     const openBefore = alreadyOpen()
     if (last !== undefined && openBefore && !closed) return join(last, openBefore)
@@ -493,12 +494,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       // closed off instead, with its jobs left for when the owner opens it.
       if (resuming && scope.forNow && left) {
         if (left.cut !== "none") emit(log.append(sessionId(), "note", { text: STOPPED_UNTRUSTED }))
-        return { ...whereItIs(sessionId()), project, resumed: true, notices }
+        return whereItIs(sessionId(), undefined, { project, resumed: true, notices })
       }
 
       const opened = startLoop({ session: sessionId(), project, scope, model, canAnswer: canAnswer || resuming })
       if (left) carryOn(sessionId(), opened, left)
-      return { ...whereItIs(sessionId(), input.after), project, resumed: last !== undefined, notices: [...refused, ...notices] }
+      return whereItIs(sessionId(), input.after, { project, resumed: last !== undefined, notices: [...refused, ...notices] })
     } finally {
       if (session !== undefined) markOpening(session, -1)
     }
@@ -517,23 +518,28 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // Where a session that is being opened stands: whether a turn is running
   // in it, as in one another client left running, the questions it is still
   // waiting on, its jobs, and the reply being written. A turn is running
-  // when the log's last turn has not ended. With `after`, the events after
-  // that number too.
+  // when the log's last turn has not ended. `rest` is the rest of the reply
+  // to an open.
+  //
+  // With `after`, the events after that number too, as many as fit in a
+  // catch-up's page with everything else the reply carries, all of it
+  // counted. An event larger than a page goes in a page of its own, so that
+  // every page moves the client on. Only the page's own events are read.
+  // A page that more follow says so, and leaves out the questions waiting
+  // and the reply so far, which the client takes from the last page.
+  //
   // All of it is read in one step, with nothing waited for in between, so it
   // describes a single moment: every event emitted later is sent as it happens.
-  function whereItIs(session: string, after?: number) {
-    const events = log.events(session)
-    const turnRunning = events.findLastIndex((event) => event.type === "turn_start") > events.findLastIndex((event) => event.type === "turn_end")
+  function whereItIs(session: string, after: number | undefined, rest: Pick<Opened, "project" | "resumed" | "notices">): Opened {
+    const latest = log.latest(session)
     const replySoFar = sessions.get(session)?.loop.replySoFar() ?? ""
-    return {
-      session,
-      turnRunning,
-      openQuestions: questions.waiting(session),
-      lastSeq: events.at(-1)?.seq ?? 0,
-      jobs: jobs.list(session),
-      ...(after !== undefined && { events: events.filter((event) => event.seq > after) }),
-      ...(replySoFar !== "" && { replySoFar }),
-    }
+    const standing = { session, ...rest, turnRunning: latest.turnRunning, lastSeq: latest.seq, jobs: jobs.list(session) }
+    const last = { openQuestions: questions.waiting(session), ...(replySoFar !== "" && { replySoFar }) }
+    if (after === undefined) return { ...standing, ...last }
+    const room = PAGE_BYTES - Buffer.byteLength(JSON.stringify({ ...standing, ...last, events: [], more: true }))
+    const page = log.after(session, after, room)
+    if (!page.more && (page.bytes <= room || page.events.length === 0)) return { ...standing, ...last, events: page.events }
+    return { ...standing, openQuestions: [], events: page.events, more: true }
   }
 
   // What an earlier run of Evie left in a session that is opening in this
@@ -683,6 +689,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
   // what is stored is read back as text.
   function sendMessage(input: Commands["send_message"]["input"]): void {
     if (typeof input.text !== "string") throw new Error("`text` is the message, and must be text.")
+    if (Buffer.byteLength(input.text) > MESSAGE_LIMIT) throw new Error(MESSAGE_TOO_LONG)
     const { loop } = open(input.session)
     const attached = attachments.check(input.session, input.attachments)
     inbox.add(input.session, { text: input.text, ...(attached !== undefined && { attachments: attached }) })
@@ -858,7 +865,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     const limit = input.limit ?? PAGE
     if (!Number.isInteger(limit) || limit < 1 || limit > LONGEST_PAGE) throw new Error(`\`limit\` is how many events to read, a whole number from 1 to ${LONGEST_PAGE}.`)
     if (input.before !== undefined && !Number.isInteger(input.before)) throw new Error("`before` is the number of an event, and the page holds the events before it.")
-    return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, limit)
+    return log.page(input.session, input.before ?? Number.MAX_SAFE_INTEGER, limit, PAGE_BYTES)
   }
 
   // A job's output is read from its file, for the jobs this run of Evie knows.

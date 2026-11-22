@@ -88,6 +88,21 @@ export type Attachments = {
   open(session: string, path: string): Promise<{ file: string; type: string } | undefined>
 }
 
+// How much of a session's events one reply holds, as a catch-up's page or
+// a page of history: about 1 MB, as JSON. A client on a slow line hears from
+// the server once a reply has arrived whole, so each comes in good time; it
+// asks for the next page from the last event of this one.
+export const PAGE_BYTES = 1024 * 1024
+
+// The most text a message to evie can hold, in bytes: 1 MB, about 250,000
+// tokens, more than most models read in one message. A longer one would
+// outlast a slow line's wait as one message, so it is refused, saying to
+// attach it as a file, which can be larger and which the model reads by
+// its path. A client checks it before sending, and the core again.
+export const MESSAGE_LIMIT = 1024 * 1024
+export const MESSAGE_TOO_LONG =
+  "This message is longer than the 1 MB a message can hold. Attach the text as a file instead: a file attached can be up to 10 MB, and evie reads it from there."
+
 // What finds a file of a project's Storage for the server to give to the
 // page, as the show tool's files are drawn and Storage opens them: by its
 // path inside the project's `.evie` folder, as Storage names it. `open`
@@ -829,6 +844,14 @@ export type Commands = {
     // every event after it is sent to the client as it happens. `jobs` are
     // the session's background jobs, the ended ones included: their events
     // are not stored, so a client that missed some learns here how each stands.
+    // With `after`, the number of the last event a client saw, as when it
+    // catches up after a drop, `events` are those after it, in order: as
+    // many as fit in `PAGE_BYTES` with everything else the reply carries,
+    // or a single event larger than that. `more` says to ask again, from the
+    // page's last event, until a page comes without it. A page with `more`
+    // leaves out the questions waiting (`openQuestions` is empty) and the
+    // reply so far: where the session stands is read from the last page,
+    // which live events follow. `jobs` come with every page.
     output: {
       session: string
       project: Project | null
@@ -839,6 +862,7 @@ export type Commands = {
       lastSeq: number
       jobs: Job[]
       events?: StoredEvent[]
+      more?: true
       replySoFar?: string
     }
   }
@@ -886,8 +910,9 @@ export type Commands = {
   // numbered below `before`, or its latest of all without it, in order, and
   // whether there are earlier ones, which a page with `before` set to the
   // first one's number reads. A page is 50 events unless `limit` asks for
-  // another number, from 1 to 500. The session need not be open, and
-  // can be a subagent's.
+  // another number, from 1 to 500, and stops sooner at `PAGE_BYTES` of them,
+  // as a catch-up's page does, but holds at least one. The session need not
+  // be open, and can be a subagent's.
   read_history: {
     input: { session: string; before?: number; limit?: number }
     output: { events: StoredEvent[]; earlier: boolean }

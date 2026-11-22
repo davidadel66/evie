@@ -3,7 +3,8 @@ import { Database } from "bun:sqlite"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { runTerminal, type Plugin } from "../src/index.ts"
+import { runTerminal, type Commands, type Plugin } from "../src/index.ts"
+import { PAGE_BYTES } from "../src/core/types.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -244,6 +245,149 @@ test("a session opened by its id is joined as it is, with the events after the n
   ])
 })
 
+// A session with replies this large in it, one per turn, as when evie
+// writes large files: its log runs to megabytes. Compaction is put off, so
+// that the scripted model is asked for nothing but the replies.
+async function largeSession(replies: string[]) {
+  const model = scriptedProvider(replies.map((text) => ({ text: [text] })))
+  const run = await startEvie([model.plugin], { compaction: { ceiling: 1_000_000_000 } })
+  cleanups.push(run.stop)
+  for (const [at] of replies.entries()) await say(run, `Message ${at + 1}`)
+  return run
+}
+
+// Catches up on a session through the core the way a client does: from the
+// event given, then from the last event of each page, until a page says no
+// more follow. Gives back every page.
+async function catchUpInPages(run: Run, after: number) {
+  const pages: Awaited<ReturnType<Run["evie"]["send"]>>[] = []
+  for (let from = after; pages.length < 50; ) {
+    const page = await run.evie.send({ type: "open_session", session: run.session, after: from })
+    pages.push(page)
+    if (!page.more || !page.events?.length) break
+    from = page.events.at(-1)!.seq
+  }
+  return pages as Commands["open_session"]["output"][]
+}
+
+const KiB = 1024
+
+test("a catch-up of many megabytes is answered in pages of at most about 1 MB of events, in order, each but the last saying more follow", async () => {
+  // Twelve turns, of four events each, whose replies are 400 KiB: two fit in a page, a third does not.
+  const run = await largeSession(Array.from({ length: 12 }, (_, at) => String(at % 10).repeat(400 * KiB)))
+
+  const pages = await catchUpInPages(run, 0)
+
+  expect(pages.map((page) => page.events?.filter((event) => event.type === "assistant_message").length)).toEqual([2, 2, 2, 2, 2, 2])
+  expect(pages.flatMap((page) => page.events!.map((event) => event.seq))).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+  expect(pages.map((page) => page.more)).toEqual([true, true, true, true, true, undefined])
+  // Each page stands where the session does as it is read.
+  for (const page of pages) expect(page).toMatchObject({ session: run.session, lastSeq: 48, turnRunning: false })
+})
+
+// Counts the rows evie reads from its database, through every statement
+// made from now on, until `stop` is called.
+function countRowsRead() {
+  let rows = 0
+  const { query, prepare } = Database.prototype
+  // The same statement is handed out again for the same SQL, and counted once.
+  const counted = new WeakSet<object>()
+  const counting = (make: Database["query"]) =>
+    function (this: Database, ...args: Parameters<Database["query"]>) {
+      const statement = make.apply(this, args)
+      if (counted.has(statement)) return statement
+      counted.add(statement)
+      const { all, get, iterate } = statement
+      statement.all = (...values) => {
+        const found = all.apply(statement, values)
+        rows += found.length
+        return found
+      }
+      statement.get = (...values) => {
+        const found = get.apply(statement, values)
+        if (found !== null) rows += 1
+        return found
+      }
+      statement.iterate = function* (...values) {
+        for (const row of iterate.apply(statement, values)) {
+          rows += 1
+          yield row
+        }
+      }
+      return statement
+    } as Database["query"]
+  Database.prototype.query = counting(query)
+  Database.prototype.prepare = counting(prepare)
+  const stop = async () => {
+    Database.prototype.query = query
+    Database.prototype.prepare = prepare
+  }
+  cleanups.push(stop)
+  return { rows: () => rows, stop }
+}
+
+test("each page of a catch-up reads only its own part of the log, not the whole of it", async () => {
+  const counter = countRowsRead()
+  const run = await largeSession(Array.from({ length: 12 }, (_, at) => String(at % 10).repeat(400 * KiB)))
+
+  const read: { events: number; rows: number }[] = []
+  for (let from = 0; ; ) {
+    const before = counter.rows()
+    const page = await run.evie.send({ type: "open_session", session: run.session, after: from })
+    read.push({ events: page.events!.length, rows: counter.rows() - before })
+    if (!page.more) break
+    from = page.events!.at(-1)!.seq
+  }
+  await counter.stop()
+
+  // The log holds 48 events; a page reads its own, the one after them, and a few rows besides.
+  expect(read.length).toBe(6)
+  for (const page of read) expect(page.rows).toBeLessThanOrEqual(page.events + 6)
+})
+
+test("everything a page carries counts in its size, and the reply being written comes only with the last page, which the client applies", async () => {
+  const replySoFar = "r".repeat(300 * KiB)
+  const model = scriptedProvider([...Array.from({ length: 12 }, (_, at) => ({ text: [String(at % 10).repeat(400 * KiB)] })), { hang: true, text: [replySoFar] }])
+  const run = await startEvie([model.plugin], { compaction: { ceiling: 1_000_000_000 } })
+  cleanups.push(run.stop)
+  for (let at = 1; at <= 12; at++) await say(run, `Message ${at}`)
+  const writing = new Promise<void>((resolve) => run.evie.subscribe((event) => event.type === "assistant_delta" && resolve()))
+  await run.evie.send({ type: "send_message", session: run.session, text: "One more" })
+  await writing
+
+  const pages = await catchUpInPages(run, 0)
+
+  for (const page of pages) expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(PAGE_BYTES)
+  expect(pages.flatMap((page) => page.events!.map((event) => event.seq))).toEqual(Array.from({ length: 50 }, (_, at) => at + 1))
+  for (const page of pages.slice(0, -1)) expect([page.replySoFar, page.openQuestions]).toEqual([undefined, []])
+  expect(pages.at(-1)).toMatchObject({ replySoFar, turnRunning: true, lastSeq: 50 })
+  expect(pages.at(-1)!.more).toBeUndefined()
+  await run.evie.send({ type: "cancel", session: run.session })
+})
+
+test("a page of history stops at about 1 MB as well as at its count, and reading earlier pages reaches every event", async () => {
+  const run = await largeSession(Array.from({ length: 12 }, (_, at) => String(at % 10).repeat(400 * KiB)))
+
+  const latest = await run.evie.send({ type: "read_history", session: run.session })
+  const pages = [latest]
+  while (pages[0]!.earlier) pages.unshift(await run.evie.send({ type: "read_history", session: run.session, before: pages[0]!.events[0]!.seq }))
+
+  // Two replies of 400 KiB fit in a page, a third does not: from 48 back to the end of the turn before the third.
+  expect(latest.events.map((event) => event.seq)).toEqual([40, 41, 42, 43, 44, 45, 46, 47, 48])
+  for (const page of pages) expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(PAGE_BYTES)
+  expect(pages.flatMap((page) => page.events.map((event) => event.seq))).toEqual(Array.from({ length: 48 }, (_, at) => at + 1))
+})
+
+test("an event larger than a page goes in a page of its own", async () => {
+  const run = await largeSession(["Short.", "x".repeat(1536 * KiB), "Short again."])
+
+  const pages = await catchUpInPages(run, 0)
+
+  // 1 to 4 the first turn, 5 turn_start, 6 user_message, 7 the large reply, 8 turn_end, 9 to 12 the last turn.
+  expect(pages.map((page) => page.events?.map((event) => event.seq))).toEqual([[1, 2, 3, 4, 5, 6], [7], [8, 9, 10, 11, 12]])
+  expect(pages.map((page) => page.more)).toEqual([true, true, undefined])
+})
+
 test("a session opened by its id that is not open, as after Evie was started again, is opened in its own project, with a turn cut off closed first", async () => {
   const { home, startAgain } = await machine()
   const first = await startAgain()
@@ -344,4 +488,18 @@ test("a session whose project has gone from the database is refused when opened 
   await expect(second.run.evie.send({ type: "open_session", session: first.run.session })).rejects.toThrow(
     `The session "${first.run.session}" belongs to the project "${first.run.project!.id}", which is missing from evie's database.`,
   )
+})
+
+// ---- A message's size ---------------------------------------------------------------------
+
+test("a message of more than 1 MB of text is refused, saying to attach it as a file, and nothing is stored", async () => {
+  const run = await startEvie([scriptedProvider([{ text: ["ok"] }]).plugin])
+  cleanups.push(run.stop)
+
+  await expect(run.evie.send({ type: "send_message", session: run.session, text: "x".repeat(1024 * 1024 + 1) })).rejects.toThrow(
+    "This message is longer than the 1 MB a message can hold. Attach the text as a file instead: a file attached can be up to 10 MB, and evie reads it from there.",
+  )
+  await say(run, "é".repeat(512 * 1024))
+
+  expect(stored(run.events).filter((event) => event.type === "user_message").map((event) => event.body.text.length)).toEqual([512 * 1024])
 })
