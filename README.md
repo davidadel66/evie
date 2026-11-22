@@ -249,7 +249,17 @@ workspace view, on the workspace of the project you are looking at (or,
 with no workspace yet, the New workspace dialog; until the projects have
 been listed, it waits), and the pencil starts a new session.
 
-The gear beside the name opens the settings, with a page each for:
+The gear beside the name opens the settings, as does Open settings in
+the command palette and the gear at the foot of the workspace strip. They
+are a page of their own, as T3 Code's are, over the page dimmed under
+them, and the whole screen on a phone. They have an address of their own,
+beside whatever is open, such as `#session=…&settings=keys`, or alone,
+`#settings=keys`; Back or Escape closes them. Their pages are down the
+left, in groups, each with its icon (a rail of the icons on a phone),
+under a search over every setting: `/` or Mod+F reaches it, Up and Down
+move through what it finds, and Enter goes to the setting's page and
+shows it. A setting changed from its default, such as the theme, has a
+reset after its title. There is a page each for:
 
 - **Appearance:** the theme, one of Dusk, Moss and Oxblood, which the
   browser remembers.
@@ -267,7 +277,7 @@ The gear beside the name opens the settings, with a page each for:
   built-in ones are changed in `evie.json` itself.
 - **Instructions:** your instruction file, `AGENTS.md` in the data folder,
   to edit and save. It applies from the next message. What you have written
-  and not saved is kept when the window is closed, until you save it.
+  and not saved is kept when the settings are closed, until you save it.
 - **Projects:** each project, with whether its own settings are trusted,
   to trust it or stop trusting it.
 
@@ -277,7 +287,7 @@ starting would give, and nothing is written. A plugin file is checked by
 `evie serve --check`, in a process of its own: it loads the settings files
 and sets the plugins up together, as starting does, without listening or
 opening any session. Most changes apply once the server starts again: the
-window says so, and **Restart to apply** starts it again, as after a crash,
+page says so, and **Restart to apply** starts it again, as after a crash,
 so that work in progress carries on; the page connects again by itself. A
 restart is refused, saying why, when the same check finds the server would
 not start. Under the login service (see "Keeping the server running"), the
@@ -398,14 +408,26 @@ nothing said in it yet, or a draft, says "What should evie do?":
   as you scroll up. While you are at the bottom, new text keeps you there;
   scrolled up, you stay where you are, with a way back down.
 
-The message box at the bottom of the conversation works as T3 Code's does:
+The message box floats over the end of the conversation, which scrolls on
+under it, and works as T3 Code's does:
 
 - **Enter sends**, and Shift and Enter starts a new line. Up in an empty
   box brings back your earlier messages in the session, and Down goes
   forward again.
-- **While evie works**, what you send steers the turn, as in the terminal:
-  evie reads it at its next step. A round Stop button beside Send, or
-  Escape in the box, stops the turn, and says Stopping until it has.
+- **While evie works**, Stop takes Send's place while the box is empty,
+  and Escape in the box stops the turn too; it says Stopping until it has.
+  The conversation's own line, "Working for 12s · Stop", keeps a quiet Stop
+  as well. What you send steers the turn, as in the terminal: evie reads it
+  at its next step.
+- **Queued, not steered:** with Mod held, Mod+Enter or a Mod-click on Send,
+  a message sent while evie works waits instead, at the end of the
+  conversation, dashed as a message not yet sent, and is sent as a turn of
+  its own once the turn before it has finished, one after another. Each
+  can be sent at once, edited in the box (Escape gives the edit up) or
+  removed. A turn that is stopped, or fails, holds the queue until you send
+  one of its messages by hand. The page holds the queue, not the server: it
+  keeps the session open while anything is queued, and a page closed or
+  reloaded loses it.
 - **A question** shows at the end of the conversation, as part of evie's
   reply: the question, its choices as round buttons under it, the first
   the main one, and "Needs you. Waiting for your answer". The keys 1 to 9
@@ -421,7 +443,8 @@ The message box at the bottom of the conversation works as T3 Code's does:
   choices in order: Yes, once, as the main one, then the others, such as
   always allowing it, then No. A message sent instead answers it No, and
   goes to evie as what to do instead.
-- **A slash** at the start of a word opens a menu of the session's
+- **A slash** at the start of a word opens a drawer, tucked into the box's
+  top edge, of the session's
   commands and your skills, each with what it does, narrowed as you type.
   Up and Down move, Enter or Tab picks, and Escape closes it. A message
   that is a slash and a word, such as `/compact`, runs the command, whose
@@ -433,16 +456,20 @@ The message box at the bottom of the conversation works as T3 Code's does:
   session would use. A project's own model is known once a session has
   opened there since the server started. In a draft, the other commands
   wait until the session has started.
-- **Under the text**, the model's name, which opens the picker too, and how
+- **Under the text**, the model's name as its provider names it, such as
+  Claude Sonnet 5, which opens the picker too, and how
   full the conversation is, as a share of the size at which evie compacts
   it by itself. Its menu gives both sizes, and Compact now.
 - **At phone width**, 767px wide or narrower as throughout the page, the
   box is one row until you tap it, and the model picker's makers are a row
   above its models that scrolls sideways.
 - **An @** at the start of a word, in a session in a project, opens a menu
-  of the project's files, narrowed and ranked as you type, as the slash
-  menu is, with the same keys. Picking one puts `@` and its path in the
-  message, such as `@src/app.ts`, and evie reads it with its tools. The
+  of the project's files, in the same drawer, narrowed and ranked as you
+  type, as the slash menu is, with the same keys. Picking one puts it in
+  the text as a chip, its icon and its name, which Backspace takes off
+  whole; the message says `@` and its path, such as `@src/app.ts`, and
+  evie reads it with its tools. A message brought back with Up has its
+  files as chips again. The
   files are those git lists, tracked or not, but not those it ignores, or
   outside git every file; never `.git`, `node_modules`, the `.evie`
   folder, evie's data folder or a folder of keys such as `.ssh`, and at
@@ -641,7 +668,7 @@ What evie changed is shown as diffs, as T3 Code shows them:
 
 **Shortcuts** work as T3 Code's, wherever the focus is, but for Escape and
 F2, which belong to the message box and the conversation, and wait while
-a window such as the settings is open. "Mod" is Cmd on a Mac and Ctrl
+a window such as the settings page is open. "Mod" is Cmd on a Mac and Ctrl
 elsewhere. They are one table, in `web/src/shortcuts.ts`, which the
 page's handlers, the command palette and the buttons' titles all read;
 they cannot be changed yet.
@@ -1538,8 +1565,8 @@ session details become a sheet, is
 | `control` | 14px on 20px; 16px on 24px below 640px | 400 | The words on a button, a chip, a menu item or a row of the palette, and a form's labels, which take semibold |
 | `label` | 14px on 20px | 600 | Titles: a session's in the list and in a header, a workspace's, a setting's, a question's; the name `evie` at the top |
 | `heading` | 18px on 24px, −0.01em | 600 | A reply's second heading |
-| `title` | 16px on 24px, −0.01em | 600 | A settings page's title, a reply's third heading |
-| `page-title` | 20px on 28px, −0.01em | 600 | The one title of a dialog, the settings window or an empty page; a reply's top heading |
+| `title` | 16px on 24px, −0.01em | 600 | A reply's third heading |
+| `page-title` | 20px on 28px, −0.01em | 600 | The one title of a dialog or an empty page; a reply's top heading |
 | `figure` | 24px on 32px, −0.02em | 600 | Big numbers on dashboards, when there are any |
 | `code` | 13px on 20px | 400 | File paths, commands, diffs and tool calls |
 | `detail` | 13px on 16px | 400 | The rows of the session details, as T3 Code's details card |
@@ -1558,9 +1585,9 @@ session details become a sheet, is
 | `space-4` | 16px | Inside the message box; between turns; above and below the conversation |
 | `space-4.5` | 18px | T3 Code's half step: the line of a pull request's title in the session details |
 | `space-5` | 20px | Where a column's text starts: the name at the top of the list, a list's indent in a reply; under the message box at desktop width |
-| `space-6` | 24px | Inside a dialog and the settings window; between tabs |
+| `space-6` | 24px | Inside a dialog; the settings page's distance from the window's edges, and the sides of its settings; between tabs |
 | `space-7` | 28px | The height of a chip under the message box's text, at every width, as T3 Code's |
-| `space-8` | 32px | Between a setting and its control; between sections; above and below an empty page's words; the stop button, at every width |
+| `space-8` | 32px | Between a setting and its control; between sections; above and below an empty page's words |
 
 **Corners:**
 
@@ -1569,7 +1596,7 @@ session details become a sheet, is
 | `radius-chip` | 6px | A small control inside a row of the session details: its icon buttons, its checks and Fix |
 | `radius-sm` | 4px | Menu items and the rows of the palette and pickers; badges; an image's thumbnail |
 | `radius-md` | 8px | The default: buttons, text boxes, menus, popovers, notices, selected rows |
-| `radius-lg` | 16px | The message box, the owner's message, dialogs, the settings window and the palette |
+| `radius-lg` | 16px | The message box and the top of its drawers, the owner's message and a queued one, dialogs, the settings page and the palette |
 | `radius-full` | 9999px | Pill buttons such as answer choices, the round send and stop buttons, status dots |
 | `radius-tile` | 25% | A project's icon tile's corners, a quarter of its size at any size |
 
@@ -1577,9 +1604,9 @@ session details become a sheet, is
 
 | Name | Value | For |
 |---|---|---|
-| `control` | 32px; 36px below 640px | Buttons, text boxes and icon buttons; the settings' pages; the send button |
+| `control` | 32px; 36px below 640px | Buttons, text boxes and icon buttons; the send button, and Stop in its place |
 | `control-sm` | 28px; 32px below 640px | Small buttons: the paperclip, the buttons that show and hide the list and the card, a row's `···`, a notice's; the items of a menu, the palette, the `/` and `@` menus and the model picker |
-| `row-height` | 32px | A row in a list: a file in Storage, a file's header in the diff, a row of the session details; at the least, a session in a workspace |
+| `row-height` | 32px | A row in a list: a file in Storage, a file's header in the diff, a row of the session details, a page in the settings' column; at the least, a session in a workspace |
 | `work-row` | 24px | A row of a turn's work log: a run of calls, each call, Thinking, Worked for, a note; and the column its icon sits in |
 | `header-height` | 52px | Every column's header: the list's, the conversation's, the card's, the diff's, a workspace's and its side chat's |
 | `gutter` | 20px; 12px below 640px | The page's side padding: the conversation, the message box, a workspace, the sign-in page |
@@ -1614,17 +1641,29 @@ session details become a sheet, is
 | `menu` | 176px | The narrowest a menu is |
 | `menu-wide` | `min(400px, calc(100vw - 32px))` | The widest a menu of sentences grows, such as the context meter's |
 | `dialog` | 512px | The widest a dialog is, as T3 Code's |
-| `settings` | 720px | The widest the settings window is |
-| `settings-height` | `min(600px, calc(100dvh - 32px))` | The settings window's height, 16px within the page's top and bottom |
-| `settings-pages` | 176px | The settings window's column of pages |
+| `settings-page` | 1280px | The widest the settings page is, as T3 Code's |
+| `settings-page-height` | 960px | The tallest the settings page is, as T3 Code's |
+| `settings-nav` | 240px | The settings page's column of pages and its search, as T3 Code's |
+| `settings-rail` | 56px | That column at phone width: a rail of the pages' icons |
+| `settings-header` | 48px | The settings page's header, with its breadcrumb and Close |
+| `settings-content` | 896px | The widest the column of settings is |
+| `settings-about` | 672px | The widest what a setting is for runs under its title |
+| `settings-select` | 224px | The least a choice of a setting's is wide, as T3 Code's select |
 | `settings-field` | 200px | A text box beside a setting |
 | `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle of an empty page |
 | `workspace-name` | 96px | The least a workspace's name keeps in its header before its tabs scroll sideways |
 | `workspace-columns` | 880px | A container width: the least room beside the strip for a workspace and its side chat side by side |
 | `icon-picker` | 230px; 254px below 640px | The project icon picker: six 32px columns (36px below 640px), their gaps, its padding and its line |
 | `icon-grid` | 220px | The tallest the picker's icons grow before they scroll |
+| `composer-text-min` | two lines | The least the message box's text is tall, as drawn and as T3 Code's |
 | `composer-text` | 208px | The tallest the message box's text grows before it scrolls, as T3 Code's |
 | `composer-menu` | 288px | The tallest the `/` and `@` menus and the model picker above the message box are, as T3 Code's |
+| `drawer-inset` | 22px | How much narrower than the message box its `/` and `@` drawers are, on each side, as T3 Code's |
+| `drawer-tuck` | 17px | How far those drawers tuck under the box's top edge, as T3 Code's |
+| `control-xs` | 24px; 28px below 640px | A small button inside a row: a queued message's Send now, edit and remove, as T3 Code's |
+| `icon-row` | 14px | The icon on such a button, and on a file's chip in the message box's text |
+| `reset` | 20px | A setting's reset, after its title, and the clear button of the settings' search |
+| `switch-knob` | 14px; 18px below 640px | The knob of a setting's switch, whose track is `switch-height` by `switch-width` round it, and which travels `switch-travel` |
 | `picker-makers` | 144px | The model picker's column of makers |
 | `attachment-chip` | 24px | An image's thumbnail in a chip above the message box's text |
 | `attachment-shown` | 160px | The largest an image attached shows in the conversation |
