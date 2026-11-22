@@ -164,7 +164,10 @@ do (see "The web app").
 
 When the connection to the server drops, as when the laptop sleeps or the
 server is started again, `evie` says so and connects again by itself, then
-shows what it missed, without repeating anything. When it cannot catch up,
+shows what it missed, without repeating anything. So does a device the
+server cannot send to fast enough: once more than 16 MB waits to be sent to
+it, the server closes its connection rather than leave a message out, and
+it catches up the same way. When it cannot catch up,
 as when the project's plugins fail to load as the server opens the session
 again, it says that some of what happened may be missing, and why. A
 message or command it had sent when the line dropped is sent again, and

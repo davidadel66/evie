@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto"
 import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent } from "../core/types.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
 import type { WebApp } from "./web-app.ts"
-import { hostInAddress, onThisComputer, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
+import { DROPPED, hostInAddress, onThisComputer, PATHS, TAKEN_BACK, type ClientMessage, type ServerMessage } from "./wire.ts"
 
 // Evie's server. It is a client of the core, as the terminal was: it uses
 // only `send` and `subscribe`, and carries them over one WebSocket to each
@@ -503,7 +503,31 @@ export function startServer(options: ServerOptions): EvieServer {
   }
 }
 
-const send = (socket: ServerWebSocket<Connection>, message: ServerMessage) => socket.send(JSON.stringify(message))
+// Sends a message on a connection. Bun says what became of it
+// (https://bun.com/docs/runtime/http/websockets, under "Backpressure"): the
+// number of bytes sent; -1 when it was queued, because the client is reading
+// more slowly than the server sends; or 0 when it was dropped, because the
+// connection is closed or already has more than `backpressureLimit` bytes,
+// 16 MB, waiting to be sent.
+//
+// A message dropped is never let go silently, since the client would carry
+// on without it: an event missing from its conversation, or a command left
+// waiting for its reply. The connection is closed instead, saying why, and
+// the client connects again and catches up from the log, as after any drop,
+// sending again each command still waiting. A connection closed already is
+// left as it is.
+//
+// A message queued is kept: Bun sends it, and every one after it, in order,
+// as the client reads. So nothing more is done. Holding the connection's
+// events back until Bun says it has drained would keep a second queue
+// beside Bun's, with no limit of its own, where Bun's has one: once it is
+// past it, the next message is dropped, which closes the connection as above.
+export function send(socket: Pick<ServerWebSocket<unknown>, "send" | "close">, message: ServerMessage) {
+  if (socket.send(JSON.stringify(message)) === 0) socket.close(DROPPED, DROPPED_WORDS)
+}
+// Why, as the client tells the owner: "The connection to evie's server
+// dropped: …". A close frame holds at most 123 bytes of it.
+const DROPPED_WORDS = "a message to this device could not be sent, so it connects again and catches up"
 
 // A request's body, read as it arrives, or nothing once it is larger than
 // `limit` bytes, as its length says or as it turns out.
