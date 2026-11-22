@@ -1,11 +1,22 @@
-import { inGit } from "./projects.ts"
-import type { Project, PullRequest } from "./types.ts"
+import { inGit } from "../core/projects.ts"
+import type { Plugin, PullRequest } from "../core/types.ts"
 
-// The pull request of the branch a project's folder is on, read with the
-// GitHub CLI, `gh`, as the owner has signed it in on the server's computer.
-// It only reads: `gh pr view` changes nothing on GitHub. How a check's
-// status and conclusion say how it stands is adapted from T3 Code's
-// `toCheckStatus` (MIT licence, notice in LICENSES/t3code-MIT.txt).
+// The built-in github plugin. It reads the pull request of the branch a
+// project's folder is on, with the GitHub CLI, `gh`, as the owner has
+// signed it in on the server's computer, for the web app's project card,
+// and for the base a branch's changes are compared with. It only reads:
+// `gh pr view` changes nothing on GitHub. How a check's status and
+// conclusion say how it stands is adapted from T3 Code's `toCheckStatus`
+// (MIT licence, notice in LICENSES/t3code-MIT.txt).
+
+export function github(): Plugin {
+  return {
+    name: "github",
+    setup(host) {
+      host.pullRequests.add({ name: "github", read: readPullRequest })
+    },
+  }
+}
 
 const FIELDS = "number,title,state,isDraft,url,baseRefName,statusCheckRollup"
 // How long gh may take, in milliseconds, since it asks GitHub over the network.
@@ -46,15 +57,31 @@ function stateOf(check: Rolled): PullRequest["checks"][number]["state"] {
   }
 }
 
-export async function readPullRequest(project: Project): Promise<PullRequest | null> {
+// What gh is given of the server's environment: where to find programs,
+// the home, settings and temporary folders it keeps its sign-in and work
+// in, the language, and its own settings, such as GH_TOKEN. Not git's
+// settings, which would point the git it runs elsewhere, nor any key.
+const GIVEN = /^(PATH|HOME|LANG|LANGUAGE|LC_[A-Z_]+|TMPDIR|XDG_CONFIG_HOME|GH_[A-Z0-9_]+|GITHUB_[A-Z0-9_]+)$/
+
+// Only an https link is given back: anything else, which a page would open
+// as it is, is left out.
+const https = (link: string | undefined) => {
+  try {
+    return link !== undefined && new URL(link).protocol === "https:" ? link : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function readPullRequest(folder: string): Promise<PullRequest | null> {
   // A folder that is not in a repository has no branch, nor pull request.
-  if ((await inGit(project.folder)) === false) return null
+  if ((await inGit(folder)) === false) return null
   let run
   try {
-    // The path is the server's own, as it is now, so that the gh found is the one the owner has.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => GIVEN.test(name)))
     run = Bun.spawn(["gh", "pr", "view", "--json", FIELDS], {
-      cwd: project.folder,
-      env: { ...process.env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" },
+      cwd: folder,
+      env: { ...env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" },
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
@@ -69,15 +96,16 @@ export async function readPullRequest(project: Project): Promise<PullRequest | n
   if (code !== 0) throw new Error(`The pull request could not be read: ${problem.trim().split("\n")[0] || (run.signalCode ? "gh took too long to answer." : `gh stopped with code ${code}.`)}`)
   const read = JSON.parse(said) as { number: number; title: string; state: string; isDraft?: boolean; url: string; baseRefName: string; statusCheckRollup?: Rolled[] }
   const state = read.state === "MERGED" ? "merged" : read.state === "CLOSED" ? "closed" : read.isDraft ? "draft" : "open"
+  const url = https(read.url)
   return {
     number: read.number,
     title: read.title,
     state,
-    url: read.url,
+    ...(url !== undefined && { url }),
     base: read.baseRefName,
     checks: (read.statusCheckRollup ?? []).map((check) => {
-      const url = check.detailsUrl || check.targetUrl
-      return { name: check.name || check.context || "Check", state: stateOf(check), ...(url && { url }) }
+      const url = https(check.detailsUrl || check.targetUrl)
+      return { name: check.name || check.context || "Check", state: stateOf(check), ...(url !== undefined && { url }) }
     }),
   }
 }

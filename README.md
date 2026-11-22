@@ -851,7 +851,7 @@ the per-model settings and the permissions.
 ### Choosing which plugins load
 
 `evie.json` in the data folder lists the plugins to load, in order. Without
-a list, the fourteen built-in ones load:
+a list, the fifteen built-in ones load:
 
 | Plugin | What it adds |
 |---|---|
@@ -868,6 +868,7 @@ a list, the fourteen built-in ones load:
 | `web` | `web_search` and `web_fetch` |
 | `sync` | The backing up of a project's `.evie` folder, and the `/sync` command |
 | `naming` | A name for each session, written by a small model from its first message |
+| `github` | The pull request of a project's branch, read with the GitHub CLI for the web app's project card and diffs |
 | `openrouter` | The connection to models through OpenRouter |
 
 ```json
@@ -886,6 +887,7 @@ a list, the fourteen built-in ones load:
     "web",
     "sync",
     "naming",
+    "github",
     "openrouter",
     { "use": "/path/to/my-plugin.ts", "options": { "greeting": "hi" } }
   ]
@@ -995,7 +997,7 @@ from there: under the login service that environment holds just the data
 folder and `PATH`, which is why `evie service install` names only the
 built-in plugins' keys.
 
-Through the host a plugin can add to five lists:
+Through the host a plugin can add to six lists:
 
 | List | What an entry is |
 |---|---|
@@ -1003,6 +1005,7 @@ Through the host a plugin can add to five lists:
 | `host.providers` | A way to reach a model |
 | `host.profiles` | What one family of models is given: a system prompt and its tools for changing files |
 | `host.commands` | A command you type starting with a slash, such as `/model`. A command can tell the model something with `context.tell`, which adds a note to the conversation |
+| `host.pullRequests` | What reads the pull request of the branch a folder is on: `read(folder)` gives it, or null when there is none or it cannot ask. The `github` plugin adds one, with the GitHub CLI; the first one added is used |
 | `host.changes` | What keeps the files each turn changed, so that a client can show them as diffs: `turns(session)` gives each turn that changed files, with what each file held before the turn and what the turn left in it. `undo` adds one, from the copies it keeps; the first one added is used |
 
 It can also attach to *hooks*, moments where a plugin's code runs:
@@ -1306,7 +1309,7 @@ credited here, and its licence notice is kept with the code.
 - [T3 Code](https://github.com/pingdotgg/t3code) (MIT): the prompt that
   names sessions, in `src/plugins/naming.ts`, rewritten in evie's words;
   and how a pull request's checks are read and summed up, in
-  `src/core/pull-request.ts` and `web/src/pull-request.ts`. The web app's
+  `src/plugins/github.ts` and `web/src/pull-request.ts`. The web app's
   layout follows T3 Code's. Its licence is in `LICENSES/`.
 
 The web app's fonts are [Geist and Geist Mono](https://github.com/vercel/geist-font)

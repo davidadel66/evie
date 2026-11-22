@@ -26,7 +26,7 @@ const turn = (...calls: ScriptedCall[]): ScriptedReply[] => [...calls.map((call)
 // Evie with the file tools, and undo unless it is left out, in a temporary
 // project holding the given files.
 // With `git`, the folder is a repository on main, with the files committed.
-async function start(script: ScriptedReply[], starting: Record<string, string> = {}, options: { undo?: boolean; git?: boolean } = {}) {
+async function start(script: ScriptedReply[], starting: Record<string, string> = {}, options: { undo?: boolean; git?: boolean; plugins?: Plugin[] } = {}) {
   const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
   const projectFolder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
   cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(projectFolder, { recursive: true, force: true }))
@@ -36,7 +36,7 @@ async function start(script: ScriptedReply[], starting: Record<string, string> =
     await git(["add", "-A"], projectFolder)
     await git(["commit", "-q", "-m", "Start"], projectFolder)
   }
-  const plugins: Plugin[] = [scriptedProvider(script).plugin, files(), ...(options.undo === false ? [] : [undo({ dataFolder: home })])]
+  const plugins: Plugin[] = [scriptedProvider(script).plugin, files(), ...(options.undo === false ? [] : [undo({ dataFolder: home })]), ...(options.plugins ?? [])]
   const run = await startEvie(plugins, { home, projectFolder })
   cleanups.push(run.stop)
   return { run, projectFolder }
@@ -293,4 +293,29 @@ test("a file taken out of git but left in the folder is removed, as git counts i
 
   const read = await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })
   expect(read.files).toEqual([{ path: "c.md", status: "removed", added: 0, removed: 1, patch: "@@ -1,1 +0,0 @@\n-c\n" }])
+})
+
+test("without a base, a branch is compared with the base of its pull request, as the plugin that reads them gives it", async () => {
+  const pullRequest: Plugin = {
+    name: "stand-in",
+    setup(host) {
+      host.pullRequests.add({ name: "stand-in", read: async () => ({ number: 7, title: "Feature", state: "open", base: "dev", checks: [] }) })
+    },
+  }
+  const { run, projectFolder } = await start([], { "a.md": "1\n" }, { git: true, plugins: [pullRequest] })
+  await git(["branch", "dev"], projectFolder)
+  await git(["checkout", "-q", "-b", "feature"], projectFolder)
+  await writeFile(join(projectFolder, "a.md"), "2\n")
+  await git(["commit", "-q", "-am", "Change a"], projectFolder)
+  // main moves on, so comparing with it would show its change too.
+  await git(["checkout", "-q", "main"], projectFolder)
+  await writeFile(join(projectFolder, "main-only.md"), "m\n")
+  await git(["add", "-A"], projectFolder)
+  await git(["commit", "-q", "-m", "On main"], projectFolder)
+  await git(["checkout", "-q", "dev"], projectFolder)
+  await git(["merge", "-q", "main"], projectFolder)
+  await git(["checkout", "-q", "feature"], projectFolder)
+
+  const read = await run.evie.send({ type: "read_changes", session: run.session, of: "branch" })
+  expect(read.base).toBe("dev")
 })

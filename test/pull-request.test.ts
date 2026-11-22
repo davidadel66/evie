@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { chmod, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { github } from "../src/index.ts"
 import { git } from "./support/git.ts"
 import { startEvie } from "./support/harness.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
@@ -19,7 +20,8 @@ afterEach(async () => {
 // Evie in a project that is a git repository on a branch of its own, with
 // a stand-in `gh` that prints `answer` and stops with `code`, or with no
 // `gh` at all.
-async function start(gh: { answer?: unknown; said?: string; code?: number } | "missing", options: { git?: boolean } = {}) {
+// Without `plugin`, the github plugin is not loaded.
+async function start(gh: { answer?: unknown; said?: string; code?: number } | "missing", options: { git?: boolean; plugin?: boolean } = {}) {
   const bin = await realpath(await mkdtemp(join(tmpdir(), "evie-bin-")))
   const projectFolder = await realpath(await mkdtemp(join(tmpdir(), "evie-project-")))
   cleanups.push(() => rm(bin, { recursive: true, force: true }), () => rm(projectFolder, { recursive: true, force: true }))
@@ -34,7 +36,7 @@ async function start(gh: { answer?: unknown; said?: string; code?: number } | "m
     await writeFile(join(bin, "said"), gh.said ?? "")
     await writeFile(
       join(bin, "gh"),
-      `#!/bin/sh\nprintf '%s\\n' "$PWD" "$@" > "${bin}/asked"\ncat "${bin}/answer"\ncat "${bin}/said" >&2\nexit ${gh.code ?? 0}\n`,
+      `#!/bin/sh\nprintf '%s\\n' "$PWD" "$@" > "${bin}/asked"\nenv > "${bin}/env"\ncat "${bin}/answer"\ncat "${bin}/said" >&2\nexit ${gh.code ?? 0}\n`,
     )
     await chmod(join(bin, "gh"), 0o755)
   }
@@ -44,10 +46,11 @@ async function start(gh: { answer?: unknown; said?: string; code?: number } | "m
   cleanups.push(async () => {
     process.env.PATH = path
   })
-  const run = await startEvie([scriptedProvider([]).plugin], { projectFolder })
+  const run = await startEvie([scriptedProvider([]).plugin, ...(options.plugin === false ? [] : [github()])], { projectFolder })
   cleanups.push(run.stop)
   const asked = () => readFile(join(bin, "asked"), "utf8").then((text) => text.trim().split("\n"), () => undefined)
-  return { run, asked, projectFolder }
+  const env = () => readFile(join(bin, "env"), "utf8").then((text) => Object.fromEntries(text.trim().split("\n").map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)])))
+  return { run, asked, env, projectFolder }
 }
 
 const PR = {
@@ -112,4 +115,47 @@ test("gh is not asked about a folder that is not in a git repository", async () 
 test("a pull request that could not be read for another reason, such as no network, says why", async () => {
   const { run } = await start({ said: "error connecting to api.github.com", code: 1 })
   await expect(run.evie.send({ type: "read_pull_request", project: run.project!.id })).rejects.toThrow("The pull request could not be read: error connecting to api.github.com")
+})
+
+test("without the github plugin there is no pull request to read, and gh is not asked", async () => {
+  const { run, asked } = await start({ answer: PR }, { plugin: false })
+  expect(await run.evie.send({ type: "read_pull_request", project: run.project!.id })).toBeNull()
+  expect(await asked()).toBeUndefined()
+})
+
+test("only an https link is given for a pull request and its checks: any other is left out", async () => {
+  const strange = {
+    ...PR,
+    url: "javascript:alert(1)",
+    statusCheckRollup: [
+      { __typename: "CheckRun", name: "check", status: "COMPLETED", conclusion: "SUCCESS", detailsUrl: "http://plain.example/1" },
+      { __typename: "StatusContext", context: "deploy", state: "SUCCESS", targetUrl: "data:text/html,hello" },
+      { __typename: "CheckRun", name: "lint", status: "COMPLETED", conclusion: "SUCCESS", detailsUrl: "https://github.com/someone/project/actions/runs/2" },
+    ],
+  }
+  const { run } = await start({ answer: strange })
+  const read = await run.evie.send({ type: "read_pull_request", project: run.project!.id })
+  expect(read?.url).toBeUndefined()
+  expect(read?.checks).toEqual([
+    { name: "check", state: "passed" },
+    { name: "deploy", state: "passed" },
+    { name: "lint", state: "passed", url: "https://github.com/someone/project/actions/runs/2" },
+  ])
+})
+
+test("gh is given only what it needs from the server's environment: its path, home, language and its own settings", async () => {
+  const kept = { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY, GIT_DIR: process.env.GIT_DIR, GH_TOKEN: process.env.GH_TOKEN, LANG: process.env.LANG }
+  Object.assign(process.env, { OPENROUTER_API_KEY: "sk-secret", GIT_DIR: "/elsewhere/.git", GH_TOKEN: "gh-token", LANG: "en_GB.UTF-8" })
+  cleanups.push(async () => {
+    for (const [name, value] of Object.entries(kept)) if (value === undefined) delete process.env[name]
+    else process.env[name] = value
+  })
+  const { run, env } = await start({ answer: PR })
+  await run.evie.send({ type: "read_pull_request", project: run.project!.id })
+  const given = await env()
+  expect(given.GH_TOKEN).toBe("gh-token")
+  expect(given.LANG).toBe("en_GB.UTF-8")
+  expect(given.HOME).toBe(process.env.HOME!)
+  expect(given.PATH).toStartWith(process.env.PATH!)
+  expect(Object.keys(given).filter((name) => name.startsWith("GIT_") || name.includes("API_KEY"))).toEqual([])
 })

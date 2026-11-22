@@ -444,16 +444,24 @@ export type FileDiff = ChangedFile & { patch?: string }
 // what it changed.
 export type TurnChanges = { turn: number; start: number; end?: number; time: number; files: ChangedFile[] }
 
-// A branch's pull request on GitHub, as the GitHub CLI reads it: its
-// number, title, state, address and base branch, and its checks, each by
-// its name, how it stands, and where its details are.
+// A branch's pull request, as a plugin reads it: its number, title,
+// state, address and base branch, and its checks, each by its name, how it
+// stands, and where its details are. An address is only ever an https link.
 export type PullRequest = {
   number: number
   title: string
   state: "open" | "draft" | "merged" | "closed"
-  url: string
+  url?: string
   base: string
   checks: { name: string; state: "passed" | "failed" | "running" | "waiting" | "cancelled" | "skipped" | "neutral"; url?: string }[]
+}
+
+// A plugin that reads the pull request of the branch a folder is on, such
+// as the github plugin. `read` gives null when the branch has none, or the
+// plugin cannot ask, and fails, saying why, when it could not be read.
+export type PullRequestReader = {
+  name: string
+  read(folder: string): Promise<PullRequest | null>
 }
 
 // ---- Hooks --------------------------------------------------------------------
@@ -518,6 +526,9 @@ export type Host = {
   // What keeps the files each turn changed, so that a client can show them
   // as diffs: undo, from the copies it keeps. The first one added is used.
   changes: Registry<ChangeKeeper>
+  // What reads the pull request of a project's branch: the github plugin,
+  // with the GitHub CLI. The first one added is used.
+  pullRequests: Registry<PullRequestReader>
   // Attaches a function to a hook.
   on<Name extends keyof Hooks>(name: Name, handler: Hooks[Name]): void
 }
@@ -813,10 +824,11 @@ export type Commands = {
       | { session: string; of: "branch"; base?: string }
     output: { files: FileDiff[]; base?: string; unavailable?: string }
   }
-  // The pull request of the branch a project's folder is on, read with
-  // the GitHub CLI, `gh`, as it is signed in on the server's computer.
-  // Null when the branch has none, or when `gh` is not installed or not
-  // signed in. Reading only: nothing is changed on GitHub.
+  // The pull request of the branch a project's folder is on, as the
+  // plugin that reads them gives it, such as the github plugin with the
+  // GitHub CLI. Null when the branch has none, when the plugin cannot ask,
+  // as with no `gh` signed in, or when no plugin reads them. Reading only:
+  // nothing is changed on GitHub.
   read_pull_request: {
     input: { project: string }
     output: PullRequest | null

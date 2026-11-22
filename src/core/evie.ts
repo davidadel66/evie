@@ -9,7 +9,6 @@ import { createEventLog } from "./log.ts"
 import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "./projects.ts"
-import { readPullRequest } from "./pull-request.ts"
 import { createQuestions } from "./questions.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
@@ -851,7 +850,11 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       case "uncommitted":
         return readUncommitted(project)
       case "branch":
-        return readBranch(project, input.base)
+        // Without a base, the branch's pull request's, when it has one.
+        return readBranch(project, input.base, async () => {
+          const reader = host.pullRequests.list()[0]
+          return project === null || reader === undefined ? undefined : (await reader.read(project.folder).catch(() => null))?.base
+        })
       default:
         throw new Error("`of` is what to compare: \"turn\", \"session\", \"uncommitted\" or \"branch\".")
     }
@@ -1044,7 +1047,9 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
         case "read_pull_request": {
           const project = projects.get(command.project)
           if (!project) throw new Error(`There is no project with the id "${String(command.project)}".`)
-          return (await readPullRequest(project)) as Output
+          // The project's own plugins once a session has opened there, or else the global ones.
+          const reader = (built.get(project.id) ?? built.get(null)!).host.pullRequests.list()[0]
+          return ((await reader?.read(project.folder)) ?? null) as Output
         }
         case "read_settings":
           return (await editor().read(projects.list())) as Output

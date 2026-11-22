@@ -193,7 +193,7 @@ test("with no list in evie.json, a plugin file added goes after the built-in one
 
   expect(JSON.parse(await readFile(join(home, "evie.json"), "utf8"))).toEqual({ model: "made-up/model", addPlugins: [greeter] })
   expect(added.plugins.map((plugin) => plugin.name)).toEqual([
-    ...["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "naming", "openrouter"],
+    ...["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "naming", "github", "openrouter"],
     greeter,
   ])
 })
