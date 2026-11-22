@@ -37,6 +37,11 @@ export type GitOptions = {
   // In milliseconds: stopped after this long. Thirty seconds unless given.
   timeout?: number
   signal?: AbortSignal
+  // For a command that lists, such as ls-files: its output is read as it
+  // comes, and git is stopped once more than `count` entries, each ended by
+  // `separator`, have come, and what follows is never read. `stopped` then
+  // says so.
+  most?: { separator: string; count: number }
 }
 
 const ALWAYS: [string, string][] = [
@@ -122,11 +127,33 @@ async function spawn(folder: string, args: string[], env: Record<string, string>
       timeout: options.timeout ?? 30_000,
       ...(options.signal && { signal: options.signal }),
     })
-    const [said, problem, code] = await Promise.all([new Response(child.stdout).arrayBuffer(), new Response(child.stderr).text(), child.exited])
-    return { code, stdout: Buffer.from(said), stderr: problem, stopped: child.signalCode !== null }
+    const read = options.most === undefined ? new Response(child.stdout).arrayBuffer().then((said) => ({ said: Buffer.from(said), cut: false })) : readAtMost(child, options.most)
+    const [{ said, cut }, problem, code] = await Promise.all([read, new Response(child.stderr).text(), child.exited])
+    return { code, stdout: said, stderr: problem, stopped: cut || child.signalCode !== null }
   } catch (cause) {
     return { code: 127, stdout: Buffer.alloc(0), stderr: `git could not be started: ${cause instanceof Error ? cause.message : String(cause)}`, stopped: false }
   }
+}
+
+// What a command writes, read as it comes, up to and with the entry that is
+// one more than `count`; then the command is stopped. Each piece is only
+// looked through for its separators, as it comes.
+async function readAtMost(child: { stdout: ReadableStream<Uint8Array>; kill(): void }, most: { separator: string; count: number }): Promise<{ said: Buffer; cut: boolean }> {
+  const separator = most.separator.charCodeAt(0)
+  const pieces: Uint8Array[] = []
+  let entries = 0
+  for await (const piece of child.stdout) {
+    for (let at = piece.indexOf(separator); at !== -1; at = piece.indexOf(separator, at + 1)) {
+      entries += 1
+      if (entries > most.count) {
+        pieces.push(piece.subarray(0, at + 1))
+        child.kill()
+        return { said: Buffer.concat(pieces), cut: true }
+      }
+    }
+    pieces.push(piece)
+  }
+  return { said: Buffer.concat(pieces), cut: false }
 }
 
 // The same, waiting for it, for a caller that cannot wait otherwise. It

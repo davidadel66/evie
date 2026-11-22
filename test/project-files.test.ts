@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { chmod, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { runGit } from "../src/core/git.ts"
 import { listProjectFiles } from "../src/core/project-files.ts"
 import { git } from "./support/git.ts"
 import { startEvie } from "./support/harness.ts"
@@ -108,4 +109,17 @@ test("a client lists a project's files by its id", async () => {
 
   expect(await run.evie.send({ type: "list_files", project: run.project!.id })).toEqual({ files: ["plan.md"], more: false })
   await expect(run.evie.send({ type: "list_files", project: "no-such-project" })).rejects.toThrow('There is no project with the id "no-such-project".')
+})
+
+test("git's output can be read as it comes and git stopped once more than so many entries have arrived, the rest never read", async () => {
+  const folder = await folderWith(Array.from({ length: 30 }, (_, at) => `file-${String(at).padStart(2, "0")}.md`))
+  await git(["init", "-q"], folder)
+
+  const cut = await runGit(folder, ["ls-files", "--others", "-z"], { most: { separator: "\0", count: 5 } })
+  const whole = await runGit(folder, ["ls-files", "--others", "-z"], { most: { separator: "\0", count: 100 } })
+
+  expect(cut.stopped).toBe(true)
+  expect(cut.stdout.toString("utf8").split("\0").filter(Boolean)).toHaveLength(6)
+  expect(whole).toMatchObject({ code: 0, stopped: false })
+  expect(whole.stdout.toString("utf8").split("\0").filter(Boolean)).toHaveLength(30)
 })

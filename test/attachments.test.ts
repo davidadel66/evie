@@ -19,7 +19,7 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
-async function start(script: ScriptedReply[] = [{ text: ["Seen."] }], images?: (model: string) => boolean | undefined): Promise<Run & { model: ReturnType<typeof scriptedProvider> }> {
+async function start(script: ScriptedReply[] = [{ text: ["Seen."] }, { text: ["Seen again."] }], images?: (model: string) => boolean | undefined): Promise<Run & { model: ReturnType<typeof scriptedProvider> }> {
   const model = scriptedProvider(script, { ...(images && { images }) })
   const run = await startEvie([model.plugin])
   cleanups.push(run.stop)
@@ -106,6 +106,38 @@ test("what a file is comes from its bytes: a picture by its signature, whatever 
   expect(await typeOf("fake.png", bytes("<html>not a picture</html>"))).toEqual({ saved: "application/octet-stream", recorded: "application/octet-stream" })
   expect(await typeOf("drawing.svg", bytes("<svg></svg>"))).toEqual({ saved: "application/octet-stream", recorded: "application/octet-stream" })
   expect(await typeOf("plan.txt", bytes("Beds."))).toEqual({ saved: "text/plain", recorded: "text/plain" })
+})
+
+test("a JPEG whose frame comes after a full EXIF segment, past the first 64 KiB, is still a JPEG, on upload and on the message", async () => {
+  const run = await start()
+  // The start, an EXIF segment as long as a segment can be, then the frame.
+  const exif = new Uint8Array(2 + 2 + 65_535 + 19)
+  exif.set([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff])
+  exif.set([0xff, 0xc0, 0, 11, 8, 0, 3, 0, 4, 1, 1, 0x11, 0, 0xff, 0xd9], 2 + 2 + 65_535)
+  expect(exif.indexOf(0xc0, 6)).toBeGreaterThan(64 * 1024)
+
+  const kept = await run.evie.attachments.save(run.session, "camera.jpg", exif)
+  await run.evie.send({ type: "send_message", session: run.session, text: "", attachments: [kept.path] })
+  await Bun.sleep(0)
+  const recorded = stored(run.events).findLast((event) => event.type === "user_message")
+
+  expect(kept.type).toBe("image/jpeg")
+  expect(recorded?.type === "user_message" && recorded.body.attachments?.[0]?.type).toBe("image/jpeg")
+})
+
+test("a name loses the characters that would start a line or turn the text around, as kept and as the model is told it", async () => {
+  const run = await start()
+  const kept = await run.evie.attachments.save(run.session, "plan\u2028b\u2029c\u0085d\u202Efdp.txt", bytes("Beds.\n"))
+
+  await say(run, "", run.session, [kept.path])
+
+  expect(kept.name).toBe("plan b c dfdp.txt")
+  expect(run.model.requests[0]?.messages[0]?.text).toStartWith('[Attached: "plan b c dfdp.txt" (text/plain, 6 bytes)')
+  // Read back from a file named with them, as a client could name a path.
+  const odd = join(kept.path, "..", "odd\u2066name\u2028.txt")
+  await writeFile(odd, "x")
+  await say(run, "", run.session, [odd])
+  expect(run.model.requests.at(-1)?.messages.at(-1)?.text).toStartWith('[Attached: "oddname .txt"')
 })
 
 test("a message can carry only files kept for its session, named by their paths: any other path is refused", async () => {
@@ -281,6 +313,24 @@ test("a request refused while it carries images is sent again with each image by
   expect(stored(run.events).filter((event) => event.type === "turn_end").map((event) => event.type === "turn_end" && event.body.reason)).toEqual(["completed", "completed"])
 })
 
+test("a request refused again without its images was not refused for them, so they are sent again on the next turn", async () => {
+  const run = await start(
+    [
+      { text: [], error: "Invalid request.", refused: true },
+      { text: [], error: "Invalid request.", refused: true },
+      { text: ["Seen."] },
+    ],
+    () => true,
+  )
+  const photo = await run.evie.attachments.save(run.session, "photo.png", png())
+
+  await say(run, "Look", run.session, [photo.path])
+  await say(run, "Try again")
+
+  expect(run.model.requests.map((request) => imagesIn(request).length)).toEqual([1, 0, 1])
+  expect(stored(run.events).filter((event) => event.type === "turn_end").map((event) => event.type === "turn_end" && event.body.reason)).toEqual(["error", "completed"])
+})
+
 test("when it cannot be told whether the model takes images, the last answer for that model is used; with none, images go by their paths, not said to be unshowable", async () => {
   let answer: boolean | undefined = undefined
   const run = await start([{ text: ["One."] }, { text: ["Two."] }, { text: ["Three."] }], () => answer)
@@ -348,6 +398,32 @@ test("with no project, the model may read the files attached in its own session,
   await run.evie.send({ type: "delete_session", session })
   expect(await Bun.file(plan.path).exists()).toBe(false)
   expect(await readdir(join(home, "attachments"))).toEqual([])
+})
+
+test("the model may not read through an attachments folder that is itself a link, nor through a session's folder in it that is", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "evie-home-")))
+  const outside = await realpath(await mkdtemp(join(tmpdir(), "evie-outside-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(outside, { recursive: true, force: true }))
+  await writeFile(join(outside, "secret.txt"), "not yours\n")
+  const script: ScriptedReply[] = []
+  const run = await startEvie([scriptedProvider(script).plugin, files(), permissions({ mode: "auto", dataFolder: home })], { home })
+  cleanups.push(run.stop)
+  const { session } = await run.evie.send({ type: "open_session" })
+  const read = async (path: string) => {
+    script.push({ text: [], calls: [{ name: "read", input: { path } }] }, { text: ["Read."] })
+    await say(run, "Read it", session)
+    return stored(run.events).findLast((event) => event.type === "tool_result")!.body.text
+  }
+
+  await mkdir(join(home, "attachments"))
+  await symlink(outside, join(home, "attachments", session))
+  expect(await read(join(home, "attachments", session, "secret.txt"))).toStartWith("Blocked by the guard:")
+
+  await rm(join(home, "attachments"), { recursive: true })
+  await mkdir(join(outside, session))
+  await writeFile(join(outside, session, "secret.txt"), "not yours either\n")
+  await symlink(outside, join(home, "attachments"))
+  expect(await read(join(home, "attachments", session, "secret.txt"))).toStartWith("Blocked by the guard:")
 })
 
 test("a subagent of a session with no project may read the files attached in the session that started it", async () => {

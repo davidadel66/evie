@@ -314,8 +314,11 @@ export function createLoop(options: LoopOptions): Loop {
     let compactionFailed = false
     let retriedTooLong = false
     // Set once a request was refused while it carried images: the rest of
-    // the turn names every image by its path.
+    // the turn names every image by its path. `suspect` are the images it
+    // carried, which are not sent again once a request without them is
+    // answered, since they were what was refused.
     let withoutImages = false
+    let suspect: string[] = []
 
     // Moving input from the inbox to the log is one transaction, so a crash
     // can neither lose a message nor record it twice. If it fails, the turn
@@ -430,13 +433,14 @@ export function createLoop(options: LoopOptions): Loop {
         }
         if (failure !== undefined) {
           // A request refused while it carried images is sent again with
-          // each image by its path, and those images are not sent again,
-          // so that a session is never stuck on an image.
+          // each image by its path, so that a session is never stuck on an
+          // image. Refused again, the images were not the cause.
           if (refused && shown.images.size > 0) {
-            for (const path of shown.images.keys()) refusedImages.add(path)
+            suspect = [...shown.images.keys()]
             withoutImages = true
             continue
           }
+          suspect = []
           // A request that was more than the model can read is compacted
           // and sent again, once.
           if (tooLong && !retriedTooLong) {
@@ -451,6 +455,10 @@ export function createLoop(options: LoopOptions): Loop {
           error = failure
           break
         }
+
+        // Answered without the images it was refused with: those are not sent again.
+        for (const path of suspect) refusedImages.add(path)
+        suspect = []
 
         // A provider that did not stop where it was asked to may let the
         // model write what only the core writes. It is cut off there, and so

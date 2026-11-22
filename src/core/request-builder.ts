@@ -1,3 +1,4 @@
+import { shownName } from "./attachments.ts"
 import { conversationOf, summaryMessage } from "./compaction.ts"
 import type { Attachment, EventBodies, Message, Request, StoredEvent, Tool } from "./types.ts"
 
@@ -77,11 +78,11 @@ function ownerMessage(body: EventBodies["user_message"], { images, unknown }: Sh
   if (attached.length === 0) return { role: "user", text: body.text }
   const shown = attached.filter((each) => images.has(each.path))
   // The name and the path are quoted, so that nothing in them can start a
-  // line of its own; the name, which a client chose, loses any square
-  // bracket too, so that it cannot close the line it is in.
+  // line of its own; the name, which a client chose, loses what could close
+  // the line it is in, or start another, too.
   const quoted = (text: string) => JSON.stringify(text)
   const lines = attached.map(
-    (each) => `[Attached: ${quoted(each.name.replaceAll("[", "(").replaceAll("]", ")"))} (${each.type}, ${sizeIn(each.size)}), kept at ${quoted(each.path)}. ${howShown(each, images, unknown === true)}]`,
+    (each) => `[Attached: ${quoted(shownName(each.name))} (${each.type}, ${sizeIn(each.size)}), kept at ${quoted(each.path)}. ${howShown(each, images, unknown === true)}]`,
   )
   return {
     role: "user",

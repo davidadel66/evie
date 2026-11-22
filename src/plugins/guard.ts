@@ -211,9 +211,12 @@ export function followLinks(absolute: string): string {
 // of its background jobs; and the files the owner attached to its messages
 // with no project to keep them in, or to those of `parent`, the session
 // that started it as a subagent. Links are followed, so nothing outside
-// them can be reached through them.
+// them can be reached through them; and a folder of attachments that is
+// itself a link, or is in one, is no allowance at all, since what it
+// leads to is not the session's.
 export function isSavedOutput(data: string, session: string, path: string, parent?: string): boolean {
-  const folders = [resolve(data, "tool-output", session), resolve(data, "attachments", session), ...(parent === undefined ? [] : [resolve(data, "attachments", parent)])]
+  const attached = (owner: string) => (isLink(resolve(data, "attachments")) || isLink(resolve(data, "attachments", owner)) ? [] : [resolve(data, "attachments", owner)])
+  const folders = [resolve(data, "tool-output", session), ...attached(session), ...(parent === undefined ? [] : attached(parent))]
   return folders.some((folder) => {
     const inside = relative(followLinks(folder), followLinks(resolve(path)))
     return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
@@ -230,6 +233,14 @@ export function isDefinition(data: string, path: string): boolean {
     const inside = relative(followLinks(resolve(data, kind)), real)
     return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))
   })
+}
+
+function isLink(absolute: string): boolean {
+  try {
+    return lstatSync(absolute).isSymbolicLink()
+  } catch {
+    return false
+  }
 }
 
 function isBrokenLink(absolute: string): boolean {

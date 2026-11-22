@@ -39,7 +39,7 @@ export async function listProjectFiles(
 // time limit may be missing some. When git will not list them, as for a
 // repository it does not trust, nothing: the folder is walked instead.
 async function listedByGit(folder: string, limit: number, within: number, leftOut: (path: string) => boolean): Promise<Listing | undefined> {
-  const run = await runGit(folder, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { timeout: within })
+  const run = await runGit(folder, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { timeout: within, most: { separator: "\0", count: limit } })
   if (run.code !== 0 && !run.stopped) return undefined
   // A listing cut short may end part way through a path, which is dropped.
   const said = run.stdout.toString("utf8")

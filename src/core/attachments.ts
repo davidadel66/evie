@@ -91,7 +91,7 @@ export function createAttachments(options: {
       if (bytes.byteLength > ATTACHMENT_LIMIT) throw new Error(`${name} is larger than the ${ATTACHMENT_LIMIT / 1024 / 1024} MB a file attached can be.`)
       const root = rootFor(session)
       const day = await folderAt(root, today())
-      const kept = name.replaceAll("[", "(").replaceAll("]", ")")
+      const kept = shownName(name)
       for (let count = 1; ; count++) {
         const path = join(day, count === 1 ? kept : numbered(kept, count))
         try {
@@ -125,7 +125,7 @@ export function createAttachments(options: {
       const root = rootFor(session)
       return given.map((path: string) => {
         if (!within(path, root) || !isKept(path)) throw new Error(`${path} is not a file kept for this session, so it cannot go with the message. Attach it again.`)
-        return { path, name: basename(path), type: kindOf(path, opening(path)), size: lstatSync(path).size }
+        return { path, name: basename(path), type: kindOf(path, keptBytes(path)), size: lstatSync(path).size }
       })
     },
   }
@@ -158,6 +158,13 @@ async function folderAt(root: string, day: string): Promise<string> {
   return folder
 }
 
+// A name as it is kept and as the model is told it: square brackets become
+// round ones, so that a name cannot close the line it is in; a line or
+// paragraph separator becomes a space, and a control that turns text
+// around is left out, so that it cannot start a line or hide what follows.
+export const shownName = (name: string) =>
+  name.replaceAll("[", "(").replaceAll("]", ")").replace(/[\u0085\u2028\u2029]/g, " ").replace(/[\u202a-\u202e\u2066-\u2069]/g, "")
+
 // A plain file name: one with no folder in it, so that it cannot lead out
 // of the folder it is kept in, and nothing a file system or a reader would
 // trip on.
@@ -174,17 +181,18 @@ function kindOf(path: string, bytes: Uint8Array): string {
   return byName === "" || byName.startsWith("image/") ? "application/octet-stream" : byName
 }
 
-// The first bytes of a file, enough to say what picture it is and its size.
-function opening(path: string): Uint8Array {
-  const bytes = new Uint8Array(OPENING)
+// A kept file's bytes, as far as a file kept can be long, so that what it
+// is is read from all of them, as it was when it was kept: a picture's
+// header can come late, as a JPEG's after a long EXIF segment.
+function keptBytes(path: string): Uint8Array {
+  const bytes = new Uint8Array(Math.min(lstatSync(path).size, ATTACHMENT_LIMIT))
   const file = openSync(path, "r")
   try {
-    return bytes.subarray(0, readSync(file, bytes, 0, OPENING, 0))
+    return bytes.subarray(0, readSync(file, bytes, 0, bytes.byteLength, 0))
   } finally {
     closeSync(file)
   }
 }
-const OPENING = 64 * 1024
 
 // A picture's kind and its size in pixels, read from the opening of its
 // file: PNG, JPEG, GIF and WebP, as each one's format says. Anything else
