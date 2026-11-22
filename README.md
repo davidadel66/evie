@@ -1167,7 +1167,7 @@ What happens without a rule depends on the mode:
 |---|---|---|---|---|
 | `read-only` | Allowed | Denied | Only ones that just look, such as `ls` and `git status` | Denied |
 | `manual` | Allowed | Asks | Asks, except ones that just look | Asks |
-| `auto` | Allowed | Allowed | Allowed, except the dangerous ones below, which ask | Reading is allowed; changing a file asks, except in the temp folder |
+| `auto` | Allowed | Allowed | Allowed, except the dangerous ones below, which ask | Reading is allowed; showing a file asks, since a copy is kept in the project; changing a file asks, except in the temp folder |
 
 In `auto` mode evie runs any command, wherever it reads, and asks only
 before the dangerous ones:

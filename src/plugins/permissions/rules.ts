@@ -14,7 +14,8 @@ export type Effect = "allow" | "deny" | "ask"
 // The three ways of working. A mode is what happens when no rule matches.
 //   read-only  nothing is changed, and nothing is asked
 //   manual     reading is free; every change and every command is asked about
-//   auto       reading is free anywhere, and changing files inside the
+//   auto       reading is free anywhere, except showing a file from outside
+//              the project, which copies it in; and changing files inside the
 //              project and the temp folder; any command runs, except the
 //              dangerous ones, which are asked about: those that send or
 //              publish, delete or overwrite files elsewhere, or change the
@@ -48,6 +49,9 @@ export type Act = {
   kind: "path" | "command" | "other"
   // For a path: whether it is a folder being searched, not one file.
   folder?: boolean
+  // For a path: whether it is being shown, which keeps a copy of it in the
+  // project's .evie folder, whose files are backed up.
+  shown?: boolean
   // For a command: the files it names, in full.
   names?: string[]
   // For a command: whether it deletes, moves or overwrites files outside
@@ -141,7 +145,7 @@ export function actsOf(call: CheckedToolCall, folder: string | null): Act[] {
   // is held to the rules for reading each file it is given.
   if (call.name === "show") {
     const given = Array.isArray(call.input.paths) ? call.input.paths.map(text).filter((each) => each !== "") : []
-    return given.length > 0 ? given.map((each) => path("read", each)) : [path("read", ".")]
+    return (given.length > 0 ? given.map((each) => path("read", each)) : [path("read", ".")]).map((act) => ({ ...act, shown: true }))
   }
   if (call.name === "patch") {
     const files = patchFiles(text(call.input.patchText))
@@ -218,7 +222,8 @@ function byMode(act: Act, mode: Mode): Effect {
   // work. In read-only mode a subagent is read-only too, so starting one
   // changes nothing. Giving a subagent more work is the same as starting one.
   if (act.action === "subagent" || act.action === "subagent_send") return mode === "manual" ? "ask" : "allow"
-  if (act.action === "read") return act.inside || mode === "auto" ? "allow" : "ask"
+  // A file shown from outside the project is copied in, so it asks in every mode.
+  if (act.action === "read") return act.inside || (mode === "auto" && !act.shown) ? "allow" : "ask"
   if (act.action === "edit") return mode === "auto" && (act.inside || isTemp(act.target, false)) ? "allow" : "ask"
   if (act.action === "shell") {
     // The dangerous ones: what leaves the computer, what deletes or

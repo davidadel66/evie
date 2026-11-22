@@ -247,17 +247,16 @@ test("show is reading each file it is given: a file inside the project is shown 
   }
   expect(asked).toEqual([])
 
-  await mode("manual")
-  expect(await attempt(showing("out/chart.png", "/somewhere/else/plot.png"), YES)).toBe("done")
-  expect(asked.at(-1)?.text).toBe("Let evie show you /somewhere/else/plot.png, which is outside the project? A copy is kept in Storage.")
+  for (const each of ["manual", "auto"]) {
+    await mode(each)
+    expect(await attempt(showing("out/chart.png", "/somewhere/else/plot.png"), YES)).toBe("done")
+    expect(asked.at(-1)?.text).toBe("Let evie show you /somewhere/else/plot.png, which is outside the project? A copy is kept in Storage.")
+  }
   expect(await attempt(showing("/somewhere/else/plot.png"), NO)).toStartWith("The owner said no to this")
-  // In auto mode reading is free anywhere, and so is showing.
-  await mode("auto")
-  expect(await attempt(showing("out/chart.png", "/somewhere/else/plot.png"))).toBe("done")
   await mode("read-only")
   expect(await attempt(showing("/somewhere/else/plot.png"))).toStartWith("Not allowed: evie is in read-only mode")
 
-  expect(asked).toHaveLength(2)
+  expect(asked).toHaveLength(3)
   expect(ran).toEqual([
     "show out/chart.png " + join(folder, "docs", "guide.md"),
     "show out/chart.png " + join(folder, "docs", "guide.md"),
@@ -770,7 +769,7 @@ test("a rule written with a path that goes through a link still matches", async 
 
 // ---- Auto mode: anything but what is dangerous ---------------------------------------------------
 
-test("in auto mode any command runs without asking, wherever it reads, and so do the tools that read", async () => {
+test("in auto mode any command runs without asking, wherever it reads, and so do the tools that read, show aside", async () => {
   const { attempt, asked, folder } = await start({ mode: "auto" })
   const commands = [
     "cat /tmp/evie-tc.log | tr '{}' '()'",
@@ -789,7 +788,6 @@ test("in auto mode any command runs without asking, wherever it reads, and so do
   for (const call of [
     read("/somewhere/else/notes.md"),
     { name: "grep", input: { pattern: "x", path: "/another/place" } },
-    { name: "show", input: { paths: ["/somewhere/else/plot.png"] } },
     edit("/tmp/evie-notes.md"),
     edit(join(tmpdir(), "evie-x.txt")),
   ]) {
@@ -830,6 +828,8 @@ test("in auto mode the dangerous is still asked about: sending, deleting or over
     shell("pmset sleepnow"),
     shell("scutil --set HostName box"),
     edit("/somewhere/else/hosts"),
+    // A file shown is copied into the project, whose files are backed up, so showing one from outside asks in every mode.
+    { name: "show", input: { paths: ["/somewhere/else/plot.png"] } },
   ]
   for (const call of calls) expect(await attempt(call, NO)).toStartWith("The owner said no to this.")
   expect(asked).toHaveLength(calls.length)
