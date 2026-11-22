@@ -90,7 +90,7 @@ export function PromptEditor({ ref, box, changed, moved, oneRow, placeholder, pa
 
   const empty = box.parts.length === 0
   return (
-    <div className="relative flex min-w-0 flex-1 self-stretch">
+    <div className="relative min-w-0 flex-1">
       {empty && (
         <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 truncate text-field text-text-muted">
           {placeholder}
@@ -206,6 +206,9 @@ function readBox(root: HTMLElement): { parts: Part[]; caret: number; clean: bool
       } else if (child instanceof HTMLBRElement) {
         if (child.dataset.tail !== undefined && top && child === root.lastChild) continue
         clean = false
+        // A break the browser leaves at the very end, as when the last
+        // chip is taken off, only holds the line open: it is no new line.
+        if (top && child === root.lastChild) continue
         words("\n")
       } else {
         clean = false

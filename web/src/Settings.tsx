@@ -207,7 +207,8 @@ function Pages({ page, items, go }: { page: Page; items: SettingItem[]; go(item:
       aria-label="Settings pages"
       className={cn(
         "flex w-settings-nav shrink-0 flex-col gap-2 overflow-y-auto border-r border-line bg-bg-side p-2",
-        opened ? "max-wide:absolute max-wide:inset-y-0 max-wide:left-0 max-wide:z-10 max-wide:w-full" : "max-wide:w-settings-rail",
+        // Opened at phone width, under the header, whose Close stays in reach.
+        opened ? "max-wide:absolute max-wide:inset-x-0 max-wide:top-settings-header max-wide:bottom-0 max-wide:z-10 max-wide:w-full max-wide:border-r-0" : "max-wide:w-settings-rail",
       )}
     >
       <label className={cn("flex h-row-height shrink-0 items-center gap-2 rounded-md px-2 text-text-muted hover:bg-surface", !opened && "max-wide:hidden")}>
@@ -369,7 +370,7 @@ function Row({
       data-setting={id}
       tabIndex={-1}
       aria-label={label}
-      className={cn("@container rounded-md px-3 py-3 outline-none transition-colors motion-reduce:transition-none wide:px-4", found && "bg-surface-raised")}
+      className={cn("@container px-3 py-3 outline-none transition-colors motion-reduce:transition-none wide:px-4", found && "rounded-md bg-surface-raised")}
     >
       <div className="flex flex-col gap-3 @min-[512px]:flex-row @min-[512px]:items-center @min-[512px]:gap-8">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
