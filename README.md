@@ -1543,8 +1543,8 @@ model, so they need no key and no network.
 ### Working on the web app
 
 The web app is in `web/`: a React page, styled with Tailwind, bundled by
-Bun's own bundler. There is no build step. `evie serve` builds the page in
-memory as it starts, which takes a few milliseconds, and serves it.
+Bun's own bundler. There is no build step. `evie serve` builds the page as
+it starts, which takes about half a second, and serves it from memory.
 
 To work on it, start a development server in the repository's folder:
 
@@ -1568,7 +1568,11 @@ Two questions were settled by trying them:
 - **Tailwind is built by `evie serve` itself, with no build script.** It
   calls `Bun.build` on `web/index.html` with Tailwind's plugin,
   `bun-plugin-tailwind`, handed over in code, and serves the result from
-  memory, minified. Bun's other way, handing the page to `Bun.serve` with
+  memory, minified. The build runs in a short-lived process of its own
+  (`src/server/build-web-app.ts`), with the server's own Bun, started in the
+  repository's folder: Bun's bundler keeps its working memory, about 300 MB,
+  for as long as the process that ran it lives, and the server runs all the
+  time. Bun's other way, handing the page to `Bun.serve` with
   `development: false`, bundles on the first request, but takes its plugins
   only from a `bunfig.toml` in the folder the server was started in. A login
   service is not started in the repository's folder, so the page would be
