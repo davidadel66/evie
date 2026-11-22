@@ -6,11 +6,13 @@ import { PATHS } from "../../src/server/wire.ts"
 // are told its state and redrawn as it changes. It is the same network
 // client the terminal uses, so it catches up by itself after a drop.
 
-// What the screens are told. Reconnecting, the reason says why the line is
-// down. Signed out, the screens offer to sign in, and the reason, when there
-// is one, says why, in words for the owner.
+// What the screens are told, with reasons in words for the owner.
+// Connecting, until the first connection is made, the reason says why the
+// last try failed. Reconnecting, after a drop, it says why the line is down.
+// Signed out, the screens offer to sign in, and the reason, when there is
+// one, says why.
 export type ConnectionState =
-  | { status: "connecting" }
+  | { status: "connecting"; reason?: string }
   | { status: "connected"; evie: Evie }
   | { status: "reconnecting"; reason: string }
   | { status: "signed out"; reason?: string }
@@ -23,8 +25,11 @@ export type ConnectionOptions = {
   // The code of a sign-in link the page was opened with, traded for the
   // cookie before connecting.
   code?: string
-  // For tests: the first wait, in milliseconds, before trying again.
+  // For tests: the first wait, in milliseconds, before trying again, and
+  // how long a sign-in may wait for the server's answer, ten seconds when
+  // left out.
   firstWait?: number
+  answerWithin?: number
 }
 
 export type Connection = {
@@ -35,7 +40,8 @@ export type Connection = {
   subscribe(listener: () => void): () => void
   // Signs in with a token pasted in, as on another device: trades it for the
   // browser's cookie, and connects with that. Gives back what went wrong,
-  // in words for the owner, or nothing once it is connecting.
+  // in words for the owner, or nothing once it is connecting. A sign-in
+  // asked for while one is under way, or while it is connecting, is let be.
   signIn(proof: { token: string }): Promise<string | undefined>
   // Closes the connection, for good.
   close(): Promise<void>
@@ -47,6 +53,9 @@ export function openConnection(options: ConnectionOptions): Connection {
   let evie: Evie | undefined
   // Fires when the connection is closed, and stops it trying again.
   const closing = new AbortController()
+  // True while it is connecting, or signing in on the way to it, so that a
+  // second sign-in, as from a double press, opens no second connection.
+  let busy = false
 
   function set(next: ConnectionState) {
     state = next
@@ -61,6 +70,14 @@ export function openConnection(options: ConnectionOptions): Connection {
   // `signInFailed` says why a sign-in code just failed, for when the browser
   // is signed out.
   async function start(signInFailed?: string) {
+    busy = true
+    try {
+      await tryUntilAnswered(signInFailed)
+    } finally {
+      busy = false
+    }
+  }
+  async function tryUntilAnswered(signInFailed?: string) {
     for (let wait = options.firstWait ?? FIRST_WAIT; ; wait = Math.min(wait * 2, LONGEST_WAIT)) {
       try {
         const client: Evie = await connect({
@@ -69,7 +86,7 @@ export function openConnection(options: ConnectionOptions): Connection {
           ...(options.firstWait !== undefined && { firstWait: options.firstWait }),
           // So that an address that takes the connection and never answers is tried again.
           signal: AbortSignal.any([closing.signal, AbortSignal.timeout(CONNECT_TIMEOUT)]),
-          onDrop: (reason) => set({ status: "reconnecting", reason }),
+          onDrop: (reason) => set({ status: "reconnecting", reason: `The connection to evie's server dropped: ${reason}.` }),
           onBack: () => set({ status: "connected", evie: client }),
           // The server took the token back, or refuses it or this page as
           // the client connects again, which trying again will not change.
@@ -92,14 +109,16 @@ export function openConnection(options: ConnectionOptions): Connection {
         // Reached at an address the server does not let in, which signing in
         // will not change: the reason says what to change.
         if (cause.reason === "page") return set({ status: "signed out", reason: cause.message })
-        set({ status: "reconnecting", reason: cause.message })
+        set({ status: "connecting", reason: cause.message })
         await pause(wait, closing.signal)
       }
     }
   }
   // A sign-in code is traded first. When it fails, the browser may be
   // signed in already, from before, so it connects all the same.
-  void (options.code === undefined ? start() : trade(options.url, { code: options.code }).then(start))
+  const answerWithin = options.answerWithin ?? ANSWER_WITHIN
+  busy = true
+  void (options.code === undefined ? start() : trade(options.url, { code: options.code }, closing.signal, answerWithin).then(start))
 
   return {
     state: () => state,
@@ -108,8 +127,13 @@ export function openConnection(options: ConnectionOptions): Connection {
       return () => void listeners.delete(listener)
     },
     async signIn(proof) {
-      const failed = await trade(options.url, proof)
-      if (failed !== undefined) return failed
+      if (busy) return undefined
+      busy = true
+      const failed = await trade(options.url, proof, closing.signal, answerWithin)
+      if (failed !== undefined) {
+        busy = false
+        return failed
+      }
       set({ status: "connecting" })
       void start()
       return undefined
@@ -123,12 +147,20 @@ export function openConnection(options: ConnectionOptions): Connection {
 
 // Trades a sign-in code or a token for the browser's cookie, which the
 // browser keeps from the answer. Gives back what went wrong, in words for
-// the owner, or nothing.
-async function trade(url: string, proof: { code: string } | { token: string }): Promise<string | undefined> {
+// the owner, or nothing. It waits for the answer no longer than `within`
+// milliseconds, or until the connection is closed.
+async function trade(url: string, proof: { code: string } | { token: string }, closing: AbortSignal, within: number): Promise<string | undefined> {
+  const timeout = AbortSignal.timeout(within)
   let answer: Response
   try {
-    answer = await fetch(new URL(PATHS.login, url), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(proof) })
+    answer = await fetch(new URL(PATHS.login, url), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(proof),
+      signal: AbortSignal.any([closing, timeout]),
+    })
   } catch {
+    if (timeout.aborted) return "evie's server did not answer in time. Check that `evie serve` is running, and try again."
     return "evie's server could not be reached. Check that `evie serve` is running."
   }
   if (answer.ok) return undefined
@@ -142,6 +174,7 @@ async function trade(url: string, proof: { code: string } | { token: string }): 
 const FIRST_WAIT = 1000
 const LONGEST_WAIT = 10_000
 const CONNECT_TIMEOUT = 10_000
+const ANSWER_WITHIN = 10_000
 
 // Waits, or until the signal fires.
 function pause(ms: number, signal: AbortSignal): Promise<void> {

@@ -68,7 +68,8 @@ test("when the line drops it is reconnecting, and connected again once the serve
   await until(connection, "connected")
 
   await served.server.stop()
-  await until(connection, "reconnecting")
+  // Why, in a sentence for the page to show; the runtime says what ended the line.
+  expect(await until(connection, "reconnecting")).toEqual({ status: "reconnecting", reason: expect.stringMatching(/^The connection to evie's server dropped: .+\.$/) })
   const again = startServer({ evie: served.run.evie, tokens: served.tokens, host: "127.0.0.1", port })
   cleanups.push(() => again.stop())
 
@@ -76,19 +77,22 @@ test("when the line drops it is reconnecting, and connected again once the serve
   expect(told).toEqual(["connecting", "connected", "reconnecting", "connected"])
 })
 
-test("when no server answers at first, it keeps trying, saying why, until one does", async () => {
+test("when no server answers at first, it keeps trying, connecting and saying why, until one does", async () => {
   const served = await start()
   const port = await freePort()
-  const { connection } = open({ url: `http://127.0.0.1:${port}`, token: served.token })
+  const { connection, told } = open({ url: `http://127.0.0.1:${port}`, token: served.token })
 
-  expect(await until(connection, "reconnecting")).toEqual({
-    status: "reconnecting",
+  while (!("reason" in connection.state())) await Bun.sleep(5)
+  expect(connection.state()).toEqual({
+    status: "connecting",
     reason: `No evie server is running at http://127.0.0.1:${port}. Start it with \`evie serve\`.`,
   })
   const server = startServer({ evie: served.run.evie, tokens: served.tokens, host: "127.0.0.1", port })
   cleanups.push(() => server.stop())
 
   await until(connection, "connected")
+  // It was never connected, so it was never reconnecting.
+  expect(told).not.toContain("reconnecting")
 })
 
 test("when its token is taken back while it is connected, it is signed out, saying why", async () => {
@@ -135,4 +139,36 @@ test("a page at an address the server does not let in, whose cookie is good, is 
     status: "signed out",
     reason: `The evie server at ${url} does not let this page connect. Add its address to "origins" under "server" in evie.json.`,
   })
+})
+
+test("signing in twice at once, as a double press of Sign in does, or while it is connecting, opens no second connection", async () => {
+  const served = await start()
+  // A token the server refuses, so that it is signed out, and stays signed
+  // out after each sign-in: this test has no browser to keep a cookie.
+  const { connection, told } = open({ url: served.server.url, token: "not-a-token" })
+
+  const whileConnecting = await connection.signIn({ token: served.token })
+  await until(connection, "signed out")
+  const both = await Promise.all([connection.signIn({ token: served.token }), connection.signIn({ token: served.token })])
+  await until(connection, "signed out")
+  await Bun.sleep(50)
+
+  expect([whileConnecting, ...both]).toEqual([undefined, undefined, undefined])
+  expect(told).toEqual(["connecting", "signed out", "connecting", "signed out"])
+})
+
+test("signing in gives up when the server does not answer in time, and says so", async () => {
+  // A server that refuses the connection without a cookie, and answers a
+  // sign-in only after the page has stopped waiting.
+  const late = () => new Promise<Response>((resolve) => setTimeout(() => resolve(new Response(null, { status: 204 })), 300))
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: (request) => (new URL(request.url).pathname === "/login" ? late() : new Response("No token.", { status: 401 })),
+  })
+  cleanups.push(async () => server.stop(true))
+  const { connection } = open({ url: `http://127.0.0.1:${server.port}`, answerWithin: 50 })
+  await until(connection, "signed out")
+
+  expect(await connection.signIn({ token: "a-token" })).toBe("evie's server did not answer in time. Check that `evie serve` is running, and try again.")
 })
