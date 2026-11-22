@@ -50,6 +50,9 @@ type Row = {
   named: string | null
   // Which came last of its turns' starts and ends, or null when it has neither.
   turn: "turn_start" | "turn_end" | null
+  // The body of the latest branch it recorded, unless it was moved since,
+  // or null.
+  branch: string | null
 }
 
 const COLUMNS = `session.id, session.project, session.created,
@@ -58,7 +61,8 @@ const COLUMNS = `session.id, session.project, session.created,
   (SELECT CASE type WHEN 'settled' THEN time END FROM event WHERE event.session = session.id AND (type = 'settled' OR NOT ${NOT_ACTIVITY}) ORDER BY seq DESC LIMIT 1) AS handTime,
   (SELECT body FROM event WHERE event.session = session.id AND type = 'user_message' ORDER BY seq LIMIT 1) AS first,
   (SELECT body FROM event WHERE event.session = session.id AND type = 'named' ORDER BY seq DESC LIMIT 1) AS named,
-  (SELECT type FROM event WHERE event.session = session.id AND type IN ('turn_start', 'turn_end') ORDER BY seq DESC LIMIT 1) AS turn`
+  (SELECT type FROM event WHERE event.session = session.id AND type IN ('turn_start', 'turn_end') ORDER BY seq DESC LIMIT 1) AS turn,
+  (SELECT CASE type WHEN 'branch' THEN body END FROM event WHERE event.session = session.id AND type IN ('branch', 'moved') ORDER BY seq DESC LIMIT 1) AS branch`
 
 // How long a session goes without activity before it settles by itself.
 const SETTLES_AFTER = 7 * 24 * 60 * 60_000
@@ -104,6 +108,7 @@ export function createSummaries(options: {
     name: givenName(bodyOf(row.named)?.name) ?? nameOf(wordsOf(bodyOf(row.first) ?? {})),
     state: stateOf(row),
     lastActive: lastActive(row),
+    ...branchOf(bodyOf(row.branch)?.branch),
   })
 
   // The last summary sent of each session, or worked out when Evie started.
@@ -136,7 +141,7 @@ export function createSummaries(options: {
 }
 
 const same = (one: SessionSummary, other: SessionSummary) =>
-  one.project === other.project && one.name === other.name && one.state === other.state && one.lastActive === other.lastActive
+  one.project === other.project && one.name === other.name && one.state === other.state && one.lastActive === other.lastActive && one.branch === other.branch
 
 // A stored body read back, or undefined when it is not a JSON object. Evie
 // writes only bodies of the right shape, but a damaged database can hold
@@ -150,6 +155,9 @@ function bodyOf(body: string | null): Record<string, unknown> | undefined {
     return undefined
   }
 }
+
+// The branch a session recorded, when the body holds one.
+const branchOf = (branch: unknown) => (typeof branch === "string" && branch !== "" ? { branch } : {})
 
 // The name a session was given, or null when the body holds none.
 const givenName = (name: unknown) => (typeof name === "string" && name !== "" ? name : null)

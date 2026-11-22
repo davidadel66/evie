@@ -238,10 +238,16 @@ and why, and the page catches up by itself once the line is back.
 
 The list can be hidden and shown with the button at the left of the
 middle column's header, or with Cmd+B (Ctrl+B elsewhere), and the browser
-remembers which. At 767px wide or narrower, as on a phone, the same button
-opens the list as a sheet over the page, from the left, which goes once a
-session is picked in it, or with Escape or a tap beside it; the
-Reconnecting line is then under the session's header.
+remembers which. At 767px wide or narrower, as on a phone, the columns
+stack: the list is at the top of the page and the conversation under it,
+a screen tall. Picking a session, even the one open, brings its
+conversation into sight, and the same button scrolls back up to the list;
+the Reconnecting line is then under the session's header.
+
+At the top of the list, beside evie's name, the squares open the
+workspace view, on the workspace of the project you are looking at (or,
+with no workspace yet, the New workspace dialog; until the projects have
+been listed, it waits), and the pencil starts a new session.
 
 The gear beside the name opens the settings, with a page each for:
 
@@ -303,22 +309,29 @@ they change, and listed again when the line comes back:
   you"), then the other recent ones, newest first. **Working** and
   **Settled** are groups at the bottom, which open and close; the browser
   remembers which are open.
-- **Each row** shows its project's icon and name, and how long ago it was
-  active, or its state; the session's name; and the git branch its
-  project is on, asked for again when the window has the focus back and
-  each minute while the page is shown. A project has a folder in a colour
+- **Each row** shows its project's icon and name, or for a session in no
+  project an empty dashed tile and "No project", and how long ago it was
+  active, or its state; the session's name; and the session's own git
+  branch: the one its project was on as its latest turn started, which
+  evie records at a turn's start when it has changed. Two sessions of one
+  project can show different branches. A project has a folder in a colour
   chosen from its id until you pick its icon and colour in its workspace
-  (below). Its icon and name open its workspace.
-- **New session** makes a draft of a new session, at the top of the list,
-  in the project of the selected session or draft, or of the project the
-  list is narrowed to; the menu beside it makes one in another project, or
-  in none. Nothing is made on the server until its first message is sent,
+  (below).
+- **New session** (the pencil) makes a draft of a new session, at the top
+  of the list, in the project of the selected session or draft, or with
+  nothing open, of the latest session. In a draft, the project in the
+  header is a menu that starts it in another project, or in none, as does
+  the command palette's "New session in a project…". With nothing open,
+  the page is such a draft, in the project of the latest session as the
+  page first showed it. Nothing is made on the server until its first
+  message is sent,
   so a draft left unused leaves nothing behind. Pressed again, it comes
   back to the same draft. The first message starts the session, asking
   first whether to trust the project when evie needs to know, and the page
   moves to it. A first message that cannot be sent comes back into the
   box, with why.
-- **Search** narrows the list by name, and the menu beside it to one
+- **Search** narrows the list to the sessions whose name and project's
+  name hold every word typed, so a project's name narrows it to that
   project.
 - **A session's name** is written by a small model from your first
   message, in the background, without holding up the reply; until it
@@ -344,8 +357,10 @@ they change, and listed again when the line comes back:
   or for a draft `#draft=<project id>` or `#draft=none`, so a reload or a
   bookmark opens on it.
 
-The middle column shows the selected session's conversation, joining it as
-it stands, even while a reply is being written:
+The middle column shows the selected session's conversation, under a
+header with its project's icon and name and the session's name, joining
+it as it stands, even while a reply is being written. A session with
+nothing said in it yet, or a draft, says "What should evie do?":
 
 - **Your messages** are on the right; **evie's replies** are on the page,
   drawn from Markdown (headings, lists, code, links and tables). HTML in a
@@ -354,14 +369,27 @@ it stands, even while a reply is being written:
   message is under it: an image as a thumbnail, which opens full size, and
   any other file as its name and size.
 - **A reply streams in** as it is written.
-- **While a turn runs**, it shows in the order things happen: evie's
-  words where it wrote them, and each run of tools it used between them as
-  one quiet line, which opens to list each call with its result in short;
-  each call opens to its whole result.
+- **The work log** is T3 Code's: each tool call is one row with an icon
+  and a sentence, such as "Read src/auth.ts", "Edited README.md" or "Ran
+  bun test", which opens to its whole result, and shows when it happened
+  while the pointer is over it; a call that failed has a red ✕. A run of
+  several calls with nothing said between them is one row counting them,
+  such as "Read 2 files and ran 1 command", which opens to a row for each,
+  scrolling past a height. The words are the same as the workspace's side
+  chat's.
+- **While a turn runs**, a line at the end of the conversation says
+  "Working for 12s · Stop", counting up on the server's clock, also while
+  a question waits; a run being carried out says what it is doing, such
+  as "Running bun", and lists that call by the command alone; and between
+  calls, a row says Thinking.
 - **Once a turn has completed**, everything before its final reply folds
-  into one quiet line, such as "Worked for 48s", which opens to show it in
-  order. A question and its answer, and notes, stay outside the fold. A
-  turn that was stopped, failed or had a reply cut short is not folded.
+  into one quiet line, such as "Worked for 48s" or "Worked for 3.4s",
+  which opens to show it in order: the time from its start to its end, as
+  T3 Code counts it, waits for your answers included, so it never drops as
+  the turn ends. A question and its answer, and notes, stay outside the
+  fold. A turn that was stopped, failed or had a reply cut
+  short is not folded, and its first run says how long it worked, or
+  "You stopped after …".
 - **Notes** say in quiet words what else happened: a compaction, with its
   summary to open; a note evie was told; a reply cut short; a turn that
   failed or was stopped; a question and your answer; and a background
@@ -378,19 +406,21 @@ The message box at the bottom of the conversation works as T3 Code's does:
 - **While evie works**, what you send steers the turn, as in the terminal:
   evie reads it at its next step. A round Stop button beside Send, or
   Escape in the box, stops the turn, and says Stopping until it has.
-- **A permission prompt** shows at the end of the conversation, with its
-  choices as buttons: No, then Yes, once, and the others, such as always
-  allowing it, under More. A message sent instead answers it No, and goes
-  to evie as what to do instead.
-- **Any other question** docks just above the box, its choices numbered:
-  the keys 1 to 9 pick one while the box does not have the focus, a number
-  sent from the box picks one, and your own words sent answer it when it
-  takes them. Anything else is not sent: the box asks you to pick one of
-  the choices, as the terminal asks again. Several waiting are taken one at
+- **A question** shows at the end of the conversation, as part of evie's
+  reply: the question, its choices as round buttons under it, the first
+  the main one, and "Needs you. Waiting for your answer". The keys 1 to 9
+  pick one while the focus is on nothing or in the empty box, and your
+  own words sent answer it when it takes them. Anything else is not sent:
+  the box asks you to pick one of the choices above, as the terminal asks
+  again. Several waiting are taken one at
   a time, with a count such as
   1/3. A question that arrives while you are typing waits until you have
   not typed for a second and a half, so that a stray key cannot answer it.
   One answered elsewhere, such as in a terminal, goes away.
+- **A permission prompt** shows in the same place and the same way, its
+  choices in order: Yes, once, as the main one, then the others, such as
+  always allowing it, then No. A message sent instead answers it No, and
+  goes to evie as what to do instead.
 - **A slash** at the start of a word opens a menu of the session's
   commands and your skills, each with what it does, narrowed as you type.
   Up and Down move, Enter or Tab picks, and Escape closes it. A message
@@ -1493,7 +1523,8 @@ typed into a text box, `field`, is 16px, below which iOS zooms the page in
 when a text box is tapped, and the page's side padding, `gutter`, is 12px.
 Text, rows, headers, chips and the work log keep their sizes, as T3 Code's
 do. A test checks that every text box in the web app takes `field`. The
-layout's own breakpoint, where the list and the session details become sheets, is
+layout's own breakpoint, where the session view's columns stack and the
+session details become a sheet, is
 768px (`wide`), as T3 Code's sidebar's is.
 
 **Text.** Sans-serif (Geist) but for `code`, in Geist Mono:
@@ -1538,7 +1569,7 @@ layout's own breakpoint, where the list and the session details become sheets, i
 | `radius-chip` | 6px | A small control inside a row of the session details: its icon buttons, its checks and Fix |
 | `radius-sm` | 4px | Menu items and the rows of the palette and pickers; badges; an image's thumbnail |
 | `radius-md` | 8px | The default: buttons, text boxes, menus, popovers, notices, selected rows |
-| `radius-lg` | 16px | The message box, the owner's message, a docked question, dialogs, the settings window and the palette |
+| `radius-lg` | 16px | The message box, the owner's message, dialogs, the settings window and the palette |
 | `radius-full` | 9999px | Pill buttons such as answer choices, the round send and stop buttons, status dots |
 | `radius-tile` | 25% | A project's icon tile's corners, a quarter of its size at any size |
 
@@ -1549,7 +1580,7 @@ layout's own breakpoint, where the list and the session details become sheets, i
 | `control` | 32px; 36px below 640px | Buttons, text boxes and icon buttons; the settings' pages; the send button |
 | `control-sm` | 28px; 32px below 640px | Small buttons: the paperclip, the buttons that show and hide the list and the card, a row's `···`, a notice's; the items of a menu, the palette, the `/` and `@` menus and the model picker |
 | `row-height` | 32px | A row in a list: a file in Storage, a file's header in the diff, a row of the session details; at the least, a session in a workspace |
-| `work-row` | 24px | A row of a turn's work log: a run of calls, each call, Working, Worked for, a note |
+| `work-row` | 24px | A row of a turn's work log: a run of calls, each call, Thinking, Worked for, a note; and the column its icon sits in |
 | `header-height` | 52px | Every column's header: the list's, the conversation's, the card's, the diff's, a workspace's and its side chat's |
 | `gutter` | 20px; 12px below 640px | The page's side padding: the conversation, the message box, a workspace, the sign-in page |
 | `touch-min` | 44px | The least a finger aims at: on a touch screen, each button reaches this far round itself, unseen |
@@ -1562,7 +1593,8 @@ layout's own breakpoint, where the list and the session details become sheets, i
 | `rail-width` | 64px | The strip of workspace tiles |
 | `tile-strip` | 44px | A workspace's tile in the strip, and the strip's way back, Add a workspace and settings buttons |
 | `tile-header` | 28px | A project's tile in a workspace's header |
-| `tile-row` | 18px | A project's icon tile in a session row |
+| `tile-row` | 18px | A project's icon tile in a session row and the conversation's header |
+| `row-inset` | 10px | Between a session row's edge and its words, so they start 18px from the list's edge, as drawn and as T3 Code's |
 | `tile-row-icon` | 12px | The icon on that tile |
 | `side-chat-width` | 360px | A workspace's side chat |
 | `session-list` | 256px | The width of the session list, as T3 Code's sidebar |
@@ -1573,9 +1605,9 @@ layout's own breakpoint, where the list and the session details become sheets, i
 | `details-menu` | 236px | The width of the menu that chooses what the session details show |
 | `detail-indent` | 36px | Where a row's words start in the session details, past its icon: a pull request's second line |
 | `card-sheet` | `min(88vw, 448px)` | The width of the session details as a sheet over the page, at phone width |
-| `list-sheet` | `min(calc(100vw - 12px), 448px)` | The width of the session list as a sheet over the page, at 767px or narrower, as T3 Code's sidebar |
 | `conversation` | 736px | The widest the conversation and the message box are, as T3 Code's |
-| `call-name` | 48px | The room a tool call's name takes in a turn's steps |
+| `call-result` | 256px | The tallest a tool call's result grows in the work log before it scrolls, as T3 Code's |
+| `work-group` | `min(288px, 50dvh)` | The tallest an opened run of calls grows before its rows scroll, as T3 Code's |
 | `palette` | 576px | The widest the command palette is, as T3 Code's |
 | `palette-list` | `min(420px, 60dvh)` | The tallest the palette's rows grow before they scroll, as T3 Code's |
 | `notice` | `min(360px, calc(100vw - 32px))` | The width of a notice at the top of the page |
@@ -1589,7 +1621,6 @@ layout's own breakpoint, where the list and the session details become sheets, i
 | `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle of an empty page |
 | `workspace-name` | 96px | The least a workspace's name keeps in its header before its tabs scroll sideways |
 | `workspace-columns` | 880px | A container width: the least room beside the strip for a workspace and its side chat side by side |
-| `project-filter` | 128px | The widest the session list's project filter grows |
 | `icon-picker` | 230px; 254px below 640px | The project icon picker: six 32px columns (36px below 640px), their gaps, its padding and its line |
 | `icon-grid` | 220px | The tallest the picker's icons grow before they scroll |
 | `composer-text` | 208px | The tallest the message box's text grows before it scrolls, as T3 Code's |
@@ -1601,7 +1632,7 @@ layout's own breakpoint, where the list and the session details become sheets, i
 | `image-open-height` | 80dvh | The tallest it shows opened |
 | `job-output` | 240px | The tallest a background job's output grows in the session details before it scrolls |
 | `diff-tree` | 240px | The file tree beside a diff |
-| `wide` | 768px | Phone width is below it: the list is a sheet, the message box is one row until tapped, the settings and the diff fill the screen, a workspace's columns stack |
+| `wide` | 768px | Phone width is below it: the session view's columns stack, the message box is one row until tapped, the settings and the diff fill the screen, a workspace's columns stack |
 
 The strokes, `line-width` (1px, every divider) and `indicator-width` (2px,
 the focus ring and the line under the selected tab), and the one shadow,

@@ -182,6 +182,24 @@ test("the projects are listed one request at a time, and once more for every ask
   ])
 })
 
+test("the list says when the projects have been listed, so that no project is taken for none before they have come", async () => {
+  const late = gate()
+  const { connection } = await startHolding([], async (command, answer) => {
+    const answered = await answer()
+    if (command.type === "list_projects") await late.opened
+    return answered
+  })
+  const sessions = list(connection)
+  const before = await until(sessions, (state) => state.listed)
+
+  late.open()
+  const after = await until(sessions, (state) => state.projectsListed)
+
+  expect(before.projectsListed).toBe(false)
+  expect(before.projects).toEqual([])
+  expect(after.projects).toHaveLength(1)
+})
+
 test("a summary that comes while the sessions are being listed wins over the list's older line for its session, and a session it brings stays", async () => {
   // The first list is the sessions as they were when it was asked, and comes late.
   let asked = 0
@@ -235,6 +253,26 @@ test("asked for again, the projects come with the branch each is on now, as afte
   sessions.refreshProjects()
 
   expect((await until(sessions, (state) => state.projects[0]?.branch !== "main")).projects[0]!.branch).toBe("feat/beds")
+})
+
+test("each session in the list has its own branch, the one it last worked on, though its project is on another now", async () => {
+  const { served, connection } = await start([{ text: ["On permissions."] }, { text: ["On dev."] }])
+  await git(["init", "-q", "-b", "feat/permissions"], served.run.projectFolder)
+  await git(["commit", "-q", "--allow-empty", "-m", "First"], served.run.projectFolder)
+  await say(served.run, "Ask before risky tools")
+  await git(["checkout", "-q", "-b", "dev"], served.run.projectFolder)
+  const sessions = list(connection)
+  await until(sessions, (state) => state.listed)
+
+  const other = await served.run.evie.send({ type: "open_session", folder: served.run.projectFolder })
+  await say(served.run, "Design the undo checkpoint", other.session)
+  const kept = await until(sessions, (state) => state.sessions.length === 2 && state.sessions.every((each) => each.branch !== undefined) && state.projects[0]?.branch !== undefined)
+
+  expect(kept.sessions.map((each) => [each.name, each.branch])).toEqual([
+    ["Design the undo checkpoint", "dev"],
+    ["Ask before risky tools", "feat/permissions"],
+  ])
+  expect(kept.projects[0]!.branch).toBe("dev")
 })
 
 test("a session is renamed from the list, which shows its new name once its summary comes, and a blank name is refused with the server's reason", async () => {

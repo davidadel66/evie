@@ -4,6 +4,7 @@ import { ask, files } from "../src/index.ts"
 import { openConnection } from "../web/src/connection.ts"
 import { openConversation, type Conversation, type ConversationState } from "../web/src/conversation.ts"
 import type { Item } from "../web/src/transcript.ts"
+import { stepKind, stepWords } from "../web/src/step-words.ts"
 import { chatLines, chatTitle, fullSize, givenBackWords, sideChatOf } from "../web/src/workspace-chat.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 import { serveEvie } from "./support/served.ts"
@@ -48,7 +49,7 @@ test("the side chat opens full size in the session view: its session, or a chat 
   expect(fullSize("new", "p1")).toBe("#draft=p1")
 })
 
-const call = (id: string, name: string, input: string) => ({ id, name, input, result: "ok", short: "ok", running: false })
+const call = (id: string, name: string, input: string) => ({ id, name, kind: stepKind(name), sentence: stepWords({ name, input }), target: input, input, fields: {}, time: 1, result: "ok", short: "ok", running: false, failed: false })
 
 test("the side chat shows the owner's messages, evie's words, and each run of work or note as one quiet line in plain words, which says the files a turn changed", () => {
   const items: Item[] = [
@@ -61,8 +62,8 @@ test("the side chat shows the owner's messages, evie's words, and each run of wo
     { key: "e8", turn: 1, kind: "reply", text: "Done. There is a new figure.", streaming: false },
     { key: "changes-9", turn: 1, kind: "changes", number: 1, files: [{ path: "usage.html", status: "changed", added: 3, removed: 1 }] },
     { key: "e10", turn: 2, kind: "owner", text: "Now the tokens", sending: [new File(["x"], "b.txt")] },
-    { key: "s-c4", turn: 2, kind: "steps", calls: [call("c4", "shell", "bun test")], label: "Working", running: true },
-    { key: "working", turn: 2, kind: "steps", calls: [], label: "Working", running: true },
+    { key: "s-c4", turn: 2, kind: "steps", calls: [call("c4", "shell", "bun test")], label: "Running bun", running: true },
+    { key: "thinking", turn: 2, kind: "thinking" },
     { key: "e11", turn: 2, kind: "note", text: "Stopped." },
     { key: "e12", turn: 2, kind: "question", id: "q1", text: "Which week?", choices: ["This", "Last"], waiting: false },
     { key: "e13", turn: 2, kind: "failed", error: "The model's provider could not be reached." },
@@ -74,7 +75,8 @@ test("the side chat shows the owner's messages, evie's words, and each run of wo
 
   expect(chatLines(items)).toEqual([
     { key: "e1", kind: "owner", text: "Add how much the cache saved", files: ["a.png"] },
-    { key: "fold-9", kind: "step", text: "Read 1 file and changed 2 files" },
+    // Edits count the files changed, each once.
+    { key: "fold-9", kind: "step", text: "Read 1 file and changed 1 file" },
     { key: "e8", kind: "text", text: "Done. There is a new figure." },
     { key: "e10", kind: "owner", text: "Now the tokens", files: ["b.txt"] },
     { key: "s-c4", kind: "step", text: "Ran bun test" },

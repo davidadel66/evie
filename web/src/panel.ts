@@ -2,8 +2,9 @@ import { useSyncExternalStore } from "react"
 
 // A side of the page that is a column at desktop width, which the owner
 // can hide and show and this browser remembers, and narrower, a sheet that
-// slides over the page, as T3 Code's sidebar and right panel are: the
-// session list on the left.
+// slides over the page, as T3 Code's sidebar is: the session list on the
+// left, which at phone width stacks above the conversation instead of
+// being a sheet (list-shown.ts).
 
 // Whether the page is wide enough for the column, whether the column is
 // shown, and whether the sheet is open.

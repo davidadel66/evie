@@ -1,22 +1,24 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+import type { ListedProject } from "../../src/core/types.ts"
 import { useCardShortcut } from "./card-shown.ts"
-import { Button } from "./components/ui/button.tsx"
 import type { Connection, ConnectionState } from "./connection.ts"
 import { ConnectionLine, ConnectionUnderHeader } from "./ConnectionLine.tsx"
 import { ConnectionShown } from "./connection-shown.ts"
 import { Conversation, Draft, Placeholder } from "./Conversation.tsx"
 import { startedHere } from "./conversation.ts"
-import { X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
-import { closeListSheet, toggleList, useListShown } from "./list-shown.ts"
+import { LIST_ID, toggleList, useListShown } from "./list-shown.ts"
 import { Notices } from "./Notices.tsx"
 import { Palette } from "./Palette.tsx"
 import { useDiffShortcut } from "./diff-shown.ts"
 import { PanelButton, RightPanel } from "./DiffPanel.tsx"
 import { CardButton, CardLane, CardPlace } from "./ProjectCard.tsx"
-import { useSelected } from "./selection.ts"
-import { titleOf } from "./session-list.ts"
-import { ListButton, SessionList } from "./SessionList.tsx"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
+import { CaretDown } from "./icons.tsx"
+import { NoProjectTile, ProjectGlyph, ProjectTile } from "./ProjectIcon.tsx"
+import { select, useSelected } from "./selection.ts"
+import { projectLookedAt, titleOf } from "./session-list.ts"
+import { ListButton, ListTop, SessionList } from "./SessionList.tsx"
 import { HeaderName } from "./SessionRow.tsx"
 import type { Sessions } from "./sessions.ts"
 import { Settings } from "./Settings.tsx"
@@ -27,11 +29,13 @@ import { workspaceIn } from "./workspace.ts"
 import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 
 // The page once signed in: the session list and the conversation, in
-// columns, as T3 Code lays them out, with the session details floating at
-// the conversation's top right. At 767px or narrower the list is a sheet
-// over the page from the left, and the details one from the right, each
-// opened from a button in the session's header. With a workspace in the address, the workspace
-// view instead. The command palette and the notices float over either.
+// columns, as the Session view drawing lays them out, with the session
+// details floating at the conversation's top right, as T3 Code's do. At
+// 767px or narrower the columns stack, as the drawing has them: the list
+// at the top of the page, and the conversation under it, a screen tall.
+// The details open from a button in the session's header. With a
+// workspace in the address, the workspace view instead. The command
+// palette and the notices float over either.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
   useDiffShortcut()
@@ -54,30 +58,25 @@ export function Frame({ state, connection, sessions }: { state: ConnectionState;
   )
 }
 
-// The session view's three columns.
+// The session view's columns, which stack at phone width.
 function SessionView({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   const list = useListShown()
-  const sheetOpen = !list.wide && list.sheet
+  const main = useRef<HTMLElement>(null)
+  const selected = useSelected()
+  // At phone width, a session or a draft picked brings its conversation
+  // into sight, under the list; with nothing picked, the list is in sight.
+  useEffect(() => {
+    if (!list.wide && selected !== undefined) main.current?.scrollIntoView({ block: "start" })
+  }, [selected, list.wide])
   return (
-    <div className="flex h-dvh">
-      <ListPlace>
-        {/* The settings button's own padding brings its icon as near the column's edge as the name. */}
-        <header className="flex h-header-height shrink-0 items-center gap-3 pr-3 pl-5">
-          <span className="text-label text-text">evie</span>
-          <div className="ml-auto flex items-center">
-            <Settings connection={connection} />
-            {!list.wide && (
-              <Button variant="icon" aria-label="Close the session list" onClick={closeListSheet}>
-                <X />
-              </Button>
-            )}
-          </div>
-        </header>
+    <div className="flex flex-col wide:h-dvh wide:flex-row">
+      <ListPlace picked={() => !list.wide && main.current?.scrollIntoView({ block: "start" })}>
+        <ListTop connection={connection} sessions={sessions} settings={<Settings connection={connection} />} />
         {list.wide && <ConnectionLine state={state} />}
         <SessionList connection={connection} sessions={sessions} />
       </ListPlace>
 
-      <main inert={sheetOpen} className="relative flex min-w-0 flex-1 flex-col bg-bg">
+      <main ref={main} className="relative flex h-dvh min-w-0 flex-col bg-bg wide:h-auto wide:flex-1">
         <OpenSession connection={connection} sessions={sessions} />
         <CardPlace connection={connection} sessions={sessions} />
       </main>
@@ -87,57 +86,23 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
   )
 }
 
-// The session list's place: the column on the left, which the owner can
-// hide, or at phone width a sheet over the page from the left, as T3
-// Code's sidebar. The list is kept on the page while hidden, so that what
-// it is narrowed to, and the shortcuts that move through it, hold. While
-// the sheet is open the page behind it cannot be reached; a tap outside
-// it, Escape, or following any link in it, as to a session, even the one
-// open, closes it, and the focus goes back where it was.
-function ListPlace({ children }: { children: ReactNode }) {
+// The session list's place: the column on the left, with a line on its
+// right edge, which the owner can hide, or at phone width the top of the
+// page, as wide as it, with a line under it. The list is kept on the page
+// while hidden, so that the shortcuts that move through it hold. A row
+// tapped is `picked`, even the one open, whose address does not change.
+function ListPlace({ picked, children }: { picked(): void; children: ReactNode }) {
   const shown = useListShown()
-  const selected = useSelected()
-  const place = useRef<HTMLElement>(null)
-  const sheet = !shown.wide
-  const open = sheet && shown.sheet
-  useEffect(() => closeListSheet(), [selected])
-  useEffect(() => {
-    if (!open) return
-    const before = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
-    place.current?.focus()
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return
-      event.preventDefault()
-      closeListSheet()
-    }
-    addEventListener("keydown", onKey)
-    return () => {
-      removeEventListener("keydown", onKey)
-      if (before?.isConnected) before.focus()
-    }
-  }, [open])
   return (
-    <>
-      {open && <div aria-hidden="true" onClick={closeListSheet} className="fixed inset-0 z-40" />}
-      <aside
-        ref={place}
-        aria-label="Sessions"
-        tabIndex={-1}
-        {...(open && { role: "dialog", "aria-modal": true })}
-        inert={sheet && !open}
-        hidden={!sheet && !shown.column}
-        onClick={(event) => open && event.target instanceof Element && event.target.closest("a[href]") !== null && closeListSheet()}
-        className={cn(
-          "flex flex-col outline-none",
-          sheet
-            ? "fixed inset-y-0 left-0 z-50 w-list-sheet border-r border-line bg-surface shadow-float transition-[translate,visibility] motion-reduce:transition-none"
-            : "w-session-list shrink-0 bg-bg-side",
-          sheet && !open && "invisible -translate-x-full",
-        )}
-      >
-        {children}
-      </aside>
-    </>
+    <aside
+      id={LIST_ID}
+      aria-label="Sessions"
+      onClick={(event) => event.target instanceof Element && event.target.closest("a[data-row]") !== null && picked()}
+      hidden={shown.wide && !shown.column}
+      className={cn("flex flex-col bg-bg-side px-2 pb-2", shown.wide ? "w-session-list shrink-0 border-r border-line" : "border-b border-line")}
+    >
+      {children}
+    </aside>
   )
 }
 
@@ -169,22 +134,30 @@ function useFrameShortcuts(togglePalette: () => void) {
   }, [togglePalette])
 }
 
-// The middle column: the selected session's conversation, under its name,
-// or one of its subagents', or for a draft, where the new session will
-// start. Whatever it shows, its header has the button that shows and hides
-// the session details.
+// The middle column: the selected session's conversation, under its
+// project and name, or one of its subagents', or for a draft, the new
+// session that will start, in the project its header picks. With nothing
+// open, the page is a draft in the project of the latest session, as T3
+// Code opens one, fixed as the empty page first shows, so that another
+// session becoming the latest neither moves it nor loses what is typed.
+// Whatever it shows, its header has the button that shows and hides the
+// session details.
 function OpenSession({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
-  if (selected === undefined) return <Empty title="No session open" text="The conversation will be here: your messages, evie's replies and the steps it took." />
-  if ("draft" in selected) {
-    const project = list.projects.find((each) => each.id === selected.draft)
-    const where = selected.draft === null ? "with no project" : `in ${project?.name ?? "its project"}`
+  const projectOf = (project: string | null) => list.projects.find((each) => each.id === project)
+  const empty = useRef<{ project: string | null }>(undefined)
+  if (selected !== undefined) empty.current = undefined
+  else if (list.listed) empty.current ??= { project: projectLookedAt(undefined, list.sessions) }
+  if (selected === undefined || "draft" in selected) {
+    // With nothing open, which project is not known until the list is read.
+    if (empty.current === undefined && selected === undefined) return <Top />
+    const project = selected === undefined ? empty.current!.project : selected.draft
     return (
       <>
-        <Top />
+        <Top project={{ id: project, listed: projectOf(project) }} title="New session" pick={{ projects: list.projects, choose: (to) => select({ draft: to }) }} />
         <CardLane>
-          <Draft connection={connection} sessions={sessions} project={selected.draft} where={where} />
+          <Draft key={`${project}`} connection={connection} sessions={sessions} project={project} />
         </CardLane>
       </>
     )
@@ -194,33 +167,89 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
   // unless this page has just started it, and its first message is on its way.
   if (!list.listed) return <Top />
   const session = list.sessions.find((each) => each.session === selected.session)
-  if (session === undefined && startedHere(selected.session) === undefined) {
+  const started = startedHere(selected.session)
+  if (session === undefined && started === undefined) {
     return <Empty title="This session is not in the list" text="Nothing has been said in it yet, or it is no longer there." />
   }
   const title = session === undefined ? "New session" : titleOf(session)
   if (selected.subagent !== undefined) return <SubagentView connection={connection} parent={selected.session} parentTitle={title} subagent={selected.subagent} />
+  const project = session !== undefined ? session.project : (started ?? null)
   return (
     <>
-      <Top key={selected.session} title={title} {...(session !== undefined && { rename: (name: string) => sessions.rename(session.session, name) })} />
+      <Top
+        key={selected.session}
+        project={{ id: project, listed: projectOf(project) }}
+        title={title}
+        {...(session !== undefined && { rename: (name: string) => sessions.rename(session.session, name) })}
+      />
       <CardLane>
-        <Conversation connection={connection} session={selected.session} />
+        <Conversation connection={connection} session={selected.session} folder={projectOf(project)?.folder} />
       </CardLane>
     </>
   )
 }
 
-// The middle column's header: the button that shows and hides the session
-// list, the session's name, when there is one to show, and the buttons that
-// show and hide the session details and the right panel. A name that can be renamed is typed in
+// The middle column's header, as the Session view drawing has it: the
+// project's tile and its name, quiet, then the session's name; after the
+// button that shows and hides the session list, and before those that show
+// and hide the session details and the right panel, on the right. For a
+// draft, the project is a menu to pick another, or none, as T3 Code's draft
+// picks where a new thread goes. A name that can be renamed is typed in
 // place after a double-click, and why a name was not taken is said on a
 // line under the header. At phone width, the line that says the connection
 // is down is under it too.
-function Top({ title, rename }: { title?: string; rename?(name: string): Promise<string | undefined> }) {
+function Top({
+  project,
+  title,
+  rename,
+  pick,
+}: {
+  project?: { id: string | null; listed: ListedProject | undefined }
+  title?: string
+  rename?(name: string): Promise<string | undefined>
+  pick?: { projects: readonly ListedProject[]; choose(project: string | null): void }
+}) {
   const [note, setNote] = useState<string>()
+  const named = project === undefined ? undefined : (
+    <>
+      {project.id === null ? <NoProjectTile /> : <ProjectTile project={project.id} size="row" />}
+      <span className="truncate">{project.id === null ? "No project" : (project.listed?.name ?? "")}</span>
+    </>
+  )
   return (
     <>
       <header className="flex h-header-height shrink-0 items-center gap-2 border-b border-line px-3">
         <ListButton />
+        {project !== undefined && (
+          <span className="flex min-w-0 shrink items-center gap-2 text-body text-text-muted">
+            {pick === undefined ? (
+              named
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" aria-label={`Start it in: ${project.id === null ? "No project" : (project.listed?.name ?? "its project")}`} className="flex min-w-0 items-center gap-2 rounded-md hover:text-text">
+                    {named}
+                    <CaretDown className="size-icon-xs shrink-0" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Start it in</DropdownMenuLabel>
+                  {pick.projects.map((each) => (
+                    <DropdownMenuItem key={each.id} current={each.id === project.id} onSelect={() => pick.choose(each.id)}>
+                      <ProjectGlyph project={each.id} />
+                      {each.name}
+                    </DropdownMenuItem>
+                  ))}
+                  {pick.projects.length > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuItem current={project.id === null} onSelect={() => pick.choose(null)}>
+                    No project
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <span aria-hidden="true">/</span>
+          </span>
+        )}
         {title === undefined ? (
           <span className="flex-1" />
         ) : rename === undefined ? (

@@ -7,6 +7,7 @@ import type { Plugin } from "../src/index.ts"
 import { git } from "./support/git.ts"
 import { nextEvent, say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
+import type { SessionSummary } from "../src/core/types.ts"
 
 // Lists and history: what a client is told about every session without
 // opening it, and the earlier conversation of one, a page at a time.
@@ -293,6 +294,152 @@ test("whether a project's folder is in a git work tree is said apart from its br
     { git: true, branch: undefined },
     { git: false, branch: undefined },
   ])
+})
+
+// ---- A session's branch -----------------------------------------------------------------------
+
+// The session's line as the list has it once `ready` says so: the branch is
+// recorded when git has answered, beside the turn, not before it.
+async function listedOnce(run: Run, session: string, ready: (summary: SessionSummary | undefined) => boolean) {
+  for (let tries = 0; tries < 400; tries++) {
+    const line = (await run.evie.send({ type: "list_sessions" })).find((summary) => summary.session === session)
+    if (ready(line)) return line
+    await Bun.sleep(5)
+  }
+  throw new Error(`The session's line never became as wanted.`)
+}
+// The branches a session's log records, in order, none as null.
+const recordedBranches = (run: Run, session = run.session) => stored(run.events).flatMap((event) => (event.type === "branch" && event.session === session ? [event.body.branch ?? null] : []))
+
+test("a session is listed with its own branch: the one its project was on as its latest turn started or ended, recorded only when it changed", async () => {
+  const { run } = await start([{ text: ["One."] }, { text: ["Two."] }, { text: ["Three."] }])
+  await git(["init", "-q", "-b", "feat/permissions"], run.projectFolder)
+  await git(["commit", "-q", "--allow-empty", "-m", "First"], run.projectFolder)
+
+  await say(run, "Ask before risky tools")
+  const first = await listedOnce(run, run.session, (line) => line?.branch !== undefined)
+  await say(run, "And the shell")
+  await git(["checkout", "-q", "-b", "dev"], run.projectFolder)
+  // A checkout between turns is not the session's until a turn starts on it.
+  const before = (await run.evie.send({ type: "list_sessions" }))[0]
+  await say(run, "Now on dev")
+  const after = await listedOnce(run, run.session, (line) => line?.branch === "dev")
+
+  expect([first?.branch, before?.branch, after?.branch]).toEqual(["feat/permissions", "feat/permissions", "dev"])
+  expect(recordedBranches(run)).toEqual(["feat/permissions", "dev"])
+  // The summary that told of the new branch came after the event that recorded it.
+  const told = summaries(run).findIndex((summary) => summary.branch === "dev")
+  expect(told).toBeGreaterThan(-1)
+  expect(run.events.indexOf(summaries(run)[told]!)).toBeGreaterThan(run.events.findIndex((event) => event.type === "branch" && event.body.branch === "dev"))
+})
+
+test("a turn that switches branch leaves its session on the branch it switched to, recorded as the turn ends", async () => {
+  const checkout: Plugin = {
+    name: "checkout",
+    setup(host) {
+      host.tools.add({
+        name: "checkout",
+        description: "Starts a branch.",
+        inputSchema: { type: "object" },
+        run: async (input, context) => (await git(["checkout", "-q", "-b", String(input.branch)], context.folder!), "Switched."),
+      })
+    },
+  }
+  const { run } = await start([{ text: ["Switching."], calls: [{ name: "checkout", input: { branch: "feat/x" } }] }, { text: ["On feat/x now."] }], [checkout])
+  await git(["init", "-q", "-b", "main"], run.projectFolder)
+  await git(["commit", "-q", "--allow-empty", "-m", "First"], run.projectFolder)
+
+  await say(run, "Start a branch for it")
+  const line = await listedOnce(run, run.session, (summary) => summary?.branch === "feat/x")
+
+  expect(line?.branch).toBe("feat/x")
+  expect(recordedBranches(run)).toEqual(["main", "feat/x"])
+})
+
+test("a project on no branch, as with a commit checked out by itself, records none in place of the branch it was on", async () => {
+  const { run } = await start([{ text: ["One."] }, { text: ["Two."] }])
+  await git(["init", "-q", "-b", "main"], run.projectFolder)
+  await git(["commit", "-q", "--allow-empty", "-m", "First"], run.projectFolder)
+  await say(run, "On main")
+  await listedOnce(run, run.session, (line) => line?.branch === "main")
+
+  await git(["checkout", "-q", "--detach"], run.projectFolder)
+  await say(run, "Now on a commit")
+  const line = await listedOnce(run, run.session, (summary) => summary !== undefined && summary.branch === undefined)
+
+  expect(line).not.toHaveProperty("branch")
+  expect(recordedBranches(run)).toEqual(["main", null])
+})
+
+test("a branch read as a turn ends is still recorded when Evie closes straight after the turn", async () => {
+  const home = await mkdtemp(join(tmpdir(), "evie-home-"))
+  const folder = await realpath(await mkdtemp(join(tmpdir(), "a-repository-")))
+  cleanups.push(() => rm(home, { recursive: true, force: true }), () => rm(folder, { recursive: true, force: true }))
+  await git(["init", "-q", "-b", "feat/quick"], folder)
+  const first = await startEvie([scriptedProvider([{ text: ["Quick."] }]).plugin], { home, projectFolder: folder })
+  await say(first, "A quick one")
+  await first.stop()
+
+  const again = await startEvie([scriptedProvider([]).plugin], { home, projectFolder: folder })
+  cleanups.push(again.stop)
+  const listed = await again.evie.send({ type: "list_sessions" })
+
+  expect(listed.find((summary) => summary.session === first.session)?.branch).toBe("feat/quick")
+})
+
+test("two sessions of one project each keep the branch they last worked on", async () => {
+  const { run } = await start([{ text: ["On permissions."] }, { text: ["On dev."] }])
+  await git(["init", "-q", "-b", "feat/permissions"], run.projectFolder)
+  await git(["commit", "-q", "--allow-empty", "-m", "First"], run.projectFolder)
+  await say(run, "Ask before risky tools")
+  await listedOnce(run, run.session, (line) => line?.branch === "feat/permissions")
+  await git(["checkout", "-q", "-b", "dev"], run.projectFolder)
+  const other = (await run.evie.send({ type: "open_session", folder: run.projectFolder })).session
+  await say(run, "Design the undo checkpoint", other)
+  await listedOnce(run, other, (line) => line?.branch === "dev")
+
+  const listed = await run.evie.send({ type: "list_sessions" })
+
+  expect(listed.map((summary) => [summary.session, summary.branch])).toEqual([
+    [other, "dev"],
+    [run.session, "feat/permissions"],
+  ])
+})
+
+test("a session with no git repository, or no project, is listed with no branch, and records none", async () => {
+  const { run } = await start([{ text: ["Plain."] }, { text: ["General."] }])
+  await say(run, "A plain folder")
+  const general = (await run.evie.send({ type: "open_session" })).session
+  await say(run, "No project at all", general)
+  await Bun.sleep(100)
+
+  const listed = await run.evie.send({ type: "list_sessions" })
+
+  expect(listed).toHaveLength(2)
+  for (const summary of listed) expect(summary).not.toHaveProperty("branch")
+  expect(stored(run.events).filter((event) => event.type === "branch")).toEqual([])
+})
+
+test("a session moved to another project keeps no branch from the one it left, until a turn starts in the new one", async () => {
+  const { run } = await start([{ text: ["Here."] }, { text: ["There."] }])
+  await git(["init", "-q", "-b", "feat/permissions"], run.projectFolder)
+  await say(run, "Ask before risky tools")
+  await listedOnce(run, run.session, (line) => line?.branch === "feat/permissions")
+  const folder = await realpath(await mkdtemp(join(tmpdir(), "another-")))
+  cleanups.push(() => rm(folder, { recursive: true, force: true }))
+  // On a branch of the same name, which is the new project's all the same.
+  await git(["init", "-q", "-b", "feat/permissions"], folder)
+  const other = (await run.evie.send({ type: "open_session", folder })).project!
+
+  await run.evie.send({ type: "move_session", session: run.session, project: other.id })
+  const moved = (await run.evie.send({ type: "list_sessions" })).find((summary) => summary.session === run.session)
+  await say(run, "Carry on there")
+  const then = await listedOnce(run, run.session, (line) => line?.branch !== undefined)
+
+  expect(moved).not.toHaveProperty("branch")
+  expect(then?.branch).toBe("feat/permissions")
+  const movedAt = stored(run.events).find((each) => each.type === "moved")!.seq
+  expect(stored(run.events).filter((event) => event.type === "branch").map((event) => event.seq > movedAt)).toEqual([false, true])
 })
 
 // ---- A session's state ------------------------------------------------------------------------

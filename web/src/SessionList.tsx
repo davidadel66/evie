@@ -1,42 +1,71 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
-import type { ListedProject, SessionState, SessionSummary } from "../../src/core/types.ts"
+import type { SessionState, SessionSummary } from "../../src/core/types.ts"
 import { addressOf, selectedIn } from "./address.ts"
 import { startedHere } from "./conversation.ts"
-import { Button } from "./components/ui/button.tsx"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./components/ui/dropdown-menu.tsx"
-import { Input } from "./components/ui/input.tsx"
-import { CaretDown, CaretRight, MagnifyingGlass, Plus, SidebarLeft } from "./icons.tsx"
+import { Button, buttonVariants } from "./components/ui/button.tsx"
+import { CaretRight, MagnifyingGlass, PencilSimpleLine, SidebarLeft, SquaresFour } from "./icons.tsx"
+import { cn } from "./lib/utils.ts"
 import { toggleList, useListShown } from "./list-shown.ts"
-import { ProjectGlyph } from "./ProjectIcon.tsx"
 import { select, useSelected } from "./selection.ts"
-import { besides, deletedSelection, filterSessions, groupSessions, inListOrder, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, titleOf, type Filter, type OpenGroups } from "./session-list.ts"
+import { besides, deletedSelection, filterSessions, groupSessions, inListOrder, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, titleOf, workspaceToOpen, type OpenGroups } from "./session-list.ts"
 import { DeleteDialog, DraftRow, SessionRow } from "./SessionRow.tsx"
 import type { Connection } from "./connection.ts"
 import { NewWorkspace } from "./NewWorkspace.tsx"
 import type { Sessions } from "./sessions.ts"
 import { ask, whenAsked, windowOver } from "./page-requests.ts"
 import { label as keyLabel, onMac, pressed } from "./shortcuts.ts"
+import { addressOfWorkspace } from "./workspace.ts"
 
-// The session list, in the left column: a new session, a search and a
-// project filter above the sessions, which are grouped with those that
-// need the owner and the active ones at the top, and the working and the
-// settled ones in groups below that open and close. A new session is a
-// draft, at the very top, until its first message is sent.
+// The top of the session list, as the Session view drawing has it: evie's
+// name, then the Workspaces button, which opens the workspace view, the
+// New session button, and the settings button given. Workspaces opens the
+// workspace of the project being looked at, or with no project at all,
+// the New workspace dialog; until the projects have been listed, which it
+// is not yet known, it waits.
+export function ListTop({ connection, sessions, settings }: { connection: Connection; sessions: Sessions; settings: ReactNode }) {
+  const list = useSyncExternalStore(sessions.subscribe, sessions.state)
+  const selected = useSelected()
+  const lookingAt = projectLookedAt(selected, list.sessions)
+  const workspace = workspaceToOpen(lookingAt, list.sessions, list.projects)
+  const where = lookingAt === null ? "with no project" : `in ${list.projects.find((project) => project.id === lookingAt)?.name ?? "its project"}`
+  const icon = cn(buttonVariants({ variant: "icon" }))
+  return (
+    <header className="flex h-header-height shrink-0 items-center gap-0.5 pl-row-inset">
+      <span className="flex-1 text-title text-text">evie</span>
+      {!list.projectsListed ? (
+        <Button variant="icon" aria-label="Workspaces" title="Workspaces: the projects are being listed" disabled>
+          <SquaresFour />
+        </Button>
+      ) : workspace !== undefined ? (
+        <a href={addressOfWorkspace({ workspace, tab: "sessions" })} aria-label="Workspaces" title="Workspaces" className={icon}>
+          <SquaresFour />
+        </a>
+      ) : (
+        <NewWorkspace connection={connection} sessions={sessions}>
+          <Button variant="icon" aria-label="Workspaces" title="Workspaces: make the first one">
+            <SquaresFour />
+          </Button>
+        </NewWorkspace>
+      )}
+      <Button variant="icon" aria-label="New session" title={`New session ${where} (${keyLabel("new session", onMac())})`} onClick={() => select({ draft: lookingAt })}>
+        <PencilSimpleLine />
+      </Button>
+      {settings}
+    </header>
+  )
+}
+
+// The session list, in the left column: a search above the sessions,
+// which are grouped with those that need the owner and the active ones at
+// the top, and the working and the settled ones in groups at the bottom of
+// the column that open and close. A new session is a draft, at the very
+// top, until its first message is sent.
 export function SessionList({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
-  // Whether the New workspace dialog is open, from the New session menu or an empty list.
+  // Whether the New workspace dialog is open, from the empty list's New workspace… button.
   const [making, setMaking] = useState(false)
   const selected = useSelected()
-  const [filter, setFilter] = useState<Filter>({ search: "" })
+  const [search, setSearch] = useState("")
   const [open, setOpen] = useState(openGroups)
   // The session whose menu should have the focus back once it has moved.
   const [refocus, setRefocus] = useState<string>()
@@ -51,7 +80,7 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
 
   const selectedSession = selected !== undefined && "session" in selected ? selected.session : undefined
   const startingIn = selectedSession !== undefined && !list.sessions.some((each) => each.session === selectedSession) ? startedHere(selectedSession) : undefined
-  const lookingAt = projectLookedAt(selected, list.sessions, filter)
+  const lookingAt = projectLookedAt(selected, list.sessions)
   const projectOf = (project: string | null) => list.projects.find((each) => each.id === project)
 
   function setGroups(next: OpenGroups) {
@@ -77,7 +106,8 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
   // the header above its conversation.
   const listShown = useListShown()
   const listInSight = useRef(false)
-  listInSight.current = listShown.wide ? listShown.column : listShown.sheet
+  // At phone width, the list is on the page, above the conversation.
+  listInSight.current = listShown.wide ? listShown.column : true
   useEffect(() => {
     function renameOnF2(event: KeyboardEvent) {
       if (pressed(event, onMac()) !== "rename" || event.defaultPrevented || windowOver() !== undefined) return
@@ -119,7 +149,8 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
     return undefined
   }
 
-  const groups = groupSessions(filterSessions(list.sessions, filter))
+  const projectName = (project: string | null) => (project === null ? "No project" : projectOf(project)?.name)
+  const groups = groupSessions(filterSessions(list.sessions, search, projectName))
 
   // The session above or below the selected one, by its shortcut or from
   // the palette, as T3 Code moves through its threads; and a new session
@@ -185,35 +216,30 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-col gap-2 px-2 pb-3">
-        <NewSession projects={list.projects} lookingAt={lookingAt} start={(project) => select({ draft: project })} newWorkspace={() => setMaking(true)} />
-        <NewWorkspace connection={connection} sessions={sessions} open={making} onOpenChange={setMaking} />
-        <div className="flex gap-1">
-          <div className="relative min-w-0 flex-1">
-            <MagnifyingGlass className="pointer-events-none absolute top-1/2 left-2 size-icon-sm -translate-y-1/2 text-text-muted" />
-            <Input
-              type="search"
-              aria-label="Search sessions by name"
-              placeholder="Search"
-              className="pl-8"
-              value={filter.search}
-              onChange={(event) => setFilter({ ...filter, search: event.target.value })}
-            />
-          </div>
-          <ProjectFilter projects={list.projects} project={filter.project} choose={(project) => setFilter({ search: filter.search, ...(project !== undefined && { project }) })} />
-        </div>
-      </div>
+      <NewWorkspace connection={connection} sessions={sessions} open={making} onOpenChange={setMaking} />
+      {/* A bare field, as the drawing has it: a magnifier and the words typed. */}
+      <label className="flex h-control shrink-0 items-center gap-2 px-row-inset text-text-muted">
+        <MagnifyingGlass className="size-icon-sm shrink-0" />
+        <span className="sr-only">Search sessions</span>
+        <input
+          type="search"
+          placeholder="Search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="min-w-0 flex-1 bg-transparent text-field text-text outline-none placeholder:text-text-muted"
+        />
+      </label>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-1">
         {[list.problem, list.projectsProblem].map(
           (problem) =>
             problem !== undefined && (
-              <p key={problem} className="px-3 pb-2 text-caption text-text-muted">
+              <p key={problem} className="px-row-inset pb-2 text-caption text-text-muted">
                 {problem}
               </p>
             ),
         )}
-        <div role="status">{notice !== undefined && <p className="px-3 pb-2 text-caption text-text-muted">{notice}</p>}</div>
+        <div role="status">{notice !== undefined && <p className="px-row-inset pb-2 text-caption text-text-muted">{notice}</p>}</div>
         {selected !== undefined && "draft" in selected && (
           <ul className="mb-1 flex flex-col">
             <DraftRow project={selected.draft} listed={projectOf(selected.draft)} href={addressOf(selected)} />
@@ -226,7 +252,7 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
           </ul>
         )}
         {list.listed && nothing && (
-          <p className="px-3 text-caption text-text-muted">{list.sessions.length === 0 ? "No sessions yet. Start one with New session." : "No sessions match."}</p>
+          <p className="px-row-inset text-caption text-text-muted">{list.sessions.length === 0 ? "No sessions yet. Start one with New session." : "No sessions match."}</p>
         )}
         {list.listed && list.sessions.length === 0 && (
           <Button variant="quiet" className="self-start" onClick={() => setMaking(true)}>
@@ -234,15 +260,20 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
           </Button>
         )}
         {rows(groups.top)}
-        {groups.working.length > 0 && (
-          <Group name="Working" count={groups.working.length} open={open.working} toggle={() => setGroups({ ...open, working: !open.working })}>
-            {rows(groups.working)}
-          </Group>
-        )}
-        {groups.settled.length > 0 && (
-          <Group name="Settled" count={groups.settled.length} open={open.settled} toggle={() => setGroups({ ...open, settled: !open.settled })}>
-            {rows(groups.settled)}
-          </Group>
+        {/* At the bottom of the column, as the drawing pins them, below the rows when the list is long. */}
+        {groups.working.length + groups.settled.length > 0 && (
+          <div className="mt-auto flex flex-col gap-1 pt-6">
+            {groups.working.length > 0 && (
+              <Group name="Working" count={groups.working.length} open={open.working} toggle={() => setGroups({ ...open, working: !open.working })}>
+                {rows(groups.working)}
+              </Group>
+            )}
+            {groups.settled.length > 0 && (
+              <Group name="Settled" count={groups.settled.length} open={open.settled} toggle={() => setGroups({ ...open, settled: !open.settled })}>
+                {rows(groups.settled)}
+              </Group>
+            )}
+          </div>
         )}
       </div>
       <DeleteDialog session={deleting} close={() => setDeleting(undefined)} remove={remove} />
@@ -251,113 +282,41 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
 }
 
 // The button at the left of the middle column's header that shows and
-// hides the session list: its column at desktop width, its sheet at phone width.
+// hides the session list's column at desktop width, and at phone width,
+// where the list is above the conversation, scrolls up to it.
 export function ListButton() {
   const shown = useListShown()
-  const open = shown.wide ? shown.column : shown.sheet
-  const label = open ? "Hide the session list" : "Show the session list"
+  const label = !shown.wide ? "Show the session list" : shown.column ? "Hide the session list" : "Show the session list"
   return (
-    <Button variant="icon" aria-label={label} aria-expanded={open} title={`${label} (${keyLabel("session list", onMac())})`} onClick={toggleList} className="size-control-sm">
+    <Button
+      variant="icon"
+      aria-label={label}
+      {...(shown.wide && { "aria-expanded": shown.column })}
+      title={`${label} (${keyLabel("session list", onMac())})`}
+      onClick={toggleList}
+      className="size-control-sm"
+    >
       <SidebarLeft />
     </Button>
   )
 }
 
 // A group at the bottom of the list, under a heading that opens and closes
-// it: a row of the list, as T3 Code's, so it does not grow below 640px.
+// it, as the Session view drawing has one: its name on the left, its count
+// and a caret at the right end. A row of the list, as T3 Code's, so it does
+// not grow below 640px.
 function Group({ name, count, open, toggle, children }: { name: string; count: number; open: boolean; toggle(): void; children: ReactNode }) {
   return (
-    <section aria-label={name} className="mt-4 flex flex-col gap-1">
-      <Button variant="quiet" aria-expanded={open} onClick={toggle} className="h-row-height justify-start text-caption">
-        <CaretRight className={`size-icon-xs transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
-        {name}
+    <section aria-label={name} className="flex flex-col gap-1">
+      <Button variant="quiet" aria-expanded={open} onClick={toggle} className="h-row-height justify-start gap-2 px-row-inset text-caption">
+        <span className="flex-1 text-left">{name}</span>
         <span>{count}</span>
+        <CaretRight className={`size-icon-caret transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
       </Button>
       {open && children}
     </section>
   )
 }
-
-// The New session button, which makes a draft of a session in the project
-// being looked at, and beside it a menu to make one in another project, or
-// in none, or to make a new workspace. Pressed again on a draft, it comes
-// back to the same draft.
-function NewSession({
-  projects,
-  lookingAt,
-  start,
-  newWorkspace,
-}: {
-  projects: ListedProject[]
-  lookingAt: string | null
-  start(project: string | null): void
-  newWorkspace(): void
-}) {
-  const where = lookingAt === null ? "with no project" : `in ${projects.find((project) => project.id === lookingAt)?.name ?? "its project"}`
-  return (
-    <div className="flex gap-1">
-      <Button variant="secondary" className="flex-1" title={`New session ${where}`} aria-label={`New session ${where}`} onClick={() => start(lookingAt)}>
-        <Plus className="size-icon-control" />
-        New session
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="secondary" className="min-w-control px-2" aria-label="New session in another project">
-            <CaretDown className="size-icon-control" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>New session in</DropdownMenuLabel>
-          {projects.map((project) => (
-            <DropdownMenuItem key={project.id} current={project.id === lookingAt} onSelect={() => start(project.id)}>
-              <ProjectGlyph project={project.id} />
-              {project.name}
-            </DropdownMenuItem>
-          ))}
-          {projects.length > 0 && <DropdownMenuSeparator />}
-          <DropdownMenuItem current={lookingAt === null} onSelect={() => start(null)}>
-            No project
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={newWorkspace}>New workspace…</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  )
-}
-
-// The menu that narrows the list to one project, or to the sessions of no
-// project, or shows every project's.
-function ProjectFilter({ projects, project, choose }: { projects: ListedProject[]; project: string | null | undefined; choose(project: string | null | undefined): void }) {
-  const value = project === undefined ? ALL : project === null ? NONE : project
-  const name = project === undefined ? "All projects" : project === null ? "No project" : (projects.find((each) => each.id === project)?.name ?? "A project")
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="quiet" aria-label={`Show sessions of: ${name}`} className="max-w-project-filter gap-1 px-3">
-          <span className="truncate">{name}</span>
-          <CaretDown className="size-icon-control" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuRadioGroup value={value} onValueChange={(chosen) => choose(chosen === ALL ? undefined : chosen === NONE ? null : chosen)}>
-          <DropdownMenuRadioItem value={ALL}>All projects</DropdownMenuRadioItem>
-          {projects.map((each) => (
-            <DropdownMenuRadioItem key={each.id} value={each.id}>
-              <ProjectGlyph project={each.id} />
-              {each.name}
-            </DropdownMenuRadioItem>
-          ))}
-          <DropdownMenuRadioItem value={NONE}>No project</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-// The filter's values for every project and for no project, which no
-// project's id can be: ids are UUIDs.
-const ALL = "all projects"
-const NONE = "no project"
 
 // The time now, to the minute, so that each row's age moves on.
 function useMinute() {

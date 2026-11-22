@@ -174,10 +174,6 @@
   /* The session details as a sheet over the page, at phone width: about
      88% of the screen, and no wider than T3 Code's right panel. */
   --spacing-card-sheet: min(88vw, 448px);
-  /* The session list as a sheet over the page, at 767px or narrower: the
-     screen but for a strip to tap beside it, as T3 Code's sidebar, and no
-     wider than the card's sheet. */
-  --spacing-list-sheet: min(calc(100vw - 12px), 448px);
   /* The command palette: as wide as T3 Code's, and its rows at most this
      tall before they scroll. */
   --spacing-palette: 576px;
@@ -187,10 +183,13 @@
   --spacing-notice: min(360px, calc(100vw - 32px));
   --spacing-sign-in-column: 400px;
   /* The conversation in the middle column, at most as wide as T3 Code's,
-     and the room a tool call's name takes in a turn's steps, as the
-     board's Message draws them. */
+     and the tallest a tool call's result grows in the work log before it
+     scrolls, as T3 Code's. */
   --spacing-conversation: 736px;
-  --spacing-call-name: 48px;
+  --spacing-call-result: 256px;
+  /* The tallest an opened run of calls grows before its rows scroll, as
+     T3 Code's. */
+  --spacing-work-group: min(288px, 50dvh);
   /* Buttons and text boxes are 32px tall, as T3 Code's; small buttons,
      and the items of a menu, the palette or a picker, are 28px, as T3
      Code's are; each 4px taller below 640px. A menu is at
@@ -208,7 +207,12 @@
   --spacing-settings-height: min(600px, calc(100dvh - 32px));
   --spacing-settings-pages: 176px;
   --spacing-settings-field: 200px;
-  /* A project's icon tile in a session row, and the icon on it. */
+  /* The room between a session row's edge and its words, so that they
+     start 18px from the list's edge, as in the Session view drawing and
+     T3 Code's sidebar. */
+  --spacing-row-inset: 10px;
+  /* A project's icon tile in a session row, and the icon on it, and in
+     the conversation's header. */
   --spacing-tile-row: 18px;
   --spacing-tile-row-icon: 12px;
   /* A project's tile in the workspace header and in the workspace strip;
@@ -229,8 +233,6 @@
      Narrower, the side chat stacks below the workspace. A container query,
      @workspace-columns, since it is the room beside the strip that counts. */
   --container-workspace-columns: 880px;
-  /* The widest the session list's project filter grows, beside the search. */
-  --spacing-project-filter: 128px;
   /* The message box: the tallest its text grows before it scrolls; the
      tallest the / menu and the model picker above it are, as T3 Code's;
      and the picker's column of makers. */
@@ -245,7 +247,7 @@
      card; the widest a tab grows; the file tree beside the diff, at most
      256px and 40% of the panel; and the panel as a sheet over the page at
      980px or narrower, 42% of the window, at least 320px and at most 448px.
-     How wide it is beside the conversation is worked out in diff-shown.ts. */
+     How wide it is beside the conversation is worked out in right-panel.ts. */
   --spacing-diff-toolbar: 40px;
   --spacing-control-xs: 24px;
   --spacing-panel-tab: 144px;
@@ -259,8 +261,9 @@
   --spacing-image-open: min(90vw, 1200px);
   --spacing-image-open-height: 80dvh;
   /* Phone width, as T3 Code's sidebar has it, is below this: the session
-     list is a sheet, the message box is one row until tapped, the settings
-     window and the diff fill the screen, and a workspace's columns stack.
+     view's columns stack, the message box is one row until tapped, the
+     settings window and the diff fill the screen, and a workspace's
+     columns stack.
      wide.ts gives the same width to the page's code. */
   --breakpoint-wide: 768px;
 }
@@ -336,4 +339,44 @@
     outline: var(--indicator-width) solid var(--focus-ring);
     outline-offset: 2px;
   }
+}
+
+/* The words of a tool call being carried out, with a light sweeping across
+   them, as T3 Code's live work row has (MIT licence, notice in
+   LICENSES/t3code-MIT.txt). Still, for those who ask for less motion. */
+@utility live-shine {
+  @media (prefers-reduced-motion: no-preference) {
+    color: transparent;
+    background-image: linear-gradient(to right, transparent, var(--text), transparent), linear-gradient(var(--text-muted), var(--text-muted));
+    background-size:
+      calc(3 * var(--spacing-work-row)) 100%,
+      100% 100%;
+    background-repeat: no-repeat;
+    background-clip: text;
+    animation: live-shine 2.2s steps(30) infinite;
+  }
+}
+@keyframes live-shine {
+  from {
+    background-position:
+      calc(-3 * var(--spacing-work-row)) 0,
+      0 0;
+  }
+  to {
+    background-position:
+      calc(100% + 3 * var(--spacing-work-row)) 0,
+      0 0;
+  }
+}
+
+/* A list that scrolls fades out at an edge with more past it, as T3 Code's
+   opened runs of calls do: over 12px, the spacing step space-3. */
+@utility fade-top {
+  mask-image: linear-gradient(to bottom, transparent, black var(--spacing-3));
+}
+@utility fade-bottom {
+  mask-image: linear-gradient(to top, transparent, black var(--spacing-3));
+}
+@utility fade-both {
+  mask-image: linear-gradient(to bottom, transparent, black var(--spacing-3), black calc(100% - var(--spacing-3)), transparent);
 }
