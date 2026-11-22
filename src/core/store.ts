@@ -55,6 +55,14 @@ export const MIGRATIONS: Migration[] = [
       created INTEGER NOT NULL
     )`)
   },
+  // 5: the icon and the colour the owner picked for a project: a Phosphor
+  // icon's name, such as "folder", and one of the design system's six
+  // project colours, such as "moss". Empty until picked, while a client
+  // draws the project as it chooses.
+  (db) => {
+    db.run("ALTER TABLE project ADD COLUMN icon TEXT")
+    db.run("ALTER TABLE project ADD COLUMN colour TEXT")
+  },
 ]
 
 // Opens Evie's one database file and brings its tables up to date.

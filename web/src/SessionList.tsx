@@ -20,6 +20,8 @@ import { ProjectGlyph } from "./ProjectIcon.tsx"
 import { select, useSelected } from "./selection.ts"
 import { besides, deletedSelection, filterSessions, groupSessions, inListOrder, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, titleOf, type Filter, type OpenGroups } from "./session-list.ts"
 import { DeleteDialog, DraftRow, SessionRow } from "./SessionRow.tsx"
+import type { Connection } from "./connection.ts"
+import { NewWorkspace } from "./NewWorkspace.tsx"
 import type { Sessions } from "./sessions.ts"
 import { whenAsked, windowOver } from "./page-requests.ts"
 import { label as keyLabel, onMac, pressed } from "./shortcuts.ts"
@@ -29,8 +31,10 @@ import { label as keyLabel, onMac, pressed } from "./shortcuts.ts"
 // need the owner and the active ones at the top, and the working and the
 // settled ones in groups below that open and close. A new session is a
 // draft, at the very top, until its first message is sent.
-export function SessionList({ sessions }: { sessions: Sessions }) {
+export function SessionList({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
+  // Whether the New workspace dialog is open, from the New session menu or an empty list.
+  const [making, setMaking] = useState(false)
   const selected = useSelected()
   const [filter, setFilter] = useState<Filter>({ search: "" })
   const [open, setOpen] = useState(openGroups)
@@ -176,7 +180,8 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-2 px-4 pb-3">
-        <NewSession projects={list.projects} lookingAt={lookingAt} start={(project) => select({ draft: project })} />
+        <NewSession projects={list.projects} lookingAt={lookingAt} start={(project) => select({ draft: project })} newWorkspace={() => setMaking(true)} />
+        <NewWorkspace connection={connection} sessions={sessions} open={making} onOpenChange={setMaking} />
         <div className="flex gap-1">
           <div className="relative min-w-0 flex-1">
             <MagnifyingGlass className="pointer-events-none absolute top-1/2 left-2 size-icon-sm -translate-y-1/2 text-text-muted" />
@@ -216,6 +221,11 @@ export function SessionList({ sessions }: { sessions: Sessions }) {
         )}
         {list.listed && nothing && (
           <p className="px-3 text-caption text-text-muted">{list.sessions.length === 0 ? "No sessions yet. Start one with New session." : "No sessions match."}</p>
+        )}
+        {list.listed && list.sessions.length === 0 && (
+          <Button variant="quiet" className="self-start" onClick={() => setMaking(true)}>
+            New workspace…
+          </Button>
         )}
         {rows(groups.top)}
         {groups.working.length > 0 && (
@@ -263,8 +273,19 @@ function Group({ name, count, open, toggle, children }: { name: string; count: n
 
 // The New session button, which makes a draft of a session in the project
 // being looked at, and beside it a menu to make one in another project, or
-// in none. Pressed again on a draft, it comes back to the same draft.
-function NewSession({ projects, lookingAt, start }: { projects: ListedProject[]; lookingAt: string | null; start(project: string | null): void }) {
+// in none, or to make a new workspace. Pressed again on a draft, it comes
+// back to the same draft.
+function NewSession({
+  projects,
+  lookingAt,
+  start,
+  newWorkspace,
+}: {
+  projects: ListedProject[]
+  lookingAt: string | null
+  start(project: string | null): void
+  newWorkspace(): void
+}) {
   const where = lookingAt === null ? "with no project" : `in ${projects.find((project) => project.id === lookingAt)?.name ?? "its project"}`
   return (
     <div className="flex gap-1">
@@ -290,6 +311,8 @@ function NewSession({ projects, lookingAt, start }: { projects: ListedProject[];
           <DropdownMenuItem current={lookingAt === null} onSelect={() => start(null)}>
             No project
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={newWorkspace}>New workspace…</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

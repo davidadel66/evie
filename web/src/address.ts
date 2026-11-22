@@ -1,3 +1,5 @@
+import { addressOfWorkspace, workspaceIn } from "./workspace.ts"
+
 // The page's address: what is selected in the list is kept after # in it,
 // so that a reload, a bookmark or a second tab opens on it. That is a
 // session, as `#session=<id>`, or a new session not yet started, a draft,
@@ -6,7 +8,8 @@
 // when its first message is sent. A sign-in link brings a code there
 // instead, which is taken out as soon as the page opens. With a session, a
 // subagent of it whose conversation is open in the middle is kept beside
-// it, as `&subagent=<id>`.
+// it, as `&subagent=<id>`. In the workspace view, the address keeps the
+// workspace instead, as `workspace.ts` says.
 
 export type Selected = { session: string; subagent?: string } | { draft: string | null }
 
@@ -34,6 +37,8 @@ const NONE = "none"
 // is selected, so that a sign-in code is not left in the address bar, a
 // bookmark or a screenshot.
 export function addressAsOpened(hash: string): string {
+  const workspace = workspaceIn(hash)
+  if (workspace !== undefined) return `/${addressOfWorkspace(workspace)}`
   const selected = selectedIn(hash)
   return `/${selected === undefined ? "" : addressOf(selected)}`
 }

@@ -13,6 +13,7 @@ import { ProjectGlyph } from "./ProjectIcon.tsx"
 import { select, useSelected } from "./selection.ts"
 import { ageWords, titleOf } from "./session-list.ts"
 import type { Sessions } from "./sessions.ts"
+import { addressOfWorkspace, workspaceIn } from "./workspace.ts"
 import { Swatch } from "./Settings.tsx"
 import { label, onMac, type Command } from "./shortcuts.ts"
 import { applyTheme, rememberedTheme, THEMES } from "./theme.ts"
@@ -77,6 +78,9 @@ export function Palette({ connection, sessions, open, close }: { connection: Con
 function Searching({ connection, sessions, run }: { connection: Connection; sessions: Sessions; run(row: Row): void }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
+  // In a workspace, its view has neither the session list nor the card,
+  // and a new session starts in its project.
+  const workspace = workspaceIn(location.hash)
   const listShown = useListShown()
   const cardShown = useCardShown()
   // The session selected, as the list has it, and whether its own
@@ -115,7 +119,14 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
   ]
 
   const actions: Row[] = [
-    { id: "new", title: "New session", keywords: ["chat", "draft", "start"], icon: <Plus />, shortcut: "new session", run: () => ask("new session") },
+    {
+      id: "new",
+      title: "New session",
+      keywords: ["chat", "draft", "start"],
+      icon: <Plus />,
+      shortcut: "new session",
+      run: () => void (ask("new session") || select({ draft: workspace?.workspace ?? null })),
+    },
     {
       id: "new in",
       title: "New session in a project…",
@@ -145,22 +156,26 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
         ],
       },
     },
-    {
-      id: "list",
-      title: (listShown.wide ? listShown.column : listShown.sheet) ? "Hide the session list" : "Show the session list",
-      keywords: ["sidebar", "sessions"],
-      icon: <SidebarLeft />,
-      shortcut: "session list",
-      run: toggleList,
-    },
-    {
-      id: "card",
-      title: (cardShown.wide ? cardShown.column : cardShown.sheet) ? "Hide the project card" : "Show the project card",
-      keywords: ["panel", "project", "subagents", "jobs"],
-      icon: <SidebarRight />,
-      shortcut: "card",
-      run: toggleCard,
-    },
+    ...(workspace !== undefined
+      ? []
+      : [
+          {
+            id: "list",
+            title: (listShown.wide ? listShown.column : listShown.sheet) ? "Hide the session list" : "Show the session list",
+            keywords: ["sidebar", "sessions"],
+            icon: <SidebarLeft />,
+            shortcut: "session list" as const,
+            run: toggleList,
+          },
+          {
+            id: "card",
+            title: (cardShown.wide ? cardShown.column : cardShown.sheet) ? "Hide the project card" : "Show the project card",
+            keywords: ["panel", "project", "subagents", "jobs"],
+            icon: <SidebarRight />,
+            shortcut: "card" as const,
+            run: toggleCard,
+          },
+        ]),
     ...(session !== undefined && (session.state === "active" || session.state === "settled")
       ? [
           {
@@ -179,7 +194,7 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
     ...(conversation?.state.turnRunning === true && !conversation.state.stopping
       ? [{ id: "stop", title: "Stop", keywords: ["cancel", "interrupt"], icon: <StopFill />, shortcut: "stop" as const, run: () => conversation.conversation.stop() }]
       : []),
-    ...(ownConversation || (selected !== undefined && "draft" in selected)
+    ...(ownConversation || (selected !== undefined && "draft" in selected) || workspace !== undefined
       ? [{ id: "model", title: "Pick a model", keywords: ["model"], shortcut: "model" as const, takesFocus: true, run: () => ask("pick model") }]
       : []),
   ]
@@ -195,7 +210,19 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
       [
         { name: "Actions", items: actions },
         { name: "Sessions", items: [...list.sessions].sort((a, b) => b.lastActive - a.lastActive).map(sessionRow) },
-        { name: "Projects", items: list.projects.map((project): Row => ({ id: `project:${project.id}`, title: project.name, keywords: [project.folder], detail: project.folder, icon: <ProjectGlyph project={project.id} />, run: () => select({ draft: project.id }) })) },
+        {
+          name: "Projects",
+          items: list.projects.map(
+            (project): Row => ({
+              id: `project:${project.id}`,
+              title: project.name,
+              keywords: [project.folder],
+              detail: project.folder,
+              icon: <ProjectGlyph project={project.id} />,
+              run: () => (location.hash = addressOfWorkspace({ workspace: project.id, tab: "sessions" })),
+            }),
+          ),
+        },
       ],
       query,
     )

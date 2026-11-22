@@ -21,47 +21,64 @@ import { onMac, pressed } from "./shortcuts.ts"
 import { Spinner } from "./Spinner.tsx"
 import { SubagentView } from "./Subagent.tsx"
 import { Words } from "./Words.tsx"
+import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 
 // The page once signed in: the session list, the conversation and the
 // project card, in three columns, as T3 Code lays them out. At 767px or
 // narrower the list is a sheet over the page from the left, and at 980px
 // or narrower the card is one from the right, each opened from a button in
-// the session's header. The command palette and the notices float over it all.
+// the session's header. With a workspace in the address, the workspace
+// view instead. The command palette and the notices float over either.
 export function Frame({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
   useCardShortcut()
   const [palette, setPalette] = useState(false)
   useFrameShortcuts(() => setPalette((open) => !open))
-  const list = useListShown()
-  const sheetOpen = !list.wide && list.sheet
+  const workspace = useWorkspacePlace()
   return (
     <ConnectionShown.Provider value={state}>
-      <div className="flex h-dvh">
-        <ListPlace>
-          {/* The settings button's own padding brings its icon near the page's 28px edge. */}
-          <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-7">
-            <span className="text-title text-text">evie</span>
-            <div className="ml-auto flex items-center">
-              <Settings connection={connection} />
-              {!list.wide && (
-                <Button variant="icon" aria-label="Close the session list" onClick={closeListSheet}>
-                  <X />
-                </Button>
-              )}
-            </div>
-          </header>
-          {list.wide && <ConnectionLine state={state} />}
-          <SessionList sessions={sessions} />
-        </ListPlace>
-
-        <main inert={sheetOpen} className="flex min-w-0 flex-1 flex-col bg-bg">
-          <OpenSession connection={connection} sessions={sessions} />
-        </main>
-
-        <CardPlace connection={connection} sessions={sessions} />
-      </div>
+      {workspace !== undefined ? (
+        <>
+          <WorkspaceView place={workspace} state={state} connection={connection} sessions={sessions} />
+          <Settings connection={connection} button={false} />
+        </>
+      ) : (
+        <SessionView state={state} connection={connection} sessions={sessions} />
+      )}
       <Palette connection={connection} sessions={sessions} open={palette} close={() => setPalette(false)} />
       <Notices connection={connection} sessions={sessions} />
     </ConnectionShown.Provider>
+  )
+}
+
+// The session view's three columns.
+function SessionView({ state, connection, sessions }: { state: ConnectionState; connection: Connection; sessions: Sessions }) {
+  const list = useListShown()
+  const sheetOpen = !list.wide && list.sheet
+  return (
+    <div className="flex h-dvh">
+      <ListPlace>
+        {/* The settings button's own padding brings its icon near the page's 28px edge. */}
+        <header className="flex h-header-height shrink-0 items-center gap-3 pr-4 pl-7">
+          <span className="text-title text-text">evie</span>
+          <div className="ml-auto flex items-center">
+            <Settings connection={connection} />
+            {!list.wide && (
+              <Button variant="icon" aria-label="Close the session list" onClick={closeListSheet}>
+                <X />
+              </Button>
+            )}
+          </div>
+        </header>
+        {list.wide && <ConnectionLine state={state} />}
+        <SessionList connection={connection} sessions={sessions} />
+      </ListPlace>
+
+      <main inert={sheetOpen} className="flex min-w-0 flex-1 flex-col bg-bg">
+        <OpenSession connection={connection} sessions={sessions} />
+      </main>
+
+      <CardPlace connection={connection} sessions={sessions} />
+    </div>
   )
 }
 
@@ -228,7 +245,7 @@ function Empty({ title, text }: { title: string; text: string }) {
 // Working is said, with why, until it is back. The status region is always
 // on the page, and only its words come and go, so that a screen reader,
 // which listens to a region already there, says them.
-function ConnectionLine({ state }: { state: ConnectionState }) {
+export function ConnectionLine({ state }: { state: ConnectionState }) {
   const line = connectionLine(state)
   return (
     <div role="status">

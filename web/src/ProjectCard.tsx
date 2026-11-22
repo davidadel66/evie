@@ -11,6 +11,7 @@ import { FolderPath } from "./FolderPath.tsx"
 import { CaretRight, Check, SidebarRight, X } from "./icons.tsx"
 import { backgroundJobs, branchWords, gitWhyNot, stateWord, subagentsOf, undoWhyNot, type CardFacts, type Subagent } from "./project-card.ts"
 import { ProjectIcon } from "./ProjectIcon.tsx"
+import { addressOfWorkspace } from "./workspace.ts"
 import { select, useSelected } from "./selection.ts"
 import { label as keyLabel, onMac } from "./shortcuts.ts"
 import type { Sessions } from "./sessions.ts"
@@ -102,8 +103,17 @@ function Header({ projectId, project, title }: { projectId: string | null; proje
   const name = title ?? (projectId === null ? "No project" : (project?.name ?? "Project"))
   return (
     <header className="flex h-header-height shrink-0 items-center gap-2 pr-4 pl-7">
-      {projectId !== null && <ProjectIcon project={projectId} />}
-      <h2 className="min-w-0 flex-1 truncate text-title text-text">{name}</h2>
+      {projectId === null ? (
+        <h2 className="min-w-0 flex-1 truncate text-title text-text">{name}</h2>
+      ) : (
+        // The project's tile and name open its workspace.
+        <h2 className="flex min-w-0 flex-1 text-title text-text">
+          <a href={addressOfWorkspace({ workspace: projectId, tab: "sessions" })} title={`Open the ${name} workspace`} className="flex h-control min-w-0 items-center gap-2">
+            <ProjectIcon project={projectId} />
+            <span className="min-w-0 truncate">{name}</span>
+          </a>
+        </h2>
+      )}
       <Button variant="icon" aria-label="Hide the project card" onClick={toggleCard}>
         <X />
       </Button>

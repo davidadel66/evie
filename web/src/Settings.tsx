@@ -28,7 +28,9 @@ import { Words } from "./Words.tsx"
 // The settings are followed for as long as the gear is there, so that
 // instructions being written are kept when the window is closed, for the
 // next time it is opened, and a restart is followed to its end.
-export function Settings({ connection }: { connection: Connection }) {
+// Without its `button`, as in the workspace view, it is opened only from
+// the command palette.
+export function Settings({ connection, button = true }: { connection: Connection; button?: boolean }) {
   const [settings, setSettings] = useState<ServerSettings>()
   const [open, setOpen] = useState(false)
   useEffect(() => {
@@ -40,11 +42,13 @@ export function Settings({ connection }: { connection: Connection }) {
   useEffect(() => whenAsked("settings", () => setOpen(true)), [])
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="icon" aria-label="Settings">
-          <GearSix />
-        </Button>
-      </DialogTrigger>
+      {button && (
+        <DialogTrigger asChild>
+          <Button variant="icon" aria-label="Settings">
+            <GearSix />
+          </Button>
+        </DialogTrigger>
+      )}
       {/* At phone width it fills the screen. */}
       <DialogContent className="@container h-settings-height max-w-settings gap-0 p-0 max-wide:inset-0 max-wide:top-0 max-wide:h-dvh max-wide:max-w-none max-wide:translate-y-0 max-wide:rounded-none max-wide:border-0">
         {settings && <Window settings={settings} />}

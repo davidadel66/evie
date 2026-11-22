@@ -3,14 +3,16 @@
 // message box to open its model picker, the conversation's header to
 // rename its session, and the settings window to open. Each part
 // listens while it is on the page; a request no part is listening for does
-// nothing.
+// nothing, and `ask` says so.
 
 export type PageRequest = "new session" | "pick model" | "rename" | "settings"
 
 const listening = new Map<PageRequest, Set<() => void>>()
 
-export function ask(request: PageRequest) {
-  for (const listener of [...(listening.get(request) ?? [])]) listener()
+export function ask(request: PageRequest): boolean {
+  const listeners = [...(listening.get(request) ?? [])]
+  for (const listener of listeners) listener()
+  return listeners.length > 0
 }
 
 // Calls `then` each time `request` is asked, until the function returned is called.

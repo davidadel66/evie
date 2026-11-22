@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import type { SessionSummary } from "../../src/core/types.ts"
 import { selectedIn } from "./address.ts"
 import { Button } from "./components/ui/button.tsx"
 import type { Connection } from "./connection.ts"
 import { Check, X } from "./icons.tsx"
 import { latestTurnEnd, rememberedNotices, shownAs, watchSessions, type Notice, type TurnEnd } from "./notices.ts"
-import { select, useSelected } from "./selection.ts"
+import { select } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import type { Sessions } from "./sessions.ts"
+import { NEW_CHAT, workspaceIn } from "./workspace.ts"
 
 // Notifications, as T3 Code's: when a session comes to need the owner, or
 // its turn finishes or fails, the owner is told, with the session's name.
@@ -33,8 +34,7 @@ const READ = 20
 
 export function Notices({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const [shown, setShown] = useState<Shown[]>([])
-  const selected = useSelected()
-  const looking = selected !== undefined && "session" in selected ? selected.session : undefined
+  const looking = lookedAt(useSyncExternalStore(onAddressChange, () => location.hash))
 
   useEffect(() => {
     let next = 0
@@ -45,10 +45,9 @@ export function Notices({ connection, sessions }: { connection: Connection; sess
 
     function tell(summary: SessionSummary, notice: Notice, end?: TurnEnd) {
       const settings = rememberedNotices()
-      const open = selectedIn(location.hash)
       const where = shownAs({
         session: summary.session,
-        lookingAt: open !== undefined && "session" in open ? open.session : undefined,
+        lookingAt: lookedAt(location.hash),
         focused: document.visibilityState === "visible" && document.hasFocus(),
         settings,
         allowed: typeof Notification === "function" && Notification.permission === "granted",
@@ -150,6 +149,19 @@ export function Notices({ connection, sessions }: { connection: Connection; sess
       ))}
     </div>
   )
+}
+
+// The session the owner is looking at, as the address has it: the one
+// open in the session view, or the one in a workspace's side chat.
+function lookedAt(hash: string): string | undefined {
+  const selected = selectedIn(hash)
+  if (selected !== undefined) return "session" in selected ? selected.session : undefined
+  const chat = workspaceIn(hash)?.chat
+  return chat === NEW_CHAT ? undefined : chat
+}
+function onAddressChange(listener: () => void) {
+  addEventListener("hashchange", listener)
+  return () => removeEventListener("hashchange", listener)
 }
 
 // What each notice says, as its title.

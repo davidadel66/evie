@@ -9,6 +9,7 @@ import { DEFAULT_CEILING, triggerSize } from "./compaction.ts"
 import { createLoop, currentModel, type Loop } from "./loop.ts"
 import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "./projects.ts"
 import { createQuestions } from "./questions.ts"
+import { listStorage, readStorage } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
 import type { Ask, Children, Commands, Core, EvieEvent, Host, JobRecord, JobWork, Plugin, Project, ProjectSettings, Provider, SettingsEditor } from "./types.ts"
@@ -41,6 +42,10 @@ export type EvieOptions = {
   trust?: (folder: string) => Promise<void>
   // What carries out the settings commands, which fail without it.
   settings?: SettingsEditor
+  // Where a project's `.evie/` folder syncs, by its own settings, which
+  // count only once it is trusted: undefined when they set nothing, or it
+  // is not trusted. A list of projects says which are backed up by it.
+  syncSetting?: (project: Project) => Promise<"private" | "none" | undefined>
   // How often, in milliseconds, sessions are looked at for any that a week
   // of quiet has settled, to send their summaries: nothing happens in a
   // session to tell of it. Once an hour when left out, which is for tests to change.
@@ -836,17 +841,24 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
 
   // Each project's branch, and whether its folder is in a git work tree,
   // are read now, from its folder, all at once.
+  // Whether each is backed up is read from its settings file too: a file
+  // that cannot be read says it is not.
   async function listProjects(): Promise<Commands["list_projects"]["output"]> {
+    const icons = projects.icons()
+    const syncing = options.plugins.some((plugin) => plugin.name === "sync")
+    const setting = options.syncSetting
+    const backedUp = async (project: Project) =>
+      setting === undefined ? undefined : syncing && (await Promise.resolve(setting(project)).catch(() => undefined)) === "private"
     return Promise.all(
       projects.list().map(async (project) => {
-        const [branch, git] = await Promise.all([branchOf(project.folder), inGit(project.folder)])
-        return { ...project, ...(branch !== undefined && { branch }), ...(git !== undefined && { git }) }
+        const [branch, git, syncs] = await Promise.all([branchOf(project.folder), inGit(project.folder), backedUp(project)])
+        return { ...project, ...(branch !== undefined && { branch }), ...(git !== undefined && { git }), ...icons.get(project.id), ...(syncs !== undefined && { syncs }) }
       }),
     )
   }
 
   async function newProject(input: Commands["new_project"]["input"]): Promise<Commands["new_project"]["output"]> {
-    const { project, madeFolder, heldFiles } = await makeProject(projects, input, home)
+    const { project, madeFolder, heldFiles, sync } = await makeProject(projects, input, home, options.env.HOME || homedir())
     keepEvieOutOfGit(project.folder)
     // The project is made by now. Untrusted, it still works, and its first
     // session asks whether to trust its settings file and what came with it.
@@ -861,7 +873,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     }
     // Backed up only when its setting counts and a plugin is there to act
     // on it: the sync plugin, known by its name.
-    const syncs = trusted && options.plugins.some((plugin) => plugin.name === "sync")
+    const syncs = trusted && sync === "private" && options.plugins.some((plugin) => plugin.name === "sync")
     return { project, madeFolder, trusted, syncs }
   }
 
@@ -961,6 +973,13 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return options.settings
   }
 
+  // A project, by its id, for a command that names one.
+  function projectFor(id: string): Project {
+    const project = typeof id === "string" ? projects.get(id) : undefined
+    if (!project) throw new Error(`There is no project with the id ${JSON.stringify(id)}.`)
+    return project
+  }
+
   // Opens a session again in this process, to pick up what was left in it.
   // A subagent's is opened by the session that started it, which is opened first.
   async function reopen(session: string): Promise<void> {
@@ -1025,6 +1044,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await moveSession(command)) as Output
         case "delete_session":
           return (await deleteSession(command)) as Output
+        case "set_project_look":
+          return projects.setIcon(command.project, command.icon, command.colour) as Output
+        case "list_storage":
+          return (await listStorage(projectFor(command.project).folder, command.folder, home)) as Output
+        case "read_storage":
+          return (await readStorage(projectFor(command.project).folder, command.path, home)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

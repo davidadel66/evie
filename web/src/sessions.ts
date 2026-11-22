@@ -32,8 +32,10 @@ export type Sessions = {
   // returned is called.
   subscribe(listener: () => void): () => void
   // Lists the projects again, for what changes with no event to tell of
-  // it, such as the branch each is on, when connected.
-  refreshProjects(): void
+  // it, such as the branch each is on, when connected. Settles once a list
+  // asked for after this call has been applied, or has failed, or at once
+  // while not connected.
+  refreshProjects(): Promise<void>
   // Settles a session, or with false brings it back. Gives back why the
   // server refused, as it does while the session is working or waiting
   // for an answer, or nothing. The list changes when the session's summary
@@ -106,14 +108,21 @@ export function openSessions(connection: Connection): Sessions {
   // one is out, however often, they are listed once more after it: the
   // answers then come in the order they were asked for, so none applied is
   // older than one applied before it.
+  // Whoever waits for a list is told once one asked for after they asked
+  // has been applied: those waiting on the one out, and those waiting on
+  // the one after it.
   let projectsOut = false
   let projectsAgain = false
-  function listProjects(evie: Evie) {
+  let waitingOut: (() => void)[] = []
+  let waitingAgain: (() => void)[] = []
+  function listProjects(evie: Evie, done?: () => void) {
     if (projectsOut) {
       projectsAgain = true
+      if (done) waitingAgain.push(done)
       return
     }
     projectsOut = true
+    if (done) waitingOut.push(done)
     void evie
       .send({ type: "list_projects" })
       .then(
@@ -122,8 +131,10 @@ export function openSessions(connection: Connection): Sessions {
       )
       .finally(() => {
         projectsOut = false
+        for (const told of waitingOut.splice(0)) told()
         if (!projectsAgain) return
         projectsAgain = false
+        ;[waitingOut, waitingAgain] = [waitingAgain, waitingOut]
         listProjects(evie)
       })
   }
@@ -171,7 +182,9 @@ export function openSessions(connection: Connection): Sessions {
       return () => void listeners.delete(listener)
     },
     refreshProjects() {
-      if (connected !== undefined) listProjects(connected)
+      const evie = connected
+      if (evie === undefined) return Promise.resolve()
+      return new Promise<void>((resolve) => listProjects(evie, resolve))
     },
     settle: (session, settled) => carryOut({ type: "settle_session", session, settled }),
     rename: (session, name) => carryOut({ type: "rename_session", session, name }),

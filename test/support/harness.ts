@@ -19,8 +19,11 @@ export async function startEvie(
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
     trust?: NonNullable<EvieOptions["trust"]>
     settings?: NonNullable<EvieOptions["settings"]>
+    syncSetting?: NonNullable<EvieOptions["syncSetting"]>
     compaction?: NonNullable<EvieOptions["compaction"]>
     quietCheckEvery?: number
+    // Settings from the environment besides the data folder, such as HOME.
+    env?: Record<string, string>
     // Open the session as a client that shows questions and answers them.
     questions?: boolean
   } = {},
@@ -32,12 +35,13 @@ export async function startEvie(
     if (!options.projectFolder) await rm(projectFolder, { recursive: true, force: true })
   }
   const evie = await createEvie({
-    env: { EVIE_HOME: home },
+    env: { ...options.env, EVIE_HOME: home },
     model: options.model ?? "test/model",
     plugins,
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
     ...(options.trust && { trust: options.trust }),
     ...(options.settings && { settings: options.settings }),
+    ...(options.syncSetting && { syncSetting: options.syncSetting }),
     ...(options.compaction && { compaction: options.compaction }),
     ...(options.quietCheckEvery !== undefined && { quietCheckEvery: options.quietCheckEvery }),
   }).catch(async (error) => {

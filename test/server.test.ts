@@ -1,5 +1,5 @@
 import { afterEach, expect, setSystemTime, test } from "bun:test"
-import { mkdtemp, realpath, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -590,13 +590,27 @@ function written(run: Run, text: string) {
   })
 }
 
+// What the terminal printed after its first line, which names the project
+// after its folder. The folder's name can hold a piece of a reply, as a
+// project called Docs holds "Do", and a temporary folder's name ends in
+// random letters that can spell one, so pieces are counted only in what follows.
+const conversation = (printed: string) => printed.slice(printed.indexOf("\n") + 1)
+
+// A project folder named Docs, so that the terminal's first line holds "Do",
+// a piece of the replies below, every time. Removed once the test is over.
+async function docsFolder() {
+  const folder = await mkdtemp(join(tmpdir(), "Docs-"))
+  cleanups.push(() => rm(folder, { recursive: true, force: true }))
+  return folder
+}
+
 test("when the line drops part way through a reply that uses a tool, the terminal shows every piece of text and every tool line once, in order, once it is back", async () => {
   const carryOn = gate()
   const finish = gate()
   const { served, line, connect } = await serveOverALine([
     piecemealModel([["Hel", "lo", carryOn.opened, " world.", { call: "lookup" }], ["Do", finish.opened, "ne."]]),
     lookup,
-  ])
+  ], { projectFolder: await docsFolder() })
   const writingDo = written(served.run, "Do")
   let printed = ""
   await runTerminal({
@@ -617,7 +631,7 @@ test("when the line drops part way through a reply that uses a tool, the termina
   })
 
   expect(printed).toContain("Hello world.\n⏺ lookup {}\n  ⎿ found it\nDone.\n")
-  for (const piece of ["Hel", "world", "lookup", "found it", "Do"]) expect(printed.split(piece)).toHaveLength(2)
+  for (const piece of ["Hel", "world", "lookup", "found it", "Do"]) expect(conversation(printed).split(piece)).toHaveLength(2)
 })
 
 test("what is written while the reply with what was missed is on its way is shown once, after it", async () => {
@@ -627,7 +641,7 @@ test("what is written while the reply with what was missed is on its way is show
   const { served, line, connect } = await serveOverALine([
     piecemealModel([["Hel", "lo", carryOn.opened, " world.", { call: "lookup" }], ["Do", finish.opened, "ne."]]),
     lookup,
-  ])
+  ], { projectFolder: await docsFolder() })
   const writingDo = written(served.run, "Do")
   let printed = ""
   await runTerminal({
@@ -653,7 +667,7 @@ test("what is written while the reply with what was missed is on its way is show
   })
 
   expect(printed).toContain("Hello world.\n⏺ lookup {}\n  ⎿ found it\nDone.\n")
-  for (const piece of ["Hel", "world", "lookup", "found it", "Do", "ne."]) expect(printed.split(piece)).toHaveLength(2)
+  for (const piece of ["Hel", "world", "lookup", "found it", "Do", "ne."]) expect(conversation(printed).split(piece)).toHaveLength(2)
 })
 
 test("a session opened just as the line dropped is shown as it stands once the line is back, though the reply comes from the server's memory", async () => {
@@ -858,7 +872,7 @@ test("a session continued by its folder is caught up on at once, so what is writ
   })
 
   expect(printed).toContain("[note] A turn is still running in this session. Ctrl-C stops it.\nWorking and done.\n")
-  for (const piece of ["Work", " and", " done."]) expect(printed.split(piece)).toHaveLength(2)
+  for (const piece of ["Work", " and", " done."]) expect(conversation(printed).split(piece)).toHaveLength(2)
 })
 
 // How long the client in the test below lets its line carry nothing before
@@ -1065,6 +1079,26 @@ test("the server remembers the replies to the last 200 commands of each device, 
   expect(await countAs(own, served.run.session, "command 2")).toEqual({ text: "run 2" })
   expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 202" })
   expect(count.runs()).toBe(202)
+})
+
+test("the replies to Storage's reads are not remembered, since they can be large and reading again changes nothing, so they take none of the 200 places", async () => {
+  const count = counted()
+  const served = await serveEvie([scriptedProvider([]).plugin, count.plugin])
+  cleanups.push(served.stop)
+  const evie = join(served.run.projectFolder, ".evie")
+  await mkdir(evie, { recursive: true })
+  await writeFile(join(evie, "notes.md"), "first\n")
+  const project = served.run.project!.id
+  const own = await ownLine(served.server.url, served.token)
+  expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
+
+  const read = { type: "read_storage", project, path: "notes.md" } as const
+  expect(await own.send({ id: "read", command: read })).toMatchObject({ result: { text: "first\n" } })
+  await writeFile(join(evie, "notes.md"), "second\n")
+  expect(await own.send({ id: "read", command: read })).toMatchObject({ result: { text: "second\n" } })
+  for (let n = 1; n <= 200; n++) await own.send({ id: `list ${n}`, command: { type: "list_storage", project } })
+
+  expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
 })
 
 test("a command still being carried out is never pushed out of the server's memory, however many of the device's commands come after it", async () => {
