@@ -229,12 +229,35 @@ any name other than `127.0.0.1` or `localhost` must be listed under
 { "server": { "host": "0.0.0.0", "origins": ["http://my-mac.local:3843"] } }
 ```
 
-For now the page is the empty frame of its three columns: the list of
-sessions, the conversation and the project card come next. A light at the
-top says whether it is connected. While the line is down it says
-Reconnecting, and it catches up by itself once the line is back. A menu
-beside it picks one of three themes, Dusk, Moss and Oxblood, which the
-browser remembers.
+The page has three columns: the list of sessions, the conversation and the
+project card. For now only the list is filled in; the conversation and the
+project card come next. A light at the top says whether it is connected.
+While the line is down it says Reconnecting, and it catches up by itself
+once the line is back. A menu beside it picks one of three themes, Dusk,
+Moss and Oxblood, which the browser remembers.
+
+The list shows every session you have said something in, kept current as
+they change, and listed again when the line comes back:
+
+- **At the top**, the sessions waiting for an answer from you ("Needs
+  you"), then the other recent ones, newest first. **Working** and
+  **Settled** are groups at the bottom, which open and close; the browser
+  remembers which are open.
+- **Each row** shows its project's icon and name, and how long ago it was
+  active, or its state; the session's name, which is the opening words of
+  its first message for now; and the git branch its project is on. Until a
+  project's icon and colour can be picked, each project has a folder in a
+  colour chosen from its id.
+- **New session** starts a session in the project of the selected session,
+  or of the project the list is narrowed to; the menu beside it starts one
+  in another project, or in none.
+- **Search** narrows the list by name, and the menu beside it to one
+  project.
+- **A row's menu** (the `···` on the selected row, or on any row under the
+  pointer) settles the session or brings it back. A session that is
+  working, or waiting for an answer, is not settled; the row says why.
+- **The selected session** is kept in the page's address, as
+  `#session=<id>`, so a reload or a bookmark opens on it.
 
 ### Keeping the server running
 
@@ -858,6 +881,15 @@ Two questions were settled by trying them:
   does use Bun's development server, which reads the plugin from the
   repository's `bunfig.toml`: that is why it must be started there.
 
+Menus, and later popovers and dialogs, are [shadcn/ui](https://ui.shadcn.com)
+parts: their code is copied into `web/src/components/ui/` and styled to
+the design system, and they are built on Radix, which handles the
+keyboard, focus and screen readers. They join their classes with `cn()` in
+`web/src/lib/utils.ts`, which is told the design system's names for text
+sizes and sizes, so that, say, `text-caption` and `text-text-muted` are
+both kept. A size added to the theme in `styles.css` is added to its list
+too; a test checks the two agree.
+
 The design system's tokens are copied from its `tokens.json`: the colours
 into `web/src/tokens.css`, one set per theme, and the rest into Tailwind's
 theme in `web/src/styles.css`. Tailwind's own defaults are cleared, so each
@@ -962,8 +994,8 @@ remove `evie.db` and `server-token` from it, and its `-seed` folder, first.
 
 ## What comes next
 
-- The rest of the web client: the list of sessions, the conversation, the
-  project card, and a workspace for each project.
+- The rest of the web client: the conversation, the project card, and a
+  workspace for each project.
 - Scheduled work, memory, voice and a phone app.
 
 ## Credits
@@ -979,8 +1011,10 @@ credited here, and its licence notice is kept with the code.
   notice are in `LICENSES/`.
 
 The web app's fonts are [Geist and Geist Mono](https://github.com/vercel/geist-font)
-(SIL Open Font License 1.1), from the `@fontsource-variable` packages. The
-licence is in `LICENSES/`.
+(SIL Open Font License 1.1), from the `@fontsource-variable` packages. Its
+menus are adapted from [shadcn/ui](https://github.com/shadcn-ui/ui) (MIT),
+and its icons are copied from [Phosphor](https://phosphoricons.com) 2.1.1
+(MIT). Their licences are in `LICENSES/`.
 
 ## Licence
 
