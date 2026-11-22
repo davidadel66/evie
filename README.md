@@ -695,10 +695,11 @@ What evie changed is shown as diffs, as T3 Code shows them:
   that `gh` runs is given the same. The one exception is the sync plugin's
   push to its private backup repository, which keeps the transports,
   credential helper and ssh command the settings have, and everything else
-  above; it pushes nothing while the backup repository's own settings name
-  a credential helper, ssh command or password program, or another file of
-  settings to read (`include`, `includeIf`), so the credentials come from
-  your own settings. The files themselves are read by the server, not through git, and
+  above. Your own settings give that push its credentials; it pushes
+  nothing while the backup repository's own settings set one of the
+  settings the sync plugin lists, such as a credential helper (an empty
+  one aside), an ssh command, another address to push to, a proxy, or
+  another file of settings to read. The files themselves are read by the server, not through git, and
   the size of each is looked at first: one over 1 MB is never read. A file
   git filters, as git-lfs does, is not compared, since its filter is not
   run, and says "Filtered file, changes not shown". One answer spends at
@@ -1014,9 +1015,12 @@ goes is a setting in its own `.evie/evie.json`:
   already on your account is never taken over: when the name is taken,
   the next free one is used, such as `evie-finances-2`. Evie records the
   repository it made in the `.evie` folder's own git settings, and before
-  every push checks that the remote is still that repository, that GitHub
-  still says it is private, and that those settings name no command for
-  git to run as it pushes; otherwise nothing is pushed. A minute
+  every push checks that the remote is still that repository, that every
+  address it pushes to is that repository's, that GitHub still says it is
+  private, and that those settings set none of a list of settings that
+  would have git run a command, push somewhere else or read settings from
+  elsewhere (`STOPS_A_PUSH` in `src/plugins/sync.ts`); otherwise nothing
+  is pushed, and `/sync` names the setting. A minute
   after Evie last changed something in the `.evie` folder, and once an
   hour, what changed is committed and pushed, without asking: the setting
   is your permission. Every project is looked at once an hour from when

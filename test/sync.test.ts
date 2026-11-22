@@ -173,8 +173,9 @@ test("syncing runs none of the commands the .evie folder's own git settings name
     ["filter.evil.clean", `${command} clean`],
     ["filter.evil.process", `${command} process`],
     ["filter.evil.required", "true"],
+    // Signing is turned off, so a commit is not signed; a signing program
+    // set here would stop the push, as below.
     ["commit.gpgSign", "true"],
-    ["gpg.program", `${command} gpg`],
   ]
   for (const [setting, value] of settings) await git(["--git-dir", join(evieFolder, ".git"), "config", setting, value], evieFolder)
   await writeFile(join(evieFolder, ".gitattributes"), "* filter=evil\n")
@@ -185,28 +186,59 @@ test("syncing runs none of the commands the .evie folder's own git settings name
   expect((await readdir(noted)).filter((each) => each !== "noted" && each !== "hooks")).toEqual([])
 })
 
-test("nothing is pushed while the .evie folder's own git settings name a credential helper, an ssh command, a password program, or more settings to read, and /sync says why", async () => {
+// What /sync says when the .evie folder's own git settings set these, by
+// git's names for them, which stop a push.
+const stopsThePush = (evieFolder: string, named: string, many = false) =>
+  `Could not sync ${evieFolder}: Its git repository's own settings, ${join(evieFolder, ".git", "config")}, set ${named}, which would have git ` +
+  "run a command of theirs, push somewhere else, or read settings from elsewhere, as it pushes, so nothing was pushed. The push takes its " +
+  `credentials from your own git settings, so remove ${many ? "them" : "that"} from the repository's settings, then /sync.`
+
+test("nothing is pushed while the .evie folder's own git settings set one that would have git run a command, push somewhere else or read settings from elsewhere, and /sync names it", async () => {
+  const { github, evieFolder, syncNow, name } = await start()
+  await syncNow()
+  const gitDir = join(evieFolder, ".git")
   const planted: [string, string, string][] = [
+    // Commands run as it pushes, or as it signs the push.
     ["credential.helper", "!touch planted", "credential.helper"],
     ["credential.https://github.com.helper", "!touch planted", "credential.https://github.com.helper"],
     ["core.sshCommand", "touch planted; ssh", "core.sshcommand"],
     ["core.askPass", "/tmp/planted", "core.askpass"],
+    ["core.gitProxy", "/tmp/planted", "core.gitproxy"],
+    ["remote.origin.receivepack", "/tmp/planted", "remote.origin.receivepack"],
+    ["remote.origin.uploadpack", "/tmp/planted", "remote.origin.uploadpack"],
+    ["remote.origin.vcs", "planted", "remote.origin.vcs"],
+    ["push.gpgSign", "true", "push.gpgsign"],
+    ["gpg.program", "/tmp/planted", "gpg.program"],
+    ["gpg.ssh.program", "/tmp/planted", "gpg.ssh.program"],
+    ["gpg.ssh.defaultKeyCommand", "/tmp/planted", "gpg.ssh.defaultkeycommand"],
+    // Somewhere else to push to, or another way there.
+    ["remote.origin.pushurl", "https://example.invalid/elsewhere.git", "remote.origin.pushurl"],
+    ["url.https://example.invalid/.pushInsteadOf", "https://github.com/", "url.https://example.invalid/.pushinsteadof"],
+    ["url.https://example.invalid/.insteadOf", "https://github.com/", "url.https://example.invalid/.insteadof"],
+    ["protocol.allow", "always", "protocol.allow"],
+    ["protocol.ext.allow", "always", "protocol.ext.allow"],
+    ["remote.origin.proxy", "http://example.invalid:8080", "remote.origin.proxy"],
+    ["http.proxy", "http://example.invalid:8080", "http.proxy"],
+    ["http.https://github.com.proxy", "http://example.invalid:8080", "http.https://github.com.proxy"],
+    ["http.curloptResolve", "github.com:443:192.0.2.1", "http.curloptresolve"],
+    ["http.sslVerify", "false", "http.sslverify"],
+    ["http.sslCAInfo", "/tmp/planted.pem", "http.sslcainfo"],
+    ["http.sslCAPath", "/tmp/planted", "http.sslcapath"],
+    ["push.recurseSubmodules", "on-demand", "push.recursesubmodules"],
+    ["submodule.recurse", "true", "submodule.recurse"],
+    // Settings read from elsewhere.
     ["include.path", "/tmp/planted.gitconfig", "include.path"],
     ["includeIf.gitdir:/tmp/.path", "/tmp/planted.gitconfig", "includeif.gitdir:/tmp/.path"],
   ]
   for (const [setting, value, named] of planted) {
-    const { github, evieFolder, syncNow, name } = await start()
-    await syncNow()
-    await git(["--git-dir", join(evieFolder, ".git"), "config", setting, value], evieFolder)
-    await writeFile(join(evieFolder, "notes.md"), "notes\n")
+    await git(["--git-dir", gitDir, "config", setting, value], evieFolder)
+    await writeFile(join(evieFolder, "notes.md"), `${setting}\n`)
 
-    expect(await syncNow()).toStartWith(
-      `Could not sync ${evieFolder}: Its git repository's own settings, ${join(evieFolder, ".git", "config")}, set ${named}, which would have git ` +
-        "run a command of theirs, or read settings from another file, as it pushes, so nothing was pushed. The push takes its credentials " +
-        "from your own git settings, so remove that from the repository's settings, then /sync.",
-    )
-    expect(await github.commits(name)).toHaveLength(1)
+    expect(await syncNow()).toStartWith(stopsThePush(evieFolder, named))
+
+    await git(["--git-dir", gitDir, "config", "--unset-all", setting], evieFolder)
   }
+  expect(await github.commits(name)).toHaveLength(1)
 })
 
 test("each of the .evie folder's own git settings that would stop a push is named, and once they are gone, the push goes through", async () => {
@@ -217,12 +249,41 @@ test("each of the .evie folder's own git settings that would stop a push is name
   await git(["--git-dir", gitDir, "config", "include.path", "/tmp/planted.gitconfig"], evieFolder)
   await writeFile(join(evieFolder, "notes.md"), "notes\n")
 
-  expect(await syncNow()).toContain(`set core.sshcommand and include.path, which would have git`)
-  expect(await syncNow()).toContain("so remove them from the repository's settings, then /sync.")
+  expect(await syncNow()).toStartWith(stopsThePush(evieFolder, "core.sshcommand and include.path", true))
   await git(["--git-dir", gitDir, "config", "--unset", "core.sshCommand"], evieFolder)
   await git(["--git-dir", gitDir, "config", "--unset", "include.path"], evieFolder)
   expect(await syncNow()).toStartWith(`Pushed the changes in ${evieFolder} to ${name} on GitHub. The try before this one had failed: `)
   expect(await github.commits(name)).toHaveLength(2)
+})
+
+test("an empty credential helper, which only clears those set before it and runs nothing, does not stop the push", async () => {
+  const { github, evieFolder, syncNow, name } = await start()
+  await syncNow()
+  await git(["--git-dir", join(evieFolder, ".git"), "config", "credential.helper", ""], evieFolder)
+  await writeFile(join(evieFolder, "notes.md"), "notes\n")
+
+  expect(await syncNow()).toBe(`Pushed the changes in ${evieFolder} to ${name} on GitHub.`)
+  expect(await github.commits(name)).toHaveLength(2)
+})
+
+test("settings kept for the work tree alone, which git reads only once the repository says so, stop the push, since they could set anything", async () => {
+  const { github, evieFolder, syncNow, name } = await start()
+  await syncNow()
+  const gitDir = join(evieFolder, ".git")
+  await git(["--git-dir", gitDir, "config", "extensions.worktreeConfig", "true"], evieFolder)
+  await writeFile(join(gitDir, "config.worktree"), "[core]\n\tsshCommand = touch planted; ssh\n")
+  await writeFile(join(evieFolder, "notes.md"), "notes\n")
+
+  expect(await syncNow()).toStartWith(stopsThePush(evieFolder, "extensions.worktreeconfig"))
+  expect(await github.commits(name)).toHaveLength(1)
+})
+
+test("the settings are read through the plugin's own way of running commands, so that stopping evie stops it, and a test that stands in for it runs no git of its own", async () => {
+  const { evieFolder, commands, syncNow } = await start()
+
+  await syncNow()
+
+  expect(commands).toContainEqual(["git", `--git-dir=${join(evieFolder, ".git")}`, "config", "--local", "-z", "--get-regexp", expect.any(String)])
 })
 
 test("the repository is named evie- and the project's name in lower case, with spaces and other characters made into dashes", async () => {
@@ -372,6 +433,26 @@ test("a remote Evie did not set up itself is never pushed to, and /sync says how
     `Could not sync ${evieFolder}: Its git repository has a remote, origin, that evie did not set up, ${join(github.folder, "somewhere-else.git")}, ` +
       `so nothing was pushed. To have evie make a private repository for it instead, remove that remote: git -C ${evieFolder} remote remove origin.`,
   )
+  expect(await github.commits("somewhere-else")).toEqual([])
+})
+
+test("a remote that also pushes to another address is never pushed to, and /sync says which", async () => {
+  const { github, evieFolder, syncNow, name } = await start()
+  await syncNow()
+  await github.own("somewhere-else", { isPrivate: false })
+  const elsewhere = join(github.folder, "somewhere-else.git")
+  await git(["--git-dir", join(evieFolder, ".git"), "remote", "set-url", "--add", "origin", elsewhere], evieFolder)
+  await writeFile(join(evieFolder, "notes.md"), "notes\n")
+
+  expect(await syncNow()).toStartWith(
+    `Could not sync ${evieFolder}: Its remote, origin, pushes to ${elsewhere}, which is not the private repository evie made for it, ${name}, ` +
+      `so nothing was pushed. To push there alone again, take that address away: git -C ${evieFolder} remote set-url --delete origin ${elsewhere}.`,
+  )
+  expect(await github.commits(name)).toHaveLength(1)
+  expect(await github.commits("somewhere-else")).toEqual([])
+  // As it says, and the push goes through.
+  await git(["-C", evieFolder, "remote", "set-url", "--delete", "origin", elsewhere], evieFolder)
+  expect(await syncNow()).toStartWith(`Pushed the changes in ${evieFolder} to ${name} on GitHub.`)
   expect(await github.commits("somewhere-else")).toEqual([])
 })
 
