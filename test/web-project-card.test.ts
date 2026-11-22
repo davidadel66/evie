@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { GitStatus, Job } from "../src/core/types.ts"
-import { backgroundJobs, CARD_CLEARANCE, cardPlace, DETAILS_ITEMS, gitAction, gitMenu, gitWhyNot, isDefaultShown, joinOutput, keptChoices, lineageOf, sectionsShown, shownFrom, stateWord, subagentsOf, undoWhyNot } from "../web/src/project-card.ts"
+import { backgroundJobs, CARD_CLEARANCE, cardDensity, cardPlace, cardRoom, DETAILS_ITEMS, gitAction, gitMenu, gitWhyNot, isDefaultShown, joinOutput, keptChoices, LINEAGE_FIRST, LINEAGE_PAGE, lineageOf, lineageWindow, parentWord, sectionsShown, shownFrom, stateWord, subagentsOf, undoWhyNot } from "../web/src/project-card.ts"
 
 // The session details' rules, apart from their screen: which of their
 // actions apply and why not, what the git button offers as the branch
@@ -8,7 +8,7 @@ import { backgroundJobs, CARD_CLEARANCE, cardPlace, DETAILS_ITEMS, gitAction, gi
 // subagents and background jobs.
 
 const repository = { id: "p1", name: "recipe-box", folder: "/Users/david/code/recipe-box", branch: "main", git: true }
-const idle = { connected: true, session: "open" as const, project: repository, turnRunning: false, requested: false }
+const idle = { connected: true, session: "open" as const, project: repository, turnRunning: false, requested: false, sending: false }
 
 test("commit, push and pull request apply in a git project while evie is not working, and say why not otherwise", () => {
   expect(gitWhyNot(idle)).toBeUndefined()
@@ -192,20 +192,50 @@ test("the git button's menu holds commit, push and a pull request, each off whil
 // ---- What the card shows --------------------------------------------------------
 
 const everything = { workspace: true, undo: true, branch: true, git: true, changes: true, lineage: true, jobs: true }
-const full = { undo: true, git: true, related: true, jobs: true }
+const full = { undo: true, git: true, sessionChanges: true, related: true, jobs: true }
 
 test("each section shows while one of its items is chosen and it has something to show, and none does when nothing would", () => {
-  expect(sectionsShown(everything, full)).toEqual({ workspace: true, versionControl: true, lineage: true, jobs: true, nothing: false })
-  // A folder not in git has no version control; a session with no subagents no lineage; no jobs running, no background work.
-  expect(sectionsShown(everything, { undo: true, git: false, related: false, jobs: false })).toEqual({ workspace: true, versionControl: false, lineage: false, jobs: false, nothing: false })
+  const all = sectionsShown(everything, full, "full")
+  expect(all).toEqual({
+    project: true,
+    folder: true,
+    undo: true,
+    sessionChanges: false,
+    workspace: true,
+    branch: true,
+    gitButton: true,
+    changes: true,
+    versionControl: true,
+    lineage: true,
+    jobs: true,
+    nothing: false,
+  })
+  // A folder not in git has no version control, but the session's own changes, from undo's copies, when they are kept.
+  const plain = sectionsShown(everything, { ...full, git: false }, "full")
+  expect([plain.versionControl, plain.sessionChanges]).toEqual([false, true])
+  expect(sectionsShown(everything, { ...full, git: false, sessionChanges: false }, "full").sessionChanges).toBe(false)
+  expect(sectionsShown({ ...everything, changes: false }, { ...full, git: false }, "full").sessionChanges).toBe(false)
+  // No subagents, no lineage; no jobs, no background work.
+  expect(sectionsShown(everything, { ...full, related: false, jobs: false }, "full")).toMatchObject({ lineage: false, jobs: false })
   // The workspace section holds the project and Undo, and shows for either.
-  expect(sectionsShown({ ...everything, workspace: false }, full).workspace).toBe(true)
-  expect(sectionsShown({ ...everything, workspace: false }, { ...full, undo: false }).workspace).toBe(false)
+  expect(sectionsShown({ ...everything, workspace: false }, full, "full").workspace).toBe(true)
+  expect(sectionsShown({ ...everything, workspace: false }, { ...full, undo: false }, "full").workspace).toBe(false)
   // Version control holds the branch, the git button and the changes, and shows for any of them.
-  expect(sectionsShown({ ...everything, branch: false, git: false }, full).versionControl).toBe(true)
-  expect(sectionsShown({ ...everything, branch: false, git: false, changes: false }, full).versionControl).toBe(false)
+  expect(sectionsShown({ ...everything, branch: false, git: false }, full, "full").versionControl).toBe(true)
+  expect(sectionsShown({ ...everything, branch: false, git: false, changes: false }, full, "full").versionControl).toBe(false)
   const none = { workspace: false, undo: false, branch: false, git: false, changes: false, lineage: false, jobs: false }
-  expect(sectionsShown(none, full)).toEqual({ workspace: false, versionControl: false, lineage: false, jobs: false, nothing: true })
+  expect(sectionsShown(none, full, "full")).toMatchObject({ workspace: false, versionControl: false, lineage: false, jobs: false, nothing: true })
+})
+
+test("a card taller than its room drops to T3 Code's compact density, without the project, the git button, the lineage and background work, and to its essential one, without the folder too", () => {
+  expect(sectionsShown(everything, full, "compact")).toMatchObject({ project: false, folder: true, undo: true, branch: true, gitButton: false, changes: true, lineage: false, jobs: false })
+  expect(sectionsShown(everything, full, "essential")).toMatchObject({ project: false, folder: false, undo: true, branch: true, gitButton: false, changes: true, lineage: false, jobs: false })
+  // Each density as T3 Code picks it, by the heights measured of the full and the compact card: none measured yet counts as fitting.
+  expect(cardDensity(600, { full: 0, compact: 0 })).toBe("full")
+  expect(cardDensity(600, { full: 600, compact: 300 })).toBe("full")
+  expect(cardDensity(599, { full: 600, compact: 300 })).toBe("compact")
+  expect(cardDensity(299, { full: 600, compact: 0 })).toBe("compact")
+  expect(cardDensity(299, { full: 600, compact: 300 })).toBe("essential")
 })
 
 test("what the card shows is the default but for what this browser was told otherwise, and only what differs from the default is kept", () => {
@@ -224,17 +254,26 @@ test("what the card shows is the default but for what this browser was told othe
   expect(isDefaultShown({ ...everything, undo: false })).toBe(false)
 })
 
-test("pinned, the card stays beside the conversation while the conversation keeps room beside it, and otherwise floats over it, opened from the header; at phone width it is a sheet", () => {
+test("pinned, the card stays beside the conversation while it has the room, and otherwise stays open floating over it, as drawn; unpinned, it opens from the header; at phone width it is a sheet", () => {
+  const room = { phone: false, pinned: true, height: 960 }
   // The conversation's width at a 1440px and a 1100px wide page, with the 256px session list beside it.
-  expect(cardPlace({ width: 1440 - 256, phone: false, pinned: true })).toBe("inline")
-  expect(cardPlace({ width: 1101 - 256, phone: false, pinned: true })).toBe("inline")
-  expect(cardPlace({ width: 1100 - 256, phone: false, pinned: true })).toBe("popover")
+  expect(cardPlace({ ...room, width: 1440 - 256 })).toBe("inline")
+  expect(cardPlace({ ...room, width: 1101 - 256 })).toBe("inline")
+  expect(cardPlace({ ...room, width: 1100 - 256 })).toBe("over")
   // The same page with the session list hidden has the room.
-  expect(cardPlace({ width: 1100, phone: false, pinned: true })).toBe("inline")
-  expect(cardPlace({ width: 1440 - 256, phone: false, pinned: false })).toBe("popover")
-  expect(cardPlace({ width: 390, phone: true, pinned: true })).toBe("sheet")
+  expect(cardPlace({ ...room, width: 1100 })).toBe("inline")
+  expect(cardPlace({ ...room, width: 1440 - 256, pinned: false })).toBe("popover")
+  expect(cardPlace({ ...room, width: 1100 - 256, pinned: false })).toBe("popover")
+  expect(cardPlace({ ...room, width: 390, phone: true })).toBe("sheet")
   // What the conversation keeps clear beside a card in place: the card, the gap at its side, and room between.
   expect(CARD_CLEARANCE).toBe(324)
+})
+
+test("the card does not pin in a column with less than 160px of room under its top, as T3 Code's does not: it opens from the header", () => {
+  // The column's height, less the card's 64px from its top and 12px from its foot.
+  expect(cardPlace({ width: 1184, phone: false, pinned: true, height: 64 + 160 + 12 })).toBe("inline")
+  expect(cardPlace({ width: 1184, phone: false, pinned: true, height: 64 + 159 + 12 })).toBe("popover")
+  expect(cardRoom(960)).toBe(960 - 76)
 })
 
 test("the lineage lists the subagents working, each with how long its round has run, and folds away those that have ended, and its heading counts those working", () => {
@@ -257,4 +296,44 @@ test("the lineage lists the subagents working, each with how long its round has 
   ])
   expect(lineageOf(subagents.slice(2), now).heading).toBe("Lineage")
   expect(lineageOf([{ ...subagents[0]!, started: now - 3 * 3_600_000 - 5 * 60_000 }], now).running[0]!.state).toBe("Working · 3h 5m")
+})
+
+test("the lineage shows six rows at first, as T3 Code's, then offers twelve more at a time", () => {
+  const rows = Array.from({ length: 20 }, (_, at) => `agent ${at + 1}`)
+  expect(lineageWindow(rows, LINEAGE_FIRST)).toEqual({ shown: rows.slice(0, 6), more: "Show 12 more" })
+  expect(lineageWindow(rows, LINEAGE_FIRST + LINEAGE_PAGE)).toEqual({ shown: rows.slice(0, 18), more: "Show 2 more" })
+  expect(lineageWindow(rows.slice(0, 6), LINEAGE_FIRST)).toEqual({ shown: rows.slice(0, 6), more: undefined })
+})
+
+test("the session above a subagent says it needs you, is working, or is waiting on its subagents, as drawn", () => {
+  expect(parentWord({ needsYou: true, turnRunning: true, subagentsWorking: true })).toBe("Needs you")
+  expect(parentWord({ needsYou: false, turnRunning: true, subagentsWorking: true })).toBe("Working")
+  expect(parentWord({ needsYou: false, turnRunning: false, subagentsWorking: true })).toBe("Waiting")
+  expect(parentWord({ needsYou: false, turnRunning: false, subagentsWorking: false })).toBe("")
+})
+
+test("on a branch, the git button waits for the pull request to be read before it offers to open one, and where pull requests cannot be read it offers only to push", () => {
+  const dirty = { ...branchStatus, uncommitted: true }
+  expect(gitAction(dirty, undefined)).toEqual({ label: "Commit & push", request: "commit and push", why: "Reading the pull request…" })
+  // On the main branch it opens none, so it need not wait.
+  expect(gitAction({ ...dirty, main: { name: "main", on: true, ahead: 0 } }, undefined)).toEqual({ label: "Commit & push", request: "commit and push" })
+  // Behind its remote it only commits, pull request or not.
+  expect(gitAction({ ...dirty, upstream: { ahead: 0, behind: 2 } }, undefined)).toEqual({ label: "Commit", request: "commit" })
+  const cannot = { unavailable: "gh is not signed in on the computer evie runs on." }
+  expect(gitAction(dirty, cannot)).toEqual({ label: "Commit & push", request: "commit and push" })
+  expect(gitAction(branchStatus, cannot)).toEqual({ label: "Commit", request: "commit", why: "Pull requests cannot be read here: gh is not signed in on the computer evie runs on." })
+  expect(gitMenu(dirty, cannot)[2]).toEqual({ label: "Create pull request", request: "pull request", why: "Pull requests cannot be read here: gh is not signed in on the computer evie runs on." })
+  expect(gitMenu(dirty, undefined)[2]).toEqual({ label: "Create pull request", request: "pull request", why: "Reading the pull request…" })
+})
+
+test("a branch with no upstream has commits to push when no remote branch has them, as a main branch the remote has never had", () => {
+  const neverPushed = { ...without(branchStatus, "upstream"), branch: "main", main: { name: "main", on: true, ahead: 0 }, unpushed: 3 }
+  expect(gitAction(neverPushed, null)).toEqual({ label: "Push", request: "push" })
+  expect(gitMenu(neverPushed, null)[1]).toEqual({ label: "Push", request: "push" })
+  expect(gitAction({ ...neverPushed, unpushed: 0 }, null)).toEqual({ label: "Push", request: "push", why: "No commits to push." })
+})
+
+test("while a request is on its way, the git buttons wait for it", () => {
+  expect(gitWhyNot({ ...idle, sending: true })).toBe("Sending…")
+  expect(undoWhyNot({ ...idle, sending: true })).toBeUndefined()
 })

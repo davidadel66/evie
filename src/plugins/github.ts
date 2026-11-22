@@ -23,10 +23,11 @@ const FIELDS = "number,title,state,isDraft,url,baseRefName,statusCheckRollup"
 // How long gh may take, in milliseconds, since it asks GitHub over the network.
 const LONGEST = 15_000
 
-// What gh says when there is no pull request to read, or it cannot be
-// asked: no pull request for the branch, or no remote on GitHub. A gh that
-// is not signed in stops with code 4.
-const NOTHING_TO_READ = /no pull requests found|no git remotes|none of the git remotes/i
+// What gh says when the branch has no pull request; when the repository
+// has no remote on GitHub, so that none can be read; and a gh that is not
+// signed in stops with code 4.
+const NONE = /no pull requests found/i
+const NO_REMOTE = /no git remotes|none of the git remotes/i
 const SIGNED_OUT = 4
 
 // A check as `statusCheckRollup` lists it: a check run, with a status and a
@@ -93,11 +94,13 @@ async function readPullRequest(folder: string): Promise<PullRequest | null> {
       timeout: LONGEST,
     })
   } catch {
-    // No gh installed.
-    return null
+    throw new Error("The GitHub CLI, gh, is not installed on the computer evie runs on.")
   }
   const [said, problem, code] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text(), run.exited])
-  if (code === SIGNED_OUT || NOTHING_TO_READ.test(problem)) return null
+  // Where pull requests cannot be read, the answer says why, so that it is not taken for a branch with none.
+  if (code === SIGNED_OUT) throw new Error("gh is not signed in on the computer evie runs on: run gh auth login there.")
+  if (NO_REMOTE.test(problem)) throw new Error("This repository has no remote on GitHub.")
+  if (NONE.test(problem)) return null
   if (code !== 0) throw new Error(`The pull request could not be read: ${problem.trim().split("\n")[0] || (run.signalCode ? "gh took too long to answer." : `gh stopped with code ${code}.`)}`)
   const read = JSON.parse(said) as { number: number; title: string; state: string; isDraft?: boolean; url: string; baseRefName: string; statusCheckRollup?: Rolled[] }
   const state = read.state === "MERGED" ? "merged" : read.state === "CLOSED" ? "closed" : read.isDraft ? "draft" : "open"

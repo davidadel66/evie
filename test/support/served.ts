@@ -21,12 +21,15 @@ export async function serveEvie(
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
     app?: WebApp
     signInCodeLasts?: number
+    // What opens a project's folder, in place of the computer's own.
+    openFolder?: NonNullable<EvieOptions["openFolder"]>
   } = {},
 ) {
   const run = await startEvie(plugins, {
     ...(options.questions && { questions: true }),
     ...(options.projectFolder && { projectFolder: options.projectFolder }),
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
+    ...(options.openFolder && { openFolder: options.openFolder }),
   })
   const tokens = await openTokens(run.home)
   const made = tokens.add("test device")

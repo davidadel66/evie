@@ -512,8 +512,9 @@ export type PullRequest = {
 }
 
 // A plugin that reads the pull request of the branch a folder is on, such
-// as the github plugin. `read` gives null when the branch has none, or the
-// plugin cannot ask, and fails, saying why, when it could not be read.
+// as the github plugin. `read` gives null when the branch has none, and
+// fails, saying why, when it could not be read, or cannot be where the
+// folder is, as with no gh signed in, so that the two are told apart.
 export type PullRequestReader = {
   name: string
   read(folder: string): Promise<PullRequest | null>
@@ -534,6 +535,10 @@ export type GitStatus = {
   // How many commits the branch is ahead of its upstream and behind it,
   // left out when it has none, or the one it had has gone.
   upstream?: { ahead: number; behind: number }
+  // With no upstream, how many of the branch's commits no remote branch
+  // has, which pushing it would send, as for a main branch the remote has
+  // never had. Left out with an upstream, or no remote.
+  unpushed?: number
   // The repository's main branch, the one its remote names as its own, or
   // else main or master; whether the folder is on it; and how many commits
   // the branch has that it does not, as the remote has it when it has it.
@@ -543,8 +548,10 @@ export type GitStatus = {
   // branch, from where it left the branch it is compared with, which
   // `against` names, to the files as they are now; on the main branch, or
   // when there is none to compare with, the work not yet committed, with
-  // `against` null.
-  changes: { against: string | null; added: number; removed: number }
+  // `against` null. `unavailable` says, in the diff's words, why a branch
+  // cannot be compared with the branch it is compared with, as when there
+  // is no such branch, and nothing is counted.
+  changes: { against: string | null; added: number; removed: number; unavailable?: string }
   // The repository's own branches, the latest committed to first, at most
   // twenty, for the owner to ask evie to switch to.
   branches: string[]
@@ -663,13 +670,15 @@ export type Project = { id: string; name: string; folder: string }
 // is on, read when the list is asked for, and left out when the folder is
 // not the top of a git repository or is on no branch; and `git`, whether
 // its folder is in a git work tree at all, at its top or below it, left out
-// when git could not tell in time. `icon` and `colour` are the ones the
+// when git could not tell in time. `fromHome` is the folder written from
+// the home folder of the computer evie runs on, as `~/code/recipe-box`,
+// left out when the folder is not inside it. `icon` and `colour` are the ones the
 // owner picked for it, left out until picked. `syncs` says whether its
 // `.evie/` folder is backed up to a private repository: the project is
 // trusted, its own settings say `"sync": "private"`, and the sync plugin is
 // loaded. It is left out when Evie was not told where projects sync, as
 // when it was started without its settings files.
-export type ListedProject = Project & { branch?: string; git?: boolean; icon?: string; colour?: ProjectColour; syncs?: boolean }
+export type ListedProject = Project & { branch?: string; git?: boolean; fromHome?: string; icon?: string; colour?: ProjectColour; syncs?: boolean }
 
 // The six colours a project can be drawn in, by their names in the web UI's
 // design system, where each is a muted earthy tone.
@@ -946,9 +955,10 @@ export type Commands = {
   }
   // The pull request of the branch a project's folder is on, as the
   // plugin that reads them gives it, such as the github plugin with the
-  // GitHub CLI. Null when the branch has none, when the plugin cannot ask,
-  // as with no `gh` signed in, or when no plugin reads them. Reading only:
-  // nothing is changed on GitHub.
+  // GitHub CLI. Null when the branch has none, or the folder is not in git.
+  // Where pull requests cannot be read, as with no `gh` signed in, or no
+  // plugin that reads them, it fails, saying why, so that a client does not
+  // take it for a branch with none. Reading only: nothing is changed on GitHub.
   read_pull_request: {
     input: { project: string }
     output: PullRequest | null
@@ -1063,6 +1073,13 @@ export type Commands = {
   read_git_status: {
     input: { project: string; base?: string }
     output: GitStatus | null
+  }
+  // Opens a project's folder in the file manager of the computer evie runs
+  // on, as T3 Code's "Open in" does. Evie's server refuses it from any
+  // other device, as it refuses keys typed there.
+  open_folder: {
+    input: { project: string }
+    output: void
   }
 }
 

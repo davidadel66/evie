@@ -434,11 +434,16 @@ a slim row at its top naming it, which holds Choose what to show and Pin.
 Its sections are the selected session's:
 
 - **Workspace:** the project's icon and name, which open its workspace;
-  its folder, cut at its start when it is long, so that its end shows, and
-  whole when pointed at; and Undo last change, with how many files the
-  last turn that changed any changed, which runs `/undo`. What `/undo`
-  says is a quiet note in the conversation, as the terminal shows it; like
-  the terminal's, the note is not kept. A session with no project says so.
+  its folder, written from the home folder, such as `~/code/recipe-box`,
+  cut at its start when it is long, and whole when pointed at, which opens
+  it in the file manager of the computer evie runs on, as T3 Code's "Open
+  in" does, and only from that computer: from another device it says so;
+  and Undo last change, with how many files the last turn that changed any
+  changed, which runs `/undo`. What `/undo` says is a quiet note in the
+  conversation, as the terminal shows it; like the terminal's, the note is
+  not kept. A session with no project says so. In a folder not in git,
+  Changes in this session counts the lines the session's turns changed,
+  from undo's copies, and opens the diff on the whole session.
 - **Version control,** in a git repository:
   - The branch, whose caret lists the repository's recent branches; picking
     one asks evie, in words, to switch the folder to it.
@@ -450,8 +455,9 @@ Its sections are the selected session's:
     checks in this session. The `github` plugin reads it with the GitHub
     CLI, `gh pr view`, in the project's folder, as `gh` is signed in on the
     server's computer, when the card opens and each minute while the page
-    is shown. With no `gh`, one not signed in, or the plugin not loaded,
-    nothing is shown. `gh` is given only the server's path, home, settings
+    is shown. With no `gh`, one not signed in, no remote on GitHub, or the
+    plugin not loaded, pull requests cannot be read, and the card says so,
+    and why, under the git button. `gh` is given only the server's path, home, settings
     and temporary folders, language and its own `GH_` and `GITHUB_`
     settings: no git settings and no keys. Only https links are kept, for
     the pull request and its checks. The page only reads it: nothing on
@@ -461,32 +467,45 @@ Its sections are the selected session's:
     branch with a pull request open; Commit, push & PR with work to commit
     on a branch with none, or commits that lead to a pull request; Commit
     when the branch is behind its remote or there is nowhere to push; Push
-    with commits to push. When there is nothing it can do, it says why when
-    pressed or pointed at. Its caret opens Commit, Push and Create pull
-    request, each off, saying why, while it does not apply. Each sends evie
+    with commits to push, which for a branch with no upstream are those no
+    remote branch has, as for a main branch the remote has never had. On a
+    branch, a label that would open a pull request waits until the pull
+    request is read; where pull requests cannot be read, the button only
+    pushes. When there is nothing it can do, it says why when pressed or
+    pointed at. Its caret opens Commit, Push and Create pull request, each
+    off, saying why, while it does not apply. Each sends evie
     a request in words, as a message in the session, such as "Commit the
     changes in this session with a short message, and push this branch to
     its remote."; evie carries it out as it would if you had typed it, and
-    asks before pushing, as it always does. A request sent keeps the
-    buttons off until evie starts on it, so it is sent once.
+    asks before pushing, as it always does. A request on its way, and one
+    sent that evie has not started on, keeps the git button, its menu, Fix
+    and the branch's menu off, so that it is sent once. A request that
+    could not be sent says why under its row.
   - Changes against the branch it is compared with, its pull request's
     base or else the main branch, such as "vs main +71 −6", or on the main
     branch, the work not committed, "Uncommitted"; it opens the diff on the
-    same. How the branch stands is read from the folder with git, which
-    reaches no other computer, when the card opens, when a turn ends, when
-    the window has the focus back and each minute while the page is shown.
+    same, which starts from the same place. A branch that cannot be
+    compared says why, as the diff does. Every changed file in the
+    project's folder is counted, with `git diff --numstat`, and files git
+    does not track as added. How the branch stands is read from the folder
+    with git, which reaches no other computer and writes nothing, when the
+    card opens, when a turn ends, when the window has the focus back and
+    each minute while the page is shown.
 - **Lineage:** while one of the session's subagents' conversations is open,
-  the session itself, which leads back to it; each subagent working, with
+  the session itself, which leads back to it, with how it stands: Working,
+  Needs you, or Waiting while it waits on its subagents; each subagent working, with
   how long its round has run, such as "Working · 31s", and Stop; and those
   that have ended, folded away under Previous agents, each with how it
   ended (Done, Failed, Stopped, or Ended for one with no round since evie's
-  server last started). Picking one opens its conversation in the middle,
+  server last started). Each list shows six at first, then "Show N more",
+  twelve at a time, as T3 Code's. Picking one opens its conversation in the middle,
   read only, under its name, with a line below that leads back to the
   session; while it works, what it adds is read every second.
 - **Background work:** each job running in the background, with its
-  command, and Stop, which is `/jobs stop`. One opens to its output, which
-  keeps up while it runs, and stays listed, with its output, once it ends,
-  until it is closed.
+  command, and Stop, which is `/jobs stop`; and those that have ended,
+  folded away under Earlier background work, as Previous agents is. Each
+  opens to its output, which keeps up while it runs; one open as it ends
+  stays open, and its fold opens for it.
 
 Each button is off while it does not apply, and says why: the session still
 opening, evie working on a turn, or the line down. With a subagent's
@@ -500,12 +519,17 @@ default. The browser remembers what differs from the default. With nothing
 chosen, the card offers the menu instead.
 
 **Pinned,** the default, the card stays open beside the conversation, which
-keeps clear of it, while the conversation has the room: at 1100px wide or
-narrower with the session list showing, or with the diff open, it floats
-instead. **Unpinned,** or without the room, it opens over the conversation
-from the button at the right of the conversation's header, or with
-Cmd+Option+B (Ctrl+Alt+B elsewhere), and closes on a click outside or
-Escape. The browser remembers whether it is pinned, and whether the pinned
+keeps clear of it, while the conversation has the room; at 1100px wide or
+narrower with the session list showing, or with the diff open, it stays
+open over the conversation, with a shadow, as drawn. **Unpinned,** or in a
+window with less than 160px of room under the card's top, it opens over
+the conversation from the button at the right of the conversation's
+header, or with Cmd+Option+B (Ctrl+Alt+B elsewhere), and closes on a click
+outside or Escape. The same button and keys close and open the pinned
+card. Taller than its room, the card drops to T3 Code's compact density,
+without the project, the git button, the lineage and background work,
+and below that to its essential one, without the folder too; the lineage
+and background work, which scroll as they grow, are not counted. The browser remembers whether it is pinned, and whether the pinned
 card was closed. At phone width it is a sheet over the page, from the
 right, which goes once another session is picked.
 

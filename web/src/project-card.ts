@@ -9,14 +9,15 @@ import type { GitStatus, Job, ListedProject, PullRequest } from "../../src/core/
 // the page is connected; whether the session is open, still opening, or
 // could not be opened; its project, null when it has none and undefined
 // while the projects have not been listed; whether a turn is running in
-// it; and whether a git button's request has been sent that evie has not
-// started on yet.
+// it; whether a git button's request has been sent that evie has not
+// started on yet; and whether one is still on its way to the server.
 export type CardFacts = {
   connected: boolean
   session: "opening" | "open" | "failed"
   project: ListedProject | null | undefined
   turnRunning: boolean
   requested: boolean
+  sending: boolean
 }
 
 const NOT_CONNECTED = "Not connected to evie's server."
@@ -41,6 +42,7 @@ export function gitWhyNot(facts: CardFacts): string | undefined {
   if (project === undefined) return "The project's details have not been read yet."
   if (project.git === false) return "The project's folder is not in a git repository."
   if (turnRunning) return "evie is working. Wait until it has finished."
+  if (facts.sending) return "Sending…"
   if (requested) return "Sent. evie is about to start on it."
   return undefined
 }
@@ -79,7 +81,11 @@ export const switchRequest = (branch: string) => `Switch this project's folder t
 // one, it is Commit, push & PR, which does what is left of that; where
 // T3 Code's would pull or sync, or publish the repository, it is Push, off,
 // saying why. `status` is undefined until it is read, and `pull` is the
-// branch's pull request, null when it has none.
+// branch's pull request: null when it has none, undefined until it is
+// read, and unavailable where pull requests cannot be read, as with no gh
+// signed in. On a branch, a label that would open a pull request waits
+// until it is read; where they cannot be read, the button only pushes.
+export type PullState = Pick<PullRequest, "state"> | null | undefined | { unavailable: string }
 export type GitAction = { label: "Commit" | "Push" | "Commit & push" | "Commit, push & PR"; request: Request; why?: string }
 
 const COMMIT = { label: "Commit", request: "commit" } as const
@@ -88,9 +94,23 @@ const COMMIT_PUSH = { label: "Commit & push", request: "commit and push" } as co
 const ALL_THREE = { label: "Commit, push & PR", request: "commit, push and pull request" } as const
 const UP_TO_DATE = "The branch is up to date. Nothing to do."
 
-export function gitAction(status: GitStatus | undefined, pull: Pick<PullRequest, "state"> | null | undefined): GitAction {
+export function gitAction(status: GitStatus | undefined, pull: PullState): GitAction {
   if (status === undefined) return { ...COMMIT, why: "Reading how the branch stands…" }
   if (status.branch === undefined) return { ...COMMIT, why: "Check out a branch before committing or pushing." }
+  const action = byRule(status, pull)
+  if (action !== ALL_THREE || (pull !== undefined && !unknownPull(pull))) return action
+  // Without knowing whether the branch has a pull request open, the button
+  // does what it would with one: it pushes, and opens none.
+  const pushOnly = byRule(status, { state: "open" })
+  if (pull === undefined) return { ...pushOnly, why: READING_PULL }
+  return pushOnly.why === undefined ? pushOnly : { ...pushOnly, why: cannotRead(pull) }
+}
+const READING_PULL = "Reading the pull request…"
+const unknownPull = (pull: PullState): pull is { unavailable: string } => pull !== null && pull !== undefined && "unavailable" in pull
+const cannotRead = (pull: { unavailable: string }) => `Pull requests cannot be read here: ${pull.unavailable}`
+
+// T3 Code's rule, by how the branch stands and whether it has a pull request open.
+function byRule(status: GitStatus, pull: PullState): GitAction {
   const facts = branchFacts(status, pull)
   const { openPull, onMain, ahead, behind } = facts
   if (status.uncommitted) {
@@ -115,7 +135,7 @@ export function gitAction(status: GitStatus | undefined, pull: Pick<PullRequest,
 // only Commit. Nothing until the branch's state is read.
 export type GitMenuItem = { label: "Commit" | "Push" | "Create pull request"; request: Request; why?: string }
 
-export function gitMenu(status: GitStatus | undefined, pull: Pick<PullRequest, "state"> | null | undefined): GitMenuItem[] {
+export function gitMenu(status: GitStatus | undefined, pull: PullState): GitMenuItem[] {
   if (status === undefined) return []
   const { openPull, ahead, behind } = branchFacts(status, pull)
   const reachable = status.upstream !== undefined || status.remote
@@ -132,7 +152,11 @@ export function gitMenu(status: GitStatus | undefined, pull: Pick<PullRequest, "
   const push: GitMenuItem = { label: "Push", request: "push", ...(pushWhy !== undefined && { why: pushWhy }) }
   if (openPull) return [commit, push]
   const pullWhy =
-    status.branch === undefined
+    pull === undefined
+      ? READING_PULL
+      : unknownPull(pull)
+        ? cannotRead(pull)
+        : status.branch === undefined
       ? "Check out a branch before opening a pull request."
       : status.main === undefined || status.main.on || status.main.ahead === 0
         ? `The branch has no commits that ${status.main?.name ?? "the main branch"} does not.`
@@ -144,15 +168,16 @@ export function gitMenu(status: GitStatus | undefined, pull: Pick<PullRequest, "
 
 // What T3 Code's rule asks of the branch: whether it has a pull request
 // open, a draft among them; whether it is the main branch; whether it has
-// commits to push, which for a branch never pushed are those main lacks;
+// commits to push, which for a branch with no upstream are those no remote
+// branch has, or else those main lacks;
 // whether it is behind its upstream; and whether it has commits main lacks.
-function branchFacts(status: GitStatus, pull: Pick<PullRequest, "state"> | null | undefined) {
+function branchFacts(status: GitStatus, pull: PullState) {
   const onMain = status.main?.on === true
   const aheadOfMain = status.main !== undefined && !status.main.on && status.main.ahead > 0
   return {
-    openPull: pull?.state === "open" || pull?.state === "draft",
+    openPull: pull != null && "state" in pull && (pull.state === "open" || pull.state === "draft"),
     onMain,
-    ahead: status.upstream !== undefined ? status.upstream.ahead > 0 : (status.main?.ahead ?? 0) > 0,
+    ahead: status.upstream !== undefined ? status.upstream.ahead > 0 : (status.unpushed ?? status.main?.ahead ?? 0) > 0,
     behind: (status.upstream?.behind ?? 0) > 0,
     aheadOfMain,
   }
@@ -268,41 +293,79 @@ export function keptChoices(shown: Shown): Partial<Record<DetailsItem, boolean>>
 
 export const isDefaultShown = (shown: Shown) => DETAILS_ITEMS.every((item) => shown[item.id] === DEFAULT_SHOWN[item.id])
 
-// Which of the card's sections show, as its drawing has them: the
-// workspace, with the project and its folder, and Undo while there is
-// something to undo; version control, in a git repository, with the branch
-// and its pull request, the git button and the changes; the lineage,
-// while the session has a parent or subagents; and background work, while
-// a job is listed. A section shows while one of its items is chosen and
-// has something to show; with none, the card offers its menu instead.
-export function sectionsShown(shown: Shown, has: { undo: boolean; git: boolean; related: boolean; jobs: boolean }) {
-  const workspace = shown.workspace || (shown.undo && has.undo)
-  const versionControl = has.git && (shown.branch || shown.git || shown.changes)
-  const lineage = shown.lineage && has.related
-  const jobs = shown.jobs && has.jobs
-  return { workspace, versionControl, lineage, jobs, nothing: !workspace && !versionControl && !lineage && !jobs }
+// How much of the card shows, as T3 Code's details card picks it when it
+// is taller than its room: all of it; compact, without the project, the git
+// button, the lineage and background work; or essential, without the
+// folder too.
+export type Density = "full" | "compact" | "essential"
+
+// The density for the room the card has, by the heights measured of the
+// card full and compact, as T3 Code's `resolveThreadDetailsCardDensity`
+// (MIT licence, notice in LICENSES/t3code-MIT.txt): one not measured yet
+// counts as fitting.
+export function cardDensity(room: number, measured: { full: number; compact: number }): Density {
+  if (measured.full === 0 || measured.full <= room) return "full"
+  if (measured.compact === 0 || measured.compact <= room) return "compact"
+  return "essential"
 }
 
-// Where the card is, as T3 Code places its details card: beside the
-// conversation, which keeps clear of it, when pinned and the conversation
-// has the room; otherwise floating over it, opened from the button in its
-// header; and at phone width, a sheet. The room is measured on the
-// conversation's own width, as T3 Code measures it, so that the card floats
-// at 1100px wide or narrower with the session list beside it, as the
-// owner's drawing has it, and wider with the list or the diff open.
-export type CardPlace = "inline" | "popover" | "sheet"
+// Which of the card's rows and sections show, as its drawing has them: the
+// workspace, with the project and its folder, Undo while there is something
+// to undo, and in a folder not in git the session's own changes, from
+// undo's copies, while they are kept; version control, in a git
+// repository, with the branch and its pull request, the git button and the
+// changes; the lineage, while the session has a parent or subagents; and
+// background work, while a job is listed. Each shows while its item is
+// chosen, has something to show, and fits the density; with none, the
+// card offers its menu instead.
+export function sectionsShown(shown: Shown, has: { undo: boolean; git: boolean; sessionChanges: boolean; related: boolean; jobs: boolean }, density: Density) {
+  const rows = {
+    project: shown.workspace && density === "full",
+    folder: shown.workspace && density !== "essential",
+    undo: shown.undo && has.undo,
+    sessionChanges: shown.changes && !has.git && has.sessionChanges,
+    branch: has.git && shown.branch,
+    gitButton: has.git && shown.git && density === "full",
+    changes: has.git && shown.changes,
+  }
+  const workspace = rows.project || rows.folder || rows.undo || rows.sessionChanges
+  const versionControl = rows.branch || rows.gitButton || rows.changes
+  const lineage = shown.lineage && has.related && density === "full"
+  const jobs = shown.jobs && has.jobs && density === "full"
+  return { ...rows, workspace, versionControl, lineage, jobs, nothing: !workspace && !versionControl && !lineage && !jobs }
+}
+
+// Where the card is. Pinned, it sits beside the conversation, which keeps
+// clear of it, while the conversation has the room ("inline"), and
+// without the room it stays open floating over the conversation ("over"),
+// as the owner's drawing has it below 1100px. Unpinned, it opens over the
+// conversation from the button in its header ("popover"), as does a
+// pinned one in a column with less than 160px of room under its top, as
+// T3 Code's does not pin there. At phone width it is a sheet. The room is
+// measured on the conversation's own column, as T3 Code measures it, so
+// that the card floats at 1100px wide or narrower with the session list
+// beside it, as drawn, and wider with the list or the diff open.
+export type CardPlace = "inline" | "over" | "popover" | "sheet"
 
 // The card's width and the gap at its side, as T3 Code's; the room between
-// it and the conversation; and the least the conversation keeps beside it.
+// it and the conversation; the least the conversation keeps beside it; how
+// far below the column's top the card is, and the least height it pins in.
 const CARD_WIDTH = 280
 const CARD_GAP = 12
 const CARD_ROOM = 32
 const LEAST_CONVERSATION = 520
+const CARD_TOP = 64
+const LEAST_HEIGHT = 160
 export const CARD_CLEARANCE = CARD_WIDTH + CARD_GAP + CARD_ROOM
 
-export function cardPlace({ width, phone, pinned }: { width: number; phone: boolean; pinned: boolean }): CardPlace {
+// The height the card has in a column this tall: below its top, and 12px
+// above the column's foot.
+export const cardRoom = (height: number) => height - CARD_TOP - CARD_GAP
+
+export function cardPlace({ width, height, phone, pinned }: { width: number; height: number; phone: boolean; pinned: boolean }): CardPlace {
   if (phone) return "sheet"
-  return pinned && width - CARD_CLEARANCE > LEAST_CONVERSATION ? "inline" : "popover"
+  if (!pinned || cardRoom(height) < LEAST_HEIGHT) return "popover"
+  return width - CARD_CLEARANCE > LEAST_CONVERSATION ? "inline" : "over"
 }
 
 // The lineage as the card lists it: the subagents working, each with how
@@ -321,4 +384,26 @@ function elapsed(ms: number): string {
   const [hours, minutes, rest] = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60]
   const words = hours > 0 ? [`${hours}h`, minutes > 0 ? `${minutes}m` : ""] : minutes > 0 ? [`${minutes}m`, rest > 0 ? `${rest}s` : ""] : [`${rest}s`]
   return words.filter((word) => word !== "").join(" ")
+}
+
+// How many of a lineage's rows show at first, and how many more each
+// press of "Show N more" adds, as T3 Code's.
+export const LINEAGE_FIRST = 6
+export const LINEAGE_PAGE = 12
+
+// The rows of a lineage that show, and the words of the button that shows
+// more, while there are more.
+export function lineageWindow<Row>(rows: readonly Row[], visible: number): { shown: Row[]; more: string | undefined } {
+  const shown = rows.slice(0, visible)
+  const hidden = rows.length - shown.length
+  return { shown, more: hidden > 0 ? `Show ${Math.min(hidden, LINEAGE_PAGE)} more` : undefined }
+}
+
+// How the session that started a subagent stands, in a word, as the
+// lineage's row above its subagents says it: a question waits for the
+// owner; it is working on a turn; or it is waiting on its subagents.
+export function parentWord(standing: { needsYou: boolean; turnRunning: boolean; subagentsWorking: boolean }): string {
+  if (standing.needsYou) return "Needs you"
+  if (standing.turnRunning) return "Working"
+  return standing.subagentsWorking ? "Waiting" : ""
 }

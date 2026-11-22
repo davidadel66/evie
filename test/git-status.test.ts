@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { git } from "./support/git.ts"
@@ -115,7 +115,7 @@ test("a folder that is not in a git repository has no git status", async () => {
   expect(await read()).toBeNull()
 })
 
-test("the changes are counted against the branch given, as the diff panel is given its pull request's base, or against main when there is no such branch", async () => {
+test("the changes are counted against the branch given, as the diff panel is given its pull request's base, or without one against main", async () => {
   const { run, projectFolder } = await start()
   await git(["branch", "dev"], projectFolder)
   await git(["checkout", "-q", "-b", "feat/breads"], projectFolder)
@@ -129,6 +129,75 @@ test("the changes are counted against the branch given, as the diff panel is giv
 
   const read = (base?: string) => run.evie.send({ type: "read_git_status", project: run.project!.id, ...(base !== undefined && { base }) })
   expect((await read("dev"))!.changes).toEqual({ against: "dev", added: 1, removed: 0 })
-  expect((await read("nowhere"))!.changes).toEqual({ against: "main", added: 1, removed: 0 })
   expect((await read())!.changes).toEqual({ against: "main", added: 1, removed: 0 })
+  // A base that is not there is not counted against another: the row says why, in the diff's own words.
+  const missing = (await read("nowhere"))!.changes
+  const diff = await run.evie.send({ type: "read_changes", session: run.session, of: "branch", base: "nowhere" })
+  expect(missing).toEqual({ against: "nowhere", added: 0, removed: 0, unavailable: diff.unavailable! })
+  expect(missing.unavailable).toBe('There is no branch "nowhere" to compare this one with.')
+})
+
+test("a main branch its remote has never had has every commit to push", async () => {
+  const { read, projectFolder } = await start()
+  const remote = await folder("evie-remote-")
+  await git(["init", "-q", "--bare", "-b", "main"], remote)
+  await git(["remote", "add", "origin", remote], projectFolder)
+  const status = await read()
+  expect(status).toMatchObject({ branch: "main", remote: true, unpushed: 1 })
+  expect(status!.upstream).toBeUndefined()
+  await git(["push", "-q", "-u", "origin", "main"], projectFolder)
+  const pushed = await read()
+  expect(pushed!.upstream).toEqual({ ahead: 0, behind: 0 })
+  expect(pushed!.unpushed).toBeUndefined()
+})
+
+test("in a repository with no commits yet, the work is counted against nothing, and reading it writes nothing into the repository", async () => {
+  const projectFolder = await folder("evie-project-")
+  await git(["init", "-q", "-b", "main"], projectFolder)
+  await writeFile(join(projectFolder, "a.md"), "one\ntwo\n")
+  const run = await startEvie([scriptedProvider([]).plugin], { home: await folder("evie-home-"), projectFolder })
+  cleanups.push(run.stop)
+  const objects = async () => (await readdir(join(projectFolder, ".git", "objects"), { recursive: true })).filter((path) => /^[0-9a-f]{2}\/[0-9a-f]+$/.test(path))
+  for (let time = 0; time < 2; time++) {
+    expect(await run.evie.send({ type: "read_git_status", project: run.project!.id })).toMatchObject({ branch: "main", uncommitted: true, changes: { against: null, added: 2, removed: 0 } })
+  }
+  expect(await objects()).toEqual([])
+})
+
+test("every changed file is counted, however many there are", async () => {
+  const { read, projectFolder } = await start()
+  await writeFile(join(projectFolder, "a.md"), "one\n2\n")
+  await mkdir(join(projectFolder, "many"))
+  for (let at = 0; at < 320; at++) await writeFile(join(projectFolder, "many", `${at}.md`), "a line\n")
+  // A file with no line break at its end counts its last line, and one that is not text counts none.
+  await writeFile(join(projectFolder, "last.md"), "a\nb")
+  await writeFile(join(projectFolder, "image.png"), new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 10, 10]))
+  expect((await read())!.changes).toEqual({ against: null, added: 1 + 320 + 2, removed: 1 })
+})
+
+test("a project in a folder below the top of a repository reads only its own folder's work", async () => {
+  // The project is made first; the folder above it becomes a repository after.
+  const top = await folder("evie-top-")
+  await mkdir(join(top, "site"))
+  await writeFile(join(top, "site", "index.md"), "home\n")
+  const run = await startEvie([scriptedProvider([]).plugin], { home: await folder("evie-home-"), projectFolder: join(top, "site") })
+  cleanups.push(run.stop)
+  await writeFile(join(top, "other.md"), "other\n")
+  await git(["init", "-q", "-b", "main"], top)
+  await git(["add", "-A"], top)
+  await git(["commit", "-q", "-m", "Start"], top)
+  expect(run.project!.folder).toBe(join(top, "site"))
+  const read = () => run.evie.send({ type: "read_git_status", project: run.project!.id })
+  await writeFile(join(top, "other.md"), "changed\n")
+  await writeFile(join(top, "loose.md"), "loose\n")
+  expect(await read()).toMatchObject({ uncommitted: false, changes: { added: 0, removed: 0 } })
+  await writeFile(join(top, "site", "index.md"), "changed\n")
+  expect(await read()).toMatchObject({ uncommitted: true, changes: { added: 1, removed: 1 } })
+})
+
+test("a git status that cannot be read is an error, saying why, not a folder outside git", async () => {
+  const { read, projectFolder } = await start()
+  await chmod(join(projectFolder, ".git", "index"), 0o000)
+  cleanups.push(() => chmod(join(projectFolder, ".git", "index"), 0o644))
+  await expect(read()).rejects.toThrow(/How the branch stands could not be read: .*index/)
 })

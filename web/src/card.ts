@@ -187,17 +187,19 @@ const PULL_REQUEST_EVERY = 60_000
 // Follows a project's pull request: read once connected, and again each
 // minute while the page is shown, when the window has the focus back, and
 // when the line comes back. Until it is first read it is undefined; null
-// says there is none, or that gh cannot be asked on the server. One that
-// could not be read keeps what was read before.
+// says the branch has none. One that could not be read keeps what was read
+// before; with nothing read before, it is unavailable, saying why, as where
+// gh is not signed in on the server.
+export type PullRequestState = PullRequest | null | undefined | { unavailable: string }
 export type FollowedPullRequest = {
-  state(): PullRequest | null | undefined
+  state(): PullRequestState
   subscribe(listener: () => void): () => void
   close(): void
 }
 
 // `page` is the window, and whether the page is shown, as the clock asks.
 export function followPullRequest(connection: Connection, project: string, page: { window: EventTarget; shown(): boolean; every?: number }): FollowedPullRequest {
-  let state: PullRequest | null | undefined = pullRequests.get(project)
+  let state: PullRequestState = pullRequests.get(project)
   const listeners = new Set<() => void>()
   let closed = false
   let reading = false
@@ -211,8 +213,11 @@ export function followPullRequest(connection: Connection, project: string, page:
       if (closed) return
       state = read
       for (const listener of [...listeners]) listener()
-    } catch {
+    } catch (cause) {
       // Kept as it was, and read again at the next turn of the clock.
+      if (closed || (state !== undefined && !("unavailable" in (state ?? {})))) return
+      state = { unavailable: wordsOf(cause) }
+      for (const listener of [...listeners]) listener()
     } finally {
       reading = false
     }
@@ -312,5 +317,18 @@ export function followGitStatus(connection: Connection, project: string, page: {
       unfollow()
       stop()
     },
+  }
+}
+
+// Opens a project's folder on the computer evie runs on. Gives back why it
+// could not be, as from another device, or nothing.
+export async function openFolder(connection: Connection, project: string): Promise<string | undefined> {
+  const evie = clientOf(connection)
+  if (evie === undefined) return NOT_CONNECTED
+  try {
+    await evie.send({ type: "open_folder", project })
+    return undefined
+  } catch (cause) {
+    return wordsOf(cause)
   }
 }

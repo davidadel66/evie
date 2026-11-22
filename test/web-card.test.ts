@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, jobs, startServer, subagents, undo as undoPlugin, type Chunk, type Command, type Evie, type Job } from "../src/index.ts"
 import type { GitStatus } from "../src/core/types.ts"
-import { followGitStatus, followOutput, followSubagents, request, stopJob, undo, type FollowedGitStatus, type Following, type Lineage } from "../web/src/card.ts"
+import { followGitStatus, followOutput, followPullRequest, followSubagents, openFolder, request, stopJob, undo, type FollowedGitStatus, type Following, type Lineage } from "../web/src/card.ts"
 import { openConnection, type Connection } from "../web/src/connection.ts"
 import { holdConversation, type Conversation, type ConversationState } from "../web/src/conversation.ts"
 import { git } from "./support/git.ts"
@@ -348,4 +348,28 @@ test("a project whose folder is not in git has no git status", async () => {
   const following = followGitStatus(connection, served.run.project!.id, { window: new EventTarget(), shown: () => true, base: () => undefined })
   cleanups.push(async () => following.close())
   expect(await untilStatus(following, (status) => status !== undefined)).toBeNull()
+})
+
+test("where pull requests cannot be read, the card is told why, and does not take it for a branch with none", async () => {
+  const { served, connection } = await start([])
+  const following = followPullRequest(connection, served.run.project!.id, { window: new EventTarget(), shown: () => true })
+  cleanups.push(async () => following.close())
+  while (following.state() === undefined) await Bun.sleep(5)
+  expect(following.state()).toEqual({ unavailable: "No plugin reads pull requests: the github plugin is not loaded." })
+})
+
+test("the project's folder is opened on the computer evie runs on, and a folder that cannot be opened says why", async () => {
+  const opened: string[] = []
+  const served = await serveEvie([scriptedProvider([]).plugin], {
+    openFolder: async (folder) => {
+      if (opened.push(folder) > 1) throw new Error("The folder could not be opened: open stopped with code 1.")
+    },
+  })
+  cleanups.push(served.stop)
+  const connection = openConnection({ url: served.server.url, token: served.token, firstWait: 10 })
+  cleanups.push(async () => connection.close())
+  while (connection.state().status !== "connected") await Bun.sleep(5)
+  expect(await openFolder(connection, served.run.project!.id)).toBeUndefined()
+  expect(opened).toEqual([served.run.project!.folder])
+  expect(await openFolder(connection, served.run.project!.id)).toBe("The folder could not be opened: open stopped with code 1.")
 })
