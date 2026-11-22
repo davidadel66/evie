@@ -267,14 +267,17 @@ they change, and listed again when the line comes back:
 - **A row's menu** (the `···` on the selected row, or on any row under the
   pointer) renames the session, moves it to another project or to none,
   settles it or brings it back, and deletes it. A double-click on the row,
-  or F2, renames it too: Enter or leaving the field saves the name, Escape
-  gives it up, and a blank name is refused. A session moved works in its
-  new project, with that project's plugins, from its next turn, and evie
-  is told where it now works. Delete asks first, and removes the session
-  for good: its conversation, its subagents and the files evie kept for
-  it, though not the files it changed in a project. A session that is
-  working, or waiting for an answer, is not settled, moved or deleted;
-  the row says why.
+  or on the name at the top of the conversation, or F2, renames it too:
+  Enter or leaving the field saves the name, Escape gives it up, and a
+  blank name, or one over 80 characters, is refused. A session moved
+  works in its new project, with that project's plugins, from its next
+  turn, and evie is told where it now works; a move is not activity, so a
+  settled session stays settled. Delete asks first, and removes the
+  session for good: its conversation, its subagents and the files evie
+  kept for it, though not the files it changed in a project. A page that
+  has the session open lets it go and says it was deleted. A session that
+  is working or waiting for an answer is not settled, moved or deleted,
+  nor moved or deleted while it opens; the row says why.
 - **What is selected** is kept in the page's address, as `#session=<id>`,
   or for a draft `#draft=<project id>` or `#draft=none`, so a reload or a
   bookmark opens on it.
