@@ -1,5 +1,5 @@
 import { afterEach, expect, setSystemTime, test } from "bun:test"
-import { mkdtemp, realpath, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -1079,6 +1079,26 @@ test("the server remembers the replies to the last 200 commands of each device, 
   expect(await countAs(own, served.run.session, "command 2")).toEqual({ text: "run 2" })
   expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 202" })
   expect(count.runs()).toBe(202)
+})
+
+test("the replies to Storage's reads are not remembered, since they can be large and reading again changes nothing, so they take none of the 200 places", async () => {
+  const count = counted()
+  const served = await serveEvie([scriptedProvider([]).plugin, count.plugin])
+  cleanups.push(served.stop)
+  const evie = join(served.run.projectFolder, ".evie")
+  await mkdir(evie, { recursive: true })
+  await writeFile(join(evie, "notes.md"), "first\n")
+  const project = served.run.project!.id
+  const own = await ownLine(served.server.url, served.token)
+  expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
+
+  const read = { type: "read_storage", project, path: "notes.md" } as const
+  expect(await own.send({ id: "read", command: read })).toMatchObject({ result: { text: "first\n" } })
+  await writeFile(join(evie, "notes.md"), "second\n")
+  expect(await own.send({ id: "read", command: read })).toMatchObject({ result: { text: "second\n" } })
+  for (let n = 1; n <= 200; n++) await own.send({ id: `list ${n}`, command: { type: "list_storage", project } })
+
+  expect(await countAs(own, served.run.session, "command 1")).toEqual({ text: "run 1" })
 })
 
 test("a command still being carried out is never pushed out of the server's memory, however many of the device's commands come after it", async () => {
