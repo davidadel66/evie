@@ -10,6 +10,9 @@ import { ArrowCounterClockwise, CaretDown, GearSix, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { keyState, onThisComputer, openServerSettings, pluginState, projectState, type ServerSettings, type Standing } from "./server-settings.ts"
 import { Spinner } from "./Spinner.tsx"
+import { keepNotices, rememberedNotices, type NoticeMode, type NoticeSettings } from "./notices.ts"
+import { whenAsked } from "./page-requests.ts"
+import { unlockSound } from "./sound.ts"
 import { applyTheme, rememberedTheme, THEMES, type Theme } from "./theme.ts"
 import { Words } from "./Words.tsx"
 
@@ -26,20 +29,27 @@ import { Words } from "./Words.tsx"
 // The settings are followed for as long as the gear is there, so that
 // instructions being written are kept when the window is closed, for the
 // next time it is opened, and a restart is followed to its end.
-export function Settings({ connection }: { connection: Connection }) {
+// Without its `button`, as in the workspace view, it is opened only from
+// the command palette.
+export function Settings({ connection, button = true }: { connection: Connection; button?: boolean }) {
   const [settings, setSettings] = useState<ServerSettings>()
+  const [open, setOpen] = useState(false)
   useEffect(() => {
     const opened = openServerSettings(connection)
     setSettings(opened)
     return () => opened.close()
   }, [connection])
+  // The command palette's Open settings opens it too.
+  useEffect(() => whenAsked("settings", () => setOpen(true)), [])
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="icon" aria-label="Settings">
-          <GearSix />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={setOpen}>
+      {button && (
+        <DialogTrigger asChild>
+          <Button variant="icon" aria-label="Settings">
+            <GearSix />
+          </Button>
+        </DialogTrigger>
+      )}
       {/* At phone width it fills the screen. */}
       <DialogContent className="@container h-settings-height max-w-settings gap-0 p-0 max-wide:inset-0 max-wide:top-0 max-wide:h-dvh max-wide:max-w-none max-wide:translate-y-0 max-wide:rounded-none max-wide:border-0">
         {settings && <Window settings={settings} />}
@@ -48,7 +58,7 @@ export function Settings({ connection }: { connection: Connection }) {
   )
 }
 
-const PAGES = ["Appearance", "Keys", "Plugins", "Instructions", "Projects"] as const
+const PAGES = ["Appearance", "Notifications", "Keys", "Plugins", "Instructions", "Projects"] as const
 type Page = (typeof PAGES)[number]
 
 // Whether this page is on the computer evie runs on, from its own address.
@@ -70,7 +80,7 @@ function Window({ settings }: { settings: ServerSettings }) {
       <div className="flex min-h-0 flex-1 flex-col @min-[600px]:flex-row">
         <Pages page={page} choose={setPage} />
         <div className="@container min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-          {page === "Appearance" ? <Appearance /> : <ServerPage page={page} settings={settings} />}
+          {page === "Appearance" ? <Appearance /> : page === "Notifications" ? <Notifications /> : <ServerPage page={page} settings={settings} />}
         </div>
       </div>
       <RestartBar settings={settings} />
@@ -219,7 +229,7 @@ function Appearance() {
 }
 
 // A theme in small: its ground and its accent, taken from the theme itself.
-function Swatch({ theme }: { theme: Theme }) {
+export function Swatch({ theme }: { theme: Theme }) {
   return (
     <span
       aria-hidden="true"
@@ -230,9 +240,90 @@ function Swatch({ theme }: { theme: Theme }) {
   )
 }
 
+// ---- Notifications ----------------------------------------------------------------------------
+
+// What evie tells the owner, and how, in this browser, as T3 Code's
+// notifications: when a session needs them, or a turn finishes or fails.
+// The system's notifications are off until the owner turns them on, and the
+// browser is asked to allow them only then. Notices in the page are a
+// switch of their own, on until turned off.
+function Notifications() {
+  const [settings, setSettings] = useState<NoticeSettings>(rememberedNotices)
+  const [allowed, setAllowed] = useState(permission)
+  const keep = (next: NoticeSettings) => {
+    keepNotices(next)
+    setSettings(next)
+  }
+  async function choose(mode: NoticeMode) {
+    keep({ ...settings, mode })
+    // In the click that chose it, so that the browser lets it play.
+    unlockSound(mode)
+    if ((mode === "on" || mode === "both") && typeof Notification === "function" && Notification.permission === "default") {
+      await Notification.requestPermission().catch(() => {})
+      setAllowed(permission())
+    }
+  }
+  const system = settings.mode === "on" || settings.mode === "both"
+  return (
+    <>
+      <PageHead title="Notifications">When a session needs you, or evie finishes or fails a turn. This browser remembers them.</PageHead>
+      <Row
+        label="Notifications and sound"
+        title="Notifications and sound"
+        about="Told by the system while this window is behind others, and by a sound, if you choose one. Nothing is said of the session you are looking at."
+        {...(system && allowed !== "granted" && { standing: PERMISSION[allowed] })}
+        control={
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button aria-label={`Notifications: ${MODE_NAMES[settings.mode]}`}>
+                {MODE_NAMES[settings.mode]}
+                <CaretDown className="size-icon-sm text-text-muted" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuRadioGroup value={settings.mode} onValueChange={(chosen) => void choose(chosen as NoticeMode)}>
+                {(Object.keys(MODE_NAMES) as NoticeMode[]).map((mode) => (
+                  <DropdownMenuRadioItem key={mode} value={mode}>
+                    {MODE_NAMES[mode]}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
+      />
+      <Row
+        label="Notices in the page"
+        title="Notices in the page"
+        about="A notice of another session, with Open, at the top of the page while this window is in front."
+        standing={{ word: settings.inApp ? "On" : "Off" }}
+        control={
+          <Button variant={settings.inApp ? "quiet" : "secondary"} onClick={() => keep({ ...settings, inApp: !settings.inApp })}>
+            {settings.inApp ? "Turn off" : "Turn on"}
+          </Button>
+        }
+      />
+    </>
+  )
+}
+
+// Each choice of notifications, by T3 Code's names for them.
+const MODE_NAMES: Record<NoticeMode, string> = { off: "Off", on: "Notifications", sound: "Sound only", both: "Notifications with sound" }
+
+// Whether this browser lets the page show the system's notifications: it
+// can, it has not been asked, it refuses, or it has none for this page, as
+// at an address that is not secure, such as another computer's over plain http.
+type Allowed = NotificationPermission | "none"
+const permission = (): Allowed => (typeof Notification === "function" && isSecureContext ? Notification.permission : "none")
+const PERMISSION: Record<Exclude<Allowed, "granted">, Standing> = {
+  default: { word: "Not allowed yet", note: "Choose again for the browser to ask" },
+  denied: { word: "Blocked by the browser", note: "Allow notifications for this page in the browser's settings" },
+  none: { word: "Not in this browser", note: "It shows them only for a page at a secure address, such as this computer's own" },
+}
+
 // ---- The pages kept on the server -----------------------------------------------------------------
 
-function ServerPage({ page, settings }: { page: Exclude<Page, "Appearance">; settings: ServerSettings }) {
+function ServerPage({ page, settings }: { page: Exclude<Page, "Appearance" | "Notifications">; settings: ServerSettings }) {
   const { view, problem, draft } = useSyncExternalStore(settings.subscribe, settings.state)
   if (view === undefined) {
     return (

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { ChangedFile, TurnChanges } from "../src/core/types.ts"
-import { changedFilesLine, drawnLines, fileTree, hasCounts, hunksOf, isDiffShortcut, scopeChoices, sessionLine, sideBySide } from "../web/src/diff.ts"
+import { changedFilesLine, drawnLines, fileTree, hasCounts, hunksOf, scopeChoices, sessionLine, sideBySide } from "../web/src/diff.ts"
 
 // The diff panel's rules, apart from its screen: a file's diff split into
 // hunks and lines, drawn stacked or side by side.
@@ -126,15 +126,4 @@ test("the file tree puts folders before files, each in order of name, and joins 
   ])
   // Each file is known by its whole path.
   expect(rows.flatMap((row) => (row.kind === "file" ? [row.path] : []))).toEqual(["docs/guide/start/one.md", "src/core/a.ts", "src/core/b.ts", "src/web/c.tsx", "test/x.test.ts", "README.md"])
-})
-
-test("mod+D shows and hides the diff, mod being Cmd on a Mac and Ctrl elsewhere", () => {
-  const keys = (given: Partial<Parameters<typeof isDiffShortcut>[0]>) => ({ code: "KeyD", key: "d", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, repeat: false, getModifierState: () => false, ...given })
-  expect(isDiffShortcut(keys({ metaKey: true }), true)).toBe(true)
-  expect(isDiffShortcut(keys({ ctrlKey: true }), false)).toBe(true)
-  expect(isDiffShortcut(keys({ ctrlKey: true }), true)).toBe(false)
-  expect(isDiffShortcut(keys({ metaKey: true, shiftKey: true }), true)).toBe(false)
-  expect(isDiffShortcut(keys({ metaKey: true, altKey: true }), true)).toBe(false)
-  expect(isDiffShortcut(keys({ metaKey: true, repeat: true }), true)).toBe(false)
-  expect(isDiffShortcut(keys({ metaKey: true, code: "KeyB" }), true)).toBe(false)
 })
