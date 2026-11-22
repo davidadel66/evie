@@ -732,7 +732,7 @@ function UndoRow({ files, why, undo }: { files: number; why: string | undefined;
 }
 
 // In a folder not in git, what the session's turns have changed, from
-// undo's copies, as decision 93's diffs come from them there: the lines
+// undo's copies, as the diff reads them where git is not there: the lines
 // added and removed; it opens the diff on the whole session.
 function SessionChangesRow({ files, back }: { files: readonly ChangedFile[]; back(): void }) {
   const added = files.reduce((sum, file) => sum + file.added, 0)
