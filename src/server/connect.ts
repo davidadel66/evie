@@ -289,21 +289,36 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     // is asked for: the owner is given where it stands now.
     let after = !seen.told && seen.seq === 0 ? undefined : seen.seq
     let reply: Reply | undefined
-    for (;;) {
-      reply = await ask(line, {
-        type: "open_session",
-        session,
-        ...(after !== undefined && { after }),
-        ...(seen.openAs?.questions && { questions: true }),
-      })
-      if (!reply || "error" in reply) break
-      const page = reply.result as Opened
-      if (!page.more) break
-      passOnMissed(session, page.events ?? [])
-      // A page that says more follow holds at least one event.
-      after = page.events!.at(-1)!.seq
+    // Set when a page says more follow but holds none, which only a server
+    // with a fault sends: asking again from the same event would never end.
+    let empty = false
+    try {
+      for (let first = true; ; first = false) {
+        reply = await ask(line, {
+          type: "open_session",
+          session,
+          ...(after !== undefined && { after }),
+          ...(seen.openAs?.questions && { questions: true }),
+        })
+        if (!reply || "error" in reply) break
+        const page = reply.result as Opened
+        // Jobs' events are not stored, so each job that has changed is
+        // passed on before the first page's events, since the turns missed
+        // are often evie dealing with a job that ended. The last page's
+        // jobs settle any that changed while the pages came.
+        if (first && seen.told) passOnJobs(session, page.jobs)
+        if (!page.more) break
+        const last = page.events?.at(-1)
+        if (last === undefined) {
+          empty = true
+          break
+        }
+        passOnMissed(session, page.events!)
+        after = last.seq
+      }
+    } finally {
+      seen.behind = false
     }
-    seen.behind = false
     // A session that could not be opened again, as when its project's
     // plugins fail to load, is left as it is: a command sent to it says why,
     // and the owner is told that some of its events may be missing, since
@@ -314,23 +329,14 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     // ask from, and those questions and answers stay in `early`, for it to skip.
     if (!reply) return
     const opening = seen.opening.splice(0)
-    if ("error" in reply) {
+    const failed = "error" in reply ? reply.error : empty ? "The server said more of its events follow, but sent none." : undefined
+    if (failed !== undefined || "error" in reply) {
       for (const open of opening) open.caughtUp(undefined)
-      options.onMissing?.(`Catching up on the session ${session} failed, so some of its events may be missing here. ${reply.error}`)
+      options.onMissing?.(`Catching up on the session ${session} failed, so some of its events may be missing here. ${failed}`)
       return
     }
     const output = reply.result as Opened
-    // Jobs' events are not stored, so each job that has changed is passed
-    // on, before the last page's events, since the turns missed are often
-    // evie dealing with a job that ended. One missing from the list ran in
-    // the server before it was stopped for good and started again, which
-    // stopped it.
-    if (seen.told) {
-      const listed = new Set(output.jobs.map((job) => job.id))
-      const gone = [...seen.jobs.values()].filter((job) => job.status === "running" && !listed.has(job.id))
-      for (const job of gone) passOn({ type: "job", session, job: { ...job, status: "stopped", ended: Date.now() } })
-      for (const job of output.jobs) passOn({ type: "job", session, job })
-    }
+    if (seen.told) passOnJobs(session, output.jobs)
     passOnMissed(session, output.events ?? [])
     // An owner not yet told where the session stands is given the jobs and
     // the reply so far in the reply to its open, so they are not passed on.
@@ -345,6 +351,18 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     seen.seq = Math.max(seen.seq, output.lastSeq)
     for (const seq of seen.early) if (seq <= seen.seq) seen.early.delete(seq)
     for (const open of opening) open.caughtUp(output)
+  }
+
+  // Passes on each of a session's jobs that has changed since it was last
+  // passed on, as a catch-up lists them. One missing from the list ran in
+  // the server before it was stopped for good and started again, which
+  // stopped it.
+  function passOnJobs(session: string, jobs: readonly Job[]) {
+    const seen = seenOf(session)
+    const listed = new Set(jobs.map((job) => job.id))
+    const gone = [...seen.jobs.values()].filter((job) => job.status === "running" && !listed.has(job.id))
+    for (const job of gone) passOn({ type: "job", session, job: { ...job, status: "stopped", ended: Date.now() } })
+    for (const job of jobs) passOn({ type: "job", session, job })
   }
 
   // Passes on the stored events a catch-up was given, but those passed on already.
@@ -471,11 +489,15 @@ export async function connect(options: ConnectOptions): Promise<Evie> {
     rejoining = true
     flush()
     const open = [...sessions].flatMap(([session, seen]) => (seen.openAs ? [session] : []))
-    await Promise.all(open.map((session) => catchUp(session, line)))
-    // The line dropped again first, and trying again has begun.
-    if (socket !== line) return
-    rejoining = false
-    flush()
+    try {
+      await Promise.all(open.map((session) => catchUp(session, line)))
+    } finally {
+      // Unless the line dropped again first, and trying again has begun.
+      if (socket === line) {
+        rejoining = false
+        flush()
+      }
+    }
   }
 
   // Every command still waiting fails, saying why.

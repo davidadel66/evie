@@ -1802,6 +1802,64 @@ test("a message whose reply was lost is sent again once the pages have all come,
   )
 })
 
+test("a job that ended while the line was down is passed on once, before the first page's events, though the pages take several replies", async () => {
+  const work = backgroundWork()
+  const { served, line, connect } = await serveOverALine([scriptedProvider([...startsWork(), { text: ["The build passed."] }, ...largeReplies(12)]).plugin, work.plugin], largeSession)
+  const client = await connect()
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: string[] = []
+  client.subscribe((event) => {
+    if (event.type === "job") seen.push(`job ${event.job.status}`)
+    else if ("seq" in event) seen.push(`${event.seq}`)
+  })
+  await say(served.run, "build it", session)
+  // Answered after the turn's events, which come first on the line.
+  await client.send({ type: "read_history", session, limit: 1 })
+  const before = seen.length
+
+  await line.cut()
+  work.finish("All passed.")
+  await turnsEnded(served.run, 2)
+  for (let at = 1; at <= 12; at++) await say(served.run, `Message ${at}`, session)
+  line.mend()
+  await client.send({ type: "read_history", session, limit: 1 })
+
+  const caughtUp = seen.slice(before)
+  expect(caughtUp[0]).toBe("job finished")
+  expect(caughtUp.filter((each) => each.startsWith("job"))).toEqual(["job finished"])
+  expect(catchUpsFrom(line).length).toBeGreaterThan(1)
+})
+
+test("a page that says more follow but holds no events ends the catch-up, saying some events may be missing, and the session is still heard from", async () => {
+  let faulty = true
+  // A server with a fault: its first page of a catch-up says more follow, with no events.
+  const core = (evie: Evie): Evie => ({
+    ...evie,
+    send: (async (command: Command) => {
+      const result = await evie.send(command)
+      if (!faulty || command.type !== "open_session" || command.after === undefined) return result
+      faulty = false
+      return { ...(result as object), events: [], more: true }
+    }) as Evie["send"],
+  })
+  const { served, line, connect } = await serveOverALine([scriptedProvider([{ text: ["Hi."] }, { text: ["Again."] }]).plugin], { core })
+  const missing: string[] = []
+  const client = await connect({ onMissing: (note) => missing.push(note) })
+  const { session } = await client.send({ type: "open_session", folder: served.run.projectFolder })
+  const seen: string[] = []
+  client.subscribe((event) => event.type === "assistant_message" && seen.push(event.body.text))
+
+  await line.cut()
+  await say(served.run, "hello", session)
+  line.mend()
+  await client.send({ type: "read_history", session, limit: 1 })
+  await say(served.run, "again", session)
+  while (seen.length === 0) await Bun.sleep(5)
+
+  expect(missing).toEqual([expect.stringMatching(/^Catching up on the session .+ failed, so some of its events may be missing here\./)])
+  expect(seen).toEqual(["Again."])
+})
+
 // ---- Lists and summaries ------------------------------------------------------------------
 
 test("a client that has opened no session is sent the summary of every session as it changes, and none of its events", async () => {

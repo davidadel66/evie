@@ -1,4 +1,4 @@
-import { connect, startServer, type ConnectOptions, type EvieOptions, type Plugin } from "../../src/index.ts"
+import { connect, startServer, type ConnectOptions, type Evie, type EvieOptions, type Plugin } from "../../src/index.ts"
 import { openTokens } from "../../src/server/tokens.ts"
 import type { WebApp } from "../../src/server/web-app.ts"
 import { startEvie } from "./harness.ts"
@@ -24,6 +24,9 @@ export async function serveEvie(
     // What opens a project's folder, in place of the computer's own.
     openFolder?: NonNullable<EvieOptions["openFolder"]>
     compaction?: NonNullable<EvieOptions["compaction"]>
+    // What the server is given in place of the core, made from it, such as
+    // one that answers a command wrongly, as a server with a fault would.
+    core?: (evie: Evie) => Evie
   } = {},
 ) {
   const run = await startEvie(plugins, {
@@ -37,7 +40,7 @@ export async function serveEvie(
   const made = tokens.add("test device")
   if (!("secret" in made)) throw new Error(made.refused)
   const server = startServer({
-    evie: run.evie,
+    evie: options.core ? options.core(run.evie) : run.evie,
     tokens,
     host: options.host ?? "127.0.0.1",
     port: 0,
