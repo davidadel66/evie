@@ -102,7 +102,6 @@ export function PromptEditor({ ref, box, changed, moved, oneRow, placeholder, pa
         role="combobox"
         aria-label={label}
         aria-placeholder={placeholder}
-        aria-multiline="true"
         aria-expanded={menu !== undefined}
         aria-controls={menu?.id}
         aria-autocomplete="list"
