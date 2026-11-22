@@ -140,23 +140,3 @@ export function joinOutput(kept: Output | undefined, read: { text: string; from:
   const line = latest.indexOf("\n")
   return { text: line === -1 || line === latest.length - 1 ? latest : latest.slice(line + 1), to: read.to, cut: true }
 }
-
-// Whether a key pressed is the one that shows and hides the card, as T3
-// Code's right panel: mod+alt+B, mod being Cmd on a Mac and Ctrl elsewhere.
-// The key is known by its place, since on a Mac Option changes the letter
-// it types. AltGr, which some keyboards report as Ctrl and Alt, types a
-// letter, so it is not the shortcut; and a key held down toggles once.
-export type Keys = {
-  code: string
-  key: string
-  metaKey: boolean
-  ctrlKey: boolean
-  altKey: boolean
-  shiftKey: boolean
-  repeat: boolean
-  getModifierState(key: string): boolean
-}
-export function isCardShortcut(keys: Keys, mac: boolean): boolean {
-  if (keys.repeat || keys.getModifierState("AltGraph")) return false
-  return keys.code === "KeyB" && keys.altKey && !keys.shiftKey && (mac ? keys.metaKey && !keys.ctrlKey : keys.ctrlKey && !keys.metaKey)
-}

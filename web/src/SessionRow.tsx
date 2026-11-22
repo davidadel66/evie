@@ -15,6 +15,7 @@ import {
 } from "./components/ui/dropdown-menu.tsx"
 import { Check, DotsThree } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
+import { whenAsked } from "./page-requests.ts"
 import { ProjectGlyph, ProjectLink } from "./ProjectIcon.tsx"
 import { ageWords, nameFieldKey, nameToSave, titleOf } from "./session-list.ts"
 import { Spinner } from "./Spinner.tsx"
@@ -219,8 +220,12 @@ function NameField({ title, save, cancel, size = "text-label" }: { title: string
 // types it in place, as in T3 Code, with the same rules as in its row.
 // `said` is told why a name was not taken, or with nothing that there is
 // nothing to say.
-export function HeaderName({ title, rename, said }: { title: string; rename(name: string): Promise<string | undefined>; said(note: string | undefined): void }) {
+// `small` is the side chat's, a label among the workspace's columns rather
+// than the page's title. The command palette's Rename this session renames
+// it here, and so does F2 when the list is out of sight.
+export function HeaderName({ title, rename, said, small = false }: { title: string; rename(name: string): Promise<string | undefined>; said(note: string | undefined): void; small?: boolean }) {
   const [editing, setEditing] = useState(false)
+  useEffect(() => whenAsked("rename", () => setEditing(true)), [])
   const [saving, setSaving] = useState<string>()
   const shown = saving ?? title
   async function save(typed: string) {
@@ -232,17 +237,19 @@ export function HeaderName({ title, rename, said }: { title: string; rename(name
     said(await rename(result.name))
     setSaving(undefined)
   }
-  if (editing) return <NameField title={shown} save={save} cancel={() => setEditing(false)} size="text-title" />
+  const size = small ? "text-label" : "text-title"
+  if (editing) return <NameField title={shown} save={save} cancel={() => setEditing(false)} size={size} />
+  const Heading = small ? "h2" : "h1"
   return (
-    <h1
+    <Heading
       onDoubleClick={() => {
         said(undefined)
         setEditing(true)
       }}
-      className="min-w-0 flex-1 truncate text-title text-text"
+      className={cn("min-w-0 flex-1 truncate text-text", size)}
     >
       {shown}
-    </h1>
+    </Heading>
   )
 }
 

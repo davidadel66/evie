@@ -17,7 +17,8 @@ test("joining classes keeps a text size beside a text colour, and the later of t
 
 test("the joiner knows every named size in Tailwind's theme", async () => {
   const styles = await readFile(join(import.meta.dir, "..", "web", "src", "styles.css"), "utf8")
-  const named = [...styles.matchAll(/--spacing-([a-z][a-z-]*):/g)].map((match) => match[1]!)
+  // A size can be set again for a width, as the controls are at phone width.
+  const named = [...new Set([...styles.matchAll(/--spacing-([a-z][a-z-]*):/g)].map((match) => match[1]!))]
 
   expect<string[]>([...NAMED_SIZES].sort()).toEqual(named.sort())
 })

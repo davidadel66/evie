@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { Job } from "../src/core/types.ts"
-import { backgroundJobs, branchWords, gitWhyNot, isCardShortcut, joinOutput, stateWord, subagentsOf, undoWhyNot } from "../web/src/project-card.ts"
+import { backgroundJobs, branchWords, gitWhyNot, joinOutput, stateWord, subagentsOf, undoWhyNot } from "../web/src/project-card.ts"
 
 // The project card's rules, apart from its screen: how it says where the
 // project is, which of its actions apply and why not, and how it lists a
@@ -113,20 +113,3 @@ test("what is kept of a job's output is its latest 64 KiB of text, cut at a line
   expect(kept).toEqual({ text: `${"b".repeat(30_000)}\nc\n`, to: 70_004, cut: true })
 })
 
-test("mod+alt+B shows and hides the card, as in T3 Code: Cmd on a Mac, Ctrl elsewhere, by the key's place, since Option changes the letter a Mac types", () => {
-  const keys = { code: "KeyB", key: "b", metaKey: false, ctrlKey: false, altKey: true, shiftKey: false, repeat: false, getModifierState: () => false }
-  expect(isCardShortcut({ ...keys, metaKey: true, key: "∫" }, true)).toBe(true)
-  expect(isCardShortcut({ ...keys, ctrlKey: true }, false)).toBe(true)
-  expect(isCardShortcut({ ...keys, ctrlKey: true }, true)).toBe(false)
-  expect(isCardShortcut({ ...keys, metaKey: true }, false)).toBe(false)
-  expect(isCardShortcut({ ...keys, metaKey: true, shiftKey: true }, true)).toBe(false)
-  expect(isCardShortcut({ ...keys, metaKey: true, altKey: false }, true)).toBe(false)
-  expect(isCardShortcut({ ...keys, metaKey: true, code: "KeyN" }, true)).toBe(false)
-})
-
-test("AltGr+B, which some keyboards type with Ctrl and Alt, is a letter and not the shortcut, and holding the keys down toggles the card once", () => {
-  const keys = { code: "KeyB", key: "b", metaKey: false, ctrlKey: true, altKey: true, shiftKey: false, repeat: false, getModifierState: () => false }
-  expect(isCardShortcut({ ...keys, key: "”", getModifierState: (key: string) => key === "AltGraph" }, false)).toBe(false)
-  expect(isCardShortcut({ ...keys, repeat: true }, false)).toBe(false)
-  expect(isCardShortcut({ ...keys, ctrlKey: false, metaKey: true, repeat: true }, true)).toBe(false)
-})

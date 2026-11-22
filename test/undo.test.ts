@@ -91,7 +91,7 @@ test("a file the owner has changed since is left alone, and undo says so", async
   await say(run, "change both")
   await writeFile(join(projectFolder, "mine.md"), "the owner's own edit\n")
 
-  expect(await undoIt()).toBe("Put back: other.md. Left alone, because something other than Evie's file tools changed it: mine.md.")
+  expect(await undoIt()).toBe("Put back: other.md. Left alone, because something other than evie's file tools changed it: mine.md.")
   expect(await file("mine.md")).toBe("the owner's own edit\n")
   expect(await file("other.md")).toBe("a\n")
 })
@@ -148,7 +148,7 @@ test("undo is refused while a turn is running", async () => {
   await run.evie.send({ type: "send_message", session: run.session, text: "and now think" })
   await writing
 
-  expect(await undoIt()).toBe("Evie is in the middle of a turn. Undo when it has finished.")
+  expect(await undoIt()).toBe("evie is in the middle of a turn. Undo when it has finished.")
   expect(await file("notes.md")).toBe("two\n")
 })
 
@@ -214,7 +214,7 @@ test("a file the owner edits part way through a turn is not put back over their 
 
   await say(run, "change it twice")
 
-  expect(await undoIt()).toBe("Left alone, because something other than Evie's file tools changed it: notes.md.")
+  expect(await undoIt()).toBe("Left alone, because something other than evie's file tools changed it: notes.md.")
   expect(await file("notes.md")).toBe("three\nthe owner's own line\n")
 })
 
@@ -266,7 +266,7 @@ test("a file Evie was stopped part way through changing is left alone, and its c
   await say(run, "change it")
   const said = (await run.evie.send({ type: "run_command", session: run.session, name: "undo", args: "" })).text
 
-  expect(said).toStartWith("Left alone, because Evie was stopped part way through changing it: notes.md. What was there before is kept in ")
+  expect(said).toStartWith("Left alone, because evie was stopped part way through changing it: notes.md. What was there before is kept in ")
   const keptIn = said.slice(said.indexOf("kept in ") + "kept in ".length, -1)
   expect(await readFile(join(keptIn, "0"), "utf8")).toBe("one\n")
   expect(await readFile(join(projectFolder, "notes.md"), "utf8")).toBe("two\n")

@@ -487,7 +487,7 @@ test("when Evie closes with a subagent still working, the session that started i
 
   await run.evie.close()
 
-  expect(notes(run)).toEqual(["Background job 1 (subagent: look into it) was stopped because Evie was closed. Start it again if it is still needed."])
+  expect(notes(run)).toEqual(["Background job 1 (subagent: look into it) was stopped because evie was closed. Start it again if it is still needed."])
 })
 
 test("the terminal takes two questions that are open at once one after the other", async () => {

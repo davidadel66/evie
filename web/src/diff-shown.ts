@@ -1,5 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react"
-import { isDiffShortcut, type Scope } from "./diff.ts"
+import type { Scope } from "./diff.ts"
+import { windowOver } from "./page-requests.ts"
+import { onMac, pressed } from "./shortcuts.ts"
 
 // Whether the diff panel is open, what it compares, and the file it was
 // opened at, if any; and how it draws a diff, stacked or side by side,
@@ -65,16 +67,17 @@ export function showTree(tree: boolean) {
   remember(TREE, tree ? "shown" : "hidden")
 }
 
-// mod+D opens and closes the panel, wherever the focus is.
+// mod+D opens and closes the panel, wherever the focus is, but for a
+// window open over the page, such as the settings, while which it waits.
 export function useDiffShortcut() {
   useEffect(() => {
-    const mac = /Mac|iPhone|iPad/.test(navigator.userAgent)
-    const pressed = (event: KeyboardEvent) => {
-      if (!isDiffShortcut(event, mac)) return
+    const mac = onMac()
+    const onKey = (event: KeyboardEvent) => {
+      if (pressed(event, mac) !== "diff" || windowOver() !== undefined) return
       event.preventDefault()
       toggleDiff()
     }
-    addEventListener("keydown", pressed)
-    return () => removeEventListener("keydown", pressed)
+    addEventListener("keydown", onKey)
+    return () => removeEventListener("keydown", onKey)
   }, [])
 }

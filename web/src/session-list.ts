@@ -50,13 +50,17 @@ export function nameFieldKey(key: string, composing: boolean): "save" | "cancel"
   return key === "Enter" ? "save" : key === "Escape" ? "cancel" : undefined
 }
 
-// The session F2 renames: the row that has the keyboard's focus, or else
-// the selected session. `focusedRow` is null for a row with no session to
-// rename, a draft's, which F2 leaves alone. Not while the owner is typing
-// in a field, where F2 is the field's.
-export function renamedByF2(focus: { focusedRow?: string | null; typing: boolean }, selected: string | undefined): string | undefined {
+// What F2 renames: while the list is shown, the row that has the
+// keyboard's focus, or else the selected session's row; with the list
+// hidden, as when it is a sheet at phone width, the selected session in
+// the header above its conversation, which is in sight. `focusedRow` is
+// null for a row with no session to rename, a draft's, which F2 leaves
+// alone. Not while the owner is typing in a field, where F2 is the field's.
+export function renamedByF2(focus: { focusedRow?: string | null; typing: boolean; listShown: boolean }, selected: string | undefined): { row: string } | { header: true } | undefined {
   if (focus.typing || focus.focusedRow === null) return undefined
-  return focus.focusedRow ?? selected
+  if (!focus.listShown) return selected === undefined ? undefined : { header: true }
+  const row = focus.focusedRow ?? selected
+  return row === undefined ? undefined : { row }
 }
 
 // The selected session, when it is one of those deleted: it may be shown
@@ -142,4 +146,21 @@ export function keepOpenGroups(groups: OpenGroups) {
   } catch {
     // Not kept: the next visit opens them as they start.
   }
+}
+
+// The sessions shown, in the list's order, by their ids: the top ones,
+// then those of each group that is open. mod+1 to mod+9 jump to the first
+// nine, and the previous and next session are moved to through them.
+export function inListOrder(groups: Groups, open: OpenGroups): string[] {
+  return [...groups.top, ...(open.working ? groups.working : []), ...(open.settled ? groups.settled : [])].map((each) => each.session)
+}
+
+// The session above or below `current` in `order`, as T3 Code moves
+// through its threads: none past either end, nor from a session not shown,
+// and with none selected, as with a draft, the last or the first.
+export function besides(order: readonly string[], current: string | undefined, direction: "previous" | "next"): string | undefined {
+  if (current === undefined) return direction === "previous" ? order.at(-1) : order[0]
+  const at = order.indexOf(current)
+  if (at === -1) return undefined
+  return order[direction === "previous" ? at - 1 : at + 1]
 }

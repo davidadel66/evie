@@ -115,7 +115,7 @@ export function sync(options: SyncOptions): Plugin {
       return { text: await push(project, evie) }
     } catch (cause) {
       const reason = cause instanceof Error ? cause.message : String(cause)
-      return { text: `Could not sync ${evie}: ${reason} It is tried again a minute after Evie next changes something there, and every hour.`, reason }
+      return { text: `Could not sync ${evie}: ${reason} It is tried again a minute after evie next changes something there, and every hour.`, reason }
     }
   }
 
@@ -124,10 +124,10 @@ export function sync(options: SyncOptions): Plugin {
   async function push(project: Project, evie: string): Promise<string> {
     // As for a project at the home folder, whose .evie folder is the data folder's usual place.
     const [here, kept] = [realPath(evie), realPath(data)]
-    if (within(here, kept) || within(kept, here)) throw new Error("It is Evie's data folder, which holds its keys and state, and is never synced.")
+    if (within(here, kept) || within(kept, here)) throw new Error("It is evie's data folder, which holds its keys and state, and is never synced.")
     // Any copy's data folder, not only this server's.
     const marker = DATA_FOLDER_FILES.find((file) => existsSync(join(evie, file)))
-    if (marker) throw new Error(`It holds ${marker}, as an Evie data folder does, and a data folder, with its keys and state, is never synced.`)
+    if (marker) throw new Error(`It holds ${marker}, as an evie data folder does, and a data folder, with its keys and state, is never synced.`)
     const step: Step = async (name, command) => {
       const done = await run(command, evie)
       if (done.code !== 0) throw new Error(failure(name, done))
@@ -165,7 +165,7 @@ export function sync(options: SyncOptions): Plugin {
     if (name === undefined) {
       if (origin !== undefined) {
         throw new Error(
-          `Its git repository has a remote, origin, that Evie did not set up, ${origin}, so nothing was pushed. To have Evie make a ` +
+          `Its git repository has a remote, origin, that evie did not set up, ${origin}, so nothing was pushed. To have evie make a ` +
             `private repository for it instead, remove that remote: git -C ${evie} remote remove origin.`,
         )
       }
@@ -177,7 +177,7 @@ export function sync(options: SyncOptions): Plugin {
     if (now === undefined) await git("remote", "add", "origin", (await viaSsh(evie)) ? there.sshUrl : there.url)
     else if (![there.url, there.sshUrl].map(plain).includes(plain(now))) {
       throw new Error(
-        `Its remote, origin, is ${now}, which is not the private repository Evie made for it, ${name}, so nothing was pushed. ` +
+        `Its remote, origin, is ${now}, which is not the private repository evie made for it, ${name}, so nothing was pushed. ` +
           `To push there again, set it back: git -C ${evie} remote set-url origin ${there.url}.`,
       )
     }
@@ -343,11 +343,11 @@ async function runCommand(command: string[], cwd: string, signal: AbortSignal | 
     })
     const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
     if (child.signalCode !== null) {
-      const why = signal?.aborted ? "Evie was stopping, so it was stopped." : "It took more than two minutes, so it was stopped."
+      const why = signal?.aborted ? "evie was stopping, so it was stopped." : "It took more than two minutes, so it was stopped."
       return { code: code || 1, stdout, stderr: `${stderr.trim()} ${why}`.trim() }
     }
     return { code, stdout, stderr }
   } catch (cause) {
-    return { code: 127, stdout: "", stderr: `${command[0]} could not be started: is it installed, and on the PATH Evie's server runs with? (${cause instanceof Error ? cause.message : String(cause)})` }
+    return { code: 127, stdout: "", stderr: `${command[0]} could not be started: is it installed, and on the PATH evie's server runs with? (${cause instanceof Error ? cause.message : String(cause)})` }
   }
 }

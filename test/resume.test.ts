@@ -173,9 +173,9 @@ test("a turn cut off when Evie stopped is closed off, so the conversation can ca
   const asked = second.model.requests[0]!.messages
   expect(asked.slice(-3, -1)).toEqual([
     { role: "tool", callId: "call_x", text: "first done" },
-    { role: "tool", callId: "call_y", text: "Evie stopped before this tool finished, so it has no result." },
+    { role: "tool", callId: "call_y", text: "evie stopped before this tool finished, so it has no result." },
   ])
-  expect(asked.at(-1)?.text).toStartWith("[Note from Evie: Evie's server restarted while you were working, and your turn was cut short.")
+  expect(asked.at(-1)?.text).toStartWith("[Note from Evie: evie's server restarted while you were working, and your turn was cut short.")
 })
 
 test("a message that was waiting when Evie stopped is answered when its session is continued", async () => {
@@ -278,7 +278,7 @@ test("a session opened by its id that is not open, as after Evie was started aga
     [10, "turn_start"],
     [11, "note"],
   ])
-  expect(second.model.requests[0]?.messages.at(-1)?.text).toStartWith("[Note from Evie: Evie's server restarted while you were working")
+  expect(second.model.requests[0]?.messages.at(-1)?.text).toStartWith("[Note from Evie: evie's server restarted while you were working")
 })
 
 test("opening by id refuses a subagent's session, saying to open the one that started it, and refuses an id that is no session's", async () => {
@@ -342,6 +342,6 @@ test("a session whose project has gone from the database is refused when opened 
   const second = await startAgain()
 
   await expect(second.run.evie.send({ type: "open_session", session: first.run.session })).rejects.toThrow(
-    `The session "${first.run.session}" belongs to the project "${first.run.project!.id}", which is missing from Evie's database.`,
+    `The session "${first.run.session}" belongs to the project "${first.run.project!.id}", which is missing from evie's database.`,
   )
 })

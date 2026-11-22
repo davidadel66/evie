@@ -198,9 +198,9 @@ export function undo(options: UndoOptions = {}): Plugin {
 
       host.commands.add({
         name: "undo",
-        description: "Put files back as they were before Evie's last turn that changed any. Run it again to go back further.",
+        description: "Put files back as they were before evie's last turn that changed any. Run it again to go back further.",
         async run(_args, context) {
-          if (context.busy) return "Evie is in the middle of a turn. Undo when it has finished."
+          if (context.busy) return "evie is in the middle of a turn. Undo when it has finished."
           const sessionFolder = join(root, context.session)
           const turns = (await readdir(sessionFolder).catch(() => [] as string[])).map(Number).filter(Number.isInteger).sort((a, b) => b - a)
 
@@ -264,8 +264,8 @@ export function undo(options: UndoOptions = {}): Plugin {
             const done = [
               restored.length > 0 ? `Put back: ${list(restored)}.` : "",
               removed.length > 0 ? `Removed, because the turn created ${removed.length === 1 ? "it" : "them"}: ${list(removed)}.` : "",
-              leftAlone.length > 0 ? `Left alone, because something other than Evie's file tools changed ${leftAlone.length === 1 ? "it" : "them"}: ${list(leftAlone)}.` : "",
-              unsure.length > 0 ? `Left alone, because Evie was stopped part way through changing ${unsure.length === 1 ? "it" : "them"}: ${list(unsure)}. What was there before is kept in ${setAside}.` : "",
+              leftAlone.length > 0 ? `Left alone, because something other than evie's file tools changed ${leftAlone.length === 1 ? "it" : "them"}: ${list(leftAlone)}.` : "",
+              unsure.length > 0 ? `Left alone, because evie was stopped part way through changing ${unsure.length === 1 ? "it" : "them"}: ${list(unsure)}. What was there before is kept in ${setAside}.` : "",
               failed.length > 0 ? `Could not be put back: ${list(failed)}. Run /undo again once that is sorted out.` : "",
               waiting.length > failed.length ? "Stopped part way, because a new turn started. Run /undo again when it has finished." : "",
             ].filter((sentence) => sentence !== "")

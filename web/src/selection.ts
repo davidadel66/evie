@@ -7,9 +7,12 @@ import { addressOf, selectedIn, type Selected } from "./address.ts"
 // What the address selects now, redrawn as it changes: by a click on a
 // row's link, by the page itself, or by going back.
 export function useSelected(): Selected | undefined {
-  const hash = useSyncExternalStore(onAddressChange, () => location.hash)
+  const hash = useAddress()
   return useMemo(() => selectedIn(hash), [hash])
 }
+
+// The page's address after #, redrawn as it changes.
+export const useAddress = () => useSyncExternalStore(onAddressChange, () => location.hash)
 function onAddressChange(listener: () => void) {
   addEventListener("hashchange", listener)
   return () => removeEventListener("hashchange", listener)

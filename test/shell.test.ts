@@ -105,7 +105,7 @@ test("a command whose output file cannot be made is not run, and the result says
   await writeFile(join(run.home, "tool-output"), "")
 
   expect(await call("shell", { command: "echo hi" })).toBe(
-    `The command was not run: Evie could not write its output file in ${join(run.home, "tool-output", run.session)}, the folder ` +
+    `The command was not run: evie could not write its output file in ${join(run.home, "tool-output", run.session)}, the folder ` +
       "where it keeps what tools print (ENOTDIR). Tell the owner that this folder cannot be written to: no command can run until it can.",
   )
 })
