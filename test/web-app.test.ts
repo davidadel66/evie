@@ -14,8 +14,8 @@ test("the web app builds into a page whose script and stylesheet are built besid
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
 
   const page = await app.page.text()
-  // A `data:` address, such as the empty icon, is carried in the page and loads nothing.
-  const loads = [...page.matchAll(/(?:src|href)="(?!data:)([^"]+)"/g)].map((match) => match[1]!)
+  // The empty icon, `data:,`, is carried in the page and loads nothing.
+  const loads = [...page.matchAll(/(?:src|href)="(?!data:,")([^"]+)"/g)].map((match) => match[1]!)
   expect(loads.map((path) => path.split(".").pop()).sort()).toEqual(["css", "js"])
   for (const path of loads) expect(Object.keys(app.files)).toContain(path)
 
@@ -97,7 +97,8 @@ test("the page names an empty icon, so that the browser does not ask for /favico
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
   const page = await app.page.text()
 
-  expect(page).toMatch(/<link rel="?icon"? href="?data:,"?\s*\/?>/)
+  const icon = page.match(/<link\b[^>]*\brel="?icon"?[^>]*>/)?.[0]
+  expect(icon).toMatch(/\bhref="?data:,"?[\s/>]/)
 })
 
 test("a transition has a length and an easing, which Tailwind's cleared defaults left out, and none for someone who asks for less motion", async () => {
