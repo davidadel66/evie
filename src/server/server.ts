@@ -67,10 +67,13 @@ type Joining = { opens: number; held: EvieEvent[] }
 // The reply to a command a device sent, and whether it has settled.
 type Remembered = { reply: Promise<ServerMessage>; settled: boolean }
 
-// The browser's cookie that holds its token, and how long the browser keeps
-// it, in seconds: 400 days, the longest browsers allow. Taking the token
-// back still signs the browser out at once.
-const COOKIE = "evie_token"
+// The browser's cookie that holds its token, named for the server's port,
+// and how long the browser keeps it, in seconds: 400 days, the longest
+// browsers allow. A browser keeps cookies apart by host but not by port, so
+// two servers on one computer, such as the everyday one and a development
+// copy, would otherwise each replace the other's cookie and sign the
+// browser out of it. Taking the token back still signs the browser out at once.
+const cookieName = (port: number) => `evie_token_${port}`
 const COOKIE_LASTS = 400 * 24 * 60 * 60
 // How many of each device's commands the server remembers the replies to,
 // to answer the same command sent again after the line dropped. There is no
@@ -207,7 +210,7 @@ export function startServer(options: ServerOptions): EvieServer {
   // `Authorization` header or the browser's cookie, or the answer that
   // refuses it.
   function admit(request: Request, port: number): Admitted | Response {
-    return refusedPage(request, port) ?? deviceFor(bearerIn(request) ?? cookieIn(request))
+    return refusedPage(request, port) ?? deviceFor(bearerIn(request) ?? cookieIn(request, port))
   }
 
   // This computer asks for a link that signs a browser in, as `evie web`
@@ -284,12 +287,12 @@ export function startServer(options: ServerOptions): EvieServer {
     if (refused) return refused
     const body = (await request.json().catch(() => undefined)) as { token?: unknown; code?: unknown } | undefined
     const admitted =
-      typeof body?.code === "string" ? signedInBrowser(body.code, cookieIn(request)) : deviceFor(typeof body?.token === "string" ? body.token : undefined)
+      typeof body?.code === "string" ? signedInBrowser(body.code, cookieIn(request, port)) : deviceFor(typeof body?.token === "string" ? body.token : undefined)
     if (admitted instanceof Response) return admitted
     const secure = new URL(request.url).protocol === "https:" ? "; Secure" : ""
     return new Response(null, {
       status: 204,
-      headers: { "Set-Cookie": `${COOKIE}=${admitted.token}; Max-Age=${COOKIE_LASTS}; HttpOnly; SameSite=Strict; Path=/${secure}` },
+      headers: { "Set-Cookie": `${cookieName(port)}=${admitted.token}; Max-Age=${COOKIE_LASTS}; HttpOnly; SameSite=Strict; Path=/${secure}` },
     })
   }
 
@@ -422,8 +425,9 @@ function localDay() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
 }
 
-// The token in the browser's cookie, if the request carries one.
-const cookieIn = (request: Request) => new Bun.CookieMap(request.headers.get("cookie") ?? "").get(COOKIE) ?? undefined
+// The token in the browser's cookie for the server on this port, if the
+// request carries one.
+const cookieIn = (request: Request, port: number) => new Bun.CookieMap(request.headers.get("cookie") ?? "").get(cookieName(port)) ?? undefined
 
 // Where the web app is served: its page, at its own address and at the
 // address a sign-in link opens, and each file the page loads. A built

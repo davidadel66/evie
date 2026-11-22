@@ -265,7 +265,9 @@ test("a browser trades its token for a cookie its scripts cannot read, and the W
 
   expect(answer.status).toBe(204)
   const [cookie, ...flags] = answer.headers.get("set-cookie")!.split("; ")
-  expect(cookie).toBe(`evie_token=${token}`)
+  // Named for the server's port: a browser sends it to every server on the
+  // same host, whatever its port.
+  expect(cookie).toBe(`evie_token_${new URL(server.url).port}=${token}`)
   // Over plain http there is no Secure flag; the browser would not keep the
   // cookie. It lasts 400 days, the longest a browser keeps one.
   expect(flags.sort()).toEqual(["HttpOnly", "Max-Age=34560000", "Path=/", "SameSite=Strict"])
@@ -281,7 +283,7 @@ test("a login with a token that is not one, or from another page, sets no cookie
 
   expect([wrong.status, elsewhere.status]).toEqual([401, 403])
   expect([wrong.headers.get("set-cookie"), elsewhere.headers.get("set-cookie")]).toEqual([null, null])
-  expect(await opens(server.url, { Origin: page, Cookie: "evie_token=not-a-token" })).toBe(false)
+  expect(await opens(server.url, { Origin: page, Cookie: `evie_token_${new URL(server.url).port}=not-a-token` })).toBe(false)
 })
 
 // ---- The web app ----------------------------------------------------------------------------
@@ -490,4 +492,20 @@ test("a browser signed in already whose token cannot be checked just now is told
   expect(names(served.tokens)).toEqual([`browser ${localDay()}`, "test device", OWN_NAME])
   // The code is kept, to be tried again.
   expect((await loginWith(server.url, page, cookie, code)).status).toBe(204)
+})
+
+test("two servers on one computer each set a cookie of their own, so that a browser signed in to both stays signed in to each", async () => {
+  const everyday = await start()
+  const development = await start()
+  const pageOf = (served: Served) => `http://127.0.0.1:${new URL(served.server.url).port}`
+  const cookieOf = async (served: Served) => cookieFrom(await login(served.server.url, pageOf(served), { token: served.token }))
+
+  const first = await cookieOf(everyday)
+  const second = await cookieOf(development)
+
+  // A browser keeps cookies apart by host, not by port, so it sends both to each.
+  const both = `${first}; ${second}`
+  expect(await opens(everyday.server.url, { Origin: pageOf(everyday), Cookie: both })).toBe(true)
+  expect(await opens(development.server.url, { Origin: pageOf(development), Cookie: both })).toBe(true)
+  expect(await opens(everyday.server.url, { Origin: pageOf(everyday), Cookie: second })).toBe(false)
 })
