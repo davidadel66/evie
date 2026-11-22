@@ -8,12 +8,12 @@ import { Input } from "./components/ui/input.tsx"
 import { Switch } from "./components/ui/switch.tsx"
 import type { Connection } from "./connection.ts"
 import { FolderPath } from "./FolderPath.tsx"
-import { ArrowUUpLeft, Bell, CaretDown, CaretRight, FolderSimple, GearSix, Key, MagnifyingGlass, Palette, PuzzlePiece, Scroll, X } from "./icons.tsx"
+import { ArrowUUpLeft, Bell, CaretDown, CaretRight, FolderSimple, Key, MagnifyingGlass, Palette, PuzzlePiece, Scroll, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { keyState, onThisComputer, openServerSettings, pluginState, projectState, type ServerSettings, type Standing } from "./server-settings.ts"
 import { Spinner } from "./Spinner.tsx"
 import { keepNotices, NOTICE_DEFAULTS, noticeChoice, rememberedNotices, type NoticeMode, type NoticeSettings } from "./notices.ts"
-import { closeSettings, openSettings, showSettingsPage, useAddress } from "./selection.ts"
+import { closeSettings, showSettingsPage, useAddress } from "./selection.ts"
 import { PAGE_NAMES, searchSettings, SETTINGS_GROUPS, settingItems, type SettingItem, type SettingsPage as Page } from "./settings-page.ts"
 import { onMac } from "./shortcuts.ts"
 import { unlockSound } from "./sound.ts"
@@ -34,18 +34,11 @@ import { Words } from "./Words.tsx"
 // Keys, plugins and trusted projects are changed only on the computer evie
 // runs on, and shown elsewhere as they stand; a key is never shown back.
 //
-// The settings are followed for as long as the frame is there, so that
-// instructions being written are kept when the page is closed, for the
-// next time it is opened, and a restart is followed to its end.
-
-// The gear that opens the settings, as T3 Code's settings button.
-export function SettingsButton() {
-  return (
-    <Button variant="icon" aria-label="Settings" title="Settings" onClick={() => openSettings()}>
-      <GearSix />
-    </Button>
-  )
-}
+// The page loads this file later, once it is idle or the settings are first
+// opened (see screens.ts); the gear that opens them is in Frame.tsx. From
+// then on, the settings are followed for as long as the frame is there, so
+// that instructions being written are kept when the page is closed, for
+// the next time it is opened, and a restart is followed to its end.
 
 export function SettingsPage({ connection }: { connection: Connection }) {
   const [settings, setSettings] = useState<ServerSettings>()
