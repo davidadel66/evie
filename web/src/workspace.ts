@@ -1,5 +1,5 @@
 import type { SessionSummary } from "../../src/core/types.ts"
-import { groupSessions } from "./session-list.ts"
+import { ageWords, groupSessions } from "./session-list.ts"
 
 // The workspace view's rules, apart from its screen. A workspace is a
 // project's home: a strip of every workspace, the workspace itself with
@@ -21,6 +21,38 @@ export type WorkspacePlace = { workspace: string; tab: WorkspaceTab; chat?: stri
 // ids are UUIDs.
 export const NEW_CHAT = "new"
 
+// Whether the side chat is shown. The owner hides it with its ×, or with
+// the toggle in the workspace's header, which shows it again, and New
+// session shows it too. This browser remembers which; one that keeps
+// nothing, as in a private window, shows it.
+const CHAT_SHOWN = "evie.side-chat"
+let shown: boolean | undefined
+const shownListeners = new Set<() => void>()
+export function chatShown(): boolean {
+  if (shown === undefined) {
+    try {
+      shown = localStorage.getItem(CHAT_SHOWN) !== "hidden"
+    } catch {
+      shown = true
+    }
+  }
+  return shown
+}
+export function setChatShown(next: boolean) {
+  const was = chatShown()
+  shown = next
+  try {
+    localStorage.setItem(CHAT_SHOWN, next ? "shown" : "hidden")
+  } catch {
+    // Not remembered: the next visit shows it.
+  }
+  if (was !== next) for (const listener of [...shownListeners]) listener()
+}
+export function onChatShown(listener: () => void): () => void {
+  shownListeners.add(listener)
+  return () => void shownListeners.delete(listener)
+}
+
 // The workspace an address's part after # is in, or undefined for none.
 // It opens on Sessions, until it has dashboards to open on.
 export function workspaceIn(hash: string): WorkspacePlace | undefined {
@@ -32,6 +64,16 @@ export function workspaceIn(hash: string): WorkspacePlace | undefined {
   const chat = named.get("chat")
   const file = named.get("file")
   return { workspace, tab, ...(chat !== null && chat !== "" && { chat }), ...(tab === "storage" && file !== null && file !== "" && { file }) }
+}
+
+// What New session does in a workspace, from the address's part after #:
+// shows the side chat, and gives back the address of a new chat in it,
+// which may be where the address is already. Elsewhere, nothing.
+export function newChat(hash: string): string | undefined {
+  const place = workspaceIn(hash)
+  if (place === undefined) return undefined
+  setChatShown(true)
+  return addressOfWorkspace({ ...place, chat: NEW_CHAT })
 }
 
 // The part after # for a place in a workspace.
@@ -54,6 +96,18 @@ export function sessionsOf(sessions: readonly SessionSummary[], project: string)
 // owner picks another, or undefined when it has none.
 export function latestSession(sessions: readonly SessionSummary[], project: string): SessionSummary | undefined {
   return sessions.filter((each) => each.project === project).sort((a, b) => b.lastActive - a.lastActive)[0]
+}
+
+// What a session's row in the Sessions tab says on its right, and in which
+// colour: Needs you in the colour of what waits for the owner, Working in
+// quiet words, Done in its own green once the session has settled, and
+// otherwise how long ago it was active.
+export type SessionStatus = { words: string; tone: "needs" | "done" | "muted" }
+export function sessionStatus(session: SessionSummary, now: number): SessionStatus {
+  if (session.state === "needs_you") return { words: "Needs you", tone: "needs" }
+  if (session.state === "working") return { words: "Working", tone: "muted" }
+  if (session.state === "settled") return { words: "Done", tone: "done" }
+  return { words: ageWords(session.lastActive, now), tone: "muted" }
 }
 
 // Whether a session in the project is waiting for an answer from the owner.
