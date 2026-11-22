@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { ATTACHMENT_LIMIT } from "../src/core/types.ts"
-import { attachable, commandIn, contextMeter, earlierMessages, fileSize, mentionAt, menuKey, putMention, rankCommands, rankFiles, recallStep, slashAt } from "../web/src/composer.ts"
+import { attachable, commandIn, contextMeter, earlierMessages, mentionAt, menuKey, putMention, rankCommands, rankFiles, recallStep, slashAt } from "../web/src/composer.ts"
 
 // The message box's rules, apart from its screen: the menu a slash opens,
 // and how it is filtered and ranked as the owner types.
@@ -144,12 +144,4 @@ test("a file larger than the limit is not attached, and the box says which and w
   expect(attachable([small, large])).toEqual({ taken: [small], problem: "video.mov is larger than the 10 MB a file attached can be." })
   expect(attachable([large, huge]).problem).toBe("video.mov and disk.img are larger than the 10 MB a file attached can be.")
   expect(attachable([{ name: "exact.bin", size: ATTACHMENT_LIMIT }]).taken).toHaveLength(1)
-})
-
-test("a file's size is said in short", () => {
-  expect(fileSize(1)).toBe("1 byte")
-  expect(fileSize(900)).toBe("900 bytes")
-  expect(fileSize(120 * 1024)).toBe("120 KB")
-  expect(fileSize(2.1 * 1024 * 1024)).toBe("2.1 MB")
-  expect(fileSize(10 * 1024 * 1024)).toBe("10 MB")
 })

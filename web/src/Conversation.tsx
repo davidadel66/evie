@@ -7,13 +7,13 @@ import type { Connection } from "./connection.ts"
 import { holdConversation, openDraft, type Conversation as Opened, type Draft as OpenedDraft } from "./conversation.ts"
 import type { ShownAttachment } from "./attachments.ts"
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog.tsx"
-import { fileSize } from "./composer.ts"
 import { CaretRight, File as FileIcon } from "./icons.tsx"
 import { renderMarkdown } from "./markdown.ts"
 import { addressOf } from "./address.ts"
 import type { Sessions } from "./sessions.ts"
 import { Spinner } from "./Spinner.tsx"
 import { transcriptOf, type Call, type Item } from "./transcript.ts"
+import { sizeWords } from "./workspace.ts"
 
 // The conversation of the session selected, in the middle column: its
 // latest page, with earlier pages read as the owner scrolls up to them,
@@ -314,7 +314,7 @@ function Attachments({ attachments, spaced }: { attachments: ShownAttachment[]; 
             <li key={each.path} title={each.path} className="flex min-h-control max-w-full items-center gap-2 text-caption text-text-muted">
               <FileIcon className="size-icon-sm shrink-0" />
               <span className="min-w-0 truncate text-text">{each.name}</span>
-              <span className="shrink-0">{fileSize(each.size)}</span>
+              <span className="shrink-0">{sizeWords(each.size)}</span>
             </li>
           ))}
         </ul>

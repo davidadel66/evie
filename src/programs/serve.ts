@@ -85,6 +85,7 @@ export async function serve(env: Settings, args: string[] = []) {
       port: serverSettings.port,
       origins: serverSettings.origins,
       ...("app" in built && { app: built.app }),
+      attachments: evie.attachments,
     })
   } catch (cause) {
     tokens.close()

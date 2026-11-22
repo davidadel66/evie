@@ -3,13 +3,14 @@ import type { Shown } from "./Asking.tsx"
 import { DockedQuestion } from "./Asking.tsx"
 import { Button } from "./components/ui/button.tsx"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "./components/ui/dropdown-menu.tsx"
-import { attachable, contextMeter, earlierMessages, fileSize, mentionAt, menuKey, putMention, rankCommands, rankFiles, recallStep, slashAt, type MenuItem, type Recalled } from "./composer.ts"
+import { attachable, contextMeter, earlierMessages, mentionAt, menuKey, putMention, rankCommands, rankFiles, recallStep, slashAt, type MenuItem, type Recalled } from "./composer.ts"
 import type { Conversation, ConversationState } from "./conversation.ts"
 import { ArrowUpBold, Check, File as FileIcon, Paperclip, StopFill, X } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { makersOf, searchModels, type Model } from "./models.ts"
 import { sendWithFiles } from "./questions.ts"
 import { Spinner } from "./Spinner.tsx"
+import { sizeWords } from "./workspace.ts"
 
 // The message box at the bottom of the conversation, to the board's
 // Composer, working as T3 Code's does: Enter sends and Shift and Enter
@@ -395,23 +396,23 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
               />
             </label>
             <div className={cn("flex min-w-0 items-center gap-2", !collapsedNow && "justify-end")}>
+              <input
+                ref={chooser}
+                type="file"
+                multiple
+                hidden
+                onChange={(event) => {
+                  attach([...(event.currentTarget.files ?? [])])
+                  event.currentTarget.value = ""
+                  box.current?.focus()
+                }}
+              />
               {!collapsedNow && (
-                <>
-                  <input
-                    ref={chooser}
-                    type="file"
-                    multiple
-                    hidden
-                    onChange={(event) => {
-                      attach([...(event.currentTarget.files ?? [])])
-                      event.currentTarget.value = ""
-                      box.current?.focus()
-                    }}
-                  />
-                  <Button variant="icon" aria-label="Attach files" title="Attach files" onClick={() => chooser.current?.click()} className="mr-auto -ml-2">
-                    <Paperclip />
-                  </Button>
-                </>
+                // Pressed, the box keeps the focus, so that at phone width it
+                // stays open while the files are chosen.
+                <Button variant="icon" aria-label="Attach files" title="Attach files" onPointerDown={(event) => event.preventDefault()} onClick={() => chooser.current?.click()} className="mr-auto -ml-2">
+                  <Paperclip />
+                </Button>
               )}
               {!collapsedNow && (
                 <div className="flex min-w-0 items-center text-caption text-text-muted">
@@ -734,14 +735,14 @@ function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
 // its name and size, and a button that takes it off.
 function AttachedFiles({ attached, remove }: { attached: Attached[]; remove(key: number): void }) {
   return (
-    <ul aria-label="Files attached" className="-ml-2 flex flex-wrap gap-2 pb-1">
+    <ul aria-label="Files to send" className="-ml-2 flex flex-wrap gap-2 pb-1">
       {attached.map(({ key, file }) => (
         <li key={key} className="flex h-control max-w-full min-w-0 items-center gap-2 rounded-md bg-surface-raised pl-1">
           {file.type.startsWith("image/") ? <Thumbnail file={file} /> : <FileIcon className="mx-2 size-icon-sm shrink-0 text-text-muted" />}
           <span className="min-w-0 truncate text-caption text-text" title={file.name}>
             {file.name}
           </span>
-          <span className="shrink-0 text-caption text-text-muted">{fileSize(file.size)}</span>
+          <span className="shrink-0 text-caption text-text-muted">{sizeWords(file.size)}</span>
           <Button variant="icon" aria-label={`Remove ${file.name}`} onClick={() => remove(key)} className="[&>svg]:size-icon-sm">
             <X />
           </Button>

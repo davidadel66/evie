@@ -179,10 +179,3 @@ export function attachable<File extends { name: string; size: number }>(files: r
     problem: large.length === 0 ? undefined : `${list} ${large.length === 1 ? "is" : "are"} larger than the ${ATTACHMENT_LIMIT / 1024 / 1024} MB a file attached can be.`,
   }
 }
-
-// A file's size in short: 4 bytes, 120 KB, 2.1 MB.
-export function fileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} byte${bytes === 1 ? "" : "s"}`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1).replace(/\.0$/, "")} MB`
-}
