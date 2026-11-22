@@ -3,7 +3,8 @@
 // lists. "mod" is Cmd on a Mac and Ctrl elsewhere. Where a browser keeps
 // T3 Code's key for itself, the key it never takes comes first, and T3
 // Code's is kept after it, for where the browser passes it on, as in a
-// window of its own.
+// window of its own. Mod and a digit is left to the browser, which moves
+// between its tabs with it, as T3 Code leaves it outside its desktop app.
 // The shortcuts are not changed in the settings.
 
 export type Command =
@@ -11,9 +12,9 @@ export type Command =
   | "new session"
   | "previous session"
   | "next session"
-  | `session ${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
   | "session list"
   | "card"
+  | "diff"
   | "model"
   | "stop"
   | "rename"
@@ -27,9 +28,9 @@ export const SHORTCUTS: readonly Shortcut[] = [
   // A Mac's browsers move between tabs on mod+shift+[ and ].
   { command: "previous session", keys: ["mod+alt+[", "mod+shift+["], does: "The session above in the list" },
   { command: "next session", keys: ["mod+alt+]", "mod+shift+]"], does: "The session below in the list" },
-  ...([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((at) => ({ command: `session ${at}` as const, keys: [`mod+${at}`], does: `The list's session ${at}` })),
   { command: "session list", keys: ["mod+b"], does: "Show or hide the session list" },
   { command: "card", keys: ["mod+alt+b"], does: "Show or hide the project card" },
+  { command: "diff", keys: ["mod+d"], does: "Open or close the diff" },
   { command: "model", keys: ["mod+shift+m"], does: "Pick a model" },
   { command: "stop", keys: ["escape"], does: "Stop evie, in the message box" },
   { command: "rename", keys: ["f2"], does: "Rename the session" },
@@ -67,8 +68,8 @@ export function pressed(keys: Keys, mac: boolean): Command | undefined {
 // Which key it is, as T3 Code tells, adapted from its keybindingMatching.ts
 // (MIT licence, notice in LICENSES/t3code-MIT.txt): a letter is the one the layout types,
 // or where Option or another alphabet types something else, the one at its
-// place; a digit or a bracket is the one at its place, since Shift, Option
-// or the layout can type another character there; any other key by its name.
+// place; a bracket is the one at its place, since Shift, Option or the
+// layout can type another character there; any other key by its name.
 function keyOf({ key, code }: Keys): string {
   const typed = key.toLowerCase()
   if (/^[a-z]$/.test(typed)) return typed
@@ -77,7 +78,6 @@ function keyOf({ key, code }: Keys): string {
   return PLACES[code] ?? typed
 }
 const PLACES: Record<string, string> = {
-  ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => [`Digit${digit}`, `${digit}`])),
   BracketLeft: "[",
   BracketRight: "]",
 }

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { SessionSummary } from "../src/core/types.ts"
-import { rankGroups, recentSessions, type Searched } from "../web/src/palette.ts"
+import { paletteActions, rankGroups, recentSessions, type Searched } from "../web/src/palette.ts"
 
 // The command palette's rules, apart from its screen, as T3 Code's: what it
 // opens on, and how what is typed ranks commands, sessions and projects.
@@ -67,4 +67,31 @@ test("the recent sessions are the latest twelve active, newest first, without th
   const listed = Array.from({ length: 15 }, (_, at) => line(`s${at}`, at))
   expect(recentSessions(listed, "s14").map((each) => each.session)).toEqual(["s13", "s12", "s11", "s10", "s9", "s8", "s7", "s6", "s5", "s4", "s3", "s2"])
   expect(recentSessions(listed.slice(0, 3), undefined).map((each) => each.session)).toEqual(["s2", "s1", "s0"])
+})
+
+const idle = { workspace: false, looking: "session" as const, state: "active" as const, turnRunning: false, stopping: false, compacting: false }
+
+test("in the session view, with a session's own conversation open, every action that applies is offered, in T3 Code's order", () => {
+  expect(paletteActions(idle)).toEqual(["new", "new in", "previous", "next", "settings", "theme", "list", "card", "diff", "settle", "move", "rename", "compact", "model"])
+  expect(paletteActions({ ...idle, state: "settled" })).toContain("settle")
+})
+
+test("Stop is offered while a turn runs, until it is stopping; a session at work is not settled or moved; Compact now waits while it compacts", () => {
+  expect(paletteActions({ ...idle, state: "working", turnRunning: true })).toEqual(["new", "new in", "previous", "next", "settings", "theme", "list", "card", "diff", "rename", "compact", "stop", "model"])
+  expect(paletteActions({ ...idle, state: "working", turnRunning: true, stopping: true })).not.toContain("stop")
+  expect(paletteActions({ ...idle, compacting: true })).not.toContain("compact")
+})
+
+test("with a subagent's conversation open, what acts on the session's own conversation is not offered", () => {
+  expect(paletteActions({ ...idle, looking: "subagent" })).toEqual(["new", "new in", "previous", "next", "settings", "theme", "list", "card", "diff", "settle", "move"])
+})
+
+test("a draft offers Pick a model, and with nothing open, only what needs no session", () => {
+  expect(paletteActions({ ...idle, looking: "draft" })).toEqual(["new", "new in", "previous", "next", "settings", "theme", "list", "card", "diff", "model"])
+  expect(paletteActions({ ...idle, looking: "none" })).toEqual(["new", "new in", "previous", "next", "settings", "theme", "list", "card", "diff"])
+})
+
+test("in a workspace, which has no list, card or diff, the actions are those of the side chat's session", () => {
+  expect(paletteActions({ ...idle, workspace: true })).toEqual(["new", "new in", "settings", "theme", "settle", "move", "rename", "compact", "model"])
+  expect(paletteActions({ ...idle, workspace: true, looking: "draft" })).toEqual(["new", "new in", "settings", "theme", "model"])
 })

@@ -50,13 +50,17 @@ export function nameFieldKey(key: string, composing: boolean): "save" | "cancel"
   return key === "Enter" ? "save" : key === "Escape" ? "cancel" : undefined
 }
 
-// The session F2 renames: the row that has the keyboard's focus, or else
-// the selected session. `focusedRow` is null for a row with no session to
-// rename, a draft's, which F2 leaves alone. Not while the owner is typing
-// in a field, where F2 is the field's.
-export function renamedByF2(focus: { focusedRow?: string | null; typing: boolean }, selected: string | undefined): string | undefined {
+// What F2 renames: while the list is shown, the row that has the
+// keyboard's focus, or else the selected session's row; with the list
+// hidden, as when it is a sheet at phone width, the selected session in
+// the header above its conversation, which is in sight. `focusedRow` is
+// null for a row with no session to rename, a draft's, which F2 leaves
+// alone. Not while the owner is typing in a field, where F2 is the field's.
+export function renamedByF2(focus: { focusedRow?: string | null; typing: boolean; listShown: boolean }, selected: string | undefined): { row: string } | { header: true } | undefined {
   if (focus.typing || focus.focusedRow === null) return undefined
-  return focus.focusedRow ?? selected
+  if (!focus.listShown) return selected === undefined ? undefined : { header: true }
+  const row = focus.focusedRow ?? selected
+  return row === undefined ? undefined : { row }
 }
 
 // The selected session, when it is one of those deleted: it may be shown

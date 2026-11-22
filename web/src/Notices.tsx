@@ -1,14 +1,14 @@
-import { useEffect, useState, useSyncExternalStore } from "react"
+import { useEffect, useState } from "react"
 import type { SessionSummary } from "../../src/core/types.ts"
-import { selectedIn } from "./address.ts"
+import { lookedAt } from "./address.ts"
 import { Button } from "./components/ui/button.tsx"
 import type { Connection } from "./connection.ts"
 import { Check, X } from "./icons.tsx"
 import { latestTurnEnd, rememberedNotices, shownAs, watchSessions, type Notice, type TurnEnd } from "./notices.ts"
-import { select } from "./selection.ts"
+import { select, useAddress } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
+import { chime, unlockSound } from "./sound.ts"
 import type { Sessions } from "./sessions.ts"
-import { NEW_CHAT, workspaceIn } from "./workspace.ts"
 
 // Notifications, as T3 Code's: when a session comes to need the owner, or
 // its turn finishes or fails, the owner is told, with the session's name.
@@ -34,7 +34,7 @@ const READ = 20
 
 export function Notices({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const [shown, setShown] = useState<Shown[]>([])
-  const looking = lookedAt(useSyncExternalStore(onAddressChange, () => location.hash))
+  const looking = lookingAt(useAddress())
 
   useEffect(() => {
     let next = 0
@@ -47,7 +47,7 @@ export function Notices({ connection, sessions }: { connection: Connection; sess
       const settings = rememberedNotices()
       const where = shownAs({
         session: summary.session,
-        lookingAt: lookedAt(location.hash),
+        lookingAt: lookingAt(location.hash),
         focused: document.visibilityState === "visible" && document.hasFocus(),
         settings,
         allowed: typeof Notification === "function" && Notification.permission === "granted",
@@ -61,7 +61,8 @@ export function Notices({ connection, sessions }: { connection: Connection; sess
       }
       if (where.system) {
         try {
-          const shownNow = new Notification(WORDS[notice], { body: name, tag: summary.session })
+          // Silent, as T3 Code's: evie plays its own sound, in the modes that have one.
+          const shownNow = new Notification(WORDS[notice], { body: name, tag: summary.session, silent: true })
           system.add(shownNow)
           shownNow.addEventListener("click", () => {
             shownNow.close()
@@ -112,13 +113,14 @@ export function Notices({ connection, sessions }: { connection: Connection; sess
     }
     addEventListener("focus", seen)
     // A sound can be played only once the owner has used the page.
-    addEventListener("pointerdown", unlockSound)
-    addEventListener("keydown", unlockSound)
+    const unlock = () => unlockSound(rememberedNotices().mode)
+    addEventListener("pointerdown", unlock)
+    addEventListener("keydown", unlock)
     return () => {
       unsubscribe()
       removeEventListener("focus", seen)
-      removeEventListener("pointerdown", unlockSound)
-      removeEventListener("keydown", unlockSound)
+      removeEventListener("pointerdown", unlock)
+      removeEventListener("keydown", unlock)
       seen()
     }
   }, [connection, sessions])
@@ -152,16 +154,11 @@ export function Notices({ connection, sessions }: { connection: Connection; sess
 }
 
 // The session the owner is looking at, as the address has it: the one
-// open in the session view, or the one in a workspace's side chat.
-function lookedAt(hash: string): string | undefined {
-  const selected = selectedIn(hash)
-  if (selected !== undefined) return "session" in selected ? selected.session : undefined
-  const chat = workspaceIn(hash)?.chat
-  return chat === NEW_CHAT ? undefined : chat
-}
-function onAddressChange(listener: () => void) {
-  addEventListener("hashchange", listener)
-  return () => removeEventListener("hashchange", listener)
+// open in the session view, or one of its subagents', or the one in a
+// workspace's side chat.
+function lookingAt(hash: string): string | undefined {
+  const look = lookedAt(hash)
+  return look !== undefined && "session" in look ? look.session : undefined
 }
 
 // What each notice says, as its title.
@@ -187,36 +184,4 @@ function State({ notice }: { notice: Notice }) {
     )
   }
   return <span className="text-caption text-status-failed">Failed</span>
-}
-
-// The sound, made in the page, so that there is no file to fetch: two soft
-// notes, rising when a session needs the owner and falling when a turn has
-// ended. A browser plays sound only once the page has been used, so the
-// player is made then, when the owner wants a sound.
-let audio: AudioContext | undefined
-function unlockSound() {
-  const { mode } = rememberedNotices()
-  if (mode !== "sound" && mode !== "both") return
-  try {
-    audio ??= new AudioContext()
-    void audio.resume().catch(() => {})
-  } catch {
-    // No sound in this browser.
-  }
-}
-function chime(notice: Notice) {
-  if (audio === undefined || audio.state !== "running") return
-  const notes = notice === "needs you" ? [660, 880] : [880, 660]
-  notes.forEach((frequency, at) => {
-    const start = audio!.currentTime + at * 0.14
-    const tone = audio!.createOscillator()
-    const loudness = audio!.createGain()
-    tone.frequency.value = frequency
-    loudness.gain.setValueAtTime(0.0001, start)
-    loudness.gain.exponentialRampToValueAtTime(0.08, start + 0.02)
-    loudness.gain.exponentialRampToValueAtTime(0.0001, start + 0.3)
-    tone.connect(loudness).connect(audio!.destination)
-    tone.start(start)
-    tone.stop(start + 0.32)
-  })
 }

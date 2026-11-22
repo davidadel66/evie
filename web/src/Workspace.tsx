@@ -5,14 +5,17 @@ import { buttonVariants } from "./components/ui/button.tsx"
 import type { Connection, ConnectionState } from "./connection.ts"
 import { Conversation, Draft, Placeholder } from "./Conversation.tsx"
 import { startedHere } from "./conversation.ts"
-import { ConnectionLine } from "./Frame.tsx"
+import { ConnectionLine } from "./ConnectionLine.tsx"
 import { IconPicker } from "./IconPicker.tsx"
 import { ArrowSquareOut, ChatsCircle, Plus } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { NewWorkspace } from "./NewWorkspace.tsx"
+import { ask, windowOver } from "./page-requests.ts"
 import { ProjectTile } from "./ProjectIcon.tsx"
+import { HeaderName } from "./SessionRow.tsx"
 import { ageWords, titleOf } from "./session-list.ts"
 import type { SessionList, Sessions } from "./sessions.ts"
+import { onMac, pressed } from "./shortcuts.ts"
 import { Spinner } from "./Spinner.tsx"
 import { Later, StorageView } from "./StorageView.tsx"
 import { addressOfWorkspace, chatAddress, latestSession, needsYou, NEW_CHAT, sessionsOf, workspaceIn, type WorkspacePlace, type WorkspaceTab } from "./workspace.ts"
@@ -116,23 +119,22 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
 // The workspace's header, in one row: its tile and name, which open the
 // picker of its icon and colour; its dashboards as tabs, none yet; and
 // Storage, Sessions and Memory pinned to the right, Memory not yet there.
-// Where the row is short, the name gives way, cut with an ellipsis, so that
-// the pinned tabs always show whole. At phone width the name has a row of
-// its own, and the tabs a row below it, which scrolls sideways, as the
-// board's tab rows do.
+// Where the row is short, the name gives way, cut with an ellipsis, down
+// to a width it always keeps, and then the tabs scroll sideways, as the
+// board's tab rows do at phone width.
 function Header({ project, place, connection, sessions }: { project: ListedProject; place: WorkspacePlace; connection: Connection; sessions: Sessions }) {
   return (
-    <header className="flex shrink-0 flex-col border-b border-line px-4 wide:h-header-height wide:flex-row wide:items-center wide:gap-6 wide:px-7">
-      <h1 className="flex h-header-height min-w-0 items-center text-title text-text wide:h-auto wide:flex-1">
+    <header className="flex h-header-height shrink-0 items-center gap-4 border-b border-line px-4 wide:gap-6 wide:px-7">
+      <h1 className="flex flex-1 text-title text-text">
         <IconPicker connection={connection} sessions={sessions} project={project}>
-          <button type="button" title="Pick its icon and colour" className="-ml-2 flex h-control min-w-0 items-center gap-2 rounded-md px-2">
+          <button type="button" title="Pick its icon and colour" className="-ml-2 flex h-control items-center gap-2 rounded-md px-2">
             <ProjectTile project={project.id} size="header" />
-            <span className="min-w-0 truncate">{project.name}</span>
+            <span className="min-w-workspace-name truncate">{project.name}</span>
           </button>
         </IconPicker>
       </h1>
       {/* A workspace's dashboards will be tabs here, before the pinned ones. */}
-      <nav aria-label="Workspace tabs" className="flex h-row-height shrink-0 items-stretch gap-6 overflow-x-auto wide:h-full wide:overflow-x-visible">
+      <nav aria-label="Workspace tabs" className="flex h-full min-w-0 items-stretch gap-6 overflow-x-auto">
         <Tab name="Storage" tab="storage" place={place} />
         <Tab name="Sessions" tab="sessions" place={place} />
         <span aria-disabled="true" className="flex shrink-0 items-center gap-2 text-label text-text-muted">
@@ -247,27 +249,55 @@ function SideChat({ project, place, list, connection, sessions }: { project: Lis
   }
   return (
     <>
-      <ChatHeader title={session === undefined ? "New session" : titleOf(session)} add={at(NEW_CHAT)} full={addressOf({ session: chat })} />
+      <ChatHeader
+        key={chat}
+        title={session === undefined ? "New session" : titleOf(session)}
+        add={at(NEW_CHAT)}
+        full={addressOf({ session: chat })}
+        {...(session !== undefined && { rename: (name: string) => sessions.rename(session.session, name) })}
+      />
       <Conversation connection={connection} session={chat} />
     </>
   )
 }
 
-function ChatHeader({ title, add, full }: { title: string; add?: string; full?: string }) {
+// The side chat's header: its session's name, which is renamed in place
+// after a double-click, F2 or the command palette's Rename, as the session
+// view's header's is, with why a name was not taken on a line under it;
+// and the ways to a new session there, and to the session view.
+function ChatHeader({ title, add, full, rename }: { title: string; add?: string; full?: string; rename?(name: string): Promise<string | undefined> }) {
+  const [note, setNote] = useState<string>()
+  // F2 renames the side chat's session, as it renames the session view's.
+  useEffect(() => {
+    if (rename === undefined) return
+    const mac = onMac()
+    const onKey = (event: KeyboardEvent) => {
+      const focused = document.activeElement
+      const typing = focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement || (focused instanceof HTMLElement && focused.isContentEditable)
+      if (pressed(event, mac) !== "rename" || event.defaultPrevented || typing || windowOver() !== undefined) return
+      event.preventDefault()
+      ask("rename")
+    }
+    addEventListener("keydown", onKey)
+    return () => removeEventListener("keydown", onKey)
+  }, [rename !== undefined])
   return (
-    <header className="flex h-header-height shrink-0 items-center gap-1 border-b border-line pr-2 pl-7">
-      <h2 className="min-w-0 flex-1 truncate text-label text-text">{title}</h2>
-      {add !== undefined && (
-        <a href={add} aria-label="New session here" title="New session here" className={buttonVariants({ variant: "icon" })}>
-          <Plus />
-        </a>
-      )}
-      {full !== undefined && (
-        <a href={full} aria-label="Open in the session view" title="Open in the session view" className={buttonVariants({ variant: "icon" })}>
-          <ArrowSquareOut />
-        </a>
-      )}
-    </header>
+    <>
+      <header className="flex h-header-height shrink-0 items-center gap-1 border-b border-line pr-2 pl-7">
+        {rename === undefined ? <h2 className="min-w-0 flex-1 truncate text-label text-text">{title}</h2> : <HeaderName title={title} rename={rename} said={setNote} small />}
+        {add !== undefined && (
+          <a href={add} aria-label="New session here" title="New session here" className={buttonVariants({ variant: "icon" })}>
+            <Plus />
+          </a>
+        )}
+        {full !== undefined && (
+          <a href={full} aria-label="Open in the session view" title="Open in the session view" className={buttonVariants({ variant: "icon" })}>
+            <ArrowSquareOut />
+          </a>
+        )}
+      </header>
+      <div role="status">{note !== undefined && <p className="px-7 pt-3 text-caption text-text-muted">{note}</p>}</div>
+    </>
   )
 }
 

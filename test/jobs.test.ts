@@ -198,7 +198,7 @@ test("cancelling a turn leaves its background jobs running, and closing Evie sto
   await run.evie.close()
   expect(background.work[0]!.stopped).toBe(true)
   // Written to the log, so a session continued later does not go on waiting to hear from the job.
-  expect(notes(run)).toEqual(["Background job 1 (the server) was stopped because Evie was closed. Start it again if it is still needed."])
+  expect(notes(run)).toEqual(["Background job 1 (the server) was stopped because evie was closed. Start it again if it is still needed."])
 })
 
 // ---- Shell commands in the background ------------------------------------------------------------
@@ -329,7 +329,7 @@ test("output that cannot be read, as when its file has gone, is a failure the cl
 
 test("reading the output of a job the session does not have says so", async () => {
   const { run } = await start([], [])
-  await expect(run.evie.send({ type: "read_job_output", session: run.session, id: "3" })).rejects.toThrow("This session has had no job 3 since Evie last started.")
+  await expect(run.evie.send({ type: "read_job_output", session: run.session, id: "3" })).rejects.toThrow("This session has had no job 3 since evie last started.")
   await expect(run.evie.send({ type: "read_job_output", session: run.session, id: "1", after: -1 })).rejects.toThrow("`after` is where the last read ended")
 })
 
@@ -433,13 +433,13 @@ test("/background moves the command Evie is waiting on to the background, and is
     [shell(), jobs()],
   )
   const background = async () => (await run.evie.send({ type: "run_command", session: run.session, name: "background", args: "" })).text
-  expect(await background()).toBe("Nothing is running. This is for when Evie is waiting on a long command.")
+  expect(await background()).toBe("Nothing is running. This is for when evie is waiting on a long command.")
 
   const calling = until(run, (event) => event.type === "assistant_message")
   await run.evie.send({ type: "send_message", session: run.session, text: "run it" })
   await calling
   await Bun.sleep(100)
-  expect(await background()).toBe("Moved to the background. Evie carries on, and is told when it finishes.")
+  expect(await background()).toBe("Moved to the background. evie carries on, and is told when it finishes.")
 
   // The call returns at once, the model carries on, and it is told when the command ends.
   await turnEnds(run, 1)
@@ -448,7 +448,7 @@ test("/background moves the command Evie is waiting on to the background, and is
   expect(notes(run)[0]).toContain("started\nfinished")
 
   // Once nothing is waited on, there is nothing to move.
-  expect(await background()).toBe("Nothing is running. This is for when Evie is waiting on a long command.")
+  expect(await background()).toBe("Nothing is running. This is for when evie is waiting on a long command.")
 })
 
 // ---- A model that writes the note it is waiting for ---------------------------------------------------

@@ -46,7 +46,7 @@ test("a data folder written by a newer Evie is refused", async () => {
   newer.close()
 
   await expect(startEvie([scriptedProvider([]).plugin], { home })).rejects.toThrow(
-    "was written by a newer version of Evie",
+    "was written by a newer version of evie",
   )
 })
 

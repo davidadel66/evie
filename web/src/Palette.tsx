@@ -7,13 +7,16 @@ import { holdConversation, type Conversation, type ConversationState } from "./c
 import { CaretLeft, CaretRight, GearSix, MagnifyingGlass, Plus, SidebarLeft, SidebarRight, StopFill } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { toggleList, useListShown } from "./list-shown.ts"
-import { ask } from "./page-requests.ts"
-import { rankGroups, recentSessions, type Group, type Searched } from "./palette.ts"
+import { ask, newSession } from "./page-requests.ts"
+import { paletteActions, rankGroups, recentSessions, type Group, type PaletteAction, type Searched } from "./palette.ts"
 import { ProjectGlyph } from "./ProjectIcon.tsx"
-import { select, useSelected } from "./selection.ts"
+import { select, useAddress } from "./selection.ts"
 import { ageWords, titleOf } from "./session-list.ts"
 import type { Sessions } from "./sessions.ts"
 import { addressOfWorkspace, workspaceIn } from "./workspace.ts"
+import { lookedAt } from "./address.ts"
+import { toggleDiff, useDiffShown } from "./diff-shown.ts"
+import { FolderPath } from "./FolderPath.tsx"
 import { Swatch } from "./Settings.tsx"
 import { label, onMac, type Command } from "./shortcuts.ts"
 import { applyTheme, rememberedTheme, THEMES } from "./theme.ts"
@@ -35,6 +38,8 @@ type Row = Searched & {
   detail?: string
   shortcut?: Command
   run?: () => void
+  // A project's folder, shown cut at its start, so that its end shows.
+  folder?: string
   opens?: { name: string; groups: Group<Row>[] }
   takesFocus?: boolean
 }
@@ -57,7 +62,7 @@ export function Palette({ connection, sessions, open, close }: { connection: Con
           if (!row?.takesFocus && opener.current instanceof HTMLElement && opener.current.isConnected) opener.current.focus()
           row?.run?.()
         }}
-        className="top-header-height max-w-palette translate-y-0 gap-0 overflow-hidden p-0 max-list:inset-x-4"
+        className="top-header-height max-w-palette translate-y-0 gap-0 overflow-hidden p-0 max-wide:inset-x-4"
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         {open && (
@@ -77,18 +82,18 @@ export function Palette({ connection, sessions, open, close }: { connection: Con
 
 function Searching({ connection, sessions, run }: { connection: Connection; sessions: Sessions; run(row: Row): void }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
-  const selected = useSelected()
-  // In a workspace, its view has neither the session list nor the card,
-  // and a new session starts in its project.
-  const workspace = workspaceIn(location.hash)
+  const hash = useAddress()
   const listShown = useListShown()
   const cardShown = useCardShown()
-  // The session selected, as the list has it, and whether its own
-  // conversation is in the middle, with its message box, rather than a
-  // subagent's.
-  const session = selected !== undefined && "session" in selected ? list.sessions.find((each) => each.session === selected.session) : undefined
-  const ownConversation = session !== undefined && selected !== undefined && "session" in selected && selected.subagent === undefined
-  const conversation = useHeld(connection, ownConversation ? session.session : undefined)
+  const diffShown = useDiffShown()
+  // What the owner is looking at: in the session view, its session, one of
+  // its subagents' conversations or a draft; in a workspace, its side
+  // chat's session or a new one. A session is as the list has it.
+  const workspace = workspaceIn(hash) !== undefined
+  const look = lookedAt(hash)
+  const session = look !== undefined && "session" in look ? list.sessions.find((each) => each.session === look.session) : undefined
+  const own = session !== undefined && look !== undefined && "session" in look && !look.subagent
+  const conversation = useHeld(connection, own ? session.session : undefined)
 
   const [query, setQuery] = useState("")
   // The lists opened from rows, the latest last, each with the search it was opened from.
@@ -118,24 +123,21 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
     },
   ]
 
-  const actions: Row[] = [
-    {
-      id: "new",
-      title: "New session",
-      keywords: ["chat", "draft", "start"],
-      icon: <Plus />,
-      shortcut: "new session",
-      run: () => void (ask("new session") || select({ draft: workspace?.workspace ?? null })),
-    },
-    {
+  // Each action's row, of those that apply now.
+  const shownNow = (panel: { wide: boolean; column: boolean; sheet: boolean }) => (panel.wide ? panel.column : panel.sheet)
+  const ROWS: Record<PaletteAction, () => Row | undefined> = {
+    new: () => ({ id: "new", title: "New session", keywords: ["chat", "draft", "start"], icon: <Plus />, shortcut: "new session", run: newSession }),
+    "new in": () => ({
       id: "new in",
       title: "New session in a project…",
       keywords: ["chat", "draft", "start", "project"],
       icon: <Plus />,
       opens: { name: "New session in", groups: projectsTo((project) => select({ draft: project })) },
-    },
-    { id: "settings", title: "Open settings", keywords: ["preferences", "keys", "plugins", "instructions", "notifications"], icon: <GearSix />, takesFocus: true, run: () => ask("settings") },
-    {
+    }),
+    previous: () => ({ id: "previous", title: "Previous session", keywords: ["above", "up"], shortcut: "previous session", run: () => void ask("previous session") }),
+    next: () => ({ id: "next", title: "Next session", keywords: ["below", "down"], shortcut: "next session", run: () => void ask("next session") }),
+    settings: () => ({ id: "settings", title: "Open settings", keywords: ["preferences", "keys", "plugins", "instructions", "notifications"], icon: <GearSix />, takesFocus: true, run: () => void ask("settings") }),
+    theme: () => ({
       id: "theme",
       title: "Theme",
       keywords: ["appearance", "colours", "colors", ...THEMES.map((theme) => theme.name)],
@@ -155,49 +157,31 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
           },
         ],
       },
-    },
-    ...(workspace !== undefined
-      ? []
-      : [
-          {
-            id: "list",
-            title: (listShown.wide ? listShown.column : listShown.sheet) ? "Hide the session list" : "Show the session list",
-            keywords: ["sidebar", "sessions"],
-            icon: <SidebarLeft />,
-            shortcut: "session list" as const,
-            run: toggleList,
-          },
-          {
-            id: "card",
-            title: (cardShown.wide ? cardShown.column : cardShown.sheet) ? "Hide the project card" : "Show the project card",
-            keywords: ["panel", "project", "subagents", "jobs"],
-            icon: <SidebarRight />,
-            shortcut: "card" as const,
-            run: toggleCard,
-          },
-        ]),
-    ...(session !== undefined && (session.state === "active" || session.state === "settled")
-      ? [
-          {
-            id: "settle",
-            title: session.state === "settled" ? "Bring back this session" : "Settle this session",
-            keywords: ["archive", "settled"],
-            run: () => void sessions.settle(session.session, session.state !== "settled"),
-          },
-          { id: "move", title: "Move to…", keywords: ["project", "session"], opens: { name: "Move to", groups: projectsTo((project) => void sessions.move(session.session, project), session.project) } },
-        ]
-      : []),
-    ...(session !== undefined ? [{ id: "rename", title: "Rename this session", keywords: ["name", "title"], shortcut: "rename" as const, takesFocus: true, run: () => ask("rename") }] : []),
-    ...(conversation !== undefined && !conversation.state.running.includes("compact")
-      ? [{ id: "compact", title: "Compact now", keywords: ["context", "summary"], run: () => void conversation.conversation.run("compact", "") }]
-      : []),
-    ...(conversation?.state.turnRunning === true && !conversation.state.stopping
-      ? [{ id: "stop", title: "Stop", keywords: ["cancel", "interrupt"], icon: <StopFill />, shortcut: "stop" as const, run: () => conversation.conversation.stop() }]
-      : []),
-    ...(ownConversation || (selected !== undefined && "draft" in selected) || workspace !== undefined
-      ? [{ id: "model", title: "Pick a model", keywords: ["model"], shortcut: "model" as const, takesFocus: true, run: () => ask("pick model") }]
-      : []),
-  ]
+    }),
+    list: () => ({ id: "list", title: shownNow(listShown) ? "Hide the session list" : "Show the session list", keywords: ["sidebar", "sessions"], icon: <SidebarLeft />, shortcut: "session list", run: toggleList }),
+    card: () => ({ id: "card", title: shownNow(cardShown) ? "Hide the project card" : "Show the project card", keywords: ["panel", "project", "subagents", "jobs"], icon: <SidebarRight />, shortcut: "card", run: toggleCard }),
+    diff: () => ({ id: "diff", title: diffShown.open ? "Close the diff" : "Open the diff", keywords: ["changes", "diffs", "files"], shortcut: "diff", run: toggleDiff }),
+    settle: () =>
+      session && {
+        id: "settle",
+        title: session.state === "settled" ? "Bring back this session" : "Settle this session",
+        keywords: ["archive", "settled"],
+        run: () => void sessions.settle(session.session, session.state !== "settled"),
+      },
+    move: () => session && { id: "move", title: "Move to…", keywords: ["project", "session"], opens: { name: "Move to", groups: projectsTo((project) => void sessions.move(session.session, project), session.project) } },
+    rename: () => ({ id: "rename", title: "Rename this session", keywords: ["name", "title"], shortcut: "rename", takesFocus: true, run: () => void ask("rename") }),
+    compact: () => conversation && { id: "compact", title: "Compact now", keywords: ["context", "summary"], run: () => void conversation.conversation.run("compact", "") },
+    stop: () => conversation && { id: "stop", title: "Stop", keywords: ["cancel", "interrupt"], icon: <StopFill />, shortcut: "stop", run: () => conversation.conversation.stop() },
+    model: () => ({ id: "model", title: "Pick a model", keywords: ["model"], shortcut: "model", takesFocus: true, run: () => void ask("pick model") }),
+  }
+  const actions = paletteActions({
+    workspace,
+    looking: look === undefined ? "none" : "draft" in look ? "draft" : look.subagent ? "subagent" : "session",
+    state: session?.state,
+    turnRunning: conversation?.state.turnRunning === true,
+    stopping: conversation?.state.stopping === true,
+    compacting: conversation?.state.running.includes("compact") === true,
+  }).flatMap((action) => ROWS[action]() ?? [])
 
   const view = opened.at(-1)?.row.opens
   const groups = (() => {
@@ -217,7 +201,7 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
               id: `project:${project.id}`,
               title: project.name,
               keywords: [project.folder],
-              detail: project.folder,
+              folder: project.folder,
               icon: <ProjectGlyph project={project.id} />,
               run: () => (location.hash = addressOfWorkspace({ workspace: project.id, tab: "sessions" })),
             }),
@@ -319,8 +303,9 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
                   {row.icon ?? <span aria-hidden="true" className="size-icon-sm shrink-0" />}
                   <span className="min-w-0 truncate text-body text-text">{row.title}</span>
                   {row.detail !== undefined && row.detail !== "" && <span className="min-w-0 flex-1 truncate text-caption text-text-muted">{row.detail}</span>}
+                  {row.folder !== undefined && <FolderPath folder={row.folder} className="flex-1 text-text-muted" />}
                   <span className="ml-auto flex shrink-0 items-center gap-2 text-caption text-text-muted">
-                    {row.shortcut !== undefined && <kbd className="font-sans">{label(row.shortcut, mac)}</kbd>}
+                    {row.shortcut !== undefined && <kbd className="hidden font-sans pointer-fine:inline">{label(row.shortcut, mac)}</kbd>}
                     {row.opens !== undefined && <CaretRight className="size-icon-sm" />}
                   </span>
                 </div>
@@ -329,7 +314,7 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
           </div>
         ))}
       </div>
-      <p className="flex shrink-0 gap-4 border-t border-line px-4 py-2 text-caption text-text-muted max-list:hidden">
+      <p className="hidden shrink-0 gap-4 border-t border-line px-4 py-2 text-caption text-text-muted pointer-fine:flex">
         <span>↑↓ Move</span>
         <span>Enter {rows[highlight]?.opens !== undefined ? "Open" : "Run"}</span>
         {view !== undefined && <span>Backspace Back</span>}

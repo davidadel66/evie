@@ -144,6 +144,9 @@
      the tallest its icons grow before they scroll. */
   --spacing-icon-picker: 280px;
   --spacing-icon-grid: 220px;
+  /* The least a workspace's name keeps in its header, cut with an
+     ellipsis, before its tabs scroll sideways instead. */
+  --spacing-workspace-name: 96px;
   /* The widest the session list's project filter grows, beside the search. */
   --spacing-project-filter: 128px;
   /* The message box: the tallest its text grows before it scrolls; the
@@ -157,12 +160,11 @@
   --spacing-job-output: 240px;
   /* The file tree beside a diff. */
   --spacing-diff-tree: 240px;
-  /* Below this width, the message box is one row until tapped, and the
-     settings window fills the screen. */
-  --breakpoint-wide: 960px;
-  /* Below this width, the session list is a sheet over the page, as T3
-     Code's sidebar is below it. */
-  --breakpoint-list: 768px;
+  /* Phone width, as T3 Code's sidebar has it, is below this: the session
+     list is a sheet, the message box is one row until tapped, the settings
+     window and the diff fill the screen, and a workspace's columns stack.
+     wide.ts gives the same width to the page's code. */
+  --breakpoint-wide: 768px;
 }
 
 /* The colours, by the theme's names, so that a class takes its value from

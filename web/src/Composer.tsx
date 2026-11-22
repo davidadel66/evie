@@ -8,9 +8,10 @@ import type { Conversation, ConversationState } from "./conversation.ts"
 import { ArrowUpBold, Check, StopFill } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { makersOf, searchModels, type Model } from "./models.ts"
-import { whenAsked } from "./page-requests.ts"
+import { whenAsked, windowOver } from "./page-requests.ts"
 import { sendDoes } from "./questions.ts"
 import { label, onMac, pressed } from "./shortcuts.ts"
+import { useWide } from "./wide.ts"
 import { Spinner } from "./Spinner.tsx"
 
 // The message box at the bottom of the conversation, to the board's
@@ -108,12 +109,12 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   useEffect(() => {
     if (wide) box.current?.focus()
   }, [])
-  // mod+shift+M opens the model picker, as in T3 Code, and so does Pick a
-  // model in the command palette.
+  // mod+shift+M opens the model picker, as in T3 Code, but for a window
+  // open over the page, and so does Pick a model in the command palette.
   useEffect(() => {
     const mac = onMac()
     const onKey = (event: KeyboardEvent) => {
-      if (pressed(event, mac) !== "model") return
+      if (pressed(event, mac) !== "model" || windowOver() !== undefined) return
       event.preventDefault()
       setPicking(true)
     }
@@ -325,20 +326,6 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   )
 }
 
-// Whether the page is wide enough for its three columns, where there is
-// room for the whole box at all times.
-function useWide() {
-  const [wide, setWide] = useState(() => matchMedia(WIDE).matches)
-  useEffect(() => {
-    const query = matchMedia(WIDE)
-    const change = () => setWide(query.matches)
-    query.addEventListener("change", change)
-    return () => query.removeEventListener("change", change)
-  }, [])
-  return wide
-}
-const WIDE = "(min-width: 960px)"
-
 // Stop, as T3 Code's: a round button with a square in it, beside Send. Once
 // pressed, it says Stopping until the turn has ended.
 function StopButton({ stopping, stop }: { stopping: boolean; stop(): void }) {
@@ -389,7 +376,14 @@ function ContextMeter({ conversation, state, opened }: { conversation: Conversat
     )
   }
   if (state.context === undefined) return null
-  const meter = contextMeter(state.context)
+  return <MeterMenu conversation={conversation} meter={contextMeter(state.context)} opened={opened} />
+}
+
+// The meter and its menu. A menu taken off the page while open, as when
+// compacting starts, has closed, which the box is told, so that it does not
+// stay whole for it.
+function MeterMenu({ conversation, meter, opened }: { conversation: Conversation; meter: ReturnType<typeof contextMeter>; opened(open: boolean): void }) {
+  useEffect(() => () => opened(false), [opened])
   return (
     <DropdownMenu onOpenChange={opened}>
       <DropdownMenuTrigger asChild>
@@ -479,9 +473,10 @@ function CommandMenu({
 }
 
 // The model picker, just above the box, as T3 Code's: the makers in a
-// column on the left, the current model's first; a search over every
-// maker's models on the right; the model in use marked with a check and
-// "In use". As in a menu, the row Up and Down, or the pointer, moves to is
+// column on the left, the current model's first, or at phone width in a
+// row above the models that scrolls sideways, so that the models have the
+// whole width; a search over every maker's models; the model in use
+// marked with a check and "In use". As in a menu, the row Up and Down, or the pointer, moves to is
 // raised; Enter picks it, and Escape, or a click outside it other than on
 // the model's name, which closes it too, closes it, giving the focus back.
 function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
@@ -540,8 +535,11 @@ function ModelPicker({ model, close }: { model: ModelChoice; close(): void }) {
   }, [highlight])
 
   return (
-    <div ref={root} role="dialog" aria-label="Pick a model" className="absolute inset-x-0 bottom-full z-40 mb-2 flex h-composer-menu overflow-hidden rounded-md border border-line bg-surface shadow-float">
-      <nav aria-label="Makers" className="flex w-picker-makers shrink-0 flex-col overflow-y-auto border-r border-line p-2">
+    <div ref={root} role="dialog" aria-label="Pick a model" className="absolute inset-x-0 bottom-full z-40 mb-2 flex h-composer-menu flex-col overflow-hidden rounded-md border border-line bg-surface shadow-float wide:flex-row">
+      <nav
+        aria-label="Makers"
+        className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 wide:w-picker-makers wide:flex-col wide:gap-0 wide:overflow-x-hidden wide:overflow-y-auto wide:border-r wide:border-b-0"
+      >
         {makers.map((each) => (
           <button
             key={each.key}

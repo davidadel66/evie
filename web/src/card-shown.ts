@@ -1,4 +1,5 @@
 import { useEffect } from "react"
+import { windowOver } from "./page-requests.ts"
 import { panel, type PanelShown } from "./panel.ts"
 import { onMac, pressed } from "./shortcuts.ts"
 
@@ -21,12 +22,13 @@ export const useCardShown = card.use
 export const toggleCard = card.toggle
 export const closeSheet = card.closeSheet
 
-// mod+alt+B shows and hides the card, wherever the focus is.
+// mod+alt+B shows and hides the card, wherever the focus is, but for a
+// window open over the page, such as the settings, while which it waits.
 export function useCardShortcut() {
   useEffect(() => {
     const mac = onMac()
     const onKey = (event: KeyboardEvent) => {
-      if (pressed(event, mac) !== "card") return
+      if (pressed(event, mac) !== "card" || windowOver() !== undefined) return
       event.preventDefault()
       toggleCard()
     }

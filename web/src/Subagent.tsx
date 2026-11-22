@@ -6,6 +6,7 @@ import { holdConversation, type Conversation } from "./conversation.ts"
 import { Reading } from "./Conversation.tsx"
 import { CaretLeft } from "./icons.tsx"
 import { subagentsOf } from "./project-card.ts"
+import { ConnectionUnderHeader } from "./ConnectionLine.tsx"
 import { CardButton, StateWord } from "./ProjectCard.tsx"
 import { ListButton } from "./SessionList.tsx"
 import { openSubagent, type Subagent } from "./subagent.ts"
@@ -71,6 +72,7 @@ function Opened({
         {found && <StateWord status={found.status} />}
         <CardButton />
       </header>
+      <ConnectionUnderHeader />
       <a
         href={addressOf({ session: parentId })}
         className="flex min-h-control shrink-0 items-center gap-1 border-b border-line px-7 pb-2 text-caption text-text-muted hover:text-text"

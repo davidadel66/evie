@@ -30,6 +30,7 @@ export const NAMED_SIZES = [
   "palette",
   "palette-list",
   "notice",
+  "workspace-name",
   "sign-in-column",
   "conversation",
   "call-name",

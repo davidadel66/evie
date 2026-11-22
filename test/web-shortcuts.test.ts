@@ -46,11 +46,16 @@ test("the previous and next session are mod+alt+[ and ], since a Mac's browsers 
   expect(pc({ code: "BracketRight", key: "}", ctrlKey: true, shiftKey: true })).toBe("next session")
 })
 
-test("mod and a digit from 1 to 9 jump to that session, the digit known by its place, as a French keyboard types & there", () => {
-  expect(mac({ code: "Digit1", key: "1", metaKey: true })).toBe("session 1")
-  expect(pc({ code: "Digit9", key: "9", ctrlKey: true })).toBe("session 9")
-  expect(pc({ code: "Digit1", key: "&", ctrlKey: true })).toBe("session 1")
-  expect(mac({ code: "Digit0", key: "0", metaKey: true })).toBeUndefined()
+test("mod and a digit is the browser's, which moves between its tabs, as T3 Code leaves it outside its desktop app", () => {
+  expect(mac({ code: "Digit1", key: "1", metaKey: true })).toBeUndefined()
+  expect(pc({ code: "Digit9", key: "9", ctrlKey: true })).toBeUndefined()
+})
+
+test("mod+D opens and closes the diff, as T3 Code's, and with Shift or Alt it is another key", () => {
+  expect(mac({ code: "KeyD", key: "d", metaKey: true })).toBe("diff")
+  expect(pc({ code: "KeyD", key: "d", ctrlKey: true })).toBe("diff")
+  expect(mac({ code: "KeyD", key: "d", metaKey: true, shiftKey: true })).toBeUndefined()
+  expect(mac({ code: "KeyD", key: "∂", metaKey: true, altKey: true })).toBeUndefined()
 })
 
 test("Escape stops and F2 renames, with no modifier", () => {
@@ -73,7 +78,7 @@ test("a shortcut is shown by its first key, as a Mac writes it, ⌥⇧⌘ before
   expect(label("previous session", true)).toBe("⌥⌘[")
   expect(label("card", false)).toBe("Ctrl+Alt+B")
   expect(label("new session", false)).toBe("Ctrl+Shift+O")
-  expect(label("session 3", false)).toBe("Ctrl+3")
+  expect(label("diff", false)).toBe("Ctrl+D")
   expect(label("stop", true)).toBe("Esc")
   expect(label("rename", false)).toBe("F2")
 })

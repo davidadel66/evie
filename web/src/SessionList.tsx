@@ -23,7 +23,7 @@ import { DeleteDialog, DraftRow, SessionRow } from "./SessionRow.tsx"
 import type { Connection } from "./connection.ts"
 import { NewWorkspace } from "./NewWorkspace.tsx"
 import type { Sessions } from "./sessions.ts"
-import { whenAsked, windowOver } from "./page-requests.ts"
+import { ask, whenAsked, windowOver } from "./page-requests.ts"
 import { label as keyLabel, onMac, pressed } from "./shortcuts.ts"
 
 // The session list, in the left column: a new session, a search and a
@@ -71,19 +71,25 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
     if (next !== open) setGroups(next)
   }, [selectedSession, selectedState])
 
-  // F2 renames the row that has the focus, or else the selected session,
-  // as in T3 Code, when its row is in sight.
+  // F2 renames, as in T3 Code: while the list is shown, the row that has
+  // the focus, or else the selected session's, when its row is in sight;
+  // with the list hidden, or the row not in it, the selected session in
+  // the header above its conversation.
+  const listShown = useListShown()
+  const listInSight = useRef(false)
+  listInSight.current = listShown.wide ? listShown.column : listShown.sheet
   useEffect(() => {
     function renameOnF2(event: KeyboardEvent) {
-      if (pressed(event, onMac()) !== "rename" || event.defaultPrevented) return
+      if (pressed(event, onMac()) !== "rename" || event.defaultPrevented || windowOver() !== undefined) return
       const focused = document.activeElement
       const typing = focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement || (focused instanceof HTMLElement && focused.isContentEditable)
       // A row's link, which has no session when it is a draft's.
       const focusedRow = focused instanceof HTMLAnchorElement && focused.dataset.row !== undefined ? (focused.dataset.session ?? null) : undefined
-      const session = renamedByF2({ ...(focusedRow !== undefined && { focusedRow }), typing }, selectedSession)
-      if (session === undefined || document.querySelector(`a[data-session="${CSS.escape(session)}"]`) === null) return
+      const renamed = renamedByF2({ ...(focusedRow !== undefined && { focusedRow }), typing, listShown: listInSight.current }, selectedSession)
+      if (renamed === undefined) return
       event.preventDefault()
-      setEditing(session)
+      if ("row" in renamed && document.querySelector(`a[data-session="${CSS.escape(renamed.row)}"]`) !== null) setEditing(renamed.row)
+      else ask("rename")
     }
     addEventListener("keydown", renameOnF2)
     return () => removeEventListener("keydown", renameOnF2)
@@ -115,37 +121,37 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
 
   const groups = groupSessions(filterSessions(list.sessions, filter))
 
-  // The shortcuts that move through the list, as T3 Code's: a new session
-  // where New session makes one, the session above or below the selected
-  // one, and the first nine shown. The palette's New session asks for one too.
+  // The session above or below the selected one, by its shortcut or from
+  // the palette, as T3 Code moves through its threads; and a new session
+  // where New session makes one, which the page asks for.
   const order = inListOrder(groups, open)
   const startNew = () => select({ draft: lookingAt })
   const moves = useRef({ order, startNew })
   moves.current = { order, startNew }
   useEffect(() => {
     const mac = onMac()
-    function move(event: KeyboardEvent) {
-      const command = pressed(event, mac)
-      if (command === undefined || event.defaultPrevented || windowOver() !== undefined) return
-      const { order, startNew } = moves.current
-      // As the address has it now, which a key pressed straight after
-      // another can be ahead of the list's drawing.
+    // As the address has it now, which a key pressed straight after
+    // another can be ahead of the list's drawing.
+    function step(direction: "previous" | "next") {
       const now = selectedIn(location.hash)
-      if (command === "new session") startNew()
-      else if (command === "previous session" || command === "next session") {
-        const to = besides(order, now !== undefined && "session" in now ? now.session : undefined, command === "previous session" ? "previous" : "next")
-        if (to !== undefined) select({ session: to })
-      } else if (/^session \d$/.test(command)) {
-        const to = order[Number(command.slice(-1)) - 1]
-        if (to !== undefined) select({ session: to })
-      } else return
-      event.preventDefault()
+      const to = besides(moves.current.order, now !== undefined && "session" in now ? now.session : undefined, direction)
+      if (to !== undefined) select({ session: to })
     }
-    addEventListener("keydown", move)
-    const unask = whenAsked("new session", () => moves.current.startNew())
+    function onKey(event: KeyboardEvent) {
+      const command = pressed(event, mac)
+      if ((command !== "previous session" && command !== "next session") || event.defaultPrevented || windowOver() !== undefined) return
+      event.preventDefault()
+      step(command === "previous session" ? "previous" : "next")
+    }
+    addEventListener("keydown", onKey)
+    const stops = [
+      whenAsked("new session", () => moves.current.startNew()),
+      whenAsked("previous session", () => step("previous")),
+      whenAsked("next session", () => step("next")),
+    ]
     return () => {
-      removeEventListener("keydown", move)
-      unask()
+      removeEventListener("keydown", onKey)
+      for (const stop of stops) stop()
     }
   }, [])
 

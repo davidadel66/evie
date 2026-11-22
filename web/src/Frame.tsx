@@ -1,7 +1,9 @@
-import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { useCardShortcut } from "./card-shown.ts"
 import { Button } from "./components/ui/button.tsx"
-import { connectionLine, type Connection, type ConnectionState } from "./connection.ts"
+import type { Connection, ConnectionState } from "./connection.ts"
+import { ConnectionLine, ConnectionUnderHeader } from "./ConnectionLine.tsx"
+import { ConnectionShown } from "./connection-shown.ts"
 import { Conversation, Draft, Placeholder } from "./Conversation.tsx"
 import { startedHere } from "./conversation.ts"
 import { X } from "./icons.tsx"
@@ -18,11 +20,10 @@ import { ListButton, SessionList } from "./SessionList.tsx"
 import { HeaderName } from "./SessionRow.tsx"
 import type { Sessions } from "./sessions.ts"
 import { Settings } from "./Settings.tsx"
-import { windowOver } from "./page-requests.ts"
+import { newSession, windowOver } from "./page-requests.ts"
 import { onMac, pressed } from "./shortcuts.ts"
-import { Spinner } from "./Spinner.tsx"
 import { SubagentView } from "./Subagent.tsx"
-import { Words } from "./Words.tsx"
+import { workspaceIn } from "./workspace.ts"
 import { useWorkspacePlace, WorkspaceView } from "./Workspace.tsx"
 
 // The page once signed in: the session list, the conversation and the
@@ -81,23 +82,18 @@ function SessionView({ state, connection, sessions }: { state: ConnectionState; 
       </main>
 
       <DiffPlace connection={connection} sessions={sessions} />
-      <DiffPlace connection={connection} sessions={sessions} />
       <CardPlace connection={connection} sessions={sessions} />
     </div>
   )
 }
-
-// How the connection stands, for the line that says it is down, which at
-// phone width, with the list in its sheet, is under the session's header.
-const ConnectionShown = createContext<ConnectionState | undefined>(undefined)
 
 // The session list's place: the column on the left, which the owner can
 // hide, or at phone width a sheet over the page from the left, as T3
 // Code's sidebar. The list is kept on the page while hidden, so that what
 // it is narrowed to, and the shortcuts that move through it, hold. While
 // the sheet is open the page behind it cannot be reached; a tap outside
-// it, Escape, or picking a session in it closes it, and the focus goes
-// back where it was.
+// it, Escape, or following any link in it, as to a session, even the one
+// open, closes it, and the focus goes back where it was.
 function ListPlace({ children }: { children: ReactNode }) {
   const shown = useListShown()
   const selected = useSelected()
@@ -130,6 +126,7 @@ function ListPlace({ children }: { children: ReactNode }) {
         {...(open && { role: "dialog", "aria-modal": true })}
         inert={sheet && !open}
         hidden={!sheet && !shown.column}
+        onClick={(event) => open && event.target instanceof Element && event.target.closest("a[href]") !== null && closeListSheet()}
         className={cn(
           "flex flex-col outline-none",
           sheet
@@ -145,8 +142,10 @@ function ListPlace({ children }: { children: ReactNode }) {
 }
 
 // The shortcuts of the frame itself: mod+K opens and closes the command
-// palette, and mod+B shows and hides the session list. While another
-// window is open over the page, such as the settings, they wait.
+// palette; mod+shift+O makes a new session, wherever the owner is; and
+// mod+B shows and hides the session list, in the session view, which has
+// one. While another window is open over the page, such as the settings,
+// they wait.
 function useFrameShortcuts(togglePalette: () => void) {
   useEffect(() => {
     const mac = onMac()
@@ -157,7 +156,10 @@ function useFrameShortcuts(togglePalette: () => void) {
       if (command === "palette" && (over === undefined || over === "palette")) {
         event.preventDefault()
         togglePalette()
-      } else if (command === "session list" && over === undefined) {
+      } else if (command === "new session" && over === undefined) {
+        event.preventDefault()
+        newSession()
+      } else if (command === "session list" && over === undefined && workspaceIn(location.hash) === undefined) {
         event.preventDefault()
         toggleList()
       }
@@ -211,8 +213,6 @@ function OpenSession({ connection, sessions }: { connection: Connection; session
 // is down is under it too.
 function Top({ title, rename }: { title?: string; rename?(name: string): Promise<string | undefined> }) {
   const [note, setNote] = useState<string>()
-  const state = useContext(ConnectionShown)
-  const list = useListShown()
   return (
     <>
       <header className="flex h-header-height shrink-0 items-center gap-3 border-b border-line pr-4 pl-4">
@@ -226,11 +226,7 @@ function Top({ title, rename }: { title?: string; rename?(name: string): Promise
         )}
         <CardButton />
       </header>
-      {!list.wide && state !== undefined && (
-        <div className="pt-3">
-          <ConnectionLine state={state} />
-        </div>
-      )}
+      <ConnectionUnderHeader />
       <div role="status">{note !== undefined && <p className="px-7 pt-3 text-caption text-text-muted">{note}</p>}</div>
     </>
   )
@@ -243,33 +239,5 @@ function Empty({ title, text }: { title: string; text: string }) {
       <Top />
       <Placeholder title={title} text={text} />
     </>
-  )
-}
-
-// Nothing while connected. While the line is not up, one quiet line, as
-// Working is said, with why, until it is back. The status region is always
-// on the page, and only its words come and go, so that a screen reader,
-// which listens to a region already there, says them.
-export function ConnectionLine({ state }: { state: ConnectionState }) {
-  const line = connectionLine(state)
-  return (
-    <div role="status">
-      {line !== undefined && (
-        <p className="flex items-start gap-2 px-7 pb-3 text-caption text-text-muted">
-          <span className="flex h-lh items-center">
-            <Spinner />
-          </span>
-          <span>
-            {line.word}
-            {line.reason !== undefined && (
-              <>
-                {". "}
-                <Words text={line.reason} />
-              </>
-            )}
-          </span>
-        </p>
-      )}
-    </div>
   )
 }

@@ -427,7 +427,7 @@ export function createLoop(options: LoopOptions): Loop {
             // A tool or a plugin's hook broke, which ends the turn.
             reason = "error"
             error = cause instanceof Error ? cause.message : String(cause)
-            emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: `${error} This is a bug in Evie or a plugin, not a problem with the input.` }))
+            emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: `${error} This is a bug in evie or a plugin, not a problem with the input.` }))
             settleRest(index + 1, "Not run, because an earlier tool call in this step broke.")
             break
           }
@@ -453,7 +453,7 @@ export function createLoop(options: LoopOptions): Loop {
 
   return {
     wake() {
-      if (broken) throw new Error(`Evie stopped because its event log could not be written: ${broken.message}`)
+      if (broken) throw new Error(`evie stopped because its event log could not be written: ${broken.message}`)
       // New input during a reply stops the reply, so the model can be asked
       // again with the input added.
       if (active) reply?.abort()
@@ -465,8 +465,8 @@ export function createLoop(options: LoopOptions): Loop {
       cancel?.abort()
     },
     async compactNow() {
-      if (active) return "Evie is in the middle of a turn. Compact when it has finished."
-      if (stopped) return "Evie is closing, so nothing was changed."
+      if (active) return "evie is in the middle of a turn. Compact when it has finished."
+      if (stopped) return "evie is closing, so nothing was changed."
       // Held as busy while it runs, so a message that arrives waits for it.
       // It is the running work, like a turn: cancel() stops it, and stop()
       // waits for it to end before the database is closed.

@@ -1,4 +1,4 @@
-import type { SessionSummary } from "../../src/core/types.ts"
+import type { SessionState, SessionSummary } from "../../src/core/types.ts"
 
 // The command palette's rules, apart from its screen, as T3 Code's: it
 // opens on the actions and the recent sessions, and what is typed searches
@@ -73,4 +73,42 @@ export function recentSessions(sessions: readonly SessionSummary[], open: string
     .filter((each) => each.session !== open)
     .sort((a, b) => b.lastActive - a.lastActive)
     .slice(0, RECENT)
+}
+
+// The actions the palette offers, by their ids, in the order it lists
+// them, as T3 Code's offers what applies and leaves out the rest. A new
+// session, the settings and the theme apply everywhere. Moving through
+// the list, and showing and hiding the list, the card and the diff, apply
+// in the session view, which has them. What acts on a session applies to
+// the one the owner is looking at: the session view's, or a workspace's
+// side chat's. Settling and moving it wait while it works or waits; what
+// acts on its own conversation does not apply while one of its subagents'
+// is open; and Pick a model applies to a draft too.
+export type PaletteFacts = {
+  workspace: boolean
+  looking: "session" | "subagent" | "draft" | "none"
+  state?: SessionState | undefined
+  turnRunning: boolean
+  stopping: boolean
+  compacting: boolean
+}
+export type PaletteAction = "new" | "new in" | "previous" | "next" | "settings" | "theme" | "list" | "card" | "diff" | "settle" | "move" | "rename" | "compact" | "stop" | "model"
+
+export function paletteActions(facts: PaletteFacts): PaletteAction[] {
+  const { workspace, looking, state } = facts
+  const own = looking === "session"
+  const session = own || looking === "subagent"
+  return [
+    "new",
+    "new in",
+    ...(workspace ? [] : (["previous", "next"] as const)),
+    "settings",
+    "theme",
+    ...(workspace ? [] : (["list", "card", "diff"] as const)),
+    ...(session && (state === "active" || state === "settled") ? (["settle", "move"] as const) : []),
+    ...(own ? (["rename"] as const) : []),
+    ...(own && !facts.compacting ? (["compact"] as const) : []),
+    ...(own && facts.turnRunning && !facts.stopping ? (["stop"] as const) : []),
+    ...(own || looking === "draft" ? (["model"] as const) : []),
+  ]
 }

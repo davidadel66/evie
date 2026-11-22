@@ -234,10 +234,10 @@ test("in auto mode Evie works freely inside the project and asks before reaching
 test("in read-only mode nothing is changed and nothing is asked", async () => {
   const { attempt, asked, ran } = await start({ mode: "read-only", rules: [{ action: "edit", effect: "allow" }, { action: "shell", match: "bun test*", effect: "allow" }] })
 
-  expect(await attempt(edit("src/app.ts"))).toStartWith("Not allowed: Evie is in read-only mode")
-  expect(await attempt(shell("bun test"))).toStartWith("Not allowed: Evie is in read-only mode")
-  expect(await attempt({ name: "deploy", input: {} })).toStartWith("Not allowed: Evie is in read-only mode")
-  expect(await attempt(read("/somewhere/else/notes.md"))).toStartWith("Not allowed: Evie is in read-only mode")
+  expect(await attempt(edit("src/app.ts"))).toStartWith("Not allowed: evie is in read-only mode")
+  expect(await attempt(shell("bun test"))).toStartWith("Not allowed: evie is in read-only mode")
+  expect(await attempt({ name: "deploy", input: {} })).toStartWith("Not allowed: evie is in read-only mode")
+  expect(await attempt(read("/somewhere/else/notes.md"))).toStartWith("Not allowed: evie is in read-only mode")
   await attempt(read("src/app.ts"))
   await attempt(shell("git diff"))
 
@@ -372,7 +372,7 @@ test("a trusted project's own file can set its mode and add rules, which come af
   await attempt(shell("bun test"))
   await attempt(edit("src/app.ts"))
   // The general session has the global mode.
-  expect(await attempt(edit("/tmp/notes.md"), undefined, general.session)).toStartWith("Not allowed: Evie is in read-only mode")
+  expect(await attempt(edit("/tmp/notes.md"), undefined, general.session)).toStartWith("Not allowed: evie is in read-only mode")
 
   expect(asked).toEqual([])
   expect(ran).toHaveLength(2)
@@ -424,7 +424,7 @@ test("a patch whose file lines are indented is judged like any other", async () 
 
   await manual.attempt(patch("/somewhere/else/x.txt"), NO)
   expect(manual.asked[0]?.text).toBe("Let evie change /somewhere/else/x.txt, which is outside the project?")
-  expect(await readOnly.attempt(patch("src/x.txt"))).toStartWith("Not allowed: Evie is in read-only mode")
+  expect(await readOnly.attempt(patch("src/x.txt"))).toStartWith("Not allowed: evie is in read-only mode")
   expect(await manual.attempt(patch("~/.ssh/authorized_keys"))).toStartWith("Blocked by the guard:")
   // A patch in which no file can be found is not waved through.
   expect(await readOnly.attempt({ name: "patch", input: { patchText: "nothing recognisable" } })).toStartWith("Not allowed")

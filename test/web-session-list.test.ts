@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { SessionState, SessionSummary } from "../src/core/types.ts"
-import { addressAsOpened, addressOf, selectedIn } from "../web/src/address.ts"
+import { addressAsOpened, addressOf, lookedAt, selectedIn } from "../web/src/address.ts"
 import { refreshWhileShown } from "../web/src/refresh.ts"
 import { ageWords, besides, deletedSelection, filterSessions, groupSessions, inListOrder, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove } from "../web/src/session-list.ts"
 
@@ -184,13 +184,21 @@ test("in a row's name field, Enter saves and Escape gives up, and a key that is 
   expect(nameFieldKey("Enter", true)).toBeUndefined()
 })
 
-test("F2 renames the row that has the keyboard's focus, or else the selected session, but not a draft's row, nor while the owner types in a field", () => {
-  expect(renamedByF2({ focusedRow: "s2", typing: false }, "s1")).toBe("s2")
-  expect(renamedByF2({ typing: false }, "s1")).toBe("s1")
+test("F2 renames, while the list is shown, the row that has the keyboard's focus, or else the selected session, but not a draft's row, nor while the owner types in a field", () => {
+  const shown = { typing: false, listShown: true }
+  expect(renamedByF2({ ...shown, focusedRow: "s2" }, "s1")).toEqual({ row: "s2" })
+  expect(renamedByF2(shown, "s1")).toEqual({ row: "s1" })
   // A draft's row has the focus: it has no session to rename.
-  expect(renamedByF2({ focusedRow: null, typing: false }, "s1")).toBeUndefined()
-  expect(renamedByF2({ typing: true }, "s1")).toBeUndefined()
-  expect(renamedByF2({ typing: false }, undefined)).toBeUndefined()
+  expect(renamedByF2({ ...shown, focusedRow: null }, "s1")).toBeUndefined()
+  expect(renamedByF2({ ...shown, typing: true }, "s1")).toBeUndefined()
+  expect(renamedByF2(shown, undefined)).toBeUndefined()
+})
+
+test("with the list hidden, as in its sheet at phone width, F2 renames the selected session in the header, which is in sight", () => {
+  const hidden = { typing: false, listShown: false }
+  expect(renamedByF2(hidden, "s1")).toEqual({ header: true })
+  expect(renamedByF2({ ...hidden, typing: true }, "s1")).toBeUndefined()
+  expect(renamedByF2(hidden, undefined)).toBeUndefined()
 })
 
 test("a selected session that has been deleted is found, and so is one whose subagent's conversation is open, so the page can let it go", () => {
@@ -217,4 +225,14 @@ test("the previous and next session are the ones above and below the selected on
   expect(besides(order, undefined, "next")).toBe("a")
   expect(besides(order, "not shown", "next")).toBeUndefined()
   expect(besides([], undefined, "next")).toBeUndefined()
+})
+
+test("what the owner is looking at is the session view's session, draft or subagent, or in a workspace, its side chat's session or new session", () => {
+  expect(lookedAt("#session=s1")).toEqual({ session: "s1", subagent: false })
+  expect(lookedAt("#session=s1&subagent=a1")).toEqual({ session: "s1", subagent: true })
+  expect(lookedAt("#draft=p1")).toEqual({ draft: true })
+  expect(lookedAt("#workspace=p1&tab=sessions&chat=s2")).toEqual({ session: "s2", subagent: false })
+  expect(lookedAt("#workspace=p1&tab=storage&chat=new")).toEqual({ draft: true })
+  expect(lookedAt("#workspace=p1&tab=sessions")).toBeUndefined()
+  expect(lookedAt("")).toBeUndefined()
 })

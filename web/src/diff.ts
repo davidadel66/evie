@@ -1,5 +1,4 @@
 import type { ChangedFile, TurnChanges } from "../../src/core/types.ts"
-import type { Keys } from "./shortcuts.ts"
 
 // The diff panel's rules, apart from its screen: what it can compare, the
 // line that says how much a turn changed, and a file's diff, as the server
@@ -176,12 +175,4 @@ export function fileTree(paths: readonly string[]): TreeRow[] {
   }
   walk(top, 0)
   return rows
-}
-
-// Whether a key pressed is the one that shows and hides the diff, as T3
-// Code's: mod+D, mod being Cmd on a Mac and Ctrl elsewhere, known by the
-// key's place. A key held down toggles once.
-export function isDiffShortcut(keys: Keys, mac: boolean): boolean {
-  if (keys.repeat || keys.altKey || keys.shiftKey) return false
-  return keys.code === "KeyD" && (mac ? keys.metaKey && !keys.ctrlKey : keys.ctrlKey && !keys.metaKey)
 }

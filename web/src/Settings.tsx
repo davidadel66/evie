@@ -12,6 +12,7 @@ import { keyState, onThisComputer, openServerSettings, pluginState, projectState
 import { Spinner } from "./Spinner.tsx"
 import { keepNotices, rememberedNotices, type NoticeMode, type NoticeSettings } from "./notices.ts"
 import { whenAsked } from "./page-requests.ts"
+import { unlockSound } from "./sound.ts"
 import { applyTheme, rememberedTheme, THEMES, type Theme } from "./theme.ts"
 import { Words } from "./Words.tsx"
 
@@ -255,6 +256,8 @@ function Notifications() {
   }
   async function choose(mode: NoticeMode) {
     keep({ ...settings, mode })
+    // In the click that chose it, so that the browser lets it play.
+    unlockSound(mode)
     if ((mode === "on" || mode === "both") && typeof Notification === "function" && Notification.permission === "default") {
       await Notification.requestPermission().catch(() => {})
       setAllowed(permission())
