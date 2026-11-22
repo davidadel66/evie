@@ -2,7 +2,6 @@ import { join } from "node:path"
 import type { EventLog } from "./log.ts"
 import type { Inbox, InboxMessage } from "./inbox.ts"
 import {
-  DEFAULT_CEILING,
   SUMMARY_PROMPT,
   chooseCut,
   clipToolResults,
@@ -213,7 +212,7 @@ export function createLoop(options: LoopOptions): Loop {
 
   // ---- Compaction ---------------------------------------------------------------
 
-  const ceiling = options.compaction?.ceiling ?? DEFAULT_CEILING
+  const ceiling = options.compaction?.ceiling
   const knownLimits = new Map<string, number>()
 
   // The size at which a conversation with this model is compacted. The
