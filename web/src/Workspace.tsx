@@ -117,11 +117,13 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
 // picker of its icon and colour; its dashboards as tabs, none yet; and
 // Storage, Sessions and Memory pinned to the right, Memory not yet there.
 // Where the row is short, the name gives way, cut with an ellipsis, so that
-// the pinned tabs always show whole.
+// the pinned tabs always show whole. At phone width the name has a row of
+// its own, and the tabs a row below it, which scrolls sideways, as the
+// board's tab rows do.
 function Header({ project, place, connection, sessions }: { project: ListedProject; place: WorkspacePlace; connection: Connection; sessions: Sessions }) {
   return (
-    <header className="flex h-header-height shrink-0 items-center gap-4 border-b border-line px-4 wide:gap-6 wide:px-7">
-      <h1 className="flex min-w-0 flex-1 text-title text-text">
+    <header className="flex shrink-0 flex-col border-b border-line px-4 wide:h-header-height wide:flex-row wide:items-center wide:gap-6 wide:px-7">
+      <h1 className="flex h-header-height min-w-0 items-center text-title text-text wide:h-auto wide:flex-1">
         <IconPicker connection={connection} sessions={sessions} project={project}>
           <button type="button" title="Pick its icon and colour" className="-ml-2 flex h-control min-w-0 items-center gap-2 rounded-md px-2">
             <ProjectTile project={project.id} size="header" />
@@ -130,7 +132,7 @@ function Header({ project, place, connection, sessions }: { project: ListedProje
         </IconPicker>
       </h1>
       {/* A workspace's dashboards will be tabs here, before the pinned ones. */}
-      <nav aria-label="Workspace tabs" className="flex h-full shrink-0 items-stretch gap-6">
+      <nav aria-label="Workspace tabs" className="flex h-row-height shrink-0 items-stretch gap-6 overflow-x-auto wide:h-full wide:overflow-x-visible">
         <Tab name="Storage" tab="storage" place={place} />
         <Tab name="Sessions" tab="sessions" place={place} />
         <span aria-disabled="true" className="flex shrink-0 items-center gap-2 text-label text-text-muted">

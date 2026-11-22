@@ -295,7 +295,7 @@ function NewSession({
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary" className="px-3" aria-label="New session in another project">
+          <Button variant="secondary" className="min-w-control px-3" aria-label="New session in another project">
             <CaretDown className="size-icon-sm" />
           </Button>
         </DropdownMenuTrigger>

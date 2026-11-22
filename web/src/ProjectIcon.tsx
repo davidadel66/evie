@@ -105,14 +105,15 @@ export function ProjectGlyph({ project }: { project: string }) {
 
 // A project's small tile and its name, as a session row's first line
 // shows them, as a link to the project's workspace. Above the row's own
-// link, it reaches into the row's padding, for the pointer.
+// link, it reaches into the row's padding, for the pointer, and a little
+// past it, so that a finger has the board's 44px.
 export function ProjectLink({ project, name }: { project: string; name: string | undefined }) {
   return (
     <span className="flex min-w-0 flex-1">
       <a
         href={addressOfWorkspace({ workspace: project, tab: "sessions" })}
         title={name === undefined ? "Open the workspace" : `Open the ${name} workspace`}
-        className="relative z-10 -my-3 flex min-w-0 items-center gap-2 py-3 hover:text-text"
+        className="relative z-10 -my-3 flex min-w-0 items-center gap-2 py-3 before:absolute before:inset-x-0 before:-inset-y-(--line-width) hover:text-text"
       >
         <ProjectIcon project={project} />
         <span className="min-w-0 truncate">{name}</span>

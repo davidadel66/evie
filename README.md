@@ -236,10 +236,20 @@ project card. While the page is connected, nothing says so; while the
 line is down, one quiet line under the name at the top says Reconnecting,
 and why, and the page catches up by itself once the line is back.
 
+The list can be hidden and shown with the button at the left of the
+middle column's header, or with Cmd+B (Ctrl+B elsewhere), and the browser
+remembers which. At 767px wide or narrower, as on a phone, the same button
+opens the list as a sheet over the page, from the left, which goes once a
+session is picked in it, or with Escape or a tap beside it; the
+Reconnecting line is then under the session's header.
+
 The gear beside the name opens the settings, with a page each for:
 
 - **Appearance:** the theme, one of Dusk, Moss and Oxblood, which the
   browser remembers.
+- **Notifications:** how evie tells you when a session needs you, or a
+  turn finishes or fails (see "Notifications" below), which the browser
+  remembers.
 - **Keys:** the keys the loaded plugins read from `.env` (see
   "Settings"), each with what it is for and only whether it is set. A new
   value is written to the file, readable by you only, and is never shown
@@ -435,6 +445,70 @@ elsewhere), and the browser remembers which. At 980px wide or narrower the
 same button opens it as a sheet over the page, from the right, which goes
 once something is picked.
 
+**Shortcuts** work as T3 Code's, wherever the focus is, but for Escape and
+F2, which belong to the message box and the list. "Mod" is Cmd on a Mac
+and Ctrl elsewhere. They are one table, in `web/src/shortcuts.ts`, which
+the page's handlers, the command palette and the buttons' titles all read;
+they cannot be changed yet.
+
+| Keys | What they do |
+|---|---|
+| Mod+K | Open or close the command palette |
+| Mod+Shift+O, or Mod+N | A new session, where New session makes one |
+| Mod+Alt+[ and ], or Mod+Shift+[ and ] | The session above or below in the list |
+| Mod+1 to Mod+9 | The list's first nine sessions, as they are shown |
+| Mod+B | Show or hide the session list |
+| Mod+Alt+B | Show or hide the project card |
+| Mod+Shift+M | Pick a model |
+| Escape | Stop evie, in the message box |
+| F2 | Rename the session |
+
+Most browsers open a new window on Mod+N, and a Mac's browsers move
+between tabs on Mod+Shift+[ and ], before the page hears of them, so
+the first keys in the table are the ones the browser always passes on,
+and T3 Code's work where it passes them on too, as in a window of its own.
+Mod+1 to Mod+9 move between the browser's tabs elsewhere; while evie's page
+has the focus, they move between its sessions.
+
+**The command palette**, Mod+K, works as T3 Code's. It opens on the
+actions and the twelve sessions last active, and what you type searches
+the actions, every session and every project: a name that is what you
+typed first, then one that starts with it, then a word that starts with
+each word typed, then one with it inside a word, and on an equal match, a
+command before a session. Each row shows its shortcut. The actions are a
+new session, here or in a project; the settings; the theme; showing and
+hiding the list and the card; settling the session or bringing it back,
+moving it, and renaming it; and Compact now, Stop and Pick a model, while
+they apply. A session opens it, and a project opens its workspace. A row
+with a list of its own, such as the theme or Move to, opens it in the
+palette, and Backspace in an empty search goes back. Up and Down move,
+Enter runs the row raised, and Escape closes it.
+
+**Notifications** work as T3 Code's. evie tells you when a session comes
+to need you, as when a question or a permission prompt waits ("Needs
+you"), and when a turn finishes ("Finished") or fails ("Failed", with what
+went wrong), with the session's name:
+
+- **With the window in front,** a notice of another session shows at the
+  top of the page, with Open. A notice that a session needs you stays
+  until it no longer does; the others go after a few seconds.
+- **With the window behind others,** the system's notification says it,
+  if you have turned them on, and clicking it opens the session.
+- **Of the session you are looking at,** nothing is said.
+
+In the settings, Notifications are Off at first, or Notifications, Sound
+only, or Notifications with sound; the browser is asked to allow them only
+when you turn them on. A browser shows them only for a page at a secure
+address, such as `127.0.0.1` on this computer, so not over plain `http`
+from another device. Notices in the page are a switch of their own, on
+until you turn them off. A sound plays only once you have used the page,
+as browsers allow. Everything is read from what the server sends every
+page already, and for a turn's end, the session's latest events, so the
+server does nothing more for it.
+
+At phone width, every button and menu item is at least 44px tall, the
+board's size for a finger.
+
 **A workspace** is a project's home, opened from its icon or name in the
 session list or the project card. The page then has three other columns:
 
@@ -475,8 +549,8 @@ session list or the project card. The page then has three other columns:
 The address keeps where you are, as `#workspace=<project id>&tab=storage`,
 with `&chat=<session id>` for the side chat's session and `&file=<path>`
 for a file open in Storage. At phone width the strip is a row of tiles at
-the top, the tabs scroll sideways, and the side chat stacks below the
-workspace.
+the top, the workspace's name has a row of its own over its tabs, which
+scroll sideways, and the side chat stacks below the workspace.
 
 ### Keeping the server running
 
@@ -1166,10 +1240,14 @@ A few values the design system's board does not name are named once in
 | `session-list` | 288px | The width of the session list |
 | `project-card` | 320px | The width of the project card |
 | `card-sheet` | `min(88vw, 448px)` | The width of the project card as a sheet over the page, at 980px or narrower |
+| `list-sheet` | `min(calc(100vw - 12px), 448px)` | The width of the session list as a sheet over the page, at 767px or narrower, as T3 Code's sidebar |
+| `palette` | 576px | The widest the command palette is, as T3 Code's |
+| `palette-list` | `min(448px, 60dvh)` | The tallest the palette's rows grow before they scroll |
+| `notice` | `min(360px, calc(100vw - 32px))` | The width of a notice at the top of the page |
 | `sign-in-column` | 400px | The width of the sign-in page's column, and of text in the middle |
 | `conversation` | 740px | The widest the conversation is, which the board's Message gives in words |
 | `call-name` | 48px | The room a tool call's name takes in a turn's steps, as the board's Message draws them |
-| `control` | 40px | The height of buttons and menu items, which the board's Button and Menu give in words |
+| `control` | 40px | The height of buttons and menu items, which the board's Button and Menu give in words; below 768px, the board's `touch-min`, 44px |
 | `menu` | 176px | The narrowest a menu is |
 | `dialog` | 400px | The widest a dialog is, such as the settings window |
 | `tile-row` | 18px | A project's icon tile in a session row, which the board's WorkspaceIcon gives in words |
@@ -1296,8 +1374,9 @@ credited here, and its licence notice is kept with the code.
   `src/plugins/files/patch.ts`, rewritten from Rust. The licence and Codex's
   notice are in `LICENSES/`.
 - [T3 Code](https://github.com/pingdotgg/t3code) (MIT): the prompt that
-  names sessions, in `src/plugins/naming.ts`, rewritten in evie's words.
-  Its licence is in `LICENSES/`.
+  names sessions, in `src/plugins/naming.ts`, rewritten in evie's words,
+  and how a key pressed is matched to a shortcut, in
+  `web/src/shortcuts.ts`. Its licence is in `LICENSES/`.
 
 The web app's fonts are [Geist and Geist Mono](https://github.com/vercel/geist-font)
 (SIL Open Font License 1.1), from the `@fontsource-variable` packages. Its

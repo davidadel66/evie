@@ -204,6 +204,9 @@
   @media (width < 768px) {
     :root {
       --spacing-control: var(--spacing-touch-min);
+      /* The icon picker's six columns grow with them: six 44px columns,
+         the gaps between them and its padding. */
+      --spacing-icon-picker: 300px;
     }
   }
 

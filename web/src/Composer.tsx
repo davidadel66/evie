@@ -57,6 +57,9 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
   const [commands, setCommands] = useState<{ items?: MenuItem[]; problem?: string }>()
   const [picking, setPicking] = useState(false)
   const [focused, setFocused] = useState(false)
+  // Whether the context meter's menu is open, which keeps the box whole
+  // at phone width, as the picker does, though the focus has left it.
+  const [meterOpen, setMeterOpen] = useState(false)
   const wide = useWide()
   const box = useRef<HTMLTextAreaElement>(null)
   // Where the caret goes once the text set has been drawn.
@@ -215,7 +218,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
 
   const docked = shown?.place === "docked" ? shown : undefined
   // At phone width, one row until tapped, as T3 Code's, unless there is more to show.
-  const collapsed = !wide && !focused && !text.includes("\n") && docked === undefined && !picking
+  const collapsed = !wide && !focused && !text.includes("\n") && docked === undefined && !picking && !meterOpen
   const placeholder =
     shown?.place === "inline" && conversation !== undefined
       ? "Send a message to say no, and what to do instead"
@@ -264,9 +267,16 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
               event.preventDefault()
               void submit()
             }}
+            // At phone width a tap on a button keeps the focus in the box,
+            // as T3 Code's does, so that the box stays whole and the tap
+            // is not lost as it folds to one row.
+            onMouseDown={(event) => {
+              if (!wide && event.target instanceof Element && event.target.closest("button") !== null) event.preventDefault()
+            }}
             className={cn("flex rounded-lg border border-line bg-surface", collapsed ? "items-center gap-2 py-1 pr-1 pl-4" : "flex-col gap-1 pt-3 pr-2 pb-2 pl-4")}
           >
-            <label className="flex min-w-0 flex-1">
+            {/* At phone width the text's line is as tall as a finger's tap, on one row or whole. */}
+            <label className="flex min-w-0 flex-1 items-center self-stretch max-wide:min-h-touch-min">
               <span className="sr-only">Message evie</span>
               <textarea
                 ref={box}
@@ -300,7 +310,7 @@ export function Composer({ conversation, state, model, shown, answer, asking, se
               {!collapsed && (
                 <div className="flex min-w-0 items-center text-caption text-text-muted">
                   <ModelName model={model.current} toggle={() => setPicking((open) => !open)} />
-                  {conversation && state && <ContextMeter conversation={conversation} state={state} />}
+                  {conversation && state && <ContextMeter conversation={conversation} state={state} opened={setMeterOpen} />}
                 </div>
               )}
               {working && <StopButton stopping={state?.stopping === true} stop={() => conversation?.stop()} />}
@@ -369,7 +379,7 @@ function ModelName({ model, toggle }: { model: string | undefined; toggle(): voi
 // compacts it by itself, in words; its menu says the sizes and compacts it
 // now. Its colour does not change: the board gives a colour no such job,
 // so a state is said in words, as Compacting.
-function ContextMeter({ conversation, state }: { conversation: Conversation; state: ConversationState }) {
+function ContextMeter({ conversation, state, opened }: { conversation: Conversation; state: ConversationState; opened(open: boolean): void }) {
   if (state.running.includes("compact")) {
     return (
       <span role="status" className="flex h-control items-center gap-2 px-2 text-status-working">
@@ -381,9 +391,9 @@ function ContextMeter({ conversation, state }: { conversation: Conversation; sta
   if (state.context === undefined) return null
   const meter = contextMeter(state.context)
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={opened}>
       <DropdownMenuTrigger asChild>
-        <Button variant="quiet" aria-label={`Context ${meter.percent} full`} className="px-2 text-caption">
+        <Button variant="quiet" aria-label={`Context ${meter.percent} full`} className="min-w-control px-2 text-caption">
           {meter.percent}
         </Button>
       </DropdownMenuTrigger>
