@@ -87,6 +87,26 @@ export async function readSession(keeper: ChangeKeeper | undefined, session: str
   return capped(await sessionFiles(keeper === undefined ? [] : await keeper.turns(session), project, { patch: true }))
 }
 
+// The most files one comparison reads and compares. Those past it are
+// listed by their paths, as too many, without being read.
+const MOST_FILES = 300
+// How many files are read at once.
+const AT_ONCE = 8
+
+// Each item worked out with `work`, a few at a time, in order.
+async function fewAtOnce<Item, Done>(items: readonly Item[], work: (item: Item) => Promise<Done>): Promise<Done[]> {
+  const done: Done[] = new Array(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const at = next++
+      done[at] = await work(items[at]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(AT_ONCE, items.length) }, worker))
+  return done
+}
+
 // ---- With git -------------------------------------------------------------------
 
 const NOT_GIT = "The project's folder is not in a git repository."
@@ -94,55 +114,100 @@ const NOT_GIT = "The project's folder is not in a git repository."
 // Runs git in a folder and gives back what it printed, or throws with what
 // it said. Git's own settings in the server's environment, such as GIT_DIR,
 // which would point it elsewhere, are left out, as for the branch.
+//
+// A repository's own settings can name commands for git to run, and a
+// repository may be one just cloned, so none of them is run: not a file
+// system monitor (core.fsmonitor), a hook (core.hooksPath, and no index
+// written that would run one), a pager, an external diff or a text
+// conversion (diff.external, and a diff driver's command and textconv,
+// which diffs are asked not to use), nor a filter, whose clean, smudge
+// and process commands are each set to none, by the filter's name. The
+// files themselves are read here, not through git.
 async function git(folder: string, args: string[], input?: Uint8Array): Promise<Buffer> {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")))
-  const run = Bun.spawn(["git", ...args], { cwd: folder, env, stdin: input ?? "ignore", stdout: "pipe", stderr: "pipe", timeout: 30_000 })
-  const [said, problem, code] = await Promise.all([new Response(run.stdout).arrayBuffer(), new Response(run.stderr).text(), run.exited])
-  if (code !== 0) throw new Error(problem.trim() || `git ${args[0]} stopped with code ${code}.`)
+  return run(folder, [...SAFE, ...(await filtersOff(folder)), ...args], input)
+}
+const SAFE = ["--no-pager", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "diff.external="]
+const DIFF_SAFE = ["--no-ext-diff", "--no-textconv"]
+
+async function run(folder: string, args: string[], input?: Uint8Array): Promise<Buffer> {
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_"))), GIT_OPTIONAL_LOCKS: "0" }
+  const child = Bun.spawn(["git", ...args], { cwd: folder, env, stdin: input ?? "ignore", stdout: "pipe", stderr: "pipe", timeout: 30_000 })
+  const [said, problem, code] = await Promise.all([new Response(child.stdout).arrayBuffer(), new Response(child.stderr).text(), child.exited])
+  if (code !== 0) throw new Error(problem.trim() || `git ${args.find((arg) => !arg.startsWith("-") && !arg.includes("=")) ?? ""} stopped with code ${code}.`)
   return Buffer.from(said)
+}
+
+// The settings that turn off each filter git's settings name, wherever they
+// are set. Reading the settings runs nothing.
+async function filtersOff(folder: string): Promise<string[]> {
+  const named = await run(folder, ["config", "--name-only", "--get-regexp", "^filter\\."]).catch(() => Buffer.from(""))
+  const filters = new Set(named.toString("utf8").split("\n").flatMap((line) => /^filter\.(.+)\.[^.]+$/.exec(line.trim())?.[1] ?? []))
+  return [...filters].flatMap((filter) => ["clean=", "smudge=", "process=", "required=false"].flatMap((setting) => ["-c", `filter.${filter}.${setting}`]))
 }
 const lines = (said: Buffer) => said.toString("utf8").split("\0").filter((each) => each !== "")
 
 // The files that differ between a commit and the folder as it is now, each
 // with what the commit held and what is there now: the changes git sees,
-// staged or not, and the files it does not track and does not ignore,
-// which count as added. Paths are from the project's folder, and only
-// what is inside it is compared.
+// staged or not, as git counts them (a file taken out of git is removed,
+// though it is still in the folder), and the files it does not track and
+// does not ignore, which count as added. A submodule moved to another
+// commit is changed, with nothing inside it compared, and git is not run
+// inside it. Paths are from the project's folder, and only what is inside
+// it is compared.
 async function sinceCommit(folder: string, commit: string): Promise<FileDiff[]> {
   const [changed, untracked] = await Promise.all([
-    git(folder, ["diff", "--name-status", "-z", "--no-renames", "--relative", commit, "--"]),
+    git(folder, ["diff", ...DIFF_SAFE, "--raw", "-z", "--no-renames", "--ignore-submodules=dirty", "--relative", commit, "--"]),
     git(folder, ["ls-files", "--others", "--exclude-standard", "-z"]),
   ])
-  const statuses = lines(changed)
-  const files = new Map<string, boolean>()
-  for (let at = 0; at + 1 < statuses.length; at += 2) files.set(statuses[at + 1]!, statuses[at] !== "A")
+  // Each change is ":<mode before> <mode after> <id> <id> <status>", then its path.
+  type Listed = { status: "added" | "removed" | "changed"; submodule: boolean }
+  const files = new Map<string, Listed>()
+  const raw = lines(changed)
+  for (let at = 0; at + 1 < raw.length; at += 2) {
+    const [before, after, , , letter] = raw[at]!.slice(1).split(" ")
+    files.set(raw[at + 1]!, { status: letter === "A" ? "added" : letter === "D" ? "removed" : "changed", submodule: before === SUBMODULE || after === SUBMODULE })
+  }
   // A repository inside this one is listed with a slash at its end, and is not a file.
-  for (const path of lines(untracked)) if (!path.endsWith("/")) files.set(path, false)
+  for (const path of lines(untracked)) if (!path.endsWith("/") && !files.has(path)) files.set(path, { status: "added", submodule: false })
   const paths = [...files.keys()].sort()
-  const committed = await blobs(folder, commit, paths.filter((path) => files.get(path)))
-  const compared = await Promise.all(paths.map(async (path) => compare(path, files.get(path) ? committed.get(path) : null, await contentsNow(`${folder}/${path}`), { patch: true })))
-  return capped(compared.filter((file) => file !== undefined))
+  const read = paths.slice(0, MOST_FILES)
+  const committed = await blobs(folder, commit, read.filter((path) => files.get(path)!.status !== "added" && !files.get(path)!.submodule))
+  const compared = await fewAtOnce(read, async (path): Promise<FileDiff | undefined> => {
+    const { status, submodule } = files.get(path)!
+    if (submodule) return { path, status, added: 0, removed: 0, unknown: true, submodule: true }
+    return compare(path, status === "added" ? null : committed.get(path), status === "removed" ? null : await contentsNow(`${folder}/${path}`), { patch: true })
+  })
+  const tooMany = paths.slice(MOST_FILES).map((path): FileDiff => ({ path, status: files.get(path)!.status, added: 0, removed: 0, tooMany: true }))
+  return capped([...compared.filter((file) => file !== undefined), ...tooMany])
 }
+// The mode git gives a submodule.
+const SUBMODULE = "160000"
 
 // What a commit held at each path, from one `git cat-file`: the contents,
 // null when it held nothing there, and undefined when what it held is not
 // a file, as for a repository inside this one.
 async function blobs(folder: string, commit: string, paths: string[]): Promise<Map<string, Uint8Array | null | undefined>> {
   const found = new Map<string, Uint8Array | null | undefined>()
-  if (paths.length === 0) return found
-  const said = await git(folder, ["cat-file", "--batch"], new TextEncoder().encode(paths.map((path) => `${commit}:./${path}\n`).join("")))
+  // `cat-file` reads one name a line, so a path with a line break in it
+  // cannot be asked for: what it held is not known, rather than read wrong.
+  for (const path of paths) if (path.includes("\n")) found.set(path, undefined)
+  const asked = paths.filter((path) => !path.includes("\n"))
+  if (asked.length === 0) return found
+  const said = await git(folder, ["cat-file", "--batch"], new TextEncoder().encode(asked.map((path) => `${commit}:./${path}\n`).join("")))
   let at = 0
-  for (const path of paths) {
+  for (const path of asked) {
     const end = said.indexOf(10, at)
     const header = said.subarray(at, end).toString("utf8")
     at = end + 1
-    if (header.endsWith(" missing")) {
-      found.set(path, null)
+    // An object found is "<id> <type> <size>", then its contents; anything
+    // else, as "<name> missing", has no contents after it.
+    const object = /^[0-9a-f]+ ([a-z]+) (\d+)$/.exec(header)
+    if (!object) {
+      found.set(path, header.endsWith(" missing") ? null : undefined)
       continue
     }
-    const [, type, size] = header.split(" ")
-    const length = Number(size)
-    found.set(path, type === "blob" ? said.subarray(at, at + length) : undefined)
+    const length = Number(object[2])
+    found.set(path, object[1] === "blob" ? said.subarray(at, at + length) : undefined)
     at += length + 1
   }
   return found
@@ -154,50 +219,56 @@ async function head(folder: string): Promise<string> {
   try {
     return (await git(folder, ["rev-parse", "--verify", "-q", "HEAD"])).toString().trim()
   } catch {
-    return (await git(folder, ["hash-object", "-t", "tree", "/dev/null"])).toString().trim()
+    return (await git(folder, ["mktree"], new Uint8Array())).toString().trim()
   }
 }
 
-async function inRepository(project: Project | null): Promise<string> {
-  if (project === null) throw new Error("This session has no project, so there is no git repository to compare.")
-  if ((await inGit(project.folder)) === false) throw new Error(NOT_GIT)
+// What a git comparison could not be made for, in words for the owner,
+// given as the answer rather than as an error: it is not a fault.
+type Unavailable = { unavailable: string }
+const unavailable = (why: string): Commands["read_changes"]["output"] => ({ files: [], unavailable: why })
+
+async function inRepository(project: Project | null): Promise<string | Unavailable> {
+  if (project === null) return { unavailable: "This session has no project, so there is no git repository to compare." }
+  if ((await inGit(project.folder)) === false) return { unavailable: NOT_GIT }
   return project.folder
 }
 
-export async function readUncommitted(project: Project | null): Promise<FileDiff[]> {
+export async function readUncommitted(project: Project | null): Promise<Commands["read_changes"]["output"]> {
   const folder = await inRepository(project)
-  return sinceCommit(folder, await head(folder))
+  if (typeof folder !== "string") return unavailable(folder.unavailable)
+  return { files: await sinceCommit(folder, await head(folder)) }
 }
 
 // The branch a branch's changes are compared with, as a commit git can
 // name: the one given, as the remote has it when it has it, since the
 // branch is merged there, or else as this repository has it. Without one,
-// the repository's main branch: the one the remote names as its own, or
-// else main or master.
-async function baseOf(folder: string, given: string | undefined): Promise<{ base: string; ref: string }> {
+// the base of the branch's pull request, when `pullRequestBase` finds one,
+// or else the repository's main branch: the one the remote names as its
+// own, or else main or master.
+async function baseOf(folder: string, given: string | undefined, pullRequestBase: () => Promise<string | undefined>): Promise<{ base: string; ref: string } | Unavailable> {
   const exists = (ref: string) => git(folder, ["rev-parse", "--verify", "-q", `${ref}^{commit}`]).then(() => true, () => false)
   const named = async (base: string) => {
+    // A name git would take as one of its options is no branch's.
+    if (base === "" || base.startsWith("-")) return undefined
     for (const ref of [`refs/remotes/origin/${base}`, `refs/heads/${base}`]) if (await exists(ref)) return { base, ref }
     return undefined
   }
-  if (given !== undefined) {
-    // A name git would take as one of its options is no branch's.
-    const found = typeof given === "string" && given !== "" && !given.startsWith("-") ? await named(given) : undefined
-    if (!found) throw new Error(`There is no branch "${String(given)}" to compare this one with.`)
-    return found
-  }
+  if (given !== undefined) return (typeof given === "string" ? await named(given) : undefined) ?? { unavailable: `There is no branch "${String(given)}" to compare this one with.` }
   const remote = await git(folder, ["symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD"]).then((said) => said.toString().trim().replace(/^origin\//, ""), () => undefined)
-  for (const base of [remote, "main", "master"]) {
+  for (const base of [await pullRequestBase(), remote, "main", "master"]) {
     const found = base === undefined ? undefined : await named(base)
     if (found) return found
   }
-  throw new Error("This repository has no main branch to compare this one with: name the branch to compare it with.")
+  return { unavailable: "This repository has no main branch to compare this one with: name the branch to compare it with." }
 }
 
-export async function readBranch(project: Project | null, given: string | undefined): Promise<{ files: FileDiff[]; base: string }> {
+export async function readBranch(project: Project | null, given: string | undefined, pullRequestBase: () => Promise<string | undefined> = async () => undefined): Promise<Commands["read_changes"]["output"]> {
   const folder = await inRepository(project)
-  const { base, ref } = await baseOf(folder, given)
-  const from = await git(folder, ["merge-base", ref, "HEAD"]).then((said) => said.toString().trim(), () => undefined)
-  if (from === undefined) throw new Error(`This branch and ${base} have no commit in common to compare from.`)
-  return { files: await sinceCommit(folder, from), base }
+  if (typeof folder !== "string") return unavailable(folder.unavailable)
+  const found = await baseOf(folder, given, pullRequestBase)
+  if ("unavailable" in found) return unavailable(found.unavailable)
+  const from = await git(folder, ["merge-base", found.ref, "HEAD"]).then((said) => said.toString().trim(), () => undefined)
+  if (from === undefined) return unavailable(`This branch and ${found.base} have no commit in common to compare from.`)
+  return { files: await sinceCommit(folder, from), base: found.base }
 }

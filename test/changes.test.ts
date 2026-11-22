@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, realpath, rm, unlink, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, realpath, rm, unlink, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { files, undo, type Plugin } from "../src/index.ts"
@@ -171,10 +171,20 @@ test("past a few megabytes of diffs in one answer, the rest of the files are too
   expect(read.files[5]).toEqual({ path: "6.txt", status: "added", added: 9000, removed: 0, tooLarge: true })
 })
 
-test("a folder that is not in a git repository has no uncommitted work or branch to compare", async () => {
+test("past 300 files in one comparison, the rest are listed as too many, without being read", async () => {
+  const { run, projectFolder } = await start([], { "start.md": "start\n" }, { git: true })
+  for (let at = 1; at <= 305; at += 1) await writeFile(join(projectFolder, `${String(at).padStart(3, "0")}.txt`), `${at}\n`)
+
+  const read = await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })
+  expect(read.files).toHaveLength(305)
+  expect(read.files[299]).toEqual({ path: "300.txt", status: "added", added: 1, removed: 0, patch: "@@ -0,0 +1,1 @@\n+300\n" })
+  expect(read.files.slice(300)).toEqual(["301", "302", "303", "304", "305"].map((name) => ({ path: `${name}.txt`, status: "added", added: 0, removed: 0, tooMany: true })))
+})
+
+test("a folder that is not in a git repository has no uncommitted work or branch to compare, which the answer says in words", async () => {
   const { run } = await start([])
   for (const of of ["uncommitted", "branch"] as const) {
-    await expect(run.evie.send({ type: "read_changes", session: run.session, of })).rejects.toThrow("The project's folder is not in a git repository.")
+    expect(await run.evie.send({ type: "read_changes", session: run.session, of })).toEqual({ files: [], unavailable: "The project's folder is not in a git repository." })
   }
 })
 
@@ -205,5 +215,82 @@ test("a branch's changes run from where it left its base to the folder as it is 
   await git(["branch", "-f", "dev", "HEAD"], projectFolder)
   expect((await run.evie.send({ type: "read_changes", session: run.session, of: "branch", base: "dev" })).files.map((file) => file.path)).toEqual(["b.md"])
 
-  await expect(run.evie.send({ type: "read_changes", session: run.session, of: "branch", base: "nowhere" })).rejects.toThrow('There is no branch "nowhere" to compare this one with.')
+  expect(await run.evie.send({ type: "read_changes", session: run.session, of: "branch", base: "nowhere" })).toEqual({ files: [], unavailable: 'There is no branch "nowhere" to compare this one with.' })
+})
+
+test("reading a repository's changes runs none of the commands the repository's own settings name", async () => {
+  const { run, projectFolder } = await start([], { "a.md": "a\n", "b.md": "b\n", ".gitattributes": "* diff=evil filter=evil\n" }, { git: true })
+  // A command that notes each time it is run, by the setting that ran it,
+  // and passes what it is given through, as a filter would.
+  const ran = await realpath(await mkdtemp(join(tmpdir(), "evie-ran-")))
+  cleanups.push(() => rm(ran, { recursive: true, force: true }))
+  const command = join(ran, "noted")
+  await writeFile(command, `#!/bin/sh\ntouch "${ran}/$1"\ncat\n`)
+  await chmod(command, 0o755)
+  await mkdir(join(ran, "hooks"))
+  await writeFile(join(ran, "hooks", "post-index-change"), `#!/bin/sh\ntouch "${ran}/hook"\n`)
+  await chmod(join(ran, "hooks", "post-index-change"), 0o755)
+  const settings: [string, string][] = [
+    ["core.fsmonitor", `${command} fsmonitor`],
+    ["core.hooksPath", join(ran, "hooks")],
+    ["core.pager", `${command} pager`],
+    ["pager.diff", `${command} pager`],
+    ["diff.external", `${command} external`],
+    ["diff.evil.command", `${command} diff-driver`],
+    ["diff.evil.textconv", `${command} textconv`],
+    ["filter.evil.clean", `${command} clean`],
+    ["filter.evil.smudge", `${command} smudge`],
+    ["filter.evil.process", `${command} process`],
+    ["filter.evil.required", "true"],
+  ]
+  for (const [name, value] of settings) await git(["config", name, value], projectFolder)
+  // One file changed, and one rewritten as it was, so git must look inside both.
+  await writeFile(join(projectFolder, "b.md"), "b changed\n")
+  await writeFile(join(projectFolder, "a.md"), "a\n")
+  await utimes(join(projectFolder, "a.md"), new Date(), new Date(Date.now() + 5000))
+
+  const uncommitted = await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })
+  await run.evie.send({ type: "read_changes", session: run.session, of: "branch" })
+  await run.evie.send({ type: "list_changes", session: run.session })
+  expect(uncommitted.files.map((file) => file.path)).toEqual(["b.md"])
+  expect((await readdir(ran)).filter((name) => name !== "noted" && name !== "hooks").sort()).toEqual([])
+})
+
+test("a file whose name holds a line break is not known, and the files after it are read as they are", async () => {
+  const { run, projectFolder } = await start([], { "a\nb.md": "one\n", "c.md": "c\n", "b.md": "b\n" }, { git: true })
+  await writeFile(join(projectFolder, "a\nb.md"), "two\n")
+  await writeFile(join(projectFolder, "b.md"), "b changed\n")
+  await writeFile(join(projectFolder, "c.md"), "c changed\n")
+
+  const read = await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })
+  expect(read.files).toEqual([
+    { path: "a\nb.md", status: "changed", added: 0, removed: 0, unknown: true },
+    { path: "b.md", status: "changed", added: 1, removed: 1, patch: "@@ -1,1 +1,1 @@\n-b\n+b changed\n" },
+    { path: "c.md", status: "changed", added: 1, removed: 1, patch: "@@ -1,1 +1,1 @@\n-c\n+c changed\n" },
+  ])
+})
+
+test("a submodule moved to another commit is changed, with nothing to compare inside it", async () => {
+  const { run, projectFolder } = await start([], { "a.md": "a\n" }, { git: true })
+  const sub = join(projectFolder, "sub")
+  await mkdir(sub)
+  await git(["init", "-q", "-b", "main"], sub)
+  await writeFile(join(sub, "inside.md"), "one\n")
+  await git(["add", "-A"], sub)
+  await git(["commit", "-q", "-m", "One"], sub)
+  await git(["add", "sub"], projectFolder)
+  await git(["commit", "-q", "-m", "Add sub"], projectFolder)
+  await writeFile(join(sub, "inside.md"), "two\n")
+  await git(["commit", "-q", "-am", "Two"], sub)
+
+  const read = await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })
+  expect(read.files).toEqual([{ path: "sub", status: "changed", added: 0, removed: 0, unknown: true, submodule: true }])
+})
+
+test("a file taken out of git but left in the folder is removed, as git counts it, not added", async () => {
+  const { run, projectFolder } = await start([], { "a.md": "a\n", "c.md": "c\n" }, { git: true })
+  await git(["rm", "-q", "--cached", "c.md"], projectFolder)
+
+  const read = await run.evie.send({ type: "read_changes", session: run.session, of: "uncommitted" })
+  expect(read.files).toEqual([{ path: "c.md", status: "removed", added: 0, removed: 1, patch: "@@ -1,1 +0,0 @@\n-c\n" }])
 })

@@ -849,7 +849,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       case "session":
         return { files: await readSession(keeper, input.session, project) }
       case "uncommitted":
-        return { files: await readUncommitted(project) }
+        return readUncommitted(project)
       case "branch":
         return readBranch(project, input.base)
       default:

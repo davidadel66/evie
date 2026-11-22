@@ -428,6 +428,10 @@ export type ChangedFile = {
   binary?: true
   tooLarge?: true
   unknown?: true
+  // A git submodule moved to another commit: nothing inside it is compared.
+  submodule?: true
+  // Past the most files one comparison reads: listed, and not read.
+  tooMany?: true
 }
 
 // With its diff, when it has one: its hunks as a unified diff writes them,
@@ -799,14 +803,15 @@ export type Commands = {
   // from where it left `base` to the files as they are now, uncommitted
   // work included. `base` is a branch, the repository's own main branch
   // when it is not given, and the output names the one used. Files git
-  // does not track and does not ignore count as added. A folder that is
-  // not in a git repository, or a base that cannot be found, is an error.
+  // does not track and does not ignore count as added. What cannot be
+  // compared, as in a folder that is not in a git repository, or against a
+  // base that cannot be found, is `unavailable`, which says why in words.
   read_changes: {
     input:
       | { session: string; of: "turn"; turn: number }
       | { session: string; of: "session" | "uncommitted" }
       | { session: string; of: "branch"; base?: string }
-    output: { files: FileDiff[]; base?: string }
+    output: { files: FileDiff[]; base?: string; unavailable?: string }
   }
   // The pull request of the branch a project's folder is on, read with
   // the GitHub CLI, `gh`, as it is signed in on the server's computer.
