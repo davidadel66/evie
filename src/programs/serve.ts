@@ -4,7 +4,7 @@ import { keepOutputTidy } from "../core/tools.ts"
 import { setUpPlugins } from "../core/evie.ts"
 import { createEvie, dataFolder, loadSettingsFiles, startServer, type EvieServer, type Settings } from "../index.ts"
 import { ensureOwnToken, openTokens } from "../server/tokens.ts"
-import type { WebApp } from "../server/web-app.ts"
+import type { BuiltWebApp, WebApp } from "../server/web-app.ts"
 import { settingsEditor } from "../settings-editor.ts"
 import { loadServerSettings } from "../settings-files.ts"
 import { EXIT_CODES, fail, print, reason, STOP_FOR_GOOD, type StopSignal } from "./common.ts"
@@ -164,12 +164,15 @@ async function check(env: Settings, adding: string[]) {
 // here, so the terminal client never loads the bundler's plugins, and a
 // module that cannot be loaded, as when a package is missing, is treated as
 // a build that failed: the server goes on without the page, since the
-// terminal and every other client still work. `load` is for tests.
+// terminal and every other client still work. The server is handed the
+// page and its files, and not the build's metafile, which it has no use for.
+// `load` is for tests.
 export async function builtWebApp(
-  load: () => Promise<{ buildWebApp(): Promise<WebApp> }> = () => import("../server/web-app.ts"),
+  load: () => Promise<{ buildWebApp(): Promise<BuiltWebApp> }> = () => import("../server/web-app.ts"),
 ): Promise<{ app: WebApp } | { problem: string }> {
   try {
-    return { app: await (await load()).buildWebApp() }
+    const { page, files } = await (await load()).buildWebApp()
+    return { app: { page, files } }
   } catch (cause) {
     return { problem: `The web app could not be built, so it is not served:\n${reason(cause)}` }
   }

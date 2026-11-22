@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test"
+import type { BuildMetafile } from "bun"
 import tailwind from "bun-plugin-tailwind"
 import { chmod, mkdir, mkdtemp, readdir, realpath, rm, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { builtWebApp } from "../src/programs/serve.ts"
-import { buildWebApp } from "../src/server/web-app.ts"
+import { buildWebApp, headLinks, withHeadLinks } from "../src/server/web-app.ts"
 
 // The web app as `evie serve` builds it when it starts: by Bun's bundler, in
 // a process of its own, with Tailwind's plugin.
@@ -29,6 +30,92 @@ test("the build hands over its metafile, which names the page's script by its pa
   const imports = entries[0]![1].imports.filter((each) => each.kind === "import-statement")
   expect(imports.length).toBeGreaterThan(0)
   for (const each of imports) expect(Object.keys(app.files)).toContain(each.path.replace(/^\./, ""))
+})
+
+test("the page has one modulepreload link for each chunk its script imports, and for each chunk those import, so the browser fetches them alongside the script; none for what it imports only when needed, such as the diff view", async () => {
+  const app = await buildWebApp()
+  if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
+  const outputs = app.metafile.outputs
+
+  // What the page's script imports, from the metafile, whether the links
+  // were added by evie or, in a later Bun, by the bundler itself.
+  const imported = new Set<string>()
+  const follow = (path: string) => {
+    for (const each of outputs[path]!.imports) {
+      if (each.kind !== "import-statement" || imported.has(each.path)) continue
+      imported.add(each.path)
+      follow(each.path)
+    }
+  }
+  const scripts = Object.keys(outputs).filter((path) => outputs[path]!.entryPoint === "web/index.html" && path.endsWith(".js"))
+  for (const script of scripts) follow(script)
+  const expected = [...imported].map((path) => path.replace(/^\./, "")).sort()
+  expect(expected.length).toBeGreaterThan(0)
+
+  const page = await app.page.text()
+  const links = [...page.matchAll(/<link\b[^>]*>/g)].map((match) => match[0]).filter((tag) => /\brel="?modulepreload"?[\s/>]/.test(tag))
+  const named = links.map((tag) => tag.match(/\bhref="?([^"\s>]+)"?/)![1]!)
+  // Each once, and no other.
+  expect(named.sort()).toEqual(expected)
+  for (const path of named) expect(Object.keys(app.files)).toContain(path)
+  // In the head, where the browser finds them as it reads the page's start.
+  for (const tag of links) expect(page.indexOf(tag)).toBeLessThan(page.indexOf("</head>"))
+  // What the script loads with `import()`, as the diff view, is left to load when it is needed.
+  const later = scripts.flatMap((script) => outputs[script]!.imports.filter((each) => each.kind === "dynamic-import" && !imported.has(each.path)))
+  expect(later.length).toBeGreaterThan(0)
+  for (const each of later) expect(named).not.toContain(each.path.replace(/^\./, ""))
+})
+
+test("the page is given each of its links once, before </head>: one it has already, as a later Bun may write itself, is not added again", () => {
+  // A page whose script imports two chunks, one of them importing a third,
+  // and loads a fourth with `import()`.
+  const output = (imports: [string, "import-statement" | "dynamic-import"][], entryPoint?: string) => ({
+    bytes: 1,
+    inputs: {},
+    exports: [],
+    imports: imports.map(([path, kind]) => ({ path, kind })),
+    ...(entryPoint && { entryPoint }),
+  })
+  const metafile: BuildMetafile = {
+    inputs: {},
+    outputs: {
+      "./index.html": output([], "web/index.html"),
+      "./chunk-page.js": output([["./chunk-a.js", "import-statement"], ["./chunk-b.js", "import-statement"], ["./chunk-later.js", "dynamic-import"]], "web/index.html"),
+      "./chunk-page.css": output([], "web/index.html"),
+      "./chunk-a.js": output([["./chunk-c.js", "import-statement"]]),
+      "./chunk-b.js": output([]),
+      "./chunk-c.js": output([]),
+      "./chunk-later.js": output([["./chunk-only-later.js", "import-statement"]]),
+      "./chunk-only-later.js": output([]),
+    },
+  }
+  const links = headLinks(metafile)
+  expect(links.map((link) => link.href).sort()).toEqual(["/chunk-a.js", "/chunk-b.js", "/chunk-c.js"])
+  expect(links.every((link) => link.rel === "modulepreload")).toBe(true)
+
+  // The bundler's link for chunk b, written in its own way.
+  const page = '<!doctype html><html><head><title>evie</title><link crossorigin rel=modulepreload href="./chunk-b.js"><script type="module" crossorigin src="/chunk-page.js"></script></head><body></body></html>'
+  const finished = withHeadLinks(page, links)
+
+  const preloads = [...finished.matchAll(/<link\b[^>]*\bmodulepreload\b[^>]*>/g)].map((match) => match[0])
+  expect(preloads).toEqual([
+    '<link crossorigin rel=modulepreload href="./chunk-b.js">',
+    '<link rel="modulepreload" href="/chunk-a.js" crossorigin>',
+    '<link rel="modulepreload" href="/chunk-c.js" crossorigin>',
+  ])
+  expect(finished).toEndWith('<link rel="modulepreload" href="/chunk-c.js" crossorigin></head><body></body></html>')
+  // Finished again, it is the same page.
+  expect(withHeadLinks(finished, links)).toBe(finished)
+})
+
+test("evie serve keeps the page and its files, and not the build's metafile, which the page was finished from and is no more use", async () => {
+  const page = new Blob(["<!doctype html>"], { type: "text/html;charset=utf-8" })
+  const files = { "/chunk-a.js": new Blob(["export {}"], { type: "text/javascript;charset=utf-8" }) }
+
+  const built = await builtWebApp(async () => ({ buildWebApp: async () => ({ page, files, metafile: { inputs: {}, outputs: {} } }) }))
+
+  expect(built).toEqual({ app: { page, files } })
+  if ("app" in built) expect(Object.keys(built.app)).toEqual(["page", "files"])
 })
 
 test("a server started in another folder, with another bun first on its path, builds the web app with its own Bun, and leaves nothing in the temporary folder", async () => {
@@ -100,13 +187,15 @@ test("the web app builds into a page whose script and stylesheet are built besid
   if (!("files" in app)) throw new Error("buildWebApp gave the page to bundle, not the page built")
 
   const page = await app.page.text()
-  // The empty icon, `data:,`, is carried in the page and loads nothing.
+  // The empty icon, `data:,`, is carried in the page and loads nothing. Beside
+  // its script and stylesheet, it preloads the chunks its script imports.
   const loads = [...page.matchAll(/(?:src|href)="(?!data:,")([^"]+)"/g)].map((match) => match[1]!)
-  expect(loads.map((path) => path.split(".").pop()).sort()).toEqual(["css", "js"])
+  expect([...new Set(loads.map((path) => path.split(".").pop()))].sort()).toEqual(["css", "js"])
+  expect(loads.filter((path) => path.endsWith(".css"))).toHaveLength(1)
   for (const path of loads) expect(Object.keys(app.files)).toContain(path)
 
   const style = await app.files[loads.find((path) => path.endsWith(".css"))!]!.text()
-  const script = await app.files[loads.find((path) => path.endsWith(".js"))!]!.text()
+  const script = await app.files[page.match(/<script[^>]* src="([^"]+)"/)![1]!]!.text()
   // The fonts are evie's own, carried in the stylesheet, not fetched from Google.
   expect(style).toMatch(/@font-face\{font-family:Geist;[^}]*url\(data:font\/woff2/)
   expect(style).toMatch(/@font-face\{font-family:Geist Mono;[^}]*url\(data:font\/woff2/)
