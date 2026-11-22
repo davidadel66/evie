@@ -96,8 +96,14 @@
      at least this wide. */
   --spacing-control: 40px;
   --spacing-menu: 176px;
-  /* The widest a dialog, such as the settings window, is. */
+  /* The widest a dialog is. */
   --spacing-dialog: 400px;
+  /* The settings window: the widest it is, its height, kept within the
+     page's, its column of pages, and a text box beside a setting. */
+  --spacing-settings: 720px;
+  --spacing-settings-height: min(600px, calc(100dvh - 56px));
+  --spacing-settings-pages: 176px;
+  --spacing-settings-field: 200px;
   /* A project's icon tile in a session row, and the icon on it. */
   --spacing-tile-row: 18px;
   --spacing-tile-row-icon: 12px;

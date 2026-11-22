@@ -158,7 +158,8 @@ Ctrl-C stops the turn in progress, and quits when nothing is running.
 
 `evie serve` listens on this computer only, at `http://127.0.0.1:3843`.
 It reads the settings files when it starts, so a change to them takes
-effect when the server is started again.
+effect when the server is started again, which the web app's settings can
+do (see "The web app").
 
 When the connection to the server drops, as when the laptop sleeps or the
 server is started again, `evie` says so and connects again by itself, then
@@ -234,8 +235,32 @@ project card. For now the project card is empty, and a conversation can be
 read but not yet written in. While the page is connected, nothing says so;
 while the line is down, one quiet line under the name at the top says
 Reconnecting, and why, and the page catches up by itself once the line is
-back. The gear beside the name opens the settings, where the theme is
-picked: one of Dusk, Moss and Oxblood, which the browser remembers.
+back.
+
+The gear beside the name opens the settings, with a page each for:
+
+- **Appearance:** the theme, one of Dusk, Moss and Oxblood, which the
+  browser remembers.
+- **Keys:** each key in `.env` (see "Settings"), with only whether it is
+  set. A new value is written to the file, and is never shown again, here
+  or anywhere else; Clear takes it out.
+- **Plugins:** the plugins `evie.json` lists, each with whether it is
+  loaded. One can be added, by a built-in plugin's name or the full path to
+  a plugin file, or removed.
+- **Instructions:** your instruction file, `AGENTS.md` in the data folder,
+  to edit and save. It applies from the next message.
+- **Projects:** each project, with whether its own settings are trusted,
+  to trust it or stop trusting it.
+
+Each change is checked as the files are when the server starts, so one the
+server would refuse is refused there and then, with the same words, and
+nothing is written. Most changes apply once the server starts again: the
+window says so, and **Restart to apply** starts it again, as after a crash,
+so that work in progress carries on; the page connects again by itself. It
+is refused when the settings would stop the server starting. Under the
+login service (see "Keeping the server running"), the service starts the
+server again; run by hand, `evie serve` starts a new server in its own
+place, in the same terminal, which Ctrl-C stops as before.
 
 The list shows every session you have said something in, kept current as
 they change, and listed again when the line comes back:
@@ -588,7 +613,8 @@ Evie keeps its state in `~/.evie`. Set `EVIE_HOME` to use another folder.
 Two files in that folder hold its settings.
 
 **`.env` is for keys.** One `NAME=value` per line. Evie reads a key and
-never writes it anywhere.
+never writes it anywhere else; the web app's settings write a key you set
+there to this file, which only your user can read.
 
 ```
 OPENROUTER_API_KEY=...
