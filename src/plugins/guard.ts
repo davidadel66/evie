@@ -4,6 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { dataFolder } from "../core/evie.ts"
 import type { CheckedToolCall, Plugin } from "../core/types.ts"
 import { ownShownFolder } from "./show/files.ts"
+import { runsInput, withoutHeredocs } from "./permissions/shell.ts"
 
 // The built-in guard. It stops the most clearly destructive commands before
 // they run, and keeps the tools out of a few private folders.
@@ -102,7 +103,8 @@ const RULES: { matches: RegExp; reason: string }[] = [
 ]
 
 function shellReason(call: CheckedToolCall, privateFolders: string[], projectFolder: string, skillsIn?: string): string | undefined {
-  const command = typeof call.input.command === "string" ? call.input.command : ""
+  // The text of a heredoc is data, unless a shell or an interpreter reads it as commands.
+  const command = withoutHeredocs(typeof call.input.command === "string" ? call.input.command : "", runsInput)
   const home = homedir()
 
   for (const rule of RULES) if (rule.matches.test(command)) return rule.reason

@@ -228,24 +228,37 @@ function heredocEnd(text: string, start: number): { word: string; end: number } 
 // A command line with the text of each heredoc taken out: the lines after
 // the one that starts it, up to and with its end line. That text is data
 // given to a command, never commands, so nothing in it is judged as one. A
-// heredoc with no end line runs to the end, as the shell reads it.
-export function withoutHeredocs(command: string): string {
+// heredoc with no end line runs to the end, as the shell reads it. A heredoc
+// inside `"$(…)"`, as a commit message is often written, counts too.
+//
+// `keep` is given each line that starts heredocs, and keeps their text when
+// it says so, as the guard does for a heredoc a shell reads as commands.
+export function withoutHeredocs(command: string, keep: (line: string) => boolean = () => false): string {
   if (!command.includes("<<")) return command
   let out = ""
   const waiting: { word: string; tabs: boolean }[] = []
-  let quote: "'" | '"' | undefined
+  // What is open where the text has got to: quotes, and `$(` inside double quotes or out of them.
+  const open: ("'" | '"' | "$(")[] = []
   for (let at = 0; at < command.length; at += 1) {
     const char = command[at]!
-    if (quote === "'") {
-      if (char === "'") quote = undefined
+    const inside = open.at(-1)
+    if (inside === "'") {
+      if (char === "'") open.pop()
     } else if (char === "\\") {
       out += command.slice(at, at + 2)
       at += 1
       continue
-    } else if (quote === '"') {
-      if (char === '"') quote = undefined
+    } else if (command.startsWith("$(", at)) {
+      open.push("$(")
+      out += "$("
+      at += 1
+      continue
+    } else if (inside === '"') {
+      if (char === '"') open.pop()
     } else if (char === "'" || char === '"') {
-      quote = char
+      open.push(char)
+    } else if (char === ")" && inside === "$(") {
+      open.pop()
     } else if (char === "#" && (at === 0 || /[\s;&|()]/.test(command[at - 1]!))) {
       // A comment runs to the end of its line.
       const end = command.indexOf("\n", at)
@@ -267,21 +280,43 @@ export function withoutHeredocs(command: string): string {
         continue
       }
     } else if (char === "\n" && waiting.length > 0) {
-      // The bodies start on the next line, one after the other.
-      let from = at + 1
-      for (const heredoc of waiting.splice(0)) {
-        while (from < command.length) {
-          const end = command.indexOf("\n", from)
-          const line = command.slice(from, end === -1 ? command.length : end)
-          from = end === -1 ? command.length : end + 1
-          if ((heredoc.tabs ? line.replace(/^\t+/, "") : line) === heredoc.word) break
+      const heredocs = waiting.splice(0)
+      if (!keep(out.slice(out.lastIndexOf("\n") + 1))) {
+        // The bodies start on the next line, one after the other.
+        let from = at + 1
+        for (const heredoc of heredocs) {
+          while (from < command.length) {
+            const end = command.indexOf("\n", from)
+            const line = command.slice(from, end === -1 ? command.length : end)
+            from = end === -1 ? command.length : end + 1
+            if ((heredoc.tabs ? line.replace(/^\t+/, "") : line) === heredoc.word) break
+          }
         }
+        out += "\n"
+        at = from - 1
+        continue
       }
-      out += "\n"
-      at = from - 1
-      continue
     }
     out += char
   }
   return out
+}
+
+// Shells, and the programs that run what they are given as a shell does.
+const SHELLS = ["bash", "sh", "zsh", "dash", "ksh", "fish", "eval", "source", "."]
+const INTERPRETERS = /^(python[\d.]*|node|perl|ruby)$/
+// Words that give an interpreter its program, so that it reads none from standard input.
+const GIVES_PROGRAM = /^(-[a-zA-Z]*[ceEm]|--(eval|print|command)(=.*)?)$/
+
+// True for a line of commands in which a shell, or an interpreter with no
+// program of its own but standard input, runs what it is given: there, a
+// heredoc is commands, not data.
+export function runsInput(line: string): boolean {
+  const { text } = setQuotesAside(line)
+  return text.split(/&&|\|\||;|\|&?|&|\$\(|`|\(/).some((piece) => {
+    const { words } = plainWords(piece.replace(/\d*<<-?\s*\S+/g, " ").replace(/\d*[<>]+&?\s*\S+/g, " "))
+    const [name = "", ...rest] = words
+    if (SHELLS.includes(name)) return true
+    return INTERPRETERS.test(name) && !rest.some((word) => word !== "-" && (!word.startsWith("-") || GIVES_PROGRAM.test(word)))
+  })
 }

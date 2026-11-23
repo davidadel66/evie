@@ -92,11 +92,19 @@ const isFolder = (absolute: string) => {
   }
 }
 
+// The home folder and the root, which are never the folder asked about:
+// an answer for one would be an answer for nearly everything.
+const isBroad = (absolute: string) => absolute === "/" || absolute === homedir() || absolute === followLinks(homedir())
+
 // Working outside the project and the temp folder, at `target`, which auto
-// mode asks about once for each folder.
+// mode asks about once for each folder. A file, or a place that is not
+// there, directly in the home folder or the root is asked about by itself,
+// as if it were a folder, and the home folder and the root themselves not at all.
 function outside(target: string, folder: string | null, searched: boolean): Act[] {
   if (isInside(folder, target) || isTemp(target)) return []
-  return [{ action: "outside", target, inside: false, kind: "path", ...((searched || isFolder(target)) && { folder: true }) }]
+  const isDirectory = searched || isFolder(target)
+  if (isDirectory && isBroad(target)) return []
+  return [{ action: "outside", target, inside: false, kind: "path", ...((isDirectory || isBroad(dirname(target))) && { folder: true }) }]
 }
 
 // Where a word of a command points, in full: "nowhere" for the places that

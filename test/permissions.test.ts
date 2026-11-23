@@ -783,6 +783,8 @@ test("the text of a heredoc is data and never judged as commands, however its en
   expect(partsOf("paste <<A <<B\na ~/x\nA\nb ~/y\nB")).toEqual(["paste <<A <<B"])
   expect(partsOf("echo '<<EOF'\nls")).toEqual(["echo '<<EOF'", "ls"])
   expect(partsOf("cat <<< ~/x\nls")).toEqual(["cat <<< ~/x", "ls"])
+  // A commit message written as a heredoc inside `"$(…)"`.
+  expect(partsOf("git commit -m \"$(cat <<'EOF'\nFix ~838,860 in `a.ts`\nEOF\n)\"").some((part) => /838|a\.ts/.test(part))).toBe(false)
 
   const auto = await start({ mode: "auto" })
   expect(await auto.attempt(shell(PULL_REQUEST))).toBe("done")
@@ -857,6 +859,37 @@ test("in auto mode a folder outside the project and the temp folder asks once, a
     "Let evie read /another/place, which is outside the project?",
   ])
   expect(asked[4]?.choices[1]).toBe("Always in this project: allow working in /another/place")
+})
+
+test("in auto mode the home folder and the root are never the folder asked about: a place in one is asked about by itself", async () => {
+  const { attempt, asked } = await start({ mode: "auto" })
+  const other = join(homedir(), "other")
+
+  expect(await attempt(shell("ls ~/other"), always)).toBe("done")
+  expect(asked[0]).toEqual({
+    text: `Run this command?\n\n  ls ~/other\n\nIt works outside the project, in ${other}.`,
+    choices: [YES, `Always in this project: allow working in ${other}`, NO],
+  })
+  for (const command of ["cat ~/other/x", "rm ~/other/y", "ls ~/other"]) expect(await attempt(shell(command))).toBe("done")
+  expect(await attempt(shell("cat ~/another/x"), NO)).toStartWith("The owner said no to this.")
+  expect(await attempt(shell("cat /evie-missing-x"), NO)).toStartWith("The owner said no to this.")
+  expect(asked.map((question) => question.choices[1])).toEqual([
+    `Always in this project: allow working in ${other}`,
+    `Always in this project: allow working in ${join(homedir(), "another")}`,
+    "Always in this project: allow working in /evie-missing-x",
+  ])
+  // The home folder and the root themselves are not asked about.
+  for (const command of ["ls ~", "ls /", "du -sh ~"]) expect(await attempt(shell(command))).toBe("done")
+  expect(asked).toHaveLength(3)
+})
+
+test("in auto mode a heredoc's text is no reason for the guard to block a pull request", async () => {
+  const { attempt, asked } = await start({ mode: "auto" })
+  const command = "gh pr create --title Guard --body-file - <<'EOF'\nsudo is never needed\ngit reset --hard is blocked\n~/.ssh stays private\nEOF"
+
+  expect(await attempt(shell(command))).toBe("done")
+  expect(await attempt(shell("bash <<'EOF'\ncat ~/.ssh/id_rsa\nEOF"))).toStartWith("Blocked by the guard:")
+  expect(asked).toEqual([])
 })
 
 test("in auto mode reading a .env file asks, by the read tools or a command naming it, and an always answer allows that file", async () => {
