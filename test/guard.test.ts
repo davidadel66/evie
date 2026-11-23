@@ -138,6 +138,35 @@ test("ordinary commands run as before", async () => {
   }
 }, 30_000)
 
+test("the text of a heredoc is data to the guard, unless a shell or an interpreter reads it as its program", async () => {
+  const { shell } = await project()
+  const body = "sudo is never needed\ngit reset --hard is blocked\n~/.ssh stays private\nrm -rf /"
+
+  for (const command of [
+    `gh pr create --title "Guard" --body-file - <<'EOF'\n${body}\nEOF`,
+    `cat > notes.md <<EOF\n${body}\nEOF`,
+    `python3 script.py <<'EOF'\n${body}\nEOF`,
+    `node -e "process.stdin.pipe(process.stdout)" <<'EOF'\n${body}\nEOF`,
+  ]) {
+    expect(`${command} => ${await shell(command)}`).toBe(`${command} => reached the tool`)
+  }
+  for (const command of [
+    "bash <<'EOF'\ncat ~/.ssh/id_rsa\nEOF",
+    "sh -s <<EOF\nsudo ls\nEOF",
+    "cat <<'EOF' | zsh\ngit reset --hard\nEOF",
+    "eval \"$(cat <<'EOF'\nsudo ls\nEOF\n)\"",
+    "source /dev/stdin <<'EOF'\nsudo ls\nEOF",
+    ". /dev/stdin <<'EOF'\nsudo ls\nEOF",
+    "python3 <<'EOF'\nopen('" + home + "/.ssh/id_rsa').read()\nEOF",
+    "python3 - <<'EOF'\nopen('" + home + "/.ssh/id_rsa').read()\nEOF",
+    "node <<'EOF'\nrequire('fs').readFileSync('" + home + "/.ssh/id_rsa')\nEOF",
+    "perl <<'EOF'\nopen(F, '" + home + "/.ssh/id_rsa')\nEOF",
+    "ruby <<'EOF'\nFile.read('" + home + "/.ssh/id_rsa')\nEOF",
+  ]) {
+    expect(`${command} => ${await shell(command)}`).toStartWith(`${command} => Blocked by the guard:`)
+  }
+}, 30_000)
+
 test("a blocked command says why, and that the owner can run it themselves", async () => {
   const { shell } = await project()
 

@@ -3,8 +3,10 @@ import { existsSync } from "node:fs"
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { dirname, join } from "node:path"
+import { followLinks } from "../src/plugins/guard.ts"
 import { loadSettingsFiles, permissions, type PermissionsOptions, type Plugin, type Rule } from "../src/index.ts"
 import { actsOf, effectFor } from "../src/plugins/permissions/rules.ts"
+import { partsOf } from "../src/plugins/permissions/shell.ts"
 import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedCall, type ScriptedReply } from "./support/scripted-provider.ts"
 
@@ -214,25 +216,21 @@ test("a command run in a folder outside the project is asked about even when it 
 
 // ---- The other modes ------------------------------------------------------------------------
 
-test("in auto mode Evie works freely inside the project and asks before reaching outside it", async () => {
+test("in auto mode Evie works freely, pushes and pull requests included, and asks before working outside the project", async () => {
   const { attempt, asked, ran } = await start({ mode: "auto" })
 
   await attempt(edit("src/app.ts"))
   await attempt(shell("bun test && git commit -m done"))
   await attempt({ name: "deploy", input: {} })
-  await attempt(shell("git push origin dev"), YES)
-  await attempt(shell("gh pr create --fill"), YES)
+  await attempt(shell("git push origin dev"))
+  await attempt(shell("gh pr create --fill"))
   await attempt(shell("gh pr view 12"))
-  await attempt(shell("curl -X POST https://example.com/hook -d ok"), YES)
+  await attempt(shell("curl -X POST https://example.com/hook -d ok"))
   await attempt(shell("curl https://example.com/page"))
   await attempt(edit("/somewhere/else/hosts"), NO)
 
-  expect(asked.map((question) => question.text.split("\n").at(-1)?.trim())).toEqual([
-    "git push origin dev",
-    "gh pr create --fill",
-    "curl -X POST https://example.com/hook -d ok",
-    "Let evie change /somewhere/else/hosts, which is outside the project?",
-  ])
+  expect(asked.map((question) => question.text)).toEqual(["Let evie change /somewhere/else/hosts, which is outside the project?"])
+  expect(asked[0]?.choices[1]).toBe("Always in this project: allow working in /somewhere/else")
   expect(ran).toHaveLength(8)
 })
 
@@ -540,27 +538,27 @@ test("a command that looks harmless but writes a file or runs a program is not t
   expect(ran).toHaveLength(3)
 })
 
-test("in auto mode a command that sends, publishes or deploys is asked about however it is introduced", async () => {
+test("in auto mode a command that sends, publishes, deploys or changes the system runs without asking", async () => {
   const { attempt, asked, ran } = await start({ mode: "auto" })
-  const outward = [
+  const commands = [
+    "git push",
     "git -C sub push",
     "env X=1 git push",
-    "time git push",
-    "if true; then git push; fi",
     "for r in a b; do git push $r; done",
-    "( ( git push ) )",
+    "gh pr merge 12 --squash",
     "npx vercel deploy",
-    "bunx wrangler deploy",
     "curl --request POST https://example.com",
-    "curl -sd x https://example.com",
-    "curl --json '{}' https://example.com",
-    "wget --post-data=x https://example.com",
     "nc example.com 80",
+    "npm publish",
+    "doas ls",
+    "defaults write com.apple.dock autohide -bool true",
+    "pmset sleepnow",
+    "security find-generic-password -s github -w",
   ]
-  for (const command of outward) await attempt(shell(command), NO)
+  for (const command of commands) expect(await attempt(shell(command))).toBe("done")
 
-  expect(asked).toHaveLength(outward.length)
-  expect(ran).toEqual([])
+  expect(asked).toEqual([])
+  expect(ran).toHaveLength(commands.length)
 })
 
 test("an always answer for a file outside the project covers that folder and no deeper", async () => {
@@ -696,26 +694,22 @@ test("a rule that denies holds behind a wrapper with options, a full path, and o
   expect(ran).toEqual([])
 })
 
-test("in auto mode more ways of publishing, deploying and writing outside the project are asked about", async () => {
+test("in auto mode a command asks about each way it can name a folder outside the project and the temp folder", async () => {
   const { attempt, asked, ran } = await start({ mode: "auto" })
   const commands = [
-    "twine upload dist/pkg.whl",
-    "gem push pkg.gem",
-    "helm upgrade app chart",
-    "pulumi up",
-    "docker compose push",
-    "docker buildx build --push .",
-    "glab mr create",
-    "bun x vercel deploy",
-    "pnpm dlx vercel",
-    "http POST example.com/hook",
-    "tar -xf a.tar -C../..",
-    // The project is in the temp folder here, so the other folder is named from the home folder.
+    // The project is in the temp folder here, so the other folders are named from the home folder.
     "make -C ~/other clean",
+    "git -C ~/other log",
     "echo x>/etc/x",
     "cd && rm -rf build",
+    "cd ~/other && make",
+    "cp --target-directory=/usr/local/bin tool",
+    'cat "/somewhere/else/a file.txt"',
+    "find ~/old -name '*.log' -delete",
+    "tar -xzf a.tgz -C ~/x",
+    "rm \\\n  ~/other/y",
   ]
-  for (const command of commands) await attempt(shell(command), NO)
+  for (const command of commands) expect(await attempt(shell(command), NO)).toStartWith("The owner said no to this.")
 
   expect(asked).toHaveLength(commands.length)
   expect(ran).toEqual([])
@@ -769,16 +763,47 @@ test("a rule written with a path that goes through a link still matches", async 
   expect(asked).toEqual([])
 })
 
-// ---- Auto mode: anything but what is dangerous ---------------------------------------------------
+// ---- Auto mode: everything but secrets and other folders ---------------------------------------
 
-test("in auto mode any command runs without asking, wherever it reads, and so do the tools that read, show aside", async () => {
-  const { attempt, asked, folder } = await start({ mode: "auto" })
+// A pull request opened in a real session, its description given on standard input by a heredoc.
+const PULL_REQUEST = `gh pr create --base dev --title "Compact at 80% of the model's context limit unless compactAt is set" --body-file - <<'EOF'
+Trusts each model's context length from OpenRouter instead of capping every model at 200,000 tokens by default:
+
+- \`src/core/compaction.ts\`: \`triggerSize(modelLimit, ceiling?)\` now uses \`Math.floor(modelLimit * 0.8)\` when the model's limit is known and no explicit \`compactAt\` ceiling is set. \`200_000\` (\`DEFAULT_CEILING\`) remains the fallback when a model's limit is unknown, and an explicit \`compactAt\` still caps any model when configured.
+- \`src/core/loop.ts\` and \`src/core/evie.ts\`: pass \`options.compaction?.ceiling\` through without substituting \`DEFAULT_CEILING\` ahead of \`triggerSize\`.
+- \`test/compaction.test.ts\`: verify 1M-context models compact at 80% (~838,860), explicit \`compactAt\` still caps them, and unknown models fall back to 200,000.
+- \`README.md\`: update the compaction and \`compactAt\` documentation.
+EOF`
+
+test("the text of a heredoc is data and never judged as commands, however its end is written", async () => {
+  expect(partsOf(PULL_REQUEST)).toEqual([PULL_REQUEST.split("\n")[0]!])
+  expect(partsOf("cat > notes.md <<EOF\nrm -rf ~/x; `ls ~/y`\nEOF\ngit add notes.md")).toEqual(["cat > notes.md <<EOF", "git add notes.md"])
+  expect(partsOf('cat <<"END" | wc -l\n$(rm ~/x)\nEND')).toEqual(['cat <<"END"', "wc -l"])
+  expect(partsOf("cat <<-EOF\n\trm ~/x\n\tEOF\necho done")).toEqual(["cat <<-EOF", "echo done"])
+  // Two on one line are read one after the other; a `<<` in quotes or a here-string is no heredoc.
+  expect(partsOf("paste <<A <<B\na ~/x\nA\nb ~/y\nB")).toEqual(["paste <<A <<B"])
+  expect(partsOf("echo '<<EOF'\nls")).toEqual(["echo '<<EOF'", "ls"])
+  expect(partsOf("cat <<< ~/x\nls")).toEqual(["cat <<< ~/x", "ls"])
+  // A commit message written as a heredoc inside `"$(…)"`.
+  expect(partsOf("git commit -m \"$(cat <<'EOF'\nFix ~838,860 in `a.ts`\nEOF\n)\"").some((part) => /838|a\.ts/.test(part))).toBe(false)
+
+  const auto = await start({ mode: "auto" })
+  expect(await auto.attempt(shell(PULL_REQUEST))).toBe("done")
+  expect(auto.asked).toEqual([])
+
+  const manual = await start()
+  await manual.attempt(shell(PULL_REQUEST), NO)
+  expect(manual.asked).toHaveLength(1)
+  expect(manual.asked[0]?.choices[1]).toBe('Always in this project: allow commands that start with "gh pr create"')
+})
+
+test("in auto mode any command runs without asking inside the project and the temp folder, and so do the tools", async () => {
+  const { attempt, asked } = await start({ mode: "auto" })
   const commands = [
+    "rm -rf dist",
+    "cat /tmp/x.log",
     "cat /tmp/evie-tc.log | tr '{}' '()'",
     "bun run typecheck > /tmp/x.log 2>&1",
-    "cat ~/Documents/notes.txt",
-    "ls -la /etc",
-    "git -C ~/other log --oneline",
     "cd /tmp/evie-work && make",
     "git ls-files | xargs wc -l",
     "find -L . -name '*.tmp' -delete",
@@ -786,93 +811,135 @@ test("in auto mode any command runs without asking, wherever it reads, and so do
     `echo hi > ${join(tmpdir(), "evie-note.txt")}`,
     "cd /tmp/evie-work && rm -rf build",
     "mv build/a.txt .",
-    "cp ~/Documents/notes.txt notes.txt",
     "git checkout -- src/app.ts",
     "sed -i '' 's/a/b/' notes.txt",
-    "sed -n 's/a/b/p' ~/notes.txt",
     "perl -pi -e 's/a/b/' /tmp/evie-work/notes.txt",
+    'git commit -m "Fix the hosts file in /etc and ~/x"',
+    // A program run by its full path is not a folder worked in.
+    "/usr/bin/env bun test",
   ]
   for (const command of commands) expect(await attempt(shell(command))).toBe("done")
-  for (const call of [
-    read("/somewhere/else/notes.md"),
-    { name: "grep", input: { pattern: "x", path: "/another/place" } },
-    edit("/tmp/evie-notes.md"),
-    edit(join(tmpdir(), "evie-x.txt")),
-  ]) {
+  for (const call of [read("src/app.ts"), { name: "grep", input: { pattern: "x", path: "src" } }, edit("/tmp/evie-notes.md"), edit(join(tmpdir(), "evie-x.txt")), read("/tmp/evie-x.log")]) {
     expect(await attempt(call)).toBe("done")
   }
   expect(asked).toEqual([])
-  expect(folder).toBeDefined()
 })
 
-test("in auto mode the dangerous is still asked about: sending, deleting or overwriting outside the project and the temp folder, and changing the system", async () => {
-  const { attempt, asked, ran, folder } = await start({ mode: "auto" })
-  await symlink("/usr", join(folder, "sys"))
-  const calls = [
-    shell("rm ~/Documents/x"),
-    shell("mv a ~/b"),
-    shell("echo hi > ~/x"),
-    shell("date >> ~/log.txt"),
-    shell("date | tee -a ~/log.txt"),
-    shell("cp notes.txt ~/notes.txt"),
-    shell("cp -t ~/backup a.txt b.txt"),
-    shell("rmdir ~/empty"),
-    shell("unlink ~/x"),
-    shell("shred ~/x"),
-    shell("truncate -s 0 ~/x"),
-    shell("dd if=a.img of=~/b.img"),
-    shell("find ~/old -name '*.log' -delete"),
-    shell("git -C ~/other checkout -- a.txt"),
-    shell("cd ~/other && git restore a.txt"),
-    shell("git restore a.txt", "/somewhere/else"),
-    shell("tar -xzf a.tgz -C ~/x"),
-    shell('rm "$f"'),
-    shell("sed -i '' 's/a/b/' ~/notes.txt"),
-    shell("sed --in-place=.bak -e 's/a/b/' ~/notes.txt"),
-    shell("perl -pi -e 's/a/b/' ~/notes.txt"),
-    // A link in the project that leads outside it, and the temp folder, is followed.
-    shell("rm sys/x"),
-    shell("git push"),
-    shell("doas ls"),
-    shell("defaults write com.apple.dock autohide -bool true"),
-    shell("launchctl load ~/Library/LaunchAgents/x.plist"),
-    shell("pmset sleepnow"),
-    // A command that names a place outside, or runs in one, and is not known to change only files inside.
-    shell('bash -c "rm -rf ~/Documents"'),
-    shell("find ~/old | xargs rm"),
-    shell("timeout 5 rm ~/x"),
-    shell("\\rm ~/x"),
-    shell("env -C ~/x rm -rf build"),
-    shell("find ~/old -exec /bin/rm {} \\;"),
-    shell("ln -sf ~/dotfiles/zshrc ~/.zshrc"),
-    shell("chmod -R 755 ~/x"),
-    shell("curl -o ~/x https://example.com/x"),
-    shell("wget -O ~/x https://example.com/x"),
-    shell("unzip -o a.zip -d ~/x"),
-    shell("tar -cf ~/out.tar src"),
-    shell("install -m 755 tool ~/bin/tool"),
-    shell("git -C ~/x checkout ."),
-    shell("git -C ~/x stash drop"),
-    shell("git -C ~/x branch -D old"),
-    shell("git -C ~/x commit -m wip"),
-    shell("perl -ne 'print' ~/notes.txt"),
-    shell("cd '/etc' && rm -f hosts"),
-    shell("find -L ~/old -delete"),
-    shell("find -name '*.log' -delete", "/somewhere/else"),
-    shell("scutil --set HostName box"),
-    edit("/somewhere/else/hosts"),
-    // A file shown is copied into the project, whose files are backed up, so showing one from outside asks in every mode.
-    { name: "show", input: { paths: ["/somewhere/else/plot.png"] } },
-  ]
-  for (const call of calls) expect(await attempt(call, NO)).toStartWith("The owner said no to this.")
-  expect(asked).toHaveLength(calls.length)
-  expect(ran).toEqual([])
+test("in auto mode a place built from a variable is not asked about, as OpenCode does not, since it cannot be told before the command runs", async () => {
+  const { attempt, asked } = await start({ mode: "auto" })
+
+  for (const command of ['rm "$f"', "rm -rf $BUILD/out", "cd $DIR && make", "ls ~nobody/x", "cd - && ls"]) expect(await attempt(shell(command))).toBe("done")
+  // The home folder written as a variable is known, so it is no way round the question.
+  expect(await attempt(shell("mv notes.md $HOME/other/notes.md"), NO)).toStartWith("The owner said no to this.")
+  expect(asked).toHaveLength(1)
 })
 
-test("sudo is one the mode asks about in auto, and the guard blocks it before that, as it blocks the private folders", async () => {
+test("in auto mode a folder outside the project and the temp folder asks once, and an always answer allows that folder from then on", async () => {
+  const { attempt, asked, ran } = await start({ mode: "auto" })
+  const other = join(homedir(), "other")
+
+  expect(await attempt(shell("ls ~/other"), NO)).toStartWith("The owner said no to this.")
+  expect(await attempt(shell("cat ~/other/x"), always)).toBe("done")
+  expect(asked[1]).toEqual({
+    text: `Run this command?\n\n  cat ~/other/x\n\nIt works outside the project, in ${other}.`,
+    choices: [YES, `Always in this project: allow working in ${other}`, NO],
+  })
+  for (const call of [shell("ls ~/other"), shell("rm ~/other/y"), shell("cat ~/other/x"), shell("cd ~/other && rm -rf build"), read(join(other, "deep", "z.md")), edit(join(other, "notes.md")), shell("ls", other)]) {
+    expect(await attempt(call)).toBe("done")
+  }
+  expect(asked).toHaveLength(2)
+  expect(ran).toHaveLength(8)
+
+  // The folder a command runs in, and the file tools, ask the same way.
+  await attempt(shell("ls", "/somewhere/else"), NO)
+  await attempt(read("/somewhere/else/notes.md"), NO)
+  await attempt({ name: "grep", input: { pattern: "x", path: "/another/place" } }, NO)
+  expect(asked.slice(2).map((question) => question.text)).toEqual([
+    "Run this command?\n\n  ls\n(in /somewhere/else)\n\nIt works outside the project, in /somewhere/else.",
+    "Let evie read /somewhere/else/notes.md, which is outside the project?",
+    "Let evie read /another/place, which is outside the project?",
+  ])
+  expect(asked[4]?.choices[1]).toBe("Always in this project: allow working in /another/place")
+})
+
+test("in auto mode the home folder and the root themselves ask every time, with no always answer, and a place in one is asked about by itself", async () => {
+  const { attempt, asked, folder } = await start({ mode: "auto" })
+  const other = join(homedir(), "other")
+
+  // A missing place directly in the home folder is asked about by itself, and always allows only it.
+  expect(await attempt(shell("ls ~/other"), always)).toBe("done")
+  expect(asked[0]).toEqual({
+    text: `Run this command?\n\n  ls ~/other\n\nIt works outside the project, in ${other}.`,
+    choices: [YES, `Always in this project: allow working in ${other}`, NO],
+  })
+  for (const command of ["cat ~/other/x", "rm ~/other/y", "ls ~/other"]) expect(await attempt(shell(command))).toBe("done")
+  expect(await attempt(shell("cat ~/another/x"), NO)).toStartWith("The owner said no to this.")
+  expect(await attempt(shell("cat /evie-missing-x"), NO)).toStartWith("The owner said no to this.")
+  expect(asked.slice(1).map((question) => question.choices[1])).toEqual([
+    `Always in this project: allow working in ${join(homedir(), "another")}`,
+    "Always in this project: allow working in /evie-missing-x",
+  ])
+
+  // The home folder and the root themselves.
+  const each = ["ls ~", "ls ~", "find ~ -name '*.log' -delete", "du -sh ~", "ls /", "cd && rm -rf build"]
+  for (const command of each) expect(await attempt(shell(command), YES)).toBe("done")
+  expect(asked.slice(3).map((question) => question.choices)).toEqual(each.map(() => [YES, NO]))
+  expect(asked[3]?.text).toBe(`Run this command?\n\n  ls ~\n\nIt works outside the project, in ${homedir()}.\n\nThis is asked about each time: an answer for the home folder or / would cover nearly everything.`)
+  expect(await attempt(shell("ls ~"), "always")).toStartWith('The owner said no to this, and added: "always".')
+  // The guard blocks deleting the home folder before it is asked about; the rules alone would ask, with no always.
+  expect(await attempt(shell("rm -rf ~"))).toStartWith("Blocked by the guard:")
+  const reached = actsOf({ id: "1", name: "shell", input: { command: "rm -rf ~" } }, folder).filter((act) => act.action === "outside")
+  expect(reached.map((act) => [act.target, act.noAlways, effectFor(act, [], "auto", folder)])).toEqual([[followLinks(homedir()), true, "ask"]])
+})
+
+test("in auto mode a session with no project works in the home folder: it asks only about what it names outside that and the temp folder, and about the home folder itself", async () => {
+  const { run, attempt, asked } = await start({ mode: "auto" })
+  const { session } = await run.evie.send({ type: "open_session", questions: true })
+
+  for (const call of [shell("ls"), shell("cat ~/notes.txt"), shell("rm -rf ~/build/x"), shell("cd ~/code && make"), shell("cd && ls"), shell("cat /tmp/x.log"), shell("ls src"), read(join(homedir(), "notes.md"))]) {
+    expect(await attempt(call, undefined, session)).toBe("done")
+  }
+  expect(asked).toEqual([])
+
+  expect(await attempt(shell("cat /etc/hosts"), NO, session)).toStartWith("The owner said no to this.")
+  const etc = followLinks("/etc")
+  expect(asked[0]).toEqual({ text: `Run this command?\n\n  cat /etc/hosts\n\nIt works in ${etc}.`, choices: [YES, `Always outside a project: allow working in ${etc}`, NO] })
+  for (const command of ["ls ~", "find ~ -delete"]) expect(await attempt(shell(command), NO, session)).toStartWith("The owner said no to this.")
+  expect(asked.slice(1).map((question) => question.choices)).toEqual([[YES, NO], [YES, NO]])
+  expect(await attempt(shell("rm -rf ~"), undefined, session)).toStartWith("Blocked by the guard:")
+})
+
+test("in auto mode a heredoc's text is no reason for the guard to block a pull request", async () => {
+  const { attempt, asked } = await start({ mode: "auto" })
+  const command = "gh pr create --title Guard --body-file - <<'EOF'\nsudo is never needed\ngit reset --hard is blocked\n~/.ssh stays private\nEOF"
+
+  expect(await attempt(shell(command))).toBe("done")
+  expect(await attempt(shell("bash <<'EOF'\ncat ~/.ssh/id_rsa\nEOF"))).toStartWith("Blocked by the guard:")
+  expect(asked).toEqual([])
+})
+
+test("in auto mode reading a .env file asks, by the read tools or a command naming it, and an always answer allows that file", async () => {
+  const { attempt, asked, folder } = await start({ mode: "auto" })
+
+  for (const call of [shell("cat .env"), read(".env"), read("config/.env.local"), shell("bun --env-file=.env.production run x"), showing("prod.env")]) {
+    expect(await attempt(call, NO)).toStartWith("The owner said no to this.")
+  }
+  expect(asked[0]).toEqual({ text: "Run this command?\n\n  cat .env\n\nIt reads .env, which may hold secrets.", choices: [YES, "Always in this project: allow reading .env", NO] })
+  expect(asked[1]?.text).toBe("Let evie read .env?")
+  for (const call of [shell("cat .env.example"), read(".env.example"), read("config/.env.example"), edit(".env")]) expect(await attempt(call)).toBe("done")
+  expect(asked).toHaveLength(5)
+
+  expect(await attempt(shell("cat .env"), always)).toBe("done")
+  expect(await attempt(shell("grep KEY .env"))).toBe("done")
+  expect(await attempt(read(join(folder, ".env")))).toBe("done")
+  expect(await attempt(read("config/.env.local"), NO)).toStartWith("The owner said no to this.")
+  expect(asked).toHaveLength(7)
+})
+
+test("the guard's private folders are blocked in auto mode as in every mode, sudo with them, and the mode alone allows sudo", async () => {
   const { attempt, asked, folder } = await start({ mode: "auto" })
   const [act] = actsOf({ id: "1", name: "shell", input: { command: "sudo ls" } }, folder)
-  expect(effectFor(act!, [], "auto", folder)).toBe("ask")
+  expect(effectFor(act!, [], "auto", folder)).toBe("allow")
 
   expect(await attempt(shell("sudo ls"))).toStartWith("Blocked by the guard:")
   expect(await attempt(shell("cat ~/.ssh/id_rsa"))).toStartWith("Blocked by the guard:")
@@ -887,11 +954,14 @@ test("in auto mode the owner's rules still decide first, and one that allows a k
       { action: "shell", match: "cat *", effect: "allow" },
       { action: "shell", match: "git push *", effect: "allow" },
       { action: "shell", match: "ls *", effect: "ask" },
+      { action: "outside", match: "~/notes/**", effect: "allow" },
     ],
   })
 
-  expect(await attempt(shell("cat ~/Documents/notes.txt"))).toBe("done")
+  expect(await attempt(shell("cat /tmp/notes.txt"))).toBe("done")
   expect(await attempt(shell("git push origin dev"))).toBe("done")
+  expect(await attempt(shell("rm ~/notes/old.txt"))).toBe("done")
+  expect(await attempt(read(join(homedir(), "notes", "a.md")))).toBe("done")
   expect(await attempt(shell("ls"), NO)).toStartWith("The owner said no to this.")
   expect(asked).toHaveLength(1)
 })
@@ -933,29 +1003,6 @@ test("a mode set with /mode is kept for that session when evie starts again, and
   expect(kept.filter((file) => file.includes(first.session))).toHaveLength(1)
   await again.evie.send({ type: "delete_session", session: first.session })
   expect(kept.filter((file) => file.includes(first.session)).every((file) => !existsSync(join(home, file)))).toBe(true)
-})
-
-test("in auto mode reading the owner's credentials asks, by the read tools or by any command, and one in the project is as before", async () => {
-  const { attempt, asked } = await start({ mode: "auto" })
-  const calls = [
-    read(join(homedir(), ".netrc")),
-    read(join(homedir(), ".config", "gcloud", "application_default_credentials.json")),
-    { name: "grep", input: { pattern: "token", path: join(homedir(), ".azure") } },
-    shell("cat ~/.npmrc"),
-    shell("cat ~/.pypirc ~/.git-credentials"),
-    shell("cat ~/.config/git/credentials"),
-    shell("grep oauth ~/.config/gh/hosts.yml"),
-    shell("cat $HOME/.docker/config.json"),
-    shell("cat ~/.kube/config"),
-    shell("security find-generic-password -s github -w"),
-    shell("security find-internet-password -s example.com"),
-  ]
-  for (const call of calls) expect(await attempt(call, NO)).toStartWith("The owner said no to this.")
-  expect(asked).toHaveLength(calls.length)
-
-  expect(await attempt(shell("cat .env .npmrc"))).toBe("done")
-  expect(await attempt(read(".netrc"))).toBe("done")
-  expect(asked).toHaveLength(calls.length)
 })
 
 test("a mode set with /mode wins over its file, which is read once, and a mode that could not be saved leaves no stale file", async () => {

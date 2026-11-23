@@ -4,7 +4,7 @@ import { join } from "node:path"
 import type { Plugin } from "../../core/types.ts"
 import { dataFolder } from "../../core/evie.ts"
 import { createGuard, isDefinition, isSavedOutput } from "../guard.ts"
-import { MODES, actsOf, alwaysRule, effectFor, questionFor, type Mode, type Rule } from "./rules.ts"
+import { AUTO_ASKS, MODES, actsOf, alwaysRule, effectFor, questionFor, type Mode, type Rule } from "./rules.ts"
 
 // The built-in permissions plugin. Before a tool runs, it decides whether
 // the call is allowed, denied, or needs the owner's say-so, and asks when it
@@ -130,8 +130,11 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
           // Reading the output Evie saved for this session is not reaching
           // outside the project, so it is not asked about. A rule that
           // denies it still does.
-          const ownOutput = act.action === "read" && effect !== "deny" && isSavedOutput(data, context.session, act.target, context.parent)
+          const ownOutput = (act.action === "read" || act.action === "outside") && effect !== "deny" && isSavedOutput(data, context.session, act.target, context.parent)
           if (ownOutput) return { act, effect: "allow" as const, standing: false }
+          // The owner's agents and skills are not another folder to work in:
+          // reading them and changing them is asked about as below.
+          if (act.action === "outside" && effect !== "deny" && isDefinition(data, act.target)) return { act, effect: "allow" as const, standing: false }
           // An agent or a skill in the data folder applies in every project
           // from then on. Reading one is free. Writing one is asked about
           // every time, whatever the mode and whatever was answered before.
@@ -159,14 +162,19 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         }
 
         // One "always" choice covers everything this call was asked about.
-        const always = asking.map((act) => alwaysRule(act, folder))
+        const always = asking.map((act) => alwaysRule(act, folder, mode)).filter(({ rule }, at, all) => all.findIndex((other) => other.rule.action === rule.action && other.rule.match === rule.match) === at)
         const labels = [...new Set(always.map(({ label }) => label))]
         const ALWAYS = `Always ${folder === null ? "outside a project" : "in this project"}: allow ${labels.join(", and ")}`
-        // There is no "always" for a standing instruction: each one is looked at.
-        const everyTime = judged.some(({ effect, standing }) => effect === "ask" && standing)
-        const text = everyTime
-          ? `${questionFor(call, asking, folder)}\n\nThis is an agent or a skill of yours. It applies in every project from now on, so it is asked about each time.`
-          : questionFor(call, asking, folder)
+        // There is no "always" for a standing instruction: each one is looked
+        // at. Nor is there for the home folder or the root itself.
+        const standing = judged.some(({ effect, standing }) => effect === "ask" && standing)
+        const broad = asking.some((act) => act.noAlways)
+        const everyTime = standing || broad
+        const notes = [
+          ...(standing ? ["This is an agent or a skill of yours. It applies in every project from now on, so it is asked about each time."] : []),
+          ...(broad ? ["This is asked about each time: an answer for the home folder or / would cover nearly everything."] : []),
+        ]
+        const text = [questionFor(call, asking, folder), ...notes].join("\n\n")
         const given = await context.ask({ text, choices: everyTime ? [ONCE, NO] : [ONCE, ALWAYS, NO], freeText: true, kind: "permission" })
         // A plain word typed in place of a number means what it says.
         const word = given?.trim().toLowerCase()
@@ -202,6 +210,5 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
 
 const ABOUT =
   "The modes are: read-only, which changes nothing; manual, which asks before every change and every command; and " +
-  "auto, which reads anywhere and works freely in the project and the temp folder, and asks before what is " +
-  "dangerous: sending or publishing, changing anything outside them, reading your credentials, and changing the " +
-  "system. Change it for this session with /mode and a name."
+  `auto, which does anything without asking, pushes and pull requests included, and asks only before ${AUTO_ASKS}; ` +
+  '"Always" then allows that folder or file from then on. Change it for this session with /mode and a name.'
