@@ -426,3 +426,39 @@ test("with no session, a client reads what a new session would start with: the m
   expect(await run.evie.send({ type: "read_context" })).toEqual({ model: "test/model", size: 0, compactsAt: 800 })
   expect(await run.evie.send({ type: "read_context", project: run.project!.id })).toEqual({ model: "project/model", size: 0, compactsAt: 800 })
 })
+
+test("without a compactAt ceiling, a model with a 1M context window compacts at 80% of its limit rather than 200,000; unknown models fall back to 200,000", async () => {
+  const big = scriptedProvider([], { limit: 1_048_576 })
+  const runBig = await startEvie([big.plugin])
+  cleanups.push(runBig.stop)
+  expect(await runBig.evie.send({ type: "read_context", session: runBig.session })).toEqual({
+    model: "test/model",
+    size: 0,
+    compactsAt: Math.floor(1_048_576 * 0.8),
+  })
+  expect(await runBig.evie.send({ type: "read_context" })).toEqual({
+    model: "test/model",
+    size: 0,
+    compactsAt: Math.floor(1_048_576 * 0.8),
+  })
+
+  // An explicit compactAt ceiling still caps a larger model.
+  const capped = scriptedProvider([], { limit: 1_048_576 })
+  const runCapped = await startEvie([capped.plugin], { compaction: { ceiling: 300_000 } })
+  cleanups.push(runCapped.stop)
+  expect(await runCapped.evie.send({ type: "read_context", session: runCapped.session })).toEqual({
+    model: "test/model",
+    size: 0,
+    compactsAt: 300_000,
+  })
+
+  // With no limit known and no compactAt set, compaction falls back to 200,000.
+  const unknown = scriptedProvider([])
+  const runUnknown = await startEvie([unknown.plugin])
+  cleanups.push(runUnknown.stop)
+  expect(await runUnknown.evie.send({ type: "read_context", session: runUnknown.session })).toEqual({
+    model: "test/model",
+    size: 0,
+    compactsAt: 200_000,
+  })
+})
