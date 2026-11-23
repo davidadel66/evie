@@ -175,7 +175,8 @@ test("a kind not on the list, a file too large, one not there and a folder are r
   await put("fake.png", "<html>not a picture</html>")
   await writeFile(join(folder, "big.pdf"), Buffer.concat([Buffer.from("%PDF-1.7\n"), Buffer.alloc(25 * 1024 * 1024)]))
   await mkdir(join(folder, "out", "pages"), { recursive: true })
-  const kinds = "evie shows PNG, JPEG, GIF and WebP pictures, SVG, PDF and Markdown (.md)"
+  const kinds =
+    "evie shows PNG, JPEG, GIF and WebP pictures, SVG, PDF, Markdown (.md), HTML mockups (.html), Mermaid diagrams (.mmd) and 3D models (.glb, .gltf, .stl, .obj)"
 
   expect(await call(["notes.txt"])).toBe(`Not shown: notes.txt is not a kind of file evie can show: ${kinds}. Save it as one of those, or tell the owner its path instead.`)
   expect(await call(["fake.png"])).toBe(`Not shown: fake.png is not a kind of file evie can show: ${kinds}. Save it as one of those, or tell the owner its path instead.`)
@@ -263,4 +264,61 @@ test("when keeping a file fails partway through a call, the copies that call mad
     /^Not shown: the files could not be kept in Storage \(ENAMETOOLONG[^)]*\)\. Check that there is room and that evie may write there, then call show again, or tell the owner the paths instead\.$/,
   )
   expect(await readdir(join(folder, ".evie", "shown", "2026-11-22"))).toEqual([])
+})
+
+test("HTML mockups, Mermaid diagrams and 3D models (GLB, glTF, STL, OBJ) are recognised and shown", async () => {
+  setSystemTime(new Date(2026, 10, 22, 9, 30))
+  const { call, put, details } = await start()
+  await put("design/mockup.html", "<!doctype html><html><body><h1>Hi</h1></body></html>\n")
+  await put("diagrams/flow.mmd", "graph LR\n  A --> B\n")
+  const glb = new Uint8Array(24)
+  glb.set([0x67, 0x6c, 0x54, 0x46]) // "glTF"
+  await put("models/box.glb", glb)
+  await put("models/scene.gltf", JSON.stringify({ asset: { version: "2.0" } }))
+  await put("models/part.stl", "solid part\nendsolid part\n")
+  await put("models/mesh.obj", "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n")
+
+  await call(["design/mockup.html", "diagrams/flow.mmd", "models/box.glb", "models/scene.gltf", "models/part.stl", "models/mesh.obj"])
+
+  expect((details() as { files: { type: string }[] }).files.map((file) => file.type)).toEqual([
+    "text/html",
+    "text/vnd.mermaid",
+    "model/gltf-binary",
+    "model/gltf+json",
+    "model/stl",
+    "model/obj",
+  ])
+})
+
+test("an HTML mockup or glTF model copies its relative companion files into its own bundle folder in Storage, never climbing outside its folder", async () => {
+  setSystemTime(new Date(2026, 10, 22, 9, 30))
+  const { call, put, folder, details } = await start()
+  await put("secret.css", "body { color: red }")
+  await put(
+    "design/card.html",
+    '<!doctype html><html><head><link rel="stylesheet" href="styles/main.css"><link rel="stylesheet" href="../secret.css"></head><body><img src="img/hero.png"><script type="module" src="./app.js"></script></body></html>',
+  )
+  await put("design/styles/main.css", "body { background: url(../img/bg.png); }")
+  await put("design/img/hero.png", png())
+  await put("design/img/bg.png", png())
+  await put("design/app.js", 'import { x } from "./lib/helper.js"; console.log(x)')
+  await put("design/lib/helper.js", "export const x = 42\n")
+  await put("models/chair.gltf", JSON.stringify({ asset: { version: "2.0" }, buffers: [{ uri: "chair.bin" }], images: [{ uri: "tex/wood.png" }] }))
+  await put("models/chair.bin", new Uint8Array([1, 2, 3, 4]))
+  await put("models/tex/wood.png", png())
+
+  await call(["design/card.html", "models/chair.gltf"])
+
+  expect((details() as { files: { path: string }[] }).files.map((f) => f.path)).toEqual(["shown/2026-11-22/card/card.html", "shown/2026-11-22/chair/chair.gltf"])
+  const cardDir = join(folder, ".evie", "shown", "2026-11-22", "card")
+  expect(await Bun.file(join(cardDir, "styles", "main.css")).exists()).toBe(true)
+  expect(await Bun.file(join(cardDir, "img", "hero.png")).exists()).toBe(true)
+  expect(await Bun.file(join(cardDir, "img", "bg.png")).exists()).toBe(true)
+  expect(await Bun.file(join(cardDir, "app.js")).exists()).toBe(true)
+  expect(await Bun.file(join(cardDir, "lib", "helper.js")).exists()).toBe(true)
+  // Never climbs outside `design/`.
+  expect(await Bun.file(join(folder, ".evie", "shown", "2026-11-22", "secret.css")).exists()).toBe(false)
+  const chairDir = join(folder, ".evie", "shown", "2026-11-22", "chair")
+  expect(await Bun.file(join(chairDir, "chair.bin")).exists()).toBe(true)
+  expect(await Bun.file(join(chairDir, "tex", "wood.png")).exists()).toBe(true)
 })

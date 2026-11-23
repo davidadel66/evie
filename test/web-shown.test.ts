@@ -130,7 +130,22 @@ test("full screen moves through every image shown in the session, pictures and S
   )
 
   expect(galleryOf(transcriptOf(view(events))).map((file) => file.name)).toEqual(["chart.png", "logo.svg"])
-  expect(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml", "application/pdf", "text/markdown", "text/html"].map(viewerOf)).toEqual(["image", "image", "image", "image", "svg", "pdf", "markdown", undefined])
+  expect(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml", "application/pdf", "text/markdown", "text/html", "text/vnd.mermaid", "model/gltf-binary", "model/gltf+json", "model/stl", "model/obj", "text/plain"].map(viewerOf)).toEqual([
+    "image",
+    "image",
+    "image",
+    "image",
+    "svg",
+    "pdf",
+    "markdown",
+    "html",
+    "mermaid",
+    "model",
+    "model",
+    "model",
+    "model",
+    undefined,
+  ])
 })
 
 test("full screen keeps the image it shows by its key, so that a gallery that grows while it is open, as when the page before is read, does not move it", () => {

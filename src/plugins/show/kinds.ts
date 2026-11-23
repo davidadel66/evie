@@ -26,10 +26,9 @@ export const SHOWN_LIMIT = 25 * 1024 * 1024
 // and to see that a text file is text and, for SVG, has its <svg> tag.
 export const KIND_HEAD = 64 * 1024
 
-// Each kind: its type; the endings of its name, the first the one a copy
-// is given when its name has none of them; and whether a file of this
-// name, opening with these bytes, is one. Pictures first, as their bytes
-// alone decide.
+// The kinds of file evie can show, in order: pictures, PDF, SVG, Markdown,
+// HTML mockups, Mermaid diagrams and 3D models (glTF, GLB, STL and OBJ).
+// Pictures and GLB come first, as their bytes alone decide.
 const KINDS: { type: string; endings: readonly string[]; is(name: string, head: Uint8Array): boolean }[] = [
   { type: "image/png", endings: [".png"], is: (_, head) => opens(head, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) },
   { type: "image/jpeg", endings: [".jpg", ".jpeg"], is: (_, head) => opens(head, [0xff, 0xd8, 0xff]) },
@@ -38,7 +37,57 @@ const KINDS: { type: string; endings: readonly string[]; is(name: string, head: 
   { type: "application/pdf", endings: [".pdf"], is: (_, head) => ascii(head, 0, 1024).includes("%PDF-") },
   { type: "image/svg+xml", endings: [".svg"], is: (name, head) => endsWith(name, [".svg"]) && textOf(head)?.includes("<svg") === true },
   { type: "text/markdown", endings: [".md", ".markdown"], is: (name, head) => endsWith(name, [".md", ".markdown"]) && textOf(head) !== undefined },
+  { type: "text/html", endings: [".html", ".htm"], is: (name, head) => endsWith(name, [".html", ".htm"]) && textOf(head) !== undefined },
+  { type: "text/vnd.mermaid", endings: [".mmd", ".mermaid"], is: (name, head) => endsWith(name, [".mmd", ".mermaid"]) && textOf(head) !== undefined },
+  { type: "model/gltf-binary", endings: [".glb"], is: (_, head) => ascii(head, 0, 4) === "glTF" },
+  { type: "model/gltf+json", endings: [".gltf"], is: (name, head) => endsWith(name, [".gltf"]) && isGltfJson(head) },
+  { type: "model/stl", endings: [".stl"], is: (name, head) => endsWith(name, [".stl"]) && isStl(head) },
+  { type: "model/obj", endings: [".obj"], is: (name, head) => endsWith(name, [".obj"]) && textOf(head) !== undefined },
 ]
+
+// Companion files that an HTML mockup or a glTF model may reference by
+// relative path and load inside its own preview pass: styles, scripts,
+// fonts, images, JSON, WebAssembly, binary buffers and textures.
+const COMPANION_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".htm": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".bin": "application/octet-stream",
+  ".ktx2": "image/ktx2",
+  ".mtl": "text/plain; charset=utf-8",
+  ".wasm": "application/wasm",
+  ".txt": "text/plain; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
+  ".gltf": "model/gltf+json",
+  ".glb": "model/gltf-binary",
+  ".stl": "model/stl",
+  ".obj": "model/obj",
+}
+
+// The HTTP Content-Type for a companion file inside a shown preview folder.
+export function companionType(name: string): string | undefined {
+  const lower = name.toLowerCase()
+  const dot = lower.lastIndexOf(".")
+  return dot === -1 ? undefined : COMPANION_TYPES[lower.slice(dot)]
+}
+
+// Whether a shown kind can reference relative companion files beside it.
+export const hasCompanions = (type: string) => type === "text/html" || type === "model/gltf+json" || type === "model/obj"
 
 // The type a file is shown as, from its name and the opening of its
 // bytes, or nothing when it is no kind that can be shown.
@@ -62,11 +111,26 @@ export function namedFor(name: string, type: string): string {
 }
 
 // The kinds that can be shown, in words for the model, as a refusal says them.
-export const SHOWN_KINDS_WORDS = "PNG, JPEG, GIF and WebP pictures, SVG, PDF and Markdown (.md)"
+export const SHOWN_KINDS_WORDS =
+  "PNG, JPEG, GIF and WebP pictures, SVG, PDF, Markdown (.md), HTML mockups (.html), Mermaid diagrams (.mmd) and 3D models (.glb, .gltf, .stl, .obj)"
 
 const opens = (head: Uint8Array, signature: number[]) => head.byteLength >= signature.length && signature.every((byte, at) => head[at] === byte)
 const ascii = (head: Uint8Array, at: number, length: number) => String.fromCharCode(...head.subarray(at, at + length))
 const endsWith = (name: string, endings: readonly string[]) => endings.some((ending) => name.toLowerCase().endsWith(ending))
+
+// A glTF JSON file starts as UTF-8 text whose first non-space byte is `{`.
+function isGltfJson(head: Uint8Array): boolean {
+  const text = textOf(head)
+  return text !== undefined && text.trimStart().startsWith("{")
+}
+
+// An STL file is either ASCII ("solid ...") or binary (an 80-byte header plus
+// a 4-byte triangle count, at least 84 bytes long).
+function isStl(head: Uint8Array): boolean {
+  if (head.byteLength >= 84) return true
+  const text = textOf(head)
+  return text !== undefined && text.trimStart().startsWith("solid")
+}
 
 // The opening of a file as text, in UTF-8, or nothing when it is not: a
 // zero byte, as a program's files hold, or bytes that are not UTF-8. A

@@ -78,6 +78,8 @@ export const NAMED_SIZES = [
   "image-open-height",
   "shown-header",
   "shown",
+  "shown-model",
+  "shown-phone",
   "shown-svg",
   "shown-drawing",
   "shown-cut",
