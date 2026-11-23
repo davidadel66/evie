@@ -3,7 +3,7 @@
 // This is matching on text, the same as the guard: it recognises commands
 // written plainly and can be fooled by one hidden in a script or built from
 // a variable. It makes the common case quiet and the obvious risk visible.
-// It is not a sandbox. Where it cannot tell, it leans towards asking.
+// It is not a sandbox.
 
 // Sets quoted text aside while a command is taken apart, so that `rg "a|b"`
 // is one command and not two. Only text the shell would not run is set
@@ -27,7 +27,7 @@ function setQuotesAside(command: string): { text: string; putBack(text: string):
 // judged on its own, so `git status && git push` is not let through as
 // `git status`. An `&` that is part of a redirect, as in `2>&1`, does not split.
 export function partsOf(command: string): string[] {
-  const { text, putBack } = setQuotesAside(command)
+  const { text, putBack } = setQuotesAside(withoutHeredocs(command))
   const inner = [...text.matchAll(/\$\(([^()]*)\)|`([^`]*)`/g)].map((found) => found[1] ?? found[2] ?? "")
   const pieces = [text, ...inner].flatMap((piece) => piece.split(/&&|\|\||;|\|&?|\n|(?<![>&])&(?![>&])/))
   const parts = pieces.map((piece) => putBack(piece.trim())).filter((piece) => piece !== "")
@@ -144,155 +144,6 @@ export function leavesForHome(part: string): boolean {
   return (words[0] === "cd" || words[0] === "pushd") && (words.length === 1 || words[1] === "-" || words[1] === "~")
 }
 
-// Commands that reach outside the machine: they send, publish or deploy. In
-// auto mode these are asked about.
-const OUTWARD: RegExp[] = [
-  /^git (push|send-email)\b/,
-  /^(npm|pnpm|yarn|bun|cargo) publish\b/,
-  /^(twine upload|gem push)\b/,
-  // gh and glab change things on the forge unless they are only looking.
-  /^(gh|glab) (?!(pr|mr|issue|repo|run|release|workflow) (view|list|status|diff|checks)\b)(?!(auth status|status)\b)/,
-  /^curl\b.* (-[a-zA-Z]*[dFTX]\S*|--(request|data\S*|form\S*|upload-file|json)\b)/,
-  /^wget\b.* --(post-data|post-file|method|body-data|body-file)\b/,
-  /^(http|https|xh)\b.* (POST|PUT|PATCH|DELETE)\b/,
-  /^(ssh|scp|sftp|rsync|ftp|nc|ncat|netcat|telnet)\b/,
-  /^docker\b.*( push\b| login\b| --push\b)/,
-  /^kubectl (apply|delete|create|replace|patch|scale|rollout|exec)\b/,
-  /^helm (install|upgrade|uninstall|rollback|push)\b/,
-  /^(terraform|tofu) (apply|destroy)\b/,
-  /^pulumi (up|destroy)\b/,
-  /^(vercel|netlify|fly|flyctl|heroku|wrangler|firebase|aws|gcloud|az|supabase)\b/,
-  /^(mail|sendmail|mutt)\b/,
-]
-// A tool run through a package runner is that tool.
-const RUNNER = /^(npx|bunx|pnpx|(pnpm|yarn) dlx|bun x|(npm|pnpm) exec)( -\S+)* /
-
-export function isOutwardFacing(part: string): boolean {
-  const plain = plainWords(part).words.join(" ").replace(RUNNER, "")
-  return OUTWARD.some((pattern) => pattern.test(plain))
-}
-
-// Commands that run as another user or change the computer's own settings.
-// In auto mode these are asked about.
-const SYSTEM: RegExp[] = [
-  /^(sudo|doas|su|pkexec)\b/,
-  /^(launchctl|systemsetup|networksetup|pmset|nvram|csrutil|diskutil|spctl|fdesetup|softwareupdate|dscl|kextload|kextunload|systemctl|chsh|passwd|shutdown|reboot|halt|poweroff)\b/,
-  /^defaults (write|delete|import|rename)\b/,
-  /^scutil --set\b/,
-  /^sysctl\b.* (-w\b|\S+=)/,
-  /^crontab\b(?! -l\b)/,
-]
-
-export function changesSystem(part: string): boolean {
-  const plain = plainWords(part).words.join(" ").replace(RUNNER, "")
-  return SYSTEM.some((pattern) => pattern.test(plain))
-}
-
-// The commands that delete, move or overwrite files, each with what it does
-// that to, from its words after the name. `files` are the files themselves;
-// `folders` are where files land or are changed, as where `cp` copies to or
-// where `git clean` runs, with "." for the folder the command runs in.
-// `unnamed` says it changes files it does not name, such as `xargs rm`.
-// Undefined when it may change more than its words tell, as `perl` without
-// `-i` may. Writing a command's output to a file, with `>` or `>>`, is one more.
-type Overwrites = { files: string[]; folders: string[]; unnamed?: true }
-const NONE: Overwrites = { files: [], folders: [] }
-// The values given to an option: `-t dir`, `-tdir`, `--target-directory dir` or `--target-directory=dir`.
-function valuesOf(words: string[], short: string, long: string): string[] {
-  return words.flatMap((word, at) => {
-    if (word === short || word === long) return [words[at + 1] ?? ""]
-    if (word.startsWith(`${long}=`)) return [word.slice(long.length + 1)]
-    return word.startsWith(short) && !word.startsWith("--") && word.length > short.length ? [word.slice(short.length)] : []
-  })
-}
-// The name of a program as it would be run: `/bin/rm` and `\rm` are rm.
-const programOf = (word: string | undefined) => (word ?? "").replace(/^\\/, "").replace(/^.*\//, "")
-// An editor that changes files in place, as `sed -i` and `perl -i` do,
-// changes the files it names. Its script is the word after an option that
-// takes one, such as `-e`, or else its first word, which names no file.
-const inPlace =
-  (takesScript: RegExp, otherwise: Overwrites | undefined) =>
-  (_args: string[], words: string[]): Overwrites | undefined => {
-    if (!words.some((word) => /^-[a-zA-Z]*i/.test(word) || word.startsWith("--in-place"))) return otherwise
-    const named = words.filter((word, at) => word !== "" && !word.startsWith("-") && !(at > 0 && takesScript.test(words[at - 1]!)))
-    return { files: words.some((word) => takesScript.test(word)) ? named : named.slice(1), folders: [] }
-  }
-const OVERWRITES: Record<string, (args: string[], words: string[], gitIn: string[]) => Overwrites | undefined> = {
-  ...Object.fromEntries(["rm", "rmdir", "unlink", "shred", "truncate", "tee"].map((name) => [name, (args: string[]) => ({ files: args, folders: [] })])),
-  mv: (args, words) => {
-    const into = valuesOf(words, "-t", "--target-directory")
-    return into.length > 0 ? { files: args.filter((arg) => !into.includes(arg)), folders: into } : { files: args.slice(0, -1), folders: args.slice(-1) }
-  },
-  cp: (args, words) => {
-    const into = valuesOf(words, "-t", "--target-directory")
-    return { files: [], folders: into.length > 0 ? into : args.length > 1 ? args.slice(-1) : [] }
-  },
-  sed: inPlace(/^(-[a-zA-Z]*[ef]|--expression|--file)$/, NONE),
-  perl: inPlace(/^-[a-zA-Z]*[eE]$/, undefined),
-  dd: (_args, words) => ({ files: words.filter((word) => word.startsWith("of=")).map((word) => word.slice(3)), folders: [] }),
-  find: (_args, words) => {
-    // Options that come before the places it starts from.
-    let from = 0
-    while (["-L", "-H", "-P", "-E", "-X", "-s", "-x", "-f"].includes(words[from] ?? "")) from += 1
-    const end = words.findIndex((word, at) => at >= from && /^[-(!]/.test(word))
-    const starts = words.slice(from, end === -1 ? words.length : end)
-    // Deleting, or running for each file anything that does more than look.
-    const changes = words.includes("-delete") || words.some((word, at) => /^-(exec|execdir|ok|okdir)$/.test(word) && !isReadOnly(words.slice(at + 1).join(" ")))
-    if (!changes) return NONE
-    return starts.length > 0 ? { files: [], folders: starts } : { files: [], folders: [], unnamed: true }
-  },
-  // What xargs runs is given files that cannot be told from its words.
-  xargs: (_args, words) => {
-    const runs = words.findIndex((word) => !word.startsWith("-") && !/^\d+$/.test(word))
-    if (runs === -1 || isReadOnly(words.slice(runs).join(" "))) return NONE
-    return Object.hasOwn(OVERWRITES, programOf(words[runs])) ? { files: [], folders: [], unnamed: true } : undefined
-  },
-  tar: (_args, words) => {
-    const short = words.filter((word, at) => (at === 0 && /^[a-zA-Z]+$/.test(word)) || /^-[a-zA-Z]/.test(word)).map((word) => word.replace(/^-/, ""))
-    const has = (letter: RegExp, long: string[]) => words.some((word) => long.includes(word)) || short.some((word) => letter.test(word))
-    if (has(/x/, ["--extract", "--get"])) {
-      const into = valuesOf(words, "-C", "--directory")
-      return { files: [], folders: into.length > 0 ? into : ["."] }
-    }
-    // Making an archive writes the file named after `f`.
-    if (has(/[cruA]/, ["--create", "--append", "--update", "--catenate"])) {
-      const archive = words.flatMap((word, at) => ((at === 0 || word.startsWith("-")) && /^-?[a-zA-Z]*f$/.test(word) ? [words[at + 1] ?? ""] : []))
-      return { files: [...archive, ...valuesOf(words, "--file", "--file")], folders: [] }
-    }
-    return has(/t/, ["--list"]) ? NONE : undefined
-  },
-  // git changes the folder it works in with anything but looking, and may write any place it names.
-  git: (args, words, gitIn) => (isReadOnly(["git", ...words].join(" ")) ? NONE : { files: [], folders: [...(gitIn.length > 0 ? gitIn : ["."]), ...args.slice(1)] }),
-}
-
-// What a command deletes, moves or overwrites, as written. `known` says
-// whether that is all it changes: it is one of the commands above, or only
-// looks apart from where it writes its output. In auto mode one that
-// changes files outside the project and the temp folder is asked about.
-export function overwrittenBy(part: string): Overwrites & { known: boolean } {
-  const { text, putBack, unquote } = setQuotesAside(part)
-  const redirected: string[] = []
-  // A redirect to a file writes it. Sending one stream to another does not.
-  const bare = text
-    .replace(/\d*>&\d+/g, " ")
-    .replace(/(?:&|\d*)>>?\|?\s*([^\s<>|&;()]+)/g, (_all, target: string) => {
-      redirected.push(unquote(target))
-      return " "
-    })
-    .replace(/\d*<<?-?\s*\S+/g, " ")
-  const { words, gitIn } = plainWords(bare)
-  const [name = "", ...rest] = words.map(unquote)
-  const found = Object.hasOwn(OVERWRITES, name) ? OVERWRITES[name]!(rest.filter((word) => !word.startsWith("-")), rest, gitIn.map(unquote)) : undefined
-  // `{a,b}` names each of a and b.
-  const each = (places: string[]) => places.flatMap((place) => place.split(/[{},]/)).filter((place) => place !== "")
-  return {
-    files: each([...(found?.files ?? []), ...redirected]),
-    folders: each(found?.folders ?? []),
-    ...(found?.unnamed && { unnamed: true as const }),
-    known: found !== undefined || isReadOnly(putBack(bare)),
-  }
-}
-
 // Where a `cd` or `pushd` goes, as written with its quotes taken off: "~"
 // for the home folder and "-" for wherever it was last. Undefined for any
 // other command.
@@ -307,13 +158,165 @@ export function cdTarget(part: string): string | undefined {
 // Every piece of a command that could name a place on disk: its words, the
 // values of `--flag=value` and `NAME=value`, a value written straight after
 // a short flag as in `-C../..`, the targets of redirects, and the entries of
-// `{a,b}`. Addresses such as https://… are left out.
-export function placesIn(part: string): string[] {
+// `{a,b}`. Quoted text is one word, as the shell reads it, so a message such
+// as `-m "fix /etc/hosts"` names no place. Addresses such as https://… are
+// left out, and so is the program run, unless `withProgram` is set: running
+// /usr/bin/env is not working in /usr/bin.
+export function placesIn(part: string, withProgram = true): string[] {
+  const { text, unquote } = setQuotesAside(part)
+  const program = withProgram ? undefined : text.split(/\s+/).find((word) => word !== "" && !isAssignment(word) && !/^[({!]+$/.test(word))
   const places: string[] = []
-  for (const piece of part.replace(/["']/g, "").split(/[\s<>={},;()|&]+/)) {
-    if (piece === "" || /^[a-z][a-z0-9+.-]*:\/\//i.test(piece)) continue
-    if (!piece.startsWith("-")) places.push(piece)
-    else if (!piece.startsWith("--") && piece.length > 2) places.push(piece.slice(2))
+  for (const piece of text.split(/[\s<>={},;()|&]+/)) {
+    if (piece === "" || piece === program) continue
+    const word = unquote(piece).replace(/["']/g, "")
+    if (word === "" || /^[a-z][a-z0-9+.-]*:\/\//i.test(word)) continue
+    if (!word.startsWith("-")) places.push(word)
+    else if (!word.startsWith("--") && word.length > 2) places.push(word.slice(2))
   }
   return places
+}
+
+// ---- Heredocs -----------------------------------------------------------------------------
+//
+// Reading a heredoc's end line is adapted from OpenCode's shell scanner,
+// packages/core/src/shell/scan.ts (bashHeredocDelimiter and bashHeredoc).
+//
+// MIT License
+//
+// Copyright (c) 2025 opencode
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+// The end word of a heredoc, written from `start`, just after `<<` or
+// `<<-`: `EOF`, `'EOF'`, `"EOF"` or `\EOF`, with its quotes taken off, and
+// where it ends in the text. Undefined when there is none.
+function heredocEnd(text: string, start: number): { word: string; end: number } | undefined {
+  let word = ""
+  let quote: "'" | '"' | undefined
+  let at = start
+  while (at < text.length && /[ \t]/.test(text[at]!)) at += 1
+  for (; at < text.length; at += 1) {
+    const char = text[at]!
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined
+      else if (char === "\\" && quote === '"' && '$`"\\'.includes(text[at + 1] ?? "")) word += text[++at]
+      else word += char
+    } else if (/[\s;&|()<>]/.test(char)) break
+    else if (char === "'" || char === '"') quote = char
+    else if (char === "\\" && text[at + 1] !== undefined && text[at + 1] !== "\n") word += text[++at]
+    else word += char
+  }
+  return word === "" || quote !== undefined ? undefined : { word, end: at }
+}
+
+// A command line with the text of each heredoc taken out: the lines after
+// the one that starts it, up to and with its end line. That text is data
+// given to a command, never commands, so nothing in it is judged as one. A
+// heredoc with no end line runs to the end, as the shell reads it. A heredoc
+// inside `"$(…)"`, as a commit message is often written, counts too.
+//
+// `keep` is given each line that starts heredocs, and keeps their text when
+// it says so, as the guard does for a heredoc a shell reads as commands.
+export function withoutHeredocs(command: string, keep: (line: string) => boolean = () => false): string {
+  if (!command.includes("<<")) return command
+  let out = ""
+  const waiting: { word: string; tabs: boolean }[] = []
+  // What is open where the text has got to: quotes, and `$(` inside double quotes or out of them.
+  const open: ("'" | '"' | "$(")[] = []
+  for (let at = 0; at < command.length; at += 1) {
+    const char = command[at]!
+    const inside = open.at(-1)
+    if (inside === "'") {
+      if (char === "'") open.pop()
+    } else if (char === "\\") {
+      out += command.slice(at, at + 2)
+      at += 1
+      continue
+    } else if (command.startsWith("$(", at)) {
+      open.push("$(")
+      out += "$("
+      at += 1
+      continue
+    } else if (inside === '"') {
+      if (char === '"') open.pop()
+    } else if (char === "'" || char === '"') {
+      open.push(char)
+    } else if (char === ")" && inside === "$(") {
+      open.pop()
+    } else if (char === "#" && (at === 0 || /[\s;&|()]/.test(command[at - 1]!))) {
+      // A comment runs to the end of its line.
+      const end = command.indexOf("\n", at)
+      out += command.slice(at, end === -1 ? command.length : end)
+      at = (end === -1 ? command.length : end) - 1
+      continue
+    } else if (command.startsWith("<<<", at)) {
+      // A here-string: its text is on the same line, and is a word like any other.
+      out += "<<<"
+      at += 2
+      continue
+    } else if (command.startsWith("<<", at)) {
+      const tabs = command[at + 2] === "-"
+      const found = heredocEnd(command, at + (tabs ? 3 : 2))
+      if (found !== undefined) {
+        waiting.push({ word: found.word, tabs })
+        out += command.slice(at, found.end)
+        at = found.end - 1
+        continue
+      }
+    } else if (char === "\n" && waiting.length > 0) {
+      const heredocs = waiting.splice(0)
+      if (!keep(out.slice(out.lastIndexOf("\n") + 1))) {
+        // The bodies start on the next line, one after the other.
+        let from = at + 1
+        for (const heredoc of heredocs) {
+          while (from < command.length) {
+            const end = command.indexOf("\n", from)
+            const line = command.slice(from, end === -1 ? command.length : end)
+            from = end === -1 ? command.length : end + 1
+            if ((heredoc.tabs ? line.replace(/^\t+/, "") : line) === heredoc.word) break
+          }
+        }
+        out += "\n"
+        at = from - 1
+        continue
+      }
+    }
+    out += char
+  }
+  return out
+}
+
+// Shells, and the programs that run what they are given as a shell does.
+const SHELLS = ["bash", "sh", "zsh", "dash", "ksh", "fish", "eval", "source", "."]
+const INTERPRETERS = /^(python[\d.]*|node|perl|ruby)$/
+// Words that give an interpreter its program, so that it reads none from standard input.
+const GIVES_PROGRAM = /^(-[a-zA-Z]*[ceEm]|--(eval|print|command)(=.*)?)$/
+
+// True for a line of commands in which a shell, or an interpreter with no
+// program of its own but standard input, runs what it is given: there, a
+// heredoc is commands, not data.
+export function runsInput(line: string): boolean {
+  const { text } = setQuotesAside(line)
+  return text.split(/&&|\|\||;|\|&?|&|\$\(|`|\(/).some((piece) => {
+    const { words } = plainWords(piece.replace(/\d*<<-?\s*\S+/g, " ").replace(/\d*[<>]+&?\s*\S+/g, " "))
+    const [name = "", ...rest] = words
+    if (SHELLS.includes(name)) return true
+    return INTERPRETERS.test(name) && !rest.some((word) => word !== "-" && (!word.startsWith("-") || GIVES_PROGRAM.test(word)))
+  })
 }
