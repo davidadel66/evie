@@ -1167,29 +1167,26 @@ What happens without a rule depends on the mode:
 |---|---|---|---|---|
 | `read-only` | Allowed | Denied | Only ones that just look, such as `ls` and `git status` | Denied |
 | `manual` | Allowed | Asks | Asks, except ones that just look | Asks |
-| `auto` | Allowed | Allowed | Allowed, except the dangerous ones below, which ask | Reading is allowed, except your credentials; showing a file asks, since a copy is kept in the project; changing a file asks, except in the temp folder |
+| `auto` | Allowed, except `.env` files, which ask | Allowed | Allowed | Asks once for each folder, except the temp folder |
 
-In `auto` mode evie runs any command that stays in the project and the
-temp folder (`/tmp` and `$TMPDIR`), and any command anywhere that only
-looks, and asks before the dangerous ones:
+`auto` works as OpenCode's default agent does: everything is allowed,
+pushes, pull requests, deploys and changes to the system included, with two
+exceptions, which ask:
 
-- ones that leave the computer or act for you online: pushes, publishing,
-  `gh` changes, POSTs, `ssh` and its kin, deploys and cloud tools;
-- ones that delete, move or overwrite files outside the project and the
-  temp folder, with links followed: `rm`, `rmdir`, `unlink`, `shred`,
-  `truncate`, `mv`, `cp` onto a file, `>`, `>>` or `tee` to a file, `dd`,
-  `find … -delete`, `xargs rm`, `tar`, `sed -i`, `perl -i`, and `git`
-  doing anything but looking in another folder;
-- any other command that names a place outside the project and the temp
-  folder, or runs in one, such as `ln -sf … ~/.zshrc` or `curl -o ~/x`,
-  unless it only looks, as `cat ~/notes.txt` does, or is one of those
-  above and changes only files inside, as `cp ~/notes.txt .` does;
-- reading your credentials, by a tool or a command: `~/.netrc`,
-  `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/.config/git/credentials`,
-  `~/.config/gh/hosts.yml`, `~/.docker/config.json`, `~/.kube/config`,
-  `~/.config/gcloud/`, `~/.azure/`, and `security find-…-password`;
-- `sudo` and its kin, and ones that change system settings, such as
-  `launchctl`, `defaults write`, `pmset`, `diskutil` and `shutdown`.
+- reading a `.env` or `.env.*` file (not `.env.example`), by the read
+  tools, `show`, or a command that names it, such as `cat .env`;
+- working in a folder outside the project and outside the system's temp
+  folder (`/tmp` and `$TMPDIR`), with links followed: a path given to a file
+  tool, a place a command names, as `cat ~/notes/a.md` or `make -C ~/other`
+  does, and the folder a command runs in, or moves to with `cd`.
+
+For a folder, "Always" allows working in that folder and everything under
+it from then on, in this project; for a `.env` file, it allows reading
+that file. A place built from a variable, such as `$DIR/build`, cannot be
+told before the command runs, so it is not asked about, as in OpenCode; a
+variable for the home folder or the temp folder is read as that folder. The
+text of a heredoc (the lines between `<<EOF` and `EOF`) is data, and is
+never judged as commands.
 
 What is refused in every mode stays refused in `auto`, `sudo` among it.
 
@@ -1212,11 +1209,13 @@ Rules go in `evie.json`, and are looked at before the mode:
 }
 ```
 
-- `action` is `read`, `edit`, `shell`, `web`, or the name of any other tool.
+- `action` is `read`, `edit`, `shell`, `web`, `outside` (working in a folder
+  outside the project and the temp folder, which `auto` asks about), or the
+  name of any other tool.
 - `effect` is `allow`, `deny` or `ask`.
 - `match` is a pattern for what the action is done to. Without it, the rule
   covers every such action.
-  - For `read` and `edit` it is a path. `*` stands for anything within one
+  - For `read`, `edit` and `outside` it is a path. `*` stands for anything within one
     folder, and `**` for anything at all. A pattern with no slash, such as
     `.env` or `*.pem`, is a file name and matches it in any folder. Any
     other pattern that is not a full path is taken from the project folder.
@@ -1234,7 +1233,7 @@ decides. In `read-only` mode no rule can allow a change.
 
 An "Always" answer for a command that reaches outside the project allows
 exactly that command, since a rule for a kind of command does not reach
-outside it. An "Always in this project" answer is saved as a rule in the global
+outside it; in `auto`, it allows the folder instead. An "Always in this project" answer is saved as a rule in the global
 `evie.json`, under `permissions.projects` and the project's folder. A
 trusted project's own `.evie/evie.json` can set `mode` and `rules` for that
 project; its rules come after the global ones.
@@ -1893,7 +1892,9 @@ Evie adapts proven pieces from other open-source harnesses. Each is
 credited here, and its licence notice is kept with the code.
 
 - [OpenCode](https://github.com/anomalyco/opencode) (MIT): the matching in
-  the `edit` tool, in `src/plugins/files/edit.ts`.
+  the `edit` tool, in `src/plugins/files/edit.ts`; what `auto` mode allows
+  and asks about, in `src/plugins/permissions/rules.ts`; and how a heredoc's
+  end line is read, in `src/plugins/permissions/shell.ts`.
 - [OpenAI Codex](https://github.com/openai/codex) (Apache 2.0): the patch
   format and the way the `patch` tool finds lines, in
   `src/plugins/files/patch.ts`, rewritten from Rust. The licence and Codex's
