@@ -165,11 +165,16 @@ export function permissions(options: PermissionsOptions = {}): Plugin {
         const always = asking.map((act) => alwaysRule(act, folder, mode)).filter(({ rule }, at, all) => all.findIndex((other) => other.rule.action === rule.action && other.rule.match === rule.match) === at)
         const labels = [...new Set(always.map(({ label }) => label))]
         const ALWAYS = `Always ${folder === null ? "outside a project" : "in this project"}: allow ${labels.join(", and ")}`
-        // There is no "always" for a standing instruction: each one is looked at.
-        const everyTime = judged.some(({ effect, standing }) => effect === "ask" && standing)
-        const text = everyTime
-          ? `${questionFor(call, asking, folder)}\n\nThis is an agent or a skill of yours. It applies in every project from now on, so it is asked about each time.`
-          : questionFor(call, asking, folder)
+        // There is no "always" for a standing instruction: each one is looked
+        // at. Nor is there for the home folder or the root itself.
+        const standing = judged.some(({ effect, standing }) => effect === "ask" && standing)
+        const broad = asking.some((act) => act.noAlways)
+        const everyTime = standing || broad
+        const notes = [
+          ...(standing ? ["This is an agent or a skill of yours. It applies in every project from now on, so it is asked about each time."] : []),
+          ...(broad ? ["This is asked about each time: an answer for the home folder or / would cover nearly everything."] : []),
+        ]
+        const text = [questionFor(call, asking, folder), ...notes].join("\n\n")
         const given = await context.ask({ text, choices: everyTime ? [ONCE, NO] : [ONCE, ALWAYS, NO], freeText: true, kind: "permission" })
         // A plain word typed in place of a number means what it says.
         const word = given?.trim().toLowerCase()

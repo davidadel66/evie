@@ -1182,7 +1182,12 @@ exceptions, which ask:
 
 For a folder, "Always" allows working in that folder and everything under
 it from then on, in this project; for a `.env` file, it allows reading
-that file. A place built from a variable, such as `$DIR/build`, cannot be
+that file. The home folder and `/` themselves, as in `ls ~` or
+`find ~ -delete`, are asked about every time, with no "Always", since one
+would cover nearly everything; a missing file or folder directly in one,
+such as `~/other`, is asked about by itself. A session with no project
+works in the home folder: there only what is outside the home folder and
+the temp folder asks, and the home folder itself when a command names it. A place built from a variable, such as `$DIR/build`, cannot be
 told before the command runs, so it is not asked about, as in OpenCode; a
 variable for the home folder or the temp folder is read as that folder. The
 text of a heredoc (the lines between `<<EOF` and `EOF`) is data, and is

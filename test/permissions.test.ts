@@ -3,6 +3,7 @@ import { existsSync } from "node:fs"
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { dirname, join } from "node:path"
+import { followLinks } from "../src/plugins/guard.ts"
 import { loadSettingsFiles, permissions, type PermissionsOptions, type Plugin, type Rule } from "../src/index.ts"
 import { actsOf, effectFor } from "../src/plugins/permissions/rules.ts"
 import { partsOf } from "../src/plugins/permissions/shell.ts"
@@ -861,10 +862,11 @@ test("in auto mode a folder outside the project and the temp folder asks once, a
   expect(asked[4]?.choices[1]).toBe("Always in this project: allow working in /another/place")
 })
 
-test("in auto mode the home folder and the root are never the folder asked about: a place in one is asked about by itself", async () => {
-  const { attempt, asked } = await start({ mode: "auto" })
+test("in auto mode the home folder and the root themselves ask every time, with no always answer, and a place in one is asked about by itself", async () => {
+  const { attempt, asked, folder } = await start({ mode: "auto" })
   const other = join(homedir(), "other")
 
+  // A missing place directly in the home folder is asked about by itself, and always allows only it.
   expect(await attempt(shell("ls ~/other"), always)).toBe("done")
   expect(asked[0]).toEqual({
     text: `Run this command?\n\n  ls ~/other\n\nIt works outside the project, in ${other}.`,
@@ -873,14 +875,38 @@ test("in auto mode the home folder and the root are never the folder asked about
   for (const command of ["cat ~/other/x", "rm ~/other/y", "ls ~/other"]) expect(await attempt(shell(command))).toBe("done")
   expect(await attempt(shell("cat ~/another/x"), NO)).toStartWith("The owner said no to this.")
   expect(await attempt(shell("cat /evie-missing-x"), NO)).toStartWith("The owner said no to this.")
-  expect(asked.map((question) => question.choices[1])).toEqual([
-    `Always in this project: allow working in ${other}`,
+  expect(asked.slice(1).map((question) => question.choices[1])).toEqual([
     `Always in this project: allow working in ${join(homedir(), "another")}`,
     "Always in this project: allow working in /evie-missing-x",
   ])
-  // The home folder and the root themselves are not asked about.
-  for (const command of ["ls ~", "ls /", "du -sh ~"]) expect(await attempt(shell(command))).toBe("done")
-  expect(asked).toHaveLength(3)
+
+  // The home folder and the root themselves.
+  const each = ["ls ~", "ls ~", "find ~ -name '*.log' -delete", "du -sh ~", "ls /", "cd && rm -rf build"]
+  for (const command of each) expect(await attempt(shell(command), YES)).toBe("done")
+  expect(asked.slice(3).map((question) => question.choices)).toEqual(each.map(() => [YES, NO]))
+  expect(asked[3]?.text).toBe(`Run this command?\n\n  ls ~\n\nIt works outside the project, in ${homedir()}.\n\nThis is asked about each time: an answer for the home folder or / would cover nearly everything.`)
+  expect(await attempt(shell("ls ~"), "always")).toStartWith('The owner said no to this, and added: "always".')
+  // The guard blocks deleting the home folder before it is asked about; the rules alone would ask, with no always.
+  expect(await attempt(shell("rm -rf ~"))).toStartWith("Blocked by the guard:")
+  const reached = actsOf({ id: "1", name: "shell", input: { command: "rm -rf ~" } }, folder).filter((act) => act.action === "outside")
+  expect(reached.map((act) => [act.target, act.noAlways, effectFor(act, [], "auto", folder)])).toEqual([[followLinks(homedir()), true, "ask"]])
+})
+
+test("in auto mode a session with no project works in the home folder: it asks only about what it names outside that and the temp folder, and about the home folder itself", async () => {
+  const { run, attempt, asked } = await start({ mode: "auto" })
+  const { session } = await run.evie.send({ type: "open_session", questions: true })
+
+  for (const call of [shell("ls"), shell("cat ~/notes.txt"), shell("rm -rf ~/build/x"), shell("cd ~/code && make"), shell("cd && ls"), shell("cat /tmp/x.log"), shell("ls src"), read(join(homedir(), "notes.md"))]) {
+    expect(await attempt(call, undefined, session)).toBe("done")
+  }
+  expect(asked).toEqual([])
+
+  expect(await attempt(shell("cat /etc/hosts"), NO, session)).toStartWith("The owner said no to this.")
+  const etc = followLinks("/etc")
+  expect(asked[0]).toEqual({ text: `Run this command?\n\n  cat /etc/hosts\n\nIt works in ${etc}.`, choices: [YES, `Always outside a project: allow working in ${etc}`, NO] })
+  for (const command of ["ls ~", "find ~ -delete"]) expect(await attempt(shell(command), NO, session)).toStartWith("The owner said no to this.")
+  expect(asked.slice(1).map((question) => question.choices)).toEqual([[YES, NO], [YES, NO]])
+  expect(await attempt(shell("rm -rf ~"), undefined, session)).toStartWith("Blocked by the guard:")
 })
 
 test("in auto mode a heredoc's text is no reason for the guard to block a pull request", async () => {

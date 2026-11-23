@@ -57,6 +57,10 @@ export type Act = {
   // For a read: whether it is a file a command names, which is the command's
   // to decide, outside auto mode.
   byCommand?: boolean
+  // For working outside: it is in the home folder or the root itself, which
+  // is asked about each time, with no always answer, since one would cover
+  // nearly everything.
+  noAlways?: boolean
 }
 
 const READ_TOOLS = ["read", "grep", "glob"]
@@ -92,18 +96,29 @@ const isFolder = (absolute: string) => {
   }
 }
 
-// The home folder and the root, which are never the folder asked about:
-// an answer for one would be an answer for nearly everything.
-const isBroad = (absolute: string) => absolute === "/" || absolute === homedir() || absolute === followLinks(homedir())
+const HOME = [...new Set([homedir(), followLinks(homedir())])]
+// The home folder and the root, which are never the folder an always answer
+// is about: one for either would be an answer for nearly everything.
+const isBroad = (absolute: string) => absolute === "/" || HOME.includes(absolute)
 
 // Working outside the project and the temp folder, at `target`, which auto
 // mode asks about once for each folder. A file, or a place that is not
 // there, directly in the home folder or the root is asked about by itself,
-// as if it were a folder, and the home folder and the root themselves not at all.
-function outside(target: string, folder: string | null, searched: boolean): Act[] {
+// as if it were a folder. The home folder and the root themselves are asked
+// about each time.
+//
+// A session with no project has the home folder as its own: it is judged as
+// working there, so only what is outside the home folder asks, and the home
+// folder itself only when it is named, not when a command just runs in it
+// (`ranIn`).
+function outside(target: string, folder: string | null, searched: boolean, ranIn = false): Act[] {
   if (isInside(folder, target) || isTemp(target)) return []
   const isDirectory = searched || isFolder(target)
-  if (isDirectory && isBroad(target)) return []
+  if (isDirectory && isBroad(target)) {
+    if (folder === null && ranIn && HOME.includes(target)) return []
+    return [{ action: "outside", target, inside: false, kind: "path", folder: true, noAlways: true }]
+  }
+  if (folder === null && HOME.some((home) => isInside(home, target))) return []
   return [{ action: "outside", target, inside: false, kind: "path", ...((isDirectory || isBroad(dirname(target))) && { folder: true }) }]
 }
 
@@ -130,7 +145,7 @@ function whereIs(place: string, runsIn: string | null): string {
 // until the command runs.
 function reachedBy(parts: string[], runsIn: string, folder: string | null): Act[] {
   const heres = [runsIn]
-  const acts = outside(runsIn, folder, true)
+  const acts = outside(runsIn, folder, true, true)
   for (const part of parts) {
     const to = cdTarget(part)
     if (to !== undefined) {
@@ -138,7 +153,7 @@ function reachedBy(parts: string[], runsIn: string, folder: string | null): Act[
         const there = to === "~" ? homedir() : to === "-" ? "unknown" : whereIs(to, from)
         if (there === "unknown" || there === "nowhere") continue
         heres.push(there)
-        acts.push(...outside(there, folder, true))
+        acts.push(...outside(there, folder, true, true))
       }
       continue
     }
@@ -341,7 +356,7 @@ export function questionFor(call: CheckedToolCall, asking: readonly Act[], folde
     const folders = [...new Set(asking.filter((act) => act.action === "outside").map(folderOf))]
     const secrets = [...new Set(asking.filter((act) => act.action === "read").map((act) => shown(act.target, folder)))]
     const why = [
-      ...(folders.length > 0 ? [`It works outside the project, in ${folders.join(", ")}.`] : []),
+      ...(folders.length > 0 ? [folder === null ? `It works in ${folders.join(", ")}.` : `It works outside the project, in ${folders.join(", ")}.`] : []),
       ...(secrets.length > 0 ? [`It reads ${secrets.join(", ")}, which may hold secrets.`] : []),
     ]
     return `Run this command?\n\n  ${String(call.input.command).trim().split("\n").join("\n  ")}${where}${why.length > 0 ? `\n\n${why.join(" ")}` : ""}`
