@@ -295,6 +295,8 @@
      Code's does; its previous and next buttons are 40px. */
   --spacing-shown-header: 36px;
   --spacing-shown: 480px;
+  --spacing-shown-model: 420px;
+  --spacing-shown-phone: 390px;
   --spacing-shown-svg: 200px;
   --spacing-shown-drawing: calc(var(--spacing-shown) - 2 * var(--spacing-6));
   --spacing-shown-cut: 320px;

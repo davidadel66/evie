@@ -1,11 +1,17 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { useContext, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type KeyboardEvent, type ReactNode, type Ref } from "react"
+import { lazy, Suspense, useContext, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type KeyboardEvent, type ReactNode, type Ref } from "react"
 import { flushSync } from "react-dom"
-import { Back, CaretDown, Download, FullScreen, InStorage, KindImage, KindMarkdown, KindPdf, KindVector, Next, Previous } from "./icons.tsx"
+import { ArrowClockwise, ArrowCounterClockwise, Back, CaretDown, DeviceDesktop, DevicePhone, Download, FullScreen, InStorage, KindHtml, KindImage, KindMarkdown, KindMermaid, KindModel, KindPdf, KindVector, Next, Previous } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { renderMarkdown } from "./markdown.ts"
-import { isImage, placeIn, ShownGallery, stepFrom, viewerOf, type Shown, type Viewer } from "./shown.ts"
+import { isImage, placeIn, previewMintOf, ShownGallery, stepFrom, viewerOf, type Shown, type Viewer } from "./shown.ts"
+import type { ModelDimensions } from "./ShownModel.tsx"
 import { addressOfWorkspace } from "./workspace.ts"
+
+// Mermaid and three.js live in separate chunks fetched only on first use of a
+// Mermaid diagram or a 3D model, so neither grows the page's initial load.
+const LazyMermaid = lazy(() => import("./ShownMermaid.tsx").then((m) => ({ default: m.MermaidView })))
+const LazyModel = lazy(() => import("./ShownModel.tsx").then((m) => ({ default: m.ModelView })))
 
 // A file evie showed, drawn under its reply in a frame like the
 // changed-files card: a 36px header with the kind's icon, the file's name
@@ -28,6 +34,9 @@ const KINDS: Record<Viewer, Kind> = {
   svg: { icon: KindVector, verb: "View", Frame: SvgFrame },
   pdf: { icon: KindPdf, verb: "View", Frame: PdfFrame, Full: PdfFull },
   markdown: { icon: KindMarkdown, verb: "Read", Frame: MarkdownFrame, Full: MarkdownFull },
+  html: { icon: KindHtml, verb: "View", Frame: HtmlFrame, Full: HtmlFull },
+  mermaid: { icon: KindMermaid, verb: "View", Frame: MermaidFrame, Full: MermaidFull },
+  model: { icon: KindModel, verb: "Inspect", Frame: ModelFrame, Full: ModelFull },
 }
 
 // In Storage already, a file has no Open in Storage.
@@ -204,6 +213,240 @@ function MarkdownFull({ file, address }: { file: Shown; address: string }) {
       {drawn}
     </div>
   )
+}
+
+// ---- Live viewers: HTML mockups, Mermaid diagrams, 3D models --------------------
+
+// Mints a scoped, short-lived preview pass for a file so its sandboxed iframe
+// or 3D loader can fetch relative companion files without carrying evie's cookie.
+function usePreviewUrl(storageAddress: string): { url?: string; failed?: true; remint(): void } {
+  const [tick, setTick] = useState(0)
+  const [state, setState] = useState<{ key: string; url?: string; failed?: true }>({ key: `${storageAddress}#${tick}` })
+  const key = `${storageAddress}#${tick}`
+  useEffect(() => {
+    let gone = false
+    fetch(previewMintOf(storageAddress), { method: "POST" })
+      .then((answer) => (answer.ok ? (answer.json() as Promise<{ url: string }>) : Promise.reject(new Error(String(answer.status)))))
+      .then(
+        ({ url }) => !gone && setState({ key, url }),
+        () => !gone && setState({ key, failed: true }),
+      )
+    return () => {
+      gone = true
+    }
+  }, [storageAddress, key])
+  const current = state.key === key ? state : {}
+  return { ...current, remint: () => setTick((n) => n + 1) }
+}
+
+// Desktop viewport width that a live HTML mockup scales down from when the
+// conversation column is narrower than a desktop screen.
+const DESKTOP_MOCKUP_WIDTH = 1280
+
+// An HTML mockup, live in a sealed iframe (`sandbox="allow-scripts allow-forms"`,
+// no `allow-same-origin`): scripts run, relative styles/scripts/images load from
+// its own scoped preview pass, and it can never touch evie or the owner's sign-in.
+// Offers a desktop/phone (390px) width switch, reload, and a quiet note saying it
+// cannot reach evie. At most 480px tall, scrolling inside.
+function HtmlFrame({ file, address }: ViewerProps) {
+  const preview = usePreviewUrl(address)
+  const [mode, setMode] = useState<"desktop" | "phone">("desktop")
+  const [reloadKey, setReloadKey] = useState(0)
+  const stage = useRef<HTMLDivElement>(null)
+  const [stageWidth, setStageWidth] = useState(0)
+
+  useEffect(() => {
+    const el = stage.current
+    if (!el) return
+    const measure = () => setStageWidth(el.clientWidth)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  if (preview.failed) return <Unavailable />
+  const scale = mode === "desktop" && stageWidth > 0 && stageWidth < DESKTOP_MOCKUP_WIDTH ? stageWidth / DESKTOP_MOCKUP_WIDTH : 1
+  const scaledHeight = Math.round(480 / scale)
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-2 px-2 py-1 text-caption text-text-muted">
+        <div role="group" aria-label="Mockup width" className="flex rounded-md bg-text/6 p-0.5">
+          <button
+            type="button"
+            aria-pressed={mode === "desktop"}
+            onClick={() => setMode("desktop")}
+            className={cn("flex h-control-xs items-center gap-1 rounded-sm px-2 text-caption", mode === "desktop" ? "bg-surface-raised text-text shadow-toggle" : "text-text-muted hover:text-text")}
+          >
+            <DeviceDesktop className="size-icon-xs" />
+            Desktop
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === "phone"}
+            onClick={() => setMode("phone")}
+            className={cn("flex h-control-xs items-center gap-1 rounded-sm px-2 text-caption", mode === "phone" ? "bg-surface-raised text-text shadow-toggle" : "text-text-muted hover:text-text")}
+          >
+            <DevicePhone className="size-icon-xs" />
+            Phone
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => setReloadKey((n) => n + 1)}
+          aria-label={`Reload ${file.name}`}
+          title="Reload"
+          className="flex h-control-xs items-center gap-1 rounded-md px-2 text-caption text-text-muted hover:bg-text/8 hover:text-text"
+        >
+          <ArrowClockwise className="size-icon-xs" />
+          Reload
+        </button>
+      </div>
+      <div ref={stage} className="relative flex h-shown w-full justify-center overflow-hidden rounded-chip bg-bg">
+        {preview.url === undefined ? (
+          <p className="m-auto text-caption text-text-muted">Opening {file.name}…</p>
+        ) : mode === "phone" ? (
+          <iframe
+            key={`${preview.url}#${reloadKey}`}
+            src={preview.url}
+            title={`${file.name}, live HTML mockup`}
+            sandbox="allow-scripts allow-forms"
+            className="h-full w-shown-phone max-w-full border-x border-line bg-white"
+          />
+        ) : (
+          <div className="h-full w-full overflow-hidden">
+            <iframe
+              key={`${preview.url}#${reloadKey}`}
+              src={preview.url}
+              title={`${file.name}, live HTML mockup`}
+              sandbox="allow-scripts allow-forms"
+              style={scale < 1 ? { width: DESKTOP_MOCKUP_WIDTH, height: scaledHeight, transform: `scale(${scale})`, transformOrigin: "top left" } : undefined}
+              className={cn("border-0 bg-white", scale === 1 && "h-full w-full")}
+            />
+          </div>
+        )}
+      </div>
+      <p className="px-2 py-0.5 text-2xs text-text-muted">Live preview in a sealed frame — this page cannot reach evie or your sign-in.</p>
+    </div>
+  )
+}
+
+function HtmlFull({ file, address }: { file: Shown; address: string }) {
+  const preview = usePreviewUrl(address)
+  if (preview.failed) return <Unavailable dark />
+  if (preview.url === undefined) return <p className="text-caption text-[rgba(255,255,255,0.8)]">Opening {file.name}…</p>
+  return (
+    <iframe
+      src={preview.url}
+      title={`${file.name}, live HTML mockup`}
+      sandbox="allow-scripts allow-forms"
+      className="block h-full-height w-full-width rounded-md border-0 bg-white shadow-float"
+    />
+  )
+}
+
+// A Mermaid diagram, drawn in Dusk colours on first use, with a "Show source"
+// toggle and natural height up to 480px.
+function MermaidFrame({ file, address }: ViewerProps) {
+  const read = useText(address)
+  const [showSource, setShowSource] = useState(false)
+  if (read.failed) return <Unavailable />
+  if (read.text === undefined) {
+    return <p className="flex min-h-control items-center justify-center rounded-chip bg-bg px-3 py-4 text-caption text-text-muted">Reading {file.name}…</p>
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      {showSource ? (
+        <pre className="max-h-shown overflow-auto rounded-chip bg-bg p-4 font-mono text-code text-text">{read.text}</pre>
+      ) : (
+        <Suspense fallback={<p className="flex min-h-control items-center justify-center rounded-chip bg-bg px-3 py-4 text-caption text-text-muted">Loading Mermaid…</p>}>
+          <LazyMermaid source={read.text} />
+        </Suspense>
+      )}
+      <div className="flex justify-end px-2 py-0.5">
+        <button
+          type="button"
+          aria-pressed={showSource}
+          onClick={() => setShowSource((v) => !v)}
+          className="flex h-control-xs items-center rounded-md px-2 text-caption text-text-muted hover:bg-text/8 hover:text-text"
+        >
+          {showSource ? "Show diagram" : "Show source"}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function MermaidFull({ file, address }: { file: Shown; address: string }) {
+  const read = useText(address)
+  if (read.failed) return <Unavailable dark />
+  if (read.text === undefined) return <p className="text-caption text-[rgba(255,255,255,0.8)]">Reading {file.name}…</p>
+  return (
+    <div className="h-full-height w-full-width overflow-auto rounded-md bg-bg p-6 shadow-float">
+      <Suspense fallback={<p className="text-caption text-text-muted">Loading Mermaid…</p>}>
+        <LazyMermaid source={read.text} full />
+      </Suspense>
+    </div>
+  )
+}
+
+// A 3D model (glTF, GLB, STL or OBJ), drawn with three.js loaded on first use.
+// 420px tall in the conversation, with Reset view and its bounding dimensions.
+function ModelFrame({ file, address }: ViewerProps) {
+  const preview = usePreviewUrl(address)
+  const [resetTick, setResetTick] = useState(0)
+  const [dims, setDims] = useState<ModelDimensions>()
+  if (preview.failed) return <Unavailable />
+  return (
+    <div className="flex flex-col gap-1">
+      {preview.url === undefined ? (
+        <div className="flex h-shown-model items-center justify-center rounded-chip bg-bg text-caption text-text-muted">Opening {file.name}…</div>
+      ) : (
+        <Suspense fallback={<div className="flex h-shown-model items-center justify-center rounded-chip bg-bg text-caption text-text-muted">Loading 3D viewer…</div>}>
+          <LazyModel url={preview.url} type={file.type} resetTick={resetTick} onDimensions={setDims} />
+        </Suspense>
+      )}
+      <div className="flex items-center justify-between gap-2 px-2 py-0.5 text-caption text-text-muted">
+        <span className="font-mono text-2xs">{dims ? `Size: ${formatModelSize(dims)}` : file.type.replace("model/", "").toUpperCase()}</span>
+        <button
+          type="button"
+          onClick={() => setResetTick((n) => n + 1)}
+          className="flex h-control-xs items-center gap-1 rounded-md px-2 text-caption text-text-muted hover:bg-text/8 hover:text-text"
+        >
+          <ArrowCounterClockwise className="size-icon-xs" />
+          Reset view
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ModelFull({ file, address }: { file: Shown; address: string }) {
+  const preview = usePreviewUrl(address)
+  const [resetTick, setResetTick] = useState(0)
+  if (preview.failed) return <Unavailable dark />
+  if (preview.url === undefined) return <p className="text-caption text-[rgba(255,255,255,0.8)]">Opening {file.name}…</p>
+  return (
+    <div className="relative">
+      <Suspense fallback={<div className="flex h-full-height w-full-width items-center justify-center rounded-md bg-bg text-caption text-text-muted">Loading 3D viewer…</div>}>
+        <LazyModel url={preview.url} type={file.type} full resetTick={resetTick} />
+      </Suspense>
+      <button
+        type="button"
+        onClick={() => setResetTick((n) => n + 1)}
+        className={cn(FULL_BUTTON, "absolute right-4 bottom-4 w-auto gap-1.5 px-3 text-detail font-medium")}
+      >
+        <ArrowCounterClockwise className="size-icon-xs" />
+        Reset view
+      </button>
+    </div>
+  )
+}
+
+function formatModelSize(dims: ModelDimensions): string {
+  const fmt = (n: number) => (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2)).replace(/\.0+$/, "")
+  return `${fmt(dims.x)} × ${fmt(dims.y)} × ${fmt(dims.z)}`
 }
 
 // A text file fetched from its address, signed in as the page is, with

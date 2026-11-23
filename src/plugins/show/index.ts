@@ -1,13 +1,14 @@
 import { closeSync, constants, openSync, readSync, realpathSync } from "node:fs"
-import { copyFile, rm, stat } from "node:fs/promises"
-import { basename, isAbsolute, join, relative, sep } from "node:path"
+import { copyFile, mkdir, rm, stat } from "node:fs/promises"
+import { basename, dirname, extname, isAbsolute, join, relative, sep } from "node:path"
 import { folderAt, numbered, today } from "../../core/attachments.ts"
 import { dataFolder } from "../../core/evie.ts"
 import { ownEvie } from "../../core/storage.ts"
 import type { Plugin, Tool, ToolContext, ToolOutput } from "../../core/types.ts"
 import { displayPath, resolvePath } from "../files/paths.ts"
+import { findCompanions } from "./companions.ts"
 import { ownShownFolder } from "./files.ts"
-import { KIND_HEAD, namedFor, SHOWN_KINDS_WORDS, SHOWN_LIMIT, shownType } from "./kinds.ts"
+import { hasCompanions, KIND_HEAD, namedFor, SHOWN_KINDS_WORDS, SHOWN_LIMIT, shownType } from "./kinds.ts"
 import { shownText, type ShownFile } from "./record.ts"
 
 // The built-in show plugin. It adds one tool, show, with which evie shows
@@ -49,9 +50,10 @@ export function show(options: ShowOptions = {}): Plugin {
   const tool: Tool = {
     name: "show",
     description:
-      "Show the owner something you made, such as an image, a diagram, a document or a design, drawn under your reply " +
-      "where they can open it full screen. Use it when seeing the file says more than describing it. Give the path of " +
-      "each file, in the order to show them. A relative path is taken from the project folder.",
+      "Show the owner something you made, drawn under your reply where they can interact with it or open it full screen. " +
+      `Use it when seeing the file communicates better than describing it in text. Supports ${SHOWN_KINDS_WORDS}. ` +
+      "Relative assets referenced by an HTML mockup (.css, .js, images) or a glTF/OBJ model (.bin, textures, .mtl) are copied with it. " +
+      "Give the path of each file, in the order to show them. A relative path is taken from the project folder.",
     inputSchema: {
       type: "object",
       properties: { paths: { type: "array", items: { type: "string" }, minItems: 1, description: "The files to show, in order" } },
@@ -74,8 +76,8 @@ export function show(options: ShowOptions = {}): Plugin {
       const storage = storageFor(context.session, context.folder)
       const place = (path: string): Pick<ShownFile, "storage" | "path"> => (storage.project ? { storage: "project", path: relative(storage.root, path).split(sep).join("/") } : { storage: "session", path })
       const files: ShownFile[] = []
-      // The copies this call has made, removed again if a later one fails,
-      // so that a call that shows nothing keeps nothing.
+      // The copies or bundle folders this call has made, removed again if a
+      // later one fails, so that a call that shows nothing keeps nothing.
       const copies: string[] = []
       try {
         for (const file of checked as Checked[]) {
@@ -84,12 +86,31 @@ export function show(options: ShowOptions = {}): Plugin {
             continue
           }
           const day = await folderAt(storage.project ? join(storage.root, "shown") : storage.root, today(), () => new LinkOut())
-          const kept = await copyInto(day, namedFor(basename(file.real), file.type), file.real)
-          copies.push(kept)
+          const companions = hasCompanions(file.type) ? await findCompanions(file.real, file.type) : []
+          if (companions.length === 0) {
+            const kept = await copyInto(day, namedFor(basename(file.real), file.type), file.real)
+            copies.push(kept)
+            files.push({ ...place(kept), type: file.type, size: file.size, from: file.named })
+            continue
+          }
+          // A file with local companion assets (such as an HTML mockup's
+          // stylesheets and images, or a glTF scene's `.bin` and textures) is
+          // kept in a bundle folder of its own so relative paths stay intact
+          // and never collide with another shown version.
+          const fileName = namedFor(basename(file.real), file.type)
+          const bundle = await makeBundleDir(day, stemOf(fileName))
+          copies.push(bundle)
+          const kept = join(bundle, fileName)
+          await copyFile(file.real, kept, constants.COPYFILE_EXCL)
+          for (const asset of companions) {
+            const target = join(bundle, ...asset.relative.split("/"))
+            await mkdir(dirname(target), { recursive: true })
+            await copyFile(asset.real, target, constants.COPYFILE_EXCL)
+          }
           files.push({ ...place(kept), type: file.type, size: file.size, from: file.named })
         }
       } catch (cause) {
-        await Promise.all(copies.map((copy) => rm(copy, { force: true }).catch(() => {})))
+        await Promise.all(copies.map((copy) => rm(copy, { recursive: true, force: true }).catch(() => {})))
         if (cause instanceof LinkOut) return `Not shown: ${cause.message}`
         // The file system refusing, such as for want of room or permission,
         // is a failure the model can act on.
@@ -187,6 +208,23 @@ async function copyInto(folder: string, name: string, from: string): Promise<str
     }
   }
 }
+
+// Creates a new folder under `parent` named `stem`, or `stem-2`, `stem-3`, …
+// when taken, so each shown bundle keeps its own snapshot of companion files.
+async function makeBundleDir(parent: string, stem: string): Promise<string> {
+  const safe = stem || "shown"
+  for (let count = 1; ; count++) {
+    const dir = join(parent, count === 1 ? safe : `${safe}-${count}`)
+    try {
+      await mkdir(dir)
+      return dir
+    } catch (cause) {
+      if ((cause as { code?: string }).code !== "EEXIST") throw cause
+    }
+  }
+}
+
+const stemOf = (name: string) => name.slice(0, name.length - extname(name).length)
 
 // Why nothing is kept in a folder that leads through a link: what it leads
 // to is not the workspace's.

@@ -1,7 +1,10 @@
 import type { HTMLBundle, ServerWebSocket } from "bun"
 import { randomBytes } from "node:crypto"
+import { realpath, stat } from "node:fs/promises"
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path"
 import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent, type StorageFiles } from "../core/types.ts"
 import { keptFileAt, typeOfFile } from "../plugins/show/files.ts"
+import { companionType } from "../plugins/show/kinds.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
 import { shikiAddress, shikiRoute } from "./shiki-files.ts"
 import { fileRoute } from "./variants.ts"
@@ -129,6 +132,26 @@ const SHOWN = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 // How long the code in a sign-in link works: long enough for the browser to
 // open, short enough that a link left in a browser's history is of no use.
 const SIGN_IN_CODE_LASTS = 5 * 60_000
+// How long a preview pass works, and the most kept in memory at once.
+const PREVIEW_PASS_LASTS = 60 * 60_000
+const MOST_PREVIEW_PASSES = 200
+// File kinds that can mint a scoped preview pass (for live HTML mockups
+// and 3D scenes that fetch companion buffers/textures by relative path).
+const PREVIEW_TYPES = new Set(["text/html", "model/gltf+json", "model/gltf-binary", "model/stl", "model/obj"])
+
+type PreviewPass = {
+  // The folder that holds the entry file and its companion assets (real path).
+  folder: string
+  // The entry file's name inside `folder`, such as `card.html` or `scene.gltf`.
+  entry: string
+  // The entry file's verified MIME type.
+  entryType: string
+  // The token of the signed-in device that minted this pass; if taken back,
+  // the pass stops working at once.
+  token: string
+  // When this pass expires, in ms since the epoch.
+  until: number
+}
 
 export function startServer(options: ServerOptions): EvieServer {
   const connections = new Set<ServerWebSocket<Connection>>()
@@ -143,6 +166,10 @@ export function startServer(options: ServerOptions): EvieServer {
   // The code in each sign-in link not yet used, with the time it stops
   // working. It is kept in memory only: a link outlives no restart.
   const codes = new Map<string, number>()
+  // Scoped, short-lived preview passes for sandboxed HTML mockups and 3D
+  // models that need to load companion files by relative path without
+  // carrying the owner's sign-in cookie.
+  const previews = new Map<string, PreviewPass>()
 
   function replyTo(device: string, message: ClientMessage): Promise<ServerMessage> {
     const carryOut = () =>
@@ -415,6 +442,94 @@ export function startServer(options: ServerOptions): EvieServer {
     })
   }
 
+  // Mints a scoped, short-lived preview pass for a shown HTML mockup or 3D
+  // model so its sandboxed iframe or loader can fetch relative companion
+  // files under `/preview/<pass>/...` without holding the owner's sign-in.
+  async function mintPreview(request: Request, port: number): Promise<Response> {
+    const admitted = admit(request, port)
+    if (admitted instanceof Response) return admitted
+    const asked = new URL(request.url).searchParams
+    const [project, session, path] = [asked.get("project"), asked.get("session"), asked.get("path")]
+    if (path === null || (project === null) === (session === null)) {
+      return new Response("Name the file, as /preview?project=<id>&path=<its path in .evie>, or /preview?session=<id>&path=<its full path>.", { status: 400 })
+    }
+    const file = project !== null ? await options.storage?.open(project, path) : options.dataFolder !== undefined ? await keptFileAt(options.dataFolder, session!, path) : undefined
+    const type = file === undefined ? undefined : await typeOfFile(file)
+    if (file === undefined || type === undefined || !PREVIEW_TYPES.has(type)) {
+      return new Response("There is no previewable file there.", { status: 404 })
+    }
+    const now = Date.now()
+    for (const [id, pass] of previews) if (pass.until <= now) previews.delete(id)
+    while (previews.size >= MOST_PREVIEW_PASSES) {
+      const oldest = previews.keys().next().value
+      if (oldest === undefined) break
+      previews.delete(oldest)
+    }
+    const id = randomBytes(32).toString("base64url")
+    const realFile = await realpath(file)
+    const entry = basename(realFile)
+    previews.set(id, { folder: dirname(realFile), entry, entryType: type, token: admitted.token, until: now + PREVIEW_PASS_LASTS })
+    return Response.json({ url: `${PATHS.preview}/${id}/${encodeURIComponent(entry)}` })
+  }
+
+  // Serves a file inside a minted preview pass's folder: `/preview/<pass>/<rel>`.
+  // The pass itself is the capability, scoped to that one folder and invalidated
+  // immediately if its device's token is revoked. HTML entries get a strict CSP
+  // locking them to their own pass prefix and sandboxed so they cannot touch evie.
+  async function previewFile(pathname: string): Promise<Response> {
+    const rest = pathname.slice(`${PATHS.preview}/`.length)
+    const slash = rest.indexOf("/")
+    if (slash <= 0) return new Response("Not found.", { status: 404 })
+    const id = rest.slice(0, slash)
+    const rawRel = rest.slice(slash + 1)
+    const pass = previews.get(id)
+    if (pass === undefined || pass.until <= Date.now()) {
+      previews.delete(id)
+      return new Response("Not found.", { status: 404 })
+    }
+    let valid: string | undefined
+    try {
+      valid = options.tokens.check(pass.token)
+    } catch {
+      return new Response("The token could not be checked just now. Try again.", { status: 503 })
+    }
+    if (valid === undefined) {
+      previews.delete(id)
+      return new Response("Not found.", { status: 404 })
+    }
+    let decoded: string
+    try {
+      decoded = decodeURIComponent(rawRel)
+    } catch {
+      return new Response("Not found.", { status: 404 })
+    }
+    if (decoded === "" || decoded.includes("\0") || decoded.startsWith("/") || decoded.includes("\\")) return new Response("Not found.", { status: 404 })
+    const candidate = resolve(pass.folder, decoded)
+    const inside = relative(pass.folder, candidate)
+    if (inside === "" || inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside)) return new Response("Not found.", { status: 404 })
+    const real = await realpath(candidate).catch(() => undefined)
+    if (real === undefined) return new Response("Not found.", { status: 404 })
+    const realInside = relative(pass.folder, real)
+    if (realInside === "" || realInside === ".." || realInside.startsWith(`..${sep}`) || isAbsolute(realInside)) return new Response("Not found.", { status: 404 })
+    const facts = await stat(real).catch(() => undefined)
+    if (!facts?.isFile()) return new Response("Not found.", { status: 404 })
+    const isEntry = realInside === pass.entry
+    const contentType = isEntry ? (pass.entryType.startsWith("text/") ? `${pass.entryType}; charset=utf-8` : pass.entryType) : companionType(real)
+    if (contentType === undefined) return new Response("Not found.", { status: 404 })
+    const prefix = `${PATHS.preview}/${id}/`
+    const csp = isEntry && pass.entryType === "text/html"
+      ? `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' ${prefix}; style-src 'unsafe-inline' ${prefix}; img-src data: blob: ${prefix}; font-src data: ${prefix}; connect-src ${prefix}; media-src data: blob: ${prefix}; frame-ancestors 'self'; sandbox allow-scripts allow-forms`
+      : "default-src 'none'; frame-ancestors 'self'"
+    const headers: Record<string, string> = {
+      "Content-Type": contentType,
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": csp,
+      "Cache-Control": "private, no-cache",
+    }
+    if (pass.entryType === "text/html") headers["Access-Control-Allow-Origin"] = "*"
+    return new Response(Bun.file(real), { headers })
+  }
+
   const server = Bun.serve<Connection>({
     hostname: options.host,
     port: options.port,
@@ -445,6 +560,8 @@ export function startServer(options: ServerOptions): EvieServer {
       if (path === PATHS.attachments && request.method === "POST") return attach(request, server.port!)
       if (path === PATHS.attachments && request.method === "GET") return attachment(request, server.port!)
       if (path === PATHS.storage && (request.method === "GET" || request.method === "HEAD")) return storageFile(request, server.port!)
+      if (path === PATHS.preview && request.method === "POST") return mintPreview(request, server.port!)
+      if (path.startsWith(`${PATHS.preview}/`) && (request.method === "GET" || request.method === "HEAD")) return previewFile(path)
       if (path === PATHS.login && request.method === "POST") return login(request, server.port!)
       if (path === PATHS.signInLink && request.method === "POST") return signInLink(request, server.port!)
       return new Response("Not found.", { status: 404 })
