@@ -82,6 +82,8 @@ export type SettingsFiles = {
   trust(folder: string): Promise<void>
   // Stops trusting a project, by its folder, as answering no does.
   untrust(folder: string): Promise<void>
+  // Whether a project, by its folder, is currently trusted.
+  isTrusted(folder: string): boolean
   // The global plugins as the global file listed them when it was read,
   // each by the name or the path it is given by, the ones under
   // "addPlugins" last.
@@ -128,6 +130,10 @@ type SettingsFile = {
   disable?: string[]
   server?: { host?: string; port?: number; origins?: string[] }
   sync?: Sync
+  // Workspace dashboards configured in a project's `.evie/evie.json`.
+  // Validated per-entry when read by `readDashboards`, so a bad entry never
+  // breaks the whole settings file.
+  dashboards?: unknown
 }
 
 // What a built-in plugin is made from: its options from the settings file,
@@ -258,6 +264,7 @@ export async function loadSettingsFiles(options: { env: Settings; adding?: strin
       trusted.add(folder)
       untrusted.delete(folder)
     },
+    isTrusted: (folder) => trusted.has(folder),
     syncSetting,
     async projectSettings(project, asking) {
       const projectFile = join(project.folder, ".evie", "evie.json")

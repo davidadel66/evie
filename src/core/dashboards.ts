@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises"
 import { join } from "node:path"
 import { onThisComputer } from "../server/wire.ts"
 import { ownEvie, storageFileAt } from "./storage.ts"
+import type { DashboardEntry } from "./types.ts"
 
 // A project's configured dashboards, read from `<project>/.evie/evie.json`.
 // Each entry is either a static file inside `.evie/`, a live local web app
@@ -9,10 +10,7 @@ import { ownEvie, storageFileAt } from "./storage.ts"
 // reason it was refused so the owner can see what to fix. Untrusted projects
 // expose no dashboards.
 
-export type DashboardEntry =
-  | { id: string; name: string; kind: "static"; path: string }
-  | { id: string; name: string; kind: "live"; url: string; start?: string; idle?: number | "never" }
-  | { id: string; name: string; kind: "invalid"; error: string }
+export type { DashboardEntry }
 
 const VALID_ID = /^[a-z0-9][a-z0-9-]*$/
 

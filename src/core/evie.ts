@@ -2,6 +2,8 @@ import { mkdir, rm } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, relative, sep } from "node:path"
 import { createTurnChanges, readBranch, readBranchSides, readUncommitted, readUncommittedSides } from "./changes.ts"
+import { createDashboardRunner, type DashboardRunnerOptions } from "./dashboard-runner.ts"
+import { readDashboards } from "./dashboards.ts"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
@@ -46,6 +48,11 @@ export type EvieOptions = {
   // yes to whether to trust them does. A project `new_project` makes is
   // trusted this way.
   trust?: (folder: string) => Promise<void>
+  // Whether a project's own settings are trusted, by its folder. Defaults to
+  // untrusted (`false`) when omitted.
+  isTrusted?: (folder: string) => boolean
+  // Overrides for the live dashboard process runner, which is for tests to change.
+  dashboards?: Partial<DashboardRunnerOptions>
   // What carries out the settings commands, which fail without it.
   settings?: SettingsEditor
   // Where a project's `.evie/` folder syncs, by its own settings, which
@@ -252,6 +259,11 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     outputFolder: join(home, "tool-output"),
     emit,
     tell: (session, text, wake, kept) => sessions.get(session)?.loop.tell(text, wake, kept),
+  })
+  const isTrusted = options.isTrusted ?? (() => false)
+  const dashboardRunner = createDashboardRunner({
+    logFolder: join(home, "dashboard-logs"),
+    ...options.dashboards,
   })
 
   // Each session open in this process: its turn loop, its project and that
@@ -1089,6 +1101,41 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return project
   }
 
+  async function listDashboards(input: Commands["list_dashboards"]["input"]): Promise<Commands["list_dashboards"]["output"]> {
+    const project = projectFor(input.project)
+    const dashboards = await readDashboards(project.folder, home, isTrusted(project.folder))
+    return { dashboards }
+  }
+
+  async function openDashboard(input: Commands["open_dashboard"]["input"]): Promise<Commands["open_dashboard"]["output"]> {
+    const project = projectFor(input.project)
+    const dashboards = await readDashboards(project.folder, home, isTrusted(project.folder))
+    const entry = dashboards.find((each) => each.id === input.id)
+    if (!entry) return { kind: "invalid", error: `There is no dashboard "${input.id}" in this workspace.` }
+    if (entry.kind === "invalid") return { kind: "invalid", error: entry.error }
+    if (entry.kind === "static") return { kind: "static", path: entry.path }
+    const res = await dashboardRunner.ensure({
+      projectId: project.id,
+      projectFolder: project.folder,
+      dashboardId: entry.id,
+      url: entry.url,
+      ...(entry.start !== undefined && { start: entry.start }),
+      ...(entry.idle !== undefined && { idle: entry.idle }),
+    })
+    if (res.ok) return { kind: "live", status: "ready", url: entry.url }
+    return { kind: "live", status: res.status, message: res.message, ...(res.log !== undefined && { log: res.log }) }
+  }
+
+  async function touchDashboard(input: Commands["touch_dashboard"]["input"]): Promise<Commands["touch_dashboard"]["output"]> {
+    const project = typeof input.project === "string" ? projects.get(input.project) : undefined
+    if (!project || !isTrusted(project.folder)) return { ok: false }
+    const dashboards = await readDashboards(project.folder, home, true)
+    const entry = dashboards.find((each) => each.id === input.id)
+    if (!entry || entry.kind !== "live") return { ok: false }
+    dashboardRunner.touch(project.folder, entry.start)
+    return { ok: true }
+  }
+
   // Opens a session again in this process, to pick up what was left in it.
   // A subagent's is opened by the session that started it, which is opened first.
   async function reopen(session: string): Promise<void> {
@@ -1188,6 +1235,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await (options.openFolder ?? openOnThisComputer)(projectFor(command.project).folder)) as Output
         case "read_git_status":
           return (await readGitStatus(projectFor(command.project), typeof command.base === "string" ? command.base : undefined)) as Output
+        case "list_dashboards":
+          return (await listDashboards(command)) as Output
+        case "open_dashboard":
+          return (await openDashboard(command)) as Output
+        case "touch_dashboard":
+          return (await touchDashboard(command)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)
@@ -1220,8 +1273,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       clearInterval(quietCheck)
       if (how.restart) {
         // Nothing more is written from here: the log is left as a crash
-        // would leave it, for the next start to pick up.
+        // would leave it, for the next start to pick up. Managed dashboard
+        // processes are stopped so restarting Evie does not orphan them.
         jobs.leave()
+        await dashboardRunner.close()
         db.close()
         return
       }
@@ -1229,10 +1284,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       questions.refuseAll()
       // Jobs are marked and noted as stopped by the closing first, while
       // the sessions that started them can still record it. Then the turns
-      // are stopped, and then the jobs are waited for.
+      // are stopped, and then the jobs and live dashboards are waited for.
       const jobsStopped = jobs.stopAll()
+      const dashboardsStopped = dashboardRunner.close()
       await Promise.all([...sessions.values()].map(({ loop }) => loop.stop()))
       await jobsStopped
+      await dashboardsStopped
       db.close()
     },
   }

@@ -759,6 +759,26 @@ export type StorageFile = { path: string; size: number; changed: number } & (
   | { kind: "image"; type: string; data: string }
 )
 
+// ---- Dashboards -----------------------------------------------------------------
+
+// One dashboard configured in a trusted project's `.evie/evie.json`: either a
+// static file inside `.evie/`, a live local web app on a loopback address, or
+// an invalid entry kept in place with why it was refused.
+export type DashboardEntry =
+  | { id: string; name: string; kind: "static"; path: string }
+  | { id: string; name: string; kind: "live"; url: string; start?: string; idle?: number | "never" }
+  | { id: string; name: string; kind: "invalid"; error: string }
+
+// What opening one of a workspace's dashboards gives back: the path of a
+// static file inside `.evie/`, a ready live dashboard's URL (proxied by the
+// server with a scoped `passId`), why a live dashboard could not be reached,
+// or why the requested dashboard is invalid.
+export type DashboardOpenResult =
+  | { kind: "static"; path: string }
+  | { kind: "live"; status: "ready"; url: string; passId?: string }
+  | { kind: "live"; status: "not_running" | "failed"; message: string; log?: string }
+  | { kind: "invalid"; error: string }
+
 // ---- Settings -------------------------------------------------------------------
 
 // The settings the owner changes from a client's settings window, as they
@@ -1161,6 +1181,26 @@ export type Commands = {
   open_folder: {
     input: { project: string }
     output: void
+  }
+  // The dashboards configured in a trusted project's `.evie/evie.json`, in
+  // order. Returns an empty list for an untrusted project or one without any.
+  list_dashboards: {
+    input: { project: string }
+    output: { dashboards: DashboardEntry[] }
+  }
+  // Opens one dashboard in a project: for a static dashboard, returns its
+  // `.evie/` path; for a live dashboard, ensures the local app is answering
+  // (starting it on demand if configured) and returns its ready URL (which
+  // Evie's server swaps for a scoped `/dashboard/<pass>/` proxy URL and passId).
+  open_dashboard: {
+    input: { project: string; id: string }
+    output: DashboardOpenResult
+  }
+  // Keeps a live dashboard's managed process and scoped proxy pass alive while
+  // the owner is viewing it.
+  touch_dashboard: {
+    input: { project: string; id: string; passId?: string }
+    output: { ok: boolean }
   }
 }
 

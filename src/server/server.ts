@@ -5,6 +5,7 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path
 import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent, type StorageFiles } from "../core/types.ts"
 import { keptFileAt, typeOfFile } from "../plugins/show/files.ts"
 import { companionType } from "../plugins/show/kinds.ts"
+import { createDashboardProxy } from "./dashboard-proxy.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
 import { shikiAddress, shikiRoute } from "./shiki-files.ts"
 import { fileRoute } from "./variants.ts"
@@ -55,6 +56,9 @@ export type ServerOptions = {
   // The data folder, where the show tool keeps what a session with no
   // project shows. Without it, the storage route gives none of those.
   dataFolder?: string
+  // How long, in milliseconds, a live dashboard proxy pass lasts between
+  // touches. One hour when left out, which is for tests to change.
+  dashboardPassLasts?: number
 }
 
 export type EvieServer = {
@@ -125,7 +129,16 @@ const REMEMBERED = 200
 // from a workspace's Storage, a diff, or a changed file's whole sides: they
 // are not remembered, so they take none of the places. Carried out again,
 // they change nothing.
-const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage", "list_files", "read_changes", "read_file_sides"])
+const NOT_REMEMBERED: ReadonlySet<string> = new Set([
+  "list_storage",
+  "read_storage",
+  "list_files",
+  "read_changes",
+  "read_file_sides",
+  "list_dashboards",
+  "open_dashboard",
+  "touch_dashboard",
+])
 // The images an attachment is given back as, to show: those a browser
 // draws and never runs.
 const SHOWN = ["image/png", "image/jpeg", "image/gif", "image/webp"]
@@ -170,11 +183,34 @@ export function startServer(options: ServerOptions): EvieServer {
   // models that need to load companion files by relative path without
   // carrying the owner's sign-in cookie.
   const previews = new Map<string, PreviewPass>()
+  // Scoped reverse proxy for live local dashboards, minting per-device
+  // capability URLs under `/dashboard/<pass>/`.
+  const dashboardProxy = createDashboardProxy({
+    prefix: PATHS.dashboard,
+    checkToken: (token) => options.tokens.check(token),
+    ...(options.dashboardPassLasts !== undefined && { passLasts: options.dashboardPassLasts }),
+  })
 
-  function replyTo(device: string, message: ClientMessage): Promise<ServerMessage> {
+  function replyTo(device: string, token: string, message: ClientMessage): Promise<ServerMessage> {
     const carryOut = () =>
       options.evie.send(message.command).then(
-        (result): ServerMessage => ({ reply: message.id, result }),
+        (result): ServerMessage => {
+          if (message.command.type === "open_dashboard") {
+            const opened = result as Commands["open_dashboard"]["output"]
+            if (opened.kind === "live" && opened.status === "ready") {
+              const pass = dashboardProxy.mint(token, opened.url)
+              return { reply: message.id, result: { kind: "live", status: "ready", url: pass.url, passId: pass.passId } }
+            }
+          }
+          if (message.command.type === "touch_dashboard") {
+            const touched = result as Commands["touch_dashboard"]["output"]
+            if (typeof message.command.passId === "string" && message.command.passId !== "") {
+              const extended = dashboardProxy.touch(message.command.passId, token)
+              return { reply: message.id, result: { ok: touched.ok && extended } }
+            }
+          }
+          return { reply: message.id, result }
+        },
         (cause): ServerMessage => ({ reply: message.id, error: cause instanceof Error ? cause.message : String(cause) }),
       )
     // A command its client will never send again, such as its own catch-up
@@ -562,6 +598,7 @@ export function startServer(options: ServerOptions): EvieServer {
       if (path === PATHS.storage && (request.method === "GET" || request.method === "HEAD")) return storageFile(request, server.port!)
       if (path === PATHS.preview && request.method === "POST") return mintPreview(request, server.port!)
       if (path.startsWith(`${PATHS.preview}/`) && (request.method === "GET" || request.method === "HEAD")) return previewFile(path)
+      if (path === PATHS.dashboard || path.startsWith(`${PATHS.dashboard}/`)) return dashboardProxy.handle(request)
       if (path === PATHS.login && request.method === "POST") return login(request, server.port!)
       if (path === PATHS.signInLink && request.method === "POST") return signInLink(request, server.port!)
       return new Response("Not found.", { status: 404 })
@@ -633,7 +670,7 @@ export function startServer(options: ServerOptions): EvieServer {
         // after it, and the client skips the second by their numbers.
         const release = open?.session === undefined ? undefined : holdBack(socket, open.session)
         try {
-          const reply = await replyTo(socket.data.device, message)
+          const reply = await replyTo(socket.data.device, socket.data.token, message)
           // The session opened is learned from the reply, before the reply is
           // sent, so the client is sent its events from then on.
           if (open && "result" in reply) {
