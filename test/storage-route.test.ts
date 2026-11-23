@@ -77,13 +77,13 @@ test("nothing outside the project's .evie folder is given: a path that climbs ou
   await put(join(outside, "secret.png"), PNG)
   await put(join(served.run.projectFolder, "loose.md"), "# Not in Storage\n")
   await put(join(evie, ".git", "notes.md"), "# Git's own\n")
-  await put(join(evie, "files", "page.html"), "<script>alert(1)</script>")
+  await put(join(evie, "files", "notes.txt"), "plain text")
   await put(join(evie, "files", "fake.png"), "<html>not a picture</html>")
   await symlink(join(outside, "secret.png"), join(evie, "away.png"))
   await symlink(join(evie, ".git", "notes.md"), join(evie, "into-git.md"))
   await symlink(outside, join(evie, "elsewhere"))
 
-  for (const path of ["../loose.md", "files/../../loose.md", join(outside, "secret.png"), "away.png", "elsewhere/secret.png", ".git/notes.md", "into-git.md", "files/page.html", "files/fake.png", "files/gone.png", "files"]) {
+  for (const path of ["../loose.md", "files/../../loose.md", join(outside, "secret.png"), "away.png", "elsewhere/secret.png", ".git/notes.md", "into-git.md", "files/notes.txt", "files/fake.png", "files/gone.png", "files"]) {
     const refused = await fetchFile(served, { project, path })
     expect([path, refused.status]).toEqual([path, 404])
   }
@@ -117,4 +117,51 @@ test("a file kept for a session with no project is given by its full path, only 
 
   await served.run.evie.send({ type: "delete_session", session })
   expect((await fetchFile(served, { session, path: kept })).status).toBe(404)
+})
+
+test("a preview pass serves an HTML mockup and its relative companion files without a cookie, sandboxed to its own folder, and stops working if its device token is taken back", async () => {
+  const { served, evie, put, project } = await serve()
+  await put(join(evie, "shown", "2026-11-22", "card", "card.html"), '<!doctype html><link rel="stylesheet" href="styles/main.css"><script src="app.js"></script>')
+  await put(join(evie, "shown", "2026-11-22", "card", "styles", "main.css"), "body { color: #e8e4dc; }")
+  await put(join(evie, "shown", "2026-11-22", "card", "app.js"), "console.log('hi')")
+  await put(join(evie, "shown", "2026-11-22", "other.txt"), "sibling outside bundle")
+
+  // Minting requires sign-in.
+  const denied = await fetch(`${served.server.url}/preview?${new URLSearchParams({ project, path: "shown/2026-11-22/card/card.html" })}`, { method: "POST" })
+  expect(denied.status).toBe(401)
+
+  const minted = await fetch(`${served.server.url}/preview?${new URLSearchParams({ project, path: "shown/2026-11-22/card/card.html" })}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${served.token}` },
+  })
+  expect(minted.status).toBe(200)
+  const { url } = (await minted.json()) as { url: string }
+  expect(url).toMatch(/^\/preview\/[A-Za-z0-9_-]+\/card\.html$/)
+
+  // Entry HTML loads with NO token/cookie, with strict sandbox + pass-scoped CSP.
+  const html = await fetch(`${served.server.url}${url}`)
+  expect(html.status).toBe(200)
+  expect(html.headers.get("content-type")).toBe("text/html; charset=utf-8")
+  const csp = html.headers.get("content-security-policy") ?? ""
+  expect(csp).toContain("sandbox allow-scripts allow-forms")
+  expect(csp).toContain("frame-ancestors 'self'")
+  const base = url.slice(0, url.lastIndexOf("/") + 1)
+  expect(csp).toContain(`script-src 'unsafe-inline' 'unsafe-eval' ${base}`)
+
+  // Companion CSS and JS load from the same pass with no cookie.
+  const css = await fetch(`${served.server.url}${base}styles/main.css`)
+  expect([css.status, css.headers.get("content-type")]).toEqual([200, "text/css; charset=utf-8"])
+  expect(await css.text()).toBe("body { color: #e8e4dc; }")
+  const js = await fetch(`${served.server.url}${base}app.js`)
+  expect([js.status, js.headers.get("content-type")]).toEqual([200, "text/javascript; charset=utf-8"])
+
+  // Cannot climb out of the bundle folder.
+  expect((await fetch(`${served.server.url}${base}..%2Fother.txt`)).status).toBe(404)
+  expect((await fetch(`${served.server.url}${base}missing.js`)).status).toBe(404)
+  // A non-previewable file cannot mint a pass.
+  const notPreviewable = await fetch(`${served.server.url}/preview?${new URLSearchParams({ project, path: "shown/2026-11-22/other.txt" })}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${served.token}` },
+  })
+  expect(notPreviewable.status).toBe(404)
 })

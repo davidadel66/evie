@@ -503,7 +503,14 @@ test("the screens opened rarely or later, and the drawings of every icon but the
   // Words of the settings, the command palette, the session details, the
   // right panel, the workspace view, its side chat and storage, the icon
   // picker, an icon's name, and the viewers of the files evie shows.
-  for (const words of ["Restart to apply", "Command palette", "Choose what to show", "The diff view could not be loaded", "This workspace is not in the list", "Ask evie to change something here", "Backed up privately", "No matching icon", "cooking-pot", "Expanded image preview", "in the browser's PDF view"]) {
+  for (const words of ["Restart to apply", "Command palette", "Choose what to show", "The diff view could not be loaded", "This workspace is not in the list", "Ask evie to change something here", "Backed up privately", "No matching icon", "cooking-pot", "Expanded image preview", "in the browser's PDF view", "Could not draw this Mermaid diagram", "Could not load this 3D model"]) {
     expect({ words, first: firstScript.includes(words), later: laterScripts.includes(words) }).toEqual({ words, first: false, later: true })
   }
+  // Neither mermaid nor three.js is in the initial bundle or the idle-loaded screens chunk.
+  const screensFile = Object.keys(app.metafile.outputs).find((path) => Object.keys(app.metafile.outputs[path]!.inputs).some((input) => input.includes("screens-later")))
+  const screensCode = screensFile === undefined ? "" : text(app.files[screensFile.replace(/^\./, "")]!.identity)
+  expect(firstScript).not.toContain("WebGLRenderer")
+  expect(screensCode).not.toContain("WebGLRenderer")
+  expect(firstScript).not.toContain("mermaid.render")
+  expect(screensCode).not.toContain("mermaid.render")
 })

@@ -19,7 +19,7 @@ export type Shown = { key: string; path: string; type: string; name: string; fol
 // The viewer that draws each type, by the type the server sends the file
 // as. A kind is added by its type and its viewer here, and its viewer in
 // Shown.tsx.
-export type Viewer = "image" | "svg" | "pdf" | "markdown"
+export type Viewer = "image" | "svg" | "pdf" | "markdown" | "html" | "mermaid" | "model"
 const VIEWERS: Record<string, Viewer> = {
   "image/png": "image",
   "image/jpeg": "image",
@@ -28,8 +28,18 @@ const VIEWERS: Record<string, Viewer> = {
   "image/svg+xml": "svg",
   "application/pdf": "pdf",
   "text/markdown": "markdown",
+  "text/html": "html",
+  "text/vnd.mermaid": "mermaid",
+  "model/gltf-binary": "model",
+  "model/gltf+json": "model",
+  "model/stl": "model",
+  "model/obj": "model",
 }
 export const viewerOf = (type: string): Viewer | undefined => VIEWERS[type]
+
+// The address to mint a scoped preview pass for a file, given its `/storage?...`
+// address. Used by HTML mockups and 3D models that may load relative companion files.
+export const previewMintOf = (storageAddress: string): string => storageAddress.replace(/^\/storage\b/, PATHS.preview)
 
 // The viewers whose files are images, which full screen moves through.
 const IMAGES: readonly Viewer[] = ["image", "svg"]

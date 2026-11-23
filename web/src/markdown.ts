@@ -88,8 +88,16 @@ const GOES_ON = /^(?:[ \t]|(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$))/
 const READ_WHOLE = /^[ \t>*+\-\d.)]*\[[^\]\n]+\]:|^[^[\n]*\]:|^ {0,3}<[A-Za-z!?/]|<a |^\s+$/i
 
 const HEADINGS = ["h1", "h2", "h3", "h4", "h5", "h6"] as const
-// Each heading's text style, at T3 Code's 20, 18, 16 and 14px.
-const HEADING_SIZES = ["text-page-title", "text-heading", "text-title"] as const
+// Each heading's text style, at T3 Code's 20, 18, 16 and 14px, with extra
+// breathing room above a section heading when it is not the first block.
+const HEADING_STYLES = [
+  "text-page-title text-text not-first:mt-5",
+  "text-heading text-text not-first:mt-5",
+  "text-title text-text not-first:mt-4",
+  "text-label text-text not-first:mt-4",
+  "text-label text-text not-first:mt-3",
+  "text-label text-text-muted not-first:mt-3",
+] as const
 const ALIGN = { left: "text-left", center: "text-center", right: "text-right" }
 
 function blocks(tokens: Token[]): ReactNode[] {
@@ -100,7 +108,7 @@ function blocks(tokens: Token[]): ReactNode[] {
         return []
       case "heading": {
         const heading = token as Tokens.Heading
-        return [h(HEADINGS[heading.depth - 1] ?? "h6", { key, className: HEADING_SIZES[heading.depth - 1] ?? "text-label" }, inline(heading.tokens))]
+        return [h(HEADINGS[heading.depth - 1] ?? "h6", { key, className: HEADING_STYLES[heading.depth - 1] ?? "text-label text-text" }, inline(heading.tokens))]
       }
       case "paragraph":
         return [h("p", { key }, inline((token as Tokens.Paragraph).tokens))]
@@ -110,32 +118,39 @@ function blocks(tokens: Token[]): ReactNode[] {
         return [h(Fragment, { key }, inline(text.tokens ?? [text]))]
       }
       case "code":
-        return [h("pre", { key, className: "overflow-x-auto border-l border-line pl-3 font-mono text-code" }, h("code", null, (token as Tokens.Code).text))]
+        return [h("pre", { key, className: "overflow-x-auto rounded-md border border-line bg-surface px-3 py-2.5 font-mono text-code" }, h("code", null, (token as Tokens.Code).text))]
       case "blockquote":
         return [h("blockquote", { key, className: "border-l border-line pl-3 text-text-muted" }, blocks((token as Tokens.Blockquote).tokens))]
       case "hr":
-        return [h("hr", { key, className: "border-t border-line" })]
+        return [h("hr", { key, className: "my-4 border-t border-line" })]
       case "list": {
         const list = token as Tokens.List
-        const items = list.items.map((item, at) => h("li", { key: at, className: "pl-1 [&+li]:mt-1 [&>*+*]:mt-2" }, blocks(item.tokens)))
-        if (!list.ordered) return [h("ul", { key, className: "list-disc pl-5" }, items)]
-        return [h("ol", { key, className: "list-decimal pl-5", ...(list.start !== "" && list.start !== 1 && { start: list.start }) }, items)]
+        const items = list.items.map((item, at) => h("li", { key: at, className: "pl-1 [&+li]:mt-1.5 [&>*+*]:mt-2" }, blocks(item.tokens)))
+        if (!list.ordered) return [h("ul", { key, className: "list-disc pl-5 marker:text-text-muted" }, items)]
+        return [h("ol", { key, className: "list-decimal pl-5 marker:text-text-muted", ...(list.start !== "" && list.start !== 1 && { start: list.start }) }, items)]
       }
       case "checkbox":
         return [checkbox(token as Tokens.Checkbox, key)]
       case "table": {
         const table = token as Tokens.Table
         const cell = (tag: "th" | "td", cell: Tokens.TableCell, at: number) =>
-          h(tag, { key: at, className: `border-b border-line px-3 py-2 ${tag === "th" ? "font-semibold" : ""} ${ALIGN[cell.align ?? "left"]}` }, inline(cell.tokens))
+          h(
+            tag,
+            {
+              key: at,
+              className: `border-b border-line px-3 py-2 align-top ${tag === "th" ? "bg-text/4 font-semibold text-text" : ""} ${ALIGN[cell.align ?? "left"]}`,
+            },
+            inline(cell.tokens),
+          )
         return [
           h(
             "div",
-            { key, className: "overflow-x-auto" },
+            { key, className: "overflow-x-auto rounded-md border border-line" },
             h(
               "table",
-              { className: "border-collapse" },
+              { className: "w-full border-collapse text-body" },
               h("thead", null, h("tr", null, table.header.map((each, at) => cell("th", each, at)))),
-              h("tbody", null, table.rows.map((row, at) => h("tr", { key: at }, row.map((each, column) => cell("td", each, column))))),
+              h("tbody", { className: "[&_tr:last-child_td]:border-b-0" }, table.rows.map((row, at) => h("tr", { key: at }, row.map((each, column) => cell("td", each, column))))),
             ),
           ),
         ]
@@ -160,13 +175,13 @@ function inline(tokens: Token[] | undefined): ReactNode[] {
       case "escape":
         return (token as Tokens.Escape).text
       case "strong":
-        return h("strong", { key, className: "font-semibold" }, inline((token as Tokens.Strong).tokens))
+        return h("strong", { key, className: "font-semibold text-text" }, inline((token as Tokens.Strong).tokens))
       case "em":
         return h("em", { key, className: "italic" }, inline((token as Tokens.Em).tokens))
       case "del":
-        return h("del", { key, className: "line-through" }, inline((token as Tokens.Del).tokens))
+        return h("del", { key, className: "line-through text-text-muted" }, inline((token as Tokens.Del).tokens))
       case "codespan":
-        return h("code", { key, className: "font-mono text-code" }, (token as Tokens.Codespan).text)
+        return h("code", { key, className: "rounded-sm bg-text/8 px-1 py-0.5 font-mono text-code" }, (token as Tokens.Codespan).text)
       case "link": {
         const link = token as Tokens.Link
         return linkTo(link.href, inline(link.tokens), key)
