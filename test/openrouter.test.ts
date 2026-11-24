@@ -51,7 +51,7 @@ test("the request goes to OpenRouter's chat completions endpoint with the key as
   expect(calls[0]?.headers.authorization).toBe(`Bearer ${KEY}`)
   expect(calls[0]?.body).toEqual({
     model: "some/model",
-    max_tokens: 16000,
+    max_tokens: 64000,
     messages: [{ role: "user", content: "hi" }],
     stream: true,
   })
@@ -259,14 +259,14 @@ test("the system prompt is sent as the first message", async () => {
   ])
 })
 
-test("a reply is limited to 16,000 tokens unless the settings say otherwise", async () => {
+test("a reply is limited to 64,000 tokens unless the settings say otherwise", async () => {
   const usual = await ask([ok(text("ok"), usage("stop"), DONE)])
   const chosen = await ask([ok(text("ok"), usage("stop"), DONE)], { maxTokens: "4000" })
   const nonsense = await ask([ok(text("ok"), usage("stop"), DONE)], { maxTokens: "lots" })
 
-  expect(usual.calls[0]?.body.max_tokens).toBe(16000)
+  expect(usual.calls[0]?.body.max_tokens).toBe(64000)
   expect(chosen.calls[0]?.body.max_tokens).toBe(4000)
-  expect(nonsense.calls[0]?.body.max_tokens).toBe(16000)
+  expect(nonsense.calls[0]?.body.max_tokens).toBe(64000)
 })
 
 test("what a model can read is looked up in OpenRouter's list, once", async () => {
@@ -480,4 +480,28 @@ test("a request refused as bad, or as too large, says so, so that what is in it 
 test("when OpenRouter's list cannot be fetched, whether a model takes images is not known", async () => {
   const offline = createOpenRouterProvider({ env: { OPENROUTER_API_KEY: KEY }, fetch: fakeOpenRouter([{ networkError: "fetch failed" }]).fetch })
   expect(await offline.takesImages?.("sees/model")).toBeUndefined()
+})
+
+// What GLM 5.3 sent back on 2026-11-23, through a server that did not turn its markup into a real call.
+const GARBLED_CALL =
+  "<tool_cal<tool_call>l>read<arg_key>limit</arg_key><arg_value>85</arg_value><arg_key>path</arg_key><arg_value>src/server/server.ts</arg_value></tool_call>"
+
+test("a reply with no tool call whose text holds the model's own tool-call markup ends as a tool call that arrived as text", async () => {
+  const { chunks } = await ask([ok(text(GARBLED_CALL), usage("stop"), DONE)])
+
+  expect(chunks.at(-1)).toMatchObject({ type: "finish", reason: "tool_call_as_text" })
+})
+
+test("tool-call markup written about in code, in backticks or a fenced block, is an ordinary reply", async () => {
+  const inline = await ask([ok(text("GLM marks a call with `<tool_call>`, then its name."), usage("stop"), DONE)])
+  const fenced = await ask([ok(text("It looks like this:\n\n```\n<tool_call>read</tool_call>\n```\n"), usage("stop"), DONE)])
+
+  expect(inline.chunks.at(-1)).toMatchObject({ type: "finish", reason: "stop" })
+  expect(fenced.chunks.at(-1)).toMatchObject({ type: "finish", reason: "stop" })
+})
+
+test("a reply said to end in tool calls that brought none, only markup in its text, also ends as a tool call that arrived as text", async () => {
+  const { chunks } = await ask([ok(text(GARBLED_CALL), usage("tool_calls"), DONE)])
+
+  expect(chunks.at(-1)).toMatchObject({ type: "finish", reason: "tool_call_as_text" })
 })

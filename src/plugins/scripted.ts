@@ -14,9 +14,10 @@ export type ScriptedCall = { name: string; input: Record<string, unknown> | stri
 // `usage` is what the provider reports the request and reply came to.
 // `tooLong` with `error` is a request refused as more than the model can
 // read, `refused` with `error` one refused as bad, as for an image in it,
-// and `cutOff` is a reply that hit its length limit.
+// `cutOff` is a reply that hit its length limit, and `callAsText` one whose
+// tool call arrived as text.
 export type ScriptedReply =
-  | { text: string[]; error?: string; tooLong?: true; refused?: true; cutOff?: true; calls?: ScriptedCall[]; usage?: { inputTokens: number; outputTokens: number } }
+  | { text: string[]; error?: string; tooLong?: true; refused?: true; cutOff?: true; callAsText?: true; calls?: ScriptedCall[]; usage?: { inputTokens: number; outputTokens: number } }
   | { fail: string }
   | { hang: true; text?: string[]; reports?: true }
 
@@ -66,6 +67,7 @@ export function scriptedProvider(
       if (reply.error !== undefined) {
         yield { type: "finish", reason: "error", error: reply.error, ...usage, ...(reply.tooLong && { tooLong: true as const }), ...(reply.refused && { refused: true as const }) }
       } else if (reply.cutOff) yield { type: "finish", reason: "length", ...usage }
+      else if (reply.callAsText) yield { type: "finish", reason: "tool_call_as_text", ...usage }
       else yield { type: "finish", reason: calls.length > 0 ? "tool_calls" : "stop", ...usage }
     },
   }

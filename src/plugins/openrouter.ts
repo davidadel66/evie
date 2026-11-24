@@ -25,8 +25,10 @@ const LIST_KEPT = 60 * 60_000
 const RETRIES = 3
 // How long a reply may be, in tokens, unless the settings say otherwise.
 // Without a limit OpenRouter reserves the model's maximum, and refuses the
-// request when the account's credits do not cover that.
-const DEFAULT_MAX_TOKENS = 16_000
+// request when the account's credits do not cover that. 64,000 is several
+// times the longest reply seen in practice, thinking included, and a reply
+// that still reaches it is asked to go on in smaller pieces.
+const DEFAULT_MAX_TOKENS = 64_000
 const LONGEST_WAIT = 60_000
 
 export type OpenRouterOptions = {
@@ -249,6 +251,17 @@ type WireChunk = {
   }
 }
 
+// How models mark a tool call in their own text. GLM, Qwen and Hermes-style
+// models use this tag; add another here when a model is seen to leak one.
+const CALL_MARKUP = ["<tool_call>"]
+
+// Whether text holds tool-call markup outside code. Markup in backticks or a
+// fenced block is the model writing about it, not calling a tool.
+function callWrittenAsText(text: string): boolean {
+  const prose = text.replace(/```[\s\S]*?(```|$)/g, "").replace(/`[^`\n]*`/g, "")
+  return CALL_MARKUP.some((tag) => prose.includes(tag))
+}
+
 async function* readReply(response: Response, signal: AbortSignal): AsyncGenerator<Chunk> {
   // A tool call arrives in pieces that share an index. The first piece has
   // its id and name; later pieces add to its arguments.
@@ -256,6 +269,8 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
   let finishReason: string | undefined
   // The token counts, when the reply carries them. Not every one does.
   let usage: Usage | undefined
+  // The reply's text, to check at the end for a tool call written as text.
+  let written = ""
 
   const chunks = wireChunks(response)
   while (true) {
@@ -276,7 +291,10 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
       return
     }
     const choice = chunk.choices?.[0]
-    if (choice?.delta?.content) yield { type: "text", text: choice.delta.content }
+    if (choice?.delta?.content) {
+      written += choice.delta.content
+      yield { type: "text", text: choice.delta.content }
+    }
     for (const piece of choice?.delta?.tool_calls ?? []) {
       const call = calls.get(piece.index) ?? { id: "", name: "", arguments: "" }
       if (piece.id) call.id = piece.id
@@ -301,6 +319,13 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
 
   for (const index of [...calls.keys()].sort((a, b) => a - b)) {
     yield { type: "tool_call", ...calls.get(index)! }
+  }
+
+  // A server that does not turn a model's own markup for a tool call into a
+  // real call sends it on as text. The reply looks finished, but nothing ran.
+  if ((finishReason === "stop" || finishReason === "tool_calls") && calls.size === 0 && callWrittenAsText(written)) {
+    yield { type: "finish", reason: "tool_call_as_text", ...(usage && { usage }) }
+    return
   }
 
   switch (finishReason) {

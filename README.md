@@ -1271,13 +1271,21 @@ and which plugins load.
 ```json
 {
   "model": "a-name-from/openrouter.ai-models",
-  "maxTokens": 16000
+  "maxTokens": 64000
 }
 ```
 
-`maxTokens` is the longest one reply may be. It is 16,000 unless you change
-it. OpenRouter refuses a request whose limit your credits do not cover, so
-lower it if you see that.
+`maxTokens` is the longest one reply may be, the model's thinking included.
+It is 64,000 unless you change it. OpenRouter sets aside the price of a
+reply that long before each request, and refuses the request when your
+credits do not cover it, so lower it if you see that.
+
+A reply that reaches the limit is not taken as finished. Its tool calls are
+not run, since their input may be cut short, and the model is told and asked
+to go on in smaller pieces. A reply whose tool call arrived as text, which
+happens when the server running a model does not turn the model's own
+markup into a real call, is handled the same way. Three such replies in a
+row end the turn with a message that says why.
 
 **Long conversations.** Every request carries the whole conversation, so a
 long session would eventually be more than the model can read. Before that
