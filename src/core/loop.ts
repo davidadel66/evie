@@ -110,21 +110,21 @@ function recordedBranch(events: readonly StoredEvent[]): string | undefined {
 const SHOWN_IMAGES = 4
 const SHOWN_BASE64 = 16 * 1024 * 1024
 
-// What the model is told when its reply was cut off at the length limit for
-// one reply. OpenCode tells it the same: go on, in smaller pieces.
-const CUT_OFF =
-  "Your last reply reached the length limit for one reply and was cut off. Continue from where it stopped, in smaller pieces: write a long file in several edits, and keep each reply short."
+// A reply that did not finish, by how it ended: what the model is told, and
+// what the turn's failure says when it was the last of three in a row.
+// OpenCode tells a cut-off model the same: go on, in smaller pieces.
+const UNFINISHED = {
+  length: {
+    ask: "Your last reply reached the length limit for one reply and was cut off. Continue from where it stopped, in smaller pieces: write a long file in several edits, and keep each reply short.",
+    last: "reached the length limit for one reply. Ask for the work in smaller pieces, or raise `maxTokens` in evie.json.",
+  },
+  tool_call_as_text: {
+    ask: "Your last reply wrote a tool call as text, so it did not run. Send it again as a real tool call. If you were only writing about tool-call markup, put it in backticks.",
+    last: "wrote a tool call as text instead of calling the tool. The server running this model may not handle its tool calls: try again, or switch to another model.",
+  },
+}
 // OpenCode's rule: three unfinished replies in a row end the step.
 const UNFINISHED_TRIES = 3
-const CUT_OFF_FAILED =
-  "Three replies in a row reached the length limit for one reply, so the turn was stopped. Ask for the work in smaller pieces, or raise `maxTokens` in evie.json."
-// What the model is told when its tool call arrived as text, and the
-// failure after three in a row.
-const CALL_AS_TEXT =
-  "Your last reply wrote a tool call as text, so it did not run. Send it again as a real tool call. If you were only writing about tool-call markup, put it in backticks."
-const CALL_AS_TEXT_FAILED =
-  "Three replies in a row wrote a tool call as text instead of calling the tool, so the turn was stopped. The server running this model may not handle its tool calls: try again, or switch to another model."
-const NOT_RUN_CUT_OFF = "Not run: the reply was cut off at the length limit, so this call's input may be incomplete. If it is still needed, send it again."
 
 // A promise's value, or nothing if it fails, or once the signal fires,
 // leaving nothing listening on the signal afterwards.
@@ -528,6 +528,14 @@ export function createLoop(options: LoopOptions): Loop {
           calls.length = 0
         }
 
+        // A reply that did not finish is not the final answer: one cut off at
+        // the length limit, or one whose tool call arrived as text. Its tool
+        // calls are neither run, as in pi, nor kept: their input may be cut
+        // short, and a provider may refuse a request that carries it. The
+        // model is told and asked again, in the same turn.
+        const unfinishedAs = ended === "length" || ended === "tool_call_as_text" ? UNFINISHED[ended] : undefined
+        const dropped = unfinishedAs ? calls.splice(0).map((call) => call.name) : []
+
         emit(
           log.append(session, "assistant_message", {
             text,
@@ -535,19 +543,14 @@ export function createLoop(options: LoopOptions): Loop {
             ...(usage && { usage }),
           }),
         )
-        // A reply that did not finish is not the final answer: one cut off at
-        // the length limit, or one whose tool call arrived as text. None of
-        // its tool calls run, as in pi, since their input may be cut short.
-        // The model is told and asked again, in the same turn.
-        if (ended === "length" || ended === "tool_call_as_text") {
-          const cutOff = ended === "length"
-          for (const call of calls) emit(log.append(session, "tool_result", { callId: call.id, name: call.name, text: NOT_RUN_CUT_OFF }))
+        if (unfinishedAs) {
           if (++unfinished === UNFINISHED_TRIES) {
             reason = "error"
-            error = cutOff ? CUT_OFF_FAILED : CALL_AS_TEXT_FAILED
+            error = `Three replies in a row did not finish, so the turn was stopped. The last one ${unfinishedAs.last}`
             break
           }
-          emit(log.append(session, "note", { text: cutOff ? CUT_OFF : CALL_AS_TEXT }))
+          const notRun = dropped.length > 0 ? ` The tool calls in it were not run: ${dropped.join(", ")}. Send again any that are still needed.` : ""
+          emit(log.append(session, "note", { text: unfinishedAs.ask + notRun }))
           continue
         }
         unfinished = 0

@@ -496,12 +496,51 @@ test("tool-call markup written about in code, in backticks or a fenced block, is
   const inline = await ask([ok(text("GLM marks a call with `<tool_call>`, then its name."), usage("stop"), DONE)])
   const fenced = await ask([ok(text("It looks like this:\n\n```\n<tool_call>read</tool_call>\n```\n"), usage("stop"), DONE)])
 
-  expect(inline.chunks.at(-1)).toMatchObject({ type: "finish", reason: "stop" })
-  expect(fenced.chunks.at(-1)).toMatchObject({ type: "finish", reason: "stop" })
+  const doubled = await ask([ok(text("GLM uses ``<tool_call>`` tags."), usage("stop"), DONE)])
+  const tilde = await ask([ok(text("~~~\n<tool_call>read</tool_call>\n~~~"), usage("stop"), DONE)])
+
+  for (const reply of [inline, fenced, doubled, tilde]) expect(reply.chunks.at(-1)).toMatchObject({ type: "finish", reason: "stop" })
+})
+
+test("markup after a code fence that is never closed still counts, since nothing closed it as code", async () => {
+  const { chunks } = await ask([ok(text("Reading it now.\n```\n" + GARBLED_CALL), usage("stop"), DONE)])
+
+  expect(chunks.at(-1)).toMatchObject({ type: "finish", reason: "tool_call_as_text" })
 })
 
 test("a reply said to end in tool calls that brought none, only markup in its text, also ends as a tool call that arrived as text", async () => {
   const { chunks } = await ask([ok(text(GARBLED_CALL), usage("tool_calls"), DONE)])
 
   expect(chunks.at(-1)).toMatchObject({ type: "finish", reason: "tool_call_as_text" })
+})
+
+// Asks once the way the loop does: the model's limit is looked up first, which fetches the list, then the request is sent.
+async function askKnowing(model: Record<string, unknown>, sent: Request) {
+  const fake = fakeOpenRouter([{ status: 200, body: JSON.stringify({ data: [model] }) }, ok(text("ok"), usage("stop"), DONE)])
+  const provider = createOpenRouterProvider({ env: { OPENROUTER_API_KEY: KEY }, fetch: fake.fetch, sleep: fake.sleep })
+  await provider.contextLimit?.(sent.model)
+  for await (const _ of provider.stream(sent, new AbortController().signal)) {
+  }
+  return fake.calls[1]?.body.max_tokens as number
+}
+
+test("a reply is limited to no more than the model's own longest reply, when OpenRouter's list gives it", async () => {
+  const limit = await askKnowing({ id: "some/model", context_length: 1_000_000, top_provider: { max_completion_tokens: 32_000 } }, request)
+
+  expect(limit).toBe(32_000)
+})
+
+test("a reply is limited to the room the request leaves in the model's context, as strict servers refuse to go past it", async () => {
+  // About 50,000 tokens of prompt, at four characters a token, in a model that reads 100,000.
+  const long: Request = { model: "some/model", messages: [{ role: "user", text: "x".repeat(200_000) }], tools: [] }
+  const full: Request = { model: "some/model", messages: [{ role: "user", text: "x".repeat(400_000) }], tools: [] }
+
+  const roomy = await askKnowing({ id: "some/model", context_length: 100_000 }, long)
+  const crowded = await askKnowing({ id: "some/model", context_length: 100_000 }, full)
+
+  expect(roomy).toBeLessThan(64_000)
+  expect(roomy).toBeGreaterThan(30_000)
+  expect(roomy + 50_000).toBeLessThanOrEqual(100_000)
+  // Never asked for less than a short reply needs; compaction keeps a context from getting this full.
+  expect(crowded).toBe(1_024)
 })

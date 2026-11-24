@@ -1276,7 +1276,9 @@ and which plugins load.
 ```
 
 `maxTokens` is the longest one reply may be, the model's thinking included.
-It is 64,000 unless you change it. OpenRouter sets aside the price of a
+It is 64,000 unless you change it. Evie asks for less when the model's own
+longest reply is shorter, or when the conversation leaves less room in what
+the model can read. OpenRouter sets aside the price of a
 reply that long before each request, and refuses the request when your
 credits do not cover it, so lower it if you see that.
 

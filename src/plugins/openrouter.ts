@@ -29,6 +29,11 @@ const RETRIES = 3
 // times the longest reply seen in practice, thinking included, and a reply
 // that still reaches it is asked to go on in smaller pieces.
 const DEFAULT_MAX_TOKENS = 64_000
+// The least a reply is limited to, and the share of a model's context left
+// unused when a limit is fitted, as servers count a few tokens more than an
+// estimate does. Both are OpenCode's.
+const LEAST_REPLY = 1_024
+const HEADROOM = 0.01
 const LONGEST_WAIT = 60_000
 
 export type OpenRouterOptions = {
@@ -75,7 +80,7 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
   // failed, or a reply that is not a list, as an error reply, is not kept,
   // so the next call tries again. The list's fields are as documented on
   // 2026-11-22: https://openrouter.ai/docs/guides/overview/models
-  type Listed = { id: string; name: string; limit?: number; images?: true }
+  type Listed = { id: string; name: string; limit?: number; longest?: number; images?: true }
   let listing: { list: Promise<Listed[] | undefined>; at: number } | undefined
   async function list(): Promise<Listed[] | undefined> {
     if (listing === undefined || now() - listing.at >= LIST_KEPT) listing = { list: fetchList(), at: now() }
@@ -90,11 +95,20 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
       if (!response.ok) return undefined
       const body = (await response.json()) as { data?: unknown }
       if (!Array.isArray(body.data)) return undefined
-      type Entry = { id?: unknown; name?: unknown; context_length?: unknown; architecture?: { input_modalities?: unknown } }
-      return (body.data as Entry[]).flatMap(({ id, name, context_length: limit, architecture }) => {
+      type Entry = { id?: unknown; name?: unknown; context_length?: unknown; top_provider?: { max_completion_tokens?: unknown }; architecture?: { input_modalities?: unknown } }
+      return (body.data as Entry[]).flatMap(({ id, name, context_length: limit, top_provider, architecture }) => {
         if (typeof id !== "string" || id === "") return []
         const images = Array.isArray(architecture?.input_modalities) && architecture.input_modalities.includes("image")
-        return [{ id, name: typeof name === "string" && name !== "" ? name : id, ...(typeof limit === "number" && limit > 0 && { limit }), ...(images && { images: true as const }) }]
+        const longest = top_provider?.max_completion_tokens
+        return [
+          {
+            id,
+            name: typeof name === "string" && name !== "" ? name : id,
+            ...(typeof limit === "number" && limit > 0 && { limit }),
+            ...(typeof longest === "number" && longest > 0 && { longest }),
+            ...(images && { images: true as const }),
+          },
+        ]
       })
     } catch {
       return undefined
@@ -128,10 +142,15 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
         return
       }
 
+      // The list is used only once it has been fetched: the loop looks up
+      // the model's limit before each request, so it is there, and a request
+      // never waits for it.
+      const known = listing && (await listing.list)?.find((entry) => entry.id === request.model)
+      const limit = fitted(request.maxTokens ?? maxTokens(options.env.EVIE_MAX_TOKENS), known, request)
       const init = {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify(toBody(request, request.maxTokens ?? maxTokens(options.env.EVIE_MAX_TOKENS))),
+        body: JSON.stringify(toBody(request, limit)),
         signal,
       }
 
@@ -175,6 +194,25 @@ export function createOpenRouterProvider(options: OpenRouterOptions): Provider {
 function maxTokens(setting: string | undefined): number {
   const asked = Number(setting)
   return Number.isInteger(asked) && asked > 0 ? asked : DEFAULT_MAX_TOKENS
+}
+
+// The limit asked for, fitted as OpenCode fits it: no more than the model's
+// own longest reply, nor than the room its context leaves after the request,
+// since strict servers refuse a request whose input and reply limit together
+// are more than the model can read. Never less than a short reply needs.
+function fitted(asked: number, model: { limit?: number; longest?: number } | undefined, request: Request): number {
+  let limit = model?.longest ? Math.min(asked, model.longest) : asked
+  if (model?.limit) limit = Math.min(limit, Math.max(LEAST_REPLY, Math.floor(model.limit * (1 - HEADROOM)) - estimatedTokens(request)))
+  return limit
+}
+
+// The request's size in tokens, estimated as OpenCode does at four characters
+// a token, with 15% added since dense text such as code runs higher. Images
+// are left out: their base64 would count far more than they cost.
+function estimatedTokens(request: Request): number {
+  const messages = JSON.stringify(request.messages, (key, value) => (key === "images" ? undefined : value))
+  const characters = (request.system ?? "").length + messages.length + JSON.stringify(request.tools).length
+  return Math.ceil((characters / 4) * 1.15)
 }
 
 function toBody(request: Request, limit: number) {
@@ -255,10 +293,11 @@ type WireChunk = {
 // models use this tag; add another here when a model is seen to leak one.
 const CALL_MARKUP = ["<tool_call>"]
 
-// Whether text holds tool-call markup outside code. Markup in backticks or a
-// fenced block is the model writing about it, not calling a tool.
+// Whether text holds tool-call markup outside code. Markup in a closed
+// fenced block, or in a code span of any number of backticks, is the model
+// writing about it, not calling a tool.
 function callWrittenAsText(text: string): boolean {
-  const prose = text.replace(/```[\s\S]*?(```|$)/g, "").replace(/`[^`\n]*`/g, "")
+  const prose = text.replace(/(```|~~~)[\s\S]*?\1/g, "").replace(/(`+)[^\n]*?\1/g, "")
   return CALL_MARKUP.some((tag) => prose.includes(tag))
 }
 
@@ -270,7 +309,7 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
   // The token counts, when the reply carries them. Not every one does.
   let usage: Usage | undefined
   // The reply's text, to check at the end for a tool call written as text.
-  let written = ""
+  let replyText = ""
 
   const chunks = wireChunks(response)
   while (true) {
@@ -292,7 +331,7 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
     }
     const choice = chunk.choices?.[0]
     if (choice?.delta?.content) {
-      written += choice.delta.content
+      replyText += choice.delta.content
       yield { type: "text", text: choice.delta.content }
     }
     for (const piece of choice?.delta?.tool_calls ?? []) {
@@ -323,7 +362,7 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
 
   // A server that does not turn a model's own markup for a tool call into a
   // real call sends it on as text. The reply looks finished, but nothing ran.
-  if ((finishReason === "stop" || finishReason === "tool_calls") && calls.size === 0 && callWrittenAsText(written)) {
+  if ((finishReason === "stop" || finishReason === "tool_calls") && calls.size === 0 && callWrittenAsText(replyText)) {
     yield { type: "finish", reason: "tool_call_as_text", ...(usage && { usage }) }
     return
   }

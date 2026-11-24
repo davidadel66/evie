@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import type { Plugin } from "../src/index.ts"
-import { say, startEvie, stored } from "./support/harness.ts"
+import { say, startEvie, stored, type Run } from "./support/harness.ts"
 import { scriptedProvider, type ScriptedReply } from "./support/scripted-provider.ts"
 
 // A reply that did not finish is never taken for the final answer: one cut
@@ -42,8 +42,8 @@ async function start(script: ScriptedReply[]) {
   return { run, model, tool }
 }
 
-const types = (run: { events: Parameters<typeof stored>[0] }) => stored(run.events).map((event) => event.type)
-const turnEnd = (run: { events: Parameters<typeof stored>[0] }) => stored(run.events).findLast((event) => event.type === "turn_end")
+const types = (run: Run) => stored(run.events).map((event) => event.type)
+const turnEnd = (run: Run) => stored(run.events).findLast((event) => event.type === "turn_end")
 
 test("a reply cut off at the length limit is not the final answer: the model is told and asked again in the same turn", async () => {
   const { run, model } = await start([{ text: ["Here is the whole file in one go: "], cutOff: true }, { text: ["Done, in smaller pieces."] }])
@@ -62,21 +62,22 @@ test("a reply cut off at the length limit is not the final answer: the model is 
   expect(asked[2]?.text).toContain("smaller pieces")
 })
 
-test("the tool calls of a cut-off reply are not run, since their input may be cut short: each gets a result asking for it again", async () => {
+test("the tool calls of a cut-off reply are not run or kept, since their input may be cut short: the note names them", async () => {
   const { run, model, tool } = await start([
-    { text: ["Writing it."], calls: [{ name: "echo", input: { text: "the whole fi" } }], cutOff: true },
+    { text: ["Writing it."], calls: [{ name: "echo", input: '{"text":"the whole fi' }], cutOff: true },
     { text: ["Done."] },
   ])
 
   await say(run, "write the file")
 
   expect(tool.ran).toEqual([])
-  expect(types(run)).toEqual(["turn_start", "user_message", "assistant_message", "tool_result", "note", "assistant_message", "turn_end"])
+  expect(types(run)).toEqual(["turn_start", "user_message", "assistant_message", "note", "assistant_message", "turn_end"])
   const asked = model.requests[1]?.messages ?? []
-  expect(asked[2]).toMatchObject({ role: "tool", callId: "call_1_0" })
-  expect(asked[2]?.text).toContain("Not run")
-  expect(asked[2]?.text).toContain("send it again")
-  expect(asked[3]?.text).toContain("cut off")
+  // The cut-short call is not sent back: a provider may refuse input that is not whole.
+  expect(asked[1]).toEqual({ role: "assistant", text: "Writing it." })
+  expect(asked[2]?.text).toContain("cut off")
+  expect(asked[2]?.text).toContain("echo")
+  expect(asked[2]?.text).toContain("not run")
 })
 
 test("three cut-off replies in a row end the turn as a failure that says the limit was reached", async () => {
@@ -131,4 +132,18 @@ test("three replies in a row with a tool call as text end the turn as a failure 
   const end = turnEnd(run)?.body
   expect(end).toMatchObject({ reason: "error" })
   expect(end?.error).toContain("as text")
+})
+
+test("unfinished replies of both kinds count together, and the failure says what the last one was", async () => {
+  const { run } = await start([
+    { text: ["Still going "], cutOff: true },
+    { text: ["<tool_call>echo</tool_call>"], callAsText: true },
+    { text: ["Still going "], cutOff: true },
+  ])
+
+  await say(run, "write the file")
+
+  const error = turnEnd(run)?.body.error ?? ""
+  expect(error).toContain("Three replies in a row did not finish")
+  expect(error).toContain("length limit")
 })
